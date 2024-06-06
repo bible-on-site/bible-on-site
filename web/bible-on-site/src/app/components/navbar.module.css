@@ -1,57 +1,79 @@
 .hamburgerMenu .menuToggle {
   @apply hidden;
 }
-.hamburgerMenu .menuToggle:checked + .menuBtn > .menuIcon {
-  @apply rotate-45;
+
+.hamburgerMenu .menuToggle:checked + .menuBtn {
+  @apply opacity-0;
+  transition: opacity 0.15s linear;
 }
-.hamburgerMenu .menuToggle:checked + .menuBtn > .menuIcon::before {
-  content: "";
-  @apply absolute w-full h-0.5 bg-gray-700 top-0 transform rotate-0;
+
+.hamburgerMenu .menuToggle:not(:checked) + .menuBtn {
+  @apply opacity-100;
+  transition: opacity 0.15s linear;
 }
-.hamburgerMenu .menuToggle:checked + .menuBtn > .menuIcon::after {
-  content: "";
-  @apply absolute w-full h-0.5 bg-gray-700 top-0 transform rotate-90;
-}
-.hamburgerMenu .menuToggle:checked ~ .menuBox {
-  @apply right-0;
-  transition: right 0.25s ease-in-out;
-}
+
 .hamburgerMenu .menuToggle:checked ~ .overlay {
-  @apply opacity-30;
+  @apply opacity-30 z-10;
   transition: opacity 0.25s ease-in-out;
 }
+
+.hamburgerMenu .menuToggle:checked ~ .menuBox {
+  @apply right-0 z-20;
+  transition: right 0.25s ease-in-out;
+}
+
 .hamburgerMenu .menuToggle:not(:checked) ~ .overlay {
-  @apply opacity-0;
+  @apply opacity-0 z-0;
 }
 
 .menuBtn {
-  @apply fixed top-5 right-5 w-7 h-7 cursor-pointer z-30;
+  @apply fixed top-5 right-5 w-8 h-10 cursor-pointer z-10 bg-transparent border-0;
+  @apply transition-opacity duration-150 ease-linear;
 }
-.menuBtn > .menuIcon,
-.menuBtn > .menuIcon::before,
-.menuBtn > .menuIcon::after {
-  @apply block absolute w-full h-0.5 bg-gray-700 transition duration-200;
+
+.menuBtn:hover {
+  @apply opacity-70;
 }
-.menuBtn > .menuIcon::before {
+
+.menuBtn:focus {
+  @apply outline-none;
+}
+
+.menuIcon,
+.menuIcon::before,
+.menuIcon::after {
+  @apply block absolute w-full h-1 bg-white;
+}
+
+.menuIcon::before {
   content: "";
-  @apply -top-2;
+  @apply -top-2.5;
 }
-.menuBtn > .menuIcon::after {
+
+.menuIcon::after {
   content: "";
-  @apply top-2;
+  @apply top-2.5;
 }
 
 .overlay {
-  @apply fixed inset-0 bg-black opacity-0 transition duration-200 z-10;
+  @apply fixed inset-0 bg-black opacity-0 transition duration-200 cursor-pointer;
 }
 
 .menuBox {
-  @apply block fixed top-0 right-[-100%] w-[300px] h-full m-0 p-20 list-none bg-gray-200 shadow-md transition duration-1000 z-20;
+  @apply block fixed top-0 right-[-100%] w-[300px] h-full m-0 p-2 list-none bg-white shadow-md transition duration-1000 z-10;
+}
+.menuItem {
+  @apply flex flex-wrap w-full;
 }
 
-.menuItem {
-  @apply block py-3 px-6 text-gray-800 font-semibold no-underline transition duration-200;
+.menuItem > * {
+  @apply block;
+  @apply mb-2;
 }
-.menuItem:hover {
-  @apply bg-gray-300;
+
+.menuItem * {
+  @apply mr-2;
+}
+.menuItem ul {
+  @apply contents;
 }
