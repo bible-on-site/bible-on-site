@@ -4,6 +4,7 @@ import "./globals.css";
 import { NavBar } from "./components/NavBar";
 
 import Image from "next/image";
+import Link from "next/link";
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
   variable: "--font-geist-sans",
@@ -28,12 +29,14 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         <nav className="top-nav">
-          <Image
-            src="/images/logos/logo-white-letters-69.webp"
-            alt='תנ"ך על הפרק'
-            width={72}
-            height={72}
-          />
+          <Link href="/">
+            <Image
+              src="/images/logos/logo-white-letters-69.webp"
+              alt='תנ"ך על הפרק'
+              width={72}
+              height={72}
+            />
+          </Link>
         </nav>
 
         <NavBar />
