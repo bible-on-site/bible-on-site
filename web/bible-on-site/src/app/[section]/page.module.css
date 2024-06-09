@@ -9,6 +9,9 @@
   width: 100%;
   z-index: 6;
 }
+.page section:first-child header {
+  margin-top: 80px;
+}
 .page section {
   position: relative;
   text-align: center;
@@ -133,15 +136,10 @@
   max-width: 1em;
 }
 
-.alHaperekHeadlines {
-  padding: 7em 0 0 0;
-}
-.alHaperekHeadlines {
-  padding-bottom: 7em;
-}
 .alHaperekHeadlines h1 {
   display: grid;
   letter-spacing: 0.25em;
+  justify-items: center;
 }
 .alHaperekHeadlines h1 a {
   color: white;
@@ -158,4 +156,7 @@
 .alHaperekHeadlines .icon {
   max-height: 2em;
   max-width: 2em;
+}
+.top-nav {
+  background-color: initial;
 }

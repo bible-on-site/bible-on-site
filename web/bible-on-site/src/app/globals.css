@@ -52,3 +52,18 @@ a {
     color-scheme: dark;
   }
 }
+.icon-white {
+  filter: invert(100%) sepia(0%) saturate(0%) hue-rotate(180deg)
+    brightness(100%) contrast(100%);
+}
+.top-nav {
+  height: 72px;
+  background-color: transparent;
+  text-align: center;
+  align-content: center;
+  display: grid;
+  justify-items: center;
+  width: 100%;
+  position: absolute;
+  z-index: 3;
+}

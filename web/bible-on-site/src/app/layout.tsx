@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { NavBar } from "./components/NavBar";
 
+import Image from "next/image";
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
   variable: "--font-geist-sans",
@@ -26,6 +27,15 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
+        <nav className="top-nav">
+          <Image
+            src="/images/logos/logo-white-letters-69.webp"
+            alt='תנ"ך על הפרק'
+            width={72}
+            height={72}
+          />
+        </nav>
+
         <NavBar />
         {children}
       </body>
