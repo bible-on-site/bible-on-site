@@ -27,7 +27,7 @@
 }
 
 .menuBtn {
-  @apply fixed top-5 right-5 w-8 h-10 cursor-pointer z-10 bg-transparent border-0;
+  @apply fixed top-7 right-5 w-8 h-10 cursor-pointer z-10 bg-transparent border-0;
   @apply transition-opacity duration-150 ease-linear;
 }
 
@@ -62,13 +62,27 @@
 .menuBox {
   @apply block fixed top-0 right-[-100%] w-[300px] h-full m-0 p-2 list-none bg-white shadow-md transition duration-1000 z-10;
 }
+
+.menuBox::before {
+  @apply absolute top-0 h-full w-[6px] left-[-6px];
+  content: "";
+
+  background: linear-gradient(to right, #000 -100%, #fff 100%);
+}
+.sidebarTopBar {
+  display: grid;
+  align-content: space-between;
+  justify-items: center;
+  padding: 13px;
+}
+
 .menuItem {
   @apply flex flex-wrap w-full;
 }
 
 .menuItem > * {
   @apply block;
-  @apply mb-2;
+  @apply m-2;
 }
 
 .menuItem * {
@@ -76,4 +90,16 @@
 }
 .menuItem ul {
   @apply contents;
+}
+.menuItem ul li {
+  @apply mr-10;
+}
+
+.menuBox > li::before {
+  content: " ";
+  @apply block w-[100%] border-b border-[#888bef4a];
+}
+.menuBox > li:last-of-type::after {
+  content: " ";
+  @apply block w-[100%] border-b border-[#888bef4a];
 }
