@@ -1,0 +1,66 @@
+/* Breadcrumb.module.css */
+
+.grid {
+  display: grid;
+  align-items: center;
+}
+/* 
+.container {
+} */
+
+.breadcrumb {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.breadcrumb li {
+  display: inline-block;
+}
+
+.breadcrumb > li:not(:last-child):after {
+  content: ">";
+  margin: 0 6px 0 10px;
+}
+
+.breadcrumb li a {
+  text-decoration: none;
+}
+
+.active {
+  position: relative;
+}
+
+/* .relative {
+} */
+
+.drop-container:hover .drop {
+  display: block;
+}
+
+.drop-container {
+  position: relative;
+}
+
+.drop {
+  display: none;
+  position: absolute;
+  top: 20px;
+  background-color: #fff;
+}
+
+.drop ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.drop ul li a {
+  display: block;
+  padding: 8px 16px;
+  text-decoration: none;
+}
+
+.small {
+  font-size: 10px;
+}
