@@ -20,15 +20,6 @@
   margin: 0.1em 0 1em;
   text-align: justify;
 }
-.pPtuha::before {
-  content: " ";
-  clear: right;
-  display: block;
-}
-.pStuma::before {
-  content: " ";
-  margin-right: 162px;
-}
 .qri label::before {
   color: #637598;
   content: "קְרִי:";

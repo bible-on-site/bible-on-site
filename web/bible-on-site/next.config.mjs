@@ -2,6 +2,8 @@
 const nextConfig = {
   experimental: {
     ppr: "incremental",
+    esmExternals: true,
+    externalDir: true,
   },
 };
 

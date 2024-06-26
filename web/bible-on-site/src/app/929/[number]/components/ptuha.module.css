@@ -1,0 +1,5 @@
+.pPtuha::before {
+  content: " ";
+  clear: right;
+  display: block;
+}

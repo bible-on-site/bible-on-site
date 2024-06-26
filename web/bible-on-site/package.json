@@ -14,9 +14,12 @@
     "flowbite": "^2.3.0",
     "flowbite-react": "^0.10.1",
     "gematry": "^1.0.2",
+    "html-flip-book-react": "https://gitpkg.now.sh/doradsoft/html-flip-book/react?master",
     "next": "15.0.0-rc.0",
-    "react": "19.0.0-rc-f994737d14-20240522",
-    "react-dom": "19.0.0-rc-f994737d14-20240522"
+    "nuqs": "^1.17.4",
+    "react": "19.0.0-rc-c21bcd627b-20240624",
+    "react-dom": "19.0.0-rc-c21bcd627b-20240624",
+    "react-phone-number-input": "^3.4.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.44.1",

@@ -10,7 +10,7 @@ export interface PerekObj {
   sefer: string;
   source: string;
 }
-export async function getPerekByPerekId(perekId: number): Promise<PerekObj> {
+export function getPerekByPerekId(perekId: number): PerekObj {
   if (perekId < 1 || perekId > 929) {
     throw new Error("Invalid perekId: " + perekId);
   }
@@ -22,7 +22,6 @@ export async function getPerekByPerekId(perekId: number): Promise<PerekObj> {
   const perekHeb = toLetters(perekNum);
   const perek = sefer.perakim.at(perekIdx)!;
 
-  debugger;
   return {
     perekId: perekId,
     perekHeb: perekHeb,
