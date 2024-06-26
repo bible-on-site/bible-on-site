@@ -1,6 +1,7 @@
 import { test, expect, TestInfo } from "@playwright/test";
 import { readFileSync } from "fs";
 import { resolve } from "path";
+test.describe.configure({ mode: "serial" });
 
 const BASE_URL = "http://127.0.0.1:3000";
 
@@ -25,8 +26,7 @@ type WebVitalsMetricsClient = {
 } & {
   [K in keyof WebVitalsMetrics as `on${K}`]: CallableFunction;
 };
-// TODO: generate tests for all routes
-test("/", async ({ page }, testInfo: TestInfo) => {
+const testWebVitals = async ({ page }, testInfo: TestInfo) => {
   const webVitalsScript = readFileSync(
     resolve(__dirname, "../../node_modules/web-vitals/dist/web-vitals.iife.js"),
     "utf8"
@@ -81,7 +81,7 @@ test("/", async ({ page }, testInfo: TestInfo) => {
 
   await page.locator("body").dispatchEvent("onbeforeunload");
 
-  const webVitalsMetrics = await page.evaluate(() => {
+  const webVitalsMetrics: WebVitalsMetricsResult = await page.evaluate(() => {
     return (window as unknown as { results: WebVitalsMetricsResult }).results;
   });
 
@@ -90,4 +90,10 @@ test("/", async ({ page }, testInfo: TestInfo) => {
   Object.values(webVitalsMetrics).forEach((metric) => {
     expect(metric.measure).toBeLessThan(metric.max);
   });
-});
+};
+// TODO: generate tests for all routes
+test("/", testWebVitals);
+// inp (https://web.dev/articles/inp) is raised significantly when toggling the read mode. Also it looks like ttfb is affected as well (not sure why it should)
+test("/929/567", testWebVitals);
+test("/929/1", testWebVitals);
+test("/929/686", testWebVitals);
