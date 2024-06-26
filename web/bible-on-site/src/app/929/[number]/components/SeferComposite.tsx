@@ -49,6 +49,7 @@ const ClientWrapper = (props: { perekObj: PerekObj; toggled: boolean }) => {
           currentlyToggled ? "opacity-1" : "opacity-0"
         } transition-opacity duration-300 absolute z-[7] top-[72px] w-full h-[calc(100vh-72px)] bg-white`}
       >
+        {/* TODO: figure out how to not affecting INP when toggling (some sort of async rendering?)) */}
         {everToggled && <Sefer perekObj={props.perekObj} />}
       </div>
     </>

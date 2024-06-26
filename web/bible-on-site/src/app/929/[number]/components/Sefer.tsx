@@ -9,6 +9,7 @@ import React from "react";
 import { Ptuah } from "./Ptuha";
 import { Stuma } from "./Stuma";
 import { toLetters } from "gematry";
+import "./sefer.css";
 const FlipBook = dynamic(
   () => import("html-flip-book-react").then((mod) => mod.FlipBook),
   { ssr: false }
