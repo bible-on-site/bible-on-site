@@ -6,7 +6,7 @@ import { PerekObj } from "@/data/perek-dto";
 export const Breadcrumb = (props: { perekObj: PerekObj }) => {
   const perekObj = props.perekObj;
   return (
-    <div className={styles.grid}>
+    <nav className={styles.grid}>
       <div className={styles.container}>
         <ol className={styles.breadcrumb}>
           <li>
@@ -89,7 +89,7 @@ export const Breadcrumb = (props: { perekObj: PerekObj }) => {
           </li>
         </ol>
       </div>
-    </div>
+    </nav>
   );
 };
 
