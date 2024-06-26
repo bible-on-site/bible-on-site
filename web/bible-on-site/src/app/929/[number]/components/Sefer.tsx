@@ -96,7 +96,6 @@ const Sefer = (props: { perekObj: PerekObj }) => {
       className="he-book"
       pages={hePages}
       pageSemantics={hePageSemantics}
-      debug={true}
       direction="rtl"
     />
   );

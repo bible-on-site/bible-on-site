@@ -1,34 +1,45 @@
-// components/ClientWrapper.tsx
 "use client";
-
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 
 import ReadModeToggler from "./ReadModeToggler";
 import Sefer from "./Sefer";
 import { PerekObj } from "@/data/perek-dto";
 
 const ClientWrapper = (props: { perekObj: PerekObj; toggled: boolean }) => {
-  const toggled = props.toggled;
+  const { toggled } = props;
   const [everToggled, setEverToggled] = useState(false);
   const [currentlyToggled, setCurrentlyToggled] = useState(false);
   const [display, setDisplay] = useState("none");
+  const handleToggle = useCallback(
+    (toggled: boolean, immediately = false) => {
+      console.log(
+        `handleToggle(toggled: ${toggled}, immediately: ${immediately})`
+      );
+      if (!everToggled && toggled) {
+        setEverToggled(true);
+      }
+      if (toggled) {
+        setDisplay("initial");
+        setCurrentlyToggled(true);
+      } else {
+        if (immediately) {
+          setDisplay("none");
+        } else {
+          setTimeout(() => setDisplay("none"), 300);
+        }
+        setCurrentlyToggled(false);
+      }
+    },
+    [everToggled]
+  );
 
-  const handleToggle = (toggled: boolean) => {
-    if (!everToggled && toggled) {
-      setEverToggled(true);
-    }
-    if (toggled) {
-      setDisplay("initial");
-      setCurrentlyToggled(true);
-    } else {
-      setTimeout(() => setDisplay("none"), 300); // Match the transition duration
-      setCurrentlyToggled(false);
-    }
-  };
+  useEffect(() => {
+    console.log(everToggled);
+    if (everToggled) return;
+    const IMMEDIATELY = true;
+    handleToggle(toggled, IMMEDIATELY);
+  }, [toggled, handleToggle, everToggled]);
 
-  if (toggled) {
-    handleToggle(true);
-  }
   return (
     <>
       <ReadModeToggler toggled={toggled} onToggle={handleToggle} />
@@ -43,4 +54,5 @@ const ClientWrapper = (props: { perekObj: PerekObj; toggled: boolean }) => {
     </>
   );
 };
+
 export default ClientWrapper;

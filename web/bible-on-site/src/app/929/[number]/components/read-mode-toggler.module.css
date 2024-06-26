@@ -1,0 +1,87 @@
+.label {
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  position: fixed;
+  top: 10px;
+  left: 20px;
+}
+
+.input {
+  display: none;
+}
+
+.toggleDiv {
+  position: relative;
+  width: 110px;
+  height: 50px;
+  background-color: #bbf7d0; /* Green when toggled */
+  border-radius: 9999px;
+  transition: background-color 300ms;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.toggleDiv::after {
+  content: "";
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  background: rgba(0, 0, 0, 0.5); /* Darker when toggled */
+  border-radius: 9999px;
+  top: 5px;
+  left: 5px;
+  transition: transform 600ms ease, width 300ms, background-color 300ms;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.input:not(:checked) + .toggleDiv {
+  background-color: white; /* White when not toggled */
+}
+
+.input:not(:checked) + .toggleDiv::after {
+  transform: translateX(60px); /* Move to the right */
+  background: linear-gradient(
+    to right,
+    #38bdf8,
+    #0ea5e9
+  ); /* Lighter when not toggled */
+}
+
+.input:checked + .toggleDiv::after {
+  transform: translateX(0); /* Move to the left */
+}
+
+.input:active + .toggleDiv::after {
+  width: 50px;
+}
+
+.input:not(:checked):active + .toggleDiv::after {
+  width: 50px;
+  right: 65px;
+}
+
+.bookIcon {
+  position: absolute;
+  width: 1.5rem;
+  height: 1.5rem;
+  left: 0.8rem;
+  opacity: 0.6;
+  transition: opacity 300ms;
+}
+
+.input:not(:checked) + .toggleDiv + .bookIcon {
+  opacity: 0.6;
+}
+
+.noteIcon {
+  position: absolute;
+  width: 1.5rem;
+  height: 1.5rem;
+  right: 0.8rem;
+  opacity: 0.6;
+  transition: opacity 300ms;
+}
+
+.input:not(:checked) + .toggleDiv + .bookIcon + .noteIcon {
+  opacity: 0.7;
+}
