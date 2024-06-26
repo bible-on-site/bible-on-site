@@ -8,54 +8,23 @@ import React, {
 } from "react";
 import Image from "next/image";
 
-export const ReadModeToggler = forwardRef(function ReadModeToggler(
-  props: { toggled: boolean },
+const ReadModeToggler = forwardRef(function ReadModeToggler(
+  props: { toggled: boolean; onToggle?: (toggled: boolean) => void },
   ref
 ) {
   const [toggled, setToggled] = useState(props.toggled);
   const toggleRef = useRef<HTMLLabelElement>(null);
 
-  const fadeElements = (fadeOut: boolean) => {
-    const nextSibling = toggleRef.current?.nextElementSibling as HTMLElement;
-    const nextNextSibling = nextSibling?.nextElementSibling as HTMLElement;
-
-    [nextSibling, nextNextSibling].forEach((element, index) => {
-      if (element) {
-        element.style.transition = "opacity 0.3s ease, display 0.4s ease";
-        element.style.opacity = fadeOut
-          ? index === 0
-            ? "0"
-            : "1"
-          : index === 0
-          ? "1"
-          : "0";
-
-        setTimeout(() => {
-          element.style.display = fadeOut
-            ? index === 0
-              ? "none"
-              : "initial"
-            : index === 0
-            ? "initial"
-            : "none";
-        }, 300);
-      }
-    });
-  };
-
-  useImperativeHandle(ref, () => ({
-    fadeNextSibling: fadeElements,
-  }));
-
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const isChecked = event.target.checked;
     setToggled(isChecked);
-    fadeElements(isChecked);
+    if (props.onToggle) {
+      props.onToggle(isChecked);
+    }
   };
 
   useEffect(() => {
     setToggled(props.toggled);
-    fadeElements(props.toggled);
   }, [props.toggled]);
 
   return (
