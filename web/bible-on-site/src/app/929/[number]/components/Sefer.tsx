@@ -36,7 +36,7 @@ const hePageSemantics: PageSemantics = {
   },
 };
 
-export const Sefer = (props: { perekObj: PerekObj }) => {
+const Sefer = (props: { perekObj: PerekObj }) => {
   const perekObj = props.perekObj;
   const sefer = getSeferByName(perekObj.sefer);
   const hePages = sefer.perakim.map((perek, perekIdx) => (

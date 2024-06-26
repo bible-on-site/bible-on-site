@@ -4,9 +4,7 @@ import "./overiide-globals.css";
 import { getPerekByPerekId } from "../../../data/perek-dto";
 import { toLetters } from "gematry";
 import Breadcrumb from "./components/Breadcrumb";
-import ReadModeToggler from "./components/ReadModeToggler";
 import { Suspense } from "react";
-import Sefer from "./components/Sefer";
 import React from "react";
 import {
   createSearchParamsCache,
@@ -15,6 +13,7 @@ import {
 } from "nuqs/server";
 import { Ptuah } from "./components/Ptuha";
 import { Stuma } from "./components/Stuma";
+import SeferComposite from "./components/SeferComposite";
 // perakim are a closed list.
 export const dynamicParams = false;
 
@@ -43,9 +42,9 @@ export default async function Perek({
   return (
     <>
       <Suspense>
-        <ReadModeToggler toggled={isBook} />
+        <SeferComposite perekObj={perekObj} toggled={isBook} />
       </Suspense>
-      <div className="absolute z-[7] top-[72px] w-full h-[calc(100vh-72px)]">
+      <div className="absolute z-[6] top-[72px] w-full h-[calc(100vh-72px)]">
         <Breadcrumb perekObj={perekObj} />
 
         <article className={styles.perekText}>
@@ -93,11 +92,6 @@ export default async function Perek({
             );
           })}
         </article>
-      </div>
-      <div className="opacity-0 absolute z-[6] top-[72px] w-full h-[calc(100vh-72px)]">
-        <Suspense>
-          <Sefer perekObj={perekObj} />
-        </Suspense>
       </div>
     </>
   );
