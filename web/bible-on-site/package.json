@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --import tsx ./node_modules/jest/bin/jest.js"
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "node --import tsx ./node_modules/jest/bin/jest.js",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@hebcal/core": "^5.4.5",
