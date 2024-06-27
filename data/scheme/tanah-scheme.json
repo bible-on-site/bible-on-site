@@ -116,7 +116,7 @@
                "header": {
                   "type": "string"
                },
-               "dates": {
+               "date": {
                   "type": "array",
                   "items": {
                      "type": "number"

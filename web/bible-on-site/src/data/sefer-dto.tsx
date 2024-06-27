@@ -1,5 +1,5 @@
 import { sefarim } from "./db/sefarim";
-import { Additionals, Pasuk, SefarimItem } from "./db/types";
+import { Additionals, Pasuk, Perek, SefarimItem } from "./db/tanah-view-types";
 export type SeferObj = Additionals | SefarimItem;
 export function getSeferByName(
   seferName: string,
@@ -17,4 +17,15 @@ export function getSeferByName(
     )!;
   }
   return sefer;
+}
+
+export function getAllPerakim(): (Perek & { perekId: number })[] {
+  let perekIdCounter = 1;
+  return sefarim.flatMap((sefer) => {
+    const perakim = sefer.perakim || [
+      ...(sefer.additionals?.[0]?.perakim || []),
+      ...(sefer.additionals?.[1]?.perakim || []),
+    ];
+    return perakim.map((perek) => ({ ...perek, perekId: perekIdCounter++ }));
+  });
 }
