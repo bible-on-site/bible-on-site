@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-const ROOT_URL = "http://127.0.0.1:3000/";
+const ROOT_URL = "/";
 
 test("has right title", async ({ page }) => {
   await page.goto(ROOT_URL);

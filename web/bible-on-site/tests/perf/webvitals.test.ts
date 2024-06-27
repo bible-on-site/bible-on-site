@@ -32,7 +32,7 @@ const testWebVitals = async ({ page }, testInfo: TestInfo) => {
     "utf8"
   );
 
-  await page.goto(`${BASE_URL}${testInfo.title}`);
+  await page.goto(testInfo.title);
 
   await page.addScriptTag({ content: webVitalsScript });
   await page.evaluate(() => {
