@@ -1,173 +1,179 @@
 {
-   "$schema":"http://json-schema.org/draft-07/schema#",
-   "definitions":{
-      "timeSegment":{
-         "type":"string",
-         "pattern":"^\\d{2}:\\d{2}:\\d{2}$"
+   "$schema": "http://json-schema.org/draft-07/schema#",
+   "definitions": {
+      "timeSegment": {
+         "type": "string",
+         "pattern": "^\\d{2}:\\d{2}:\\d{2}$"
       },
-      "timeframe":{
-         "type":"object",
-         "properties":{
-            "from":{
-               "$ref":"#/definitions/timeSegment"
+      "timeframe": {
+         "type": "object",
+         "properties": {
+            "from": {
+               "$ref": "#/definitions/timeSegment"
             },
-            "to":{
-               "$ref":"#/definitions/timeSegment"
+            "to": {
+               "$ref": "#/definitions/timeSegment"
             }
          },
-         "required":[
+         "required": [
             "from",
             "to"
          ]
       },
-      "ktivSegment":{
-         "type":"object",
-         "properties":{
-            "type":{
-               "type":"string",
-               "enum":[
+      "ktivSegment": {
+         "type": "object",
+         "properties": {
+            "type": {
+               "type": "string",
+               "enum": [
                   "ktiv"
                ]
             },
-            "value":{
-               "type":"string"
+            "value": {
+               "type": "string"
             },
-            "recordingTimeFrame":{
-               "$ref":"#/definitions/timeframe"
+            "recordingTimeFrame": {
+               "$ref": "#/definitions/timeframe"
             }
          },
-         "required":[
+         "required": [
             "type",
             "value",
             "recordingTimeFrame"
          ]
       },
-      "qriSegment":{
-         "type":"object",
-         "properties":{
-            "type":{
-               "type":"string",
-               "enum":[
+      "qriSegment": {
+         "type": "object",
+         "properties": {
+            "type": {
+               "type": "string",
+               "enum": [
                   "qri"
                ]
             },
-            "value":{
-               "type":"string"
+            "value": {
+               "type": "string"
             },
-            "recordingTimeFrame":{
-               "$ref":"#/definitions/timeframe"
+            "recordingTimeFrame": {
+               "$ref": "#/definitions/timeframe"
             }
          },
-         "required":[
+         "required": [
             "type",
             "value",
             "recordingTimeFrame"
          ]
       },
-      "stumaSegment":{
-         "type":"object",
-         "properties":{
-            "type":{
-               "type":"string",
-               "enum":[
+      "stumaSegment": {
+         "type": "object",
+         "properties": {
+            "type": {
+               "type": "string",
+               "enum": [
                   "stuma"
                ]
             }
          },
-         "required":[
+         "required": [
             "type"
          ]
       },
-      "ptuhaSegment":{
-         "type":"object",
-         "properties":{
-            "type":{
-               "type":"string",
-               "enum":[
+      "ptuhaSegment": {
+         "type": "object",
+         "properties": {
+            "type": {
+               "type": "string",
+               "enum": [
                   "ptuha"
                ]
             }
          },
-         "required":[
+         "required": [
             "type"
          ]
       },
-      "segment":{
-         "oneOf":[
+      "segment": {
+         "oneOf": [
             {
-               "$ref":"#/definitions/ktivSegment"
+               "$ref": "#/definitions/ktivSegment"
             },
             {
-               "$ref":"#/definitions/qriSegment"
+               "$ref": "#/definitions/qriSegment"
             },
             {
-               "$ref":"#/definitions/stumaSegment"
+               "$ref": "#/definitions/stumaSegment"
             },
             {
-               "$ref":"#/definitions/ptuhaSegment"
+               "$ref": "#/definitions/ptuhaSegment"
             }
          ]
       },
-      "perakim":{
-         "type":"array",
-         "items":{
-            "type":"object",
-            "properties":{
-               "header":{
-                  "type":"string"
+      "perakim": {
+         "type": "array",
+         "items": {
+            "type": "object",
+            "properties": {
+               "header": {
+                  "type": "string"
                },
-               "pesukim":{
-                  "type":"array",
-                  "items":{
-                     "type":"object",
-                     "properties":{
-                        "segments":{
-                           "type":"array",
-                           "items":{
-                              "$ref":"#/definitions/segment"
+               "dates": {
+                  "type": "array",
+                  "items": {
+                     "type": "number"
+                  }
+               },
+               "pesukim": {
+                  "type": "array",
+                  "items": {
+                     "type": "object",
+                     "properties": {
+                        "segments": {
+                           "type": "array",
+                           "items": {
+                              "$ref": "#/definitions/segment"
                            }
                         }
                      },
-                     "required":[
+                     "required": [
                         "segments"
                      ]
                   }
                }
             },
-            "required":[
+            "required": [
                "header",
                "pesukim"
             ]
          }
       },
-      "additionals":{
-         "type":"array",
-         "items":{
-            "type":"object",
-            "properties":{
-               "letter":{
-                  "type":"string"
+      "additionals": {
+         "type": "array",
+         "items": {
+            "type": "object",
+            "properties": {
+               "letter": {
+                  "type": "string"
                },
-               "name":{
-                  "type":"string"
+               "name": {
+                  "type": "string"
                },
-               "tanachUsName":{
-                  "type":"string"
+               "tanachUsName": {
+                  "type": "string"
                },
-               "pesukimCount":{
-                  "type":"number"
+               "pesukimCount": {
+                  "type": "number"
                },
-               "perakim":{
-                  "$ref":"#/definitions/perakim"
+               "perakim": {
+                  "$ref": "#/definitions/perakim"
                },
-               "perekFrom":{
-                  "type":"number"
+               "perekFrom": {
+                  "type": "number"
                },
-               "perekTo":{
-                  "type":"number"
+               "perekTo": {
+                  "type": "number"
                }
             },
-            "required":[
+            "required": [
                "letter",
                "name",
                "tanachUsName",
@@ -176,57 +182,57 @@
          }
       }
    },
-   "type":"array",
-   "items":{
-      "type":"object",
-      "properties":{
-         "name":{
-            "type":"string"
+   "type": "array",
+   "items": {
+      "type": "object",
+      "properties": {
+         "name": {
+            "type": "string"
          },
-         "tanachUsName":{
-            "type":"string"
+         "tanachUsName": {
+            "type": "string"
          },
-         "helek":{
-            "type":"string"
+         "helek": {
+            "type": "string"
          },
-         "pesukimCount":{
-            "type":"number"
+         "pesukimCount": {
+            "type": "number"
          },
-         "perakim":{
-            "$ref":"#/definitions/perakim"
+         "perakim": {
+            "$ref": "#/definitions/perakim"
          },
-         "perekFrom":{
-            "type":"number"
+         "perekFrom": {
+            "type": "number"
          },
-         "perekTo":{
-            "type":"number"
+         "perekTo": {
+            "type": "number"
          },
-         "additionals":{
-            "type":"array",
-            "items":{
-               "$ref":"#/definitions/additionals"
+         "additionals": {
+            "type": "array",
+            "items": {
+               "$ref": "#/definitions/additionals"
             }
          }
       },
-      "required":[
+      "required": [
          "name",
          "helek",
          "pesukimCount"
       ],
-      "oneOf":[
+      "oneOf": [
          {
-            "required":[
+            "required": [
                "perakim",
                "tanachUsName"
             ]
          },
          {
-            "required":[
+            "required": [
                "additionals"
             ]
          }
       ]
    },
-   "minItems":35,
-   "maxItems":35
+   "minItems": 35,
+   "maxItems": 35
 }

@@ -37,6 +37,7 @@ interface Pasuk {
 
 interface Perek {
   header: string;
+  dates: number[];
   pesukim: Pasuk[];
 }
 
