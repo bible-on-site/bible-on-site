@@ -31,21 +31,21 @@ jobs:
 
       - name: Install Dependencies
         id: npm-ci
-        run: npm ci
+        run: cd web/bible-on-site && npm ci
 
       # disabled until prettier config is configured properly
       # - name: Check Format
       #   id: npm-format-check
-      #   run: npm run format:check
+      #   run: cd web/bible-on-site && npm run format:check
 
       - name: Lint
         id: npm-lint
-        run: npm run lint
+        run: cd web/bible-on-site && npm run lint
 
       - name: Test
         id: npm-unit-test
-        run: npm run test:unit
+        run: cd web/bible-on-site && npm run test:unit
 
       - name: Build
         id: npm-build
-        run: npm run build
+        run: cd web/bible-on-site && npm run build
