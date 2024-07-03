@@ -11,6 +11,9 @@
     "test:unit": "node --import tsx ./node_modules/jest/bin/jest.js",
     "test:e2e": "playwright test"
   },
+  "engines": {
+    "node": ">=22.2.0"
+  },
   "dependencies": {
     "@hebcal/core": "^5.4.5",
     "@syncfusion/ej2-react-grids": "^25.2.7",
