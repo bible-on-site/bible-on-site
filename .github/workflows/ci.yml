@@ -25,7 +25,7 @@ jobs:
         id: setup-node
         uses: actions/setup-node@v4
         with:
-          node-version-file: package.json
+          node-version-file: web/bible-on-site/package.json
           cache: npm
 
       - name: Install Dependencies
