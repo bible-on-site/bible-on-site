@@ -26,6 +26,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version-file: web/bible-on-site/package.json
+          cache-dependency-path: web/bible-on-site/package-lock.json
           cache: npm
 
       - name: Install Dependencies
