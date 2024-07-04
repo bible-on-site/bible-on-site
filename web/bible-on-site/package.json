@@ -11,8 +11,8 @@
     "lint": "next lint",
     "test": "npm run test:unit && npm run test:e2e && npm run test:perf",
     "test:unit": "node --import tsx ./node_modules/jest/bin/jest.js",
-    "test:e2e": "playwright test tests/e2e",
-    "test:perf": "playwright test tests/perf --retries=5"
+    "test:e2e": "playwright test --config=playwright.e2e.config.ts",
+    "test:perf": "playwright test --config=playwright.perf.config.ts"
   },
   "engines": {
     "node": ">=22.2.0"
