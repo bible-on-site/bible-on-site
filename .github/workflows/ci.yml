@@ -54,8 +54,10 @@ jobs:
 
       - name: Launch Server
         id: npm-dev
-        run: npm run dev
+        run: npm run dev &
 
       - name: E2E Test
         id: npm-e2e-test
-        run: npm run test:e2e
+        run: |
+          npx wait-on http://localhost:3000
+          npm run test:e2e
