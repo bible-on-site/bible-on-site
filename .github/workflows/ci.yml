@@ -12,7 +12,9 @@ jobs:
   build:
     name: TypeScript Build
     runs-on: ubuntu-latest
-
+    defaults:
+      run:
+        working-directory: web/bible-on-site
     permissions:
       contents: read
 
@@ -31,21 +33,21 @@ jobs:
 
       - name: Install Dependencies
         id: npm-ci
-        run: cd web/bible-on-site && npm ci
+        run: npm ci
 
       # disabled until prettier config is configured properly
       # - name: Check Format
       #   id: npm-format-check
-      #   run: cd web/bible-on-site && npm run format:check
+      #   run: npm run format:check
 
       - name: Lint
         id: npm-lint
-        run: cd web/bible-on-site && npm run lint
+        run: npm run lint
 
       - name: Test
         id: npm-unit-test
-        run: cd web/bible-on-site && npm run test:unit
+        run: npm run test:unit
 
       - name: Build
         id: npm-build
-        run: cd web/bible-on-site && npm run build
+        run: npm run build
