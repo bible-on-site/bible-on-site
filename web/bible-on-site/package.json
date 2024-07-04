@@ -16,7 +16,7 @@
     "node": ">=22.2.0"
   },
   "dependencies": {
-    "@hebcal/core": "^5.4.6",
+    "@hebcal/core": "^5.4.8",
     "@syncfusion/ej2-react-grids": "^26.1.40",
     "@syncfusion/ej2-react-layouts": "^26.1.38",
     "flowbite": "^2.4.1",
