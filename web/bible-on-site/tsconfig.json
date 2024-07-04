@@ -27,7 +27,10 @@
     "./src/**/*.ts",
     "./src/**/*.tsx",
     ".next/types/**/*.ts",
-    "playwright.config.ts"
+    "playwright.config.ts",
+    "playwright.base.config.ts",
+    "playwright.e2e.config.ts",
+    "playwright.perf.config.ts"
   ],
   "exclude": ["node_modules"]
 }
