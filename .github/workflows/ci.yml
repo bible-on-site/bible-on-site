@@ -10,7 +10,7 @@ on:
 
 jobs:
   build:
-    name: TypeScript Build
+    name: Website CI
     runs-on: ubuntu-latest
     defaults:
       run:
