@@ -61,3 +61,8 @@ jobs:
         run: |
           npx wait-on http://localhost:3000
           npm run test:e2e
+
+      - name: Perf Test
+        id: npm-perf-test
+        continue-on-error: true
+        run: npm run test:perf
