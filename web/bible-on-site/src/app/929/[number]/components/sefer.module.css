@@ -2,13 +2,13 @@
   background-color: white;
   padding: 15px;
 }
-perekText::-webkit-scrollbar {
+.perekText::-webkit-scrollbar {
   width: 11px;
 }
-perekText::-webkit-scrollbar-track {
+.perekText::-webkit-scrollbar-track {
   background: var(--scrollbarBG);
 }
-perekText::-webkit-scrollbar-thumb {
+.perekText::-webkit-scrollbar-thumb {
   background-color: var(--thumbBG);
   border-radius: 6px;
   border: 3px solid var(--scrollbarBG);

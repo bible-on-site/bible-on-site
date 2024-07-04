@@ -1,0 +1,73 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: master
+    paths:
+      - web/bible-on-site/**
+  pull_request:
+    branches: master
+    paths:
+      - web/bible-on-site/**
+
+jobs:
+  build:
+    name: Website CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/bible-on-site
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        id: setup-node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: web/bible-on-site/package.json
+          cache-dependency-path: web/bible-on-site/package-lock.json
+          cache: npm
+
+      - name: Install Dependencies
+        id: npm-ci
+        run: |
+          npm ci
+          npx playwright install --with-deps
+
+      # disabled until prettier config is configured properly
+      # - name: Check Format
+      #   id: npm-format-check
+      #   run: npm run format:check
+
+      - name: Lint
+        id: npm-lint
+        run: npm run lint
+
+      - name: Unit Test
+        id: npm-unit-test
+        run: npm run test:unit
+
+      - name: Build
+        id: npm-build
+        run: npm run build
+
+      - name: E2E Test
+        id: npm-e2e-test
+        run: npm run test:e2e
+
+      - name: Perf Test
+        id: npm-perf-test
+        continue-on-error: true
+        run: npm run test:perf
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 30
