@@ -56,15 +56,9 @@ jobs:
         id: npm-build
         run: npm run build
 
-      - name: Launch Server
-        id: npm-dev
-        run: npm run dev &
-
       - name: E2E Test
         id: npm-e2e-test
-        run: |
-          wait-on http://localhost:3000
-          npm run test:e2e
+        run: npm run test:e2e
 
       - name: Perf Test
         id: npm-perf-test
