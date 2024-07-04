@@ -3,14 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "update": "npx npm-check-updates --peer --deep -u && npm install && npm install",
-    "dev": "next dev --turbo",
+    "update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
+    "update:playwright": "npx playwright install",
+    "dev": "next dev --turbo -p 3000",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "npm run test:unit && npm run test:e2e",
+    "test": "npm run test:unit && npm run test:e2e && npm run test:perf",
     "test:unit": "node --import tsx ./node_modules/jest/bin/jest.js",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test tests/e2e",
+    "test:perf": "playwright test tests/perf --retries=5"
   },
   "engines": {
     "node": ">=22.2.0"
