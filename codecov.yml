@@ -1,40 +1,54 @@
 codecov:
-    require_ci_to_pass: true
+  require_ci_to_pass: true
 
 coverage:
-    precision: 2
-    round: down
-    range: "70...100"
+  precision: 2
+  round: down
+  range: "70...100"
 
-    status:
-        project:
-            default:
-                target: auto
-                threshold: 5%
-                base: auto 
-        patch:
-            default:
-                target: auto
-                threshold: 5%
-                base: auto
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 5%
+        base: auto 
+    patch:
+      default:
+        target: auto
+        threshold: 5%
+        base: auto
 
 parsers:
-    gcov:
-        branch_detection:
-            conditional: yes
-            loop: yes
-            method: no
-            macro: no
+  gcov:
+    branch_detection:
+      conditional: yes
+      loop: yes
+      method: no
+      macro: no
 
 comment:
-    layout: "reach,diff,flags,files,footer"
-    behavior: default
-    require_changes: false
+  layout: "reach,diff,flags,files,footer"
+  behavior: default
+  require_changes: false
 
 ignore:
-    - "**/*.test.js"
-    - "**/*.spec.js"
-    - "**/tests/"
-    - "**/playwright/"
-    - "**/.next/"
-    - "**/node_modules/"
+  - "**/*.test.js"
+  - "**/*.spec.js"
+  - "**/tests/"
+  - "**/playwright/"
+  - "**/.next/"
+  - "**/node_modules/"
+
+flags:
+  unit:
+    paths:
+      - web/bible-on-site/tests/unit/
+    carryforward: true
+  e2e:
+    paths:
+      - web/bible-on-site/tests/e2e/
+    carryforward: true
+  perf:
+    paths:
+      - web/bible-on-site/tests/perf/
+    carryforward: true
