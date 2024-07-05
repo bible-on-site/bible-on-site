@@ -9,7 +9,7 @@ coverage:
   status:
     project:
       default:
-        paths: 
+        paths:
           - "web/bible-on-site/coverage/lcov.info"
         target: auto
         threshold: 5%
