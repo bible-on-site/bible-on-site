@@ -5,10 +5,12 @@ on:
     branches: master
     paths:
       - web/bible-on-site/**
+      - .github/**
   pull_request:
     branches: master
     paths:
       - web/bible-on-site/**
+      - .github/**
 
 jobs:
   build:
