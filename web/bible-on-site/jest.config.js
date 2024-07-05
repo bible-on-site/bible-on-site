@@ -18,7 +18,7 @@ const config = {
   collectCoverageFrom: ["./src/**"],
 
   coverageDirectory: "coverage",
-  coverageProvider: ["v8"],
+  coverageProvider: "v8",
   coverageReporters: ["text", "lcov", "json-summary"],
   setupFiles: ["./jest.setup.js"],
   preset: "ts-jest",
