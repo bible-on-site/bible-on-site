@@ -1,4 +1,8 @@
 repos:
+-   repo: https://github.com/mxr/sync-pre-commit-deps
+    rev: v0.0.1
+    hooks:
+    -   id: sync-pre-commit-deps
 -   repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
@@ -7,10 +11,14 @@ repos:
     -   id: check-yaml
     -   id: check-ast
     -   id: check-added-large-files
--   repo: local
+-   repo: https://github.com/rhysd/actionlint
+    rev: v1.7.1
     hooks:
-    -   id: eslint
-        name: eslint
-        entry: npx eslint --debug
-        pass_filenames: false
-        language: system
+      - id: actionlint
+-   repo: https://github.com/biomejs/pre-commit
+    rev: v0.4.0
+    hooks:
+    -   id: biome-check
+        additional_dependencies: ["@biomejs/biome@1.6.0"]
+    -   id: biome-lint
+        additional_dependencies: ["@biomejs/biome@1.6.0"]
