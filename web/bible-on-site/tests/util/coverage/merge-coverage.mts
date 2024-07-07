@@ -12,9 +12,10 @@ const coverageOptions = {
 	inputDir: [
 		path.resolve(coverageDir, "unit", "raw"),
 		path.resolve(coverageDir, "e2e", "raw"),
+		path.resolve(coverageDir, "perf", "raw"),
 	],
 	outputDir: path.resolve(coverageDir, "merged"),
 
-	reports: ["raw", "text", "html"],
+	reports: ["raw", "text", "html", "lcov", "json"],
 };
 await new CoverageReport(coverageOptions).generate();

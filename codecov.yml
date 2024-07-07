@@ -10,7 +10,7 @@ coverage:
     project:
       default:
         paths:
-          - "web/bible-on-site/coverage/**/*"
+          - "web/bible-on-site/coverage/merged/lcov.info"
         target: auto
         threshold: 5%
         base: auto
