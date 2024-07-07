@@ -1,14 +1,9 @@
 import { defineConfig } from "@playwright/test";
-import baseConfig from "./playwright.base.config";
-const TEST_TYPE = "perf";
+import { getBaseConfig } from "./playwright.base.config";
+import { TestType } from "./test-type";
 export default defineConfig({
-  ...baseConfig,
-  testMatch: [`${TEST_TYPE}/**/*.test.ts`],
+  ...getBaseConfig(TestType.PERF),
   fullyParallel: false,
-  retries: 5,
+  retries: process.env.CI ? 4 : 0,
   workers: 1,
-  reporter: [
-    ["list"],
-    ["html", { outputFolder: `playwright-report/${TEST_TYPE}` }],
-  ],
 });

@@ -5,10 +5,12 @@ import { NavBar } from "./components/NavBar";
 
 import Image from "next/image";
 import Link from "next/link";
+/* istanbul ignore next */
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
   variable: "--font-geist-sans",
 });
+/* istanbul ignore next */
 const geistMono = localFont({
   src: "./fonts/GeistMonoVF.woff",
   variable: "--font-geist-mono",
