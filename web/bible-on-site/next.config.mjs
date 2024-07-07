@@ -4,6 +4,7 @@ const nextConfig = {
     ppr: "incremental",
     esmExternals: true,
     externalDir: true,
+    swcPlugins: [["swc-plugin-coverage-instrument", {}]],
   },
 };
 
