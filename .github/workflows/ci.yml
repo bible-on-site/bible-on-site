@@ -47,12 +47,11 @@ jobs:
             ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ env.PLAYWRIGHT_VERSION }}
 
-      - name: Clear npm cache
-        run: npm cache clean --force
-
       - name: Install npm Dependencies
         id: npm_ci
-        run: npm ci --force
+        run: |
+          npm ci
+          npm install html-flip-book-react@https://gitpkg.now.sh/doradsoft/html-flip-book/react?master --force
 
       - name: Install Playwright Dependencies
         if: steps.playwright-cache.outputs.cache-hit != 'true'
