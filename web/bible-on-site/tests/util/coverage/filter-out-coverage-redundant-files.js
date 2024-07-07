@@ -6,10 +6,10 @@ import path from "path";
  * @description Filters out redundant files from the coverage.
  */
 export function filterOutCoverageRedundantFiles(coverage) {
-	const SRC_DIR = path.resolve(__dirname, "../../../", "src");
-	for (const file in coverage) {
-		if (!coverage[file].path.startsWith(SRC_DIR)) {
-			delete coverage[file];
-		}
-	}
+  const SRC_DIR = path.resolve(__dirname, "../../../", "src");
+  for (const file in coverage) {
+    if (!coverage[file].path.startsWith(SRC_DIR)) {
+      delete coverage[file];
+    }
+  }
 }

@@ -1,3 +1,15 @@
 {
-	"extends": ["next"]
+  "root": true,
+  "extends": ["next", "next/core-web-vitals"],
+  // Set that everything besides nextjs code should be checked with regular eslint parser
+  "overrides": [
+    {
+      "files": ["*.js", "*.config.mjs"],
+      // This is the default parser of ESLint
+      "parser": "espree",
+      "parserOptions": {
+        "ecmaVersion": "latest"
+      }
+    }
+  ]
 }
