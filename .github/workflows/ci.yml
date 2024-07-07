@@ -51,6 +51,7 @@ jobs:
         id: npm_ci
         run: |
           npm ci || { echo "npm ci failed"; exit 1; }
+        continue-on-error: true
 
       - name: Install npm Dependencies Fallback
         id: npm_i
