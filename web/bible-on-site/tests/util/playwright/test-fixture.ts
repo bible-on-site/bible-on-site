@@ -1,7 +1,6 @@
 import { test as testBase, expect } from "@playwright/test";
 import { addCoverageReport } from "monocart-reporter";
-import path from "path";
-
+import { filterOutCoverageRedundantFiles } from "../coverage/filter-out-coverage-redundant-files";
 declare global {
   interface Window {
     collectIstanbulCoverage: (coverage: any) => void;
@@ -18,12 +17,7 @@ const test = testBase.extend({
     );
     await context.exposeFunction("collectIstanbulCoverage", (coverage: any) => {
       if (coverage) {
-        const SRC_DIR = path.resolve(__dirname, "../../", "src");
-        for (const file in coverage) {
-          if (!coverage[file].path.startsWith(SRC_DIR)) {
-            delete coverage[file];
-          }
-        }
+        filterOutCoverageRedundantFiles(coverage);
         if (Object.keys(coverage).length > 0) {
           addCoverageReport(coverage, test.info());
         }

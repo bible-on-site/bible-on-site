@@ -1,6 +1,6 @@
 import { Page, TestInfo } from "@playwright/test"; // import { test, expect } from "@playwright/test";
 
-import { test, expect } from "../util/test-fixture";
+import { test, expect } from "../util/playwright/test-fixture";
 
 import { readFileSync } from "fs";
 import { resolve } from "path";
