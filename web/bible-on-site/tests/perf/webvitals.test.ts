@@ -1,6 +1,6 @@
-import { Page, TestInfo } from "@playwright/test"; // import { test, expect } from "@playwright/test";
+import type { Page, TestInfo } from "@playwright/test"; // import { test, expect } from "@playwright/test";
 
-import { test, expect } from "../util/playwright/test-fixture";
+import { expect, test } from "../util/playwright/test-fixture";
 
 import { readFileSync } from "fs";
 import { resolve } from "path";
@@ -9,93 +9,93 @@ test.describe.configure({ mode: "serial" });
 type WebVitalsMetric = { measure: number; max: number };
 
 type WebVitalsMetrics = {
-  CLS: number;
-  FCP: number;
-  INP: number;
-  LCP: number;
-  TTFB: number;
+	CLS: number;
+	FCP: number;
+	INP: number;
+	LCP: number;
+	TTFB: number;
 };
 
 type WebVitalsMetricsResult = {
-  [K in keyof WebVitalsMetrics]: WebVitalsMetric;
+	[K in keyof WebVitalsMetrics]: WebVitalsMetric;
 };
 
 type WebVitalsMetricsClient = {
-  [K in keyof WebVitalsMetrics]: number;
+	[K in keyof WebVitalsMetrics]: number;
 } & {
-  [K in keyof WebVitalsMetrics as `${K}Threshold`]: number;
+	[K in keyof WebVitalsMetrics as `${K}Threshold`]: number;
 } & {
-  [K in keyof WebVitalsMetrics as `on${K}`]: CallableFunction;
+	[K in keyof WebVitalsMetrics as `on${K}`]: CallableFunction;
 };
 const testWebVitals = async ({ page }: { page: Page }, testInfo: TestInfo) => {
-  const webVitalsScript = readFileSync(
-    resolve(__dirname, "../../node_modules/web-vitals/dist/web-vitals.iife.js"),
-    "utf8"
-  );
+	const webVitalsScript = readFileSync(
+		resolve(__dirname, "../../node_modules/web-vitals/dist/web-vitals.iife.js"),
+		"utf8",
+	);
 
-  await page.goto(testInfo.title);
+	await page.goto(testInfo.title);
 
-  await page.addScriptTag({ content: webVitalsScript });
-  await page.evaluate(() => {
-    const webVitals = (
-      window as unknown as { webVitals: WebVitalsMetricsClient }
-    ).webVitals;
-    (window as unknown as { results: WebVitalsMetricsResult }).results = [
-      "CLS",
-      "FCP",
-      "INP",
-      "LCP",
-      "TTFB",
-    ]
-      .map((name) => ({
-        name,
-        measure: NaN,
-        max: (
-          webVitals[
-            `${name}Thresholds` as keyof WebVitalsMetricsClient
-          ] as unknown as [number, number]
-        )[0],
-      }))
-      .reduce((acc, { name, measure, max }) => {
-        acc[name as keyof WebVitalsMetrics] = { measure, max };
-        return acc;
-      }, {} as WebVitalsMetricsResult);
-    const handleMetric =
-      (name: keyof WebVitalsMetrics) => (metric: { value: number }) => {
-        console.log(name, metric.value);
-        (window as unknown as { results: WebVitalsMetricsResult }).results[
-          name
-        ].measure = metric.value;
-      };
-    webVitals.onCLS(handleMetric("CLS"), { reportAllChanges: true });
-    webVitals.onFCP(handleMetric("FCP"));
-    webVitals.onINP(handleMetric("INP"), { reportAllChanges: true });
-    webVitals.onLCP(handleMetric("LCP"));
-    webVitals.onTTFB(handleMetric("TTFB"));
-  });
+	await page.addScriptTag({ content: webVitalsScript });
+	await page.evaluate(() => {
+		const webVitals = (
+			window as unknown as { webVitals: WebVitalsMetricsClient }
+		).webVitals;
+		(window as unknown as { results: WebVitalsMetricsResult }).results = [
+			"CLS",
+			"FCP",
+			"INP",
+			"LCP",
+			"TTFB",
+		]
+			.map((name) => ({
+				name,
+				measure: Number.NaN,
+				max: (
+					webVitals[
+						`${name}Thresholds` as keyof WebVitalsMetricsClient
+					] as unknown as [number, number]
+				)[0],
+			}))
+			.reduce((acc, { name, measure, max }) => {
+				acc[name as keyof WebVitalsMetrics] = { measure, max };
+				return acc;
+			}, {} as WebVitalsMetricsResult);
+		const handleMetric =
+			(name: keyof WebVitalsMetrics) => (metric: { value: number }) => {
+				console.log(name, metric.value);
+				(window as unknown as { results: WebVitalsMetricsResult }).results[
+					name
+				].measure = metric.value;
+			};
+		webVitals.onCLS(handleMetric("CLS"), { reportAllChanges: true });
+		webVitals.onFCP(handleMetric("FCP"));
+		webVitals.onINP(handleMetric("INP"), { reportAllChanges: true });
+		webVitals.onLCP(handleMetric("LCP"));
+		webVitals.onTTFB(handleMetric("TTFB"));
+	});
 
-  // TODO: refactor into test-utils into something like `simulateRandomUserInteraction(page, tags = ["button, "label", "input"], maxElements = 10)`
-  const elements = page.locator("button, label, input"); // Select all labels and buttons in the body
+	// TODO: refactor into test-utils into something like `simulateRandomUserInteraction(page, tags = ["button, "label", "input"], maxElements = 10)`
+	const elements = page.locator("button, label, input"); // Select all labels and buttons in the body
 
-  for (const element of (await elements.all())
-    .slice(0, 10)
-    .filter((elem) => elem !== undefined)) {
-    try {
-      await element.click({ timeout: 1000 }); // Try to click the element with a timeout
-    } catch (error) {}
-  }
+	for (const element of (await elements.all())
+		.slice(0, 10)
+		.filter((elem) => elem !== undefined)) {
+		try {
+			await element.click({ timeout: 1000 }); // Try to click the element with a timeout
+		} catch (error) {}
+	}
 
-  await page.locator("body").dispatchEvent("onbeforeunload");
+	await page.locator("body").dispatchEvent("onbeforeunload");
 
-  const webVitalsMetrics: WebVitalsMetricsResult = await page.evaluate(() => {
-    return (window as unknown as { results: WebVitalsMetricsResult }).results;
-  });
+	const webVitalsMetrics: WebVitalsMetricsResult = await page.evaluate(() => {
+		return (window as unknown as { results: WebVitalsMetricsResult }).results;
+	});
 
-  console.log("Web Vitals Analysis:", webVitalsMetrics);
+	console.log("Web Vitals Analysis:", webVitalsMetrics);
 
-  Object.values(webVitalsMetrics).forEach((metric) => {
-    expect(metric.measure).toBeLessThan(metric.max);
-  });
+	Object.values(webVitalsMetrics).forEach((metric) => {
+		expect(metric.measure).toBeLessThan(metric.max);
+	});
 };
 // TODO: generate tests for all routes
 

@@ -10,7 +10,7 @@ coverage:
     project:
       default:
         paths:
-          - "web/bible-on-site/coverage/lcov.info"
+          - "web/bible-on-site/coverage/merged/lcov.info"
         target: auto
         threshold: 5%
         base: auto
@@ -21,6 +21,14 @@ coverage:
         base: auto
 
 parsers:
+  javascript:
+    enable_partials: yes
+  lcov:
+    branch_detection:
+      conditional: yes
+      loop: yes
+      method: no
+      macro: no
   gcov:
     branch_detection:
       conditional: yes
