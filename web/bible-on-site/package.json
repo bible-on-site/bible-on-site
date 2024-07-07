@@ -10,7 +10,7 @@
     "build": "next build --no-lint",
     "start": "next start",
     "lint": "next lint",
-    "test": "npm run test:unit && npm run test:e2e && npm run test:perf",
+    "test": "npm run test:unit && npm run test:e2e && npm run test:perf && npm run coverage:merge",
     "test:unit": "node --import tsx ./node_modules/jest/bin/jest.js",
     "test:e2e": "playwright test --config=playwright.e2e.config.ts",
     "test:perf": "playwright test --config=playwright.perf.config.ts",
