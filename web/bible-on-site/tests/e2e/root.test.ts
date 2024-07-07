@@ -1,11 +1,11 @@
 // import { test, expect } from "@playwright/test";
 
-import { test, expect } from "../util/test-fixture";
+import { expect, test } from "../util/test-fixture";
 
 const ROOT_URL = "/";
 
 test("has right title", async ({ page }) => {
-  await page.goto(ROOT_URL);
-  // Expect a title "to contain" a substring.
-  await expect(page).toHaveTitle('תנ"ך על הפרק');
+	await page.goto(ROOT_URL);
+	// Expect a title "to contain" a substring.
+	await expect(page).toHaveTitle('תנ"ך על הפרק');
 });
