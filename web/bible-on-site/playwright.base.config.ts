@@ -7,7 +7,7 @@ export function getBaseConfig(testType: TestType) {
   const coverageReportOptions: CoverageReportOptions = {
     name: "Next.js Istanbul Coverage Report",
     outputDir: `./coverage/${testType}`,
-    reports: ["html"],
+    reports: ["raw", "text", "html"],
   };
 
   const WEB_SERVER_URL = "http://127.0.0.1:3000";
@@ -42,8 +42,10 @@ export function getBaseConfig(testType: TestType) {
       reuseExistingServer: true, // consider that for some tests, such as for admin pages, restart the server before running each test
     },
     reporter: [
+      // results:
       ["list"],
       ["html", { outputFolder: `playwright-report/${testType}` }],
+      // Coverage:
       [
         "monocart-reporter",
         {

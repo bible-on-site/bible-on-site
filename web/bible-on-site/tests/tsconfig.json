@@ -25,5 +25,5 @@
     "types": ["node"],
     "jsx": "preserve"
   },
-  "include": ["./**/*.ts"]
+  "include": ["./**/*.ts", "util/coverage/merge-coverage.mts"]
 }
