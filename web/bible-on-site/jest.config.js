@@ -15,10 +15,9 @@ const config = {
 
   collectCoverage: true,
 
-  collectCoverageFrom: ["./src/**"],
-
+  collectCoverageFrom: ["./src/**/*.{ts,tsx}"],
   coverageDirectory: "coverage",
-  coverageReporters: ["v8"],
+  coverageReporters: ["json"],
   setupFiles: ["./jest.setup.js"],
   preset: "ts-jest",
   testEnvironment: "jsdom",
