@@ -23,7 +23,7 @@ export const Breadcrumb = (props: { perekObj: PerekObj }) => {
 							<span
 								className={`${styles.glyphicon} ${styles["glyphicon-triangle-bottom"]} ${styles.small}`}
 								aria-hidden="true"
-							></span>
+							/>
 						</span>
 						<div className={`${styles.drop} ${styles["bg-white"]}`}>
 							<ul className={`${styles.list} ${styles.pl0}`}>
@@ -47,7 +47,7 @@ export const Breadcrumb = (props: { perekObj: PerekObj }) => {
 							<span
 								className={`${styles.glyphicon} ${styles["glyphicon-triangle-bottom"]} ${styles.small}`}
 								aria-hidden="true"
-							></span>
+							/>
 						</span>
 						<div className={`${styles.drop} ${styles["bg-white"]}`}>
 							<ul className={`${styles.list} ${styles.pl0}`}>
@@ -71,7 +71,7 @@ export const Breadcrumb = (props: { perekObj: PerekObj }) => {
 							<span
 								className={`${styles.glyphicon} ${styles["glyphicon-triangle-bottom"]} ${styles.small}`}
 								aria-hidden="true"
-							></span>
+							/>
 						</span>
 						<div className={`${styles.drop} ${styles["bg-white"]}`}>
 							<ul className={`${styles.list} ${styles.pl0}`}>
