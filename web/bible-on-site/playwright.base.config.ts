@@ -10,15 +10,7 @@ export function getBaseConfig(testType: TestType) {
     reports: ["html"],
   };
 
-  /**
-   * Read environment variables from file.
-   * https://github.com/motdotla/dotenv
-   */
-  // require('dotenv').config();
-
-  /**
-   * See https://playwright.dev/docs/test-configuration.
-   */
+  const WEB_SERVER_URL = "http://127.0.0.1:3000";
   const config = defineConfig({
     testMatch: [`${testType}/**/*.test.ts`],
     testDir: "./tests",
@@ -26,7 +18,7 @@ export function getBaseConfig(testType: TestType) {
     forbidOnly: !!process.env.CI,
     use: {
       /* Base URL to use in actions like `await page.goto('/')`. */
-      baseURL: "http://127.0.0.1:3000",
+      baseURL: WEB_SERVER_URL,
 
       /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
       trace: "on-first-retry",
@@ -46,7 +38,7 @@ export function getBaseConfig(testType: TestType) {
     webServer: {
       env: { NODE_OPTIONS: `--inspect=${getDebugPort()}` },
       command: `npm run dev`,
-      url: "http://127.0.0.1:3000",
+      url: WEB_SERVER_URL,
       reuseExistingServer: true, // consider that for some tests, such as for admin pages, restart the server before running each test
     },
     reporter: [
