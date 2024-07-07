@@ -48,14 +48,13 @@ jobs:
           key: ${{ runner.os }}-playwright-${{ env.PLAYWRIGHT_VERSION }}
 
       - name: Install npm Dependencies
-        id: npm-ci
+        id: npm_ci
         run: |
-          npm ci || echo "npm ci failed" && exit 1
-        continue-on-error: true
+          npm ci || { echo "npm ci failed"; exit 1; }
 
       - name: Install npm Dependencies Fallback
-        id: npm-i
-        if: failure()
+        id: npm_i
+        if: steps.npm_ci.outcome == 'failure'
         run: |
           echo "npm ci failed, running npm cache clean and npm install"
           npm cache clean --force
