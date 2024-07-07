@@ -25,7 +25,7 @@
     "flowbite": "^2.4.1",
     "flowbite-react": "^0.10.1",
     "gematry": "^1.0.2",
-    "html-flip-book-react": "0.0.0-alpha.1",
+    "html-flip-book-react": "https://gitpkg.now.sh/doradsoft/html-flip-book/react?master",
     "moment-timezone": "^0.5.45",
     "next": "15.0.0-rc.0",
     "nuqs": "^1.17.4",
