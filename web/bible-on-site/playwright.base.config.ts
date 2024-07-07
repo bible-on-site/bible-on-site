@@ -45,7 +45,7 @@ export function getBaseConfig(testType: TestType) {
 
     webServer: {
       env: { NODE_OPTIONS: `--inspect=${getDebugPort()}` },
-      command: `npm run ${process.env.CI ? "start" : "dev"}`,
+      command: `npm run dev`,
       url: "http://127.0.0.1:3000",
       reuseExistingServer: true, // consider that for some tests, such as for admin pages, restart the server before running each test
     },
