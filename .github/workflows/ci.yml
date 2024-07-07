@@ -50,12 +50,16 @@ jobs:
       - name: Install npm Dependencies
         id: npm-ci
         run: |
-          npm ci
-          if [ $? -ne 0 ]; then
-            echo "npm ci failed, running npm cache clean and npm install"
-            npm cache clean --force
-            npm install
-          fi
+          npm ci || echo "npm ci failed" && exit 1
+        continue-on-error: true
+
+      - name: Install npm Dependencies Fallback
+        id: npm-i
+        if: failure()
+        run: |
+          echo "npm ci failed, running npm cache clean and npm install"
+          npm cache clean --force
+          npm install || exit 1
 
       - name: Install Playwright Dependencies
         if: steps.playwright-cache.outputs.cache-hit != 'true'
