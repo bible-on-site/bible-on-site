@@ -8,5 +8,5 @@ export function getDebugPort() {
 }
 // TODO: think if name is representative enough
 export function getRouterDebugPort() {
-  return getDebugPort();
+  return getDebugPort() + 1;
 }
