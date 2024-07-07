@@ -49,7 +49,7 @@ jobs:
 
       - name: Install npm Dependencies
         id: npm-ci
-        run: npm ci || npm i
+        run: npm ci || (npm cache clean --force && npm i)
 
       - name: Install Playwright Dependencies
         if: steps.playwright-cache.outputs.cache-hit != 'true'
