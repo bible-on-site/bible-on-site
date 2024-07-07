@@ -6,7 +6,7 @@
 import nextJest from "next/jest.js";
 
 const createJestConfig = nextJest({
-  // Provide the path to your Next.js app to load next.config.js and .env files in your test environment
+  // path to Next.js app to load next.config.js and .env files into test environment
   dir: "./",
 });
 /** @type {import('jest').Config} */
@@ -14,14 +14,30 @@ const config = {
   clearMocks: true,
 
   collectCoverage: true,
-
-  collectCoverageFrom: ["./src/**"],
-
-  coverageDirectory: "coverage",
-  coverageProvider: "v8",
-  coverageReporters: ["text", "lcov", "json-summary"],
+  coverageReporters: ["none"],
+  collectCoverageFrom: ["./src/**/*.{ts,tsx,css,scss,js,json}"],
   setupFiles: ["./jest.setup.js"],
   preset: "ts-jest",
+  reporters: [
+    "default",
+    [
+      "./tests/util/jest/coverage",
+      {
+        // logging: 'debug',
+        name: "Jest Monocart Coverage Report",
+        all: "./src",
+
+        sourcePath: {
+          "src/": "",
+        },
+
+        outputDir: "./coverage/unit",
+
+        reports: ["raw", "text", "html"],
+      },
+    ],
+  ],
+  // globalTeardown: "./tests/util/jest/globalTeardown.js",
   testEnvironment: "jsdom",
   testMatch: ["**/tests/(unit|integration)/**/*.test.ts"],
   // A map from regular expressions to paths to transformers
