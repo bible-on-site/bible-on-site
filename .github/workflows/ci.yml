@@ -84,7 +84,7 @@ jobs:
         id: npm-perf-test
         continue-on-error: true
         run: npm run test:perf
-      
+
       - name: Merge Test Coverage
         continue-on-error: true
         run: npm run coverage:merge
