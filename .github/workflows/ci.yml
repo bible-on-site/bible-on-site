@@ -49,7 +49,7 @@ jobs:
 
       - name: Install npm Dependencies
         id: npm_ci
-        run: npm ci --no-audit
+        run: npm ci --loglevel error
 
       - name: Install Playwright Dependencies
         if: steps.playwright-cache.outputs.cache-hit != 'true'
