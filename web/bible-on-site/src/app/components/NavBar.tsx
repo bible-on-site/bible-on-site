@@ -7,10 +7,10 @@ export const NavBar = () => {
 		<div className={styles.hamburgerMenu}>
 			<input type="checkbox" className={styles.menuToggle} id="menu-toggle" />
 			<label className={styles.menuBtn} htmlFor="menu-toggle">
-				<span className={styles.menuIcon}></span>
+				<span className={styles.menuIcon} />
 			</label>
 
-			<label className={styles.overlay} htmlFor="menu-toggle"></label>
+			<label className={styles.overlay} htmlFor="menu-toggle" />
 
 			<ul className={styles.menuBox}>
 				<header className={styles.sidebarTopBar}>
