@@ -111,4 +111,3 @@ jobs:
           name: playwright-report
           path: web/bible-on-site/playwright-report/
           retention-days: 30
-
