@@ -4,11 +4,14 @@
  */
 
 import nextJest from "next/jest.js";
-
 const createJestConfig = nextJest({
 	// path to Next.js app to load next.config.js and .env files into test environment
 	dir: "./",
 });
+const reports = ["raw", "text", "html"];
+if (process.env.CI) {
+  reports.push("codecov");
+}
 /** @type {import('jest').Config} */
 const config = {
 	clearMocks: true,
@@ -33,18 +36,18 @@ const config = {
 
 				outputDir: "./coverage/unit",
 
-				reports: ["raw", "text", "html"],
-			},
-		],
-	],
-	// globalTeardown: "./tests/util/jest/globalTeardown.js",
-	testEnvironment: "jsdom",
-	testMatch: ["**/tests/(unit|integration)/**/*.test.ts"],
-	// A map from regular expressions to paths to transformers
-	transform: {
-		"^.+\\.ts$": "ts-jest",
-	},
-	extensionsToTreatAsEsm: [".ts", ".json"],
+        reports: reports,
+      },
+    ],
+  ],
+  // globalTeardown: "./tests/util/jest/globalTeardown.js",
+  testEnvironment: "jsdom",
+  testMatch: ["**/tests/(unit|integration)/**/*.test.ts"],
+  // A map from regular expressions to paths to transformers
+  transform: {
+    "^.+\\.ts$": "ts-jest",
+  },
+  extensionsToTreatAsEsm: [".ts", ".json"],
 };
 
 // work around https://github.com/vercel/next.js/issues/35634
