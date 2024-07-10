@@ -12,10 +12,7 @@ const __dirname = path.dirname(__filename); // get the name of the directory
 
 const coverageDir = path.resolve(__dirname, "../../../coverage");
 const outputDir = path.resolve(coverageDir, "merged");
-const reports = ["text", "html"];
-if (process.env.CI) {
-  reports.push("codecov");
-}
+const reports = ["text", process.env.CI ? "codecov" : "html"];
 const coverageOptions: CoverageReportOptions = {
   name: "Merge Coverage Report",
   inputDir: [

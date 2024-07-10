@@ -8,10 +8,8 @@ const createJestConfig = nextJest({
 	// path to Next.js app to load next.config.js and .env files into test environment
 	dir: "./",
 });
-const reports = ["raw", "text", "html"];
-if (process.env.CI) {
-  reports.push("codecov");
-}
+const reports = ["raw", "text", process.env.CI ? "codecov" : "html"];
+
 /** @type {import('jest').Config} */
 const config = {
 	clearMocks: true,
