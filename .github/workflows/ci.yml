@@ -99,11 +99,6 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: web/bible-on-site/coverage/merged/coverage-final.json
-          exclude: |
-            web/bible-on-site/tests/
-            web/bible-on-site/coverage/unit
-            web/bible-on-site/coverage/e2e
-
       - name: Perf Test
         id: npm-perf-test
         continue-on-error: true
