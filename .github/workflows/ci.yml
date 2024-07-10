@@ -94,6 +94,12 @@ jobs:
         continue-on-error: true
         run: npm run coverage:merge
 
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: web/bible-on-site/coverage/merged/codecov.json
+
       - name: Perf Test
         id: npm-perf-test
         continue-on-error: true
@@ -106,8 +112,3 @@ jobs:
           path: web/bible-on-site/playwright-report/
           retention-days: 30
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          file: web/bible-on-site/coverage/merged/codecov.json
