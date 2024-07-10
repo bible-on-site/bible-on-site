@@ -77,7 +77,7 @@ export function getPerekIdByDate(date: Date): number {
 
 	const hebDateAsNumber = hebcalDateToNumber(hDate);
 
-	return getAllPerakim().find((p) => p.date.includes(hebDateAsNumber))?.perekId;
+	return getAllPerakim().find((p) => p.date.includes(hebDateAsNumber))!.perekId;
 }
 export function getTodaysPerekId() {
 	return getPerekIdByDate(moment.tz(new Date(), "Asia/Jerusalem").toDate());
