@@ -98,7 +98,7 @@ jobs:
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          file: web/bible-on-site/coverage/merged/lcov.info
+          file: web/bible-on-site/coverage/merged/cobertura-coverage.xml
           disable_search: true
 
       - name: Perf Test
