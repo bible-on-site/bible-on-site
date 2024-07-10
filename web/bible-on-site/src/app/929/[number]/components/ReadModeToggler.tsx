@@ -38,7 +38,7 @@ const ReadModeToggler = forwardRef(function ReadModeToggler(
 				checked={toggled}
 				onChange={handleChange}
 			/>
-			<div className={styles.toggleDiv}></div>
+			<div className={styles.toggleDiv} />
 			<Image
 				className={styles.bookIcon}
 				src="/icons/open-book.svg"

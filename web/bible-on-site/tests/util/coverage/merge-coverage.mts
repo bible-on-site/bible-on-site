@@ -1,6 +1,6 @@
-import fs from "fs"; // Import the 'fs' module
-import path from "path";
-import { fileURLToPath } from "url";
+import fs from "node:fs"; // Import the 'fs' module
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 // merge-coverage.js
 import {
 	CoverageReport,
