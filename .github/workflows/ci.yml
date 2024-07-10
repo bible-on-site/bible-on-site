@@ -99,6 +99,8 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: web/bible-on-site/coverage/merged/coverage-final.json
+          disable_search: true
+
       - name: Perf Test
         id: npm-perf-test
         continue-on-error: true
