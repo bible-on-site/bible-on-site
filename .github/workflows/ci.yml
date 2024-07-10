@@ -90,21 +90,21 @@ jobs:
         id: npm-e2e-test
         run: npm run test:e2e
 
-      # - name: Perf Test
-      #   id: npm-perf-test
-      #   continue-on-error: true
-      #   run: npm run test:perf
-
       - name: Merge Test Coverage
         continue-on-error: true
         run: npm run coverage:merge
 
-      # - uses: actions/upload-artifact@v4
-      #   if: always()
-      #   with:
-      #     name: playwright-report
-      #     path: web/bible-on-site/playwright-report/
-      #     retention-days: 30
+      - name: Perf Test
+        id: npm-perf-test
+        continue-on-error: true
+        run: npm run test:perf
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: web/bible-on-site/playwright-report/
+          retention-days: 30
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
