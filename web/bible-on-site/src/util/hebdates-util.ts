@@ -5,12 +5,12 @@ function getMonthInDBFormatFromHebcalDate(hDate: HDate): number {
 	// regular case
 	if (hDateMonth < 6 || !hDate.isLeapYear()) {
 		return hDateMonth;
-	} else if (hDateMonth === 6 || hDateMonth === 7) {
-		return hDateMonth + 7;
-	} // if (hDateMonth >= 8)
-	else {
-		return hDateMonth - 1;
 	}
+	if (hDateMonth === 6 || hDateMonth === 7) {
+		return hDateMonth + 7;
+	}
+
+	return hDateMonth - 1;
 }
 export enum DayOfWeek {
 	SUNDAY = 0,

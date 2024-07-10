@@ -3,11 +3,14 @@ import { defineConfig } from "@playwright/test";
 import type { CoverageReportOptions } from "monocart-reporter";
 import { getDebugPort } from "./get-debug-port";
 import type { TestType } from "./test-type";
+
 export function getBaseConfig(testType: TestType) {
+	const reports = ["raw", "text", process.env.CI ? "codecov" : "html"];
+
 	const coverageReportOptions: CoverageReportOptions = {
 		name: "Next.js Istanbul Coverage Report",
 		outputDir: `./coverage/${testType}`,
-		reports: ["raw", "text", "html"],
+		reports: reports,
 	};
 
 	const WEB_SERVER_URL = "http://127.0.0.1:3000";
@@ -37,7 +40,7 @@ export function getBaseConfig(testType: TestType) {
 
 		webServer: {
 			env: { NODE_OPTIONS: `--inspect=${getDebugPort()}` },
-			command: `npm run dev`,
+			command: "npm run dev",
 			url: WEB_SERVER_URL,
 			reuseExistingServer: true, // consider that for some tests, such as for admin pages, restart the server before running each test
 		},

@@ -20,8 +20,6 @@ class MonocartCoverageReporter extends CoverageReporter {
 		if (this.disabled) {
 			return;
 		}
-
-		debugger;
 		await this._addUntestedFiles(testContexts);
 
 		const coverage = await this._sourceMapStore.transformCoverage(

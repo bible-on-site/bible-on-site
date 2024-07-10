@@ -19,7 +19,7 @@ export default async function TodaysPerek({
 
 	const paramsString = params.toString();
 	redirect(
-		`/929/${perekId}` + (paramsString.length > 0 ? `?${paramsString}` : ""),
+		`/929/${perekId}${paramsString.length > 0 ? `?${paramsString}` : ""}`,
 		RedirectType.replace,
 	);
 }

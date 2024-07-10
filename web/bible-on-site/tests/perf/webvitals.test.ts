@@ -2,8 +2,8 @@ import type { Page, TestInfo } from "@playwright/test"; // import { test, expect
 
 import { expect, test } from "../util/playwright/test-fixture";
 
-import { readFileSync } from "fs";
-import { resolve } from "path";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 test.describe.configure({ mode: "serial" });
 
 type WebVitalsMetric = { measure: number; max: number };

@@ -14,7 +14,7 @@ export function getSeferByName(
 		(sefer) => sefer.name === seferName,
 	)!;
 	if (!sefer) {
-		throw new Error("Invalid seferName: " + seferName);
+		throw new Error(`Invalid seferName: ${seferName}`);
 	}
 	if (additionalLetter) {
 		sefer = sefer.additionals.find(

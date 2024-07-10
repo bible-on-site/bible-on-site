@@ -43,7 +43,7 @@ export default function Home({
 						</p>
 					</article>
 					<article className="flex flex-col items-center p-6 rounded-lg">
-						<h1 className="text-xl font-bold" role="button" tabIndex={1}>
+						<h1 className="text-xl font-bold">
 							<Image
 								className="icon-white"
 								src="/icons/smartphone.svg"

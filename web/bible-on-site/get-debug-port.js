@@ -1,4 +1,4 @@
-const { execSync } = require("child_process");
+const { execSync } = require("node:child_process");
 
 // This function is to generate a debug port
 // Currently it is hardcoded to 9229 but it can be changed to any number

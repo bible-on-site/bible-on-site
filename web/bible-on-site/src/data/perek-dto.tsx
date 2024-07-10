@@ -23,7 +23,7 @@ export interface PerekObj {
 }
 export function getPerekByPerekId(perekId: number): PerekObj {
 	if (perekId < 1 || perekId > 929) {
-		throw new Error("Invalid perekId: " + perekId);
+		throw new Error(`Invalid perekId: ${perekId}`);
 	}
 	const sefer = sefarim.find(
 		(sefer) => sefer.perekFrom <= perekId && sefer.perekTo >= perekId,
@@ -56,7 +56,8 @@ export function getPerekIdByDate(date: Date): number {
 		for (const cycleHDate of cycleHDates) {
 			if (hDate.deltaDays(cycleHDate) < 0) {
 				return cycleHDate;
-			} else if (
+			}
+			if (
 				hDate.deltaDays(cycleHDate.add(CYCLE_LENGTH - 1, DateUnits.DAYS)) < 0
 			) {
 				return hDate;

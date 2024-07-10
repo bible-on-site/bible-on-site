@@ -8,7 +8,7 @@ function parseKosherChristianDate(
 ): Date {
 	const dateParts = dateString.split("/");
 	const day = Number.parseInt(dateParts[0], 10);
-	const month = new Date(dateParts[1] + " 1, 2000").getMonth(); // getMonth() needs a valid year
+	const month = new Date(`${dateParts[1]} 1, 2000`).getMonth(); // getMonth() needs a valid year
 	const year = Number.parseInt(dateParts[2], 10) + 2000; // Assumes the year is 2024, not 1924
 	const timeParts = timeString.split(":");
 	const hours = Number.parseInt(timeParts[0], 10);

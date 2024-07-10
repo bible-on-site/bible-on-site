@@ -40,7 +40,7 @@ const hePageSemantics: PageSemantics = {
 const Sefer = (props: { perekObj: PerekObj }) => {
 	const perekObj = props.perekObj;
 	const sefer = getSeferByName(perekObj.sefer);
-	const emptyPage = <section className={styles.page}></section>;
+	const emptyPage = <section className={styles.page} />;
 	const pages = sefer.perakim
 		.map((perek, perekIdx) => (
 			<React.Fragment key={perekIdx + 1}>
@@ -52,19 +52,19 @@ const Sefer = (props: { perekObj: PerekObj }) => {
 								<a className={styles.pasukNum}>{toLetters(pasukIdx + 1)}</a>
 							);
 							const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
-								const segmentKey = pasukIdx + 1 + "-" + (segmentIdx + 1);
+								const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
 								// TODO: merge qris sequnce like in 929/406
 								return (
 									<React.Fragment key={segmentKey}>
-										<a className={segment.type == "qri" ? styles.qri : ""}>
-											{segment.type == "ktiv" ? (
+										<a className={segment.type === "qri" ? styles.qri : ""}>
+											{segment.type === "ktiv" ? (
 												segment.value
-											) : segment.type == "qri" ? (
+											) : segment.type === "qri" ? (
 												<>
-													(<label></label>
+													(<label />
 													{segment.value})
 												</>
-											) : segment.type == "ptuha" ? (
+											) : segment.type === "ptuha" ? (
 												Ptuah()
 											) : (
 												Stuma()
