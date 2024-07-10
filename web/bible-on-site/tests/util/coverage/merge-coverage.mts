@@ -3,8 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 // merge-coverage.js
 import {
-  CoverageReport,
-  type CoverageReportOptions,
+	CoverageReport,
+	type CoverageReportOptions,
 } from "monocart-coverage-reports";
 
 const __filename = fileURLToPath(import.meta.url); // get the resolved path to the file
@@ -17,23 +17,23 @@ const outputDir = path.resolve(coverageDir, "merged");
 const reports = ["text", process.env.CI ? "json" : "html"];
 
 const coverageOptions: CoverageReportOptions = {
-  name: "Merge Coverage Report",
-  inputDir: [
-    path.resolve(unitCoverageDir, "raw"),
-    path.resolve(e2eCoverageDir, "raw"),
-  ],
-  outputDir: outputDir,
-  reports: reports,
+	name: "Merge Coverage Report",
+	inputDir: [
+		path.resolve(unitCoverageDir, "raw"),
+		path.resolve(e2eCoverageDir, "raw"),
+	],
+	outputDir: outputDir,
+	reports: reports,
 };
 const report = new CoverageReport(coverageOptions);
 const results = await report.generate();
 if (!results) {
-  process.exit(1);
+	process.exit(1);
 }
 const coveragePercentage = results.summary.lines.pct;
 const filePath = path.resolve(outputDir, "coverage-percentage.txt");
 await fs.promises.writeFile(filePath, coveragePercentage.toString());
 if (process.env.CI) {
-  await fs.promises.rm(unitCoverageDir, { recursive: true });
-  await fs.promises.rm(e2eCoverageDir, { recursive: true });
+	await fs.promises.rm(unitCoverageDir, { recursive: true });
+	await fs.promises.rm(e2eCoverageDir, { recursive: true });
 }
