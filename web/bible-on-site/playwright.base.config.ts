@@ -5,7 +5,10 @@ import { getDebugPort } from "./get-debug-port";
 import type { TestType } from "./test-type";
 
 export function getBaseConfig(testType: TestType) {
-	const reports = ["raw", "text", process.env.CI ? "codecov" : "html"];
+	const reports = ["raw", "text"];
+	if (!process.env.CI) {
+		reports.push("html");
+	}
 
 	const coverageReportOptions: CoverageReportOptions = {
 		name: "Next.js Istanbul Coverage Report",
