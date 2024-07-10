@@ -94,7 +94,6 @@ jobs:
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          exclude: ./web/bible-on-site/bible-on-site/web/bible-on-site/tests
 
       - name: Perf Test
         id: npm-perf-test
