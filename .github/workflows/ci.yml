@@ -40,7 +40,7 @@ jobs:
         run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./package-lock.json').dependencies['@playwright/test'].version)")" >> $GITHUB_ENV
 
       - name: Cache playwright binaries
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: playwright-cache
         with:
           path: |
@@ -90,14 +90,21 @@ jobs:
         id: npm-e2e-test
         run: npm run test:e2e
 
+      - name: Merge Test Coverage
+        continue-on-error: true
+        run: npm run coverage:merge
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: web/bible-on-site/coverage/merged/lcov.info
+          disable_search: true
+
       - name: Perf Test
         id: npm-perf-test
         continue-on-error: true
         run: npm run test:perf
-
-      - name: Merge Test Coverage
-        continue-on-error: true
-        run: npm run coverage:merge
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -105,8 +112,3 @@ jobs:
           name: playwright-report
           path: web/bible-on-site/playwright-report/
           retention-days: 30
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}

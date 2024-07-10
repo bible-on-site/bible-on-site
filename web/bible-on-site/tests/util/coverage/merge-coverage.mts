@@ -11,13 +11,16 @@ const __filename = fileURLToPath(import.meta.url); // get the resolved path to t
 const __dirname = path.dirname(__filename); // get the name of the directory
 
 const coverageDir = path.resolve(__dirname, "../../../coverage");
+const unitCoverageDir = path.resolve(coverageDir, "unit");
+const e2eCoverageDir = path.resolve(coverageDir, "e2e");
 const outputDir = path.resolve(coverageDir, "merged");
-const reports = ["text", process.env.CI ? "codecov" : "html"];
+const reports = ["text", process.env.CI ? "lcov" : "html"];
+
 const coverageOptions: CoverageReportOptions = {
 	name: "Merge Coverage Report",
 	inputDir: [
-		path.resolve(coverageDir, "unit", "raw"),
-		path.resolve(coverageDir, "e2e", "raw"),
+		path.resolve(unitCoverageDir, "raw"),
+		path.resolve(e2eCoverageDir, "raw"),
 	],
 	outputDir: outputDir,
 	reports: reports,
@@ -30,3 +33,7 @@ if (!results) {
 const coveragePercentage = results.summary.lines.pct;
 const filePath = path.resolve(outputDir, "coverage-percentage.txt");
 await fs.promises.writeFile(filePath, coveragePercentage.toString());
+if (process.env.CI) {
+	await fs.promises.rm(unitCoverageDir, { recursive: true });
+	await fs.promises.rm(e2eCoverageDir, { recursive: true });
+}
