@@ -1,27 +1,27 @@
 {
-  "env": {
-    "jest": true
-  },
-  "plugins": ["@typescript-eslint", "jest"],
-  "extends": [
-    "eslint:recommended",
-    "plugin:@typescript-eslint/strict-type-checked",
-    "plugin:@typescript-eslint/stylistic-type-checked",
-    "plugin:jest/recommended",
-    "plugin:jest/style"
-  ],
-  "rules": {
-    "@typescript-eslint/no-unsafe-call": "off" /* flaky */,
-    "@typescript-eslint/no-unsafe-member-access": "off" /* flaky */,
-    "@typescript-eslint/no-unsafe-assignment": "off" /* flaky */
-  },
-  "parserOptions": {
-    "project": "tsconfig.json"
-  },
-  "overrides": [
-    {
-      "files": ["*.json"],
-      "extends": ["eslint:recommended", "plugin:jsonc/recommended-with-jsonc"]
-    }
-  ]
+	"env": {
+		"jest": true
+	},
+	"plugins": ["@typescript-eslint", "jest"],
+	"extends": [
+		"eslint:recommended",
+		"plugin:@typescript-eslint/strict-type-checked",
+		"plugin:@typescript-eslint/stylistic-type-checked",
+		"plugin:jest/recommended",
+		"plugin:jest/style"
+	],
+	"rules": {
+		"@typescript-eslint/no-unsafe-call": "off" /* flaky */,
+		"@typescript-eslint/no-unsafe-member-access": "off" /* flaky */,
+		"@typescript-eslint/no-unsafe-assignment": "off" /* flaky */
+	},
+	"parserOptions": {
+		"project": "tsconfig.json"
+	},
+	"overrides": [
+		{
+			"files": ["*.json"],
+			"extends": ["eslint:recommended", "plugin:jsonc/recommended-with-jsonc"]
+		}
+	]
 }
