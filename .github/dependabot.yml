@@ -5,7 +5,24 @@
 
 version: 2
 updates:
-  - package-ecosystem: "" # See documentation for possible values
+  - package-ecosystem: "npm" # Change this based on your project
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 10
+    versioning-strategy: auto
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    # ignore:
+    #   - dependency-name: "express"
+    #     versions: ["4.x.x"]
+    labels:
+      - "dependencies"
+      - "automerge"
+
+  # You can add more entries for different package ecosystems
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
