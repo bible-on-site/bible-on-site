@@ -1,21 +1,5 @@
 {
-	"linter": {
-		"ignore": [
-			"coverage/",
-			"coverage/",
-			"coverage/",
-			"coverage/",
-			"coverage/",
-			"coverage/",
-			"coverage/",
-			"coverage/",
-			"coverage/",
-			"coverage/",
-			"node_modules/",
-			"reports/",
-			"lib/",
-			"coverage/",
-			"coverage/"
-		]
-	}
+  "linter": {
+    "ignore": ["coverage/", "node_modules/", "reports/", "lib/"]
+  }
 }
