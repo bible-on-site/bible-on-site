@@ -29,11 +29,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        id: setup-node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: web/bible-on-site/package.json
+          cache-dependency-path: web/bible-on-site/package-lock.json
+          cache: npm
 
       - name: Install ESLint
         run: |
-          npm install eslint@8.57.0
-          npm install @microsoft/eslint-formatter-sarif@3.1.0
+          npm install @microsoft/eslint-formatter-sarif
 
       - name: Run ESLint
         run: npx eslint .
