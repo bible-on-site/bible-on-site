@@ -1,15 +1,32 @@
 {
-	"root": true,
-	"extends": ["next/core-web-vitals"],
-	// Set that everything besides nextjs code should be checked with regular eslint parser
-	"overrides": [
-		{
-			"files": ["*.js", "*.config.mjs"],
-			// This is the default parser of ESLint
-			"parser": "espree",
-			"parserOptions": {
-				"ecmaVersion": "latest"
-			}
-		}
-	]
+  "root": true,
+  "plugins": ["@typescript-eslint"],
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/strict-type-checked",
+    "plugin:@typescript-eslint/stylistic-type-checked",
+    "plugin:react/recommended",
+    "plugin:jsonc/recommended-with-jsonc",
+    "next/core-web-vitals"
+  ],
+  "overrides": [
+    {
+      "files": ["*.js", "*.config.mjs"],
+      "parser": "espree",
+      "parserOptions": {
+        "ecmaVersion": "latest"
+      }
+    }
+  ],
+  "parserOptions": {
+    "project": "tsconfig.json"
+  },
+  "rules": {
+    "@typescript-eslint/restrict-template-expressions": [
+      "error",
+      {
+        "allowNumber": true // it has trivial toString() conversion, so no need to be so strict here
+      }
+    ]
+  }
 }
