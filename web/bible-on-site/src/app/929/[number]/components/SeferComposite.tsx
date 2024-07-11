@@ -10,7 +10,7 @@ const ClientWrapper = (props: { perekObj: PerekObj; toggled: boolean }) => {
 	const [everToggled, setEverToggled] = useState(false);
 	const [currentlyToggled, setCurrentlyToggled] = useState(false);
 	const [display, setDisplay] = useState('none');
-	const handleToggle = (toggled: boolean, immediately = false) => {
+	const handleToggle = useCallback((toggled: boolean, immediately = false) => {
 		console.log(
 			`handleToggle(toggled: ${toggled}, immediately: ${immediately})`,
 		);
