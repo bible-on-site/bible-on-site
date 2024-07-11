@@ -71,8 +71,7 @@ const Sefer = (props: { perekObj: PerekObj }) => {
 											)}
 										</a>
 										{segmentIdx === pasuk.segments.length - 1 ||
-										(segment &&
-											(segment.type === "ktiv" || segment.type === "qri") &&
+										((segment.type === "ktiv" || segment.type === "qri") &&
 											segment.value.at(segment.value.length - 1) ===
 												"־") ? null : (
 											<span> </span>

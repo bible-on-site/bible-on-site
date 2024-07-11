@@ -5,7 +5,7 @@ import styles from "./page.module.css";
 export const dynamicParams = false;
 
 // this reserverd function is a magic for caching
-export async function generateStaticParams() {
+export function generateStaticParams() {
 	return ["dailyBulletin", "tos", "app", "contact", "donation"];
 }
 

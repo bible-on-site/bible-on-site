@@ -1,36 +1,43 @@
 import { sefarim } from "./db/sefarim";
-import {
-	type Additionals,
-	Pasuk,
-	type Perek,
-	type SefarimItem,
+import type {
+	Additionals,
+	Perek,
+	SefarimItem,
+	SefarimItemWithAdditionals,
+	SefarimItemWithPerakim,
 } from "./db/tanah-view-types";
-export type SeferObj = Additionals | SefarimItem;
+export type SeferObj = Additionals | SefarimItemWithPerakim;
 export function getSeferByName(
 	seferName: string,
 	additionalLetter?: string,
 ): SeferObj {
-	let sefer: Additionals | SefarimItem = sefarim.find(
+	const seferBeforeAdditionalExtraction: SefarimItem | undefined = sefarim.find(
 		(sefer) => sefer.name === seferName,
-	)!;
-	if (!sefer) {
+	);
+	if (!seferBeforeAdditionalExtraction) {
 		throw new Error(`Invalid seferName: ${seferName}`);
 	}
 	if (additionalLetter) {
-		sefer = sefer.additionals.find(
-			(additional) => additional.letter === additionalLetter,
-		)!;
+		const additional = (
+			seferBeforeAdditionalExtraction as SefarimItemWithAdditionals
+		).additionals.find((additional) => additional.letter === additionalLetter);
+		if (!additional) {
+			throw new Error(`Invalid additionalLetter: ${additionalLetter}`);
+		}
+		return additional;
 	}
-	return sefer;
+	const nonAdditionalSefer =
+		seferBeforeAdditionalExtraction as SefarimItemWithPerakim;
+	return nonAdditionalSefer;
 }
 
 export function getAllPerakim(): (Perek & { perekId: number })[] {
 	let perekIdCounter = 1;
 	return sefarim.flatMap((sefer) => {
-		const perakim = sefer.perakim || [
-			...(sefer.additionals?.[0]?.perakim || []),
-			...(sefer.additionals?.[1]?.perakim || []),
-		];
+		const perakim =
+			"perakim" in sefer
+				? sefer.perakim
+				: [...sefer.additionals[0].perakim, ...sefer.additionals[1].perakim];
 		return perakim.map((perek) => ({ ...perek, perekId: perekIdCounter++ }));
 	});
 }

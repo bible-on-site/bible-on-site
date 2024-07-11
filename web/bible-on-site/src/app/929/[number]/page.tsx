@@ -2,11 +2,7 @@
 import styles from "./page.module.css";
 import "./overiide-globals.css";
 import { toLetters } from "gematry";
-import {
-	createSearchParamsCache,
-	parseAsBoolean,
-	parseAsString,
-} from "nuqs/server";
+import { createSearchParamsCache, parseAsString } from "nuqs/server";
 import { Suspense } from "react";
 import React from "react";
 import { getPerekByPerekId } from "../../../data/perek-dto";
@@ -18,7 +14,7 @@ import { Stuma } from "./components/Stuma";
 export const dynamicParams = false;
 
 // this reserverd function is a magic for caching
-export async function generateStaticParams() {
+export function generateStaticParams() {
 	// return range of numbers from 1 to 929
 	return Array.from({ length: 929 }, (_, i) => i + 1);
 }
@@ -28,7 +24,7 @@ const searchParamsCache = createSearchParamsCache({
 });
 
 // TODO: figure out if need to use generateMetadata
-export default async function Perek({
+export default function Perek({
 	params: { number },
 	searchParams,
 }: {
@@ -51,14 +47,14 @@ export default async function Perek({
 					{perekObj.pesukim.map((pasuk, pasukIdx) => {
 						const pasukKey = pasukIdx + 1;
 						const pasukNumElement = (
-							<a className={styles.pasukNum}>{toLetters(pasukIdx + 1)}</a>
+							<span className={styles.pasukNum}>{toLetters(pasukIdx + 1)}</span>
 						);
 						const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
 							const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
 							// TODO: merge qris sequnce like in 929/406
 							return (
 								<React.Fragment key={segmentKey}>
-									<a className={segment.type === "qri" ? styles.qri : ""}>
+									<span className={segment.type === "qri" ? styles.qri : ""}>
 										{segment.type === "ktiv" ? (
 											segment.value
 										) : segment.type === "qri" ? (
@@ -71,10 +67,9 @@ export default async function Perek({
 										) : (
 											Stuma()
 										)}
-									</a>
+									</span>
 									{segmentIdx === pasuk.segments.length - 1 ||
-									(segment &&
-										(segment.type === "ktiv" || segment.type === "qri") &&
+									((segment.type === "ktiv" || segment.type === "qri") &&
 										segment.value.at(segment.value.length - 1) ===
 											"־") ? null : (
 										<span> </span>

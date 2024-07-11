@@ -6,15 +6,18 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 test.describe.configure({ mode: "serial" });
 
-type WebVitalsMetric = { measure: number; max: number };
+interface WebVitalsMetric {
+	measure: number;
+	max: number;
+}
 
-type WebVitalsMetrics = {
+interface WebVitalsMetrics {
 	CLS: number;
 	FCP: number;
 	INP: number;
 	LCP: number;
 	TTFB: number;
-};
+}
 
 type WebVitalsMetricsResult = {
 	[K in keyof WebVitalsMetrics]: WebVitalsMetric;
@@ -56,10 +59,10 @@ const testWebVitals = async ({ page }: { page: Page }, testInfo: TestInfo) => {
 					] as unknown as [number, number]
 				)[0],
 			}))
-			.reduce((acc, { name, measure, max }) => {
+			.reduce<WebVitalsMetricsResult>((acc, { name, measure, max }) => {
 				acc[name as keyof WebVitalsMetrics] = { measure, max };
 				return acc;
-			}, {} as WebVitalsMetricsResult);
+			}, {});
 		const handleMetric =
 			(name: keyof WebVitalsMetrics) => (metric: { value: number }) => {
 				console.log(name, metric.value);
@@ -75,14 +78,18 @@ const testWebVitals = async ({ page }: { page: Page }, testInfo: TestInfo) => {
 	});
 
 	// TODO: refactor into test-utils into something like `simulateRandomUserInteraction(page, tags = ["button, "label", "input"], maxElements = 10)`
-	const elements = page.locator("button, label, input"); // Select all labels and buttons in the body
-
-	for (const element of (await elements.all())
-		.slice(0, 10)
-		.filter((elem) => elem !== undefined)) {
+	const elements = page.locator("button, label, input");
+	const elementsFlat = (await elements.all()).flat();
+	const SAMPLE_SIZE = 10;
+	for (const element of elementsFlat.slice(
+		0,
+		Math.min(elementsFlat.length, SAMPLE_SIZE),
+	)) {
 		try {
 			await element.click({ timeout: 1000 }); // Try to click the element with a timeout
-		} catch (error) {}
+		} catch (error) {
+			console.log("Error clicking element", element, error);
+		}
 	}
 
 	await page.locator("body").dispatchEvent("onbeforeunload");
