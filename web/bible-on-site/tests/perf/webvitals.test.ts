@@ -7,102 +7,102 @@ import { resolve } from "node:path";
 test.describe.configure({ mode: "serial" });
 
 interface WebVitalsMetric {
-	measure: number;
-	max: number;
+  measure: number;
+  max: number;
 }
 
 interface WebVitalsMetrics {
-	CLS: number;
-	FCP: number;
-	INP: number;
-	LCP: number;
-	TTFB: number;
+  CLS: number;
+  FCP: number;
+  INP: number;
+  LCP: number;
+  TTFB: number;
 }
 
 type WebVitalsMetricsResult = {
-	[K in keyof WebVitalsMetrics]: WebVitalsMetric;
+  [K in keyof WebVitalsMetrics]: WebVitalsMetric;
 };
 
 type WebVitalsMetricsClient = {
-	[K in keyof WebVitalsMetrics]: number;
+  [K in keyof WebVitalsMetrics]: number;
 } & {
-	[K in keyof WebVitalsMetrics as `${K}Threshold`]: number;
+  [K in keyof WebVitalsMetrics as `${K}Threshold`]: number;
 } & {
-	[K in keyof WebVitalsMetrics as `on${K}`]: CallableFunction;
+  [K in keyof WebVitalsMetrics as `on${K}`]: CallableFunction;
 };
 const testWebVitals = async ({ page }: { page: Page }, testInfo: TestInfo) => {
-	const webVitalsScript = readFileSync(
-		resolve(__dirname, "../../node_modules/web-vitals/dist/web-vitals.iife.js"),
-		"utf8",
-	);
+  const webVitalsScript = readFileSync(
+    resolve(__dirname, "../../node_modules/web-vitals/dist/web-vitals.iife.js"),
+    "utf8",
+  );
 
-	await page.goto(testInfo.title);
+  await page.goto(testInfo.title);
 
-	await page.addScriptTag({ content: webVitalsScript });
-	await page.evaluate(() => {
-		const webVitals = (
-			window as unknown as { webVitals: WebVitalsMetricsClient }
-		).webVitals;
-		(window as unknown as { results: WebVitalsMetricsResult }).results = [
-			"CLS",
-			"FCP",
-			"INP",
-			"LCP",
-			"TTFB",
-		]
-			.map((name) => ({
-				name,
-				measure: Number.NaN,
-				max: (
-					webVitals[
-						`${name}Thresholds` as keyof WebVitalsMetricsClient
-					] as unknown as [number, number]
-				)[0],
-			}))
-			.reduce<WebVitalsMetricsResult>((acc, { name, measure, max }) => {
-				acc[name as keyof WebVitalsMetrics] = { measure, max };
-				return acc;
-			}, {});
-		const handleMetric =
-			(name: keyof WebVitalsMetrics) => (metric: { value: number }) => {
-				console.log(name, metric.value);
-				(window as unknown as { results: WebVitalsMetricsResult }).results[
-					name
-				].measure = metric.value;
-			};
-		webVitals.onCLS(handleMetric("CLS"), { reportAllChanges: true });
-		webVitals.onFCP(handleMetric("FCP"));
-		webVitals.onINP(handleMetric("INP"), { reportAllChanges: true });
-		webVitals.onLCP(handleMetric("LCP"));
-		webVitals.onTTFB(handleMetric("TTFB"));
-	});
+  await page.addScriptTag({ content: webVitalsScript });
+  await page.evaluate(() => {
+    const webVitals = (
+      window as unknown as { webVitals: WebVitalsMetricsClient }
+    ).webVitals;
+    (window as unknown as { results: WebVitalsMetricsResult }).results = [
+      "CLS",
+      "FCP",
+      "INP",
+      "LCP",
+      "TTFB",
+    ]
+      .map((name) => ({
+        name,
+        measure: Number.NaN,
+        max: (
+          webVitals[
+            `${name}Thresholds` as keyof WebVitalsMetricsClient
+          ] as unknown as [number, number]
+        )[0],
+      }))
+      .reduce<WebVitalsMetricsResult>((acc, { name, measure, max }) => {
+        acc[name as keyof WebVitalsMetrics] = { measure, max };
+        return acc;
+      }, {});
+    const handleMetric =
+      (name: keyof WebVitalsMetrics) => (metric: { value: number }) => {
+        console.log(name, metric.value);
+        (window as unknown as { results: WebVitalsMetricsResult }).results[
+          name
+        ].measure = metric.value;
+      };
+    webVitals.onCLS(handleMetric("CLS"), { reportAllChanges: true });
+    webVitals.onFCP(handleMetric("FCP"));
+    webVitals.onINP(handleMetric("INP"), { reportAllChanges: true });
+    webVitals.onLCP(handleMetric("LCP"));
+    webVitals.onTTFB(handleMetric("TTFB"));
+  });
 
-	// TODO: refactor into test-utils into something like `simulateRandomUserInteraction(page, tags = ["button, "label", "input"], maxElements = 10)`
-	const elements = page.locator("button, label, input");
-	const elementsFlat = (await elements.all()).flat();
-	const SAMPLE_SIZE = 10;
-	for (const element of elementsFlat.slice(
-		0,
-		Math.min(elementsFlat.length, SAMPLE_SIZE),
-	)) {
-		try {
-			await element.click({ timeout: 1000 }); // Try to click the element with a timeout
-		} catch (error) {
-			console.log("Error clicking element", element, error);
-		}
-	}
+  // TODO: refactor into test-utils into something like `simulateRandomUserInteraction(page, tags = ["button, "label", "input"], maxElements = 10)`
+  const elements = page.locator("button, label, input");
+  const elementsFlat = (await elements.all()).flat();
+  const SAMPLE_SIZE = 10;
+  for (const element of elementsFlat.slice(
+    0,
+    Math.min(elementsFlat.length, SAMPLE_SIZE),
+  )) {
+    try {
+      await element.click({ timeout: 1000 }); // Try to click the element with a timeout
+    } catch (error) {
+      console.log("Error clicking element", element, error);
+    }
+  }
 
-	await page.locator("body").dispatchEvent("onbeforeunload");
+  await page.locator("body").dispatchEvent("onbeforeunload");
 
-	const webVitalsMetrics: WebVitalsMetricsResult = await page.evaluate(() => {
-		return (window as unknown as { results: WebVitalsMetricsResult }).results;
-	});
+  const webVitalsMetrics: WebVitalsMetricsResult = await page.evaluate(() => {
+    return (window as unknown as { results: WebVitalsMetricsResult }).results;
+  });
 
-	console.log("Web Vitals Analysis:", webVitalsMetrics);
+  console.log("Web Vitals Analysis:", webVitalsMetrics);
 
-	Object.values(webVitalsMetrics).forEach((metric) => {
-		expect(metric.measure).toBeLessThan(metric.max);
-	});
+  Object.values(webVitalsMetrics).forEach((metric) => {
+    expect(metric.measure).toBeLessThan(metric.max);
+  });
 };
 // TODO: generate tests for all routes
 
