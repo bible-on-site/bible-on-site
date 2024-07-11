@@ -1,16 +1,26 @@
 import { HDate, Location, Zmanim } from "@hebcal/core";
 
-function getMonthInDBFormatFromHebcalDate(hDate: HDate): number {
+function extractUniformMonthNumberFromHDate(hDate: HDate): number {
 	const hDateMonth = hDate.getTishreiMonth();
-	// regular case
+	// regular case: all months of non-leap year, or months Tishrei-Shevat of leap year
 	if (hDateMonth < 6 || !hDate.isLeapYear()) {
 		return hDateMonth;
 	}
+	// months Adar I and Adar II of leap year
 	if (hDateMonth === 6 || hDateMonth === 7) {
 		return hDateMonth + 7;
 	}
-
+	// months Nisan-Elul of leap year
 	return hDateMonth - 1;
+}
+function extractHebcalMonthNumberfromNumericDate(date: number): number {
+	const uniformMonth = Number.parseInt(date.toString().substring(4, 6));
+	// if leap year and months Adar I or Adar II
+	if (uniformMonth === 13 || uniformMonth === 14) {
+		return uniformMonth - 1;
+	}
+	// for all months of non-leap year, or months Tishrei-Shevat and Nisan-Elul of leap year
+	return ((uniformMonth + 5) % 12) + 1;
 }
 export enum DayOfWeek {
 	SUNDAY = 0,
@@ -39,7 +49,7 @@ export function constructTsetAwareHDate(date: Date): HDate {
 
 export function hebcalDateToNumber(hDate: HDate): number {
 	return Number.parseInt(
-		`${hDate.yy}${getMonthInDBFormatFromHebcalDate(hDate)
+		`${hDate.yy}${extractUniformMonthNumberFromHDate(hDate)
 			.toString()
 			.padStart(2, "0")}${hDate.dd.toString().padStart(2, "0")}`,
 	);
@@ -47,7 +57,7 @@ export function hebcalDateToNumber(hDate: HDate): number {
 export function parseNumericalDateToHebcalDate(dateAsNumber: number) {
 	return new HDate(
 		Number.parseInt(dateAsNumber.toString().substring(6)),
-		Number.parseInt(dateAsNumber.toString().substring(4, 6)),
+		extractHebcalMonthNumberfromNumericDate(dateAsNumber),
 		Number.parseInt(dateAsNumber.toString().substring(0, 4)),
 	);
 }
