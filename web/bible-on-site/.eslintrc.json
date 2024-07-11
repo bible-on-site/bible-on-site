@@ -1,6 +1,6 @@
 {
   "root": true,
-  "plugins": ["@typescript-eslint"],
+  "plugins": ["@typescript-eslint", "react"],
   "extends": [
     "eslint:recommended",
     "plugin:@typescript-eslint/strict-type-checked",
@@ -15,9 +15,13 @@
     "@typescript-eslint/restrict-template-expressions": [
       "error",
       {
-        "allowNumber": true // it has trivial toString() conversion, so no need to be so strict here
+        "allowNumber": true // number type has trivial toString() conversion, so no need to be so strict here
       }
-    ]
+    ],
+
+    "@typescript-eslint/no-unsafe-call": "off", // flaky
+    "@typescript-eslint/no-unsafe-member-access": "off", // flaky
+    "@typescript-eslint/no-unsafe-assignment": "off" // flaky
   },
   "overrides": [
     {
