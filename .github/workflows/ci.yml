@@ -3,15 +3,14 @@ name: Continuous Integration
 on:
   push:
     branches: master
-    paths:
-      - web/bible-on-site/**
-      - .github/**
   pull_request:
     branches: master
-    paths:
-      - web/bible-on-site/**
-      - .github/**
-  workflow_call:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'The branch or tag to run the workflow on'
+        required: true
+        default: 'master'
 
 jobs:
   build:
@@ -27,6 +26,8 @@ jobs:
       - name: Checkout
         id: checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
 
       - name: Setup Node.js
         id: setup-node
@@ -101,6 +102,12 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: web/bible-on-site/coverage/merged/lcov.info
           disable_search: true
+
+      - name: Run codacy-coverage-reporter
+        uses: codacy/codacy-coverage-reporter-action@master
+        with:
+          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
+          coverage-reports: web/bible-on-site/coverage/merged/lcov.info
 
       - name: Perf Test
         id: npm-perf-test
