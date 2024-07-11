@@ -12,8 +12,15 @@ on:
       - web/bible-on-site/**
       - .github/**
   workflow_dispatch:
-  repository_dispatch:
-    types: [trigger-ci]  # This matches the event_type from the curl command
+    inputs:
+      ref:
+        description: 'The branch or tag to run the workflow on'
+        required: true
+        default: 'master'
+  workflow_run:
+    workflows: ["Manual workflow"]  # Name of the triggering workflow
+    types:
+      - completed
 
 jobs:
   build:
