@@ -36,4 +36,5 @@ jobs:
           comment-summary-in-pr: always
         #   fail-on-severity: moderate
         #   deny-licenses: GPL-1.0-or-later, LGPL-2.0-or-later
+        #   allow_licenses: GPL-3.0, BSD-3-Clause, MIT
         #   retry-on-snapshot-warnings: true
