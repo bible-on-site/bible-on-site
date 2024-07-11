@@ -17,10 +17,6 @@ on:
         description: 'The branch or tag to run the workflow on'
         required: true
         default: 'master'
-  workflow_run:
-    workflows: ["Manual workflow"]  # Name of the triggering workflow
-    types:
-      - completed
 
 jobs:
   build:
@@ -36,6 +32,8 @@ jobs:
       - name: Checkout
         id: checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
 
       - name: Setup Node.js
         id: setup-node
