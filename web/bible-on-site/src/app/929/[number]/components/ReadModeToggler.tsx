@@ -1,19 +1,15 @@
-"use client";
-import Image from "next/image";
-import type React from "react";
-import {
-	forwardRef,
-	useEffect,
-	useImperativeHandle,
-	useRef,
-	useState,
-} from "react";
-import styles from "./read-mode-toggler.module.css";
+'use client';
+import Image from 'next/image';
+import type React from 'react';
+import { useEffect, useImperativeHandle, useRef, useState } from 'react';
+import styles from './read-mode-toggler.module.css';
 
-const ReadModeToggler = forwardRef(function ReadModeToggler(
-	props: { toggled: boolean; onToggle?: (toggled: boolean) => void },
+const ReadModeToggler = function ReadModeToggler({
 	ref,
-) {
+	...props
+}: { toggled: boolean; onToggle?: (toggled: boolean) => void } & {
+	ref: React.RefObject<unknown>;
+}) {
 	const [toggled, setToggled] = useState(props.toggled);
 	const toggleRef = useRef<HTMLLabelElement>(null);
 
@@ -55,6 +51,6 @@ const ReadModeToggler = forwardRef(function ReadModeToggler(
 			/>
 		</label>
 	);
-});
+};
 
 export default ReadModeToggler;
