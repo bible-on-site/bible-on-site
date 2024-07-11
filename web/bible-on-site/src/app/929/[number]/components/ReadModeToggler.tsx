@@ -4,10 +4,10 @@ import type React from "react";
 import { forwardRef, useEffect, useRef, useState } from "react";
 import styles from "./read-mode-toggler.module.css";
 
-const ReadModeToggler = forwardRef(function ReadModeToggler(props: {
-  toggled: boolean;
-  onToggle?: (toggled: boolean) => void;
-}) {
+const ReadModeToggler = forwardRef<
+  HTMLLabelElement,
+  { toggled: boolean; onToggle?: (toggled: boolean) => void }
+>(function ReadModeToggler(props, ref) {
   const [toggled, setToggled] = useState(props.toggled);
   const toggleRef = useRef<HTMLLabelElement>(null);
 
@@ -24,7 +24,7 @@ const ReadModeToggler = forwardRef(function ReadModeToggler(props: {
   }, [props.toggled]);
 
   return (
-    <label ref={toggleRef} className={styles.label}>
+    <label ref={ref ?? toggleRef} className={styles.label}>
       <input
         className={styles.input}
         id="toggle"
