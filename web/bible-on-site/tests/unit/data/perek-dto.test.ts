@@ -1,5 +1,8 @@
 import moment from "moment-timezone";
-import { getPerekIdByDate } from "../../../src/data/perek-dto";
+import {
+	getPerekByPerekId,
+	getPerekIdByDate,
+} from "../../../src/data/perek-dto";
 
 function parseKosherChristianDate(
 	dateString: string,
@@ -27,6 +30,51 @@ describe("getPerekIdByDate", () => {
 		it("returns 625", () => {
 			const actual = getPerekIdByDate(parseKosherChristianDate("27/June/24"));
 			expect(actual).toBe(625);
+		});
+	});
+});
+
+describe("getPerekByPerekId", () => {
+	describe("First perek in tanah", () => {
+		const actual = getPerekByPerekId(1);
+		it("has perekId 1", () => {
+			expect(actual.perekId).toBe(1);
+		});
+		it("has perekHeb א", () => {
+			expect(actual.perekHeb).toBe("א");
+		});
+		it("has header בריאת העולם", () => {
+			expect(actual.header).toBe("בריאת העולם");
+		});
+		it("has helek תורה", () => {
+			expect(actual.helek).toBe("תורה");
+		});
+		it("has sefer בראשית", () => {
+			expect(actual.sefer).toBe("בראשית");
+		});
+		it("has source בראשית א", () => {
+			expect(actual.source).toBe("בראשית א");
+		});
+	});
+	describe("Second perek in tanah", () => {
+		const actual = getPerekByPerekId(2);
+		it("has perekId 2", () => {
+			expect(actual.perekId).toBe(2);
+		});
+		it("has perekHeb א", () => {
+			expect(actual.perekHeb).toBe("ב");
+		});
+		it("has header גן בעדן, אדם ואשתו", () => {
+			expect(actual.header).toBe("גן בעדן, אדם ואשתו");
+		});
+		it("has helek תורה", () => {
+			expect(actual.helek).toBe("תורה");
+		});
+		it("has sefer בראשית", () => {
+			expect(actual.sefer).toBe("בראשית");
+		});
+		it("has source בראשית ב", () => {
+			expect(actual.source).toBe("בראשית ב");
 		});
 	});
 });

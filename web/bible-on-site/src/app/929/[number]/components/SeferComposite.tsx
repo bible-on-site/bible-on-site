@@ -25,7 +25,9 @@ const ClientWrapper = (props: { perekObj: PerekObj; toggled: boolean }) => {
 				if (immediately) {
 					setDisplay("none");
 				} else {
-					setTimeout(() => setDisplay("none"), 300);
+					setTimeout(() => {
+						setDisplay("none");
+					}, 300);
 				}
 				setCurrentlyToggled(false);
 			}

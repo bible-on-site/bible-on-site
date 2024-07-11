@@ -24,9 +24,9 @@ export enum DayOfWeek {
 export enum DateUnits {
 	DAYS = "d",
 }
-
+const JERUSALEM = new Location(31.778, 35.235, true, "Asia/Jerusalem");
 const calculateTset = (date: Date): Date =>
-	new Zmanim(Location.lookup("Jerusalem")!, date, true).tzeit(7);
+	new Zmanim(JERUSALEM, date, true).tzeit(7);
 
 const advanceDayIfAfterTset = (hDate: HDate, date: Date, tset: Date): HDate =>
 	date.getTime() > tset.getTime() ? hDate.next() : hDate;

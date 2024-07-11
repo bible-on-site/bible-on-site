@@ -1,0 +1,6 @@
+{
+	"eslint.workingDirectories": [
+		"./web/bible-on-site",
+		"./web/bible-on-site/tests"
+	]
+}
