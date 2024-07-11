@@ -31,7 +31,6 @@ jobs:
       pull-requests: write
     steps:
       - name: Run CI Workflow
-        if: ${{ inputs.workflow_to_run == 'CI Workflow' }}
         run: |
           curl -L -X POST \
             -H "Accept: application/vnd.github+json" \
