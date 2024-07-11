@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import type { PerekObj } from '@/data/perek-dto';
 import ReadModeToggler from './ReadModeToggler';
@@ -9,20 +9,18 @@ const ClientWrapper = (props: { perekObj: PerekObj; toggled: boolean }) => {
 	const { toggled } = props;
 	const [everToggled, setEverToggled] = useState(false);
 	const [currentlyToggled, setCurrentlyToggled] = useState(false);
-	const [display, setDisplay] = useState('none');
-	const handleToggle = useCallback((toggled: boolean, immediately = false) => {
-		console.log(
-			`handleToggle(toggled: ${toggled}, immediately: ${immediately})`,
-		);
-		if (!everToggled && toggled) {
-			setEverToggled(true);
-		}
-		if (toggled) {
-			setDisplay('initial');
-			setCurrentlyToggled(true);
-		} else {
-			if (immediately) {
-				setDisplay('none');
+	const [display, setDisplay] = useState("none");
+	const handleToggle = useCallback(
+		(toggled: boolean, immediately = false) => {
+			console.log(
+				`handleToggle(toggled: ${toggled}, immediately: ${immediately})`,
+			);
+			if (!everToggled && toggled) {
+				setEverToggled(true);
+			}
+			if (toggled) {
+				setDisplay("initial");
+				setCurrentlyToggled(true);
 			} else {
 				if (immediately) {
 					setDisplay("none");
@@ -33,9 +31,9 @@ const ClientWrapper = (props: { perekObj: PerekObj; toggled: boolean }) => {
 				}
 				setCurrentlyToggled(false);
 			}
-			setCurrentlyToggled(false);
-		}
-	};
+		},
+		[everToggled],
+	);
 
 	useEffect(() => {
 		console.log(everToggled);
