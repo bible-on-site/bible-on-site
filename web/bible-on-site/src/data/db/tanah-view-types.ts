@@ -51,16 +51,24 @@ interface Additionals {
 	perekTo: number;
 }
 
-interface SefarimItem {
+interface SefarimItemBase {
 	name: string;
-	tanachUsName: string;
 	helek: string;
 	pesukimCount: number;
-	perakim: Perek[];
 	perekFrom: number;
 	perekTo: number;
+}
+
+export interface SefarimItemWithPerakim extends SefarimItemBase {
+	tanachUsName: string;
+	perakim: Perek[];
+}
+
+export interface SefarimItemWithAdditionals extends SefarimItemBase {
 	additionals: Additionals[];
 }
+
+type SefarimItem = SefarimItemWithPerakim | SefarimItemWithAdditionals;
 
 type Sefarim = SefarimItem[];
 

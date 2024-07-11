@@ -1,0 +1,39 @@
+{
+	"root": true,
+	"plugins": ["@typescript-eslint", "react"],
+	"extends": [
+		"eslint:recommended",
+		"plugin:@typescript-eslint/strict-type-checked",
+		"plugin:@typescript-eslint/stylistic-type-checked",
+		"plugin:react/recommended",
+		"next/core-web-vitals"
+	],
+	"parserOptions": {
+		"project": "tsconfig.json"
+	},
+	"rules": {
+		"@typescript-eslint/restrict-template-expressions": [
+			"error",
+			{
+				"allowNumber": true // number type has trivial toString() conversion, so no need to be so strict here
+			}
+		],
+
+		"@typescript-eslint/no-unsafe-call": "off", // flaky
+		"@typescript-eslint/no-unsafe-member-access": "off", // flaky
+		"@typescript-eslint/no-unsafe-assignment": "off" // flaky
+	},
+	"overrides": [
+		{
+			"files": ["*.js", "*.config.mjs"],
+			"parser": "espree",
+			"parserOptions": {
+				"ecmaVersion": "latest"
+			}
+		},
+		{
+			"files": ["*.json"],
+			"extends": ["eslint:recommended", "plugin:jsonc/recommended-with-jsonc"]
+		}
+	]
+}

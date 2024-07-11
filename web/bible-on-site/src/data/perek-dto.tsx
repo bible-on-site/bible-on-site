@@ -5,12 +5,16 @@ import {
 	hebcalDateToNumber,
 	parseNumericalDateToHebcalDate,
 } from "@/util/hebdates-util";
-import { type HDate, Location, Zmanim } from "@hebcal/core";
+import type { HDate } from "@hebcal/core";
 import { toLetters } from "gematry";
 import moment from "moment-timezone";
 import { cycles } from "./db/cycles";
 import { sefarim } from "./db/sefarim";
-import type { Pasuk } from "./db/tanah-view-types";
+import type {
+	Additionals,
+	Pasuk,
+	SefarimItemWithPerakim,
+} from "./db/tanah-view-types";
 import { getAllPerakim } from "./sefer-dto";
 export interface PerekObj {
 	perekId: number;
@@ -21,21 +25,39 @@ export interface PerekObj {
 	sefer: string;
 	source: string;
 }
+
 export function getPerekByPerekId(perekId: number): PerekObj {
 	if (perekId < 1 || perekId > 929) {
 		throw new Error(`Invalid perekId: ${perekId}`);
 	}
 	const sefer = sefarim.find(
 		(sefer) => sefer.perekFrom <= perekId && sefer.perekTo >= perekId,
-	)!;
-	const perekIdx = perekId - sefer.perekFrom;
-	const perekNum = perekIdx + 1;
-	const perekHeb = toLetters(perekNum);
-	const perek = sefer.perakim.at(perekIdx)!;
+	);
+	if (!sefer) {
+		throw new Error(`No sefer found for perekId: ${perekId}`);
+	}
 
+	const seferOrAdditional: SefarimItemWithPerakim | Additionals | undefined =
+		"additionals" in sefer
+			? sefer.additionals.find(
+					(a) => a.perekFrom <= perekId && a.perekTo >= perekId,
+				)
+			: sefer;
+	if (!seferOrAdditional) {
+		throw new Error(
+			`Addtionals perakim range is different from their sefer (${sefer.name}) perakim range`,
+		);
+	}
+	const perekNum = perekId - sefer.perekFrom + 1;
+	const perekIdx = perekNum - 1;
+	const perek = seferOrAdditional.perakim.at(perekIdx);
+	if (!perek) {
+		throw new Error(`No perek found for perekId: ${perekId}`);
+	}
+	const perekHeb = toLetters(perekNum);
 	return {
-		perekId: perekId,
-		perekHeb: perekHeb,
+		perekId,
+		perekHeb,
 		header: perek.header,
 		pesukim: perek.pesukim,
 		helek: sefer.helek,
@@ -46,7 +68,8 @@ export function getPerekByPerekId(perekId: number): PerekObj {
 
 export function getPerekIdByDate(date: Date): number {
 	const floorToThursdayAtWeekend = (hDate: HDate): HDate =>
-		hDate.getDay() === DayOfWeek.FRIDAY || hDate.getDay() === DayOfWeek.SATURDAY
+		(hDate.getDay() as DayOfWeek) === DayOfWeek.FRIDAY ||
+		(hDate.getDay() as DayOfWeek) === DayOfWeek.SATURDAY
 			? hDate.nearest(DayOfWeek.THURSDAY)
 			: hDate;
 
@@ -63,7 +86,11 @@ export function getPerekIdByDate(date: Date): number {
 				return hDate;
 			}
 		}
-		return cycleHDates.findLast(() => true)!;
+		const lastCycleHDate = cycleHDates.at(-1);
+		if (!lastCycleHDate) {
+			throw new Error("no cycles data found");
+		}
+		return lastCycleHDate;
 	};
 
 	const getLearningHDate = (date: Date): HDate => {
@@ -77,7 +104,11 @@ export function getPerekIdByDate(date: Date): number {
 
 	const hebDateAsNumber = hebcalDateToNumber(hDate);
 
-	return getAllPerakim().find((p) => p.date.includes(hebDateAsNumber))!.perekId;
+	const perek = getAllPerakim().find((p) => p.date.includes(hebDateAsNumber));
+	if (!perek) {
+		throw new Error(`No perek found for date: ${hDate.toString()}`);
+	}
+	return perek.perekId;
 }
 export function getTodaysPerekId() {
 	return getPerekIdByDate(moment.tz(new Date(), "Asia/Jerusalem").toDate());
