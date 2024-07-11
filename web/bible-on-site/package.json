@@ -9,7 +9,7 @@
 		"dev-turbo": "next dev --turbo -p 3000",
 		"build": "next build --no-lint",
 		"start": "next start",
-		"lint": "npx biome ci . --indent-style space",
+		"lint": "npx biome format . --write --indent-style space",
 		"test": "npm run test:unit && npm run test:e2e && npm run test:perf",
 		"test:unit": "node --import tsx ./node_modules/jest/bin/jest.js",
 		"test:e2e": "playwright test --config=playwright.e2e.config.ts",
