@@ -11,7 +11,9 @@ on:
     paths:
       - web/bible-on-site/**
       - .github/**
-  workflow_call:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [trigger-ci]  # This matches the event_type from the curl command
 
 jobs:
   build:
