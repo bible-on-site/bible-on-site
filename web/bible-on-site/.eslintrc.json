@@ -1,32 +1,35 @@
 {
-	"root": true,
-	"plugins": ["@typescript-eslint"],
-	"extends": [
-		"eslint:recommended",
-		"plugin:@typescript-eslint/strict-type-checked",
-		"plugin:@typescript-eslint/stylistic-type-checked",
-		"plugin:react/recommended",
-		"plugin:jsonc/recommended-with-jsonc",
-		"next/core-web-vitals"
-	],
-	"overrides": [
-		{
-			"files": ["*.js", "*.config.mjs"],
-			"parser": "espree",
-			"parserOptions": {
-				"ecmaVersion": "latest"
-			}
-		}
-	],
-	"parserOptions": {
-		"project": "tsconfig.json"
-	},
-	"rules": {
-		"@typescript-eslint/restrict-template-expressions": [
-			"error",
-			{
-				"allowNumber": true // it has trivial toString() conversion, so no need to be so strict here
-			}
-		]
-	}
+  "root": true,
+  "plugins": ["@typescript-eslint"],
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/strict-type-checked",
+    "plugin:@typescript-eslint/stylistic-type-checked",
+    "plugin:react/recommended",
+    "next/core-web-vitals"
+  ],
+  "parserOptions": {
+    "project": "tsconfig.json"
+  },
+  "rules": {
+    "@typescript-eslint/restrict-template-expressions": [
+      "error",
+      {
+        "allowNumber": true // it has trivial toString() conversion, so no need to be so strict here
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["*.js", "*.config.mjs"],
+      "parser": "espree",
+      "parserOptions": {
+        "ecmaVersion": "latest"
+      }
+    },
+    {
+      "files": ["*.json"],
+      "extends": ["eslint:recommended", "plugin:jsonc/recommended-with-jsonc"]
+    }
+  ]
 }
