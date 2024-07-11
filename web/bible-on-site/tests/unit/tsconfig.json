@@ -14,7 +14,6 @@
     "strictFunctionTypes": true,
     "strictPropertyInitialization": true,
     "resolveJsonModule": true,
-    "allowJs": true,
     "noImplicitThis": true,
     "alwaysStrict": true,
     "declaration": true,
@@ -22,8 +21,8 @@
     "moduleResolution": "node",
     "outDir": "./dist",
     "baseUrl": ".",
-    "types": ["node"],
+    "types": ["jest"],
     "jsx": "preserve"
   },
-  "include": ["./**/*.ts", "util/coverage/merge-coverage.mts"]
+  "include": ["./**/*.ts"]
 }
