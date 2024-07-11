@@ -24,6 +24,6 @@ jobs:
     steps:
       - name: Run CI Workflow
         if: ${{ inputs.workflow_to_run == 'CI Workflow' }}
-        uses: .github/workflows/ci.yml
+        uses: ci.yml
 
         # Add more conditional steps for other workflows
