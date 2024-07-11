@@ -30,13 +30,23 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - name: Run CI Workflow
+      - name: Trigger specified workflow
+        id: trigger_workflow
         run: |
-          curl -L -X POST \
+          response=$(curl -s -o response.txt -w "%{http_code}" -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             https://api.github.com/repos/${{ github.repository }}/actions/workflows/${{ github.event.inputs.workflow_name }}/dispatches \
-            -d '{"ref":"${{ github.event.inputs.ref }}"}'
-
+            -d '{"ref":"${{ github.event.inputs.ref }}"}')
+          echo "HTTP_STATUS=$response" >> $GITHUB_ENV
+          cat response.txt
+      - name: Check curl response
+        run: |
+          if [ "${{ env.HTTP_STATUS }}" -eq 204 ]; then
+            echo "Workflow triggered successfully."
+          else
+            echo "Failed to trigger workflow. HTTP status: ${{ env.HTTP_STATUS }}"
+            exit 1
+          fi
         # Add more conditional steps for other workflows
