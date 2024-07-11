@@ -103,6 +103,12 @@ jobs:
           file: web/bible-on-site/coverage/merged/lcov.info
           disable_search: true
 
+      - name: Run codacy-coverage-reporter
+        uses: codacy/codacy-coverage-reporter-action@master
+        with:
+          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
+          coverage-reports: web/bible-on-site/coverage/merged/lcov.info
+
       - name: Perf Test
         id: npm-perf-test
         continue-on-error: true
