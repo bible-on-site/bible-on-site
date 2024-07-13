@@ -1,13 +1,13 @@
 {
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "Debug Website Unit Tests",
-      "type": "node",
-      "request": "launch",
-      "runtimeExecutable": "npm",
-      "cwd": "${workspaceRoot}/web/bible-on-site",
-      "runtimeArgs": ["run", "test:unit"]
-    }
-  ]
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Debug Website Unit Tests",
+			"type": "node",
+			"request": "launch",
+			"runtimeExecutable": "npm",
+			"cwd": "${workspaceRoot}/web/bible-on-site",
+			"runtimeArgs": ["run", "test:unit"]
+		}
+	]
 }
