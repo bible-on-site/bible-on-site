@@ -1,4 +1,5 @@
 import type { Page, TestInfo } from "@playwright/test"; // import { test, expect } from "@playwright/test";
+import { errors } from "@playwright/test"; // import { test, expect } from "@playwright/test";
 
 import { expect, test } from "../util/playwright/test-fixture";
 
@@ -62,7 +63,8 @@ const testWebVitals = async ({ page }: { page: Page }, testInfo: TestInfo) => {
 			.reduce<WebVitalsMetricsResult>((acc, { name, measure, max }) => {
 				acc[name as keyof WebVitalsMetrics] = { measure, max };
 				return acc;
-			}, {});
+				// eslint-disable-next-line @typescript-eslint/prefer-reduce-type-parameter
+			}, {} as WebVitalsMetricsResult);
 		const handleMetric =
 			(name: keyof WebVitalsMetrics) => (metric: { value: number }) => {
 				console.log(name, metric.value);
@@ -78,19 +80,27 @@ const testWebVitals = async ({ page }: { page: Page }, testInfo: TestInfo) => {
 	});
 
 	// TODO: refactor into test-utils into something like `simulateRandomUserInteraction(page, tags = ["button, "label", "input"], maxElements = 10)`
-	const elements = page.locator("button, label, input");
-	const elementsFlat = (await elements.all()).flat();
-	const SAMPLE_SIZE = 10;
-	for (const element of elementsFlat.slice(
-		0,
-		Math.min(elementsFlat.length, SAMPLE_SIZE),
-	)) {
-		try {
-			await element.click({ timeout: 1000 }); // Try to click the element with a timeout
-		} catch (error) {
-			console.log("Error clicking element", element, error);
+
+	let wasAnyElementClicked = false;
+	do {
+		const elements = page.locator("button, label, input");
+		const elementsFlat = (await elements.all()).flat();
+		const SAMPLE_SIZE = 10;
+		for (const element of elementsFlat.slice(
+			0,
+			Math.min(elementsFlat.length, SAMPLE_SIZE),
+		)) {
+			try {
+				await element.click({ timeout: 100 }); // Try to click the element with a timeout
+				wasAnyElementClicked = true;
+			} catch (error) {
+				// timout error is not an error
+				if (!(error instanceof errors.TimeoutError)) {
+					console.log(error);
+				}
+			}
 		}
-	}
+	} while (!wasAnyElementClicked); // repeat until at least one element was clicked
 
 	await page.locator("body").dispatchEvent("onbeforeunload");
 
