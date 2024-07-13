@@ -3,7 +3,6 @@ import type {
 	Additionals,
 	Perek,
 	SefarimItem,
-	SefarimItemWithAdditionals,
 	SefarimItemWithPerakim,
 } from "./db/tanah-view-types";
 export type SeferObj = Additionals | SefarimItemWithPerakim;
@@ -15,14 +14,20 @@ export function getSeferByName(
 		(sefer) => sefer.name === seferName,
 	);
 	if (!seferBeforeAdditionalExtraction) {
-		throw new Error(`Invalid seferName: ${seferName}`);
+		throw new Error(`Invalid sefer name: ${seferName}`);
 	}
+
 	if (additionalLetter) {
-		const additional = (
-			seferBeforeAdditionalExtraction as SefarimItemWithAdditionals
-		).additionals.find((additional) => additional.letter === additionalLetter);
+		if (!("additionals" in seferBeforeAdditionalExtraction)) {
+			throw new Error(
+				`Sefer ${seferName} has no addtionals at all and requested additional letter: ${additionalLetter}`,
+			);
+		}
+		const additional = seferBeforeAdditionalExtraction.additionals.find(
+			(additional) => additional.letter === additionalLetter,
+		);
 		if (!additional) {
-			throw new Error(`Invalid additionalLetter: ${additionalLetter}`);
+			throw new Error(`Invalid additional letter: ${additionalLetter}`);
 		}
 		return additional;
 	}
