@@ -6,7 +6,7 @@ const sefarim: Sefarim = Array.from(
 		? (eval(
 				"require('./sefaria-dump-5784-sivan-4.tanah_view.json')",
 			) as Sefarim)
-		: (tanah as Sefarim),
+		: /* istanbul ignore next: will never be reached in testing env */ (tanah as Sefarim),
 );
 
 export { sefarim };

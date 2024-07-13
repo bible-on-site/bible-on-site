@@ -42,6 +42,7 @@ interface Perek {
 }
 
 interface Additionals {
+	helek: string;
 	letter: string;
 	name: string;
 	tanachUsName: string;
