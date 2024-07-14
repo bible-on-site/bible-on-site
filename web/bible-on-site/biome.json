@@ -16,7 +16,7 @@
 		"maxSize": 104857600
 	},
 	"linter": {
-		"ignore": ["coverage/", "node_modules/", "reports/", "lib/"],
+		"ignore": ["coverage/", "dist/", "node_modules/", "reports/", "lib/"],
 		"enabled": true,
 		"rules": {
 			"nursery": {
@@ -111,8 +111,7 @@
 				"useNamespaceKeyword": "error",
 				"useValidTypeof": "error"
 			}
-		},
-		"ignore": ["lib/", "dist/", "node_modules/", "coverage/"]
+		}
 	},
 	"overrides": [
 		{ "include": ["*.js", "*.config.mjs"] },
