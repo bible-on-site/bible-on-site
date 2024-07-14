@@ -1,6 +1,9 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.8.3/schema.json",
   "organizeImports": { "enabled": true },
+  "files": {
+    "maxSize": 104857600
+  },
   "linter": {
     "ignore": ["coverage/", "node_modules/", "reports/", "lib/"],
     "enabled": true,
