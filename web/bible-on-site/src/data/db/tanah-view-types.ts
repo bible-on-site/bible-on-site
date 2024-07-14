@@ -42,13 +42,14 @@ interface Perek {
 }
 
 interface Additionals {
-  letter: string;
-  name: string;
-  tanachUsName: string;
-  pesukimCount: number;
-  perakim: Perek[];
-  perekFrom: number;
-  perekTo: number;
+	helek: string;
+	letter: string;
+	name: string;
+	tanachUsName: string;
+	pesukimCount: number;
+	perakim: Perek[];
+	perekFrom: number;
+	perekTo: number;
 }
 
 interface SefarimItemBase {
