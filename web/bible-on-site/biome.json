@@ -2,7 +2,10 @@
 	"$schema": "https://biomejs.dev/schemas/1.8.3/schema.json",
 	"formatter": {
 		"enabled": true,
-		"formatWithErrors": true
+		"formatWithErrors": true,
+    "indentWidth": 2,
+    "indentStyle": "space",
+    "ignore": ["dist/", "node_modules/", "coverage/"]
 	},
 	"vcs": {
 		"enabled": true,
@@ -108,7 +111,8 @@
 				"useNamespaceKeyword": "error",
 				"useValidTypeof": "error"
 			}
-		}
+		},
+		"ignore": ["lib/", "dist/", "node_modules/", "coverage/"]
 	},
 	"overrides": [
 		{ "include": ["*.js", "*.config.mjs"] },
