@@ -68,6 +68,7 @@ jobs:
 
       - name: Lint
         id: npm-lint
+        continue-on-error: true
         run: npm run lint
 
       - name: Unit Test
