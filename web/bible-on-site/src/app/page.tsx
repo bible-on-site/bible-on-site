@@ -1,1 +1,1 @@
-export { default } from "./[section]/page";
+export { default } from "./[section]/page.ts";

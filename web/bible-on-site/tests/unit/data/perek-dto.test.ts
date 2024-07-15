@@ -2,8 +2,8 @@ import {
   getPerekByPerekId,
   getPerekIdByDate,
   getTodaysPerekId,
-} from "../../../src/data/perek-dto";
-import { parseKosherChristianDate } from "../../util/dates";
+} from "../../../src/data/perek-dto.ts";
+import { parseKosherChristianDate } from "../../util/dates.ts";
 
 describe("getPerekIdByDate", () => {
   describe("21 Sivan 5784 (inside 3d cycle)", () => {

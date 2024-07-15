@@ -6,8 +6,8 @@ import { toLetters } from "gematry";
 import type { PageSemantics } from "html-flip-book-react";
 import dynamic from "next/dynamic";
 import React from "react";
-import { Ptuah } from "./Ptuha";
-import { Stuma } from "./Stuma";
+import { Ptuah } from "./Ptuha.tsx";
+import { Stuma } from "./Stuma.tsx";
 import styles from "./sefer.module.css";
 import "./sefer.css";
 const FlipBook = dynamic(
