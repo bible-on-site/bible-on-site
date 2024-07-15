@@ -20,7 +20,13 @@
     "enabled": true,
     "rules": {
       "nursery": {
-        "useSortedClasses": "error"
+        "useDateNow": "error",
+        "useImportExtensions": "error",
+        "useSortedClasses": "error",
+        "useTopLevelRegex": "error",
+        "noDuplicateJsonKeys": "error",
+        "noUndeclaredDependencies": "error",
+        "noUnusedFunctionParameters": "error"
       },
       "recommended": false,
       "a11y": { "noBlankTarget": "error" },
@@ -33,9 +39,12 @@
         "noUselessConstructor": "error",
         "noUselessThisAlias": "error",
         "noUselessTypeConstraint": "error",
+        "noForEach": "error",
         "noWith": "error",
+        "useFlatMap": "error",
         "useLiteralKeys": "error",
-        "useOptionalChain": "error"
+        "useOptionalChain": "error",
+        "useSimplifiedLogicExpression": "error"
       },
       "correctness": {
         "noChildrenProp": "error",
@@ -57,6 +66,7 @@
         "noUnreachableSuper": "error",
         "noUnsafeFinally": "error",
         "noUnsafeOptionalChaining": "error",
+        "noUnusedImports": "error",
         "noUnusedLabels": "error",
         "noUnusedVariables": "error",
         "useArrayLiterals": "off",
@@ -70,11 +80,15 @@
         "noInferrableTypes": "error",
         "noNamespace": "error",
         "noNonNullAssertion": "error",
+        "noUselessElse": "error",
         "useAsConstAssertion": "error",
         "useConsistentArrayType": "error",
+        "useConst": "error",
         "useForOf": "error",
         "useLiteralEnumMembers": "error",
-        "useShorthandFunctionType": "error"
+        "useShorthandFunctionType": "error",
+        "useShorthandArrayType": "error",
+        "useTemplate": "error"
       },
       "suspicious": {
         "noAssignInExpressions": "error",
@@ -103,6 +117,7 @@
         "noMisleadingInstantiator": "error",
         "noPrototypeBuiltins": "error",
         "noRedeclare": "error",
+        "noSuspiciousSemicolonInJsx": "error",
         "noShadowRestrictedNames": "error",
         "noUnsafeDeclarationMerging": "error",
         "noUnsafeNegation": "error",
