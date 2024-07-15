@@ -5,7 +5,7 @@
 
 import nextJest from "next/jest.js";
 const createJestConfig = nextJest({
-  // path to Next.js app to load next.config.js and .env files into test environment
+  // Path to Next.js app to load next.config.js and .env files into test environment
   dir: "./",
 });
 const reports = ["raw", "text"];
@@ -18,9 +18,9 @@ const config = {
   clearMocks: true,
 
   collectCoverage: true,
-  coverageReporters: ["none"],
   collectCoverageFrom: ["./src/**/*.{ts,tsx,css,scss,js,json}"],
-  setupFiles: ["./jest.setup.js"],
+  coverageReporters: ["none"],
+  extensionsToTreatAsEsm: [".ts", ".json"],
   preset: "ts-jest",
   reporters: [
     "default",
@@ -41,6 +41,7 @@ const config = {
       },
     ],
   ],
+  setupFiles: ["./jest.setup.js"],
   // globalTeardown: "./tests/util/jest/globalTeardown.js",
   testEnvironment: "jsdom",
   testMatch: ["**/tests/(unit|integration)/**/*.test.ts"],
@@ -48,7 +49,6 @@ const config = {
   transform: {
     "^.+\\.ts$": "ts-jest",
   },
-  extensionsToTreatAsEsm: [".ts", ".json"],
 };
 
 // work around https://github.com/vercel/next.js/issues/35634

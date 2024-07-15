@@ -12,7 +12,7 @@ const globalTeardown = async (config) => {
   await client.close();
   filterOutCoverageRedundantFiles(coverageData);
 
-  // there is no test info on teardown, just mock one with required config
+  // There is no test info on teardown, just mock one with required config
   const mockTestInfo = {
     config,
   };
