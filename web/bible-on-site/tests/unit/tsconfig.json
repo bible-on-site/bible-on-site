@@ -2,6 +2,7 @@
   "compilerOptions": {
     "target": "esnext",
     "module": "ESNext",
+    "allowImportingTsExtensions": true,
     "strict": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
@@ -19,6 +20,7 @@
     "declaration": true,
     "declarationMap": true,
     "moduleResolution": "node",
+    "noEmit": true,
     "outDir": "./dist",
     "baseUrl": ".",
     "types": ["jest"],
