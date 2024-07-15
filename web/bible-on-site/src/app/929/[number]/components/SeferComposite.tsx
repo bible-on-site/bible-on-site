@@ -1,9 +1,9 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import type { PerekObj } from "@/data/perek-dto";
-import ReadModeToggler from "./ReadModeToggler";
-import Sefer from "./Sefer";
+import ReadModeToggler from "./ReadModeToggler.tsx";
+import Sefer from "./Sefer.tsx";
 
 const ClientWrapper = (props: { perekObj: PerekObj; toggled: boolean }) => {
   const { toggled } = props;

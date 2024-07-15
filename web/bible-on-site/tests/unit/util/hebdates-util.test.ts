@@ -1,11 +1,11 @@
-import { parseKosherChristianDate } from "../../util/dates";
+import { parseKosherChristianDate } from "../../util/dates.ts";
 
 import { HDate, months } from "@hebcal/core";
 import {
   constructTsetAwareHDate,
   hebcalDateToNumber,
   parseNumericalDateToHebcalDate,
-} from "../../../src/util/hebdates-util";
+} from "../../../src/util/hebdates-util.ts";
 
 describe("constructTsetAwareHDate", () => {
   describe("when before tset", () => {

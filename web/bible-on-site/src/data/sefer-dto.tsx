@@ -1,10 +1,10 @@
-import { sefarim } from "./db/sefarim";
+import { sefarim } from "./db/sefarim.ts";
 import type {
   Additionals,
   Perek,
   SefarimItem,
   SefarimItemWithPerakim,
-} from "./db/tanah-view-types";
+} from "./db/tanah-view-types.ts";
 export type SeferObj = Additionals | SefarimItemWithPerakim;
 export function getSeferByName(
   seferName: string,

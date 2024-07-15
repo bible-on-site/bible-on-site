@@ -1,7 +1,7 @@
 import type { Page, TestInfo } from "@playwright/test"; // import { test, expect } from "@playwright/test";
 import { errors } from "@playwright/test"; // import { test, expect } from "@playwright/test";
 
-import { expect, test } from "../util/playwright/test-fixture";
+import { expect, test } from "../util/playwright/test-fixture.ts";
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";

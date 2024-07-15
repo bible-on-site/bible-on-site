@@ -8,14 +8,14 @@ import {
 import type { HDate } from "@hebcal/core";
 import { toLetters } from "gematry";
 import moment from "moment-timezone";
-import { cycles } from "./db/cycles";
-import { sefarim } from "./db/sefarim";
+import { cycles } from "./db/cycles.ts";
+import { sefarim } from "./db/sefarim.ts";
 import type {
   Additionals,
   Pasuk,
   SefarimItemWithPerakim,
-} from "./db/tanah-view-types";
-import { getAllPerakim } from "./sefer-dto";
+} from "./db/tanah-view-types.ts";
+import { getAllPerakim } from "./sefer-dto.ts";
 export interface PerekObj {
   perekId: number;
   perekHeb: string;

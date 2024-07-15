@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
-import { NavBar } from "./components/NavBar";
+import { NavBar } from "./components/NavBar.tsx";
 
 import Image from "next/image";
 import Link from "next/link";

@@ -1,4 +1,4 @@
-import type { Cycles } from "./cycles-types";
+import type { Cycles } from "./cycles-types.ts";
 import * as cyclesDB from "./cycles.json";
 
 const cycles: Cycles = Array.from(

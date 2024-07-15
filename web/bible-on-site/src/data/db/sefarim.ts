@@ -1,5 +1,5 @@
 import * as tanah from "./sefaria-dump-5784-sivan-4.tanah_view.json";
-import type { Sefarim } from "./tanah-view-types";
+import type { Sefarim } from "./tanah-view-types.ts";
 
 const sefarim: Sefarim = Array.from(
   process.env.IS_TEST_ENV

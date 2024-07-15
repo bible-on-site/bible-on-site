@@ -1,7 +1,7 @@
 import { CDPClient } from "monocart-coverage-reports";
 import { addCoverageReport } from "monocart-reporter";
-import { getRouterDebugPort } from "./get-debug-port";
-import { filterOutCoverageRedundantFiles } from "./tests/util/coverage/filter-out-coverage-redundant-files";
+import { getRouterDebugPort } from "./get-debug-port.js";
+import { filterOutCoverageRedundantFiles } from "./tests/util/coverage/filter-out-coverage-redundant-files.js";
 
 const globalTeardown = async (config) => {
   const client = await CDPClient({

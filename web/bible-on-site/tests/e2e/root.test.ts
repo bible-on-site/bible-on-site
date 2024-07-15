@@ -1,6 +1,6 @@
 // import { test, expect } from "@playwright/test";
 
-import { expect, test } from "../util/playwright/test-fixture";
+import { expect, test } from "../util/playwright/test-fixture.ts";
 
 const ROOT_URL = "/";
 

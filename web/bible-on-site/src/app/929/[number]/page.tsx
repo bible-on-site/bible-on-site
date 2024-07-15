@@ -5,11 +5,11 @@ import { toLetters } from "gematry";
 import { createSearchParamsCache, parseAsString } from "nuqs/server";
 import { Suspense } from "react";
 import React from "react";
-import { getPerekByPerekId } from "../../../data/perek-dto";
-import Breadcrumb from "./components/Breadcrumb";
-import { Ptuah } from "./components/Ptuha";
-import SeferComposite from "./components/SeferComposite";
-import { Stuma } from "./components/Stuma";
+import { getPerekByPerekId } from "../../../data/perek-dto.ts";
+import Breadcrumb from "./components/Breadcrumb.tsx";
+import { Ptuah } from "./components/Ptuha.tsx";
+import SeferComposite from "./components/SeferComposite.tsx";
+import { Stuma } from "./components/Stuma.tsx";
 // perakim are a closed list.
 export const dynamicParams = false;
 
