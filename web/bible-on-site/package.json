@@ -21,7 +21,7 @@
     "node": ">=22.2.0"
   },
   "dependencies": {
-    "@hebcal/core": "5.4.9",
+    "@hebcal/core": "5.4.10",
     "@syncfusion/ej2-react-grids": "26.1.41",
     "@syncfusion/ej2-react-layouts": "26.1.38",
     "flowbite": "2.4.1",
@@ -47,9 +47,10 @@
     "jest": "29.7.0",
     "jest-environment-jsdom": "29.7.0",
     "monocart-reporter": "2.6.1",
+    "monocart-coverage-reports": "2.9.2",
     "postcss": "8.4.39",
     "swc-plugin-coverage-instrument": "0.0.24",
-    "tailwindcss": "3.4.4",
+    "tailwindcss": "3.4.5",
     "ts-jest": "29.2.2",
     "ts-node": "10.9.2",
     "tsx": "4.16.2",
