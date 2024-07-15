@@ -21,7 +21,6 @@ const config = {
   collectCoverageFrom: ["./src/**/*.{ts,tsx,css,scss,js,json}"],
   coverageReporters: ["none"],
   extensionsToTreatAsEsm: [".ts", ".json"],
-  moduleDirectories: ['node_modules', '.'],
   preset: "ts-jest",
   reporters: [
     "default",
