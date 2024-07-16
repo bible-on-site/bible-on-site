@@ -32,7 +32,7 @@
 		"next": "15.0.0-rc.0",
 		"nuqs": "1.17.4",
 		"react": "19.0.0-rc-85acf2d195-20240711",
-		"react-dom": "19.0.0-rc-85acf2d195-20240711",
+		"react-dom": "19.0.0-rc.0",
 		"react-phone-number-input": "3.4.3"
 	},
 	"devDependencies": {
