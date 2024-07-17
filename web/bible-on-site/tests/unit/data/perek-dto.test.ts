@@ -2,7 +2,7 @@ import {
   getPerekByPerekId,
   getPerekIdByDate,
   getTodaysPerekId,
-} from "../../../src/data/perek-dto.ts";
+} from "../../../src/data/perek-dto.tsx";
 import { parseKosherChristianDate } from "../../util/dates.ts";
 
 describe("getPerekIdByDate", () => {

@@ -1,5 +1,5 @@
 import type { Additionals } from "../../../src/data/db/tanah-view-types.ts";
-import { getSeferByName } from "../../../src/data/sefer-dto.ts";
+import { getSeferByName } from "../../../src/data/sefer-dto.tsx";
 
 describe("getSeferByName", () => {
   describe("when invalid sefer name", () => {
