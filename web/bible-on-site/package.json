@@ -9,7 +9,7 @@
     "dev-turbo": "cross-env TURBOPACK=1 next dev --turbo -p 3000",
     "build": "next build --no-lint",
     "start": "next start",
-    "lint": "npx biome check --write --unsafe --config-path=./biome.json",
+    "lint": "npx biome check --write --unsafe",
     "test": "npm run test:unit && npm run test:e2e && npm run test:perf",
     "test:unit": "node --import tsx ./node_modules/jest/bin/jest.js",
     "test:e2e": "playwright test --config=playwright.e2e.config.ts",
