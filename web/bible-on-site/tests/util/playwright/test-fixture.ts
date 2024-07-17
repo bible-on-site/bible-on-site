@@ -1,6 +1,6 @@
 import { expect, test as testBase } from "@playwright/test";
 import { addCoverageReport } from "monocart-reporter";
-import { filterOutCoverageRedundantFiles } from "../coverage/filter-out-coverage-redundant-files.ts";
+import { filterOutCoverageRedundantFiles } from "../coverage/filter-out-coverage-redundant-files.js";
 declare global {
   interface Window {
     collectIstanbulCoverage: (coverage: any) => void;
