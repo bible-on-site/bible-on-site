@@ -1,7 +1,7 @@
 import { devices } from "@playwright/test";
 import { defineConfig } from "@playwright/test";
 import type { CoverageReportOptions } from "monocart-reporter";
-import { getDebugPort } from "./get-debug-port.ts";
+import { getDebugPort } from "./get-debug-port.js";
 import type { TestType } from "./test-type.ts";
 
 export function getBaseConfig(testType: TestType) {
