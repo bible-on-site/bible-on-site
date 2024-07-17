@@ -20,4 +20,4 @@ repos:
     hooks:
     -   id: biome-check
         additional_dependencies: ["@biomejs/biome@1.8.3"]
-        args: ["--unsafe","--reporter=github", "--config-path=./web/bible-on-site/biome.json"]
+        args: ["--unsafe","--reporter=github"]
