@@ -1,3 +1,4 @@
+import { getAllPerakim } from "@/data/sefer-dto";
 import {
   DateUnits,
   DayOfWeek,
@@ -15,7 +16,6 @@ import type {
   Pasuk,
   SefarimItemWithPerakim,
 } from "./db/tanah-view-types.ts";
-import { getAllPerakim } from "@/data/sefer-dto";
 export interface PerekObj {
   perekId: number;
   perekHeb: string;

@@ -1,11 +1,11 @@
 // import Image from "next/image";
 import styles from "./page.module.css";
 import "./overiide-globals.css";
+import { getPerekByPerekId } from "@/data/perek-dto";
 import { toLetters } from "gematry";
 import { createSearchParamsCache, parseAsString } from "nuqs/server";
 import { Suspense } from "react";
 import React from "react";
-import { getPerekByPerekId } from "@/data/perek-dto";
 import Breadcrumb from "./components/Breadcrumb.tsx";
 import { Ptuah } from "./components/Ptuha.tsx";
 import SeferComposite from "./components/SeferComposite.tsx";

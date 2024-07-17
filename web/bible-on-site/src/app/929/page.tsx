@@ -1,5 +1,5 @@
-import { RedirectType, redirect } from "next/navigation";
 import { getTodaysPerekId } from "@/data/perek-dto";
+import { RedirectType, redirect } from "next/navigation";
 
 export default function TodaysPerek({
   searchParams,
