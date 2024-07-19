@@ -78,7 +78,6 @@ jobs:
 
       - name: Perf Test
         id: npm-perf-test
-        continue-on-error: true
         run: npm run test:perf
 
       - uses: actions/upload-artifact@v4
