@@ -3,19 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
-    "update:playwright": "npx playwright install",
+    "build": "next build --no-lint",
+    "coverage:merge": "node --import tsx ./tests/util/coverage/merge-coverage.mts",
     "dev": "next dev -p 3000",
     "dev-turbo": "cross-env TURBOPACK=1 next dev --turbo -p 3000",
-    "build": "next build --no-lint",
-    "start": "next start",
     "lint": "npx biome check --write --unsafe",
+    "start": "next start",
     "test": "npm run test:unit && npm run test:e2e && npm run test:perf",
     "test:unit": "node --import tsx ./node_modules/jest/bin/jest.js",
     "test:e2e": "playwright test --config=playwright.e2e.config.ts",
     "test:perf": "playwright test --config=playwright.perf.config.ts",
     "test:coverage": "npm run test:unit && npm run test:e2e && npm run coverage:merge",
-    "coverage:merge": "node --import tsx ./tests/util/coverage/merge-coverage.mts"
+    "update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
+    "update:playwright": "npx playwright install" 
   },
   "engines": {
     "node": ">=22.2.0"
@@ -27,7 +27,7 @@
     "flowbite": "2.4.1",
     "flowbite-react": "0.10.1",
     "gematry": "1.0.2",
-    "html-flip-book-react": "git+https://github.com/doradsoft/html-flip-book.git#master:packages/html-flip-book-react",
+    "html-flip-book-react": "git+https://github.com/doradsoft/html-flip-book.git#packages/html-flip-book-react",
     "moment-timezone": "0.5.45",
     "next": "rc",
     "nuqs": "1.17.4",
