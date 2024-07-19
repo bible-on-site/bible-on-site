@@ -15,7 +15,7 @@
     "test:perf": "playwright test --config=playwright.perf.config.ts",
     "test:coverage": "npm run test:unit && npm run test:e2e && npm run coverage:merge",
     "update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
-    "update:playwright": "npx playwright install" 
+    "update:playwright": "npx playwright install"
   },
   "engines": {
     "node": ">=22.2.0"
