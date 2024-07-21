@@ -18,7 +18,7 @@
     "update:playwright": "npx playwright install"
   },
   "engines": {
-    "node": ">=22.2.0 <22.5.0"
+    "node": ">22.5.0"
   },
   "dependencies": {
     "@hebcal/core": "5.4.11",
