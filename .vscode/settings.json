@@ -1,6 +1,11 @@
 {
-	"eslint.workingDirectories": [
-		"./web/bible-on-site",
-		"./web/bible-on-site/tests"
-	]
+  "editor.codeActionsOnSave": {
+    "quickfix.biome": "explicit",
+    "source.organizeImports.biome": "explicit"
+  },
+  "editor.defaultFormatter": "biomejs.biome",
+  "editor.formatOnSave": true,
+  "javascript.preferences.importModuleSpecifier": "relative",
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "biome.lspBin": "../web/bible-on-site/node_modules/@biomejs/biome/bin/biome"
 }

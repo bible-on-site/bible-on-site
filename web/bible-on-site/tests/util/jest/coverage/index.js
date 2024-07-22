@@ -1,6 +1,6 @@
 const { CoverageReporter } = require("@jest/reporters");
 const { CoverageReport } = require("monocart-coverage-reports");
-import { filterOutCoverageRedundantFiles } from "../../coverage/filter-out-coverage-redundant-files";
+import { filterOutCoverageRedundantFiles } from "../../coverage/filter-out-coverage-redundant-files.js";
 class MonocartCoverageReporter extends CoverageReporter {
 	constructor(globalConfig, reporterOptions, reporterContext) {
 		super(globalConfig, reporterContext);
