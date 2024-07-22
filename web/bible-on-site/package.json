@@ -1,6 +1,6 @@
 {
   "name": "bible-on-site",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "scripts": {
     "build": "next build --no-lint",
@@ -37,7 +37,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.8.3",
-    "@playwright/test": "1.45.2",
+    "@playwright/test": "1.45.3",
     "@types/jest": "29.5.12",
     "@types/node": "20.14.11",
     "@types/react": "18.3.3",
