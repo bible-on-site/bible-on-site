@@ -124,7 +124,7 @@ jobs:
       - name: Install npm Dependencies
         id: npm_ci
         run: |
-          npm i --no-audit
+          npm ci --no-audit
 
       - name: Install Playwright Dependencies
         if: steps.playwright-cache.outputs.cache-hit != 'true'
