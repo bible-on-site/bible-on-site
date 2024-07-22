@@ -53,7 +53,7 @@ jobs:
       - name: Install npm Dependencies
         id: npm_ci
         run: |
-          npm install html-flip-book-react@https://gitpkg.now.sh/doradsoft/html-flip-book/react?master
+          npm install html-flip-book-react@https://gitpkg.now.sh/doradsoft/html-flip-book/html-flip-book-react?master
           npm ci --no-audit
 
       - name: Install Playwright Dependencies
