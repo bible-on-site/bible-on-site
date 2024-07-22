@@ -1,4 +1,33 @@
 {
 	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
-	"extends": ["config:recommended"]
+	"extends": ["config:recommended"],
+	"packageRules": [
+		{
+			"matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+			"matchDepTypes": ["devDependencies"],
+			"automerge": true
+		},
+		{
+			"matchPackagePatterns": ["eslint", "biome"],
+			"labels": ["linting"]
+		},
+		{
+			"matchDepTypes": ["optionalDependencies"],
+			"addLabels": ["optional"]
+		}
+	],
+	"bumpVersion": "patch",
+	"vulnerabilityAlerts": {
+		"automerge": true,
+		"labels": ["security"],
+		"groupName": null,
+		"schedule": [],
+		"dependencyDashboardApproval": false,
+		"minimumReleaseAge": null,
+		"rangeStrategy": "update-lockfile",
+		"commitMessageSuffix": "[SECURITY]",
+		"branchTopic": "{{{datasource}}}-{{{depName}}}-vulnerability",
+		"prCreation": "immediate"
+	},
+	"labels": ["dependencies"]
 }
