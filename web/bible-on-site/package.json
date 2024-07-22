@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
@@ -47,7 +47,7 @@
 		"eslint-config-next": "15.0.0-rc.0",
 		"eslint-plugin-jest": "^28.6.0",
 		"eslint-plugin-jsonc": "2.16.0",
-		"eslint-plugin-react": "7.34.4",
+		"eslint-plugin-react": "7.35.0",
 		"jest": "29.7.0",
 		"jest-environment-jsdom": "29.7.0",
 		"monocart-reporter": "2.6.1",
