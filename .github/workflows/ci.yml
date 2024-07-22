@@ -53,7 +53,8 @@ jobs:
       - name: Install npm Dependencies
         id: npm_ci
         run: |
-          npm i --no-audit
+          npm install html-flip-book-react@https://gitpkg.now.sh/doradsoft/html-flip-book/html-flip-book-react?master
+          npm ci --no-audit
 
       - name: Install Playwright Dependencies
         if: steps.playwright-cache.outputs.cache-hit != 'true'
@@ -124,6 +125,7 @@ jobs:
       - name: Install npm Dependencies
         id: npm_ci
         run: |
+          npm install html-flip-book-react@https://gitpkg.now.sh/doradsoft/html-flip-book/html-flip-book-react?master
           npm ci --no-audit
 
       - name: Install Playwright Dependencies
