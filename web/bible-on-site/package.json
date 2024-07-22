@@ -30,7 +30,7 @@
 		"html-flip-book-react": "https://gitpkg.now.sh/doradsoft/html-flip-book/html-flip-book-react?master",
 		"moment-timezone": "0.5.45",
 		"next": "rc",
-		"nuqs": "1.17.4",
+		"nuqs": "1.17.5",
 		"react": "rc",
 		"react-dom": "rc",
 		"react-phone-number-input": "3.4.3"
