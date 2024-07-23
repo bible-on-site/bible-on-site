@@ -33,7 +33,7 @@
 		"nuqs": "1.17.5",
 		"react": "rc",
 		"react-dom": "rc",
-		"react-phone-number-input": "3.4.3"
+		"react-phone-number-input": "3.4.4"
 	},
 	"devDependencies": {
 		"@playwright/test": "1.45.3",
