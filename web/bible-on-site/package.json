@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.1.3",
+	"version": "0.1.4",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
@@ -33,7 +33,7 @@
 		"nuqs": "1.17.5",
 		"react": "rc",
 		"react-dom": "rc",
-		"react-phone-number-input": "3.4.3"
+		"react-phone-number-input": "3.4.4"
 	},
 	"devDependencies": {
 		"@playwright/test": "1.45.3",
