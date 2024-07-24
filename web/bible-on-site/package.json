@@ -22,7 +22,7 @@
 	},
 	"dependencies": {
 		"@hebcal/core": "5.4.11",
-		"@syncfusion/ej2-react-grids": "26.1.42",
+		"@syncfusion/ej2-react-grids": "26.2.4",
 		"@syncfusion/ej2-react-layouts": "26.1.38",
 		"flowbite": "2.4.1",
 		"flowbite-react": "0.10.1",
