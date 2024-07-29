@@ -14,7 +14,79 @@ on:
         default: 'master'
 
 jobs:
-  build:
+  performance:
+    name: Website Performance
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/bible-on-site
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+
+      - name: Setup Node.js
+        id: setup-node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: web/bible-on-site/package.json
+          cache-dependency-path: web/bible-on-site/package-lock.json
+          cache: npm
+
+      - name: Get installed Playwright version
+        id: playwright-version
+        run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./package.json').devDependencies['@playwright/test'])")" >> $GITHUB_ENV
+
+      - name: Cache playwright binaries
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: |
+            ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ env.PLAYWRIGHT_VERSION }}
+
+      - name: Install npm Dependencies
+        id: npm_ci
+        run: |
+          npm install html-flip-book-react@https://gitpkg.now.sh/doradsoft/html-flip-book/html-flip-book-react?master
+          npm ci --no-audit
+
+      - name: Install Playwright Dependencies
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: |
+          npx playwright install --with-deps
+          npx playwright install-deps
+
+      - name: Build cache
+        uses: actions/cache@v4
+        with:
+          path: web/bible-on-site/.next/cache
+          # Generate a new cache whenever packages or source files change.
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') }}
+          # If source files changed but packages didn't, rebuild from a prior cache.
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-
+
+      - name: Build
+        id: npm-build
+        run: npm run build
+
+      - name: Perf Test
+        id: npm-perf-test
+        run: npm run test:perf
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-perf-report
+          path: web/bible-on-site/playwright-report/
+          retention-days: 30
+  end-to-end:
     name: Website CI
     runs-on: ubuntu-latest
     defaults:
@@ -62,11 +134,6 @@ jobs:
           npx playwright install --with-deps
           npx playwright install-deps
 
-      # disabled until prettier config is configured properly
-      # - name: Check Format
-      #   id: npm-format-check
-      #   run: npm run format:check
-
       - name: Lint
         id: npm-lint
         run: npm run lint
@@ -110,14 +177,9 @@ jobs:
           project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
           coverage-reports: web/bible-on-site/coverage/merged/lcov.info
 
-      - name: Perf Test
-        id: npm-perf-test
-        continue-on-error: true
-        run: npm run test:perf
-
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: playwright-report
+          name: playwright-e2e-report
           path: web/bible-on-site/playwright-report/
           retention-days: 30
