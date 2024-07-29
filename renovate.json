@@ -16,15 +16,10 @@
 			"addLabels": ["optional"]
 		},
 		{
-		  	"groupName": "all non-major dependencies",
-		  	"groupSlug": "all-minor-patch",
-		  	"matchPackageNames": [
-				"*"
-		  	],
-		  	"matchUpdateTypes": [
-				"minor",
-				"patch"
-		  	]
+			"groupName": "all non-major dependencies",
+			"groupSlug": "all-minor-patch",
+			"matchPackageNames": ["*"],
+			"matchUpdateTypes": ["minor", "patch"]
 		}
 	],
 	"bumpVersion": "patch",
