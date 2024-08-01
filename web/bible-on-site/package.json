@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.1.14",
+	"version": "0.1.15",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
@@ -54,7 +54,7 @@
 		"postcss": "8.4.40",
 		"swc-plugin-coverage-instrument": "0.0.24",
 		"tailwindcss": "3.4.7",
-		"ts-jest": "29.2.3",
+		"ts-jest": "29.2.4",
 		"ts-node": "10.9.2",
 		"tsx": "4.16.3",
 		"typescript": "5.5.4",
