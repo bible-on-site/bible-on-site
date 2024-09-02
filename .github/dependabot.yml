@@ -20,9 +20,24 @@ updates:
     labels:
       - "dependencies"
       - "automerge"
+    groups:
+      npm-development:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+      npm-production:
+        dependency-type: production
+        update-types:
+          - patch
 
   # You can add more entries for different package ecosystems
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      actions-minor:
+        update-types:
+          - minor
+          - patch
