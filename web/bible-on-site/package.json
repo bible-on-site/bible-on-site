@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.1.49",
+	"version": "0.1.50",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
@@ -22,7 +22,7 @@
 	},
 	"dependencies": {
 		"@hebcal/core": "5.4.11",
-		"@syncfusion/ej2-react-grids": "26.2.11",
+		"@syncfusion/ej2-react-grids": "26.2.12",
 		"@syncfusion/ej2-react-layouts": "26.2.10",
 		"flowbite": "2.5.1",
 		"flowbite-react": "0.10.1",
@@ -30,7 +30,7 @@
 		"html-flip-book-react": "https://gitpkg.now.sh/doradsoft/html-flip-book/html-flip-book-react?master",
 		"moment-timezone": "0.5.45",
 		"next": "rc",
-		"nuqs": "1.18.0",
+		"nuqs": "1.19.0",
 		"react": "rc",
 		"react-dom": "rc",
 		"react-phone-number-input": "3.4.5"
@@ -47,7 +47,7 @@
 		"eslint-config-next": "15.0.0-rc.0",
 		"eslint-plugin-jest": "^28.6.0",
 		"eslint-plugin-jsonc": "2.16.0",
-		"eslint-plugin-react": "7.35.0",
+		"eslint-plugin-react": "7.35.1",
 		"jest": "29.7.0",
 		"jest-environment-jsdom": "29.7.0",
 		"monocart-reporter": "2.8.0",
