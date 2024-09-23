@@ -30,10 +30,10 @@
 		"html-flip-book-react": "https://gitpkg.now.sh/doradsoft/html-flip-book/html-flip-book-react?master",
 		"moment-timezone": "0.5.45",
 		"next": "rc",
-		"nuqs": "1.19.1",
+		"nuqs": "1.19.2",
 		"react": "rc",
 		"react-dom": "rc",
-		"react-phone-number-input": "3.4.6"
+		"react-phone-number-input": "3.4.8"
 	},
 	"devDependencies": {
 		"@playwright/test": "1.47.1",
