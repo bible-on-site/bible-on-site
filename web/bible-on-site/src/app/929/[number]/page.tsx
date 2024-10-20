@@ -14,9 +14,13 @@ import { Stuma } from "./components/Stuma";
 export const dynamicParams = false;
 
 // this reserverd function is a magic for caching
-export function generateStaticParams() {
+export function generateStaticParams(): {
+	number: string;
+}[] {
 	// return range of numbers from 1 to 929
-	return Array.from({ length: 929 }, (_, i) => i + 1);
+	return Array.from({ length: 929 }, (_, i) => ({
+		number: (i + 1).toString(),
+	}));
 }
 const searchParamsCache = createSearchParamsCache({
 	// List your search param keys and associated parsers here:
@@ -24,16 +28,16 @@ const searchParamsCache = createSearchParamsCache({
 });
 
 // TODO: figure out if need to use generateMetadata
-export default function Perek({
-	params: { number },
+export default async function Perek({
+	params,
 	searchParams,
 }: {
-	params: { number: number };
-	searchParams: Record<string, string | string[] | undefined>;
+	params: Promise<{ number: string }>;
+	searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-	const perekId = number;
+	const perekId = Number.parseInt((await params).number);
 	const perekObj = getPerekByPerekId(perekId);
-	const { book: bookSearchParam } = searchParamsCache.parse(searchParams);
+	const { book: bookSearchParam } = searchParamsCache.parse(await searchParams);
 	const isBook = bookSearchParam != null;
 	return (
 		<>

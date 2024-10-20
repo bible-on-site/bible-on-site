@@ -43,25 +43,31 @@ const Sefer = (props: { perekObj: PerekObj }) => {
 	const emptyPage = <section className={styles.page} />;
 	const pages = sefer.perakim
 		.map((perek, perekIdx) => (
+			// biome-ignore lint/suspicious/noArrayIndexKey: this is the stable id
 			<React.Fragment key={perekIdx + 1}>
 				<section className={styles.page}>
 					<article className={styles.perekText}>
 						{perek.pesukim.map((pasuk, pasukIdx) => {
 							const pasukKey = pasukIdx + 1;
 							const pasukNumElement = (
-								<a className={styles.pasukNum}>{toLetters(pasukIdx + 1)}</a>
+								<a href="#TODO" className={styles.pasukNum}>
+									{toLetters(pasukIdx + 1)}
+								</a>
 							);
 							const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
 								const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
 								// TODO: merge qris sequnce like in 929/406
 								return (
 									<React.Fragment key={segmentKey}>
-										<a className={segment.type === "qri" ? styles.qri : ""}>
+										<a
+											href="#TODO"
+											className={segment.type === "qri" ? styles.qri : ""}
+										>
 											{segment.type === "ktiv" ? (
 												segment.value
 											) : segment.type === "qri" ? (
 												<>
-													(<label />
+													(<span />
 													{segment.value})
 												</>
 											) : segment.type === "ptuha" ? (

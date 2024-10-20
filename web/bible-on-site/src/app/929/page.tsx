@@ -1,15 +1,15 @@
 import { RedirectType, redirect } from "next/navigation";
 import { getTodaysPerekId } from "../../data/perek-dto";
 
-export default function TodaysPerek({
+export default async function TodaysPerek({
 	searchParams,
 }: {
-	searchParams: Record<string, string | string[] | undefined>;
+	searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
 	const perekId = getTodaysPerekId();
 	const params = new URLSearchParams();
 
-	Object.entries(searchParams).forEach(([key, value]) => {
+	Object.entries(await searchParams).forEach(([key, value]) => {
 		if (Array.isArray(value)) {
 			value.forEach((v) => {
 				params.append(key, v);

@@ -29,13 +29,14 @@
 		"gematry": "1.0.2",
 		"html-flip-book-react": "https://gitpkg.now.sh/doradsoft/html-flip-book/html-flip-book-react?master",
 		"moment-timezone": "0.5.46",
-		"next": "rc",
+		"next": "15.0.0-canary.200",
 		"nuqs": "1.20.0",
 		"react": "rc",
 		"react-dom": "rc",
 		"react-phone-number-input": "3.4.8"
 	},
 	"devDependencies": {
+		"@biomejs/biome": "1.9.4",
 		"@playwright/test": "1.47.1",
 		"@types/jest": "29.5.13",
 		"@types/node": "22.7.5",
