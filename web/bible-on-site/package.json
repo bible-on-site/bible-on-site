@@ -38,7 +38,7 @@
 	"devDependencies": {
 		"@playwright/test": "1.47.1",
 		"@types/jest": "29.5.13",
-		"@types/node": "22.7.5",
+		"@types/node": "22.7.7",
 		"@types/react": "18.3.11",
 		"@types/react-dom": "18.3.1",
 		"autoprefixer": "10.4.20",
@@ -53,7 +53,7 @@
 		"monocart-reporter": "2.8.0",
 		"postcss": "8.4.47",
 		"swc-plugin-coverage-instrument": "0.0.24",
-		"tailwindcss": "3.4.13",
+		"tailwindcss": "3.4.14",
 		"ts-jest": "29.2.5",
 		"ts-node": "10.9.2",
 		"tsx": "4.19.1",
