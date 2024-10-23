@@ -1,6 +1,7 @@
 {
-	"eslint.workingDirectories": [
-		"./web/bible-on-site",
-		"./web/bible-on-site/tests"
-	]
+  "eslint.workingDirectories": [
+    "./web/bible-on-site",
+    "./web/bible-on-site/tests"
+  ]
+  // "biome.lspBin": "web/bible-on-site/node_modules/.bin/biome"
 }

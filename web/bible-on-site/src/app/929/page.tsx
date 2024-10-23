@@ -8,7 +8,7 @@ export default async function TodaysPerek(props: {
 	const perekId = getTodaysPerekId();
 	const params = new URLSearchParams();
 
-	Object.entries(searchParams).forEach(([key, value]) => {
+	Object.entries(await searchParams).forEach(([key, value]) => {
 		if (Array.isArray(value)) {
 			value.forEach((v) => {
 				params.append(key, v);

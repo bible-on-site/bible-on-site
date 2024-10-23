@@ -7,7 +7,9 @@ export const dynamicParams = false;
 
 // this reserverd function is a magic for caching
 export function generateStaticParams() {
-	return ["dailyBulletin", "tos", "app", "contact", "donation"];
+	return ["dailyBulletin", "tos", "app", "contact", "donation"].map(
+		(section) => ({ section }),
+	);
 }
 
 export default async function Home(props: {
@@ -63,7 +65,7 @@ export default async function Home(props: {
 					</article>
 				</section>
 			</section>
-			{section}
+			{(await params).section}
 		</div>
 	);
 }
