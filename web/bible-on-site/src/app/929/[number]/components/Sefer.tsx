@@ -1,11 +1,11 @@
 "use client";
-// HeBook.tsx
-import Link from 'next/link'
 import type { PerekObj } from "@/data/perek-dto";
 import { getSeferByName } from "@/data/sefer-dto";
 import { toLetters } from "gematry";
 import type { PageSemantics } from "html-flip-book-react";
 import dynamic from "next/dynamic";
+// HeBook.tsx
+import Link from "next/link";
 import React from "react";
 import { Ptuah } from "./Ptuha";
 import { Stuma } from "./Stuma";
@@ -50,7 +50,9 @@ const Sefer = (props: { perekObj: PerekObj }) => {
 						{perek.pesukim.map((pasuk, pasukIdx) => {
 							const pasukKey = pasukIdx + 1;
 							const pasukNumElement = (
-								<Link className={styles.pasukNum}>{toLetters(pasukIdx + 1)}</Link>
+								<Link className={styles.pasukNum}>
+									{toLetters(pasukIdx + 1)}
+								</Link>
 							);
 							const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
 								const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
