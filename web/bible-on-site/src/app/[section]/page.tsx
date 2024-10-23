@@ -6,13 +6,15 @@ export const dynamicParams = false;
 
 // this reserverd function is a magic for caching
 export function generateStaticParams() {
-	return ["dailyBulletin", "tos", "app", "contact", "donation"];
+	return ["dailyBulletin", "tos", "app", "contact", "donation"].map(
+		(section) => ({ section }),
+	);
 }
 
-export default function Home({
-	params: { section },
+export default async function Home({
+	params,
 }: {
-	params: { section: string };
+	params: Promise<{ section: string }>;
 }) {
 	return (
 		<div className={styles.page}>
@@ -60,7 +62,7 @@ export default function Home({
 					</article>
 				</section>
 			</section>
-			{section}
+			{(await params).section}
 		</div>
 	);
 }
