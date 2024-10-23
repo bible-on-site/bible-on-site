@@ -12,7 +12,9 @@ import { Stuma } from "./Stuma";
 import styles from "./sefer.module.css";
 import "./sefer.css";
 const FlipBook = dynamic(
-	() => import("html-flip-book-react").then((mod) => mod.FlipBook),
+	() => import("html-flip-book-react").then((mod) => ({
+        default: mod.FlipBook
+    })),
 	{ ssr: false },
 );
 

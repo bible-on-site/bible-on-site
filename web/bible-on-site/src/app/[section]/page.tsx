@@ -10,12 +10,18 @@ export function generateStaticParams() {
 	return ["dailyBulletin", "tos", "app", "contact", "donation"];
 }
 
-export default function Home({
-	params: { section },
-}: {
-	params: { section: string };
-}) {
-	return (
+export default async function Home(
+    props: {
+        params: Promise<{ section: string }>;
+    }
+) {
+    const params = await props.params;
+
+    const {
+        section
+    } = params;
+
+    return (
 		<div className={styles.page}>
 			<section className={`${styles.alHaperekSection} bg-custom py-8`}>
 				<header className="text-center">
