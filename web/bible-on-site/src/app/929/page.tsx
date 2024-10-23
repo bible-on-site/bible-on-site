@@ -1,16 +1,14 @@
 import { RedirectType, redirect } from "next/navigation";
 import { getTodaysPerekId } from "../../data/perek-dto";
 
-export default async function TodaysPerek(
-    props: {
-        searchParams: Promise<Record<string, string | string[] | undefined>>;
-    }
-) {
-    const searchParams = await props.searchParams;
-    const perekId = getTodaysPerekId();
-    const params = new URLSearchParams();
+export default async function TodaysPerek(props: {
+	searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+	const searchParams = await props.searchParams;
+	const perekId = getTodaysPerekId();
+	const params = new URLSearchParams();
 
-    Object.entries(searchParams).forEach(([key, value]) => {
+	Object.entries(searchParams).forEach(([key, value]) => {
 		if (Array.isArray(value)) {
 			value.forEach((v) => {
 				params.append(key, v);
@@ -20,8 +18,8 @@ export default async function TodaysPerek(
 		}
 	});
 
-    const paramsString = params.toString();
-    redirect(
+	const paramsString = params.toString();
+	redirect(
 		`/929/${perekId}${paramsString.length > 0 ? `?${paramsString}` : ""}`,
 		RedirectType.replace,
 	);

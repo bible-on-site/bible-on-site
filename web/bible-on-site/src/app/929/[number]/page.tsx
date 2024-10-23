@@ -24,24 +24,20 @@ const searchParamsCache = createSearchParamsCache({
 });
 
 // TODO: figure out if need to use generateMetadata
-export default async function Perek(
-    props: {
-        params: Promise<{ number: number }>;
-        searchParams: Promise<Record<string, string | string[] | undefined>>;
-    }
-) {
-    const searchParams = await props.searchParams;
-    const params = await props.params;
+export default async function Perek(props: {
+	params: Promise<{ number: number }>;
+	searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+	const searchParams = await props.searchParams;
+	const params = await props.params;
 
-    const {
-        number
-    } = params;
+	const { number } = params;
 
-    const perekId = number;
-    const perekObj = getPerekByPerekId(perekId);
-    const { book: bookSearchParam } = searchParamsCache.parse(searchParams);
-    const isBook = bookSearchParam != null;
-    return (
+	const perekId = number;
+	const perekObj = getPerekByPerekId(perekId);
+	const { book: bookSearchParam } = searchParamsCache.parse(searchParams);
+	const isBook = bookSearchParam != null;
+	return (
 		<>
 			<Suspense>
 				<SeferComposite perekObj={perekObj} toggled={isBook} />
