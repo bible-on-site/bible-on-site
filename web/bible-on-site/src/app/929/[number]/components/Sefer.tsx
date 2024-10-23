@@ -1,5 +1,6 @@
 "use client";
 // HeBook.tsx
+import Link from 'next/link'
 import type { PerekObj } from "@/data/perek-dto";
 import { getSeferByName } from "@/data/sefer-dto";
 import { toLetters } from "gematry";
@@ -49,14 +50,14 @@ const Sefer = (props: { perekObj: PerekObj }) => {
 						{perek.pesukim.map((pasuk, pasukIdx) => {
 							const pasukKey = pasukIdx + 1;
 							const pasukNumElement = (
-								<a className={styles.pasukNum}>{toLetters(pasukIdx + 1)}</a>
+								<Link className={styles.pasukNum}>{toLetters(pasukIdx + 1)}</Link>
 							);
 							const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
 								const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
 								// TODO: merge qris sequnce like in 929/406
 								return (
 									<React.Fragment key={segmentKey}>
-										<a className={segment.type === "qri" ? styles.qri : ""}>
+										<Link className={segment.type === "qri" ? styles.qri : ""}>
 											{segment.type === "ktiv" ? (
 												segment.value
 											) : segment.type === "qri" ? (
@@ -69,7 +70,7 @@ const Sefer = (props: { perekObj: PerekObj }) => {
 											) : (
 												Stuma()
 											)}
-										</a>
+										</Link>
 										{segmentIdx === pasuk.segments.length - 1 ||
 										((segment.type === "ktiv" || segment.type === "qri") &&
 											segment.value.at(segment.value.length - 1) ===
