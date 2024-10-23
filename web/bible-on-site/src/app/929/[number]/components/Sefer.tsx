@@ -1,17 +1,21 @@
 "use client";
-// HeBook.tsx
 import type { PerekObj } from "@/data/perek-dto";
 import { getSeferByName } from "@/data/sefer-dto";
 import { toLetters } from "gematry";
 import type { PageSemantics } from "html-flip-book-react";
 import dynamic from "next/dynamic";
+// HeBook.tsx
+import Link from "next/link";
 import React from "react";
 import { Ptuah } from "./Ptuha";
 import { Stuma } from "./Stuma";
 import styles from "./sefer.module.css";
 import "./sefer.css";
 const FlipBook = dynamic(
-	() => import("html-flip-book-react").then((mod) => mod.FlipBook),
+	() =>
+		import("html-flip-book-react").then((mod) => ({
+			default: mod.FlipBook,
+		})),
 	{ ssr: false },
 );
 
@@ -43,25 +47,28 @@ const Sefer = (props: { perekObj: PerekObj }) => {
 	const emptyPage = <section className={styles.page} />;
 	const pages = sefer.perakim
 		.map((perek, perekIdx) => (
+			// biome-ignore lint/suspicious/noArrayIndexKey: this is the stable id
 			<React.Fragment key={perekIdx + 1}>
 				<section className={styles.page}>
 					<article className={styles.perekText}>
 						{perek.pesukim.map((pasuk, pasukIdx) => {
 							const pasukKey = pasukIdx + 1;
 							const pasukNumElement = (
-								<a className={styles.pasukNum}>{toLetters(pasukIdx + 1)}</a>
+								<Link className={styles.pasukNum}>
+									{toLetters(pasukIdx + 1)}
+								</Link>
 							);
 							const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
 								const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
 								// TODO: merge qris sequnce like in 929/406
 								return (
 									<React.Fragment key={segmentKey}>
-										<a className={segment.type === "qri" ? styles.qri : ""}>
+										<Link className={segment.type === "qri" ? styles.qri : ""}>
 											{segment.type === "ktiv" ? (
 												segment.value
 											) : segment.type === "qri" ? (
 												<>
-													(<label />
+													(<span />
 													{segment.value})
 												</>
 											) : segment.type === "ptuha" ? (
@@ -69,7 +76,7 @@ const Sefer = (props: { perekObj: PerekObj }) => {
 											) : (
 												Stuma()
 											)}
-										</a>
+										</Link>
 										{segmentIdx === pasuk.segments.length - 1 ||
 										((segment.type === "ktiv" || segment.type === "qri") &&
 											segment.value.at(segment.value.length - 1) ===
