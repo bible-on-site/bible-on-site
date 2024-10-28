@@ -8,8 +8,8 @@
 			"automerge": true
 		},
 		{
-			"matchPackagePatterns": ["eslint", "biome"],
-			"labels": ["linting"]
+			"labels": ["linting"],
+			"matchPackageNames": ["/eslint/", "/biome/"]
 		},
 		{
 			"matchDepTypes": ["optionalDependencies"],
