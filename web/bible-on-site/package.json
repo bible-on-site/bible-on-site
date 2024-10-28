@@ -22,15 +22,15 @@
 	},
 	"dependencies": {
 		"@hebcal/core": "5.5.2",
-		"@syncfusion/ej2-react-grids": "27.1.53",
-		"@syncfusion/ej2-react-layouts": "27.1.53",
+		"@syncfusion/ej2-react-grids": "27.1.55",
+		"@syncfusion/ej2-react-layouts": "27.1.56",
 		"flowbite": "2.5.2",
 		"flowbite-react": "0.10.2",
 		"gematry": "1.0.2",
 		"html-flip-book-react": "https://gitpkg.now.sh/doradsoft/html-flip-book/html-flip-book-react?master",
 		"moment-timezone": "0.5.46",
 		"next": "rc",
-		"nuqs": "2.0.2",
+		"nuqs": "2.0.4",
 		"react": "rc",
 		"react-dom": "rc",
 		"react-phone-number-input": "3.4.9"
