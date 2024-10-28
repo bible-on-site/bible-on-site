@@ -1,31 +1,57 @@
 {
 	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
-	"extends": ["config:recommended", ":dependencyDashboard"],
+	"extends": [
+		"config:recommended",
+		":dependencyDashboard"
+	],
 	"packageRules": [
 		{
-			"matchUpdateTypes": ["minor", "patch", "pin", "digest"],
-			"matchDepTypes": ["devDependencies"],
+			"matchUpdateTypes": [
+				"minor",
+				"patch",
+				"pin",
+				"digest"
+			],
+			"matchDepTypes": [
+				"devDependencies"
+			],
 			"automerge": true
 		},
 		{
-			"matchPackagePatterns": ["eslint", "biome"],
-			"labels": ["linting"]
+			"labels": [
+				"linting"
+			],
+			"matchPackageNames": [
+				"/eslint/",
+				"/biome/"
+			]
 		},
 		{
-			"matchDepTypes": ["optionalDependencies"],
-			"addLabels": ["optional"]
+			"matchDepTypes": [
+				"optionalDependencies"
+			],
+			"addLabels": [
+				"optional"
+			]
 		},
 		{
 			"groupName": "all non-major dependencies",
 			"groupSlug": "all-minor-patch",
-			"matchPackageNames": ["*"],
-			"matchUpdateTypes": ["minor", "patch"]
+			"matchPackageNames": [
+				"*"
+			],
+			"matchUpdateTypes": [
+				"minor",
+				"patch"
+			]
 		}
 	],
 	"bumpVersion": "patch",
 	"vulnerabilityAlerts": {
 		"automerge": true,
-		"labels": ["security"],
+		"labels": [
+			"security"
+		],
 		"groupName": null,
 		"schedule": [],
 		"dependencyDashboardApproval": false,
@@ -35,5 +61,7 @@
 		"branchTopic": "{{{datasource}}}-{{{depName}}}-vulnerability",
 		"prCreation": "immediate"
 	},
-	"labels": ["dependencies"]
+	"labels": [
+		"dependencies"
+	]
 }
