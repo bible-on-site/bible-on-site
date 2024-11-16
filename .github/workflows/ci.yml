@@ -168,7 +168,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          file: web/bible-on-site/coverage/merged/lcov.info
+          files: web/bible-on-site/coverage/merged/lcov.info
           disable_search: true
 
       - name: Run codacy-coverage-reporter
