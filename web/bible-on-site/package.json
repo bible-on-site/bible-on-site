@@ -22,7 +22,7 @@
 	},
 	"dependencies": {
 		"@hebcal/core": "5.8.3",
-		"@syncfusion/ej2-react-grids": "27.2.4",
+		"@syncfusion/ej2-react-grids": "27.2.5",
 		"@syncfusion/ej2-react-layouts": "27.2.3",
 		"flowbite": "2.5.2",
 		"flowbite-react": "0.10.2",
@@ -33,7 +33,7 @@
 		"nuqs": "2.2.3",
 		"react": "rc",
 		"react-dom": "rc",
-		"react-phone-number-input": "3.4.9"
+		"react-phone-number-input": "3.4.10"
 	},
 	"devDependencies": {
 		"@playwright/test": "1.49.0",
