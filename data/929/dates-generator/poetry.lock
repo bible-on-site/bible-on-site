@@ -529,13 +529,13 @@ files = [
 
 [[package]]
 name = "hdate"
-version = "0.10.11"
+version = "0.11.1"
 description = "Jewish/Hebrew date and Zmanim in native Python 2.7/3.x"
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.9"
 files = [
-    {file = "hdate-0.10.11-py3-none-any.whl", hash = "sha256:a989efdff1288fb16c0a40591de6cdc8cffe2f1fa2fc83ac00a1cd7e3ef1b084"},
-    {file = "hdate-0.10.11.tar.gz", hash = "sha256:e5e2becc704010e5355ef4940c74f325ab4e796a12e9557897c5afb071244469"},
+    {file = "hdate-0.11.1-py3-none-any.whl", hash = "sha256:77b611c6d4021a71a230a2de66108a41b5d1a0576f0ceb53a082678855449ccd"},
+    {file = "hdate-0.11.1.tar.gz", hash = "sha256:f2e835c5fa9fd2d919c104dfc58ad81e2545b962b5883530cf8e04609c0c807b"},
 ]
 
 [package.dependencies]
@@ -2044,13 +2044,13 @@ files = [
 
 [[package]]
 name = "tzdata"
-version = "2024.1"
+version = "2024.2"
 description = "Provider of IANA time zone data"
 optional = false
 python-versions = ">=2"
 files = [
-    {file = "tzdata-2024.1-py2.py3-none-any.whl", hash = "sha256:9068bc196136463f5245e51efda838afa15aaeca9903f49050dfa2679db4d252"},
-    {file = "tzdata-2024.1.tar.gz", hash = "sha256:2674120f8d891909751c38abcdfd386ac0a5a1127954fbc332af6b5ceae07efd"},
+    {file = "tzdata-2024.2-py2.py3-none-any.whl", hash = "sha256:a48093786cdcde33cad18c2555e8532f34422074448fbc874186f0abd79565cd"},
+    {file = "tzdata-2024.2.tar.gz", hash = "sha256:7d85cc416e9382e69095b7bdf4afd9e3880418a2413feec7069d533d6b4e31cc"},
 ]
 
 [[package]]
@@ -2151,4 +2151,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "abcd173801cded66a59a67330fb7e8a89d10bf4b63cc6f1b631876e09d417549"
+content-hash = "7210fe9685b6d12a45481141b171e59d8c71cd4f94f9268eb80d309014157c62"
