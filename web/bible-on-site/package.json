@@ -21,8 +21,8 @@
 		"node": ">=22.2.0"
 	},
 	"dependencies": {
-		"@hebcal/core": "5.8.5",
-		"@syncfusion/ej2-react-grids": "28.1.33",
+		"@hebcal/core": "5.8.14",
+		"@syncfusion/ej2-react-grids": "28.1.38",
 		"@syncfusion/ej2-react-layouts": "28.1.33",
 		"flowbite": "2.5.2",
 		"flowbite-react": "0.10.2",
@@ -30,10 +30,10 @@
 		"html-flip-book-react": "https://gitpkg.now.sh/doradsoft/html-flip-book/html-flip-book-react?master",
 		"moment-timezone": "0.5.46",
 		"next": "rc",
-		"nuqs": "2.3.0",
+		"nuqs": "2.3.1",
 		"react": "rc",
 		"react-dom": "rc",
-		"react-phone-number-input": "3.4.10"
+		"react-phone-number-input": "3.4.11"
 	},
 	"devDependencies": {
 		"@playwright/test": "1.49.0",
