@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.1.73",
+	"version": "0.1.74",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
@@ -24,7 +24,7 @@
 		"@hebcal/core": "5.8.5",
 		"@syncfusion/ej2-react-grids": "28.1.33",
 		"@syncfusion/ej2-react-layouts": "28.1.33",
-		"flowbite": "2.5.2",
+		"flowbite": "3.0.0",
 		"flowbite-react": "0.10.2",
 		"gematry": "1.0.2",
 		"html-flip-book-react": "https://gitpkg.now.sh/doradsoft/html-flip-book/html-flip-book-react?master",
