@@ -108,20 +108,6 @@ doc = ["doc8", "sphinx (>=7.0.0)", "sphinx-autobuild", "sphinx-autodoc-typehints
 test = ["dateparser (==1.*)", "pre-commit", "pytest", "pytest-cov", "pytest-mock", "pytz (==2021.1)", "simplejson (==3.*)"]
 
 [[package]]
-name = "astral"
-version = "2.2"
-description = "Calculations for the position of the sun and moon."
-optional = false
-python-versions = ">=3.6"
-files = [
-    {file = "astral-2.2-py2.py3-none-any.whl", hash = "sha256:b9ef70faf32e81a8ba174d21e8f29dc0b53b409ef035f27e0749ddc13cb5982a"},
-    {file = "astral-2.2.tar.gz", hash = "sha256:e41d9967d5c48be421346552f0f4dedad43ff39a83574f5ff2ad32b6627b6fbe"},
-]
-
-[package.dependencies]
-pytz = "*"
-
-[[package]]
 name = "asttokens"
 version = "2.4.1"
 description = "Annotate AST trees with source code positions"
@@ -478,6 +464,16 @@ files = [
 ]
 
 [[package]]
+name = "docopt"
+version = "0.6.2"
+description = "Pythonic argument parser, that will make you smile"
+optional = false
+python-versions = "*"
+files = [
+    {file = "docopt-0.6.2.tar.gz", hash = "sha256:49b3a825280bd66b3aa83585ef59c4a8c82f2c8a522dbe754a8bc8d08c85c491"},
+]
+
+[[package]]
 name = "executing"
 version = "2.0.1"
 description = "Get the currently executing AST node of a frame, and other information"
@@ -529,17 +525,20 @@ files = [
 
 [[package]]
 name = "hdate"
-version = "0.10.11"
+version = "1.0.0"
 description = "Jewish/Hebrew date and Zmanim in native Python 2.7/3.x"
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.9"
 files = [
-    {file = "hdate-0.10.11-py3-none-any.whl", hash = "sha256:a989efdff1288fb16c0a40591de6cdc8cffe2f1fa2fc83ac00a1cd7e3ef1b084"},
-    {file = "hdate-0.10.11.tar.gz", hash = "sha256:e5e2becc704010e5355ef4940c74f325ab4e796a12e9557897c5afb071244469"},
+    {file = "hdate-1.0.0-py3-none-any.whl", hash = "sha256:ed098eb99af42ae7f343f3764d482b732faec1682a00a624975171a92229e806"},
+    {file = "hdate-1.0.0.tar.gz", hash = "sha256:fe18081ce92cddd444f94defb0ed97495108ec912794a592db650053ad50203b"},
 ]
 
 [package.dependencies]
-astral = ">=2.2,<3.0"
+num2words = ">=0.5.14"
+
+[package.extras]
+astral = ["astral (>=2.2,<3.0)"]
 
 [[package]]
 name = "httpcore"
@@ -1287,6 +1286,20 @@ jupyter-server = ">=1.8,<3"
 test = ["pytest", "pytest-console-scripts", "pytest-jupyter", "pytest-tornasync"]
 
 [[package]]
+name = "num2words"
+version = "0.5.14"
+description = "Modules to convert numbers to words. Easily extensible."
+optional = false
+python-versions = "*"
+files = [
+    {file = "num2words-0.5.14-py3-none-any.whl", hash = "sha256:1c8e5b00142fc2966fd8d685001e36c4a9911e070d1b120e1beb721fa1edb33d"},
+    {file = "num2words-0.5.14.tar.gz", hash = "sha256:b066ec18e56b6616a3b38086b5747daafbaa8868b226a36127e0451c0cf379c6"},
+]
+
+[package.dependencies]
+docopt = ">=0.6.2"
+
+[[package]]
 name = "overrides"
 version = "7.7.0"
 description = "A decorator to automatically detect mismatch when overriding a method."
@@ -1494,17 +1507,6 @@ python-versions = ">=3.6"
 files = [
     {file = "python-json-logger-2.0.7.tar.gz", hash = "sha256:23e7ec02d34237c5aa1e29a070193a4ea87583bb4e7f8fd06d3de8264c4b2e1c"},
     {file = "python_json_logger-2.0.7-py3-none-any.whl", hash = "sha256:f380b826a991ebbe3de4d897aeec42760035ac760345e57b812938dc8b35e2bd"},
-]
-
-[[package]]
-name = "pytz"
-version = "2024.1"
-description = "World timezone definitions, modern and historical"
-optional = false
-python-versions = "*"
-files = [
-    {file = "pytz-2024.1-py2.py3-none-any.whl", hash = "sha256:328171f4e3623139da4983451950b28e95ac706e13f3f2630a879749e7a8b319"},
-    {file = "pytz-2024.1.tar.gz", hash = "sha256:2a29735ea9c18baf14b448846bde5a48030ed267578472d8955cd0e7443a9812"},
 ]
 
 [[package]]
@@ -2151,4 +2153,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "abcd173801cded66a59a67330fb7e8a89d10bf4b63cc6f1b631876e09d417549"
+content-hash = "84f54f4321bb3cc0afea0bb08b389901c6d14521f57337b5ab40e18a2f08ae6c"
