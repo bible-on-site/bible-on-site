@@ -41,7 +41,7 @@ export default async function Home({
 									height={48}
 								/>
 								<span>לימוד יומי על הפרק</span>
-							</Link
+							</Link>
 						</h1>
 						<p>
 							בתנ&quot;ך על הפרק לומדים במקביל ללימוד של 929 - פרק ליום. הלימוד
