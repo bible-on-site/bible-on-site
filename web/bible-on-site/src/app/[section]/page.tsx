@@ -32,7 +32,7 @@ export default async function Home({
 				>
 					<article className="flex flex-col items-center p-6 rounded-lg">
 						<h1 className="text-xl font-bold">
-							<a href="/929/">
+							<Link href="/929/">
 								<Image
 									className="icon-white"
 									src="/icons/calendar-today.svg"
@@ -41,7 +41,7 @@ export default async function Home({
 									height={48}
 								/>
 								<span>לימוד יומי על הפרק</span>
-							</a>
+							</Link
 						</h1>
 						<p>
 							בתנ&quot;ך על הפרק לומדים במקביל ללימוד של 929 - פרק ליום. הלימוד
