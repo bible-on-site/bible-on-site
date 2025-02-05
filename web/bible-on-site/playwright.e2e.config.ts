@@ -5,4 +5,7 @@ export default defineConfig({
 	...getBaseConfig(TestType.E2E),
 	fullyParallel: true,
 	retries: 0,
+	use: {
+		timezoneId: "Asia/Jerusalem",
+	},
 });
