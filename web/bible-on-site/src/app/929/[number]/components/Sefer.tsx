@@ -10,7 +10,7 @@ import { Ptuah } from "./Ptuha";
 import { Stuma } from "./Stuma";
 import styles from "./sefer.module.css";
 import "./sefer.css";
-import Link from 'next/link'
+import Link from "next/link";
 
 const FlipBook = dynamic(
 	() => import("html-flip-book-react").then((mod) => mod.FlipBook),
