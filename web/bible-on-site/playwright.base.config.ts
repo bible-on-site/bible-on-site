@@ -29,6 +29,7 @@ export function getBaseConfig(testType: TestType) {
 			/* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
 			trace: "on-first-retry",
 
+			locale: 'he-IL',
 			timezoneId: "Asia/Jerusalem",
 		},
 		globalTeardown: "./playwright-global-teardown.js",
