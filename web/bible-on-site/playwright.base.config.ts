@@ -31,6 +31,7 @@ export function getBaseConfig(testType: TestType) {
 
 			locale: "he-IL",
 			timezoneId: "Asia/Jerusalem",
+			permissions: ["geolocation"],
 		},
 		globalTeardown: "./playwright-global-teardown.js",
 		projects: [
