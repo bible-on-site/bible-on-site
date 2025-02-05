@@ -49,7 +49,9 @@ const Sefer = (props: { perekObj: PerekObj }) => {
 						{perek.pesukim.map((pasuk, pasukIdx) => {
 							const pasukKey = pasukIdx + 1;
 							const pasukNumElement = (
-								<Link className={styles.pasukNum}>{toLetters(pasukIdx + 1)}</Link>
+								<Link className={styles.pasukNum}>
+									{toLetters(pasukIdx + 1)}
+								</Link>
 							);
 							const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
 								const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
