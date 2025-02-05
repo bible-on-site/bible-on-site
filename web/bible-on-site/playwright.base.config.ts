@@ -28,6 +28,7 @@ export function getBaseConfig(testType: TestType) {
 
 			/* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
 			trace: "on-first-retry",
+			timezoneId: "Asia/Jerusalem",
 		},
 		globalTeardown: "./playwright-global-teardown.js",
 		projects: [
@@ -56,7 +57,7 @@ export function getBaseConfig(testType: TestType) {
 				"monocart-reporter",
 				{
 					coverage: coverageReportOptions,
-					timezoneOffset: -120,
+					timezoneOffset: 120,
 				},
 			],
 		],

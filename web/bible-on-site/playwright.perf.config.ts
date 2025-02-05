@@ -6,7 +6,4 @@ export default defineConfig({
 	fullyParallel: false,
 	retries: process.env.CI ? 4 : 0,
 	workers: 1,
-	use: {
-		timezoneId: "Asia/Jerusalem",
-	},
 });
