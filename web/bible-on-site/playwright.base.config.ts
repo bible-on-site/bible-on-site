@@ -56,7 +56,7 @@ export function getBaseConfig(testType: TestType) {
 				"monocart-reporter",
 				{
 					coverage: coverageReportOptions,
-					timezoneOffset: -120
+					timezoneOffset: -120,
 				},
 			],
 		],
