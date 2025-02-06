@@ -12,11 +12,11 @@ export function getBaseConfig(testType: TestType) {
 
 	const coverageReportOptions: CoverageReportOptions = {
 		name: "Next.js Istanbul Coverage Report",
-		outputDir: `./coverage/${testType}`,
+		outputDir: `${__dirname}/coverage/${testType}`,
 		reports: reports,
 	};
 
-	const WEB_SERVER_URL = "http://127.0.0.1:3000";
+	const WEB_SERVER_URL = "http://127.0.0.1:3001";
 	const config = defineConfig({
 		testMatch: [`${testType}/**/*.test.ts`],
 		testDir: "./tests",
@@ -30,6 +30,8 @@ export function getBaseConfig(testType: TestType) {
 			trace: "on-first-retry",
 			timezoneId: "Asia/Jerusalem",
 		},
+		// Increase the default timeout to 1 min in case of CI (slow servers).
+		timeout: process.env.CI ? 60000 : 30000,
 		globalTeardown: "./playwright-global-teardown.js",
 		projects: [
 			{
@@ -44,6 +46,7 @@ export function getBaseConfig(testType: TestType) {
 
 		webServer: {
 			env: { NODE_OPTIONS: `--inspect=${getDebugPort()}` },
+			timeout: 20000,
 			command: "npm run dev",
 			url: WEB_SERVER_URL,
 			reuseExistingServer: true, // consider that for some tests, such as for admin pages, restart the server before running each test

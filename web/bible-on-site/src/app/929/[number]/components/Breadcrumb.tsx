@@ -6,7 +6,10 @@ import styles from "./breadcrumb.module.css";
 export const Breadcrumb = (props: { perekObj: PerekObj }) => {
 	const perekObj = props.perekObj;
 	return (
-		<nav className={styles.grid}>
+		<nav
+			data-testid={`perek-breadcrumb-${perekObj.perekId}`}
+			className={styles.grid}
+		>
 			<div className={styles.container}>
 				<ol className={styles.breadcrumb}>
 					<li>

@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import styles from "./page.module.css";
 
 // sections are a closed list.
@@ -6,14 +7,20 @@ export const dynamicParams = false;
 
 // this reserverd function is a magic for caching
 export function generateStaticParams() {
-	return ["dailyBulletin", "tos", "app", "contact", "donation"];
+	// Return an array of objects with the key "section"
+	return [
+		{ section: "dailyBulletin" },
+		{ section: "tos" },
+		{ section: "app" },
+		{ section: "contact" },
+		{ section: "donation" },
+	];
 }
 
-export default function Home({
-	params: { section },
-}: {
-	params: { section: string };
-}) {
+export default async function Home({
+	params,
+}: { params: Promise<{ section: string }> }) {
+	const { section } = await params;
 	return (
 		<div className={styles.page}>
 			<section className={`${styles.alHaperekSection} bg-custom py-8`}>
@@ -26,7 +33,7 @@ export default function Home({
 				>
 					<article className="flex flex-col items-center p-6 rounded-lg">
 						<h1 className="text-xl font-bold">
-							<a href="/929/">
+							<Link href="/929/">
 								<Image
 									className="icon-white"
 									src="/icons/calendar-today.svg"
@@ -35,7 +42,7 @@ export default function Home({
 									height={48}
 								/>
 								<span>לימוד יומי על הפרק</span>
-							</a>
+							</Link>
 						</h1>
 						<p>
 							בתנ&quot;ך על הפרק לומדים במקביל ללימוד של 929 - פרק ליום. הלימוד

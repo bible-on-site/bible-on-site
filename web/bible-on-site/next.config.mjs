@@ -1,14 +1,22 @@
-import { argv } from "process";
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	experimental: {
-		ppr: "incremental",
 		esmExternals: true,
 		externalDir: true,
-		swcPlugins: process.env.TURBOPACK
-			? []
-			: [["swc-plugin-coverage-instrument", {}]],
+		swcPlugins:
+			// Currently there are a few bugs with swc-plugin-coverage-instrument when using turbopack
+			// 1. It decorates next/font with some overhead which breaks a next constraint that next/font should be top level something
+			//    This can be solved quite easily by adding "layout.tsx" to the unstableExclude array (and maybe break layout.tsx in order to lose as least coverage data as possible)
+			// 2. It resolves source paths as just their name breaking coverage tree structure
+			//    TODO: open an issue in swc-plugin-coverage-instrument repo with an MCVE
+			process.env.TURBOPACK
+				? []
+				: [
+						[
+							"swc-plugin-coverage-instrument",
+							{ unstableExclude: ["coverage/route.ts"] },
+						],
+					],
 	},
 };
 
