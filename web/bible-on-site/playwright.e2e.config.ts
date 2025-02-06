@@ -5,4 +5,5 @@ export default defineConfig({
 	...getBaseConfig(TestType.E2E),
 	fullyParallel: true,
 	retries: 0,
+	workers: process.env.CI ? "100%" : "50%",
 });
