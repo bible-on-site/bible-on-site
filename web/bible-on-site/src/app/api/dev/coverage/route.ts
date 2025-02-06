@@ -13,7 +13,7 @@ export async function GET(request: Request) {
       status: 403,
     });
   }
-  const result = (global as unknown as { __coverage__?: CoverageData }).__coverage__ || {};
+  const result = (global as unknown as { __coverage__?: CoverageData }).__coverage__ ?? {};
   (global as unknown as { __coverage__: CoverageData }).__coverage__ = {};
   return NextResponse.json(result);
 }
