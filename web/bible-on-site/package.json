@@ -22,12 +22,8 @@
 		"node": ">=22.2.0"
 	},
 	"babel": {
-		"presets": [
-			"next/babel"
-		],
-		"plugins": [
-			"istanbul"
-		]
+		"presets": ["next/babel"],
+		"plugins": ["istanbul"]
 	},
 	"dependencies": {
 		"@hebcal/core": "5.9.0",
