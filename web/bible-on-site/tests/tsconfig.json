@@ -1,33 +1,37 @@
 {
-	"compilerOptions": {
-		"target": "esnext",
-		"module": "ESNext",
-		"strict": true,
-		"esModuleInterop": true,
-		"forceConsistentCasingInFileNames": true,
-		"noImplicitReturns": true,
-		"noUnusedLocals": true,
-		"noUnusedParameters": true,
-		"noFallthroughCasesInSwitch": true,
-		"noImplicitAny": true,
-		"strictNullChecks": true,
-		"strictFunctionTypes": true,
-		"strictPropertyInitialization": true,
-		"resolveJsonModule": true,
-		"allowJs": true,
-		"noImplicitThis": true,
-		"alwaysStrict": true,
-		"declaration": true,
-		"declarationMap": true,
-		"moduleResolution": "node",
-		"outDir": "./dist",
-		"baseUrl": ".",
-		"types": ["node"],
-		"jsx": "preserve"
-	},
-	"include": [
-		"./**/*.ts",
-		"util/coverage/merge-coverage.mts",
-		"playwright.config.js"
-	]
+  // TODO: make dedicated tsconfig for different kind of tests (unit, e2e, performance, etc)
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "ESNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictPropertyInitialization": true,
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "declaration": true,
+    "declarationMap": true,
+    "moduleResolution": "node",
+    "outDir": "./dist",
+    "baseUrl": ".",
+    "types": ["node"],
+    "jsx": "preserve"
+  },
+
+  "include": [
+    "../shared/**/*.ts",
+    "globals.d.ts",
+    "./**/*.ts",
+    "util/coverage/merge-coverage.mts",
+    "playwright.config.js"
+  ]
 }
