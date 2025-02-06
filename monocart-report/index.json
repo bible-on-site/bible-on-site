@@ -1,294 +1,284 @@
 {
-    "name": "Test Report",
-    "logo": null,
-    "date": 1738849269575,
-    "dateH": "6.2.2025, 15:41:09",
-    "duration": 1701,
-    "durationH": "1.7s",
-    "cwd": "C:/Users/Dorad/git/bible-on-site",
-    "outputFile": "C:\\Users\\Dorad\\git\\bible-on-site\\monocart-report\\index.html",
-    "outputDir": "C:\\Users\\Dorad\\git\\bible-on-site\\monocart-report",
-    "metadata": {
-        "actualWorkers": 0
-    },
-    "system": {
-        "cpu": {
-            "color": "#117DBB",
-            "count": 20,
-            "model": "13th Gen Intel(R) Core(TM) i9-13900H",
-            "speed": 2995
-        },
-        "mem": {
-            "color": "#8B12AE",
-            "total": 33954357248
-        },
-        "arch": "x64",
-        "platform": "win32",
-        "release": "10.0.26100",
-        "type": "Windows_NT",
-        "version": "Windows 11 Enterprise",
-        "uptime": 295712.125,
-        "hostname": "DESKTOP-BGJRUVJ",
-        "pid": 23864,
-        "node": "22.13.0",
-        "v8": "12.4.254.21-node.22",
-        "timestampStart": 1738842069575,
-        "ticks": [
-            {
-                "cpu": {
-                    "percent": 19.63
-                },
-                "mem": {
-                    "free": 10825867264
-                },
-                "timestamp": 1738842071276
-            }
-        ],
-        "workers": 1,
-        "jobs": [],
-        "cwd": "C:/Users/Dorad/git/bible-on-site",
-        "configFile": "web/bible-on-site/playwright.perf.config.ts",
-        "playwright": "1.50.1",
-        "monocart": "2.9.13",
-        "testDir": "web/bible-on-site/tests",
-        "outputFile": "monocart-report/index.html",
-        "outputDir": "monocart-report",
-        "timestampEnd": 1738842071276
-    },
-    "artifacts": [],
-    "trends": [],
-    "columns": [
-        {
-            "id": "caseType",
-            "name": "",
-            "width": 36,
-            "sortable": false,
-            "align": "center",
-            "formatter": "iconCaseType",
-            "detailed": false
-        },
-        {
-            "id": "title",
-            "name": "Title",
-            "searchable": true,
-            "width": 350,
-            "maxWidth": 1230,
-            "detailed": false
-        },
-        {
-            "id": "type",
-            "name": "Type",
-            "width": 50,
-            "sortable": false,
-            "align": "center",
-            "formatter": "iconType",
-            "detailed": false
-        },
-        {
-            "id": "duration",
-            "name": "Duration",
-            "align": "right",
-            "sortAsc": false,
-            "formatter": "duration",
-            "detailed": false
-        },
-        {
-            "id": "errors",
-            "name": "Errors",
-            "width": 60,
-            "align": "center",
-            "comparer": "errors",
-            "formatter": "errors",
-            "detailed": false
-        },
-        {
-            "id": "logs",
-            "name": "Logs",
-            "width": 60,
-            "align": "center",
-            "comparer": "logs",
-            "formatter": "logs",
-            "detailed": false
-        },
-        {
-            "id": "annotations",
-            "name": "Annotations",
-            "width": 100,
-            "markdown": true,
-            "searchable": true,
-            "comparer": "annotations",
-            "formatter": "annotations",
-            "detailed": false
-        },
-        {
-            "id": "attachments",
-            "name": "Attachments",
-            "width": 100,
-            "align": "center",
-            "formatter": "attachments",
-            "detailed": false
-        },
-        {
-            "id": "status",
-            "name": "Status",
-            "align": "center",
-            "detailed": false
-        },
-        {
-            "id": "expectedStatus",
-            "name": "Expected",
-            "align": "center",
-            "detailed": false
-        },
-        {
-            "id": "outcome",
-            "name": "Outcome",
-            "align": "center",
-            "width": 85,
-            "detailed": false
-        },
-        {
-            "id": "retry",
-            "name": "Retry",
-            "align": "center",
-            "width": 50,
-            "detailed": false
-        },
-        {
-            "id": "location",
-            "name": "Location",
-            "classMap": "mcr-location",
-            "width": 200,
-            "maxWidth": 1981,
-            "detailed": false
-        }
-    ],
-    "rows": [],
-    "formatters": {},
-    "suiteTypes": [
-        "project",
-        "file",
-        "describe",
-        "shard"
-    ],
-    "caseTypes": [
-        "failed",
-        "flaky",
-        "skipped",
-        "passed"
-    ],
-    "traceViewerUrl": "https://trace.playwright.dev/?trace={traceUrl}",
-    "mermaid": null,
-    "groupOptions": null,
-    "tags": {},
-    "summary": {
-        "tests": {
-            "name": "Tests",
-            "value": 0,
-            "nav": true,
-            "id": "tests"
-        },
-        "failed": {
-            "name": "Failed",
-            "value": 0,
-            "color": "#d00",
-            "nav": true,
-            "id": "failed",
-            "percent": "0.0%"
-        },
-        "flaky": {
-            "name": "Flaky",
-            "value": 0,
-            "color": "orange",
-            "nav": true,
-            "id": "flaky",
-            "percent": "0.0%"
-        },
-        "skipped": {
-            "name": "Skipped",
-            "value": 0,
-            "color": "gray",
-            "nav": true,
-            "id": "skipped",
-            "percent": "0.0%"
-        },
-        "passed": {
-            "name": "Passed",
-            "value": 0,
-            "color": "green",
-            "nav": true,
-            "id": "passed",
-            "percent": "0.0%"
-        },
-        "steps": {
-            "name": "Steps",
-            "value": 0,
-            "id": "steps"
-        },
-        "suites": {
-            "name": "Suites",
-            "value": 0,
-            "id": "suites"
-        },
-        "projects": {
-            "name": "Projects",
-            "description": "Suite type is project",
-            "value": 0,
-            "id": "projects"
-        },
-        "files": {
-            "name": "Files",
-            "description": "Suite type is file",
-            "value": 0,
-            "id": "files"
-        },
-        "describes": {
-            "name": "Describes",
-            "description": "Suite type is describe",
-            "value": 0,
-            "id": "describes"
-        },
-        "shards": {
-            "name": "Shards",
-            "description": "Suite type is shard (only in shading mode)",
-            "value": 0,
-            "id": "shards"
-        },
-        "errors": {
-            "name": "Errors",
-            "icon": "error",
-            "value": 0,
-            "id": "errors"
-        },
-        "retries": {
-            "name": "Retries",
-            "icon": "retry",
-            "value": 0,
-            "id": "retries"
-        },
-        "logs": {
-            "name": "Logs",
-            "icon": "log",
-            "value": 0,
-            "id": "logs"
-        },
-        "attachments": {
-            "name": "Attachments",
-            "icon": "attachment",
-            "value": 0,
-            "id": "attachments"
-        },
-        "artifacts": {
-            "name": "Artifacts",
-            "value": 0
-        }
-    },
-    "pieChart": {
-        "ns": "mcr-pie",
-        "width": 360,
-        "height": 150,
-        "margin": 10,
-        "svg": "<svg viewBox=\"0 0 360 150\" width=\"100%\" height=\"100%\" xmlns=\"http://www.w3.org/2000/svg\"><circle cx=\"75\" cy=\"75\" r=\"65\" fill=\"#f5f5f5\" /><g transform=\"translate(160 15)\"><g class=\"mcr-pie-legend-failed\" transform=\"translate(0 0)\"><circle cx=\"10\" cy=\"15\" r=\"10\" fill=\"#d00\" opacity=\"0.8\" /><text x=\"30\" y=\"15\" alignment-baseline=\"middle\">Failed</text><text x=\"115\" y=\"15\" alignment-baseline=\"middle\" text-anchor=\"middle\">0</text><text x=\"190\" y=\"15\" alignment-baseline=\"middle\" text-anchor=\"end\">0.0%</text></g><g class=\"mcr-pie-legend-flaky\" transform=\"translate(0 30)\"><circle cx=\"10\" cy=\"15\" r=\"10\" fill=\"orange\" opacity=\"0.8\" /><text x=\"30\" y=\"15\" alignment-baseline=\"middle\">Flaky</text><text x=\"115\" y=\"15\" alignment-baseline=\"middle\" text-anchor=\"middle\">0</text><text x=\"190\" y=\"15\" alignment-baseline=\"middle\" text-anchor=\"end\">0.0%</text></g><g class=\"mcr-pie-legend-skipped\" transform=\"translate(0 60)\"><circle cx=\"10\" cy=\"15\" r=\"10\" fill=\"gray\" opacity=\"0.8\" /><text x=\"30\" y=\"15\" alignment-baseline=\"middle\">Skipped</text><text x=\"115\" y=\"15\" alignment-baseline=\"middle\" text-anchor=\"middle\">0</text><text x=\"190\" y=\"15\" alignment-baseline=\"middle\" text-anchor=\"end\">0.0%</text></g><g class=\"mcr-pie-legend-passed\" transform=\"translate(0 90)\"><circle cx=\"10\" cy=\"15\" r=\"10\" fill=\"green\" opacity=\"0.8\" /><text x=\"30\" y=\"15\" alignment-baseline=\"middle\">Passed</text><text x=\"115\" y=\"15\" alignment-baseline=\"middle\" text-anchor=\"middle\">0</text><text x=\"190\" y=\"15\" alignment-baseline=\"middle\" text-anchor=\"end\">0.0%</text></g></g></svg>"
-    },
-    "htmlPath": "monocart-report/index.html"
+	"name": "Test Report",
+	"logo": null,
+	"date": 1738849269575,
+	"dateH": "6.2.2025, 15:41:09",
+	"duration": 1701,
+	"durationH": "1.7s",
+	"cwd": "C:/Users/Dorad/git/bible-on-site",
+	"outputFile": "C:\\Users\\Dorad\\git\\bible-on-site\\monocart-report\\index.html",
+	"outputDir": "C:\\Users\\Dorad\\git\\bible-on-site\\monocart-report",
+	"metadata": {
+		"actualWorkers": 0
+	},
+	"system": {
+		"cpu": {
+			"color": "#117DBB",
+			"count": 20,
+			"model": "13th Gen Intel(R) Core(TM) i9-13900H",
+			"speed": 2995
+		},
+		"mem": {
+			"color": "#8B12AE",
+			"total": 33954357248
+		},
+		"arch": "x64",
+		"platform": "win32",
+		"release": "10.0.26100",
+		"type": "Windows_NT",
+		"version": "Windows 11 Enterprise",
+		"uptime": 295712.125,
+		"hostname": "DESKTOP-BGJRUVJ",
+		"pid": 23864,
+		"node": "22.13.0",
+		"v8": "12.4.254.21-node.22",
+		"timestampStart": 1738842069575,
+		"ticks": [
+			{
+				"cpu": {
+					"percent": 19.63
+				},
+				"mem": {
+					"free": 10825867264
+				},
+				"timestamp": 1738842071276
+			}
+		],
+		"workers": 1,
+		"jobs": [],
+		"cwd": "C:/Users/Dorad/git/bible-on-site",
+		"configFile": "web/bible-on-site/playwright.perf.config.ts",
+		"playwright": "1.50.1",
+		"monocart": "2.9.13",
+		"testDir": "web/bible-on-site/tests",
+		"outputFile": "monocart-report/index.html",
+		"outputDir": "monocart-report",
+		"timestampEnd": 1738842071276
+	},
+	"artifacts": [],
+	"trends": [],
+	"columns": [
+		{
+			"id": "caseType",
+			"name": "",
+			"width": 36,
+			"sortable": false,
+			"align": "center",
+			"formatter": "iconCaseType",
+			"detailed": false
+		},
+		{
+			"id": "title",
+			"name": "Title",
+			"searchable": true,
+			"width": 350,
+			"maxWidth": 1230,
+			"detailed": false
+		},
+		{
+			"id": "type",
+			"name": "Type",
+			"width": 50,
+			"sortable": false,
+			"align": "center",
+			"formatter": "iconType",
+			"detailed": false
+		},
+		{
+			"id": "duration",
+			"name": "Duration",
+			"align": "right",
+			"sortAsc": false,
+			"formatter": "duration",
+			"detailed": false
+		},
+		{
+			"id": "errors",
+			"name": "Errors",
+			"width": 60,
+			"align": "center",
+			"comparer": "errors",
+			"formatter": "errors",
+			"detailed": false
+		},
+		{
+			"id": "logs",
+			"name": "Logs",
+			"width": 60,
+			"align": "center",
+			"comparer": "logs",
+			"formatter": "logs",
+			"detailed": false
+		},
+		{
+			"id": "annotations",
+			"name": "Annotations",
+			"width": 100,
+			"markdown": true,
+			"searchable": true,
+			"comparer": "annotations",
+			"formatter": "annotations",
+			"detailed": false
+		},
+		{
+			"id": "attachments",
+			"name": "Attachments",
+			"width": 100,
+			"align": "center",
+			"formatter": "attachments",
+			"detailed": false
+		},
+		{
+			"id": "status",
+			"name": "Status",
+			"align": "center",
+			"detailed": false
+		},
+		{
+			"id": "expectedStatus",
+			"name": "Expected",
+			"align": "center",
+			"detailed": false
+		},
+		{
+			"id": "outcome",
+			"name": "Outcome",
+			"align": "center",
+			"width": 85,
+			"detailed": false
+		},
+		{
+			"id": "retry",
+			"name": "Retry",
+			"align": "center",
+			"width": 50,
+			"detailed": false
+		},
+		{
+			"id": "location",
+			"name": "Location",
+			"classMap": "mcr-location",
+			"width": 200,
+			"maxWidth": 1981,
+			"detailed": false
+		}
+	],
+	"rows": [],
+	"formatters": {},
+	"suiteTypes": ["project", "file", "describe", "shard"],
+	"caseTypes": ["failed", "flaky", "skipped", "passed"],
+	"traceViewerUrl": "https://trace.playwright.dev/?trace={traceUrl}",
+	"mermaid": null,
+	"groupOptions": null,
+	"tags": {},
+	"summary": {
+		"tests": {
+			"name": "Tests",
+			"value": 0,
+			"nav": true,
+			"id": "tests"
+		},
+		"failed": {
+			"name": "Failed",
+			"value": 0,
+			"color": "#d00",
+			"nav": true,
+			"id": "failed",
+			"percent": "0.0%"
+		},
+		"flaky": {
+			"name": "Flaky",
+			"value": 0,
+			"color": "orange",
+			"nav": true,
+			"id": "flaky",
+			"percent": "0.0%"
+		},
+		"skipped": {
+			"name": "Skipped",
+			"value": 0,
+			"color": "gray",
+			"nav": true,
+			"id": "skipped",
+			"percent": "0.0%"
+		},
+		"passed": {
+			"name": "Passed",
+			"value": 0,
+			"color": "green",
+			"nav": true,
+			"id": "passed",
+			"percent": "0.0%"
+		},
+		"steps": {
+			"name": "Steps",
+			"value": 0,
+			"id": "steps"
+		},
+		"suites": {
+			"name": "Suites",
+			"value": 0,
+			"id": "suites"
+		},
+		"projects": {
+			"name": "Projects",
+			"description": "Suite type is project",
+			"value": 0,
+			"id": "projects"
+		},
+		"files": {
+			"name": "Files",
+			"description": "Suite type is file",
+			"value": 0,
+			"id": "files"
+		},
+		"describes": {
+			"name": "Describes",
+			"description": "Suite type is describe",
+			"value": 0,
+			"id": "describes"
+		},
+		"shards": {
+			"name": "Shards",
+			"description": "Suite type is shard (only in shading mode)",
+			"value": 0,
+			"id": "shards"
+		},
+		"errors": {
+			"name": "Errors",
+			"icon": "error",
+			"value": 0,
+			"id": "errors"
+		},
+		"retries": {
+			"name": "Retries",
+			"icon": "retry",
+			"value": 0,
+			"id": "retries"
+		},
+		"logs": {
+			"name": "Logs",
+			"icon": "log",
+			"value": 0,
+			"id": "logs"
+		},
+		"attachments": {
+			"name": "Attachments",
+			"icon": "attachment",
+			"value": 0,
+			"id": "attachments"
+		},
+		"artifacts": {
+			"name": "Artifacts",
+			"value": 0
+		}
+	},
+	"pieChart": {
+		"ns": "mcr-pie",
+		"width": 360,
+		"height": 150,
+		"margin": 10,
+		"svg": "<svg viewBox=\"0 0 360 150\" width=\"100%\" height=\"100%\" xmlns=\"http://www.w3.org/2000/svg\"><circle cx=\"75\" cy=\"75\" r=\"65\" fill=\"#f5f5f5\" /><g transform=\"translate(160 15)\"><g class=\"mcr-pie-legend-failed\" transform=\"translate(0 0)\"><circle cx=\"10\" cy=\"15\" r=\"10\" fill=\"#d00\" opacity=\"0.8\" /><text x=\"30\" y=\"15\" alignment-baseline=\"middle\">Failed</text><text x=\"115\" y=\"15\" alignment-baseline=\"middle\" text-anchor=\"middle\">0</text><text x=\"190\" y=\"15\" alignment-baseline=\"middle\" text-anchor=\"end\">0.0%</text></g><g class=\"mcr-pie-legend-flaky\" transform=\"translate(0 30)\"><circle cx=\"10\" cy=\"15\" r=\"10\" fill=\"orange\" opacity=\"0.8\" /><text x=\"30\" y=\"15\" alignment-baseline=\"middle\">Flaky</text><text x=\"115\" y=\"15\" alignment-baseline=\"middle\" text-anchor=\"middle\">0</text><text x=\"190\" y=\"15\" alignment-baseline=\"middle\" text-anchor=\"end\">0.0%</text></g><g class=\"mcr-pie-legend-skipped\" transform=\"translate(0 60)\"><circle cx=\"10\" cy=\"15\" r=\"10\" fill=\"gray\" opacity=\"0.8\" /><text x=\"30\" y=\"15\" alignment-baseline=\"middle\">Skipped</text><text x=\"115\" y=\"15\" alignment-baseline=\"middle\" text-anchor=\"middle\">0</text><text x=\"190\" y=\"15\" alignment-baseline=\"middle\" text-anchor=\"end\">0.0%</text></g><g class=\"mcr-pie-legend-passed\" transform=\"translate(0 90)\"><circle cx=\"10\" cy=\"15\" r=\"10\" fill=\"green\" opacity=\"0.8\" /><text x=\"30\" y=\"15\" alignment-baseline=\"middle\">Passed</text><text x=\"115\" y=\"15\" alignment-baseline=\"middle\" text-anchor=\"middle\">0</text><text x=\"190\" y=\"15\" alignment-baseline=\"middle\" text-anchor=\"end\">0.0%</text></g></g></svg>"
+	},
+	"htmlPath": "monocart-report/index.html"
 }
