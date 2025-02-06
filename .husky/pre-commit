@@ -1,0 +1,2 @@
+cd ./web/bible-on-site
+.husky/pre-commit

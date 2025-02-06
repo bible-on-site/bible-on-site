@@ -34,6 +34,7 @@ const ReadModeToggler = forwardRef<
 			/>
 			<div className={styles.toggleDiv} />
 			<Image
+				data-testid="read-mode-toggler-basic-view-button"
 				className={styles.bookIcon}
 				src="/icons/open-book.svg"
 				alt="תצוגה בסיסית"
@@ -41,6 +42,7 @@ const ReadModeToggler = forwardRef<
 				height={16}
 			/>
 			<Image
+				data-testid="read-mode-toggler-sefer-view-button"
 				className={styles.noteIcon}
 				src="/icons/note.svg"
 				alt="תצוגת ספר"

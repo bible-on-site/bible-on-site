@@ -38,5 +38,6 @@ next-env.d.ts
 /blob-report/
 /playwright/.cache/
 
+monocart-report/
 # swc
 .swc

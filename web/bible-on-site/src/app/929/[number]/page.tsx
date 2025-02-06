@@ -15,8 +15,8 @@ export const dynamicParams = false;
 
 // this reserverd function is a magic for caching
 export function generateStaticParams() {
-	// return range of numbers from 1 to 929
-	return Array.from({ length: 929 }, (_, i) => i + 1);
+	// Return an array of objects with the key "number" as a string
+	return Array.from({ length: 929 }, (_, i) => ({ number: String(i + 1) }));
 }
 const searchParamsCache = createSearchParamsCache({
 	// List your search param keys and associated parsers here:
@@ -24,16 +24,19 @@ const searchParamsCache = createSearchParamsCache({
 });
 
 // TODO: figure out if need to use generateMetadata
-export default function Perek({
-	params: { number },
+export default async function Perek({
+	params,
 	searchParams,
 }: {
-	params: { number: number };
-	searchParams: Record<string, string | string[] | undefined>;
+	params: Promise<{ number: string }>;
+	searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-	const perekId = number;
+	const { number } = await params;
+	const resolvedSearchParams = await searchParams;
+	const perekId = Number.parseInt(number, 10); // convert string to number
 	const perekObj = getPerekByPerekId(perekId);
-	const { book: bookSearchParam } = searchParamsCache.parse(searchParams);
+	const { book: bookSearchParam } =
+		searchParamsCache.parse(resolvedSearchParams);
 	const isBook = bookSearchParam != null;
 	return (
 		<>

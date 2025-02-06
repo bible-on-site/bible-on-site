@@ -1,0 +1,2 @@
+npm run lint || exit 1
+npm run test:unit || exit 1

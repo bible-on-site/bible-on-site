@@ -1,4 +1,5 @@
 {
+	// TODO: make dedicated tsconfig for different kind of tests (unit, e2e, performance, etc)
 	"compilerOptions": {
 		"target": "esnext",
 		"module": "ESNext",
@@ -25,5 +26,12 @@
 		"types": ["node"],
 		"jsx": "preserve"
 	},
-	"include": ["./**/*.ts", "util/coverage/merge-coverage.mts"]
+
+	"include": [
+		"../shared/**/*.ts",
+		"globals.d.ts",
+		"./**/*.ts",
+		"util/coverage/merge-coverage.mts",
+		"playwright.config.js"
+	]
 }

@@ -27,27 +27,21 @@ const config = {
 		[
 			"./tests/util/jest/coverage",
 			{
-				// logging: 'debug',
 				name: "Jest Monocart Coverage Report",
 				all: "./src",
-
-				sourcePath: {
-					"src/": "",
-				},
-
 				outputDir: "./coverage/unit",
-
 				reports: reports,
 			},
 		],
 	],
-	// globalTeardown: "./tests/util/jest/globalTeardown.js",
 	testEnvironment: "jsdom",
 	testMatch: ["**/tests/(unit|integration)/**/*.test.ts"],
-	// A map from regular expressions to paths to transformers
 	transform: {
 		"^.+\\.ts$": "ts-jest",
 	},
+	transformIgnorePatterns: [
+		// This will be overwritten in hackJestConfig.
+	],
 	extensionsToTreatAsEsm: [".ts", ".json"],
 };
 
@@ -55,9 +49,9 @@ const config = {
 async function hackJestConfig() {
 	// createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async
 	const nextJestConfig = await createJestConfig(config)();
-	// /node_modules/ is the first pattern, so overwrite it with the correct version
+	// modules within @hebcal and gematry to not be transformed.
 	nextJestConfig.transformIgnorePatterns[0] =
-		"/node_modules/(?!gematry).+\\.js$";
+		"/node_modules/(?!(@hebcal|gematry)/)";
 
 	return nextJestConfig;
 }

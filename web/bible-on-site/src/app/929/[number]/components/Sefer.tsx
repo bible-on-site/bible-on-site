@@ -10,6 +10,7 @@ import { Ptuah } from "./Ptuha";
 import { Stuma } from "./Stuma";
 import styles from "./sefer.module.css";
 import "./sefer.css";
+
 const FlipBook = dynamic(
 	() => import("html-flip-book-react").then((mod) => mod.FlipBook),
 	{ ssr: false },
@@ -49,14 +50,16 @@ const Sefer = (props: { perekObj: PerekObj }) => {
 						{perek.pesukim.map((pasuk, pasukIdx) => {
 							const pasukKey = pasukIdx + 1;
 							const pasukNumElement = (
-								<a className={styles.pasukNum}>{toLetters(pasukIdx + 1)}</a>
+								<span className={styles.pasukNum}>
+									{toLetters(pasukIdx + 1)}
+								</span>
 							);
 							const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
 								const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
 								// TODO: merge qris sequnce like in 929/406
 								return (
 									<React.Fragment key={segmentKey}>
-										<a className={segment.type === "qri" ? styles.qri : ""}>
+										<span className={segment.type === "qri" ? styles.qri : ""}>
 											{segment.type === "ktiv" ? (
 												segment.value
 											) : segment.type === "qri" ? (
@@ -69,7 +72,7 @@ const Sefer = (props: { perekObj: PerekObj }) => {
 											) : (
 												Stuma()
 											)}
-										</a>
+										</span>
 										{segmentIdx === pasuk.segments.length - 1 ||
 										((segment.type === "ktiv" || segment.type === "qri") &&
 											segment.value.at(segment.value.length - 1) ===
