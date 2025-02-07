@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.1.76",
+	"version": "0.1.77",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
@@ -23,8 +23,12 @@
 		"node": ">=22.2.0"
 	},
 	"babel": {
-		"presets": ["next/babel"],
-		"plugins": ["istanbul"]
+		"presets": [
+			"next/babel"
+		],
+		"plugins": [
+			"istanbul"
+		]
 	},
 	"dependencies": {
 		"@hebcal/core": "5.9.0",
