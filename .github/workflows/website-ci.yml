@@ -1,4 +1,4 @@
-name: Continous Integration - web/bible-on-site
+name: Continous Integration - website
 
 on:
   push:
