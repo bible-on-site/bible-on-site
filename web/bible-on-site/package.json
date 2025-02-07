@@ -16,18 +16,15 @@
 		"test:perf": "playwright test --config=playwright.perf.config.ts",
 		"test:coverage": "npm run test:unit && npm run test:e2e && npm run coverage:merge",
 		"coverage:merge": "node --import tsx ./tests/util/coverage/merge-coverage.mts",
-		"prepare": "husky"
+		"prepare": "husky",
+		"package": "docker build -t bible-on-site:0.1.73 ."
 	},
 	"engines": {
 		"node": ">=22.2.0"
 	},
 	"babel": {
-		"presets": [
-			"next/babel"
-		],
-		"plugins": [
-			"istanbul"
-		]
+		"presets": ["next/babel"],
+		"plugins": ["istanbul"]
 	},
 	"dependencies": {
 		"@hebcal/core": "5.9.0",
@@ -36,7 +33,7 @@
 		"flowbite": "3.1.2",
 		"flowbite-react": "0.10.2",
 		"gematry": "1.0.2",
-		"html-flip-book-react": "https://gitpkg.now.sh/doradsoft/html-flip-book/html-flip-book-react?master",
+		"html-flip-book-react": "0.0.0-alpha.1",
 		"moment-timezone": "0.5.47",
 		"next": "15.1.6",
 		"nuqs": "2.3.2",
