@@ -230,3 +230,48 @@ jobs:
           name: playwright-e2e-report
           path: web/bible-on-site/playwright-report/
           retention-days: 30
+
+  deploy:
+    strategy:
+    matrix:
+      server:
+        - prefix: WEST_COAST
+        # - prefix: EAST_COAST   # add additional servers as needed
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    # Run CD only after successful tests
+    needs:
+      - performance
+      - end-to-end
+    environment:
+      name: production
+      url: https://your-production-site.example.com
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: master
+      - name: Deploy Application via SSH & Docker
+        env:
+          SERVER_IP: ${{ secrets[matrix.server.prefix + '_IP'] }}
+          SSH_USER: ${{ secrets[matrix.server.prefix + '_SSH_USER'] }}
+          SSH_KEY: ${{ secrets[matrix.server.prefix + '_SSH_KEY'] }}
+          SSH_PASSPHRASE: ${{ secrets[matrix.server.prefix + '_SSH_PASSPHRASE'] }}
+        run: |
+          echo "Deploying application..."
+          # The deploy script can use these env variables to SSH into your server.
+          # For instance, you could use a tool like sshpass:
+          # sshpass -p "$SSH_PASSPHRASE" ssh -o StrictHostKeyChecking=no $SSH_USER@$SERVER_IP 'cd /path/to/app && npm run deploy'
+          # For simplicity, here we run:
+          npm run deploy
+      - name: Clean Up Old Artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run cleanup:artifacts
+      - name: Upload Docker Artifact
+        # Ensure that the Docker artifact is available in a known folder (e.g., docker-artifact/)
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image-artifact
+          path: web/bible-on-site/docker-artifact/
+          retention-days: 30

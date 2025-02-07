@@ -17,7 +17,8 @@
 		"test:coverage": "npm run test:unit && npm run test:e2e && npm run coverage:merge",
 		"coverage:merge": "node --import tsx ./tests/util/coverage/merge-coverage.mts",
 		"prepare": "husky",
-		"package": "docker build -t bible-on-site:0.1.73 ."
+		"package": "docker build -t bible-on-site:0.1.73 .",
+		"cleanup:artifacts": "node scripts/cleanupArtifacts.js"
 	},
 	"engines": {
 		"node": ">=22.2.0"
@@ -46,6 +47,7 @@
 		"react-phone-number-input": "3.4.11"
 	},
 	"devDependencies": {
+		"@octokit/rest": "21.1.0",
 		"@playwright/test": "1.50.1",
 		"@types/jest": "29.5.14",
 		"@types/node": "22.13.1",
