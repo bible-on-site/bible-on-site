@@ -251,6 +251,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: master
+      - name: Package Application
+        run: npm run package
       - name: Deploy Application via SSH & Docker
         env:
           SERVER_IP: ${{ secrets[matrix.server.prefix + '_IP'] }}
