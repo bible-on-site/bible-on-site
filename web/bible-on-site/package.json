@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.1.77",
+	"version": "0.1.78",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
@@ -23,12 +23,8 @@
 		"node": ">=22.2.0"
 	},
 	"babel": {
-		"presets": [
-			"next/babel"
-		],
-		"plugins": [
-			"istanbul"
-		]
+		"presets": ["next/babel"],
+		"plugins": ["istanbul"]
 	},
 	"dependencies": {
 		"@hebcal/core": "5.9.0",
@@ -53,7 +49,7 @@
 		"@types/react-dom": "19.0.3",
 		"autoprefixer": "10.4.20",
 		"cross-env": "^7.0.3",
-		"eslint": "9.19.0",
+		"eslint": "9.20.0",
 		"eslint-config-next": "15.1.6",
 		"eslint-plugin-jest": "^28.11.0",
 		"eslint-plugin-jsonc": "2.19.1",
