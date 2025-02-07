@@ -33,6 +33,13 @@ jobs:
         run: |
           cd web/bible-on-site
           npm version patch -m "chore(release): %s [skip ci]"
+      - name: Commit changes
+        run: |
+          cd web/bible-on-site
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Actions"
+          git add package.json package-lock.json
+          git commit -m "chore(release): Bump version [skip ci]"
       - name: Push updated version back to repository
         run: |
           git push origin HEAD --follow-tags
