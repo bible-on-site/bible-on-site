@@ -14,6 +14,27 @@ on:
         default: 'master'
 
 jobs:
+  bump-version:
+    name: Bump Patch Version
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: web/bible-on-site/package.json
+      - name: Bump patch version
+        run: |
+          cd web/bible-on-site
+          npm version patch -m "chore(release): %s [skip ci]"
+      - name: Push updated version back to repository
+        run: |
+          git push origin HEAD --follow-tags
+
   performance:
     name: Website Performance
     runs-on: ubuntu-latest
