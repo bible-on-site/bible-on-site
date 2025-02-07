@@ -29,7 +29,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version-file: web/bible-on-site/package.json
+      - name: Check for changes in web/bible-on-site
+        id: paths_filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            bible:
+              - 'web/bible-on-site/**'
       - name: Bump patch version
+        if: steps.paths_filter.outputs.bible == 'true'
         run: |
           cd web/bible-on-site
           npm version patch -m "chore(release): %s [skip ci]"
@@ -42,11 +50,13 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.DEPLOY_KEY }}
       - name: Commit changes
+        if: steps.paths_filter.outputs.bible == 'true'
         run: |
           cd web/bible-on-site
           git add package.json package-lock.json
           git commit -m "chore(release): Bump version [skip ci]"
       - name: Push updated version back to repository
+        if: steps.paths_filter.outputs.bible == 'true'
         run: |
           git remote set-url origin git@github.com:${{ github.repository }}
           git push origin HEAD --follow-tags
