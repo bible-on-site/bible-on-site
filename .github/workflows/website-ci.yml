@@ -17,9 +17,34 @@ on:
         default: "master"
 
 jobs:
+  # STARTING FLOW
+  determine_changes:
+    name: Determine Changes
+    runs-on: ubuntu-latest
+    outputs:
+      website_changed: ${{ steps.check_changes.outputs.website_changed }}
+      ci_changed: ${{ steps.check_changes.outputs.ci_changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          fetch-depth: 2
+
+      - name: Check for changes
+        id: check_changes
+        run: |
+          WEBSITE_CHANGED=$(git diff --name-only --diff-filter=AM HEAD^ HEAD | grep -q "web/bible-on-site" && echo "true" || echo "false")
+          CI_CHANGED=$(git diff --name-only --diff-filter=AM HEAD^ HEAD | grep -q ".github/workflows/website-ci.yml" && echo "true" || echo "false")
+          echo "website_changed=${WEBSITE_CHANGED}" >> $GITHUB_OUTPUT
+          echo "ci_changed=${CI_CHANGED}" >> $GITHUB_OUTPUT
+
+  # ACTUAL JOBS
   performance:
     name: Website Performance
     runs-on: ubuntu-latest
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.website_changed == 'true' }}
     defaults:
       run:
         working-directory: web/bible-on-site
@@ -89,9 +114,12 @@ jobs:
           name: playwright-perf-report
           path: web/bible-on-site/playwright-report/
           retention-days: 30
+
   end-to-end:
     name: Website CI
     runs-on: ubuntu-latest
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.website_changed == 'true' || needs.determine_changes.outputs.ci_changed == 'true' }}
     defaults:
       run:
         working-directory: web/bible-on-site
