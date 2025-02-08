@@ -287,7 +287,7 @@ jobs:
             RETRY_COUNT=0
             while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
               OWNER_REPO=(${GITHUB_REPOSITORY/\// })
-              CODECOV_JSON=$(curl -s -H "Authorization: token ${{ secrets.CODECOV_TOKEN }}" "https://api.codecov.io/api/v2/github/${OWNER_REPO[0]}/repos/${OWNER_REPO[1]}/commits/${{ github.sha }}")
+              CODECOV_JSON=$(curl -s -H "Authorization: Bearer ${{ secrets.CODECOV_API_TOKEN }}" "https://api.codecov.io/api/v2/github/${OWNER_REPO[0]}/repos/${OWNER_REPO[1]}/commits/${{ github.sha }}")
               echo "CODECOV_JSON: $CODECOV_JSON"
               CODECOV_STATUS=$(echo "$CODECOV_JSON" | jq -r '.data.commit.state')
               if [ "$CODECOV_STATUS" = "complete" ]; then
