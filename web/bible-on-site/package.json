@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.1.73",
+	"version": "0.1.79",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
@@ -16,23 +16,28 @@
 		"test:perf": "playwright test --config=playwright.perf.config.ts",
 		"test:coverage": "npm run test:unit && npm run test:e2e && npm run coverage:merge",
 		"coverage:merge": "node --import tsx ./tests/util/coverage/merge-coverage.mts",
-		"prepare": "husky"
+		"prepare": "husky",
+		"package": "docker build -t bible-on-site:0.1.73 ."
 	},
 	"engines": {
 		"node": ">=22.2.0"
 	},
 	"babel": {
-		"presets": ["next/babel"],
-		"plugins": ["istanbul"]
+		"presets": [
+			"next/babel"
+		],
+		"plugins": [
+			"istanbul"
+		]
 	},
 	"dependencies": {
 		"@hebcal/core": "5.9.0",
 		"@syncfusion/ej2-react-grids": "28.2.4",
 		"@syncfusion/ej2-react-layouts": "28.2.4",
-		"flowbite": "2.5.2",
+		"flowbite": "3.1.2",
 		"flowbite-react": "0.10.2",
 		"gematry": "1.0.2",
-		"html-flip-book-react": "https://gitpkg.now.sh/doradsoft/html-flip-book/html-flip-book-react?master",
+		"html-flip-book-react": "0.0.0-alpha.1",
 		"moment-timezone": "0.5.47",
 		"next": "15.1.6",
 		"nuqs": "2.3.2",
@@ -48,7 +53,7 @@
 		"@types/react-dom": "19.0.3",
 		"autoprefixer": "10.4.20",
 		"cross-env": "^7.0.3",
-		"eslint": "9.19.0",
+		"eslint": "9.20.0",
 		"eslint-config-next": "15.1.6",
 		"eslint-plugin-jest": "^28.11.0",
 		"eslint-plugin-jsonc": "2.19.1",
