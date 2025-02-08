@@ -41,6 +41,53 @@ jobs:
           echo "ci_changed=${CI_CHANGED}" >> $GITHUB_OUTPUT
 
   # ACTUAL JOBS
+  bump-version:
+    name: Bump Patch Version
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ${{ env.NODE_VERSION_FILE }}
+      - name: Check for changes in ${{ env.MODULE_DIRECTORY }}
+        id: paths_filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            bible:
+              - '${{ env.MODULE_DIRECTORY }}/**'
+      - name: Bump patch version
+        if: steps.paths_filter.outputs.bible == 'true'
+        run: |
+          cd ${{ env.MODULE_DIRECTORY }}
+          npm version patch -m "chore(release): %s [skip ci]"
+      - name: Configure Git
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+      - name: Add Deploy Key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
+      - name: Commit changes
+        if: steps.paths_filter.outputs.bible == 'true'
+        run: |
+          cd ${{ env.MODULE_DIRECTORY }}
+          git add package.json package-lock.json
+          git commit -m "chore(release): Bump version [skip ci]"
+      - name: Push updated version back to repository
+        if: steps.paths_filter.outputs.bible == 'true'
+        run: |
+          git remote set-url origin git@github.com:${{ github.repository }}
+          git push origin HEAD --follow-tags
+
   performance:
     name: Website Performance
     runs-on: ubuntu-latest
