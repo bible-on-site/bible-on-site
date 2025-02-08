@@ -1,19 +1,53 @@
-name: Continuous Integration
+name: Continous Integration - website
 
 on:
-  merge_group:
   push:
     branches: master
   pull_request:
     branches: master
+  merge_group:
+    branches: master
   workflow_dispatch:
     inputs:
       ref:
-        description: 'The branch or tag to run the workflow on'
+        description: "The branch or tag to run the workflow on"
         required: true
-        default: 'master'
+        default: "master"
+
+env:
+  MODULE_DIRECTORY: web/bible-on-site
+  NODE_VERSION_FILE: web/bible-on-site/package.json
+  CACHE_DEPENDENCY_PATH: web/bible-on-site/package-lock.json
 
 jobs:
+  # STARTING FLOW
+  determine_changes:
+    name: Determine Changes
+    runs-on: ubuntu-latest
+    outputs:
+      website_changed: ${{ steps.check_changes.outputs.website_changed }}
+      ci_changed: ${{ steps.check_changes.outputs.ci_changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          fetch-depth: 0
+
+      - name: Check for changes
+        id: check_changes
+        run: |
+          if [[ ${{ github.event_name }} == 'pull_request' ]]; then
+            BASE_SHA=${{ github.event.pull_request.base.sha }}
+          else
+            BASE_SHA=$(git rev-parse origin/master)
+          fi
+          WEBSITE_CHANGED=$(git diff --name-only --diff-filter=AM $BASE_SHA HEAD | grep -q "${{ env.MODULE_DIRECTORY }}" && echo "true" || echo "false")
+          CI_CHANGED=$(git diff --name-only --diff-filter=AM $BASE_SHA HEAD | grep -q ".github/workflows/website-ci.yml" && echo "true" || echo "false")
+          echo "website_changed=${WEBSITE_CHANGED}" >> $GITHUB_OUTPUT
+          echo "ci_changed=${CI_CHANGED}" >> $GITHUB_OUTPUT
+
+  # ACTUAL JOBS
   bump-version:
     name: Bump Patch Version
     runs-on: ubuntu-latest
@@ -28,18 +62,18 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version-file: web/bible-on-site/package.json
-      - name: Check for changes in web/bible-on-site
+          node-version-file: ${{ env.NODE_VERSION_FILE }}
+      - name: Check for changes in ${{ env.MODULE_DIRECTORY }}
         id: paths_filter
         uses: dorny/paths-filter@v3
         with:
           filters: |
             bible:
-              - 'web/bible-on-site/**'
+              - '${{ env.MODULE_DIRECTORY }}/**'
       - name: Bump patch version
         if: steps.paths_filter.outputs.bible == 'true'
         run: |
-          cd web/bible-on-site
+          cd ${{ env.MODULE_DIRECTORY }}
           npm version patch -m "chore(release): %s [skip ci]"
       - name: Configure Git
         run: |
@@ -52,7 +86,7 @@ jobs:
       - name: Commit changes
         if: steps.paths_filter.outputs.bible == 'true'
         run: |
-          cd web/bible-on-site
+          cd ${{ env.MODULE_DIRECTORY }}
           git add package.json package-lock.json
           git commit -m "chore(release): Bump version [skip ci]"
       - name: Push updated version back to repository
@@ -64,9 +98,11 @@ jobs:
   performance:
     name: Website Performance
     runs-on: ubuntu-latest
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.website_changed == 'true' }}
     defaults:
       run:
-        working-directory: web/bible-on-site
+        working-directory: ${{ env.MODULE_DIRECTORY }}
     permissions:
       contents: read
 
@@ -81,8 +117,8 @@ jobs:
         id: setup-node
         uses: actions/setup-node@v4
         with:
-          node-version-file: web/bible-on-site/package.json
-          cache-dependency-path: web/bible-on-site/package-lock.json
+          node-version-file: ${{ env.NODE_VERSION_FILE }}
+          cache-dependency-path: ${{ env.CACHE_DEPENDENCY_PATH }}
           cache: npm
 
       - name: Get installed Playwright version
@@ -112,7 +148,7 @@ jobs:
       - name: Build cache
         uses: actions/cache@v4
         with:
-          path: web/bible-on-site/.next/cache
+          path: ${{ env.MODULE_DIRECTORY }}/.next/cache
           # Generate a new cache whenever packages or source files change.
           key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') }}
           # If source files changed but packages didn't, rebuild from a prior cache.
@@ -131,14 +167,17 @@ jobs:
         if: always()
         with:
           name: playwright-perf-report
-          path: web/bible-on-site/playwright-report/
+          path: ${{ env.MODULE_DIRECTORY }}/playwright-report/
           retention-days: 30
+
   end-to-end:
     name: Website CI
     runs-on: ubuntu-latest
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.website_changed == 'true' || needs.determine_changes.outputs.ci_changed == 'true' }}
     defaults:
       run:
-        working-directory: web/bible-on-site
+        working-directory: ${{ env.MODULE_DIRECTORY }}
     permissions:
       contents: read
 
@@ -153,8 +192,8 @@ jobs:
         id: setup-node
         uses: actions/setup-node@v4
         with:
-          node-version-file: web/bible-on-site/package.json
-          cache-dependency-path: web/bible-on-site/package-lock.json
+          node-version-file: ${{ env.NODE_VERSION_FILE }}
+          cache-dependency-path: ${{ env.CACHE_DEPENDENCY_PATH }}
           cache: npm
 
       - name: Get installed Playwright version
@@ -192,7 +231,7 @@ jobs:
       - name: Build cache
         uses: actions/cache@v4
         with:
-          path: web/bible-on-site/.next/cache
+          path: ${{ env.MODULE_DIRECTORY }}/.next/cache
           # Generate a new cache whenever packages or source files change.
           key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') }}
           # If source files changed but packages didn't, rebuild from a prior cache.
@@ -215,18 +254,76 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: web/bible-on-site/coverage/merged/lcov.info
+          files: ${{ env.MODULE_DIRECTORY }}/coverage/merged/lcov.info
           disable_search: true
 
       - name: Run codacy-coverage-reporter
         uses: codacy/codacy-coverage-reporter-action@master
         with:
           project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
-          coverage-reports: web/bible-on-site/coverage/merged/lcov.info
+          coverage-reports: ${{ env.MODULE_DIRECTORY }}/coverage/merged/lcov.info
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: playwright-e2e-report
-          path: web/bible-on-site/playwright-report/
+          path: ${{ env.MODULE_DIRECTORY }}/playwright-report/
           retention-days: 30
+
+  # CLOSING FLOW
+  report_status:
+    name: Report Status
+    runs-on: ubuntu-latest
+    needs: [determine_changes, performance, end-to-end]
+    if: always() # This ensures the job always runs
+    steps:
+      - name: Determine overall status
+        id: determine_status
+        run: |
+          PERFORMANCE_STATUS=$([ "${{ needs.performance.result }}" = "success" ] && echo "success" || echo "failure")
+          E2E_STATUS=$([ "${{ needs.end-to-end.result }}" = "success" ] && echo "success" || echo "failure")
+
+          if [ "${{ needs.determine_changes.outputs.website_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.ci_changed }}" = "true" ]; then
+            # Check Codecov status using the Codecov API
+            MAX_RETRIES=10
+            RETRY_COUNT=0
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+              OWNER_REPO=(${GITHUB_REPOSITORY/\// })
+              if [ "$GITHUB_EVENT_NAME" == "pull_request" ]; then
+                GITHUB_SHA=$(cat $GITHUB_EVENT_PATH | jq -r .pull_request.head.sha)
+              else
+                GITHUB_SHA=${{ github.sha }}
+              fi
+              CODECOV_JSON=$(curl -s -H "Authorization: Bearer ${{ secrets.CODECOV_API_TOKEN }}" "https://api.codecov.io/api/v2/github/${OWNER_REPO[0]}/repos/${OWNER_REPO[1]}/commits/$GITHUB_SHA")
+              echo "CODECOV_JSON: $CODECOV_JSON"
+              CODECOV_STATUS=$(echo "$CODECOV_JSON" | jq -r '.state')
+              if [ "$CODECOV_STATUS" = "complete" ]; then
+                CODECOV_RESULT=$(echo "$CODECOV_JSON" | jq -r '.ci_passed')
+                if [ "$CODECOV_RESULT" = "false" ]; then
+                  echo "Codecov check failed"
+                  echo "status=failure" >> $GITHUB_OUTPUT
+                  exit 1
+                fi
+                break
+              fi
+              echo "Waiting for Codecov status to complete (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)..."
+              sleep 30
+              RETRY_COUNT=$((RETRY_COUNT+1))
+            done
+            if [ "$E2E_STATUS" = "failure" ]; then
+              echo "Overall status: failure"
+              echo "status=failure" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+          fi
+
+          # if [ "${{ needs.determine_changes.outputs.website_changed }}" = "true" ]; then
+          #   if [ "$PERFORMANCE_STATUS" = "failure" ]; then
+          #     echo "Overall status: failure"
+          #     echo "status=failure" >> $GITHUB_OUTPUT
+          #     exit 1
+          #   fi
+          # fi
+
+          echo "Overall status: success"
+          echo "status=success" >> $GITHUB_OUTPUT
