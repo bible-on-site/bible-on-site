@@ -282,6 +282,26 @@ jobs:
           E2E_STATUS=$([ "${{ needs.end-to-end.result }}" = "success" ] && echo "success" || echo "failure")
 
           if [ "${{ needs.determine_changes.outputs.website_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.ci_changed }}" = "true" ]; then
+            # Check Codecov status using the Codecov API
+            MAX_RETRIES=10
+            RETRY_COUNT=0
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+              CODECOV_JSON=$(curl -s -H "Authorization: token ${{ secrets.CODECOV_TOKEN }}" "https://api.codecov.io/api/v2/gh/${{ github.repository }}/commit/${{ github.sha }}")
+              echo "CODECOV_JSON: $CODECOV_JSON"
+              CODECOV_STATUS=$(echo "$CODECOV_JSON" | jq -r '.data.commit.state')
+              if [ "$CODECOV_STATUS" = "complete" ]; then
+                CODECOV_RESULT=$(echo "$CODECOV_JSON" | jq -r '.data.commit.result')
+                if [ "$CODECOV_RESULT" = "error" ]; then
+                  echo "Codecov check failed"
+                  echo "status=failure" >> $GITHUB_OUTPUT
+                  exit 1
+                fi
+                break
+              fi
+              echo "Waiting for Codecov status to complete (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)..."
+              sleep 30
+              RETRY_COUNT=$((RETRY_COUNT+1))
+            done
             if [ "$E2E_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               echo "status=failure" >> $GITHUB_OUTPUT
@@ -289,13 +309,7 @@ jobs:
             fi
           fi
 
-          # if [ "${{ needs.determine_changes.outputs.website_changed }}" = "true" ]; then
-          #   if [ "$PERFORMANCE_STATUS" = "failure" ]; then
-          #     echo "Overall status: failure"
-          #     echo "status=failure" >> $GITHUB_OUTPUT
-          #     exit 1
-          #   fi
-          # fi
+
 
           echo "Overall status: success"
           echo "status=success" >> $GITHUB_OUTPUT
