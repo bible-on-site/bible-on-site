@@ -35,8 +35,13 @@ jobs:
       - name: Check for changes
         id: check_changes
         run: |
-          WEBSITE_CHANGED=$(git diff --name-only --diff-filter=AM HEAD^ HEAD | grep -q "${{ env.MODULE_DIRECTORY }}" && echo "true" || echo "false")
-          CI_CHANGED=$(git diff --name-only --diff-filter=AM HEAD^ HEAD | grep -q ".github/workflows/website-ci.yml" && echo "true" || echo "false")
+          if [[ ${{ github.event_name }} == 'pull_request' ]]; then
+            BASE_SHA=${{ github.event.pull_request.base.sha }}
+          else
+            BASE_SHA=$(git rev-parse origin/master)
+          fi
+          WEBSITE_CHANGED=$(git diff --name-only --diff-filter=AM $BASE_SHA HEAD | grep -q "${{ env.MODULE_DIRECTORY }}" && echo "true" || echo "false")
+          CI_CHANGED=$(git diff --name-only --diff-filter=AM $BASE_SHA HEAD | grep -q ".github/workflows/website-ci.yml" && echo "true" || echo "false")
           echo "website_changed=${WEBSITE_CHANGED}" >> $GITHUB_OUTPUT
           echo "ci_changed=${CI_CHANGED}" >> $GITHUB_OUTPUT
 
