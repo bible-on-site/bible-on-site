@@ -3,18 +3,19 @@ name: Continous Integration - website
 on:
   push:
     branches: master
-    paths:
-      - "web/bible-on-site/**"
   pull_request:
     branches: master
-    paths:
-      - "web/bible-on-site/**"
   workflow_dispatch:
     inputs:
       ref:
         description: "The branch or tag to run the workflow on"
         required: true
         default: "master"
+
+env:
+  MODULE_DIRECTORY: web/bible-on-site
+  NODE_VERSION_FILE: web/bible-on-site/package.json
+  CACHE_DEPENDENCY_PATH: web/bible-on-site/package-lock.json
 
 jobs:
   # STARTING FLOW
@@ -34,7 +35,7 @@ jobs:
       - name: Check for changes
         id: check_changes
         run: |
-          WEBSITE_CHANGED=$(git diff --name-only --diff-filter=AM HEAD^ HEAD | grep -q "web/bible-on-site" && echo "true" || echo "false")
+          WEBSITE_CHANGED=$(git diff --name-only --diff-filter=AM HEAD^ HEAD | grep -q "${{ env.MODULE_DIRECTORY }}" && echo "true" || echo "false")
           CI_CHANGED=$(git diff --name-only --diff-filter=AM HEAD^ HEAD | grep -q ".github/workflows/website-ci.yml" && echo "true" || echo "false")
           echo "website_changed=${WEBSITE_CHANGED}" >> $GITHUB_OUTPUT
           echo "ci_changed=${CI_CHANGED}" >> $GITHUB_OUTPUT
@@ -47,7 +48,7 @@ jobs:
     if: ${{ needs.determine_changes.outputs.website_changed == 'true' }}
     defaults:
       run:
-        working-directory: web/bible-on-site
+        working-directory: ${{ env.MODULE_DIRECTORY }}
     permissions:
       contents: read
 
@@ -62,8 +63,8 @@ jobs:
         id: setup-node
         uses: actions/setup-node@v4
         with:
-          node-version-file: web/bible-on-site/package.json
-          cache-dependency-path: web/bible-on-site/package-lock.json
+          node-version-file: ${{ env.NODE_VERSION_FILE }}
+          cache-dependency-path: ${{ env.CACHE_DEPENDENCY_PATH }}
           cache: npm
 
       - name: Get installed Playwright version
@@ -93,7 +94,7 @@ jobs:
       - name: Build cache
         uses: actions/cache@v4
         with:
-          path: web/bible-on-site/.next/cache
+          path: ${{ env.MODULE_DIRECTORY }}/.next/cache
           # Generate a new cache whenever packages or source files change.
           key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') }}
           # If source files changed but packages didn't, rebuild from a prior cache.
@@ -112,7 +113,7 @@ jobs:
         if: always()
         with:
           name: playwright-perf-report
-          path: web/bible-on-site/playwright-report/
+          path: ${{ env.MODULE_DIRECTORY }}/playwright-report/
           retention-days: 30
 
   end-to-end:
@@ -122,7 +123,7 @@ jobs:
     if: ${{ needs.determine_changes.outputs.website_changed == 'true' || needs.determine_changes.outputs.ci_changed == 'true' }}
     defaults:
       run:
-        working-directory: web/bible-on-site
+        working-directory: ${{ env.MODULE_DIRECTORY }}
     permissions:
       contents: read
 
@@ -137,8 +138,8 @@ jobs:
         id: setup-node
         uses: actions/setup-node@v4
         with:
-          node-version-file: web/bible-on-site/package.json
-          cache-dependency-path: web/bible-on-site/package-lock.json
+          node-version-file: ${{ env.NODE_VERSION_FILE }}
+          cache-dependency-path: ${{ env.CACHE_DEPENDENCY_PATH }}
           cache: npm
 
       - name: Get installed Playwright version
@@ -176,7 +177,7 @@ jobs:
       - name: Build cache
         uses: actions/cache@v4
         with:
-          path: web/bible-on-site/.next/cache
+          path: ${{ env.MODULE_DIRECTORY }}/.next/cache
           # Generate a new cache whenever packages or source files change.
           key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') }}
           # If source files changed but packages didn't, rebuild from a prior cache.
@@ -199,20 +200,20 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: web/bible-on-site/coverage/merged/lcov.info
+          files: ${{ env.MODULE_DIRECTORY }}/coverage/merged/lcov.info
           disable_search: true
 
       - name: Run codacy-coverage-reporter
         uses: codacy/codacy-coverage-reporter-action@master
         with:
           project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
-          coverage-reports: web/bible-on-site/coverage/merged/lcov.info
+          coverage-reports: ${{ env.MODULE_DIRECTORY }}/coverage/merged/lcov.info
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: playwright-e2e-report
-          path: web/bible-on-site/playwright-report/
+          path: ${{ env.MODULE_DIRECTORY }}/playwright-report/
           retention-days: 30
 
   # CLOSING FLOW
