@@ -214,3 +214,35 @@ jobs:
           name: playwright-e2e-report
           path: web/bible-on-site/playwright-report/
           retention-days: 30
+
+  # CLOSING FLOW
+  report_status:
+    name: Report Status
+    runs-on: ubuntu-latest
+    needs: [determine_changes, performance, end-to-end]
+    if: always() # This ensures the job always runs
+    steps:
+      - name: Determine overall status
+        id: determine_status
+        run: |
+          PERFORMANCE_STATUS=$([ "${{ needs.performance.result }}" = "success" ] && echo "success" || echo "failure")
+          E2E_STATUS=$([ "${{ needs.end-to-end.result }}" = "success" ] && echo "success" || echo "failure")
+
+          if [ "${{ needs.determine_changes.outputs.website_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.ci_changed }}" = "true" ]; then
+            if [ "$E2E_STATUS" = "failure" ]; then
+              echo "Overall status: failure"
+              echo "status=failure" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+          fi
+
+          if [ "${{ needs.determine_changes.outputs.website_changed }}" = "true" ]; then
+            if [ "$PERFORMANCE_STATUS" = "failure" ]; then
+              echo "Overall status: failure"
+              echo "status=failure" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+          fi
+
+          echo "Overall status: success"
+          echo "status=success" >> $GITHUB_OUTPUT
