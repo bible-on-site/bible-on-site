@@ -20,4 +20,4 @@ repos:
       - id: local-lint
         name: biome check
         entry: biome check
-        language: system
+        language: node
