@@ -19,5 +19,5 @@ repos:
     hooks:
       - id: local-lint
         name: biome check
-        entry: ./node_modules/.bin/biome
+        entry: biome check
         language: system
