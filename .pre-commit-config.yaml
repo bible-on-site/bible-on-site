@@ -18,6 +18,6 @@ repos:
 -   repo: https://github.com/biomejs/pre-commit
     rev: v0.6.1
     hooks:
-        id: local-biome-check
+      - id: local-biome-check
         name: biome check
         entry: npx biome check
