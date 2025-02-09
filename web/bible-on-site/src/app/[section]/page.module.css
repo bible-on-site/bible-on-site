@@ -52,7 +52,7 @@
   display: block;
   direction: rtl;
   text-align: right;
-  font-family: Tahoma;
+  font-family: Tahoma, sans-serif;
   font-size: 100%;
   margin-top: 1em;
   line-height: 1.5em;
@@ -73,7 +73,7 @@
   cursor: pointer;
   direction: initial;
   display: initial;
-  font-family: Tahoma;
+  font-family: Tahoma, sans-serif;
   font-size: 1.1em;
   letter-spacing: 0.1em;
   line-height: initial;
