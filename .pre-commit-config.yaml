@@ -15,9 +15,9 @@ repos:
     rev: v1.7.7
     hooks:
       - id: actionlint
--   repo: https://github.com/biomejs/pre-commit
-    rev: v0.6.1
+-   repo: local
     hooks:
-      - id: local-biome-check
+        id: local-biome-check
         name: biome check
         entry: npx biome check
+
