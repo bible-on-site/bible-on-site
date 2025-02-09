@@ -1,105 +1,105 @@
 .hamburgerMenu .menuToggle {
-  @apply hidden;
+	@apply hidden;
 }
 
 .hamburgerMenu .menuToggle:checked + .menuBtn {
-  @apply opacity-0;
-  transition: opacity 0.15s linear;
+	@apply opacity-0;
+	transition: opacity 0.15s linear;
 }
 
 .hamburgerMenu .menuToggle:not(:checked) + .menuBtn {
-  @apply opacity-100;
-  transition: opacity 0.15s linear;
+	@apply opacity-100;
+	transition: opacity 0.15s linear;
 }
 
 .hamburgerMenu .menuToggle:checked ~ .overlay {
-  @apply opacity-30 z-10;
-  transition: opacity 0.25s ease-in-out;
+	@apply opacity-30 z-10;
+	transition: opacity 0.25s ease-in-out;
 }
 
 .hamburgerMenu .menuToggle:checked ~ .menuBox {
-  @apply right-0 z-20;
-  transition: right 0.25s ease-in-out;
+	@apply right-0 z-20;
+	transition: right 0.25s ease-in-out;
 }
 
 .hamburgerMenu .menuToggle:not(:checked) ~ .overlay {
-  @apply opacity-0 z-0;
+	@apply opacity-0 z-0;
 }
 
 .menuBtn {
-  @apply fixed top-7 right-5 w-8 h-10 cursor-pointer z-10 bg-transparent border-0;
-  @apply transition-opacity duration-150 ease-linear;
+	@apply fixed top-7 right-5 w-8 h-10 cursor-pointer z-10 bg-transparent border-0;
+	@apply transition-opacity duration-150 ease-linear;
 }
 
 .menuBtn:hover {
-  @apply opacity-70;
+	@apply opacity-70;
 }
 
 .menuBtn:focus {
-  @apply outline-none;
+	@apply outline-none;
 }
 
 .menuIcon,
 .menuIcon::before,
 .menuIcon::after {
-  @apply block absolute w-full h-1 bg-white;
+	@apply block absolute w-full h-1 bg-white;
 }
 
 .menuIcon::before {
-  content: "";
-  @apply -top-2.5;
+	content: "";
+	@apply -top-2.5;
 }
 
 .menuIcon::after {
-  content: "";
-  @apply top-2.5;
+	content: "";
+	@apply top-2.5;
 }
 
 .overlay {
-  @apply fixed inset-0 bg-black opacity-0 transition duration-200 cursor-pointer;
+	@apply fixed inset-0 bg-black opacity-0 transition duration-200 cursor-pointer;
 }
 
 .menuBox {
-  @apply block fixed top-0 right-[-100%] w-[300px] h-full m-0 p-2 list-none bg-white shadow-md transition duration-1000 z-10;
+	@apply block fixed top-0 right-[-100%] w-[300px] h-full m-0 p-2 list-none bg-white shadow-md transition duration-1000 z-10;
 }
 
 .menuBox::before {
-  @apply absolute top-0 h-full w-[6px] left-[-6px];
-  content: "";
+	@apply absolute top-0 h-full w-[6px] left-[-6px];
+	content: "";
 
-  background: linear-gradient(to right, #000 -100%, #fff 100%);
+	background: linear-gradient(to right, #000 -100%, #fff 100%);
 }
 .sidebarTopBar {
-  display: grid;
-  align-content: space-between;
-  justify-items: center;
-  padding: 13px;
+	display: grid;
+	align-content: space-between;
+	justify-items: center;
+	padding: 13px;
 }
 
 .menuItem {
-  @apply flex flex-wrap w-full;
+	@apply flex flex-wrap w-full;
 }
 
 .menuItem > * {
-  @apply block;
-  @apply m-2;
+	@apply block;
+	@apply m-2;
 }
 
 .menuItem * {
-  @apply mr-2;
+	@apply mr-2;
 }
 .menuItem ul {
-  @apply contents;
+	@apply contents;
 }
 .menuItem ul li {
-  @apply mr-10;
+	@apply mr-10;
 }
 
 .menuBox > li::before {
-  content: " ";
-  @apply block w-[100%] border-b border-[#888bef4a];
+	content: " ";
+	@apply block w-[100%] border-b border-[#888bef4a];
 }
 .menuBox > li:last-of-type::after {
-  content: " ";
-  @apply block w-[100%] border-b border-[#888bef4a];
+	content: " ";
+	@apply block w-[100%] border-b border-[#888bef4a];
 }

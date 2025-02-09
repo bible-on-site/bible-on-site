@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.1.85",
+	"version": "0.1.88",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
@@ -19,16 +19,11 @@
 		"prepare": "husky",
 		"package": "docker build -t bible-on-site:0.1.73 ."
 	},
+	"bin": {
+		"biome": "./node_modules/@biomejs/biome/bin/biome"
+	},
 	"engines": {
 		"node": ">=22.2.0"
-	},
-	"babel": {
-		"presets": [
-			"next/babel"
-		],
-		"plugins": [
-			"istanbul"
-		]
 	},
 	"dependencies": {
 		"@hebcal/core": "5.9.0",

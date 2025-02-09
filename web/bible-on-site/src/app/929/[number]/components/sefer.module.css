@@ -1,57 +1,57 @@
 .page {
-  background-color: white;
-  padding: 15px;
+	background-color: white;
+	padding: 15px;
 }
 .perekText::-webkit-scrollbar {
-  width: 11px;
+	width: 11px;
 }
 .perekText::-webkit-scrollbar-track {
-  background: var(--scrollbarBG);
+	background: var(--scrollbarBG);
 }
 .perekText::-webkit-scrollbar-thumb {
-  background-color: var(--thumbBG);
-  border-radius: 6px;
-  border: 3px solid var(--scrollbarBG);
+	background-color: var(--thumbBG);
+	border-radius: 6px;
+	border: 3px solid var(--scrollbarBG);
 }
 
 .perekText {
-  scrollbar-width: thin;
-  scrollbar-color: var(--thumbBG) var(--scrollbarBG);
-  direction: rtl;
-  --scrollbarBG: #cfd8dc;
-  --thumbBG: #90a4ae;
-  letter-spacing: 0.04em;
-  word-spacing: 0.12em;
-  line-height: 1.5em;
-  padding-left: 10px;
-  text-align: justify;
-  -moz-text-align-last: right;
-  text-align-last: right;
-  overflow-y: auto;
-  overflow-x: hidden;
-  display: flow-root;
-  height: 100%;
+	scrollbar-width: thin;
+	scrollbar-color: var(--thumbBG) var(--scrollbarBG);
+	direction: rtl;
+	--scrollbarBG: #cfd8dc;
+	--thumbBG: #90a4ae;
+	letter-spacing: 0.04em;
+	word-spacing: 0.12em;
+	line-height: 1.5em;
+	padding-left: 10px;
+	text-align: justify;
+	-moz-text-align-last: right;
+	text-align-last: right;
+	overflow-y: auto;
+	overflow-x: hidden;
+	display: flow-root;
+	height: 100%;
 }
 .pasukNum {
-  color: #1c2c5d;
-  cursor: pointer;
-  font-weight: 700;
-  text-decoration: underline;
+	color: #1c2c5d;
+	cursor: pointer;
+	font-weight: 700;
+	text-decoration: underline;
 }
 .perekTextHeader h1 {
-  color: #9a92d1;
-  font-size: 1.2em;
-  font-weight: 700;
-  margin: 0.1em 0 1em;
-  text-align: justify;
+	color: #9a92d1;
+	font-size: 1.2em;
+	font-weight: 700;
+	margin: 0.1em 0 1em;
+	text-align: justify;
 }
 .qri label::before {
-  color: #637598;
-  content: "קְרִי:";
-  cursor: text;
-  display: inherit;
-  font-size: 14px;
-  font-weight: 400;
-  margin: 0 0 0 1vmin;
-  vertical-align: baseline;
+	color: #637598;
+	content: "קְרִי:";
+	cursor: text;
+	display: inherit;
+	font-size: 14px;
+	font-weight: 400;
+	margin: 0 0 0 1vmin;
+	vertical-align: baseline;
 }
