@@ -62,6 +62,7 @@ export default async function Perek({
 											segment.value
 										) : segment.type === "qri" ? (
 											<>
+												{/* biome-ignore lint/a11y/noLabelWithoutControl: It'll take some time to validate this fix altogether with css rules */}
 												(<label />
 												{segment.value})
 											</>

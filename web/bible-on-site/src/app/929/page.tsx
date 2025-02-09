@@ -10,15 +10,15 @@ export default async function TodaysPerek({
 	const perekId = getTodaysPerekId();
 	const params = new URLSearchParams();
 
-	Object.entries(resolvedSearchParams).forEach(([key, value]) => {
+	for (const [key, value] of Object.entries(resolvedSearchParams)) {
 		if (Array.isArray(value)) {
-			value.forEach((v) => {
+			for (const v of value) {
 				params.append(key, v);
-			});
+			}
 		} else if (value !== undefined) {
 			params.append(key, value);
 		}
-	});
+	}
 
 	const paramsString = params.toString();
 	redirect(
