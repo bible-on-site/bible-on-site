@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4"
-async-graphql = "4"
+async-graphql = "7"
 async-graphql-actix-web = "4"
 sqlx = { version = "0.6", features = ["mysql", "runtime-actix-native-tls"] }
 dotenv = "0.15"
