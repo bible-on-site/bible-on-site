@@ -21,4 +21,3 @@ repos:
         name: biome check
         entry: npx biome check
         language: system
-
