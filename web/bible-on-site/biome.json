@@ -7,7 +7,11 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"ignore": [".next/**", "coverage", "src/data/db/*.json"]
+		"ignore": [
+			".next/**",
+			"coverage",
+			"sefaria-dump-5784-sivan-4.tanah_view.json"
+		]
 	},
 	"formatter": {
 		"enabled": true,
