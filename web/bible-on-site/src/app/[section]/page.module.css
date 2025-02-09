@@ -1,162 +1,162 @@
 .page {
-	/* top: -.3em; */
-	padding-bottom: initial;
+  /* top: -.3em; */
+  padding-bottom: initial;
 }
 
 .topHeader {
-	background: transparent;
-	position: absolute;
-	width: 100%;
-	z-index: 6;
+  background: transparent;
+  position: absolute;
+  width: 100%;
+  z-index: 6;
 }
 .page section:first-child header {
-	margin-top: 80px;
+  margin-top: 80px;
 }
 .page section {
-	position: relative;
-	text-align: center;
-	width: 100%;
-	z-index: 2;
+  position: relative;
+  text-align: center;
+  width: 100%;
+  z-index: 2;
 }
 .page section > header {
-	letter-spacing: 0.3em;
-	text-align: center;
+  letter-spacing: 0.3em;
+  text-align: center;
 }
 .page section > header > h1 {
-	font-size: 1.8em;
-	margin: 0.5em 0;
+  font-size: 1.8em;
+  margin: 0.5em 0;
 }
 .page section > header > h2 {
-	font-size: 1.4em;
-	margin: 0.3em 0;
+  font-size: 1.4em;
+  margin: 0.3em 0;
 }
 .alHaperekSection {
-	background-color: #1552ac;
-	background-image: url(/root/dots-primary-dark.webp);
-	background-repeat: repeat;
-	background-size: 6px;
-	color: #fff;
+  background-color: #1552ac;
+  background-image: url(/root/dots-primary-dark.webp);
+  background-repeat: repeat;
+  background-size: 6px;
+  color: #fff;
 }
 .page fieldset {
-	border: none;
-	margin: 0;
-	padding: 0;
+  border: none;
+  margin: 0;
+  padding: 0;
 }
 .page .input-container {
-	position: relative;
+  position: relative;
 }
 .page input {
-	background: none;
-	border: none;
-	border-bottom: 1px solid #4a4a4a;
-	display: block;
-	direction: rtl;
-	text-align: right;
-	font-family: Tahoma, sans-serif;
-	font-size: 100%;
-	margin-top: 1em;
-	line-height: 1.5em;
-	outline: 0;
-	overflow: visible;
-	width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 1px solid #4a4a4a;
+  display: block;
+  direction: rtl;
+  text-align: right;
+  font-family: Tahoma, sans-serif;
+  font-size: 100%;
+  margin-top: 1em;
+  line-height: 1.5em;
+  outline: 0;
+  overflow: visible;
+  width: 100%;
 }
 .page input[type="email"],
 .page input[type="tel"] {
-	direction: ltr;
-	text-align: left;
+  direction: ltr;
+  text-align: left;
 }
 .page input[type="submit"] {
-	background: initial;
-	background-color: #fff;
-	border: 1px solid #000;
-	color: #000;
-	cursor: pointer;
-	direction: initial;
-	display: initial;
-	font-family: Tahoma, sans-serif;
-	font-size: 1.1em;
-	letter-spacing: 0.1em;
-	line-height: initial;
-	margin: 0.8em 0 0.1em 0;
-	outline: initial;
-	overflow: initial;
-	padding: 0.5em 0.8em;
-	vertical-align: middle;
-	text-align: initial;
-	width: initial;
+  background: initial;
+  background-color: #fff;
+  border: 1px solid #000;
+  color: #000;
+  cursor: pointer;
+  direction: initial;
+  display: initial;
+  font-family: Tahoma, sans-serif;
+  font-size: 1.1em;
+  letter-spacing: 0.1em;
+  line-height: initial;
+  margin: 0.8em 0 0.1em 0;
+  outline: initial;
+  overflow: initial;
+  padding: 0.5em 0.8em;
+  vertical-align: middle;
+  text-align: initial;
+  width: initial;
 }
 .page input + label {
-	animation: 0.2s;
-	animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-	animation-fill-mode: forwards;
-	border: 0;
-	bottom: 0;
-	box-sizing: border-box;
-	color: #003f93;
-	font-weight: bold;
-	font-size: 0.7em;
-	left: 0;
-	letter-spacing: 0.15em;
-	line-height: 1em;
-	pointer-events: none;
-	position: absolute;
-	right: 0;
-	text-align: right;
-	top: 0;
+  animation: 0.2s;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  animation-fill-mode: forwards;
+  border: 0;
+  bottom: 0;
+  box-sizing: border-box;
+  color: #003f93;
+  font-weight: bold;
+  font-size: 0.7em;
+  left: 0;
+  letter-spacing: 0.15em;
+  line-height: 1em;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  text-align: right;
+  top: 0;
 }
 .page input:focus + label {
-	animation-name: input;
+  animation-name: input;
 }
 @keyframes input {
-	to {
-		opacity: 1;
-	}
+  to {
+    opacity: 1;
+  }
 }
 .page input + label::after {
-	content: "";
-	height: 2px;
-	position: absolute;
-	bottom: 0;
-	right: 45%;
-	background: #003f93;
-	transition: 0.2s;
-	transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-	visibility: hidden;
-	width: 10px;
+  content: "";
+  height: 2px;
+  position: absolute;
+  bottom: 0;
+  right: 45%;
+  background: #003f93;
+  transition: 0.2s;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  visibility: hidden;
+  width: 10px;
 }
 .page input:focus + label::after {
-	right: 0;
-	width: 100%;
-	visibility: visible;
+  right: 0;
+  width: 100%;
+  visibility: visible;
 }
 .icon {
-	display: block;
-	margin: auto;
-	max-height: 1em;
-	max-width: 1em;
+  display: block;
+  margin: auto;
+  max-height: 1em;
+  max-width: 1em;
 }
 
 .alHaperekHeadlines h1 {
-	display: grid;
-	letter-spacing: 0.25em;
-	justify-items: center;
+  display: grid;
+  letter-spacing: 0.25em;
+  justify-items: center;
 }
 .alHaperekHeadlines h1 a {
-	color: white;
-	display: contents;
-	line-height: 1.875em;
-	text-decoration: none;
+  color: white;
+  display: contents;
+  line-height: 1.875em;
+  text-decoration: none;
 }
 .alHaperekHeadlines h1 i {
-	font-size: 2em;
+  font-size: 2em;
 }
 .alHaperekHeadlines p {
-	letter-spacing: 0.35em;
+  letter-spacing: 0.35em;
 }
 .alHaperekHeadlines .icon {
-	max-height: 2em;
-	max-width: 2em;
+  max-height: 2em;
+  max-width: 2em;
 }
 .top-nav {
-	background-color: initial;
+  background-color: initial;
 }
