@@ -1,32 +1,32 @@
 .perekText {
-  letter-spacing: 0.04em;
-  word-spacing: 0.12em;
-  line-height: 1.5em;
-  padding: 0;
-  margin: 16px;
-  text-align: justify;
-  text-align-last: right;
+	letter-spacing: 0.04em;
+	word-spacing: 0.12em;
+	line-height: 1.5em;
+	padding: 0;
+	margin: 16px;
+	text-align: justify;
+	text-align-last: right;
 }
 .pasukNum {
-  color: #1c2c5d;
-  cursor: pointer;
-  font-weight: 700;
-  text-decoration: underline;
+	color: #1c2c5d;
+	cursor: pointer;
+	font-weight: 700;
+	text-decoration: underline;
 }
 .perekTextHeader h1 {
-  color: #9a92d1;
-  font-size: 1.2em;
-  font-weight: 700;
-  margin: 0.1em 0 1em;
-  text-align: justify;
+	color: #9a92d1;
+	font-size: 1.2em;
+	font-weight: 700;
+	margin: 0.1em 0 1em;
+	text-align: justify;
 }
 .qri label::before {
-  color: #637598;
-  content: "קְרִי:";
-  cursor: text;
-  display: inherit;
-  font-size: 14px;
-  font-weight: 400;
-  margin: 0 0 0 1vmin;
-  vertical-align: baseline;
+	color: #637598;
+	content: "קְרִי:";
+	cursor: text;
+	display: inherit;
+	font-size: 14px;
+	font-weight: 400;
+	margin: 0 0 0 1vmin;
+	vertical-align: baseline;
 }

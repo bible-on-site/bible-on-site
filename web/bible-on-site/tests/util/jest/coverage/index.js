@@ -9,11 +9,11 @@ class MonocartCoverageReporter extends CoverageReporter {
 		this.reporterOptions = reporterOptions;
 	}
 
-	onTestResult() {
+	onTestResult(...args) {
 		if (this.disabled) {
 			return;
 		}
-		super.onTestResult.apply(this, arguments);
+		super.onTestResult.apply(this, args);
 	}
 
 	async onRunComplete(testContexts, results) {
