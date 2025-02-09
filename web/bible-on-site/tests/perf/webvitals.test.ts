@@ -110,9 +110,9 @@ const testWebVitals = async ({ page }: { page: Page }, testInfo: TestInfo) => {
 
 	console.log("Web Vitals Analysis:", webVitalsMetrics);
 
-	Object.values(webVitalsMetrics).forEach((metric) => {
+	for (const metric of Object.values(webVitalsMetrics)) {
 		expect(metric.measure).toBeLessThan(metric.max);
-	});
+	}
 };
 // TODO: generate tests for all routes
 

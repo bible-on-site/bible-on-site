@@ -10,6 +10,7 @@ export const NavBar = () => {
 				<span className={styles.menuIcon} />
 			</label>
 
+			{/* biome-ignore lint/a11y/noLabelWithoutControl: this is a hack nonetheless. Maybe need to better implement and then lint error won't be relevant */}
 			<label className={styles.overlay} htmlFor="menu-toggle" />
 
 			<ul className={styles.menuBox}>

@@ -6,7 +6,7 @@ const BASE_URL = "/929";
 const togglerAnimationDuration = 300;
 test("toggling to sefer view hides perek breadcrumbs", async ({ page }) => {
 	const perekId = 1;
-	await page.goto(BASE_URL + "/" + perekId);
+	await page.goto(`${BASE_URL}/${perekId}`);
 	const perekBreadCrumbs = await page.getByTestId(
 		`perek-breadcrumb-${perekId}`,
 	);

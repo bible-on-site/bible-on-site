@@ -44,6 +44,7 @@ const Sefer = (props: { perekObj: PerekObj }) => {
 	const emptyPage = <section className={styles.page} />;
 	const pages = sefer.perakim
 		.map((perek, perekIdx) => (
+			// biome-ignore lint/suspicious/noArrayIndexKey: this is the stable id
 			<React.Fragment key={perekIdx + 1}>
 				<section className={styles.page}>
 					<article className={styles.perekText}>
@@ -64,7 +65,9 @@ const Sefer = (props: { perekObj: PerekObj }) => {
 												segment.value
 											) : segment.type === "qri" ? (
 												<>
-													(<label />
+													(
+													{/* biome-ignore lint/a11y/noLabelWithoutControl: It'll take some time to validate this fix altogether with css rules */}
+													<label />
 													{segment.value})
 												</>
 											) : segment.type === "ptuha" ? (
