@@ -17,7 +17,7 @@ repos:
       - id: actionlint
 -   repo: local
     hooks:
-        id: local-biome-check
+      - id: local-biome-check
         name: biome check
         entry: npx biome check
 
