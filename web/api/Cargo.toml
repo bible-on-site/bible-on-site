@@ -1,11 +1,11 @@
 [package]
 name = "api"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 
 [dependencies]
 actix-web = "4"
-async-graphql = "4"
+async-graphql = "7"
 async-graphql-actix-web = "4"
 sqlx = { version = "0.8", features = ["mysql", "runtime-actix-native-tls"] }
 dotenv = "0.15"
