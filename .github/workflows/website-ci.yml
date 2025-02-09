@@ -65,7 +65,7 @@ jobs:
           node-version-file: ${{ env.NODE_VERSION_FILE }}
       - name: Check for changes in ${{ env.MODULE_DIRECTORY }}
         id: paths_filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36
         with:
           filters: |
             bible:
@@ -85,7 +85,7 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
       - name: Add Deploy Key
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387
         with:
           ssh-private-key: ${{ secrets.DEPLOY_KEY }}
       - name: Commit changes
@@ -141,7 +141,6 @@ jobs:
       - name: Install npm Dependencies
         id: npm_ci
         run: |
-          npm install html-flip-book-react@https://gitpkg.now.sh/doradsoft/html-flip-book/html-flip-book-react?master
           npm ci --no-audit
 
       - name: Install Playwright Dependencies
@@ -216,7 +215,6 @@ jobs:
       - name: Install npm Dependencies
         id: npm_ci
         run: |
-          npm install html-flip-book-react@https://gitpkg.now.sh/doradsoft/html-flip-book/html-flip-book-react?master
           npm ci --no-audit
 
       - name: Install Playwright Dependencies
@@ -256,14 +254,14 @@ jobs:
         run: npm run coverage:merge
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@13ce06bfc6bbe3ecf90edbbf1bc32fe5978ca1d3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.MODULE_DIRECTORY }}/coverage/merged/lcov.info
           disable_search: true
 
       - name: Run codacy-coverage-reporter
-        uses: codacy/codacy-coverage-reporter-action@master
+        uses: codacy/codacy-coverage-reporter-action@a38818475bb21847788496e9f0fddaa4e84955ba
         with:
           project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
           coverage-reports: ${{ env.MODULE_DIRECTORY }}/coverage/merged/lcov.info
