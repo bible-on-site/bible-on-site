@@ -1,53 +1,53 @@
-use actix_web::{guard, web, App, HttpResponse, HttpServer, Responder};
-use async_graphql::http::GraphQLPlaygroundConfig;
-use async_graphql_actix_web::{GraphQLRequest, GraphQLResponse};
-use dotenv::dotenv;
-use sqlx::MySqlPool;
-use std::env;
+mod common;
+mod dtos;
+mod providers;
+mod resolvers;
+mod services;
+mod startup;
 
-mod schema;
-use schema::{create_schema, AppSchema};
+use crate::startup::{ActixApp, Telemetry};
+use std::fmt::{Debug, Display};
+use tokio::task::JoinError;
 
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    dotenv().ok();
-    let db_user = env::var("DB_USER").expect("DB_USER must be set");
-    let db_pass = env::var("DB_PASS").expect("DB_PASS must be set");
-    let options = sqlx::mysql::MySqlConnectOptions::new()
-        .username(&db_user)
-        .password(&db_pass)
-        .database("tanah")
-        .port(3306)
-        .host("localhost");
-    let pool = MySqlPool::connect_with(options)
-        .await
-        .expect("Failed to connect to MySQL");
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Initialize telemetry for structured logging.
+    let subscriber = Telemetry::get_subscriber("api", "info"); // Customize the application name and log level as needed.
+    Telemetry::init_subscriber(subscriber);
 
-    let schema: AppSchema = create_schema(pool);
+    // Create sand start the Actix application.
+    let application = ActixApp::new().await?;
+    let application_task = tokio::spawn(application.start_server());
 
-    HttpServer::new(move || {
-        App::new()
-            .app_data(web::Data::new(schema.clone()))
-            .service(
-                web::resource("/graphql")
-                    .guard(guard::Post())
-                    .to(graphql_handler),
+    // Monitor the application's exit status.
+    tokio::select! {
+        outcome = application_task => report_exit("API", outcome),
+    };
+
+    Ok(())
+}
+
+// Helper function to log the outcome of the application task.
+fn report_exit(task_name: &str, outcome: Result<Result<(), impl Debug + Display>, JoinError>) {
+    match outcome {
+        Ok(Ok(())) => {
+            tracing::info!("{} has exited", task_name)
+        }
+        Ok(Err(e)) => {
+            tracing::error!(
+                error.cause_chain = ?e,
+                error.message = %e,
+                "{} failed",
+                task_name
             )
-            .service(web::resource("/").guard(guard::Get()).to(playground))
-    })
-    .bind("127.0.0.1:8000")?
-    .run()
-    .await
-}
-
-async fn graphql_handler(schema: web::Data<AppSchema>, req: GraphQLRequest) -> GraphQLResponse {
-    schema.execute(req.into_inner()).await.into()
-}
-
-async fn playground() -> impl Responder {
-    HttpResponse::Ok()
-        .content_type("text/html; charset=utf-8")
-        .body(async_graphql::http::playground_source(
-            GraphQLPlaygroundConfig::new("/graphql"),
-        ))
+        }
+        Err(e) => {
+            tracing::error!(
+                error.cause_chain = ?e,
+                error.message = %e,
+                "{}' task failed to complete",
+                task_name
+            )
+        }
+    }
 }
