@@ -1,6 +1,14 @@
 {
-	"eslint.workingDirectories": [
-		"./web/bible-on-site",
-		"./web/bible-on-site/tests"
-	]
+  "editor.formatOnSave": true,
+  "[javascript]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+
+  "rust-analyzer.linkedProjects": ["web/api/Cargo.toml"]
 }

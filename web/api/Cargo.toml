@@ -1,0 +1,16 @@
+[package]
+name = "api"
+version = "0.1.2"
+edition = "2021"
+
+[dependencies]
+actix-web = "4.9.0"
+async-graphql = "7.0.15"
+async-graphql-actix-web = "7.0.15"
+sqlx = { version = "0.8.3", features = ["mysql", "runtime-tokio-native-tls"] }
+dotenv = "0.15.0"
+serde = { version = "1.0.217", features = ["derive"] }
+
+[[bin]]
+name = "api"
+path = "src/main.rs"
