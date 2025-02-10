@@ -10,5 +10,5 @@
     "editor.defaultFormatter": "biomejs.biome"
   },
 
-  "rust-analyzer.linkedProjects": ["web/api/Cargo.toml"]
+  "rust-analyzer.linkedProjects": ["web/api/Cargo.toml", "web/api/entities/Cargo.toml"]
 }
