@@ -1,0 +1,17 @@
+{
+	"unwantedRecommendations": ["dbaeumer.vscode-eslint"],
+	"recommendations": [
+		"yzhang.markdown-all-in-one", // Markdown (General)
+		"github.vscode-github-actions", // GitHub Actions (Website, planned for API and App)
+		"ms-playwright.playwright", // Playwright (Website, API)
+		"tamasfe.even-better-toml", // TOML (API)
+		"ms-dotnettools.csharp", // C# (App)
+		"dsznajder.es7-react-js-snippets", // React (Website)
+		"ms-dotnettools.dotnet-maui", // MAUI (App)
+		"biomejs.biome", // TypeScript formatter/linter (Website)
+		"ms-vscode.cpptools", // Rust run/debug (API)
+		"codecov.codecov", // Code coverage (Website, planned for more)
+		"ms-azuretools.vscode-docker", // Docker (Website, planned for API and App)
+		"rust-lang.rust-analyzer" // Rust (Website, API)
+	]
+}
