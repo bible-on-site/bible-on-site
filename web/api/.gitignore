@@ -1,3 +1,4 @@
 target/
-# much important
+# much important`
 .env
+.coverage/
