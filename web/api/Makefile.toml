@@ -1,0 +1,47 @@
+[config]
+skip_core_tasks = true
+default_to_workspace = false
+
+[tasks.run-api]
+command = "cargo"
+args = ["run"]
+
+[tasks.coverage-reset]
+command = "cargo"
+args = ["llvm-cov", "clean"]
+
+[tasks.coverage-run]
+command = "cargo"
+args = ["llvm-cov", "run", "--profile", "dev", "--no-report"]
+
+[tasks.coverage-report-lcov]
+command = "cargo"
+args = [
+  "llvm-cov",
+  "report",
+  "--profile",
+  "dev",
+  "--lcov",
+  "--output-path",
+  ".coverage/e2e.lcov",
+]
+
+[tasks.coverage-report-browser]
+command = "cargo"
+args = ["llvm-cov", "report", "--profile", "dev", "--open"]
+
+[tasks.e2e]
+command = "C:\\Program Files\\nodejs\\npm.cmd"  # TODO: make this platform independent, maybe using ssome linking.
+args = ["run", "--prefix", "tests", "test:e2e"]
+
+
+[tasks.test-coverage]
+dependencies = [
+  "coverage-reset",
+  "coverage-run",
+  "coverage-report-lcov",
+  "coverage-report-browser",
+]
+
+[tasks.test-e2e]
+dependencies = ["e2e"]
