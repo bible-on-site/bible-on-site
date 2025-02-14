@@ -21,7 +21,18 @@ pub struct ActixApp {
     server: Server,
     shutdown_signal: Arc<AtomicBool>,
 }
+use actix_web::{HttpRequest, HttpResponse};
 
+pub async fn debug_request(_req: HttpRequest, body: web::Bytes) -> HttpResponse {
+    // Extract the body as a string.
+    let debug_body = String::from_utf8_lossy(&body).to_string();
+
+    // For demonstration purposes, print the debug information.
+    println!("Debug request body: {}", debug_body);
+
+    // Respond with a confirmation.
+    HttpResponse::Ok().body("Debug info captured")
+}
 impl ActixApp {
     pub async fn new() -> Result<Self, Error> {
         if let Err(e) = dotenvy::dotenv() {
