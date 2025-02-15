@@ -29,7 +29,7 @@ jobs:
       ci_changed: ${{ steps.check_changes.outputs.ci_changed }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
           fetch-depth: 0
@@ -56,27 +56,29 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: ${{ env.NODE_VERSION_FILE }}
       - name: Check for changes in ${{ env.MODULE_DIRECTORY }}
         id: paths_filter
         uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36
         with:
           filters: |
-            bible:
+            website:
               - '${{ env.MODULE_DIRECTORY }}/**'
+      - name: Setup Node.js
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a
+        with:
+          node-version-file: ${{ env.NODE_VERSION_FILE }}
+          cache-dependency-path: ${{ env.CACHE_DEPENDENCY_PATH }}
+          cache: npm
       - name: Bump patch version
-        if: steps.paths_filter.outputs.bible == 'true'
+        if: steps.paths_filter.outputs.website == 'true'
         run: |
           cd ${{ env.MODULE_DIRECTORY }}
           npm version patch -m "chore(release): %s [skip ci]"
       - name: Format package.json using Biome
-        if: steps.paths_filter.outputs.bible == 'true'
+        if: steps.paths_filter.outputs.website == 'true'
         run: |
           cd ${{ env.MODULE_DIRECTORY }}
           npx @biomejs/biome format --write package.json
@@ -89,13 +91,13 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.DEPLOY_KEY }}
       - name: Commit changes
-        if: steps.paths_filter.outputs.bible == 'true'
+        if: steps.paths_filter.outputs.website == 'true'
         run: |
           cd ${{ env.MODULE_DIRECTORY }}
           git add package.json package-lock.json
           git commit -m "chore(release): Bump version [skip ci]"
       - name: Push updated version back to repository
-        if: steps.paths_filter.outputs.bible == 'true'
+        if: steps.paths_filter.outputs.website == 'true'
         run: |
           git remote set-url origin git@github.com:${{ github.repository }}
           git push origin HEAD --follow-tags
@@ -114,13 +116,13 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
 
       - name: Setup Node.js
         id: setup-node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a
         with:
           node-version-file: ${{ env.NODE_VERSION_FILE }}
           cache-dependency-path: ${{ env.CACHE_DEPENDENCY_PATH }}
@@ -131,7 +133,7 @@ jobs:
         run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./package.json').devDependencies['@playwright/test'])")" >> $GITHUB_ENV
 
       - name: Cache playwright binaries
-        uses: actions/cache@v4
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
         id: playwright-cache
         with:
           path: |
@@ -150,7 +152,7 @@ jobs:
           npx playwright install-deps
 
       - name: Build cache
-        uses: actions/cache@v4
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
         with:
           path: ${{ env.MODULE_DIRECTORY }}/.next/cache
           # Generate a new cache whenever packages or source files change.
@@ -167,7 +169,7 @@ jobs:
         id: npm-perf-test
         run: npm run test:perf
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
         if: always()
         with:
           name: playwright-perf-report
@@ -188,13 +190,13 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
 
       - name: Setup Node.js
         id: setup-node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a
         with:
           node-version-file: ${{ env.NODE_VERSION_FILE }}
           cache-dependency-path: ${{ env.CACHE_DEPENDENCY_PATH }}
@@ -205,7 +207,7 @@ jobs:
         run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./package.json').devDependencies['@playwright/test'])")" >> $GITHUB_ENV
 
       - name: Cache playwright binaries
-        uses: actions/cache@v4
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
         id: playwright-cache
         with:
           path: |
@@ -232,7 +234,7 @@ jobs:
         run: npm run test:unit
 
       - name: Build cache
-        uses: actions/cache@v4
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
         with:
           path: ${{ env.MODULE_DIRECTORY }}/.next/cache
           # Generate a new cache whenever packages or source files change.
@@ -266,7 +268,7 @@ jobs:
           project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
           coverage-reports: ${{ env.MODULE_DIRECTORY }}/coverage/merged/lcov.info
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
         if: always()
         with:
           name: playwright-e2e-report
