@@ -16,7 +16,6 @@
 		"test:perf": "playwright test --config=playwright.perf.config.ts",
 		"test:coverage": "npm run test:unit && npm run test:e2e && npm run coverage:merge",
 		"coverage:merge": "node --import tsx ./tests/util/coverage/merge-coverage.mts",
-		"prepare": "husky",
 		"package": "cross-env-shell \"docker build -t bible-on-site:${npm_package_version} .\""
 	},
 	"bin": {
