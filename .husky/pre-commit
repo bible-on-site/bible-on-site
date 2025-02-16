@@ -1,4 +1,8 @@
-changed_files=$(git diff --cached --name-only | grep -E '^web/(bible-on-site|api)/')
+changed_files=$(git diff --cached --name-only | grep -E '^web/(bible-on-site|api)/' || true)
+if [ -z "$changed_files" ]; then
+    echo "No relevant changes; skipping pre-commit."
+    exit 0
+fi
 if [ -n "$changed_files" ]; then
     modules=$(echo "$changed_files" | sed -E 's|^web/bible-on-site/|website/|; s|^web/api/|api/|; s|^app/|app/|' | cut -d'/' -f1 | sort -u)
     echo "Detected changes in modules: $modules"

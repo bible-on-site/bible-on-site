@@ -1,4 +1,4 @@
-name: Continous Integration - website
+name: Continous Integration - api
 
 on:
   push:
