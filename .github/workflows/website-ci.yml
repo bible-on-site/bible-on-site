@@ -67,7 +67,7 @@ jobs:
             website:
               - '${{ env.MODULE_DIRECTORY }}/**'
       - name: Setup Node.js
-        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a
+        uses: actions/setup-node@802632921f8532d2409ae6eac3313b6f81f11122
         with:
           node-version-file: ${{ env.NODE_VERSION_FILE }}
           cache-dependency-path: ${{ env.CACHE_DEPENDENCY_PATH }}
@@ -122,7 +122,7 @@ jobs:
 
       - name: Setup Node.js
         id: setup-node
-        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a
+        uses: actions/setup-node@802632921f8532d2409ae6eac3313b6f81f11122
         with:
           node-version-file: ${{ env.NODE_VERSION_FILE }}
           cache-dependency-path: ${{ env.CACHE_DEPENDENCY_PATH }}
@@ -196,7 +196,7 @@ jobs:
 
       - name: Setup Node.js
         id: setup-node
-        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a
+        uses: actions/setup-node@802632921f8532d2409ae6eac3313b6f81f11122
         with:
           node-version-file: ${{ env.NODE_VERSION_FILE }}
           cache-dependency-path: ${{ env.CACHE_DEPENDENCY_PATH }}
