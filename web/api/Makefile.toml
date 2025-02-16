@@ -9,7 +9,7 @@ args = ["run"]
 [tasks.lint]
 "command" = "cargo"
 # TODO: add , "--", "-D", "warnings" to the args to make it more strict
-args = ["clippy"]  
+args = ["clippy"]
 
 [tasks.coverage-reset]
 command = "cargo"
