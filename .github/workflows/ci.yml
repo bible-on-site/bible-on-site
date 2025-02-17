@@ -30,8 +30,23 @@ jobs:
     outputs:
       website_module_dir: web/bible-on-site
       api_module_dir: web/api
+      WEBSITE_PLAYWRIGHT_VERSION: ${{ steps.get_website_playwright_version.outputs.PLAYWRIGHT_VERSION }}
+      API_PLAYWRIGHT_VERSION: ${{ steps.get_api_playwright_version.outputs.PLAYWRIGHT_VERSION }}
     steps:
       - run: echo "Setting up environment variables"
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+      - name: Get API Playwright version
+        id: get_api_playwright_version
+        working-directory: ${{ env.API_TESTS_DIRECTORY }}
+        run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./package.json').devDependencies['@playwright/test'])")" >> $GITHUB_OUTPUT
+      - name: Get Website Playwright version
+        id: get_website_playwright_version
+        working-directory: ${{ env.WEBSITE_DIRECTORY }}
+        run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./package.json').devDependencies['@playwright/test'])")" >> $GITHUB_OUTPUT
 
   # STARTING FLOW
   determine_website_changes:
@@ -86,7 +101,7 @@ jobs:
   website_performance:
     name: Website Performance
     runs-on: ubuntu-latest
-    needs: determine_website_changes
+    needs: [setup_env, determine_website_changes]
     if: ${{ needs.determine_website_changes.outputs.module_changed == 'true' }}
     defaults:
       run:
@@ -109,17 +124,13 @@ jobs:
           cache-dependency-path: ${{ env.WEBSITE_NODE_CACHE_PATH }}
           cache: npm
 
-      - name: Get installed Playwright version
-        id: playwright-version
-        run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./package.json').devDependencies['@playwright/test'])")" >> $GITHUB_ENV
-
       - name: Cache playwright binaries
         uses: actions/cache@v4
         id: playwright-cache
         with:
           path: |
             ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ env.PLAYWRIGHT_VERSION }}
+          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.WEBSITE_PLAYWRIGHT_VERSION }}
 
       - name: Install npm Dependencies
         id: npm_ci
@@ -160,7 +171,7 @@ jobs:
   website_e2e:
     name: Website CI
     runs-on: ubuntu-latest
-    needs: determine_website_changes
+    needs: [setup_env, determine_website_changes]
     if: ${{ needs.determine_website_changes.outputs.module_changed == 'true' || needs.determine_website_changes.outputs.ci_changed == 'true' }}
     defaults:
       run:
@@ -183,17 +194,13 @@ jobs:
           cache-dependency-path: ${{ env.WEBSITE_NODE_CACHE_PATH }}
           cache: npm
 
-      - name: Get installed Playwright version
-        id: playwright-version
-        run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./package.json').devDependencies['@playwright/test'])")" >> $GITHUB_ENV
-
       - name: Cache playwright binaries
         uses: actions/cache@v4
         id: playwright-cache
         with:
           path: |
             ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ env.PLAYWRIGHT_VERSION }}
+          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.WEBSITE_PLAYWRIGHT_VERSION }}
 
       - name: Install npm Dependencies
         id: npm_ci
@@ -259,7 +266,7 @@ jobs:
   api_tests:
     name: API CI
     runs-on: ubuntu-latest
-    needs: determine_api_changes
+    needs: [setup_env, determine_api_changes]
     if: ${{ needs.determine_api_changes.outputs.module_changed == 'true' || needs.determine_api_changes.outputs.ci_changed == 'true' }}
     permissions:
       contents: read
@@ -290,18 +297,13 @@ jobs:
         working-directory: ${{ env.API_DIRECTORY }}
         run: cargo make lint
 
-      - name: Get installed Playwright version
-        id: playwright-version
-        working-directory: ${{ env.API_TESTS_DIRECTORY }}
-        run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./package.json').devDependencies['@playwright/test'])")" >> $GITHUB_ENV
-
       - name: Cache playwright binaries
         uses: actions/cache@v4
         id: playwright-cache
         with:
           path: |
             ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ env.PLAYWRIGHT_VERSION }}
+          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.API_PLAYWRIGHT_VERSION }}
 
       - name: Install npm Dependencies
         id: npm_ci
