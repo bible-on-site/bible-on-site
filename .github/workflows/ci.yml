@@ -283,11 +283,11 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: ${{ env.MODULE_DIRECTORY }}
+          workspaces: ${{ env.API_DIRECTORY }}
 
       - name: Lint
         id: lint
-        working-directory: ${{ env.MODULE_DIRECTORY }}
+        working-directory: ${{ env.API_DIRECTORY }}
         run: cargo make lint
 
       - name: Get installed Playwright version
