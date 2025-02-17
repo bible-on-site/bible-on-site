@@ -354,6 +354,12 @@ jobs:
           E2E_STATUS=$([ "${{ needs.website_e2e.result }}" = "success" ] && echo "success" || echo "failure")
           API_STATUS=$([ "${{ needs.api_tests.result }}" = "success" ] && echo "success" || echo "failure")
 
+          if [ "${{ needs.determine_website_changes.result }}" = "failure" ] || [ "${{ needs.determine_api_changes.result }}" = "failure" ]; then
+            echo "Overall status: failure"
+            echo "status=failure" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
           if [ "${{ needs.determine_website_changes.outputs.module_changed }}" = "true" ] || [ "${{ needs.determine_website_changes.outputs.ci_changed }}" = "true" ]; then
             # Check Codecov status using the Codecov API
             MAX_RETRIES=10
