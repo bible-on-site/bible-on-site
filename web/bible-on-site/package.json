@@ -34,7 +34,7 @@
 		"html-flip-book-react": "0.0.0-alpha.1",
 		"moment-timezone": "0.5.47",
 		"next": "15.1.6",
-		"nuqs": "2.3.2",
+		"nuqs": "2.4.0",
 		"react": "rc",
 		"react-dom": "rc",
 		"react-phone-number-input": "3.4.11"
