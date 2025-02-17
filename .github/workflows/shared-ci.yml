@@ -1,0 +1,55 @@
+name: Shared CI Components
+
+on:
+  workflow_call:
+    inputs:
+      module_directory:
+        required: true
+        type: string
+      module_name:
+        required: true
+        type: string
+      ci_file:
+        required: true
+        type: string
+    outputs:
+      module_changed:
+        description: "Whether the module has changed"
+        value: ${{ jobs.determine_changes.outputs.module_changed }}
+      ci_changed:
+        description: "Whether the CI configuration has changed"
+        value: ${{ jobs.determine_changes.outputs.ci_changed }}
+
+jobs:
+  determine_changes:
+    name: Determine Changes
+    runs-on: ubuntu-latest
+    outputs:
+      module_changed: ${{ steps.check_changes.outputs.module_changed }}
+      ci_changed: ${{ steps.check_changes.outputs.ci_changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          fetch-depth: 0
+
+      - name: Check for changes
+        id: check_changes
+        run: |
+          if [[ ${{ github.event_name }} == 'pull_request' ]]; then
+            BASE_SHA=${{ github.event.pull_request.base.sha }}
+          else
+            BASE_SHA=$(git rev-parse origin/master)
+          fi
+          echo "BASE_SHA: $BASE_SHA"
+          echo "Changed files:"
+          git diff --name-only $BASE_SHA HEAD
+          MODULE_CHANGED=$(git diff --name-only $BASE_SHA HEAD | grep -q -E "^${{ inputs.module_name }}/" && echo "true" || echo "false")
+          CI_CHANGED=$(git diff --name-only $BASE_SHA HEAD | grep -q "${{ inputs.ci_file }}" && echo "true" || echo "false")
+          echo "Module directory being checked: ${{ inputs.module_name }}"
+          echo "CI file being checked: ${{ inputs.ci_file }}"
+          echo "MODULE_CHANGED: $MODULE_CHANGED"
+          echo "CI_CHANGED: $CI_CHANGED"
+          echo "module_changed=${MODULE_CHANGED}" >> $GITHUB_OUTPUT
+          echo "ci_changed=${CI_CHANGED}" >> $GITHUB_OUTPUT

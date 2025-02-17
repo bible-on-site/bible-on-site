@@ -1,0 +1,81 @@
+name: Shared Version Bump
+
+on:
+  workflow_call:
+    inputs:
+      module_directory:
+        required: true
+        type: string
+      module_changed:
+        required: true
+        type: string
+      version_command:
+        required: true
+        type: string
+      files_to_commit:
+        required: true
+        type: string
+    secrets:
+      DEPLOY_KEY:
+        required: true
+
+jobs:
+  bump-version:
+    name: Bump Patch Version
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && inputs.module_changed == 'true'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        if: contains(inputs.version_command, 'npm')
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ${{ inputs.MODULE_DIRECTORY }}/package.json
+          cache-dependency-path: ${{ inputs.MODULE_DIRECTORY }}/package-lock.json
+          cache: npm
+
+      - name: Setup Rust
+        if: contains(inputs.version_command, 'cargo')
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: taiki-e/install-action@v2
+        if: contains(inputs.version_command, 'cargo')
+        with:
+            tool: cargo-make, cargo-release
+
+      - name: Cache Cargo dependencies
+        if: contains(inputs.version_command, 'cargo')
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ inputs.module_directory }}
+
+      - name: Bump version
+        working-directory: ${{ inputs.module_directory }}
+        run: ${{ inputs.version_command }}
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+      - name: Add Deploy Key
+        uses: webfactory/ssh-agent@72c0bfd31ab22a2e11716951e3f107a9647dc97e
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
+
+      - name: Commit changes
+        run: |
+          cd ${{ inputs.module_directory }}
+          git add ${{ inputs.files_to_commit }}
+          git commit -m "chore(release): Bump version [skip ci]"
+
+      - name: Push changes
+        run: |
+          git remote set-url origin git@github.com:${{ github.repository }}
+          git push origin HEAD --follow-tags
