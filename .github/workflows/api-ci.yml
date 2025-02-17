@@ -29,7 +29,7 @@ jobs:
       ci_changed: ${{ steps.check_changes.outputs.ci_changed }}
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
           fetch-depth: 0
@@ -56,13 +56,13 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check for changes in ${{ env.MODULE_DIRECTORY }}
         id: paths_filter
-        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36
+        uses: dorny/paths-filter@v3
         with:
           filters: |
             api:
@@ -71,12 +71,12 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - uses: taiki-e/install-action@ad0904967b4c8e3005f6ed2efa1fa74dd9a05f32
+      - uses: taiki-e/install-action@v2
         with:
           tool: cargo-make, cargo-release
 
       - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3
+        uses: Swatinem/rust-cache@v2
         with:
           workspaces: ${{ env.MODULE_DIRECTORY }}
 
@@ -120,7 +120,7 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
 
@@ -129,12 +129,12 @@ jobs:
         with:
           components: clippy
 
-      - uses: taiki-e/install-action@ad0904967b4c8e3005f6ed2efa1fa74dd9a05f32
+      - uses: taiki-e/install-action@v2
         with:
           tool: cargo-make, cargo-llvm-cov
 
       - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3
+        uses: Swatinem/rust-cache@v2
         with:
           workspaces: ${{ env.MODULE_DIRECTORY }}
 
@@ -149,7 +149,7 @@ jobs:
         run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./package.json').devDependencies['@playwright/test'])")" >> $GITHUB_ENV
 
       - name: Cache playwright binaries
-        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+        uses: actions/cache@v4
         id: playwright-cache
         with:
           path: |
