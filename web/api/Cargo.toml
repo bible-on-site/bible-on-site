@@ -32,3 +32,6 @@ members = [".", "./entities"]
 
 [profile.dev]
 incremental = true
+
+[package.metadata.release]
+pre-release-commit-message = "chore(release): {{version}} [skip ci]"

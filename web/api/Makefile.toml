@@ -6,6 +6,11 @@ default_to_workspace = false
 command = "cargo"
 args = ["run"]
 
+[tasks.lint]
+"command" = "cargo"
+# TODO: add , "--", "-D", "warnings" to the args to make it more strict
+args = ["clippy"]
+
 [tasks.coverage-reset]
 command = "cargo"
 args = ["llvm-cov", "clean"]
@@ -45,3 +50,7 @@ dependencies = [
 
 [tasks.test-e2e]
 dependencies = ["e2e"]
+
+[tasks.bump-patch-version]
+command = "cargo"
+args = ["release", "patch", "--no-publish", "--execute"]
