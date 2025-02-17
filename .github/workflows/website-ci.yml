@@ -24,7 +24,7 @@ jobs:
   determine_changes:
     name: Determine Changes
     uses: ./.github/workflows/shared-ci.yml
-        with:
+    with:
       module_directory: ${{ env.MODULE_DIRECTORY }}
       changes_filter: "web/bible-on-site"
       ci_file: ".github/workflows/website-ci.yml"
@@ -32,65 +32,14 @@ jobs:
   # ACTUAL JOBS
   bump-version:
     name: Bump Website Patch Version
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Check for changes in ${{ env.MODULE_DIRECTORY }}
-        id: paths_filter
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            website:
-              - '${{ env.MODULE_DIRECTORY }}/**'
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: ${{ env.NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.NODE_CACHE_DEPENDENCY_PATH }}
-          cache: npm
-
-      - name: Bump patch version
-        if: steps.paths_filter.outputs.website == 'true'
-        run: |
-          cd ${{ env.MODULE_DIRECTORY }}
-          npm version patch -m "chore(release): %s [skip ci]"
-
-      - name: Format package.json using Biome
-        if: steps.paths_filter.outputs.website == 'true'
-        run: |
-          cd ${{ env.MODULE_DIRECTORY }}
-          npx @biomejs/biome format --write package.json
-
-      - name: Configure Git
-        run: |
-          git config --global user.email "actions@github.com"
-          git config --global user.name "GitHub Actions"
-
-      - name: Add Deploy Key
-        uses: webfactory/ssh-agent@72c0bfd31ab22a2e11716951e3f107a9647dc97e
-        with:
-          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
-
-      - name: Commit changes
-        if: steps.paths_filter.outputs.website == 'true'
-        run: |
-          cd ${{ env.MODULE_DIRECTORY }}
-          git add package.json package-lock.json
-          git commit -m "chore(release): Bump version [skip ci]"
-
-      - name: Push updated version back to repository
-        if: steps.paths_filter.outputs.website == 'true'
-        run: |
-          git remote set-url origin git@github.com:${{ github.repository }}
-          git push origin HEAD --follow-tags
+    needs: determine_changes
+    uses: ./.github/workflows/shared-version-bump.yml
+    with:
+      module_directory: ${{ env.MODULE_DIRECTORY }}
+      module_changed: ${{ needs.determine_changes.outputs.module_changed }}
+      version_command: "npm version patch -m \"chore(release): %s [skip ci]\""
+      files_to_commit: "package.json package-lock.json"
+    secrets: inherit
 
   performance:
     name: Website Performance

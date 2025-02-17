@@ -24,72 +24,23 @@ jobs:
   determine_changes:
     name: Determine Changes
     uses: ./.github/workflows/shared-ci.yml
-        with:
+    with:
       module_directory: ${{ env.MODULE_DIRECTORY }}
       changes_filter: "web/api"
       ci_file: ".github/workflows/api-ci.yml"
 
   bump-version:
     name: Bump Patch Version
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+    needs: determine_changes
+    uses: ./.github/workflows/shared-version-bump.yml
+    with:
+      module_directory: ${{ env.MODULE_DIRECTORY }}
+      module_changed: ${{ needs.determine_changes.outputs.module_changed }}
+      version_command: "cargo make bump-patch-version"
+      files_to_commit: "Cargo.toml Cargo.lock"
+    secrets: inherit
 
-      - name: Check for changes in ${{ env.MODULE_DIRECTORY }}
-        id: paths_filter
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            api:
-              - '${{ env.MODULE_DIRECTORY }}/**'
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-make, cargo-release
-
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: ${{ env.MODULE_DIRECTORY }}
-
-      - name: Bump patch version
-        working-directory: ${{ env.MODULE_DIRECTORY }}
-        if: steps.paths_filter.outputs.api == 'true'
-        run: |
-          cargo make bump-patch-version
-
-      - name: Configure Git
-        run: |
-          git config --global user.email "actions@github.com"
-          git config --global user.name "GitHub Actions"
-
-      - name: Add Deploy Key
-        uses: webfactory/ssh-agent@72c0bfd31ab22a2e11716951e3f107a9647dc97e
-        with:
-          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
-
-      - name: Commit changes
-        if: steps.paths_filter.outputs.api == 'true'
-        run: |
-          cd ${{ env.MODULE_DIRECTORY }}
-          git add Cargo.toml Cargo.lock
-          git commit -m "chore(release): Bump version [skip ci]"
-
-      - name: Push updated version back to repository
-        if: steps.paths_filter.outputs.api == 'true'
-        run: |
-          git remote set-url origin git@github.com:${{ github.repository }}
-          git push origin HEAD --follow-tags
-
+  # ACTUAL JOBS
   api-tests:
     name: API CI
     runs-on: ubuntu-latest
