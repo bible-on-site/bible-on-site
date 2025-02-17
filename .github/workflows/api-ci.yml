@@ -76,7 +76,7 @@ jobs:
           tool: cargo-make, cargo-release
 
       - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3
+        uses: Swatinem/rust-cache@27b8ea9368cf428f0bfe41b0876b1a7e809d9844
         with:
           workspaces: ${{ env.MODULE_DIRECTORY }}
 
@@ -134,7 +134,7 @@ jobs:
           tool: cargo-make, cargo-llvm-cov
 
       - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3
+        uses: Swatinem/rust-cache@27b8ea9368cf428f0bfe41b0876b1a7e809d9844
         with:
           workspaces: ${{ env.MODULE_DIRECTORY }}
 
