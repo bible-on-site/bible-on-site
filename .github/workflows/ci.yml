@@ -318,7 +318,7 @@ jobs:
 
   # CLOSING FLOW
   report_status:
-    name: Report Website Status
+    name: Report CI Status
     runs-on: ubuntu-latest
     needs: [determine_website_changes, determine_api_changes, website_performance, website_e2e, api_tests]
     if: always() # This ensures the job always runs
