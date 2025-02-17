@@ -39,7 +39,7 @@ jobs:
           node-version-file: ${{ inputs.MODULE_DIRECTORY }}/package.json
           cache-dependency-path: ${{ inputs.MODULE_DIRECTORY }}/package-lock.json
           cache: npm
-      
+
       - name: Setup Rust
         if: contains(inputs.version_command, 'cargo')
         uses: dtolnay/rust-toolchain@stable
