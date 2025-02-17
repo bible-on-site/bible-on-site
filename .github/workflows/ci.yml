@@ -240,7 +240,7 @@ jobs:
           path: ${{ github.env.MODULE_DIRECTORY }}/playwright-report/
           retention-days: 30
   
-  api-tests:
+  api_tests:
     name: API CI
     runs-on: ubuntu-latest
     needs: determine_api_changes
