@@ -141,7 +141,7 @@ jobs:
         run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./package.json').devDependencies['@playwright/test'])")" >> $GITHUB_ENV
 
       - name: Cache playwright binaries
-        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+        uses: actions/cache@9fa7e61ec7e1f44ac75218e7aaea81da8856fd11
         id: playwright-cache
         with:
           path: |
@@ -160,7 +160,7 @@ jobs:
           npx playwright install-deps
 
       - name: Build cache
-        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+        uses: actions/cache@9fa7e61ec7e1f44ac75218e7aaea81da8856fd11
         with:
           path: ${{ env.MODULE_DIRECTORY }}/.next/cache
           # Generate a new cache whenever packages or source files change.
@@ -215,7 +215,7 @@ jobs:
         run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./package.json').devDependencies['@playwright/test'])")" >> $GITHUB_ENV
 
       - name: Cache playwright binaries
-        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+        uses: actions/cache@9fa7e61ec7e1f44ac75218e7aaea81da8856fd11
         id: playwright-cache
         with:
           path: |
@@ -242,7 +242,7 @@ jobs:
         run: npm run test:unit
 
       - name: Build cache
-        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+        uses: actions/cache@9fa7e61ec7e1f44ac75218e7aaea81da8856fd11
         with:
           path: ${{ env.MODULE_DIRECTORY }}/.next/cache
           # Generate a new cache whenever packages or source files change.
