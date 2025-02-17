@@ -337,6 +337,11 @@ jobs:
           fi
 
           if [ "${{ needs.determine_website_changes.outputs.module_changed }}" = "true" ] || [ "${{ needs.determine_website_changes.outputs.ci_changed }}" = "true" ]; then
+            if [ "$E2E_STATUS" = "failure" ]; then
+              echo "Overall status: failure"
+              echo "status=failure" >> $GITHUB_OUTPUT
+              exit 1
+            fi
             # Check Codecov status using the Codecov API
             MAX_RETRIES=10
             RETRY_COUNT=0
@@ -373,11 +378,6 @@ jobs:
               sleep 30
               RETRY_COUNT=$((RETRY_COUNT+1))
             done
-            if [ "$E2E_STATUS" = "failure" ]; then
-              echo "Overall status: failure"
-              echo "status=failure" >> $GITHUB_OUTPUT
-              exit 1
-            fi
           fi
 
           if [ "${{ needs.determine_api_changes.outputs.module_changed }}" = "true" ] || [ "${{ needs.determine_api_changes.outputs.ci_changed }}" = "true" ]; then
