@@ -42,7 +42,7 @@ jobs:
           else
             BASE_SHA=$(git rev-parse origin/master)
           fi
-          MODULE_CHANGED=$(git diff --name-only --diff-filter=AM $BASE_SHA HEAD | grep -q -E '^${{ inputs.changes_filter }}/" && echo "true" || echo "false")
+          MODULE_CHANGED=$(git diff --name-only --diff-filter=AM $BASE_SHA HEAD | grep -q -E "^${{ inputs.changes_filter }}/" && echo "true" || echo "false")
           CI_CHANGED=$(git diff --name-only --diff-filter=AM $BASE_SHA HEAD | grep -q "${{ inputs.ci_file }}" && echo "true" || echo "false")
           echo "module_changed=${MODULE_CHANGED}" >> $GITHUB_OUTPUT
           echo "ci_changed=${CI_CHANGED}" >> $GITHUB_OUTPUT
