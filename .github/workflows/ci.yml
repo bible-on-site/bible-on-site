@@ -39,7 +39,7 @@ jobs:
         with:
           module_directory: ${{ env.WEBSITE_DIRECTORY }}
           module_name: ${{ env.WEBSITE_DIRECTORY }}
-          ci_file: ".github/workflows/website-ci.yml"
+          ci_file: ".github/workflows/ci.yml"
     outputs:
       module_changed: ${{ steps.determine_changes.outputs.module_changed }}
       ci_changed: ${{ steps.determine_changes.outputs.ci_changed }}
@@ -59,7 +59,7 @@ jobs:
         with:
           module_directory: ${{ env.API_DIRECTORY }}
           module_name: ${{ env.API_DIRECTORY }}
-          ci_file: ".github/workflows/api-ci.yml"
+          ci_file: ".github/workflows/ci.yml"
     outputs:
       module_changed: ${{ steps.determine_changes.outputs.module_changed }}
       ci_changed: ${{ steps.determine_changes.outputs.ci_changed }}
@@ -70,6 +70,7 @@ jobs:
     needs: determine_website_changes
     permissions:
       contents: write
+      actions: read
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -90,6 +91,7 @@ jobs:
     needs: determine_api_changes
     permissions:
       contents: write
+      actions: read
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
