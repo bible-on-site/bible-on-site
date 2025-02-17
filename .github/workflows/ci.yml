@@ -31,7 +31,7 @@ jobs:
       module_directory: ${{ github.env.WEBSITE_DIRECTORY }}
       module_name: ${{ github.env.WEBSITE_DIRECTORY }}
       ci_file: ".github/workflows/website-ci.yml"
-  
+
   determine_api_changes:
     name: Determine API Changes
     uses: ./.github/workflows/shared-ci.yml
@@ -53,7 +53,7 @@ jobs:
       version_command: "npm version patch -m \"chore(release): %s [skip ci]\""
       files_to_commit: "package.json package-lock.json"
     secrets: inherit
-  
+
   bump_api_version:
     name: Bump API Patch Version
     needs: determine_api_changes
