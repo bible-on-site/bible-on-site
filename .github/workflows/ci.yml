@@ -28,6 +28,11 @@ jobs:
     name: Determine Website Changes
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
       - name: Determine Changes
         id: determine_changes
         uses: ./.github/workflows/shared-ci.yml
@@ -43,6 +48,11 @@ jobs:
     name: Determine API Changes
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
       - name: Determine Changes
         id: determine_changes
         uses: ./.github/workflows/shared-ci.yml
@@ -62,6 +72,11 @@ jobs:
       contents: write
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
       - name: Bump Website Patch Version
         uses: ./.github/workflows/shared-version-bump.yml
         with:
@@ -77,6 +92,11 @@ jobs:
       contents: write
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
       - name: Bump API Patch Version
         uses: ./.github/workflows/shared-version-bump.yml
         with:
