@@ -26,7 +26,7 @@ jobs:
     uses: ./.github/workflows/shared-ci.yml
     with:
       module_directory: ${{ github.env.MODULE_DIRECTORY }}
-      changes_filter: "web/api"
+      module_name: "web/api"
       ci_file: ".github/workflows/api-ci.yml"
 
   bump-version:

@@ -26,7 +26,7 @@ jobs:
     uses: ./.github/workflows/shared-ci.yml
     with:
       module_directory: ${{ github.env.MODULE_DIRECTORY }}
-      changes_filter: "web/bible-on-site"
+      module_name: "web/bible-on-site"
       ci_file: ".github/workflows/website-ci.yml"
 
   # ACTUAL JOBS
