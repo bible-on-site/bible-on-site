@@ -28,8 +28,8 @@ jobs:
     name: Setup Environment Variables
     runs-on: ubuntu-latest
     outputs:
-      website_directory: web/bible-on-site
-      api_directory: web/api
+      website_module_dir: web/bible-on-site
+      api_module_dir: web/api
     steps:
       - run: echo "Setting up environment variables"
 
@@ -40,8 +40,8 @@ jobs:
     secrets: inherit
     uses: ./.github/workflows/shared-ci.yml
     with:
-      module_directory: ${{ needs.setup_env.outputs.website_directory }}
-      module_name: ${{ needs.setup_env.outputs.website_directory }}
+      module_directory: ${{ needs.setup_env.outputs.website_module_dir }}
+      module_name: ${{ needs.setup_env.outputs.website_module_dir }}
       ci_file: ".github/workflows/ci.yml"
 
   determine_api_changes:
@@ -50,8 +50,8 @@ jobs:
     secrets: inherit
     uses: ./.github/workflows/shared-ci.yml
     with:
-      module_directory: ${{ needs.setup_env.outputs.api_directory }}
-      module_name: ${{ needs.setup_env.outputs.api_directory }}
+      module_directory: ${{ needs.setup_env.outputs.api_module_dir }}
+      module_name: ${{ needs.setup_env.outputs.api_module_dir }}
       ci_file: ".github/workflows/ci.yml"
 
   # ACTUAL JOBS
@@ -64,7 +64,7 @@ jobs:
     secrets: inherit
     uses: ./.github/workflows/shared-version-bump.yml
     with:
-      module_directory: ${{ needs.setup_env.outputs.website_directory }}
+      module_directory: ${{ needs.setup_env.outputs.website_module_dir }}
       module_changed: ${{ needs.determine_website_changes.outputs.module_changed }}
       version_command: "npm version patch -m \"chore(release): %s [skip ci]\""
       files_to_commit: "package.json package-lock.json"
@@ -78,7 +78,7 @@ jobs:
     secrets: inherit
     uses: ./.github/workflows/shared-version-bump.yml
     with:
-      module_directory: ${{ needs.setup_env.outputs.api_directory }}
+      module_directory: ${{ needs.setup_env.outputs.api_module_dir }}
       module_changed: ${{ needs.determine_api_changes.outputs.module_changed }}
       version_command: "cargo release patch"
       files_to_commit: "Cargo.toml Cargo.lock"
