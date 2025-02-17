@@ -257,7 +257,7 @@ jobs:
           name: playwright-e2e-report
           path: ${{ env.MODULE_DIRECTORY }}/playwright-report/
           retention-days: 30
-  
+
   api_tests:
     name: API CI
     runs-on: ubuntu-latest
