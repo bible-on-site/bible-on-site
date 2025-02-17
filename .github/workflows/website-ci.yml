@@ -17,7 +17,7 @@ on:
 env:
   MODULE_DIRECTORY: web/bible-on-site
   NODE_VERSION_FILE: web/bible-on-site/package.json
-  CACHE_DEPENDENCY_PATH: web/bible-on-site/package-lock.json
+  NODE_CACHE_DEPENDENCY_PATH: web/bible-on-site/package-lock.json
 
 jobs:
   # STARTING FLOW
@@ -49,7 +49,7 @@ jobs:
 
   # ACTUAL JOBS
   bump-version:
-    name: Bump Patch Version
+    name: Bump Website Patch Version
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     permissions:
@@ -59,6 +59,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Check for changes in ${{ env.MODULE_DIRECTORY }}
         id: paths_filter
         uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36
@@ -66,36 +67,43 @@ jobs:
           filters: |
             website:
               - '${{ env.MODULE_DIRECTORY }}/**'
+
       - name: Setup Node.js
         uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a
         with:
           node-version-file: ${{ env.NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.CACHE_DEPENDENCY_PATH }}
+          cache-dependency-path: ${{ env.NODE_CACHE_DEPENDENCY_PATH }}
           cache: npm
+
       - name: Bump patch version
         if: steps.paths_filter.outputs.website == 'true'
         run: |
           cd ${{ env.MODULE_DIRECTORY }}
           npm version patch -m "chore(release): %s [skip ci]"
+
       - name: Format package.json using Biome
         if: steps.paths_filter.outputs.website == 'true'
         run: |
           cd ${{ env.MODULE_DIRECTORY }}
           npx @biomejs/biome format --write package.json
+
       - name: Configure Git
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
+
       - name: Add Deploy Key
         uses: webfactory/ssh-agent@72c0bfd31ab22a2e11716951e3f107a9647dc97e
         with:
           ssh-private-key: ${{ secrets.DEPLOY_KEY }}
+
       - name: Commit changes
         if: steps.paths_filter.outputs.website == 'true'
         run: |
           cd ${{ env.MODULE_DIRECTORY }}
           git add package.json package-lock.json
           git commit -m "chore(release): Bump version [skip ci]"
+
       - name: Push updated version back to repository
         if: steps.paths_filter.outputs.website == 'true'
         run: |
@@ -125,7 +133,7 @@ jobs:
         uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a
         with:
           node-version-file: ${{ env.NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.CACHE_DEPENDENCY_PATH }}
+          cache-dependency-path: ${{ env.NODE_CACHE_DEPENDENCY_PATH }}
           cache: npm
 
       - name: Get installed Playwright version
@@ -199,7 +207,7 @@ jobs:
         uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a
         with:
           node-version-file: ${{ env.NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.CACHE_DEPENDENCY_PATH }}
+          cache-dependency-path: ${{ env.NODE_CACHE_DEPENDENCY_PATH }}
           cache: npm
 
       - name: Get installed Playwright version
@@ -277,7 +285,7 @@ jobs:
 
   # CLOSING FLOW
   report_status:
-    name: Report Status
+    name: Report Website Status
     runs-on: ubuntu-latest
     needs: [determine_changes, performance, end-to-end]
     if: always() # This ensures the job always runs
@@ -321,14 +329,6 @@ jobs:
               exit 1
             fi
           fi
-
-          # if [ "${{ needs.determine_changes.outputs.website_changed }}" = "true" ]; then
-          #   if [ "$PERFORMANCE_STATUS" = "failure" ]; then
-          #     echo "Overall status: failure"
-          #     echo "status=failure" >> $GITHUB_OUTPUT
-          #     exit 1
-          #   fi
-          # fi
 
           echo "Overall status: success"
           echo "status=success" >> $GITHUB_OUTPUT
