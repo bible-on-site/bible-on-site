@@ -33,6 +33,8 @@ jobs:
   bump-version:
     name: Bump Website Patch Version
     needs: determine_changes
+    permissions:
+      contents: write
     uses: ./.github/workflows/shared-version-bump.yml
     with:
       module_directory: ${{ github.env.MODULE_DIRECTORY }}
