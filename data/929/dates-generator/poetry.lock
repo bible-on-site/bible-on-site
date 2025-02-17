@@ -525,13 +525,13 @@ files = [
 
 [[package]]
 name = "hdate"
-version = "1.0.2"
+version = "1.0.3"
 description = "Jewish/Hebrew date and Zmanim in native Python 2.7/3.x"
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "hdate-1.0.2-py3-none-any.whl", hash = "sha256:1af214036629ae33a39d534c18abb89ba773d2d2a5468a62d6c6d1fa103ebb42"},
-    {file = "hdate-1.0.2.tar.gz", hash = "sha256:a460a88c309227cf3ff103e24bd588368e2e38c26da28105a8fbcda8257c1b16"},
+    {file = "hdate-1.0.3-py3-none-any.whl", hash = "sha256:c9d76c95c77577f45c98e5e2cb3822d3738c8534a1d3bac827db2967bbdc9de9"},
+    {file = "hdate-1.0.3.tar.gz", hash = "sha256:661440592212fc8480da265743db4c6abcc6121a5619775db2f62cf8ceabebab"},
 ]
 
 [package.dependencies]
