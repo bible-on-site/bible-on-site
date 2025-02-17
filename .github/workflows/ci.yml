@@ -90,7 +90,7 @@ jobs:
     if: ${{ needs.determine_website_changes.outputs.module_changed == 'true' }}
     defaults:
       run:
-        working-directory: ${{ env.MODULE_DIRECTORY }}
+        working-directory: ${{ env.WEBSITE_DIRECTORY }}
     permissions:
       contents: read
 
@@ -105,8 +105,8 @@ jobs:
         id: setup-node
         uses: actions/setup-node@v4
         with:
-          node-version-file: ${{ env.NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.NODE_CACHE_DEPENDENCY_PATH }}
+          node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
+          cache-dependency-path: ${{ env.WEBSITE_NODE_CACHE_PATH }}
           cache: npm
 
       - name: Get installed Playwright version
@@ -135,7 +135,7 @@ jobs:
       - name: Build cache
         uses: actions/cache@v4
         with:
-          path: ${{ env.MODULE_DIRECTORY }}/.next/cache
+          path: ${{ env.WEBSITE_DIRECTORY }}/.next/cache
           # Generate a new cache whenever packages or source files change.
           key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') }}
           # If source files changed but packages didn't, rebuild from a prior cache.
@@ -154,7 +154,7 @@ jobs:
         if: always()
         with:
           name: playwright-perf-report
-          path: ${{ env.MODULE_DIRECTORY }}/playwright-report/
+          path: ${{ env.WEBSITE_DIRECTORY }}/playwright-report/
           retention-days: 30
 
   website_e2e:
@@ -164,7 +164,7 @@ jobs:
     if: ${{ needs.determine_website_changes.outputs.module_changed == 'true' || needs.determine_website_changes.outputs.ci_changed == 'true' }}
     defaults:
       run:
-        working-directory: ${{ env.MODULE_DIRECTORY }}
+        working-directory: ${{ env.WEBSITE_DIRECTORY }}
     permissions:
       contents: read
 
@@ -179,8 +179,8 @@ jobs:
         id: setup-node
         uses: actions/setup-node@v4
         with:
-          node-version-file: ${{ env.NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.NODE_CACHE_DEPENDENCY_PATH }}
+          node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
+          cache-dependency-path: ${{ env.WEBSITE_NODE_CACHE_PATH }}
           cache: npm
 
       - name: Get installed Playwright version
@@ -217,7 +217,7 @@ jobs:
       - name: Build cache
         uses: actions/cache@v4
         with:
-          path: ${{ env.MODULE_DIRECTORY }}/.next/cache
+          path: ${{ env.WEBSITE_DIRECTORY }}/.next/cache
           # Generate a new cache whenever packages or source files change.
           key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') }}
           # If source files changed but packages didn't, rebuild from a prior cache.
@@ -240,20 +240,20 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ env.MODULE_DIRECTORY }}/coverage/merged/lcov.info
+          files: ${{ env.WEBSITE_DIRECTORY }}/coverage/merged/lcov.info
           disable_search: true
 
       - name: Run codacy-coverage-reporter
         uses: codacy/codacy-coverage-reporter-action@master
         with:
           project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
-          coverage-reports: ${{ env.MODULE_DIRECTORY }}/coverage/merged/lcov.info
+          coverage-reports: ${{ env.WEBSITE_DIRECTORY }}/coverage/merged/lcov.info
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: playwright-e2e-report
-          path: ${{ env.MODULE_DIRECTORY }}/playwright-report/
+          path: ${{ env.WEBSITE_DIRECTORY }}/playwright-report/
           retention-days: 30
 
   api_tests:
