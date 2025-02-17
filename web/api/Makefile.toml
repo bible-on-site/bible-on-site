@@ -2,13 +2,16 @@
 skip_core_tasks = true
 default_to_workspace = false
 
+[env]
+NPM_BIN = { source = "${CARGO_MAKE_RUST_TARGET_OS}", default_value = "npm", mapping = { "windows" = "C:\\Program Files\\nodejs\\npm.cmd" } }
+
 [tasks.run-api]
 command = "cargo"
 args = ["run"]
 
 [tasks.lint]
 "command" = "cargo"
-# TODO: add , "--", "-D", "warnings" to the args to make it more strict
+# TODO: add , "--", "-D", "warnings" to the args to make it more strict once all warnings are fixed
 args = ["clippy"]
 
 [tasks.coverage-reset]
@@ -32,24 +35,26 @@ args = [
 ]
 
 [tasks.coverage-report-browser]
+condition = { env_not_set = [
+  "CI",
+] } # better place the condition in tasks.test-coverage, but I couldn't find a way to do it
 command = "cargo"
 args = ["llvm-cov", "report", "--profile", "dev", "--open"]
 
-[tasks.e2e]
-command = "C:\\Program Files\\nodejs\\npm.cmd"  # TODO: make this platform independent, maybe using ssome linking.
+
+[tasks.test-e2e]
+command = "${NPM_BIN}"
 args = ["run", "--prefix", "tests", "test:e2e"]
 
 
 [tasks.test-coverage]
 dependencies = [
   "coverage-reset",
-  "coverage-run",
+  "coverage-run",            # this task is terminated using a signal called from the test task
   "coverage-report-lcov",
   "coverage-report-browser",
 ]
 
-[tasks.test-e2e]
-dependencies = ["e2e"]
 
 [tasks.bump-patch-version]
 command = "cargo"
