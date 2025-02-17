@@ -23,31 +23,12 @@ jobs:
   # STARTING FLOW
   determine_changes:
     name: Determine Changes
-    runs-on: ubuntu-latest
-    outputs:
-      api_changed: ${{ steps.check_changes.outputs.api_changed }}
-      ci_changed: ${{ steps.check_changes.outputs.ci_changed }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    uses: ./.github/workflows/shared-ci.yml
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
-          fetch-depth: 0
+      module_directory: ${{ env.MODULE_DIRECTORY }}
+      changes_filter: "web/api"
+      ci_file: ".github/workflows/api-ci.yml"
 
-      - name: Check for changes
-        id: check_changes
-        run: |
-          if [[ ${{ github.event_name }} == 'pull_request' ]]; then
-            BASE_SHA=${{ github.event.pull_request.base.sha }}
-          else
-            BASE_SHA=$(git rev-parse origin/master)
-          fi
-          API_CHANGED=$(git diff --name-only --diff-filter=AM $BASE_SHA HEAD | grep -q "${{ env.MODULE_DIRECTORY }}" && echo "true" || echo "false")
-          CI_CHANGED=$(git diff --name-only --diff-filter=AM $BASE_SHA HEAD | grep -q ".github/workflows/api-ci.yml" && echo "true" || echo "false")
-          echo "api_changed=${API_CHANGED}" >> $GITHUB_OUTPUT
-          echo "ci_changed=${CI_CHANGED}" >> $GITHUB_OUTPUT
-
-  # ACTUAL JOBS
   bump-version:
     name: Bump Patch Version
     runs-on: ubuntu-latest
