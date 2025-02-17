@@ -307,8 +307,13 @@ jobs:
               else
                 GITHUB_SHA=${{ github.sha }}
               fi
-              CODECOV_JSON=$(curl -s -H "Authorization: Bearer ${{ secrets.CODECOV_API_TOKEN }}" "https://api.codecov.io/api/v2/github/${OWNER_REPO[0]}/repos/${OWNER_REPO[1]}/commits/$GITHUB_SHA")
+              CODECOV_JSON=$(curl -s -H "Authorization: token ${{ secrets.CODECOV_API_TOKEN }}" "https://api.codecov.io/api/v2/github/${OWNER_REPO[0]}/repos/${OWNER_REPO[1]}/commits/$GITHUB_SHA")
               echo "CODECOV_JSON: $CODECOV_JSON"
+              if [[ "$CODECOV_JSON" == *"Invalid token"* ]] || [[ "$CODECOV_JSON" == *"error"* ]]; then
+                echo "Failed to get Codecov status"
+                echo "status=failure" >> $GITHUB_OUTPUT
+                exit 1
+              fi
               CODECOV_STATUS=$(echo "$CODECOV_JSON" | jq -r '.state')
               if [ "$CODECOV_STATUS" = "complete" ]; then
                 CODECOV_RESULT=$(echo "$CODECOV_JSON" | jq -r '.ci_passed')
@@ -318,6 +323,11 @@ jobs:
                   exit 1
                 fi
                 break
+              fi
+              if [ $RETRY_COUNT -eq $((MAX_RETRIES-1)) ]; then
+                echo "Timeout waiting for Codecov status"
+                echo "status=failure" >> $GITHUB_OUTPUT
+                exit 1
               fi
               echo "Waiting for Codecov status to complete (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)..."
               sleep 30
