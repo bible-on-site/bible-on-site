@@ -330,13 +330,5 @@ jobs:
             fi
           fi
 
-          # if [ "${{ needs.determine_changes.outputs.website_changed }}" = "true" ]; then
-          #   if [ "$PERFORMANCE_STATUS" = "failure" ]; then
-          #     echo "Overall status: failure"
-          #     echo "status=failure" >> $GITHUB_OUTPUT
-          #     exit 1
-          #   fi
-          # fi
-
           echo "Overall status: success"
           echo "status=success" >> $GITHUB_OUTPUT
