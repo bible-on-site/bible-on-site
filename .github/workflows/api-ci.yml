@@ -25,7 +25,7 @@ jobs:
     name: Determine Changes
     uses: ./.github/workflows/shared-ci.yml
     with:
-      module_directory: ${{ env.MODULE_DIRECTORY }}
+      module_directory: ${{ github.env.MODULE_DIRECTORY }}
       changes_filter: "web/api"
       ci_file: ".github/workflows/api-ci.yml"
 
@@ -34,7 +34,7 @@ jobs:
     needs: determine_changes
     uses: ./.github/workflows/shared-version-bump.yml
     with:
-      module_directory: ${{ env.MODULE_DIRECTORY }}
+      module_directory: ${{ github.env.MODULE_DIRECTORY }}
       module_changed: ${{ needs.determine_changes.outputs.module_changed }}
       version_command: "cargo make bump-patch-version"
       files_to_commit: "Cargo.toml Cargo.lock"
