@@ -55,7 +55,15 @@ dependencies = [
   "coverage-report-browser",
 ]
 
-
 [tasks.bump-patch-version]
 command = "cargo"
 args = ["release", "patch", "--no-publish", "--execute"]
+
+[tasks.package]
+command = "docker"
+args = [
+  "build",
+  "-t",
+  "${CARGO_MAKE_CRATE_NAME}:${CARGO_MAKE_CRATE_VERSION}",
+  ".",
+]
