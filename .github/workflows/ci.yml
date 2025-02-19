@@ -72,7 +72,7 @@ jobs:
   # ACTUAL JOBS
   bump_website_version:
     name: Bump Website Patch Version
-    needs: [setup_env, determine_website_changes]
+    needs: [setup_env, determine_website_changes, ci_checks_passing]
     permissions:
       contents: write
       actions: read
@@ -86,7 +86,7 @@ jobs:
 
   bump_api_version:
     name: Bump API Patch Version
-    needs: [setup_env, determine_api_changes]
+    needs: [setup_env, determine_api_changes, ci_checks_passing]
     permissions:
       contents: write
       actions: read
@@ -319,8 +319,8 @@ jobs:
           npx playwright install-deps
 
   # CLOSING FLOW
-  report_status:
-    name: Report CI Status
+  ci_checks_passing:
+    name: CI Checks Passing
     runs-on: ubuntu-latest
     needs: [determine_website_changes, determine_api_changes, website_performance, website_e2e, api_tests]
     if: always() # This ensures the job always runs
