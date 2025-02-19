@@ -31,7 +31,7 @@ args = [
   "dev",
   "--lcov",
   "--output-path",
-  ".coverage/e2e.lcov",
+  ".coverage/lcov.info",
 ]
 
 [tasks.coverage-report-browser]
