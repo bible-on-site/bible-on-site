@@ -15,10 +15,10 @@ const websiteCoverageFilePath = path.resolve(
 );
 const apiCoverageFilePath = path.resolve(
 	__dirname,
-	"../web/api/.coverage/e2e.lcov",
+	"../web/api/.coverage/lcov.info",
 );
 const outputDir = path.resolve(__dirname, "..", ".coverage");
-const outputFilePath = path.resolve(outputDir, "merged.lcov");
+const outputFilePath = path.resolve(outputDir, "lcov.info");
 
 try {
 	fs.mkdirSync(outputDir);
