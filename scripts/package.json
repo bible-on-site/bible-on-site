@@ -1,0 +1,9 @@
+{
+	"devDependencies": {
+		"@types/node": "^22.13.4",
+		"tsx": "4.19.2"
+	},
+	"scripts": {
+		"coverage:merge": "node --import tsx ./merge-coverage.mts"
+	}
+}

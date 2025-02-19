@@ -13,6 +13,7 @@
 		"codecov.codecov", // Code coverage (Website, planned for more)
 		"ms-azuretools.vscode-docker", // Docker (Website, planned for API and App)
 		"rust-lang.rust-analyzer", // Rust (Website, API)
-		"foxundermoon.shell-format" // Shell (General)
+		"foxundermoon.shell-format", // Shell (General)
+		"SonarSource.sonarlint-vscode" // SonarLint (App)
 	]
 }

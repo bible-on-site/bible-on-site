@@ -14,7 +14,7 @@ const coverageDir = path.resolve(__dirname, "../../../coverage");
 const unitCoverageDir = path.resolve(coverageDir, "unit");
 const e2eCoverageDir = path.resolve(coverageDir, "e2e");
 const outputDir = path.resolve(coverageDir, "merged");
-const reports = ["text", process.env.CI ? "lcov" : "html"];
+const reports = ["text", "lcov", ...(process.env.CI ? [] : ["html"])];
 
 const coverageOptions: CoverageReportOptions = {
 	name: "Merge Coverage Report",
