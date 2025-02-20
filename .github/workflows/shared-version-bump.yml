@@ -80,10 +80,10 @@ jobs:
           git remote set-url origin git@github.com:${{ github.repository }}
           git push origin HEAD --follow-tags
 
-      - name: Build docker release
+      - name: `dockerize api`
         if: contains(inputs.version_command, 'cargo')
         run: cargo make package
 
-      - name: Create npm release
+      - name: `dockerize website`
         if: contains(inputs.version_command, 'npm')
         run: npm run package
