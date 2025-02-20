@@ -9,9 +9,10 @@ on:
       module_name:
         required: true
         type: string
-      ci_file:
+      ci_path:
         required: true
         type: string
+        description: "Single file path, comma-separated list of files, or directory path"
     outputs:
       module_changed:
         description: "Whether the module has changed"
@@ -48,9 +49,15 @@ jobs:
             echo "Changed files:"
             git diff --name-only $BASE_SHA HEAD
             MODULE_CHANGED=$(git diff --name-only $BASE_SHA HEAD | grep -q -E "^${{ inputs.module_name }}/" && echo "true" || echo "false")
-            CI_CHANGED=$(git diff --name-only $BASE_SHA HEAD | grep -q "${{ inputs.ci_file }}" && echo "true" || echo "false")
+            # Convert comma-separated paths to regex pattern
+            CI_PATHS=$(echo "${{ inputs.ci_path }}" | sed 's/,/\\|/g')
+            # If it's a directory, add /* to match files inside
+            if [ -d "${{ inputs.ci_path }}" ]; then
+                CI_PATHS="${CI_PATHS}/*"
+            fi
+            CI_CHANGED=$(git diff --name-only $BASE_SHA HEAD | grep -q -E "${CI_PATHS}" && echo "true" || echo "false")
             echo "Module directory being checked: ${{ inputs.module_name }}"
-            echo "CI file being checked: ${{ inputs.ci_file }}"
+            echo "CI paths being checked: ${{ inputs.ci_path }}"
             echo "MODULE_CHANGED: $MODULE_CHANGED"
             echo "CI_CHANGED: $CI_CHANGED"
             echo "module_changed=${MODULE_CHANGED}" >> $GITHUB_OUTPUT

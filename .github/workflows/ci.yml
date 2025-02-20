@@ -57,7 +57,7 @@ jobs:
     with:
       module_directory: ${{ needs.setup_env.outputs.website_module_dir }}
       module_name: ${{ needs.setup_env.outputs.website_module_dir }}
-      ci_file: ".github/workflows/ci.yml"
+      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-version-bump.yml"
 
   determine_api_changes:
     name: Determine API Changes
@@ -67,7 +67,7 @@ jobs:
     with:
       module_directory: ${{ needs.setup_env.outputs.api_module_dir }}
       module_name: ${{ needs.setup_env.outputs.api_module_dir }}
-      ci_file: ".github/workflows/ci.yml"
+      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-version-bump.yml"
 
   # ACTUAL JOBS
   bump_website_version:
