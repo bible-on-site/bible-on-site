@@ -53,7 +53,7 @@ jobs:
           CI_PATHS=$(echo "${{ inputs.ci_path }}" | sed 's/,/\\|/g' | sed 's/\./\\./g')
           echo "Raw CI paths: ${{ inputs.ci_path }}"
           echo "Processed CI paths pattern: ${CI_PATHS}"
-          
+
           # If any path is a directory, check if it exists and add /* pattern
           if echo "${{ inputs.ci_path }}" | grep -q ","; then
             # Handle multiple paths
