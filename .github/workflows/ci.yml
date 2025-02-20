@@ -162,6 +162,12 @@ jobs:
         run: npm run test:perf
 
       - uses: actions/upload-artifact@v4
+        with:
+          name: performance-coverage
+          path: ${{ env.WEBSITE_DIRECTORY }}/coverage/
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: playwright-perf-report
@@ -238,6 +244,12 @@ jobs:
       - name: E2E Test
         id: npm-e2e-test
         run: npm run test:e2e
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: e2e-coverage
+          path: ${{ env.WEBSITE_DIRECTORY }}/coverage/
+          retention-days: 30
 
       - name: Merge Test Coverage
         continue-on-error: true
