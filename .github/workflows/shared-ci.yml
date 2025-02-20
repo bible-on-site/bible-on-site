@@ -50,11 +50,29 @@ jobs:
           git diff --name-only $BASE_SHA HEAD
           MODULE_CHANGED=$(git diff --name-only $BASE_SHA HEAD | grep -q -E "^${{ inputs.module_name }}/" && echo "true" || echo "false")
           # Convert comma-separated paths to regex pattern
-          CI_PATHS=$(echo "${{ inputs.ci_path }}" | sed 's/,/\\|/g')
-          # If it's a directory, add /* to match files inside
-          if [ -d "${{ inputs.ci_path }}" ]; then
-              CI_PATHS="${CI_PATHS}/*"
+          CI_PATHS=$(echo "${{ inputs.ci_path }}" | sed 's/,/\\|/g' | sed 's/\./\\./g')
+          echo "Raw CI paths: ${{ inputs.ci_path }}"
+          echo "Processed CI paths pattern: ${CI_PATHS}"
+          
+          # If any path is a directory, check if it exists and add /* pattern
+          if echo "${{ inputs.ci_path }}" | grep -q ","; then
+            # Handle multiple paths
+            FINAL_PATTERN=""
+            IFS=',' read -ra PATHS <<< "${{ inputs.ci_path }}"
+            for path in "${PATHS[@]}"; do
+              if [ -d "$path" ]; then
+                FINAL_PATTERN="${FINAL_PATTERN}${path}/.*|"
+              else
+                FINAL_PATTERN="${FINAL_PATTERN}${path}|"
+              fi
+            done
+            # Remove trailing |
+            CI_PATHS=${FINAL_PATTERN%|}
+          elif [ -d "${{ inputs.ci_path }}" ]; then
+            # Single directory path
+            CI_PATHS="${CI_PATHS}/.*"
           fi
+          echo "Final CI paths pattern: ${CI_PATHS}"
           CI_CHANGED=$(git diff --name-only $BASE_SHA HEAD | grep -q -E "${CI_PATHS}" && echo "true" || echo "false")
           echo "Module directory being checked: ${{ inputs.module_name }}"
           echo "CI paths being checked: ${{ inputs.ci_path }}"
