@@ -47,7 +47,7 @@ jobs:
       - uses: taiki-e/install-action@v2
         if: contains(inputs.version_command, 'cargo')
         with:
-            tool: cargo-make, cargo-release
+          tool: cargo-make, cargo-release
 
       - name: Cache Cargo dependencies
         if: contains(inputs.version_command, 'cargo')

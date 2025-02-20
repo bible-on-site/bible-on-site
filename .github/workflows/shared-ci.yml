@@ -38,27 +38,27 @@ jobs:
       - name: Check for changes
         id: check_changes
         run: |
-            if [[ ${{ github.event_name }} == 'pull_request' ]]; then
-                BASE_SHA=${{ github.event.pull_request.base.sha }}
-            elif [[ ${{ github.event_name }} == 'push' ]]; then
-                BASE_SHA=${{ github.event.before }}
-            else
-                BASE_SHA=$(git rev-parse origin/master)
-            fi
-            echo "BASE_SHA: $BASE_SHA"
-            echo "Changed files:"
-            git diff --name-only $BASE_SHA HEAD
-            MODULE_CHANGED=$(git diff --name-only $BASE_SHA HEAD | grep -q -E "^${{ inputs.module_name }}/" && echo "true" || echo "false")
-            # Convert comma-separated paths to regex pattern
-            CI_PATHS=$(echo "${{ inputs.ci_path }}" | sed 's/,/\\|/g')
-            # If it's a directory, add /* to match files inside
-            if [ -d "${{ inputs.ci_path }}" ]; then
-                CI_PATHS="${CI_PATHS}/*"
-            fi
-            CI_CHANGED=$(git diff --name-only $BASE_SHA HEAD | grep -q -E "${CI_PATHS}" && echo "true" || echo "false")
-            echo "Module directory being checked: ${{ inputs.module_name }}"
-            echo "CI paths being checked: ${{ inputs.ci_path }}"
-            echo "MODULE_CHANGED: $MODULE_CHANGED"
-            echo "CI_CHANGED: $CI_CHANGED"
-            echo "module_changed=${MODULE_CHANGED}" >> $GITHUB_OUTPUT
-            echo "ci_changed=${CI_CHANGED}" >> $GITHUB_OUTPUT
+          if [[ ${{ github.event_name }} == 'pull_request' ]]; then
+              BASE_SHA=${{ github.event.pull_request.base.sha }}
+          elif [[ ${{ github.event_name }} == 'push' ]]; then
+              BASE_SHA=${{ github.event.before }}
+          else
+              BASE_SHA=$(git rev-parse origin/master)
+          fi
+          echo "BASE_SHA: $BASE_SHA"
+          echo "Changed files:"
+          git diff --name-only $BASE_SHA HEAD
+          MODULE_CHANGED=$(git diff --name-only $BASE_SHA HEAD | grep -q -E "^${{ inputs.module_name }}/" && echo "true" || echo "false")
+          # Convert comma-separated paths to regex pattern
+          CI_PATHS=$(echo "${{ inputs.ci_path }}" | sed 's/,/\\|/g')
+          # If it's a directory, add /* to match files inside
+          if [ -d "${{ inputs.ci_path }}" ]; then
+              CI_PATHS="${CI_PATHS}/*"
+          fi
+          CI_CHANGED=$(git diff --name-only $BASE_SHA HEAD | grep -q -E "${CI_PATHS}" && echo "true" || echo "false")
+          echo "Module directory being checked: ${{ inputs.module_name }}"
+          echo "CI paths being checked: ${{ inputs.ci_path }}"
+          echo "MODULE_CHANGED: $MODULE_CHANGED"
+          echo "CI_CHANGED: $CI_CHANGED"
+          echo "module_changed=${MODULE_CHANGED}" >> $GITHUB_OUTPUT
+          echo "ci_changed=${CI_CHANGED}" >> $GITHUB_OUTPUT
