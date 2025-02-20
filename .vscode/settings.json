@@ -14,5 +14,6 @@
 		"web/api/Cargo.toml",
 		"web/api/entities/Cargo.toml"
 	],
-	"rust-analyzer.check.command": "clippy"
+	"rust-analyzer.check.command": "clippy",
+	"sonarlint.analysisExcludesStandalone": "**/web/**"
 }
