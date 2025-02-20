@@ -83,3 +83,7 @@ jobs:
       - name: Build docker release
         if: contains(inputs.version_command, 'cargo')
         run: cargo make package
+      
+      - name: Create npm release
+        if: contains(inputs.version_command, 'npm')
+        run: npm run package
