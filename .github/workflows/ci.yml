@@ -57,7 +57,7 @@ jobs:
     with:
       module_directory: ${{ needs.setup_env.outputs.website_module_dir }}
       module_name: ${{ needs.setup_env.outputs.website_module_dir }}
-      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-version-bump.yml"
+      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
 
   determine_api_changes:
     name: Determine API Changes
@@ -67,7 +67,7 @@ jobs:
     with:
       module_directory: ${{ needs.setup_env.outputs.api_module_dir }}
       module_name: ${{ needs.setup_env.outputs.api_module_dir }}
-      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-version-bump.yml"
+      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
 
   # ACTUAL JOBS
   bump_website_version:
@@ -77,7 +77,7 @@ jobs:
       contents: write
       actions: read
     secrets: inherit
-    uses: ./.github/workflows/shared-version-bump.yml
+    uses: ./.github/workflows/shared-release.yml
     with:
       module_directory: ${{ needs.setup_env.outputs.website_module_dir }}
       module_changed: ${{ needs.determine_website_changes.outputs.module_changed }}
@@ -91,7 +91,7 @@ jobs:
       contents: write
       actions: read
     secrets: inherit
-    uses: ./.github/workflows/shared-version-bump.yml
+    uses: ./.github/workflows/shared-release.yml
     with:
       module_directory: ${{ needs.setup_env.outputs.api_module_dir }}
       module_changed: ${{ needs.determine_api_changes.outputs.module_changed }}
@@ -252,7 +252,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: e2e-coverage
+          name: website-coverage
           path: ${{ env.WEBSITE_DIRECTORY }}/coverage/merged/lcov.info
           retention-days: 30
           overwrite: true
