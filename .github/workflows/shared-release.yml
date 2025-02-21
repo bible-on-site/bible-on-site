@@ -32,8 +32,13 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set Environment Variables
+        run: |
+          echo "IS_CARGO=$([[ '${{ inputs.version_command }}' == *cargo* ]] && echo true || echo false)" >> $GITHUB_ENV
+          echo "IS_NPM=$([[ '${{ inputs.version_command }}' == *npm* ]] && echo true || echo false)" >> $GITHUB_ENV
+
       - name: Setup Node.js
-        if: contains(inputs.version_command, 'npm')
+        if: ${{ env.IS_NPM }}
         uses: actions/setup-node@v4
         with:
           node-version-file: ${{ inputs.MODULE_DIRECTORY }}/package.json
@@ -41,16 +46,16 @@ jobs:
           cache: npm
 
       - name: Setup Rust
-        if: contains(inputs.version_command, 'cargo')
+        if: ${{ env.IS_CARGO }}
         uses: dtolnay/rust-toolchain@stable
 
       - uses: taiki-e/install-action@v2
-        if: contains(inputs.version_command, 'cargo')
+        if: ${{ env.IS_CARGO }}
         with:
-            tool: cargo-make, cargo-release
+          tool: cargo-make, cargo-release
 
       - name: Cache Cargo dependencies
-        if: contains(inputs.version_command, 'cargo')
+        if: ${{ env.IS_CARGO }}
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: ${{ inputs.module_directory }}
@@ -79,3 +84,6 @@ jobs:
         run: |
           git remote set-url origin git@github.com:${{ github.repository }}
           git push origin HEAD --follow-tags
+
+      - name: ${{ env.IS_CARGO && 'Dockerize api' || 'Dockerize website' }}
+        run: ${{ env.IS_CARGO && 'cargo make package' || 'npm run package' }}
