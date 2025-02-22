@@ -39,7 +39,7 @@ jobs:
           echo "IS_NPM=$(echo '${{ inputs.version_command }}' | grep -q 'npm' && echo true || echo false)" >> $GITHUB_ENV
 
       - name: Setup Node.js
-        if: ${{ env.IS_NPM }}
+        if: ${{ env.IS_NPM == 'true' }}
         uses: actions/setup-node@v4
         with:
           node-version-file: ${{ inputs.MODULE_DIRECTORY }}/package.json
@@ -47,16 +47,16 @@ jobs:
           cache: npm
 
       - name: Setup Rust
-        if: ${{ env.IS_CARGO }}
+        if: ${{ env.IS_CARGO == 'true' }}
         uses: dtolnay/rust-toolchain@stable
 
       - uses: taiki-e/install-action@v2
-        if: ${{ env.IS_CARGO }}
+        if: ${{ env.IS_CARGO == 'true' }}
         with:
           tool: cargo-make, cargo-release
 
       - name: Cache Cargo dependencies
-        if: ${{ env.IS_CARGO }}
+        if: ${{ env.IS_CARGO == 'true' }}
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: ${{ inputs.module_directory }}
@@ -86,5 +86,5 @@ jobs:
           git remote set-url origin git@github.com:${{ github.repository }}
           git push origin HEAD --follow-tags
 
-      - name: ${{ env.IS_CARGO && 'Dockerize api' || 'Dockerize website' }}
-        run: ${{ env.IS_CARGO && 'cargo make package' || 'npm run package' }}
+      - name: ${{ env.IS_CARGO == 'true' && 'Dockerize api' || 'Dockerize website' }}
+        run: ${{ env.IS_CARGO == 'true' && 'cargo make package' || 'npm run package' }}
