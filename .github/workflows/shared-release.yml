@@ -5,7 +5,7 @@ on:
     inputs:
       module_changed:
         required: true
-        type: boolean
+        type: string
       module_directory:
         required: true
         type: string
