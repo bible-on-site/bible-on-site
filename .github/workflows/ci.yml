@@ -27,11 +27,6 @@ jobs:
   setup_env:
     name: Setup Environment Variables
     runs-on: ubuntu-latest
-    outputs:
-      website_module_dir: web/bible-on-site
-      api_module_dir: web/api
-      WEBSITE_PLAYWRIGHT_VERSION: ${{ steps.get_website_playwright_version.outputs.PLAYWRIGHT_VERSION }}
-      API_PLAYWRIGHT_VERSION: ${{ steps.get_api_playwright_version.outputs.PLAYWRIGHT_VERSION }}
     steps:
       - run: echo "Setting up environment variables"
       - name: Checkout
