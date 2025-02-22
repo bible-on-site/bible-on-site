@@ -389,6 +389,7 @@ jobs:
           echo "determine_website_changes.module_changed: ${{ needs.determine_website_changes.outputs.module_changed }}"
           echo "determine_api_changes.module_changed: ${{ needs.determine_api_changes.outputs.module_changed }}"
           echo "ci_checks_passing: ${{ toJSON(needs.ci_checks_passing) }}"
+          echo "needs: ${{ toJSON(needs) }}"
       - name: Test is push
         if: github.event_name == 'push'
         run: echo "Push event"
