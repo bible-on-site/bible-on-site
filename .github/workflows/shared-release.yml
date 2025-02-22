@@ -20,8 +20,8 @@ on:
         required: true
 
 jobs:
-  bump-version:
-    name: Bump Patch Version
+  release:
+    name: Release
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/master' && inputs.module_changed == 'true'
     permissions:
