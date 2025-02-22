@@ -382,7 +382,7 @@ jobs:
   # RELEASES
   release_website:
     name: Release Website
-    needs: [setup_env, determine_website_changes]
+    needs: [setup_env]
     permissions:
       contents: write
       actions: read
@@ -395,7 +395,7 @@ jobs:
 
   release_api:
     name: Release API
-    needs: [setup_env, determine_api_changes]
+    needs: [setup_env]
     permissions:
       contents: write
       actions: read
