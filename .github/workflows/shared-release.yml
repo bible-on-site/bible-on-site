@@ -6,9 +6,6 @@ on:
       module_directory:
         required: true
         type: string
-      module_changed:
-        required: true
-        type: string
       version_command:
         required: true
         type: string
