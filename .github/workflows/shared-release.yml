@@ -1,4 +1,4 @@
-name: Shared Version Bump
+name: Shared Release Flow
 
 on:
   workflow_call:
