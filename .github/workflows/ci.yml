@@ -70,34 +70,6 @@ jobs:
       ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
 
   # ACTUAL JOBS
-  release_website:
-    name: Release Website
-    needs: [setup_env, determine_website_changes, ci_checks_passing]
-    permissions:
-      contents: write
-      actions: read
-    secrets: inherit
-    uses: ./.github/workflows/shared-release.yml
-    with:
-      module_directory: ${{ needs.setup_env.outputs.website_module_dir }}
-      module_changed: ${{ needs.determine_website_changes.outputs.module_changed }}
-      version_command: "npm version patch -m \"chore(release): %s [skip ci]\""
-      files_to_commit: "package.json package-lock.json"
-
-  release_api:
-    name: Release API
-    needs: [setup_env, determine_api_changes, ci_checks_passing]
-    permissions:
-      contents: write
-      actions: read
-    secrets: inherit
-    uses: ./.github/workflows/shared-release.yml
-    with:
-      module_directory: ${{ needs.setup_env.outputs.api_module_dir }}
-      module_changed: ${{ needs.determine_api_changes.outputs.module_changed }}
-      version_command: "cargo release patch"
-      files_to_commit: "Cargo.toml Cargo.lock"
-
   website_performance:
     name: Website Performance
     runs-on: ubuntu-latest
@@ -406,3 +378,32 @@ jobs:
 
           echo "Overall status: success"
           echo "status=success" >> $GITHUB_OUTPUT
+
+  # RELEASES
+  release_website:
+    name: Release Website
+    needs: [setup_env, determine_website_changes, ci_checks_passing]
+    permissions:
+      contents: write
+      actions: read
+    secrets: inherit
+    uses: ./.github/workflows/shared-release.yml
+    with:
+      module_directory: ${{ needs.setup_env.outputs.website_module_dir }}
+      module_changed: ${{ needs.determine_website_changes.outputs.module_changed }}
+      version_command: "npm version patch -m \"chore(release): %s [skip ci]\""
+      files_to_commit: "package.json package-lock.json"
+
+  release_api:
+    name: Release API
+    needs: [setup_env, determine_api_changes, ci_checks_passing]
+    permissions:
+      contents: write
+      actions: read
+    secrets: inherit
+    uses: ./.github/workflows/shared-release.yml
+    with:
+      module_directory: ${{ needs.setup_env.outputs.api_module_dir }}
+      module_changed: ${{ needs.determine_api_changes.outputs.module_changed }}
+      version_command: "cargo release patch --execute --no-confirm --config commit-message=\"chore(release): {{version}} [skip ci]\""
+      files_to_commit: "Cargo.toml Cargo.lock"
