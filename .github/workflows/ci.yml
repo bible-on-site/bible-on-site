@@ -383,7 +383,6 @@ jobs:
   release_website:
     name: Release Website
     needs: [setup_env, determine_website_changes, ci_checks_passing]
-    if: ${{ needs.ci_checks_passing.outputs.status == 'success' }}
     permissions:
       contents: write
       actions: read
@@ -398,7 +397,6 @@ jobs:
   release_api:
     name: Release API
     needs: [setup_env, determine_api_changes, ci_checks_passing]
-    if: ${{ needs.ci_checks_passing.outputs.status == 'success' }}
     permissions:
       contents: write
       actions: read
