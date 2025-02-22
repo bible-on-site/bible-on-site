@@ -6,9 +6,6 @@ on:
       module_directory:
         required: true
         type: string
-      module_changed:
-        required: true
-        type: string
       version_command:
         required: true
         type: string
@@ -26,7 +23,6 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && inputs.module_changed == 'true' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
