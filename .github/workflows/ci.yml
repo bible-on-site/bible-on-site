@@ -70,8 +70,8 @@ jobs:
       ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
 
   # ACTUAL JOBS
-  bump_website_version:
-    name: Bump Website Patch Version
+  release_website:
+    name: Release Website
     needs: [setup_env, determine_website_changes, ci_checks_passing]
     permissions:
       contents: write
@@ -84,8 +84,8 @@ jobs:
       version_command: "npm version patch -m \"chore(release): %s [skip ci]\""
       files_to_commit: "package.json package-lock.json"
 
-  bump_api_version:
-    name: Bump API Patch Version
+  release_api:
+    name: Release API
     needs: [setup_env, determine_api_changes, ci_checks_passing]
     permissions:
       contents: write
