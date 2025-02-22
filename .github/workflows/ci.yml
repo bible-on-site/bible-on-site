@@ -412,13 +412,14 @@ jobs:
   release_website:
     name: Release Website
     needs: [setup_env, determine_website_changes, ci_checks_passing]
-    if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && needs.determine_website_changes.outputs.module_changed == 'true' }}
+    if: ${{ always() }}
     permissions:
       contents: write
       actions: read
     secrets: inherit
     uses: ./.github/workflows/shared-release.yml
     with:
+      module_changed: ${{ needs.determine_website_changes.outputs.module_changed }}
       module_directory: ${{ needs.setup_env.outputs.website_module_dir }}
       version_command: 'npm version patch -m "chore(release): %s [skip ci]"'
       files_to_commit: "package.json package-lock.json"
@@ -426,13 +427,14 @@ jobs:
   release_api:
     name: Release API
     needs: [setup_env, determine_api_changes, ci_checks_passing]
-    if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && needs.determine_api_changes.outputs.module_changed == 'true' }}
+    if: ${{ always() }}
     permissions:
       contents: write
       actions: read
     secrets: inherit
     uses: ./.github/workflows/shared-release.yml
     with:
+      module_changed: ${{ needs.determine_api_changes.outputs.module_changed }}
       module_directory: ${{ needs.setup_env.outputs.api_module_dir }}
       version_command: 'cargo release patch --execute --no-confirm --config commit-message="chore(release): {{version}} [skip ci]"'
       files_to_commit: "Cargo.toml Cargo.lock"
