@@ -87,4 +87,5 @@ jobs:
           git push origin HEAD --follow-tags
 
       - name: ${{ env.IS_CARGO == 'true' && 'Dockerize api' || 'Dockerize website' }}
+        working-directory: ${{ inputs.module_directory }}
         run: ${{ env.IS_CARGO == 'true' && 'cargo make package' || 'npm run package' }}
