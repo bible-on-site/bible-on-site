@@ -396,6 +396,9 @@ jobs:
   release_api:
     name: Release API
     needs: [setup_env, determine_api_changes]
+    permissions:
+      contents: write
+      actions: read
     secrets: inherit
     uses: ./.github/workflows/shared-release.yml
     with:
