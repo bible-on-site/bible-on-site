@@ -35,8 +35,8 @@ jobs:
 
       - name: Set Environment Variables
         run: |
-          echo "IS_CARGO=$([[ '${{ inputs.version_command }}' == *cargo* ]] && echo true || echo false)" >> $GITHUB_ENV
-          echo "IS_NPM=$([[ '${{ inputs.version_command }}' == *npm* ]] && echo true || echo false)" >> $GITHUB_ENV
+          echo "IS_CARGO=$(echo '${{ inputs.version_command }}' | grep -q 'cargo' && echo true || echo false)" >> $GITHUB_ENV
+          echo "IS_NPM=$(echo '${{ inputs.version_command }}' | grep -q 'npm' && echo true || echo false)" >> $GITHUB_ENV
 
       - name: Setup Node.js
         if: ${{ env.IS_NPM }}
