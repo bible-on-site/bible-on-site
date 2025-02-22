@@ -23,7 +23,7 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && inputs.module_changed == 'true'
+    if: github.event_name == 'push'
     permissions:
       contents: write
     steps:
@@ -59,31 +59,3 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: ${{ inputs.module_directory }}
-
-      - name: Bump version
-        working-directory: ${{ inputs.module_directory }}
-        run: ${{ inputs.version_command }}
-
-      - name: Configure Git
-        run: |
-          git config --global user.email "actions@github.com"
-          git config --global user.name "GitHub Actions"
-
-      - name: Add Deploy Key
-        uses: webfactory/ssh-agent@72c0bfd31ab22a2e11716951e3f107a9647dc97e
-        with:
-          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
-
-      - name: Commit changes
-        run: |
-          cd ${{ inputs.module_directory }}
-          git add ${{ inputs.files_to_commit }}
-          git commit -m "chore(release): Bump version [skip ci]"
-
-      - name: Push changes
-        run: |
-          git remote set-url origin git@github.com:${{ github.repository }}
-          git push origin HEAD --follow-tags
-
-      - name: ${{ env.IS_CARGO && 'Dockerize api' || 'Dockerize website' }}
-        run: ${{ env.IS_CARGO && 'cargo make package' || 'npm run package' }}
