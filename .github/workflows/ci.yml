@@ -309,8 +309,6 @@ jobs:
     name: CI Checks Passing
     runs-on: ubuntu-latest
     needs: [determine_website_changes, determine_api_changes, website_performance, website_e2e, api_tests]
-    outputs:
-      status: ${{ steps.determine_status.outputs.status }}
     if: always() # This ensures the job always runs
     steps:
       - name: Determine overall status
@@ -322,14 +320,12 @@ jobs:
 
           if [ "${{ needs.determine_website_changes.result }}" = "failure" ] || [ "${{ needs.determine_api_changes.result }}" = "failure" ]; then
             echo "Overall status: failure"
-            echo "status=failure" >> $GITHUB_OUTPUT
             exit 1
           fi
 
           if [ "${{ needs.determine_website_changes.outputs.module_changed }}" = "true" ] || [ "${{ needs.determine_website_changes.outputs.ci_changed }}" = "true" ]; then
             if [ "$E2E_STATUS" = "failure" ]; then
               echo "Overall status: failure"
-              echo "status=failure" >> $GITHUB_OUTPUT
               exit 1
             fi
             # Check Codecov status using the Codecov API
@@ -373,13 +369,11 @@ jobs:
           if [ "${{ needs.determine_api_changes.outputs.module_changed }}" = "true" ] || [ "${{ needs.determine_api_changes.outputs.ci_changed }}" = "true" ]; then
             if [ "$API_STATUS" = "failure" ]; then
               echo "Overall status: failure"
-              echo "status=failure" >> $GITHUB_OUTPUT
               exit 1
             fi
           fi
 
           echo "Overall status: success"
-          echo "status=success" >> $GITHUB_OUTPUT
 
   # RELEASES
   debug_release:
@@ -393,7 +387,6 @@ jobs:
           echo "github.ref: ${{ github.ref }}"
           echo "determine_website_changes.module_changed: ${{ needs.determine_website_changes.outputs.module_changed }}"
           echo "determine_api_changes.module_changed: ${{ needs.determine_api_changes.outputs.module_changed }}"
-          echo "ci_checks_passing.outputs.status: ${{ needs.ci_checks_passing.outputs.status }}"
 
   release_website:
     name: Release Website
