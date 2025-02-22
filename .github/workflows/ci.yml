@@ -382,7 +382,7 @@ jobs:
   # RELEASES
   release_website:
     name: Release Website
-    needs: [setup_env]
+    needs: setup_env
     permissions:
       contents: write
       actions: read
@@ -392,16 +392,3 @@ jobs:
       module_directory: ${{ needs.setup_env.outputs.website_module_dir }}
       version_command: 'npm version patch -m "chore(release): %s [skip ci]"'
       files_to_commit: "package.json package-lock.json"
-
-  release_api:
-    name: Release API
-    needs: [setup_env]
-    permissions:
-      contents: write
-      actions: read
-    secrets: inherit
-    uses: ./.github/workflows/shared-release.yml
-    with:
-      module_directory: ${{ needs.setup_env.outputs.api_module_dir }}
-      version_command: 'cargo release patch --execute --no-confirm --config commit-message="chore(release): {{version}} [skip ci]"'
-      files_to_commit: "Cargo.toml Cargo.lock"
