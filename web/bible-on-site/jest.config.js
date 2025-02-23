@@ -8,10 +8,6 @@ const createJestConfig = nextJest({
 	// path to Next.js app to load next.config.js and .env files into test environment
 	dir: "./",
 });
-const reports = ["raw", "text"];
-if (!process.env.CI) {
-	reports.push("html");
-}
 
 /** @type {import('jest').Config} */
 const config = {
@@ -30,7 +26,7 @@ const config = {
 				name: "Jest Monocart Coverage Report",
 				all: "./src",
 				outputDir: "./coverage/unit",
-				reports: reports,
+				reports: ["lcovonly"],
 			},
 		],
 	],
