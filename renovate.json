@@ -13,13 +13,15 @@
 		},
 		{
 			"matchDepTypes": ["optionalDependencies"],
-			"addLabels": ["optional"]
+			"addLabels": ["optional"],
+			"automerge": true
 		},
 		{
 			"groupName": "all non-major dependencies",
 			"groupSlug": "all-minor-patch",
 			"matchPackageNames": ["*"],
-			"matchUpdateTypes": ["minor", "patch"]
+			"matchUpdateTypes": ["minor", "patch"],
+			"automerge": true
 		}
 	],
 	"bumpVersion": "patch",
