@@ -15,5 +15,9 @@
 		"web/api/entities/Cargo.toml"
 	],
 	"rust-analyzer.check.command": "clippy",
-	"sonarlint.analysisExcludesStandalone": "**/web/**"
+	"sonarlint.analysisExcludesStandalone": "**/web/**",
+	"coverage-gutters.coverageFileNames": ["lcov.info"],
+	"coverage-gutters.coverageBaseDir": "{web/bible-on-site/coverage/{unit,e2e,merged},web/api/.coverage,.coverage}",
+	"coverage-gutters.showLineCoverage": true,
+	"coverage-gutters.showGutterCoverage": true
 }
