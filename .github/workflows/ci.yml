@@ -85,8 +85,8 @@ jobs:
       - name: Build and cache Docker image
         uses: docker/build-push-action@v6
         with:
-          context: etc/lcov-docker
-          file: etc/lcov-docker/Dockerfile
+          context: web/bible-on-site/tests/util/coverage/lcov-docker/
+          file: web/bible-on-site/tests/util/coverage/lcov-docker/Dockerfile
           tags: lcov-cli:0.0.1
           outputs: type=docker,dest=/tmp/lcov-docker-image.tar
           cache-from: type=gha
