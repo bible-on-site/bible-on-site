@@ -1,6 +1,7 @@
 const { CoverageReporter } = require("@jest/reporters");
 const { CoverageReport } = require("monocart-coverage-reports");
 import { filterOutCoverageRedundantFiles } from "../../coverage/filter-out-coverage-redundant-files";
+const fs = require("node:fs");
 class MonocartCoverageReporter extends CoverageReporter {
 	constructor(globalConfig, reporterOptions, reporterContext) {
 		super(globalConfig, reporterContext);
@@ -27,10 +28,17 @@ class MonocartCoverageReporter extends CoverageReporter {
 		);
 		filterOutCoverageRedundantFiles(coverage.data);
 		this.reporterOptions.sourceFinder = this._sourceMapStore.sourceFinder;
+
 		const coverageReport = new CoverageReport(this.reporterOptions);
 		coverageReport.cleanCache();
 		await coverageReport.add(coverage);
 		await coverageReport.generate();
+
+		// Fixes path formatting in LCOV files for Windows paths
+		const lcovPath = "coverage/unit/lcov.info";
+		const content = fs.readFileSync(lcovPath, "utf8");
+		const fixedContent = content.replace(/SF:C\\/g, "SF:C:\\");
+		fs.writeFileSync(lcovPath, fixedContent);
 	}
 }
 
