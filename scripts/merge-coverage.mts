@@ -31,7 +31,5 @@ stream.write(await fs.promises.readFile(websiteCoverageFilePath));
 stream.write(await fs.promises.readFile(apiCoverageFilePath));
 stream.end();
 
-if (process.env.CI) {
-	await fs.promises.rm(websiteCoverageDir, { recursive: true });
-	await fs.promises.rm(apiCoverageFilePath, { recursive: true });
-}
+await fs.promises.rm(websiteCoverageDir, { recursive: true });
+await fs.promises.rm(apiCoverageFilePath, { recursive: true });
