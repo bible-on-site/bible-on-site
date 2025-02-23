@@ -68,7 +68,7 @@ jobs:
       module_directory: ${{ needs.setup_env.outputs.api_module_dir }}
       module_name: ${{ needs.setup_env.outputs.api_module_dir }}
       ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
-  
+
   build_lcov_docker:
     name: Build LCOV Docker Image
     needs: setup_env
