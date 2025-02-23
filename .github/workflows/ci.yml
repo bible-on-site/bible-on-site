@@ -244,6 +244,15 @@ jobs:
         id: npm-e2e-test
         run: npm run test:e2e
 
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: lcov-docker-image
+          path: /tmp
+
+      - name: Load Docker image
+        run: docker load --input /tmp/lcov-docker-image.tar
+
       - name: Merge Test Coverage
         continue-on-error: true
         run: npm run coverage:merge
