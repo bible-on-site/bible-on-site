@@ -46,6 +46,12 @@ jobs:
           cache-dependency-path: ${{ inputs.MODULE_DIRECTORY }}/package-lock.json
           cache: npm
 
+      - name: Install npm Dependencies
+        if: ${{ env.IS_NPM == 'true' }}
+        id: npm_ci
+        run: |
+          npm ci --no-audit
+
       - name: Setup Rust
         if: ${{ env.IS_CARGO == 'true' }}
         uses: dtolnay/rust-toolchain@stable
