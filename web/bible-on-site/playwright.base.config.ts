@@ -3,17 +3,21 @@ import { defineConfig } from "@playwright/test";
 import type { CoverageReportOptions } from "monocart-reporter";
 import { getDebugPort } from "./get-debug-port";
 import type { TestType } from "./test-type";
+import * as fs from "node:fs";
 
 export function getBaseConfig(testType: TestType) {
-	const reports = ["raw", "text"];
-	if (!process.env.CI) {
-		reports.push("html");
-	}
-
 	const coverageReportOptions: CoverageReportOptions = {
 		name: "Next.js Istanbul Coverage Report",
 		outputDir: `${__dirname}/coverage/${testType}`,
-		reports: reports,
+		reports: ["lcovonly"],
+
+		onEnd: async (coverage) => {
+			// Fixes path formatting in LCOV files for Windows paths
+			const lcovPath = "coverage/e2e/lcov.info";
+			const content = fs.readFileSync(lcovPath, "utf8");
+			const fixedContent = content.replace(/SF:C\\/g, "SF:C:\\");
+			fs.writeFileSync(lcovPath, fixedContent);
+		},
 	};
 
 	const WEB_SERVER_URL = "http://127.0.0.1:3001";
