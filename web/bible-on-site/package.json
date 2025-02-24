@@ -37,7 +37,7 @@
 		"nuqs": "2.4.0",
 		"react": "rc",
 		"react-dom": "rc",
-		"react-phone-number-input": "3.4.11"
+		"react-phone-number-input": "3.4.12"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",
