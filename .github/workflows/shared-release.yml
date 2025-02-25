@@ -48,6 +48,7 @@ jobs:
 
       - name: Install npm Dependencies
         if: ${{ env.IS_NPM == 'true' }}
+        working-directory: ${{ inputs.module_directory }}
         id: npm_ci
         run: |
           npm ci --no-audit
@@ -58,6 +59,7 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         if: ${{ env.IS_CARGO == 'true' }}
+        working-directory: ${{ inputs.module_directory }}
         with:
           tool: cargo-make, cargo-release
 
