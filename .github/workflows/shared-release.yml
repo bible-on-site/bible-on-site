@@ -85,7 +85,7 @@ jobs:
         run: |
           cd ${{ inputs.module_directory }}
           git add ${{ inputs.files_to_commit }}
-          git commit -m -n "chore(release): Bump version [skip ci]"
+          git commit -n -m "chore(release): Bump version [skip ci]"
 
       - name: Push changes
         run: |
