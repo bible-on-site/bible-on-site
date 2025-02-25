@@ -7,7 +7,7 @@ const globalTeardown = async (config) => {
 	const client = await CDPClient({
 		port: getRouterDebugPort(),
 	});
-
+	if (!client.getIstanbulCoverage) return;
 	const coverageData = await client.getIstanbulCoverage();
 	await client.close();
 	filterOutCoverageRedundantFiles(coverageData);
