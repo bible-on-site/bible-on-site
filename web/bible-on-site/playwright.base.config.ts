@@ -13,7 +13,7 @@ export function getBaseConfig(testType: TestType) {
 
 		onEnd: async (coverage) => {
 			// Fixes path formatting in LCOV files for Windows paths
-			const lcovPath = "coverage/e2e/lcov.info";
+			const lcovPath = `coverage/${testType}/lcov.info`;
 			const content = fs.readFileSync(lcovPath, "utf8");
 			const fixedContent = content.replace(/SF:C\\/g, "SF:C:\\");
 			fs.writeFileSync(lcovPath, fixedContent);
@@ -36,6 +36,7 @@ export function getBaseConfig(testType: TestType) {
 		},
 		// Increase the default timeout to 1 min in case of CI (slow servers).
 		timeout: process.env.CI ? 60000 : 30000,
+		globalSetup: "./playwright-global-setup.js",
 		globalTeardown: "./playwright-global-teardown.js",
 		projects: [
 			{

@@ -1,7 +1,19 @@
 import type { Page, TestInfo } from "@playwright/test"; // import { test, expect } from "@playwright/test";
 import { errors } from "@playwright/test"; // import { test, expect } from "@playwright/test";
 
-import { expect, test } from "../util/playwright/test-fixture";
+import { expect, test as testBase } from "../util/playwright/test-fixture";
+
+const test = testBase.extend({
+	page: async ({ page }, use, testInfo) => {
+		// Preload the page to warm up cache
+		await page.goto(testInfo.title);
+		await page.waitForLoadState("networkidle");
+		console.log(`Preloaded ${testInfo.title} for cache warmup`);
+
+		// Continue with the actual test using the warmed-up page
+		await use(page);
+	},
+});
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
