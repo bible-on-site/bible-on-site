@@ -59,7 +59,6 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         if: ${{ env.IS_CARGO == 'true' }}
-        working-directory: ${{ inputs.module_directory }}
         with:
           tool: cargo-make, cargo-release
 
