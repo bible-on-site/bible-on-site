@@ -359,7 +359,7 @@ jobs:
           fi
 
           if [ "${{ needs.determine_website_changes.outputs.module_changed }}" = "true" ] || [ "${{ needs.determine_website_changes.outputs.ci_changed }}" = "true" ]; then
-            if [ "$E2E_STATUS" = "failure" || "PERFORMANCE_STATUS" = "failure" ]; then
+            if [ "$E2E_STATUS" = "failure" || "$PERFORMANCE_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
             fi
