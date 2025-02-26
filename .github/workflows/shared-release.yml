@@ -48,6 +48,7 @@ jobs:
 
       - name: Install npm Dependencies
         if: ${{ env.IS_NPM == 'true' }}
+        working-directory: ${{ inputs.module_directory }}
         id: npm_ci
         run: |
           npm ci --no-audit
