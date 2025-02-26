@@ -10,7 +10,6 @@ repos:
     -   id: check-yaml
     -   id: check-ast
     -   id: check-added-large-files
-    -   id: check-json
     -   id: check-xml
     -   id: check-case-conflict
     -   id: check-symlinks
@@ -22,3 +21,8 @@ repos:
     rev: v1.7.7
     hooks:
       - id: actionlint
+-   repo: https://gitlab.com/bmares/check-json5
+    rev: v1.0.0
+    hooks:
+      - id: check-json5
+
