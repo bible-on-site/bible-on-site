@@ -456,7 +456,7 @@ jobs:
     with:
       module_changed: ${{ needs.determine_website_changes.outputs.module_changed }}
       module_directory: ${{ needs.setup_env.outputs.website_module_dir }}
-      version_command: 'npm version patch -m "chore(release): %s [skip ci]"'
+      version_command: 'npm version patch --no-git-tag-version -m "chore(release): %s [skip ci]"'
       files_to_commit: "package.json package-lock.json"
 
   release_api:
