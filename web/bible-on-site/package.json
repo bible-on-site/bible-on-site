@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.6",
+	"version": "0.2.7",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
@@ -33,7 +33,7 @@
 		"gematry": "1.0.2",
 		"html-flip-book-react": "0.0.0-alpha.1",
 		"moment-timezone": "0.5.47",
-		"next": "15.1.7",
+		"next": "15.2.3",
 		"nuqs": "2.4.0",
 		"react": "rc",
 		"react-dom": "rc",
