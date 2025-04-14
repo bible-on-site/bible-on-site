@@ -68,14 +68,14 @@ jobs:
         with:
           workspaces: ${{ inputs.module_directory }}
 
-      - name: Bump version
-        working-directory: ${{ inputs.module_directory }}
-        run: ${{ inputs.version_command }}
-
       - name: Configure Git
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
+
+      - name: Bump version
+        working-directory: ${{ inputs.module_directory }}
+        run: ${{ inputs.version_command }}
 
       - name: Add Deploy Key
         uses: webfactory/ssh-agent@72c0bfd31ab22a2e11716951e3f107a9647dc97e
