@@ -10,7 +10,6 @@ repos:
     -   id: check-yaml
     -   id: check-ast
     -   id: check-added-large-files
-    -   id: check-json
     -   id: check-xml
     -   id: check-case-conflict
     -   id: check-symlinks
@@ -18,6 +17,10 @@ repos:
     -   id: check-merge-conflict
     -   id: trailing-whitespace
     -   id: mixed-line-ending
+-   repo: https://github.com/doradsoft/pre-commit-hooks
+    rev: main
+    hooks:
+      - id: check-json5
 -   repo: https://github.com/rhysd/actionlint
     rev: v1.7.7
     hooks:
