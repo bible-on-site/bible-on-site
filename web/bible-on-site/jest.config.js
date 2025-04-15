@@ -9,27 +9,17 @@ const createJestConfig = nextJest({
 	dir: "./",
 });
 
+const measureCov = flagToBool(process.env.MEASURE_COV, true);
 /** @type {import('jest').Config} */
 const config = {
 	clearMocks: true,
 
-	collectCoverage: true,
+	collectCoverage: measureCov,
 	coverageReporters: ["none"],
 	collectCoverageFrom: ["./src/**/*.{ts,tsx,css,scss,js,json}"],
 	setupFiles: ["./jest.setup.js"],
 	preset: "ts-jest",
-	reporters: [
-		"default",
-		[
-			"./tests/util/jest/coverage",
-			{
-				name: "Jest Monocart Coverage Report",
-				all: "./src",
-				outputDir: "./coverage/unit",
-				reports: ["lcovonly"],
-			},
-		],
-	],
+	reporters: getReporters(),
 	testEnvironment: "jsdom",
 	testMatch: ["**/tests/(unit|integration)/**/*.test.ts"],
 	transform: {
@@ -40,6 +30,29 @@ const config = {
 	],
 	extensionsToTreatAsEsm: [".ts", ".json"],
 };
+
+function getReporters() {
+	const result = ["default"];
+
+	if (measureCov) {
+		result.push([
+			"./tests/util/jest/coverage",
+			{
+				name: "Jest Monocart Coverage Report",
+				all: "./src",
+				outputDir: "./coverage/unit",
+				reports: ["lcovonly"],
+			},
+		]);
+	}
+	return result;
+}
+function flagToBool(value, defaultValue) {
+	if (value === undefined || value === null || value === "") {
+		return defaultValue;
+	}
+	return value === 1 || value === "1";
+}
 
 // work around https://github.com/vercel/next.js/issues/35634
 async function hackJestConfig() {
