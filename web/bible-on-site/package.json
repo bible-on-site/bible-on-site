@@ -25,16 +25,16 @@
 		"node": ">=22.2.0"
 	},
 	"dependencies": {
-		"@hebcal/core": "5.9.0",
+		"@hebcal/core": "5.9.2",
 		"@syncfusion/ej2-react-grids": "28.2.7",
 		"@syncfusion/ej2-react-layouts": "28.2.5",
 		"flowbite": "3.1.2",
 		"flowbite-react": "0.10.2",
 		"gematry": "1.0.2",
 		"html-flip-book-react": "0.0.0-alpha.1",
-		"moment-timezone": "0.5.47",
+		"moment-timezone": "0.5.48",
 		"next": "15.1.7",
-		"nuqs": "2.4.0",
+		"nuqs": "2.4.2",
 		"react": "rc",
 		"react-dom": "rc",
 		"react-phone-number-input": "3.4.12"
