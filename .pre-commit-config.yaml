@@ -4,7 +4,7 @@ repos:
     hooks:
     -   id: sync-pre-commit-deps
 -   repo: https://github.com/doradsoft/pre-commit-hooks
-    rev: 5.0.0-doradsoft-0
+    rev: 5.0.0-doradsoft-1
     hooks:
       - id: check-json5
 -   repo: https://github.com/pre-commit/pre-commit-hooks
