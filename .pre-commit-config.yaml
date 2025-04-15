@@ -3,6 +3,10 @@ repos:
     rev: v0.0.3
     hooks:
     -   id: sync-pre-commit-deps
+-   repo: https://github.com/doradsoft/pre-commit-hooks
+    rev: 5.0.0-doradsoft-0
+    hooks:
+      - id: check-json5
 -   repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
@@ -17,10 +21,6 @@ repos:
     -   id: check-merge-conflict
     -   id: trailing-whitespace
     -   id: mixed-line-ending
--   repo: https://github.com/doradsoft/pre-commit-hooks
-    rev: 5.0.0-doradsoft-0
-    hooks:
-      - id: check-json5
 -   repo: https://github.com/rhysd/actionlint
     rev: v1.7.7
     hooks:
