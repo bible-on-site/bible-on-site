@@ -33,10 +33,10 @@ jobs:
     name: Setup Environment Variables
     runs-on: ubuntu-latest
     outputs:
-      website_module_dir: web/bible-on-site
-      api_module_dir: web/api
-      WEBSITE_PLAYWRIGHT_VERSION: ${{ steps.get_website_playwright_version.outputs.PLAYWRIGHT_VERSION }}
-      API_PLAYWRIGHT_VERSION: ${{ steps.get_api_playwright_version.outputs.PLAYWRIGHT_VERSION }}
+      website_directory: web/bible-on-site
+      api_directory: web/api
+      website_playwright_version: ${{ steps.get_website_playwright_version.outputs.PLAYWRIGHT_VERSION }}
+      api_playwright_version: ${{ steps.get_api_playwright_version.outputs.PLAYWRIGHT_VERSION }}
     steps:
       - run: echo "Setting up environment variables"
       - name: Checkout
@@ -60,8 +60,8 @@ jobs:
     secrets: inherit
     uses: ./.github/workflows/shared-ci.yml
     with:
-      module_directory: ${{ needs.setup_env.outputs.website_module_dir }}
-      module_name: ${{ needs.setup_env.outputs.website_module_dir }}
+      module_directory: ${{ needs.setup_env.outputs.website_directory }}
+      module_name: ${{ needs.setup_env.outputs.website_directory }}
       ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
 
   determine_api_changes:
@@ -70,8 +70,8 @@ jobs:
     secrets: inherit
     uses: ./.github/workflows/shared-ci.yml
     with:
-      module_directory: ${{ needs.setup_env.outputs.api_module_dir }}
-      module_name: ${{ needs.setup_env.outputs.api_module_dir }}
+      module_directory: ${{ needs.setup_env.outputs.api_directory }}
+      module_name: ${{ needs.setup_env.outputs.api_directory }}
       ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
 
   build_lcov_docker:
@@ -137,7 +137,7 @@ jobs:
         with:
           path: |
             ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.WEBSITE_PLAYWRIGHT_VERSION }}
+          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.website_playwright_version }}
 
       - name: Install npm Dependencies
         id: npm_ci
@@ -206,7 +206,7 @@ jobs:
         with:
           path: |
             ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.WEBSITE_PLAYWRIGHT_VERSION }}
+          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.website_playwright_version }}
 
       - name: Install npm Dependencies
         id: npm_ci
@@ -321,7 +321,7 @@ jobs:
         with:
           path: |
             ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.WEBSITE_PLAYWRIGHT_VERSION }}
+          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.api_playwright_version }}
 
       - name: Install npm Dependencies
         id: npm_ci
@@ -360,27 +360,6 @@ jobs:
           path: ${{ env.API_COVERAGE_REPORT }}
           retention-days: 30
           overwrite: true
-
-      - name: Cache playwright binaries
-        uses: actions/cache@v4
-        id: playwright-cache
-        with:
-          path: |
-            ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.API_PLAYWRIGHT_VERSION }}
-
-      - name: Install npm Dependencies
-        id: npm_ci
-        working-directory: ${{ env.API_TESTS_DIRECTORY }}
-        run: |
-          npm ci --no-audit
-
-      - name: Install Playwright Dependencies
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        working-directory: ${{ env.API_TESTS_DIRECTORY }}
-        run: |
-          npx playwright install --with-deps
-          npx playwright install-deps
 
   # CLOSING FLOW
   cross_module_ci:
@@ -543,7 +522,7 @@ jobs:
     uses: ./.github/workflows/shared-release.yml
     with:
       module_changed: ${{ needs.determine_website_changes.outputs.module_changed }}
-      module_directory: ${{ needs.setup_env.outputs.website_module_dir }}
+      module_directory: ${{ needs.setup_env.outputs.website_directory }}
       version_command: 'npm version patch --no-git-tag-version -m "chore(release): %s [skip ci]"'
       files_to_commit: "package.json package-lock.json"
 
@@ -558,6 +537,6 @@ jobs:
     uses: ./.github/workflows/shared-release.yml
     with:
       module_changed: ${{ needs.determine_api_changes.outputs.module_changed }}
-      module_directory: ${{ needs.setup_env.outputs.api_module_dir }}
+      module_directory: ${{ needs.setup_env.outputs.api_directory }}
       version_command: 'cargo release patch --execute --no-confirm --config commit-message="chore(release): {{version}} [skip ci]"'
       files_to_commit: "Cargo.toml Cargo.lock"
