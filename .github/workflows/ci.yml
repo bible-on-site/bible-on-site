@@ -26,6 +26,9 @@ env:
   API_TESTS_NODE_CACHE_PATH: web/api/tests/package-lock.json
   API_COVERAGE_REPORT: web/api/.coverage/lcov.info
   CROSS_MODULE_COVERAGE_REPORT: .coverage/lcov.info
+  DEVOPS_DIRECTORY: devops
+  DEVOPS_NODE_VERSION_FILE: devops/package.json
+  DEVOPS_NODE_CACHE_PATH: devops/package-lock.json
 
 jobs:
   # ENV SETUP
@@ -307,8 +310,38 @@ jobs:
         working-directory: ${{ env.API_DIRECTORY }}
         run: cargo make lint
 
-      - name: Setup Node.js
-        id: setup-node
+      - name: Setup DevOps Node.js
+        id: setup-devops-node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
+          cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
+          cache: npm
+
+      - name: Install devops npm Dependencies
+        id: devops_npm_ci
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        run: |
+          npm ci --no-audit
+
+      - name: Install and start MySQL
+        id: mysql
+        uses: shogo82148/actions-setup-mysql@v1
+        with:
+          mysql-version: "8.4"
+          root-password: root
+          distribution: "mysql"
+          auto-start: true
+
+      - name: Populate CI
+        id: populate-ci
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        run: npm run populate_test_db
+        env:
+          DB_URL: mysql://root:root@localhost:3306/tanah?ssl-mode=DISABLED
+
+      - name: Setup Tests Node.js
+        id: setup-tests-node
         uses: actions/setup-node@v4
         with:
           node-version-file: ${{ env.API_TESTS_NODE_VERSION_FILE }}
@@ -323,8 +356,8 @@ jobs:
             ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.api_playwright_version }}
 
-      - name: Install npm Dependencies
-        id: npm_ci
+      - name: Install Tests npm Dependencies
+        id: tests_npm_ci
         working-directory: ${{ env.API_TESTS_DIRECTORY }}
         run: |
           npm ci --no-audit
@@ -340,9 +373,9 @@ jobs:
         id: api-e2e
         working-directory: ${{ env.API_DIRECTORY }}
         run: |
-          cargo make test-coverage &
-          cargo make test-e2e
-          wait
+          cargo make coverage-e2e
+        env:
+          DB_URL: mysql://root:root@localhost:3306/tanah?ssl-mode=DISABLED
 
       - name: Store E2E Report
         uses: actions/upload-artifact@v4

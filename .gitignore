@@ -2,3 +2,4 @@ node_modules/
 monocart-report/
 .coverage/
 .env
+.playwright-report/

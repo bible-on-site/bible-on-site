@@ -19,7 +19,7 @@ command = "cargo"
 args = ["clean", "-p", "${CARGO_MAKE_CRATE_NAME}", "-p", "entities"]
 
 
-[tasks.coverage-run]
+[tasks.coverage-run-base]
 command = "cargo"
 args = ["llvm-cov", "run", "--profile", "dev", "--no-report"]
 
@@ -42,17 +42,21 @@ condition = { env_not_set = [
 command = "cargo"
 args = ["llvm-cov", "report", "--profile", "dev", "--open"]
 
+[tasks.coverage-run]
+dependencies = [
+  "clean",
+  "coverage-run-base",       # this task is terminated using a signal called from the test task
+  "coverage-report-lcov",
+  "coverage-report-browser",
+]
+
 [tasks.test-e2e]
 command = "${NPM_BIN}"
 args = ["run", "--prefix", "tests", "test:e2e"]
 
-[tasks.test-coverage]
-dependencies = [
-  "clean",
-  "coverage-run",            # this task is terminated using a signal called from the test task
-  "coverage-report-lcov",
-  "coverage-report-browser",
-]
+[tasks.coverage-e2e]
+command = "${NPM_BIN}"
+args = ["run", "--prefix", "tests", "coverage:e2e"]
 
 [tasks.bump-patch-version]
 command = "cargo"
