@@ -340,7 +340,7 @@ jobs:
         id: api-e2e
         working-directory: ${{ env.API_DIRECTORY }}
         run: |
-          cargo make test-coverage & 
+          cargo make test-coverage &
           cargo make test-e2e
           wait
 
