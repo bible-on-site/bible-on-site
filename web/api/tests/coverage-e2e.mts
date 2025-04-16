@@ -36,14 +36,9 @@ function handleCoverageRunOutput(chunk: Buffer) {
 	// Accumulate stdout data until the marker is found
 	accumulatedStdout += text;
 
-	const apiRunningIndication = "Running `target\\llvm-cov-target\\debug\\api";
-	const apiRunningIndicationPosix = "Running `target/llvm-cov-target/debug/api";
+	const apiRunningIndication = "Running";
 	// When the marker appears in the accumulated output, start the test-e2e process
-	if (
-		// TODO: check from last position minus indication length
-		accumulatedStdout.includes(apiRunningIndication) ||
-		accumulatedStdout.includes(apiRunningIndicationPosix)
-	) {
+	if (accumulatedStdout.includes(apiRunningIndication)) {
 		isAPIRunning = true;
 		// run the e2e tests
 		const testE2E = spawn("cargo", ["make", "test-e2e"], { shell: true });
