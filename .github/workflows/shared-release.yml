@@ -27,7 +27,7 @@ jobs:
   release:
     name: Release
     # Ensures only one release job runs at a time for this repository.
-    # This prevents potential race conditions which was proved to happen.
+    # This prevents potential race conditions which has been proven to occur.
     #
     # It acts as a safeguard against:
     # - Multiple triggers if the merge queue (despite squash settings) pushes multiple commits rapidly.
