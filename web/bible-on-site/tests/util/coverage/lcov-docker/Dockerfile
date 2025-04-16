@@ -1,11 +1,11 @@
-FROM alpine:3.18
+FROM alpine:3.21
 
 
 # Install lcov and its dependencies
 RUN apk add --no-cache --repository http://dl-cdn.alpinelinux.org/alpine/edge/community lcov
 
 # Set working directory
-WORKDIR /coverage
+WORKDIR /.coverage
 
 # Make sure lcov is in PATH
 ENV PATH="/usr/bin:${PATH}"

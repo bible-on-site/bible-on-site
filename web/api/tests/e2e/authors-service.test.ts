@@ -10,12 +10,13 @@ test("basic test", async ({ request }) => {
 		data: {
 			operationName: null,
 			variables: {},
-			query: `{\n  authorById(id: 1) {\n    id\n    name\n    details\n  }\n}\n`,
+			query:
+				"{\n  authorById(id: 1) {\n    id\n    name\n    details\n  }\n}\n",
 		},
 	});
 	const responseBody = await response.json();
 	// Expect a title "to contain" a substring.
-	await expect(responseBody).toMatchObject({
+	expect(responseBody).toMatchObject({
 		data: {
 			authorById: {
 				id: 1,

@@ -28,6 +28,11 @@ export default defineConfig({
 	retries: 0,
 	workers: process.env.CI ? "100%" : "50%",
 
+	reporter: [
+		["list"],
+		["html", { outputFolder: "../.playwright-report/e2e", open: "never" }],
+	],
+
 	webServer: {
 		// Wait until WEB_SERVER_URL returns a successful response
 		command:

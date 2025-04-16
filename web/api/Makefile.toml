@@ -14,9 +14,10 @@ args = ["run"]
 # TODO: add , "--", "-D", "warnings" to the args to make it more strict once all warnings are fixed
 args = ["clippy"]
 
-[tasks.coverage-reset]
+[tasks.clean]
 command = "cargo"
-args = ["llvm-cov", "clean"]
+args = ["clean", "-p", "${CARGO_MAKE_CRATE_NAME}", "-p", "entities"]
+
 
 [tasks.coverage-run]
 command = "cargo"
@@ -41,15 +42,13 @@ condition = { env_not_set = [
 command = "cargo"
 args = ["llvm-cov", "report", "--profile", "dev", "--open"]
 
-
 [tasks.test-e2e]
 command = "${NPM_BIN}"
 args = ["run", "--prefix", "tests", "test:e2e"]
 
-
 [tasks.test-coverage]
 dependencies = [
-  "coverage-reset",
+  "clean",
   "coverage-run",            # this task is terminated using a signal called from the test task
   "coverage-report-lcov",
   "coverage-report-browser",

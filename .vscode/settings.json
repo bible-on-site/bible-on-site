@@ -1,7 +1,8 @@
 {
 	"editor.formatOnSave": true,
 	"files.exclude": {
-		"data/929/dates-generator/.venv": true
+		"data/929/dates-generator/.venv": true,
+		"**/test-results": true
 	},
 	"[javascript]": {
 		"editor.defaultFormatter": "biomejs.biome"
@@ -20,7 +21,7 @@
 	"rust-analyzer.check.command": "clippy",
 	"sonarlint.analysisExcludesStandalone": "**/web/**",
 	"coverage-gutters.coverageFileNames": ["lcov.info"],
-	"coverage-gutters.coverageBaseDir": "{web/bible-on-site/coverage/{unit,e2e,merged},web/api/.coverage,.coverage}",
+	"coverage-gutters.coverageBaseDir": "{web/bible-on-site/.coverage/{unit,e2e,merged},web/api/.coverage,.coverage}",
 	"coverage-gutters.showLineCoverage": true,
 	"coverage-gutters.showGutterCoverage": true
 }

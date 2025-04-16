@@ -18,9 +18,12 @@ env:
   WEBSITE_DIRECTORY: web/bible-on-site
   WEBSITE_NODE_VERSION_FILE: web/bible-on-site/package.json
   WEBSITE_NODE_CACHE_PATH: web/bible-on-site/package-lock.json
+  WEBSITE_COVERAGE_REPORT: web/bible-on-site/.coverage/merged/lcov.info
   API_DIRECTORY: web/api
   API_CARGO_FILE: web/api/Cargo.toml
   API_TESTS_DIRECTORY: web/api/tests
+  API_COVERAGE_REPORT: web/api/.coverage/lcov.info
+  CROSS_MODULE_COVERAGE_REPORT: .coverage/lcov.info
 
 jobs:
   # ENV SETUP
@@ -82,22 +85,22 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and cache Docker image
+      - name: Build And Cache lcov Docker Image
         uses: docker/build-push-action@v6
         with:
           context: web/bible-on-site/tests/util/coverage/lcov-docker/
           file: web/bible-on-site/tests/util/coverage/lcov-docker/Dockerfile
-          tags: lcov-cli:0.0.1
+          tags: lcov-cli:0.0.2
           outputs: type=docker,dest=/tmp/lcov-docker-image.tar
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Upload Docker image artifact
+      - name: Store Docker Image
         uses: actions/upload-artifact@v4
         with:
           name: lcov-docker-image
           path: /tmp/lcov-docker-image.tar
-          retention-days: 90
+          retention-days: 400
 
   # ACTUAL JOBS
   website_performance:
@@ -161,11 +164,11 @@ jobs:
         id: npm-perf-test
         run: npm run test:perf
 
-      - uses: actions/upload-artifact@v4
-        if: always()
+      - name: Store Perf Report
+        uses: actions/upload-artifact@v4
         with:
-          name: playwright-perf-report
-          path: ${{ env.WEBSITE_DIRECTORY }}/playwright-report/perf/
+          name: website-perf-report
+          path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/perf/
           retention-days: 30
           overwrite: true
 
@@ -238,44 +241,33 @@ jobs:
         id: npm-e2e-test
         run: npm run coverage:e2e
 
-      - name: Download Docker image artifact
+      - name: Store E2E Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-e2e-report
+          path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/e2e/
+          retention-days: 30
+          overwrite: true
+
+      - name: Restore lcov Docker image
         uses: actions/download-artifact@v4
         with:
           name: lcov-docker-image
           path: /tmp
 
-      - name: Load Docker image
+      - name: Load lcov Docker image
         run: docker load --input /tmp/lcov-docker-image.tar
 
-      - name: Merge Test Coverage
+      - name: Merge Test Coverage (Unit + E2E)
         continue-on-error: true
         run: npm run coverage:merge
 
-      - uses: actions/upload-artifact@v4
+      - name: Store Website Coverage Artifact
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: actions/upload-artifact@v4
         with:
           name: website-coverage
-          path: ${{ env.WEBSITE_DIRECTORY }}/coverage/merged/lcov.info
-          retention-days: 30
-          overwrite: true
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ env.WEBSITE_DIRECTORY }}/coverage/merged/lcov.info
-          disable_search: true
-
-      - name: Run codacy-coverage-reporter
-        uses: codacy/codacy-coverage-reporter-action@master
-        with:
-          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
-          coverage-reports: ${{ env.WEBSITE_DIRECTORY }}/coverage/merged/lcov.info
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: playwright-e2e-report
-          path: ${{ env.WEBSITE_DIRECTORY }}/playwright-report/e2e/
+          path: ${{ env.WEBSITE_COVERAGE_REPORT }}
           retention-days: 30
           overwrite: true
 
@@ -313,6 +305,31 @@ jobs:
         working-directory: ${{ env.API_DIRECTORY }}
         run: cargo make lint
 
+      - name: E2E Test
+        id: api-e2e
+        working-directory: ${{ env.API_DIRECTORY }}
+        run: |
+          cargo make test-coverage & 
+          cargo make test-e2e
+          wait
+
+      - name: Store E2E Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-e2e-report
+          path: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/
+          retention-days: 30
+          overwrite: true
+
+      - name: Store API Coverage Report
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-coverage
+          path: ${{ env.API_COVERAGE_REPORT }}
+          retention-days: 30
+          overwrite: true
+
       - name: Cache playwright binaries
         uses: actions/cache@v4
         id: playwright-cache
@@ -335,14 +352,15 @@ jobs:
           npx playwright install-deps
 
   # CLOSING FLOW
-  ci_checks_passing:
-    name: CI Checks Passing
+  cross_module_ci:
+    name: Cross Module CI
     runs-on: ubuntu-latest
     needs: [determine_website_changes, determine_api_changes, website_performance, website_e2e, api_tests]
     if: ${{ always() }}
+
     steps:
-      - name: Determine overall status
-        id: determine_status
+      - name: Verify each module CI status
+        id: verify_each_module_ci_status
         run: |
           WEBSITE_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_website_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
           API_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_api_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
@@ -363,7 +381,56 @@ jobs:
               echo "Overall status: failure"
               exit 1
             fi
-            # Check Codecov status using the Codecov API
+          fi
+
+          API_MODULE_CHANGED=$([ "${{ needs.determine_api_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$API_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ]; then
+            API_STATUS=$([ "${{ needs.api_tests.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "$API_STATUS" = "failure" ]; then
+              echo "Overall status: failure"
+              exit 1
+            fi
+          fi
+
+          echo "Overall status: success"
+
+      - name: Restore Website Coverage Report
+        if: ${{ needs.determine_website_changes.outputs.module_changed != 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: website-coverage
+          path: ${{ env.WEBSITE_COVERAGE_REPORT }}
+
+      - name: Restore API Coverage Report
+        if: ${{ needs.determine_api_changes.outputs.module_changed != 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: api-coverage
+          path: ${{ env.API_COVERAGE_REPORT }}
+
+      - name: Load lcov Docker image
+        run: docker load --input /tmp/lcov-docker-image.tar
+
+      - name: Merge Test Coverage (Website + API)
+        run: npm run coverage:merge
+        working-directory: devops
+
+      - name: Publish coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.CROSS_MODULE_COVERAGE_REPORT }}
+          disable_search: true
+
+      - name: Run codacy-coverage-reporter
+        uses: codacy/codacy-coverage-reporter-action@master
+        with:
+          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
+          coverage-reports: ${{ env.CROSS_MODULE_COVERAGE_REPORT }}
+
+      - name: Verify Coverage 3rd Party Reporting
+        run: |
+          # Check Codecov status using the Codecov API
             MAX_RETRIES=10
             RETRY_COUNT=0
             while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
@@ -399,25 +466,13 @@ jobs:
               sleep 30
               RETRY_COUNT=$((RETRY_COUNT+1))
             done
-          fi
-
-          API_MODULE_CHANGED=$([ "${{ needs.determine_api_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$API_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ]; then
-            API_STATUS=$([ "${{ needs.api_tests.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-            if [ "$API_STATUS" = "failure" ]; then
-              echo "Overall status: failure"
-              exit 1
-            fi
-          fi
-
-          echo "Overall status: success"
 
   # RELEASES
   debug_release:
     name: Debug Release
     runs-on: ubuntu-latest
     if: ${{ always() }}
-    needs: [setup_env, determine_website_changes, determine_api_changes, ci_checks_passing]
+    needs: [setup_env, determine_website_changes, determine_api_changes, cross_module_ci]
     steps:
       - name: Debug Release inputs
         run: |
@@ -425,7 +480,7 @@ jobs:
           echo "github.ref: ${{ github.ref }}"
           echo "determine_website_changes.module_changed: ${{ needs.determine_website_changes.outputs.module_changed }}"
           echo "determine_api_changes.module_changed: ${{ needs.determine_api_changes.outputs.module_changed }}"
-          echo "ci_checks_passing: ${{ toJSON(needs.ci_checks_passing) }}"
+          echo "cross_module_ci: ${{ toJSON(needs.cross_module_ci) }}"
           echo "needs: ${{ toJSON(needs) }}"
       - name: Test is push
         if: github.event_name == 'push'
@@ -448,7 +503,7 @@ jobs:
 
   release_website:
     name: Release Website
-    needs: [setup_env, determine_website_changes, ci_checks_passing]
+    needs: [setup_env, determine_website_changes, cross_module_ci]
     if: ${{ always() }}
     permissions:
       contents: write
@@ -463,7 +518,7 @@ jobs:
 
   release_api:
     name: Release API
-    needs: [setup_env, determine_api_changes, ci_checks_passing]
+    needs: [setup_env, determine_api_changes, cross_module_ci]
     if: ${{ always() }}
     permissions:
       contents: write
