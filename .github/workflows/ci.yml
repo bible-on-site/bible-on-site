@@ -380,7 +380,7 @@ jobs:
       - name: Store E2E Report
         uses: actions/upload-artifact@v4
         with:
-          name: website-e2e-report
+          name: api-e2e-report
           path: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/
           retention-days: 30
           overwrite: true
