@@ -21,7 +21,7 @@ const config = {
 						{
 							name: "Jest Monocart Coverage Report",
 							all: "./src",
-							outputDir: "./coverage/unit",
+							outputDir: "./.coverage/unit",
 							reports: ["lcovonly"],
 						},
 					],

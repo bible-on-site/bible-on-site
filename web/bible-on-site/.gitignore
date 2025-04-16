@@ -6,7 +6,7 @@
 .pnp.js
 .yarn/install-state.gz
 # testing
-/coverage
+/.coverage
 
 # next.js
 /.next/
@@ -34,7 +34,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 /test-results/
-/playwright-report/
+/.playwright-report/
 /blob-report/
 /playwright/.cache/
 
