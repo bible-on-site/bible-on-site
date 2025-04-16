@@ -88,9 +88,10 @@ jobs:
           git add ${{ inputs.files_to_commit }}
           git commit -n -m "chore(release): Bump version [skip ci]"
 
-      - name: Push changes
+      - name: Push (Sync) changes
         run: |
           git remote set-url origin git@github.com:${{ github.repository }}
+          git pull --rebase origin HEAD
           git push origin HEAD --follow-tags
 
       - name: ${{ env.IS_CARGO == 'true' && 'Dockerize api' || 'Dockerize website' }}
