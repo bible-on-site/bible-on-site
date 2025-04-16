@@ -36,7 +36,10 @@ function handleCoverageRunOutput(chunk: Buffer) {
 	// Accumulate stdout data until the marker is found
 	accumulatedStdout += text;
 
-	const apiRunningIndication = "Running `target\\llvm-cov-target\\debug\\api";
+	const isWin = process.platform === "win32";
+	const apiRunningIndication = isWin
+		? "Running `target\\llvm-cov-target\\debug\\api"
+		: "Running `target/llvm-cov-target/debug/api";
 	// When the marker appears in the accumulated output, start the test-e2e process
 	if (accumulatedStdout.includes(apiRunningIndication)) {
 		isAPIRunning = true;
