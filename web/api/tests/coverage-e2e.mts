@@ -36,7 +36,8 @@ function handleCoverageRunOutput(chunk: Buffer) {
 	// Accumulate stdout data until the marker is found
 	accumulatedStdout += text;
 
-	const apiRunningIndication = "Running";
+	// TODO: improve the indication. Be careful with finding the balanced indication and tests on several environments
+	const apiRunningIndication = "llvm-cov-target";
 	// When the marker appears in the accumulated output, start the test-e2e process
 	if (accumulatedStdout.includes(apiRunningIndication)) {
 		isAPIRunning = true;
