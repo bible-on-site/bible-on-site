@@ -1,5 +1,8 @@
 {
 	"editor.formatOnSave": true,
+	"files.exclude": {
+		"data/929/dates-generator/.venv": true
+	},
 	"[javascript]": {
 		"editor.defaultFormatter": "biomejs.biome"
 	},
