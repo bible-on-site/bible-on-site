@@ -300,11 +300,6 @@ jobs:
         with:
           tool: cargo-make, cargo-llvm-cov
 
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: ${{ env.API_DIRECTORY }}
-
       - name: Lint
         id: lint
         working-directory: ${{ env.API_DIRECTORY }}
@@ -375,7 +370,12 @@ jobs:
         run: |
           cargo make coverage-e2e
         env:
-          DB_URL: mysql://root:root@localhost:3306/tanah?ssl-mode=DISABLED
+          DB_URL: mysql://root:root@localhost:3306/tanah_test?ssl-mode=DISABLED
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ env.API_DIRECTORY }}
 
       - name: Store E2E Report
         uses: actions/upload-artifact@v4
