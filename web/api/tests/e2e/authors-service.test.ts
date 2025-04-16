@@ -20,8 +20,8 @@ test("basic test", async ({ request }) => {
 		data: {
 			authorById: {
 				id: 1,
-				name: 'הרב יעקב אריאל שליט"א',
-				details: 'אב"ד, רב העיר רמת גן',
+				name: "תיאור לדוגמא",
+				details: 'הרב לדוגמא שליט"א',
 			},
 		},
 	});
