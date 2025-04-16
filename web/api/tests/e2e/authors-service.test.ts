@@ -20,8 +20,8 @@ test("basic test", async ({ request }) => {
 		data: {
 			authorById: {
 				id: 1,
-				name: "תיאור לדוגמא",
-				details: 'הרב לדוגמא שליט"א',
+				name: 'הרב לדוגמא שליט"א',
+				details: "תיאור לדוגמא",
 			},
 		},
 	});
