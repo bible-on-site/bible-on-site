@@ -2,7 +2,7 @@
 	"name": "bible-on-site-api-tests",
 	"version": "1.0.0",
 	"scripts": {
-		"test:e2e": "playwright test --config=playwright.config.ts"
+		"coverage:e2e": "playwright test --config=playwright.config.ts"
 	},
 
 	"engines": {

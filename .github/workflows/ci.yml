@@ -162,18 +162,12 @@ jobs:
         run: npm run test:perf
 
       - uses: actions/upload-artifact@v4
-        with:
-          name: performance-coverage
-          path: ${{ env.WEBSITE_DIRECTORY }}/coverage/
-          retention-days: 30
-          overwrite: true
-
-      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: playwright-perf-report
-          path: ${{ env.WEBSITE_DIRECTORY }}/playwright-report/
+          path: ${{ env.WEBSITE_DIRECTORY }}/playwright-report/perf/
           retention-days: 30
+          overwrite: true
 
   website_e2e:
     name: Website CI
@@ -226,7 +220,7 @@ jobs:
 
       - name: Unit Test
         id: npm-unit-test
-        run: npm run test:unit
+        run: npm run coverage:unit
 
       - name: Build cache
         uses: actions/cache@v4
@@ -242,7 +236,7 @@ jobs:
 
       - name: E2E Test
         id: npm-e2e-test
-        run: npm run test:e2e
+        run: npm run coverage:e2e
 
       - name: Download Docker image artifact
         uses: actions/download-artifact@v4
@@ -281,8 +275,9 @@ jobs:
         if: always()
         with:
           name: playwright-e2e-report
-          path: ${{ env.WEBSITE_DIRECTORY }}/playwright-report/
+          path: ${{ env.WEBSITE_DIRECTORY }}/playwright-report/e2e/
           retention-days: 30
+          overwrite: true
 
   api_tests:
     name: API CI
@@ -349,17 +344,22 @@ jobs:
       - name: Determine overall status
         id: determine_status
         run: |
-          PERFORMANCE_STATUS=$([ "${{ needs.website_performance.result }}" = "success" ] && echo "success" || echo "failure")
-          E2E_STATUS=$([ "${{ needs.website_e2e.result }}" = "success" ] && echo "success" || echo "failure")
-          API_STATUS=$([ "${{ needs.api_tests.result }}" = "success" ] && echo "success" || echo "failure")
-
-          if [ "${{ needs.determine_website_changes.result }}" = "failure" ] || [ "${{ needs.determine_api_changes.result }}" = "failure" ]; then
-            echo "Overall status: failure"
+          WEBSITE_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_website_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+          API_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_api_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+          if [ "$WEBSITE_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$API_CHANGES_DETERMINATION_STATUS" = "failure" ]; then
+            echo "Could not determine module changes."
+            [ "$WEBSITE_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine website changes."
+            [ "$API_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine API changes."
+            echo "Overall status=failure" >> $GITHUB_OUTPUT
             exit 1
           fi
 
-          if [ "${{ needs.determine_website_changes.outputs.module_changed }}" = "true" ] || [ "${{ needs.determine_website_changes.outputs.ci_changed }}" = "true" ]; then
-            if [ "$E2E_STATUS" = "failure" || "$PERFORMANCE_STATUS" = "failure" ]; then
+          WEBSITE_MODULE_CHANGED=$([ "${{ needs.determine_website_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          CI_CHANGED=$([ "${{ needs.determine_website_changes.outputs.ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$WEBSITE_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ]; then
+            E2E_STATUS=$([ "${{ needs.website_e2e.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            PERFORMANCE_STATUS=$([ "${{ needs.website_performance.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "$E2E_STATUS" = "failure" ] || [ "$PERFORMANCE_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
             fi
@@ -371,9 +371,9 @@ jobs:
               if [ "$GITHUB_EVENT_NAME" == "pull_request" ]; then
                 GITHUB_SHA=$(cat $GITHUB_EVENT_PATH | jq -r .pull_request.head.sha)
               else
-                GITHUB_SHA=${{ github.sha }}
+                GITHUB_SHA=${{ github.sha }} # Generated
               fi
-              CODECOV_JSON=$(curl -s -H "Authorization: token ${{ secrets.CODECOV_API_TOKEN }}" "https://api.codecov.io/api/v2/github/${OWNER_REPO[0]}/repos/${OWNER_REPO[1]}/commits/$GITHUB_SHA")
+              CODECOV_JSON=$(curl -s -H "Authorization: token ${{ secrets.CODECOV_API_TOKEN }}" "https://api.codecov.io/api/v2/github/${OWNER_REPO[0]}/repos/${OWNER_REPO[1]}/commits/$GITHUB_SHA") # Generated
               echo "CODECOV_JSON: $CODECOV_JSON"
               if [[ "$CODECOV_JSON" == *"Invalid token"* ]] || [[ "$CODECOV_JSON" == *"error"* ]]; then
                 echo "Failed to get Codecov status"
@@ -401,7 +401,9 @@ jobs:
             done
           fi
 
-          if [ "${{ needs.determine_api_changes.outputs.module_changed }}" = "true" ] || [ "${{ needs.determine_api_changes.outputs.ci_changed }}" = "true" ]; then
+          API_MODULE_CHANGED=$([ "${{ needs.determine_api_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$API_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ]; then
+            API_STATUS=$([ "${{ needs.api_tests.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$API_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1

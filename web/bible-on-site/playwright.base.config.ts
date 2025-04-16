@@ -1,25 +1,12 @@
-import { devices } from "@playwright/test";
+import { devices, type ReporterDescription } from "@playwright/test";
 import { defineConfig } from "@playwright/test";
 import type { CoverageReportOptions } from "monocart-reporter";
 import { getDebugPort } from "./get-debug-port";
 import type { TestType } from "./test-type";
 import * as fs from "node:fs";
+import { shouldMeasureCov } from "./tests/util/environment.mjs";
 
 export function getBaseConfig(testType: TestType) {
-	const coverageReportOptions: CoverageReportOptions = {
-		name: "Next.js Istanbul Coverage Report",
-		outputDir: `${__dirname}/coverage/${testType}`,
-		reports: ["lcovonly"],
-
-		onEnd: async (coverage) => {
-			// Fixes path formatting in LCOV files for Windows paths
-			const lcovPath = `coverage/${testType}/lcov.info`;
-			const content = fs.readFileSync(lcovPath, "utf8");
-			const fixedContent = content.replace(/SF:C\\/g, "SF:C:\\");
-			fs.writeFileSync(lcovPath, fixedContent);
-		},
-	};
-
 	const WEB_SERVER_URL = "http://127.0.0.1:3001";
 	const config = defineConfig({
 		testMatch: [`${testType}/**/*.test.ts`],
@@ -37,7 +24,9 @@ export function getBaseConfig(testType: TestType) {
 		// Increase the default timeout to 1 min in case of CI (slow servers).
 		timeout: process.env.CI ? 60000 : 30000,
 		globalSetup: "./playwright-global-setup.js",
-		globalTeardown: "./playwright-global-teardown.js",
+		globalTeardown: shouldMeasureCov
+			? "./playwright-global-teardown-coverage.js"
+			: undefined,
 		projects: [
 			{
 				name: "chromium",
@@ -57,18 +46,37 @@ export function getBaseConfig(testType: TestType) {
 			reuseExistingServer: true, // consider that for some tests, such as for admin pages, restart the server before running each test
 		},
 		reporter: [
-			// results:
 			["list"],
 			["html", { outputFolder: `playwright-report/${testType}` }],
-			// Coverage:
-			[
-				"monocart-reporter",
-				{
-					coverage: coverageReportOptions,
-					timezoneOffset: 120,
-				},
-			],
+			...(shouldMeasureCov ? [getMonocartReporter()] : []),
 		],
 	});
 	return config;
+
+	function getMonocartReporter(): ReporterDescription {
+		const GMT2_Offset = 60 * 2;
+		return [
+			"monocart-reporter",
+			{
+				coverage: getCoverageReportOptions(),
+				timezoneOffset: GMT2_Offset, // TODO: check if during daylight saving time this is correct, if not append 60 mins accordingly
+			},
+		] as ReporterDescription;
+	}
+
+	function getCoverageReportOptions(): CoverageReportOptions {
+		return {
+			name: "Next.js Istanbul Coverage Report",
+			outputDir: `${__dirname}/coverage/${testType}`,
+			reports: ["lcovonly"],
+
+			onEnd: async (coverage) => {
+				// Fixes path formatting in LCOV files for Windows paths
+				const lcovPath = `coverage/${testType}/lcov.info`;
+				const content = fs.readFileSync(lcovPath, "utf8");
+				const fixedContent = content.replace(/SF:C\\/g, "SF:C:\\");
+				fs.writeFileSync(lcovPath, fixedContent);
+			},
+		};
+	}
 }
