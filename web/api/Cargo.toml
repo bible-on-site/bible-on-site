@@ -4,7 +4,7 @@ name = "bible-on-site-api"
 description = "Bible on Site API"
 license-file = "../../license"
 repository = "https://github.com/bible-on-site/bible-on-site"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 
 [dependencies]
@@ -17,7 +17,7 @@ serde = { version = "1.0.217", features = ["derive"] }
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
 anyhow = "1.0.95"
 tracing = "0.1.41"
-tracing-opentelemetry = "0.29.0"
+tracing-opentelemetry = "0.30.0"
 tracing-actix-web = "0.7.15"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 tracing-bunyan-formatter = "0.3.10"
