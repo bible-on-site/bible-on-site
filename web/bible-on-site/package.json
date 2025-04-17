@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.12",
+	"version": "0.2.13",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
@@ -43,7 +43,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",
-		"@playwright/test": "1.51.1",
+		"@playwright/test": "1.52.0",
 		"@types/jest": "29.5.14",
 		"@types/node": "22.14.1",
 		"@types/react": "19.1.2",
