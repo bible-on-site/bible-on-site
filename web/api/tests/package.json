@@ -5,7 +5,6 @@
 		"test:e2e": "playwright test --config=playwright.config.ts",
 		"coverage:e2e": "node --import tsx ./coverage-e2e.mts"
 	},
-
 	"engines": {
 		"node": ">=22.2.0"
 	},
@@ -13,8 +12,8 @@
 	"license": "MIT",
 	"description": "",
 	"devDependencies": {
-		"@playwright/test": "^1.50.1",
-		"@types/node": "22.13.1",
+		"@playwright/test": "^1.51.1",
+		"@types/node": "^22.14.1",
 		"tsx": "4.19.3"
 	}
 }

@@ -3,3 +3,5 @@ monocart-report/
 .coverage/
 .env
 .playwright-report/
+.venv/
+*.egg-info/

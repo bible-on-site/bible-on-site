@@ -4,6 +4,8 @@ default_to_workspace = false
 
 [env]
 NPM_BIN = { source = "${CARGO_MAKE_RUST_TARGET_OS}", default_value = "npm", mapping = { "windows" = "C:\\Program Files\\nodejs\\npm.cmd" } }
+HOST = "127.0.0.1"
+PORT = 3003
 
 [tasks.run-api]
 command = "cargo"
@@ -20,9 +22,10 @@ args = ["clean", "-p", "${CARGO_MAKE_CRATE_NAME}", "-p", "entities"]
 
 
 [tasks.coverage-run-base]
+env = { PROFILE = "test" }
+
 command = "cargo"
 args = ["llvm-cov", "run", "--profile", "dev", "--no-report"]
-
 [tasks.coverage-report-lcov]
 command = "cargo"
 args = [

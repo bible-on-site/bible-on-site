@@ -1,12 +1,13 @@
 {
 	"devDependencies": {
 		"@types/node": "^22.13.4",
-		"tsx": "4.19.3",
 		"dotenv": "^16.4.7",
-		"mysql2": "^3.12.0"
+		"mysql2": "^3.12.0",
+		"tsx": "4.19.3"
 	},
 	"scripts": {
 		"coverage:merge": "node --import tsx ./merge-coverage.mts",
-		"populate_test_db": "node --import tsx ./populate-test-db.mts"
+		"populate_test_db": "node --import tsx ./populate-test-db.mts",
+		"setup_dev_env": "node --import tsx ./setup-dev-env.mts"
 	}
 }

@@ -14,7 +14,9 @@
 		"ms-azuretools.vscode-docker", // Docker (Website, planned for API and App)
 		"rust-lang.rust-analyzer", // Rust (Website, API)
 		"foxundermoon.shell-format", // Shell (General)
+		"ms-python.python", // Python (General)
 		"SonarSource.sonarlint-vscode", // SonarLint (App)
-		"ryanluker.vscode-coverage-gutters" // Code coverage (Website, planned for more)
+		"ryanluker.vscode-coverage-gutters", // Code coverage (Website, planned for more)
+		"ms-toolsai.jupyter" // Jupyter (Data generation)
 	]
 }

@@ -1,8 +1,8 @@
 {
 	"editor.formatOnSave": true,
 	"files.exclude": {
-		"data/929/dates-generator/.venv": true,
-		"**/test-results": true
+		"**/test-results": true,
+		"**/.venv": true
 	},
 	"[javascript]": {
 		"editor.defaultFormatter": "biomejs.biome"
@@ -23,5 +23,11 @@
 	"coverage-gutters.coverageFileNames": ["lcov.info"],
 	"coverage-gutters.coverageBaseDir": "{web/bible-on-site/.coverage/{unit,e2e,merged},web/api/.coverage,.coverage}",
 	"coverage-gutters.showLineCoverage": true,
-	"coverage-gutters.showGutterCoverage": true
+	"coverage-gutters.showGutterCoverage": true,
+	"github.copilot.enable": {
+		"*": true,
+		"plaintext": false,
+		"markdown": true,
+		"scminput": false
+	}
 }

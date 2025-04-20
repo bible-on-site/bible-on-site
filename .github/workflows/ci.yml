@@ -324,7 +324,7 @@ jobs:
         uses: shogo82148/actions-setup-mysql@v1
         with:
           mysql-version: "8.4"
-          root-password: root
+          root-password: test_123
           distribution: "mysql"
           auto-start: true
 
@@ -332,8 +332,6 @@ jobs:
         id: populate-ci
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: npm run populate_test_db
-        env:
-          DB_URL: mysql://root:root@localhost:3306
 
       - name: Setup Tests Node.js
         id: setup-tests-node
@@ -369,8 +367,6 @@ jobs:
         working-directory: ${{ env.API_DIRECTORY }}
         run: |
           cargo make coverage-e2e
-        env:
-          DB_URL: mysql://root:root@localhost:3306/tanah_test?ssl-mode=DISABLED
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2

@@ -4,8 +4,15 @@ if [ -z "$changed_files" ]; then
     exit 0
 fi
 if [ -n "$changed_files" ]; then
-    echo "Running pre-commit for cross-module..."
-    # TODO: pre-commit
+    # Activate the devops venv and run pre-commit
+    if [ -f "./devops/.venv/Scripts/activate" ]; then
+        echo "Running pre-commit for cross-module..."
+        source ./devops/.venv/Scripts/activate
+        pre-commit run --all-files
+        deactivate
+    else
+        echo "Skipping pre-commit for cross-module; devops venv not found."
+    fi
 
     modules=$(echo "$changed_files" | sed -E 's|^web/bible-on-site/|website/|; s|^web/api/|api/|; s|^app/|app/|' | cut -d'/' -f1 | sort -u)
     echo "Detected changes in modules: $modules"
