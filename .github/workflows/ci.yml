@@ -93,8 +93,8 @@ jobs:
       - name: Build And Cache lcov Docker Image
         uses: docker/build-push-action@v6
         with:
-          context: web/bible-on-site/tests/util/coverage/lcov-docker/
-          file: web/bible-on-site/tests/util/coverage/lcov-docker/Dockerfile
+          context: devops/coverage/lcov-docker/
+          file: devops/coverage/lcov-docker/Dockerfile
           tags: lcov-cli:0.0.2
           outputs: type=docker,dest=/tmp/lcov-docker-image.tar
           cache-from: type=gha
@@ -434,18 +434,22 @@ jobs:
           echo "Overall status: success"
 
       - name: Restore Website Coverage Report
-        if: ${{ needs.determine_website_changes.outputs.module_changed != 'true' }}
         uses: actions/download-artifact@v4
         with:
           name: website-coverage
           path: ${{ env.WEBSITE_COVERAGE_REPORT }}
 
       - name: Restore API Coverage Report
-        if: ${{ needs.determine_api_changes.outputs.module_changed != 'true' }}
         uses: actions/download-artifact@v4
         with:
           name: api-coverage
           path: ${{ env.API_COVERAGE_REPORT }}
+
+      - name: Restore lcov Docker image
+        uses: actions/download-artifact@v4
+        with:
+          name: lcov-docker-image
+          path: /tmp
 
       - name: Load lcov Docker image
         run: docker load --input /tmp/lcov-docker-image.tar
