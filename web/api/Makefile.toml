@@ -23,10 +23,15 @@ args = ["clean", "-p", "${CARGO_MAKE_CRATE_NAME}", "-p", "entities"]
 
 [tasks.coverage-run-base]
 env = { PROFILE = "test" }
-
 command = "cargo"
 args = ["llvm-cov", "run", "--profile", "dev", "--no-report"]
+
+[tasks.coverage-dir-create]
+command = "mkdir"
+args = ["-p", ".coverage"]
+
 [tasks.coverage-report-lcov]
+dependencies = ["coverage-dir-create"]
 command = "cargo"
 args = [
   "llvm-cov",
