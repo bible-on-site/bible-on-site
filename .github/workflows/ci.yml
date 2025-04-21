@@ -473,9 +473,29 @@ jobs:
       - name: Load lcov Docker image
         run: docker load --input /tmp/lcov-docker-image.tar
 
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+
+      - name: Setup DevOps Node.js
+        id: setup-devops-node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
+          cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
+          cache: npm
+
+      - name: Install devops npm Dependencies
+        id: devops_npm_ci
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        run: |
+          npm ci --no-audit
+
       - name: Merge Test Coverage (Website + API)
         run: npm run coverage:merge
-        working-directory: devops
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
 
       - name: Publish coverage to Codecov
         uses: codecov/codecov-action@v5
