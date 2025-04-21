@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.20",
+	"version": "0.2.21",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
@@ -27,7 +27,7 @@
 		"node": ">=22.2.0"
 	},
 	"dependencies": {
-		"@hebcal/core": "5.9.2",
+		"@hebcal/core": "5.9.3",
 		"@syncfusion/ej2-react-grids": "29.1.38",
 		"@syncfusion/ej2-react-layouts": "29.1.38",
 		"flowbite": "3.1.2",
