@@ -184,7 +184,7 @@ function assertPythonVersion() {
 }
 
 function assertNodeJSVersion() {
-	// TODO: check using semver, TODO: inform if NodeJS is not installed
+	// TODO: check using semver, TODO: inform if NodeJS is not installed.
 	console.info("Checking NodeJS version...");
 	const supportedNodeVersions = ["v22.13.0"];
 	const actualNodeVersion = spawnSync("node", ["--version"], { shell: isWin })
