@@ -1,33 +1,26 @@
-changed_files=$(git diff --cached --name-only | grep -E '^web/(bible-on-site|api)/' || true)
-if [ -z "$changed_files" ]; then
-    echo "No relevant changes; skipping pre-commit."
-    exit 0
+# cross-module pre-commit hook
+if [ -f "./devops/.venv/Scripts/activate" ]; then
+    echo "Running pre-commit for cross-module..."
+    source ./devops/.venv/Scripts/activate
+    pre-commit run --all-files || exit 1
+    deactivate
+else
+    echo "Skipping pre-commit for cross-module; devops venv not found."
 fi
-if [ -n "$changed_files" ]; then
-    # Activate the devops venv and run pre-commit
-    if [ -f "./devops/.venv/Scripts/activate" ]; then
-        echo "Running pre-commit for cross-module..."
-        source ./devops/.venv/Scripts/activate
-        pre-commit run --all-files
-        deactivate
-    else
-        echo "Skipping pre-commit for cross-module; devops venv not found."
-    fi
 
-    modules=$(echo "$changed_files" | sed -E 's|^web/bible-on-site/|website/|; s|^web/api/|api/|; s|^app/|app/|' | cut -d'/' -f1 | sort -u)
-    echo "Detected changes in modules: $modules"
+modules=$(echo "$changed_files" | sed -E 's|^web/bible-on-site/|website/|; s|^web/api/|api/|; s|^app/|app/|' | cut -d'/' -f1 | sort -u)
+echo "Detected changes in modules: $modules"
 
-    if echo "$changed_files" | grep -q '^web/bible-on-site/'; then
-        echo "Running pre-commit tasks for web/bible-on-site..."
-        cd ./web/bible-on-site
-        .husky/pre-commit
-        cd - >/dev/null
-    fi
+if echo "$changed_files" | grep -q '^web/bible-on-site/'; then
+    echo "Running pre-commit tasks for web/bible-on-site..."
+    cd ./web/bible-on-site
+    .husky/pre-commit
+    cd - >/dev/null
+fi
 
-    if echo "$changed_files" | grep -q '^web/api/'; then
-        echo "Running pre-commit tasks for web/api..."
-        cd ./web/api
-        .husky/pre-commit
-        cd - >/dev/null
-    fi
+if echo "$changed_files" | grep -q '^web/api/'; then
+    echo "Running pre-commit tasks for web/api..."
+    cd ./web/api
+    .husky/pre-commit
+    cd - >/dev/null
 fi
