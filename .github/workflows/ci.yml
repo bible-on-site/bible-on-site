@@ -456,7 +456,7 @@ jobs:
       - name: Restore Website Coverage Report
         uses: actions/download-artifact@v4
         with:
-            name: ${{ needs.determine_website_changes.outputs.module_changed == 'true' && format('website-coverage.{0}', github.run_id) || 'website-coverage.master' }}
+          name: ${{ needs.determine_website_changes.outputs.module_changed == 'true' && format('website-coverage.{0}', github.run_id) || 'website-coverage.master' }}
           path: ${{ env.WEBSITE_COVERAGE_REPORT }}
 
       - name: Restore API Coverage Report
