@@ -1,8 +1,10 @@
+changed_files=$(git diff --cached --name-only --diff-filter=ACM HEAD)
+
 # cross-module pre-commit hook
 if [ -f "./devops/.venv/Scripts/activate" ]; then
     echo "Running pre-commit for cross-module..."
     source ./devops/.venv/Scripts/activate
-    pre-commit run --all-files || exit 1
+    pre-commit run --files $(echo "$changed_files" | tr '\n' ' ') || exit 1
     deactivate
 else
     echo "Skipping pre-commit for cross-module; devops venv not found."
