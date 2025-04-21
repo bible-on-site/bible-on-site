@@ -452,6 +452,12 @@ jobs:
 
           echo "Overall status: success"
 
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+
       - name: Restore Website Coverage Report
         uses: actions/download-artifact@v4
         with:
@@ -472,12 +478,6 @@ jobs:
 
       - name: Load lcov Docker image
         run: docker load --input /tmp/lcov-docker-image.tar
-
-      - name: Checkout
-        id: checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
 
       - name: Setup DevOps Node.js
         id: setup-devops-node
