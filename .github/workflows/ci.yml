@@ -29,6 +29,8 @@ env:
   DEVOPS_DIRECTORY: devops
   DEVOPS_NODE_VERSION_FILE: devops/package.json
   DEVOPS_NODE_CACHE_PATH: devops/package-lock.json
+  WEBSITE_COVERAGE_ARTIFACT_NAME:
+  API_COVERAGE_ARTIFACT_NAME:
 
 jobs:
   # ENV SETUP
@@ -180,7 +182,7 @@ jobs:
   website_e2e:
     name: Website CI
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_website_changes]
+    needs: [setup_env, determine_website_changes, build_lcov_docker]
     if: ${{ needs.determine_website_changes.outputs.module_changed == 'true' || needs.determine_website_changes.outputs.ci_changed == 'true' }}
     defaults:
       run:
@@ -267,11 +269,19 @@ jobs:
         continue-on-error: true
         run: npm run coverage:merge
 
-      - name: Store Website Coverage Artifact
-        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      - name: Set Website Coverage Artifact Name
+        id: set-website-coverage-artifact-name
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ]; then
+            echo "WEBSITE_COVERAGE_ARTIFACT_NAME=website-coverage.master" >> $GITHUB_ENV
+          else
+            echo "WEBSITE_COVERAGE_ARTIFACT_NAME=website-coverage.${{ github.run_id }}" >> $GITHUB_ENV
+          fi
+
+      - name: Store Website Coverage Report
         uses: actions/upload-artifact@v4
         with:
-          name: website-coverage
+          name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME }}
           path: ${{ env.WEBSITE_COVERAGE_REPORT }}
           retention-days: 30
           overwrite: true
@@ -381,11 +391,20 @@ jobs:
           retention-days: 30
           overwrite: true
 
+      - name: Set API Coverage Artifact Name
+        id: set-api-coverage-artifact-name
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ]; then
+            echo "API_COVERAGE_ARTIFACT_NAME=api-coverage.master" >> $GITHUB_ENV
+          else
+            echo "API_COVERAGE_ARTIFACT_NAME=api-coverage.${{ github.run_id }}" >> $GITHUB_ENV
+          fi
+
       - name: Store API Coverage Report
         if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         uses: actions/upload-artifact@v4
         with:
-          name: api-coverage
+          name: ${{ env.API_COVERAGE_ARTIFACT_NAME }}
           path: ${{ env.API_COVERAGE_REPORT }}
           retention-days: 30
           overwrite: true
@@ -394,7 +413,8 @@ jobs:
   cross_module_ci:
     name: Cross Module CI
     runs-on: ubuntu-latest
-    needs: [determine_website_changes, determine_api_changes, website_performance, website_e2e, api_e2e]
+    needs:
+      [determine_website_changes, determine_api_changes, website_performance, website_e2e, api_e2e, build_lcov_docker]
     if: ${{ always() }}
 
     steps:
@@ -436,13 +456,13 @@ jobs:
       - name: Restore Website Coverage Report
         uses: actions/download-artifact@v4
         with:
-          name: website-coverage
+            name: ${{ needs.determine_website_changes.outputs.module_changed == 'true' && format('website-coverage.{0}', github.run_id) || 'website-coverage.master' }}
           path: ${{ env.WEBSITE_COVERAGE_REPORT }}
 
       - name: Restore API Coverage Report
         uses: actions/download-artifact@v4
         with:
-          name: api-coverage
+          name: ${{ needs.determine_api_changes.outputs.module_changed == 'true' && format('api-coverage.{0}', github.run_id) || 'api-coverage.master' }}
           path: ${{ env.API_COVERAGE_REPORT }}
 
       - name: Restore lcov Docker image
