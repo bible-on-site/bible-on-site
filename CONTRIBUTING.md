@@ -7,15 +7,18 @@ There are several ways in which you can contribute, beyond writing code. The goa
 Please report any bugs found on a production platform (website, app, etc.).
 This could be anything, from malfunctioning feature to a typo within an article.
 
-## QA Testers
+## Technologists
+Please see (How to Contribute)[https://github.com/bible-on-site/bible-on-site/wiki/How-To-Contribute] in the wiki.
+
+### QA Testers
 Contribute test cases:
 - For the website, add tests under `web/bible-on-site/tests`.
 - For the API, add tests under `web/api`.
 
 *Note: App testing will be integrated in the future.*
 
-## Software Developers
+### Software Developers
 Submit pull requests or suggest assigning yourself to any issue.
 
-## DevOps
+### DevOps
 Suggest assigning yourself to any issue tagged with `DevOps`.

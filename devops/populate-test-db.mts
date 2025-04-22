@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url); // get the resolved path to t
 const __dirname = path.dirname(__filename); // get the name of the directory
 
 // Load environment variables from .env file
-dotenv.config();
+dotenv.config({ path: path.resolve(process.cwd(), ".test.env") });
 
 async function getDbConnectionDetails(): Promise<mysql.ConnectionOptions> {
 	const dbUrlStr = process.env.DB_URL;

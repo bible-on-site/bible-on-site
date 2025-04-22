@@ -4,6 +4,8 @@ default_to_workspace = false
 
 [env]
 NPM_BIN = { source = "${CARGO_MAKE_RUST_TARGET_OS}", default_value = "npm", mapping = { "windows" = "C:\\Program Files\\nodejs\\npm.cmd" } }
+HOST = "127.0.0.1"
+PORT = 3003
 
 [tasks.run-api]
 command = "cargo"
@@ -14,15 +16,22 @@ args = ["run"]
 # TODO: add , "--", "-D", "warnings" to the args to make it more strict once all warnings are fixed
 args = ["clippy"]
 
-[tasks.coverage-reset]
+[tasks.clean]
 command = "cargo"
-args = ["llvm-cov", "clean"]
+args = ["clean", "-p", "${CARGO_MAKE_CRATE_NAME}", "-p", "entities"]
 
-[tasks.coverage-run]
+
+[tasks.coverage-run-base]
+env = { PROFILE = "test" }
 command = "cargo"
 args = ["llvm-cov", "run", "--profile", "dev", "--no-report"]
 
+[tasks.coverage-dir-create]
+command = "mkdir"
+args = ["-p", ".coverage"]
+
 [tasks.coverage-report-lcov]
+dependencies = ["coverage-dir-create"]
 command = "cargo"
 args = [
   "llvm-cov",
@@ -41,19 +50,21 @@ condition = { env_not_set = [
 command = "cargo"
 args = ["llvm-cov", "report", "--profile", "dev", "--open"]
 
+[tasks.coverage-run]
+dependencies = [
+  "clean",
+  "coverage-run-base",       # this task is terminated using a signal called from the test task
+  "coverage-report-lcov",
+  "coverage-report-browser",
+]
 
 [tasks.test-e2e]
 command = "${NPM_BIN}"
 args = ["run", "--prefix", "tests", "test:e2e"]
 
-
-[tasks.test-coverage]
-dependencies = [
-  "coverage-reset",
-  "coverage-run",            # this task is terminated using a signal called from the test task
-  "coverage-report-lcov",
-  "coverage-report-browser",
-]
+[tasks.coverage-e2e]
+command = "${NPM_BIN}"
+args = ["run", "--prefix", "tests", "coverage:e2e"]
 
 [tasks.bump-patch-version]
 command = "cargo"
