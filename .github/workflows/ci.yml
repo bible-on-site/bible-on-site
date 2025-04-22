@@ -18,13 +18,15 @@ env:
   WEBSITE_DIRECTORY: web/bible-on-site
   WEBSITE_NODE_VERSION_FILE: web/bible-on-site/package.json
   WEBSITE_NODE_CACHE_PATH: web/bible-on-site/package-lock.json
-  WEBSITE_COVERAGE_REPORT: web/bible-on-site/.coverage/merged/lcov.info
+  WEBSITE_MERGED_COVERAGE_REPORT: web/bible-on-site/.coverage/merged/lcov.info
+  WEBSITE_MERGED_COVERAGE_DIR: web/bible-on-site/.coverage/merged
   API_DIRECTORY: web/api
   API_CARGO_FILE: web/api/Cargo.toml
   API_TESTS_DIRECTORY: web/api/tests
   API_TESTS_NODE_VERSION_FILE: web/api/tests/package.json
   API_TESTS_NODE_CACHE_PATH: web/api/tests/package-lock.json
   API_COVERAGE_REPORT: web/api/.coverage/lcov.info
+  API_COVERAGE_DIR: web/api/.coverage/lcov.info
   CROSS_MODULE_COVERAGE_REPORT: .coverage/lcov.info
   DEVOPS_DIRECTORY: devops
   DEVOPS_NODE_VERSION_FILE: devops/package.json
@@ -282,7 +284,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME }}
-          path: ${{ env.WEBSITE_COVERAGE_REPORT }}
+          path: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
           retention-days: 400
           overwrite: true
 
@@ -462,13 +464,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ${{ needs.determine_website_changes.outputs.module_changed == 'true' && format('website-coverage.{0}', github.run_id) || 'website-coverage.master' }}
-          path: ${{ env.WEBSITE_COVERAGE_REPORT }}
+          path: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
 
       - name: Restore API Coverage Report
         uses: actions/download-artifact@v4
         with:
           name: ${{ needs.determine_api_changes.outputs.module_changed == 'true' && format('api-coverage.{0}', github.run_id) || 'api-coverage.master' }}
-          path: ${{ env.API_COVERAGE_REPORT }}
+          path: ${{ env.API_COVERAGE_DIR }}
 
       - name: Restore lcov Docker image
         uses: actions/download-artifact@v4
