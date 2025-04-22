@@ -525,8 +525,9 @@ jobs:
                 GITHUB_SHA=${{ github.sha }} # Generated
               fi
               CODECOV_JSON=$(curl -s -H "Authorization: token ${{ secrets.CODECOV_API_TOKEN }}" "https://api.codecov.io/api/v2/github/${OWNER_REPO[0]}/repos/${OWNER_REPO[1]}/commits/$GITHUB_SHA") # Generated
-              echo "CODECOV_JSON: $CODECOV_JSON"
-              if [[ "$CODECOV_JSON" == *"Invalid token"* ]] || [[ "$CODECOV_JSON" == *"error"* ]]; then
+              # Check if the response JSON has an "error" key or if the "error" value is not null/empty
+              if [ "$(echo "$CODECOV_JSON" | jq -r 'has("error") and (.error != null) and (.error != "")')" = "true" ]; then
+                echo "Codecov API returned error: $(echo "$CODECOV_JSON" | jq -r '.error')"
                 echo "Failed to get Codecov status"
                 echo "status=failure" >> $GITHUB_OUTPUT
                 exit 1
