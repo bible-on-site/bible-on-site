@@ -6,7 +6,7 @@ const __filename = fileURLToPath(import.meta.url); // get the resolved path to t
 const __dirname = path.dirname(__filename); // get the name of the directory
 const websiteCoverageDir = path.resolve(
 	__dirname,
-	"../web/bible-on-site/coverage/merged",
+	"../web/bible-on-site/.coverage/merged",
 );
 const websiteCoverageFilePath = path.resolve(
 	__dirname,

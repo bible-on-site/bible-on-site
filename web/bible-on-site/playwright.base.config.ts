@@ -27,6 +27,7 @@ export function getBaseConfig(testType: TestType) {
 		globalTeardown: shouldMeasureCov
 			? "./playwright-global-teardown-coverage.js"
 			: undefined,
+		name: testType,
 		projects: [
 			{
 				name: "chromium",
@@ -47,7 +48,10 @@ export function getBaseConfig(testType: TestType) {
 		},
 		reporter: [
 			["list"],
-			["html", { outputFolder: `playwright-report/${testType}` }],
+			[
+				"html",
+				{ outputFolder: `.playwright-report/${testType}`, open: "never" },
+			],
 			...(shouldMeasureCov ? [getMonocartReporter()] : []),
 		],
 	});
@@ -67,12 +71,12 @@ export function getBaseConfig(testType: TestType) {
 	function getCoverageReportOptions(): CoverageReportOptions {
 		return {
 			name: "Next.js Istanbul Coverage Report",
-			outputDir: `${__dirname}/coverage/${testType}`,
+			outputDir: `${__dirname}/.coverage/${testType}`,
 			reports: ["lcovonly"],
 
 			onEnd: async (coverage) => {
 				// Fixes path formatting in LCOV files for Windows paths
-				const lcovPath = `coverage/${testType}/lcov.info`;
+				const lcovPath = `.coverage/${testType}/lcov.info`;
 				const content = fs.readFileSync(lcovPath, "utf8");
 				const fixedContent = content.replace(/SF:C\\/g, "SF:C:\\");
 				fs.writeFileSync(lcovPath, fixedContent);

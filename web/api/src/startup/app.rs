@@ -35,8 +35,14 @@ pub async fn debug_request(_req: HttpRequest, body: web::Bytes) -> HttpResponse 
 }
 impl ActixApp {
     pub async fn new() -> Result<Self, Error> {
-        if let Err(e) = dotenvy::dotenv() {
-            tracing::warn!("Failed to load .env file: {}", e);
+        let profile: String = env::var("PROFILE").unwrap_or_else(|_| "prod".to_string());
+        let env_file_name = if profile == "prod" {
+            ".env".to_string()
+        } else {
+            format!(".{}.env", profile)
+        };
+        if let Err(e) = dotenvy::from_filename_override(env_file_name.clone()) {
+            tracing::warn!("Failed to load {} file: {}", env_file_name, e);
             tracing::warn!("Using default environment variables");
         }
 
@@ -100,7 +106,7 @@ impl ActixApp {
                         .to(graphql_playground),
                 );
 
-            if env::var("PROFILE").unwrap_or_default() == "dev" {
+            if env::var("PROFILE").unwrap_or_default() != "prod" {
                 cfg.service(web::resource("/api/shutdown").guard(guard::Post()).to({
                     let shutdown_signal = shutdown_signal.clone();
                     move || {

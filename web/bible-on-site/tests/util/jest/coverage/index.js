@@ -35,7 +35,7 @@ class MonocartCoverageReporter extends CoverageReporter {
 		await coverageReport.generate();
 
 		// Fixes path formatting in LCOV files for Windows paths
-		const lcovPath = "coverage/unit/lcov.info";
+		const lcovPath = ".coverage/unit/lcov.info";
 		const content = fs.readFileSync(lcovPath, "utf8");
 		const fixedContent = content.replace(/SF:C\\/g, "SF:C:\\");
 		fs.writeFileSync(lcovPath, fixedContent);

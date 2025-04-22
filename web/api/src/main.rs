@@ -23,7 +23,6 @@ async fn main() -> anyhow::Result<()> {
     tokio::select! {
         outcome = application_task => report_exit("API", outcome),
     };
-
     Ok(())
 }
 

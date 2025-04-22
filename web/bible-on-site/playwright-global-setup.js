@@ -1,3 +1,10 @@
-const globalSetup = async (config) => {};
+const { rmSync } = require("node:fs");
+const { resolve } = require("node:path");
 
-export default globalSetup;
+/** @param {import('@playwright/test').FullConfig} config */
+module.exports = async function globalSetup(config) {
+	rmSync(resolve(__dirname, ".cache", "playwright"), {
+		recursive: true,
+		force: true,
+	});
+};

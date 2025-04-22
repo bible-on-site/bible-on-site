@@ -1,4 +1,7 @@
 /** @type {import('next').NextConfig} */
+const KB = 1024;
+const MB = KB * KB;
+const GB = MB * KB;
 const nextConfig = {
 	output: "standalone",
 	experimental: {
@@ -20,6 +23,7 @@ const nextConfig = {
 					],
 	},
 	allowedDevOrigins: ["127.0.0.1"],
+	cacheMaxMemorySize: 1 * GB,
 };
 
 export default nextConfig;

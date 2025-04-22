@@ -18,9 +18,21 @@ env:
   WEBSITE_DIRECTORY: web/bible-on-site
   WEBSITE_NODE_VERSION_FILE: web/bible-on-site/package.json
   WEBSITE_NODE_CACHE_PATH: web/bible-on-site/package-lock.json
+  WEBSITE_MERGED_COVERAGE_REPORT: web/bible-on-site/.coverage/merged/lcov.info
+  WEBSITE_MERGED_COVERAGE_DIRECTORY: web/bible-on-site/.coverage/merged
   API_DIRECTORY: web/api
   API_CARGO_FILE: web/api/Cargo.toml
   API_TESTS_DIRECTORY: web/api/tests
+  API_TESTS_NODE_VERSION_FILE: web/api/tests/package.json
+  API_TESTS_NODE_CACHE_PATH: web/api/tests/package-lock.json
+  API_COVERAGE_REPORT: web/api/.coverage/lcov.info
+  API_COVERAGE_DIRECTORY: web/api/.coverage
+  CROSS_MODULE_COVERAGE_REPORT: .coverage/lcov.info
+  DEVOPS_DIRECTORY: devops
+  DEVOPS_NODE_VERSION_FILE: devops/package.json
+  DEVOPS_NODE_CACHE_PATH: devops/package-lock.json
+  WEBSITE_COVERAGE_ARTIFACT_NAME:
+  API_COVERAGE_ARTIFACT_NAME:
 
 jobs:
   # ENV SETUP
@@ -28,10 +40,10 @@ jobs:
     name: Setup Environment Variables
     runs-on: ubuntu-latest
     outputs:
-      website_module_dir: web/bible-on-site
-      api_module_dir: web/api
-      WEBSITE_PLAYWRIGHT_VERSION: ${{ steps.get_website_playwright_version.outputs.PLAYWRIGHT_VERSION }}
-      API_PLAYWRIGHT_VERSION: ${{ steps.get_api_playwright_version.outputs.PLAYWRIGHT_VERSION }}
+      website_directory: web/bible-on-site
+      api_directory: web/api
+      website_playwright_version: ${{ steps.get_website_playwright_version.outputs.PLAYWRIGHT_VERSION }}
+      api_playwright_version: ${{ steps.get_api_playwright_version.outputs.PLAYWRIGHT_VERSION }}
     steps:
       - run: echo "Setting up environment variables"
       - name: Checkout
@@ -55,8 +67,8 @@ jobs:
     secrets: inherit
     uses: ./.github/workflows/shared-ci.yml
     with:
-      module_directory: ${{ needs.setup_env.outputs.website_module_dir }}
-      module_name: ${{ needs.setup_env.outputs.website_module_dir }}
+      module_directory: ${{ needs.setup_env.outputs.website_directory }}
+      module_name: ${{ needs.setup_env.outputs.website_directory }}
       ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
 
   determine_api_changes:
@@ -65,8 +77,8 @@ jobs:
     secrets: inherit
     uses: ./.github/workflows/shared-ci.yml
     with:
-      module_directory: ${{ needs.setup_env.outputs.api_module_dir }}
-      module_name: ${{ needs.setup_env.outputs.api_module_dir }}
+      module_directory: ${{ needs.setup_env.outputs.api_directory }}
+      module_name: ${{ needs.setup_env.outputs.api_directory }}
       ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
 
   build_lcov_docker:
@@ -82,22 +94,22 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and cache Docker image
+      - name: Build And Cache lcov Docker Image
         uses: docker/build-push-action@v6
         with:
-          context: web/bible-on-site/tests/util/coverage/lcov-docker/
-          file: web/bible-on-site/tests/util/coverage/lcov-docker/Dockerfile
-          tags: lcov-cli:0.0.1
+          context: devops/coverage/lcov-docker/
+          file: devops/coverage/lcov-docker/Dockerfile
+          tags: lcov-cli:0.0.2
           outputs: type=docker,dest=/tmp/lcov-docker-image.tar
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Upload Docker image artifact
+      - name: Store Docker Image
         uses: actions/upload-artifact@v4
         with:
           name: lcov-docker-image
           path: /tmp/lcov-docker-image.tar
-          retention-days: 90
+          retention-days: 400
 
   # ACTUAL JOBS
   website_performance:
@@ -132,7 +144,7 @@ jobs:
         with:
           path: |
             ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.WEBSITE_PLAYWRIGHT_VERSION }}
+          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.website_playwright_version }}
 
       - name: Install npm Dependencies
         id: npm_ci
@@ -161,18 +173,18 @@ jobs:
         id: npm-perf-test
         run: npm run test:perf
 
-      - uses: actions/upload-artifact@v4
-        if: always()
+      - name: Store Perf Report
+        uses: actions/upload-artifact@v4
         with:
-          name: playwright-perf-report
-          path: ${{ env.WEBSITE_DIRECTORY }}/playwright-report/perf/
+          name: website-perf-report
+          path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/perf/
           retention-days: 30
           overwrite: true
 
   website_e2e:
     name: Website CI
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_website_changes]
+    needs: [setup_env, determine_website_changes, build_lcov_docker]
     if: ${{ needs.determine_website_changes.outputs.module_changed == 'true' || needs.determine_website_changes.outputs.ci_changed == 'true' }}
     defaults:
       run:
@@ -201,7 +213,7 @@ jobs:
         with:
           path: |
             ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.WEBSITE_PLAYWRIGHT_VERSION }}
+          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.website_playwright_version }}
 
       - name: Install npm Dependencies
         id: npm_ci
@@ -238,48 +250,45 @@ jobs:
         id: npm-e2e-test
         run: npm run coverage:e2e
 
-      - name: Download Docker image artifact
+      - name: Store E2E Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-e2e-report
+          path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/e2e/
+          retention-days: 30
+          overwrite: true
+
+      - name: Restore lcov Docker image
         uses: actions/download-artifact@v4
         with:
           name: lcov-docker-image
           path: /tmp
 
-      - name: Load Docker image
+      - name: Load lcov Docker image
         run: docker load --input /tmp/lcov-docker-image.tar
 
-      - name: Merge Test Coverage
+      - name: Merge Test Coverage (Unit + E2E)
         continue-on-error: true
         run: npm run coverage:merge
 
-      - uses: actions/upload-artifact@v4
+      - name: Set Website Coverage Artifact Name
+        id: set-website-coverage-artifact-name
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ]; then
+            echo "WEBSITE_COVERAGE_ARTIFACT_NAME=website-coverage.master" >> $GITHUB_ENV
+          else
+            echo "WEBSITE_COVERAGE_ARTIFACT_NAME=website-coverage.${{ github.run_id }}" >> $GITHUB_ENV
+          fi
+
+      - name: Store Website Coverage Report
+        uses: actions/upload-artifact@v4
         with:
-          name: website-coverage
-          path: ${{ env.WEBSITE_DIRECTORY }}/coverage/merged/lcov.info
-          retention-days: 30
+          name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME }}
+          path: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
+          retention-days: 400
           overwrite: true
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ env.WEBSITE_DIRECTORY }}/coverage/merged/lcov.info
-          disable_search: true
-
-      - name: Run codacy-coverage-reporter
-        uses: codacy/codacy-coverage-reporter-action@master
-        with:
-          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
-          coverage-reports: ${{ env.WEBSITE_DIRECTORY }}/coverage/merged/lcov.info
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: playwright-e2e-report
-          path: ${{ env.WEBSITE_DIRECTORY }}/playwright-report/e2e/
-          retention-days: 30
-          overwrite: true
-
-  api_tests:
+  api_e2e:
     name: API CI
     runs-on: ubuntu-latest
     needs: [setup_env, determine_api_changes]
@@ -303,15 +312,46 @@ jobs:
         with:
           tool: cargo-make, cargo-llvm-cov
 
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: ${{ env.API_DIRECTORY }}
-
       - name: Lint
         id: lint
         working-directory: ${{ env.API_DIRECTORY }}
         run: cargo make lint
+
+      - name: Setup DevOps Node.js
+        id: setup-devops-node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
+          cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
+          cache: npm
+
+      - name: Install devops npm Dependencies
+        id: devops_npm_ci
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        run: |
+          npm ci --no-audit
+
+      - name: Install and start MySQL
+        id: mysql
+        uses: shogo82148/actions-setup-mysql@v1
+        with:
+          mysql-version: "8.4"
+          root-password: test_123
+          distribution: "mysql"
+          auto-start: true
+
+      - name: Populate CI
+        id: populate-ci
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        run: npm run populate_test_db
+
+      - name: Setup Tests Node.js
+        id: setup-tests-node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ${{ env.API_TESTS_NODE_VERSION_FILE }}
+          cache-dependency-path: ${{ env.API_TESTS_NODE_CACHE_PATH }}
+          cache: npm
 
       - name: Cache playwright binaries
         uses: actions/cache@v4
@@ -319,10 +359,10 @@ jobs:
         with:
           path: |
             ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.API_PLAYWRIGHT_VERSION }}
+          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.api_playwright_version }}
 
-      - name: Install npm Dependencies
-        id: npm_ci
+      - name: Install Tests npm Dependencies
+        id: tests_npm_ci
         working-directory: ${{ env.API_TESTS_DIRECTORY }}
         run: |
           npm ci --no-audit
@@ -334,15 +374,53 @@ jobs:
           npx playwright install --with-deps
           npx playwright install-deps
 
+      - name: E2E Test
+        id: api-e2e
+        working-directory: ${{ env.API_DIRECTORY }}
+        run: |
+          cargo make coverage-e2e
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ env.API_DIRECTORY }}
+
+      - name: Store E2E Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-e2e-report
+          path: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/
+          retention-days: 30
+          overwrite: true
+
+      - name: Set API Coverage Artifact Name
+        id: set-api-coverage-artifact-name
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ]; then
+            echo "API_COVERAGE_ARTIFACT_NAME=api-coverage.master" >> $GITHUB_ENV
+          else
+            echo "API_COVERAGE_ARTIFACT_NAME=api-coverage.${{ github.run_id }}" >> $GITHUB_ENV
+          fi
+
+      - name: Store API Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.API_COVERAGE_ARTIFACT_NAME }}
+          path: ${{ env.API_COVERAGE_REPORT }}
+          retention-days: 400
+          overwrite: true
+
   # CLOSING FLOW
-  ci_checks_passing:
-    name: CI Checks Passing
+  cross_module_ci:
+    name: Cross Module CI
     runs-on: ubuntu-latest
-    needs: [determine_website_changes, determine_api_changes, website_performance, website_e2e, api_tests]
+    needs:
+      [determine_website_changes, determine_api_changes, website_performance, website_e2e, api_e2e, build_lcov_docker]
     if: ${{ always() }}
+
     steps:
-      - name: Determine overall status
-        id: determine_status
+      - name: Verify each module CI status
+        id: verify_each_module_ci_status
         run: |
           WEBSITE_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_website_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
           API_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_api_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
@@ -363,7 +441,80 @@ jobs:
               echo "Overall status: failure"
               exit 1
             fi
-            # Check Codecov status using the Codecov API
+          fi
+
+          API_MODULE_CHANGED=$([ "${{ needs.determine_api_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$API_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ]; then
+            API_STATUS=$([ "${{ needs.api_e2e.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "$API_STATUS" = "failure" ]; then
+              echo "Overall status: failure"
+              exit 1
+            fi
+          fi
+
+          echo "Overall status: success"
+
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+
+      - name: Restore Website Coverage Report
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.determine_website_changes.outputs.module_changed == 'true' && format('website-coverage.{0}', github.run_id) || 'website-coverage.master' }}
+          path: ${{ env.WEBSITE_MERGED_COVERAGE_DIRECTORY }}
+
+      - name: Restore API Coverage Report
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.determine_api_changes.outputs.module_changed == 'true' && format('api-coverage.{0}', github.run_id) || 'api-coverage.master' }}
+          path: ${{ env.API_COVERAGE_DIRECTORY }}
+
+      - name: Restore lcov Docker image
+        uses: actions/download-artifact@v4
+        with:
+          name: lcov-docker-image
+          path: /tmp
+
+      - name: Load lcov Docker image
+        run: docker load --input /tmp/lcov-docker-image.tar
+
+      - name: Setup DevOps Node.js
+        id: setup-devops-node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
+          cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
+          cache: npm
+
+      - name: Install devops npm Dependencies
+        id: devops_npm_ci
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        run: |
+          npm ci --no-audit
+
+      - name: Merge Test Coverage (Website + API)
+        run: npm run coverage:merge
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+
+      - name: Publish coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.CROSS_MODULE_COVERAGE_REPORT }}
+          disable_search: true
+
+      - name: Run codacy-coverage-reporter
+        uses: codacy/codacy-coverage-reporter-action@master
+        with:
+          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
+          coverage-reports: ${{ env.CROSS_MODULE_COVERAGE_REPORT }}
+
+      - name: Verify Coverage 3rd Party Reporting
+        run: |
+          # Check Codecov status using the Codecov API
             MAX_RETRIES=10
             RETRY_COUNT=0
             while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
@@ -374,8 +525,9 @@ jobs:
                 GITHUB_SHA=${{ github.sha }} # Generated
               fi
               CODECOV_JSON=$(curl -s -H "Authorization: token ${{ secrets.CODECOV_API_TOKEN }}" "https://api.codecov.io/api/v2/github/${OWNER_REPO[0]}/repos/${OWNER_REPO[1]}/commits/$GITHUB_SHA") # Generated
-              echo "CODECOV_JSON: $CODECOV_JSON"
-              if [[ "$CODECOV_JSON" == *"Invalid token"* ]] || [[ "$CODECOV_JSON" == *"error"* ]]; then
+              # Check if the response JSON has an "error" key or if the "error" value is not null/empty
+              if [ "$(echo "$CODECOV_JSON" | jq -r 'has("error") and (.error != null) and (.error != "")')" = "true" ]; then
+                echo "Codecov API returned error: $(echo "$CODECOV_JSON" | jq -r '.error')"
                 echo "Failed to get Codecov status"
                 echo "status=failure" >> $GITHUB_OUTPUT
                 exit 1
@@ -399,25 +551,13 @@ jobs:
               sleep 30
               RETRY_COUNT=$((RETRY_COUNT+1))
             done
-          fi
-
-          API_MODULE_CHANGED=$([ "${{ needs.determine_api_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$API_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ]; then
-            API_STATUS=$([ "${{ needs.api_tests.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-            if [ "$API_STATUS" = "failure" ]; then
-              echo "Overall status: failure"
-              exit 1
-            fi
-          fi
-
-          echo "Overall status: success"
 
   # RELEASES
   debug_release:
     name: Debug Release
     runs-on: ubuntu-latest
     if: ${{ always() }}
-    needs: [setup_env, determine_website_changes, determine_api_changes, ci_checks_passing]
+    needs: [setup_env, determine_website_changes, determine_api_changes, cross_module_ci]
     steps:
       - name: Debug Release inputs
         run: |
@@ -425,7 +565,7 @@ jobs:
           echo "github.ref: ${{ github.ref }}"
           echo "determine_website_changes.module_changed: ${{ needs.determine_website_changes.outputs.module_changed }}"
           echo "determine_api_changes.module_changed: ${{ needs.determine_api_changes.outputs.module_changed }}"
-          echo "ci_checks_passing: ${{ toJSON(needs.ci_checks_passing) }}"
+          echo "cross_module_ci: ${{ toJSON(needs.cross_module_ci) }}"
           echo "needs: ${{ toJSON(needs) }}"
       - name: Test is push
         if: github.event_name == 'push'
@@ -448,7 +588,7 @@ jobs:
 
   release_website:
     name: Release Website
-    needs: [setup_env, determine_website_changes, ci_checks_passing]
+    needs: [setup_env, determine_website_changes, cross_module_ci]
     if: ${{ always() }}
     permissions:
       contents: write
@@ -457,13 +597,13 @@ jobs:
     uses: ./.github/workflows/shared-release.yml
     with:
       module_changed: ${{ needs.determine_website_changes.outputs.module_changed }}
-      module_directory: ${{ needs.setup_env.outputs.website_module_dir }}
+      module_directory: ${{ needs.setup_env.outputs.website_directory }}
       version_command: 'npm version patch --no-git-tag-version -m "chore(release): %s [skip ci]"'
       files_to_commit: "package.json package-lock.json"
 
   release_api:
     name: Release API
-    needs: [setup_env, determine_api_changes, ci_checks_passing]
+    needs: [setup_env, determine_api_changes, cross_module_ci]
     if: ${{ always() }}
     permissions:
       contents: write
@@ -472,6 +612,6 @@ jobs:
     uses: ./.github/workflows/shared-release.yml
     with:
       module_changed: ${{ needs.determine_api_changes.outputs.module_changed }}
-      module_directory: ${{ needs.setup_env.outputs.api_module_dir }}
+      module_directory: ${{ needs.setup_env.outputs.api_directory }}
       version_command: 'cargo release patch --execute --no-confirm --config commit-message="chore(release): {{version}} [skip ci]"'
       files_to_commit: "Cargo.toml Cargo.lock"
