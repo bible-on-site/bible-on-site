@@ -31,8 +31,10 @@ env:
   DEVOPS_DIRECTORY: devops
   DEVOPS_NODE_VERSION_FILE: devops/package.json
   DEVOPS_NODE_CACHE_PATH: devops/package-lock.json
-  WEBSITE_COVERAGE_ARTIFACT_NAME:
-  API_COVERAGE_ARTIFACT_NAME:
+  WEBSITE_COVERAGE_ARTIFACT_NAME_WF:
+  WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER:
+  API_COVERAGE_ARTIFACT_NAME_WF:
+  API_COVERAGE_ARTIFACT_NAME_MASTER:
 
 jobs:
   # ENV SETUP
@@ -271,19 +273,25 @@ jobs:
         continue-on-error: true
         run: npm run coverage:merge
 
-      - name: Set Website Coverage Artifact Name
-        id: set-website-coverage-artifact-name
+      - name: Set Website Coverage Artifact Names
+        id: set-website-coverage-artifact-names
         run: |
-          if [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ]; then
-            echo "WEBSITE_COVERAGE_ARTIFACT_NAME=website-coverage.master" >> $GITHUB_ENV
-          else
-            echo "WEBSITE_COVERAGE_ARTIFACT_NAME=website-coverage.${{ github.run_id }}" >> $GITHUB_ENV
-          fi
+          echo "WEBSITE_COVERAGE_ARTIFACT_NAME_WF=website-coverage.${{ github.run_id }}" >> $GITHUB_ENV
+          echo "WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER=website-coverage.master" >> $GITHUB_ENV
 
-      - name: Store Website Coverage Report
+      - name: Store Website Coverage Report (wf)
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME }}
+          name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF }}
+          path: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
+          retention-days: 400
+          overwrite: true
+
+      - name: Store Website Coverage Report (master)
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
           retention-days: 400
           overwrite: true
@@ -393,19 +401,25 @@ jobs:
           retention-days: 30
           overwrite: true
 
-      - name: Set API Coverage Artifact Name
-        id: set-api-coverage-artifact-name
+      - name: Set API Coverage Artifact Names
+        id: set-api-coverage-artifact-names
         run: |
-          if [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ]; then
-            echo "API_COVERAGE_ARTIFACT_NAME=api-coverage.master" >> $GITHUB_ENV
-          else
-            echo "API_COVERAGE_ARTIFACT_NAME=api-coverage.${{ github.run_id }}" >> $GITHUB_ENV
-          fi
+          echo "API_COVERAGE_ARTIFACT_NAME_WF=api-coverage.${{ github.run_id }}" >> $GITHUB_ENV
+          echo "API_COVERAGE_ARTIFACT_NAME_MASTER=api-coverage.master" >> $GITHUB_ENV
 
-      - name: Store API Coverage Report
+      - name: Store API Coverage Report (wf)
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.API_COVERAGE_ARTIFACT_NAME }}
+          name: ${{ env.API_COVERAGE_ARTIFACT_NAME_WF }}
+          path: ${{ env.API_COVERAGE_REPORT }}
+          retention-days: 400
+          overwrite: true
+
+      - name: Store API Coverage Report (master)
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.API_COVERAGE_REPORT }}
           retention-days: 400
           overwrite: true
