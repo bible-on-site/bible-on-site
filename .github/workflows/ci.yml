@@ -444,10 +444,9 @@ jobs:
         build_lcov_docker,
         determine_baseline_availability,
       ]
-    if: ${{ always() && needs.api_e2e.result == 'success' && needs.website_performance.result == 'success' && needs.website_performance.result == 'skipped' }}
-
+    if: ${{ always() }}
     steps:
-      - name: check prerequisites
+      - name: Check Prerequisites
         id: check_prerequisites
         run: |
           WEBSITE_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_website_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
