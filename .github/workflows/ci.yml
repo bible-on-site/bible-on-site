@@ -496,13 +496,13 @@ jobs:
       - name: Restore Website Coverage Report
         uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.determine_website_changes.outputs.ci_changed == 'true' || needs.determine_website_changes.outputs.module_changed == 'true' && env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF || env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
+          name: ${{ ( needs.determine_website_changes.outputs.ci_changed == 'true' || needs.determine_website_changes.outputs.module_changed == 'true' ) && env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF || env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_DIRECTORY }}
 
       - name: Restore API Coverage Report
         uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.determine_website_changes.outputs.ci_changed == 'true' || needs.determine_api_changes.outputs.module_changed == 'true' && env.API_COVERAGE_ARTIFACT_NAME_WF || env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
+          name: ${{ ( needs.determine_website_changes.outputs.ci_changed == 'true' || needs.determine_api_changes.outputs.module_changed == 'true' ) && env.API_COVERAGE_ARTIFACT_NAME_WF || env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.API_COVERAGE_DIRECTORY }}
 
       - name: Restore lcov Docker image
