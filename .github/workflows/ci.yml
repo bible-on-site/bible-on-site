@@ -31,10 +31,10 @@ env:
   DEVOPS_DIRECTORY: devops
   DEVOPS_NODE_VERSION_FILE: devops/package.json
   DEVOPS_NODE_CACHE_PATH: devops/package-lock.json
-  WEBSITE_COVERAGE_ARTIFACT_NAME_WF:
-  WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER:
-  API_COVERAGE_ARTIFACT_NAME_WF:
-  API_COVERAGE_ARTIFACT_NAME_MASTER:
+  WEBSITE_COVERAGE_ARTIFACT_NAME_WF: website-coverage.${{ github.run_id }}
+  WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER: website-coverage.master
+  API_COVERAGE_ARTIFACT_NAME_WF: api-coverage.${{ github.run_id }}
+  API_COVERAGE_ARTIFACT_NAME_MASTER: api-coverage.master
 
 jobs:
   setup_env:
@@ -63,6 +63,8 @@ jobs:
 
   determine_baseline_availability:
     name: Determine Baseline Availability
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     outputs:
       is_api_master_coverage_available: ${{ steps.master_api_coverage_report_exists.outputs.exists }}
@@ -290,12 +292,6 @@ jobs:
         continue-on-error: true
         run: npm run coverage:merge
 
-      - name: Set Website Coverage Artifact Names
-        id: set-website-coverage-artifact-names
-        run: |
-          echo "WEBSITE_COVERAGE_ARTIFACT_NAME_WF=website-coverage.${{ github.run_id }}" >> $GITHUB_ENV
-          echo "WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER=website-coverage.master" >> $GITHUB_ENV
-
       - name: Store Website Coverage Report (wf)
         uses: actions/upload-artifact@v4
         with:
@@ -418,12 +414,6 @@ jobs:
           retention-days: 30
           overwrite: true
 
-      - name: Set API Coverage Artifact Names
-        id: set-api-coverage-artifact-names
-        run: |
-          echo "API_COVERAGE_ARTIFACT_NAME_WF=api-coverage.${{ github.run_id }}" >> $GITHUB_ENV
-          echo "API_COVERAGE_ARTIFACT_NAME_MASTER=api-coverage.master" >> $GITHUB_ENV
-
       - name: Store API Coverage Report (wf)
         uses: actions/upload-artifact@v4
         with:
@@ -507,13 +497,13 @@ jobs:
       - name: Restore Website Coverage Report
         uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.determine_website_changes.outputs.module_changed == 'true' && format('website-coverage.{0}', github.run_id) || 'website-coverage.master' }}
+          name: ${{ needs.determine_website_changes.outputs.module_changed == 'true' && env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF || env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_DIRECTORY }}
 
       - name: Restore API Coverage Report
         uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.determine_api_changes.outputs.module_changed == 'true' && format('api-coverage.{0}', github.run_id) || 'api-coverage.master' }}
+          name: ${{ needs.determine_api_changes.outputs.module_changed == 'true' && env.API_COVERAGE_ARTIFACT_NAME_WF || env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.API_COVERAGE_DIRECTORY }}
 
       - name: Restore lcov Docker image
