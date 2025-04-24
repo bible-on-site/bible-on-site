@@ -464,7 +464,7 @@ jobs:
           WEBSITE_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_website_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
           if [ "$WEBSITE_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$WEBSITE_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             E2E_STATUS=$([ "${{ needs.website_e2e.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-              PERFORMANCE_STATUS = "skipped"
+              PERFORMANCE_STATUS=skipped
               # No need to run performance tests if only the master coverage is available but no changes were made to niether the website nor the CI
               if [ "$WEBSITE_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ]; then
                 PERFORMANCE_STATUS=$([ "${{ needs.website_performance.result }}" = "success" ] && echo "success" || echo "failure") # Generated
