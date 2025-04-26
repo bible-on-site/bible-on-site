@@ -34,10 +34,10 @@ comment:
 flags:
   api:
     paths:
-      - "web/api/src/**"
+      - web/api/src/
   app:
     paths:
-      - "app/BibleOnSite/**"
+      - app/BibleOnSite/
   website:
     paths:
-      - "web/website/src/**"
+      - web/website/src/
