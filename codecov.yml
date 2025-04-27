@@ -40,4 +40,4 @@ flags:
       - app/BibleOnSite/
   website:
     paths:
-      - web/website/src/
+      - web/bible-on-site/src/
