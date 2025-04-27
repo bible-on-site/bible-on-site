@@ -333,6 +333,11 @@ jobs:
         with:
           tool: cargo-make, cargo-llvm-cov
 
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ env.API_DIRECTORY }}
+
       - name: Lint
         id: lint
         working-directory: ${{ env.API_DIRECTORY }}
@@ -400,11 +405,6 @@ jobs:
         working-directory: ${{ env.API_DIRECTORY }}
         run: |
           cargo make coverage-e2e
-
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: ${{ env.API_DIRECTORY }}
 
       - name: Store E2E Report
         uses: actions/upload-artifact@v4
@@ -505,6 +505,24 @@ jobs:
           name: ${{ ( needs.determine_website_changes.outputs.ci_changed == 'true' || needs.determine_api_changes.outputs.module_changed == 'true' ) && env.API_COVERAGE_ARTIFACT_NAME_WF || env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.API_COVERAGE_DIRECTORY }}
 
+      - name: Publish Website Coverage To Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
+          disable_search: true
+          flags: website
+          fail_ci_if_error: true
+
+      - name: Publish API Coverage To Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.API_COVERAGE_REPORT }}
+          disable_search: true
+          flags: api
+          fail_ci_if_error: true
+
       - name: Restore lcov Docker image
         uses: actions/download-artifact@v4
         with:
@@ -532,13 +550,6 @@ jobs:
         run: npm run coverage:merge
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
 
-      - name: Publish coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ env.CROSS_MODULE_COVERAGE_REPORT }}
-          disable_search: true
-
       - name: Run codacy-coverage-reporter
         uses: codacy/codacy-coverage-reporter-action@master
         with:
@@ -548,7 +559,7 @@ jobs:
       - name: Verify Coverage 3rd Party Reporting
         run: |
           # Check Codecov status using the Codecov API
-            MAX_RETRIES=10
+            MAX_RETRIES=30
             RETRY_COUNT=0
             while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
               OWNER_REPO=(${GITHUB_REPOSITORY/\// })
@@ -581,7 +592,7 @@ jobs:
                 exit 1
               fi
               echo "Waiting for Codecov status to complete (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)..."
-              sleep 30
+              sleep 10
               RETRY_COUNT=$((RETRY_COUNT+1))
             done
 
