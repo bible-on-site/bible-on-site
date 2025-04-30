@@ -279,6 +279,14 @@ jobs:
           retention-days: 30
           overwrite: true
 
+      - name: Publish Report To Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/unit/junit/results.xml, ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/e2e/junit/results.xml
+          flags: website
+
       - name: Restore lcov Docker image
         uses: actions/download-artifact@v4
         with:
@@ -406,12 +414,12 @@ jobs:
         run: |
           cargo make coverage-e2e
 
-      - name: Upload Test Results To Codecov
+      - name: Publish E2E Report To Codecov
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/junit/results.xml
+          file: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/junit/results.xml
           flags: api
 
       - name: Store E2E Report
