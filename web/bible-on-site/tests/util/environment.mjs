@@ -12,3 +12,5 @@ function flagToBool(value, options) {
 export const shouldMeasureCov = flagToBool(process.env.MEASURE_COV, {
 	defaultValue: false,
 });
+
+export const isCI = !!process.env.CI;

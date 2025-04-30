@@ -1,12 +1,13 @@
-import { devices } from "@playwright/test";
+import { devices, ReporterDescription } from "@playwright/test";
 import { defineConfig } from "@playwright/test";
 
+const isCI = !!process.env.CI;
 const WEB_SERVER_URL = "http://127.0.0.1:3003/api/graphql";
 export default defineConfig({
 	testMatch: ["**/*.test.ts"],
 	testDir: "./e2e",
 	/* Fail the build on CI if you accidentally left test.only in the source code. */
-	forbidOnly: !!process.env.CI,
+	forbidOnly: isCI,
 	use: {
 		/* Base URL to use in actions like `await page.goto('/')`. */
 		baseURL: WEB_SERVER_URL,
@@ -16,7 +17,7 @@ export default defineConfig({
 		timezoneId: "Asia/Jerusalem",
 	},
 	// Increase the default timeout to 1 min in case of CI (slow servers).
-	timeout: process.env.CI ? 60000 : 30000,
+	timeout: isCI ? 60000 : 30000,
 	globalTeardown: "./playwright-global-teardown.js",
 	projects: [
 		{
@@ -26,11 +27,21 @@ export default defineConfig({
 	],
 	fullyParallel: true,
 	retries: 0,
-	workers: process.env.CI ? "100%" : "50%",
+	workers: isCI ? "100%" : "50%",
 
 	reporter: [
 		["list"],
 		["html", { outputFolder: "../.playwright-report/e2e", open: "never" }],
+		...(isCI
+			? [
+					[
+						"junit",
+						{
+							outputFile: `.playwright-report/${testType}/junit/results.xml`,
+						},
+					] as ReporterDescription,
+				]
+			: []),
 	],
 
 	webServer: {

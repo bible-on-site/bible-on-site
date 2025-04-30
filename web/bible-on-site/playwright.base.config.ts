@@ -4,8 +4,7 @@ import type { CoverageReportOptions } from "monocart-reporter";
 import { getDebugPort } from "./get-debug-port";
 import type { TestType } from "./test-type";
 import * as fs from "node:fs";
-import { shouldMeasureCov } from "./tests/util/environment.mjs";
-const isCI = !!process.env.CI;
+import { shouldMeasureCov, isCI } from "./tests/util/environment.mjs";
 export function getBaseConfig(testType: TestType) {
 	const WEB_SERVER_URL = "http://127.0.0.1:3001";
 	const config = defineConfig({
@@ -53,10 +52,14 @@ export function getBaseConfig(testType: TestType) {
 				{ outputFolder: `.playwright-report/${testType}`, open: "never" },
 			],
 			...(isCI
-				? ([
-						"junit",
-						{ outputFile: `.playwright-report/${testType}/junit/results.xml` },
-					] as ReporterDescription)
+				? [
+						[
+							"junit",
+							{
+								outputFile: `.playwright-report/${testType}/junit/results.xml`,
+							},
+						] as ReporterDescription,
+					]
 				: []),
 			...(shouldMeasureCov ? [getMonocartReporter()] : []),
 		],
@@ -84,6 +87,7 @@ export function getBaseConfig(testType: TestType) {
 				// Fixes path formatting in LCOV files for Windows paths
 				const lcovPath = `.coverage/${testType}/lcov.info`;
 				const content = fs.readFileSync(lcovPath, "utf8");
+				// TODO: support any drive letter, not just C:
 				const fixedContent = content.replace(/SF:C\\/g, "SF:C:\\");
 				fs.writeFileSync(lcovPath, fixedContent);
 			},
