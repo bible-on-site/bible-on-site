@@ -5,14 +5,14 @@ import { getDebugPort } from "./get-debug-port";
 import type { TestType } from "./test-type";
 import * as fs from "node:fs";
 import { shouldMeasureCov } from "./tests/util/environment.mjs";
-
+const isCI = !!process.env.CI;
 export function getBaseConfig(testType: TestType) {
 	const WEB_SERVER_URL = "http://127.0.0.1:3001";
 	const config = defineConfig({
 		testMatch: [`${testType}/**/*.test.ts`],
 		testDir: "./tests",
 		/* Fail the build on CI if you accidentally left test.only in the source code. */
-		forbidOnly: !!process.env.CI,
+		forbidOnly: isCI,
 		use: {
 			/* Base URL to use in actions like `await page.goto('/')`. */
 			baseURL: WEB_SERVER_URL,
@@ -22,7 +22,7 @@ export function getBaseConfig(testType: TestType) {
 			timezoneId: "Asia/Jerusalem",
 		},
 		// Increase the default timeout to 1 min in case of CI (slow servers).
-		timeout: process.env.CI ? 60000 : 30000,
+		timeout: isCI ? 60000 : 30000,
 		globalSetup: "./playwright-global-setup.js",
 		globalTeardown: shouldMeasureCov
 			? "./playwright-global-teardown-coverage.js"
@@ -52,6 +52,12 @@ export function getBaseConfig(testType: TestType) {
 				"html",
 				{ outputFolder: `.playwright-report/${testType}`, open: "never" },
 			],
+			...(isCI
+				? ([
+						"junit",
+						{ outputFile: `.playwright-report/${testType}/junit/results.xml` },
+					] as ReporterDescription)
+				: []),
 			...(shouldMeasureCov ? [getMonocartReporter()] : []),
 		],
 	});

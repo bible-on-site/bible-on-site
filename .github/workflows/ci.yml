@@ -406,6 +406,14 @@ jobs:
         run: |
           cargo make coverage-e2e
 
+      - name: Upload Test Results To Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/junit/results.xml
+          flags: api
+
       - name: Store E2E Report
         uses: actions/upload-artifact@v4
         with:
