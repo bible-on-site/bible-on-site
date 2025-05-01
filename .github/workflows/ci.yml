@@ -489,12 +489,20 @@ jobs:
           path: ${{ env.TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY }}
           merge-multiple: true
 
+      - name: List JUnit files
+        id: list_files
+        run: |
+          cd ${{ env.TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY }}
+          files=$(ls -1 | paste -sd,)
+          echo "junit_files=$files" >> $GITHUB_OUTPUT
+
       - name: Publish Website Unit/E2E/Perf Report To Codecov
         if: ${{ needs.website_e2e.result != 'skipped' }}
         uses: codecov/test-results-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          directory: ${{ env.TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY }}
+          files: ${{ steps.list_files.outputs.junit_files }}
+          flags: website # Assuming you want to flag these as website tests
 
   cross_module_ci:
     name: Cross Module CI
