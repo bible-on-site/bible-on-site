@@ -46,7 +46,7 @@ export function getBaseConfig(testType: TestType) {
 			reuseExistingServer: true, // consider that for some tests, such as for admin pages, restart the server before running each test
 		},
 		reporter: [
-			["list"],
+			[isCI ? "github" : "list"],
 			[
 				"html",
 				{ outputFolder: `.playwright-report/${testType}`, open: "never" },
@@ -56,7 +56,7 @@ export function getBaseConfig(testType: TestType) {
 						[
 							"junit",
 							{
-								outputFile: `.playwright-report/${testType}/junit/results.xml`,
+								outputFile: `.playwright-report/${testType}/junit/${testType}-results.xml`,
 							},
 						] as ReporterDescription,
 					]

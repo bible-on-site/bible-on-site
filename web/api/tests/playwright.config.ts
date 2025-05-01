@@ -1,4 +1,4 @@
-import { devices, ReporterDescription } from "@playwright/test";
+import { devices, type ReporterDescription } from "@playwright/test";
 import { defineConfig } from "@playwright/test";
 
 const isCI = !!process.env.CI;
@@ -31,7 +31,13 @@ export default defineConfig({
 
 	reporter: [
 		["list"],
-		["html", { outputFolder: "../.playwright-report/e2e", open: "never" }],
+		[
+			"html",
+			{
+				outputFolder: "../.playwright-report/e2e/html",
+				open: isCI ? "never" : "on-failure",
+			},
+		],
 		...(isCI
 			? [
 					[
