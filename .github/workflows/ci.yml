@@ -6,8 +6,7 @@ on:
     branches: master
   pull_request:
     branches: master
-  merge_group:
-    branches: master
+  # TODO: if ever scale on PR frequency consider trigger on merge_group. If doing so, implement a way to immediately pass CI if merge_group contains only a single PR
   workflow_dispatch:
     inputs:
       ref:
