@@ -470,6 +470,8 @@ jobs:
 
   website_publish_test_results_to_codecov:
     name: Publish Website Test Results To Codecov
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     needs: [website_e2e, website_performance]
     if: ${{ always() && (needs.website_e2e.result != 'skipped' || needs.website_performance.result != 'skipped') }}
