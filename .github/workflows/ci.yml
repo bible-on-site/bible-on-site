@@ -500,6 +500,7 @@ jobs:
         if: ${{ needs.website_e2e.result != 'skipped' }}
         uses: codecov/test-results-action@v1
         with:
+          working-directory: ${{ env.TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ steps.list_files.outputs.junit_files }}
           flags: website # Assuming you want to flag these as website tests
