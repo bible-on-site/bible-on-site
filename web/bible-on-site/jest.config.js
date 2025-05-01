@@ -1,6 +1,6 @@
 import nextJest from "next/jest.js";
-import { shouldMeasureCov } from "./tests/util/environment.mjs";
-
+import { isCI, shouldMeasureCov } from "./tests/util/environment.mjs";
+// TODO: transform into TS
 /** @type {import('jest').Config} */
 const config = {
 	clearMocks: true,
@@ -13,7 +13,15 @@ const config = {
 	setupFiles: ["./jest.setup.js"],
 	preset: "ts-jest",
 	reporters: [
-		"default",
+		isCI ? ["github-actions", { silent: false }] : "default",
+		...(isCI
+			? [
+					[
+						"jest-junit",
+						{ outputDirectory: ".jest-report", outputName: "unit-results.xml" },
+					],
+				]
+			: []),
 		...(shouldMeasureCov
 			? [
 					[
