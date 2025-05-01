@@ -4,15 +4,14 @@ import type { CoverageReportOptions } from "monocart-reporter";
 import { getDebugPort } from "./get-debug-port";
 import type { TestType } from "./test-type";
 import * as fs from "node:fs";
-import { shouldMeasureCov } from "./tests/util/environment.mjs";
-
+import { shouldMeasureCov, isCI } from "./tests/util/environment.mjs";
 export function getBaseConfig(testType: TestType) {
 	const WEB_SERVER_URL = "http://127.0.0.1:3001";
 	const config = defineConfig({
 		testMatch: [`${testType}/**/*.test.ts`],
 		testDir: "./tests",
 		/* Fail the build on CI if you accidentally left test.only in the source code. */
-		forbidOnly: !!process.env.CI,
+		forbidOnly: isCI,
 		use: {
 			/* Base URL to use in actions like `await page.goto('/')`. */
 			baseURL: WEB_SERVER_URL,
@@ -22,7 +21,7 @@ export function getBaseConfig(testType: TestType) {
 			timezoneId: "Asia/Jerusalem",
 		},
 		// Increase the default timeout to 1 min in case of CI (slow servers).
-		timeout: process.env.CI ? 60000 : 30000,
+		timeout: isCI ? 60000 : 30000,
 		globalSetup: "./playwright-global-setup.js",
 		globalTeardown: shouldMeasureCov
 			? "./playwright-global-teardown-coverage.js"
@@ -47,11 +46,21 @@ export function getBaseConfig(testType: TestType) {
 			reuseExistingServer: true, // consider that for some tests, such as for admin pages, restart the server before running each test
 		},
 		reporter: [
-			["list"],
+			[isCI ? "github" : "list"],
 			[
 				"html",
 				{ outputFolder: `.playwright-report/${testType}`, open: "never" },
 			],
+			...(isCI
+				? [
+						[
+							"junit",
+							{
+								outputFile: `.playwright-report/${testType}/junit/${testType}-results.xml`,
+							},
+						] as ReporterDescription,
+					]
+				: []),
 			...(shouldMeasureCov ? [getMonocartReporter()] : []),
 		],
 	});
@@ -78,6 +87,7 @@ export function getBaseConfig(testType: TestType) {
 				// Fixes path formatting in LCOV files for Windows paths
 				const lcovPath = `.coverage/${testType}/lcov.info`;
 				const content = fs.readFileSync(lcovPath, "utf8");
+				// TODO: support any drive letter, not just C:
 				const fixedContent = content.replace(/SF:C\\/g, "SF:C:\\");
 				fs.writeFileSync(lcovPath, fixedContent);
 			},

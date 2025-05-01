@@ -1,3 +1,4 @@
+# TODO: cleanup artifacts using geekyeggo/delete-artifact
 name: Continous Integration
 
 on:
@@ -15,34 +16,38 @@ on:
         default: "master"
 
 env:
-  WEBSITE_DIRECTORY: web/bible-on-site
-  WEBSITE_NODE_VERSION_FILE: web/bible-on-site/package.json
-  WEBSITE_NODE_CACHE_PATH: web/bible-on-site/package-lock.json
-  WEBSITE_MERGED_COVERAGE_REPORT: web/bible-on-site/.coverage/merged/lcov.info
-  WEBSITE_MERGED_COVERAGE_DIRECTORY: web/bible-on-site/.coverage/merged
-  API_DIRECTORY: web/api
   API_CARGO_FILE: web/api/Cargo.toml
-  API_TESTS_DIRECTORY: web/api/tests
-  API_TESTS_NODE_VERSION_FILE: web/api/tests/package.json
-  API_TESTS_NODE_CACHE_PATH: web/api/tests/package-lock.json
-  API_COVERAGE_REPORT: web/api/.coverage/lcov.info
+  API_COVERAGE_ARTIFACT_NAME_MASTER: api-coverage.master
+  API_COVERAGE_ARTIFACT_NAME_WF: api-coverage.${{ github.run_id }}
   API_COVERAGE_DIRECTORY: web/api/.coverage
+  API_COVERAGE_REPORT: web/api/.coverage/lcov.info
+  API_DIRECTORY: web/api
+  API_TESTS_DIRECTORY: web/api/tests
+  API_TESTS_NODE_CACHE_PATH: web/api/tests/package-lock.json
+  API_TESTS_NODE_VERSION_FILE: web/api/tests/package.json
   CROSS_MODULE_COVERAGE_REPORT: .coverage/lcov.info
   DEVOPS_DIRECTORY: devops
-  DEVOPS_NODE_VERSION_FILE: devops/package.json
   DEVOPS_NODE_CACHE_PATH: devops/package-lock.json
-  WEBSITE_COVERAGE_ARTIFACT_NAME_WF: website-coverage.${{ github.run_id }}
+  TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY: tmp-website-junit-reports
+  DEVOPS_NODE_VERSION_FILE: devops/package.json
   WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER: website-coverage.master
-  API_COVERAGE_ARTIFACT_NAME_WF: api-coverage.${{ github.run_id }}
-  API_COVERAGE_ARTIFACT_NAME_MASTER: api-coverage.master
+  WEBSITE_COVERAGE_ARTIFACT_NAME_WF: website-coverage.${{ github.run_id }}
+  WEBSITE_DIRECTORY: web/bible-on-site
+  WEBSITE_E2E_JUNIT_REPORT_ARTIFACT_NAME: website-e2e-junit-report-${{ github.run_id }}
+  WEBSITE_MERGED_COVERAGE_DIRECTORY: web/bible-on-site/.coverage/merged
+  WEBSITE_MERGED_COVERAGE_REPORT: web/bible-on-site/.coverage/merged/lcov.info
+  WEBSITE_NODE_CACHE_PATH: web/bible-on-site/package-lock.json
+  WEBSITE_NODE_VERSION_FILE: web/bible-on-site/package.json
+  WEBSITE_PERF_JUNIT_REPORT_ARTIFACT_NAME: website-perf-junit-report-${{ github.run_id }}
+  WEBSITE_UNIT_JUNIT_REPORT_ARTIFACT_NAME: website-unit-junit-report-${{ github.run_id }}
 
 jobs:
   setup_env:
     name: Setup Environment Variables
     runs-on: ubuntu-latest
     outputs:
-      website_directory: web/bible-on-site
-      api_directory: web/api
+      website_directory: ${{ env.WEBSITE_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
+      api_directory: ${{ env.API_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       website_playwright_version: ${{ steps.get_website_playwright_version.outputs.PLAYWRIGHT_VERSION }}
       api_playwright_version: ${{ steps.get_api_playwright_version.outputs.PLAYWRIGHT_VERSION }}
     steps:
@@ -194,12 +199,20 @@ jobs:
         id: npm-perf-test
         run: npm run test:perf
 
-      - name: Store Perf Report
+      - name: Store Website Perf HTML Report
         uses: actions/upload-artifact@v4
         with:
-          name: website-perf-report
-          path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/perf/
-          retention-days: 30
+          name: website-perf-html-report-${{ github.run_id }}
+          path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/perf/html
+          retention-days: 7
+          overwrite: true
+
+      - name: Store Website Perf JUnit Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.WEBSITE_PERF_JUNIT_REPORT_ARTIFACT_NAME }}
+          path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/perf/junit/perf-results.xml
+          retention-days: 1
           overwrite: true
 
   website_e2e:
@@ -255,6 +268,14 @@ jobs:
         id: npm-unit-test
         run: npm run coverage:unit
 
+      - name: Store Website Unit JUnit Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.WEBSITE_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
+          path: ${{ env.WEBSITE_DIRECTORY }}/.jest-report/unit-results.xml
+          retention-days: 1
+          overwrite: true
+
       - name: Build cache
         uses: actions/cache@v4
         with:
@@ -271,12 +292,20 @@ jobs:
         id: npm-e2e-test
         run: npm run coverage:e2e
 
-      - name: Store E2E Report
+      - name: Store Website E2E HTML Report
         uses: actions/upload-artifact@v4
         with:
-          name: website-e2e-report
-          path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/e2e/
-          retention-days: 30
+          name: website-e2e-html-report-${{ github.run_id }}
+          path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/e2e/html
+          retention-days: 7
+          overwrite: true
+
+      - name: Store Website E2E JUnit Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.WEBSITE_E2E_JUNIT_REPORT_ARTIFACT_NAME }}
+          path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/e2e/junit/e2e-results.xml
+          retention-days: 1
           overwrite: true
 
       - name: Restore lcov Docker image
@@ -406,12 +435,20 @@ jobs:
         run: |
           cargo make coverage-e2e
 
-      - name: Store E2E Report
+      - name: Publish API E2E Report To Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/junit/results.xml
+          flags: api
+
+      - name: Store API E2E HTML Report
         uses: actions/upload-artifact@v4
         with:
-          name: api-e2e-report
-          path: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/
-          retention-days: 30
+          name: api-e2e-html-report-${{ github.run_id }}
+          path: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/html
+          retention-days: 7
           overwrite: true
 
       - name: Store API Coverage Report (wf)
@@ -430,6 +467,43 @@ jobs:
           path: ${{ env.API_COVERAGE_REPORT }}
           retention-days: 400
           overwrite: true
+
+  website_publish_test_results_to_codecov:
+    name: Publish Website Test Results To Codecov
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    needs: [website_e2e, website_performance]
+    if: ${{ always() && (needs.website_e2e.result != 'skipped' || needs.website_performance.result != 'skipped') }}
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+
+      - name: Restore Website JUnit Reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: website-*-junit-report-${{ github.run_id }}
+          path: ${{ env.TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY }}
+          merge-multiple: true
+
+      - name: List JUnit files
+        id: list_files
+        run: |
+          cd ${{ env.TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY }}
+          files=$(ls -1 | paste -sd,)
+          echo "junit_files=$files" >> $GITHUB_OUTPUT
+
+      - name: Publish Website Unit/E2E/Perf Report To Codecov
+        if: ${{ needs.website_e2e.result != 'skipped' }}
+        uses: codecov/test-results-action@v1
+        with:
+          working-directory: ${{ env.TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ steps.list_files.outputs.junit_files }}
+          flags: website # Assuming you want to flag these as website tests
 
   cross_module_ci:
     name: Cross Module CI
@@ -455,7 +529,7 @@ jobs:
             echo "Could not determine module changes."
             [ "$WEBSITE_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine website changes."
             [ "$API_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine API changes."
-            echo "Overall status=failure" >> $GITHUB_OUTPUT
+            echo "Overall status: failure" >> $GITHUB_OUTPUT
             exit 1
           fi
 
@@ -499,12 +573,6 @@ jobs:
           name: ${{ ( needs.determine_website_changes.outputs.ci_changed == 'true' || needs.determine_website_changes.outputs.module_changed == 'true' ) && env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF || env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_DIRECTORY }}
 
-      - name: Restore API Coverage Report
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ ( needs.determine_website_changes.outputs.ci_changed == 'true' || needs.determine_api_changes.outputs.module_changed == 'true' ) && env.API_COVERAGE_ARTIFACT_NAME_WF || env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: ${{ env.API_COVERAGE_DIRECTORY }}
-
       - name: Publish Website Coverage To Codecov
         uses: codecov/codecov-action@v5
         with:
@@ -513,6 +581,12 @@ jobs:
           disable_search: true
           flags: website
           fail_ci_if_error: true
+
+      - name: Restore API Coverage Report
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ ( needs.determine_website_changes.outputs.ci_changed == 'true' || needs.determine_api_changes.outputs.module_changed == 'true' ) && env.API_COVERAGE_ARTIFACT_NAME_WF || env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
+          path: ${{ env.API_COVERAGE_DIRECTORY }}
 
       - name: Publish API Coverage To Codecov
         uses: codecov/codecov-action@v5
