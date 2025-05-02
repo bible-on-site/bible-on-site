@@ -5,6 +5,7 @@
 		"husky": "9.1.7"
 	},
 	"scripts": {
-		"prepare": "husky"
+		"prepare": "husky",
+		"version": "cross-env-shell echo ${npm_package_version}"
 	}
 }

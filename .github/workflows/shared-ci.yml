@@ -33,7 +33,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
-          fetch-depth: 0
 
       - name: Check for changes
         id: check_changes

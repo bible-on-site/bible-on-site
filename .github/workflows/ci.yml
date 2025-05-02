@@ -1,11 +1,8 @@
 # TODO: cleanup artifacts using geekyeggo/delete-artifact
 name: Continous Integration
-
 on:
   push:
-    branches: master
-  pull_request:
-    branches: master
+    branches: [] # all branches
   # TODO: if ever scale on PR frequency consider trigger on merge_group. If doing so, implement a way to immediately pass CI if merge_group contains only a single PR
   workflow_dispatch:
     inputs:
@@ -27,8 +24,8 @@ env:
   CROSS_MODULE_COVERAGE_REPORT: .coverage/lcov.info
   DEVOPS_DIRECTORY: devops
   DEVOPS_NODE_CACHE_PATH: devops/package-lock.json
-  TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY: tmp-website-junit-reports
   DEVOPS_NODE_VERSION_FILE: devops/package.json
+  TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY: tmp-website-junit-reports
   WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER: website-coverage.master
   WEBSITE_COVERAGE_ARTIFACT_NAME_WF: website-coverage.${{ github.run_id }}
   WEBSITE_DIRECTORY: web/bible-on-site
@@ -715,8 +712,6 @@ jobs:
     with:
       module_changed: ${{ needs.determine_website_changes.outputs.module_changed }}
       module_directory: ${{ needs.setup_env.outputs.website_directory }}
-      version_command: 'npm version patch --no-git-tag-version -m "chore(release): %s [skip ci]"'
-      files_to_commit: "package.json package-lock.json"
 
   release_api:
     name: Release API
@@ -730,5 +725,3 @@ jobs:
     with:
       module_changed: ${{ needs.determine_api_changes.outputs.module_changed }}
       module_directory: ${{ needs.setup_env.outputs.api_directory }}
-      version_command: 'cargo release patch --execute --no-confirm --config commit-message="chore(release): {{version}} [skip ci]"'
-      files_to_commit: "Cargo.toml Cargo.lock"
