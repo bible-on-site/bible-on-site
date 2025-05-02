@@ -10,37 +10,7 @@ const __dirname = path.dirname(__filename); // get the name of the directory
 // Load environment variables from .env file
 dotenv.config({ path: path.resolve(process.cwd(), ".test.env") });
 
-async function getDbConnectionDetails(): Promise<mysql.ConnectionOptions> {
-	const dbUrlStr = process.env.DB_URL;
-	if (dbUrlStr === undefined) {
-		throw new Error("Environment variable DB_URL is required");
-	}
-
-	const dbUrl = new URL(dbUrlStr);
-	const dbHost = dbUrl.hostname;
-	const dbPort = dbUrl.port || "3306";
-	const dbUser = dbUrl.username;
-	const dbPassword = decodeURIComponent(dbUrl.password);
-
-	return {
-		host: dbHost,
-		port: Number.parseInt(dbPort, 10),
-		user: dbUser,
-		password: dbPassword,
-		multipleStatements: true,
-	};
-}
-
-async function executeScript(
-	connection: mysql.Connection,
-	scriptPath: string,
-	scriptType: string,
-): Promise<void> {
-	console.log(`Executing ${scriptType} script...`);
-	const script = fs.readFileSync(scriptPath, "utf8");
-	await connection.query(script);
-	console.log(`${scriptType} script executed successfully`);
-}
+await main();
 
 async function main() {
 	let connection: mysql.Connection | null = null;
@@ -75,4 +45,34 @@ async function main() {
 	}
 }
 
-await main();
+async function getDbConnectionDetails(): Promise<mysql.ConnectionOptions> {
+	const dbUrlStr = process.env.DB_URL;
+	if (dbUrlStr === undefined) {
+		throw new Error("Environment variable DB_URL is required");
+	}
+
+	const dbUrl = new URL(dbUrlStr);
+	const dbHost = dbUrl.hostname;
+	const dbPort = dbUrl.port || "3306";
+	const dbUser = dbUrl.username;
+	const dbPassword = decodeURIComponent(dbUrl.password);
+
+	return {
+		host: dbHost,
+		port: Number.parseInt(dbPort, 10),
+		user: dbUser,
+		password: dbPassword,
+		multipleStatements: true,
+	};
+}
+
+async function executeScript(
+	connection: mysql.Connection,
+	scriptPath: string,
+	scriptType: string,
+): Promise<void> {
+	console.log(`Executing ${scriptType} script...`);
+	const script = fs.readFileSync(scriptPath, "utf8");
+	await connection.query(script);
+	console.log(`${scriptType} script executed successfully`);
+}

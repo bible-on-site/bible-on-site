@@ -1,3 +1,4 @@
+## compare against their staged version (begin with not --name-only? sound complicated)
 changed_files=$(git diff --cached --name-only --diff-filter=ACM HEAD)
 
 # cross-module pre-commit hook
