@@ -8,12 +8,6 @@ on:
       module_directory:
         required: true
         type: string
-      version_command:
-        required: true
-        type: string
-      files_to_commit:
-        required: true
-        type: string
     secrets:
       DEPLOY_KEY:
         required: true
@@ -21,8 +15,10 @@ on:
 permissions:
   contents: write
 env:
-  IS_NPM: false
-  IS_CARGO: false
+  IS_NPM: ${{ inputs.module_directory == 'web/bible-on-site' }}
+  IS_CARGO: ${{ inputs.module_directory == 'web/api' }}
+  MODULE_NAME: ${{ inputs.module_directory == 'web/bible-on-site' && 'Website' || 'API' }}
+
 jobs:
   release:
     name: Release
@@ -44,11 +40,6 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set Environment Variables
-        run: |
-          echo "IS_CARGO=$(echo '${{ inputs.version_command }}' | grep -q 'cargo' && echo true || echo false)" >> $GITHUB_ENV
-          echo "IS_NPM=$(echo '${{ inputs.version_command }}' | grep -q 'npm' && echo true || echo false)" >> $GITHUB_ENV
-
       - name: Setup Node.js
         if: ${{ env.IS_NPM == 'true' }}
         uses: actions/setup-node@v4
@@ -57,7 +48,7 @@ jobs:
           cache-dependency-path: ${{ inputs.MODULE_DIRECTORY }}/package-lock.json
           cache: npm
 
-      - name: Install npm Dependencies
+      - name: Install NPM Dependencies
         if: ${{ env.IS_NPM == 'true' }}
         working-directory: ${{ inputs.module_directory }}
         id: npm_ci
@@ -84,26 +75,51 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-      - name: Bump version
+      - name: Bump ${{ env.MODULE_NAME }} Version
         working-directory: ${{ inputs.module_directory }}
-        run: ${{ inputs.version_command }}
+        run: |
+          if [ "${{ env.IS_NPM }}" = "true" ]; then # Generated
+            npm version patch --no-git-tag-version -m "chore(release): %s [skip ci]"
+          elif [ "${{ env.IS_CARGO }}" = "true" ]; then # Generated
+            cargo release patch --execute --no-confirm --config commit-message="chore(release): {{version}} [skip ci]"
+          fi
+      - name: Get Bumped Version
+        id: get_bumped_version
+        working-directory: ${{ inputs.module_directory }}
+        run: |
+          if [ "${{ env.MODULE_NAME }}" = "Website" ]; then # Generated
+            echo "BUMPED_VERSION=$(cargo make version | grep -v 'INFO')" >> $GITHUB_OUTPUT
+          elif [ "${{ env.MODULE_NAME }}" = "API" ]; then # Generated
+            echo "BUMPED_VERSION=$(npm run version | grep -v -e \"^$\" -e \">\")" >> $GITHUB_OUTPUT
+          fi
 
       - name: Add Deploy Key
         uses: webfactory/ssh-agent@72c0bfd31ab22a2e11716951e3f107a9647dc97e
         with:
           ssh-private-key: ${{ secrets.DEPLOY_KEY }}
 
-      - name: Commit changes
+      - name: Commit ${{ env.MODULE_NAME }} Version Bump Changes
+        working-directory: ${{ inputs.module_directory }}
         run: |
-          cd ${{ inputs.module_directory }}
-          git add ${{ inputs.files_to_commit }}
-          git commit -n -m "chore(release): Bump version [skip ci]"
+          if [ "${{ env.IS_NPM }}" = "true" ]; then # Generated
+            git add package.json package-lock.json
+          elif [ "${{ env.IS_CARGO }}" = "true" ]; then # Generated
+            git add Cargo.toml Cargo.lock
+          fi
+          git commit -n -m "chore(release): Bump ${{ env.MODULE_NAME }} version to ${{ steps.get_bumped_version.outputs.BUMPED_VERSION }} [skip ci]"
 
-      - name: Push changes
+      - name: Push ${{ env.MODULE_NAME }} Version Bump Changes
         run: |
           git remote set-url origin git@github.com:${{ github.repository }}
           git push origin HEAD --follow-tags
 
-      - name: ${{ env.IS_CARGO == 'true' && 'Dockerize api' || 'Dockerize website' }}
+      - name: Dockerize ${{ env.MODULE_NAME }}
         working-directory: ${{ inputs.module_directory }}
         run: ${{ env.IS_CARGO == 'true' && 'cargo make package' || 'npm run package' }}
+
+      - name: Create Tag
+        id: create_tag
+        run: |
+          TAG_NAME=$(echo "${{ env.MODULE_NAME }}-v${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}")
+          git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
+          git push origin "$TAG_NAME"

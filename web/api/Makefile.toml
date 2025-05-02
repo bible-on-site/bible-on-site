@@ -78,3 +78,7 @@ args = [
   "${CARGO_MAKE_CRATE_NAME}:${CARGO_MAKE_CRATE_VERSION}",
   ".",
 ]
+
+[tasks.version]
+command = "echo"
+args = ["${CARGO_MAKE_CRATE_VERSION}"]

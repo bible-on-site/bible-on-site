@@ -1,0 +1,54 @@
+name: Continuous Deployment
+
+on:
+  push:
+    tags:
+      - "website-v*.*.*"
+      - "api-v*.*.*"
+
+jobs:
+  deploy:
+    if: startsWith(github.ref, 'refs/tags/website-v')
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+
+    env:
+      DEVOPS_DIRECTORY: devops
+      DEVOPS_NODE_CACHE_PATH: devops/package-lock.json
+      DEVOPS_NODE_VERSION_FILE: devops/package.json
+
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.ref }}
+      - name: Calculate Module Name
+        id: module_name
+        run: |
+          echo "MODULE_NAME=$(echo ${{ github.ref }} | sed -E 's|refs/tags/([^/]+)-v[0-9]+\.[0-9]+\.[0-9]+|\1|')" >> $GITHUB_OUTPUT
+
+      - name: Setup Node.js
+        id: setup-node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
+          cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
+          cache: npm
+
+      - name: Install npm Dependencies
+        id: npm_ci
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        run: |
+          npm ci --no-audit
+
+      - name: Spread Secrets to Environment Variables
+        uses: oNaiPs/secrets-to-env-action@v1
+        with:
+          secrets: ${{ toJSON(secrets) }}
+
+      - name: Deploy to Production
+        id: deploy
+        run: |
+          npm run deploy:${{ steps.module_name.outputs.MODULE_NAME }}

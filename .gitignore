@@ -5,3 +5,4 @@ monocart-report/
 .playwright-report/
 .venv/
 *.egg-info/
+.ssh/
