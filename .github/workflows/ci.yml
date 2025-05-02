@@ -2,7 +2,8 @@
 name: Continous Integration
 on:
   push:
-    branches: [] # all branches
+    branches:
+      - "**"
   # TODO: if ever scale on PR frequency consider trigger on merge_group. If doing so, implement a way to immediately pass CI if merge_group contains only a single PR
   workflow_dispatch:
     inputs:
