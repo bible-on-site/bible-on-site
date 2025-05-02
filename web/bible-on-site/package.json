@@ -18,7 +18,8 @@
 		"coverage:unit": "cross-env MEASURE_COV=1 node --no-deprecation --import tsx ./node_modules/jest/bin/jest.js",
 		"coverage:e2e": "cross-env MEASURE_COV=1 playwright test --config=playwright.e2e.config.ts",
 		"coverage:merge": "node --import tsx ./tests/util/coverage/merge-coverage.mts",
-		"package": "cross-env-shell \"docker build -t bible-on-site:${npm_package_version} .\""
+		"package": "cross-env-shell \"docker build -t bible-on-site:${npm_package_version} .\"",
+		"version": "cross-env-shell echo ${npm_package_version}"
 	},
 	"bin": {
 		"biome": "./node_modules/@biomejs/biome/bin/biome"
