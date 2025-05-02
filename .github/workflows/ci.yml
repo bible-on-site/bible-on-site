@@ -1,10 +1,14 @@
 # TODO: cleanup artifacts using geekyeggo/delete-artifact
 name: Continous Integration
 on:
+  # Better practice is to run on any push instead of just either master push or PR.
+  # Just that there is some issues with the way the CI is implemented now.
+  # I.E. the module determination tstep depends on it.
+  # TODO: (1) Resolve this dependency (2) remove the pull_request trigger (3) set push trigger on ** branches
   push:
-    branches:
-      - "**"
-  # TODO: if ever scale on PR frequency consider trigger on merge_group. If doing so, implement a way to immediately pass CI if merge_group contains only a single PR
+    branches: master
+  pull_request:
+    branches: master
   workflow_dispatch:
     inputs:
       ref:

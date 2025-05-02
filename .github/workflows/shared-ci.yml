@@ -36,6 +36,7 @@ jobs:
 
       - name: Check for changes
         id: check_changes
+        # TODO: Enhance this check. I.E. the way it's implemented now prevents the CI from running if there isn't an open PR.
         run: |
           if [[ ${{ github.event_name }} == 'pull_request' ]]; then
               BASE_SHA=${{ github.event.pull_request.base.sha }}
