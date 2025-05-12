@@ -28,15 +28,15 @@
 		"node": ">=22.2.0"
 	},
 	"dependencies": {
-		"@hebcal/core": "5.9.3",
-		"@syncfusion/ej2-react-grids": "29.1.39",
+		"@hebcal/core": "5.9.5",
+		"@syncfusion/ej2-react-grids": "29.1.41",
 		"@syncfusion/ej2-react-layouts": "29.1.39",
 		"flowbite": "3.1.2",
 		"flowbite-react": "0.11.7",
 		"gematry": "1.0.2",
 		"html-flip-book-react": "0.0.0-alpha.1",
 		"moment-timezone": "0.5.48",
-		"next": "15.3.1",
+		"next": "15.3.2",
 		"nuqs": "2.4.3",
 		"react": "rc",
 		"react-dom": "rc",
