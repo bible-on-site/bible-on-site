@@ -102,7 +102,12 @@ jobs:
       - name: Commit ${{ env.MODULE_NAME }} Version Bump Changes
         working-directory: ${{ inputs.module_directory }}
         run: |
-          git add ${{ env.IS_NPM == 'true' && 'package.json package-lock.json' || 'Cargo.toml Cargo.lock' }} # Generated
+          if [ "${{ env.IS_NPM }}" = "true" ]; then
+            FILES_TO_ADD="package.json package-lock.json"
+          elif [ "${{ env.IS_CARGO }}" = "true" ]; then
+            FILES_TO_ADD="Cargo.toml Cargo.lock"
+          fi
+          git add $FILES_TO_ADD # Generated
           git commit -n -m "chore(release): Bump ${{ env.MODULE_NAME }} version to ${{ steps.get_bumped_version.outputs.BUMPED_VERSION }} [skip ci]"
 
       - name: Dockerize ${{ env.MODULE_NAME }}
