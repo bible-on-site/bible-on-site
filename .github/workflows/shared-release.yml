@@ -62,7 +62,7 @@ jobs:
       - uses: taiki-e/install-action@v2
         if: ${{ env.IS_CARGO == 'true' }}
         with:
-          tool: cargo-make, cargo-release
+          tool: cargo-make, tomato-toml, semver-bump
 
       - name: Cache Cargo dependencies
         if: ${{ env.IS_CARGO == 'true' }}
@@ -79,14 +79,15 @@ jobs:
         working-directory: ${{ inputs.module_directory }}
         run: |
           if [ "${{ env.IS_NPM }}" = "true" ]; then # Generated
-            npm version patch --no-git-tag-version -m "chore(release): %s [skip ci]"
+            npm version patch --no-git-tag-version
           elif [ "${{ env.IS_CARGO }}" = "true" ]; then # Generated
-            cargo release patch --execute --no-confirm --config commit-message="chore(release): {{version}} [skip ci]"
+            cargo make bump-version
           fi
       - name: Get Bumped Version
         id: get_bumped_version
         working-directory: ${{ inputs.module_directory }}
         run: |
+          # TODO implement in root devops script
           if [ "${{ env.MODULE_NAME }}" = "Website" ]; then # Generated
             echo "BUMPED_VERSION=$(cargo make version | grep -v 'INFO')" >> $GITHUB_OUTPUT
           elif [ "${{ env.MODULE_NAME }}" = "API" ]; then # Generated
@@ -101,17 +102,8 @@ jobs:
       - name: Commit ${{ env.MODULE_NAME }} Version Bump Changes
         working-directory: ${{ inputs.module_directory }}
         run: |
-          if [ "${{ env.IS_NPM }}" = "true" ]; then # Generated
-            git add package.json package-lock.json
-          elif [ "${{ env.IS_CARGO }}" = "true" ]; then # Generated
-            git add Cargo.toml Cargo.lock
-          fi
+          git add ${{ env.IS_NPM == 'true' && 'package.json package-lock.json' || 'Cargo.toml Cargo.lock' }} # Generated
           git commit -n -m "chore(release): Bump ${{ env.MODULE_NAME }} version to ${{ steps.get_bumped_version.outputs.BUMPED_VERSION }} [skip ci]"
-
-      - name: Push ${{ env.MODULE_NAME }} Version Bump Changes
-        run: |
-          git remote set-url origin git@github.com:${{ github.repository }}
-          git push origin HEAD --follow-tags
 
       - name: Dockerize ${{ env.MODULE_NAME }}
         working-directory: ${{ inputs.module_directory }}
@@ -122,4 +114,8 @@ jobs:
         run: |
           TAG_NAME=$(echo "${{ env.MODULE_NAME }}-v${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}")
           git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
-          git push origin "$TAG_NAME"
+
+      - name: Push Changes (I.E. Version Bump) and the Tag
+        run: |
+          git remote set-url origin git@github.com:${{ github.repository }}
+          git push origin HEAD --tags --follow-tags
