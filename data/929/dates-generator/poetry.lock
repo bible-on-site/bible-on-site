@@ -525,20 +525,20 @@ files = [
 
 [[package]]
 name = "hdate"
-version = "1.0.3"
+version = "1.1.0"
 description = "Jewish/Hebrew date and Zmanim in native Python 2.7/3.x"
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "hdate-1.0.3-py3-none-any.whl", hash = "sha256:c9d76c95c77577f45c98e5e2cb3822d3738c8534a1d3bac827db2967bbdc9de9"},
-    {file = "hdate-1.0.3.tar.gz", hash = "sha256:661440592212fc8480da265743db4c6abcc6121a5619775db2f62cf8ceabebab"},
+    {file = "hdate-1.1.0-py3-none-any.whl", hash = "sha256:583534c9ad698618b17a42b3ca86bed460c7b1971b12933d77605b04b9c33765"},
+    {file = "hdate-1.1.0.tar.gz", hash = "sha256:cc2cea11d316b0f58d8161e6a4c7fbb618aac1ca333abf9921731313b4939e72"},
 ]
 
 [package.dependencies]
 num2words = ">=0.5.14"
 
 [package.extras]
-astral = ["astral (>=2.2,<3.0)"]
+astral = ["astral (>=2.2)"]
 
 [[package]]
 name = "httpcore"
