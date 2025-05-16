@@ -89,9 +89,9 @@ jobs:
         run: |
           # TODO implement in root devops script
           if [ "${{ env.MODULE_NAME }}" = "Website" ]; then # Generated
-            echo "BUMPED_VERSION=$(cargo make version | grep -v 'INFO')" >> $GITHUB_OUTPUT
-          elif [ "${{ env.MODULE_NAME }}" = "API" ]; then # Generated
             echo "BUMPED_VERSION=$(npm run version | grep -v -e \"^$\" -e \">\")" >> $GITHUB_OUTPUT
+          elif [ "${{ env.MODULE_NAME }}" = "API" ]; then # Generated
+            echo "BUMPED_VERSION=$(cargo make version | grep -v 'INFO')" >> $GITHUB_OUTPUT
           fi
 
       - name: Add Deploy Key
