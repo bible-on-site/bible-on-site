@@ -139,6 +139,7 @@ jobs:
 
       - name: save docker image
         run: |
+          mkdir -p ${{ inputs.module_directory }}/.release
           docker save -o ${{ env.DOCKER_IMAGE_PATH }} ${{ env.DOCKER_IMAGE_NAME }}:${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}
 
       - name: Create GitHub Release For ${{ env.MODULE_NAME_CAPITALIZED }}
