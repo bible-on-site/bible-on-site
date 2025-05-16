@@ -19,6 +19,8 @@ env:
   IS_CARGO: ${{ inputs.module_directory == 'web/api' }}
   MODULE_NAME: ${{ inputs.module_directory == 'web/bible-on-site' && 'website' || 'api' }}
   MODULE_NAME_CAPITALIZED: ${{ inputs.module_directory == 'web/bible-on-site' && 'Website' || 'API' }}
+  DOCKER_IMAGE_NAME: ${{ inputs.module_directory == 'web/bible-on-site' && 'bible-on-site' || 'bible-on-site-api' }}
+  DOCKER_IMAGE_PATH: ${{ inputs.module_directory }}/.release/${{ inputs.module_directory == 'web/bible-on-site' && 'bible-on-site' || 'bible-on-site-api' }}.tar.gz
 jobs:
   release:
     name: Release
@@ -124,3 +126,30 @@ jobs:
         run: |
           git remote set-url origin git@github.com:${{ github.repository }}
           git push origin HEAD --tags --follow-tags
+
+      - name: save docker image
+        run: |
+          docker save -o ${{ env.DOCKER_IMAGE_PATH }} ${{ env.DOCKER_IMAGE_NAME }}:${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}
+
+      - name: Create GitHub Release For ${{ env.MODULE_NAME_CAPITALIZED }}
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.MODULE_NAME }}-v${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}
+          release_name: Release ${{ env.MODULE_NAME_CAPITALIZED }} v${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}
+          body: |
+            Automated release for ${{ env.MODULE_NAME_CAPITALIZED }} version ${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}.
+          draft: false
+          prerelease: false
+
+      - name: Upload ${{ env.MODULE_NAME_CAPITALIZED }} Image to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ env.DOCKER_IMAGE_PATH }}
+          asset_name: ${{ env.DOCKER_IMAGE_NAME }}-v${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}.tar.gz
+          asset_content_type: application/x-tar
