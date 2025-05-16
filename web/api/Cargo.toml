@@ -44,3 +44,7 @@ incremental = true
 
 [package.metadata.release]
 pre-release-commit-message = "chore(release): {{version}} [skip ci]"
+
+[package.metadata.cargo-udeps.ignore] #TODO: somehow the ignore list got ignored...
+normal = ["semver-bump", "tomato-toml"]
+build = ["semver-bump", "tomato-toml"]
