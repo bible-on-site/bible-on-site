@@ -587,7 +587,7 @@ jobs:
       - name: Restore API Coverage Report
         uses: actions/download-artifact@v4
         with:
-            name: ${{ needs.api_e2e.result != 'skipped' && env.API_COVERAGE_ARTIFACT_NAME_WF || env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
+          name: ${{ needs.api_e2e.result != 'skipped' && env.API_COVERAGE_ARTIFACT_NAME_WF || env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.API_COVERAGE_DIRECTORY }}
 
       - name: Publish API Coverage To Codecov
