@@ -122,7 +122,7 @@ function pipInstall(dir: string, inVenv = true) {
 function assertRustVersion() {
 	// TODO: check using semver, TODO: inform if Rust is not installed
 	console.info("Checking Rust version...");
-	const supportedRustVersions = ["1.84.1"];
+	const supportedRustVersions = ["1.87.0"];
 	const actualRustVersion = RegExp(/rustc\s+(\d+\.\d+\.\d+)/)
 		.exec(
 			spawnSync("rustc", ["--version"], {
