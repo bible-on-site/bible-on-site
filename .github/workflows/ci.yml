@@ -531,7 +531,7 @@ jobs:
             echo "Could not determine module changes."
             [ "$WEBSITE_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine website changes."
             [ "$API_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine API changes."
-            echo "Overall status: failure" >> $GITHUB_OUTPUT
+            echo "Overall status: failure"
             exit 1
           fi
 
