@@ -21,8 +21,18 @@ env:
   MODULE_NAME_CAPITALIZED: ${{ inputs.module_directory == 'web/bible-on-site' && 'Website' || 'API' }}
   DOCKER_IMAGE_NAME: ${{ inputs.module_directory == 'web/bible-on-site' && 'bible-on-site' || 'bible-on-site-api' }}
   DOCKER_IMAGE_PATH: ${{ inputs.module_directory }}/.release/${{ inputs.module_directory == 'web/bible-on-site' && 'bible-on-site' || 'bible-on-site-api' }}.tar.gz
+
 jobs:
+  setup_env:
+    name: Setup Environment Variables
+    runs-on: ubuntu-latest
+    outputs:
+      MODULE_NAME: ${{ env.MODULE_NAME }} # a workaround for places where only needs.<job_id>.<output> is allowed
+    steps:
+      - run: echo "Setting up environment variables"
+
   release:
+    needs: setup_env
     name: Release
     # Ensures only one release job runs at a time for this repository.
     # This prevents potential race conditions which has been proven to occur.
@@ -32,7 +42,7 @@ jobs:
     #   TODO: Investigate the root cause of multiple triggers from the merge queue.
     # - Collisions from manual workflow runs or other concurrent triggers.
     concurrency:
-      group: ${{ github.repository }}
+      group: ${{ github.repository }}-release-${{ needs.setup_env.outputs.MODULE_NAME }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
     if: ${{ inputs.module_changed == 'true' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)}}
