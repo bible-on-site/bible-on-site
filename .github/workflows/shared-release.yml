@@ -17,8 +17,8 @@ permissions:
 env:
   IS_NPM: ${{ inputs.module_directory == 'web/bible-on-site' }}
   IS_CARGO: ${{ inputs.module_directory == 'web/api' }}
-  MODULE_NAME: ${{ inputs.module_directory == 'web/bible-on-site' && 'Website' || 'API' }}
-
+  MODULE_NAME: ${{ inputs.module_directory == 'web/bible-on-site' && 'website' || 'api' }}
+  MODULE_NAME_CAPITALIZED: ${{ inputs.module_directory == 'web/bible-on-site' && 'Website' || 'API' }}
 jobs:
   release:
     name: Release
@@ -75,7 +75,7 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-      - name: Bump ${{ env.MODULE_NAME }} Version
+      - name: Bump ${{ env.MODULE_NAME_CAPITALIZED }} Version
         working-directory: ${{ inputs.module_directory }}
         run: |
           if [ "${{ env.IS_NPM }}" = "true" ]; then # Generated
@@ -88,9 +88,9 @@ jobs:
         working-directory: ${{ inputs.module_directory }}
         run: |
           # TODO implement in root devops script
-          if [ "${{ env.MODULE_NAME }}" = "Website" ]; then # Generated
+          if [ "${{ env.MODULE_NAME }}" = "website" ]; then # Generated
             echo "BUMPED_VERSION=$(npm run version | grep -v -e \"^$\" -e \">\")" >> $GITHUB_OUTPUT
-          elif [ "${{ env.MODULE_NAME }}" = "API" ]; then # Generated
+          elif [ "${{ env.MODULE_NAME }}" = "api" ]; then # Generated
             echo "BUMPED_VERSION=$(cargo make version | grep -v 'INFO')" >> $GITHUB_OUTPUT
           fi
 
@@ -99,7 +99,7 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.DEPLOY_KEY }}
 
-      - name: Commit ${{ env.MODULE_NAME }} Version Bump Changes
+      - name: Commit ${{ env.MODULE_NAME_CAPITALIZED }} Version Bump Changes
         working-directory: ${{ inputs.module_directory }}
         run: |
           if [ "${{ env.IS_NPM }}" = "true" ]; then
@@ -110,7 +110,7 @@ jobs:
           git add $FILES_TO_ADD # Generated
           git commit -n -m "chore(release): Bump ${{ env.MODULE_NAME }} version to ${{ steps.get_bumped_version.outputs.BUMPED_VERSION }} [skip ci]"
 
-      - name: Dockerize ${{ env.MODULE_NAME }}
+      - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
         working-directory: ${{ inputs.module_directory }}
         run: ${{ env.IS_CARGO == 'true' && 'cargo make package' || 'npm run package' }}
 
