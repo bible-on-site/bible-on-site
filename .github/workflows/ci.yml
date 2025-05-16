@@ -572,7 +572,7 @@ jobs:
       - name: Restore Website Coverage Report
         uses: actions/download-artifact@v4
         with:
-          name: ${{ ( needs.determine_website_changes.outputs.ci_changed == 'true' || needs.determine_website_changes.outputs.module_changed == 'true' ) && env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF || env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
+          name: ${{ needs.website_e2e.result != 'skipped' && env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF || env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_DIRECTORY }}
 
       - name: Publish Website Coverage To Codecov
@@ -587,7 +587,7 @@ jobs:
       - name: Restore API Coverage Report
         uses: actions/download-artifact@v4
         with:
-          name: ${{ ( needs.determine_website_changes.outputs.ci_changed == 'true' || needs.determine_api_changes.outputs.module_changed == 'true' ) && env.API_COVERAGE_ARTIFACT_NAME_WF || env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
+            name: ${{ needs.api_e2e.result != 'skipped' && env.API_COVERAGE_ARTIFACT_NAME_WF || env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.API_COVERAGE_DIRECTORY }}
 
       - name: Publish API Coverage To Codecov
@@ -671,40 +671,6 @@ jobs:
               sleep 10
               RETRY_COUNT=$((RETRY_COUNT+1))
             done
-
-  # RELEASES
-  debug_release:
-    name: Debug Release
-    runs-on: ubuntu-latest
-    if: ${{ always() }}
-    needs: [setup_env, determine_website_changes, determine_api_changes, cross_module_ci]
-    steps:
-      - name: Debug Release inputs
-        run: |
-          echo "github.event_name: ${{ github.event_name }}"
-          echo "github.ref: ${{ github.ref }}"
-          echo "determine_website_changes.module_changed: ${{ needs.determine_website_changes.outputs.module_changed }}"
-          echo "determine_api_changes.module_changed: ${{ needs.determine_api_changes.outputs.module_changed }}"
-          echo "cross_module_ci: ${{ toJSON(needs.cross_module_ci) }}"
-          echo "needs: ${{ toJSON(needs) }}"
-      - name: Test is push
-        if: github.event_name == 'push'
-        run: echo "Push event"
-      - name: Test is main branch
-        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        run: echo "Main branch"
-      - name: Test website changed
-        if: needs.determine_website_changes.outputs.module_changed == 'true'
-        run: echo "Website changed"
-      - name: Test api changed
-        if: needs.determine_api_changes.outputs.module_changed == 'true'
-        run: echo "API changed"
-      - name: Test should release website
-        if: github.event_name == 'push' && needs.determine_website_changes.outputs.module_changed == 'true' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        run: echo "Release website"
-      - name: Test should release api
-        if: github.event_name == 'push' && needs.determine_api_changes.outputs.module_changed == 'true' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        run: echo "Release api"
 
   release_website:
     name: Release Website
