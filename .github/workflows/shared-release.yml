@@ -142,7 +142,7 @@ jobs:
 
       - name: GZip Docker Image
         run: |
-          gzip -f ${{ env.DOCKER_IMAGE_TAR_GZ_PATH }}
+          gzip -f ${{ env.DOCKER_IMAGE_TAR_PATH }}
 
       - name: Create GitHub Release For ${{ env.MODULE_NAME_CAPITALIZED }}
         id: create_release
