@@ -31,6 +31,7 @@ env:
   DEVOPS_DIRECTORY: devops
   DEVOPS_NODE_CACHE_PATH: devops/package-lock.json
   DEVOPS_NODE_VERSION_FILE: devops/package.json
+  IS_MASTER_BRANCH: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
   TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY: tmp-website-junit-reports
   WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER: website-coverage.master
   WEBSITE_COVERAGE_ARTIFACT_NAME_WF: website-coverage.${{ github.run_id }}
@@ -48,10 +49,11 @@ jobs:
     name: Setup Environment Variables
     runs-on: ubuntu-latest
     outputs:
-      website_directory: ${{ env.WEBSITE_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       api_directory: ${{ env.API_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
-      website_playwright_version: ${{ steps.get_website_playwright_version.outputs.PLAYWRIGHT_VERSION }}
       api_playwright_version: ${{ steps.get_api_playwright_version.outputs.PLAYWRIGHT_VERSION }}
+      is_master_branch: ${{ env.IS_MASTER_BRANCH }} # a workaround for places where only needs.<job_id>.<output> is allowed
+      website_directory: ${{ env.WEBSITE_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
+      website_playwright_version: ${{ steps.get_website_playwright_version.outputs.PLAYWRIGHT_VERSION }}
     steps:
       - run: echo "Setting up environment variables"
       - name: Checkout
@@ -332,7 +334,7 @@ jobs:
           overwrite: true
 
       - name: Store Website Coverage Report (master)
-        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        if: ${{ env.IS_MASTER_BRANCH == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
@@ -462,7 +464,7 @@ jobs:
           overwrite: true
 
       - name: Store API Coverage Report (master)
-        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        if: ${{ env.IS_MASTER_BRANCH == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
@@ -675,25 +677,23 @@ jobs:
   release_website:
     name: Release Website
     needs: [setup_env, determine_website_changes, cross_module_ci]
-    if: ${{ always() }}
+    if: ${{ needs.determine_website_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
     secrets: inherit
     uses: ./.github/workflows/shared-release.yml
     with:
-      module_changed: ${{ needs.determine_website_changes.outputs.module_changed }}
       module_directory: ${{ needs.setup_env.outputs.website_directory }}
 
   release_api:
     name: Release API
     needs: [setup_env, determine_api_changes, cross_module_ci]
-    if: ${{ always() }}
+    if: ${{ needs.determine_api_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
     secrets: inherit
     uses: ./.github/workflows/shared-release.yml
     with:
-      module_changed: ${{ needs.determine_api_changes.outputs.module_changed }}
       module_directory: ${{ needs.setup_env.outputs.api_directory }}
