@@ -2,9 +2,6 @@ name: Shared Release Flow
 on:
   workflow_call:
     inputs:
-      module_changed:
-        required: true
-        type: string
       module_directory:
         required: true
         type: string
@@ -20,7 +17,7 @@ env:
   MODULE_NAME: ${{ inputs.module_directory == 'web/bible-on-site' && 'website' || 'api' }}
   MODULE_NAME_CAPITALIZED: ${{ inputs.module_directory == 'web/bible-on-site' && 'Website' || 'API' }}
   DOCKER_IMAGE_NAME: ${{ inputs.module_directory == 'web/bible-on-site' && 'bible-on-site' || 'bible-on-site-api' }}
-  DOCKER_IMAGE_PATH: ${{ inputs.module_directory }}/.release/${{ inputs.module_directory == 'web/bible-on-site' && 'bible-on-site' || 'bible-on-site-api' }}.tar.gz
+  DOCKER_IMAGE_OUTPUT_DIR: ${{ inputs.module_directory }}/.release
 
 jobs:
   setup_env:
@@ -45,7 +42,6 @@ jobs:
       group: ${{ github.repository }}-release-${{ needs.setup_env.outputs.MODULE_NAME }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
-    if: ${{ inputs.module_changed == 'true' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)}}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -95,6 +91,7 @@ jobs:
           elif [ "${{ env.IS_CARGO }}" = "true" ]; then # Generated
             cargo make bump-version
           fi
+
       - name: Get Bumped Version
         id: get_bumped_version
         working-directory: ${{ inputs.module_directory }}
@@ -122,9 +119,25 @@ jobs:
           git add $FILES_TO_ADD # Generated
           git commit -n -m "chore(release): Bump ${{ env.MODULE_NAME }} version to ${{ steps.get_bumped_version.outputs.BUMPED_VERSION }} [skip ci]"
 
+      - name: Calculate Docker Image Path
+        id: docker_image_path
+        run: |
+          DOCKER_IMAGE_TAR_NAME="${{ env.DOCKER_IMAGE_NAME }}-v${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}.tar"
+          DOCKER_IMAGE_TAR_GZ_NAME="${DOCKER_IMAGE_TAR_NAME}.gz"
+          DOCKER_IMAGE_TAR_PATH="${{ env.DOCKER_IMAGE_OUTPUT_DIR }}/${DOCKER_IMAGE_TAR_NAME}"
+          echo "DOCKER_IMAGE_TAR_GZ_NAME=${DOCKER_IMAGE_TAR_GZ_NAME}" >> $GITHUB_OUTPUT
+          echo "DOCKER_IMAGE_TAR_PATH=${DOCKER_IMAGE_TAR_PATH}" >> $GITHUB_OUTPUT
+          echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_PATH}.gz" >> $GITHUB_OUTPUT
+
       - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
-        working-directory: ${{ inputs.module_directory }}
-        run: ${{ env.IS_CARGO == 'true' && 'cargo make package' || 'npm run package' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.module_directory }}
+          file: ${{ inputs.module_directory }}/Dockerfile
+          tags: ${{ env.DOCKER_IMAGE_NAME }}:${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}
+          outputs: type=docker,dest=${{ steps.docker_image_path.outputs.DOCKER_IMAGE_TAR_PATH }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Create Tag
         id: create_tag
@@ -137,10 +150,10 @@ jobs:
           git remote set-url origin git@github.com:${{ github.repository }}
           git push origin HEAD --tags --follow-tags
 
-      - name: save docker image
+      - name: GZip Docker Image
+        working-directory: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
         run: |
-          mkdir -p ${{ inputs.module_directory }}/.release
-          docker save -o ${{ env.DOCKER_IMAGE_PATH }} ${{ env.DOCKER_IMAGE_NAME }}:${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}
+          gzip -f ${{ steps.docker_image_path.outputs.DOCKER_IMAGE_TAR_PATH }}
 
       - name: Create GitHub Release For ${{ env.MODULE_NAME_CAPITALIZED }}
         id: create_release
@@ -161,6 +174,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ env.DOCKER_IMAGE_PATH }}
-          asset_name: ${{ env.DOCKER_IMAGE_NAME }}-v${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}.tar.gz
-          asset_content_type: application/x-tar
+          asset_path: ${{ steps.docker_image_path.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
+          asset_name: ${{ steps.docker_image_path.outputs.DOCKER_IMAGE_TAR_GZ_NAME }}
+          asset_content_type: application/gzip
