@@ -2,9 +2,6 @@ name: Shared Release Flow
 on:
   workflow_call:
     inputs:
-      module_changed:
-        required: true
-        type: string
       module_directory:
         required: true
         type: string
@@ -45,7 +42,6 @@ jobs:
       group: ${{ github.repository }}-release-${{ needs.setup_env.outputs.MODULE_NAME }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
-    if: ${{ inputs.module_changed == 'true' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)}}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
