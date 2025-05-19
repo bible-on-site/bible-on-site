@@ -17,8 +17,7 @@ env:
   MODULE_NAME: ${{ inputs.module_directory == 'web/bible-on-site' && 'website' || 'api' }}
   MODULE_NAME_CAPITALIZED: ${{ inputs.module_directory == 'web/bible-on-site' && 'Website' || 'API' }}
   DOCKER_IMAGE_NAME: ${{ inputs.module_directory == 'web/bible-on-site' && 'bible-on-site' || 'bible-on-site-api' }}
-  DOCKER_IMAGE_TAR_PATH: ${{ inputs.module_directory }}/.release/${{ inputs.module_directory == 'web/bible-on-site' && 'bible-on-site' || 'bible-on-site-api' }}.tar
-  DOCKER_IMAGE_TAR_GZ_PATH: ${{ inputs.module_directory }}/.release/${{ inputs.module_directory == 'web/bible-on-site' && 'bible-on-site' || 'bible-on-site-api' }}.tar.gz
+  DOCKER_IMAGE_OUTPUT_DIR: ${{ inputs.module_directory }}/.release
 
 jobs:
   setup_env:
@@ -92,6 +91,7 @@ jobs:
           elif [ "${{ env.IS_CARGO }}" = "true" ]; then # Generated
             cargo make bump-version
           fi
+
       - name: Get Bumped Version
         id: get_bumped_version
         working-directory: ${{ inputs.module_directory }}
@@ -119,13 +119,22 @@ jobs:
           git add $FILES_TO_ADD # Generated
           git commit -n -m "chore(release): Bump ${{ env.MODULE_NAME }} version to ${{ steps.get_bumped_version.outputs.BUMPED_VERSION }} [skip ci]"
 
+      - name: Calculate Docker Image Path
+        id: docker_image_path
+        run: |
+          DOCKER_IMAGE_TAR_NAME="${{ env.DOCKER_IMAGE_NAME }}-v${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}.tar"
+          DOCKER_IMAGE_TAR_GZ_NAME="${DOCKER_IMAGE_TAR_NAME}.gz"
+          echo "DOCKER_IMAGE_TAR_GZ_NAME=${DOCKER_IMAGE_TAR_GZ_NAME}" >> $GITHUB_OUTPUT
+          echo "DOCKER_IMAGE_TAR_PATH=${{ env.DOCKER_IMAGE_OUTPUT_DIR }}/${DOCKER_IMAGE_TAR_NAME}" >> $GITHUB_OUTPUT
+          echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_PATH}.gz" >> $GITHUB_OUTPUT
+
       - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
         uses: docker/build-push-action@v6
         with:
           context: ${{ inputs.module_directory }}
           file: ${{ inputs.module_directory }}/Dockerfile
           tags: ${{ env.DOCKER_IMAGE_NAME }}:${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}
-          outputs: type=docker,dest=${{ env.DOCKER_IMAGE_TAR_PATH }}
+          outputs: type=docker,dest=${{ steps.docker_image_path.outputs.DOCKER_IMAGE_TAR_PATH }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -141,8 +150,9 @@ jobs:
           git push origin HEAD --tags --follow-tags
 
       - name: GZip Docker Image
+        working-directory: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
         run: |
-          gzip -f ${{ env.DOCKER_IMAGE_TAR_GZ_PATH }}
+          gzip -f ${{ steps.docker_image_path.outputs.DOCKER_IMAGE_TAR_PATH }}
 
       - name: Create GitHub Release For ${{ env.MODULE_NAME_CAPITALIZED }}
         id: create_release
@@ -163,6 +173,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ env.DOCKER_IMAGE_TAR_GZ_PATH }}
-          asset_name: ${{ env.DOCKER_IMAGE_NAME }}-v${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}.tar.gz
+          asset_path: ${{ steps.docker_image_path.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
+          asset_name: ${{ steps.docker_image_path.outputs.DOCKER_IMAGE_TAR_GZ_NAME }}
           asset_content_type: application/gzip
