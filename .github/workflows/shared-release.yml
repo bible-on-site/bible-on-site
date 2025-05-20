@@ -98,7 +98,7 @@ jobs:
         run: |
           # TODO implement in root devops script
           if [ "${{ env.MODULE_NAME }}" = "website" ]; then # Generated
-            echo "BUMPED_VERSION=$(npm run version | grep -v -e \"^$\" -e \">\")" >> $GITHUB_OUTPUT
+            echo "BUMPED_VERSION=$(npm run version | tail -1)" >> $GITHUB_OUTPUT
           elif [ "${{ env.MODULE_NAME }}" = "api" ]; then # Generated
             echo "BUMPED_VERSION=$(cargo make version | grep -v 'INFO')" >> $GITHUB_OUTPUT
           fi
