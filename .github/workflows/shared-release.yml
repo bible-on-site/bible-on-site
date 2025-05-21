@@ -157,7 +157,7 @@ jobs:
       - name: GZip Docker Image
         working-directory: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
         run: |
-          gzip -f ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_PATH }}
+          gzip -f ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_NAME }}
 
       - name: Create GitHub Release For ${{ env.MODULE_NAME_CAPITALIZED }}
         id: create_release
