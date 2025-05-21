@@ -130,6 +130,9 @@ jobs:
           echo "DOCKER_IMAGE_TAR_PATH=${DOCKER_IMAGE_TAR_PATH}" >> $GITHUB_OUTPUT
           echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_PATH}.gz" >> $GITHUB_OUTPUT
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
         uses: docker/build-push-action@v6
         with:
