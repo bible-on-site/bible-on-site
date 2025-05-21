@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.28",
+	"version": "0.2.29",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
@@ -29,7 +29,7 @@
 	},
 	"dependencies": {
 		"@hebcal/core": "5.9.5",
-		"@syncfusion/ej2-react-grids": "29.2.4",
+		"@syncfusion/ej2-react-grids": "29.2.5",
 		"@syncfusion/ej2-react-layouts": "29.2.4",
 		"flowbite": "3.1.2",
 		"flowbite-react": "0.11.7",
@@ -46,7 +46,7 @@
 		"@biomejs/biome": "1.9.4",
 		"@playwright/test": "1.52.0",
 		"@types/jest": "29.5.14",
-		"@types/node": "22.15.20",
+		"@types/node": "22.15.21",
 		"@types/react": "19.1.4",
 		"@types/react-dom": "19.1.5",
 		"autoprefixer": "10.4.21",
