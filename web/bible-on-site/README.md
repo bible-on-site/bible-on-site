@@ -4,3 +4,4 @@ It's implemented using Next.js
 Guidelines:
 - Use SSG wherever possible.
 - Make sure each change is covered by a test.
+- Check locally before pushing.
