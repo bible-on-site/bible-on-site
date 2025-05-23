@@ -1,0 +1,12 @@
+name: Test Tag Trigger
+
+on:
+  push:
+    tags:
+      - "website-v*.*.*"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Tag workflow triggered!"
