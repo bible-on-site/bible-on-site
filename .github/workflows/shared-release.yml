@@ -154,32 +154,22 @@ jobs:
       - name: Push Changes (I.E. Version Bump) and the Tag
         run: |
           git remote set-url origin git@github.com:${{ github.repository }}
-          git push origin HEAD --tags --follow-tags
+          git push origin HEAD
+          git push origin $TAG_NAME
 
       - name: GZip Docker Image
         working-directory: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
         run: |
           gzip -c -f ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_NAME }} > ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_GZ_NAME }}
 
-      - name: Create GitHub Release For ${{ env.MODULE_NAME_CAPITALIZED }}
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create GitHub Release and Upload ${{ env.MODULE_NAME_CAPITALIZED }} Image
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.MODULE_NAME }}-v${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}
-          release_name: Release ${{ env.MODULE_NAME_CAPITALIZED }} v${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}
+          name: Release ${{ env.MODULE_NAME_CAPITALIZED }} v${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}
           body: |
             Automated release for ${{ env.MODULE_NAME_CAPITALIZED }} version ${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}.
           draft: false
           prerelease: false
-
-      - name: Upload ${{ env.MODULE_NAME_CAPITALIZED }} Image to Release
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
-          asset_name: ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_GZ_NAME }}
-          asset_content_type: application/gzip
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
