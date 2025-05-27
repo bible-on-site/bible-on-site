@@ -117,7 +117,7 @@ jobs:
             FILES_TO_ADD="Cargo.toml Cargo.lock"
           fi
           git add $FILES_TO_ADD # Generated
-          git commit -n -m "chore(release): Bump ${{ env.MODULE_NAME }} version to ${{ steps.get_bumped_version.outputs.BUMPED_VERSION }} [skip ci]"
+          git commit -n -m "chore(release): Bump ${{ env.MODULE_NAME }} version to ${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}"
 
       - name: Prepare Dockerizing
         id: prepare_dockerizing
@@ -154,8 +154,7 @@ jobs:
       - name: Push Changes (I.E. Version Bump) and the Tag
         run: |
           git remote set-url origin git@github.com:${{ github.repository }}
-          git push origin HEAD
-          git push origin $TAG_NAME
+          git push origin HEAD --tags --follow-tags
 
       - name: GZip Docker Image
         working-directory: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
