@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.37",
+	"version": "0.2.38",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
@@ -28,14 +28,14 @@
 		"node": ">=22.2.0"
 	},
 	"dependencies": {
-		"@hebcal/core": "5.9.7",
-		"@syncfusion/ej2-react-grids": "29.2.5",
+		"@hebcal/core": "5.9.8",
+		"@syncfusion/ej2-react-grids": "29.2.7",
 		"@syncfusion/ej2-react-layouts": "29.2.4",
 		"flowbite": "3.1.2",
 		"flowbite-react": "0.11.7",
 		"gematry": "1.0.2",
 		"html-flip-book-react": "0.0.0-alpha.1",
-		"moment-timezone": "0.5.48",
+		"moment-timezone": "0.6.0",
 		"next": "15.3.2",
 		"nuqs": "2.4.3",
 		"react": "rc",
@@ -46,8 +46,8 @@
 		"@biomejs/biome": "1.9.4",
 		"@playwright/test": "1.52.0",
 		"@types/jest": "29.5.14",
-		"@types/node": "22.15.21",
-		"@types/react": "19.1.5",
+		"@types/node": "22.15.22",
+		"@types/react": "19.1.6",
 		"@types/react-dom": "19.1.5",
 		"autoprefixer": "10.4.21",
 		"cross-env": "7.0.3",
@@ -56,7 +56,7 @@
 		"jest": "29.7.0",
 		"jest-environment-jsdom": "29.7.0",
 		"jest-junit": "16.0.0",
-		"monocart-reporter": "2.9.19",
+		"monocart-reporter": "2.9.20",
 		"postcss": "8.5.3",
 		"swc-plugin-coverage-instrument": "0.0.27",
 		"tailwindcss": "3.4.17",
@@ -64,7 +64,7 @@
 		"ts-node": "10.9.2",
 		"tsx": "4.19.4",
 		"typescript": "5.8.3",
-		"typescript-eslint": "8.32.1",
+		"typescript-eslint": "8.33.0",
 		"web-vitals": "5.0.1"
 	}
 }
