@@ -6,3 +6,4 @@ monocart-report/
 .venv/
 *.egg-info/
 .ssh/
+.release/

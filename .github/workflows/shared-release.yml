@@ -83,47 +83,39 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-      - name: Bump ${{ env.MODULE_NAME_CAPITALIZED }} Version
+      - name: Get Current Version
+        id: get_current_version
         working-directory: ${{ inputs.module_directory }}
         run: |
-          if [ "${{ env.IS_NPM }}" = "true" ]; then # Generated
-            npm version patch --no-git-tag-version
-          elif [ "${{ env.IS_CARGO }}" = "true" ]; then # Generated
-            cargo make bump-version
+          if [ "${{ env.MODULE_NAME }}" = "website" ]; then
+            CURRENT_VERSION=$(npm run version | tail -1)
+          elif [ "${{ env.MODULE_NAME }}" = "api" ]; then
+            CURRENT_VERSION=$(cargo make version | grep -v 'INFO')
           fi
+          echo "CURRENT_VERSION=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
 
-      - name: Get Bumped Version
-        id: get_bumped_version
-        working-directory: ${{ inputs.module_directory }}
+      - name: Create Tag
+        id: create_tag
         run: |
-          # TODO implement in root devops script
-          if [ "${{ env.MODULE_NAME }}" = "website" ]; then # Generated
-            echo "BUMPED_VERSION=$(npm run version | tail -1)" >> $GITHUB_OUTPUT
-          elif [ "${{ env.MODULE_NAME }}" = "api" ]; then # Generated
-            echo "BUMPED_VERSION=$(cargo make version | grep -v 'INFO')" >> $GITHUB_OUTPUT
-          fi
+          TAG_NAME=$(echo "${{ env.MODULE_NAME }}-v${{ steps.get_current_version.outputs.CURRENT_VERSION }}")
+          git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
+          echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_OUTPUT
 
       - name: Add Deploy Key
         uses: webfactory/ssh-agent@72c0bfd31ab22a2e11716951e3f107a9647dc97e
         with:
           ssh-private-key: ${{ secrets.DEPLOY_KEY }}
 
-      - name: Commit ${{ env.MODULE_NAME_CAPITALIZED }} Version Bump Changes
-        working-directory: ${{ inputs.module_directory }}
+      - name: Push Tag
         run: |
-          if [ "${{ env.IS_NPM }}" = "true" ]; then
-            FILES_TO_ADD="package.json package-lock.json"
-          elif [ "${{ env.IS_CARGO }}" = "true" ]; then
-            FILES_TO_ADD="Cargo.toml Cargo.lock"
-          fi
-          git add $FILES_TO_ADD # Generated
-          git commit -n -m "chore(release): Bump ${{ env.MODULE_NAME }} version to ${{ steps.get_bumped_version.outputs.BUMPED_VERSION }} [skip ci]"
+          git remote set-url origin git@github.com:${{ github.repository }}
+          git push origin ${{ steps.create_tag.outputs.TAG_NAME }}
 
       - name: Prepare Dockerizing
         id: prepare_dockerizing
         run: |
           mkdir -p ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
-          DOCKER_IMAGE_TAR_NAME="${{ env.DOCKER_IMAGE_NAME }}-v${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}.tar"
+          DOCKER_IMAGE_TAR_NAME="${{ env.DOCKER_IMAGE_NAME }}-v${{ steps.get_current_version.outputs.CURRENT_VERSION }}.tar"
           DOCKER_IMAGE_TAR_GZ_NAME="${DOCKER_IMAGE_TAR_NAME}.gz"
           DOCKER_IMAGE_TAR_PATH="${{ env.DOCKER_IMAGE_OUTPUT_DIR }}/${DOCKER_IMAGE_TAR_NAME}"
           DOCKER_IMAGE_TAR_GZ_PATH="${DOCKER_IMAGE_TAR_PATH}.gz"
@@ -140,22 +132,10 @@ jobs:
         with:
           context: ${{ inputs.module_directory }}
           file: ${{ inputs.module_directory }}/Dockerfile
-          tags: ${{ env.DOCKER_IMAGE_NAME }}:${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}
+          tags: ${{ env.DOCKER_IMAGE_NAME }}:${{ steps.get_current_version.outputs.CURRENT_VERSION }}
           outputs: type=docker,dest=${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_PATH }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Create Tag
-        id: create_tag
-        run: |
-          TAG_NAME=$(echo "${{ env.MODULE_NAME }}-v${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}")
-          git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
-
-      - name: Push Changes (I.E. Version Bump) and the Tag
-        run: |
-          git remote set-url origin git@github.com:${{ github.repository }}
-          git push origin HEAD
-          git push origin $TAG_NAME
 
       - name: GZip Docker Image
         working-directory: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
@@ -165,11 +145,37 @@ jobs:
       - name: Create GitHub Release and Upload ${{ env.MODULE_NAME_CAPITALIZED }} Image
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.MODULE_NAME }}-v${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}
-          name: Release ${{ env.MODULE_NAME_CAPITALIZED }} v${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}
+          tag_name: ${{ steps.create_tag.outputs.TAG_NAME }}
+          name: Release ${{ env.MODULE_NAME_CAPITALIZED }} v${{ steps.get_current_version.outputs.CURRENT_VERSION }}
           body: |
-            Automated release for ${{ env.MODULE_NAME_CAPITALIZED }} version ${{ steps.get_bumped_version.outputs.BUMPED_VERSION }}.
+            Automated release for ${{ env.MODULE_NAME_CAPITALIZED }} version ${{ steps.get_current_version.outputs.CURRENT_VERSION }}.
           draft: false
           prerelease: false
           token: ${{ secrets.GITHUB_TOKEN }}
           files: ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
+
+      - name: Bump ${{ env.MODULE_NAME_CAPITALIZED }} Version
+        working-directory: ${{ inputs.module_directory }}
+        run: |
+          if [ "${{ env.IS_NPM }}" = "true" ]; then
+            npm version patch --no-git-tag-version
+          elif [ "${{ env.IS_CARGO }}" = "true" ]; then
+            cargo make bump-version
+          fi
+
+      - name: Commit ${{ env.MODULE_NAME_CAPITALIZED }} Version Bump Changes
+        working-directory: ${{ inputs.module_directory }}
+        run: |
+          if [ "${{ env.IS_NPM }}" = "true" ]; then
+            FILES_TO_ADD="package.json package-lock.json"
+            NEXT_VERSION=$(node -e "const pkg = require('./package.json'); console.log(pkg.version)")
+          elif [ "${{ env.IS_CARGO }}" = "true" ]; then
+            FILES_TO_ADD="Cargo.toml Cargo.lock"
+            NEXT_VERSION=$(cargo make version | grep -v 'INFO')
+          fi
+          git add $FILES_TO_ADD
+          git commit -n -m "chore(release): Bump ${{ env.MODULE_NAME }} version to ${NEXT_VERSION} [skip ci]"
+
+      - name: Push Version Bump Changes
+        run: |
+          git push origin HEAD
