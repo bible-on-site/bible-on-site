@@ -1,7 +1,7 @@
-/** @type {import('next').NextConfig} */
 const KB = 1024;
 const MB = KB * KB;
 const GB = MB * KB;
+/** @type {import('next').NextConfig} */
 const nextConfig = {
 	output: "standalone",
 	experimental: {
