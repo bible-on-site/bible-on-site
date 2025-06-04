@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.63",
+	"version": "0.2.64",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
@@ -48,7 +48,7 @@
 		"@types/jest": "29.5.14",
 		"@types/node": "22.15.29",
 		"@types/react": "19.1.6",
-		"@types/react-dom": "19.1.5",
+		"@types/react-dom": "19.1.6",
 		"autoprefixer": "10.4.21",
 		"cross-env": "7.0.3",
 		"eslint": "9.28.0",
