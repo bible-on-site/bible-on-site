@@ -112,6 +112,30 @@ jobs:
       module_name: ${{ needs.setup_env.outputs.api_directory }}
       ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
 
+  package_website:
+    name: Package Website
+    needs: [setup_env, determine_website_changes]
+    if: ${{ needs.determine_website_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    permissions:
+      contents: write
+      actions: read
+    secrets: inherit
+    uses: ./.github/workflows/shared-package.yml
+    with:
+      module_directory: ${{ needs.setup_env.outputs.website_directory }}
+
+  package_api:
+    name: Package API
+    needs: [setup_env, determine_api_changes]
+    if: ${{ needs.determine_api_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    permissions:
+      contents: write
+      actions: read
+    secrets: inherit
+    uses: ./.github/workflows/shared-package.yml
+    with:
+      module_directory: ${{ needs.setup_env.outputs.api_directory }}
+
   build_lcov_docker:
     name: Build LCOV Docker Image
     needs: setup_env
@@ -677,7 +701,7 @@ jobs:
 
   release_website:
     name: Release Website
-    needs: [setup_env, determine_website_changes, cross_module_ci]
+    needs: [setup_env, determine_website_changes, cross_module_ci, package_website]
     if: ${{ needs.determine_website_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
@@ -689,7 +713,7 @@ jobs:
 
   release_api:
     name: Release API
-    needs: [setup_env, determine_api_changes, cross_module_ci]
+    needs: [setup_env, determine_api_changes, cross_module_ci, package_api]
     if: ${{ needs.determine_api_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write

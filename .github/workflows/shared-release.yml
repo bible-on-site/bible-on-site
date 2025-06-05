@@ -111,36 +111,20 @@ jobs:
           git remote set-url origin git@github.com:${{ github.repository }}
           git push origin ${{ steps.create_tag.outputs.TAG_NAME }}
 
-      - name: Prepare Dockerizing
-        id: prepare_dockerizing
+      - name: Prepare Docker Restore
+        id: prepare_docker_restore
         run: |
           mkdir -p ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
           DOCKER_IMAGE_TAR_NAME="${{ env.DOCKER_IMAGE_NAME }}-v${{ steps.get_current_version.outputs.CURRENT_VERSION }}.tar"
-          DOCKER_IMAGE_TAR_GZ_NAME="${DOCKER_IMAGE_TAR_NAME}.gz"
           DOCKER_IMAGE_TAR_PATH="${{ env.DOCKER_IMAGE_OUTPUT_DIR }}/${DOCKER_IMAGE_TAR_NAME}"
           DOCKER_IMAGE_TAR_GZ_PATH="${DOCKER_IMAGE_TAR_PATH}.gz"
-          echo "DOCKER_IMAGE_TAR_NAME=${DOCKER_IMAGE_TAR_NAME}" >> $GITHUB_OUTPUT
-          echo "DOCKER_IMAGE_TAR_GZ_NAME=${DOCKER_IMAGE_TAR_GZ_NAME}" >> $GITHUB_OUTPUT
-          echo "DOCKER_IMAGE_TAR_PATH=${DOCKER_IMAGE_TAR_PATH}" >> $GITHUB_OUTPUT
           echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
-        uses: docker/build-push-action@v6
+      - name: Restore Docker Image
+        uses: actions/download-artifact@v4
         with:
-          context: ${{ inputs.module_directory }}
-          file: ${{ inputs.module_directory }}/Dockerfile
-          tags: ${{ env.DOCKER_IMAGE_NAME }}:${{ steps.get_current_version.outputs.CURRENT_VERSION }}
-          outputs: type=docker,dest=${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_PATH }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: GZip Docker Image
-        working-directory: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
-        run: |
-          gzip -c -f ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_NAME }} > ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_GZ_NAME }}
+          name: ${{ env.DOCKER_IMAGE_NAME }}-docker-${{ github.run_id }}
+          path: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
 
       - name: Create GitHub Release and Upload ${{ env.MODULE_NAME_CAPITALIZED }} Image
         uses: softprops/action-gh-release@v2
@@ -152,7 +136,7 @@ jobs:
           draft: false
           prerelease: false
           token: ${{ secrets.GITHUB_TOKEN }}
-          files: ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
+          files: ${{ steps.prepare_docker_restore.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
 
       - name: Bump ${{ env.MODULE_NAME_CAPITALIZED }} Version
         working-directory: ${{ inputs.module_directory }}
