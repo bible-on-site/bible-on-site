@@ -1,0 +1,118 @@
+name: Shared Package Flow
+on:
+  workflow_call:
+    inputs:
+      module_directory:
+        required: true
+        type: string
+    secrets:
+      DEPLOY_KEY:
+        required: true
+
+permissions:
+  contents: write
+env:
+  IS_NPM: ${{ inputs.module_directory == 'web/bible-on-site' }}
+  IS_CARGO: ${{ inputs.module_directory == 'web/api' }}
+  MODULE_NAME: ${{ inputs.module_directory == 'web/bible-on-site' && 'website' || 'api' }}
+  MODULE_NAME_CAPITALIZED: ${{ inputs.module_directory == 'web/bible-on-site' && 'Website' || 'API' }}
+  DOCKER_IMAGE_NAME: ${{ inputs.module_directory == 'web/bible-on-site' && 'bible-on-site' || 'bible-on-site-api' }}
+  DOCKER_IMAGE_OUTPUT_DIR: ${{ inputs.module_directory }}/.release
+
+jobs:
+  setup_env:
+    name: Setup Environment Variables
+    runs-on: ubuntu-latest
+    outputs:
+      MODULE_NAME: ${{ env.MODULE_NAME }} # a workaround for places where only needs.<job_id>.<output> is allowed
+    steps:
+      - run: echo "Setting up environment variables"
+
+  package:
+    needs: setup_env
+    name: Package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        if: ${{ env.IS_NPM == 'true' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ${{ inputs.MODULE_DIRECTORY }}/package.json
+          cache-dependency-path: ${{ inputs.MODULE_DIRECTORY }}/package-lock.json
+          cache: npm
+
+      - name: Install NPM Dependencies
+        if: ${{ env.IS_NPM == 'true' }}
+        working-directory: ${{ inputs.module_directory }}
+        id: npm_ci
+        run: |
+          npm ci --no-audit
+
+      - name: Setup Rust
+        if: ${{ env.IS_CARGO == 'true' }}
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: taiki-e/install-action@v2
+        if: ${{ env.IS_CARGO == 'true' }}
+        with:
+          tool: cargo-make, tomato-toml, semver-bump
+
+      - name: Cache Cargo dependencies
+        if: ${{ env.IS_CARGO == 'true' }}
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ inputs.module_directory }}
+
+      - name: Get Current Version
+        id: get_current_version
+        working-directory: ${{ inputs.module_directory }}
+        run: |
+          if [ "${{ env.MODULE_NAME }}" = "website" ]; then
+            CURRENT_VERSION=$(npm run version | tail -1)
+          elif [ "${{ env.MODULE_NAME }}" = "api" ]; then
+            CURRENT_VERSION=$(cargo make version | grep -v 'INFO')
+          fi
+          echo "CURRENT_VERSION=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Prepare Dockerizing
+        id: prepare_dockerizing
+        run: |
+          mkdir -p ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
+          DOCKER_IMAGE_TAR_NAME="${{ env.DOCKER_IMAGE_NAME }}-v${{ steps.get_current_version.outputs.CURRENT_VERSION }}.tar"
+          DOCKER_IMAGE_TAR_GZ_NAME="${DOCKER_IMAGE_TAR_NAME}.gz"
+          DOCKER_IMAGE_TAR_PATH="${{ env.DOCKER_IMAGE_OUTPUT_DIR }}/${DOCKER_IMAGE_TAR_NAME}"
+          DOCKER_IMAGE_TAR_GZ_PATH="${DOCKER_IMAGE_TAR_PATH}.gz"
+          echo "DOCKER_IMAGE_TAR_NAME=${DOCKER_IMAGE_TAR_NAME}" >> $GITHUB_OUTPUT
+          echo "DOCKER_IMAGE_TAR_GZ_NAME=${DOCKER_IMAGE_TAR_GZ_NAME}" >> $GITHUB_OUTPUT
+          echo "DOCKER_IMAGE_TAR_PATH=${DOCKER_IMAGE_TAR_PATH}" >> $GITHUB_OUTPUT
+          echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.module_directory }}
+          file: ${{ inputs.module_directory }}/Dockerfile
+          tags: ${{ env.DOCKER_IMAGE_NAME }}:${{ steps.get_current_version.outputs.CURRENT_VERSION }}
+          outputs: type=docker,dest=${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_PATH }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: GZip Docker Image
+        working-directory: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
+        run: |
+          gzip -c -f ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_NAME }} > ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_GZ_NAME }}
+
+      - name: Store Docker Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.DOCKER_IMAGE_NAME }}-docker-${{ github.run_id }}
+          path: ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
+          retention-days: 1
