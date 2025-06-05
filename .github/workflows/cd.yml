@@ -1,14 +1,12 @@
 name: Continuous Deployment
 
 on:
-  push:
-    tags:
-      - "website-v*.*.*"
-      - "api-v*.*.*"
+  release:
+    types: [published]
 
 jobs:
   deploy:
-    if: startsWith(github.ref, 'refs/tags/website-v')
+    if: always()
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -23,7 +21,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.ref }}
+          ref: ${{ github.event.release.tag_name }}
 
       - name: Calculate Module Name
         id: module_name

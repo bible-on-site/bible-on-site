@@ -20,21 +20,19 @@ await main();
 async function main() {
 	const { hideBin } = await import("yargs/helpers");
 
-	const argv = await yargs
-		.default(hideBin(process.argv))
-		.scriptName("deploy")
-		.usage("Usage: $0 <moduleName>")
-		.positional("moduleName", {
-			describe: "The name of the module to deploy",
+	const argv = await yargs(hideBin(process.argv))
+		.option("moduleName", {
+			alias: "m",
+			describe: "The module to deploy",
+			choices: ["website", "api"] as const,
+			demandOption: true,
 			type: "string",
-			choices: Object.keys(deployers),
 		})
-		.demandCommand(1, "You must provide a module name to deploy.")
 		.help()
-		.alias("h", "help")
+		.alias("help", "h")
 		.parse();
 
-	const moduleName = argv.moduleName as keyof typeof deployers;
+	const moduleName = argv.moduleName;
 
 	if (!moduleName) {
 		console.error("Module name is required.");
@@ -49,7 +47,9 @@ async function main() {
 		);
 		process.exit(1);
 	}
-	dotenv.config();
+	dotenv.config({
+		path: "./deploy/.env", // It's a workaround as I didn't manage to make cwd to be set to deploy folder preliminary to execution
+	});
 	const sshConfigs = getSSHConnections();
 	for (const [connectionName, config] of Object.entries(sshConfigs)) {
 		const ssh = new NodeSSH();

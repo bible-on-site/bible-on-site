@@ -1,4 +1,7 @@
 {
+	"engines": {
+		"node": ">=22.2.0"
+	},
 	"devDependencies": {
 		"@types/node": "22.15.29",
 		"@types/semver": "7.7.0",
