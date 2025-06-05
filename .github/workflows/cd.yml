@@ -24,6 +24,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.ref }}
+
       - name: Calculate Module Name
         id: module_name
         run: |
@@ -50,5 +51,6 @@ jobs:
 
       - name: Deploy to Production
         id: deploy
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           npm run deploy:${{ steps.module_name.outputs.MODULE_NAME }}
