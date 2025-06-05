@@ -1,5 +1,5 @@
 This is the Website (BE and FE) for the Bible on Site project.
-It's implemented using Next.js 15
+It's implemented using Next.js 15 and react 19.
 
 Guidelines:
 - Use SSG wherever possible.
