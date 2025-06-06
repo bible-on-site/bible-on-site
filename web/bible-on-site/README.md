@@ -8,3 +8,4 @@ It's implemented using Next.js 15 and react 19.
 
 Main features:
 - **Bible Search**: Search for Bible verses and passages.
+- **Book View**: View books of the Bible as interactive books.
