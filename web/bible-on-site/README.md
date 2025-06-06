@@ -11,3 +11,4 @@ Main features:
 - **Book View**: Read the books of the Bible as interactive books.
 - **Articles**: Learn articles related to the Bible.
 - **Commentaries**: Learn Bible commentaries.
+- **Recordings**: Listen to Bible recordings.

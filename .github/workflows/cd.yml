@@ -24,7 +24,7 @@ jobs:
       - name: Resolve Inputs
         id: resolve_inputs
         run: |
-          echo "${{ github.event.client_payload.module_name }}" >> $GITHUB_OUTPUT # GENERATED
+          echo "MODULE_NAME=${{ github.event.client_payload.module_name }}" >> $GITHUB_OUTPUT # GENERATED
 
       - name: Setup Node.js
         id: setup-node
