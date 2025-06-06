@@ -27,7 +27,6 @@ jobs:
       MODULE_NAME: ${{ env.MODULE_NAME }} # a workaround for places where only needs.<job_id>.<output> is allowed
     steps:
       - run: echo "Setting up environment variables"
-
   package:
     needs: setup_env
     name: Package
@@ -46,12 +45,12 @@ jobs:
           cache-dependency-path: ${{ inputs.MODULE_DIRECTORY }}/package-lock.json
           cache: npm
 
-      - name: Install NPM Dependencies
+      - name: Install NPM Dev Dependencies
         if: ${{ env.IS_NPM == 'true' }}
         working-directory: ${{ inputs.module_directory }}
         id: npm_ci
         run: |
-          npm ci --no-audit
+          npm ci --include=dev --no-audit
 
       - name: Setup Rust
         if: ${{ env.IS_CARGO == 'true' }}
@@ -61,12 +60,6 @@ jobs:
         if: ${{ env.IS_CARGO == 'true' }}
         with:
           tool: cargo-make, tomato-toml, semver-bump
-
-      - name: Cache Cargo dependencies
-        if: ${{ env.IS_CARGO == 'true' }}
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: ${{ inputs.module_directory }}
 
       - name: Get Current Version
         id: get_current_version
@@ -92,8 +85,18 @@ jobs:
           echo "DOCKER_IMAGE_TAR_PATH=${DOCKER_IMAGE_TAR_PATH}" >> $GITHUB_OUTPUT
           echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
 
+      - name: Debug - Print module tree
+        working-directory: ${{ inputs.module_directory }}
+        run: |
+          echo "Module directory structure:"
+          tree -L 5
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            network=host
+            image=moby/buildkit:13cf07c97baebd3d5603feecc03f5a46ac98d2a5
 
       - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
         uses: docker/build-push-action@v6
@@ -102,8 +105,13 @@ jobs:
           file: ${{ inputs.module_directory }}/Dockerfile
           tags: ${{ env.DOCKER_IMAGE_NAME }}:${{ steps.get_current_version.outputs.CURRENT_VERSION }}
           outputs: type=docker,dest=${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_PATH }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: |
+            type=gha,scope=${{ github.workflow }}-${{ env.MODULE_NAME }}
+          cache-to: |
+            type=gha,mode=max,scope=${{ github.workflow }}-${{ env.MODULE_NAME }}
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+          platforms: linux/amd64
 
       - name: GZip Docker Image
         working-directory: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
