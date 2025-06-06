@@ -8,6 +8,8 @@ on:
     secrets:
       DEPLOY_KEY:
         required: true
+      BOT_PAT:
+        required: true
 
 permissions:
   contents: write
@@ -20,6 +22,17 @@ env:
   DOCKER_IMAGE_OUTPUT_DIR: ${{ inputs.module_directory }}/.release
 
 jobs:
+  trigger_cd:
+    name: Trigger CD Workflow
+    runs-on: ubuntu-latest
+    steps:
+      - uses: peter-evans/repository-dispatch@v3
+        with:
+          repository: ${{ github.repository }}
+          token: ${{ secrets.BOT_PAT }} # Might be able to use the default GITHUB_TOKEN, but using a PAT as I don't have time to test it right now.
+          event-type: deploy
+          client-payload: '{"ref": "${{ github.ref }}", "module_name": "${{ env.MODULE_NAME }}"}'
+
   setup_env:
     name: Setup Environment Variables
     runs-on: ubuntu-latest
@@ -133,8 +146,6 @@ jobs:
           name: Release ${{ env.MODULE_NAME_CAPITALIZED }} v${{ steps.get_current_version.outputs.CURRENT_VERSION }}
           body: |
             Automated release for ${{ env.MODULE_NAME_CAPITALIZED }} version ${{ steps.get_current_version.outputs.CURRENT_VERSION }}.
-          draft: false
-          prerelease: false
           token: ${{ secrets.GITHUB_TOKEN }}
           files: ${{ steps.prepare_docker_restore.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
 

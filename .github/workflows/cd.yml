@@ -1,9 +1,8 @@
 name: Continuous Deployment
 
 on:
-  release:
-    types: [published]
-
+  repository_dispatch:
+    types: [deploy]
 jobs:
   deploy:
     permissions:
@@ -20,12 +19,12 @@ jobs:
         id: checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.event.client_payload.ref }}
 
-      - name: Calculate Module Name
-        id: module_name
+      - name: Resolve Inputs
+        id: resolve_inputs
         run: |
-          echo "MODULE_NAME=$(echo ${{ github.ref }} | sed -E 's|refs/tags/([^/]+)-v[0-9]+\.[0-9]+\.[0-9]+|\1|')" >> $GITHUB_OUTPUT
+          echo "${{ github.event.client_payload.module_name }}" >> $GITHUB_OUTPUT # GENERATED
 
       - name: Setup Node.js
         id: setup-node
@@ -50,4 +49,4 @@ jobs:
         id: deploy
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
-          npm run deploy:${{ steps.module_name.outputs.MODULE_NAME }}
+          npm run deploy:${{ steps.resolve_inputs.outputs.MODULE_NAME }}
