@@ -6,7 +6,6 @@ on:
 
 jobs:
   deploy:
-    if: always()
     permissions:
       contents: read
     runs-on: ubuntu-latest
