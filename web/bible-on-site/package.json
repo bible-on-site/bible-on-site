@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.81",
+	"version": "0.2.82",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
@@ -47,7 +47,7 @@
 		"@playwright/test": "1.53.0",
 		"@types/jest": "29.5.14",
 		"@types/node": "22.15.31",
-		"@types/react": "19.1.7",
+		"@types/react": "19.1.8",
 		"@types/react-dom": "19.1.6",
 		"autoprefixer": "10.4.21",
 		"cross-env": "7.0.3",
@@ -62,7 +62,7 @@
 		"tailwindcss": "3.4.17",
 		"ts-jest": "29.3.4",
 		"ts-node": "10.9.2",
-		"tsx": "4.20.0",
+		"tsx": "4.20.1",
 		"typescript": "5.8.3",
 		"typescript-eslint": "8.34.0",
 		"web-vitals": "5.0.2"
