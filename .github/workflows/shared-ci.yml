@@ -1,5 +1,8 @@
 name: Shared CI Components
 
+permissions:
+  contents: read
+
 on:
   workflow_call:
     inputs:
