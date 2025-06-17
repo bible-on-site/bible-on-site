@@ -49,6 +49,8 @@ jobs:
   setup_env:
     name: Setup Environment Variables
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       api_directory: ${{ env.API_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       api_playwright_version: ${{ steps.get_api_playwright_version.outputs.PLAYWRIGHT_VERSION }}
