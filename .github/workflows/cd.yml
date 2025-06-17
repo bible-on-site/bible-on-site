@@ -43,7 +43,9 @@ jobs:
       - name: Spread Secrets to Environment Variables
         uses: oNaiPs/secrets-to-env-action@v1
         with:
-          secrets: ${{ toJSON(secrets) }}
+          secrets: |
+            SECRET_API_KEY=${{ secrets.SECRET_API_KEY }}
+            SECRET_DB_PASSWORD=${{ secrets.SECRET_DB_PASSWORD }}
 
       - name: Deploy to Production
         id: deploy
