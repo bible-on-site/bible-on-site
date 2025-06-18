@@ -43,7 +43,7 @@ jobs:
       - name: Spread Secrets to Environment Variables
         uses: oNaiPs/secrets-to-env-action@v1
         with:
-          secrets: ${{ toJSON(secrets) }}
+          secrets: ${{ toJSON(secrets) }} # TODO: spread just the required secrets (SSH related, mostly)
 
       - name: Prepare Docker Restore
         id: prepare_docker_restore

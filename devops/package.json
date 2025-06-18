@@ -3,10 +3,10 @@
 		"node": ">=22.2.0"
 	},
 	"devDependencies": {
-		"@types/node": "22.15.31",
+		"@types/node": "22.15.32",
 		"@types/semver": "7.7.0",
 		"@types/yargs": "17.0.33",
-		"tsx": "4.20.1"
+		"tsx": "4.20.3"
 	},
 	"scripts": {
 		"coverage:merge": "node --import tsx ./merge-coverage.mts",
