@@ -8,7 +8,7 @@
 		"ms-dotnettools.csharp", // C# (App)
 		"dsznajder.es7-react-js-snippets", // React (Website)
 		"ms-dotnettools.dotnet-maui", // MAUI (App)
-		"biomejs.biome", // TypeScript formatter/linter (Website)
+		"biomejs.biome", // TypeScript formatter/linter (Website). Due to a bug (https://github.com/biomejs/biome-vscode/issues/622) you should manually insall version 2.3.2 by right clicking the extension after the automatic installation and then "Install specific version..."
 		"ms-vscode.cpptools", // Rust run/debug (API)
 		"codecov.codecov", // Code coverage (Website, planned for more)
 		"ms-azuretools.vscode-docker", // Docker (Website, planned for API and App)

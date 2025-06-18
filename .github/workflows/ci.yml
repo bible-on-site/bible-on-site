@@ -714,6 +714,8 @@ jobs:
     uses: ./.github/workflows/shared-release.yml
     with:
       module_directory: ${{ needs.setup_env.outputs.website_directory }}
+      module_version: ${{ needs.package_website.outputs.module_version }}
+      docker_artifact_name: ${{ needs.package_website.outputs.docker_artifact_name }}
 
   release_api:
     name: Release API
@@ -726,3 +728,5 @@ jobs:
     uses: ./.github/workflows/shared-release.yml
     with:
       module_directory: ${{ needs.setup_env.outputs.api_directory }}
+      module_version: ${{ needs.package_api.outputs.module_version }}
+      docker_artifact_name: ${{ needs.package_api.outputs.docker_artifact_name }}

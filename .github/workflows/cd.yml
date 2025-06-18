@@ -13,18 +13,18 @@ jobs:
       DEVOPS_DIRECTORY: devops
       DEVOPS_NODE_CACHE_PATH: devops/package-lock.json
       DEVOPS_NODE_VERSION_FILE: devops/package.json
-
+      MODULE_NAME: ${{ github.event.client_payload.module_name }}
+      MODULE_DIRECTORY: ${{ github.event.client_payload.module_directory }}
+      MODULE_VERSION: ${{ github.event.client_payload.module_version }}
+      DOCKER_ARTIFACT_NAME: ${{ github.event.client_payload.docker_artifact_name }}
+      DOCKER_IMAGE_NAME: ${{ github.event.client_payload.module_directory == 'web/bible-on-site' && 'bible-on-site' || 'bible-on-site-api' }}
+      DOCKER_IMAGE_OUTPUT_DIR: ${{ github.event.client_payload.module_directory }}/.release
     steps:
       - name: Checkout
         id: checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.client_payload.ref }}
-
-      - name: Resolve Inputs
-        id: resolve_inputs
-        run: |
-          echo "MODULE_NAME=${{ github.event.client_payload.module_name }}" >> $GITHUB_OUTPUT # GENERATED
 
       - name: Setup Node.js
         id: setup-node
@@ -45,8 +45,23 @@ jobs:
         with:
           secrets: ${{ toJSON(secrets) }}
 
+      - name: Prepare Docker Restore
+        id: prepare_docker_restore
+        run: |
+          mkdir -p "$DOCKER_IMAGE_OUTPUT_DIR"
+          DOCKER_IMAGE_TAR_NAME="${{ env.DOCKER_IMAGE_NAME }}-v${{ env.MODULE_VERSION }}.tar"
+          DOCKER_IMAGE_TAR_PATH="${{ env.DOCKER_IMAGE_OUTPUT_DIR }}/${DOCKER_IMAGE_TAR_NAME}"
+          DOCKER_IMAGE_TAR_GZ_PATH="${DOCKER_IMAGE_TAR_PATH}.gz"
+          echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
+
+      - name: Restore Docker Image
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.DOCKER_ARTIFACT_NAME }}
+          path: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
+
       - name: Deploy to Production
         id: deploy
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
-          npm run deploy:${{ steps.resolve_inputs.outputs.MODULE_NAME }}
+          npm run deploy -- --module-name ${{ env.MODULE_NAME }} --module-version "${{ env.MODULE_VERSION }}"
