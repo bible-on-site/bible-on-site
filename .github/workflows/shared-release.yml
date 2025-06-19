@@ -3,6 +3,15 @@ on:
   workflow_call:
     inputs:
       module_directory:
+        description: The directory of the module to release. Should be either 'web/bible-on-site' or 'web/api'.
+        required: true
+        type: string
+      module_version:
+        description: The version of the module.
+        required: true
+        type: string
+      docker_artifact_name:
+        description: The name of the Docker artifact.
         required: true
         type: string
     secrets:
@@ -31,7 +40,7 @@ jobs:
           repository: ${{ github.repository }}
           token: ${{ secrets.BOT_PAT }} # Might be able to use the default GITHUB_TOKEN, but using a PAT as I don't have time to test it right now.
           event-type: deploy
-          client-payload: '{"ref": "${{ github.ref }}", "module_name": "${{ env.MODULE_NAME }}"}'
+          client-payload: '{"ref": "${{ github.ref }}", "module_directory": "${{ inputs.module_directory }}", "module_name": "${{ env.MODULE_NAME }}", "module_version": "${{ inputs.module_version }}", "docker_artifact_name": "${{ inputs.docker_artifact_name }}"}'
 
   setup_env:
     name: Setup Environment Variables
@@ -96,21 +105,10 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-      - name: Get Current Version
-        id: get_current_version
-        working-directory: ${{ inputs.module_directory }}
-        run: |
-          if [ "${{ env.MODULE_NAME }}" = "website" ]; then
-            CURRENT_VERSION=$(npm run version | tail -1)
-          elif [ "${{ env.MODULE_NAME }}" = "api" ]; then
-            CURRENT_VERSION=$(cargo make version | grep -v 'INFO')
-          fi
-          echo "CURRENT_VERSION=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
-
       - name: Create Tag
         id: create_tag
         run: |
-          TAG_NAME=$(echo "${{ env.MODULE_NAME }}-v${{ steps.get_current_version.outputs.CURRENT_VERSION }}")
+          TAG_NAME=$(echo "${{ env.MODULE_NAME }}-v${{ inputs.module_version }}")
           git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
           echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_OUTPUT
 
@@ -128,7 +126,7 @@ jobs:
         id: prepare_docker_restore
         run: |
           mkdir -p ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
-          DOCKER_IMAGE_TAR_NAME="${{ env.DOCKER_IMAGE_NAME }}-v${{ steps.get_current_version.outputs.CURRENT_VERSION }}.tar"
+          DOCKER_IMAGE_TAR_NAME="${{ env.DOCKER_IMAGE_NAME }}-v${{ inputs.module_version }}.tar"
           DOCKER_IMAGE_TAR_PATH="${{ env.DOCKER_IMAGE_OUTPUT_DIR }}/${DOCKER_IMAGE_TAR_NAME}"
           DOCKER_IMAGE_TAR_GZ_PATH="${DOCKER_IMAGE_TAR_PATH}.gz"
           echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
@@ -136,16 +134,16 @@ jobs:
       - name: Restore Docker Image
         uses: actions/download-artifact@v4
         with:
-          name: ${{ env.DOCKER_IMAGE_NAME }}-docker-${{ github.run_id }}
+          name: ${{ inputs.docker_artifact_name }}
           path: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
 
       - name: Create GitHub Release and Upload ${{ env.MODULE_NAME_CAPITALIZED }} Image
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.create_tag.outputs.TAG_NAME }}
-          name: Release ${{ env.MODULE_NAME_CAPITALIZED }} v${{ steps.get_current_version.outputs.CURRENT_VERSION }}
+          name: Release ${{ env.MODULE_NAME_CAPITALIZED }} v${{ inputs.module_version }}
           body: |
-            Automated release for ${{ env.MODULE_NAME_CAPITALIZED }} version ${{ steps.get_current_version.outputs.CURRENT_VERSION }}.
+            Automated release for ${{ env.MODULE_NAME_CAPITALIZED }} version ${{ inputs.module_version }}.
           token: ${{ secrets.GITHUB_TOKEN }}
           files: ${{ steps.prepare_docker_restore.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
 
@@ -163,13 +161,13 @@ jobs:
         run: |
           if [ "${{ env.IS_NPM }}" = "true" ]; then
             FILES_TO_ADD="package.json package-lock.json"
-            NEXT_VERSION=$(node -e "const pkg = require('./package.json'); console.log(pkg.version)")
+            NEXT_MODULE_VERSION=$(node -e "const pkg = require('./package.json'); console.log(pkg.version)")
           elif [ "${{ env.IS_CARGO }}" = "true" ]; then
             FILES_TO_ADD="Cargo.toml Cargo.lock"
-            NEXT_VERSION=$(cargo make version | grep -v 'INFO')
+            NEXT_MODULE_VERSION=$(cargo make version | grep -v 'INFO')
           fi
           git add $FILES_TO_ADD
-          git commit -n -m "chore(release): Bump ${{ env.MODULE_NAME }} version to ${NEXT_VERSION} [skip ci]"
+          git commit -n -m "chore(release): Bump ${{ env.MODULE_NAME }} version to ${NEXT_MODULE_VERSION} [skip ci]"
 
       - name: Push Version Bump Changes
         run: |

@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import styles from "./navbar.module.css";
+import packageJson from "../../../package.json";
 
 export const NavBar = () => {
   return (
@@ -61,7 +62,9 @@ export const NavBar = () => {
           <Image src="/icons/donation.svg" alt="תרומות" width={16} height={16} />
           <Link href="/donation">
             <span>תרומות</span>
-          </Link>
+          </Link>{" "}        </li>
+        <li className={styles.versionItem}>
+          {packageJson.version}
         </li>
       </ul>
     </div>

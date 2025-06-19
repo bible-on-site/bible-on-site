@@ -5,6 +5,7 @@
 		"module": "ESNext",
 		"strict": true,
 		"esModuleInterop": true,
+		"experimentalDecorators": true,
 		"forceConsistentCasingInFileNames": true,
 		"noImplicitReturns": true,
 		"noUnusedLocals": true,
