@@ -1,7 +1,8 @@
 import yargs from "yargs";
 import { APIDeployer } from "./api-deployer.mjs";
 import { WebsiteDeployer } from "./website-deployer.mjs";
-import { dropConnection, establishSSHConnections } from "./ssh.mjs";
+import { establishSSHConnections } from "./ssh/index.mjs";
+import type { DeployerBase } from "./deployer-base.mjs";
 
 const deployers = {
 	website: WebsiteDeployer,
@@ -47,22 +48,39 @@ async function main() {
 		);
 		process.exit(1);
 	}
-
-	const sshConnections = await establishSSHConnections();
-	for (const ssh of sshConnections) {
+	console.info(`Starting deployment for module: ${moduleName}...`);
+	console.info("Establishing SSH connections...");
+	const connections = await establishSSHConnections();
+	const dirtyDeployers: Array<DeployerBase> = [];
+	// TODO: parallelize deployment across connections
+	for (const connection of connections) {
+		console.info(`Deploying on ${connection.config.name}...`);
 		const DeployerClass = deployers[moduleName];
-		const deployer = new DeployerClass(ssh);
+		const deployer = new DeployerClass(connection);
+		dirtyDeployers.push(deployer);
 		deployer.setLocalVersion(moduleVersion);
-		if (moduleVersion) {
-			deployer.dockerImageName += `:${moduleVersion}`;
-		}
 		try {
 			await deployer.deploy();
 		} catch (error) {
-			console.error(`Deployment failed for ${moduleName}:`, error);
+			console.error(
+				`Deployment failed on connection ${connection.config.name}:`,
+				error,
+			);
+			console.info("Rolling back deployment attempts for all connections...");
+			for (const deployer of dirtyDeployers) {
+				deployer.rollback();
+			}
+			for (const connectionToDrop of connections) {
+				connectionToDrop.drop();
+			}
 			process.exit(1);
-		} finally {
-			dropConnection(deployer.ssh);
 		}
 	}
+	console.info(
+		"All deployments completed successfully. Cleaning up previous deployments for each connection...",
+	);
+	for (const deployer of dirtyDeployers) {
+		await deployer.finalizeDeployment();
+	}
+	console.info("Deployment process finished successfully.");
 }

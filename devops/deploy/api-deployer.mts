@@ -1,12 +1,12 @@
-import type { NodeSSH } from "node-ssh";
 import { DeployerBase } from "./deployer-base.mjs";
 import { execSync } from "node:child_process";
 import { pMemoizeDecorator } from "p-memoize";
 import path from "node:path";
+import type { SSHConnection } from "./ssh/ssh-connection.mjs";
 
 export class APIDeployer extends DeployerBase {
-	constructor(ssh: NodeSSH) {
-		super("api", "bible-on-site-api", ssh);
+	constructor(connection: SSHConnection) {
+		super("api", "bible-on-site-api", connection);
 	}
 
 	@pMemoizeDecorator()

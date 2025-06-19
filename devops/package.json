@@ -12,7 +12,8 @@
 		"coverage:merge": "node --import tsx ./merge-coverage.mts",
 		"populate_test_db": "node --import tsx ./populate-test-db.mts",
 		"setup_dev_env": "node --import tsx ./setup-dev-env.mts",
-		"deploy": "node --import tsx ./deploy/index.mts"
+		"deploy": "node --import tsx ./deploy/index.mts",
+		"debug": "node --import tsx ./deploy/index.mts --module-name website --module-version 0.2.88"
 	},
 	"dependencies": {
 		"dotenv": "16.5.0",
