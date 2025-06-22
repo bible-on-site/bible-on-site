@@ -40,7 +40,7 @@ jobs:
           repository: ${{ github.repository }}
           token: ${{ secrets.BOT_PAT }} # Might be able to use the default GITHUB_TOKEN, but using a PAT as I don't have time to test it right now.
           event-type: deploy
-          client-payload: '{"ref": "${{ github.ref }}", "module_directory": "${{ inputs.module_directory }}", "module_name": "${{ env.MODULE_NAME }}", "module_version": "${{ inputs.module_version }}", "docker_artifact_name": "${{ inputs.docker_artifact_name }}"}'
+          client-payload: '{"ref": "${{ github.ref }}", "module_directory": "${{ inputs.module_directory }}", "module_name": "${{ env.MODULE_NAME }}", "module_version": "${{ inputs.module_version }}", "ci_run_id": "${{ github.run_id }}", "docker_artifact_name": "${{ inputs.docker_artifact_name }}"}'
 
   setup_env:
     name: Setup Environment Variables
