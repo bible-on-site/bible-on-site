@@ -8,7 +8,13 @@ on:
     secrets:
       DEPLOY_KEY:
         required: true
-
+    outputs:
+      module_version:
+        description: The version of the module.
+        value: ${{ jobs.package.outputs.module_version }}
+      docker_artifact_name:
+        description: The name of the Docker artifact.
+        value: ${{ jobs.package.outputs.docker_artifact_name }}
 permissions:
   contents: write
 env:
@@ -31,6 +37,9 @@ jobs:
     needs: setup_env
     name: Package
     runs-on: ubuntu-latest
+    outputs:
+      module_version: ${{ steps.get_module_version.outputs.MODULE_VERSION }}
+      docker_artifact_name: ${{ steps.prepare_dockerizing.outputs.DOCKER_ARTIFACT_NAME }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -61,29 +70,31 @@ jobs:
         with:
           tool: cargo-make, tomato-toml, semver-bump
 
-      - name: Get Current Version
-        id: get_current_version
+      - name: Get Module Version
+        id: get_module_version
         working-directory: ${{ inputs.module_directory }}
         run: |
           if [ "${{ env.MODULE_NAME }}" = "website" ]; then
-            CURRENT_VERSION=$(npm run version | tail -1)
+            MODULE_VERSION=$(npm run version | tail -1)
           elif [ "${{ env.MODULE_NAME }}" = "api" ]; then
-            CURRENT_VERSION=$(cargo make version | grep -v 'INFO')
+            MODULE_VERSION=$(cargo make version | grep -v 'INFO')
           fi
-          echo "CURRENT_VERSION=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
+          echo "MODULE_VERSION=${MODULE_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Prepare Dockerizing
         id: prepare_dockerizing
         run: |
           mkdir -p ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
-          DOCKER_IMAGE_TAR_NAME="${{ env.DOCKER_IMAGE_NAME }}-v${{ steps.get_current_version.outputs.CURRENT_VERSION }}.tar"
+          DOCKER_IMAGE_TAR_NAME="${{ env.DOCKER_IMAGE_NAME }}-v${{ steps.get_module_version.outputs.MODULE_VERSION }}.tar"
           DOCKER_IMAGE_TAR_GZ_NAME="${DOCKER_IMAGE_TAR_NAME}.gz"
           DOCKER_IMAGE_TAR_PATH="${{ env.DOCKER_IMAGE_OUTPUT_DIR }}/${DOCKER_IMAGE_TAR_NAME}"
           DOCKER_IMAGE_TAR_GZ_PATH="${DOCKER_IMAGE_TAR_PATH}.gz"
+          DOCKER_ARTIFACT_NAME="${{ env.DOCKER_IMAGE_NAME }}-docker-${{ github.run_id }}"
           echo "DOCKER_IMAGE_TAR_NAME=${DOCKER_IMAGE_TAR_NAME}" >> $GITHUB_OUTPUT
           echo "DOCKER_IMAGE_TAR_GZ_NAME=${DOCKER_IMAGE_TAR_GZ_NAME}" >> $GITHUB_OUTPUT
           echo "DOCKER_IMAGE_TAR_PATH=${DOCKER_IMAGE_TAR_PATH}" >> $GITHUB_OUTPUT
           echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
+          echo "DOCKER_ARTIFACT_NAME=${DOCKER_ARTIFACT_NAME}" >> $GITHUB_OUTPUT
 
       - name: Debug - Print module tree
         working-directory: ${{ inputs.module_directory }}
@@ -103,7 +114,7 @@ jobs:
         with:
           context: ${{ inputs.module_directory }}
           file: ${{ inputs.module_directory }}/Dockerfile
-          tags: ${{ env.DOCKER_IMAGE_NAME }}:${{ steps.get_current_version.outputs.CURRENT_VERSION }}
+          tags: ${{ env.DOCKER_IMAGE_NAME }}:${{ steps.get_module_version.outputs.MODULE_VERSION }}
           outputs: type=docker,dest=${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_PATH }}
           cache-from: |
             type=gha,scope=${{ github.workflow }}-${{ env.MODULE_NAME }}
@@ -121,6 +132,6 @@ jobs:
       - name: Store Docker Image
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.DOCKER_IMAGE_NAME }}-docker-${{ github.run_id }}
+          name: ${{ steps.prepare_dockerizing.outputs.DOCKER_ARTIFACT_NAME }}
           path: ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
           retention-days: 1

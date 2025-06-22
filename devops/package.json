@@ -6,18 +6,20 @@
 		"@types/node": "22.15.32",
 		"@types/semver": "7.7.0",
 		"@types/yargs": "17.0.33",
-		"dotenv": "16.5.0",
-		"mysql2": "3.14.1",
-		"node-ssh": "13.2.1",
-		"ssh-config": "5.0.3",
-		"tsx": "4.20.3",
-		"yargs": "17.7.2"
+		"tsx": "4.20.3"
 	},
 	"scripts": {
 		"coverage:merge": "node --import tsx ./merge-coverage.mts",
 		"populate_test_db": "node --import tsx ./populate-test-db.mts",
 		"setup_dev_env": "node --import tsx ./setup-dev-env.mts",
-		"deploy:api": "node --import tsx ./deploy/index.mts --moduleName api",
-		"deploy:website": "node --import tsx ./deploy/index.mts --moduleName website"
+		"deploy": "node --import tsx ./deploy/index.mts"
+	},
+	"dependencies": {
+		"dotenv": "16.5.0",
+		"mysql2": "3.14.1",
+		"node-ssh": "13.2.1",
+		"ssh-config": "5.0.3",
+		"p-memoize": "7.1.1",
+		"yargs": "17.7.2"
 	}
 }

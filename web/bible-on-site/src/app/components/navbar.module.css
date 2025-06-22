@@ -60,7 +60,20 @@
 }
 
 .menuBox {
-	@apply block fixed top-0 right-[-100%] w-[300px] h-full m-0 p-2 list-none bg-white shadow-md transition duration-1000 z-10;
+	display: flex;
+	flex-direction: column;
+	position: fixed;
+	top: 0;
+	right: -100%;
+	width: 300px;
+	height: 100%;
+	margin: 0;
+	padding: 8px;
+	list-style: none;
+	background-color: white;
+	box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+	transition: right 1s;
+	z-index: 10;
 }
 
 .menuBox::before {
@@ -96,10 +109,33 @@
 }
 
 .menuBox > li::before {
-	content: " ";
-	@apply block w-[100%] border-b border-[#888bef4a];
+	content: " ";	@apply block w-[100%] border-b border-[#888bef4a];
 }
 .menuBox > li:last-of-type::after {
 	content: " ";
 	@apply block w-[100%] border-b border-[#888bef4a];
 }
+
+/* Version item at bottom */
+.versionItem {
+  margin-top: auto;
+  border-top: 1px solid rgba(136, 139, 239, 0.29);
+  padding: 8px 0 8px 0;
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.875rem;
+  direction: ltr;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.versionItem::before,
+.versionItem::after {
+  display: none !important;
+  content: none !important;
+}
+
+
+
