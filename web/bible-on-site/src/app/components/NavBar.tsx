@@ -62,10 +62,9 @@ export const NavBar = () => {
           <Image src="/icons/donation.svg" alt="תרומות" width={16} height={16} />
           <Link href="/donation">
             <span>תרומות</span>
-          </Link>{" "}        </li>
-        <li className={styles.versionItem}>
-          {packageJson.version}
+          </Link>{" "}
         </li>
+        <li className={styles.versionItem}>- {packageJson.version} -</li>
       </ul>
     </div>
   );
