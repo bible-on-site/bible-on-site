@@ -81,6 +81,7 @@ async function main() {
 	);
 	for (const deployer of dirtyDeployers) {
 		await deployer.finalizeDeployment();
+		deployer.dispose();
 	}
 	console.info("Deployment process finished successfully.");
 }

@@ -1,3 +1,6 @@
+// General comment: This file was created by extensive use of vibe coding.
+// I'm not proud of it, but it makes the job.
+// Priority for improvment the quality depends on fragility which will be cleared by time.
 import * as semver from "semver";
 import fs from "node:fs";
 import type { SSHConnection } from "./ssh/ssh-connection.mjs";
@@ -22,7 +25,7 @@ export abstract class DeployerBase {
 	}
 
 	async deploy(): Promise<void> {
-		console.info(`Deploying ${this.moduleName}...`);
+		this.info(`Deploying ${this.moduleName}...`);
 		await this.deployPreConditions();
 		await this.coreDeploy();
 		await this.deployPostConditions();
@@ -62,7 +65,7 @@ export abstract class DeployerBase {
 	): Promise<string | undefined> {
 		const tailCount = offset + 1;
 		const command = `docker images ${this.dockerImageName} --format '{{.Tag}}' | grep -v '<none>' | sort -V | tail -n ${tailCount} | head -n 1`;
-		console.info(`Executing command: ${command}`);
+		this.info(`Executing command: ${command}`);
 		const result = await this.connection.client?.execCommand(command);
 		return result?.stdout?.trim();
 	}
@@ -74,15 +77,15 @@ export abstract class DeployerBase {
 	private async localRemoteVersionDiff(): Promise<Diff> {
 		const localVersion = await this.getLocalVersion();
 		const remoteVersion = await this.getRemoteModuleVersion();
-		console.info(`Local version: ${localVersion}`);
-		console.info(`Remote version: ${remoteVersion}`);
+		this.info(`Local version: ${localVersion}`);
+		this.info(`Remote version: ${remoteVersion}`);
 
 		if (!localVersion) {
-			console.info("Local version not found.");
+			this.info("Local version not found.");
 			return Diff.RemoteNewer;
 		}
 		if (!remoteVersion) {
-			console.info("Remote version not found. Assuming local is newer.");
+			this.info("Remote version not found. Assuming local is newer.");
 			return Diff.LocalNewer;
 		}
 
@@ -90,25 +93,25 @@ export abstract class DeployerBase {
 		const remoteSemver = semver.valid(semver.coerce(remoteVersion));
 
 		if (!localSemver) {
-			console.error(`Invalid local version format: ${localVersion}`);
+			this.error(`Invalid local version format: ${localVersion}`);
 			return Diff.RemoteNewer; // Or handle error as appropriate
 		}
 		if (!remoteSemver) {
-			console.warn(
+			this.warn(
 				`Invalid remote version format: ${remoteVersion}. Assuming local is newer.`,
 			);
 			return Diff.LocalNewer; // Or handle error as appropriate
 		}
 
 		if (semver.gt(localSemver, remoteSemver)) {
-			console.info("Local version is newer than remote version.");
+			this.info("Local version is newer than remote version.");
 			return Diff.LocalNewer;
 		}
 		if (semver.lt(localSemver, remoteSemver)) {
-			console.info("Remote version is newer than local version.");
+			this.info("Remote version is newer than local version.");
 			return Diff.RemoteNewer;
 		}
-		console.info("Local and remote versions are the same.");
+		this.info("Local and remote versions are the same.");
 		return Diff.LocalRemoteSame;
 	}
 
@@ -233,31 +236,54 @@ export abstract class DeployerBase {
 				return "Starting";
 		}
 	}
-
 	private async getContainerIds(filters: {
 		status?: string;
 		version?: string;
 	}): Promise<string[]> {
-		const ancestorFilter = filters.version
-			? `${this.dockerImageName}:${filters.version}`
-			: this.dockerImageName;
-		const baseFilter = `ancestor=${ancestorFilter}`;
-		const statusFilter = filters.status
-			? ` --filter "status=${filters.status}"`
-			: "";
-		const listCommand = `docker ps -a --filter "${baseFilter}"${statusFilter} --format "{{.ID}}"`;
+		// Build the search command based on filters
+		let searchCommand = `docker ps -a --format "{{.ID}} {{.Image}} {{.Status}}"`;
 
-		const listResult = await this.connection.client?.execCommand(listCommand);
-		return listResult?.stdout?.trim()
-			? listResult.stdout.trim().split("\n")
+		// Apply image and version filtering
+		if (filters.version) {
+			searchCommand += ` | grep "${this.dockerImageName}:${filters.version}"`;
+		} else {
+			searchCommand += ` | grep "${this.dockerImageName}:"`;
+		}
+
+		// Apply status filtering if specified
+		if (filters.status) {
+			searchCommand += ` | grep "${filters.status}"`;
+		}
+
+		// Extract just the container IDs
+		searchCommand += " | awk '{print $1}'";
+
+		this.debug(`Executing container search: ${searchCommand}`);
+		const result = await this.connection.client?.execCommand(searchCommand);
+
+		if (result?.code !== 0) {
+			this.warn(`Container search failed: ${result?.stderr}`);
+			return [];
+		}
+
+		const containerIds = result?.stdout?.trim()
+			? result.stdout
+					.trim()
+					.split("\n")
+					.filter((id) => id.length > 0)
 			: [];
+
+		this.debug(
+			`Found ${containerIds.length} containers: [${containerIds.join(", ")}]`,
+		);
+		return containerIds;
 	}
 
 	private async executeContainerAction(
 		action: "stop" | "remove",
 		containerId: string,
 	): Promise<void> {
-		console.info(
+		this.info(
 			`${action === "stop" ? "Stopping" : "Removing"} container ${containerId}...`,
 		);
 		const result = await this.connection.client?.execCommand(
@@ -265,7 +291,7 @@ export abstract class DeployerBase {
 		);
 
 		if (result?.code !== 0) {
-			console.warn(
+			this.warn(
 				`Failed to ${action} container ${containerId}: ${result?.stderr}`,
 			);
 		}
@@ -276,14 +302,14 @@ export abstract class DeployerBase {
 		namePrefix?: string,
 	): Promise<void> {
 		if (!version) {
-			console.warn("Version not specified for container start");
+			this.warn("Version not specified for container start");
 			return;
 		}
 
 		const containerName =
 			namePrefix ?? `${this.dockerImageName}-${version}-${Date.now()}`;
 		const runCommand = `docker run -d --name ${containerName} ${this.dockerRunOptions} ${this.dockerImageName}:${version} &`;
-		console.info(`Executing command: ${runCommand}`);
+		this.info(`Executing command: ${runCommand}`);
 
 		const runResult = await this.connection.client?.execCommand(runCommand);
 
@@ -291,9 +317,7 @@ export abstract class DeployerBase {
 			throw new Error(`Failed to start container: ${runResult?.stderr}`);
 		}
 
-		console.info(
-			`Container started successfully: ${runResult?.stdout?.trim()}`,
-		);
+		this.info(`Container started successfully: ${runResult?.stdout?.trim()}`);
 	} // Core image operations
 	private async getImageVersions(filterCommand: string): Promise<string[]> {
 		const result = await this.connection.client?.execCommand(filterCommand);
@@ -302,24 +326,20 @@ export abstract class DeployerBase {
 
 	private async removeImageVersion(version: string): Promise<void> {
 		const imageTag = `${this.dockerImageName}:${version}`;
-		console.info(`Removing image ${imageTag}...`);
+		this.info(`Removing image ${imageTag}...`);
 
 		const removeResult = await this.connection.client?.execCommand(
 			`docker rmi ${imageTag}`,
 		);
 
 		if (removeResult?.code !== 0) {
-			console.warn(
-				`Failed to remove image ${imageTag}: ${removeResult?.stderr}`,
-			);
+			this.warn(`Failed to remove image ${imageTag}: ${removeResult?.stderr}`);
 		} else {
-			console.info(`Successfully removed image ${imageTag}`);
+			this.info(`Successfully removed image ${imageTag}`);
 		}
-	}
-
-	// Specific operations using shared functions
+	} // Specific operations using shared functions
 	private async stopOldDockerContainers(): Promise<void> {
-		await this.manageContainers("stop", {});
+		await this.manageContainers("stop", { status: "Up" });
 	}
 
 	private async startNewDockerContainers(): Promise<void> {
@@ -329,15 +349,17 @@ export abstract class DeployerBase {
 		}
 		await this.manageContainers("start", { version: localVersion });
 	}
-
 	private async removeOldDockerContainers(): Promise<void> {
-		await this.manageContainers("remove", { status: "exited" });
+		// Remove both Exited and Created containers to free up image references
+		// TODO: improve the filter to be able to receive both instead of two calls
+		await this.manageContainers("remove", { status: "Exited" });
+		await this.manageContainers("remove", { status: "Created" });
 	}
 
 	private async stopNewDockerContainers(): Promise<void> {
 		const localVersion = await this.getLocalVersion();
 		if (!localVersion) {
-			console.warn("Local version not found, cannot stop new containers");
+			this.warn("Local version not found, cannot stop new containers");
 			return;
 		}
 		await this.manageContainers("stop", { version: localVersion });
@@ -346,7 +368,7 @@ export abstract class DeployerBase {
 	private async startOldDockerContainers(): Promise<void> {
 		const previousVersion = await this.getPreviousRemoteVersion();
 		if (!previousVersion) {
-			console.warn("No previous version found to rollback to");
+			this.warn("No previous version found to rollback to");
 			return;
 		}
 		await this.manageContainers(
@@ -380,10 +402,13 @@ export abstract class DeployerBase {
 	private async removeNewDockerImages(): Promise<void> {
 		const localVersion = await this.getLocalVersion();
 		if (!localVersion) {
-			console.warn("Local version not found, cannot remove new images");
+			this.warn("Local version not found, cannot remove new images");
 			return;
 		}
 		await this.removeImageVersion(localVersion);
+	}
+	protected async debug(message: string): Promise<void> {
+		console.debug(`[${await this.getDescription()}] ${message}`);
 	}
 	protected async info(message: string): Promise<void> {
 		console.info(`[${await this.getDescription()}] ${message}`);
