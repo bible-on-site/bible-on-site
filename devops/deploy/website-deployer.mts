@@ -2,7 +2,7 @@ import { DeployerBase } from "./deployer-base.mjs";
 import * as packageJson from "../../web/bible-on-site/package.json" assert {
 	type: "json",
 };
-import { pMemoizeDecorator } from "p-memoize";
+import { pMemoizeDecorator as memoize } from "p-memoize";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { SSHConnection } from "./ssh/ssh-connection.mjs";
@@ -14,7 +14,7 @@ export class WebsiteDeployer extends DeployerBase {
 		super("website", "bible-on-site", connection);
 	}
 
-	@pMemoizeDecorator()
+	@memoize()
 	async getLocalVersion(): Promise<string> {
 		const localVersion = this.wrappedLocalVersion;
 		if (localVersion) {
@@ -22,7 +22,7 @@ export class WebsiteDeployer extends DeployerBase {
 		}
 		return packageJson.version;
 	}
-	@pMemoizeDecorator()
+	@memoize()
 	override async getDockerImageTarGzPath(): Promise<string> {
 		return path.resolve(
 			__dirname,
