@@ -1,6 +1,6 @@
 import { DeployerBase } from "./deployer-base.mjs";
 import { execSync } from "node:child_process";
-import { pMemoizeDecorator } from "p-memoize";
+import { pMemoizeDecorator as memoize } from "p-memoize";
 import path from "node:path";
 import type { SSHConnection } from "./ssh/ssh-connection.mjs";
 
@@ -9,7 +9,7 @@ export class APIDeployer extends DeployerBase {
 		super("api", "bible-on-site-api", connection);
 	}
 
-	@pMemoizeDecorator()
+	@memoize()
 	async getLocalVersion(): Promise<string> {
 		const localVersion = this.wrappedLocalVersion;
 		if (localVersion) {
@@ -24,7 +24,7 @@ export class APIDeployer extends DeployerBase {
 			throw error; // Re-throw the error to propagate it
 		}
 	}
-	@pMemoizeDecorator()
+	@memoize()
 	override async getDockerImageTarGzPath(): Promise<string> {
 		return path.resolve(
 			__dirname,

@@ -50,6 +50,8 @@ export abstract class DeployerBase {
 		return Promise.resolve(this.wrappedLocalVersion);
 	}
 	abstract getDockerImageTarGzPath(): Promise<string>;
+
+	// TODO: (1) refactor into dictionary, (2) return the hardcoded run options (3) from derived classes extend super call results
 	protected get dockerRunOptions(): string {
 		return "";
 	}
