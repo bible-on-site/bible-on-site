@@ -1,3 +1,6 @@
+Hardware requirements:
+- 2 GB RAM
+- 1 CPU ("Premium Intel")
 IP address: 64.23.161.137
 Connection via SSH key & passkey only
 How to setup from scratch:
@@ -15,7 +18,7 @@ ufw allow 80
 # TODO: migrate everything from the old windows server then can assign the .com domain here as well
 ```bash
 # certbot certonly --standalone -d xn--febl3a.co.il -d www.xn--febl3a.co.il -d api.xn--febl3a.co.il -d xn--febl3a.com -d www.xn--febl3a.com -d api.xn--febl3a.com
-certbot certonly --standalone -d xn--febl3a.co.il -d www.xn--febl3a.co.il -d api.xn--febl3a.co.il
+certbot certonly --nginx -d xn--febl3a.co.il -d www.xn--febl3a.co.il -d api.xn--febl3a.co.il
 apt update
 apt install nginx
 ufw allow 'Nginx Full'
