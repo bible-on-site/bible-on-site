@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.113",
+	"version": "0.2.114",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
@@ -64,7 +64,7 @@
 		"ts-node": "10.9.2",
 		"tsx": "4.20.3",
 		"typescript": "5.8.3",
-		"typescript-eslint": "8.35.0",
+		"typescript-eslint": "8.35.1",
 		"web-vitals": "5.0.3"
 	}
 }
