@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.124",
+	"version": "0.2.125",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
