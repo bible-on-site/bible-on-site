@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.125",
+	"version": "0.2.126",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
@@ -46,7 +46,7 @@
 		"@biomejs/biome": "1.9.4",
 		"@playwright/test": "1.53.2",
 		"@types/jest": "29.5.14",
-		"@types/node": "22.16.1",
+		"@types/node": "22.16.2",
 		"@types/react": "19.1.8",
 		"@types/react-dom": "19.1.6",
 		"autoprefixer": "10.4.21",
