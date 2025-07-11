@@ -15,7 +15,7 @@
 		"deploy": "node --import tsx ./deploy/index.mts"
 	},
 	"dependencies": {
-		"dotenv": "16.6.1",
+		"dotenv": "17.2.0",
 		"mysql2": "3.14.2",
 		"node-ssh": "13.2.1",
 		"ssh-config": "5.0.3",
