@@ -54,7 +54,7 @@
 		"eslint": "9.31.0",
 		"eslint-config-next": "15.4.2",
 		"jest": "29.7.0",
-		"jest-environment-jsdom": "29.7.0",
+		"jest-environment-jsdom": "30.0.4",
 		"jest-junit": "16.0.0",
 		"monocart-reporter": "2.9.21",
 		"postcss": "8.5.6",
