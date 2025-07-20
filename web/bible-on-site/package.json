@@ -43,7 +43,7 @@
 		"react-phone-number-input": "3.4.12"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "1.9.4",
+		"@biomejs/biome": "2.1.2",
 		"@playwright/test": "1.54.1",
 		"@types/jest": "29.5.14",
 		"@types/node": "22.16.5",
