@@ -52,7 +52,7 @@ export function getPerekByPerekId(perekId: number): PerekObj {
 			`Addtionals perakim range is different from their sefer (${sefer.name}) perakim range`,
 		);
 	}
-	const perekNum = perekId - sefer.perekFrom + 1;
+	const perekNum = perekId - seferOrAdditional.perekFrom + 1;
 	const perekIdx = perekNum - 1;
 	const perek = seferOrAdditional.perakim.at(perekIdx);
 	/* istanbul ignore next: should never happen */
