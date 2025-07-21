@@ -7,3 +7,4 @@ monocart-report/
 *.egg-info/
 .ssh/
 .release/
+.cache/
