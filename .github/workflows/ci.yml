@@ -342,7 +342,7 @@ jobs:
           overwrite: true
 
       - name: Restore lcov Docker image
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: lcov-docker-image
           path: /tmp
@@ -516,7 +516,7 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
 
       - name: Restore Website JUnit Reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: website-*-junit-report-${{ github.run_id }}
           path: ${{ env.TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY }}
@@ -601,7 +601,7 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
 
       - name: Restore Website Coverage Report
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.website_e2e.result != 'skipped' && env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF || env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_DIRECTORY }}
@@ -616,7 +616,7 @@ jobs:
           fail_ci_if_error: true
 
       - name: Restore API Coverage Report
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.api_e2e.result != 'skipped' && env.API_COVERAGE_ARTIFACT_NAME_WF || env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.API_COVERAGE_DIRECTORY }}
@@ -631,7 +631,7 @@ jobs:
           fail_ci_if_error: true
 
       - name: Restore lcov Docker image
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: lcov-docker-image
           path: /tmp
