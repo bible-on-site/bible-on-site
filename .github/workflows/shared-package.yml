@@ -48,7 +48,7 @@ jobs:
 
       - name: Setup Node.js
         if: ${{ env.IS_NPM == 'true' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version-file: ${{ inputs.MODULE_DIRECTORY }}/package.json
           cache-dependency-path: ${{ inputs.MODULE_DIRECTORY }}/package-lock.json
