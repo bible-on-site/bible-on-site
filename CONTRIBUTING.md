@@ -8,7 +8,7 @@ Please report any bugs found on a production platform (website, app, etc.).
 This could be anything, from malfunctioning feature to a typo within an article.
 
 ## Technologists
-Please see (How to Contribute)[https://github.com/bible-on-site/bible-on-site/wiki/How-To-Contribute] in the wiki.
+Please see [Contributing to Bible On Site](https://github.com/bible-on-site/bible-on-site/wiki/Contributing-to-Bible-On-Site) in the wiki.
 
 ### QA Testers
 Contribute test cases:
