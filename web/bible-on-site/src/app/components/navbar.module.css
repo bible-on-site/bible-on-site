@@ -1,119 +1,159 @@
 .hamburgerMenu .menuToggle {
-	@apply hidden;
+  display: none;
 }
 
 .hamburgerMenu .menuToggle:checked + .menuBtn {
-	@apply opacity-0;
-	transition: opacity 0.15s linear;
+  opacity: 0;
+  transition: opacity 0.15s linear;
 }
 
 .hamburgerMenu .menuToggle:not(:checked) + .menuBtn {
-	@apply opacity-100;
-	transition: opacity 0.15s linear;
+  opacity: 1;
+  transition: opacity 0.15s linear;
 }
 
 .hamburgerMenu .menuToggle:checked ~ .overlay {
-	@apply opacity-30 z-10;
-	transition: opacity 0.25s ease-in-out;
+  opacity: 0.3;
+  z-index: 10;
+  transition: opacity 0.25s ease-in-out;
 }
 
 .hamburgerMenu .menuToggle:checked ~ .menuBox {
-	@apply right-0 z-20;
-	transition: right 0.25s ease-in-out;
+  right: 0;
+  z-index: 20;
+  transition: right 0.25s ease-in-out;
 }
 
 .hamburgerMenu .menuToggle:not(:checked) ~ .overlay {
-	@apply opacity-0 z-0;
+  opacity: 0;
+  z-index: 0;
 }
 
 .menuBtn {
-	@apply fixed top-7 right-5 w-8 h-10 cursor-pointer z-10 bg-transparent border-0;
-	@apply transition-opacity duration-150 ease-linear;
+  position: fixed;
+  top: 1.75rem;
+  right: 1.25rem;
+  width: 2rem;
+  height: 2rem;
+  cursor: pointer;
+  z-index: 10;
+  background-color: transparent;
+  border: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s linear;
 }
 
 .menuBtn:hover {
-	@apply opacity-70;
+  opacity: 0.7;
 }
 
 .menuBtn:focus {
-	@apply outline-none;
+  outline: none;
 }
 
 .menuIcon,
 .menuIcon::before,
 .menuIcon::after {
-	@apply block absolute w-full h-1 bg-white;
+  display: block;
+  position: absolute;
+  width: 2rem;
+  height: 0.25rem;
+  background-color: white;
 }
 
 .menuIcon::before {
-	content: "";
-	@apply -top-2.5;
+  content: "";
+  top: -0.625rem;
 }
 
 .menuIcon::after {
-	content: "";
-	@apply top-2.5;
+  content: "";
+  top: 0.625rem;
 }
 
 .overlay {
-	@apply fixed inset-0 bg-black opacity-0 transition duration-200 cursor-pointer;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background-color: black;
+  opacity: 0;
+  transition: all 0.2s;
+  cursor: pointer;
 }
 
 .menuBox {
-	display: flex;
-	flex-direction: column;
-	position: fixed;
-	top: 0;
-	right: -100%;
-	width: 300px;
-	height: 100%;
-	margin: 0;
-	padding: 8px;
-	list-style: none;
-	background-color: white;
-	box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-	transition: right 1s;
-	z-index: 10;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  right: -100%;
+  width: 300px;
+  height: 100%;
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+  background-color: white;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  transition: right 1s;
+  z-index: 10;
 }
 
 .menuBox::before {
-	@apply absolute top-0 h-full w-[6px] left-[-6px];
-	content: "";
-
-	background: linear-gradient(to right, #000 -100%, #fff 100%);
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 6px;
+  left: -6px;
+  content: "";
+  background: linear-gradient(to right, #000 -100%, #fff 100%);
 }
+
 .sidebarTopBar {
-	display: grid;
-	align-content: space-between;
-	justify-items: center;
-	padding: 13px;
+  display: grid;
+  align-content: space-between;
+  justify-items: center;
+  padding: 13px;
 }
 
 .menuItem {
-	@apply flex flex-wrap w-full;
+  display: flex;
+  flex-wrap: wrap;
+  width: 100%;
 }
 
 .menuItem > * {
-	@apply block;
-	@apply m-2;
+  display: block;
+  margin: 0.5rem;
 }
 
 .menuItem * {
-	@apply mr-2;
+  margin-right: 0.5rem;
 }
+
 .menuItem ul {
-	@apply contents;
+  display: contents;
 }
+
 .menuItem ul li {
-	@apply mr-10;
+  margin-right: 2.5rem;
 }
 
 .menuBox > li::before {
-	content: " ";	@apply block w-[100%] border-b border-[#888bef4a];
+  content: " ";
+  display: block;
+  width: 100%;
+  border-bottom: 1px solid #888bef4a;
 }
+
 .menuBox > li:last-of-type::after {
-	content: " ";
-	@apply block w-[100%] border-b border-[#888bef4a];
+  content: " ";
+  display: block;
+  width: 100%;
+  border-bottom: 1px solid #888bef4a;
 }
 
 /* Version item at bottom */
@@ -136,6 +176,3 @@
   display: none !important;
   content: none !important;
 }
-
-
-
