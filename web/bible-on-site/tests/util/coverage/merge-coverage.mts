@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 
 const COVERAGE_DIR = `${process.env.npm_config_local_prefix}/.coverage`;
 
@@ -12,9 +13,36 @@ function sanitizeCoverage(): void {
 	const e2eCoveragePath = `${COVERAGE_DIR}/e2e/lcov.info`;
 	for (const coveragePath of [unitCoveragePath, e2eCoveragePath]) {
 		const sanitizedCoveragePath = `${coveragePath}.sanitized`;
-		const cmd = `awk '/^FN:0,/ { next } /^DA:0,/ { next } /^BRDA:0,/ { next } { print }' ${coveragePath} > ${sanitizedCoveragePath}`;
-		const out = runCommand(cmd);
-		if (out) console.log(formatOutput(out));
+
+		try {
+			const content = awaitReadFileSafe(coveragePath);
+			const filtered = content
+				.split(/\r?\n/)
+				.filter(
+					(line) =>
+						!/^FN:0,/.test(line) &&
+						!/^DA:0,/.test(line) &&
+						!/^BRDA:0,/.test(line),
+				)
+				.join("\n");
+			mkdirSync(dirname(sanitizedCoveragePath), {
+				recursive: true,
+			});
+			writeFileSync(sanitizedCoveragePath, filtered);
+			console.log(`Wrote sanitized coverage: ${sanitizedCoveragePath}`);
+		} catch (err) {
+			console.error(`Failed to sanitize coverage file ${coveragePath}:`, err);
+			process.exit(1);
+		}
+	}
+}
+
+function awaitReadFileSafe(path: string): string {
+	try {
+		return readFileSync(path, "utf8");
+	} catch (e) {
+		const msg = e instanceof Error ? e.message : String(e);
+		throw new Error(`Unable to read file ${path}: ${msg}`);
 	}
 }
 
