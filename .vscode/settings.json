@@ -24,10 +24,16 @@
 	"coverage-gutters.coverageBaseDir": "{web/bible-on-site/.coverage/{unit,e2e,merged},web/api/.coverage,.coverage}",
 	"coverage-gutters.showLineCoverage": true,
 	"coverage-gutters.showGutterCoverage": true,
+	"editor.codeActionsOnSave": {
+		"source.organizeImports.biome": "explicit",
+		"source.fixAll.biome": "explicit"
+	},
 	"github.copilot.enable": {
 		"*": true,
 		"plaintext": false,
 		"markdown": true,
 		"scminput": false
-	}
+	},
+	"python-envs.defaultEnvManager": "ms-python.python:system",
+	"python-envs.pythonProjects": []
 }

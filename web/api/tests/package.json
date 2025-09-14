@@ -3,7 +3,7 @@
 	"version": "1.0.0",
 	"scripts": {
 		"test:e2e": "playwright test --config=playwright.config.ts",
-		"coverage:e2e": "node --import tsx ./coverage-e2e.mts"
+		"coverage:e2e": "cross-env MEASURE_COV=1 playwright test --config=playwright.config.ts"
 	},
 	"engines": {
 		"node": ">=22.2.0"
@@ -14,6 +14,7 @@
 	"devDependencies": {
 		"@playwright/test": "^1.51.1",
 		"@types/node": "^22.14.1",
+		"cross-env": "7.0.3",
 		"tsx": "4.19.3"
 	}
 }

@@ -1,12 +1,13 @@
 import {
 	type BrowserContext,
-	type Page,
 	expect,
+	type Page,
 	test as testBase,
 } from "@playwright/test";
-import { shouldMeasureCov } from "../environment.mjs";
 import { addCoverageReport } from "monocart-reporter";
+import { shouldMeasureCov } from "../../../../shared/tests-util/environment.mjs";
 import { filterOutCoverageRedundantFiles } from "../coverage/filter-out-coverage-redundant-files";
+
 declare global {
 	interface Window {
 		collectIstanbulCoverage: (coverage?: CoverageData) => void;
