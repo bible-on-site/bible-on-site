@@ -86,7 +86,8 @@ export function getBaseConfig(testType: TestType) {
 			outputDir: `${__dirname}/.coverage/${testType}`,
 			reports: ["lcovonly"],
 
-			onEnd: async () => {
+			// biome-ignore lint/correctness/noUnusedFunctionParameters: have some wierd bug. keeping for isolation
+			onEnd: async (coverage) => {
 				// Fixes path formatting in LCOV files for Windows paths
 				const lcovPath = `.coverage/${testType}/lcov.info`;
 				const content = fs.readFileSync(lcovPath, "utf8");
