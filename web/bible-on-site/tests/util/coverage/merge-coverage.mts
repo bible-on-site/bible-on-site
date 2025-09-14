@@ -4,8 +4,19 @@ import { mkdirSync } from "node:fs";
 const COVERAGE_DIR = `${process.env.npm_config_local_prefix}/.coverage`;
 
 mkdirSync(`${COVERAGE_DIR}/merged`, { recursive: true });
-
+sanitizeCoverage();
 mergeCoverage();
+
+function sanitizeCoverage(): void {
+	const unitCoveragePath = `${COVERAGE_DIR}/unit/lcov.info`;
+	const e2eCoveragePath = `${COVERAGE_DIR}/e2e/lcov.info`;
+	for (const coveragePath of [unitCoveragePath, e2eCoveragePath]) {
+		const sanitizedCoveragePath = `${coveragePath}.sanitized`;
+		const cmd = `awk '/^FN:0,/ { next } /^DA:0,/ { next } /^BRDA:0,/ { next } { print }' ${coveragePath} > ${sanitizedCoveragePath}`;
+		const out = runCommand(cmd);
+		if (out) console.log(formatOutput(out));
+	}
+}
 
 function mergeCoverage(): void {
 	const cmd = `docker run --rm -t -v ${COVERAGE_DIR}:/.coverage lcov-cli:0.0.2 --rc branch_coverage=1 -a /.coverage/unit/lcov.info -a /.coverage/e2e/lcov.info -o /.coverage/merged/lcov.info`;
