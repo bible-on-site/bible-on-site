@@ -191,7 +191,7 @@ jobs:
 
       - name: Setup Node.js
         id: setup-node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
           cache-dependency-path: ${{ env.WEBSITE_NODE_CACHE_PATH }}
@@ -268,7 +268,7 @@ jobs:
 
       - name: Setup Node.js
         id: setup-node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
           cache-dependency-path: ${{ env.WEBSITE_NODE_CACHE_PATH }}
@@ -407,7 +407,7 @@ jobs:
 
       - name: Setup DevOps Node.js
         id: setup-devops-node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
           cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
@@ -435,7 +435,7 @@ jobs:
 
       - name: Setup Tests Node.js
         id: setup-tests-node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: ${{ env.API_TESTS_NODE_VERSION_FILE }}
           cache-dependency-path: ${{ env.API_TESTS_NODE_CACHE_PATH }}
@@ -641,7 +641,7 @@ jobs:
 
       - name: Setup DevOps Node.js
         id: setup-devops-node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
           cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
