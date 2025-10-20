@@ -12,7 +12,7 @@
 	"license": "MIT",
 	"description": "",
 	"devDependencies": {
-		"@playwright/test": "^1.51.1",
+		"@playwright/test": "^1.56.1",
 		"@types/node": "^22.14.1",
 		"tsx": "4.19.3"
 	}
