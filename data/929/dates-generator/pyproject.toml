@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dates-generator"
-version = "0.1.1"
+version = "0.1.2"
 description = ""
 authors = ["doradsoft <doradsoft@gmail.com>"]
 license = "MIT"
@@ -11,7 +11,7 @@ package-mode = false
 python = "^3.12"
 hdate = "^1.0.0"
 jupyter = "^1.0.0"
-ipykernel = "^6.29.4"
+ipykernel = "^7.0.0"
 tzdata = "^2024.1"
 
 
