@@ -1,4 +1,5 @@
-import { spawn } from "node:child_process";
+import { fork } from "node:child_process";
+import { mkdirSync, openSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -13,26 +14,31 @@ try {
 }
 
 async function main() {
-	const shouldMeasureCov = process.argv.includes("--measure-cov");
 	process.chdir(path.resolve(__dirname, ".."));
+	const logDir = path.resolve(__dirname, ".log");
+	mkdirSync(logDir, { recursive: true });
+	const out = openSync(path.resolve(logDir, "api_launcher.log"), "w");
 
-	const coverageRun = spawn(
-		"cargo",
-		["make", shouldMeasureCov ? "run-for-coverage" : "run-for-tests"],
-		{ shell: true },
+	// Fork with tsx loader via Node's --import flag
+	// TODO: find a way without this ugly wrapper.
+	// The original issue was that when the tests are finished, a signal is sent to this process which then kills the API as well.
+	// The workaround is to have this wrapper process detached from the launcher process.
+	const wrapper = fork(
+		path.resolve(__dirname, "cargo_wrapper.mts"),
+		process.argv.slice(2),
+		{
+			cwd: __dirname,
+			detached: true,
+			execArgv: ["--no-deprecation", "--trace-deprecation", "--import", "tsx"],
+			silent: true,
+			stdio: ["ignore", out, out, "ipc"],
+		},
 	);
 
-	coverageRun.stdout.on("data", (data) => {
-		const str = data.toString();
-		process.stdout.write(str);
-	});
-	coverageRun.stderr.on("data", (data) => {
-		const str = data.toString();
-		process.stderr.write(str);
-	});
-	coverageRun.once("close", (code) => {
-		if (code !== 0) {
-			throw new Error(`API process exited with code ${code}`);
-		}
-	});
+	wrapper.unref();
+
+	// Keep the process alive by monitoring in an infinite loop
+	while (true) {
+		await new Promise((resolve) => setTimeout(resolve, 1000));
+	}
 }
