@@ -6,7 +6,7 @@ import {
 } from "@playwright/test";
 import { addCoverageReport } from "monocart-reporter";
 import { shouldMeasureCov } from "../../../../shared/tests-util/environment.mjs";
-import { filterOutCoverageRedundantFiles } from "../coverage/filter-out-coverage-redundant-files";
+import { sanitizeCoverage } from "../coverage/sanitize-coverage";
 
 declare global {
 	interface Window {
@@ -50,7 +50,7 @@ async function coverageSetup(context: BrowserContext) {
 		"collectIstanbulCoverage",
 		(coverage?: CoverageData) => {
 			if (coverage) {
-				filterOutCoverageRedundantFiles(coverage);
+				sanitizeCoverage(coverage as never); // TODO: fix types / migrate sanitizeCoverage to TS
 				if (Object.keys(coverage).length > 0) {
 					addCoverageReport(coverage, test.info());
 				}
