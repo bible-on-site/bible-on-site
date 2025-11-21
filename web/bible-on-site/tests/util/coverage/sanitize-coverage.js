@@ -1,10 +1,14 @@
 import path from "node:path";
-
+/**
+ * @typedef {Object} Position
+ * @property {number} line
+ * @property {number} column
+ */
 /**
  * @typedef {Object} EntryData
  * @property {boolean} all
  * @property {string} path
- * @property {Object.<number, Object>} statementMap
+ * @property {Object.<number, {start: Position, end: Position}>} statementMap
  * @property {Object.<number, {name?: string, decl?: Object, loc?: Object, line?: number}>} fnMap
  * @property {Object.<number, {type?: string, loc?: Object, locations?: Object, line?: number}>} branchMap
  * @property {Object.<number, number>} s
@@ -62,14 +66,21 @@ function hasValidStructure(coverageEntry) {
  */
 function sanitizeEntryData(coverageEntryData) {
 	const lineElementsMaps = [
-		coverageEntryData.branchMap,
-		coverageEntryData.fnMap,
+		{ map: coverageEntryData.branchMap, counters: coverageEntryData.b },
+		{ map: coverageEntryData.fnMap, counters: coverageEntryData.f },
 	];
-	for (const lineElementsMap of lineElementsMaps) {
+	for (const { map: lineElementsMap, counters } of lineElementsMaps) {
 		for (const [key, value] of Object.entries(lineElementsMap)) {
 			if (value.line === 0) {
 				delete lineElementsMap[key];
+				delete counters[key];
 			}
+		}
+	}
+	for (const [key, value] of Object.entries(coverageEntryData.statementMap)) {
+		if (value.start.line === 0 || value.end.line === 0) {
+			delete coverageEntryData.statementMap[key];
+			delete coverageEntryData.s[key];
 		}
 	}
 }
