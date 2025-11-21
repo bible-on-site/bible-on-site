@@ -65,22 +65,56 @@ function hasValidStructure(coverageEntry) {
  * @description Checks if the coverage entry has mispositioned tokens (e.g., zero coverage lines).
  */
 function sanitizeEntryData(coverageEntryData) {
+	// Remove any line elements that are mapped to line 0 // TODO: refactor, as this is very clumsy
 	const lineElementsMaps = [
 		{ map: coverageEntryData.branchMap, counters: coverageEntryData.b },
 		{ map: coverageEntryData.fnMap, counters: coverageEntryData.f },
 	];
 	for (const { map: lineElementsMap, counters } of lineElementsMaps) {
+		const validEntries = [];
 		for (const [key, value] of Object.entries(lineElementsMap)) {
-			if (value.line === 0) {
-				delete lineElementsMap[key];
-				delete counters[key];
+			if (value.line !== 0) {
+				validEntries.push({ key, value, counter: counters[key] });
 			}
 		}
+		// Clear and rebuild the map without holes
+		for (const key of Object.keys(lineElementsMap)) {
+			delete lineElementsMap[key];
+			delete counters[key];
+		}
+		validEntries.forEach((entry, index) => {
+			lineElementsMap[index] = entry.value;
+			counters[index] = entry.counter;
+		});
 	}
+
+	const validStatements = [];
 	for (const [key, value] of Object.entries(coverageEntryData.statementMap)) {
-		if (value.start.line === 0 || value.end.line === 0) {
-			delete coverageEntryData.statementMap[key];
-			delete coverageEntryData.s[key];
+		if (value.start.line !== 0 && value.end.line !== 0) {
+			validStatements.push({ value, counter: coverageEntryData.s[key] });
 		}
 	}
+	// Clear and rebuild the statementMap without holes
+	for (const key of Object.keys(coverageEntryData.statementMap)) {
+		delete coverageEntryData.statementMap[key];
+		delete coverageEntryData.s[key];
+	}
+	validStatements.forEach((entry, index) => {
+		coverageEntryData.statementMap[index] = entry.value;
+		coverageEntryData.s[index] = entry.counter;
+	});
+
+	// // Remove any branch entries that point to non-existent statement lines TODO: remove commented code or uncomment if ever found an issue in this area
+	// const statementLines = new Set();
+	// for (const stmt of Object.values(coverageEntryData.statementMap)) {
+	// 	statementLines.add(stmt.start.line);
+	// }
+
+	// for (const [key, value] of Object.entries(coverageEntryData.branchMap)) {
+	// 	const line = value.line || value.loc?.start?.line;
+	// 	if (line && !statementLines.has(line)) {
+	// 		delete coverageEntryData.branchMap[key];
+	// 		delete coverageEntryData.b[key];
+	// 	}
+	// }
 }
