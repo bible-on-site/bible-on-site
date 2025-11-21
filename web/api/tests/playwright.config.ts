@@ -49,7 +49,7 @@ export default defineConfig({
 					[
 						"junit",
 						{
-							outputFile: ".playwright-report/e2e/junit/results.xml",
+							outputFile: "../.playwright-report/e2e/junit/results.xml",
 						},
 					] as ReporterDescription,
 				]
