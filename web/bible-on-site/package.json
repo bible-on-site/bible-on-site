@@ -32,7 +32,7 @@
 		"@syncfusion/ej2-react-grids": "29.2.11",
 		"@syncfusion/ej2-react-layouts": "29.2.4",
 		"flowbite": "3.1.2",
-		"flowbite-react": "0.12.5",
+		"flowbite-react": "0.12.10",
 		"gematry": "1.0.2",
 		"html-flip-book-react": "0.0.0-alpha.1",
 		"moment-timezone": "0.6.0",
@@ -40,7 +40,7 @@
 		"nuqs": "2.4.3",
 		"react": "19.1.1",
 		"react-dom": "19.1.1",
-		"react-phone-number-input": "3.4.12"
+		"react-phone-number-input": "3.4.14"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",
