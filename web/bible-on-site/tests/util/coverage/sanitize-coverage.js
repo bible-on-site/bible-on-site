@@ -112,13 +112,40 @@ function sanitizeBranchMap(entry, statementHelper) {
 	entry.b = entry.b ?? {};
 	const branches = [];
 	for (const [key, value] of Object.entries(entry.branchMap)) {
-		const line = value.line ?? value.loc?.start?.line ?? value.loc?.line;
-		const branchHits = getBranchHitCount(entry.b[key]);
-		if (statementHelper.ensureLine(line, branchHits ?? 0)) {
-			branches.push({ value, counter: entry.b[key] ?? 0 });
+		const counter = typeof entry.b[key] === "undefined" ? 0 : entry.b[key];
+		const hasLines = ensureBranchLines(value, counter, statementHelper);
+		if (hasLines) {
+			branches.push({ value, counter });
 		}
 	}
 	rebuildMap(entry.branchMap, entry.b, branches);
+}
+
+function ensureBranchLines(value, counter, statementHelper) {
+	if (!value) {
+		return false;
+	}
+	let registered = false;
+	const locationHits = getBranchLocationHits(counter);
+	const branchHits = getBranchHitCount(counter);
+	const primaryLine =
+		value.line ?? value.loc?.start?.line ?? value.loc?.line ?? 0;
+	if (primaryLine > 0) {
+		statementHelper.ensureLine(primaryLine, branchHits);
+		registered = true;
+	}
+	const locations = Array.isArray(value.locations) ? value.locations : [];
+	locations.forEach((location, index) => {
+		const locationLine =
+			location?.start?.line ?? location?.line ?? location?.loc?.start?.line ?? 0;
+		if (locationLine <= 0) {
+			return;
+		}
+		const hits = locationHits[index] ?? 0;
+		statementHelper.ensureLine(locationLine, hits);
+		registered = true;
+	});
+	return registered;
 }
 
 function sanitizeFunctionMap(entry) {
@@ -178,4 +205,21 @@ function getBranchHitCount(counter) {
 	return typeof counter === "number" && Number.isFinite(counter)
 		? counter
 		: 0;
+}
+
+function getBranchLocationHits(counter) {
+	if (Array.isArray(counter)) {
+		return counter.map((value) => toFiniteNumber(value));
+	}
+	if (counter && typeof counter === "object") {
+		return Object.keys(counter)
+			.sort((a, b) => Number(a) - Number(b))
+			.map((key) => toFiniteNumber(counter[key]));
+	}
+	return [toFiniteNumber(counter)];
+}
+
+function toFiniteNumber(value) {
+	const num = typeof value === "number" ? value : Number(value);
+	return Number.isFinite(num) ? num : 0;
 }
