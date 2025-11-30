@@ -1,9 +1,23 @@
 import { execSync } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import {
+	copyFileSync,
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	writeFileSync,
+} from "node:fs";
 
 const COVERAGE_DIR = `${process.env.npm_config_local_prefix}/.coverage`;
 
+const DEBUG_TARGET_FILE = "SeferComposite.tsx";
+const DEBUG_DIR = `${COVERAGE_DIR}/debug`;
+const DEBUG_TARGETS = [
+	{ label: "unit", path: `${COVERAGE_DIR}/unit/lcov.info` },
+	{ label: "e2e", path: `${COVERAGE_DIR}/e2e/lcov.info` },
+];
+
 mkdirSync(`${COVERAGE_DIR}/merged`, { recursive: true });
+dumpTargetCoverage();
 mergeCoverage();
 
 function mergeCoverage(): void {
@@ -11,6 +25,75 @@ function mergeCoverage(): void {
 
 	const out = runCommand(cmd);
 	if (out) console.log(formatOutput(out));
+}
+
+function dumpTargetCoverage(): void {
+	mkdirSync(DEBUG_DIR, { recursive: true });
+
+	for (const target of DEBUG_TARGETS) {
+		const snippet = extractCoverageSection(target.path, DEBUG_TARGET_FILE);
+		const outputPath = `${DEBUG_DIR}/${DEBUG_TARGET_FILE.replace(/\W+/g, "_")}.${target.label}.txt`;
+		const content =
+			snippet ??
+			`Coverage snippet for ${target.label} missing ${DEBUG_TARGET_FILE}\n`;
+		copyCoverageFile(target.path, `${DEBUG_DIR}/${target.label}.lcov.info`);
+		writeFileSync(outputPath, content, "utf8");
+		console.log(`Debug snippet for ${target.label} written to ${outputPath}`);
+	}
+}
+
+function extractCoverageSection(
+	filePath: string,
+	targetFile: string,
+): string | undefined {
+	if (!existsSync(filePath)) {
+		return undefined;
+	}
+
+	const lines = readFileSync(filePath, "utf8").split(/\r?\n/);
+	const sections = [];
+	let capturing = false;
+	let buffer = [];
+
+	for (const line of lines) {
+		if (line.startsWith("SF:")) {
+			if (capturing && buffer.length) {
+				sections.push(buffer.join("\n"));
+				buffer = [];
+			}
+
+			capturing = line.includes(targetFile);
+			if (capturing) {
+				buffer.push(line);
+			}
+			continue;
+		}
+
+		if (capturing) {
+			buffer.push(line);
+			if (line === "end_of_record") {
+				sections.push(buffer.join("\n"));
+				buffer = [];
+				capturing = false;
+			}
+		}
+	}
+
+	if (capturing && buffer.length) {
+		sections.push(buffer.join("\n"));
+	}
+
+	return sections.length ? sections.join("\n\n") : undefined;
+}
+
+function copyCoverageFile(source: string, destination: string): void {
+	if (!existsSync(source)) {
+		console.log(`Coverage file not found: ${source}`);
+		return;
+	}
+
+	copyFileSync(source, destination);
+	console.log(`Copied coverage file to ${destination}`);
 }
 
 function runCommand(cmd: string): Buffer | undefined {
