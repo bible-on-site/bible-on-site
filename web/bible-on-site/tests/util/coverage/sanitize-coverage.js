@@ -37,6 +37,8 @@ import path from "node:path";
  * @param {Record<string, Entry>} coverage
  * @returns {Record<string, Entry>}
  */
+const DEBUG_SANITIZE_PATH = process.env.DEBUG_SANITIZE_PATH;
+
 export function sanitizeCoverage(coverage) {
 	const SRC_DIR = path.resolve(__dirname, "../../../", "src");
 	for (const file of Object.keys(coverage)) {
@@ -64,9 +66,40 @@ function isTracked(entry, srcDir) {
 
 function sanitizeEntryData(entryData) {
 	if (!entryData) return;
+	debugEntry(entryData, "before");
 	const statementHelper = sanitizeStatementMap(entryData);
 	sanitizeBranchMap(entryData, statementHelper);
 	sanitizeFunctionMap(entryData);
+	debugEntry(entryData, "after");
+}
+
+function debugEntry(entryData, stage) {
+	if (!DEBUG_SANITIZE_PATH) {
+		return;
+	}
+	if (stage !== "after") {
+		return;
+	}
+	const entryPath = entryData.path ?? entryData?.data?.path;
+	const normalized = entryPath?.replace(/\\/g, "/");
+	if (!normalized || !normalized.includes(DEBUG_SANITIZE_PATH)) {
+		return;
+	}
+	const safeDump = {
+		stage,
+		path: entryPath,
+		statements: Object.entries(entryData.statementMap ?? {}).map(
+			([key, value]) => ({ key, start: value.start, end: value.end }),
+		),
+		statementHits: entryData.s,
+		branches: Object.entries(entryData.branchMap ?? {}).map(([key, value]) => ({
+			key,
+			line: value?.line ?? value?.loc?.start?.line ?? value?.loc?.line,
+			locations: value?.locations,
+		})),
+		branchHits: entryData.b,
+	};
+	console.log("[sanitizeCoverage]", JSON.stringify(safeDump, null, 2));
 }
 
 function sanitizeStatementMap(entry) {
@@ -92,8 +125,8 @@ function sanitizeStatementMap(entry) {
 				return undefined;
 			}
 			const existing = lineToStatementKey.get(line);
-			if (typeof existing !== "undefined") {
-				const key = String(existing);
+			if (existing && existing.origin === "start") {
+				const key = existing.key;
 				entry.s[key] = Math.max(entry.s[key] ?? 0, minHits);
 				return key;
 			}
@@ -113,12 +146,46 @@ function sanitizeBranchMap(entry, statementHelper) {
 	const branches = [];
 	for (const [key, value] of Object.entries(entry.branchMap)) {
 		const counter = typeof entry.b[key] === "undefined" ? 0 : entry.b[key];
-		const hasLines = ensureBranchLines(value, counter, statementHelper);
-		if (hasLines) {
-			branches.push({ value, counter });
-		}
+		const splitEntries = splitBranchByLine(value, counter);
+		splitEntries.forEach(({ value: branchValue, counter: branchCounter }) => {
+			const hasLines = ensureBranchLines(branchValue, branchCounter, statementHelper);
+			if (hasLines) {
+				branches.push({ value: branchValue, counter: branchCounter });
+			}
+		});
 	}
 	rebuildMap(entry.branchMap, entry.b, branches);
+}
+
+function splitBranchByLine(value, counter) {
+	const locations = Array.isArray(value?.locations) ? value.locations : [];
+	if (!locations.length) {
+		return [{ value, counter }];
+	}
+	const locationHits = getBranchLocationHits(counter);
+	const groups = new Map();
+	locations.forEach((location, index) => {
+		const line = getLocationLine(location);
+		if (line <= 0) {
+			return;
+		}
+		const clonedLocation = cloneLocation(location);
+		if (!groups.has(line)) {
+			groups.set(line, { locations: [], hits: [] });
+		}
+		const group = groups.get(line);
+		group.locations.push(clonedLocation);
+		group.hits.push(locationHits[index] ?? 0);
+	});
+	if (!groups.size) {
+		return [{ value, counter }];
+	}
+	return Array.from(groups.entries()).map(([line, group]) => {
+		const cloned = cloneBranchValue(value);
+		setBranchLine(cloned, line);
+		cloned.locations = group.locations;
+		return { value: cloned, counter: group.hits };
+	});
 }
 
 function ensureBranchLines(value, counter, statementHelper) {
@@ -128,16 +195,25 @@ function ensureBranchLines(value, counter, statementHelper) {
 	let registered = false;
 	const locationHits = getBranchLocationHits(counter);
 	const branchHits = getBranchHitCount(counter);
-	const primaryLine =
-		value.line ?? value.loc?.start?.line ?? value.loc?.line ?? 0;
+	const primaryLine = getCanonicalBranchLine(value);
+	const extraLine = getBranchDeclaredLine(value);
+	const branchLines = new Set();
 	if (primaryLine > 0) {
-		statementHelper.ensureLine(primaryLine, branchHits);
-		registered = true;
+		branchLines.add(primaryLine);
 	}
+	if (extraLine > 0) {
+		branchLines.add(extraLine);
+	}
+	if (primaryLine > 0 && value.line !== primaryLine) {
+		setBranchLine(value, primaryLine);
+	}
+	branchLines.forEach((line) => {
+		statementHelper.ensureLine(line, branchHits);
+		registered = true;
+	});
 	const locations = Array.isArray(value.locations) ? value.locations : [];
 	locations.forEach((location, index) => {
-		const locationLine =
-			location?.start?.line ?? location?.line ?? location?.loc?.start?.line ?? 0;
+		const locationLine = getLocationLine(location);
 		if (locationLine <= 0) {
 			return;
 		}
@@ -177,15 +253,23 @@ function rebuildMap(map, counters, entries, onEntry) {
 	});
 }
 
-function trackStatementLine(lineToKey, line, key) {
-	if (typeof line === "number" && line > 0 && !lineToKey.has(line)) {
-		lineToKey.set(line, String(key));
+
+function trackStatementLine(lineToKey, line, key, origin) {
+	if (typeof line !== "number" || line <= 0) {
+		return;
 	}
+	const existing = lineToKey.get(line);
+	if (existing) {
+		if (existing.origin === "start" || origin !== "start") {
+			return;
+		}
+	}
+	lineToKey.set(line, { key: String(key), origin });
 }
 
 function registerStatementLines(lineToKey, statement, key) {
-	trackStatementLine(lineToKey, statement.start?.line, key);
-	trackStatementLine(lineToKey, statement.end?.line, key);
+	trackStatementLine(lineToKey, statement.start?.line, key, "start");
+	trackStatementLine(lineToKey, statement.end?.line, key, "end");
 }
 
 function createFlatStatement(line) {
@@ -222,4 +306,87 @@ function getBranchLocationHits(counter) {
 function toFiniteNumber(value) {
 	const num = typeof value === "number" ? value : Number(value);
 	return Number.isFinite(num) ? num : 0;
+}
+
+function getCanonicalBranchLine(value) {
+	const locationLines = [];
+	if (Array.isArray(value?.locations)) {
+		for (const location of value.locations) {
+			const line =
+				location?.start?.line ?? location?.line ?? location?.loc?.start?.line ?? 0;
+			if (line > 0) locationLines.push(line);
+		}
+	}
+	if (locationLines.length) {
+		return Math.min(...locationLines);
+	}
+	const locLine = value?.loc?.start?.line ?? value?.loc?.line ?? 0;
+	if (locLine > 0) {
+		return locLine;
+	}
+	const directLine = typeof value?.line === "number" ? value.line : 0;
+	return directLine > 0 ? directLine : 0;
+}
+
+function getBranchDeclaredLine(value) {
+	return typeof value?.line === "number" && value.line > 0 ? value.line : 0;
+}
+
+function cloneBranchValue(value) {
+	return {
+		...value,
+		loc: cloneLocation(value?.loc),
+		locations: Array.isArray(value?.locations)
+			? value.locations.map(cloneLocation)
+			: value?.locations,
+	};
+}
+
+function cloneLocation(location) {
+	if (!location || typeof location !== "object") {
+		return location ?? null;
+	}
+	const cloned = { ...location };
+	if (location.start) {
+		cloned.start = { ...location.start };
+	}
+	if (location.end) {
+		cloned.end = { ...location.end };
+	}
+	if (location.loc) {
+		cloned.loc = cloneLocation(location.loc);
+	}
+	if (location.line) {
+		cloned.line = location.line;
+	}
+	return cloned;
+}
+
+function getLocationLine(location) {
+	return (
+		location?.start?.line ??
+		location?.line ??
+		location?.loc?.start?.line ??
+		0
+	);
+}
+
+function setBranchLine(value, line) {
+	if (!value || line <= 0) {
+		return;
+	}
+	value.line = line;
+	value.loc = alignLocationLine(value.loc, line);
+}
+
+function alignLocationLine(location, line) {
+	const cloned = cloneLocation(location ?? {});
+	if (!cloned.start) {
+		cloned.start = {};
+	}
+	cloned.start.line = line;
+	if (typeof cloned.line === "number") {
+		cloned.line = line;
+	}
+	return cloned;
 }
