@@ -1,4 +1,4 @@
-import { stat, watch } from "node:fs/promises";
+import { mkdir, stat, watch } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { shouldMeasureCov } from "../../shared/tests-util/environment.mjs";
@@ -23,6 +23,7 @@ const isCoverageReady = async () => {
 };
 
 const waitForCoverageFile = async () => {
+	await mkdir(COVERAGE_DIR_PATH, { recursive: true });
 	if (await isCoverageReady()) {
 		return;
 	}
