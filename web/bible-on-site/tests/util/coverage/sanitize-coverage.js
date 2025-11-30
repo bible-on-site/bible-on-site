@@ -1,4 +1,5 @@
 import path from "node:path";
+
 /**
  * @typedef {Object} Position
  * @property {number} line
@@ -30,91 +31,104 @@ import path from "node:path";
  */
 
 /**
- * @param {Record<string, Entry>} coverage - The coverage object.
- * @returns {Record<string, Entry>} The filtered coverage object.
- * @description Filters out redundant files from the coverage. Mutates the
- * coverage object and also returns it for convenience/chaining.
+ * Filters coverage entries so only tracked files remain and their coverage maps
+ * are rebuilt without invalid statement or branch references.
+ *
+ * @param {Record<string, Entry>} coverage
+ * @returns {Record<string, Entry>}
  */
 export function sanitizeCoverage(coverage) {
-	// Work on a stable list of keys so deleting entries doesn't affect iteration
+	const SRC_DIR = path.resolve(__dirname, "../../../", "src");
 	for (const file of Object.keys(coverage)) {
 		const entry = coverage[file];
-		if (!isTracked(entry) || !hasValidStructure(entry)) {
+		if (!entry || !hasValidStructure(entry) || !isTracked(entry, SRC_DIR)) {
 			delete coverage[file];
+			continue;
 		}
-		// some implementation (unit) uses underlying data object, and top level properties are actually getters.
-		// other implementation (e2e) uses the data object directly at top level.
 		sanitizeEntryData(entry.data ?? entry);
 	}
-
 	return coverage;
 }
 
-function isTracked(coverageEntry) {
-	const entryPath = path.resolve(coverageEntry.path);
-	const SRC_DIR = path.resolve(__dirname, "../../../", "src");
-	return entryPath.startsWith(SRC_DIR);
+function hasValidStructure(entry) {
+	return entry && typeof entry.path === "string";
 }
 
-function hasValidStructure(coverageEntry) {
-	return coverageEntry && typeof coverageEntry.path === "string";
+function isTracked(entry, srcDir) {
+	if (!entry || typeof entry.path !== "string") {
+		return false;
+	}
+	const entryPath = path.resolve(entry.path);
+	return entryPath.startsWith(srcDir);
 }
-/**
- * @param {EntryData} coverageEntryData
- * @returns {boolean}
- * @description Checks if the coverage entry has mispositioned tokens (e.g., zero coverage lines).
- */
-function sanitizeEntryData(coverageEntryData) {
-	// Remove any line elements that are mapped to line 0 // TODO: refactor, as this is very clumsy
-	const lineElementsMaps = [
-		{ map: coverageEntryData.branchMap, counters: coverageEntryData.b },
-		{ map: coverageEntryData.fnMap, counters: coverageEntryData.f },
-	];
-	for (const { map: lineElementsMap, counters } of lineElementsMaps) {
-		const validEntries = [];
-		for (const [key, value] of Object.entries(lineElementsMap)) {
-			if (value.line !== 0) {
-				validEntries.push({ key, value, counter: counters[key] });
-			}
-		}
-		// Clear and rebuild the map without holes
-		for (const key of Object.keys(lineElementsMap)) {
-			delete lineElementsMap[key];
-			delete counters[key];
-		}
-		validEntries.forEach((entry, index) => {
-			lineElementsMap[index] = entry.value;
-			counters[index] = entry.counter;
-		});
-	}
 
-	const validStatements = [];
-	for (const [key, value] of Object.entries(coverageEntryData.statementMap)) {
-		if (value.start.line !== 0 && value.end.line !== 0) {
-			validStatements.push({ value, counter: coverageEntryData.s[key] });
+function sanitizeEntryData(entryData) {
+	if (!entryData) return;
+	const statementLines = sanitizeStatementMap(entryData);
+	sanitizeBranchMap(entryData, statementLines);
+	sanitizeFunctionMap(entryData);
+}
+
+function sanitizeStatementMap(entry) {
+	entry.statementMap = entry.statementMap ?? {};
+	entry.s = entry.s ?? {};
+	const statements = [];
+	for (const [key, value] of Object.entries(entry.statementMap)) {
+		const startLine = value.start?.line ?? 0;
+		const endLine = value.end?.line ?? 0;
+		if (startLine > 0 && endLine > 0) {
+			statements.push({ value, counter: entry.s[key] ?? 0 });
 		}
 	}
-	// Clear and rebuild the statementMap without holes
-	for (const key of Object.keys(coverageEntryData.statementMap)) {
-		delete coverageEntryData.statementMap[key];
-		delete coverageEntryData.s[key];
+	rebuildMap(entry.statementMap, entry.s, statements);
+
+	const statementLines = new Set();
+	for (const { value } of statements) {
+		if (typeof value.start?.line === "number") {
+			statementLines.add(value.start.line);
+		}
+		if (typeof value.end?.line === "number") {
+			statementLines.add(value.end.line);
+		}
 	}
-	validStatements.forEach((entry, index) => {
-		coverageEntryData.statementMap[index] = entry.value;
-		coverageEntryData.s[index] = entry.counter;
+	return statementLines;
+}
+
+function sanitizeBranchMap(entry, statementLines) {
+	entry.branchMap = entry.branchMap ?? {};
+	entry.b = entry.b ?? {};
+	const branches = [];
+	for (const [key, value] of Object.entries(entry.branchMap)) {
+		const line = value.line ?? value.loc?.start?.line ?? value.loc?.line;
+		if (line > 0 && statementLines.has(line)) {
+			branches.push({ value, counter: entry.b[key] ?? 0 });
+		}
+	}
+	rebuildMap(entry.branchMap, entry.b, branches);
+}
+
+function sanitizeFunctionMap(entry) {
+	entry.fnMap = entry.fnMap ?? {};
+	entry.f = entry.f ?? {};
+	const functions = [];
+	for (const [key, value] of Object.entries(entry.fnMap)) {
+		const line = value.line ?? value.loc?.start?.line ?? 0;
+		if (line > 0) {
+			functions.push({ value, counter: entry.f[key] ?? 0 });
+		}
+	}
+	rebuildMap(entry.fnMap, entry.f, functions);
+}
+
+function rebuildMap(map, counters, entries) {
+	for (const key of Object.keys(map)) {
+		delete map[key];
+	}
+	for (const key of Object.keys(counters)) {
+		delete counters[key];
+	}
+	entries.forEach((entry, index) => {
+		map[index] = entry.value;
+		counters[index] = entry.counter;
 	});
-
-	// // Remove any branch entries that point to non-existent statement lines TODO: remove commented code or uncomment if ever found an issue in this area
-	// const statementLines = new Set();
-	// for (const stmt of Object.values(coverageEntryData.statementMap)) {
-	// 	statementLines.add(stmt.start.line);
-	// }
-
-	// for (const [key, value] of Object.entries(coverageEntryData.branchMap)) {
-	// 	const line = value.line || value.loc?.start?.line;
-	// 	if (line && !statementLines.has(line)) {
-	// 		delete coverageEntryData.branchMap[key];
-	// 		delete coverageEntryData.b[key];
-	// 	}
-	// }
 }
