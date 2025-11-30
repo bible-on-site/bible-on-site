@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   submit:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,10 +31,7 @@ jobs:
           dotnet-version: "9.0.x"
 
       - name: Install MAUI workloads
-        run: |
-          dotnet workload install maui-android --skip-manifest-update
-          dotnet workload install maui-ios --skip-manifest-update
-          dotnet workload install maui-maccatalyst --skip-manifest-update
+        run: dotnet workload install maui-android maui-ios maui-maccatalyst --skip-manifest-update
 
       - name: Generate dependency graph
         uses: actions/dependency-submission@v4
