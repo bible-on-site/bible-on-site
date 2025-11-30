@@ -1,0 +1,42 @@
+# This workflow submits NuGet dependencies to GitHub's dependency graph.
+# It replaces the auto-generated "dynamic / submit-nuget" workflow
+# by properly installing .NET MAUI workloads before running dotnet restore.
+name: NuGet Dependency Submission
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "**/*.csproj"
+      - "**/*.sln"
+      - "**/Directory.Build.props"
+      - "**/Directory.Build.targets"
+      - "**/global.json"
+      - ".github/workflows/nuget-dependency-submission.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Install MAUI workloads
+        run: |
+          dotnet workload install maui-android --skip-manifest-update
+          dotnet workload install maui-ios --skip-manifest-update
+          dotnet workload install maui-maccatalyst --skip-manifest-update
+
+      - name: Generate dependency graph
+        uses: actions/dependency-submission@v4
+        with:
+          build-root-directory: .
