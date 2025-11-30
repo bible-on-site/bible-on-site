@@ -64,8 +64,8 @@ function isTracked(entry, srcDir) {
 
 function sanitizeEntryData(entryData) {
 	if (!entryData) return;
-	const statementLines = sanitizeStatementMap(entryData);
-	sanitizeBranchMap(entryData, statementLines);
+	const statementHelper = sanitizeStatementMap(entryData);
+	sanitizeBranchMap(entryData, statementHelper);
 	sanitizeFunctionMap(entryData);
 }
 
@@ -84,23 +84,34 @@ function sanitizeStatementMap(entry) {
 
 	const statementLines = new Set();
 	for (const { value } of statements) {
-		if (typeof value.start?.line === "number") {
-			statementLines.add(value.start.line);
-		}
-		if (typeof value.end?.line === "number") {
-			statementLines.add(value.end.line);
-		}
+		trackStatementLines(value, statementLines);
 	}
-	return statementLines;
+	let nextStatementIndex = statements.length;
+	return {
+		ensureLine(line) {
+			if (line <= 0) {
+				return false;
+			}
+			if (statementLines.has(line)) {
+				return true;
+			}
+			const key = String(nextStatementIndex++);
+			const flatStatement = createFlatStatement(line);
+			entry.statementMap[key] = flatStatement;
+			entry.s[key] = 0;
+			trackStatementLines(flatStatement, statementLines);
+			return true;
+		},
+	};
 }
 
-function sanitizeBranchMap(entry, statementLines) {
+function sanitizeBranchMap(entry, statementHelper) {
 	entry.branchMap = entry.branchMap ?? {};
 	entry.b = entry.b ?? {};
 	const branches = [];
 	for (const [key, value] of Object.entries(entry.branchMap)) {
 		const line = value.line ?? value.loc?.start?.line ?? value.loc?.line;
-		if (line > 0 && statementLines.has(line)) {
+		if (statementHelper.ensureLine(line)) {
 			branches.push({ value, counter: entry.b[key] ?? 0 });
 		}
 	}
@@ -131,4 +142,22 @@ function rebuildMap(map, counters, entries) {
 		map[index] = entry.value;
 		counters[index] = entry.counter;
 	});
+}
+
+function trackStatementLines(statement, statementLines) {
+	const startLine = statement.start?.line;
+	const endLine = statement.end?.line;
+	if (typeof startLine === "number" && startLine > 0) {
+		statementLines.add(startLine);
+	}
+	if (typeof endLine === "number" && endLine > 0) {
+		statementLines.add(endLine);
+	}
+}
+
+function createFlatStatement(line) {
+	return {
+		start: { line, column: 0 },
+		end: { line, column: 0 },
+	};
 }
