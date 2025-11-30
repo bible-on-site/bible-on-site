@@ -80,27 +80,29 @@ function sanitizeStatementMap(entry) {
 			statements.push({ value, counter: entry.s[key] ?? 0 });
 		}
 	}
-	rebuildMap(entry.statementMap, entry.s, statements);
+	const lineToStatementKey = new Map();
+	rebuildMap(entry.statementMap, entry.s, statements, (index, value) => {
+		registerStatementLines(lineToStatementKey, value, index);
+	});
 
-	const statementLines = new Set();
-	for (const { value } of statements) {
-		trackStatementLines(value, statementLines);
-	}
 	let nextStatementIndex = statements.length;
 	return {
-		ensureLine(line) {
+		ensureLine(line, minHits = 0) {
 			if (line <= 0) {
-				return false;
+				return undefined;
 			}
-			if (statementLines.has(line)) {
-				return true;
+			const existing = lineToStatementKey.get(line);
+			if (typeof existing !== "undefined") {
+				const key = String(existing);
+				entry.s[key] = Math.max(entry.s[key] ?? 0, minHits);
+				return key;
 			}
 			const key = String(nextStatementIndex++);
 			const flatStatement = createFlatStatement(line);
 			entry.statementMap[key] = flatStatement;
-			entry.s[key] = 0;
-			trackStatementLines(flatStatement, statementLines);
-			return true;
+			entry.s[key] = Math.max(0, minHits);
+			registerStatementLines(lineToStatementKey, flatStatement, key);
+			return key;
 		},
 	};
 }
@@ -111,7 +113,8 @@ function sanitizeBranchMap(entry, statementHelper) {
 	const branches = [];
 	for (const [key, value] of Object.entries(entry.branchMap)) {
 		const line = value.line ?? value.loc?.start?.line ?? value.loc?.line;
-		if (statementHelper.ensureLine(line)) {
+		const branchHits = getBranchHitCount(entry.b[key]);
+		if (statementHelper.ensureLine(line, branchHits ?? 0)) {
 			branches.push({ value, counter: entry.b[key] ?? 0 });
 		}
 	}
@@ -131,7 +134,7 @@ function sanitizeFunctionMap(entry) {
 	rebuildMap(entry.fnMap, entry.f, functions);
 }
 
-function rebuildMap(map, counters, entries) {
+function rebuildMap(map, counters, entries, onEntry) {
 	for (const key of Object.keys(map)) {
 		delete map[key];
 	}
@@ -141,18 +144,21 @@ function rebuildMap(map, counters, entries) {
 	entries.forEach((entry, index) => {
 		map[index] = entry.value;
 		counters[index] = entry.counter;
+		if (typeof onEntry === "function") {
+			onEntry(index, entry.value);
+		}
 	});
 }
 
-function trackStatementLines(statement, statementLines) {
-	const startLine = statement.start?.line;
-	const endLine = statement.end?.line;
-	if (typeof startLine === "number" && startLine > 0) {
-		statementLines.add(startLine);
+function trackStatementLine(lineToKey, line, key) {
+	if (typeof line === "number" && line > 0 && !lineToKey.has(line)) {
+		lineToKey.set(line, String(key));
 	}
-	if (typeof endLine === "number" && endLine > 0) {
-		statementLines.add(endLine);
-	}
+}
+
+function registerStatementLines(lineToKey, statement, key) {
+	trackStatementLine(lineToKey, statement.start?.line, key);
+	trackStatementLine(lineToKey, statement.end?.line, key);
 }
 
 function createFlatStatement(line) {
@@ -160,4 +166,16 @@ function createFlatStatement(line) {
 		start: { line, column: 0 },
 		end: { line, column: 0 },
 	};
+}
+
+function getBranchHitCount(counter) {
+	if (Array.isArray(counter)) {
+		return counter.reduce((max, value) => {
+			const num = typeof value === "number" ? value : Number(value);
+			return Number.isFinite(num) ? Math.max(max, num) : max;
+		}, 0);
+	}
+	return typeof counter === "number" && Number.isFinite(counter)
+		? counter
+		: 0;
 }
