@@ -147,12 +147,13 @@ function sanitizeBranchMap(entry, statementHelper) {
 	for (const [key, value] of Object.entries(entry.branchMap)) {
 		const counter = typeof entry.b[key] === "undefined" ? 0 : entry.b[key];
 		const splitEntries = splitBranchByLine(value, counter);
-		splitEntries.forEach(({ value: branchValue, counter: branchCounter }) => {
+		for (const entryVariant of splitEntries) {
+			const { value: branchValue, counter: branchCounter } = entryVariant;
 			const hasLines = ensureBranchLines(branchValue, branchCounter, statementHelper);
 			if (hasLines) {
 				branches.push({ value: branchValue, counter: branchCounter });
 			}
-		});
+		}
 	}
 	rebuildMap(entry.branchMap, entry.b, branches);
 }
@@ -207,10 +208,10 @@ function ensureBranchLines(value, counter, statementHelper) {
 	if (primaryLine > 0 && value.line !== primaryLine) {
 		setBranchLine(value, primaryLine);
 	}
-	branchLines.forEach((line) => {
+	for (const line of branchLines) {
 		statementHelper.ensureLine(line, branchHits);
 		registered = true;
-	});
+	}
 	const locations = Array.isArray(value.locations) ? value.locations : [];
 	locations.forEach((location, index) => {
 		const locationLine = getLocationLine(location);
