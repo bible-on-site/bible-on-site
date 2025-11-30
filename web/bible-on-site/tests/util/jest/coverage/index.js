@@ -1,6 +1,8 @@
 const { CoverageReporter } = require("@jest/reporters");
 const { CoverageReport } = require("monocart-coverage-reports");
-import { filterOutCoverageRedundantFiles } from "../../coverage/filter-out-coverage-redundant-files";
+
+import { sanitizeCoverage } from "../../coverage/sanitize-coverage";
+
 const fs = require("node:fs");
 class MonocartCoverageReporter extends CoverageReporter {
 	constructor(globalConfig, reporterOptions, reporterContext) {
@@ -26,7 +28,7 @@ class MonocartCoverageReporter extends CoverageReporter {
 		const coverage = await this._sourceMapStore.transformCoverage(
 			this._coverageMap,
 		);
-		filterOutCoverageRedundantFiles(coverage.data);
+		sanitizeCoverage(coverage.data);
 		this.reporterOptions.sourceFinder = this._sourceMapStore.sourceFinder;
 
 		const coverageReport = new CoverageReport(this.reporterOptions);

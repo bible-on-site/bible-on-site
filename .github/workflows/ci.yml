@@ -354,6 +354,15 @@ jobs:
         continue-on-error: true
         run: npm run coverage:merge
 
+      - name: Store Coverage Debug Snippets
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-coverage-debug-${{ github.run_id }}
+          path: ${{ env.WEBSITE_DIRECTORY }}/.coverage/debug
+          retention-days: 7
+          overwrite: true
+
       - name: Store Website Coverage Report (wf)
         uses: actions/upload-artifact@v4
         with:

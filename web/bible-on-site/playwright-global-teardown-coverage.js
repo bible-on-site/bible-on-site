@@ -1,7 +1,7 @@
 import { CDPClient } from "monocart-coverage-reports";
 import { addCoverageReport } from "monocart-reporter";
 import { getRouterDebugPort } from "./get-debug-port";
-import { filterOutCoverageRedundantFiles } from "./tests/util/coverage/filter-out-coverage-redundant-files";
+import { sanitizeCoverage } from "./tests/util/coverage/sanitize-coverage";
 
 const globalTeardown = async (config) => {
 	const client = await CDPClient({
@@ -10,7 +10,7 @@ const globalTeardown = async (config) => {
 	if (!client.getIstanbulCoverage) return;
 	const coverageData = await client.getIstanbulCoverage();
 	await client.close();
-	filterOutCoverageRedundantFiles(coverageData);
+	sanitizeCoverage(coverageData);
 
 	// there is no test info on teardown, just mock one with required config
 	const mockTestInfo = {
