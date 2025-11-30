@@ -1,7 +1,7 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url); // get the resolved path to the file
 const __dirname = path.dirname(__filename); // get the name of the directory
@@ -186,7 +186,7 @@ function assertPythonVersion() {
 function assertNodeJSVersion() {
 	// TODO: check using semver, TODO: inform if NodeJS is not installed.
 	console.info("Checking NodeJS version...");
-	const supportedNodeVersions = ["v22.13.0"];
+	const supportedNodeVersions = ["v24.11.1"];
 	const actualNodeVersion = spawnSync("node", ["--version"], { shell: isWin })
 		.output.toString()
 		.replaceAll(",", "")

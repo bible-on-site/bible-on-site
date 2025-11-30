@@ -1,5 +1,33 @@
+.overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background-color: black;
+  opacity: 0;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
 .hamburgerMenu .menuToggle {
   display: none;
+}
+
+.menuBtn {
+  position: fixed;
+  top: 1.75rem;
+  right: 1.25rem;
+  width: 2rem;
+  height: 2rem;
+  cursor: pointer;
+  z-index: 10;
+  background-color: transparent;
+  border: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s linear;
 }
 
 .hamburgerMenu .menuToggle:checked + .menuBtn {
@@ -18,6 +46,23 @@
   transition: opacity 0.25s ease-in-out;
 }
 
+.menuBox {
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  right: -100%;
+  width: 300px;
+  height: 100%;
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+  background-color: white;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  transition: right 1s;
+  z-index: 10;
+}
+
 .hamburgerMenu .menuToggle:checked ~ .menuBox {
   right: 0;
   z-index: 20;
@@ -27,22 +72,6 @@
 .hamburgerMenu .menuToggle:not(:checked) ~ .overlay {
   opacity: 0;
   z-index: 0;
-}
-
-.menuBtn {
-  position: fixed;
-  top: 1.75rem;
-  right: 1.25rem;
-  width: 2rem;
-  height: 2rem;
-  cursor: pointer;
-  z-index: 10;
-  background-color: transparent;
-  border: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: opacity 0.15s linear;
 }
 
 .menuBtn:hover {
@@ -71,35 +100,6 @@
 .menuIcon::after {
   content: "";
   top: 0.625rem;
-}
-
-.overlay {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  background-color: black;
-  opacity: 0;
-  transition: all 0.2s;
-  cursor: pointer;
-}
-
-.menuBox {
-  display: flex;
-  flex-direction: column;
-  position: fixed;
-  top: 0;
-  right: -100%;
-  width: 300px;
-  height: 100%;
-  margin: 0;
-  padding: 8px;
-  list-style: none;
-  background-color: white;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  transition: right 1s;
-  z-index: 10;
 }
 
 .menuBox::before {
@@ -173,6 +173,8 @@
 
 .versionItem::before,
 .versionItem::after {
+  /* biome-ignore lint/complexity/noImportantStyles: TODO: find a way without !important */
   display: none !important;
+  /* biome-ignore lint/complexity/noImportantStyles: TODO: find a way without !important */
   content: none !important;
 }

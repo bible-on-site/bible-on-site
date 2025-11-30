@@ -48,7 +48,7 @@ jobs:
 
       - name: Setup Node.js
         if: ${{ env.IS_NPM == 'true' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: ${{ inputs.MODULE_DIRECTORY }}/package.json
           cache-dependency-path: ${{ inputs.MODULE_DIRECTORY }}/package-lock.json
@@ -130,7 +130,7 @@ jobs:
           gzip -c -f ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_NAME }} > ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_GZ_NAME }}
 
       - name: Store Docker Image
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ steps.prepare_dockerizing.outputs.DOCKER_ARTIFACT_NAME }}
           path: ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
