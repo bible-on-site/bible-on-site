@@ -1,6 +1,9 @@
 # This workflow submits NuGet dependencies to GitHub's dependency graph.
-# It replaces the auto-generated "dynamic / submit-nuget" workflow
-# by properly installing .NET MAUI workloads before running dotnet restore.
+# NOTE: This workflow does NOT replace GitHub's "Automatic Dependency Submission (NuGet)"
+# dynamic workflow. The dynamic workflow is controlled by GitHub and cannot be modified
+# through repository code. To fix the dynamic workflow failures, you must disable
+# "Automatic dependency submission" in repository Settings > Security > Dependency graph.
+# This custom workflow provides a working alternative that installs MAUI workloads.
 name: NuGet Dependency Submission
 
 on:
