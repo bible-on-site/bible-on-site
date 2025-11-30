@@ -1,7 +1,13 @@
-import { devices, type ReporterDescription } from "@playwright/test";
-import { defineConfig } from "@playwright/test";
+import {
+	defineConfig,
+	devices,
+	type ReporterDescription,
+} from "@playwright/test";
+import {
+	isCI,
+	shouldMeasureCov,
+} from "../../shared/tests-util/environment.mjs";
 
-const isCI = !!process.env.CI;
 const WEB_SERVER_URL = "http://127.0.0.1:3003/api/graphql";
 export default defineConfig({
 	testMatch: ["**/*.test.ts"],
@@ -18,7 +24,7 @@ export default defineConfig({
 	},
 	// Increase the default timeout to 1 min in case of CI (slow servers).
 	timeout: isCI ? 60000 : 30000,
-	globalTeardown: "./playwright-global-teardown.js",
+	globalTeardown: "./playwright-global-teardown.mjs",
 	projects: [
 		{
 			name: "chromium",
@@ -43,7 +49,7 @@ export default defineConfig({
 					[
 						"junit",
 						{
-							outputFile: ".playwright-report/e2e/junit/results.xml",
+							outputFile: "../.playwright-report/e2e/junit/results.xml",
 						},
 					] as ReporterDescription,
 				]
@@ -52,9 +58,8 @@ export default defineConfig({
 
 	webServer: {
 		// Wait until WEB_SERVER_URL returns a successful response
-		command:
-			"sh -c 'until curl --silent --fail --head \"$WEB_SERVER_URL\"; do sleep 1; done'",
-		timeout: 90000,
+		command: `node --import tsx ./launch-api-for-tests.mts ${shouldMeasureCov ? "--measure-cov" : ""}`,
+		timeout: 240000,
 		url: WEB_SERVER_URL,
 		reuseExistingServer: true, // consider that for some tests, such as for admin pages, restart the server before running each test
 	},

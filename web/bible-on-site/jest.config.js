@@ -1,5 +1,6 @@
 import nextJest from "next/jest.js";
-import { isCI, shouldMeasureCov } from "./tests/util/environment.mjs";
+import { isCI, shouldMeasureCov } from "../shared/tests-util/environment.mjs";
+
 // TODO: transform into TS
 /** @type {import('jest').Config} */
 const config = {
