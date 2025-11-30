@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdirSync, openSync } from "node:fs";
+import { mkdirSync, openSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,6 +19,11 @@ function main() {
 	mkdirSync(logDir, { recursive: true });
 	const out = openSync(path.resolve(logDir, "api.log"), "w");
 	const shouldMeasureCov = process.argv.includes("--measure-cov");
+	const coverageFilePath = path.resolve(__dirname, "../.coverage/lcov.info");
+
+	if (shouldMeasureCov) {
+		rmSync(coverageFilePath, { force: true });
+	}
 
 	const cargo = spawn(
 		"cargo",

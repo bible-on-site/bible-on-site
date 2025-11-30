@@ -24,7 +24,7 @@ export default defineConfig({
 	},
 	// Increase the default timeout to 1 min in case of CI (slow servers).
 	timeout: isCI ? 60000 : 30000,
-	globalTeardown: "./playwright-global-teardown.js",
+	globalTeardown: "./playwright-global-teardown.mjs",
 	projects: [
 		{
 			name: "chromium",
