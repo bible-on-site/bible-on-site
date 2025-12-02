@@ -7,7 +7,7 @@ const nextConfig = {
 	experimental: {
 		esmExternals: true,
 		externalDir: true,
-		swcPlugins: ["swc-plugin-coverage-instrument"],
+		swcPlugins: [["swc-plugin-coverage-instrument", {}]],
 	},
 	allowedDevOrigins: ["127.0.0.1"],
 	cacheMaxMemorySize: 1 * GB,
