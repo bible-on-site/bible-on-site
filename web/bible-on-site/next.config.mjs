@@ -7,7 +7,14 @@ const nextConfig = {
 	experimental: {
 		esmExternals: true,
 		externalDir: true,
-		swcPlugins: [["swc-plugin-coverage-instrument", {}]],
+		swcPlugins: process.env.TURBOPACK
+			? []
+			: [
+					[
+						"swc-plugin-coverage-instrument",
+						{ unstableExclude: ["coverage/route.ts"] },
+					],
+				],
 	},
 	allowedDevOrigins: ["127.0.0.1"],
 	cacheMaxMemorySize: 1 * GB,
