@@ -9,6 +9,10 @@
   width: 100%;
   z-index: 6;
 }
+.page section > header {
+  letter-spacing: 0.3em;
+  text-align: center;
+}
 .page section:first-child header {
   margin-top: 80px;
 }
@@ -18,9 +22,10 @@
   width: 100%;
   z-index: 2;
 }
-.page section > header {
-  letter-spacing: 0.3em;
-  text-align: center;
+.alHaperekHeadlines h1 {
+  display: grid;
+  letter-spacing: 0.25em;
+  justify-items: center;
 }
 .page section > header > h1 {
   font-size: 1.8em;
@@ -136,11 +141,6 @@
   max-width: 1em;
 }
 
-.alHaperekHeadlines h1 {
-  display: grid;
-  letter-spacing: 0.25em;
-  justify-items: center;
-}
 .alHaperekHeadlines h1 a {
   color: white;
   display: contents;

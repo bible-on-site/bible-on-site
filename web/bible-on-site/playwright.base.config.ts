@@ -44,7 +44,7 @@ export function getBaseConfig(testType: TestType) {
 		webServer: {
 			env: { NODE_OPTIONS: `--inspect=${getDebugPort()}` },
 			timeout: 20000,
-			command: "npm run dev",
+			command: "npm run dev-webpack",
 			url: WEB_SERVER_URL,
 			reuseExistingServer: true, // consider that for some tests, such as for admin pages, restart the server before running each test
 		},

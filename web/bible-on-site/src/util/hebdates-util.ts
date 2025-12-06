@@ -14,7 +14,7 @@ function extractUniformMonthNumberFromHDate(hDate: HDate): number {
 	return hDateMonth - 1;
 }
 function extractHebcalMonthNumberfromNumericDate(date: number): number {
-	const uniformMonth = Number.parseInt(date.toString().substring(4, 6));
+	const uniformMonth = Number.parseInt(date.toString().substring(4, 6), 10);
 	// if leap year and months Adar I or Adar II
 	if (uniformMonth === 13 || uniformMonth === 14) {
 		return uniformMonth - 1;
@@ -52,12 +52,13 @@ export function hebcalDateToNumber(hDate: HDate): number {
 		`${hDate.yy}${extractUniformMonthNumberFromHDate(hDate)
 			.toString()
 			.padStart(2, "0")}${hDate.dd.toString().padStart(2, "0")}`,
+		10,
 	);
 }
 export function parseNumericalDateToHebcalDate(dateAsNumber: number) {
 	return new HDate(
-		Number.parseInt(dateAsNumber.toString().substring(6)),
+		Number.parseInt(dateAsNumber.toString().substring(6), 10),
 		extractHebcalMonthNumberfromNumericDate(dateAsNumber),
-		Number.parseInt(dateAsNumber.toString().substring(0, 4)),
+		Number.parseInt(dateAsNumber.toString().substring(0, 4), 10),
 	);
 }

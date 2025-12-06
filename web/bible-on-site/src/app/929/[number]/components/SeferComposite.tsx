@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import type { PerekObj } from "@/data/perek-dto";
 import ReadModeToggler from "./ReadModeToggler";
