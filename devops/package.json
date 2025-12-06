@@ -3,10 +3,10 @@
 		"node": ">=22.2.0"
 	},
 	"devDependencies": {
-		"@types/node": "22.16.5",
-		"@types/semver": "7.7.0",
-		"@types/yargs": "17.0.33",
-		"tsx": "4.20.3"
+		"@types/node": "22.19.1",
+		"@types/semver": "7.7.1",
+		"@types/yargs": "17.0.35",
+		"tsx": "4.21.0"
 	},
 	"scripts": {
 		"coverage:merge": "node --import tsx ./merge-coverage.mts",
@@ -16,9 +16,9 @@
 	},
 	"dependencies": {
 		"dotenv": "16.6.1",
-		"mysql2": "3.14.2",
+		"mysql2": "3.15.3",
 		"node-ssh": "13.2.1",
-		"ssh-config": "5.0.3",
+		"ssh-config": "5.0.4",
 		"p-memoize": "7.1.1",
 		"yargs": "17.7.2"
 	}
