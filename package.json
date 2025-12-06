@@ -1,7 +1,7 @@
 {
 	"name": "bible-on-site-monorepo",
 	"devDependencies": {
-		"@types/node": "^22.14.1",
+		"@types/node": "^24.0.0",
 
 		"husky": "9.1.7"
 	},
