@@ -18,7 +18,7 @@ class MonocartCoverageReporter extends CoverageReporter {
 		}
 		super.onTestResult.apply(this, args);
 	}
-
+	// biome-ignore lint/correctness/noUnusedFunctionParameters: framework required function signature
 	async onRunComplete(testContexts, results) {
 		if (this.disabled) {
 			return;
