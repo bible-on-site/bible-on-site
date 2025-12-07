@@ -9,16 +9,19 @@ FROM base AS deps
 WORKDIR /app
 
 # Install dependencies based on the preferred package manager
-COPY package.json package-lock.json .npmrc* ./
+# Build context is web/, so bible-on-site is a subdirectory
+COPY bible-on-site/package.json bible-on-site/package-lock.json ./
+COPY bible-on-site/.npmrc* ./
 # TODO can pass the entire npm cache
 RUN npm ci --omit=dev --prefer-offline
 
 # Rebuild the source code only when needed
 FROM base AS builder
-WORKDIR /app
+WORKDIR /app/bible-on-site
 COPY --from=deps /app/node_modules ./node_modules
-# TODO: Copy only necessary files for build
-COPY . .
+# Copy the main app and shared dependencies (maintaining ../shared import structure)
+COPY bible-on-site/ ./
+COPY shared/ ../shared/
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
@@ -34,12 +37,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/public ./public
+COPY --from=builder /app/bible-on-site/public ./public
 
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/bible-on-site/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/bible-on-site/.next/static ./.next/static
 
 USER nextjs
 
