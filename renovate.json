@@ -22,6 +22,10 @@
 			"matchPackageNames": ["*"],
 			"matchUpdateTypes": ["minor", "patch"],
 			"automerge": true
+		},
+		{
+			"matchPackageNames": ["swc-plugin-coverage-instrument"],
+			"enabled": false
 		}
 	],
 	"bumpVersion": "patch",
