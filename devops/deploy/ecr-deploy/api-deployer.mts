@@ -32,6 +32,14 @@ export class APIECRDeployer extends ECRDeployerBase {
 		return `${this.dockerImageName}:v${version}`;
 	}
 
+	override async getDockerImageArchivePath(): Promise<string> {
+		const version = await this.getLocalVersion();
+		return path.resolve(
+			__dirname,
+			`../../../web/api/.release/bible-on-site-api-v${version}.tar.gz`,
+		);
+	}
+
 	protected override getBuildCwd(): string {
 		return path.resolve(__dirname, "../../../web/api");
 	}

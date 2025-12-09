@@ -27,6 +27,14 @@ export class WebsiteECRDeployer extends ECRDeployerBase {
 		return `${this.dockerImageName}:v${version}`;
 	}
 
+	override async getDockerImageArchivePath(): Promise<string> {
+		const version = await this.getLocalVersion();
+		return path.resolve(
+			__dirname,
+			`../../../web/bible-on-site/.release/bible-on-site-v${version}.tar.gz`,
+		);
+	}
+
 	protected override getBuildCwd(): string {
 		// Build context is web/ to include both bible-on-site and shared directories
 		return path.resolve(__dirname, "../../../web");

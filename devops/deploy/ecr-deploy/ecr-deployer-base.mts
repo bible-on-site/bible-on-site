@@ -20,6 +20,7 @@ export enum Diff {
 
 export abstract class ECRDeployerBase {
 	protected wrappedLocalVersion?: string;
+	protected dockerImagePath?: string;
 
 	constructor(
 		protected readonly moduleName: string,
@@ -43,8 +44,13 @@ export abstract class ECRDeployerBase {
 		this.wrappedLocalVersion = version;
 	}
 
+	public setDockerImagePath(imagePath: string | undefined): void {
+		this.dockerImagePath = imagePath;
+	}
+
 	protected abstract getLocalVersion(): Promise<string>;
 	protected abstract getDockerImageTag(): Promise<string>;
+	protected abstract getDockerImageArchivePath(): Promise<string>;
 
 	protected get dockerBuildContext(): string {
 		return ".";
@@ -277,31 +283,87 @@ export abstract class ECRDeployerBase {
 		const ecrImageUri = `${repositoryUri}:${versionTag}`;
 		const ecrLatestUri = `${repositoryUri}:latest`;
 
-		this.info(`Building Docker image: ${imageTag}`);
-
-		// Check if image exists locally
-		try {
-			execSync(`docker image inspect ${imageTag}`, { stdio: "pipe" });
-			this.info(`Using existing local image: ${imageTag}`);
-		} catch {
-			// Image doesn't exist, need to build it
-			this.info(`Local image not found. Building from Dockerfile...`);
-			const buildCommand = `docker build -t ${imageTag} -f ${this.dockerfilePath} ${this.dockerBuildContext}`;
-			execSync(buildCommand, { stdio: "inherit", cwd: this.getBuildCwd() });
+		// Determine if we should use an image archive
+		// Priority: explicit dockerImagePath > calculated archive path (if exists) > build from source
+		let archivePathToUse: string | undefined = this.dockerImagePath;
+		if (!archivePathToUse) {
+			const calculatedArchivePath = await this.getDockerImageArchivePath();
+			if (fs.existsSync(calculatedArchivePath)) {
+				this.info(`Found pre-built image archive: ${calculatedArchivePath}`);
+				archivePathToUse = calculatedArchivePath;
+			}
 		}
 
-		// Tag for ECR
-		this.info(`Tagging image as ${ecrImageUri}`);
-		execSync(`docker tag ${imageTag} ${ecrImageUri}`, { stdio: "inherit" });
-		execSync(`docker tag ${imageTag} ${ecrLatestUri}`, { stdio: "inherit" });
+		// Push directly from image archive if available (using crane - no docker load needed)
+		if (archivePathToUse) {
+			await this.pushImageFromArchive(
+				archivePathToUse,
+				ecrImageUri,
+				ecrLatestUri,
+			);
+		} else {
+			this.info(`Building Docker image: ${imageTag}`);
 
-		// Push to ECR
-		this.info(`Pushing image to ECR: ${ecrImageUri}`);
-		execSync(`docker push ${ecrImageUri}`, { stdio: "inherit" });
-		this.info(`Pushing latest tag to ECR: ${ecrLatestUri}`);
-		execSync(`docker push ${ecrLatestUri}`, { stdio: "inherit" });
+			// Check if image exists locally
+			try {
+				execSync(`docker image inspect ${imageTag}`, { stdio: "pipe" });
+				this.info(`Using existing local image: ${imageTag}`);
+			} catch {
+				// Image doesn't exist, need to build it
+				this.info(`Local image not found. Building from Dockerfile...`);
+				const buildCommand = `docker build -t ${imageTag} -f ${this.dockerfilePath} ${this.dockerBuildContext}`;
+				execSync(buildCommand, { stdio: "inherit", cwd: this.getBuildCwd() });
+			}
+
+			// Tag for ECR
+			this.info(`Tagging image as ${ecrImageUri}`);
+			execSync(`docker tag ${imageTag} ${ecrImageUri}`, { stdio: "inherit" });
+			execSync(`docker tag ${imageTag} ${ecrLatestUri}`, { stdio: "inherit" });
+
+			// Push to ECR
+			this.info(`Pushing image to ECR: ${ecrImageUri}`);
+			execSync(`docker push ${ecrImageUri}`, { stdio: "inherit" });
+			this.info(`Pushing latest tag to ECR: ${ecrLatestUri}`);
+			execSync(`docker push ${ecrLatestUri}`, { stdio: "inherit" });
+		}
 
 		this.info(`Image pushed to ECR successfully: ${ecrImageUri}`);
+	}
+
+	/**
+	 * Push image directly from archive (.tar or .tar.gz) to ECR using crane.
+	 * This avoids the need to load the image into Docker first.
+	 */
+	private async pushImageFromArchive(
+		archivePath: string,
+		ecrImageUri: string,
+		ecrLatestUri: string,
+	): Promise<void> {
+		let actualPath = archivePath;
+
+		// Decompress if .tar.gz
+		if (archivePath.endsWith(".tar.gz") || archivePath.endsWith(".tgz")) {
+			this.info(`Decompressing ${archivePath}...`);
+			execSync(`gunzip -f "${archivePath}"`, { stdio: "inherit" });
+			actualPath = archivePath.replace(/\.gz$/, "").replace(/\.tgz$/, ".tar");
+		}
+
+		// Verify archive file exists
+		if (!fs.existsSync(actualPath)) {
+			throw new Error(`Docker image archive not found: ${actualPath}`);
+		}
+
+		// Push directly to ECR using crane (no docker load needed!)
+		this.info(`Pushing image directly from ${actualPath} to ${ecrImageUri}...`);
+		execSync(`crane push "${actualPath}" "${ecrImageUri}"`, {
+			stdio: "inherit",
+		});
+
+		// Also push as latest
+		this.info(`Pushing latest tag to ECR: ${ecrLatestUri}`);
+		execSync(`crane push "${actualPath}" "${ecrLatestUri}"`, {
+			stdio: "inherit",
+		});
 	}
 
 	protected getBuildCwd(): string {

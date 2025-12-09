@@ -34,12 +34,20 @@ async function main() {
 			demandOption: false,
 			type: "string",
 		})
+		.option("docker-image", {
+			alias: "i",
+			describe:
+				"Path to a Docker image archive (.tar or .tar.gz) to push directly",
+			demandOption: false,
+			type: "string",
+		})
 		.help()
 		.alias("help", "h")
 		.parse();
 
 	const moduleName = argv.moduleName;
 	const moduleVersion = argv.moduleVersion;
+	const dockerImagePath = argv.dockerImage;
 
 	if (!moduleName) {
 		console.error("Module name is required.");
@@ -70,6 +78,7 @@ async function main() {
 		const DeployerClass = deployers[moduleName];
 		const deployer: ECRDeployerBase = new DeployerClass(client, config);
 		deployer.setLocalVersion(moduleVersion);
+		deployer.setDockerImagePath(dockerImagePath);
 
 		// Deploy
 		await deployer.deploy();

@@ -7,7 +7,8 @@ import {
 	type ImageDetail,
 } from "@aws-sdk/client-ecr";
 import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
-import { fromSSO } from "@aws-sdk/credential-providers";
+import { fromEnv, fromSSO } from "@aws-sdk/credential-providers";
+import type { AwsCredentialIdentityProvider } from "@smithy/types";
 import * as dotenv from "dotenv";
 
 dotenv.config({
@@ -18,6 +19,8 @@ export interface ECRConfig {
 	region: string;
 	accountId: string;
 	profile?: string;
+	/** If true, use environment credentials (for CI). Otherwise use SSO (for local). */
+	useEnvCredentials?: boolean;
 }
 
 /**
@@ -111,11 +114,19 @@ export async function withRetry<T>(
 
 /**
  * Gets ECR configuration from environment variables.
- * Uses AWS IAM Identity Center (SSO) for authentication.
+ *
+ * Authentication modes:
+ * 1. **CI mode** (AWS_ACCESS_KEY_ID is set or CI=true): Uses environment credentials from OIDC
+ * 2. **Local mode**: Uses AWS IAM Identity Center (SSO) via AWS_PROFILE
  *
  * Required env vars:
  * - AWS_REGION: The AWS region (e.g., us-east-1)
+ *
+ * For local mode (SSO):
  * - AWS_PROFILE: The SSO profile name configured via `aws configure sso`
+ *
+ * For CI mode (OIDC):
+ * - AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN: Set by aws-actions/configure-aws-credentials
  *
  * Optional env vars:
  * - AWS_ACCOUNT_ID: If not provided, will be fetched from STS
@@ -124,17 +135,26 @@ export async function getECRConfig(): Promise<ECRConfig> {
 	const region = process.env.AWS_REGION;
 	const profile = process.env.AWS_PROFILE;
 
+	// Detect CI mode: either explicit CI=true or AWS credentials are set (from OIDC)
+	const isCI = process.env.CI === "true" || !!process.env.AWS_ACCESS_KEY_ID;
+	const useEnvCredentials = isCI;
+
 	if (!region) {
 		throw new Error(
 			"Missing AWS_REGION environment variable. Please check your .env file.",
 		);
 	}
 
-	if (!profile) {
+	if (!useEnvCredentials && !profile) {
 		throw new Error(
 			"Missing AWS_PROFILE environment variable. Configure SSO with 'aws configure sso' and set the profile name.",
 		);
 	}
+
+	// Get credentials provider based on mode
+	const credentials: AwsCredentialIdentityProvider = useEnvCredentials
+		? fromEnv()
+		: fromSSO({ profile });
 
 	// Get account ID from STS if not provided
 	let accountId = process.env.AWS_ACCOUNT_ID;
@@ -142,7 +162,7 @@ export async function getECRConfig(): Promise<ECRConfig> {
 		console.info("AWS_ACCOUNT_ID not set, fetching from STS...");
 		const stsClient = new STSClient({
 			region,
-			credentials: fromSSO({ profile }),
+			credentials,
 		});
 		const identity = await withRetry(
 			() => stsClient.send(new GetCallerIdentityCommand({})),
@@ -156,13 +176,23 @@ export async function getECRConfig(): Promise<ECRConfig> {
 		console.info(`Using AWS Account ID: ${accountId}`);
 	}
 
-	return { region, accountId, profile };
+	if (useEnvCredentials) {
+		console.info("Using environment credentials (CI/OIDC mode)");
+	} else {
+		console.info(`Using SSO profile: ${profile}`);
+	}
+
+	return { region, accountId, profile, useEnvCredentials };
 }
 
 export function createECRClient(config: ECRConfig): ECRClient {
+	const credentials: AwsCredentialIdentityProvider = config.useEnvCredentials
+		? fromEnv()
+		: fromSSO({ profile: config.profile });
+
 	return new ECRClient({
 		region: config.region,
-		credentials: fromSSO({ profile: config.profile }),
+		credentials,
 	});
 }
 
