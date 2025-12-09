@@ -220,9 +220,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.WEBSITE_DIRECTORY }}/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ github.sha }}
+          key: ${{ runner.os }}-nextjs-${{ hashFiles(format('{0}/package-lock.json', env.WEBSITE_DIRECTORY)) }}-${{ hashFiles(format('{0}/**/*.js', env.WEBSITE_DIRECTORY), format('{0}/**/*.jsx', env.WEBSITE_DIRECTORY), format('{0}/**/*.ts', env.WEBSITE_DIRECTORY), format('{0}/**/*.tsx', env.WEBSITE_DIRECTORY)) }}
+          # If source files changed but packages didn't, rebuild from a prior cache.
           restore-keys: |
-            ${{ runner.os }}-nextjs-
+            ${{ runner.os }}-nextjs-${{ hashFiles(format('{0}/package-lock.json', env.WEBSITE_DIRECTORY)) }}-
 
       - name: Build
         id: npm-build
@@ -313,9 +314,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.WEBSITE_DIRECTORY }}/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ github.sha }}
+          key: ${{ runner.os }}-nextjs-${{ hashFiles(format('{0}/package-lock.json', env.WEBSITE_DIRECTORY)) }}-${{ hashFiles(format('{0}/**/*.js', env.WEBSITE_DIRECTORY), format('{0}/**/*.jsx', env.WEBSITE_DIRECTORY), format('{0}/**/*.ts', env.WEBSITE_DIRECTORY), format('{0}/**/*.tsx', env.WEBSITE_DIRECTORY)) }}
+          # If source files changed but packages didn't, rebuild from a prior cache.
           restore-keys: |
-            ${{ runner.os }}-nextjs-
+            ${{ runner.os }}-nextjs-${{ hashFiles(format('{0}/package-lock.json', env.WEBSITE_DIRECTORY)) }}-
 
       - name: Build
         id: npm-build

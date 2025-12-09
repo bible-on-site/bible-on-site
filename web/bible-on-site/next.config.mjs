@@ -7,6 +7,7 @@ const nextConfig = {
 	experimental: {
 		esmExternals: true,
 		externalDir: true,
+		turbopackFileSystemCacheForDev: true,
 		swcPlugins: !process.env.WEBPACK
 			? // Currently there are a few bugs with swc-plugin-coverage-instrument when using turbopack
 				// 1. It decorates next/font with some overhead which breaks a next constraint that next/font should be top level something
