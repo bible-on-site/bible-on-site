@@ -34,6 +34,7 @@ The following diagram illustrates the high-level architecture of the Bible On Si
 
 - **Repositories**: `bible-on-site`, `bible-on-site-api`
 - Images are tagged with version numbers and `latest`
+- **Lifecycle Policy**: Keeps last 15 images, automatically expires older images to control storage costs
 
 ### 6. Auto-Deploy (EventBridge + Lambda)
 
