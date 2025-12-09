@@ -1,8 +1,12 @@
 import { execSync } from "node:child_process";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { pMemoizeDecorator as memoize } from "p-memoize";
 import { DeployerBase } from "./deployer-base.mjs";
 import type { SSHConnection } from "./ssh/ssh-connection.mjs";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export class APIDeployer extends DeployerBase {
 	constructor(connection: SSHConnection) {
