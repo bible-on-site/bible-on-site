@@ -1,0 +1,78 @@
+@startuml AWS Architecture
+
+!define AWSPuml https://raw.githubusercontent.com/awslabs/aws-icons-for-plantuml/v18.0/dist
+!include AWSPuml/AWSCommon.puml
+!include AWSPuml/AWSSimplified.puml
+!include AWSPuml/Compute/EC2.puml
+!include AWSPuml/Compute/Lambda.puml
+!include AWSPuml/Containers/ElasticContainerRegistry.puml
+!include AWSPuml/Containers/ElasticContainerService.puml
+!include AWSPuml/NetworkingContentDelivery/CloudMap.puml
+!include AWSPuml/ApplicationIntegration/EventBridge.puml
+!include AWSPuml/General/User.puml
+!include AWSPuml/DeveloperTools/CodePipeline.puml
+!include AWSPuml/NetworkingContentDelivery/Route53.puml
+!include AWSPuml/ManagementGovernance/CloudWatch.puml
+
+skinparam linetype ortho
+skinparam defaultTextAlignment center
+skinparam nodesep 140
+skinparam ranksep 70
+
+top to bottom direction
+
+title Bible On Site - AWS Architecture (il-central-1)
+
+actor "Internet User" as user
+actor "GitHub Actions CD" as cd
+
+rectangle "AWS Cloud (il-central-1)" as aws {
+
+    Route53(route53, "Route53", "DNS Zones")
+    rectangle "VPC (172.31.0.0/16)" as vpc {
+
+        rectangle "Public Subnet" as publicSubnet {
+            EC2(nginx, "EC2: Nginx", "Reverse Proxy | SSL Termination")
+        }
+
+        CloudMap(cloudmap, "Cloud Map", "bible-on-site.local")
+
+        rectangle "ECS Fargate Cluster" as ecs {
+            ElasticContainerService(website, "Website Service", "Port 3000")
+            ElasticContainerService(api, "API Service", "Port 3003")
+        }
+
+        CloudWatch(cloudwatch, "CloudWatch", "Container Logs")
+    }
+
+    rectangle "Container Registry" as registry {
+        ElasticContainerRegistry(ecr, "ECR", "bible-on-site\nbible-on-site-api")
+    }
+
+    rectangle "Auto Deploy" as autoDeploy {
+        EventBridge(eventbridge, "EventBridge", "ECR Push Rule")
+        Lambda(lambda, "Lambda", "ecr-to-ecs-deploy")
+    }
+}
+
+' User Data Flow
+user -down-> route53 : xn--febl3a.[co.il,com]
+route53 -down--> nginx : A Record
+nginx -down--> cloudmap : 1. Resolve ECS Tasks
+cloudmap .up.> nginx : Return Task IPs
+nginx -down--> website : 2. Proxy Traffic
+
+' CD Deployment Flow
+cd -down---> ecr : Push Image\n(OIDC Auth)
+ecr -down--> ecs : Pull Images
+
+' Auto Deploy Flow
+eventbridge .up.> ecr : Listens to\nPush Events
+eventbridge -down-> lambda : Trigger
+lambda -left-> ecs : Load Latest\nImage from ECR
+
+' Logging Flow
+cloudwatch -up--> ecs : Scale In/Out
+ecs --down-> cloudwatch : Logs
+
+@enduml

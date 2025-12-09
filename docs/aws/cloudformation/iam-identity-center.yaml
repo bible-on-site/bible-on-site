@@ -1,8 +1,14 @@
+# ============================================================================
+# ⚠️ DISCLAIMER: This CloudFormation template has NEVER been tested or deployed.
+# It is maintained as Infrastructure as Code DOCUMENTATION ONLY to reflect the
+# de-facto AWS configuration. Do not assume it will work without thorough testing.
+# ============================================================================
+
 AWSTemplateFormatVersion: "2010-09-09"
 Description: |
   IAM Identity Center (SSO) Configuration Documentation.
 
-  ⚠️ IMPORTANT: This template is for DOCUMENTATION PURPOSES ONLY.
+  ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
 
   AWS CloudFormation has LIMITED support for IAM Identity Center resources.
   The following resources must be created via AWS Console or CLI:

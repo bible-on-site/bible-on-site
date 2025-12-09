@@ -84,3 +84,5 @@ jobs:
             --module-name ${{ env.MODULE_NAME }} \
             --module-version "${{ env.MODULE_VERSION }}" \
             --docker-image "${{ github.workspace }}/${{ steps.prepare_docker_restore.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}"
+        # Note: ECS deployment is automatically triggered by EventBridge when
+        # the 'latest' tag is pushed to ECR. See: ecr-ecs-auto-deploy.yaml

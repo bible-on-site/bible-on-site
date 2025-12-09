@@ -1,8 +1,12 @@
 # AWS CloudFormation Templates
 
-This directory contains CloudFormation templates that document and can recreate the AWS infrastructure for the Bible On Site project.
+This directory contains CloudFormation templates that document the AWS infrastructure for the Bible On Site project.
 
-> **⚠️ Important**: These templates are for **documentation and disaster recovery** purposes. The actual infrastructure was created manually or via CLI. Use these templates to understand the current state or to recreate resources if needed.
+> **⚠️ IMPORTANT DISCLAIMER**
+>
+> **These templates have NEVER been tested or deployed.** They are maintained purely as **Infrastructure as Code documentation** to reflect the de-facto AWS configuration that was created manually or via CLI.
+>
+> While these templates are updated regularly to document infrastructure changes, they should NOT be assumed to work without thorough testing. Use them as reference documentation only.
 
 ## Architecture Overview
 
@@ -91,7 +95,49 @@ IAM Identity Center (SSO) configuration including permission sets.
 
 > **Note**: IAM Identity Center resources are **not fully supported** by CloudFormation. This template documents the configuration but resources must be created via Console or CLI.
 
-### 7. `master-stack.yaml`
+### 7. `ecr-ecs-auto-deploy.yaml`
+Automatic ECS deployment when ECR images are pushed.
+
+**Components:**
+- EventBridge Rules: Listen for ECR push events (tag: `latest`)
+  - `ecr-push-bible-on-site-website` → triggers on `bible-on-site` repo
+  - `ecr-push-bible-on-site-api` → triggers on `bible-on-site-api` repo
+- Lambda Function: `ecr-to-ecs-deploy` (Python 3.12)
+- IAM Roles: `ECRDeployLambdaRole`, `EventBridgeECSDeployRole`
+
+**Flow:** ECR Push → EventBridge → Lambda → ECS UpdateService (forceNewDeployment)
+
+### 8. `cloudwatch.yaml`
+CloudWatch Log Groups and Application Auto Scaling.
+
+**Log Groups:**
+- `/ecs/bible-on-site-website` - ECS Website container logs (180 days retention)
+
+**Auto Scaling (Target Tracking):**
+- Min: 1, Max: 3 tasks
+- Target CPU: 70%
+- Scale-out cooldown: 300s, Scale-in cooldown: 600s
+
+**Log Stream Pattern:** `ecs/<container-name>/<task-id>`
+
+**Flow:** ECS Tasks → CloudWatch Logs | CloudWatch Alarms → Auto Scaling → ECS
+
+### 9. `route53.yaml`
+Route53 hosted zones and DNS records.
+
+**Hosted Zones:**
+- `xn--febl3a.com` (תנך.com) - Public zone
+- `xn--febl3a.co.il` (תנך.co.il) - Public zone
+- `bible-on-site.local` - Private zone (managed by Cloud Map)
+
+**DNS Records (per public zone):**
+- `A` record → `<EC2_PUBLIC_IP>` (EC2 Nginx)
+- `CNAME` wildcard (`*.domain`) → apex domain
+- `CNAME` www → apex domain
+
+**Flow:** User → Route53 DNS → Nginx EC2 → ECS via Cloud Map
+
+### 10. `master-stack.yaml`
 Nested stack that deploys all components together (for reference).
 
 ## Data Flow: ECR → ECS → nginx → Internet
@@ -115,7 +161,8 @@ As of the last export (see git history for date):
 | **ECS Service** | `bible-on-site-website` (1 task, Fargate) |
 | **Cloud Map** | `bible-on-site.local` → `website.bible-on-site.local` |
 | **ECR** | `bible-on-site` (website), `bible-on-site-api` (future) |
-| **EC2** | `<INSTANCE_ID>` (t3.small, nginx) |
+| **EC2** | `<INSTANCE_ID>` (t3.small, nginx, `<EC2_PUBLIC_IP>`) |
+| **Route53** | `xn--febl3a.com`, `xn--febl3a.co.il` → `<EC2_PUBLIC_IP>` |
 | **OIDC Provider** | `token.actions.githubusercontent.com` |
 | **IAM Roles** | `GitHubActionsECRDeployRole`, `ecsTaskExecutionRole` |
 | **SSO Users** | `dorad` (admin), `bible-on-site-github-ci-bot` (CI) |
@@ -145,4 +192,4 @@ aws sso login --profile bible-on-site-deployer
 
 ## Related Documentation
 
-- [nginx Configuration](./appendix/router/router.conf)
+- [nginx Configuration](./appendix/ec2-nginx/router/router.conf)

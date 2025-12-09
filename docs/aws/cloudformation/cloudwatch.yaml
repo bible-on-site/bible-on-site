@@ -1,0 +1,104 @@
+# ============================================================================
+# ⚠️ DISCLAIMER: This CloudFormation template has NEVER been tested or deployed.
+# It is maintained as Infrastructure as Code DOCUMENTATION ONLY to reflect the
+# de-facto AWS configuration. Do not assume it will work without thorough testing.
+# ============================================================================
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: |
+  CloudWatch Log Groups and Auto Scaling for Bible On Site project.
+
+  ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
+
+  This template documents the CloudWatch Logs configuration for ECS container logs
+  and Application Auto Scaling configuration for ECS services.
+
+  LOG GROUPS:
+  | Log Group Name | Retention | Purpose |
+  |----------------|-----------|---------|
+  | /ecs/bible-on-site-website | 180 days | ECS Website container logs |
+
+  Log streams are created automatically by ECS with the pattern:
+  ecs/<container-name>/<task-id>
+
+  AUTO SCALING:
+  | Service | Min | Max | Target CPU | Scale Out Cooldown | Scale In Cooldown |
+  |---------|-----|-----|------------|-------------------|-------------------|
+  | bible-on-site-website | 1 | 3 | 70% | 300s | 600s |
+
+  CLOUDWATCH ALARMS (auto-created by Target Tracking):
+  - AlarmHigh: Triggers scale-out when CPU > 70%
+  - AlarmLow: Triggers scale-in when CPU < 70%
+
+Resources:
+  # =============================================================================
+  # ECS Website Log Group
+  # =============================================================================
+  ECSWebsiteLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/bible-on-site-website
+      RetentionInDays: 180
+      LogGroupClass: STANDARD
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Service
+          Value: website
+
+  # =============================================================================
+  # ECS API Log Group (for future use)
+  # =============================================================================
+  # ECSAPILogGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   Properties:
+  #     LogGroupName: /ecs/bible-on-site-api
+  #     RetentionInDays: 180
+  #     LogGroupClass: STANDARD
+  #     Tags:
+  #       - Key: Project
+  #         Value: bible-on-site
+  #       - Key: Service
+  #         Value: api
+
+  # =============================================================================
+  # Application Auto Scaling - Scalable Target
+  # =============================================================================
+  WebsiteScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      ServiceNamespace: ecs
+      ResourceId: service/bible-on-site-cluster/bible-on-site-website
+      ScalableDimension: ecs:service:DesiredCount
+      MinCapacity: 1
+      MaxCapacity: 3
+      # RoleARN is auto-created as AWSServiceRoleForApplicationAutoScaling_ECSService
+
+  # =============================================================================
+  # Application Auto Scaling - CPU Target Tracking Policy
+  # =============================================================================
+  WebsiteCPUScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: cpu-target-tracking
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref WebsiteScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 70.0
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        ScaleOutCooldown: 300
+        ScaleInCooldown: 600
+
+Outputs:
+  WebsiteLogGroupName:
+    Description: Log group name for ECS Website service
+    Value: !Ref ECSWebsiteLogGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-WebsiteLogGroupName"
+
+  WebsiteLogGroupArn:
+    Description: Log group ARN for ECS Website service
+    Value: !GetAtt ECSWebsiteLogGroup.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-WebsiteLogGroupArn"

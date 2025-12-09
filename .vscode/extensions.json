@@ -18,6 +18,7 @@
 		"SonarSource.sonarlint-vscode", // SonarLint (App)
 		"ryanluker.vscode-coverage-gutters", // Code coverage (Website, planned for more)
 		"ms-toolsai.jupyter", // Jupyter (Data generation)
-		"Orta.vscode-jest" // Jest (Website)
+		"Orta.vscode-jest", // Jest (Website)
+		"jebbs.plantuml" // PlantUML (documentation)
 	]
 }

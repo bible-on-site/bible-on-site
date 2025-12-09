@@ -1,0 +1,295 @@
+# ============================================================================
+# ⚠️ DISCLAIMER: This CloudFormation template has NEVER been tested or deployed.
+# It is maintained as Infrastructure as Code DOCUMENTATION ONLY to reflect the
+# de-facto AWS configuration. Do not assume it will work without thorough testing.
+# ============================================================================
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: |
+  ECR to ECS Auto-Deploy Infrastructure.
+
+  ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
+
+  This template creates EventBridge rules and a Lambda function that automatically
+  triggers ECS service deployments whenever a new Docker image is pushed to ECR.
+
+  Components:
+  - EventBridge Rule: Listens for ECR image push events (tag: latest)
+  - Lambda Function: Triggers ECS UpdateService with forceNewDeployment
+  - IAM Roles: Execution roles for Lambda and EventBridge
+
+  Flow: ECR Push → EventBridge → Lambda → ECS UpdateService
+
+  Sensitive Information Restoration:
+  | Placeholder | Description | Restoration Command |
+  |---|---|---|
+  | `<AWS_ACCOUNT_ID>` | AWS Account ID | `aws sts get-caller-identity --query Account --output text` |
+
+Parameters:
+  ECSClusterName:
+    Type: String
+    Default: bible-on-site-cluster
+    Description: Name of the ECS cluster
+
+  WebsiteServiceName:
+    Type: String
+    Default: bible-on-site-website
+    Description: Name of the website ECS service
+
+  ApiServiceName:
+    Type: String
+    Default: bible-on-site-api
+    Description: Name of the API ECS service
+
+  WebsiteECRRepoName:
+    Type: String
+    Default: bible-on-site
+    Description: Name of the website ECR repository
+
+  ApiECRRepoName:
+    Type: String
+    Default: bible-on-site-api
+    Description: Name of the API ECR repository
+
+Resources:
+  # =============================================================================
+  # IAM Role: Lambda Execution Role
+  # =============================================================================
+  ECRDeployLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ECRDeployLambdaRole
+      Description: Lambda role for ECR to ECS deployment trigger
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ECSDeployPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # ECS permissions to update services
+              - Effect: Allow
+                Action:
+                  - ecs:UpdateService
+                  - ecs:DescribeServices
+                Resource:
+                  - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:service/${ECSClusterName}/${WebsiteServiceName}"
+                  - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:service/${ECSClusterName}/${ApiServiceName}"
+              # CloudWatch Logs permissions
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+
+  # =============================================================================
+  # IAM Role: EventBridge Role (for future direct ECS integration if needed)
+  # =============================================================================
+  EventBridgeECSDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: EventBridgeECSDeployRole
+      Description: Allows EventBridge to trigger ECS service updates on ECR push
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ECSUpdateServicePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:UpdateService
+                  - ecs:DescribeServices
+                Resource:
+                  - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:service/${ECSClusterName}/${WebsiteServiceName}"
+                  - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:service/${ECSClusterName}/${ApiServiceName}"
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: "*"
+                Condition:
+                  StringLike:
+                    iam:PassedToService: ecs-tasks.amazonaws.com
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+
+  # =============================================================================
+  # Lambda Function: ECR to ECS Deploy Trigger
+  # =============================================================================
+  #
+  # Lambda code (Python 3.12) - stored in: management/aws/cloudformation/ecr-ecs-auto-deploy/ecr-to-ecs-deploy-lambda.py
+  #
+  # The function:
+  # 1. Receives ECR push events from EventBridge
+  # 2. Maps ECR repository name to ECS service name
+  # 3. Calls ecs:UpdateService with forceNewDeployment=True
+  #
+  ECRToECSDeployFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ecr-to-ecs-deploy
+      Description: Triggers ECS deployment when ECR image is pushed
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 30
+      Role: !GetAtt ECRDeployLambdaRole.Arn
+      Environment:
+        Variables:
+          ECS_CLUSTER_NAME: !Ref ECSClusterName
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import os
+
+          def handler(event, context):
+              """
+              Triggered by EventBridge when an ECR image is pushed.
+              Forces a new deployment of the corresponding ECS service.
+              """
+              print(f"Event received: {json.dumps(event)}")
+
+              repo_name = event['detail']['repository-name']
+
+              # Map ECR repo to ECS service
+              repo_to_service = {
+                  'bible-on-site': 'bible-on-site-website',
+                  'bible-on-site-api': 'bible-on-site-api'
+              }
+
+              service_name = repo_to_service.get(repo_name)
+              if not service_name:
+                  print(f"No ECS service mapping for repo: {repo_name}")
+                  return {'statusCode': 200, 'body': 'No action needed'}
+
+              cluster_name = os.environ.get('ECS_CLUSTER_NAME', 'bible-on-site-cluster')
+              ecs = boto3.client('ecs')
+
+              response = ecs.update_service(
+                  cluster=cluster_name,
+                  service=service_name,
+                  forceNewDeployment=True
+              )
+
+              print(f"ECS update-service response: {response['service']['serviceName']} - deployments: {len(response['service']['deployments'])}")
+
+              return {
+                  'statusCode': 200,
+                  'body': f"Triggered deployment for {service_name}"
+              }
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+
+  # =============================================================================
+  # Lambda Permission: Allow EventBridge to invoke Lambda
+  # =============================================================================
+  LambdaInvokePermissionWebsite:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ECRToECSDeployFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ECRPushRuleWebsite.Arn
+
+  LambdaInvokePermissionApi:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ECRToECSDeployFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ECRPushRuleApi.Arn
+
+  # =============================================================================
+  # EventBridge Rule: ECR Push for Website Repository
+  # =============================================================================
+  ECRPushRuleWebsite:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: ecr-push-bible-on-site-website
+      Description: Trigger ECS deployment when bible-on-site image is pushed to ECR
+      State: ENABLED
+      EventPattern:
+        source:
+          - aws.ecr
+        detail-type:
+          - "ECR Image Action"
+        detail:
+          action-type:
+            - PUSH
+          result:
+            - SUCCESS
+          repository-name:
+            - !Ref WebsiteECRRepoName
+          image-tag:
+            - latest
+      Targets:
+        - Id: ecr-ecs-deploy-lambda
+          Arn: !GetAtt ECRToECSDeployFunction.Arn
+
+  # =============================================================================
+  # EventBridge Rule: ECR Push for API Repository
+  # =============================================================================
+  ECRPushRuleApi:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: ecr-push-bible-on-site-api
+      Description: Trigger ECS deployment when bible-on-site-api image is pushed to ECR
+      State: ENABLED
+      EventPattern:
+        source:
+          - aws.ecr
+        detail-type:
+          - "ECR Image Action"
+        detail:
+          action-type:
+            - PUSH
+          result:
+            - SUCCESS
+          repository-name:
+            - !Ref ApiECRRepoName
+          image-tag:
+            - latest
+      Targets:
+        - Id: ecr-ecs-deploy-lambda
+          Arn: !GetAtt ECRToECSDeployFunction.Arn
+
+Outputs:
+  LambdaFunctionArn:
+    Description: ARN of the ECR to ECS deploy Lambda function
+    Value: !GetAtt ECRToECSDeployFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaFunctionArn"
+
+  LambdaRoleArn:
+    Description: ARN of the Lambda execution role
+    Value: !GetAtt ECRDeployLambdaRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaRoleArn"
+
+  EventBridgeRuleWebsiteArn:
+    Description: ARN of the EventBridge rule for website ECR pushes
+    Value: !GetAtt ECRPushRuleWebsite.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-EventBridgeRuleWebsiteArn"
+
+  EventBridgeRuleApiArn:
+    Description: ARN of the EventBridge rule for API ECR pushes
+    Value: !GetAtt ECRPushRuleApi.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-EventBridgeRuleApiArn"

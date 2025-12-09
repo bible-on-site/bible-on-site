@@ -1,6 +1,14 @@
+# ============================================================================
+# ⚠️ DISCLAIMER: This CloudFormation template has NEVER been tested or deployed.
+# It is maintained as Infrastructure as Code DOCUMENTATION ONLY to reflect the
+# de-facto AWS configuration. Do not assume it will work without thorough testing.
+# ============================================================================
+
 AWSTemplateFormatVersion: "2010-09-09"
 Description: |
   GitHub Actions OIDC Provider and IAM Role for ECR deployments.
+
+  ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
 
   This template sets up OpenID Connect (OIDC) authentication between GitHub Actions
   and AWS, allowing GitHub workflows to assume an IAM role without storing long-lived
@@ -92,6 +100,16 @@ Resources:
             Resource:
               - !Sub "arn:aws:ecr:*:${AWS::AccountId}:repository/bible-on-site"
               - !Sub "arn:aws:ecr:*:${AWS::AccountId}:repository/bible-on-site-api"
+
+          # ECS Service Update - force new deployment after ECR push
+          - Sid: ECSServiceUpdate
+            Effect: Allow
+            Action:
+              - ecs:UpdateService
+              - ecs:DescribeServices
+            Resource:
+              - !Sub "arn:aws:ecs:*:${AWS::AccountId}:service/bible-on-site-cluster/bible-on-site-website"
+              - !Sub "arn:aws:ecs:*:${AWS::AccountId}:service/bible-on-site-cluster/bible-on-site-api"
 
           # STS - allows the workflow to verify its identity
           - Sid: STSGetCallerIdentity

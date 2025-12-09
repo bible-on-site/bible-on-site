@@ -1,6 +1,14 @@
+# ============================================================================
+# ⚠️ DISCLAIMER: This CloudFormation template has NEVER been tested or deployed.
+# It is maintained as Infrastructure as Code DOCUMENTATION ONLY to reflect the
+# de-facto AWS configuration. Do not assume it will work without thorough testing.
+# ============================================================================
+
 AWSTemplateFormatVersion: "2010-09-09"
 Description: |
   Master stack for Bible On Site AWS infrastructure.
+
+  ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
 
   This nested stack can deploy all infrastructure components:
   - VPC networking and security groups

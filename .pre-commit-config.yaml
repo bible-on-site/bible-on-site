@@ -1,13 +1,14 @@
 repos:
-  - repo: 'https://github.com/mxr/sync-pre-commit-deps'
+  - repo: "https://github.com/mxr/sync-pre-commit-deps"
     rev: v0.0.3
     hooks:
       - id: sync-pre-commit-deps
-  - repo: 'https://github.com/pre-commit/pre-commit-hooks'
+  - repo: "https://github.com/pre-commit/pre-commit-hooks"
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
       - id: check-yaml
+        exclude: ^docs/aws/cloudformation/
       - id: check-ast
       - id: check-added-large-files
       - id: check-xml
@@ -17,11 +18,11 @@ repos:
       - id: check-merge-conflict
       - id: trailing-whitespace
       - id: mixed-line-ending
-  - repo: 'https://github.com/doradsoft/json5-pre-commit-hook'
+  - repo: "https://github.com/doradsoft/json5-pre-commit-hook"
     rev: v1.0.3
     hooks:
       - id: check-json5
-  - repo: 'https://github.com/rhysd/actionlint'
+  - repo: "https://github.com/rhysd/actionlint"
     rev: v1.7.7
     hooks:
       - id: actionlint
