@@ -114,7 +114,7 @@ jobs:
         with:
           context: ${{ inputs.module_directory }}
           file: ${{ inputs.module_directory }}/Dockerfile
-          tags: ${{ env.DOCKER_IMAGE_NAME }}:${{ steps.get_module_version.outputs.MODULE_VERSION }}
+          tags: ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }}
           outputs: type=docker,dest=${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_PATH }}
           cache-from: |
             type=gha,scope=${{ github.workflow }}-${{ env.MODULE_NAME }}

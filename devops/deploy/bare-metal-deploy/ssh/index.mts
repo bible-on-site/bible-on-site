@@ -1,10 +1,10 @@
 import * as dotenv from "dotenv";
-import { SSHConnection } from "./ssh-connection.mjs";
 import type { SSHConfig } from "./ssh-config.mjs";
+import { SSHConnection } from "./ssh-connection.mjs";
 
 export async function establishSSHConnections(): Promise<Array<SSHConnection>> {
 	dotenv.config({
-		path: "./deploy/.env", // It's a workaround as I didn't manage to make cwd to be set to deploy folder preliminary to execution
+		path: "./deploy/bare-metal-deploy/.env", // It's a workaround as I didn't manage to make cwd to be set to deploy folder preliminary to execution
 	});
 	const connections: Array<SSHConnection> = getSSHConfigs().map((config) => {
 		return new SSHConnection(config);

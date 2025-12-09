@@ -1,10 +1,10 @@
-import { DeployerBase } from "./deployer-base.mjs";
-import * as packageJson from "../../web/bible-on-site/package.json" assert {
-	type: "json",
-};
-import { pMemoizeDecorator as memoize } from "p-memoize";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { pMemoizeDecorator as memoize } from "p-memoize";
+import packageJson from "../../../web/bible-on-site/package.json" with {
+	type: "json",
+};
+import { DeployerBase } from "./deployer-base.mjs";
 import type { SSHConnection } from "./ssh/ssh-connection.mjs";
 
 const __filename = fileURLToPath(import.meta.url); // get the resolved path to the file
@@ -26,7 +26,7 @@ export class WebsiteDeployer extends DeployerBase {
 	override async getDockerImageTarGzPath(): Promise<string> {
 		return path.resolve(
 			__dirname,
-			`../../web/bible-on-site/.release/bible-on-site-v${await this.getLocalVersion()}.tar.gz`,
+			`../../../web/bible-on-site/.release/bible-on-site-v${await this.getLocalVersion()}.tar.gz`,
 		);
 	}
 	override get dockerRunOptions(): string {

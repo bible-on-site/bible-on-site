@@ -1,7 +1,7 @@
-import { DeployerBase } from "./deployer-base.mjs";
 import { execSync } from "node:child_process";
-import { pMemoizeDecorator as memoize } from "p-memoize";
 import path from "node:path";
+import { pMemoizeDecorator as memoize } from "p-memoize";
+import { DeployerBase } from "./deployer-base.mjs";
 import type { SSHConnection } from "./ssh/ssh-connection.mjs";
 
 export class APIDeployer extends DeployerBase {
@@ -16,7 +16,7 @@ export class APIDeployer extends DeployerBase {
 			return localVersion;
 		}
 		const command = `cargo make version | grep -v "INFO"`;
-		const options = { cwd: "../../web/api" };
+		const options = { cwd: "../../../web/api" };
 		try {
 			return execSync(command, options).toString().trim();
 		} catch (error: unknown) {
@@ -28,7 +28,7 @@ export class APIDeployer extends DeployerBase {
 	override async getDockerImageTarGzPath(): Promise<string> {
 		return path.resolve(
 			__dirname,
-			`../../web/api/.release/bible-on-site-api.tar-v${await this.getLocalVersion()}.gz`,
+			`../../../web/api/.release/bible-on-site-api.tar-v${await this.getLocalVersion()}.gz`,
 		);
 	}
 }

@@ -1,0 +1,26 @@
+# Exclude everything first, then include only what's needed
+*
+
+# Include only bible-on-site and shared
+!bible-on-site/
+!shared/
+
+# Exclude from bible-on-site
+bible-on-site/.coverage
+bible-on-site/.husky
+bible-on-site/.next
+bible-on-site/.playwright-report
+bible-on-site/.release
+bible-on-site/.swc
+bible-on-site/monocart-report
+bible-on-site/node_modules
+bible-on-site/out
+bible-on-site/build
+bible-on-site/coverage
+bible-on-site/.coverage
+bible-on-site/test-results
+bible-on-site/tests
+
+# Exclude from shared
+shared/node_modules
+shared/tests
