@@ -20,6 +20,7 @@ permissions:
 env:
   IS_NPM: ${{ inputs.module_directory == 'web/bible-on-site' }}
   IS_CARGO: ${{ inputs.module_directory == 'web/api' }}
+  SHARED_ROOT_DIR: web
   MODULE_NAME: ${{ inputs.module_directory == 'web/bible-on-site' && 'website' || 'api' }}
   MODULE_NAME_CAPITALIZED: ${{ inputs.module_directory == 'web/bible-on-site' && 'Website' || 'API' }}
   DOCKER_IMAGE_NAME: ${{ inputs.module_directory == 'web/bible-on-site' && 'bible-on-site' || 'bible-on-site-api' }}
@@ -112,7 +113,7 @@ jobs:
       - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
         uses: docker/build-push-action@v6
         with:
-          context: ${{ inputs.module_directory }}
+          context: ${{ env.SHARED_ROOT_DIR }}
           file: ${{ inputs.module_directory }}/Dockerfile
           tags: ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }}
           outputs: type=docker,dest=${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_PATH }}
