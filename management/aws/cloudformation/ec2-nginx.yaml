@@ -1,0 +1,376 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: |
+  EC2 Instance for nginx Reverse Proxy / Router.
+
+  This template documents the EC2 instance that runs nginx as a reverse proxy,
+  routing traffic to ECS services via Cloud Map service discovery.
+
+  ⚠️ IMPORTANT: This template is primarily for DOCUMENTATION.
+  The EC2 instance was created via the AWS Console launch wizard.
+  Some resources (like the key pair) cannot be created via CloudFormation.
+
+  Architecture:
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │                              Internet                                    │
+  │                    תנך.co.il / תנך.com                                   │
+  └───────────────────────────────┬─────────────────────────────────────────┘
+                                  │
+                                  ▼
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  EC2: nginx Reverse Proxy                                               │
+  │  ─────────────────────────                                              │
+  │  Instance: <INSTANCE_ID>                                                │
+  │  Type: t3.small                                                         │
+  │  Public IP: <MASKED - see retrieval command>                            │
+  │  Private IP: <PRIVATE_IP>                                               │
+  │  Security Group: launch-wizard-1 (<SECURITY_GROUP_ID>)                  │
+  │  Key Pair: nginx                                                        │
+  │                                                                         │
+  │  nginx config: /etc/nginx/conf.d/router.conf                            │
+  │  SSL certs: /etc/letsencrypt/live/xn--febl3a.{co.il,com}/               │
+  │                                                                         │
+  │  Uses VPC DNS (172.31.0.2) to resolve:                                  │
+  │  - website.bible-on-site.local → ECS task IPs                           │
+  │  - api.bible-on-site.local → (future) ECS API task IPs                  │
+  └───────────────────────────────┬─────────────────────────────────────────┘
+                                  │
+                    VPC Private Network (172.31.0.0/16)
+                                  │
+                                  ▼
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  ECS Fargate Tasks                                                      │
+  │  ─────────────────                                                      │
+  │  website.bible-on-site.local:3000                                       │
+  │  (Cloud Map DNS → private IPs like <ECS_TASK_IP>)                       │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  Sensitive Information Restoration:
+  | Placeholder | Description | Restoration Command |
+  |---|---|---|
+  | `<INSTANCE_ID>` | EC2 Instance ID | `aws ec2 describe-instances --filters "Name=tag:Name,Values=nginx-router" --query "Reservations[0].Instances[0].InstanceId" --output text` |
+  | `<MASKED>` | Public IP Address | `aws ec2 describe-instances --instance-ids <INSTANCE_ID> --query "Reservations[0].Instances[0].PublicIpAddress" --output text --region il-central-1` |
+  | `<PRIVATE_IP>` | Private IP Address | `aws ec2 describe-instances --instance-ids <INSTANCE_ID> --query "Reservations[0].Instances[0].PrivateIpAddress" --output text` |
+  | `<SECURITY_GROUP_ID>` | Security Group ID | `aws ec2 describe-security-groups --filters "Name=group-name,Values=launch-wizard-1" --query "SecurityGroups[0].GroupId" --output text` |
+  | `<VPC_ID>` | VPC ID | `aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text` |
+  | `<SUBNET_ID>` | Subnet ID | `aws ec2 describe-instances --instance-ids <INSTANCE_ID> --query "Reservations[0].Instances[0].SubnetId" --output text` |
+  | `<AMI_ID>` | AMI ID | `aws ec2 describe-instances --instance-ids <INSTANCE_ID> --query "Reservations[0].Instances[0].ImageId" --output text` |
+  | `<VOLUME_ID>` | EBS Volume ID | `aws ec2 describe-instances --instance-ids <INSTANCE_ID> --query "Reservations[0].Instances[0].BlockDeviceMappings[0].Ebs.VolumeId" --output text` |
+  | `<ECS_TASK_IP>` | ECS Task Private IP | `aws ecs list-tasks --cluster bible-on-site-cluster --service-name bible-on-site-website --query "taskArns[0]" --output text | xargs aws ecs describe-tasks --cluster bible-on-site-cluster --tasks | jq -r ".tasks[0].containers[0].networkInterfaces[0].privateIpv4Address"` |
+  | `<EXTERNAL_API_IP>` | External API IP | Check external service configuration |
+  | Key pair private key | SSH Private Key | Stored securely, not in version control |
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+    Description: EC2 instance type
+
+  KeyPairName:
+    Type: String
+    Default: nginx
+    Description: |
+      Name of existing EC2 key pair for SSH access.
+      Key pair must be created separately (cannot be created via CloudFormation with private key).
+      To create: aws ec2 create-key-pair --key-name nginx --key-type ed25519 --region il-central-1
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Default: <VPC_ID>
+
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Default: <SUBNET_ID>
+    Description: Subnet for EC2 instance (il-central-1c)
+
+  # Using Amazon Linux 2023 AMI for il-central-1
+  # To get latest: aws ssm get-parameters --names /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 --region il-central-1
+  AmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: Amazon Linux 2023 AMI ID (auto-updated via SSM parameter)
+
+Metadata:
+  # =========================================================================
+  # HARDWARE REQUIREMENTS
+  # =========================================================================
+  HardwareRequirements:
+    RAM: 2 GB
+    CPU: 1 CPU (Premium Intel)
+    Storage: 8 GB gp3 EBS
+    Connection: SSH key & passkey only
+
+  # =========================================================================
+  # CURRENT INSTANCE CONFIGURATION
+  # =========================================================================
+  CurrentInstance:
+    InstanceId: <INSTANCE_ID>
+    InstanceType: t3.small
+    AMI: <AMI_ID>
+    AvailabilityZone: il-central-1c
+    SubnetId: <SUBNET_ID>
+    VpcId: <VPC_ID>
+    PrivateIpAddress: <PRIVATE_IP>
+    # PublicIpAddress: <MASKED>
+    KeyName: nginx
+    SecurityGroups:
+      - GroupId: <SECURITY_GROUP_ID>
+        GroupName: launch-wizard-1
+    EbsOptimized: true
+    RootVolume:
+      DeviceName: /dev/sda1
+      VolumeId: <VOLUME_ID>
+      DeleteOnTermination: true
+
+  # =========================================================================
+  # KEY PAIR INFORMATION
+  # =========================================================================
+  KeyPair:
+    KeyPairId: key-0f89648bdcc14cc2c
+    KeyName: nginx
+    KeyType: ed25519
+    # KeyFingerprint: <MASKED>
+    Note: |
+      The private key file should be stored securely and is NOT in version control.
+      If lost, create a new key pair and update the instance.
+
+  # =========================================================================
+  # NGINX CONFIGURATION
+  # =========================================================================
+  NginxConfig:
+    ConfigPath: /etc/nginx/conf.d/router.conf
+    ConfigSource: See appendix/router/router.conf
+    Features:
+      - SSL termination for תנך.co.il and תנך.com (punycode: xn--febl3a)
+      - HTTP to HTTPS redirect
+      - Reverse proxy to ECS services via Cloud Map DNS
+      - VPC DNS resolver (172.31.0.2) for service discovery
+      - Static file serving from /var/www/html/
+      - GeoIP support for geographic routing
+    SSLCertificates:
+      - /etc/letsencrypt/live/xn--febl3a.co.il/fullchain.pem
+      - /etc/letsencrypt/live/xn--febl3a.com/fullchain.pem
+    Upstreams:
+      website:
+        DNS: website.bible-on-site.local
+        Port: 3000
+        Status: Active (ECS Fargate)
+      api:
+        DNS: api.bible-on-site.local (future)
+        Port: 3003
+        Status: Currently using external server (<EXTERNAL_API_IP>:3003)
+
+Resources:
+  # =============================================================================
+  # Security Group for nginx EC2
+  # =============================================================================
+  # Note: The actual instance uses "launch-wizard-1" (<SECURITY_GROUP_ID>)
+  # This defines the intended configuration
+  NginxSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: nginx-router-sg
+      GroupDescription: Security group for nginx reverse proxy
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0 # Consider restricting to specific IPs
+          Description: SSH access
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP (redirects to HTTPS)
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: nginx-router-sg
+        - Key: Project
+          Value: bible-on-site
+
+  # =============================================================================
+  # EC2 Instance
+  # =============================================================================
+  NginxInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref AmiId
+      KeyName: !Ref KeyPairName
+      SubnetId: !Ref SubnetId
+      SecurityGroupIds:
+        - !Ref NginxSecurityGroup
+      EbsOptimized: true
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 8
+            VolumeType: gp3
+            DeleteOnTermination: true
+      # IMDSv2 required (more secure)
+      MetadataOptions:
+        HttpTokens: required
+        HttpPutResponseHopLimit: 2
+        HttpEndpoint: enabled
+      Tags:
+        - Key: Name
+          Value: nginx-router
+        - Key: Project
+          Value: bible-on-site
+        - Key: Component
+          Value: nginx-router
+      # User data to install nginx (run on first boot)
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          # Update system
+          dnf update -y
+
+          # Install nginx
+          dnf install -y nginx
+
+          # Install certbot for SSL
+          dnf install -y certbot python3-certbot-nginx
+
+          # Enable and start nginx
+          systemctl enable nginx
+          systemctl start nginx
+
+          # Note: SSL certificates and nginx config must be set up manually
+          # See appendix/router/router.conf for configuration file
+
+Outputs:
+  InstanceId:
+    Description: EC2 Instance ID
+    Value: !Ref NginxInstance
+
+  PublicIp:
+    Description: Public IP address of nginx instance
+    Value: !GetAtt NginxInstance.PublicIp
+
+  PrivateIp:
+    Description: Private IP address of nginx instance
+    Value: !GetAtt NginxInstance.PrivateIp
+
+  SecurityGroupId:
+    Description: Security Group ID
+    Value: !Ref NginxSecurityGroup
+
+  SSHCommand:
+    Description: SSH command to connect (replace with actual key path)
+    Value: !Sub "ssh -i ~/.ssh/nginx.pem ec2-user@${NginxInstance.PublicIp}"
+# =============================================================================
+# SETUP FROM SCRATCH (Ubuntu/Debian - e.g., DigitalOcean)
+# =============================================================================
+#
+# If using Ubuntu/Debian instead of Amazon Linux, follow these steps:
+#
+# 1. Create a new server (DigitalOcean, AWS, etc.)
+#    - 2 GB RAM, 1 CPU (Premium Intel)
+#    - Add your SSH key to the server
+#
+# 2. SSH into the server
+#
+# 3. Install certbot via snap:
+#    sudo snap install core
+#    sudo snap refresh core
+#    sudo snap install --classic certbot
+#    sudo ln -s /snap/bin/certbot /usr/bin/certbot
+#
+# 4. Configure firewall:
+#    sudo ufw allow 443
+#    sudo ufw allow 80
+#
+# 5. Install nginx and GeoIP:
+#    sudo apt update
+#    sudo apt install -y nginx
+#    sudo ufw allow 'Nginx Full'
+#    sudo apt install -y geoip-database libnginx-mod-http-geoip
+#
+# 6. Obtain SSL certificates:
+#    sudo certbot certonly --nginx \
+#      -d xn--febl3a.co.il \
+#      -d www.xn--febl3a.co.il \
+#      -d api.xn--febl3a.co.il \
+#      -d xn--febl3a.com \
+#      -d www.xn--febl3a.com \
+#      -d api.xn--febl3a.com
+#
+# 7. Deploy nginx configuration:
+#    # Copy appendix/router/router.conf to /etc/nginx/conf.d/
+#    sudo cp appendix/router/router.conf /etc/nginx/conf.d/
+#
+# 8. Validate and reload:
+#    sudo nginx -t
+#    sudo systemctl reload nginx
+#
+# =============================================================================
+
+# =============================================================================
+# POST-DEPLOYMENT SETUP (Amazon Linux / Any Platform)
+# =============================================================================
+#
+# After launching the instance, you need to:
+#
+# 1. SSH into the instance:
+#    ssh -i ~/.ssh/nginx.pem ec2-user@<PUBLIC_IP>
+#
+# 2. Copy nginx configuration:
+#    scp -i ~/.ssh/nginx.pem appendix/router/router.conf ec2-user@<PUBLIC_IP>:/tmp/
+#    # Then on the server:
+#    sudo mv /tmp/router.conf /etc/nginx/conf.d/
+#
+# 3. Obtain SSL certificates:
+#    sudo certbot certonly --nginx \
+#      -d xn--febl3a.co.il \
+#      -d www.xn--febl3a.co.il \
+#      -d api.xn--febl3a.co.il \
+#      -d xn--febl3a.com \
+#      -d www.xn--febl3a.com \
+#      -d api.xn--febl3a.com
+#
+# 4. Test and reload nginx:
+#    sudo nginx -t
+#    sudo systemctl reload nginx
+#
+# 5. Set up certbot auto-renewal:
+#    echo "0 0 * * * root certbot renew --quiet" | sudo tee /etc/cron.d/certbot-renew
+#
+# =============================================================================
+
+# =============================================================================
+# CLI Commands
+# =============================================================================
+#
+# Get instance details:
+#   aws ec2 describe-instances --filters "Name=tag:Name,Values=nginx-router" --region il-central-1
+#
+# Get public IP:
+#   aws ec2 describe-instances --filters "Name=tag:Name,Values=nginx-router" --query "Reservations[0].Instances[0].PublicIpAddress" --output text --region il-central-1
+#
+# Start/Stop instance:
+#   aws ec2 start-instances --instance-ids <INSTANCE_ID> --region il-central-1
+#   aws ec2 stop-instances --instance-ids <INSTANCE_ID> --region il-central-1
+#
+# =============================================================================
+
+# =============================================================================
+# TODO
+# =============================================================================
+#
+# - Migrate everything from the old Windows server
+# - Then can assign the .com domain here as well
+#
+# =============================================================================
