@@ -3,10 +3,12 @@ name: Continuous Deployment
 on:
   repository_dispatch:
     types: [deploy]
+
 jobs:
   deploy:
     permissions:
       contents: read
+      id-token: write # Required for OIDC authentication with AWS
     runs-on: ubuntu-latest
 
     env:
@@ -20,6 +22,10 @@ jobs:
       DOCKER_IMAGE_NAME: ${{ github.event.client_payload.module_directory == 'web/bible-on-site' && 'bible-on-site' || 'bible-on-site-api' }}
       DOCKER_IMAGE_OUTPUT_DIR: ${{ github.event.client_payload.module_directory }}/.release
       CI_RUN_ID: ${{ github.event.client_payload.ci_run_id }}
+      # AWS Configuration
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+
     steps:
       - name: Checkout
         id: checkout
@@ -41,18 +47,25 @@ jobs:
         run: |
           npm ci --no-audit
 
-      - name: Spread Secrets to Environment Variables
-        uses: oNaiPs/secrets-to-env-action@v1
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v5
         with:
-          secrets: ${{ toJSON(secrets) }} # TODO: spread just the required secrets (SSH related, mostly)
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup crane
+        uses: imjasonh/setup-crane@v0.4
+
+      - name: Login to ECR
+        run: |
+          aws ecr get-login-password --region ${{ env.AWS_REGION }} | crane auth login --username AWS --password-stdin ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
 
       - name: Prepare Docker Restore
         id: prepare_docker_restore
         run: |
           mkdir -p "$DOCKER_IMAGE_OUTPUT_DIR"
           DOCKER_IMAGE_TAR_NAME="${{ env.DOCKER_IMAGE_NAME }}-v${{ env.MODULE_VERSION }}.tar"
-          DOCKER_IMAGE_TAR_PATH="${{ env.DOCKER_IMAGE_OUTPUT_DIR }}/${DOCKER_IMAGE_TAR_NAME}"
-          DOCKER_IMAGE_TAR_GZ_PATH="${DOCKER_IMAGE_TAR_PATH}.gz"
+          DOCKER_IMAGE_TAR_GZ_PATH="${{ env.DOCKER_IMAGE_OUTPUT_DIR }}/${DOCKER_IMAGE_TAR_NAME}.gz"
           echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
 
       - name: Restore Docker Image
@@ -61,10 +74,13 @@ jobs:
           name: ${{ env.DOCKER_ARTIFACT_NAME }}
           path: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
           run-id: ${{ env.CI_RUN_ID }}
-          github-token: ${{ secrets.BOT_PAT }} # Might be able to use the default GITHUB_TOKEN, but using a PAT as I don't have time to test it right now.
+          github-token: ${{ secrets.BOT_PAT }}
 
-      - name: Deploy to Production
+      - name: Deploy to ECR
         id: deploy
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
-          npm run deploy -- --module-name ${{ env.MODULE_NAME }} --module-version "${{ env.MODULE_VERSION }}"
+          npm run deploy:ecr -- \
+            --module-name ${{ env.MODULE_NAME }} \
+            --module-version "${{ env.MODULE_VERSION }}" \
+            --docker-image "${{ github.workspace }}/${{ steps.prepare_docker_restore.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}"

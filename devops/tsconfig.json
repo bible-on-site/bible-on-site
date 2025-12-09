@@ -1,8 +1,8 @@
 {
 	// TODO: make dedicated tsconfig for different kind of tests (unit, e2e, performance, etc)
 	"compilerOptions": {
-		"target": "esnext",
-		"module": "ESNext",
+		"target": "ESNext",
+		"module": "NodeNext",
 		"strict": true,
 		"esModuleInterop": true,
 		"experimentalDecorators": true,
@@ -21,7 +21,7 @@
 		"alwaysStrict": true,
 		"declaration": true,
 		"declarationMap": true,
-		"moduleResolution": "node",
+		"moduleResolution": "NodeNext",
 		"outDir": "./dist",
 		"baseUrl": ".",
 		"types": ["node"],
