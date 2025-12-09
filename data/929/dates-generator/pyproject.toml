@@ -8,11 +8,9 @@ readme = "README.md"
 package-mode = false
 
 [tool.poetry.dependencies]
-python = "^3.12"
-hdate = "^1.0.0"
-jupyter = "^1.0.0"
-ipykernel = "^6.29.4"
-tzdata = "^2024.1"
+python = "^3.14"
+hdate = "^1.1.2"
+tzdata = "^2025.2"
 
 
 [build-system]
