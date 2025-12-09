@@ -1,7 +1,15 @@
+# ============================================================================
+# ⚠️ DISCLAIMER: This CloudFormation template has NEVER been tested or deployed.
+# It is maintained as Infrastructure as Code DOCUMENTATION ONLY to reflect the
+# de-facto AWS configuration. Do not assume it will work without thorough testing.
+# ============================================================================
+
 AWSTemplateFormatVersion: "2010-09-09"
 Description: |
   ECS Cluster, Services, Task Definitions, and Cloud Map Service Discovery
   for Bible On Site project.
+
+  ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
 
   This template creates:
   - ECS Cluster (Fargate)

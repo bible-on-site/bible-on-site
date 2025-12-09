@@ -1,11 +1,18 @@
+# ============================================================================
+# ⚠️ DISCLAIMER: This CloudFormation template has NEVER been tested or deployed.
+# It is maintained as Infrastructure as Code DOCUMENTATION ONLY to reflect the
+# de-facto AWS configuration. Do not assume it will work without thorough testing.
+# ============================================================================
+
 AWSTemplateFormatVersion: "2010-09-09"
 Description: |
   EC2 Instance for nginx Reverse Proxy / Router.
 
+  ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
+
   This template documents the EC2 instance that runs nginx as a reverse proxy,
   routing traffic to ECS services via Cloud Map service discovery.
 
-  ⚠️ IMPORTANT: This template is primarily for DOCUMENTATION.
   The EC2 instance was created via the AWS Console launch wizard.
   Some resources (like the key pair) cannot be created via CloudFormation.
 
@@ -142,7 +149,7 @@ Metadata:
   # =========================================================================
   NginxConfig:
     ConfigPath: /etc/nginx/conf.d/router.conf
-    ConfigSource: See appendix/router/router.conf
+    ConfigSource: See appendix/ec2-nginx/router/router.conf
     Features:
       - SSL termination for תנך.co.il and תנך.com (punycode: xn--febl3a)
       - HTTP to HTTPS redirect
@@ -249,7 +256,7 @@ Resources:
           systemctl start nginx
 
           # Note: SSL certificates and nginx config must be set up manually
-          # See appendix/router/router.conf for configuration file
+          # See appendix/ec2-nginx/router/router.conf for configuration file
 
 Outputs:
   InstanceId:
@@ -309,8 +316,8 @@ Outputs:
 #      -d api.xn--febl3a.com
 #
 # 7. Deploy nginx configuration:
-#    # Copy appendix/router/router.conf to /etc/nginx/conf.d/
-#    sudo cp appendix/router/router.conf /etc/nginx/conf.d/
+#    # Copy appendix/ec2-nginx/router/router.conf to /etc/nginx/conf.d/
+#    sudo cp appendix/ec2-nginx/router/router.conf /etc/nginx/conf.d/
 #
 # 8. Validate and reload:
 #    sudo nginx -t
@@ -328,7 +335,7 @@ Outputs:
 #    ssh -i ~/.ssh/nginx.pem ec2-user@<PUBLIC_IP>
 #
 # 2. Copy nginx configuration:
-#    scp -i ~/.ssh/nginx.pem appendix/router/router.conf ec2-user@<PUBLIC_IP>:/tmp/
+#    scp -i ~/.ssh/nginx.pem appendix/ec2-nginx/router/router.conf ec2-user@<PUBLIC_IP>:/tmp/
 #    # Then on the server:
 #    sudo mv /tmp/router.conf /etc/nginx/conf.d/
 #
