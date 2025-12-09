@@ -6,60 +6,10 @@ This directory contains CloudFormation templates that document and can recreate 
 
 ## Architecture Overview
 
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                                  Internet                                        │
-│                         תנך.co.il / תנך.com (DNS)                                │
-└───────────────────────────────────────┬─────────────────────────────────────────┘
-                                        │
-                                        ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│  EC2: nginx Reverse Proxy (ec2-nginx.yaml)                                      │
-│  ─────────────────────────────────────────                                      │
-│  • Public IP: <MASKED>                                                          │
-│  • SSL termination (Let's Encrypt)                                              │
-│  • Routes to ECS via Cloud Map DNS                                              │
-│  • Security Group: HTTP/HTTPS/SSH inbound                                       │
-└───────────────────────────────────────┬─────────────────────────────────────────┘
-                                        │
-                    VPC Private Network │ 172.31.0.0/16
-                    (vpc-networking.yaml)
-                                        │
-            ┌───────────────────────────┴───────────────────────────┐
-            │                                                       │
-            ▼                                                       ▼
-┌───────────────────────────────┐               ┌───────────────────────────────┐
-│  Cloud Map Service Discovery  │               │  ECR Repositories             │
-│  (ecs-services.yaml)          │               │  (ecr-repositories.yaml)      │
-│  ───────────────────────────  │               │  ─────────────────────────    │
-│  Namespace: bible-on-site.local│               │  • bible-on-site (website)   │
-│  • website.bible-on-site.local │◄──────────────│  • bible-on-site-api         │
-│  • api.bible-on-site.local     │   pulls from  │                              │
-└───────────────────┬───────────┘               └───────────────────────────────┘
-                    │                                          ▲
-                    ▼                                          │
-┌───────────────────────────────────────────────────────────────────────────────┐
-│  ECS Fargate Cluster (ecs-services.yaml)                                      │
-│  ───────────────────────────────────────                                      │
-│  Cluster: bible-on-site-cluster                                               │
-│  ┌─────────────────────────────────┐    ┌─────────────────────────────────┐  │
-│  │ Service: bible-on-site-website  │    │ Service: bible-on-site-api     │  │
-│  │ Port: 3000                      │    │ Port: 3003 (future)            │  │
-│  │ Image: ECR/bible-on-site        │    │ Image: ECR/bible-on-site-api   │  │
-│  └─────────────────────────────────┘    └─────────────────────────────────┘  │
-│                                                                               │
-│  Task Execution Role: ecsTaskExecutionRole                                    │
-│  • ECR pull permissions                                                       │
-│  • CloudWatch Logs permissions                                                │
-└───────────────────────────────────────────────────────────────────────────────┘
+For a detailed visual representation of the infrastructure, please refer to the [Architecture Documentation](../architecture/README.md).
 
-┌───────────────────────────────────────────────────────────────────────────────┐
-│  IAM & Security (github-oidc.yaml, iam-identity-center.yaml)                  │
-│  ───────────────────────────────────────────────────────────                  │
-│  • GitHub OIDC Provider → GitHubActionsECRDeployRole (CI/CD)                  │
-│  • IAM Identity Center → AdministratorAccess, ECRDeployer (SSO)               │
-└───────────────────────────────────────────────────────────────────────────────┘
-```
+The system consists of an Nginx reverse proxy on EC2 routing traffic to ECS Fargate containers, using Cloud Map for service discovery.
+
 
 ## Sensitive Information
 
@@ -70,7 +20,7 @@ Sensitive values are masked with placeholders. To retrieve actual values:
 | `<AWS_ACCOUNT_ID>` | `aws sts get-caller-identity --query Account --output text` |
 | `<SSO_INSTANCE_ARN>` | `aws sso-admin list-instances --query "Instances[0].InstanceArn" --output text --region il-central-1` |
 | `<IDENTITY_STORE_ID>` | `aws sso-admin list-instances --query "Instances[0].IdentityStoreId" --output text --region il-central-1` |
-| `<EC2_PUBLIC_IP>` | `aws ec2 describe-instances --filters "Name=tag:Name,Values=nginx-router" --query "Reservations[0].Instances[0].PublicIpAddress" --output text --region il-central-1` |
+| `<EC2_PUBLIC_IP>` | `aws ec2 describe-instances --instance-ids i-0d811651c11294634 --query "Reservations[0].Instances[0].PublicIpAddress" --output text --region il-central-1` |
 | `<KEY_PAIR_FINGERPRINT>` | `aws ec2 describe-key-pairs --key-names nginx --query "KeyPairs[0].KeyFingerprint" --output text --region il-central-1` |
 
 ## Templates
