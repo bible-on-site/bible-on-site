@@ -1,0 +1,344 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: |
+  ECS Cluster, Services, Task Definitions, and Cloud Map Service Discovery
+  for Bible On Site project.
+
+  This template creates:
+  - ECS Cluster (Fargate)
+  - Cloud Map namespace for service discovery
+  - ECS Task Execution Role with ECR and CloudWatch permissions
+  - Task definitions and services
+
+  Sensitive Information Restoration:
+  | Placeholder | Description | Restoration Command |
+  |---|---|---|
+  | `<AWS_ACCOUNT_ID>` | AWS Account ID | `aws sts get-caller-identity --query Account --output text` |
+  | `<NGINX_PUBLIC_IP>` | Nginx Public IP | `aws ec2 describe-instances --filters "Name=tag:Name,Values=nginx-router" --query "Reservations[0].Instances[0].PublicIpAddress" --output text` |
+  | `<VPC_ID>` | VPC ID | `aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text` |
+  | `<SUBNET_IDS>` | Subnet IDs | `aws ec2 describe-subnets --filters "Name=vpc-id,Values=<VPC_ID>" --query "Subnets[*].SubnetId" --output text` |
+  | `<ECS_SECURITY_GROUP_ID>` | ECS Security Group ID | `aws ec2 describe-security-groups --filters "Name=group-name,Values=bible-on-site-ecs-sg" --query "SecurityGroups[0].GroupId" --output text` |
+
+  Architecture:
+  ┌─────────────────┐      ┌─────────────────────────────────────────────┐
+  │  nginx (EC2)    │      │              ECS Fargate                    │
+  │  <NGINX_PUBLIC_IP>│──────│  ┌─────────────────────────────────────┐    │
+  │                 │      │  │  bible-on-site-website              │    │
+  │  Resolves:      │      │  │  website.bible-on-site.local:3000   │    │
+  │  website.bible- │      │  │  Image: ECR/bible-on-site:latest    │    │
+  │  on-site.local  │      │  └─────────────────────────────────────┘    │
+  │  via Cloud Map  │      │                                             │
+  └─────────────────┘      │  ┌─────────────────────────────────────┐    │
+                           │  │  bible-on-site-api (future)         │    │
+                           │  │  api.bible-on-site.local:3003       │    │
+                           │  │  Image: ECR/bible-on-site-api       │    │
+                           │  └─────────────────────────────────────┘    │
+                           └─────────────────────────────────────────────┘
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues:
+      - production
+      - staging
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Default: <VPC_ID>
+    Description: VPC ID for ECS tasks and Cloud Map
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Default: <SUBNET_IDS>
+    Description: Subnet IDs for ECS tasks (should be in multiple AZs)
+
+  ECSSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Default: <ECS_SECURITY_GROUP_ID>
+    Description: Security group for ECS tasks
+
+  WebsiteImageUri:
+    Type: String
+    Default: <AWS_ACCOUNT_ID>.dkr.ecr.il-central-1.amazonaws.com/bible-on-site:latest
+    Description: |
+      ECR image URI for website.
+      To get latest: aws ecr describe-images --repository-name bible-on-site --query "sort_by(imageDetails,&imagePushedAt)[-1].imageTags[0]" --region il-central-1
+
+Resources:
+  # =============================================================================
+  # ECS Cluster
+  # =============================================================================
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: bible-on-site-cluster
+      ClusterSettings:
+        - Name: containerInsights
+          Value: disabled # Enable for production monitoring (adds cost)
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Environment
+          Value: !Ref Environment
+
+  # =============================================================================
+  # Cloud Map Namespace (Private DNS for Service Discovery)
+  # =============================================================================
+  # This creates a private DNS namespace that allows services to discover
+  # each other using DNS names like: website.bible-on-site.local
+  ServiceDiscoveryNamespace:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    Properties:
+      Name: bible-on-site.local
+      Vpc: !Ref VpcId
+      Description: Private DNS namespace for ECS service discovery
+      Properties:
+        DnsProperties:
+          SOA:
+            TTL: 15
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+
+  # =============================================================================
+  # Cloud Map Service: Website
+  # =============================================================================
+  # Registers as: website.bible-on-site.local
+  # nginx resolves this DNS name to get the ECS task IPs
+  WebsiteServiceDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: website
+      NamespaceId: !Ref ServiceDiscoveryNamespace
+      Description: Service discovery for bible-on-site website
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  # =============================================================================
+  # ECS Task Execution Role
+  # =============================================================================
+  # This role is used by ECS to:
+  # - Pull images from ECR
+  # - Write logs to CloudWatch
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ecsTaskExecutionRole
+      Description: ECS task execution role for pulling images and logging
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        # AWS managed policy for basic ECS task execution (ECR pull, basic logging)
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        # Additional permissions for creating CloudWatch log groups
+        - PolicyName: CloudWatchLogsFullAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+
+  # =============================================================================
+  # Task Definition: Website (Next.js)
+  # =============================================================================
+  WebsiteTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: bible-on-site-website
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: "256" # 0.25 vCPU
+      Memory: "512" # 512 MB
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      # TaskRoleArn: # Add if tasks need to call AWS APIs
+      ContainerDefinitions:
+        - Name: website
+          Image: !Ref WebsiteImageUri
+          Essential: true
+          PortMappings:
+            - ContainerPort: 3000
+              HostPort: 3000
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: /ecs/bible-on-site-website
+              awslogs-create-group: "true"
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          # Environment variables can be added here
+          # Environment:
+          #   - Name: NODE_ENV
+          #     Value: production
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Component
+          Value: website
+
+  # =============================================================================
+  # ECS Service: Website
+  # =============================================================================
+  WebsiteService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - WebsiteServiceDiscovery
+    Properties:
+      ServiceName: bible-on-site-website
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref WebsiteTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      PlatformVersion: LATEST
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets: !Ref SubnetIds
+          SecurityGroups:
+            - !Ref ECSSecurityGroupId
+          AssignPublicIp: ENABLED # Required for pulling from ECR without NAT Gateway
+      # Service Discovery - registers task IPs with Cloud Map
+      ServiceRegistries:
+        - RegistryArn: !GetAtt WebsiteServiceDiscovery.Arn
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+        DeploymentCircuitBreaker:
+          Enable: false
+          Rollback: false
+      EnableExecuteCommand: false
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Component
+          Value: website
+
+  # =============================================================================
+  # Future: API Service (Rust)
+  # =============================================================================
+  # Uncomment when API is ready for deployment
+  #
+  # ApiServiceDiscovery:
+  #   Type: AWS::ServiceDiscovery::Service
+  #   Properties:
+  #     Name: api
+  #     NamespaceId: !Ref ServiceDiscoveryNamespace
+  #     DnsConfig:
+  #       RoutingPolicy: MULTIVALUE
+  #       DnsRecords:
+  #         - Type: A
+  #           TTL: 10
+  #     HealthCheckCustomConfig:
+  #       FailureThreshold: 1
+  #
+  # ApiTaskDefinition:
+  #   Type: AWS::ECS::TaskDefinition
+  #   Properties:
+  #     Family: bible-on-site-api
+  #     NetworkMode: awsvpc
+  #     RequiresCompatibilities:
+  #       - FARGATE
+  #     Cpu: "256"
+  #     Memory: "512"
+  #     ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+  #     ContainerDefinitions:
+  #       - Name: api
+  #         Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/bible-on-site-api:latest"
+  #         Essential: true
+  #         PortMappings:
+  #           - ContainerPort: 3003
+  #             HostPort: 3003
+  #             Protocol: tcp
+  #         LogConfiguration:
+  #           LogDriver: awslogs
+  #           Options:
+  #             awslogs-group: /ecs/bible-on-site-api
+  #             awslogs-create-group: "true"
+  #             awslogs-region: !Ref AWS::Region
+  #             awslogs-stream-prefix: ecs
+
+Outputs:
+  ClusterArn:
+    Description: ECS Cluster ARN
+    Value: !GetAtt ECSCluster.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ClusterArn"
+
+  ClusterName:
+    Description: ECS Cluster Name
+    Value: !Ref ECSCluster
+    Export:
+      Name: !Sub "${AWS::StackName}-ClusterName"
+
+  NamespaceId:
+    Description: Cloud Map Namespace ID
+    Value: !Ref ServiceDiscoveryNamespace
+    Export:
+      Name: !Sub "${AWS::StackName}-NamespaceId"
+
+  NamespaceName:
+    Description: Cloud Map Namespace DNS Name
+    Value: bible-on-site.local
+
+  WebsiteServiceArn:
+    Description: ECS Website Service ARN
+    Value: !Ref WebsiteService
+    Export:
+      Name: !Sub "${AWS::StackName}-WebsiteServiceArn"
+
+  WebsiteServiceDiscoveryDNS:
+    Description: DNS name for website service discovery
+    Value: website.bible-on-site.local
+
+  TaskExecutionRoleArn:
+    Description: ECS Task Execution Role ARN
+    Value: !GetAtt ECSTaskExecutionRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-TaskExecutionRoleArn"
+# =============================================================================
+# CLI Commands to Verify/Update
+# =============================================================================
+#
+# List clusters:
+#   aws ecs list-clusters --region il-central-1
+#
+# Describe cluster:
+#   aws ecs describe-clusters --clusters bible-on-site-cluster --region il-central-1
+#
+# List services:
+#   aws ecs list-services --cluster bible-on-site-cluster --region il-central-1
+#
+# Describe service:
+#   aws ecs describe-services --cluster bible-on-site-cluster --services bible-on-site-website --region il-central-1
+#
+# Update service (force new deployment):
+#   aws ecs update-service --cluster bible-on-site-cluster --service bible-on-site-website --force-new-deployment --region il-central-1
+#
+# List Cloud Map namespaces:
+#   aws servicediscovery list-namespaces --region il-central-1
+#
+# List Cloud Map services:
+#   aws servicediscovery list-services --region il-central-1
+#
+# Check DNS resolution (from within VPC):
+#   dig website.bible-on-site.local
+#
+# =============================================================================

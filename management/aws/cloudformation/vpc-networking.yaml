@@ -1,0 +1,171 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: |
+  VPC and Networking infrastructure for Bible On Site project.
+
+  This template documents the default VPC configuration used by the project.
+  The actual VPC is the AWS default VPC which was created automatically.
+
+  Sensitive Information Restoration:
+  | Placeholder | Description | Restoration Command |
+  |---|---|---|
+  | `<VPC_ID>` | VPC ID | `aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text --region il-central-1` |
+  | `<SUBNET_ID_1>` | Subnet ID (il-central-1c) | `aws ec2 describe-subnets --filters "Name=vpc-id,Values=<VPC_ID>" "Name=availability-zone,Values=il-central-1c" --query "Subnets[0].SubnetId" --output text` |
+  | `<SUBNET_ID_2>` | Subnet ID (il-central-1a) | `aws ec2 describe-subnets --filters "Name=vpc-id,Values=<VPC_ID>" "Name=availability-zone,Values=il-central-1a" --query "Subnets[0].SubnetId" --output text` |
+  | `<SUBNET_ID_3>` | Subnet ID (il-central-1b) | `aws ec2 describe-subnets --filters "Name=vpc-id,Values=<VPC_ID>" "Name=availability-zone,Values=il-central-1b" --query "Subnets[0].SubnetId" --output text` |
+  | `<IGW_ID>` | Internet Gateway ID | `aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=<VPC_ID>" --query "InternetGateways[0].InternetGatewayId" --output text` |
+  | `<ROUTE_TABLE_ID>` | Route Table ID | `aws ec2 describe-route-tables --filters "Name=vpc-id,Values=<VPC_ID>" --query "RouteTables[0].RouteTableId" --output text` |
+
+# =============================================================================
+# CURRENT CONFIGURATION (discovered via AWS CLI)
+# =============================================================================
+#
+# VPC:
+#   VPC ID: <VPC_ID>
+#   CIDR: 172.31.0.0/16
+#   Type: Default VPC
+#   DNS Hostnames: Enabled
+#   DNS Resolution: Enabled
+#
+# Subnets (all public, auto-assign public IP):
+#   - <SUBNET_ID_1> | 172.31.0.0/20  | il-central-1c
+#   - <SUBNET_ID_2> | 172.31.32.0/20 | il-central-1a
+#   - <SUBNET_ID_3> | 172.31.16.0/20 | il-central-1b
+#
+# Internet Gateway: <IGW_ID>
+#
+# Route Table: <ROUTE_TABLE_ID>
+#   - 172.31.0.0/16 → local
+#   - 0.0.0.0/0 → <IGW_ID>
+#
+# VPC DNS Resolver: 172.31.0.2 (used by nginx for Cloud Map service discovery)
+#
+# =============================================================================
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues:
+      - production
+      - staging
+
+Resources:
+  # =============================================================================
+  # Security Group: ec2-nginx (Reverse Proxy / Router)
+  # =============================================================================
+  # This security group is for the EC2 instance running nginx
+  # which acts as the public-facing reverse proxy
+  NginxSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: nginx-router-sg
+      GroupDescription: Security group for nginx reverse proxy EC2 instance
+      VpcId: <VPC_ID> # Default VPC - replace if using custom VPC
+      SecurityGroupIngress:
+        # SSH access (restrict to your IP in production)
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: SSH access (consider restricting to specific IPs)
+        # HTTP (redirects to HTTPS)
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP (redirects to HTTPS)
+        # HTTPS (main traffic)
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS traffic
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+          Description: All outbound traffic
+      Tags:
+        - Key: Name
+          Value: nginx-router-sg
+        - Key: Project
+          Value: bible-on-site
+        - Key: Component
+          Value: nginx-router
+
+  # =============================================================================
+  # Security Group: ECS Tasks
+  # =============================================================================
+  # This security group is for ECS Fargate tasks
+  # Only allows traffic from within the VPC (from nginx)
+  ECSTasksSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: bible-on-site-ecs-sg
+      GroupDescription: ECS tasks security group
+      VpcId: <VPC_ID> # Default VPC
+      SecurityGroupIngress:
+        # Allow traffic from VPC CIDR on port 3000 (Next.js)
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          CidrIp: 172.31.0.0/16
+          Description: Next.js from within VPC (nginx proxy)
+        # Future: API service on port 3003
+        # - IpProtocol: tcp
+        #   FromPort: 3003
+        #   ToPort: 3003
+        #   CidrIp: 172.31.0.0/16
+        #   Description: API from within VPC (nginx proxy)
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+          Description: All outbound traffic (for ECR pull, etc.)
+      Tags:
+        - Key: Name
+          Value: bible-on-site-ecs-sg
+        - Key: Project
+          Value: bible-on-site
+        - Key: Component
+          Value: ecs
+
+Outputs:
+  NginxSecurityGroupId:
+    Description: Security Group ID for nginx EC2 instance
+    Value: !Ref NginxSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-NginxSecurityGroupId"
+
+  ECSTasksSecurityGroupId:
+    Description: Security Group ID for ECS tasks
+    Value: !Ref ECSTasksSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-ECSTasksSecurityGroupId"
+
+  VpcId:
+    Description: Default VPC ID (hardcoded - update if VPC changes)
+    Value: <VPC_ID>
+
+  SubnetIds:
+    Description: Subnet IDs for ECS tasks (all AZs)
+    Value: <SUBNET_IDS>
+
+  VpcCidr:
+    Description: VPC CIDR block
+    Value: 172.31.0.0/16
+# =============================================================================
+# CLI Commands to Retrieve Current Values
+# =============================================================================
+#
+# Get VPC details:
+#   aws ec2 describe-vpcs --region il-central-1
+#
+# Get subnets:
+#   aws ec2 describe-subnets --filters "Name=vpc-id,Values=<VPC_ID>" --region il-central-1
+#
+# Get security groups:
+#   aws ec2 describe-security-groups --filters "Name=vpc-id,Values=<VPC_ID>" --region il-central-1
+#
+# Get route tables:
+#   aws ec2 describe-route-tables --filters "Name=vpc-id,Values=<VPC_ID>" --region il-central-1
+#
+# =============================================================================

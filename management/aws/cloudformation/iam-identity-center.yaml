@@ -1,0 +1,204 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: |
+  IAM Identity Center (SSO) Configuration Documentation.
+
+  ⚠️ IMPORTANT: This template is for DOCUMENTATION PURPOSES ONLY.
+
+  AWS CloudFormation has LIMITED support for IAM Identity Center resources.
+  The following resources must be created via AWS Console or CLI:
+  - Users (AWS::IdentityStore::User - not supported)
+  - Groups (AWS::IdentityStore::Group - limited support)
+  - Account Assignments
+
+  This file documents the current configuration and provides CLI commands
+  to recreate the setup if needed.
+
+  SENSITIVE INFORMATION RESTORATION:
+  | Placeholder | Description | Restoration Command |
+  |---|---|---|
+  | `<SSO_START_URL>` | SSO Start URL | `https://<IdentityStoreId>.awsapps.com/start` (Retrieve IdentityStoreId via `aws sso-admin list-instances --region il-central-1`) |
+  | `<SSO_INSTANCE_ARN>` | SSO Instance ARN | `aws sso-admin list-instances --region il-central-1 --query "Instances[0].InstanceArn" --output text` |
+  | `<IDENTITY_STORE_ID>` | Identity Store ID | `aws sso-admin list-instances --region il-central-1 --query "Instances[0].IdentityStoreId" --output text` |
+  | `<USER_ID>` | User ID | `aws identitystore list-users --identity-store-id <IDENTITY_STORE_ID> --region il-central-1` |
+  | `<PERMISSION_SET_ARN>` | Permission Set ARN | `aws sso-admin list-permission-sets --instance-arn <SSO_INSTANCE_ARN> --region il-central-1` |
+
+  AUTHENTICATION METHODS:
+  1. Local Development (Human Users):
+     - Uses IAM Identity Center (SSO) with temporary credentials.
+     - Login: `aws sso login --profile bible-on-site-deployer`
+     - Verify: `aws sts get-caller-identity --profile bible-on-site-deployer`
+     - Benefits: No long-lived credentials, MFA enforced, Centralized management.
+
+  2. GitHub Actions (CI/CD):
+     - Uses OIDC (OpenID Connect) with temporary credentials.
+     - No AWS credentials stored in GitHub secrets.
+     - Credentials automatically rotated per workflow run.
+
+  LOCAL CLI SETUP:
+  1. Configure SSO: `aws configure sso`
+     - SSO session name: bible-on-site-sso
+     - SSO start URL: <SSO_START_URL>
+     - SSO region: il-central-1
+     - Registration scopes: sso:account:access
+  2. Login: `aws sso login --profile bible-on-site-deployer`
+
+# =============================================================================
+# CURRENT CONFIGURATION (as of 2025-12-09)
+# =============================================================================
+#
+# SSO Instance:
+#   Instance ARN: <SSO_INSTANCE_ARN>
+#   Identity Store ID: <IDENTITY_STORE_ID>
+#   AWS Access Portal URL: <SSO_START_URL>
+#   Region: il-central-1
+#
+# To retrieve these values:
+#   aws sso-admin list-instances --region il-central-1
+#
+# =============================================================================
+
+Metadata:
+  # =========================================================================
+  # USERS
+  # =========================================================================
+  # Users are managed in IAM Identity Center and cannot be created via CloudFormation.
+  #
+  # Current Users:
+  #
+  # 1. dorad (Administrator)
+  #    - User ID: <USER_ID_1>
+  #    - Display Name: Dorad Levinshtein
+  #    - Email: <MASKED - retrieve from AWS Console>
+  #    - Permission Sets: AdministratorAccess
+  #
+  # 2. bible-on-site-github-ci-bot (CI/CD Bot)
+  #    - User ID: <USER_ID_2>
+  #    - Display Name: bible on site github ci bot
+  #    - Email: <MASKED - retrieve from AWS Console>
+  #    - Permission Sets: ECRDeployer
+  #
+  # To list users:
+  #   aws identitystore list-users --identity-store-id <IDENTITY_STORE_ID> --region il-central-1
+  #
+  # To get user emails (masked above for security):
+  #   aws identitystore describe-user \
+  #     --identity-store-id <IDENTITY_STORE_ID> \
+  #     --user-id <USER_ID> \
+  #     --region il-central-1
+
+  # =========================================================================
+  # PERMISSION SETS
+  # =========================================================================
+  PermissionSets:
+    AdministratorAccess:
+      Description: Full AWS administrator access
+      PermissionSetArn: <PERMISSION_SET_ARN_1>
+      SessionDuration: PT1H
+      ManagedPolicies:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+      AssignedTo:
+        - dorad
+
+    ECRDeployer:
+      Description: ECR push/pull permissions for deployments
+      PermissionSetArn: <PERMISSION_SET_ARN_2>
+      SessionDuration: PT1H
+      InlinePolicy: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "ECRAuth",
+              "Effect": "Allow",
+              "Action": ["ecr:GetAuthorizationToken"],
+              "Resource": "*"
+            },
+            {
+              "Sid": "ECRRepository",
+              "Effect": "Allow",
+              "Action": [
+                "ecr:CreateRepository",
+                "ecr:DescribeRepositories",
+                "ecr:DescribeImages",
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchGetImage",
+                "ecr:InitiateLayerUpload",
+                "ecr:UploadLayerPart",
+                "ecr:CompleteLayerUpload",
+                "ecr:PutImage"
+              ],
+              "Resource": [
+                "arn:aws:ecr:*:*:repository/bible-on-site",
+                "arn:aws:ecr:*:*:repository/bible-on-site-api"
+              ]
+            },
+            {
+              "Sid": "STSGetCallerIdentity",
+              "Effect": "Allow",
+              "Action": ["sts:GetCallerIdentity"],
+              "Resource": "*"
+            }
+          ]
+        }
+      AssignedTo:
+        - bible-on-site-github-ci-bot
+
+# =============================================================================
+# CLI COMMANDS TO RECREATE CONFIGURATION
+# =============================================================================
+#
+# Prerequisites:
+#   - AWS CLI v2 installed
+#   - Logged in with administrator access
+#   - IAM Identity Center already enabled
+#
+# Variables (set these first):
+#   export AWS_PROFILE=AdministratorAccess-<AWS_ACCOUNT_ID>
+#   export AWS_REGION=il-central-1
+#   export SSO_INSTANCE_ARN="<SSO_INSTANCE_ARN>"
+#   export IDENTITY_STORE_ID="<IDENTITY_STORE_ID>"
+#   export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+#
+# 1. Create ECRDeployer Permission Set:
+#
+#   aws sso-admin create-permission-set \
+#     --instance-arn "$SSO_INSTANCE_ARN" \
+#     --name "ECRDeployer" \
+#     --session-duration "PT1H" \
+#     --region $AWS_REGION
+#
+# 2. Attach inline policy to ECRDeployer:
+#
+#   aws sso-admin put-inline-policy-to-permission-set \
+#     --instance-arn "$SSO_INSTANCE_ARN" \
+#     --permission-set-arn "<PERMISSION_SET_ARN_FROM_STEP_1>" \
+#     --inline-policy '{...policy JSON...}' \
+#     --region $AWS_REGION
+#
+# 3. Create Account Assignment (assign user to permission set):
+#
+#   aws sso-admin create-account-assignment \
+#     --instance-arn "$SSO_INSTANCE_ARN" \
+#     --target-id "$AWS_ACCOUNT_ID" \
+#     --target-type AWS_ACCOUNT \
+#     --permission-set-arn "<PERMISSION_SET_ARN>" \
+#     --principal-type USER \
+#     --principal-id "<USER_ID>" \
+#     --region $AWS_REGION
+#
+# =============================================================================
+
+# Note: This is a documentation-only template
+# No actual CloudFormation resources are defined because IAM Identity Center
+# resources are not fully supported by CloudFormation
+
+Resources:
+  # Placeholder resource to make this a valid CloudFormation template
+  DocumentationPlaceholder:
+    Type: AWS::CloudFormation::WaitConditionHandle
+    Metadata:
+      Note: |
+        This is a placeholder resource. IAM Identity Center configuration
+        must be done via AWS Console or CLI. See the Metadata section above
+        for the current configuration and CLI commands to recreate it.

@@ -1,0 +1,175 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: |
+  GitHub Actions OIDC Provider and IAM Role for ECR deployments.
+
+  This template sets up OpenID Connect (OIDC) authentication between GitHub Actions
+  and AWS, allowing GitHub workflows to assume an IAM role without storing long-lived
+  AWS credentials as secrets.
+
+  Sensitive Information Restoration:
+  | Placeholder | Description | Restoration Command |
+  |---|---|---|
+  | `<AWS_ACCOUNT_ID>` | AWS Account ID | `aws sts get-caller-identity --query Account --output text` |
+
+  GITHUB REPOSITORY SECRETS:
+  | Name                | Value                                                            | Description       |
+  |---------------------|------------------------------------------------------------------|-------------------|
+  | AWS_DEPLOY_ROLE_ARN | arn:aws:iam::<AWS_ACCOUNT_ID>:role/GitHubActionsECRDeployRole    | IAM role for OIDC |
+  | AWS_REGION          | il-central-1                                                     | AWS region        |
+  | AWS_ACCOUNT_ID      | <AWS_ACCOUNT_ID>                                                 | AWS account ID    |
+
+Parameters:
+  GitHubOrg:
+    Type: String
+    Default: bible-on-site
+    Description: GitHub organization name
+
+  GitHubRepo:
+    Type: String
+    Default: bible-on-site
+    Description: GitHub repository name
+
+  # Optional: Restrict to specific branches
+  # GitHubBranch:
+  #   Type: String
+  #   Default: '*'
+  #   Description: GitHub branch pattern (e.g., 'main', 'refs/heads/main', or '*' for all)
+
+Resources:
+  # =============================================================================
+  # OIDC Identity Provider for GitHub Actions
+  # =============================================================================
+  # This allows GitHub Actions to authenticate with AWS using OIDC tokens
+  # instead of long-lived access keys
+  GitHubOIDCProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      # AWS validates GitHub's certificate chain directly, so we use a placeholder
+      # See: https://github.com/aws-actions/configure-aws-credentials#oidc-subject-claims
+      ThumbprintList:
+        - ffffffffffffffffffffffffffffffffffffffff
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Purpose
+          Value: github-actions-oidc
+
+  # =============================================================================
+  # IAM Policy: ECR Deploy Permissions
+  # =============================================================================
+  GitHubActionsECRDeployPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: GitHubActionsECRDeployPolicy
+      Description: Allows GitHub Actions to push/pull images to ECR repositories
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          # ECR Authentication - required to get Docker login token
+          - Sid: ECRAuth
+            Effect: Allow
+            Action:
+              - ecr:GetAuthorizationToken
+            Resource: "*"
+
+          # ECR Repository Operations - scoped to specific repositories
+          - Sid: ECRRepository
+            Effect: Allow
+            Action:
+              - ecr:CreateRepository
+              - ecr:DescribeRepositories
+              - ecr:DescribeImages
+              - ecr:BatchCheckLayerAvailability
+              - ecr:GetDownloadUrlForLayer
+              - ecr:BatchGetImage
+              - ecr:InitiateLayerUpload
+              - ecr:UploadLayerPart
+              - ecr:CompleteLayerUpload
+              - ecr:PutImage
+            Resource:
+              - !Sub "arn:aws:ecr:*:${AWS::AccountId}:repository/bible-on-site"
+              - !Sub "arn:aws:ecr:*:${AWS::AccountId}:repository/bible-on-site-api"
+
+          # STS - allows the workflow to verify its identity
+          - Sid: STSGetCallerIdentity
+            Effect: Allow
+            Action:
+              - sts:GetCallerIdentity
+            Resource: "*"
+
+  # =============================================================================
+  # IAM Role: GitHub Actions ECR Deploy Role
+  # =============================================================================
+  GitHubActionsECRDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: GitHubActionsECRDeployRole
+      Description: Role assumed by GitHub Actions for ECR deployments
+      MaxSessionDuration: 3600 # 1 hour
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !GetAtt GitHubOIDCProvider.Arn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                # Ensure the token is intended for AWS
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                # Restrict to specific GitHub repository
+                # Format: repo:<org>/<repo>:<branch/ref>
+                # Using * allows any branch/ref in the repository
+                token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubOrg}/${GitHubRepo}:*"
+      ManagedPolicyArns:
+        - !Ref GitHubActionsECRDeployPolicy
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Purpose
+          Value: github-actions-ecr-deploy
+
+Outputs:
+  OIDCProviderArn:
+    Description: ARN of the GitHub OIDC Provider
+    Value: !GetAtt GitHubOIDCProvider.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-OIDCProviderArn"
+
+  RoleArn:
+    Description: |
+      ARN of the IAM Role for GitHub Actions.
+      Add this to your GitHub repository secrets as AWS_DEPLOY_ROLE_ARN
+    Value: !GetAtt GitHubActionsECRDeployRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-RoleArn"
+
+  PolicyArn:
+    Description: ARN of the ECR Deploy Policy
+    Value: !Ref GitHubActionsECRDeployPolicy
+    Export:
+      Name: !Sub "${AWS::StackName}-PolicyArn"
+
+  # =============================================================================
+  # GitHub Repository Configuration
+  # =============================================================================
+  # After deploying this stack, configure your GitHub repository:
+  #
+  # 1. Go to: Repository Settings → Secrets and variables → Actions
+  #
+  # 2. Add these secrets:
+  #    - AWS_DEPLOY_ROLE_ARN: (use the RoleArn output above)
+  #    - AWS_REGION: il-central-1
+  #    - AWS_ACCOUNT_ID: (run: aws sts get-caller-identity --query Account --output text)
+  #
+  # 3. In your GitHub Actions workflow:
+  #    ```yaml
+  #    - uses: aws-actions/configure-aws-credentials@v4
+  #      with:
+  #        role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+  #        aws-region: ${{ secrets.AWS_REGION }}
+  #    ```

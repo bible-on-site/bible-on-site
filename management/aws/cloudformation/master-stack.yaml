@@ -1,0 +1,213 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: |
+  Master stack for Bible On Site AWS infrastructure.
+
+  This nested stack can deploy all infrastructure components:
+  - VPC networking and security groups
+  - ECR repositories for container images
+  - ECS cluster, services, and Cloud Map service discovery
+  - EC2 nginx reverse proxy (documentation only - manual setup required)
+  - GitHub OIDC provider and IAM role for CI/CD
+
+  Note:
+  - IAM Identity Center is NOT included (not fully supported by CloudFormation)
+  - EC2 nginx requires manual setup (key pair, SSL certificates)
+  See individual yaml files for documentation.
+
+  Sensitive Information Restoration:
+  | Placeholder | Description | Restoration Command |
+  |---|---|---|
+  | `<AWS_ACCOUNT_ID>` | AWS Account ID | `aws sts get-caller-identity --query Account --output text` |
+  | `<VPC_ID>` | VPC ID | `aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text` |
+  | `<SUBNET_IDS>` | Subnet IDs | `aws ec2 describe-subnets --filters "Name=vpc-id,Values=<VPC_ID>" --query "Subnets[*].SubnetId" --output text` |
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues:
+      - production
+      - staging
+    Description: Environment name
+
+  GitHubOrg:
+    Type: String
+    Default: bible-on-site
+    Description: GitHub organization name
+
+  GitHubRepo:
+    Type: String
+    Default: bible-on-site
+    Description: GitHub repository name
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Default: <VPC_ID>
+    Description: VPC ID (default VPC)
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Default: <SUBNET_IDS>
+    Description: Subnet IDs for ECS tasks
+
+  # Skip flags for existing resources
+  SkipECR:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Skip ECR stack (if already exists)
+
+  SkipGitHubOIDC:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Skip GitHub OIDC stack (if already exists)
+
+  SkipECS:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Skip ECS stack (if already exists)
+
+Conditions:
+  CreateECR: !Equals [!Ref SkipECR, "false"]
+  CreateGitHubOIDC: !Equals [!Ref SkipGitHubOIDC, "false"]
+  CreateECS: !Equals [!Ref SkipECS, "false"]
+
+Resources:
+  # =============================================================================
+  # ECR Repositories
+  # =============================================================================
+  ECRStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: CreateECR
+    Properties:
+      TemplateURL: ./ecr-repositories.yaml
+      Parameters:
+        Environment: !Ref Environment
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Component
+          Value: ecr
+
+  # =============================================================================
+  # GitHub OIDC Provider and Role
+  # =============================================================================
+  GitHubOIDCStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: CreateGitHubOIDC
+    Properties:
+      TemplateURL: ./github-oidc.yaml
+      Parameters:
+        GitHubOrg: !Ref GitHubOrg
+        GitHubRepo: !Ref GitHubRepo
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Component
+          Value: github-oidc
+
+  # =============================================================================
+  # ECS Cluster, Services, and Cloud Map
+  # =============================================================================
+  # Note: This stack creates ECS resources and Cloud Map namespace
+  # The ECS tasks will pull images from ECR and register with Cloud Map
+  # nginx on EC2 will use Cloud Map DNS to route traffic to ECS tasks
+  ECSStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: CreateECS
+    DependsOn:
+      - ECRStack
+    Properties:
+      TemplateURL: ./ecs-services.yaml
+      Parameters:
+        Environment: !Ref Environment
+        VpcId: !Ref VpcId
+        SubnetIds: !Join [",", !Ref SubnetIds]
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Component
+          Value: ecs
+
+  # =============================================================================
+  # VPC Security Groups
+  # =============================================================================
+  # Note: VPC itself is the default VPC, not created by CloudFormation
+  # This just creates/documents the security groups
+  # VPCStack:
+  #   Type: AWS::CloudFormation::Stack
+  #   Properties:
+  #     TemplateURL: ./vpc-networking.yaml
+  #     Parameters:
+  #       Environment: !Ref Environment
+
+  # =============================================================================
+  # EC2 nginx Reverse Proxy
+  # =============================================================================
+  # Note: EC2 instance is NOT included in this stack because:
+  # - Key pair must be created separately
+  # - SSL certificates require manual Let's Encrypt setup
+  # - nginx config requires manual deployment
+  # See ec2-nginx.yaml for documentation
+
+Outputs:
+  # ECR Outputs
+  WebsiteRepositoryUri:
+    Condition: CreateECR
+    Description: URI of the website ECR repository
+    Value: !GetAtt ECRStack.Outputs.WebsiteRepositoryUri
+
+  ApiRepositoryUri:
+    Condition: CreateECR
+    Description: URI of the API ECR repository
+    Value: !GetAtt ECRStack.Outputs.ApiRepositoryUri
+
+  # GitHub OIDC Outputs
+  GitHubActionsRoleArn:
+    Condition: CreateGitHubOIDC
+    Description: ARN of the IAM Role for GitHub Actions (add to GitHub secrets)
+    Value: !GetAtt GitHubOIDCStack.Outputs.RoleArn
+
+  # ECS Outputs
+  ECSClusterName:
+    Condition: CreateECS
+    Description: ECS Cluster Name
+    Value: !GetAtt ECSStack.Outputs.ClusterName
+
+  CloudMapNamespace:
+    Condition: CreateECS
+    Description: Cloud Map namespace for service discovery
+    Value: !GetAtt ECSStack.Outputs.NamespaceName
+
+  WebsiteServiceDNS:
+    Condition: CreateECS
+    Description: DNS name for website service (used by nginx)
+    Value: !GetAtt ECSStack.Outputs.WebsiteServiceDiscoveryDNS
+
+  # Configuration Summary
+  ConfigurationSummary:
+    Description: Post-deployment configuration steps
+    Value: |
+      1. Add GitHub repository secrets:
+         - AWS_DEPLOY_ROLE_ARN: (see GitHubActionsRoleArn output)
+         - AWS_REGION: il-central-1
+         - AWS_ACCOUNT_ID: (run: aws sts get-caller-identity --query Account --output text)
+
+      2. Configure IAM Identity Center manually (see iam-identity-center.yaml)
+
+      3. Set up EC2 nginx instance manually (see ec2-nginx.yaml):
+         - Create key pair
+         - Launch instance
+         - Install nginx and certbot
+         - Configure SSL certificates
+         - Deploy router.conf
+
+      4. Update local AWS CLI profiles for SSO access

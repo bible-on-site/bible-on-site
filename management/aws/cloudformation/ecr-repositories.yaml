@@ -1,0 +1,127 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: |
+  ECR Repositories for Bible On Site project.
+
+  This template creates ECR repositories for storing Docker images.
+
+  Sensitive Information Restoration:
+  | Placeholder | Description | Restoration Command |
+  |---|---|---|
+  | `<AWS_ACCOUNT_ID>` | AWS Account ID | `aws sts get-caller-identity --query Account --output text` |
+
+  ECR REPOSITORIES:
+  - bible-on-site (Next.js website): v<version>, latest
+  - bible-on-site-api (Rust API): v<version>, latest
+
+  Full URI: <AWS_ACCOUNT_ID>.dkr.ecr.il-central-1.amazonaws.com/<repository>
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues:
+      - production
+      - staging
+    Description: Environment name for tagging
+
+Resources:
+  # =============================================================================
+  # ECR Repository: bible-on-site (Next.js Website)
+  # =============================================================================
+  WebsiteRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: bible-on-site
+      ImageTagMutability: MUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 15 images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 15
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Component
+          Value: website
+        - Key: Environment
+          Value: !Ref Environment
+
+  # =============================================================================
+  # ECR Repository: bible-on-site-api (Rust API)
+  # =============================================================================
+  ApiRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: bible-on-site-api
+      ImageTagMutability: MUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 15 images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 15
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Component
+          Value: api
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  WebsiteRepositoryUri:
+    Description: URI of the website ECR repository
+    Value: !GetAtt WebsiteRepository.RepositoryUri
+    Export:
+      Name: !Sub "${AWS::StackName}-WebsiteRepositoryUri"
+
+  WebsiteRepositoryArn:
+    Description: ARN of the website ECR repository
+    Value: !GetAtt WebsiteRepository.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-WebsiteRepositoryArn"
+
+  ApiRepositoryUri:
+    Description: URI of the API ECR repository
+    Value: !GetAtt ApiRepository.RepositoryUri
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiRepositoryUri"
+
+  ApiRepositoryArn:
+    Description: ARN of the API ECR repository
+    Value: !GetAtt ApiRepository.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiRepositoryArn"
