@@ -333,19 +333,34 @@ export abstract class ECRDeployerBase {
 	/**
 	 * Push image directly from archive (.tar or .tar.gz) to ECR using crane.
 	 * This avoids the need to load the image into Docker first.
+	 * Requires crane to be installed: https://github.com/google/go-containerregistry/tree/main/cmd/crane
 	 */
 	private async pushImageFromArchive(
 		archivePath: string,
 		ecrImageUri: string,
 		ecrLatestUri: string,
 	): Promise<void> {
+		// Check if crane is installed
+		try {
+			execSync("crane version", { stdio: "pipe" });
+		} catch {
+			throw new Error(
+				"crane is not installed or not in PATH. Install it from: https://github.com/google/go-containerregistry/tree/main/cmd/crane",
+			);
+		}
+
 		let actualPath = archivePath;
 
-		// Decompress if .tar.gz
+		// Decompress if .tar.gz (keep original with -k for re-runs if deployment fails)
 		if (archivePath.endsWith(".tar.gz") || archivePath.endsWith(".tgz")) {
-			this.info(`Decompressing ${archivePath}...`);
-			execSync(`gunzip -f "${archivePath}"`, { stdio: "inherit" });
 			actualPath = archivePath.replace(/\.gz$/, "").replace(/\.tgz$/, ".tar");
+			// Only decompress if the .tar doesn't already exist
+			if (!fs.existsSync(actualPath)) {
+				this.info(`Decompressing ${archivePath}...`);
+				execSync(`gunzip -k "${archivePath}"`, { stdio: "inherit" });
+			} else {
+				this.info(`Using existing decompressed archive: ${actualPath}`);
+			}
 		}
 
 		// Verify archive file exists
