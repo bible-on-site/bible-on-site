@@ -1,11 +1,23 @@
+# Combined .dockerignore for web/ context
+# Used by both api/Dockerfile and bible-on-site/Dockerfile
 # Exclude everything first, then include only what's needed
 *
 
-# Include only bible-on-site and shared
+# Include directories needed for builds
+!api/
 !bible-on-site/
 !shared/
 
-# Exclude from bible-on-site
+# Exclude from api/
+api/.coverage
+api/.husky
+api/.next
+api/.playwright-report
+api/devops
+api/target
+api/tests
+
+# Exclude from bible-on-site/
 bible-on-site/.coverage
 bible-on-site/.husky
 bible-on-site/.next
@@ -17,10 +29,29 @@ bible-on-site/node_modules
 bible-on-site/out
 bible-on-site/build
 bible-on-site/coverage
-bible-on-site/.coverage
 bible-on-site/test-results
 bible-on-site/tests
 
-# Exclude from shared
-shared/node_modules
-shared/tests
+# Common exclusions
+**/.DS_Store
+**/.classpath
+**/.dockerignore
+**/.env
+**/.git
+**/.gitignore
+**/.project
+**/.settings
+**/.toolstarget
+**/.vs
+**/.vscode
+**/*.*proj.user
+**/*.dbmdl
+**/*.jfm
+**/charts
+**/docker-compose*
+**/compose.y*ml
+**/Dockerfile*
+**/node_modules
+**/npm-debug.log
+**/secrets.dev.yaml
+**/values.dev.yaml
