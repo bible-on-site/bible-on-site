@@ -1,0 +1,35 @@
+@startuml CD Workflow
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam ActivityBackgroundColor #E8F4FD
+skinparam ActivityBorderColor #2196F3
+skinparam ActivityFontColor #1565C0
+skinparam ArrowColor #1976D2
+skinparam ActivityBarColor #1976D2
+
+title Continuous Deployment Workflow
+
+start
+
+:repository_dispatch (deploy);
+note right
+  From CI:
+  module_name, module_version,
+  docker_artifact_name, ci_run_id
+end note
+
+:Setup & AWS Auth;
+
+:Restore Docker Image from CI;
+
+:**Deploy to ECR**;
+
+:ECS Auto-Deploy (EventBridge);
+note right
+  Triggered when 'latest'
+  tag pushed to ECR
+end note
+
+stop
+
+@enduml

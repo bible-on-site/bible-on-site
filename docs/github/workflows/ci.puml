@@ -1,0 +1,187 @@
+@startuml CI Workflow
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam ActivityBackgroundColor #E8F4FD
+skinparam ActivityBorderColor #2196F3
+skinparam ActivityFontColor #1565C0
+skinparam ArrowColor #1976D2
+skinparam ActivityBarColor #1976D2
+
+title Continuous Integration Workflow
+
+|#E8F4FD|Initial|
+start
+
+fork
+  :Setup Environment Variables;
+  note right: 7s
+fork again
+  :Determine Baseline Availability;
+  note right: 5s
+end fork
+
+|#FFF8E1|Determine|
+fork
+  :Determine Changes / Determine Website Changes;
+  note right: 8s
+fork again
+  :Determine Changes / Determine API Changes;
+  note right: 8s
+fork again
+  :Build LCOV Docker Image;
+  note right: 17s
+end fork
+
+|#E8F5E9|CI|
+fork
+  :Website Performance;
+  note right
+    4m 12s
+    ----
+    - Checkout (1s)
+    - Setup Node.js (4s)
+    - Cache Playwright binaries (10s)
+    - Install npm Dependencies (19s)
+    - Install Playwright Dependencies (0s)
+    - Build cache (13s)
+    - Build (34s)
+    - **Perf Test** (2m 28s)
+    - Store Website Perf HTML Report (0s)
+    - Store Website Perf JUnit Report (0s)
+    - Post Build cache (13s)
+    - Post Cache Playwright binaries (1s)
+    - Post Setup Node.js (5s)
+    - Post Checkout (0s)
+  end note
+fork again
+  :P... / Setup Environment Variables;
+  note right: 4s
+  :P... / Setup Environment Variables;
+  note right: 5s
+  :Website CI;
+  note right
+    2m 45s
+    ----
+    - Checkout (2s)
+    - Setup Node.js (3s)
+    - Cache Playwright binaries (5s)
+    - Install npm Dependencies (21s)
+    - Install Playwright Dependencies (0s)
+    - **Lint** (8s)
+    - **Unit Test** (11s)
+    - Store Website Unit JUnit Report (1s)
+    - Build cache (13s)
+    - **Build** (35s)
+    - **E2E Test** (46s)
+    - Store Website E2E HTML Report (0s)
+    - Store Website E2E JUnit Report (1s)
+    - Restore lcov Docker image (1s)
+    - Load lcov Docker image (2s)
+    - Merge Test Coverage (Unit + E2E) (1s)
+    - Store Coverage Debug Snippets (0s)
+    - Store Website Coverage Report (wf) (1s)
+    - Store Website Coverage Report (master) (1s)
+    - Post Build cache (14s)
+    - Post Cache Playwright binaries (0s)
+    - Post Setup Node.js (2s)
+    - Post Checkout (1s)
+  end note
+fork again
+  :P... / Setup Environment Variables;
+  note right: 5s
+  :API CI;
+  note right
+    1m 51s
+    ----
+    - Checkout (2s)
+    - Setup Rust (4s)
+    - Run taiki-e/install-action@v2 (1s)
+    - Cache Cargo dependencies (14s)
+    - **Lint** (17s)
+    - Setup DevOps Node.js (3s)
+    - Install devops npm Dependencies (20s)
+    - Install and start MySQL (7s)
+    - Populate CI (1s)
+    - Setup Tests Node.js (1s)
+    - Cache Playwright binaries (4s)
+    - Install Tests npm Dependencies (1s)
+    - Install Playwright Dependencies (0s)
+    - **E2E Test** (24s)
+    - Publish API E2E Report To Codecov (1s)
+    - Store API E2E HTML Report (1s)
+    - Store API Coverage Report (wf) (1s)
+    - Store API Coverage Report (master) (0s)
+    - Post Cache Playwright binaries (0s)
+    - Post Setup Tests Node.js (1s)
+    - Post Install and start MySQL (2s)
+    - Post Setup DevOps Node.js (0s)
+    - Post Cache Cargo dependencies (0s)
+    - Post Checkout (0s)
+  end note
+end fork
+
+|#F3E5F5|Post CI|
+fork
+  :Publish Website Test Results To Codecov;
+  note right: 8s
+fork again
+  :Cross Module CI;
+  note right
+    35s
+    ----
+    - Checkout (2s)
+    - Restore Website Coverage Report (0s)
+    - **Publish Website Coverage To Codecov** (2s)
+    - Restore API Coverage Report (0s)
+    - **Publish API Coverage To Codecov** (2s)
+    - Restore lcov Docker image (1s)
+    - Load lcov Docker image (3s)
+    - Setup DevOps Node.js (1s)
+    - Install devops npm Dependencies (15s)
+    - Merge Test Coverage (Website + API) (0s)
+    - **Publish Cross Module Coverage To Codacy** (3s)
+    - Verify Coverage 3rd Party Reporting (0s)
+    - Post Setup DevOps Node.js (1s)
+    - Post Checkout (0s)
+  end note
+end fork
+
+|#FFEBEE|Package|
+fork
+  :Package Website / Package;
+  note right: 4m 29s
+fork again
+  :Package API / Package;
+  note right: 8m 5s
+end fork
+
+|#E3F2FD|Release Setup|
+fork
+  :R... / Setup Environment Variables;
+  note right: 4s
+fork again
+  :R... / Setup Environment Variables;
+  note right: 3s
+end fork
+
+fork
+  :Release API / Release;
+  note right: 1m 13s
+fork again
+  :Release Website / Release;
+  note right: 47s
+end fork
+
+|#E0F7FA|Trigger CD|
+fork
+  :Release... / Trigger CD Workflow;
+  note right: 5s
+fork again
+  :Release... / Trigger CD Workflow;
+  note right: 5s
+end fork
+
+stop
+
+@enduml
+

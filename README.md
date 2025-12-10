@@ -11,6 +11,10 @@ Bible on Site is a digital educational initiative aimed at Bible learners, featu
 | API       | [![API Coverage](https://codecov.io/gh/bible-on-site/bible-on-site/branch/master/graph/badge.svg?token=SIRSVRJ1XZ&flag=api)](https://codecov.io/gh/bible-on-site/bible-on-site) | [![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/) <br>[![Actix Web](https://img.shields.io/badge/Actix%20Web-800080?style=for-the-badge&logo=actix)](https://actix.rs/) <br>[![GraphQl](https://img.shields.io/badge/GraphQl-E10098?style=for-the-badge&logo=graphql&logoColor=white)](https://graphql.org) <br>[![Playwright](https://img.shields.io/badge/Playwright-45ba4b?style=for-the-badge&logo=Playwright&logoColor=white)](https://playwright.dev) |
 | App       | [TBD]                                                                                                                                                                                                                                                                                                                                                                                                                | [![.NET MAUI](https://img.shields.io/badge/.NET%20MAUI-12B3DF?style=for-the-badge&logo=.NET&logoColor=white)](https://dotnet.microsoft.com/apps/maui)                                                                                                                                                                                                                                                                               |
 ## Project Architecture
-
 - [AWS Architecture](docs/aws/architecture/README.md)
 
+## Repository Structure
+- [Repository Structure](docs/repo-structure/repo-structure.md)
+
+## CI/CD Architecture
+- [CI](docs/github/workflows/ci.md)
