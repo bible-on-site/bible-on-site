@@ -38,11 +38,8 @@ bible-on-site/
     │   │   └── root/ <-- root public assets
     │   ├── shared/ <-- Shared Code Between product and tests
     │   ├── src/
-    │   │   ├── app/
-    │   │   │   ├── 929/ 
-    │   │   │   │   └── [number]/
-    │   │   │   │       └── components/
-    │   │   │   ├── [section]/
+    │   │   ├── app/ <-- root page code and app-wide code
+    │   │   │   ├── 929/ <-- 929 page
     │   │   │   ├── api/ <-- Not to be confused with the web/api service, contains minimalist API interaction for the website
     │   │   │   │   └── dev/ <-- development only API interaction code
     │   │   │   │       └── coverage/ <-- coverage related API interaction code
