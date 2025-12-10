@@ -41,7 +41,7 @@ export default async function Perek({
       <Suspense>
         <SeferComposite perekObj={perekObj} toggled={isBook} />
       </Suspense>
-      <div className="absolute z-[6] top-[72px] w-full h-[calc(100vh-72px)]">
+      <div className={styles.perekContainer}>
         <Breadcrumb perekObj={perekObj} />
 
         <article className={styles.perekText}>
