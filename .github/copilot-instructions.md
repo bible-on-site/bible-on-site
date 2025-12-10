@@ -7,3 +7,10 @@ When working on this repository, please refer to the relevant documentation unde
 - **Repository Structure**: For you to navigate through the code base, read `docs/repo-structure/`
 - **GitHub CI/CD**: For GitHub in general, for Actions, workflows, continuous integration, or continuous deployment topics, read `docs/github/`
 - **AWS**: For AWS infrastructure, architecture, or related topics, read `docs/aws/`
+
+## web/bible-on-site instructions
+
+When working on the `web/bible-on-site` project (website),
+when I ask you to debug or to modify code, use playwright at http://localhost:3001
+(`npm run dev` might be required if no already on)
+Use of client components is forbidden unless I explicitly ask for it.

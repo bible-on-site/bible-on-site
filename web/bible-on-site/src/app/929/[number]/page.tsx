@@ -1,6 +1,5 @@
 // import Image from "next/image";
 import styles from "./page.module.css";
-import "./overiide-globals.css";
 import { toLetters } from "gematry";
 import { createSearchParamsCache, parseAsString } from "nuqs/server";
 import { Suspense } from "react";

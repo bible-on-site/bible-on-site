@@ -158,5 +158,6 @@
   max-width: 2em;
 }
 .top-nav {
-  background-color: initial;
+  /* biome-ignore lint/complexity/noImportantStyles: needed to override 929 page styles during client-side navigation */
+  background-color: transparent !important;
 }
