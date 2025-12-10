@@ -1,6 +1,9 @@
 const KB = 1024;
 const MB = KB * KB;
 const GB = MB * KB;
+
+import { covIgnoreList } from "./.covignore.mjs";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	output: "standalone",
@@ -18,7 +21,7 @@ const nextConfig = {
 			: [
 					[
 						"swc-plugin-coverage-instrument",
-						{ unstableExclude: ["coverage/route.ts"] },
+						{ unstableExclude: covIgnoreList },
 					],
 				],
 	},

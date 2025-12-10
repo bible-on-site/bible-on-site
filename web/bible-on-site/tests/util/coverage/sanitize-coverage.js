@@ -1,4 +1,6 @@
 import path from "node:path";
+import picomatch from "picomatch";
+import { covIgnoreList } from "../../../.covignore.mjs";
 
 /**
  * @typedef {Object} Position
@@ -61,7 +63,18 @@ function isTracked(entry, srcDir) {
 		return false;
 	}
 	const entryPath = path.resolve(entry.path);
-	return entryPath.startsWith(srcDir);
+	const isPartOfSrc = entryPath.startsWith(srcDir);
+	const projectRoot = path.dirname(srcDir);
+	const relativePath = path
+		.relative(projectRoot, entryPath)
+		.replace(/\\/g, "/");
+	const isIgnored = covIgnoreList.some((pattern) => {
+		// Prepend **/ if pattern doesn't already start with it, to match anywhere in path
+		const globPattern = pattern.startsWith("**/") ? pattern : `**/${pattern}`;
+		return picomatch(globPattern)(relativePath);
+	});
+
+	return isPartOfSrc && !isIgnored;
 }
 
 function sanitizeEntryData(entryData) {
@@ -149,7 +162,11 @@ function sanitizeBranchMap(entry, statementHelper) {
 		const splitEntries = splitBranchByLine(value, counter);
 		for (const entryVariant of splitEntries) {
 			const { value: branchValue, counter: branchCounter } = entryVariant;
-			const hasLines = ensureBranchLines(branchValue, branchCounter, statementHelper);
+			const hasLines = ensureBranchLines(
+				branchValue,
+				branchCounter,
+				statementHelper,
+			);
 			if (hasLines) {
 				branches.push({ value: branchValue, counter: branchCounter });
 			}
@@ -254,7 +271,6 @@ function rebuildMap(map, counters, entries, onEntry) {
 	});
 }
 
-
 function trackStatementLine(lineToKey, line, key, origin) {
 	if (typeof line !== "number" || line <= 0) {
 		return;
@@ -287,9 +303,7 @@ function getBranchHitCount(counter) {
 			return Number.isFinite(num) ? Math.max(max, num) : max;
 		}, 0);
 	}
-	return typeof counter === "number" && Number.isFinite(counter)
-		? counter
-		: 0;
+	return typeof counter === "number" && Number.isFinite(counter) ? counter : 0;
 }
 
 function getBranchLocationHits(counter) {
@@ -314,7 +328,10 @@ function getCanonicalBranchLine(value) {
 	if (Array.isArray(value?.locations)) {
 		for (const location of value.locations) {
 			const line =
-				location?.start?.line ?? location?.line ?? location?.loc?.start?.line ?? 0;
+				location?.start?.line ??
+				location?.line ??
+				location?.loc?.start?.line ??
+				0;
 			if (line > 0) locationLines.push(line);
 		}
 	}
@@ -365,10 +382,7 @@ function cloneLocation(location) {
 
 function getLocationLine(location) {
 	return (
-		location?.start?.line ??
-		location?.line ??
-		location?.loc?.start?.line ??
-		0
+		location?.start?.line ?? location?.line ?? location?.loc?.start?.line ?? 0
 	);
 }
 
