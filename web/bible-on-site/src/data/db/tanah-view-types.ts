@@ -41,7 +41,7 @@ interface Perek {
 	pesukim: Pasuk[];
 }
 
-interface Additionals {
+export interface Additionals {
 	helek: string;
 	letter: string;
 	name: string;

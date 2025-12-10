@@ -1,7 +1,7 @@
 import type { PerekObj } from "@/data/perek-dto";
 import { getSeferByName } from "@/data/sefer-dto";
 import { sefarim } from "@/data/db/sefarim";
-import type { SefarimItem } from "@/data/db/tanah-view-types";
+import type { Additionals, SefarimItem } from "@/data/db/tanah-view-types";
 import Link from "next/link";
 import styles from "./breadcrumb.module.css";
 import { toLetters } from "gematry";
@@ -10,7 +10,7 @@ import { toLetters } from "gematry";
 export const Breadcrumb = (props: { perekObj: PerekObj }) => {
 	const perekObj = props.perekObj;
 	const sefer = getSeferByName(perekObj.sefer, perekObj.additional);
-	const perakim = sefer.perakim.map((perek, idx) => ({
+	const perakim = sefer.perakim.map((_perek, idx) => ({
 		perekId: sefer.perekFrom + idx,
 		perekHeb: toLetters(idx + 1),
 	}));
@@ -37,7 +37,7 @@ export const Breadcrumb = (props: { perekObj: PerekObj }) => {
 	const currentSeferItem = sefarim.find((s) => s.name === perekObj.sefer);
 	const hasAdditionals = currentSeferItem && "additionals" in currentSeferItem;
 	const additionals = hasAdditionals
-		? (currentSeferItem as SefarimItem & { additionals: any[] }).additionals.map(
+		? (currentSeferItem as SefarimItem & { additionals: Additionals[] }).additionals.map(
 				(a) => ({
 					letter: a.letter,
 					perekId: a.perekFrom,
@@ -56,25 +56,30 @@ export const Breadcrumb = (props: { perekObj: PerekObj }) => {
 		<nav
 			data-testid={`perek-breadcrumb-${perekObj.perekId}`}
 			className={styles.grid}
+			aria-label="Breadcrumb"
 		>
 			<div className={styles.container}>
 				<ol className={styles.breadcrumb}>
 					<li>
-						<Link href="/">תנ&quot;ך על הפרק</Link>{" "}
+						<Link href="/">תנ&quot;ך על הפרק</Link>
 					</li>
 					<li>
-						<Link href="/929">על הפרק</Link>{" "}
+						<Link href="/929">על הפרק</Link>
 					</li>
 					<li
 						className={`${styles.active} ${styles.relative} ${styles["drop-container"]}`}
 					>
-						<span>
+						<button
+							type="button"
+							aria-haspopup="true"
+							aria-label={`חלק נוכחי: ${perekObj.helek}. לחץ לבחירת חלק אחר`}
+						>
 							{perekObj.helek}
 							<span
 								className={`${styles.glyphicon} ${styles["glyphicon-triangle-bottom"]} ${styles.small}`}
 								aria-hidden="true"
 							/>
-						</span>{" "}
+						</button>
 						<div className={`${styles.drop} ${styles["bg-white"]}`}>
 							<ul className={`${styles.list} ${styles.pl0}`}>
 								{halakim.map((helek) => (
@@ -88,14 +93,17 @@ export const Breadcrumb = (props: { perekObj: PerekObj }) => {
 					<li
 						className={`${styles.active} ${styles.relative} ${styles["drop-container"]}`}
 					>
-						<span>
+						<button
+							type="button"
+							aria-haspopup="true"
+							aria-label={`ספר נוכחי: ${perekObj.sefer}. לחץ לבחירת ספר אחר`}
+						>
 							{perekObj.sefer}
 							<span
 								className={`${styles.glyphicon} ${styles["glyphicon-triangle-bottom"]} ${styles.small}`}
 								aria-hidden="true"
 							/>
-						</span>
-						{" "}
+						</button>
 						<div className={`${styles.drop} ${styles["bg-white"]} ${seferGridClass}`}>
 							<ul className={`${styles.list} ${styles.pl0}`}>
 								{sefarimInHelek.map((s) => (
@@ -107,40 +115,46 @@ export const Breadcrumb = (props: { perekObj: PerekObj }) => {
 						</div>
 					</li>
 					{hasAdditionals && perekObj.additional && (
-						<>
-							<li
-								className={`${styles.active} ${styles.relative} ${styles["drop-container"]}`}
+						<li
+							className={`${styles.active} ${styles.relative} ${styles["drop-container"]}`}
+						>
+							<button
+								type="button"
+								aria-haspopup="true"
+								aria-label={`חלק ${perekObj.additional} של ${perekObj.sefer}. לחץ לבחירת חלק אחר`}
 							>
-								<span>
-									{perekObj.additional}
-									<span
-										className={`${styles.glyphicon} ${styles["glyphicon-triangle-bottom"]} ${styles.small}`}
-										aria-hidden="true"
-									/>
-								</span>
-								{" "}
-								<div className={`${styles.drop} ${styles["bg-white"]}`}>
-									<ul className={`${styles.list} ${styles.pl0}`}>
-										{additionals.map((a) => (
-											<li key={a.letter}>
-												<Link href={`/929/${a.perekId}`}>{a.letter}</Link>
-											</li>
-										))}
-									</ul>
-								</div>
-							</li>
-						</>
+								{perekObj.additional}
+								<span
+									className={`${styles.glyphicon} ${styles["glyphicon-triangle-bottom"]} ${styles.small}`}
+									aria-hidden="true"
+								/>
+							</button>
+							<div className={`${styles.drop} ${styles["bg-white"]}`}>
+								<ul className={`${styles.list} ${styles.pl0}`}>
+									{additionals.map((a) => (
+										<li key={a.letter}>
+											<Link href={`/929/${a.perekId}`}>{a.letter}</Link>
+										</li>
+									))}
+								</ul>
+							</div>
+						</li>
 					)}
 					<li
 						className={`${styles.active} ${styles.relative} ${styles["drop-container"]}`}
+						aria-current="page"
 					>
-						<span>
+						<button
+							type="button"
+							aria-haspopup="true"
+							aria-label={`פרק נוכחי: ${perekObj.perekHeb}. לחץ לבחירת פרק אחר`}
+						>
 							{perekObj.perekHeb}
 							<span
 								className={`${styles.glyphicon} ${styles["glyphicon-triangle-bottom"]} ${styles.small}`}
 								aria-hidden="true"
 							/>
-						</span>
+						</button>
 						<div
 							className={`${styles.drop} ${styles["bg-white"]} ${styles["perek-grid"]}`}
 							style={{ "--perek-rows": perakimRows } as React.CSSProperties}
