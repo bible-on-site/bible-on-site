@@ -1,9 +1,4 @@
-/* When perek-layout is present, hide the global nav */
-body:has(.perek-layout) > .top-nav {
-  display: none;
-}
-
-/* Style the perek-specific nav with blue background */
-.perek-nav {
+/* Set the nav background color for perek pages */
+body:has(.perek-layout) .top-nav {
   background-color: #1552ac;
 }
