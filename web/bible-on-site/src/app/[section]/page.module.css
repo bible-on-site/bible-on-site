@@ -13,8 +13,8 @@
   letter-spacing: 0.3em;
   text-align: center;
 }
-.page section:first-child header {
-  margin-top: 80px;
+.page section:first-child {
+  padding-top: 80px;
 }
 .page section {
   position: relative;
