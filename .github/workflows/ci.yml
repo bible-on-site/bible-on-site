@@ -668,7 +668,7 @@ jobs:
         run: npm run coverage:merge
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
 
-      - name: Run codacy-coverage-reporter
+      - name: Publish Cross Module Coverage To Codacy
         uses: codacy/codacy-coverage-reporter-action@master
         with:
           project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
