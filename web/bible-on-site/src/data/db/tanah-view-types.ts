@@ -41,7 +41,7 @@ interface Perek {
 	pesukim: Pasuk[];
 }
 
-export interface Additionals {
+interface AdditionalsItem {
 	helek: string;
 	letter: string;
 	name: string;
@@ -51,6 +51,7 @@ export interface Additionals {
 	perekFrom: number;
 	perekTo: number;
 }
+type Additionals = [AdditionalsItem, AdditionalsItem];
 
 interface SefarimItemBase {
 	name: string;
@@ -66,7 +67,7 @@ export interface SefarimItemWithPerakim extends SefarimItemBase {
 }
 
 export interface SefarimItemWithAdditionals extends SefarimItemBase {
-	additionals: Additionals[];
+	additionals: Additionals;
 }
 
 type SefarimItem = SefarimItemWithPerakim | SefarimItemWithAdditionals;
@@ -83,6 +84,7 @@ export type {
 	Segment,
 	Pasuk,
 	Perek,
+	AdditionalsItem,
 	Additionals,
 	SefarimItem,
 	Sefarim,

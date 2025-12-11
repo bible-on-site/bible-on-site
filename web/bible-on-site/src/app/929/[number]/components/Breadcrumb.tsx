@@ -1,15 +1,15 @@
-import type { PerekObj } from "@/data/perek-dto";
-import { getSeferByName } from "@/data/sefer-dto";
+import { toLetters } from "gematry";
+import Link from "next/link";
 import { sefarim } from "@/data/db/sefarim";
 import type { Additionals, SefarimItem } from "@/data/db/tanah-view-types";
-import Link from "next/link";
+import type { PerekObj } from "@/data/perek-dto";
+import { getSeferOrAdditionalByName } from "@/data/sefer-dto";
 import styles from "./breadcrumb.module.css";
-import { toLetters } from "gematry";
 // import Image from "next/image";
 
 export const Breadcrumb = (props: { perekObj: PerekObj }) => {
 	const perekObj = props.perekObj;
-	const sefer = getSeferByName(perekObj.sefer, perekObj.additional);
+	const sefer = getSeferOrAdditionalByName(perekObj.sefer, perekObj.additional);
 	const perakim = sefer.perakim.map((_perek, idx) => ({
 		perekId: sefer.perekFrom + idx,
 		perekHeb: toLetters(idx + 1),
@@ -37,12 +37,12 @@ export const Breadcrumb = (props: { perekObj: PerekObj }) => {
 	const currentSeferItem = sefarim.find((s) => s.name === perekObj.sefer);
 	const hasAdditionals = currentSeferItem && "additionals" in currentSeferItem;
 	const additionals = hasAdditionals
-		? (currentSeferItem as SefarimItem & { additionals: Additionals[] }).additionals.map(
-				(a) => ({
-					letter: a.letter,
-					perekId: a.perekFrom,
-				}),
-		  )
+		? (
+				currentSeferItem as SefarimItem & { additionals: Additionals }
+			).additionals.map((a) => ({
+				letter: a.letter,
+				perekId: a.perekFrom,
+			}))
 		: [];
 
 	// Determine CSS class for sefarim grid based on helek
@@ -104,7 +104,9 @@ export const Breadcrumb = (props: { perekObj: PerekObj }) => {
 								aria-hidden="true"
 							/>
 						</button>
-						<div className={`${styles.drop} ${styles["bg-white"]} ${seferGridClass}`}>
+						<div
+							className={`${styles.drop} ${styles["bg-white"]} ${seferGridClass}`}
+						>
 							<ul className={`${styles.list} ${styles.pl0}`}>
 								{sefarimInHelek.map((s) => (
 									<li key={s.name}>
