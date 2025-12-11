@@ -13,8 +13,8 @@
   letter-spacing: 0.3em;
   text-align: center;
 }
-.page section:first-child header {
-  margin-top: 80px;
+.page section:first-child {
+  padding-top: 80px;
 }
 .page section {
   position: relative;
@@ -158,5 +158,46 @@
   max-width: 2em;
 }
 .top-nav {
-  background-color: initial;
+  /* biome-ignore lint/complexity/noImportantStyles: needed to override 929 page styles during client-side navigation */
+  background-color: transparent !important;
+}
+
+.sectionHeader {
+  text-align: center;
+}
+
+.sectionTitle {
+  font-size: 2.25rem;
+  font-weight: bold;
+}
+
+.sectionSubtitle {
+  font-size: 1.5rem;
+  margin-top: 0.5rem;
+}
+
+.headlinesGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+@media (min-width: 768px) {
+  .headlinesGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.headlineArticle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+}
+
+.headlineTitle {
+  font-size: 1.25rem;
+  font-weight: bold;
 }

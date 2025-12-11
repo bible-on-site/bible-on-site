@@ -37,7 +37,6 @@ interface FileCoverage {
 	hash: string;
 }
 
-// biome-ignore lint/correctness/noUnusedVariables: It IS used elsewhere, it's biome bug not recognizing it.
 interface CoverageData {
 	[filePath: string]: FileCoverage;
 }

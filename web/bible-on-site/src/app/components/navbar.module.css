@@ -8,6 +8,7 @@
   opacity: 0;
   transition: all 0.2s;
   cursor: pointer;
+  pointer-events: none;
 }
 
 .hamburgerMenu .menuToggle {
@@ -16,7 +17,7 @@
 
 .menuBtn {
   position: fixed;
-  top: 1.75rem;
+  top: 1.25rem;
   right: 1.25rem;
   width: 2rem;
   height: 2rem;
@@ -44,6 +45,7 @@
   opacity: 0.3;
   z-index: 10;
   transition: opacity 0.25s ease-in-out;
+  pointer-events: auto;
 }
 
 .menuBox {

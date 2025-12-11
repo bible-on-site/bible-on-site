@@ -1,4 +1,1 @@
-.top-nav {
-  /* biome-ignore lint/complexity/noImportantStyles: TODO: find a way without using !important */
-  background-color: #1552ac !important;
-}
+/* Styles for /929/[number] pages are now handled via body:has(.perek-page) in globals.css */
