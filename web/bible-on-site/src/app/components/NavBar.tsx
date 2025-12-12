@@ -25,19 +25,13 @@ export const NavBar = () => {
 						/>
 					</Link>
 				</header>
-				<li
-					className={`${styles.menuItem} ${styles.withRibbon}`}
-					style={{ "--ribbon-text": '"בבניה"' } as React.CSSProperties}
-				>
+				<li className={`${styles.menuItem} ${styles.ribbonBuilding}`}>
 					<Image src="/icons/book.svg" alt="על הפרק" width={16} height={16} />
 					<Link href="./929">
 						<span>על הפרק</span>
 					</Link>
 				</li>
-				<li
-					className={`${styles.menuItem} ${styles.withRibbon}`}
-					style={{ "--ribbon-text": '"יחזור בהמשך"' } as React.CSSProperties}
-				>
+				<li className={`${styles.menuItem} ${styles.ribbonComingSoon}`}>
 					<Image
 						src="/icons/daily-bulletin.svg"
 						alt="עלון יומי"
@@ -61,10 +55,7 @@ export const NavBar = () => {
 						</li>
 					</ul>
 				</li>
-				<li
-					className={`${styles.menuItem} ${styles.withRibbon}`}
-					style={{ "--ribbon-text": '"יחזור בהמשך"' } as React.CSSProperties}
-				>
+				<li className={`${styles.menuItem} ${styles.ribbonComingSoon}`}>
 					<Image
 						src="/icons/handshake.svg"
 						alt="תנאי שימוש"
@@ -75,10 +66,7 @@ export const NavBar = () => {
 						<span>תנאי שימוש</span>
 					</Link>
 				</li>
-				<li
-					className={`${styles.menuItem} ${styles.withRibbon}`}
-					style={{ "--ribbon-text": '"יחזור בהמשך"' } as React.CSSProperties}
-				>
+				<li className={`${styles.menuItem} ${styles.ribbonComingSoon}`}>
 					<Image
 						src="/icons/google-play.svg"
 						alt="ישומון"
@@ -89,10 +77,7 @@ export const NavBar = () => {
 						<span>יישומון</span>
 					</Link>
 				</li>
-				<li
-					className={`${styles.menuItem} ${styles.withRibbon}`}
-					style={{ "--ribbon-text": '"יחזור בהמשך"' } as React.CSSProperties}
-				>
+				<li className={`${styles.menuItem} ${styles.ribbonComingSoon}`}>
 					<Image
 						src="/icons/contact.svg"
 						alt="צור קשר"
@@ -103,10 +88,7 @@ export const NavBar = () => {
 						<span>צור קשר</span>
 					</Link>
 				</li>
-				<li
-					className={`${styles.menuItem} ${styles.withRibbon}`}
-					style={{ "--ribbon-text": '"יחזור בהמשך"' } as React.CSSProperties}
-				>
+				<li className={`${styles.menuItem} ${styles.ribbonComingSoon}`}>
 					<Image
 						src="/icons/donation.svg"
 						alt="תרומות"
@@ -115,7 +97,7 @@ export const NavBar = () => {
 					/>
 					<Link href="/donation">
 						<span>תרומות</span>
-					</Link>{" "}
+					</Link>
 				</li>
 				<li
 					className={styles.versionItem}

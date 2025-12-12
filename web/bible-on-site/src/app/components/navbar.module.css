@@ -125,7 +125,6 @@
   display: flex;
   flex-wrap: wrap;
   width: 100%;
-  position: relative;
 }
 
 .menuItem > * {
@@ -133,9 +132,14 @@
   margin: 0.5rem;
 }
 
-/* Diagonal ribbon label */
-.withRibbon::after {
-  content: var(--ribbon-text);
+/* Ribbon base styles */
+.ribbonBuilding,
+.ribbonComingSoon {
+  position: relative;
+}
+
+.ribbonBuilding::after,
+.ribbonComingSoon::after {
   position: absolute;
   left: -10px;
   top: 50%;
@@ -147,6 +151,14 @@
   white-space: nowrap;
   z-index: 1;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.ribbonBuilding::after {
+  content: "בבניה";
+}
+
+.ribbonComingSoon::after {
+  content: "יחזור בהמשך";
 }
 
 .menuItem * {
