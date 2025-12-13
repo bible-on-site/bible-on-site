@@ -1,15 +1,17 @@
 import { sefarim } from "./db/sefarim";
 import type {
-	Additionals,
+	AdditionalsItem,
 	Perek,
 	SefarimItem,
 	SefarimItemWithPerakim,
 } from "./db/tanah-view-types";
-export type SeferObj = Additionals | SefarimItemWithPerakim;
-export function getSeferByName(
+export type Sefer = SefarimItemWithPerakim;
+export type Additional = AdditionalsItem;
+
+export function getSeferOrAdditionalByName(
 	seferName: string,
 	additionalLetter?: string,
-): SeferObj {
+): Sefer | Additional {
 	const seferBeforeAdditionalExtraction: SefarimItem | undefined = sefarim.find(
 		(sefer) => sefer.name === seferName,
 	);
@@ -31,9 +33,18 @@ export function getSeferByName(
 		}
 		return additional;
 	}
+
 	const nonAdditionalSefer =
 		seferBeforeAdditionalExtraction as SefarimItemWithPerakim;
 	return nonAdditionalSefer;
+}
+
+export function getSeferByName(seferName: string): SefarimItem {
+	const sefer = sefarim.find((sefer) => sefer.name === seferName);
+	if (!sefer) {
+		throw new Error(`Invalid sefer name: ${seferName}`);
+	}
+	return sefer;
 }
 
 export function getAllPerakim(): (Perek & { perekId: number })[] {

@@ -1,10 +1,10 @@
 import type { Additionals } from "../../../src/data/db/tanah-view-types";
-import { getSeferByName } from "../../../src/data/sefer-dto";
+import { getSeferOrAdditionalByName } from "../../../src/data/sefer-dto";
 
 describe("getSeferByName", () => {
 	describe("when invalid sefer name", () => {
 		it("throws error", () => {
-			expect(() => getSeferByName("ספר מקבים")).toThrow(
+			expect(() => getSeferOrAdditionalByName("ספר מקבים")).toThrow(
 				"Invalid sefer name: ספר מקבים",
 			);
 		});
@@ -12,21 +12,21 @@ describe("getSeferByName", () => {
 	describe("when invalid additional letter", () => {
 		describe("when sefer has other addtionals", () => {
 			it("throws error", () => {
-				expect(() => getSeferByName("שמואל", "ג")).toThrow(
+				expect(() => getSeferOrAdditionalByName("שמואל", "ג")).toThrow(
 					"Invalid additional letter: ג",
 				);
 			});
 		});
 		describe("when sefer has no other addtionals", () => {
 			it("throws error", () => {
-				expect(() => getSeferByName("ישעיהו", "ב")).toThrow(
+				expect(() => getSeferOrAdditionalByName("ישעיהו", "ב")).toThrow(
 					"Sefer ישעיהו has no addtionals at all and requested additional letter: ב",
 				);
 			});
 		});
 	});
 	describe("when בראשית", () => {
-		const actual = getSeferByName("בראשית");
+		const actual = getSeferOrAdditionalByName("בראשית");
 		it("has name בראשית", () => {
 			expect(actual.name).toBe("בראשית");
 		});
@@ -50,7 +50,7 @@ describe("getSeferByName", () => {
 		});
 	});
 	describe("when שמואל א", () => {
-		const actual = getSeferByName("שמואל", "א") as Additionals;
+		const actual = getSeferOrAdditionalByName("שמואל", "א") as Additionals;
 		it("has name שמואל א", () => {
 			expect(actual.name).toBe("שמואל א");
 		});

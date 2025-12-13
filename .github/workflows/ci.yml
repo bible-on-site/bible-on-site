@@ -372,6 +372,7 @@ jobs:
           path: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
           retention-days: 400
           overwrite: true
+          if-no-files-found: error
 
       - name: Store Website Coverage Report (master)
         if: ${{ env.IS_MASTER_BRANCH == 'true' }}

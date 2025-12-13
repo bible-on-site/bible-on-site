@@ -1,17 +1,18 @@
-import {
-	DateUnits,
-	DayOfWeek,
-	constructTsetAwareHDate,
-	hebcalDateToNumber,
-	parseNumericalDateToHebcalDate,
-} from "@/util/hebdates-util";
 import type { HDate } from "@hebcal/core";
 import { toLetters } from "gematry";
 import moment from "moment-timezone";
+import {
+	constructTsetAwareHDate,
+	DateUnits,
+	DayOfWeek,
+	hebcalDateToNumber,
+	parseNumericalDateToHebcalDate,
+} from "@/util/hebdates-util";
 import { cycles } from "./db/cycles";
 import { sefarim } from "./db/sefarim";
 import type {
 	Additionals,
+	AdditionalsItem,
 	Pasuk,
 	SefarimItemWithPerakim,
 } from "./db/tanah-view-types";
@@ -61,7 +62,7 @@ export function getPerekByPerekId(perekId: number): PerekObj {
 	}
 	const perekHeb = toLetters(perekNum);
 	const additional =
-		"additionals" in sefer ? (seferOrAdditional as Additionals) : undefined;
+		"additionals" in sefer ? (seferOrAdditional as AdditionalsItem) : undefined;
 	return {
 		perekId,
 		perekHeb,

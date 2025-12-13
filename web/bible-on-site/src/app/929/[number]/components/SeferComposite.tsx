@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { PerekObj } from "@/data/perek-dto";
 import ReadModeToggler from "./ReadModeToggler";
 import Sefer from "./Sefer";
+import styles from "./sefer-composite.module.css";
 
 const ClientWrapper = (props: { perekObj: PerekObj; toggled: boolean }) => {
 	const { toggled } = props;
@@ -47,9 +48,9 @@ const ClientWrapper = (props: { perekObj: PerekObj; toggled: boolean }) => {
 			<ReadModeToggler toggled={toggled} onToggle={handleToggle} />
 			<div
 				style={{ display }}
-				className={`${
-					currentlyToggled ? "opacity-1" : "opacity-0"
-				} transition-opacity duration-300 absolute z-[7] top-[72px] w-full h-[calc(100vh-72px)] bg-white`}
+				className={`${styles.seferOverlay} ${
+					currentlyToggled ? styles.visible : styles.hidden
+				}`}
 			>
 				{/* TODO: figure out how to not affecting INP when toggling (some sort of async rendering?)) */}
 				{everToggled && <Sefer perekObj={props.perekObj} />}

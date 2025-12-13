@@ -42,7 +42,11 @@ const Sefer = (props: { perekObj: PerekObj }) => {
 	const perekObj = props.perekObj;
 	const sefer = getSeferByName(perekObj.sefer);
 	const emptyPage = <section className={styles.page} />;
-	const pages = sefer.perakim
+	const perakim =
+		"perakim" in sefer
+			? sefer.perakim
+			: sefer.additionals.flatMap((additional) => additional.perakim);
+	const pages = perakim
 		.map((perek, perekIdx) => (
 			// biome-ignore lint/suspicious/noArrayIndexKey: this is the stable id
 			<React.Fragment key={perekIdx + 1}>

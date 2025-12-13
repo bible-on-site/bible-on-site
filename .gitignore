@@ -3,6 +3,7 @@ monocart-report/
 .coverage/
 .env
 .playwright-report/
+.playwright-mcp/
 .venv/
 *.egg-info/
 .ssh/

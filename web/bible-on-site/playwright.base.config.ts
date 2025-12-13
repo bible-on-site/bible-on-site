@@ -7,7 +7,7 @@ import {
 import type { CoverageReportOptions } from "monocart-reporter";
 import { isCI, shouldMeasureCov } from "../shared/tests-util/environment.mjs";
 import { getDebugPort } from "./get-debug-port";
-import type { TestType } from "./test-type";
+import type { TestType } from "./tests/util/playwright/types";
 export function getBaseConfig(testType: TestType) {
 	const WEB_SERVER_URL = "http://127.0.0.1:3001";
 	const config = defineConfig({
@@ -44,7 +44,8 @@ export function getBaseConfig(testType: TestType) {
 		webServer: {
 			env: { NODE_OPTIONS: `--inspect=${getDebugPort()}` },
 			timeout: 20000,
-			command: "npm run dev-webpack",
+			command:
+				"echo 'Error: A derived playwright config must set the web server command' && exit 1",
 			url: WEB_SERVER_URL,
 			reuseExistingServer: true, // consider that for some tests, such as for admin pages, restart the server before running each test
 		},

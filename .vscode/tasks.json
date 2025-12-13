@@ -1,4 +1,12 @@
 {
-  "version": "2.0.0",
-  "tasks": []
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "npm",
+			"script": "dev",
+			"path": "web/bible-on-site",
+			"problemMatcher": [],
+			"label": "npm: dev - web/bible-on-site"
+		}
+	]
 }
