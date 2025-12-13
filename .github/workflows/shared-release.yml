@@ -172,14 +172,14 @@ jobs:
       - name: Push Version Bump Changes
         run: |
           set -e  # Exit immediately if any command fails
-          
+
           # Get the current branch name
           CURRENT_BRANCH=$(git symbolic-ref --short HEAD)
           echo "Current branch: $CURRENT_BRANCH"
-          
+
           # Fetch the latest changes from the remote branch
           git fetch origin "$CURRENT_BRANCH"
-          
+
           # Rebase the local commit on top of the remote branch
           # This ensures our version bump commit is applied on top of any changes
           # that may have been pushed since we checked out (e.g., from parallel releases)
@@ -189,6 +189,6 @@ jobs:
             git rebase --abort
             exit 1
           fi
-          
+
           # Push the rebased commit
           git push origin HEAD
