@@ -23,16 +23,16 @@ export default async function Home({
 	const { section } = await params;
 	return (
 		<div className={styles.page}>
-			<section className={`${styles.alHaperekSection} bg-custom py-8`}>
-				<header className="text-center">
-					<h1 className="text-4xl font-bold">תנ&quot;ך על הפרק</h1>
-					<h2 className="text-2xl mt-2">לימוד תנ&quot;ך יומי</h2>
+			<section className={styles.alHaperekSection}>
+				<header className={styles.sectionHeader}>
+					<h1 className={styles.sectionTitle}>תנ&quot;ך על הפרק</h1>
+					<h2 className={styles.sectionSubtitle}>לימוד תנ&quot;ך יומי</h2>
 				</header>
 				<section
-					className={`${styles.alHaperekHeadlines} grid grid-cols-1 md:grid-cols-2 gap-6 mt-8`}
+					className={`${styles.alHaperekHeadlines} ${styles.headlinesGrid}`}
 				>
-					<article className="flex flex-col items-center p-6 rounded-lg">
-						<h1 className="text-xl font-bold">
+					<article className={styles.headlineArticle}>
+						<h1 className={styles.headlineTitle}>
 							<Link href="/929/">
 								<Image
 									className="icon-white"
@@ -49,8 +49,8 @@ export default async function Home({
 							נעים, מעמיק ומחכים.
 						</p>
 					</article>
-					<article className="flex flex-col items-center p-6 rounded-lg">
-						<h1 className="text-xl font-bold">
+					<article className={styles.headlineArticle}>
+						<h1 className={styles.headlineTitle}>
 							<Image
 								className="icon-white"
 								src="/icons/smartphone.svg"
