@@ -1,0 +1,4 @@
+/* Set the nav background color for perek pages */
+body:has(.perek-layout) .top-nav {
+  background-color: #1552ac;
+}

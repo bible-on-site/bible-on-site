@@ -8,6 +8,7 @@
   opacity: 0;
   transition: all 0.2s;
   cursor: pointer;
+  pointer-events: none;
 }
 
 .hamburgerMenu .menuToggle {
@@ -16,7 +17,7 @@
 
 .menuBtn {
   position: fixed;
-  top: 1.75rem;
+  top: 1.25rem;
   right: 1.25rem;
   width: 2rem;
   height: 2rem;
@@ -44,6 +45,7 @@
   opacity: 0.3;
   z-index: 10;
   transition: opacity 0.25s ease-in-out;
+  pointer-events: auto;
 }
 
 .menuBox {
@@ -130,6 +132,35 @@
   margin: 0.5rem;
 }
 
+/* Ribbon base styles */
+.ribbonBuilding,
+.ribbonComingSoon {
+  position: relative;
+}
+
+.ribbonBuilding::after,
+.ribbonComingSoon::after {
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  transform: translateY(-50%) rotate(-18deg);
+  background-color: #1552ac;
+  color: white;
+  font-size: 0.6rem;
+  padding: 2px 6px;
+  white-space: nowrap;
+  z-index: 1;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.ribbonBuilding::after {
+  content: "בבניה";
+}
+
+.ribbonComingSoon::after {
+  content: "יחזור בהמשך";
+}
+
 .menuItem * {
   margin-right: 0.5rem;
 }
@@ -142,14 +173,14 @@
   margin-right: 2.5rem;
 }
 
-.menuBox > li::before {
+.menuBox > li:not(.versionItem)::before {
   content: " ";
   display: block;
   width: 100%;
   border-bottom: 1px solid #888bef4a;
 }
 
-.menuBox > li:last-of-type::after {
+.menuBox > li:not(.versionItem):last-of-type::after {
   content: " ";
   display: block;
   width: 100%;
@@ -171,7 +202,13 @@
   align-items: center;
 }
 
-.versionItem::before,
+.versionItem::before {
+  /* biome-ignore lint/complexity/noImportantStyles: TODO: find a way without !important */
+  display: inline !important;
+  /* biome-ignore lint/complexity/noImportantStyles: TODO: find a way without !important */
+  content: var(--version-content) !important;
+}
+
 .versionItem::after {
   /* biome-ignore lint/complexity/noImportantStyles: TODO: find a way without !important */
   display: none !important;
