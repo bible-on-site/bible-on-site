@@ -8,7 +8,7 @@
 		"dev": "next dev -p 3001",
 		"dev-webpack": "cross-env WEBPACK=1 next dev --webpack -p 3001",
 		"build": "next build",
-		"start": "next start -p 3001",
+		"start": "node .next/standalone/server.js",
 		"lint": "biome lint",
 		"test:all": "npm run test:unit && npm run coverage:e2e && npm run test:perf",
 		"test:unit": "node --no-deprecation --trace-deprecation --import tsx ./node_modules/jest/bin/jest.js",
@@ -28,6 +28,7 @@
 		"node": ">=24.11.1"
 	},
 	"dependencies": {
+		"autoprefixer": "10.4.22",
 		"@hebcal/core": "6.0.6",
 		"@syncfusion/ej2-react-grids": "31.2.18",
 		"@syncfusion/ej2-react-layouts": "31.2.12",
@@ -49,7 +50,6 @@
 		"@types/node": "24.10.3",
 		"@types/react": "19.2.7",
 		"@types/react-dom": "19.2.3",
-		"autoprefixer": "10.4.22",
 		"cross-env": "10.1.0",
 		"eslint": "9.39.2",
 		"eslint-config-next": "16.0.10",
