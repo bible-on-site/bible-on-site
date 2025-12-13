@@ -7,6 +7,9 @@ import { covIgnoreList } from "./.covignore.mjs";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	output: "standalone",
+	turbopack: {
+		root: import.meta.dirname,
+	},
 	experimental: {
 		esmExternals: true,
 		externalDir: true,
