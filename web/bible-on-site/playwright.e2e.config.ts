@@ -10,7 +10,7 @@ export default defineConfig({
 	...baseConfig,
 	webServer: {
 		...(baseConfig.webServer as TestConfigWebServer),
-		command: "npm run dev",
+		command: "npm run dev-webpack",
 	},
 	fullyParallel: true,
 	retries: 0,
