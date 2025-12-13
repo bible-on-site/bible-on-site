@@ -31,6 +31,7 @@ bible-on-site/build
 bible-on-site/coverage
 bible-on-site/test-results
 bible-on-site/tests
+bible-on-site/playwright.*.ts
 
 # Common exclusions
 **/.DS_Store
