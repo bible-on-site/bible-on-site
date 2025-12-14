@@ -7,8 +7,9 @@
 		"update:playwright": "npx playwright install",
 		"dev": "next dev -p 3001",
 		"dev-webpack": "cross-env WEBPACK=1 next dev --webpack -p 3001",
-		"build": "next build",
-		"start": "cross-env PORT=3001 node .next/standalone/server.js",
+		"build": "next build && npm run postbuild",
+		"postbuild": "shx cp -r public .next/standalone/ && shx cp -r .next/static .next/standalone/.next/ && shx cp -r node_modules/@img .next/standalone/node_modules/",
+		"start": "cross-env PORT=3001 HOSTNAME=localhost node .next/standalone/server.js",
 		"lint": "biome lint",
 		"test:all": "npm run test:unit && npm run coverage:e2e && npm run test:perf",
 		"test:unit": "node --no-deprecation --trace-deprecation --import tsx ./node_modules/jest/bin/jest.js",
@@ -28,10 +29,10 @@
 		"node": ">=24.11.1"
 	},
 	"dependencies": {
-		"autoprefixer": "10.4.22",
 		"@hebcal/core": "6.0.6",
 		"@syncfusion/ej2-react-grids": "31.2.18",
 		"@syncfusion/ej2-react-layouts": "31.2.12",
+		"autoprefixer": "10.4.22",
 		"flowbite": "4.0.1",
 		"flowbite-react": "0.12.13",
 		"gematry": "1.0.2",
@@ -41,7 +42,8 @@
 		"nuqs": "2.8.5",
 		"react": "19.2.3",
 		"react-dom": "19.2.3",
-		"react-phone-number-input": "3.4.14"
+		"react-phone-number-input": "3.4.14",
+		"sharp": "0.34.5"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.8",
@@ -59,6 +61,7 @@
 		"monocart-reporter": "2.9.23",
 		"picomatch": "4.0.3",
 		"postcss": "8.5.6",
+		"shx": "0.4.0",
 		"swc-plugin-coverage-instrument": "0.0.31",
 		"ts-jest": "29.4.6",
 		"ts-node": "10.9.2",
