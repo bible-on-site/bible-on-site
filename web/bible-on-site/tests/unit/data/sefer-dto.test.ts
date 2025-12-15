@@ -1,7 +1,10 @@
 import type { Additionals } from "../../../src/data/db/tanah-view-types";
-import { getSeferOrAdditionalByName } from "../../../src/data/sefer-dto";
+import {
+	getSeferByName,
+	getSeferOrAdditionalByName,
+} from "../../../src/data/sefer-dto";
 
-describe("getSeferByName", () => {
+describe("getSeferOrAdditionalByName", () => {
 	describe("when invalid sefer name", () => {
 		it("throws error", () => {
 			expect(() => getSeferOrAdditionalByName("ספר מקבים")).toThrow(
@@ -74,6 +77,31 @@ describe("getSeferByName", () => {
 		});
 		it("has 31 perakim", () => {
 			expect(actual.perakim).toHaveLength(31);
+		});
+	});
+});
+
+describe("getSeferByName", () => {
+	describe("when valid sefer name", () => {
+		const actual = getSeferByName("בראשית");
+		it("returns sefer with correct name", () => {
+			expect(actual.name).toBe("בראשית");
+		});
+		it("has perakim array", () => {
+			expect("perakim" in actual || "additionals" in actual).toBe(true);
+		});
+	});
+	describe("when sefer with additionals", () => {
+		const actual = getSeferByName("שמואל");
+		it("returns sefer with additionals", () => {
+			expect("additionals" in actual).toBe(true);
+		});
+	});
+	describe("when invalid sefer name", () => {
+		it("throws error", () => {
+			expect(() => getSeferByName("ספר מקבים")).toThrow(
+				"Invalid sefer name: ספר מקבים",
+			);
 		});
 	});
 });

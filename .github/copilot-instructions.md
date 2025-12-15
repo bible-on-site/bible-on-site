@@ -14,6 +14,7 @@ When working on this repository, please refer to the relevant documentation unde
 
 - That's a Jewish Orthodox project, avoid any Christian terminology and reformist expressions
 - Currently still use the Perakim division despite being a christian division and not the Parashot division.
+- **Never ignore compiler or linter errors/warnings.** Always fix issues reported by TypeScript, Rust, .NET compilers, Biome, ESLint, Clippy, or any other static analysis tool before committing code.
 
 ### Terminology Instructions
 

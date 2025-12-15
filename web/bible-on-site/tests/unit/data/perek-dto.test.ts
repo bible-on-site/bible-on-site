@@ -110,30 +110,41 @@ describe("getPerekByPerekId", () => {
 			expect(() => getPerekByPerekId(-300)).toThrow("Invalid perekId: -300");
 		});
 	});
+	describe("Perek with qri segments (perek 25 - Bereshit 25)", () => {
+		const actual = getPerekByPerekId(25);
+		it("has perekId 25", () => {
+			expect(actual.perekId).toBe(25);
+		});
+		it("has sefer בראשית", () => {
+			expect(actual.sefer).toBe("בראשית");
+		});
+		it("has perekHeb כה", () => {
+			expect(actual.perekHeb).toBe("כה");
+		});
+		it("contains qri segment in pesukim", () => {
+			const qriSegments = actual.pesukim.flatMap((pasuk) =>
+				pasuk.segments.filter((segment) => segment.type === "qri"),
+			);
+			expect(qriSegments.length).toBeGreaterThan(0);
+		});
+		it("qri segment has expected structure", () => {
+			const qriSegments = actual.pesukim.flatMap((pasuk) =>
+				pasuk.segments.filter((segment) => segment.type === "qri"),
+			);
+			const firstQri = qriSegments[0];
+			expect(firstQri).toHaveProperty("type", "qri");
+			expect(firstQri).toHaveProperty("value");
+			expect(typeof firstQri.value).toBe("string");
+		});
+	});
 });
+
+jest.mock("../../../src/util/date", () => ({
+	getCurrentDate: () => new Date("2024-06-27T12:00:00+03:00"),
+}));
+
 describe("getTodaysPerekId", () => {
-	const mockDate = parseKosherChristianDate("27/June/24");
-	let originalDate: DateConstructor;
-
-	beforeAll(() => {
-		originalDate = globalThis.Date;
-
-		// Mock the Date constructor
-		function MockDate() {
-			return mockDate;
-		}
-		MockDate.prototype = Date.prototype;
-		globalThis.Date = MockDate as unknown as DateConstructor;
-
-		// Mock Date methods
-		globalThis.Date.now = jest.fn(() => mockDate.getTime());
-	});
-
-	afterAll(() => {
-		globalThis.Date = originalDate;
-	});
-
-	it("returns correct perek", () => {
+	it("returns correct perek for mocked date (27/June/24 = perek 625)", () => {
 		const actual = getTodaysPerekId();
 		expect(actual).toBe(625);
 	});
