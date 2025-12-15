@@ -164,7 +164,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Store Docker Image
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: lcov-docker-image
           path: /tmp/lcov-docker-image.tar
@@ -234,7 +234,7 @@ jobs:
         run: npm run test:perf
 
       - name: Store Website Perf HTML Report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: website-perf-html-report-${{ github.run_id }}
           path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/perf/html
@@ -242,7 +242,7 @@ jobs:
           overwrite: true
 
       - name: Store Website Perf JUnit Report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ env.WEBSITE_PERF_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/perf/junit/perf-results.xml
@@ -303,7 +303,7 @@ jobs:
         run: npm run coverage:unit
 
       - name: Store Website Unit JUnit Report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ env.WEBSITE_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.WEBSITE_DIRECTORY }}/.jest-report/unit-results.xml
@@ -328,7 +328,7 @@ jobs:
         run: npm run coverage:e2e
 
       - name: Store Website E2E HTML Report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: website-e2e-html-report-${{ github.run_id }}
           path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/e2e/html
@@ -336,7 +336,7 @@ jobs:
           overwrite: true
 
       - name: Store Website E2E JUnit Report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ env.WEBSITE_E2E_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/e2e/junit/e2e-results.xml
@@ -358,7 +358,7 @@ jobs:
 
       - name: Store Coverage Debug Snippets
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: website-coverage-debug-${{ github.run_id }}
           path: ${{ env.WEBSITE_DIRECTORY }}/.coverage/debug
@@ -366,7 +366,7 @@ jobs:
           overwrite: true
 
       - name: Store Website Coverage Report (wf)
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
@@ -376,7 +376,7 @@ jobs:
 
       - name: Store Website Coverage Report (master)
         if: ${{ env.IS_MASTER_BRANCH == 'true' }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
@@ -489,7 +489,7 @@ jobs:
           flags: api
 
       - name: Store API E2E HTML Report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: api-e2e-html-report-${{ github.run_id }}
           path: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/html
@@ -497,7 +497,7 @@ jobs:
           overwrite: true
 
       - name: Store API Coverage Report (wf)
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ env.API_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.API_COVERAGE_REPORT }}
@@ -506,7 +506,7 @@ jobs:
 
       - name: Store API Coverage Report (master)
         if: ${{ env.IS_MASTER_BRANCH == 'true' }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.API_COVERAGE_REPORT }}
