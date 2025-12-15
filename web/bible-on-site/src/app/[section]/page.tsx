@@ -10,6 +10,7 @@ export function generateStaticParams() {
 	// Return an array of objects with the key "section"
 	return [
 		{ section: "dailyBulletin" },
+		{ section: "whatsappGroup" },
 		{ section: "tos" },
 		{ section: "app" },
 		{ section: "contact" },
@@ -19,7 +20,9 @@ export function generateStaticParams() {
 
 export default async function Home({
 	params,
-}: { params: Promise<{ section: string }> }) {
+}: {
+	params: Promise<{ section: string }>;
+}) {
 	const { section } = await params;
 	return (
 		<div className={styles.page}>
