@@ -42,8 +42,10 @@ export function getBaseConfig(testType: TestType) {
 		],
 
 		webServer: {
-			env: { NODE_OPTIONS: `--inspect=${getDebugPort()}` },
-			timeout: 20000,
+			...(shouldMeasureCov && {
+				env: { NODE_OPTIONS: `--inspect=${getDebugPort()}` },
+			}),
+			timeout: 60000,
 			command:
 				"echo 'Error: A derived playwright config must set the web server command' && exit 1",
 			url: WEB_SERVER_URL,
