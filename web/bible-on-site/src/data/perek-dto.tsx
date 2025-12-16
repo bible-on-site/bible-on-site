@@ -1,6 +1,7 @@
 import type { HDate } from "@hebcal/core";
 import { toLetters } from "gematry";
 import moment from "moment-timezone";
+import { getCurrentDate } from "@/util/date";
 import {
 	constructTsetAwareHDate,
 	DateUnits,
@@ -129,6 +130,10 @@ export function getPerekIdByDate(date: Date): number {
 	}
 	return perek.perekId;
 }
+
+/**
+ * Get the perek ID for today.
+ */
 export function getTodaysPerekId() {
-	return getPerekIdByDate(moment.tz(new Date(), "Asia/Jerusalem").toDate());
+	return getPerekIdByDate(moment.tz(getCurrentDate(), "Asia/Jerusalem").toDate());
 }
