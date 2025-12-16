@@ -36,10 +36,16 @@ test("toggling to sefer view hides perek breadcrumbs", async ({ page }) => {
 	await seferViewButton.scrollIntoViewIfNeeded();
 	try {
 		await seferViewButton.click({ timeout: 10_000 });
-	} catch (_firstError) {
+	} catch (nonForcedError) {
+		console.warn(
+			`Standard click failed with error (${nonForcedError}), retrying with force click...`,
+		);
 		try {
 			await seferViewButton.click({ force: true, timeout: 5_000 });
-		} catch (_secondError) {
+		} catch (forcedError) {
+			console.warn(
+				`Force click also failed with error (${forcedError}), falling back to evaluate click...`,
+			);
 			await seferViewButton.evaluate((el) => (el as HTMLElement).click());
 		}
 	}

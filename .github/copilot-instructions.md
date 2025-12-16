@@ -14,7 +14,6 @@ When working on this repository, please refer to the relevant documentation unde
 
 - That's a Jewish Orthodox project, avoid any Christian terminology and reformist expressions
 - Currently still use the Perakim division despite being a christian division and not the Parashot division.
-- **Never ignore compiler or linter errors/warnings.** Always fix issues reported by TypeScript, Rust, .NET compilers, Biome, ESLint, Clippy, or any other static analysis tool before committing code.
 
 ### Terminology Instructions
 
@@ -28,6 +27,12 @@ When referring to religious texts in this repository, please use the following t
   The addtionals for שמואל, מלכים ודברי הימים are א, ב. sometimes referred as 1, 2 in source code, and ע, נ or 70, 50 accordingly for עזרא.
 - When referring to the books of the Tanah in the codebase, use their Hebrew names, and not their tanachUS names (I.E. בראשית instead of Genesis) unless there is a specific tanachUS related context.
 
+### Implementation Instructions
+
+When implementing features or making changes in this repository, please adhere to the following guidelines:
+
+- **Never ignore compiler or linter errors/warnings.** Always fix issues reported by TypeScript, Rust, .NET compilers, Biome, ESLint, Clippy, or any other static analysis tool before committing code.
+
 ### web/bible-on-site Instructions
 
 When working on the `web/bible-on-site` project (website):
@@ -36,6 +41,11 @@ When working on the `web/bible-on-site` project (website):
 - Use of client components is forbidden unless I explicitly ask for it
 - Tests: `npm run test:unit` (unit), `npm run test:e2e` (e2e)
 - Coverage: `npm run coverage:unit`, `npm run coverage:e2e`
+
+#### Implementation Instructions
+
+- When writing a test, and asserting non null using the framework, you can use the non null assertion operator after and decorate the usage with a linter supression comment explaining why it's safe.
+- When catching an error, log that it took place using console.warn or console.error..
 
 ### AWS Infrastructure Instructions
 

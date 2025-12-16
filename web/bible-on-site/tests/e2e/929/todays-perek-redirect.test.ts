@@ -47,7 +47,8 @@ test.describe("Today's Perek redirect", () => {
 		const url = page.url();
 		const match = url.match(/\/929\/(\d+)/);
 		expect(match).not.toBeNull();
-		const perekId = Number.parseInt(match?.[1] ?? "0", 10);
+		// biome-ignore lint/style/noNonNullAssertion: Already checked for null above
+		const perekId = Number.parseInt(match![1], 10);
 		expect(perekId).toBeGreaterThanOrEqual(1);
 		expect(perekId).toBeLessThanOrEqual(929);
 
