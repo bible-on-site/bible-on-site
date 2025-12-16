@@ -114,7 +114,7 @@ describe("getPerekByPerekId", () => {
 			expect(() => getPerekByPerekId(-300)).toThrow("Invalid perekId: -300");
 		});
 	});
-	describe("Perek with qri segments (perek 25 - Bereshit 25)", () => {
+	describe("Perek with qri segments (perek 25 - בראשית כה)", () => {
 		const actual = getPerekByPerekId(25);
 		it("has perekId 25", () => {
 			expect(actual.perekId).toBe(25);

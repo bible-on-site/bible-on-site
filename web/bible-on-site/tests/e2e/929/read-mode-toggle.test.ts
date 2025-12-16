@@ -15,11 +15,11 @@ async function clickToggler(
 	try {
 		await button.click({ timeout: 10_000 });
 	} catch (err) {
-		console.warn(`Standard click failed for ${testId}:`, err);
+		console.warn(`Standard click failed for ${testId}:`, String(err));
 		try {
 			await button.click({ force: true, timeout: 5_000 });
 		} catch (forceErr) {
-			console.warn(`Force click also failed for ${testId}:`, forceErr);
+			console.warn(`Force click also failed for ${testId}:`, String(forceErr));
 			await button.evaluate((el) => (el as HTMLElement).click());
 		}
 	}
@@ -40,13 +40,13 @@ test("toggling to sefer view hides perek breadcrumbs", async ({ page }) => {
 		await seferViewButton.click({ timeout: 10_000 });
 	} catch (nonForcedError) {
 		console.warn(
-			`Standard click failed with error (${nonForcedError}), retrying with force click...`,
+			`Standard click failed with error (${String(nonForcedError)}), retrying with force click...`,
 		);
 		try {
 			await seferViewButton.click({ force: true, timeout: 5_000 });
 		} catch (forcedError) {
 			console.warn(
-				`Force click also failed with error (${forcedError}), falling back to evaluate click...`,
+				`Force click also failed with error (${String(forcedError)}), falling back to evaluate click...`,
 			);
 			await seferViewButton.evaluate((el) => (el as HTMLElement).click());
 		}
