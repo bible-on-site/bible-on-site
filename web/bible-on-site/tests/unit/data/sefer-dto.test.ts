@@ -1,4 +1,4 @@
-import type { Additionals } from "../../../src/data/db/tanah-view-types";
+import type { AdditionalsItem } from "../../../src/data/db/tanah-view-types";
 import {
 	getSeferByName,
 	getSeferOrAdditionalByName,
@@ -53,7 +53,7 @@ describe("getSeferOrAdditionalByName", () => {
 		});
 	});
 	describe("when שמואל א", () => {
-		const actual = getSeferOrAdditionalByName("שמואל", "א") as Additionals;
+		const actual = getSeferOrAdditionalByName("שמואל", "א") as AdditionalsItem;
 		it("has name שמואל א", () => {
 			expect(actual.name).toBe("שמואל א");
 		});

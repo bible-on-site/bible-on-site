@@ -31,7 +31,13 @@ When referring to religious texts in this repository, please use the following t
 
 When implementing features or making changes in this repository, please adhere to the following guidelines:
 
-- **Never ignore compiler or linter errors/warnings.** Always fix issues reported by TypeScript, Rust, .NET compilers, Biome, ESLint, Clippy, or any other static analysis tool before committing code.
+- **Never ignore compiler or linter errors/warnings.** Always fix issues reported by TypeScript, Rust, .NET compilers, Biome, ESLint, Clippy, or any other static analysis tool before committing code. Mainitain 0 problems in vscode (exception are currently: [{
+  "resource": "<repo_root>/.github/workflows/ci.yml",
+  "message": "Context access might be invalid: module_changed",
+  }] and [{
+  "resource": "<repo_root>/.github/workflows/ci.yml",
+  "message": "Unable to find reusable workflow",
+  }], and warnings for web/api until cleaned up).
 
 ### web/bible-on-site Instructions
 
