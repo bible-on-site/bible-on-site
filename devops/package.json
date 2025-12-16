@@ -21,7 +21,7 @@
 		"@aws-sdk/client-sts": "3.952.0",
 		"@aws-sdk/credential-providers": "3.952.0",
 		"dotenv": "16.6.1",
-		"mysql2": "3.15.3",
+		"mysql2": "3.16.0",
 		"node-ssh": "13.2.1",
 		"ssh-config": "5.0.4",
 		"p-memoize": "7.1.1",
