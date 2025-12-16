@@ -14,10 +14,12 @@ async function clickToggler(
 	await button.scrollIntoViewIfNeeded();
 	try {
 		await button.click({ timeout: 10_000 });
-	} catch {
+	} catch (err) {
+		console.warn(`Standard click failed for ${testId}:`, err);
 		try {
 			await button.click({ force: true, timeout: 5_000 });
-		} catch {
+		} catch (forceErr) {
+			console.warn(`Force click also failed for ${testId}:`, forceErr);
 			await button.evaluate((el) => (el as HTMLElement).click());
 		}
 	}

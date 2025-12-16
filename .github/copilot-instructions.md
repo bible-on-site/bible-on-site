@@ -44,8 +44,8 @@ When working on the `web/bible-on-site` project (website):
 
 #### Implementation Instructions
 
-- When writing a test, and asserting non null using the framework, you can use the non null assertion operator after and decorate the usage with a linter supression comment explaining why it's safe.
-- When catching an error, log that it took place using console.warn or console.error..
+- When writing a test, and asserting non null using the framework, you can use the non null assertion operator after and decorate the usage with a linter suppression comment explaining why it's safe.
+- When catching an error, log that it took place using console.warn or console.error.
 
 ### AWS Infrastructure Instructions
 

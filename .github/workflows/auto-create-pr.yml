@@ -1,0 +1,55 @@
+name: Auto Create PR
+
+on:
+  push:
+    branches-ignore:
+      - main
+      - master
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Check if PR exists
+        id: check-pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_EXISTS=$(gh pr list --head "${{ github.ref_name }}" --json number --jq 'length')
+          echo "exists=$PR_EXISTS" >> $GITHUB_OUTPUT
+
+      - name: Extract commit message
+        if: steps.check-pr.outputs.exists == '0'
+        id: commit-msg
+        run: |
+          # Get the first line as title
+          TITLE=$(git log -1 --pretty=%s)
+          echo "title=$TITLE" >> $GITHUB_OUTPUT
+
+          # Get the body (from line 3 onwards, skipping subject and blank line)
+          BODY=$(git log -1 --pretty=%b | tail -n +1)
+
+          # Handle multiline body for GitHub Actions
+          {
+            echo "body<<EOF"
+            echo "$BODY"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: Create Pull Request
+        if: steps.check-pr.outputs.exists == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --title "${{ steps.commit-msg.outputs.title }}" \
+            --body "${{ steps.commit-msg.outputs.body }}" \
+            --base main \
+            --head "${{ github.ref_name }}"

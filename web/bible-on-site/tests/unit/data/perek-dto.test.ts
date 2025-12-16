@@ -1,3 +1,7 @@
+jest.mock("../../../src/util/date", () => ({
+	getCurrentDate: () => new Date("2024-06-27T12:00:00+03:00"),
+}));
+
 import {
 	getPerekByPerekId,
 	getPerekIdByDate,
@@ -138,10 +142,6 @@ describe("getPerekByPerekId", () => {
 		});
 	});
 });
-
-jest.mock("../../../src/util/date", () => ({
-	getCurrentDate: () => new Date("2024-06-27T12:00:00+03:00"),
-}));
 
 describe("getTodaysPerekId", () => {
 	it("returns correct perek for mocked date (27/June/24 = perek 625)", () => {
