@@ -21,7 +21,7 @@
 		"moduleResolution": "node",
 		"outDir": "./dist",
 		"baseUrl": ".",
-		"types": ["jest"],
+		"types": ["jest", "node"],
 		"jsx": "preserve"
 	},
 	"include": ["./**/*.ts"]

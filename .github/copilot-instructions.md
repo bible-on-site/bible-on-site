@@ -27,6 +27,18 @@ When referring to religious texts in this repository, please use the following t
   The addtionals for שמואל, מלכים ודברי הימים are א, ב. sometimes referred as 1, 2 in source code, and ע, נ or 70, 50 accordingly for עזרא.
 - When referring to the books of the Tanah in the codebase, use their Hebrew names, and not their tanachUS names (I.E. בראשית instead of Genesis) unless there is a specific tanachUS related context.
 
+### Implementation Instructions
+
+When implementing features or making changes in this repository, please adhere to the following guidelines:
+
+- **Never ignore compiler or linter errors/warnings.** Always fix issues reported by TypeScript, Rust, .NET compilers, Biome, ESLint, Clippy, or any other static analysis tool before committing code. Mainitain 0 problems in vscode (exception are currently: [{
+  "resource": "<repo_root>/.github/workflows/ci.yml",
+  "message": "Context access might be invalid: module_changed",
+  }] and [{
+  "resource": "<repo_root>/.github/workflows/ci.yml",
+  "message": "Unable to find reusable workflow",
+  }], and warnings for web/api until cleaned up).
+
 ### web/bible-on-site Instructions
 
 When working on the `web/bible-on-site` project (website):
@@ -35,6 +47,11 @@ When working on the `web/bible-on-site` project (website):
 - Use of client components is forbidden unless I explicitly ask for it
 - Tests: `npm run test:unit` (unit), `npm run test:e2e` (e2e)
 - Coverage: `npm run coverage:unit`, `npm run coverage:e2e`
+
+#### Implementation Instructions
+
+- When writing a test, and asserting non null using the framework, you can use the non null assertion operator after and decorate the usage with a linter suppression comment explaining why it's safe.
+- When catching an error, log that it took place using console.warn or console.error.
 
 ### AWS Infrastructure Instructions
 
