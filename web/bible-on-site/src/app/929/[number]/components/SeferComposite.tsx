@@ -1,4 +1,5 @@
 "use client";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import type { PerekObj } from "@/data/perek-dto";
@@ -6,8 +7,13 @@ import ReadModeToggler from "./ReadModeToggler";
 import Sefer from "./Sefer";
 import styles from "./sefer-composite.module.css";
 
-const ClientWrapper = (props: { perekObj: PerekObj; toggled: boolean }) => {
-	const { toggled } = props;
+const ClientWrapper = (props: { perekObj: PerekObj }) => {
+	// A better design is to control the toggling state from outside this
+	// component, but in that case the entire page rendering method is changed
+	// from SSG to dynamic, affecting performance and SEO / AIO. So in that
+	// tradeoff, this component handles the toggling state internally.
+	const searchParams = useSearchParams();
+	const toggled = searchParams.get("book") != null;
 	const [everToggled, setEverToggled] = useState(false);
 	const [currentlyToggled, setCurrentlyToggled] = useState(false);
 	const [display, setDisplay] = useState("none");
