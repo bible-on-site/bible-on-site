@@ -1,1 +1,1 @@
-export const covIgnoreList = ["coverage/route.ts"];
+export const covIgnoreList = ["api/dev/**"];
