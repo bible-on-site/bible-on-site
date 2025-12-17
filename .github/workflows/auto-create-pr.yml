@@ -53,5 +53,5 @@ jobs:
           gh pr create \
             --title "${{ steps.commit-msg.outputs.title }}" \
             --body "${{ steps.commit-msg.outputs.body }}" \
-            --base main \
+            --base master \
             --head "${{ github.ref_name }}"

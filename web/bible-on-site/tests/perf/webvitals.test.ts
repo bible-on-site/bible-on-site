@@ -6,32 +6,7 @@ import { expect, test as testBase } from "../util/playwright/test-fixture";
 
 const test = testBase.extend({
 	page: async ({ page }, use, testInfo) => {
-		// Preload the page to warm up the cache
-		const cacheDir = resolve(__dirname, "../../.cache/playwright/warm-pages");
-		const warmPagesCacheFile = resolve(cacheDir, "warm-pages.txt");
-		const warmPages = new Set();
-		mkdirSync(cacheDir, { recursive: true });
-		const delimiter = "\n";
-		if (existsSync(warmPagesCacheFile)) {
-			for (const page of readFileSync(warmPagesCacheFile, "utf8").split(
-				delimiter,
-			)) {
-				warmPages.add(page.trim());
-			}
-		} else {
-			writeFileSync(warmPagesCacheFile, "", "utf8");
-		}
-		if (!warmPages.has(testInfo.title)) {
-			await page.goto(testInfo.title);
-			await page.waitForLoadState("networkidle");
-			console.debug(`Preloaded ${testInfo.title} for cache warmup`);
-			warmPages.add(testInfo.title);
-			writeFileSync(
-				warmPagesCacheFile,
-				Array.from(warmPages).join(delimiter),
-				"utf8",
-			);
-		}
+		await warmUpPageIfNeeded(page, testInfo);
 
 		// Continue with the actual test using the warmed-up page
 		await use(page);
@@ -162,8 +137,43 @@ const testWebVitals = async ({ page }: { page: Page }, testInfo: TestInfo) => {
 };
 // TODO: generate tests for all routes
 
+// TODO: Populate dynamically from next build results
+const nonSSGRoutes = new Set<string>([]);
+async function warmUpPageIfNeeded(page: Page, testInfo: TestInfo) {
+	const isSSGRoute = !nonSSGRoutes.has(testInfo.title);
+	if (isSSGRoute) {
+		// Skip warming up for SSG routes
+		return;
+	}
+	// Preload the page to warm up the cache
+	const cacheDir = resolve(__dirname, "../../.cache/playwright/warm-pages");
+	const warmPagesCacheFile = resolve(cacheDir, "warm-pages.txt");
+	const warmPages = new Set();
+	mkdirSync(cacheDir, { recursive: true });
+	const delimiter = "\n";
+	if (existsSync(warmPagesCacheFile)) {
+		for (const warmPage of readFileSync(warmPagesCacheFile, "utf8").split(
+			delimiter,
+		)) {
+			warmPages.add(warmPage.trim());
+		}
+	} else {
+		writeFileSync(warmPagesCacheFile, "", "utf8");
+	}
+	if (!warmPages.has(testInfo.title)) {
+		await page.goto(testInfo.title);
+		await page.waitForLoadState("networkidle");
+		console.debug(`Preloaded ${testInfo.title} for cache warmup`);
+		warmPages.add(testInfo.title);
+		writeFileSync(
+			warmPagesCacheFile,
+			Array.from(warmPages).join(delimiter),
+			"utf8",
+		);
+	}
+}
+
 test("/", testWebVitals);
-// inp (https://web.dev/articles/inp) is raised significantly when toggling the read mode. Also it looks like ttfb is affected as well (not sure why it should)
 test("/929/567", testWebVitals);
 test("/929/1", testWebVitals);
 test("/929/686", testWebVitals);
