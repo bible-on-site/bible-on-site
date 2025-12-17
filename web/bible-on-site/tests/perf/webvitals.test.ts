@@ -152,10 +152,10 @@ async function warmUpPageIfNeeded(page: Page, testInfo: TestInfo) {
 	mkdirSync(cacheDir, { recursive: true });
 	const delimiter = "\n";
 	if (existsSync(warmPagesCacheFile)) {
-		for (const page of readFileSync(warmPagesCacheFile, "utf8").split(
+		for (const warmPage of readFileSync(warmPagesCacheFile, "utf8").split(
 			delimiter,
 		)) {
-			warmPages.add(page.trim());
+			warmPages.add(warmPage.trim());
 		}
 	} else {
 		writeFileSync(warmPagesCacheFile, "", "utf8");
