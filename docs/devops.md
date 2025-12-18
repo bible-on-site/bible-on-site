@@ -100,7 +100,7 @@ This document describes the DevOps tools and practices used in the Bible on Site
 |------|---------|--------|
 | [![Codecov](https://img.shields.io/badge/Codecov-F01F7A?logo=codecov&logoColor=fff&style=for-the-badge)](https://about.codecov.io/) | Code coverage reporting | * |
 | [![Codacy](https://img.shields.io/badge/Codacy-222F29?logo=codacy&logoColor=fff&style=for-the-badge)](https://www.codacy.com/) | Code quality analysis | * |
-| [![CloudWatch](https://custom-icon-badges.demolab.com/badge/CloudWatch-000000.svg?logo=cloudwatch&style=for-the-badge)](https://aws.amazon.com/cloudwatch/) | Infrastructure monitoring | website, api |
+| [![CloudWatch](https://custom-icon-badges.demolab.com/badge/CloudWatch-000000.svg?logo=cloudwatch&style=for-the-badge)](https://aws.amazon.com/cloudwatch/) | scale the ECS in / out | website, api |
 
 ## Workflows
 - [CI](docs/github/workflows/ci.md)

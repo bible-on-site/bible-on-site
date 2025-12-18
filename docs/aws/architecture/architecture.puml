@@ -10,6 +10,8 @@
 !include AWSPuml/NetworkingContentDelivery/CloudMap.puml
 !include AWSPuml/ApplicationIntegration/EventBridge.puml
 !include AWSPuml/General/User.puml
+!include AWSPuml/General/Client.puml
+!include AWSPuml/General/Mobileclient.puml
 !include AWSPuml/DeveloperTools/CodePipeline.puml
 !include AWSPuml/NetworkingContentDelivery/Route53.puml
 !include AWSPuml/ManagementGovernance/CloudWatch.puml
@@ -24,6 +26,8 @@ top to bottom direction
 title Bible On Site - AWS Architecture (il-central-1)
 
 actor "Internet User" as user
+Client(browser, "Browser", "Web Client")
+Mobileclient(mobileApp, "Mobile App", "iOS/Android")
 actor "GitHub Actions CD" as cd
 
 rectangle "AWS Cloud (il-central-1)" as aws {
@@ -56,23 +60,28 @@ rectangle "AWS Cloud (il-central-1)" as aws {
 }
 
 ' User Data Flow
-user -down-> route53 : xn--febl3a.[co.il,com]
+user -down-> browser
+user -down-> mobileApp
+browser -down-> route53 : xn--febl3a.[co.il,com]
+mobileApp -down-> route53 : api.xn--febl3a.[co.il,com]
 route53 -down--> nginx : A Record
 nginx -down--> cloudmap : 1. Resolve ECS Tasks
-cloudmap .up.> nginx : Return Task IPs
-nginx -down--> website : 2. Proxy Traffic
+cloudmap .right..> nginx : Return Task IPs
+nginx -down-> website
+note right of link : 2. Proxy xn--febl3a.[co.il,com] Traffic
+nginx -down-> api
+note right of link : 2. Proxy api.xn--febl3a.[co.il,com] Traffic
 
 ' CD Deployment Flow
 cd -down---> ecr : Push Image\n(OIDC Auth)
-ecr -down--> ecs : Pull Images
+ecr -down-> ecs : Pull Images
 
 ' Auto Deploy Flow
-eventbridge .up.> ecr : Listens to\nPush Events
+eventbridge .left..> ecr : Listens to\nPush Events
 eventbridge -down-> lambda : Trigger
-lambda -left-> ecs : Load Latest\nImage from ECR
+lambda -left-> ecs
+note bottom of link : Load Latest Image from ECR
 
-' Logging Flow
-cloudwatch -up--> ecs : Scale In/Out
-ecs --down-> cloudwatch : Logs
-
+ecs -left--> cloudwatch : Scale In/Out
+ecs -down--> cloudwatch : Logs
 @enduml
