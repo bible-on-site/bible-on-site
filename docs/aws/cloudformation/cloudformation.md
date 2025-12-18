@@ -10,7 +10,7 @@ This directory contains CloudFormation templates that document the AWS infrastru
 
 ## Architecture Overview
 
-For a detailed visual representation of the infrastructure, please refer to the [Architecture Documentation](../architecture/README.md).
+For a detailed visual representation of the infrastructure, please refer to the [Architecture Documentation](../architecture/aws-architecture.md).
 
 The system consists of an Nginx reverse proxy on EC2 routing traffic to ECS Fargate containers, using Cloud Map for service discovery.
 
