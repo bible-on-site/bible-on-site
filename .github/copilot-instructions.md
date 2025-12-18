@@ -57,5 +57,6 @@ When working on the `web/bible-on-site` project (website):
 
 When working on the AWS infrastructure for this repository, please adhere to the following guidelines:
 
+- connect using aws sso login --profile AdministratorAccess-<AccountID>
 - Every accpeted change must be reflected in the infrastructure as code (IaC) templates located in the `infrastructure/` directory.
 - Do not act the opposite, means, do not invoke CloudFormation based on templates located in the `infrastructure/` directory as they are currently for reference only and never really tested.
