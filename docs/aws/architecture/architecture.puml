@@ -15,6 +15,7 @@
 !include AWSPuml/DeveloperTools/CodePipeline.puml
 !include AWSPuml/NetworkingContentDelivery/Route53.puml
 !include AWSPuml/ManagementGovernance/CloudWatch.puml
+!include <logos/github-icon>
 
 skinparam linetype ortho
 skinparam defaultTextAlignment center
@@ -28,7 +29,7 @@ title Bible On Site - AWS Architecture (il-central-1)
 actor "Internet User" as user
 Client(browser, "Browser", "Web Client")
 Mobileclient(mobileApp, "Mobile App", "iOS/Android")
-actor "GitHub Actions CD" as cd
+rectangle "<$github-icon>\nGitHub Actions CD" as cd
 
 rectangle "AWS Cloud (il-central-1)" as aws {
 
