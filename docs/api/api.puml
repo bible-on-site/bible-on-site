@@ -1,0 +1,60 @@
+@startuml API Architecture
+
+skinparam packageStyle rectangle
+skinparam componentStyle rectangle
+skinparam defaultFontSize 12
+skinparam ArrowThickness 2
+
+title Bible on Site API - Layered Architecture
+
+package "Client" as client {
+    [GraphQL Client] as gql_client
+}
+
+rectangle "API System" as api_system #line.dashed {
+    package "Presentation Layer" #E8F4FD {
+        [Actix Web Server] as actix
+        [GraphQL Endpoint] as gql_endpoint
+        package "Resolvers" {
+            [AuthorsQuery] as authors_resolver
+        }
+    }
+
+    package "Business Logic Layer" #FFF3E0 {
+        package "Services" {
+            [AuthorsService] as authors_service
+        }
+        package "DTOs" {
+            [Author DTO] as author_dto
+        }
+    }
+
+    package "Data Access Layer" #E8F5E9 {
+        package "Providers" {
+            [Database Provider] as db_provider
+        }
+        package "Entities (SeaORM)" {
+            [Author Entity] as author_entity
+        }
+    }
+}
+
+package "Infrastructure" {
+    database "MySQL" as mysql
+}
+
+' Relationships
+gql_client --> gql_endpoint : GraphQL Query
+
+actix --> gql_endpoint
+gql_endpoint --> authors_resolver
+
+authors_resolver --> authors_service
+authors_resolver --> author_dto : returns
+
+authors_service --> db_provider
+authors_service --> author_entity : uses
+
+db_provider --> mysql : SeaORM
+
+@enduml

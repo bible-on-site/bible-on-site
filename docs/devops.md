@@ -29,7 +29,8 @@ This document describes the DevOps tools and practices used in the Bible on Site
 | [![.NET MAUI](https://img.shields.io/badge/.NET%20MAUI-512BD4?logo=dotnet&logoColor=fff&style=for-the-badge)](https://dotnet.microsoft.com/en-us/apps/maui) | App framework | app |
 | [![C#](https://custom-icon-badges.demolab.com/badge/C%23-%23239120.svg?logo=cshrp&logoColor=white&style=for-the-badge)](https://learn.microsoft.com/en-us/dotnet/csharp/) | App language | app |
 | [![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/) | API language | api |
-| [![GraphQL](https://img.shields.io/badge/GraphQL-E10098?logo=graphql&logoColor=fff&style=for-the-badge)](https://graphql.org/) | API query language | api |
+| [![Actix Web](https://img.shields.io/badge/Actix%20Web-800080?style=for-the-badge&logo=actix)](https://actix.rs/) | API framework | api |
+| [![GraphQl](https://img.shields.io/badge/GraphQl-E10098?style=for-the-badge&logo=graphql&logoColor=white)](https://graphql.org) | API query language | api |
 | [![SeaORM](https://custom-icon-badges.demolab.com/badge/SeaORM-000000.svg?logo=sea-orm&style=for-the-badge)](https://www.sea-ql.org/SeaORM/) | ORM | api |
 | [![MongoDB](https://img.shields.io/badge/MongoDB-%234ea94b.svg?logo=mongodb&logoColor=white&style=for-the-badge)](https://www.mongodb.com/) | Data pipeline | * |
 | [![Biome](https://img.shields.io/badge/Biome-60a5fa?style=for-the-badge&logo=biome&logoColor=white)](https://biomejs.dev/) | Linter & Formatter | website |
