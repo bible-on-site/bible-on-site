@@ -55,7 +55,7 @@ export function getBaseConfig(testType: TestType) {
 			[isCI ? "github" : "list"],
 			[
 				"html",
-				{ outputFolder: `.playwright-report/${testType}`, open: "never" },
+				{ outputFolder: `.playwright-report/${testType}/html`, open: "never" },
 			],
 			...(isCI
 				? [
