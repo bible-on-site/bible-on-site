@@ -180,7 +180,7 @@ jobs:
       run:
         working-directory: ${{ env.WEBSITE_DIRECTORY }}
     permissions:
-      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout
@@ -232,6 +232,23 @@ jobs:
       - name: Perf Test
         id: npm-perf-test
         run: npm run test:perf
+
+      - name: Install Bencher CLI
+        uses: bencherdev/bencher@main
+
+      - name: Track Performance with Bencher
+        env:
+          BENCHER_PROJECT: bible-on-site-website
+          BENCHER_BRANCH: ${{ github.head_ref || github.ref_name }} # PR source branch, or branch name on push
+        run: |
+          bencher run \
+            --project "$BENCHER_PROJECT" \
+            --token "${{ secrets.BENCHER_API_TOKEN }}" \
+            --branch "$BENCHER_BRANCH" \
+            --testbed ubuntu-latest \
+            --adapter json \
+            --github-actions '${{ secrets.GITHUB_TOKEN }}' \
+            --file ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/perf/bencher/benchmark.json
 
       - name: Store Website Perf HTML Report
         uses: actions/upload-artifact@v6
