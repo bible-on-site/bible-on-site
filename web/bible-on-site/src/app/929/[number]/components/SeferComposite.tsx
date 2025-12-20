@@ -3,11 +3,14 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import type { PerekObj } from "@/data/perek-dto";
+import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
 import ReadModeToggler from "./ReadModeToggler";
 import Sefer from "./Sefer";
 import styles from "./sefer-composite.module.css";
 
 const ClientWrapper = (props: { perekObj: PerekObj }) => {
+	const isWideEnough = useIsWideEnough(TABLET_MIN_WIDTH);
+
 	// A better design is to control the toggling state from outside this
 	// component, but in that case the entire page rendering method is changed
 	// from SSG to dynamic, affecting performance and SEO / AIO. So in that
@@ -48,6 +51,13 @@ const ClientWrapper = (props: { perekObj: PerekObj }) => {
 		const IMMEDIATELY = true;
 		handleToggle(toggled, IMMEDIATELY);
 	}, [toggled, handleToggle, everToggled]);
+
+	// Don't render anything on mobile - sefer view is tablet+ only
+	// Return null during SSR/initial render to avoid hydration mismatch,
+	// then check viewport after hydration
+	if (isWideEnough === false) {
+		return null;
+	}
 
 	return (
 		<>

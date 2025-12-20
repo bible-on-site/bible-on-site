@@ -1,10 +1,10 @@
-import { test, expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 // This test checks that the hamburger menu is clickable and toggles the menu
 // It also checks that the clickable area matches the hamburger icon boundaries
 
 test.describe("NavBar hamburger menu", () => {
-	test("should toggle menu when hamburger is clicked", async ({ page }) => {
+	test("Toggles menu when hamburger is clicked", async ({ page }) => {
 		await page.goto("/");
 		const menuBtn = page.locator("label[class*=menuBtn]");
 		const menuIcon = page.locator("span[class*=menuIcon]");
