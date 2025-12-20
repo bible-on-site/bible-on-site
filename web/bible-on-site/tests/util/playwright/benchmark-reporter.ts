@@ -34,7 +34,7 @@ export interface BenchmarkEntry {
 
 const BENCHMARK_OUTPUT_DIR = resolve(
 	__dirname,
-	"../../.playwright-report/perf/bencher",
+	"../../../.playwright-report/perf/bencher",
 );
 const BENCHMARK_OUTPUT_FILE = resolve(BENCHMARK_OUTPUT_DIR, "benchmark.json");
 

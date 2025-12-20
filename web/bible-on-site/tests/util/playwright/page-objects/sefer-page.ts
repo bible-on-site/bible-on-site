@@ -8,7 +8,6 @@ import { expect } from "@playwright/test";
 export class SeferPage {
 	private readonly page: Page;
 	private readonly baseUrl = "http://localhost:3001/929";
-	private readonly togglerAnimationDuration = 300;
 
 	constructor(page: Page) {
 		this.page = page;
@@ -40,15 +39,18 @@ export class SeferPage {
 		);
 		await seferViewButton.scrollIntoViewIfNeeded();
 		await seferViewButton.click({ timeout: 10_000 });
-		await this.page.waitForTimeout(this.togglerAnimationDuration);
+		// Wait for the overlay to become visible instead of using a fixed timeout,
+		// which can be flaky in CI environments
+		await this.verifySeferViewIsOpen();
 	}
 
 	/**
 	 * Verify that the sefer overlay is visible
+	 * Uses a longer timeout to account for animation and CI slowness
 	 */
 	async verifySeferViewIsOpen(): Promise<void> {
 		const seferOverlay = this.page.locator('[class*="seferOverlay"]');
-		await expect(seferOverlay).toBeVisible();
+		await expect(seferOverlay).toBeVisible({ timeout: 10_000 });
 	}
 
 	/**
@@ -79,7 +81,9 @@ export class SeferPage {
 		const closeButton = this.page.getByTestId("sefer-overlay-close");
 		if (await closeButton.isVisible()) {
 			await closeButton.click();
-			await this.page.waitForTimeout(this.togglerAnimationDuration);
+			// Wait for overlay to become hidden instead of fixed timeout
+			const seferOverlay = this.page.locator('[class*="seferOverlay"]');
+			await expect(seferOverlay).toBeHidden({ timeout: 10_000 });
 		}
 	}
 

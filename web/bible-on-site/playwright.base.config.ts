@@ -8,6 +8,7 @@ import type { CoverageReportOptions } from "monocart-reporter";
 import { isCI, shouldMeasureCov } from "../shared/tests-util/environment.mjs";
 import { getDebugPort } from "./get-debug-port";
 import type { TestType } from "./tests/util/playwright/types";
+
 export function getBaseConfig(testType: TestType) {
 	const WEB_SERVER_URL = "http://127.0.0.1:3001";
 	// Coverage instrumentation adds significant overhead, so use longer timeouts
@@ -35,12 +36,25 @@ export function getBaseConfig(testType: TestType) {
 		name: testType,
 		projects: [
 			{
-				name: "chromium",
+				name: "Desktop",
+				testIgnore: `${testType}/**/*.isolated.test.ts`,
 				use: { ...devices["Desktop Chrome"] },
 			},
 			{
-				name: "Mobile Chrome",
+				name: "Mobile",
+				testIgnore: `${testType}/**/*.isolated.test.ts`,
 				use: { ...devices["Pixel 5"] },
+			},
+			{
+				name: "Desktop-Isolated",
+				testMatch: `${testType}/**/*.isolated.test.ts`,
+				dependencies: ["Desktop", "Mobile"],
+				workers: 1,
+				use: {
+					...devices["Desktop Chrome"],
+					// Enables performance.memory API for accurate JS heap measurements
+					launchOptions: { args: ["--enable-precise-memory-info"] },
+				},
 			},
 		],
 

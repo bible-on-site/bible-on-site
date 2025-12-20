@@ -21,7 +21,7 @@ test.describe("Sefer view", () => {
 	});
 
 	test.describe("Sefarim without additionals", () => {
-		test("Bereshit: sefer view shows pesukim", async ({ page }) => {
+		test("Shows pesukim", async ({ page }) => {
 			const seferPage = new SeferPage(page);
 			await seferPage.openSeferViewForPerek(1); // First perek of Bereshit
 			await seferPage.verifySeferViewIsOpen();
@@ -30,28 +30,28 @@ test.describe("Sefer view", () => {
 	});
 
 	test.describe("Sefarim with additionals", () => {
-		test("Shemuel: sefer view shows pesukim", async ({ page }) => {
+		test("Shemuel: Shows pesukim", async ({ page }) => {
 			const seferPage = new SeferPage(page);
 			await seferPage.openSeferViewForPerek(188); // First perek of Shemuel א
 			await seferPage.verifySeferViewIsOpen();
 			await seferPage.verifyPesukimAreVisible();
 		});
 
-		test("Melachim: sefer view shows pesukim", async ({ page }) => {
+		test("Melachim: Shows pesukim", async ({ page }) => {
 			const seferPage = new SeferPage(page);
 			await seferPage.openSeferViewForPerek(250); // First perek of Melachim א
 			await seferPage.verifySeferViewIsOpen();
 			await seferPage.verifyPesukimAreVisible();
 		});
 
-		test("Ezra: sefer view shows pesukim", async ({ page }) => {
+		test("Ezra: Shows pesukim", async ({ page }) => {
 			const seferPage = new SeferPage(page);
 			await seferPage.openSeferViewForPerek(764); // First perek of Ezra
 			await seferPage.verifySeferViewIsOpen();
 			await seferPage.verifyPesukimAreVisible();
 		});
 
-		test("Divrei Hayamim: sefer view shows pesukim", async ({ page }) => {
+		test("Divrei Hayamim: Shows pesukim", async ({ page }) => {
 			const seferPage = new SeferPage(page);
 			await seferPage.openSeferViewForPerek(727); // First perek of Divrei Hayamim א
 			await seferPage.verifySeferViewIsOpen();

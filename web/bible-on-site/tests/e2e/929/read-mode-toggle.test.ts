@@ -18,7 +18,9 @@ test.beforeEach(({ skipOnNotWideEnough }) => {
 	void skipOnNotWideEnough;
 });
 
-test("toggling to sefer view hides perek breadcrumbs", async ({ page }) => {
+test("Hides perek breadcrumbs when toggling to sefer view", async ({
+	page,
+}) => {
 	const perekId = 1;
 	await page.goto(`${BASE_URL}/${perekId}`);
 	const perekBreadCrumbs = page.getByTestId(`perek-breadcrumb-${perekId}`);
@@ -36,7 +38,7 @@ test("toggling to sefer view hides perek breadcrumbs", async ({ page }) => {
 	expect(opacity).toBe("1");
 });
 
-test("toggling sefer view OFF hides overlay after animation", async ({
+test("Hides overlay after animation when toggling sefer view OFF", async ({
 	page,
 }) => {
 	const perekId = 1;
