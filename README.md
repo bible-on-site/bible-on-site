@@ -18,4 +18,4 @@ Bible on Site is a digital educational initiative aimed at Bible learners, featu
 - [Repository Structure](docs/repo-structure.md)
 
 ## DevOps Architecture and Toolset
-- [DevOps Architecture and Toolset](docs/devops.md)
+- [DevOps Architecture and Toolset](docs/devops/devops.md)

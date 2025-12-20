@@ -103,5 +103,7 @@ This document describes the DevOps tools and practices used in the Bible on Site
 | [![CloudWatch](https://custom-icon-badges.demolab.com/badge/CloudWatch-000000.svg?logo=cloudwatch&style=for-the-badge)](https://aws.amazon.com/cloudwatch/) | scale the ECS in / out | website, api |
 
 ## Workflows
+- [Setup Development Environment](./setup-development-environment/setup-development-environment.md)
+- [Pre-commit Checks](./pre-commit.md)
 - [CI](docs/github/workflows/ci.md)
 - [CD](docs/github/workflows/cd.md)

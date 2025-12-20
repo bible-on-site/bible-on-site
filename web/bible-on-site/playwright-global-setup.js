@@ -1,7 +1,7 @@
 // TODO: try to convert to ESM when Playwright supports it
 const { mkdirSync, writeFileSync } = require("node:fs");
 const { resolve } = require("node:path");
-const { shouldMeasureCov } = require("../shared/tests-util/environment.mjs");
+
 const BENCHMARK_OUTPUT_DIR = resolve(
 	__dirname,
 	".playwright-report/perf/bencher",
@@ -27,6 +27,10 @@ const WARMUP_ROUTES = [
  * which adds overhead that can cause timeouts on cold starts.
  */
 async function warmUpServer() {
+	// Dynamically import ESM module to get shouldMeasureCov flag  // TODO: import regularly when this file is ESM
+	const { shouldMeasureCov } = await import(
+		"../shared/tests-util/environment.mjs"
+	);
 	if (!shouldMeasureCov) {
 		return;
 	}
@@ -85,6 +89,7 @@ module.exports = async function globalSetup(config) {
 	// Clear benchmark file for fresh perf test run (Bencher Metric Format uses object)
 	mkdirSync(BENCHMARK_OUTPUT_DIR, { recursive: true });
 	writeFileSync(BENCHMARK_OUTPUT_FILE, "{}", "utf8");
+
 
 	// Warm up server when running with coverage
 	await warmUpServer();
