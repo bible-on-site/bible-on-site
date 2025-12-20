@@ -1,5 +1,4 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -167,7 +166,7 @@ function assertMAUIVersion() {
 function assertPythonVersion() {
 	// TODO: check using semver, TODO: inform if Python is not installed
 	console.info("Checking Python version...");
-	const supportedPythonVersions = ["3.12.3", "3.13.1"];
+	const supportedPythonVersions = ["3.14.0", "3.14.2"];
 	const actualPythonVersion = spawnSync("python", ["--version"], {
 		shell: isWin,
 	})

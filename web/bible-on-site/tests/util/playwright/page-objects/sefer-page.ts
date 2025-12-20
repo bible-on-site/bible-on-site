@@ -6,98 +6,92 @@ import { expect } from "@playwright/test";
  * Handles navigation and interactions with the sefer view
  */
 export class SeferPage {
-  private readonly page: Page;
-  private readonly baseUrl = "http://localhost:3001/929";
-  private readonly togglerAnimationDuration = 300;
+	private readonly page: Page;
+	private readonly baseUrl = "http://localhost:3001/929";
 
-  constructor(page: Page) {
-    this.page = page;
-  }
+	constructor(page: Page) {
+		this.page = page;
+	}
 
-  /**
-   * Navigate to a specific perek by its ID
-   */
-  async navigateToPerek(perekId: number): Promise<void> {
-    await this.page.goto(`${this.baseUrl}/${perekId}`);
-  }
+	/**
+	 * Navigate to a specific perek by its ID
+	 */
+	async navigateToPerek(perekId: number): Promise<void> {
+		await this.page.goto(`${this.baseUrl}/${perekId}`);
+	}
 
-  /**
-   * Convenience method: Navigate to a perek and open sefer view
-   * This represents the common user journey of opening a sefer view from a perek
-   */
-  async openSeferViewForPerek(perekId: number): Promise<void> {
-    await this.navigateToPerek(perekId);
-    await this.openSeferView();
-  }
+	/**
+	 * Convenience method: Navigate to a perek and open sefer view
+	 * This represents the common user journey of opening a sefer view from a perek
+	 */
+	async openSeferViewForPerek(perekId: number): Promise<void> {
+		await this.navigateToPerek(perekId);
+		await this.openSeferView();
+	}
 
-  /**
-   * Click the sefer view toggle button to open sefer view
-   */
-  async openSeferView(): Promise<void> {
-    const seferViewButton = this.page.getByTestId("read-mode-toggler-sefer-view-button");
+	/**
+	 * Click the sefer view toggle button to open sefer view
+	 * Note: This assumes the test is running on tablet+ viewport where the toggle is visible
+	 */
+	async openSeferView(): Promise<void> {
+		const seferViewButton = this.page.getByTestId(
+			"read-mode-toggler-sefer-view-button",
+		);
+		await seferViewButton.scrollIntoViewIfNeeded();
+		await seferViewButton.click({ timeout: 10_000 });
+		// Wait for the overlay to become visible instead of using a fixed timeout,
+		// which can be flaky in CI environments
+		await this.verifySeferViewIsOpen();
+	}
 
-    // Try different click strategies for reliability across devices
-    try {
-      await seferViewButton.scrollIntoViewIfNeeded();
-      await seferViewButton.click({ timeout: 5000 });
-    } catch (firstError) {
-      try {
-        console.warn(`Standard click failed with error (${firstError}), retrying with force click...`);
-        await seferViewButton.click({ force: true });
-      } catch (secondError) {
-        console.warn(`Force click also failed with error (${secondError}), retrying with evaluate click...`);
-        await seferViewButton.evaluate((el) => (el as HTMLElement).click());
-      }
-    }
+	/**
+	 * Verify that the sefer overlay is visible
+	 * Uses a longer timeout to account for animation and CI slowness
+	 */
+	async verifySeferViewIsOpen(): Promise<void> {
+		const seferOverlay = this.page.locator('[class*="seferOverlay"]');
+		await expect(seferOverlay).toBeVisible({ timeout: 10_000 });
+	}
 
-    await this.page.waitForTimeout(this.togglerAnimationDuration);
-  }
+	/**
+	 * Verify that pesukim (verses) are visible in the sefer view
+	 * Checks that there are multiple article elements with text content
+	 */
+	async verifyPesukimAreVisible(): Promise<void> {
+		const visibleArticles = this.page.locator("article:visible");
 
-  /**
-   * Verify that the sefer overlay is visible
-   */
-  async verifySeferViewIsOpen(): Promise<void> {
-    const seferOverlay = this.page.locator('[class*="seferOverlay"]');
-    await expect(seferOverlay).toBeVisible();
-  }
+		// Wait for any article to become visible; flipbook renders hidden pages too
+		await expect(visibleArticles.first()).toBeVisible({ timeout: 10_000 });
 
-  /**
-   * Verify that pesukim (verses) are visible in the sefer view
-   * Checks that there are multiple article elements with text content
-   */
-  async verifyPesukimAreVisible(): Promise<void> {
-    const visibleArticles = this.page.locator("article:visible");
+		const count = await visibleArticles.count();
+		expect(count).toBeGreaterThan(0);
 
-    // Wait for any article to become visible; flipbook renders hidden pages too
-    await expect(visibleArticles.first()).toBeVisible({ timeout: 10_000 });
+		// Verify a visible page has meaningful text (avoid hidden cover pages)
+		const firstVisibleArticle = visibleArticles.first();
+		const textContent = await firstVisibleArticle.textContent();
+		expect(textContent).toBeTruthy();
+		// biome-ignore lint/style/noNonNullAssertion: assured by previous check
+		expect(textContent!.length).toBeGreaterThan(50);
+	}
 
-    const count = await visibleArticles.count();
-    expect(count).toBeGreaterThan(0);
+	/**
+	 * Close the sefer view (if needed for future tests)
+	 */
+	async closeSeferView(): Promise<void> {
+		const closeButton = this.page.getByTestId("sefer-overlay-close");
+		if (await closeButton.isVisible()) {
+			await closeButton.click();
+			// Wait for overlay to become hidden instead of fixed timeout
+			const seferOverlay = this.page.locator('[class*="seferOverlay"]');
+			await expect(seferOverlay).toBeHidden({ timeout: 10_000 });
+		}
+	}
 
-    // Verify a visible page has meaningful text (avoid hidden cover pages)
-    const firstVisibleArticle = visibleArticles.first();
-    const textContent = await firstVisibleArticle.textContent();
-    expect(textContent).toBeTruthy();
-    // biome-ignore lint/style/noNonNullAssertion: assured by previous check
-    expect(textContent!.length).toBeGreaterThan(50);
-  }
-
-  /**
-   * Close the sefer view (if needed for future tests)
-   */
-  async closeSeferView(): Promise<void> {
-    const closeButton = this.page.getByTestId("sefer-overlay-close");
-    if (await closeButton.isVisible()) {
-      await closeButton.click();
-      await this.page.waitForTimeout(this.togglerAnimationDuration);
-    }
-  }
-
-  /**
-   * Get the number of pages in the sefer view
-   */
-  async getPageCount(): Promise<number> {
-    const articles = this.page.locator("article");
-    return await articles.count();
-  }
+	/**
+	 * Get the number of pages in the sefer view
+	 */
+	async getPageCount(): Promise<number> {
+		const articles = this.page.locator("article");
+		return await articles.count();
+	}
 }

@@ -6,7 +6,7 @@
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
 		"update:playwright": "npx playwright install",
 		"dev": "next dev -p 3001",
-		"dev-webpack": "cross-env WEBPACK=1 next dev --webpack -p 3001",
+		"dev-webpack": "cross-env WEBPACK=1 next dev --webpack -p 3001 -H 127.0.0.1",
 		"build": "next build && npm run postbuild",
 		"postbuild": "shx cp -r public .next/standalone/ && shx cp -r .next/static .next/standalone/.next/ && shx cp -r node_modules/@img .next/standalone/node_modules/",
 		"start": "cross-env PORT=3001 HOSTNAME=127.0.0.1 node .next/standalone/server.js",

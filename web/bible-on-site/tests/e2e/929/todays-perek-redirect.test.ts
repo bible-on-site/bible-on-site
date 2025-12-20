@@ -13,10 +13,20 @@ test.describe("Today's Perek redirect", () => {
 		await request.delete("/api/dev/mock-date");
 	});
 
-	test("navigating to /929 redirects to today's perek based on mocked date", async ({
+	test("Redirects to today's perek based on mocked date", async ({
 		page,
 		request,
-	}) => {
+	}, testInfo) => {
+		// The mock-date API only works in development mode.
+		// Skip this test when running against the production server.
+		const checkResponse = await request.get("/api/dev/mock-date");
+		if (!checkResponse.ok()) {
+			testInfo.skip(
+				true,
+				"Mock-date API not available (requires development server)",
+			);
+		}
+
 		// Set the mocked date on the server
 		const mockResponse = await request.post("/api/dev/mock-date", {
 			data: { date: MOCKED_DATE },
@@ -35,9 +45,7 @@ test.describe("Today's Perek redirect", () => {
 		await expect(breadcrumb).toBeVisible();
 	});
 
-	test("navigating to /929 without mock redirects to a valid perek", async ({
-		page,
-	}) => {
+	test("Redirects to a valid perek without mock", async ({ page }) => {
 		await page.goto("/929");
 
 		// Verify the URL redirected to a valid perek ID (1-929)
