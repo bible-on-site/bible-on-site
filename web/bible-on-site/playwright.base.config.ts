@@ -10,6 +10,9 @@ import { getDebugPort } from "./get-debug-port";
 import type { TestType } from "./tests/util/playwright/types";
 export function getBaseConfig(testType: TestType) {
 	const WEB_SERVER_URL = "http://127.0.0.1:3001";
+	// Coverage instrumentation adds significant overhead, so use longer timeouts
+	const baseTimeout = isCI ? 60000 : 30000;
+	const timeout = shouldMeasureCov ? baseTimeout * 2 : baseTimeout;
 	const config = defineConfig({
 		testMatch: [`${testType}/**/*.test.ts`],
 		testDir: "./tests",
@@ -23,8 +26,8 @@ export function getBaseConfig(testType: TestType) {
 			trace: "on-first-retry",
 			timezoneId: "Asia/Jerusalem",
 		},
-		// Increase the default timeout to 1 min in case of CI (slow servers).
-		timeout: isCI ? 60000 : 30000,
+		// Increase the default timeout in case of CI (slow servers) or coverage (overhead).
+		timeout,
 		globalSetup: "./playwright-global-setup.js",
 		globalTeardown: shouldMeasureCov
 			? "./playwright-global-teardown-coverage.js"

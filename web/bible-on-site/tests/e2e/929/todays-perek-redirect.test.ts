@@ -16,7 +16,17 @@ test.describe("Today's Perek redirect", () => {
 	test("navigating to /929 redirects to today's perek based on mocked date", async ({
 		page,
 		request,
-	}) => {
+	}, testInfo) => {
+		// The mock-date API only works in development mode.
+		// Skip this test when running against the production server.
+		const checkResponse = await request.get("/api/dev/mock-date");
+		if (!checkResponse.ok()) {
+			testInfo.skip(
+				true,
+				"Mock-date API not available (requires development server)",
+			);
+		}
+
 		// Set the mocked date on the server
 		const mockResponse = await request.post("/api/dev/mock-date", {
 			data: { date: MOCKED_DATE },

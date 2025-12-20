@@ -9,9 +9,17 @@ import { test } from "../../../util/playwright/test-fixture";
  * Future improvements will include:
  * - Titles inside the sefer for easy identification
  * - Opening the sefer on the correct page
+ *
+ * Sefer view is only available on tablet and larger viewports (>= 768px)
+ * Tests use the skipOnMobile fixture to automatically skip on mobile viewports.
  */
 
 test.describe("Sefer view", () => {
+	// Skip all tests in this suite on mobile viewports - sefer view requires tablet+
+	test.beforeEach(({ skipOnNotWideEnough }) => {
+		void skipOnNotWideEnough;
+	});
+
 	test.describe("Sefarim without additionals", () => {
 		test("Bereshit: sefer view shows pesukim", async ({ page }) => {
 			const seferPage = new SeferPage(page);
@@ -29,11 +37,7 @@ test.describe("Sefer view", () => {
 			await seferPage.verifyPesukimAreVisible();
 		});
 
-		test("Melachim: sefer view shows pesukim", async ({ page, browserName }) => {
-			// Skip on mobile devices due to viewport issues (will be fixed when sefer is fully functional)
-			test.skip(browserName === "chromium" && page.viewportSize()?.width === 412,
-				"Skipping on mobile - known flaky issue with Melachim on mobile viewport");
-
+		test("Melachim: sefer view shows pesukim", async ({ page }) => {
 			const seferPage = new SeferPage(page);
 			await seferPage.openSeferViewForPerek(250); // First perek of Melachim א
 			await seferPage.verifySeferViewIsOpen();
