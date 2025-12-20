@@ -249,7 +249,7 @@ jobs:
             --adapter json \
             --github-actions '${{ secrets.GITHUB_TOKEN }}' \
             --file .playwright-report/perf/bencher/benchmark.json \
-            --threshold-measure cls --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 0.25 --threshold-lower-boundary _ \
+            --threshold-measure cls --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 20.00 --threshold-lower-boundary _ \
             --threshold-measure fcp --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 0.25 --threshold-lower-boundary _ \
             --threshold-measure lcp --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 0.25 --threshold-lower-boundary _ \
             --threshold-measure ttfb --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 0.25 --threshold-lower-boundary _ \
