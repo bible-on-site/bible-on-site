@@ -248,7 +248,7 @@ jobs:
             --testbed ubuntu-latest \
             --adapter json \
             --github-actions '${{ secrets.GITHUB_TOKEN }}' \
-            --file ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/perf/bencher/benchmark.json
+            --file .playwright-report/perf/bencher/benchmark.json
 
       - name: Store Website Perf HTML Report
         uses: actions/upload-artifact@v6
