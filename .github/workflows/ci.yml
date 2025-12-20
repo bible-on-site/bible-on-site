@@ -180,7 +180,8 @@ jobs:
       run:
         working-directory: ${{ env.WEBSITE_DIRECTORY }}
     permissions:
-      pull-requests: write
+      checks: write # Required by Bencher to create GitHub Check on push to master
+      pull-requests: write # Required by Bencher to add comment on PRs
 
     steps:
       - name: Checkout
@@ -429,9 +430,6 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          # Pin to 1.91 until Rust 1.92 process termination issue is resolved
-          # See: GitHub runner image 20251215.174.1 updated to Rust 1.92 which causes API E2E tests to hang
-          toolchain: "1.91"
           components: clippy
 
       - uses: taiki-e/install-action@v2
