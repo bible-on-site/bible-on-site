@@ -2,7 +2,7 @@ const KB = 1024;
 const MB = KB * KB;
 const GB = MB * KB;
 
-import { covIgnoreList } from "./.covignore.mjs";
+const isProduction = process.env.NODE_ENV === "production";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -14,9 +14,20 @@ const nextConfig = {
 		esmExternals: true,
 		externalDir: true,
 		turbopackFileSystemCacheForDev: true,
-		swcPlugins: [
-			["swc-plugin-coverage-instrument", { unstableExclude: covIgnoreList }],
-		],
+		// Only include coverage instrumentation in non-production builds
+		...(isProduction
+			? {}
+			: {
+					swcPlugins: [
+						[
+							"swc-plugin-coverage-instrument",
+							{
+								unstableExclude: (await import("./.covignore.mjs"))
+									.covIgnoreList,
+							},
+						],
+					],
+				}),
 	},
 	allowedDevOrigins: ["127.0.0.1"],
 	cacheMaxMemorySize: 1 * GB,

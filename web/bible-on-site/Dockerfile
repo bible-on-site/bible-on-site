@@ -23,6 +23,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY bible-on-site/ ./
 COPY shared/ ../shared/
 
+ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN npm run build
