@@ -1,3 +1,8 @@
+# Skip md-dead-link-check in pre-commit.ci due to network restrictions (DNS resolution failures for external links)
+# External links are still checked locally where network access is available
+ci:
+  skip: [md-dead-link-check]
+
 repos:
   - repo: "https://github.com/mxr/sync-pre-commit-deps"
     rev: v0.0.3
@@ -26,12 +31,8 @@ repos:
     rev: v1.7.9
     hooks:
       - id: actionlint
-  - repo: local
+  - repo: "https://github.com/AlexanderDokuchaev/md-dead-link-check"
+    rev: v1.2.0
     hooks:
       - id: md-dead-link-check
-        name: Markdown dead link check
-        description: Check for dead links in markdown files (uses CI config with check_web_links=false in CI)
-        entry: python devops/md-dead-link-check-wrapper.py
-        language: python
-        types: [markdown]
-        additional_dependencies: ["md-dead-link-check"]
+        args: ["--config", "devops/pyproject.toml"]
