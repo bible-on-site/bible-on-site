@@ -8,6 +8,13 @@ When working on this repository, please refer to the relevant documentation unde
 - **GitHub CI/CD**: For GitHub in general, for Actions, workflows, continuous integration, or continuous deployment topics, read `docs/github/`
 - **AWS**: For AWS infrastructure, architecture, or related topics, read `docs/aws/`
 
+## Investigation Tools
+
+- **GitHub CLI (`gh`)**: Use the `gh` CLI for investigating GitHub-related issues (Actions runs, PRs, issues, etc.). Examples:
+  - `gh run view <run-id> --log-failed` - View failed job logs
+  - `gh run view <run-id> --json workflowName,event,conclusion` - Get run metadata
+  - `gh api repos/<owner>/<repo>/commits/<sha>` - Get commit details
+
 ## Implementation Instructions
 
 ### General Instructions
@@ -52,6 +59,31 @@ When working on the `web/bible-on-site` project (website):
 
 - When writing a test, and asserting non null using the framework, you can use the non null assertion operator after and decorate the usage with a linter suppression comment explaining why it's safe.
 - When catching an error, log that it took place using console.warn or console.error.
+
+### Playwright Tests (currently applies to website-e2e/perf, api-e2e)
+
+#### Test Description Conventions
+
+When writing tests, follow this naming convention for `describe` and `it`/`test` blocks:
+
+- **Top-level `describe` blocks**: Use the subject being tested (e.g., component name, function name, module name)
+- **Nested `describe` blocks**: Use contextual descriptions or scenarios (e.g., "when user is authenticated", "with invalid input")
+- **Leaf `it`/`test` blocks**: Use expectation verbs describing the expected behavior (e.g., "returns the correct value", "throws an error", "renders the component")
+
+Example:
+
+```typescript
+describe('UserService', () => {
+  describe('getUser', () => {
+    describe('when user exists', () => {
+      it('returns the user object', () => { ... });
+    });
+    describe('when user does not exist', () => {
+      it('throws UserNotFoundError', () => { ... });
+    });
+  });
+});
+```
 
 ### AWS Infrastructure Instructions
 
