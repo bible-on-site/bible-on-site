@@ -24,8 +24,15 @@
 			"automerge": true
 		},
 		{
+			"description": "See https://github.com/bible-on-site/bible-on-site/issues/528",
 			"matchPackageNames": ["swc-plugin-coverage-instrument"],
 			"enabled": false
+		},
+		{
+			"description": "See https://github.com/bible-on-site/bible-on-site/issues/985",
+			"matchPackageNames": ["node"],
+			"matchDepTypes": ["engines"],
+			"allowedVersions": ">=24.11.1 <24.12.0"
 		}
 	],
 	"bumpVersion": "patch",
