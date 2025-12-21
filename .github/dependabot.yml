@@ -6,7 +6,10 @@
 version: 2
 updates:
   - package-ecosystem: "npm" # Change this based on your project
-    directory: "/web/bible-on-site" # Location of package manifests
+    directories:
+      - "/web/bible-on-site" # Location of package manifests
+      - "/web/api/tests"
+      - "/devops"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
@@ -14,9 +17,8 @@ updates:
     allow:
       - dependency-type: "direct"
       - dependency-type: "indirect"
-    # ignore:
-    #   - dependency-name: "express"
-    #     versions: ["4.x.x"]
+    ignore:
+      - dependency-name: "swc-plugin-coverage-instrument"
     labels:
       - "dependencies"
       - "automerge"
