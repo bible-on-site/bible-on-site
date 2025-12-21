@@ -44,6 +44,7 @@ These checks run on all staged files regardless of module:
 | `mixed-line-ending` | Enforces consistent line endings |
 | `check-json5` | Validates JSON5 syntax |
 | `actionlint` | Lints GitHub Actions workflows |
+| `md-dead-link-check` | Detects broken links in Markdown files |
 
 ## Website Module
 

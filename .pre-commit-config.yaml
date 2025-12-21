@@ -26,3 +26,8 @@ repos:
     rev: v1.7.9
     hooks:
       - id: actionlint
+  - repo: "https://github.com/AlexanderDokuchaev/md-dead-link-check"
+    rev: v1.2.0
+    hooks:
+      - id: md-dead-link-check
+        args: ["--config", "devops/pyproject.toml"]

@@ -92,3 +92,28 @@ When working on the AWS infrastructure for this repository, please adhere to the
 - connect using aws sso login --profile AdministratorAccess-<AccountID>
 - Every accpeted change must be reflected in the infrastructure as code (IaC) templates located in the `infrastructure/` directory.
 - Do not act the opposite, means, do not invoke CloudFormation based on templates located in the `infrastructure/` directory as they are currently for reference only and never really tested.
+
+When modifying the AWS infrastructure process, always update `docs/aws/` to reflect the changes.
+
+### Pre-commit Hooks
+
+The repository uses pre-commit hooks managed by [pre-commit](https://pre-commit.com/):
+
+- **Configuration**: `.pre-commit-config.yaml` at repository root
+- **Python venv**: Located at `devops/.venv/` - activate with `source devops/.venv/Scripts/activate` (Windows) or `source devops/.venv/bin/activate` (Unix)
+- **pyproject.toml**: Located at `devops/pyproject.toml` - tool configurations (e.g., `[tool.md_dead_link_check]`) go here
+- **Husky integration**: Husky (npm) triggers pre-commit (Python) on git hooks. The `.husky/pre-commit` script calls `pre-commit run`
+
+To run a specific hook manually:
+
+```bash
+source devops/.venv/Scripts/activate  # or bin/activate on Unix
+pre-commit run <hook-id> --all-files
+```
+
+To add a new pre-commit hook:
+
+1. Add the repo and hook configuration to `.pre-commit-config.yaml`
+2. Add any tool-specific configuration to `devops/pyproject.toml` under the appropriate `[tool.*]` section (if it cannot be inlined in `.pre-commit-config.yaml`)
+
+When modifying the pre-commit process, always update `docs/devops/pre-commit.md` to reflect the changes.
