@@ -28,10 +28,8 @@ normalizeCoverageFiles();
 mergeCoverage();
 
 function mergeCoverage(): void {
-	// Note: --ignore-errors inconsistent is needed for branch consistency issues where
-	// a line is hit but no branches are evaluated. This is a data quality issue from
-	// different coverage providers, not something we can easily fix in normalization.
-	const cmd = `docker run --rm -t -v ${COVERAGE_DIR}:/.coverage lcov-cli:0.0.2 --rc branch_coverage=1 --ignore-errors inconsistent -a /.coverage/unit/lcov.normalized.info -a /.coverage/e2e/lcov.normalized.info -o /.coverage/merged/lcov.info`;
+	// Both unit and e2e tests now use swc-plugin-coverage-instrument for consistent branch line mappings
+	const cmd = `docker run --rm -t -v ${COVERAGE_DIR}:/.coverage lcov-cli:0.0.2 --rc branch_coverage=1 -a /.coverage/unit/lcov.normalized.info -a /.coverage/e2e/lcov.normalized.info -o /.coverage/merged/lcov.info`;
 
 	const out = runCommand(cmd);
 	if (out) console.log(formatOutput(out));
