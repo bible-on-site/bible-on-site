@@ -1,47 +1,72 @@
-const { CoverageReporter } = require("@jest/reporters");
 const { CoverageReport } = require("monocart-coverage-reports");
 
 import { sanitizeCoverage } from "../../coverage/sanitize-coverage";
 
 const fs = require("node:fs");
-class MonocartCoverageReporter extends CoverageReporter {
-	constructor(globalConfig, reporterOptions, reporterContext) {
-		super(globalConfig, reporterContext);
-		this.disabled = !globalConfig.collectCoverage;
-		this.coverageProvider = globalConfig.coverageProvider;
+const path = require("node:path");
+
+const COVERAGE_FILE = path.join(
+	process.cwd(),
+	".coverage",
+	"unit",
+	"istanbul-coverage.json",
+);
+
+/**
+ * Custom Jest reporter that collects coverage from SWC's coverage instrumentation plugin.
+ * This uses the same `swc-plugin-coverage-instrument` as Next.js, ensuring consistent
+ * branch line mappings between unit and e2e tests.
+ *
+ * The coverage data is written to a file by jest.coverage-setup.js after tests complete,
+ * and this reporter reads it to generate the LCOV report.
+ */
+class MonocartCoverageReporter {
+	constructor(globalConfig, reporterOptions) {
+		this.globalConfig = globalConfig;
 		this.reporterOptions = reporterOptions;
 	}
 
-	onTestResult(...args) {
-		if (this.disabled) {
-			return;
-		}
-		super.onTestResult.apply(this, args);
-	}
 	// biome-ignore lint/correctness/noUnusedFunctionParameters: framework required function signature
 	async onRunComplete(testContexts, results) {
-		if (this.disabled) {
+		// Read coverage from the file written by jest.coverage-setup.js
+		if (!fs.existsSync(COVERAGE_FILE)) {
+			console.warn(
+				`[MonocartCoverageReporter] Coverage file not found: ${COVERAGE_FILE}`,
+			);
 			return;
 		}
-		await this._addUntestedFiles(testContexts);
 
-		const coverage = await this._sourceMapStore.transformCoverage(
-			this._coverageMap,
+		const coverageData = JSON.parse(fs.readFileSync(COVERAGE_FILE, "utf8"));
+
+		if (!coverageData || Object.keys(coverageData).length === 0) {
+			console.warn("[MonocartCoverageReporter] No coverage data in file");
+			return;
+		}
+
+		console.log(
+			`[MonocartCoverageReporter] Processing coverage for ${Object.keys(coverageData).length} files`,
 		);
-		sanitizeCoverage(coverage.data);
-		this.reporterOptions.sourceFinder = this._sourceMapStore.sourceFinder;
+
+		sanitizeCoverage(coverageData);
 
 		const coverageReport = new CoverageReport(this.reporterOptions);
 		coverageReport.cleanCache();
-		await coverageReport.add(coverage);
+		await coverageReport.add(coverageData);
 		await coverageReport.generate();
 
 		// Fixes path formatting in LCOV files for Windows paths
 		const lcovPath = ".coverage/unit/lcov.info";
-		const content = fs.readFileSync(lcovPath, "utf8");
-		// TODO: support any drive letter, not just C:
-		const fixedContent = content.replace(/SF:C\\/g, "SF:C:\\");
-		fs.writeFileSync(lcovPath, fixedContent);
+		if (fs.existsSync(lcovPath)) {
+			const content = fs.readFileSync(lcovPath, "utf8");
+			// TODO: support any drive letter, not just C:
+			const fixedContent = content.replace(/SF:C\\/g, "SF:C:\\");
+			fs.writeFileSync(lcovPath, fixedContent);
+		}
+
+		// Clean up the intermediate coverage file
+		if (fs.existsSync(COVERAGE_FILE)) {
+			fs.unlinkSync(COVERAGE_FILE);
+		}
 	}
 }
 

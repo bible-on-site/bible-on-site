@@ -6,6 +6,7 @@ import {
 } from "@playwright/test";
 import type { CoverageReportOptions } from "monocart-reporter";
 import { isCI, shouldMeasureCov } from "../shared/tests-util/environment.mjs";
+import { monocartAllFilter } from "./.covignore.mjs";
 import { getDebugPort } from "./get-debug-port";
 import type { TestType } from "./tests/util/playwright/types";
 
@@ -105,7 +106,10 @@ export function getBaseConfig(testType: TestType) {
 			name: "Next.js Istanbul Coverage Report",
 			outputDir: `${__dirname}/.coverage/${testType}`,
 			reports: ["lcovonly"],
-
+			all: {
+				dir: ["./src"],
+				filter: monocartAllFilter,
+			},
 			// biome-ignore lint/correctness/noUnusedFunctionParameters: have some wierd bug. keeping for isolation
 			onEnd: async (coverage) => {
 				// Fixes path formatting in LCOV files for Windows paths

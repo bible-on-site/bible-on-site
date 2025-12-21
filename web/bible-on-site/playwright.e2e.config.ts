@@ -10,7 +10,7 @@ const baseConfig = getBaseConfig(TestType.E2E);
 
 // Use dev-webpack when measuring coverage (needs instrumentation), otherwise use production server for stability
 const webServerCommand = shouldMeasureCov
-	? "npm run dev-webpack"
+	? "npm run dev"
 	: "npm run start";
 
 export default defineConfig({

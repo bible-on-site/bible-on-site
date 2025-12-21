@@ -1,17 +1,45 @@
 import nextJest from "next/jest.js";
 import { isCI, shouldMeasureCov } from "../shared/tests-util/environment.mjs";
+import { covIgnoreList, monocartAllFilter } from "./.covignore.mjs";
+
+// SWC configuration with coverage instrumentation plugin
+// Uses the same plugin as Next.js to ensure consistent branch line mappings
+const swcCoverageConfig = [
+	"@swc/jest",
+	{
+		jsc: {
+			parser: {
+				syntax: "typescript",
+				tsx: true,
+			},
+			transform: {
+				react: {
+					runtime: "automatic",
+				},
+			},
+			experimental: {
+				plugins: [
+					[
+						"swc-plugin-coverage-instrument",
+						{ unstableExclude: covIgnoreList },
+					],
+				],
+			},
+		},
+	},
+];
 
 // TODO: transform into TS
 /** @type {import('jest').Config} */
 const config = {
 	clearMocks: true,
 
-	collectCoverage: shouldMeasureCov,
-	coverageReporters: ["none"],
-	collectCoverageFrom: shouldMeasureCov
-		? ["./src/**/*.{ts,tsx,css,scss,js,json}"]
-		: undefined,
+	// When using SWC coverage instrumentation, we don't use Jest's built-in coverage
+	// The coverage is collected via the SWC plugin and processed by our custom reporter
+	collectCoverage: false,
 	setupFiles: ["./jest.setup.js"],
+	// Use setupFilesAfterEnv to collect coverage after tests complete
+	setupFilesAfterEnv: shouldMeasureCov ? ["./jest.coverage-setup.js"] : [],
 	preset: "ts-jest",
 	reporters: [
 		isCI ? ["github-actions", { silent: false }] : "default",
@@ -29,7 +57,10 @@ const config = {
 						"./tests/util/jest/coverage",
 						{
 							name: "Jest Monocart Coverage Report",
-							all: "./src",
+							all: {
+								dir: ["./src"],
+								filter: monocartAllFilter,
+							},
 							outputDir: "./.coverage/unit",
 							reports: ["lcovonly"],
 						},
@@ -39,9 +70,10 @@ const config = {
 	],
 	testEnvironment: "jsdom",
 	testMatch: ["**/tests/(unit|integration)/**/*.test.ts"],
-	transform: {
-		"^.+\\.ts$": "ts-jest",
-	},
+	// Use SWC with coverage plugin when measuring coverage, otherwise use ts-jest
+	transform: shouldMeasureCov
+		? { "^.+\\.(t|j)sx?$": swcCoverageConfig }
+		: { "^.+\\.ts$": "ts-jest" },
 	extensionsToTreatAsEsm: [".ts", ".json"],
 };
 

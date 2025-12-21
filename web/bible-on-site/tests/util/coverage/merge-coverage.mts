@@ -6,6 +6,7 @@ import {
 	readFileSync,
 	writeFileSync,
 } from "node:fs";
+import { normalizeLcovFile } from "./normalize-coverage.mjs";
 
 const COVERAGE_DIR = `${process.env.npm_config_local_prefix}/.coverage`;
 
@@ -16,15 +17,30 @@ const DEBUG_TARGETS = [
 	{ label: "e2e", path: `${COVERAGE_DIR}/e2e/lcov.info` },
 ];
 
+const UNIT_LCOV = `${COVERAGE_DIR}/unit/lcov.info`;
+const E2E_LCOV = `${COVERAGE_DIR}/e2e/lcov.info`;
+const NORMALIZED_UNIT_LCOV = `${COVERAGE_DIR}/unit/lcov.normalized.info`;
+const NORMALIZED_E2E_LCOV = `${COVERAGE_DIR}/e2e/lcov.normalized.info`;
+
 mkdirSync(`${COVERAGE_DIR}/merged`, { recursive: true });
 dumpTargetCoverage();
+normalizeCoverageFiles();
 mergeCoverage();
 
 function mergeCoverage(): void {
-	const cmd = `docker run --rm -t -v ${COVERAGE_DIR}:/.coverage lcov-cli:0.0.2 --rc branch_coverage=1 -a /.coverage/unit/lcov.info -a /.coverage/e2e/lcov.info -o /.coverage/merged/lcov.info`;
+	// Both unit and e2e tests now use swc-plugin-coverage-instrument for consistent branch line mappings
+	const cmd = `docker run --rm -t -v ${COVERAGE_DIR}:/.coverage lcov-cli:0.0.2 --rc branch_coverage=1 -a /.coverage/unit/lcov.normalized.info -a /.coverage/e2e/lcov.normalized.info -o /.coverage/merged/lcov.info`;
 
 	const out = runCommand(cmd);
 	if (out) console.log(formatOutput(out));
+}
+
+function normalizeCoverageFiles(): void {
+	const unitRenamed = normalizeLcovFile(UNIT_LCOV, NORMALIZED_UNIT_LCOV);
+	console.log(`Normalized ${unitRenamed} function names in ${UNIT_LCOV}`);
+
+	const e2eRenamed = normalizeLcovFile(E2E_LCOV, NORMALIZED_E2E_LCOV);
+	console.log(`Normalized ${e2eRenamed} function names in ${E2E_LCOV}`);
 }
 
 function dumpTargetCoverage(): void {
@@ -95,7 +111,6 @@ function copyCoverageFile(source: string, destination: string): void {
 	copyFileSync(source, destination);
 	console.log(`Copied coverage file to ${destination}`);
 }
-
 
 function runCommand(cmd: string): Buffer | undefined {
 	try {
