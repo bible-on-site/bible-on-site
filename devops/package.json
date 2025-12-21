@@ -24,7 +24,7 @@
 		"mysql2": "3.16.0",
 		"node-ssh": "13.2.1",
 		"ssh-config": "5.0.4",
-		"p-memoize": "7.1.1",
+		"p-memoize": "8.0.0",
 		"semver": "7.7.3",
 		"yargs": "17.7.2"
 	}
