@@ -19,15 +19,6 @@ package "Target Platforms" {
     [Windows] as Windows <<platform>>
 }
 
-' ===== App Evolution =====
-note right of Android
-  **App Generation History**
-  ├─ 1st Gen: Cordova (cross-platform)
-  ├─ 2nd Gen: Cordova / Swift
-  ├─ 3rd Gen: Flutter
-  └─ 4th Gen: .NET MAUI (current)
-end note
-
 ' ===== Application =====
 package "Bible On Site App (.NET MAUI)" as App {
     [UI Layer\n(XAML/C#)] as UI
