@@ -1,5 +1,6 @@
 import nextJest from "next/jest.js";
 import { isCI, shouldMeasureCov } from "../shared/tests-util/environment.mjs";
+import { monocartAllFilter } from "./.covignore.mjs";
 
 // TODO: transform into TS
 /** @type {import('jest').Config} */
@@ -29,7 +30,10 @@ const config = {
 						"./tests/util/jest/coverage",
 						{
 							name: "Jest Monocart Coverage Report",
-							all: "./src",
+							all: {
+								dir: ["./src"],
+								filter: monocartAllFilter,
+							},
 							outputDir: "./.coverage/unit",
 							reports: ["lcovonly"],
 						},
