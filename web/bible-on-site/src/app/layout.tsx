@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
-import { NavBar } from "./components/NavBar";
 
 import Image from "next/image";
 import Link from "next/link";
+import { NavBar } from "./components/NavBar";
+
 /* istanbul ignore next */
 const geistSans = localFont({
 	src: "./fonts/GeistVF.woff",
