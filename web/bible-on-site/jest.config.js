@@ -19,7 +19,10 @@ const swcCoverageConfig = [
 			},
 			experimental: {
 				plugins: [
-					["swc-plugin-coverage-instrument", { unstableExclude: covIgnoreList }],
+					[
+						"swc-plugin-coverage-instrument",
+						{ unstableExclude: covIgnoreList },
+					],
 				],
 			},
 		},
