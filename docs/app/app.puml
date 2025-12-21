@@ -1,0 +1,86 @@
+@startuml app-architecture
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam componentStyle rectangle
+
+title Bible On Site - Cross-Platform Application Architecture
+
+' ===== App Stores =====
+package "Distribution Channels" {
+    [Google Play Store] as GooglePlay <<store>>
+    [Apple App Store] as AppStore <<store>>
+    [Microsoft Store] as MSStore <<store>>
+}
+
+' ===== Platforms =====
+package "Target Platforms" {
+    [Android] as Android <<platform>>
+    [iOS] as iOS <<platform>>
+    [Windows] as Windows <<platform>>
+}
+
+' ===== App Evolution =====
+note right of Android
+  **App Generation History**
+  ├─ 1st Gen: Cordova (cross-platform)
+  ├─ 2nd Gen: Cordova / Swift
+  ├─ 3rd Gen: Flutter
+  └─ 4th Gen: .NET MAUI (current)
+end note
+
+' ===== Application =====
+package "Bible On Site App (.NET MAUI)" as App {
+    [UI Layer\n(XAML/C#)] as UI
+    [Business Logic] as BL
+    [Data Access Layer] as DAL
+}
+
+' ===== Local Storage =====
+database "Local SQLite DB" as SQLite {
+    [Tanah Contents\n(Sefarim, Perakim, Pesukim)] as TanahData
+    [Commentaries\n(from Rabbis z\"l)] as Commentaries
+}
+
+' ===== External Services =====
+cloud "Backend Services" {
+    [API Service] as API
+}
+
+cloud "Firebase" {
+    [User Settings\nStorage] as FirebaseSettings
+    [Push Notifications\n(FCM)] as FirebaseNotifications
+}
+
+' ===== Relationships =====
+
+' Store to Platform downloads
+GooglePlay --> Android : downloads
+AppStore --> iOS : downloads
+MSStore --> Windows : downloads
+
+' Platform runs app
+Android --> App
+iOS --> App
+Windows --> App
+
+' App internal flow
+UI --> BL
+BL --> DAL
+
+' Data sources
+DAL --> SQLite : static data\n(offline-first)
+DAL --> API : dynamic data\n(online)
+
+' Firebase connections
+BL --> FirebaseSettings : read/write\nuser preferences
+FirebaseNotifications --> App : push\nnotifications
+
+' ===== Legend =====
+legend bottom
+  |= Symbol |= Description |
+  | SQLite | Static content (Tanah, Commentaries) - rarely changes |
+  | API | Dynamic content - frequently updated |
+  | Firebase | User settings & notifications |
+endlegend
+
+@enduml
