@@ -6,7 +6,7 @@
 		"coverage:e2e": "cross-env MEASURE_COV=1 playwright test --config=playwright.config.ts"
 	},
 	"engines": {
-		"node": ">=22.2.0"
+		"node": ">=24.11.1 <24.12.0"
 	},
 	"author": "",
 	"license": "MIT",

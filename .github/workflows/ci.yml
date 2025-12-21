@@ -180,7 +180,8 @@ jobs:
       run:
         working-directory: ${{ env.WEBSITE_DIRECTORY }}
     permissions:
-      pull-requests: write
+      checks: write # Required by Bencher to create GitHub Check on push to master
+      pull-requests: write # Required by Bencher to add comment on PRs
 
     steps:
       - name: Checkout
