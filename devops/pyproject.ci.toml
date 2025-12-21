@@ -1,0 +1,8 @@
+# CI-specific configuration for md-dead-link-check
+# Used when running in CI environments where external network access is restricted
+# See devops/md-dead-link-check-wrapper.py
+
+[tool.md_dead_link_check]
+exclude_links = ["http://localhost:*", "https://localhost:*"]
+# Disable web link checking in CI due to network restrictions (DNS resolution failures)
+check_web_links = false
