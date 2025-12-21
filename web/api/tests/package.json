@@ -15,6 +15,6 @@
 		"@playwright/test": "^1.51.1",
 		"@types/node": "^22.14.1",
 		"cross-env": "7.0.3",
-		"tsx": "4.19.3"
+		"tsx": "4.21.0"
 	}
 }
