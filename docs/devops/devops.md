@@ -67,8 +67,8 @@ This document describes the DevOps tools and practices used in the Bible on Site
 |------|---------|--------|
 | [![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF?style=for-the-badge&logo=github-actions&logoColor=white)](https://github.com/features/actions) | Automated release workflow | * |
 | [![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/) | Container image building | website, api |
-| [![semver-bump](https://img.shields.io/badge/semver--bump-000?style=for-the-badge&logo=rust&logoColor=white)](https://github.com/pksunkara/semver-bump) | Semantic version bumping | api |
-| [![tomato-toml](https://img.shields.io/badge/tomato--toml-000?style=for-the-badge&logo=rust&logoColor=white)](https://github.com/Amanieu/tomato-toml) | TOML file manipulation (Cargo.toml) | api |
+| [![semver-bump](https://img.shields.io/badge/semver--bump-000?style=for-the-badge&logo=rust&logoColor=white)](https://github.com/ceejbot/semver-bump) | Semantic version bumping | api |
+| [![tomato-toml](https://img.shields.io/badge/tomato--toml-000?style=for-the-badge&logo=rust&logoColor=white)](https://github.com/ceejbot/tomato) | TOML file manipulation (Cargo.toml) | api |
 | [![Git Tags](https://img.shields.io/badge/Git%20Tags-F05032?style=for-the-badge&logo=git&logoColor=white)](https://git-scm.com/book/en/v2/Git-Basics-Tagging) | Version tagging | * |
 
 ### 🚀 DEPLOY
@@ -105,5 +105,5 @@ This document describes the DevOps tools and practices used in the Bible on Site
 ## Workflows
 - [Setup Development Environment](./setup-development-environment/setup-development-environment.md)
 - [Pre-commit Checks](./pre-commit.md)
-- [CI](docs/github/workflows/ci.md)
-- [CD](docs/github/workflows/cd.md)
+- [CI](../github/workflows/ci/ci.md)
+- [CD](../github/workflows/cd/cd.md)

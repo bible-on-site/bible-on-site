@@ -192,4 +192,4 @@ aws sso login --profile bible-on-site-deployer
 
 ## Related Documentation
 
-- [nginx Configuration](./appendix/ec2-nginx/router/router.conf)
+- [nginx Configuration](./ec2-nginx/router/router.conf)

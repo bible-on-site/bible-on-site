@@ -8,7 +8,7 @@ This directory contains deployment scripts for the Bible On Site project.
 
 Pushes Docker images to AWS Elastic Container Registry (ECR) using IAM Identity Center (SSO) authentication.
 
-**Setup guide:** See [management/aws/ECR-DEPLOYMENT.md](../../management/aws/ECR-DEPLOYMENT.md)
+**Setup guide:** See [CloudFormation documentation](../../docs/aws/cloudformation/cloudformation.md) for ECR and OIDC configuration.
 
 **Commands:**
 ```bash
