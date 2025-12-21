@@ -1,0 +1,106 @@
+@startuml Daily Bulletin Service
+
+title Daily Bulletin Distribution Flow
+
+skinparam backgroundColor #FEFEFE
+skinparam sequenceArrowThickness 2
+skinparam roundcorner 10
+skinparam sequenceParticipant underline
+
+actor "EventBridge\nScheduler" as Scheduler #LightBlue
+participant "Lambda\n(Daily Bulletin)" as Lambda #LightGreen
+database "State Store" as State #LightYellow
+database "Tanah Data\n(Static)" as Tanah #LightCoral
+database "Commentary\nData" as Commentary #LightCoral
+database "Rabbi Articles" as Articles #LightCoral
+participant "Smoove API" as Smoove #Orange
+actor "Email\nSubscribers" as Email #Pink
+participant "Telegram Bot" as TelegramBot #DeepSkyBlue
+participant "WhatsApp Bot" as WhatsAppBot #LightGreen
+actor "Telegram\nChannel/Group" as TelegramGroup #DeepSkyBlue
+actor "WhatsApp\nGroup" as WhatsAppGroup #LightGreen
+
+== Morning Schedule (Multiple Runs) ==
+
+Scheduler -> Lambda : Trigger (cron expression)
+activate Lambda
+
+== Idempotency Check ==
+
+Lambda -> State : Check if today's bulletin sent
+alt Already Sent Successfully
+    State --> Lambda : Success recorded
+    Lambda --> Scheduler : Exit (no-op)
+else Not Yet Sent
+    State --> Lambda : Not found / Failed
+
+    == Holiday Pre-Distribution Check ==
+
+    Lambda -> Lambda : Calculate upcoming holidays
+    note right of Lambda
+        If holiday approaching:
+        - Generate bulletins for holiday days
+        - Include in current distribution
+        (Work forbidden during holidays)
+    end note
+
+    == Content Generation ==
+
+    Lambda -> Tanah : Fetch daily Perek pesukim
+    Tanah --> Lambda : Pesukim content
+
+    Lambda -> Commentary : Fetch Perek commentary
+    Commentary --> Lambda : Commentary content
+
+    Lambda -> Articles : Select random rabbi article
+    Articles --> Lambda : Article content
+
+    Lambda -> Lambda : Assemble bulletin content
+
+    == Email Distribution via Smoove ==
+
+    Lambda -> Smoove : Send content for templating
+    activate Smoove
+    Smoove -> Smoove : Render email template
+    Smoove -> Email : Distribute email
+    Email --> Smoove : Delivery confirmation
+    Smoove --> Lambda : Email sent confirmation
+    deactivate Smoove
+
+    == PDF Generation & Download ==
+
+    Lambda -> Smoove : Request PDF generation
+    activate Smoove
+    Smoove -> Smoove : Generate PDF from template
+    Smoove --> Lambda : PDF file download
+    deactivate Smoove
+
+    == Messaging Platform Distribution ==
+
+    par Telegram Distribution
+        Lambda -> TelegramBot : Send PDF
+        activate TelegramBot
+        TelegramBot -> TelegramGroup : Post PDF to channel/group
+        TelegramGroup --> TelegramBot : Posted
+        TelegramBot --> Lambda : Success
+        deactivate TelegramBot
+    else WhatsApp Distribution
+        Lambda -> WhatsAppBot : Send PDF
+        activate WhatsAppBot
+        WhatsAppBot -> WhatsAppGroup : Post PDF to group
+        WhatsAppGroup --> WhatsAppBot : Posted
+        WhatsAppBot --> Lambda : Success
+        deactivate WhatsAppBot
+    end
+
+    == Record Success ==
+
+    Lambda -> State : Record successful distribution
+    State --> Lambda : Confirmed
+
+    Lambda --> Scheduler : Complete
+end
+
+deactivate Lambda
+
+@enduml
