@@ -26,8 +26,12 @@ repos:
     rev: v1.7.9
     hooks:
       - id: actionlint
-  - repo: "https://github.com/AlexanderDokuchaev/md-dead-link-check"
-    rev: v1.2.0
+  - repo: local
     hooks:
       - id: md-dead-link-check
-        args: ["--config", "devops/pyproject.toml"]
+        name: Markdown dead link check
+        description: Check for dead links in markdown files (uses CI config with check_web_links=false in CI)
+        entry: python devops/md-dead-link-check-wrapper.py
+        language: python
+        types: [markdown]
+        additional_dependencies: ["md-dead-link-check"]
