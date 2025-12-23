@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.184",
+	"version": "0.2.185",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
@@ -39,7 +39,7 @@
 		"html-flip-book-react": "0.0.0-alpha.1",
 		"moment-timezone": "0.6.0",
 		"next": "16.1.1",
-		"nuqs": "2.8.5",
+		"nuqs": "2.8.6",
 		"react": "19.2.3",
 		"react-dom": "19.2.3",
 		"react-phone-number-input": "3.4.14",
