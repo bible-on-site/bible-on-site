@@ -22,7 +22,7 @@ tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 tracing-bunyan-formatter = "0.3.10"
 tracing-log = "0.2.0"
 derive_more = { version = "2.1.1", features = ["display"] }
-sea-orm = "1.1.19"
+sea-orm = { version = "1.1.19", default-features = false }
 entities = { path = "./entities" }
 
 [dev-dependencies]
