@@ -10,7 +10,7 @@ edition = "2024"
 
 [dependencies]
 actix-web = "4.12.1"
-async-graphql = "7.0.17"
+async-graphql = { version = "7.0.17", default-features = false, features = ["playground"] }
 async-graphql-actix-web = "7.0.17"
 dotenvy = "0.15.7"
 serde = { version = "1.0.228", features = ["derive"] }
