@@ -15,24 +15,13 @@ use tracing_actix_web::TracingLogger;
 use crate::providers::Database;
 
 use super::schema_builder::{build_schema, graphql_playground, graphql_request};
-use tokio::time::{timeout, Duration};
+use tokio::time::Duration;
 
 pub struct ActixApp {
     server: Server,
     shutdown_signal: Arc<AtomicBool>,
 }
-use actix_web::{HttpRequest, HttpResponse};
 
-pub async fn debug_request(_req: HttpRequest, body: web::Bytes) -> HttpResponse {
-    // Extract the body as a string.
-    let debug_body = String::from_utf8_lossy(&body).to_string();
-
-    // For demonstration purposes, print the debug information.
-    println!("Debug request body: {}", debug_body);
-
-    // Respond with a confirmation.
-    HttpResponse::Ok().body("Debug info captured")
-}
 impl ActixApp {
     pub async fn new() -> Result<Self, Error> {
         let profile: String = env::var("PROFILE").unwrap_or_else(|_| "prod".to_string());

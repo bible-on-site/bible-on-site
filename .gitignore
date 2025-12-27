@@ -9,3 +9,5 @@ monocart-report/
 .ssh/
 .release/
 .cache/
+legacy-app/
+legacy-api/

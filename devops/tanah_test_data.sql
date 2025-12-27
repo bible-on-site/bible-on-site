@@ -12,3 +12,13 @@ INSERT INTO tanah_rabbi (NAME, DETAILS, ARTICLE_DETECTION_TYPE_ID) VALUES
 ('הרב לדוגמא ז"ל', 'תיאור לדוגמא', 1),
 ('הרב לדוגמא הי"ד', 'תיאור לדוגמא', 1),
 ('רב עם תיאור ארוך ז"ל', 'תיאור מאוד מאוד מאוד מאוד מאוד מאוד מאוד מאוד מאוד מאוד מאוד מאוד מאוד מאוד מאוד מאוד מאוד ארוך', 1);
+
+-- Test data for table tanah_sefer
+INSERT INTO tanah_sefer (SEFER_ID, NAME, TANACH_US_NAME) VALUES
+(1, 'בראשית', 'Gen'),
+(2, 'שמות', 'Ex'),
+(3, 'ויקרא', 'Lev'),
+(4, 'במדבר', 'Num'),
+(5, 'דברים', 'Deut'),
+(8, 'שמואל', '{"1":"1 Sam","2":"2 Sam"}'),
+(34, 'עזרא', '{"70":"Ezra","50":"Neh"}');

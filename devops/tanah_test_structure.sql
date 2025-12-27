@@ -152,6 +152,21 @@ CREATE TABLE `tanah_system_message` (
   PRIMARY KEY (`ID`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `tanah_sefer`
+--
+
+DROP TABLE IF EXISTS `tanah_sefer`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `tanah_sefer` (
+  `SEFER_ID` int NOT NULL,
+  `NAME` varchar(19) DEFAULT NULL,
+  `TANACH_US_NAME` varchar(29) NOT NULL,
+  PRIMARY KEY (`SEFER_ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;
+/*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

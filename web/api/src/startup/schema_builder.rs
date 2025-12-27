@@ -1,10 +1,16 @@
 use async_graphql::{EmptyMutation, EmptySubscription, MergedObject, Schema};
 
 use crate::providers::Database;
+use crate::resolvers::articles_resolver;
 use crate::resolvers::authors_resolver;
+use crate::resolvers::sefarim_resolver;
 
 #[derive(MergedObject, Default)]
-pub struct QueryRoot(authors_resolver::AuthorsQuery);
+pub struct QueryRoot(
+    articles_resolver::ArticlesQuery,
+    authors_resolver::AuthorsQuery,
+    sefarim_resolver::SefarimQuery,
+);
 
 pub fn build_schema(database: &Database) -> Schema<QueryRoot, EmptyMutation, EmptySubscription> {
     Schema::build(QueryRoot::default(), EmptyMutation, EmptySubscription)
