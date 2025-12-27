@@ -6,7 +6,7 @@ license-file = "../../license"
 repository = "https://github.com/bible-on-site/bible-on-site"
 publish = false
 version = "0.1.9"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 actix-web = "4.9.0"
