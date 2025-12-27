@@ -12,18 +12,16 @@ edition = "2024"
 actix-web = "4.12.1"
 async-graphql = { version = "7.0.17", features = ["dataloader"] }
 async-graphql-actix-web = "7.0.17"
-sqlx = { version = "0.8.6", features = ["mysql", "runtime-tokio-native-tls"] }
-dotenvy = { version = "0.15.7" }
+dotenvy = "0.15.7"
 serde = { version = "1.0.228", features = ["derive"] }
 tokio = { version = "1.48.0", features = ["macros", "rt-multi-thread"] }
 anyhow = "1.0.100"
 tracing = "0.1.44"
-tracing-opentelemetry = "0.32.0"
 tracing-actix-web = "0.7.20"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 tracing-bunyan-formatter = "0.3.10"
 tracing-log = "0.2.0"
-derive_more = { version = "2.1.1", features = ["full"] }
+derive_more = { version = "2.1.1", features = ["display"] }
 sea-orm = "1.1.19"
 entities = { path = "./entities" }
 
