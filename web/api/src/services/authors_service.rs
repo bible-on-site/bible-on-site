@@ -11,9 +11,9 @@ pub async fn find_one_by_id(db: &Database, id: i32) -> Result<Model, ServiceErro
         .one(db.get_connection())
         .await
         .map_err(|db_err| {
-            ServiceError::internal_server_error(&INTERNAL_SERVER_ERROR, Some(db_err))
+            ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
         })?;
-    pub const AUTHOR_NOT_FOUND: &'static str = "Author Not Found";
+    const AUTHOR_NOT_FOUND: &str = "Author Not Found";
     match user {
         Some(value) => {
             tracing::info!("Author found");
