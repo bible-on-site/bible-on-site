@@ -2,13 +2,14 @@ use std::{
     env, io,
     net::TcpListener,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
 };
 
 use actix_web::guard;
-use actix_web::{dev::Server, web, App, HttpServer};
+use actix_web::middleware::Compress;
+use actix_web::{App, HttpServer, dev::Server, web};
 use anyhow::Error;
 use tracing_actix_web::TracingLogger;
 
@@ -48,6 +49,7 @@ impl ActixApp {
             let shutdown_signal = shutdown_signal.clone();
             move || {
                 App::new()
+                    .wrap(Compress::default())
                     .wrap(TracingLogger::default())
                     .configure(Self::build_app_config(&db, shutdown_signal.clone()))
             }
