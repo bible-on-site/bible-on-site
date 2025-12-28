@@ -5,6 +5,7 @@ use crate::resolvers::articles_resolver;
 use crate::resolvers::authors_resolver;
 use crate::resolvers::perakim_resolver;
 use crate::resolvers::sefarim_resolver;
+use crate::resolvers::starter_resolver;
 
 #[derive(MergedObject, Default)]
 pub struct QueryRoot(
@@ -12,6 +13,7 @@ pub struct QueryRoot(
     authors_resolver::AuthorsQuery,
     perakim_resolver::PerakimQuery,
     sefarim_resolver::SefarimQuery,
+    starter_resolver::StarterQuery,
 );
 
 pub fn build_schema(database: &Database) -> Schema<QueryRoot, EmptyMutation, EmptySubscription> {

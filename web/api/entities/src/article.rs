@@ -3,17 +3,13 @@ use sea_orm::entity::prelude::*;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
 #[sea_orm(table_name = "tanah_article")]
 pub struct Model {
-    #[sea_orm(primary_key, column_name = "ID")]
+    #[sea_orm(primary_key)]
     pub id: i32,
-    #[sea_orm(column_name = "PEREK_ID")]
     pub perek_id: i16,
-    #[sea_orm(column_name = "AUTHOR_ID")]
     pub author_id: i16,
-    #[sea_orm(column_name = "ABSTRACT", column_type = "Text", nullable)]
+    #[sea_orm(column_name = "abstract", column_type = "Text", nullable)]
     pub article_abstract: Option<String>,
-    #[sea_orm(column_name = "NAME")]
     pub name: String,
-    #[sea_orm(column_name = "PRIORITY")]
     pub priority: i8,
 }
 

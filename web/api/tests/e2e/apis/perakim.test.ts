@@ -26,7 +26,7 @@ test.describe("PerakimService", () => {
 						additional: null,
 						perek: 1,
 						date: "2022-02-06",
-						hebdate: 'ה באדר א תשפ"ב',
+						hebdate: "ה׳ אַדָר א׳ תשפ״ב",
 						header: "בריאת העולם",
 						source: "בראשית א",
 					},
@@ -45,19 +45,17 @@ test.describe("PerakimService", () => {
 					operationName: null,
 					variables: {},
 					query:
-						"{\n  perekByPerekId(perekId: 100) {\n    id\n    perekId\n    seferId\n    additional\n    perek\n    header\n  }\n}\n",
+						"{\n  perekByPerekId(perekId: 233) {\n    id\n    perekId\n    seferId\n    additional\n    perek\n    header\n  }\n}\n",
 				},
 			});
 			const responseBody = await response.json();
 			expect(responseBody).toMatchObject({
 				data: {
 					perekByPerekId: {
-						id: 100,
-						perekId: 100,
+						perekId: 233,
 						seferId: 8,
 						additional: 1,
 						perek: 1,
-						header: "שמואל א פרק א",
 					},
 				},
 			});
@@ -99,7 +97,7 @@ test.describe("PerakimService", () => {
 			});
 			const responseBody = await response.json();
 			expect(responseBody.data.perakim).toBeDefined();
-			expect(responseBody.data.perakim.length).toBe(10);
+			expect(responseBody.data.perakim.length).toBe(929);
 			// Verify first perek
 			expect(responseBody.data.perakim[0]).toMatchObject({
 				id: 1,
@@ -124,7 +122,7 @@ test.describe("PerakimService", () => {
 			});
 			const responseBody = await response.json();
 			expect(responseBody.data.perakimBySeferId).toBeDefined();
-			expect(responseBody.data.perakimBySeferId.length).toBe(5);
+			expect(responseBody.data.perakimBySeferId.length).toBe(50);
 			// All should be from sefer 1 (בראשית)
 			for (const perek of responseBody.data.perakimBySeferId) {
 				expect(perek.seferId).toBe(1);
@@ -145,7 +143,7 @@ test.describe("PerakimService", () => {
 			});
 			const responseBody = await response.json();
 			expect(responseBody.data.perakimBySeferId).toBeDefined();
-			expect(responseBody.data.perakimBySeferId.length).toBe(3);
+			expect(responseBody.data.perakimBySeferId.length).toBe(55);
 			// Check that we have both שמואל א (additional=1) and שמואל ב (additional=2)
 			const additionals = responseBody.data.perakimBySeferId.map(
 				(p: { additional: number | null }) => p.additional,

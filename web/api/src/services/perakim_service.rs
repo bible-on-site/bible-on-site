@@ -27,6 +27,7 @@ pub async fn find_one_by_perek_id(db: &Database, perek_id: i32) -> Result<Model,
 pub async fn find_all(db: &Database) -> Result<Vec<Model>, ServiceError> {
     tracing::info_span!("perakim_service::find_all");
     let perakim = Entity::find()
+        .filter(entities::perek::Column::PerekId.is_not_null())
         .all(db.get_connection())
         .await
         .map_err(|db_err| {
