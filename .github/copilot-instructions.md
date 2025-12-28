@@ -60,6 +60,21 @@ When working on the `web/bible-on-site` project (website):
 - When writing a test, and asserting non null using the framework, you can use the non null assertion operator after and decorate the usage with a linter suppression comment explaining why it's safe.
 - When catching an error, log that it took place using console.warn or console.error.
 
+### web/api Instructions
+
+When working on the `web/api` project (Rust GraphQL API):
+
+- The API uses `cargo-make` for task orchestration. Use `Makefile.toml` lifecycle commands:
+  - `cargo make run-api` - Run the API server
+  - `cargo make test-e2e` - Run E2E tests (starts API server automatically)
+  - `cargo make coverage-e2e` - Run E2E tests with coverage
+  - `cargo make lint` - Run Clippy linter
+  - `cargo make clean` - Clean build artifacts
+  - `cargo make package` - Build Docker image
+- E2E tests are in `tests/e2e/` and use Playwright
+- Test database: Use `DB_URL` env var or `.test.env` file. Populate with: `DB_URL="mysql://root:test_123@localhost:3306/tanah_test" npx tsx devops/populate-test-db.mts`
+- Entities are in the `entities/` crate, services in `src/services/`, resolvers in `src/resolvers/`, DTOs in `src/dtos/`
+
 ### Playwright Tests (currently applies to website-e2e/perf, api-e2e)
 
 #### Test Description Conventions

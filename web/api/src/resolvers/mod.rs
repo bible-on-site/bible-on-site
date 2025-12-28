@@ -1,1 +1,5 @@
+pub mod articles_resolver;
 pub mod authors_resolver;
+pub mod perakim_resolver;
+pub mod sefarim_resolver;
+pub mod starter_resolver;

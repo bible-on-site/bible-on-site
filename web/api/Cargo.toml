@@ -6,29 +6,34 @@ license-file = "../../license"
 repository = "https://github.com/bible-on-site/bible-on-site"
 publish = false
 version = "0.1.9"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-actix-web = "4.9.0"
-async-graphql = { version = "7.0.15", features = ["dataloader"] }
-async-graphql-actix-web = "7.0.15"
-sqlx = { version = "0.8.3", features = ["mysql", "runtime-tokio-native-tls"] }
-dotenvy = { version = "0.15.7" }
-serde = { version = "1.0.217", features = ["derive"] }
-tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
-anyhow = "1.0.95"
-tracing = "0.1.41"
-tracing-opentelemetry = "0.32.0"
-tracing-actix-web = "0.7.15"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
-tracing-bunyan-formatter = "0.3.10"
+actix-web = { version = "4.12.1", default-features = false, features = [
+    "macros",
+    "http2",
+    "compress-brotli",
+    "ws",
+] }
+async-graphql = { version = "7.0.17", default-features = false, features = [
+    "playground",
+] }
+async-graphql-actix-web = "7.0.17"
+dotenvy = "0.15.7"
+serde = { version = "1.0.228", features = ["derive"] }
+tokio = { version = "1.48.0", features = ["macros", "rt-multi-thread"] }
+anyhow = "1.0.100"
+tracing = "0.1.44"
+tracing-actix-web = "0.7.20"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+tracing-bunyan-formatter = { version = "0.3.10", default-features = false }
 tracing-log = "0.2.0"
-derive_more = { version = "2.0.1", features = ["full"] }
-sea-orm = "1.1.4"
+derive_more = { version = "2.1.1", features = ["display"] }
+sea-orm = { version = "1.1.19", default-features = false }
 entities = { path = "./entities" }
 
 [dev-dependencies]
-cargo-llvm-cov = "0.6.16"
+cargo-llvm-cov = "0.6.21"
 cargo-make = "0.37.24"
 semver-bump = "1.0.1"
 tomato-toml = { git = "https://github.com/doradsoft/rust-tomato-toml", branch = "latest" }
