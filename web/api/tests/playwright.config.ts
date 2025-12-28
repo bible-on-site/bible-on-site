@@ -5,15 +5,17 @@ import {
 } from "@playwright/test";
 import {
 	isCI,
+	isCopilot,
 	shouldMeasureCov,
 } from "../../shared/tests-util/environment.mjs";
 
 const WEB_SERVER_URL = "http://127.0.0.1:3003/api/graphql";
+const isNonInteractive = isCI || isCopilot;
 export default defineConfig({
 	testMatch: ["**/*.test.ts"],
 	testDir: "./e2e",
 	/* Fail the build on CI if you accidentally left test.only in the source code. */
-	forbidOnly: isCI,
+	forbidOnly: isNonInteractive,
 	use: {
 		/* Base URL to use in actions like `await page.goto('/')`. */
 		baseURL: WEB_SERVER_URL,
@@ -23,7 +25,7 @@ export default defineConfig({
 		timezoneId: "Asia/Jerusalem",
 	},
 	// Increase the default timeout to 1 min in case of CI (slow servers).
-	timeout: isCI ? 60000 : 30000,
+	timeout: isNonInteractive ? 60000 : 30000,
 	globalTeardown: "./playwright-global-teardown.mjs",
 	projects: [
 		{
@@ -33,7 +35,7 @@ export default defineConfig({
 	],
 	fullyParallel: true,
 	retries: 0,
-	workers: isCI ? "100%" : "50%",
+	workers: isNonInteractive ? "100%" : "50%",
 
 	reporter: [
 		["list"],
@@ -41,10 +43,10 @@ export default defineConfig({
 			"html",
 			{
 				outputFolder: "../.playwright-report/e2e/html",
-				open: isCI ? "never" : "on-failure",
+				open: isNonInteractive ? "never" : "on-failure",
 			},
 		],
-		...(isCI
+		...(isNonInteractive
 			? [
 					[
 						"junit",

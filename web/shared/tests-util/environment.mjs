@@ -14,3 +14,5 @@ export const shouldMeasureCov = flagToBool(process.env.MEASURE_COV, {
 });
 
 export const isCI = !!process.env.CI;
+
+export const isCopilot = !!process.env.VSCODE_AGENT_FOLDER;

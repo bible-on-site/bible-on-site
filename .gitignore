@@ -9,3 +9,6 @@ monocart-report/
 .ssh/
 .release/
 .cache/
+legacy-app/
+legacy-api/
+web/api/docs/migration.md
