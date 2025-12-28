@@ -514,9 +514,9 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          file: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/junit/results.xml
+          files: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/junit/results.xml
           flags: api
-          report-type: test_results
+          report_type: test_results
 
       - name: Store API E2E HTML Report
         uses: actions/upload-artifact@v6
@@ -579,7 +579,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ steps.list_files.outputs.junit_files }}
           flags: website # Assuming you want to flag these as website tests
-          report-type: test_results
+          report_type: test_results
 
   cross_module_ci:
     name: Cross Module CI
