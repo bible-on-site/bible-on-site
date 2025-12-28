@@ -1559,16 +1559,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gethostname"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1ebd34e35c46e00bb73e81363248d627782724609fe1b6396f553f68fe3862e"
-dependencies = [
- "libc",
- "winapi",
-]
-
-[[package]]
 name = "getrandom"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3896,7 +3886,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d637245a0d8774bd48df6482e086c59a8b5348a910c3b0579354045a9d82411"
 dependencies = [
  "ahash",
- "gethostname",
  "log",
  "serde",
  "serde_json",
