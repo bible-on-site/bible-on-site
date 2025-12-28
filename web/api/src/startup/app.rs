@@ -54,7 +54,7 @@ impl ActixApp {
                     .configure(Self::build_app_config(&db, shutdown_signal.clone()))
             }
         })
-        .listen(listener)?
+        .listen_auto_h2c(listener)?
         .run();
         tracing::info!("Server running on port {}", port);
         Ok(Self {
