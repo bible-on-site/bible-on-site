@@ -8,8 +8,8 @@ This document tracks the migration of GraphQL APIs from `legacy-api/` (TypeScrip
 |-----|----------------|--------|-------|
 | Author | `legacy-api/api/resolvers/author-resolver.ts` | ✅ Migrated | `authorById` query |
 | Sefer | `legacy-api/dal/sefer-data-source.ts` | ✅ Migrated | `seferById`, `sefarim` queries |
-| Article | `legacy-api/api/resolvers/article-reslover.ts` | 🔄 Pending | `articleById` query |
-| Perek | `legacy-api/api/resolvers/perek-resolver.ts` | 🔄 Pending | `perekById` query, has sefer relationship |
+| Article | `legacy-api/api/resolvers/article-reslover.ts` | ✅ Migrated | `articleById`, `articlesByPerekId`, `articlesByAuthorId` queries |
+| Perek | `legacy-api/api/resolvers/perek-resolver.ts` | ✅ Migrated | `perekByPerekId`, `perakim`, `perakimBySeferId` queries |
 | Starter | `legacy-api/api/resolvers/starter-resolver.ts` | 🔄 Pending | Aggregation: authors list + perek article counters |
 
 ## Database Schema Reference

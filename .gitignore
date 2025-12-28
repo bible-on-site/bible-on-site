@@ -11,3 +11,4 @@ monocart-report/
 .cache/
 legacy-app/
 legacy-api/
+web/api/docs/migration.md
