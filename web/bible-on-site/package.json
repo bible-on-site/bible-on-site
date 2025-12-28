@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.186",
+	"version": "0.2.187",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
@@ -34,7 +34,7 @@
 		"@syncfusion/ej2-react-layouts": "31.2.12",
 		"autoprefixer": "10.4.23",
 		"flowbite": "4.0.1",
-		"flowbite-react": "0.12.14",
+		"flowbite-react": "0.12.15",
 		"gematry": "1.0.2",
 		"html-flip-book-react": "0.0.0-alpha.1",
 		"moment-timezone": "0.6.0",
