@@ -12,3 +12,5 @@ monocart-report/
 legacy-app/
 legacy-api/
 web/api/docs/migration.md
+actionlint
+test-results/
