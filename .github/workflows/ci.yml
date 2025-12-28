@@ -761,7 +761,7 @@ jobs:
   release_api:
     name: Release API
     needs: [setup_env, determine_api_changes, cross_module_ci, package_api]
-    if: ${{ needs.determine_api_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ needs.package_api.result == 'success' && needs.determine_api_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
