@@ -106,6 +106,28 @@ CREATE TABLE `tanah_dedication_type` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `tanah_perek`
+--
+
+DROP TABLE IF EXISTS `tanah_perek`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `tanah_perek` (
+  `ID` int NOT NULL,
+  `PEREK_ID` int DEFAULT NULL,
+  `SEFER_ID` int DEFAULT NULL,
+  `ADDITIONAL` int DEFAULT NULL,
+  `PEREK` int DEFAULT NULL,
+  `DATE` date DEFAULT NULL,
+  `HEBDATE` varchar(20) DEFAULT NULL,
+  `TSEIT` time DEFAULT NULL,
+  `HEADER` varchar(100) DEFAULT NULL,
+  `SOURCE` varchar(20) DEFAULT NULL,
+  PRIMARY KEY (`ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `tanah_perek_dedication`
 --
 
