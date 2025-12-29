@@ -1,0 +1,8 @@
+# Known Lighthouse audit issue
+id: max-potential-fid
+strategy: all
+explanation: |
+  Deprecated metric, replaced by INP (Interaction to Next Paint).
+  This metric is volatile in local testing and has been superseded
+  by INP as a Core Web Vital.
+typical_value: "500-2500ms depending on page and CPU load"

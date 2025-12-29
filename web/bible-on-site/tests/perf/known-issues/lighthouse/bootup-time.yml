@@ -1,0 +1,10 @@
+# Known Lighthouse audit issue
+id: bootup-time
+strategy: all
+explanation: |
+  JavaScript execution time varies significantly based on local
+  machine CPU load and background processes.
+  Volatile in local testing due to CPU variance.
+urls:
+  - "_next/static/chunks/d4b4a1ad90e2acdb.js"
+  - "_next/static/chunks/734ff1b70e8a97d3.js"

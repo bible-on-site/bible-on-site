@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { reportBenchmark } from "../util/playwright/benchmark-reporter";
+import { reportBenchmark } from "../util/benchmark";
 
 /**
  * Routes to exercise during memory benchmarking.
@@ -122,8 +122,8 @@ test.describe("Server Memory", () => {
 		).toBeGreaterThan(0);
 
 		reportBenchmark({
-			name: "memory",
-			measure: "server_rss_mb",
+			name: "memory: server RSS",
+			measure: "memory_mb",
 			value: peakServerRssMB,
 			upperValue: MAX_SERVER_RSS_MB,
 		});
@@ -134,8 +134,8 @@ test.describe("Server Memory", () => {
 		const MAX_SERVER_HEAP_MB = 512;
 
 		reportBenchmark({
-			name: "memory",
-			measure: "server_heap_mb",
+			name: "memory: server heap",
+			measure: "memory_mb",
 			value: peakServerHeapMB,
 			upperValue: MAX_SERVER_HEAP_MB,
 		});

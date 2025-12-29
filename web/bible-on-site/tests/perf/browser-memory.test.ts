@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { reportBenchmark } from "../util/playwright/benchmark-reporter";
+import { reportBenchmark } from "../util/benchmark";
 
 /**
  * Routes to exercise during memory benchmarking.
@@ -118,14 +118,11 @@ test.describe("Browser Memory", () => {
 
 		// Report browser memory per device - high threshold (1024MB) for tracking
 		const MAX_BROWSER_MEMORY_MB = 1024;
-		const browserMeasureName = isDesktop
-			? "browser_heap_desktop_mb"
-			: "browser_heap_mobile_mb";
 
 		if (peakBrowserMemoryBytes > 0) {
 			reportBenchmark({
-				name: "memory",
-				measure: browserMeasureName,
+				name: `memory: browser heap (${deviceLabel})`,
+				measure: "memory_mb",
 				value: peakBrowserMemoryMB,
 				upperValue: MAX_BROWSER_MEMORY_MB,
 			});

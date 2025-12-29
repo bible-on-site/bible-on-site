@@ -1,0 +1,7 @@
+# Known Lighthouse audit issue
+id: network-dependency-tree-insight
+strategy: all
+explanation: |
+  Network dependency tree shows suboptimal resource loading order.
+  This is a diagnostic insight for analyzing critical request chains.
+  Next.js handles resource loading - limited optimization available.

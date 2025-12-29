@@ -1,0 +1,8 @@
+# Known Lighthouse audit issue
+id: valid-source-maps
+strategy: all
+explanation: |
+  Source maps not included in production build.
+  This is intentional - source maps are not shipped to production
+  for security and bundle size reasons.
+url: "_next/static/chunks/734ff1b70e8a97d3.js"

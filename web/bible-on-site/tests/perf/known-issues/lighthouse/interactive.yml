@@ -1,0 +1,8 @@
+# Known Lighthouse audit issue
+id: interactive
+strategy: all
+explanation: |
+  Time to Interactive (TTI) is volatile in local testing.
+  It varies significantly based on local machine CPU load
+  and is tested via the overall performance category score.
+typical_value: "3-5s depending on page and CPU load"

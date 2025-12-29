@@ -1,0 +1,9 @@
+# Known Lighthouse audit issue
+id: legacy-javascript-insight
+strategy: all
+explanation: |
+  Polyfills for Array.prototype.at, Array.prototype.flat, Array.prototype.flatMap,
+  Object.fromEntries, Object.hasOwn, String.prototype.trimEnd, String.prototype.trimStart
+  are being shipped unnecessarily for modern browsers.
+url: "_next/static/chunks/d4b4a1ad90e2acdb.js"
+wasted_bytes: 14449

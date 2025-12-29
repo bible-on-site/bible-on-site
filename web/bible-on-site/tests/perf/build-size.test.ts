@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
-import { reportBenchmark } from "../util/playwright/benchmark-reporter";
+import { reportBenchmark } from "../util/benchmark";
 
 const NEXT_BUILD_DIR = resolve(__dirname, "../../.next");
 const STANDALONE_DIR = resolve(NEXT_BUILD_DIR, "standalone");
@@ -63,8 +63,8 @@ test.describe("Build Size Benchmarks", () => {
 			// Upper threshold set high (750MB) - this is mainly for tracking trends
 			const MAX_SIZE_MB = 750;
 			reportBenchmark({
-				name: "build",
-				measure: "standalone_size_mb",
+				name: "build: standalone",
+				measure: "size_mb",
 				value: sizeMB,
 				upperValue: MAX_SIZE_MB,
 			});
@@ -90,8 +90,8 @@ test.describe("Build Size Benchmarks", () => {
 			// Report to Bencher - upper threshold set high for tracking
 			const MAX_SIZE_MB = 4096;
 			reportBenchmark({
-				name: "build",
-				measure: "next_dir_size_mb",
+				name: "build: .next",
+				measure: "size_mb",
 				value: sizeMB,
 				upperValue: MAX_SIZE_MB,
 			});
