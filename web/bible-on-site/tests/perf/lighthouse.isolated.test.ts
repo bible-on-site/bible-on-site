@@ -3,10 +3,7 @@ import { resolve } from "node:path";
 import { chromium } from "@playwright/test";
 import getPort from "get-port";
 import lighthouse, { desktopConfig, type Flags, type Result } from "lighthouse";
-import {
-	getLighthouseMeasure,
-	reportBenchmark,
-} from "../util/benchmark";
+import { getLighthouseMeasure, reportBenchmark } from "../util/benchmark";
 import { test as base, expect } from "../util/playwright/test-fixture";
 
 type DeviceStrategy = "mobile" | "desktop";
@@ -469,9 +466,7 @@ test.describe("Lighthouse", () => {
 				for (const [categoryId, minScore] of Object.entries(
 					categoryThresholds,
 				)) {
-					test(`category: ${categoryId}`, async ({
-						getLighthouseResult,
-					}) => {
+					test(`category: ${categoryId}`, async ({ getLighthouseResult }) => {
 						const lhr = getLighthouseResult(path, strategy);
 						const category =
 							lhr.categories[categoryId as keyof typeof lhr.categories];
@@ -519,9 +514,7 @@ test.describe("Lighthouse", () => {
 				];
 
 				for (const metric of coreMetrics) {
-					test(`metric: ${metric.name}`, async ({
-						getLighthouseResult,
-					}) => {
+					test(`metric: ${metric.name}`, async ({ getLighthouseResult }) => {
 						const lhr = getLighthouseResult(path, strategy);
 						const audit = lhr.audits[metric.id];
 						const value = audit?.numericValue ?? 0;
