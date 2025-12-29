@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Page, TestInfo } from "@playwright/test"; // import { test, expect } from "@playwright/test";
 import { errors } from "@playwright/test"; // import { test, expect } from "@playwright/test";
-import { reportBenchmark, type BencherMeasure } from "../util/benchmark";
+import { type BencherMeasure, reportBenchmark } from "../util/benchmark";
 import { expect, test as testBase } from "../util/playwright/test-fixture";
 
 const test = testBase.extend({
