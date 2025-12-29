@@ -542,7 +542,7 @@ test.describe("Lighthouse", () => {
 				// and soft assertions allow all audits to be checked even if some fail
 				test("audits: all measurable audits pass", async ({
 					getLighthouseResult,
-				}, testInfo) => {
+				}) => {
 					const lhr = getLighthouseResult(path, strategy);
 
 					const summary = {
@@ -567,15 +567,10 @@ test.describe("Lighthouse", () => {
 							continue;
 						}
 
-						// Report benchmark for this audit
-						const benchmarkValue = audit.numericValue ?? score;
-						reportBenchmark({
-							name: `${testInfo.title} - ${auditId}`,
-							measure: `audit-${auditId}`,
-							value: benchmarkValue,
-							lowerValue: 0.9,
-							upperValue: 1.0,
-						});
+						// Note: Individual audits are NOT reported to Bencher to avoid
+						// bloating the benchmark matrix. Audits are validated via soft
+						// assertions below. Only category scores and core metrics are
+						// tracked in Bencher for regression detection.
 
 						// Use test.step for per-audit visibility in the report
 						await test.step(`audit: ${auditId}`, async () => {
