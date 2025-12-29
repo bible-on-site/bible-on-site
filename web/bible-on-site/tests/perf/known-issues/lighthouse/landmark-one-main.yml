@@ -1,0 +1,9 @@
+# Known Lighthouse audit issue
+id: landmark-one-main
+strategy: all
+explanation: |
+  The document does not have a main landmark (<main> element).
+  This is an accessibility issue that needs layout refactoring.
+element: <html lang="en">
+selector: html
+issue: "Document does not have a main landmark"

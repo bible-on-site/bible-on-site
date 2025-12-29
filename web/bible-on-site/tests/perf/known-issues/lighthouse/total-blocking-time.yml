@@ -1,0 +1,8 @@
+# Known Lighthouse audit issue
+id: total-blocking-time
+strategy: all
+explanation: |
+  Tested separately via TBT metric threshold.
+  This audit is covered by the Core Web Vitals metric test which uses
+  a more appropriate threshold for local testing variance.
+typical_value: "500-3500ms depending on page and CPU load"

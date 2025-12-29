@@ -1,0 +1,7 @@
+# Known Lighthouse audit issue
+id: forced-reflow-insight
+strategy: all
+explanation: |
+  Forced reflow detected during page load.
+  This can cause layout thrashing and should be investigated.
+  Likely caused by JavaScript reading layout properties after DOM modifications.

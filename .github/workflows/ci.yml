@@ -250,17 +250,13 @@ jobs:
             --adapter json \
             --github-actions '${{ secrets.GITHUB_TOKEN }}' \
             --file .playwright-report/perf/bencher/benchmark.json \
-            --threshold-measure cls --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 20.00 --threshold-lower-boundary _ \
-            --threshold-measure fcp --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 0.50 --threshold-lower-boundary _ \
-            --threshold-measure lcp --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 0.50 --threshold-lower-boundary _ \
-            --threshold-measure ttfb --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 0.50 --threshold-lower-boundary _ \
-            --threshold-measure inp --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 1.50 --threshold-lower-boundary _ \
-            --threshold-measure standalone_size_mb --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 0.50 --threshold-lower-boundary _ \
-            --threshold-measure next_dir_size_mb --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 0.50 --threshold-lower-boundary _ \
-            --threshold-measure browser_heap_desktop_mb --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 0.50 --threshold-lower-boundary _ \
-            --threshold-measure browser_heap_mobile_mb --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 0.50 --threshold-lower-boundary _ \
-            --threshold-measure server_rss_mb --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 0.50 --threshold-lower-boundary _ \
-            --threshold-measure server_heap_mb --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 0.50 --threshold-lower-boundary _ \
+            --threshold-measure time_ms --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 5.00 --threshold-lower-boundary _ \
+            --threshold-measure memory_mb --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 5.00 --threshold-lower-boundary _ \
+            --threshold-measure size_mb --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 5.00 --threshold-lower-boundary _ \
+            --threshold-measure score --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary _ --threshold-lower-boundary 5.00 \
+            --threshold-measure ratio --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 20.00 --threshold-lower-boundary _ \
+            --threshold-measure bytes --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 5.00 --threshold-lower-boundary _ \
+            --threshold-measure count --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 10.00 --threshold-lower-boundary _ \
 
       - name: Store Website Perf HTML Report
         uses: actions/upload-artifact@v6

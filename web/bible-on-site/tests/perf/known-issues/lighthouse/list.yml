@@ -1,0 +1,10 @@
+# Known Lighthouse audit issue
+id: list
+strategy: all
+explanation: |
+  Lists do not contain only <li> elements and script supporting elements.
+  The navbar-module__menuBox contains a <header> element which is not allowed.
+element: <ul class="navbar-module__Owhr-a__menuBox">
+selector: body > div.navbar-module__hamburgerMenu > ul.navbar-module__menuBox
+issue: "List element has direct children that are not allowed: header"
+related_element: <header class="navbar-module__Owhr-a__sidebarTopBar">

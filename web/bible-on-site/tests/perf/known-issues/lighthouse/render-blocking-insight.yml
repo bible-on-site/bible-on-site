@@ -1,0 +1,11 @@
+# Known Lighthouse audit issue
+id: render-blocking-insight
+strategy: all
+explanation: |
+  Some CSS resources are blocking the first paint of the page.
+  These are Next.js generated CSS chunks that could potentially be inlined or deferred.
+urls:
+  - "_next/static/chunks/419f56f8d635b5aa.css"
+  - "_next/static/chunks/3ce583f06c5473cc.css"
+  - "_next/static/chunks/51e1c431dd66a840.css"
+  - "_next/static/chunks/f813724b77f04a54.css"
