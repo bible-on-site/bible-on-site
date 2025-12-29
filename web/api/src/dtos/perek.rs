@@ -1,5 +1,6 @@
-use async_graphql::{ComplexObject, SimpleObject};
+use async_graphql::{ComplexObject, Context, Result, SimpleObject};
 
+use crate::{providers::Database, services::articles_service};
 use entities::perek::Model;
 
 #[derive(SimpleObject, Debug, Clone)]
@@ -44,4 +45,14 @@ impl From<Model> for Perek {
 }
 
 #[ComplexObject]
-impl Perek {}
+impl Perek {
+    /// Returns the count of articles for this perek
+    #[graphql(name = "articlesCount")]
+    async fn articles_count(&self, ctx: &Context<'_>) -> Result<i64> {
+        // Use perek_id (1-929) for counting, not the DB id
+        let perek_id = self.perek_id.unwrap_or(self.id);
+        let db = ctx.data::<Database>()?;
+        let count = articles_service::count_by_perek_id(db, perek_id).await?;
+        Ok(count)
+    }
+}

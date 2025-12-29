@@ -104,5 +104,44 @@ test.describe("StarterService", () => {
 				expect(count).toBeGreaterThanOrEqual(0);
 			}
 		});
+
+		test("returns articlesCount for each author", async ({ request }) => {
+			const response: APIResponse = await request.post(ROOT_URL, {
+				headers: {
+					"Content-Type": "application/json",
+				},
+				data: {
+					operationName: null,
+					variables: {},
+					query:
+						"{\n  starter {\n    authors {\n      id\n      name\n      articlesCount\n    }\n  }\n}\n",
+				},
+			});
+			const responseBody = await response.json();
+
+			const authors = responseBody.data.starter.authors;
+			expect(authors).toHaveLength(4);
+
+			// Check all authors have articlesCount
+			for (const author of authors) {
+				expect(author.articlesCount).toBeDefined();
+				expect(typeof author.articlesCount).toBe("number");
+				expect(author.articlesCount).toBeGreaterThanOrEqual(0);
+			}
+
+			// Test data: author 1 has 1 article, author 2 has 2 articles
+			const author1 = authors.find((a: { id: number }) => a.id === 1);
+			expect(author1).toBeDefined();
+			expect(author1.articlesCount).toBe(1);
+
+			const author2 = authors.find((a: { id: number }) => a.id === 2);
+			expect(author2).toBeDefined();
+			expect(author2.articlesCount).toBe(2);
+
+			// Author 3 has no articles
+			const author3 = authors.find((a: { id: number }) => a.id === 3);
+			expect(author3).toBeDefined();
+			expect(author3.articlesCount).toBe(0);
+		});
 	});
 });
