@@ -4,6 +4,7 @@ import "./globals.css";
 
 import Image from "next/image";
 import Link from "next/link";
+import { GoogleAnalytics } from "./components/GoogleAnalytics";
 import { NavBar } from "./components/NavBar";
 
 /* istanbul ignore next */
@@ -30,6 +31,9 @@ export default function RootLayout({
 }>) {
 	return (
 		<html lang="en">
+			<head>
+				<GoogleAnalytics />
+			</head>
 			<body className={`${geistSans.variable} ${geistMono.variable}`}>
 				<nav className="top-nav">
 					<Link href="/">
