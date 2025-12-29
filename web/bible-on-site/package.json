@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.189",
+	"version": "0.2.190",
 	"private": true,
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
@@ -55,7 +55,7 @@
 		"@types/react": "19.2.7",
 		"@types/react-dom": "19.2.3",
 		"cross-env": "10.1.0",
-		"get-port": "5.1.1",
+		"get-port": "7.1.0",
 		"jest": "30.2.0",
 		"jest-environment-jsdom": "30.2.0",
 		"jest-junit": "16.0.0",
