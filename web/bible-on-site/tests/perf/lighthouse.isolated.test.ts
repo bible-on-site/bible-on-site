@@ -248,6 +248,26 @@ function isKnownIssue(auditId: string, strategy: DeviceStrategy): boolean {
 }
 
 /**
+ * Maps Lighthouse numericUnit to a unified Bencher measure name.
+ * Grouping by scale prevents sparse matrices in Bencher reports.
+ */
+function getBencherMeasure(
+	numericUnit: string | undefined,
+): "time_ms" | "bytes" | "count" | "score" {
+	switch (numericUnit) {
+		case "millisecond":
+			return "time_ms";
+		case "byte":
+			return "bytes";
+		case "element":
+			return "count";
+		default:
+			// unitless, undefined, or any other unit → use score (0-1)
+			return "score";
+	}
+}
+
+/**
  * Extract diagnostic details from a Lighthouse audit result.
  * This provides actionable information about what's failing and why.
  */
@@ -567,10 +587,17 @@ test.describe("Lighthouse", () => {
 							continue;
 						}
 
-						// Note: Individual audits are NOT reported to Bencher to avoid
-						// bloating the benchmark matrix. Audits are validated via soft
-						// assertions below. Only category scores and core metrics are
-						// tracked in Bencher for regression detection.
+						// Report to Bencher using unified measure names based on numericUnit.
+						// This groups audits by scale (time_ms, bytes, count, score) to prevent
+						// sparse matrices in Bencher reports.
+						const measure = getBencherMeasure(audit.numericUnit);
+						const benchmarkValue =
+							audit.numericValue !== undefined ? audit.numericValue : score;
+						reportBenchmark({
+							name: `audit: ${auditId}`,
+							measure,
+							value: benchmarkValue,
+						});
 
 						// Use test.step for per-audit visibility in the report
 						await test.step(`audit: ${auditId}`, async () => {
