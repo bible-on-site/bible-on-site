@@ -3,7 +3,10 @@ import { resolve } from "node:path";
 import { chromium } from "@playwright/test";
 import getPort from "get-port";
 import lighthouse, { desktopConfig, type Flags, type Result } from "lighthouse";
-import { reportBenchmark } from "../util/playwright/benchmark-reporter";
+import {
+	getLighthouseMeasure,
+	reportBenchmark,
+} from "../util/benchmark";
 import { test as base, expect } from "../util/playwright/test-fixture";
 
 type DeviceStrategy = "mobile" | "desktop";
@@ -248,26 +251,6 @@ function isKnownIssue(auditId: string, strategy: DeviceStrategy): boolean {
 }
 
 /**
- * Maps Lighthouse numericUnit to a unified Bencher measure name.
- * Grouping by scale prevents sparse matrices in Bencher reports.
- */
-function getBencherMeasure(
-	numericUnit: string | undefined,
-): "time_ms" | "bytes" | "count" | "score" {
-	switch (numericUnit) {
-		case "millisecond":
-			return "time_ms";
-		case "byte":
-			return "bytes";
-		case "element":
-			return "count";
-		default:
-			// unitless, undefined, or any other unit → use score (0-1)
-			return "score";
-	}
-}
-
-/**
  * Extract diagnostic details from a Lighthouse audit result.
  * This provides actionable information about what's failing and why.
  */
@@ -488,15 +471,15 @@ test.describe("Lighthouse", () => {
 				)) {
 					test(`category: ${categoryId}`, async ({
 						getLighthouseResult,
-					}, testInfo) => {
+					}) => {
 						const lhr = getLighthouseResult(path, strategy);
 						const category =
 							lhr.categories[categoryId as keyof typeof lhr.categories];
 						const score = category?.score ?? 0;
 
 						reportBenchmark({
-							name: testInfo.title,
-							measure: `category-${categoryId}`,
+							name: `category: ${categoryId}`,
+							measure: "score",
 							value: score,
 							lowerValue: minScore,
 							upperValue: 1.0,
@@ -538,14 +521,16 @@ test.describe("Lighthouse", () => {
 				for (const metric of coreMetrics) {
 					test(`metric: ${metric.name}`, async ({
 						getLighthouseResult,
-					}, testInfo) => {
+					}) => {
 						const lhr = getLighthouseResult(path, strategy);
 						const audit = lhr.audits[metric.id];
 						const value = audit?.numericValue ?? 0;
 
+						// Use 'ratio' for CLS (unitless), 'time_ms' for timing metrics
+						const measure = metric.name === "CLS" ? "ratio" : "time_ms";
 						reportBenchmark({
-							name: testInfo.title,
-							measure: `metric-${metric.name.toLowerCase()}`,
+							name: `metric: ${metric.name}`,
+							measure,
 							value: value,
 							upperValue: metric.threshold,
 						});
@@ -590,7 +575,7 @@ test.describe("Lighthouse", () => {
 						// Report to Bencher using unified measure names based on numericUnit.
 						// This groups audits by scale (time_ms, bytes, count, score) to prevent
 						// sparse matrices in Bencher reports.
-						const measure = getBencherMeasure(audit.numericUnit);
+						const measure = getLighthouseMeasure(audit.numericUnit);
 						const benchmarkValue =
 							audit.numericValue !== undefined ? audit.numericValue : score;
 						reportBenchmark({

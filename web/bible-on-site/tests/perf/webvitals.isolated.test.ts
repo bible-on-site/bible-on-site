@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Page, TestInfo } from "@playwright/test"; // import { test, expect } from "@playwright/test";
 import { errors } from "@playwright/test"; // import { test, expect } from "@playwright/test";
-import { reportBenchmark } from "../util/playwright/benchmark-reporter";
+import { reportBenchmark, type BencherMeasure } from "../util/benchmark";
 import { expect, test as testBase } from "../util/playwright/test-fixture";
 
 const test = testBase.extend({
@@ -129,10 +129,14 @@ const testWebVitals = async ({ page }: { page: Page }, testInfo: TestInfo) => {
 			continue;
 		}
 
+		// Map Web Vitals metric names to unified Bencher measures
+		// CLS is a ratio (unitless), all others are timing (milliseconds)
+		const measure: BencherMeasure = metricName === "CLS" ? "ratio" : "time_ms";
+
 		// Export metric to benchmark file for historical tracking (Bencher format)
 		reportBenchmark({
-			name: testInfo.title,
-			measure: metricName.toLowerCase(),
+			name: `webvitals: ${metricName} (${testInfo.title})`,
+			measure,
 			value: metric.measure,
 			upperValue: metric.max,
 		});
