@@ -1,0 +1,11 @@
+# Known Lighthouse audit issue
+id: mainthread-work-breakdown
+strategy: all
+explanation: |
+  Main thread work varies significantly based on local machine
+  CPU load and background processes.
+  Volatile in local testing due to CPU variance.
+breakdown:
+  - scriptEvaluation: "Script Evaluation (~4.5s)"
+  - scriptParseCompile: "Script Parsing & Compilation (~1s)"
+  - styleLayout: "Style & Layout (~200ms)"
