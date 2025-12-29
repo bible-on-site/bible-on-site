@@ -81,6 +81,45 @@ test.describe("PerakimService", () => {
 				statusCode: 404,
 			});
 		});
+
+		test("returns articlesCount for a perek (on-demand computed)", async ({
+			request,
+		}) => {
+			const response: APIResponse = await request.post(ROOT_URL, {
+				headers: {
+					"Content-Type": "application/json",
+				},
+				data: {
+					operationName: null,
+					variables: {},
+					query:
+						"{\n  perekByPerekId(perekId: 1) {\n    perekId\n    articlesCount\n  }\n}\n",
+				},
+			});
+			const responseBody = await response.json();
+			expect(responseBody.data.perekByPerekId).toMatchObject({
+				perekId: 1,
+				articlesCount: 3, // Test data: perek 1 has 3 articles
+			});
+		});
+
+		test("returns articlesCount of 0 for perek with no articles", async ({
+			request,
+		}) => {
+			const response: APIResponse = await request.post(ROOT_URL, {
+				headers: {
+					"Content-Type": "application/json",
+				},
+				data: {
+					operationName: null,
+					variables: {},
+					query:
+						"{\n  perekByPerekId(perekId: 2) {\n    perekId\n    articlesCount\n  }\n}\n",
+				},
+			});
+			const responseBody = await response.json();
+			expect(responseBody.data.perekByPerekId.articlesCount).toBe(0);
+		});
 	});
 
 	test.describe("perakim", () => {

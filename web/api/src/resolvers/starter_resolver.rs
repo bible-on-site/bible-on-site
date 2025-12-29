@@ -14,7 +14,12 @@ impl StarterQuery {
     async fn starter(&self, ctx: &Context<'_>) -> Result<Starter> {
         let db = ctx.data::<Database>()?;
 
+        // Fetch authors and article counts in parallel-friendly single queries
         let authors = authors_service::find_all(db)
+            .await
+            .map_err(|e| e.extend())?;
+
+        let author_article_counts = articles_service::count_by_author(db)
             .await
             .map_err(|e| e.extend())?;
 
@@ -22,8 +27,17 @@ impl StarterQuery {
             .await
             .map_err(|e| e.extend())?;
 
+        // Map authors with their pre-computed article counts
+        let authors_with_counts: Vec<Author> = authors
+            .into_iter()
+            .map(|model| {
+                let count = author_article_counts.get(&model.id).copied().unwrap_or(0);
+                Author::with_articles_count(model, count)
+            })
+            .collect();
+
         Ok(Starter {
-            authors: authors.into_iter().map(Author::from).collect(),
+            authors: authors_with_counts,
             perek_articles_counters,
         })
     }
