@@ -1,7 +1,8 @@
 /**
  * Checks if the current environment is production.
- * @returns true if NODE_ENV is 'production', false otherwise
+ * Uses NEXT_PUBLIC_ENV for runtime environment detection.
+ * @returns true if NEXT_PUBLIC_ENV is 'production', false otherwise
  */
 export function isProduction(): boolean {
-	return process.env.NODE_ENV === "production";
+	return process.env.NEXT_PUBLIC_ENV === "production";
 }
