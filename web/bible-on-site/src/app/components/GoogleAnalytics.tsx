@@ -1,8 +1,14 @@
 import Script from "next/script";
+import { isProduction } from "@/util/environment";
 
-const GA_MEASUREMENT_ID = "G-220MEPY7WL"; // TODO: Replace with your actual GA4 Measurement ID
+const GA_MEASUREMENT_ID = "G-220MEPY7WL";
 
 export function GoogleAnalytics() {
+	// Only enable Google Analytics in production
+	if (!isProduction()) {
+		return null;
+	}
+
 	return (
 		<>
 			<Script
