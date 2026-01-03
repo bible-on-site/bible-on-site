@@ -30,7 +30,7 @@
 	},
 	"dependencies": {
 		"@hebcal/core": "6.0.8",
-		"@syncfusion/ej2-react-grids": "31.2.18",
+		"@syncfusion/ej2-react-grids": "32.1.21",
 		"@syncfusion/ej2-react-layouts": "31.2.12",
 		"autoprefixer": "10.4.23",
 		"flowbite": "4.0.1",
