@@ -86,14 +86,9 @@ async function nextJestConfigPromise() {
 	const nextJestConfig = await createNextJestConfig(config)();
 	// This cannot be set directly in the jest config because it is overridden by next/jest.
 	nextJestConfig.transformIgnorePatterns = [
-		// ESM modules that need to be transformed: @hebcal, gematry, quick-lru
-		"/node_modules/(?!(@hebcal|gematry|quick-lru)/)",
+		// ESM modules that need to be transformed: gematry, temporal-polyfill, sunrise-sunset-js
+		"/node_modules/(?!(gematry|temporal-polyfill|sunrise-sunset-js)/)",
 	];
-	// Enable ESM module resolution for @hebcal/core and other ESM-only packages
-	nextJestConfig.moduleNameMapper = {
-		...nextJestConfig.moduleNameMapper,
-		"^@hebcal/core$": "<rootDir>/node_modules/@hebcal/core/dist/esm/index.js",
-	};
 
 	return nextJestConfig;
 }

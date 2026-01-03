@@ -1,4 +1,3 @@
-import type { HDate } from "@hebcal/core";
 import { toLetters } from "gematry";
 import moment from "moment-timezone";
 import { getCurrentDate } from "@/util/date";
@@ -6,6 +5,7 @@ import {
 	constructTsetAwareHDate,
 	DateUnits,
 	DayOfWeek,
+	type HebrewDate,
 	hebcalDateToNumber,
 	parseNumericalDateToHebcalDate,
 } from "@/util/hebdates-util";
@@ -79,13 +79,13 @@ export function getPerekByPerekId(perekId: number): PerekObj {
 }
 
 export function getPerekIdByDate(date: Date): number {
-	const floorToThursdayAtWeekend = (hDate: HDate): HDate =>
+	const floorToThursdayAtWeekend = (hDate: HebrewDate): HebrewDate =>
 		(hDate.getDay() as DayOfWeek) === DayOfWeek.FRIDAY ||
 		(hDate.getDay() as DayOfWeek) === DayOfWeek.SATURDAY
 			? hDate.nearest(DayOfWeek.THURSDAY)
 			: hDate;
 
-	const roundToCycle = (hDate: HDate): HDate => {
+	const roundToCycle = (hDate: HebrewDate): HebrewDate => {
 		const cycleHDates = cycles.map(parseNumericalDateToHebcalDate);
 		const CYCLE_LENGTH = 1299;
 		for (const cycleHDate of cycleHDates) {
@@ -112,14 +112,14 @@ export function getPerekIdByDate(date: Date): number {
 		return lastCycleHDate.add(CYCLE_LENGTH - 1);
 	};
 
-	const getLearningHDate = (date: Date): HDate => {
+	const getLearningHDate = (date: Date): HebrewDate => {
 		const tsetAwareHDate = constructTsetAwareHDate(date);
 		const weekendAwareHdate = floorToThursdayAtWeekend(tsetAwareHDate);
 		const cycleAwareHDate = roundToCycle(weekendAwareHdate);
 		return cycleAwareHDate;
 	};
 
-	const hDate: HDate = getLearningHDate(date);
+	const hDate: HebrewDate = getLearningHDate(date);
 
 	const hebDateAsNumber = hebcalDateToNumber(hDate);
 
@@ -135,5 +135,7 @@ export function getPerekIdByDate(date: Date): number {
  * Get the perek ID for today.
  */
 export function getTodaysPerekId() {
-	return getPerekIdByDate(moment.tz(getCurrentDate(), "Asia/Jerusalem").toDate());
+	return getPerekIdByDate(
+		moment.tz(getCurrentDate(), "Asia/Jerusalem").toDate(),
+	);
 }

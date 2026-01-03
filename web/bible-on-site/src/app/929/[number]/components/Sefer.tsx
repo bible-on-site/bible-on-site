@@ -3,6 +3,7 @@ import { toLetters } from "gematry";
 import type { PageSemantics } from "html-flip-book-react";
 import dynamic from "next/dynamic";
 import React from "react";
+import { isQriDifferentThanKtiv } from "@/data/db/tanah-view-types";
 // HeBook.tsx
 import type { PerekObj } from "@/data/perek-dto";
 import { getSeferByName } from "@/data/sefer-dto";
@@ -61,19 +62,25 @@ const Sefer = (props: { perekObj: PerekObj }) => {
 							);
 							const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
 								const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
+								const isQriWithDifferentKtiv =
+									segment.type === "qri" && isQriDifferentThanKtiv(segment);
 								// TODO: merge qris sequnce like in 929/406
 								return (
 									<React.Fragment key={segmentKey}>
-										<span className={segment.type === "qri" ? styles.qri : ""}>
+										<span className={isQriWithDifferentKtiv ? styles.qri : ""}>
 											{segment.type === "ktiv" ? (
 												segment.value
 											) : segment.type === "qri" ? (
-												<>
-													(
-													{/* biome-ignore lint/a11y/noLabelWithoutControl: It'll take some time to validate this fix altogether with css rules */}
-													<label />
-													{segment.value})
-												</>
+												isQriWithDifferentKtiv ? (
+													<>
+														(
+														{/* biome-ignore lint/a11y/noLabelWithoutControl: It'll take some time to validate this fix altogether with css rules */}
+														<label />
+														{segment.value})
+													</>
+												) : (
+													segment.value
+												)
 											) : segment.type === "ptuha" ? (
 												Ptuah()
 											) : (
