@@ -1,0 +1,1855 @@
+- id: 1
+  sefer: בראשית
+  perek: 1
+  header: בריאת העולם
+  qualified: true
+- id: 2
+  sefer: בראשית
+  perek: 2
+  header: גן בעדן, אדם ואשתו
+  qualified: true
+- id: 3
+  sefer: בראשית
+  perek: 3
+  header: חטא עץ הדעת
+  qualified: true
+- id: 4
+  sefer: בראשית
+  perek: 4
+  header: קין והבל
+  qualified: true
+- id: 5
+  sefer: בראשית
+  perek: 5
+  header: ספר תולדות אדם
+  qualified: true
+- id: 6
+  sefer: בראשית
+  perek: 6
+  header: הדרדרות הבריאה, נח והציווי על התיבה
+  qualified: true
+- id: 7
+  sefer: בראשית
+  perek: 7
+  header: תיבת נח והמבול
+  qualified: true
+- id: 8
+  sefer: בראשית
+  perek: 8
+  header: יְבֹשֶׁת המים
+  qualified: true
+- id: 9
+  sefer: בראשית
+  perek: 9
+  header: אִסּוּר רצח, ברית שלא יהיה עוד מבול, ברכה לשם ויפת וקללת כנען
+  qualified: true
+- id: 10
+  sefer: בראשית
+  perek: 10
+  header: תולדות בני נח
+  qualified: true
+- id: 11
+  sefer: בראשית
+  perek: 11
+  header: מגדל בבל, מנח עד אברהם
+  qualified: true
+- id: 12
+  sefer: בראשית
+  perek: 12
+  header: יציאת אברם מחרן לארץ כנען, ירידת אברם מצרימה
+  qualified: true
+- id: 13
+  sefer: בראשית
+  perek: 13
+  header: הפרדות אברם מלוט, הבטחת ה' לאברם לתת לו את ארץ כנען
+  qualified: true
+- id: 14
+  sefer: בראשית
+  perek: 14
+  header: מלחמת המלכים
+  qualified: true
+- id: 15
+  sefer: בראשית
+  perek: 15
+  header: ברית בין הבתרים
+  qualified: true
+- id: 16
+  sefer: בראשית
+  perek: 16
+  header: עקרות שרה ולידת ישמעאל
+  qualified: true
+- id: 17
+  sefer: בראשית
+  perek: 17
+  header: ברית המילה, מאברם לאברהם ומשרי לשרה
+  qualified: true
+- id: 18
+  sefer: בראשית
+  perek: 18
+  header: ביקור המלאכים אצל אברהם, תפילת אברהם על סדום
+  qualified: true
+- id: 19
+  sefer: בראשית
+  perek: 19
+  header: הפיכת סדום, מעשה לוט ובנותיו
+  qualified: true
+- id: 20
+  sefer: בראשית
+  perek: 20
+  header: אברהם ושרה בגרר
+  qualified: true
+- id: 21
+  sefer: בראשית
+  perek: 21
+  header: לידת יצחק, גירוש ישמעאל, הברית בין אברהם לאבימלך
+  qualified: true
+- id: 22
+  sefer: בראשית
+  perek: 22
+  header: העקידה
+  qualified: true
+- id: 23
+  sefer: בראשית
+  perek: 23
+  header: פטירת שרה, אברהם קונה את מערת המכפלה
+  qualified: true
+- id: 24
+  sefer: בראשית
+  perek: 24
+  header: מציאת שידוך ליצחק ונישואיו עם רבקה
+  qualified: true
+- id: 25
+  sefer: בראשית
+  perek: 25
+  header: פטירת אברהם, תולדותיו, לידת יעקב ועשו, מכירת הבכורה
+  qualified: true
+- id: 26
+  sefer: בראשית
+  perek: 26
+  header: יצחק ורבקה בגרר
+  qualified: true
+- id: 27
+  sefer: בראשית
+  perek: 27
+  header: ברכת יצחק לבניו, ציווי רבקה ליעקב לברוח ללבן
+  qualified: true
+- id: 28
+  sefer: בראשית
+  perek: 28
+  header: ציווי יצחק ליעקב ללכת ללבן ולָשֵׂאת אשה, ברכתו, חלום יעקב
+  qualified: true
+- id: 29
+  sefer: בראשית
+  perek: 29
+  header: יעקב אצל לבן, נישואיו ללאה ורחל, לידת ארבעה מבניו
+  qualified: true
+- id: 30
+  sefer: בראשית
+  perek: 30
+  header: לידת שבעה בנים נוספים ודינה, יעקב מתעשר
+  qualified: true
+- id: 31
+  sefer: בראשית
+  perek: 31
+  header: יעקב וביתו נפרדים מלבן
+  qualified: true
+- id: 32
+  sefer: בראשית
+  perek: 32
+  header: יעקב מתכונן למפגש עם עשו, יעקב והמלאך
+  qualified: true
+- id: 33
+  sefer: בראשית
+  perek: 33
+  header: יעקב ועשו נפגשים, יעקב מתיישב בשכם
+  qualified: true
+- id: 34
+  sefer: בראשית
+  perek: 34
+  header: מעשה דינה
+  qualified: true
+- id: 35
+  sefer: בראשית
+  perek: 35
+  header: ההבטחה ליעקב בבית אל, פטירת רחל וְהֻלֶּדֶת בנימין, סִכּוּם השבטים, פטירת
+    יצחק
+  qualified: true
+- id: 36
+  sefer: בראשית
+  perek: 36
+  header: תולדות עשו ומלכי אדום
+  qualified: true
+- id: 37
+  sefer: בראשית
+  perek: 37
+  header: חלומות יוסף ומכירתו
+  qualified: true
+- id: 38
+  sefer: בראשית
+  perek: 38
+  header: מעשה יהודה ותמר
+  qualified: true
+- id: 39
+  sefer: בראשית
+  perek: 39
+  header: יוסף בבית פוטיפר ובבית הסוהר
+  qualified: true
+- id: 40
+  sefer: בראשית
+  perek: 40
+  header: יוסף, שר האופים ושר הטבחים
+  qualified: true
+- id: 41
+  sefer: בראשית
+  perek: 41
+  header: חלום פרעה, יוסף מתמנה למשנה למלך ונושא אשה
+  qualified: true
+- id: 42
+  sefer: בראשית
+  perek: 42
+  header: אחי יוסף יורדים למצרים ובאים אליו
+  qualified: true
+- id: 43
+  sefer: בראשית
+  perek: 43
+  header: יעקב נאלץ להוריד את בנימין מצרימה למפגש עם יוסף
+  qualified: true
+- id: 44
+  sefer: בראשית
+  perek: 44
+  header: עלילת הגביע, דברי יהודה ליוסף
+  qualified: true
+- id: 45
+  sefer: בראשית
+  perek: 45
+  header: יוסף מתוודע אל האחים ומזמין את יעקב
+  qualified: true
+- id: 46
+  sefer: בראשית
+  perek: 46
+  header: יעקב וצאצאיו מתיישבים במצרים
+  qualified: true
+- id: 47
+  sefer: בראשית
+  perek: 47
+  header: מפגש יעקב ופרעה, קניית יוסף את הארץ, שבועת יוסף ליעקב שלא יקברנו במצרים
+  qualified: true
+- id: 48
+  sefer: בראשית
+  perek: 48
+  header: ברכת יעקב ליוסף ובניו
+  qualified: true
+- id: 49
+  sefer: בראשית
+  perek: 49
+  header: ברכת יעקב לשבטים ופטירתו
+  qualified: true
+- id: 50
+  sefer: בראשית
+  perek: 50
+  header: חניטת יעקב במצרים וקבורתו במערת המכפלה, פטירת יוסף
+  qualified: true
+- id: 51
+  sefer: שמות
+  perek: 1
+  header: בני ישראל מתרבים במצרים ופרעה משעבדם
+  qualified: true
+- id: 52
+  sefer: שמות
+  perek: 2
+  header: לידת משה, הריגתו את המצרי, בריחתו למדין, זעקת בני ישראל ושמיעת ה' את זעקתם
+  qualified: true
+- id: 53
+  sefer: שמות
+  perek: 3
+  header: התגלות ה' למשה בסנה
+  qualified: true
+- id: 54
+  sefer: שמות
+  perek: 4
+  header: המשך הדיון של משה עם ה', חזרתו למצרים
+  qualified: true
+- id: 55
+  sefer: שמות
+  perek: 5
+  header: משה ואהרן אצל פרעה, הכבדת השעבוד
+  qualified: true
+- id: 56
+  sefer: שמות
+  perek: 6
+  header: דיבורי ה' למשה, משפחות בני ישראל
+  qualified: true
+- id: 57
+  sefer: שמות
+  perek: 7
+  header: משה ואהרן (שוב) בבית פרעה, מכת דם
+  qualified: true
+- id: 58
+  sefer: שמות
+  perek: 8
+  header: מכות צפרדע כִּנִּים ועָרֹב
+  qualified: true
+- id: 59
+  sefer: שמות
+  perek: 9
+  header: מכות דבר שחין וברד
+  qualified: true
+- id: 60
+  sefer: שמות
+  perek: 10
+  header: מכות ארבה וחושך
+  qualified: true
+- id: 61
+  sefer: שמות
+  perek: 11
+  header: ההתראה על מכת בכורות
+  qualified: true
+- id: 62
+  sefer: שמות
+  perek: 12
+  header: קִדּוּשׁ הַחֹדֶשׁ, פֶּסַח מִצְרַיִם ופסח דורות, מכת בכרות ויציאת מִצְרַיִם
+  qualified: true
+- id: 63
+  sefer: שמות
+  perek: 13
+  header: פרשות "קדש לי" "והיה כי יביאך"
+  qualified: true
+- id: 64
+  sefer: שמות
+  perek: 14
+  header: קריעת ים סוף
+  qualified: true
+- id: 65
+  sefer: שמות
+  perek: 15
+  header: שירת הים
+  qualified: true
+- id: 66
+  sefer: שמות
+  perek: 16
+  header: פרשת המן
+  qualified: true
+- id: 67
+  sefer: שמות
+  perek: 17
+  header: מַסָּה וּמְרִיבָה, מלחמת עמלק
+  qualified: true
+- id: 68
+  sefer: שמות
+  perek: 18
+  header: יתרו בא ומייעץ
+  qualified: true
+- id: 69
+  sefer: שמות
+  perek: 19
+  header: ההכנות למתן תורה
+  qualified: true
+- id: 70
+  sefer: שמות
+  perek: 20
+  header: מתן תורה ומצוות נוספות
+  qualified: true
+- id: 71
+  sefer: שמות
+  perek: 21
+  header: פרשת עבד עברי, דיני נזיקין
+  qualified: true
+- id: 72
+  sefer: שמות
+  perek: 22
+  header: עוד דיני נזיקין ומצוות נוספות
+  qualified: true
+- id: 73
+  sefer: שמות
+  perek: 23
+  header: מצוות נוספות
+  qualified: true
+- id: 74
+  sefer: שמות
+  perek: 24
+  header: בניית המזבח, הקרבת הקרבנות, כריתת ברית עם ה', משה עולה לקבל את הלֻחֹת
+  suggestion2: אמירת נעשה ונשמע
+  qualified: true
+- id: 75
+  sefer: שמות
+  perek: 25
+  header: ציווי התרומה, תבנית הארון, תבנית הַשֻּׁלְחָן, תבנית המנורה
+  qualified: true
+- id: 76
+  sefer: שמות
+  perek: 26
+  header: תבנית המשכן
+  qualified: true
+- id: 77
+  sefer: שמות
+  perek: 27
+  header: תבנית מזבח העולה, תבנית החצר, ציווי העלאת נר תמיד
+  qualified: true
+- id: 78
+  sefer: שמות
+  perek: 28
+  header: בגדי הכהונה
+  qualified: true
+- id: 79
+  sefer: שמות
+  perek: 29
+  header: אופן משיחת הכהנים ואופן קידוש המשכן
+  qualified: true
+- id: 80
+  sefer: שמות
+  perek: 30
+  header: מזבח הקטורת, הכיור, אופן מניית העם, שמן המשחה והקטורת
+  qualified: true
+- id: 81
+  sefer: שמות
+  perek: 31
+  header: מינוי בצלאל ואהליאב, ציווי על השבת, קבלת הלֻחֹת
+  qualified: true
+- id: 82
+  sefer: שמות
+  perek: 32
+  header: חטא העגל, תפילות משה, בני לוי הורגים את החוטאים
+  qualified: true
+- id: 83
+  sefer: שמות
+  perek: 33
+  header: משה מתיישב מחוץ למחנה, משה מבקש שה' ישכון רק בקרב ישראל
+  qualified: true
+- id: 84
+  sefer: שמות
+  perek: 34
+  header: הַלֻּחֹת השניים, י"ג מידות, מצוות שונות
+  qualified: true
+- id: 85
+  sefer: שמות
+  perek: 35
+  header: בנ"י מצווים על השבת ותורמים למלאכת המשכן
+  qualified: true
+- id: 86
+  sefer: שמות
+  perek: 36
+  header: סוף ההתרמה, זימון החכמים העושים במלאכה, עֲשִׂיַּת המשכן
+  qualified: true
+- id: 87
+  sefer: שמות
+  perek: 37
+  header: עֲשִׂיַּת הארון, השלחן, המנורה, מִזְבֵּחַ הַקְּטֹרֶת, השמן והַקְּטֹרֶת
+  qualified: true
+- id: 88
+  sefer: שמות
+  perek: 38
+  header: עֲשִׂיַּת מִזְבֵּחַ הָעוֹלָה, הַכִּיּוֹר וְהֶחָצֵר, פִּקּוּדֵי הַמִּשְׁכָּן
+  qualified: true
+- id: 89
+  sefer: שמות
+  perek: 39
+  header: עֲשִׂיַּת בִּגְדֵי הַכְּהֻנָּה, סִיּוּם עֲשִׂיַּת הַמִּשְׁכָּן וכלָיו והַבְּגָדִים
+  qualified: true
+- id: 90
+  sefer: שמות
+  perek: 40
+  header: הקמת המשכן, האש והענן על המשכן
+  qualified: true
+- id: 91
+  sefer: ויקרא
+  perek: 1
+  header: פָּרָשַׁת קָרְבַּן עוֹלָה
+  qualified: true
+- id: 92
+  sefer: ויקרא
+  perek: 2
+  header: פָּרָשַׁת קָרְבַּן מִנְחָה
+  qualified: true
+- id: 93
+  sefer: ויקרא
+  perek: 3
+  header: פָּרָשַׁת קָרְבַּן שְׁלָמִים
+  qualified: true
+- id: 94
+  sefer: ויקרא
+  perek: 4
+  header: פָּרָשַׁת קָרְבַּן חַטָּאת
+  qualified: true
+- id: 95
+  sefer: ויקרא
+  perek: 5
+  header: פָּרָשַׁת קָרְבַּן עוֹלֶה וְיוֹרֵד וּפָרָשַׁת קָרְבַּן אָשָׁם
+  qualified: true
+- id: 96
+  sefer: ויקרא
+  perek: 6
+  header: דינים נוספים של העולה, של המנחה ושל החטאת
+  qualified: true
+- id: 97
+  sefer: ויקרא
+  perek: 7
+  header: דינים נוספים של האשם ושל השלמים, איסור אכילת חלב ודם
+  qualified: true
+- id: 98
+  sefer: ויקרא
+  perek: 8
+  header: משיחת המשכן ואהרן ובניו
+  qualified: true
+- id: 99
+  sefer: ויקרא
+  perek: 9
+  header: היום השמיני למילואים
+  qualified: true
+- id: 100
+  sefer: ויקרא
+  perek: 10
+  header: חטא נדב ואביהוא ומיתתם, איסור עבודה לשתויי יין
+  qualified: true
+- id: 101
+  sefer: ויקרא
+  perek: 11
+  header: החיות המותרות והאסורות באכילה
+  qualified: true
+- id: 102
+  sefer: ויקרא
+  perek: 12
+  header: טומאת היולדת וטהרתה
+  qualified: true
+- id: 103
+  sefer: ויקרא
+  perek: 13
+  header: טומאת צרעת הגוף והבגדים
+  qualified: true
+- id: 104
+  sefer: ויקרא
+  perek: 14
+  header: טהרת המצורע, צרעת הבתים
+  qualified: true
+- id: 105
+  sefer: ויקרא
+  perek: 15
+  header: טומאת זב ובעל קרי, נדה וזבה וטהרתם
+  qualified: true
+- id: 106
+  sefer: ויקרא
+  perek: 16
+  header: סדר עבודת הכהן הגדול
+  qualified: true
+- id: 107
+  sefer: ויקרא
+  perek: 17
+  header: אִסּוּר שְׁחִיטַת חוץ והקרבה בַּבָּמוֹת, כִּסּוּי הדם, טֻמְאַת נְבֵלָה
+  qualified: true
+- id: 108
+  sefer: ויקרא
+  perek: 18
+  header: אזהרה על תועבות הגויים בתחום העריות
+  qualified: true
+- id: 109
+  sefer: ויקרא
+  perek: 19
+  header: מִצְוֹת רַבּוֹת
+  qualified: true
+- id: 110
+  sefer: ויקרא
+  perek: 20
+  header: מִצְוֹת נוֹסָפוֹת, העונשים על העריות
+  qualified: true
+- id: 111
+  sefer: ויקרא
+  perek: 21
+  header: צִוּוּיִּם מיוחדים לכהנים וכהנים גדולים, פסולי כהונה
+  qualified: true
+- id: 112
+  sefer: ויקרא
+  perek: 22
+  header: מִצְוֹת רַבּוֹת נוֹסָפוֹת הקשורות לכהנים ולקרבנות
+  qualified: true
+- id: 113
+  sefer: ויקרא
+  perek: 23
+  header: פָּרָשַׁת המועדות
+  qualified: true
+- id: 114
+  sefer: ויקרא
+  perek: 24
+  header: ציווי העלאת נר תמיד, לחם הפנים, הַמְקַלֵּל, מכה נפש ובהמה
+  qualified: true
+- id: 115
+  sefer: ויקרא
+  perek: 25
+  header: שְׁמִטָּה ויוֹבֵל, אִסּוּר רִבִּית, כמה מצוות בעניין עבד עברי
+  qualified: true
+- id: 116
+  sefer: ויקרא
+  perek: 26
+  header: מספר אזהרות, הברכה והקללה
+  qualified: true
+- id: 117
+  sefer: ויקרא
+  perek: 27
+  header: הלכות ערכים וחרמים
+  qualified: true
+- id: 118
+  sefer: במדבר
+  perek: 1
+  header: מפקד בני ישראל ללא הַלְוִיִּם, הפקדת הַלְוִיִּם על המשכן
+  qualified: true
+- id: 119
+  sefer: במדבר
+  perek: 2
+  header: צִוּוּיִּ על חניה לפי דגלים, קיום הַצִּוּוּי, נסיעה כפי החניה
+  qualified: true
+- id: 120
+  sefer: במדבר
+  perek: 3
+  header: תֹּלְדוֹת אהרן, הַלְוִיִּם - משרתים, מפקד הַלְוִיִּם והַבְּכֹרֹת, החלפתם
+  qualified: true
+- id: 121
+  sefer: במדבר
+  perek: 4
+  header: 'פקודת הַלְוִיִּם לפי משפחות: קהת, גרשון ומררי'
+  qualified: true
+- id: 122
+  sefer: במדבר
+  perek: 5
+  header: שִׁלּוּחַ טמאים מהמחנה, גוזל ונשבע, תרומה, קדשים, סוטה
+  qualified: true
+- id: 123
+  sefer: במדבר
+  perek: 6
+  header: תורת הנזיר, בִּרְכַּת כֹּהֲנִים
+  qualified: true
+- id: 124
+  sefer: במדבר
+  perek: 7
+  header: קרבנות הנשיאים לחנוכת המזבח
+  qualified: true
+- id: 125
+  sefer: במדבר
+  perek: 8
+  header: העלאת הַנֵּרֹת, מעשה הַמְּנֹרָה, טהרת וכפרת הַלְוִיִּם, גיל עֲבֹדָתָם
+  qualified: true
+- id: 126
+  sefer: במדבר
+  perek: 9
+  header: פסח מדבר, הַצִּוּוּי על פסח שני, הַגֵּר בפסח, הענן
+  qualified: true
+- id: 127
+  sefer: במדבר
+  perek: 10
+  header: הַחֲצֹצְרוֹת, מסע המחנות, הַפְּנִיָּה לְחֹבָב, נְסִיעָת הָאָרוֹן
+  qualified: true
+- id: 128
+  sefer: במדבר
+  perek: 11
+  header: הַמִּתְאוֹנֵנִים, הַמִּתְאַוִּים, תְּפִלַּת מֹשֶׁה, הַזְּקֵנִים, אֶלְדָּד
+    וּמֵידָד
+  qualified: true
+- id: 129
+  sefer: במדבר
+  perek: 12
+  header: מעשה מרים, מעלת נבואתו של משה, עונש מרים
+  qualified: true
+- id: 130
+  sefer: במדבר
+  perek: 13
+  header: שליחת המרגלים, חזרתם ודבריהם
+  qualified: true
+- id: 131
+  sefer: במדבר
+  perek: 14
+  header: תְּלוּנַת העם, תגובת ה', תְּפִלַּת משה, עונש לדור, המעפילים
+  qualified: true
+- id: 132
+  sefer: במדבר
+  perek: 15
+  header: מנחה ונסכים, חלה, קָרְבָּנוֹת על עבודה זרה, מְקֹשֵׁשׁ, צִיצִת
+  qualified: true
+- id: 133
+  sefer: במדבר
+  perek: 16
+  header: מחלוקת קרח, עונש המשתתפים
+  qualified: true
+- id: 134
+  sefer: במדבר
+  perek: 17
+  header: מִחְזוּר הַמַּחְתּוֹת, תלונת העם וְעָנְשָם, מטה אהרן, חשש העם
+  qualified: true
+- id: 135
+  sefer: במדבר
+  perek: 18
+  header: שמירת המקדש, מַתְּנֹת כְּהֻנָּה, מעשר ראשון, מעשר מן המעשר
+  qualified: true
+- id: 136
+  sefer: במדבר
+  perek: 19
+  header: פָּרָה אֲדֻמָּה, טֻמְאַת מֵת
+  qualified: true
+- id: 137
+  sefer: במדבר
+  perek: 20
+  header: מות מרים, תלונת העדה, חטא מי מריבה, הַפְּנִיָּה לאדום, מות אהרן
+  qualified: true
+- id: 138
+  sefer: במדבר
+  perek: 21
+  header: מלחמת ערד, תלונת העם וְתֹּצְאֹתֶיהָ, שירת הבאר, המלחמה בסיחון ובעוג
+  qualified: true
+- id: 139
+  sefer: במדבר
+  perek: 22
+  header: בלק שוכר את בלעם לקלל
+  qualified: true
+- id: 140
+  sefer: במדבר
+  perek: 23
+  header: בלעם מברך את ישראל פעמיים
+  qualified: true
+- id: 141
+  sefer: במדבר
+  perek: 24
+  header: בלעם מברך את ישראל פעם נוספת ומנבא על ישראל והאומות
+  qualified: true
+- id: 142
+  sefer: במדבר
+  perek: 25
+  header: בנות מואב ובני ישראל, קנאת פינחס והשכר שקיבל, צִוּוּי לְהִלָּחֵם במדין
+  qualified: true
+- id: 143
+  sefer: במדבר
+  perek: 26
+  header: מפקד בני ישראל, אופן חלוקת הנחלות, פְּקוּדֵי הַלְוִיִּם
+  qualified: true
+- id: 144
+  sefer: במדבר
+  perek: 27
+  header: בְּנוֹת צְלָפְחָד וְדִינָן, צִוּוּי ה' לְמֹשֶׁה לַעֲלוֹת הָהָרָה, מִנּוּי
+    יְהוֹשֻׁעַ
+  qualified: true
+- id: 145
+  sefer: במדבר
+  perek: 28
+  header: קרבנות התמיד, שבת, ראש חודש, פסח וחג המצות, שבועות
+  qualified: true
+- id: 146
+  sefer: במדבר
+  perek: 29
+  header: קרבנות ראש השנה, יום הַכִּפּוּרִים, סוכות, שְׁמִינִי עֲצֶרֶת
+  qualified: true
+- id: 147
+  sefer: במדבר
+  perek: 30
+  header: פרשת נדרים
+  qualified: true
+- id: 148
+  sefer: במדבר
+  perek: 31
+  header: מלחמה במדין, הגעלת וטבילת כלים, חלוקת השלל מהמלחמה
+  qualified: true
+- id: 149
+  sefer: במדבר
+  perek: 32
+  header: ראובן, גד וחצי המנשה מבקשים את עבר הירדן המזרחי, התנאי של משה איתם
+  qualified: true
+- id: 150
+  sefer: במדבר
+  perek: 33
+  header: מסעי בני ישראל, הציווי להוריש את יושבי הארץ
+  qualified: true
+- id: 151
+  sefer: במדבר
+  perek: 34
+  header: גבולות ארץ כנען, מנחילי הארץ
+  qualified: true
+- id: 152
+  sefer: במדבר
+  perek: 35
+  header: עָרֵי הַלְוִיִּם, עָרֵי מִקְלָט ורוצח בשגגה
+  qualified: true
+- id: 153
+  sefer: במדבר
+  perek: 36
+  header: טענת בני מנשה, בְּנוֹת צְלָפְחָד נישאות לִבְנֵי דֹדֵיהֶן
+  qualified: true
+- id: 154
+  sefer: דברים
+  perek: 1
+  header: מֹשֶׁה מתאר בפני ישראל את תחילת קורות המדבר
+  qualified: true
+- id: 155
+  sefer: דברים
+  perek: 2
+  header: מֹשֶׁה מתאר בפני ישראל את סוף קורות המדבר
+  qualified: true
+- id: 156
+  sefer: דברים
+  perek: 3
+  header: מֹשֶׁה ממשיך לתאר בפני ישראל את סוף קורות המדבר
+  qualified: true
+- id: 157
+  sefer: דברים
+  perek: 4
+  header: מֹשֶׁה מַתְרֶה בְיִשְׂרָאֵל לָלֶכֶת בְּדֶרֶךְ הַטּוֹב וּמַבְדִּיל שָׁלֹשׁ
+    עָרֵי מִקְלָט
+  qualified: true
+- id: 158
+  sefer: דברים
+  perek: 5
+  header: עשרת הדברות ומעמד הר סיני
+  qualified: true
+- id: 159
+  sefer: דברים
+  perek: 6
+  header: אזהרות נוספות, פרשת שמע, שאלת הבן
+  qualified: true
+- id: 160
+  sefer: דברים
+  perek: 7
+  header: הבדל ישראל והעמים ומצוות קשורות, ברכה בזכות קיום המצוות
+  qualified: true
+- id: 161
+  sefer: דברים
+  perek: 8
+  header: קִיּוּם הַמִּצְוֹת מְחַיֶּה, זִכָּרוֹן נִסֵּי הַמִּדְבָּר, הָאָרֶץ הַטֹּבָה
+    וּבִרְכָתָהּ וָעוֹד
+  qualified: true
+- id: 162
+  sefer: דברים
+  perek: 9
+  header: ה' מוֹרִישׁ אֶת הַגּוֹיִם מִפְּנֵי רִשְׁעָתָם, מֹשֶׁה מַזְכִּיר מֵחֲטָאֵי
+    הַמִּדְבָּר
+  qualified: true
+- id: 163
+  sefer: דברים
+  perek: 10
+  header: מֹשֶׁה מַזְכִּיר אֶת הַלֻּחוֹת הַשְּׁנִיִּם וּמִקְרִים נוֹסָפִים, יִרְאַת
+    וְאַהֲבַת ה'
+  qualified: true
+- id: 164
+  sefer: דברים
+  perek: 11
+  header: שבחה של ארץ ישראל, פרשת "והיה אם שמוע", הבטחת ה' לעם ישראל על ירושת הארץ
+  qualified: true
+- id: 165
+  sefer: דברים
+  perek: 12
+  header: מִצְוֹת רַבּוֹת הקשורות למקדש
+  qualified: true
+- id: 166
+  sefer: דברים
+  perek: 13
+  header: לֹא תֹסֵף וְלֹא תִגְרַע, נְבִיא שֶׁקֶר, מֵסִית ומדיח, עִיר הַנִּדַּחַת
+  qualified: true
+- id: 167
+  sefer: דברים
+  perek: 14
+  header: לא לְהִתְגּוֹדֵּד, לא לִקְרֹח, מאכלות אסורות, מעשר שני ועני ועוד
+  qualified: true
+- id: 168
+  sefer: דברים
+  perek: 15
+  header: שמיטת כספים, צדקה, הענקה, בכור
+  qualified: true
+- id: 169
+  sefer: דברים
+  perek: 16
+  header: הרגלים, ספירת העומר, עֲלִיָּה לָרֶגֶל, שֹׁפְטִים וְשֹׁטְרִים, אִסֻּרֵי מַצֵּבָה
+    וַאֲשֵרָה
+  qualified: true
+- id: 170
+  sefer: דברים
+  perek: 17
+  header: חובת הריגת עובד עבודה זרה, זקן ממרא, מינוי מלך והלכותיו
+  qualified: true
+- id: 171
+  sefer: דברים
+  perek: 18
+  header: דיני הכהנים, איסור כישוף, החובה לשמוע לנביא, דיני נביא שקר
+  qualified: true
+- id: 172
+  sefer: דברים
+  perek: 19
+  header: עָרֵי מִקְלָט, לֹא לָחוֹס עַל רוֹצֵחַ וְחוֹבֵל, לֹא לְהַסּיג גְּבוּל, דִּינֵי
+    עֵדִים
+  qualified: true
+- id: 173
+  sefer: דברים
+  perek: 20
+  header: 'דִּינֵי מִלְחָמָה, וּבֵינֵיהֶם: היחס לְשִׁבְעָה עַמִּים, עֲצֵי מַאֲכָל
+    בְּעֵת מָצוֹר'
+  qualified: true
+- id: 174
+  sefer: דברים
+  perek: 21
+  header: עֶגְלָה עֲרֻפָה, אֵשֶׁת יְפַת תֹּאַר, בֵּן סוֹרֵר וּמֹרֶה, אִסּוּר הַלָּנַת
+    מֵת
+  qualified: true
+- id: 175
+  sefer: דברים
+  perek: 22
+  header: מִצְוֹת רַבּוֹת
+  qualified: true
+- id: 176
+  sefer: דברים
+  perek: 23
+  header: מִצְוֹת רַבּוֹת נוֹסָפוֹת
+  qualified: true
+- id: 177
+  sefer: דברים
+  perek: 24
+  header: מִצְוֹת רַבּוֹת נוֹסָפוֹת
+  qualified: true
+- id: 178
+  sefer: דברים
+  perek: 25
+  header: מלקות, אסור חסימת בהמה, יבום, חליצה, רודף, הצִוּוּי לזכור את מעשה עמלק ולמחותו
+  qualified: true
+- id: 179
+  sefer: דברים
+  perek: 26
+  header: מקרא בכורים, ודוי מעשר, אזהרת משה ללכת בדרך ה׳
+  qualified: true
+- id: 180
+  sefer: דברים
+  perek: 27
+  header: צווי על קיום מעמד ברכה וקללה בהר גרזים והר עיבל
+  qualified: true
+- id: 181
+  sefer: דברים
+  perek: 28
+  header: ברית בערבות מואב / ברכות ותוכחות
+  qualified: true
+- id: 182
+  sefer: דברים
+  perek: 29
+  header: ברית ערבות, אזהרה על האלה, המכות - על עזיבת ה'
+  qualified: true
+- id: 183
+  sefer: דברים
+  perek: 30
+  header: פרשת התשובה, משה מזהיר לבחור בחיים
+  qualified: true
+- id: 184
+  sefer: דברים
+  perek: 31
+  header: משה מחזק את ישראל ויהושע, מצות הקהל וכתיבת ספר תורה, יהושע נכנס לתפקיד
+  qualified: true
+- id: 185
+  sefer: דברים
+  perek: 32
+  header: שירת האזינו, צווי על משה למות
+  qualified: true
+- id: 186
+  sefer: דברים
+  perek: 33
+  header: ברכת משה לבני ישראל טרם מותו
+  qualified: true
+- id: 187
+  sefer: דברים
+  perek: 34
+  header: ה' מראה למשה את הארץ, משה מת, שבח למשה
+  qualified: true
+- id: 188
+  sefer: יהושע
+  perek: 1
+  header: חזוקי ה' ליהושע, צווי להכין צידה, יהושע מזכיר לשנים וחצי השבטים את התחייבותם
+  qualified: true
+- id: 189
+  sefer: יהושע
+  perek: 2
+  header: יהושע שולח שני מרגלים ליריחו, הם מגיעים לרחב, חוזרים ומדווחים לו
+  qualified: true
+- id: 190
+  sefer: יהושע
+  perek: 3
+  header: הכנה למעבר הירדן, הכהנים נֹשאים את ארון הברית ומי הירדן נכרתים מפניו
+  qualified: true
+- id: 191
+  sefer: יהושע
+  perek: 4
+  header: צווי על הקמת אבני זכרון, יהושע מתגדל, מעבר הירדן לפרטיו
+  qualified: true
+- id: 192
+  sefer: יהושע
+  perek: 5
+  header: הלב של מלכי עבר הירדן נמס, מילת העם, פסח גלגל, אכילת החדש, המלאך ויהושע
+  suggestion2: קוצץ מ"התגלות המלאך ליהושע" ל"המלאך ויהושע"
+  qualified: true
+- id: 193
+  sefer: יהושע
+  perek: 6
+  header: כיבוש יריחו, הצלת רחב, קללה למי שיבנה מחדש את יריחו
+  qualified: true
+- id: 194
+  sefer: יהושע
+  perek: 7
+  header: מעילת עכן בחרם, כשלון ישראל במלחמת העי הראשונה
+  qualified: true
+- id: 195
+  sefer: יהושע
+  perek: 8
+  header: המלחמה השניה של ישראל בעי ונצחונם, קיום מעמד הברכה והקללה
+  qualified: true
+- id: 196
+  sefer: יהושע
+  perek: 9
+  header: תרמית הגבעונים
+  qualified: true
+- id: 197
+  sefer: יהושע
+  perek: 10
+  header: מלחמת יהושע במלכי הדרום, כיבוש חלקים נרחבים מהארץ
+  qualified: true
+- id: 198
+  sefer: יהושע
+  perek: 11
+  header: מלחמת יהושע במלכי הצפון
+  qualified: true
+- id: 199
+  sefer: יהושע
+  perek: 12
+  header: פירוט המלכים שהכו בני ישראל
+  qualified: true
+- id: 200
+  sefer: יהושע
+  perek: 13
+  header: צווי ה' ליהושע להנחיל הארץ, נחלות ראובן גד, וחצי המנשה
+  qualified: true
+- id: 201
+  sefer: יהושע
+  perek: 14
+  header: כלב מבקש מיהושע את הר חברון ומקבלו
+  qualified: true
+- id: 202
+  sefer: יהושע
+  perek: 15
+  header: נחלת יהודה, עתניאל בן קנז כובש את דביר ומקבל את עכסה בת כלב, בקשת עכסה
+  qualified: true
+- id: 203
+  sefer: יהושע
+  perek: 16
+  header: נחלת אפרים
+  qualified: true
+- id: 204
+  sefer: יהושע
+  perek: 17
+  header: נחלת מנשה, ברוא יער להרחבת נחלת בני יוסף
+  qualified: true
+- id: 205
+  sefer: יהושע
+  perek: 18
+  header: השכנת אהל מועד בשילה, כתיבת הארץ וגורלות לשבעה שבטים
+  qualified: true
+- id: 206
+  sefer: יהושע
+  perek: 19
+  header: גורלות שמעון, זבולן, יששכר, אשר, נפתלי ודן
+  qualified: true
+- id: 207
+  sefer: יהושע
+  perek: 20
+  header: הקדשת ערי מקלט בעבר הירדן המערבי
+  qualified: true
+- id: 208
+  sefer: יהושע
+  perek: 21
+  header: ערי הלוים ומגרשיהם, מנוחה מהגוים
+  qualified: true
+- id: 209
+  sefer: יהושע
+  perek: 22
+  header: יהושע משחרר את שנים וחצי השבטים והם בונים מזבח, דין ודברים עמם
+  qualified: true
+- id: 210
+  sefer: יהושע
+  perek: 23
+  header: נאום יהושע
+  qualified: true
+- id: 211
+  sefer: יהושע
+  perek: 24
+  header: יהושע מזהיר מפני ע"ז וכורת ברית על עבודת ה', מות יהושע, קבורת יוסף, מות
+    אלעזר
+  qualified: true
+- id: 212
+  sefer: שופטים
+  perek: 1
+  header: כיבושי יהודה, שמעון ובני יוסף, עם ישראל לא הוריש את הכנענים
+  qualified: true
+- id: 213
+  sefer: שופטים
+  perek: 2
+  header: קם דור שלא ידע את ה' ועבדו ע"ז, כשהיו חוזרים בתשובה היה ה' מושיעם
+  qualified: true
+- id: 214
+  sefer: שופטים
+  perek: 3
+  header: הגוים המציקים, שפיטת עתניאל בן קנז, אהוד בן גרא ושמגר בן ענת
+  qualified: true
+- id: 215
+  sefer: שופטים
+  perek: 4
+  header: דבורה, ברק ושבטי זבולן ונפתלי נלחמים בסיסרא, יעל הורגתו
+  qualified: true
+- id: 216
+  sefer: שופטים
+  perek: 5
+  header: שירת דבורה, הארץ שוקטת ארבעים שנה
+  qualified: true
+- id: 217
+  sefer: שופטים
+  perek: 6
+  header: נאום הנביא, דבר ה' לגדעון, ריב גדעון בבעל ובקשת האותות
+  qualified: true
+- id: 218
+  sefer: שופטים
+  perek: 7
+  header: 'המלחמה במדין: מצבת הנלחמים, האות, התכסיס, הבהלה והמרדף'
+  qualified: true
+- id: 219
+  sefer: שופטים
+  perek: 8
+  header: המרדף אחר זבח וצלמנע ותצאתיו, מות גדעון
+  qualified: true
+- id: 220
+  sefer: שופטים
+  perek: 9
+  header: אבימלך ואנשי שכם רוצחים את בני גדעון, הרעה שבאה עליהם
+  qualified: true
+- id: 221
+  sefer: שופטים
+  perek: 10
+  header: שופטים נוספים, לחץ עמון על ישראל, דבר ה', דבר שרי גלעד
+  qualified: true
+- id: 222
+  sefer: שופטים
+  perek: 11
+  header: מינוי יפתח, שיח בינו למלך עמון, נדרו, הקרב בעמון, קיום הנדר
+  qualified: true
+- id: 223
+  sefer: שופטים
+  perek: 12
+  header: פנית אפרים אל יפתח וענשם מאת הגלעדים, שופטים נוספים
+  qualified: true
+- id: 224
+  sefer: שופטים
+  perek: 13
+  header: התגלות המלאך אל אשת מנוח, הולדת שמשון
+  qualified: true
+- id: 225
+  sefer: שופטים
+  perek: 14
+  header: שמשון, הארי והדבש, שמשון לוקח אישה, שמשון והמרעים
+  qualified: false
+- id: 226
+  sefer: שופטים
+  perek: 15
+  header: שמשון מכה בפלשתים, בורח מהם, מוסגר לידם ומכה בהם שוב
+  qualified: false
+- id: 227
+  sefer: שופטים
+  perek: 16
+  header: שמשון ודלילה, קיצוץ שערותיו, הלכדו, מותו יחד עם הפלשתים
+  qualified: false
+- id: 228
+  sefer: שופטים
+  perek: 17
+  header: מיכה ואמו מקימים פסל ומסכה, הנער הלוי חובר למיכה
+  qualified: false
+- id: 229
+  sefer: שופטים
+  perek: 18
+  header: בני דן לוקחים את פסל מיכה ואת הנער ועולים להלחם על ליש
+  qualified: false
+- id: 230
+  sefer: שופטים
+  perek: 19
+  header: פלגש בגבעה
+  qualified: false
+- id: 231
+  sefer: שופטים
+  perek: 20
+  header: מלחמת ישראל ובנימין
+  qualified: false
+- id: 232
+  sefer: שופטים
+  perek: 21
+  header: שידוכים לבני בנימין הנותרים עם נשות יבש גלעד והחולות בשלה
+  qualified: false
+- id: 233
+  sefer: שמואל
+  perek: 1
+  header: אלקנה ונשיו בשילה, נדר חנה, מפגשה עם עלי, הולדת שמואל
+  qualified: false
+  additional: א
+- id: 234
+  sefer: שמואל
+  perek: 2
+  header: תפלת חנה, שמואל משרת בשילה, בני עלי, נבואה קשה לעלי
+  qualified: false
+  additional: א
+- id: 235
+  sefer: שמואל
+  perek: 3
+  header: שמואל מתנבא לראשונה, שמואל גדל ומוחזק כנביא
+  qualified: false
+  additional: א
+- id: 236
+  sefer: שמואל
+  perek: 4
+  header: המלחמה עם פלשתים, הלקח הארון, מות עלי ובניו וכלתו
+  qualified: false
+  additional: א
+- id: 237
+  sefer: שמואל
+  perek: 5
+  header: גלגוליו של הארון בערי פלשתים וענשם בשל כך
+  qualified: false
+  additional: א
+- id: 238
+  sefer: שמואל
+  perek: 6
+  header: פלשתים משיבים את הארון, אנשי בית שמש נגפים לפניו
+  qualified: false
+  additional: א
+- id: 239
+  sefer: שמואל
+  perek: 7
+  header: הארון בקרית יערים, שְׁמוּאֵל מוביל קרב נגד פלשתים, שְׁמוּאֵל שופט
+  qualified: false
+  additional: א
+- id: 240
+  sefer: שמואל
+  perek: 8
+  header: בני שמואל, העם דורש מלך, שְׁמוּאֵל מזהירם, ה' מאפשר להם
+  qualified: false
+  additional: א
+- id: 241
+  sefer: שמואל
+  perek: 9
+  header: שָׁאוּל מתגלגל אל שְׁמוּאֵל, שְׁמוּאֵל מכבדו
+  qualified: false
+  additional: א
+- id: 242
+  sefer: שמואל
+  perek: 10
+  header: שְׁמוּאֵל מושח את שָׁאוּל ומנבא לו, שָׁאוּל מתנבא, שָׁאוּל מומלך
+  qualified: false
+  additional: א
+- id: 243
+  sefer: שמואל
+  perek: 11
+  header: התנאי של נָחָשׁ הָֽעַמּוֹנִי, שָׁאוּל נלחם בְּעַמּוֹן, חִדּוּשׁ המלוכה
+  qualified: false
+  additional: א
+- id: 244
+  sefer: שמואל
+  perek: 12
+  header: טענת שמואל על הרצון בשלטון מלך, הכרזתו שהכל תלוי במעשים
+  qualified: false
+  additional: א
+- id: 245
+  sefer: שמואל
+  perek: 13
+  header: תחילת המלחמה בפלשתים, העם מתפזר, שאול לא מחכה לשמואל
+  qualified: false
+  additional: א
+- id: 246
+  sefer: שמואל
+  perek: 14
+  header: מכת יונתן בפלשתים, עברו על שבועת אביו, חיזוק מלכות שאול
+  qualified: false
+  additional: א
+- id: 247
+  sefer: שמואל
+  perek: 15
+  header: מלחמת שאול בעמלק, אי קיום ציווי שמואל ותוצאותיו
+  qualified: false
+  additional: א
+- id: 248
+  sefer: שמואל
+  perek: 16
+  header: שמואל מושח את דוד, רוח רעה שורה על שאול
+  qualified: false
+  additional: א
+- id: 249
+  sefer: שמואל
+  perek: 17
+  header: גלית מחרף, דוד הורגו, פלשתים מובסים, שאול מתשאל את דוד
+  qualified: false
+  additional: א
+- id: 250
+  sefer: שמואל
+  perek: 18
+  header: ברית דוד ויהונתן, יחס שאול לדוד, נישואי דוד ומיכל, דוד משכיל וה' עמו
+  qualified: false
+  additional: א
+- id: 251
+  sefer: שמואל
+  perek: 19
+  header: שאול מבקש את נפש דוד, מיכל מצילה את דוד, דוד ושמואל בניות ברמה, שאול מתנבא
+  qualified: false
+  additional: א
+- id: 252
+  sefer: שמואל
+  perek: 20
+  header: יהונתן חוקר על יחס שאול לדוד בסעודת ראש חודש, מגלה שמבקש נפשו ומודיע לדוד
+  qualified: false
+  additional: א
+- id: 253
+  sefer: שמואל
+  perek: 21
+  header: דוד בנב עיר הכהנים, מקבל מאחימלך לחם קדש וחרב, בורח אל אכיש ומתחזה למשוגע
+  qualified: false
+  additional: א
+- id: 254
+  sefer: שמואל
+  perek: 22
+  header: אביו ואמו של דוד נקלטים במואב, אנשים מצטרפים לדוד, דואג גורם להשמדת נב
+  qualified: false
+  additional: א
+- id: 255
+  sefer: שמואל
+  perek: 23
+  header: דוד מושיע את קעילה מפלשתים, יהונתן מעודד את דוד, שאול ממשיך לרדוף אחר דוד
+  qualified: false
+  additional: א
+- id: 256
+  sefer: שמואל
+  perek: 24
+  header: דוד כורת את כנף המעיל של שאול, שאול משביע את דוד לא להכרית את ביתו
+  qualified: false
+  additional: א
+- id: 257
+  sefer: שמואל
+  perek: 25
+  header: מות שמואל, מעשה נבל, דוד נושא את אביגיל ואחינעם, מיכל ניתנת לפלטי בן ליש
+  qualified: false
+  additional: א
+- id: 258
+  sefer: שמואל
+  perek: 26
+  header: דוד חס על שאול בגבעת החכילה, שאול מברך את דוד
+  qualified: false
+  additional: א
+- id: 259
+  sefer: שמואל
+  perek: 27
+  header: דוד ואנשיו בצקלג בחסות אכיש מלך גת, דוד פושט על עמי האזור ומסתיר זאת מאכיש
+  qualified: false
+  additional: א
+- id: 260
+  sefer: שמואל
+  perek: 28
+  header: אכיש מצרף את דוד לקרב בישראל, ה' לא עונה לשאול, שאול מעלה את שמואל באוב
+  qualified: false
+  additional: א
+- id: 261
+  sefer: שמואל
+  perek: 29
+  header: סרני פלשתים מתנגדים לשיתוף דוד בקרב, אכיש משחרר את דוד
+  qualified: false
+  additional: א
+- id: 262
+  sefer: שמואל
+  perek: 30
+  header: עמלק פשטו על צקלג, דוד משמיד אותם, מחלק את השלל לכל הצבא וגם לערי יהודה
+  qualified: false
+  additional: א
+- id: 263
+  sefer: שמואל
+  perek: 31
+  header: שאול ובניו מתים בקרב עם פלשתים בגלבוע, אנשי יבש גלעד קוברים את עצמותיהם
+  qualified: false
+  additional: א
+- id: 264
+  sefer: שמואל
+  perek: 1
+  header: נער עמלקי מבשר לדוד על מות שאול, דוד הורגו, דוד מקונן על מות שאול
+  qualified: false
+  additional: ב
+- id: 265
+  sefer: שמואל
+  perek: 2
+  header: דוד נמשח בחברון, מברך את אנשי יבש גלעד, המלכת איש בשת, מאבק בין בתי המלוכה
+  qualified: false
+  additional: ב
+- id: 266
+  sefer: שמואל
+  perek: 3
+  header: הבנים של דוד בחברון, ברית אבנר ודוד, החזרת מיכל, יואב הורג את אבנר, דוד
+    מתאבל
+  qualified: false
+  additional: ב
+- id: 267
+  sefer: שמואל
+  perek: 4
+  header: רכב ובענה רוצחים את איש בשת, באים לבשר לדוד ונהרגים על ידו
+  qualified: false
+  additional: ב
+- id: 268
+  sefer: שמואל
+  perek: 5
+  header: דוד נמשח למלך על כל ישראל, כובש את ירושלים ומתבסס בה, מביס את פלשתים
+  qualified: false
+  additional: ב
+- id: 269
+  sefer: שמואל
+  perek: 6
+  header: דוד מעלה את הארון לירושלים
+  qualified: false
+  additional: ב
+- id: 270
+  sefer: שמואל
+  perek: 7
+  header: דוד מבקש לבנות את בית ה', נתן מתנבא לדוד שבנו של דוד יבנה הבית
+  qualified: false
+  additional: ב
+- id: 271
+  sefer: שמואל
+  perek: 8
+  header: דוד מכה את עמי הסביבה, תעי מברך את דוד, דוד מושיב נציבים באדום, מבנה המלכות
+  qualified: false
+  additional: ב
+- id: 272
+  sefer: שמואל
+  perek: 9
+  header: דוד קורא למפיבשת בן יהונתן בן שאול ודואג לנכסיו ולצרכיו
+  qualified: false
+  additional: ב
+- id: 273
+  sefer: שמואל
+  perek: 10
+  header: דוד שולח לנחם את חנון מלך עמון, עמון משיבים בעוינות ונעזרים בארם, דוד מכה
+    בארם
+  qualified: false
+  additional: ב
+- id: 274
+  sefer: שמואל
+  perek: 11
+  header: דוד ובת שבע
+  qualified: false
+  additional: ב
+- id: 275
+  sefer: שמואל
+  perek: 12
+  header: נתן הנביא מוכיח את דוד על דבר בת שבע, דוד מתוודה, פטירת בנה, הולדת שלמה
+  qualified: false
+  additional: ב
+- id: 276
+  sefer: שמואל
+  perek: 13
+  header: אמנון ותמר, אבשלום הורג את אמנון ובורח, דוד מתאבל
+  qualified: false
+  additional: ב
+- id: 277
+  sefer: שמואל
+  perek: 14
+  header: יואב שולח אשה תקועית לגרום לדוד לקרוא לאבשלום ומצליח, אבשלום נפגש עם אביו
+  qualified: false
+  additional: ב
+- id: 278
+  sefer: שמואל
+  perek: 15
+  header: אבשלום גונב את לב ישראל וקושר קשר על דוד, דוד בורח ושותל מרגלים אצל אבשלום
+  qualified: false
+  additional: ב
+- id: 279
+  sefer: שמואל
+  perek: 16
+  header: מפגש דוד וציבה, שמעי מקלל את דוד, אבשלום בא אל פלגשי אביו בעצת אחתופל
+  qualified: false
+  additional: ב
+- id: 280
+  sefer: שמואל
+  perek: 17
+  header: עצת אחתופל לתקוף את דוד מופרת והוא מתאבד, דוד וצבאו מתארחים במחנים בברחם
+  qualified: false
+  additional: ב
+- id: 281
+  sefer: שמואל
+  perek: 18
+  header: צבא דוד נלחם בצבא אבשלום, מות אבשלום
+  qualified: false
+  additional: ב
+- id: 282
+  sefer: שמואל
+  perek: 19
+  header: דוד חוזר לירושלים
+  qualified: false
+  additional: ב
+- id: 283
+  sefer: שמואל
+  perek: 20
+  header: יואב הורג את עמשא, אשה חכמה מוסרת את שבע בן בכרי, מבנה המלכות
+  qualified: false
+  additional: ב
+- id: 284
+  sefer: שמואל
+  perek: 21
+  header: רעב בארץ, דוד מוסר מצאצאי שאול לגבעונים, הרעב נפסק, חיסול ארבעה בני הרפה
+  qualified: false
+  additional: ב
+- id: 285
+  sefer: שמואל
+  perek: 22
+  header: שירת דוד
+  qualified: false
+  additional: ב
+- id: 286
+  sefer: שמואל
+  perek: 23
+  header: נְאֻם דוד, הַגִּבֹּרִים אֲשֶׁר לְדָוִד
+  qualified: false
+  additional: ב
+- id: 287
+  sefer: שמואל
+  perek: 24
+  header: המפקד, המגפה, קְנִייַּת גֹּרֶן ארונה
+  qualified: false
+  additional: ב
+- id: 288
+  sefer: מלכים
+  perek: 1
+  header: דוד זקן, אדניה מתנשא, נתן ובת שבע דוחפים להמלכת שלמה
+  qualified: false
+  additional: א
+- id: 289
+  sefer: מלכים
+  perek: 2
+  header: צוואת דוד לשלמה, מות דוד, שלמה מחסל את אדניה וממלא את צוואת דוד
+  qualified: false
+  additional: א
+- id: 290
+  sefer: מלכים
+  perek: 3
+  header: שלמה לוקח את בת פרעה, מקבל לב חכם מה', משפט שלמה
+  qualified: false
+  additional: א
+- id: 291
+  sefer: מלכים
+  perek: 4
+  header: שרי וניצבי המלך שלמה, עם ישראל רבים ושמחים
+  qualified: false
+  additional: א
+- id: 292
+  sefer: מלכים
+  perek: 5
+  header: לחם שלמה, העם יושב בטח, חכמת שלמה, הכנת חומרי גלם למקדש
+  qualified: false
+  additional: א
+- id: 293
+  sefer: מלכים
+  perek: 6
+  header: בנין המקדש ומדותיו, דבר ה' לשלמה, פרטי הבניה
+  qualified: false
+  additional: א
+- id: 294
+  sefer: מלכים
+  perek: 7
+  header: מעשה בית שלמה, העמודים יכין ובועז, ים של שלמה ועוד, השלמת המלאכה
+  qualified: false
+  additional: א
+- id: 295
+  sefer: מלכים
+  perek: 8
+  header: העלאת הארון למקדש, תפילת שלמה, הודאתו לה', חנוכת המזבח
+  qualified: false
+  additional: א
+- id: 296
+  sefer: מלכים
+  perek: 9
+  header: דבר ה' לשלמה, התשלום לחירם ותגובתו, מעשי שלמה
+  qualified: false
+  additional: א
+- id: 297
+  sefer: מלכים
+  perek: 10
+  header: מלכת שבא באה אל שלמה, עושר שלמה וחכמתו
+  qualified: false
+  additional: א
+- id: 298
+  sefer: מלכים
+  perek: 11
+  header: נשות שלמה, דבר ה' אליו, מלכותו מאוימת, נבואת אחיה לירבעם
+  qualified: false
+  additional: א
+- id: 299
+  sefer: מלכים
+  perek: 12
+  header: רחבעם מקשיב לילדים, חלוקת המלוכה, נבואת שמעיה, עגלי הזהב
+  qualified: false
+  additional: א
+- id: 300
+  sefer: מלכים
+  perek: 13
+  header: נבואת עִדּוֹ לירבעם, עברו על דברי עצמו, עונשו
+  qualified: false
+  additional: א
+- id: 301
+  sefer: מלכים
+  perek: 14
+  header: אביה חולה, נבואת אחיה לאשת ירבעם, תום מלכות ירבעם ורחבעם
+  qualified: false
+  additional: א
+- id: 302
+  sefer: מלכים
+  perek: 15
+  header: מלכויות אביה ואסא על יהודה ומלכויות נדב ובעשא על ישראל
+  qualified: false
+  additional: א
+- id: 303
+  sefer: מלכים
+  perek: 16
+  header: העונש לבעשא, מלכות בנו אלה, זמרי, עמרי ואחאב על ישראל
+  qualified: false
+  additional: א
+- id: 304
+  sefer: מלכים
+  perek: 17
+  header: אליהו הנביא מביא בצורת, גלות אליהו צרפתה
+  qualified: false
+  additional: א
+- id: 305
+  sefer: מלכים
+  perek: 18
+  header: אליהו הנביא נראה לאחאב, מעמד אליהו ונביאי הבעל בכרמל
+  qualified: false
+  additional: א
+- id: 306
+  sefer: מלכים
+  perek: 19
+  header: אליהו הנביא בורח מאיזבל, מבקש למות, התגלות ה' אליו
+  qualified: false
+  additional: א
+- id: 307
+  sefer: מלכים
+  perek: 20
+  header: מלחמת ישראל וארם, אחאב מחיה את בן הדד ומבושר כי ייענש
+  qualified: false
+  additional: א
+- id: 308
+  sefer: מלכים
+  perek: 21
+  header: אחאב מבקש את כרם נבות, איזבל מסדרת שימות על שסרב, אליהו מבשר שייענשו
+  qualified: false
+  additional: א
+- id: 309
+  sefer: מלכים
+  perek: 22
+  header: מלחמת אחאב ויהושפט ברמות גלעד, מות אחאב, מלכויות יהושפט ואחזיהו
+  qualified: false
+  additional: א
+- id: 310
+  sefer: מלכים
+  perek: 1
+  header: אחזיה דורש בבעל זבוב, אליהו הנביא מבשרו שימות וכך קורה
+  qualified: false
+  additional: ב
+- id: 311
+  sefer: מלכים
+  perek: 2
+  header: אליהו הנביא עולה בסערה השמימה, אלישע מרפא את מי יריחו
+  qualified: false
+  additional: ב
+- id: 312
+  sefer: מלכים
+  perek: 3
+  header: מלחמת יהודה, ישראל ואדום במואב
+  qualified: false
+  additional: ב
+- id: 313
+  sefer: מלכים
+  perek: 4
+  header: אלישע ואשת עובדיה, אלישע והאלמנה השונמית, ניסי אלישע
+  qualified: false
+  additional: ב
+- id: 314
+  sefer: מלכים
+  perek: 5
+  header: צרעת נעמן, מפגשו עם אלישע וריפויו, מעשה גיחזי ותגובת אלישע
+  qualified: false
+  additional: ב
+- id: 315
+  sefer: מלכים
+  perek: 6
+  header: אלישע מציף ברזל, אלישע וחיל ארם, רעב בשומרון
+  qualified: false
+  additional: ב
+- id: 316
+  sefer: מלכים
+  perek: 7
+  header: ארבעה מצורעים ושלל מחנה ארם, שליש לועג לאלישע ונענש
+  qualified: false
+  additional: ב
+- id: 317
+  sefer: מלכים
+  perek: 8
+  header: השונמית יוצאת מהארץ, אלישע בדמשק, מלכים נוספים
+  qualified: false
+  additional: ב
+- id: 318
+  sefer: מלכים
+  perek: 9
+  header: אלישע הנביא מושח את יהוא, יהוא הורג את יהורם ואיזבל
+  qualified: false
+  additional: ב
+- id: 319
+  sefer: מלכים
+  perek: 10
+  header: יהוא מכרית את בית אחאב ואת עבודת הבעל, פטירתו
+  qualified: false
+  additional: ב
+- id: 320
+  sefer: מלכים
+  perek: 11
+  header: מעשי עתליה, הצלת יואש והמלכתו על יהודה, מות עתליה
+  qualified: false
+  additional: ב
+- id: 321
+  sefer: מלכים
+  perek: 12
+  header: מלכות יהואש על יהודה, בדק הבית
+  qualified: false
+  additional: ב
+- id: 322
+  sefer: מלכים
+  perek: 13
+  header: מלכות יהואחז ויואש על ישראל, אלישע ויואש, מות אלישע
+  qualified: false
+  additional: ב
+- id: 323
+  sefer: מלכים
+  perek: 14
+  header: אמציה מלך יהודה ויואש מלך ישראל, ירבעם השני ועוד
+  qualified: false
+  additional: ב
+- id: 324
+  sefer: מלכים
+  perek: 15
+  header: עוזיה ויותם מלכי יהודה. זכריה, שלום, מנחם, פקח והושע מלכי ישראל
+  qualified: false
+  additional: ב
+- id: 325
+  sefer: מלכים
+  perek: 16
+  header: מלכות אחז, מזבח אחז
+  qualified: false
+  additional: ב
+- id: 326
+  sefer: מלכים
+  perek: 17
+  header: גלות עשרת השבטים
+  qualified: false
+  additional: ב
+- id: 327
+  sefer: מלכים
+  perek: 18
+  header: מלכות חזקיהו על יהודה וכפיפותו לסנחריב מלך אשור, דברי החירוף של רבשקה
+  qualified: false
+  additional: ב
+- id: 328
+  sefer: מלכים
+  perek: 19
+  header: חזקיה פונה לישעיה, מתפלל ונענה, צבא סחנריב נופל וסנחריב נרצח
+  qualified: false
+  additional: ב
+- id: 329
+  sefer: מלכים
+  perek: 20
+  header: חזקיה חולה ונרפא בדבר ה', חזקיה מראה למלך בבל את גנזיו ונענש
+  qualified: false
+  additional: ב
+- id: 330
+  sefer: מלכים
+  perek: 21
+  header: מלכות מנשה, ה' אומר שיהפוך את ירושלים בגלל מנשה, מלכות אמון
+  qualified: false
+  additional: ב
+- id: 331
+  sefer: מלכים
+  perek: 22
+  header: מלכות יאשיה, ספר תורה נמצא במקדש, נבואת חולדה
+  qualified: false
+  additional: ב
+- id: 332
+  sefer: מלכים
+  perek: 23
+  header: יאשיה קורא מספר התורה, מכרית ע"ז, מקיים פסח. מלכות יְהוֹאָחָז ויהויקים על
+    יהודה
+  qualified: false
+  additional: ב
+- id: 333
+  sefer: מלכים
+  perek: 24
+  header: מרד יהויקים ומותו, מלכות יהויכין, מלכות צדקיהו
+  qualified: false
+  additional: ב
+- id: 334
+  sefer: מלכים
+  perek: 25
+  header: לקיחת צדקיה לבבל, חרבן הבית, רצח גדליה
+  qualified: false
+  additional: ב
+- id: 335
+  sefer: ישעיה
+  perek: 1
+  header: חזון ישעיהו - תוכחה לממלכת יהודה
+  qualified: false
+- id: 336
+  sefer: ישעיה
+  perek: 2
+  header: נבואת ישעיה על הר ה' באחרית הימים, ה' משפיל גאים
+  qualified: false
+- id: 337
+  sefer: ישעיה
+  perek: 3
+  header: תוכחת ישעיה למנהיגים ולנשים
+  qualified: false
+- id: 338
+  sefer: ישעיה
+  perek: 4
+  header: נבואת נחמה קצרה
+  qualified: false
+- id: 339
+  sefer: ישעיה
+  perek: 5
+  header: משל הכרם, קריאות הוי, נבואת פורענות
+  qualified: false
+- id: 340
+  sefer: ישעיה
+  perek: 6
+  header: הקדשת ישעיה לנביא
+  qualified: false
+- id: 341
+  sefer: ישעיה
+  perek: 7
+  header: נבואות ישעיה לאחז
+  qualified: false
+- id: 342
+  sefer: ישעיה
+  perek: 8
+  header: האות "מַהֵר שָׁלָל חָשׁ בַּז", שטף אשור שיבוא על יהודה והפרת עצתם, דרך העם
+    המוטעית
+  qualified: false
+- id: 343
+  sefer: ישעיה
+  perek: 9
+  header: נבואה ישעיה על תשועה ליהודה ותוכחה לאפרים
+  qualified: false
+- id: 344
+  sefer: ישעיה
+  perek: 10
+  header: קריאת "הוי" לחוקקים, נבואה על מפלת אשור ותשועה ליהודה
+  qualified: false
+- id: 345
+  sefer: ישעיה
+  perek: 11
+  header: נבואה על המשיח, קיבוץ גלויות, אחדות עם ישראל, כיבוש ארץ ישראל
+  qualified: false
+- id: 346
+  sefer: ישעיה
+  perek: 12
+  header: שירת הודאה על כל הטוב מפרק י"א
+  qualified: false
+- id: 347
+  sefer: ישעיה
+  perek: 13
+  header: משא בבל
+  qualified: false

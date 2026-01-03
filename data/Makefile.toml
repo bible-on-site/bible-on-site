@@ -1,0 +1,129 @@
+[env]
+CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+
+[config]
+default_to_workspace = false
+
+# =============================================================================
+# Common Tasks
+# =============================================================================
+
+[tasks.build]
+description = "Build all data processing tools"
+command = "cargo"
+args = ["build", "--release"]
+
+[tasks.clean]
+description = "Clean build artifacts"
+command = "cargo"
+args = ["clean"]
+
+[tasks.lint]
+description = "Run clippy linter"
+command = "cargo"
+args = ["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"]
+
+[tasks.fmt]
+description = "Format code"
+command = "cargo"
+args = ["fmt", "--all"]
+
+[tasks.fmt-check]
+description = "Check code formatting"
+command = "cargo"
+args = ["fmt", "--all", "--", "--check"]
+
+# =============================================================================
+# Sefaria Setup Tasks
+# =============================================================================
+
+[tasks.sefaria-setup]
+description = "Check MongoDB installation and setup environment"
+cwd = "./sefaria/setup-and-population"
+command = "cargo"
+args = ["run", "--release", "--", "setup"]
+
+[tasks.sefaria-populate]
+description = "Populate MongoDB with Sefaria dump"
+cwd = "./sefaria/setup-and-population"
+command = "cargo"
+args = ["run", "--release", "--", "populate"]
+
+# =============================================================================
+# Pipeline Tasks
+# =============================================================================
+
+[tasks.generate-tanah-view]
+description = "Generate tanah view from MongoDB (use --json or --sqlite)"
+cwd = "./sefaria/pipelines/tanah-view"
+script = '''
+echo "Usage: cargo make generate-tanah-view-json OR cargo make generate-tanah-view-sqlite"
+'''
+
+[tasks.generate-tanah-view-json]
+description = "Generate tanah view as JSON"
+cwd = "./sefaria/pipelines/tanah-view"
+command = "cargo"
+args = ["run", "--release", "--", "--format", "json"]
+
+[tasks.generate-tanah-view-sqlite]
+description = "Generate tanah view as SQLite"
+cwd = "./sefaria/pipelines/tanah-view"
+command = "cargo"
+args = ["run", "--release", "--", "--format", "sqlite"]
+
+[tasks.generate-compass-stages]
+description = "Generate MongoDB Compass stages for debugging aggregation pipeline"
+cwd = "./sefaria/pipelines/tanah-view"
+command = "cargo"
+args = ["run", "--release", "--", "--format", "compass-stages"]
+
+# =============================================================================
+# MySQL Tasks
+# =============================================================================
+
+[tasks.mysql-populate]
+description = "Populate MySQL database with Tanah structure and test data"
+cwd = "./mysql/db-populator"
+command = "cargo"
+args = ["run", "--release"]
+
+[tasks.mysql-populate-data-only]
+description = "Populate MySQL database with test data only (skip structure)"
+cwd = "./mysql/db-populator"
+command = "cargo"
+args = ["run", "--release", "--", "--skip-structure"]
+
+# =============================================================================
+# Coverage Tasks (tanah-view)
+# =============================================================================
+
+[tasks.coverage-dir-create]
+description = "Create coverage output directory"
+cwd = "./sefaria/pipelines/tanah-view"
+command = "mkdir"
+args = ["-p", ".coverage"]
+
+[tasks.coverage-tanah-view]
+description = "Run tanah-view tests with coverage and generate lcov.info"
+cwd = "./sefaria/pipelines/tanah-view"
+dependencies = ["coverage-dir-create"]
+command = "cargo"
+args = ["llvm-cov", "--lcov", "--output-path", ".coverage/lcov.info"]
+
+[tasks.coverage-tanah-view-browser]
+description = "Run tanah-view tests with coverage and open HTML report in browser"
+condition = { env_not_set = ["CI"] }
+cwd = "./sefaria/pipelines/tanah-view"
+command = "cargo"
+args = ["llvm-cov", "--html", "--open"]
+
+# =============================================================================
+# Schema Validation Tasks
+# =============================================================================
+
+[tasks.validate-tanah-view-json]
+description = "Validate tanah view JSON output against JSON Schema"
+cwd = "./sefaria/pipelines/tanah-view"
+command = "ajv"
+args = ["validate", "-s", "tanah_view.schema.json", "-d", ".output/sefaria-dump-5784-sivan-4.tanah_view.json", "--spec=draft2020"]
