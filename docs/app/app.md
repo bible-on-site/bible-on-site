@@ -39,3 +39,44 @@ The app integrates with Firebase for:
 
 - **User Settings Storage** - Persisting user preferences across devices
 - **Push Notifications** - Delivering updates and reminders via Firebase Cloud Messaging (FCM)
+
+## Development
+
+### Prerequisites
+
+- .NET 9.0 SDK
+- MAUI workloads: `dotnet workload install maui`
+
+### Build System
+
+The app uses [NUKE](https://nuke.build/) for build automation (similar to cargo-make for Rust).
+
+```bash
+cd app
+dotnet tool restore              # First time only
+dotnet run --project devops -- [target]
+```
+
+### Available Targets
+
+| Target | Description |
+|--------|-------------|
+| `Compile` | Build all projects (default) |
+| `Clean` | Clean build outputs |
+| `Restore` | Restore NuGet packages |
+| `Test` | Run all tests (unit + integration) |
+| `TestUnit` | Run unit tests only |
+| `TestIntegration` | Run integration tests (requires API) |
+| `RunWindows` | Run app on Windows |
+| `RunAndroid` | Run app on Android emulator |
+| `RunIos` | Run app on iOS simulator |
+| `RunMac` | Run app on Mac Catalyst |
+
+### Examples
+
+```bash
+dotnet run --project devops -- Compile        # Build the app
+dotnet run --project devops -- Test           # Run all tests
+dotnet run --project devops -- RunWindows     # Launch on Windows
+dotnet run --project devops -- --help         # Show all targets
+```

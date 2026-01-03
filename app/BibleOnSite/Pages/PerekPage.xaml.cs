@@ -1,0 +1,77 @@
+namespace BibleOnSite.Pages;
+
+using BibleOnSite.Services;
+using BibleOnSite.ViewModels;
+
+/// <summary>
+/// Page for displaying a Perek (chapter) with its pasukim (verses).
+/// </summary>
+public partial class PerekPage : ContentPage
+{
+    private readonly PerekViewModel _viewModel;
+    private bool _isLoading;
+
+    public PerekPage()
+    {
+        InitializeComponent();
+        _viewModel = new PerekViewModel();
+        BindingContext = _viewModel;
+    }
+
+    public PerekPage(PerekViewModel viewModel)
+    {
+        InitializeComponent();
+        _viewModel = viewModel;
+        BindingContext = _viewModel;
+    }
+
+    protected override async void OnAppearing()
+    {
+        base.OnAppearing();
+
+        // If no perek is loaded, load perek 1
+        if (_viewModel.Perek == null && !_isLoading)
+        {
+            _isLoading = true;
+            try
+            {
+                // Load data from SQLite database
+                await _viewModel.LoadByPerekIdAsync(1);
+
+                // Also load starter data from API in background
+                _ = LoadApiDataAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Failed to load perek: {ex.Message}");
+            }
+            finally
+            {
+                _isLoading = false;
+            }
+        }
+    }
+
+    private static async Task LoadApiDataAsync()
+    {
+        try
+        {
+            if (!StarterService.Instance.IsLoaded)
+            {
+                await StarterService.Instance.LoadAsync();
+                Console.WriteLine($"Loaded {StarterService.Instance.Authors.Count} authors from API");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Failed to load API data: {ex.Message}");
+        }
+    }
+
+    protected override void OnNavigatedTo(NavigatedToEventArgs args)
+    {
+        base.OnNavigatedTo(args);
+
+        // Handle navigation parameters if needed
+    }
+}

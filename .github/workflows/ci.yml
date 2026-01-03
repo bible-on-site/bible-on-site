@@ -29,6 +29,7 @@ env:
   API_TESTS_NODE_CACHE_PATH: web/api/tests/package-lock.json
   API_TESTS_NODE_VERSION_FILE: web/api/tests/package.json
   CROSS_MODULE_COVERAGE_REPORT: .coverage/lcov.info
+  DATA_DIRECTORY: data
   DEVOPS_DIRECTORY: devops
   DEVOPS_NODE_CACHE_PATH: devops/package-lock.json
   DEVOPS_NODE_VERSION_FILE: devops/package.json
@@ -435,7 +436,9 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: ${{ env.API_DIRECTORY }}
+          workspaces: |
+            ${{ env.API_DIRECTORY }}
+            ${{ env.DATA_DIRECTORY }}
 
       - name: Lint
         id: lint
@@ -465,10 +468,10 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
-      - name: Populate CI
-        id: populate-ci
-        working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        run: npm run populate_test_db
+      - name: Populate Test Database
+        id: populate-test-db
+        working-directory: ${{ env.DATA_DIRECTORY }}
+        run: cargo make mysql-populate
 
       - name: Setup Tests Node.js
         id: setup-tests-node

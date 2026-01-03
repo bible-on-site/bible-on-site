@@ -1,0 +1,342 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://bible-on-site.org/schemas/tanah_view.schema.json",
+	"title": "Tanah View",
+	"description": "Schema for the Tanah view JSON output - the formatted Tanah text with segments, dates, and metadata",
+	"type": "array",
+	"items": {
+		"$ref": "#/$defs/SefarimItem"
+	},
+	"$defs": {
+		"SefarimItem": {
+			"description": "A sefer (book) in the Tanah. Can have perakim directly or additionals (for split books like שמואל)",
+			"type": "object",
+			"oneOf": [
+				{ "$ref": "#/$defs/SefarimItemWithPerakim" },
+				{ "$ref": "#/$defs/SefarimItemWithAdditionals" }
+			]
+		},
+		"SefarimItemWithPerakim": {
+			"description": "A sefer with perakim directly (most sefarim)",
+			"type": "object",
+			"properties": {
+				"_id": {
+					"type": "string",
+					"description": "MongoDB document ID (Hebrew sefer name)"
+				},
+				"name": {
+					"type": "string",
+					"description": "Hebrew name of the sefer (e.g., בראשית)"
+				},
+				"tanachUsName": {
+					"type": "string",
+					"description": "English name from tanach.us (e.g., Genesis)"
+				},
+				"helek": {
+					"type": "string",
+					"enum": ["תורה", "נביאים", "כתובים"],
+					"description": "Section of the Tanah"
+				},
+				"pesukimCount": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "Total number of pesukim in this sefer"
+				},
+				"perekFrom": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 929,
+					"description": "First perek ID in 929 project numbering"
+				},
+				"perekTo": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 929,
+					"description": "Last perek ID in 929 project numbering"
+				},
+				"perakim": {
+					"type": "array",
+					"items": { "$ref": "#/$defs/Perek" },
+					"description": "Array of perakim in this sefer"
+				}
+			},
+			"required": [
+				"_id",
+				"name",
+				"tanachUsName",
+				"helek",
+				"pesukimCount",
+				"perekFrom",
+				"perekTo",
+				"perakim"
+			],
+			"additionalProperties": false
+		},
+		"SefarimItemWithAdditionals": {
+			"description": "A sefer with additionals (split books: שמואל, מלכים, עזרא-נחמיה, דברי הימים)",
+			"type": "object",
+			"properties": {
+				"_id": {
+					"type": "string",
+					"description": "MongoDB document ID (Hebrew sefer name)"
+				},
+				"name": {
+					"type": "string",
+					"description": "Hebrew name of the sefer (e.g., שמואל)"
+				},
+				"helek": {
+					"type": "string",
+					"enum": ["תורה", "נביאים", "כתובים"],
+					"description": "Section of the Tanah"
+				},
+				"pesukimCount": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "Total number of pesukim across all additionals"
+				},
+				"perekFrom": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 929,
+					"description": "First perek ID in 929 project numbering"
+				},
+				"perekTo": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 929,
+					"description": "Last perek ID in 929 project numbering"
+				},
+				"additionals": {
+					"type": "array",
+					"items": { "$ref": "#/$defs/AdditionalsItem" },
+					"minItems": 2,
+					"maxItems": 2,
+					"description": "Two sub-parts of the sefer (א/ב for שמואל,מלכים,דה\"י or ע/נ for עזרא-נחמיה)"
+				}
+			},
+			"required": [
+				"_id",
+				"name",
+				"helek",
+				"pesukimCount",
+				"perekFrom",
+				"perekTo",
+				"additionals"
+			],
+			"additionalProperties": false
+		},
+		"AdditionalsItem": {
+			"description": "A sub-part of a split sefer",
+			"type": "object",
+			"properties": {
+				"letter": {
+					"type": "string",
+					"enum": ["א", "ב", "ע", "נ"],
+					"description": "Letter identifier for the additional (א/ב or ע/נ)"
+				},
+				"name": {
+					"type": "string",
+					"description": "Full Hebrew name including letter (e.g., שמואל א)"
+				},
+				"tanachUsName": {
+					"type": "string",
+					"description": "English name from tanach.us (e.g., I Samuel)"
+				},
+				"helek": {
+					"type": "string",
+					"enum": ["תורה", "נביאים", "כתובים"],
+					"description": "Section of the Tanah"
+				},
+				"order": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "Canonical order number"
+				},
+				"pesukimCount": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "Number of pesukim in this additional"
+				},
+				"perekFrom": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 929,
+					"description": "First perek ID in 929 project numbering"
+				},
+				"perekTo": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 929,
+					"description": "Last perek ID in 929 project numbering"
+				},
+				"perakim": {
+					"type": "array",
+					"items": { "$ref": "#/$defs/Perek" },
+					"description": "Array of perakim in this additional"
+				}
+			},
+			"required": [
+				"letter",
+				"name",
+				"tanachUsName",
+				"helek",
+				"order",
+				"pesukimCount",
+				"perekFrom",
+				"perekTo",
+				"perakim"
+			],
+			"additionalProperties": false
+		},
+		"Perek": {
+			"description": "A perek (chapter) in the Tanah",
+			"type": "object",
+			"properties": {
+				"perekId": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 929,
+					"description": "Perek ID in the 929 project numbering (1-929)"
+				},
+				"header": {
+					"type": "string",
+					"description": "Hebrew header/title describing the perek content"
+				},
+				"date": {
+					"type": "array",
+					"items": {
+						"type": "integer",
+						"description": "Hebrew date in YYYYMMDD format (e.g., 57750329 = 29 Adar 5775)"
+					},
+					"minItems": 1,
+					"description": "Array of dates when this perek is read in various 929 cycles"
+				},
+				"star_rise": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"pattern": "^\\d{2}:\\d{2}$",
+						"description": "Time in HH:MM format (Jerusalem local time)"
+					},
+					"minItems": 1,
+					"description": "Tseit hakochavim times corresponding to each date (when the reading day begins)"
+				},
+				"pesukim": {
+					"type": "array",
+					"items": { "$ref": "#/$defs/Pasuk" },
+					"minItems": 1,
+					"description": "Array of pesukim (verses) in this perek"
+				}
+			},
+			"required": ["perekId", "header", "date", "star_rise", "pesukim"],
+			"additionalProperties": false
+		},
+		"Pasuk": {
+			"description": "A pasuk (verse) containing segments",
+			"type": "object",
+			"properties": {
+				"segments": {
+					"type": "array",
+					"items": { "$ref": "#/$defs/Segment" },
+					"minItems": 1,
+					"description": "Array of text segments that make up this pasuk"
+				}
+			},
+			"required": ["segments"],
+			"additionalProperties": false
+		},
+		"Segment": {
+			"description": "A text segment within a pasuk",
+			"oneOf": [
+				{ "$ref": "#/$defs/QriSegment" },
+				{ "$ref": "#/$defs/KtivSegment" },
+				{ "$ref": "#/$defs/StumaSegment" },
+				{ "$ref": "#/$defs/PtuhaSegment" }
+			]
+		},
+		"QriSegment": {
+			"description": "Qri (vocalized) text segment - the pronunciation. Most segments are this type.",
+			"type": "object",
+			"properties": {
+				"type": {
+					"const": "qri"
+				},
+				"value": {
+					"type": "string",
+					"minLength": 1,
+					"description": "The vocalized Hebrew text with teamim (cantillation marks)"
+				},
+				"recordingTimeFrame": {
+					"$ref": "#/$defs/RecordingTimeFrame",
+					"description": "Start and end timestamps for audio recording"
+				},
+				"ktivOffset": {
+					"type": "integer",
+					"description": "Offset to the paired ktiv segment. Only present when qri differs from ktiv. Negative means ktiv precedes, 0 means orphan qri (קרי ולא כתיב)."
+				}
+			},
+			"required": ["type", "value", "recordingTimeFrame"],
+			"additionalProperties": false
+		},
+		"KtivSegment": {
+			"description": "Ktiv (written) text segment - appears when ktiv differs from qri. כתיב ולא קרי or כתיב וקרי cases.",
+			"type": "object",
+			"properties": {
+				"type": {
+					"const": "ktiv"
+				},
+				"value": {
+					"type": "string",
+					"minLength": 1,
+					"description": "The unvocalized written Hebrew text (consonants only)"
+				},
+				"qriOffset": {
+					"type": "integer",
+					"description": "Offset to the paired qri segment. Always present. Positive means qri follows, 0 means orphan ktiv (כתיב ולא קרי)."
+				}
+			},
+			"required": ["type", "value", "qriOffset"],
+			"additionalProperties": false
+		},
+		"StumaSegment": {
+			"description": "Stuma (ס) - closed paragraph break",
+			"type": "object",
+			"properties": {
+				"type": {
+					"const": "stuma"
+				}
+			},
+			"required": ["type"],
+			"additionalProperties": false
+		},
+		"PtuhaSegment": {
+			"description": "Ptuha (פ) - open paragraph break",
+			"type": "object",
+			"properties": {
+				"type": {
+					"const": "ptuha"
+				}
+			},
+			"required": ["type"],
+			"additionalProperties": false
+		},
+		"RecordingTimeFrame": {
+			"description": "Timestamps for audio recording segment",
+			"type": "object",
+			"properties": {
+				"from": {
+					"type": "string",
+					"pattern": "^\\d{2}:\\d{2}:\\d{2}$",
+					"description": "Start time in HH:MM:SS format"
+				},
+				"to": {
+					"type": "string",
+					"pattern": "^\\d{2}:\\d{2}:\\d{2}$",
+					"description": "End time in HH:MM:SS format"
+				}
+			},
+			"required": ["from", "to"],
+			"additionalProperties": false
+		}
+	}
+}
