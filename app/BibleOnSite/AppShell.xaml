@@ -4,12 +4,14 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:local="clr-namespace:BibleOnSite"
-    Shell.FlyoutBehavior="Flyout"
-    Title="BibleOnSite">
+    xmlns:pages="clr-namespace:BibleOnSite.Pages"
+    Shell.FlyoutBehavior="Disabled"
+    Title="תנ״ך על הפרק">
 
+    <!-- PerekPage is the main/home page -->
     <ShellContent
-        Title="Home"
-        ContentTemplate="{DataTemplate local:MainPage}"
-        Route="MainPage" />
+        Title="הפרק"
+        ContentTemplate="{DataTemplate pages:PerekPage}"
+        Route="PerekPage"/>
 
 </Shell>

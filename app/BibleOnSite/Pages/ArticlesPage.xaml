@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
+             xmlns:models="clr-namespace:BibleOnSite.Models"
+             x:Class="BibleOnSite.Pages.ArticlesPage"
+             x:DataType="viewmodels:ArticlesViewModel"
+             Title="{Binding PerekTitle, StringFormat='מאמרים על {0}'}"
+             FlowDirection="RightToLeft">
+
+    <Grid RowDefinitions="Auto,*">
+        <!-- Header -->
+        <VerticalStackLayout Grid.Row="0"
+                             Padding="16,12"
+                             BackgroundColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}">
+            <Label
+                Text="{Binding PerekTitle, StringFormat='מאמרים על {0}'}"
+                FontSize="20"
+                FontAttributes="Bold"
+                HorizontalTextAlignment="Center"
+                TextColor="White"/>
+            <Label
+                Text="{Binding Articles.Count, StringFormat='{0} מאמרים'}"
+                FontSize="14"
+                HorizontalTextAlignment="Center"
+                TextColor="White"
+                Opacity="0.9"
+                IsVisible="{Binding HasArticles}"/>
+        </VerticalStackLayout>
+
+        <!-- Articles List -->
+        <CollectionView Grid.Row="1"
+                        ItemsSource="{Binding Articles}"
+                        SelectionMode="Single"
+                        SelectionChanged="OnArticleSelected"
+                        Margin="8,0">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:Article">
+                    <Frame Padding="12"
+                           Margin="0,8"
+                           CornerRadius="12"
+                           BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}"
+                           BorderColor="Transparent">
+
+                        <Grid RowDefinitions="Auto,Auto,Auto"
+                              ColumnDefinitions="*,Auto">
+                            <!-- Article Name -->
+                            <Label Grid.Row="0"
+                                   Grid.Column="0"
+                                   Grid.ColumnSpan="2"
+                                   Text="{Binding Name}"
+                                   FontSize="18"
+                                   FontAttributes="Bold"
+                                   LineBreakMode="WordWrap"
+                                   Margin="0,0,0,4"/>
+
+                            <!-- Short Abstract -->
+                            <Label Grid.Row="1"
+                                   Grid.Column="0"
+                                   Grid.ColumnSpan="2"
+                                   Text="{Binding ShortAbstract}"
+                                   FontSize="14"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
+                                   LineBreakMode="TailTruncation"
+                                   MaxLines="2"
+                                   Margin="0,0,0,8"/>
+
+                            <!-- Author Info -->
+                            <HorizontalStackLayout Grid.Row="2"
+                                                   Grid.Column="0"
+                                                   Spacing="8"
+                                                   VerticalOptions="Center"
+                                                   IsVisible="{Binding Author, Converter={StaticResource StringNotEmptyConverter}}">
+                                <Frame WidthRequest="32"
+                                       HeightRequest="32"
+                                       CornerRadius="16"
+                                       Padding="0"
+                                       IsClippedToBounds="True"
+                                       BorderColor="Transparent">
+                                    <Image Source="{Binding Author.ImageUrl}"
+                                           Aspect="AspectFill"
+                                           WidthRequest="32"
+                                           HeightRequest="32"/>
+                                </Frame>
+                                <Label Text="{Binding Author.ShortenedName}"
+                                       FontSize="13"
+                                       VerticalTextAlignment="Center"
+                                       TextColor="{StaticResource Primary}"/>
+                            </HorizontalStackLayout>
+
+                            <!-- Arrow indicator -->
+                            <Label Grid.Row="2"
+                                   Grid.Column="1"
+                                   Text="◀"
+                                   FontSize="16"
+                                   VerticalTextAlignment="Center"
+                                   TextColor="{StaticResource Primary}"/>
+                        </Grid>
+                    </Frame>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+
+            <!-- Empty State -->
+            <CollectionView.EmptyView>
+                <VerticalStackLayout VerticalOptions="Center"
+                                     HorizontalOptions="Center"
+                                     Padding="20">
+                    <!-- Loading State -->
+                    <VerticalStackLayout IsVisible="{Binding IsLoading}">
+                        <ActivityIndicator IsRunning="{Binding IsLoading}"
+                                           Margin="0,10,0,0"/>
+                        <Label Text="טוען מאמרים..."
+                               FontSize="16"
+                               HorizontalTextAlignment="Center"
+                               Margin="0,10,0,0"/>
+                    </VerticalStackLayout>
+
+                    <!-- No Articles State -->
+                    <VerticalStackLayout IsVisible="{Binding IsLoading, Converter={StaticResource InvertedBoolConverter}}">
+                        <Label Text="📚"
+                               FontSize="48"
+                               HorizontalTextAlignment="Center"/>
+                        <Label Text="אין מאמרים לפרק זה"
+                               FontSize="18"
+                               HorizontalTextAlignment="Center"
+                               Margin="0,10,0,0"/>
+                        <Label Text="{Binding ErrorMessage}"
+                               FontSize="14"
+                               TextColor="{StaticResource Error}"
+                               HorizontalTextAlignment="Center"
+                               IsVisible="{Binding ErrorMessage, Converter={StaticResource StringNotEmptyConverter}}"
+                               Margin="0,10,0,0"/>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+        </CollectionView>
+    </Grid>
+
+</ContentPage>

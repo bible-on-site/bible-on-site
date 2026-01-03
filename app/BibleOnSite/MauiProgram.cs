@@ -1,4 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
+using BibleOnSite.Services;
+using BibleOnSite.ViewModels;
 
 namespace BibleOnSite;
 
@@ -14,6 +16,20 @@ public static class MauiProgram
 				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
 				fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
 			});
+
+		// Initialize PreferencesService with MAUI storage
+		PreferencesService.Initialize(new MauiPreferencesStorage());
+
+		// Register services
+		builder.Services.AddSingleton(_ => PreferencesService.Instance);
+		builder.Services.AddSingleton(_ => StarterService.Instance);
+
+		// Register ViewModels
+		builder.Services.AddTransient<PerekViewModel>();
+		builder.Services.AddTransient<PreferencesViewModel>();
+
+		// Register Pages
+		builder.Services.AddTransient<MainPage>();
 
 #if DEBUG
 		builder.Logging.AddDebug();
