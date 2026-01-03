@@ -1,0 +1,340 @@
+{
+	"_id": 0,
+	"order": {
+		"$arrayElemAt": [
+			{
+				"$arrayElemAt": ["$metadata.order", 0]
+			},
+			0
+		]
+	},
+	"letter": {
+		"$let": {
+			"vars": {
+				"name": {
+					"$arrayElemAt": [
+						{
+							"$map": {
+								"input": {
+									"$filter": {
+										"input": {
+											"$arrayElemAt": ["$metadata.schema.titles", 0]
+										},
+										"as": "title",
+										"cond": {
+											"$and": [
+												{
+													"$eq": ["$$title.lang", "he"]
+												},
+												{
+													"$eq": ["$$title.primary", true]
+												}
+											]
+										}
+									}
+								},
+								"as": "filteredTitle",
+								"in": "$$filteredTitle.text"
+							}
+						},
+						0
+					]
+				}
+			},
+			"in": {
+				"$switch": {
+					"branches": [
+						{
+							"case": {
+								"$in": ["$$name", ["שמואל א", "מלכים א", "דברי הימים א"]]
+							},
+							"then": "א"
+						},
+						{
+							"case": {
+								"$in": ["$$name", ["שמואל ב", "מלכים ב", "דברי הימים ב"]]
+							},
+							"then": "ב"
+						},
+						{
+							"case": {
+								"$in": ["$$name", ["עזרא"]]
+							},
+							"then": "ע"
+						},
+						{
+							"case": {
+								"$in": ["$$name", ["נחמיה"]]
+							},
+							"then": "נ"
+						}
+					],
+					"default": "$$REMOVE"
+				}
+			}
+		}
+	},
+	"name": {
+		"$arrayElemAt": [
+			{
+				"$map": {
+					"input": {
+						"$filter": {
+							"input": {
+								"$arrayElemAt": ["$metadata.schema.titles", 0]
+							},
+							"as": "title",
+							"cond": {
+								"$and": [
+									{
+										"$eq": ["$$title.lang", "he"]
+									},
+									{
+										"$eq": ["$$title.primary", true]
+									}
+								]
+							}
+						}
+					},
+					"as": "filteredTitle",
+					"in": "$$filteredTitle.text"
+				}
+			},
+			0
+		]
+	},
+	"tanachUsName": "$title",
+	"helek": {
+		"$let": {
+			"vars": {
+				"category": {
+					"$arrayElemAt": [
+						{
+							"$arrayElemAt": ["$metadata.categories", 0]
+						},
+						1
+					]
+				}
+			},
+			"in": {
+				"$switch": {
+					"branches": [
+						{
+							"case": {
+								"$eq": ["$$category", "Torah"]
+							},
+							"then": "תורה"
+						},
+						{
+							"case": {
+								"$eq": ["$$category", "Prophets"]
+							},
+							"then": "נביאים"
+						},
+						{
+							"case": {
+								"$eq": ["$$category", "Writings"]
+							},
+							"then": "כתובים"
+						}
+					],
+					"default": "$$category"
+				}
+			}
+		}
+	},
+	"pesukimCount": {
+		"$arrayElemAt": [
+			{
+				"$arrayElemAt": ["$metadata.schema.lengths", 0]
+			},
+			1
+		]
+	},
+	"perakim": {
+		"$map": {
+			"input": "$chapter",
+			"as": "chapter",
+			"in": {
+				"header": "",
+				"pesukim": {
+					"$map": {
+						"input": "$$chapter",
+						"as": "pasuk",
+						"in": {
+							"segments": {
+								"$let": {
+									"vars": {
+										"defaultTimeFrame": {
+											"from": "00:00:00",
+											"to": "00:00:00"
+										},
+										"processedPasuk": {
+											"$function": {
+												"body": "function (p) {\n    let qriFlg = false;\n    let res = \"\";\n    for (let i = 0; i < p.length; i++) {\n        let c = p[i];\n        if (c === \"[\") {\n            qriFlg = true;\n            res += c;\n        } else if (c === \"]\") {\n            qriFlg = false;\n            res += c;\n        } else if (qriFlg) {\n            res += c === \" \" ? \"_\" : c;\n        } else {\n            if (c === \"־\") {\n                res += \"־ \";\n            } else {\n                res += c;\n            }\n        }\n    }\n    return res.split(\" ׀\").join(\"׀\");\n}",
+												"args": ["$$pasuk"],
+												"lang": "js"
+											}
+										}
+									},
+									"in": {
+										"$reduce": {
+											"input": {
+												"$split": ["$$processedPasuk", " "]
+											},
+											"initialValue": [],
+											"in": {
+												"$cond": {
+													"if": {
+														"$eq": ["$$this", ""]
+													},
+													"then": "$$value",
+													"else": {
+														"$concatArrays": [
+															"$$value",
+															[
+																{
+																	"$cond": {
+																		"if": {
+																			"$regexMatch": {
+																				"input": "$$this",
+																				"regex": "\\[.*\\]"
+																			}
+																		},
+																		"then": {
+																			"value": {
+																				"$substrCP": [
+																					{
+																						"$replaceAll": {
+																							"input": "$$this",
+																							"find": "_",
+																							"replacement": " "
+																						}
+																					},
+																					1,
+																					{
+																						"$subtract": [
+																							{ "$strLenCP": "$$this" },
+																							2
+																						]
+																					}
+																				]
+																			},
+																			"type": "qri",
+																			"_fromBracket": true,
+																			"recordingTimeFrame": "$$defaultTimeFrame"
+																		},
+																		"else": {
+																			"$cond": {
+																				"if": {
+																					"$eq": ["$$this", "(פ)"]
+																				},
+																				"then": {
+																					"type": "ptuha"
+																				},
+																				"else": {
+																					"$cond": {
+																						"if": {
+																							"$eq": ["$$this", "(ס)"]
+																						},
+																						"then": {
+																							"type": "stuma"
+																						},
+																						"else": {
+																							"$let": {
+																								"vars": {
+																									"wordValue": {
+																										"$let": {
+																											"vars": {
+																												"lastChar": {
+																													"$substrCP": [
+																														"$$this",
+																														{
+																															"$subtract": [
+																																{
+																																	"$strLenCP": "$$this"
+																																},
+																																1
+																															]
+																														},
+																														1
+																													]
+																												}
+																											},
+																											"in": {
+																												"$cond": {
+																													"if": {
+																														"$eq": [
+																															"$$lastChar",
+																															"׀"
+																														]
+																													},
+																													"then": {
+																														"$concat": [
+																															{
+																																"$substrCP": [
+																																	"$$this",
+																																	0,
+																																	{
+																																		"$subtract": [
+																																			{
+																																				"$strLenCP": "$$this"
+																																			},
+																																			1
+																																		]
+																																	}
+																																]
+																															},
+																															" ׀"
+																														]
+																													},
+																													"else": "$$this"
+																												}
+																											}
+																										}
+																									},
+																									"hasNiqqud": {
+																										"$regexMatch": {
+																											"input": "$$this",
+																											"regex": "[\u05B0-\u05BD\u05BF\u05C1\u05C2\u05C7]"
+																										}
+																									}
+																								},
+																								"in": {
+																									"$cond": {
+																										"if": "$$hasNiqqud",
+																										"then": {
+																											"value": "$$wordValue",
+																											"type": "qri",
+																											"recordingTimeFrame": "$$defaultTimeFrame"
+																										},
+																										"else": {
+																											"value": "$$wordValue",
+																											"type": "ktiv"
+																										}
+																									}
+																								}
+																							}
+																						}
+																					}
+																				}
+																			}
+																		}
+																	}
+																}
+															]
+														]
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
