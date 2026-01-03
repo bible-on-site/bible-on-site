@@ -10,7 +10,6 @@
 	},
 	"scripts": {
 		"coverage:merge": "node --import tsx ./merge-coverage.mts",
-		"populate_test_db": "node --import tsx ./populate-test-db.mts",
 		"setup_dev_env": "node --import tsx ./setup-dev-env.mts",
 		"deploy": "echo 'Use deploy:bare-metal or deploy:ecr' && exit 1",
 		"deploy:bare-metal": "node --import tsx ./deploy/bare-metal-deploy/index.mts",
@@ -21,7 +20,6 @@
 		"@aws-sdk/client-sts": "3.958.0",
 		"@aws-sdk/credential-providers": "3.958.0",
 		"dotenv": "16.6.1",
-		"mysql2": "3.16.0",
 		"node-ssh": "13.2.1",
 		"ssh-config": "5.0.4",
 		"p-memoize": "7.1.1",

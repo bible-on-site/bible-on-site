@@ -1,12 +1,154 @@
 {
 	"version": "2.0.0",
 	"tasks": [
+		// ============ Website Tasks ============
 		{
 			"type": "npm",
 			"script": "dev",
 			"path": "web/bible-on-site",
 			"problemMatcher": [],
 			"label": "npm: dev - web/bible-on-site"
+		},
+
+		// ============ API Tasks ============
+		{
+			"label": "api: start",
+			"type": "shell",
+			"command": "cargo make run-api",
+			"options": {
+				"cwd": "${workspaceFolder}/web/api"
+			},
+			"isBackground": true,
+			"problemMatcher": {
+				"pattern": {
+					"regexp": "^$"
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": "cargo make",
+					"endsPattern": "Server running on port 3003"
+				}
+			},
+			"presentation": {
+				"reveal": "silent",
+				"panel": "dedicated",
+				"group": "api"
+			}
+		},
+		{
+			"label": "api: check-health",
+			"type": "shell",
+			"command": "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3003/api/graphql || exit 0",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "never"
+			}
+		},
+
+		// ============ MAUI App Tasks (via NUKE) ============
+		{
+			"label": "app: build",
+			"type": "shell",
+			"command": "dotnet run --project devops -- Compile",
+			"options": {
+				"cwd": "${workspaceFolder}/app"
+			},
+			"group": "build",
+			"problemMatcher": "$msCompile"
+		},
+		{
+			"label": "app: run-windows",
+			"type": "shell",
+			"command": "dotnet run --project devops -- RunWindows",
+			"options": {
+				"cwd": "${workspaceFolder}/app"
+			},
+			"dependsOn": ["api: start"],
+			"problemMatcher": "$msCompile",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"group": "app"
+			}
+		},
+		{
+			"label": "app: run-android",
+			"type": "shell",
+			"command": "dotnet run --project devops -- RunAndroid",
+			"options": {
+				"cwd": "${workspaceFolder}/app"
+			},
+			"dependsOn": ["api: start"],
+			"problemMatcher": "$msCompile",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"group": "app"
+			}
+		},
+		{
+			"label": "app: run-ios",
+			"type": "shell",
+			"command": "dotnet run --project devops -- RunIos",
+			"options": {
+				"cwd": "${workspaceFolder}/app"
+			},
+			"dependsOn": ["api: start"],
+			"problemMatcher": "$msCompile",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"group": "app"
+			}
+		},
+		{
+			"label": "app: run-mac",
+			"type": "shell",
+			"command": "dotnet run --project devops -- RunMac",
+			"options": {
+				"cwd": "${workspaceFolder}/app"
+			},
+			"dependsOn": ["api: start"],
+			"problemMatcher": "$msCompile",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"group": "app"
+			}
+		},
+		{
+			"label": "app: test",
+			"type": "shell",
+			"command": "dotnet run --project build -- Test",
+			"options": {
+				"cwd": "${workspaceFolder}/app"
+			},
+			"group": "test",
+			"problemMatcher": "$msCompile"
+		},
+		{
+			"label": "app: test-unit",
+			"type": "shell",
+			"command": "dotnet run --project devops -- TestUnit",
+			"options": {
+				"cwd": "${workspaceFolder}/app"
+			},
+			"group": "test",
+			"problemMatcher": "$msCompile"
+		},
+		{
+			"label": "app: test-integration",
+			"type": "shell",
+			"command": "dotnet run --project devops -- TestIntegration",
+			"options": {
+				"cwd": "${workspaceFolder}/app"
+			},
+			"dependsOn": ["api: start"],
+			"group": "test",
+			"problemMatcher": "$msCompile"
 		}
 	]
 }
