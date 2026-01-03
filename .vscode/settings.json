@@ -4,6 +4,10 @@
 		"**/test-results": true,
 		"**/.venv": true
 	},
+	"search.exclude": {
+		"**/*.tanah_view.json": true,
+		"**/.output/**": true
+	},
 	"[javascript]": {
 		"editor.defaultFormatter": "biomejs.biome"
 	},

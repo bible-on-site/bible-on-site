@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG RUST_VERSION=1.87.0
+ARG RUST_VERSION=1.92.0
 ARG APP_NAME=api
 
 ################################################################################

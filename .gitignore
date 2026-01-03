@@ -14,3 +14,11 @@ legacy-api/
 web/api/docs/migration.md
 actionlint
 test-results/
+
+# Rust build artifacts
+**/target/
+
+# Raw data files (too large for git, downloaded/generated locally)
+app/BibleOnSite/Resources/Raw/
+**/.raw/
+**/.outputs/
