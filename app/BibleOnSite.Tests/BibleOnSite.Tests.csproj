@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="FluentAssertions" Version="7.0.0" />
+    <PackageReference Include="Moq" Version="4.20.72" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="GraphQL.Client" Version="6.1.0" />
+    <PackageReference Include="GraphQL.Client.Serializer.Newtonsoft" Version="6.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Note: We don't reference BibleOnSite.csproj directly as it targets MAUI platforms.
+      Instead, we include the source files directly for testing.
+    -->
+    <Compile Include="..\BibleOnSite\Config\*.cs" Link="Config\%(Filename)%(Extension)" />
+    <Compile Include="..\BibleOnSite\Data\*.cs" Link="Data\%(Filename)%(Extension)" />
+    <Compile Include="..\BibleOnSite\Helpers\*.cs" Link="Helpers\%(Filename)%(Extension)" />
+    <Compile Include="..\BibleOnSite\Models\*.cs" Link="Models\%(Filename)%(Extension)" />
+    <Compile Include="..\BibleOnSite\Services\BaseGraphQLService.cs" Link="Services\BaseGraphQLService.cs" />
+    <Compile Include="..\BibleOnSite\Services\StarterService.cs" Link="Services\StarterService.cs" />
+    <Compile Include="..\BibleOnSite\Services\IPreferencesStorage.cs" Link="Services\IPreferencesStorage.cs" />
+    <Compile Include="..\BibleOnSite\Services\PreferencesService.cs" Link="Services\PreferencesService.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\PerekViewModel.cs" Link="ViewModels\PerekViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\PreferencesViewModel.cs" Link="ViewModels\PreferencesViewModel.cs" />
+  </ItemGroup>
+
+</Project>
