@@ -4,26 +4,29 @@ coverage:
   status:
     project:
       default:
-        target: auto
+        target: 80%
         threshold: 5%
-        base: auto
       api:
-        target: auto
+        target: 80%
         flags:
           - api
       app:
-        target: auto
+        target: 80%
         flags:
           - app
       website:
-        target: auto
+        target: 80%
         flags:
           - website
+      data:
+        # TODO: Increase target once data is covered by CI
+        target: 0%
+        flags:
+          - data
     patch:
       default:
-        target: auto
+        target: 80%
         threshold: 5%
-        base: auto
 comment:
   layout: "reach, diff, flags, files, footer"
   behavior: default
@@ -41,3 +44,6 @@ flags:
   website:
     paths:
       - web/bible-on-site/src/
+  data:
+    paths:
+      - data/
