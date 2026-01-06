@@ -9,7 +9,7 @@ pub struct Sefer {
     pub name: String,
     /// The tanachUS name - can be a simple string like "Gen" or a JSON object
     /// for sefarim with additionals like {"1":"1 Sam","2":"2 Sam"}
-    pub tanach_us_name: String,
+    pub tanach_us_name: Option<String>,
 }
 
 impl From<Model> for Sefer {

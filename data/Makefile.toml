@@ -78,6 +78,19 @@ cwd = "./sefaria/pipelines/tanah-view"
 command = "cargo"
 args = ["run", "--release", "--", "--format", "compass-stages"]
 
+[tasks.generate-tanah-view-mysql]
+description = "Generate tanah view as MySQL SQL file"
+cwd = "./sefaria/pipelines/tanah-view"
+command = "cargo"
+args = [
+    "run",
+    "--release",
+    "--",
+    "--format",
+    "mysql",
+    "--output-to-dependant-modules",
+]
+
 # =============================================================================
 # MySQL Tasks
 # =============================================================================
@@ -117,13 +130,3 @@ condition = { env_not_set = ["CI"] }
 cwd = "./sefaria/pipelines/tanah-view"
 command = "cargo"
 args = ["llvm-cov", "--html", "--open"]
-
-# =============================================================================
-# Schema Validation Tasks
-# =============================================================================
-
-[tasks.validate-tanah-view-json]
-description = "Validate tanah view JSON output against JSON Schema"
-cwd = "./sefaria/pipelines/tanah-view"
-command = "ajv"
-args = ["validate", "-s", "tanah_view.schema.json", "-d", ".output/sefaria-dump-5784-sivan-4.tanah_view.json", "--spec=draft2020"]

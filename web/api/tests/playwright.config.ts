@@ -39,13 +39,13 @@ export default defineConfig({
 
 	reporter: [
 		["list"],
-		[
-			"html",
-			{
-				outputFolder: "../.playwright-report/e2e/html",
-				open: isNonInteractive ? "never" : "on-failure",
-			},
-		],
+		// [
+		// 	"html",
+		// 	{
+		// 		outputFolder: "../.playwright-report/e2e/html",
+		// 		open: isNonInteractive ? "never" : "on-failure",
+		// 	},
+		// ],
 		...(isNonInteractive
 			? [
 					[

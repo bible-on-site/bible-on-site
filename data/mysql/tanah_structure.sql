@@ -222,6 +222,42 @@ CREATE TABLE `tanah_additional` (
   CONSTRAINT `fk_additional_sefer` FOREIGN KEY (`sefer_id`) REFERENCES `tanah_sefer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- View for denormalized perek data (used by API)
+-- Returns data from the current valid cycle (latest cycle where date <= CURRENT_DATE)
+--
+
+DROP VIEW IF EXISTS `tanah_perek_view`;
+CREATE VIEW `tanah_perek_view` AS
+SELECT
+  p.id,
+  p.id AS perek_id,
+  s.id AS sefer_id,
+  s.name AS sefer_name,
+  CASE
+    WHEN a.id IS NOT NULL THEN a.id
+    ELSE NULL
+  END AS additional,
+  a.letter AS additional_letter,
+  p.perek,
+  -- Perek number within sefer/additional context (for compiled_source)
+  CASE
+    WHEN a.id IS NOT NULL THEN p.id - a.perek_from + 1
+    ELSE p.id - s.perek_id_from + 1
+  END AS perek_in_context,
+  pd.date,
+  pd.hebdate,
+  pd.star_rise AS tseit,
+  p.header
+FROM tanah_perek p
+JOIN tanah_sefer s ON p.id BETWEEN s.perek_id_from AND s.perek_id_to
+LEFT JOIN tanah_perek_date pd ON pd.perek_id = p.id AND pd.cycle = (
+  SELECT MAX(pd2.cycle) FROM tanah_perek_date pd2
+  WHERE pd2.perek_id = p.id AND pd2.date <= CURRENT_DATE
+)
+LEFT JOIN tanah_additional a ON a.sefer_id = s.id AND p.id BETWEEN a.perek_from AND a.perek_to;
+
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

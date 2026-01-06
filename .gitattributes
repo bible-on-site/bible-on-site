@@ -1,6 +1,7 @@
 # Generated data files - tracked but don't show diffs
 web/bible-on-site/src/data/db/*.tanah_view.json binary linguist-generated
 app/BibleOnSite/Resources/Raw/*.tanah_view.sqlite binary linguist-generated
+data/mysql/*_data.sql binary linguist-generated
 
 # Pipeline output files - not tracked (in .gitignore via parent dir)
 # data/sefaria/pipelines/tanah-view/.output/

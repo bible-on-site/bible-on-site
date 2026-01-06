@@ -22,7 +22,7 @@ test.describe("SefarimService", () => {
 					seferById: {
 						id: 1,
 						name: "בראשית",
-						tanachUsName: "Gen",
+						tanachUsName: "Genesis",
 					},
 				},
 			});
@@ -48,7 +48,7 @@ test.describe("SefarimService", () => {
 					seferById: {
 						id: 8,
 						name: "שמואל",
-						tanachUsName: '{"1":"1 Sam","2":"2 Sam"}',
+						tanachUsName: null,
 					},
 				},
 			});
@@ -100,7 +100,7 @@ test.describe("SefarimService", () => {
 			expect(bereshit).toMatchObject({
 				id: 1,
 				name: "בראשית",
-				tanachUsName: "Gen",
+				tanachUsName: "Genesis",
 			});
 		});
 	});

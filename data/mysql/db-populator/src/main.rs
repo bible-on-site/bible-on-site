@@ -27,6 +27,10 @@ struct Cli {
     #[arg(long, default_value = "../tanah_test_data.sql")]
     data_script: String,
 
+    /// Path to tanah view data SQL file (sefarim and perakim)
+    #[arg(long, default_value = "../tanah_sefarim_and_perakim_data.sql")]
+    tanah_view_data_script: String,
+
     /// Skip structure script execution
     #[arg(long, default_value = "false")]
     skip_structure: bool,
@@ -75,6 +79,9 @@ async fn main() -> Result<()> {
     if !cli.skip_data {
         let data_path = base_path.join(&cli.data_script);
         execute_script(&mut conn, &data_path, "data").await?;
+
+        let tanah_view_data_path = base_path.join(&cli.tanah_view_data_script);
+        execute_script(&mut conn, &tanah_view_data_path, "tanah-view-data").await?;
     }
 
     conn.close().await.context("Failed to close connection")?;
