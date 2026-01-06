@@ -160,3 +160,5 @@ When committing changes:
 2. Before pushing, always check for unstaged changes: `git status`
 3. If pre-commit modified files, stage and amend: `git diff-tree --no-commit-id --name-only -r HEAD | xargs git add && git commit --amend --no-edit` (only re-stages files from the original commit)
 4. Only push after confirming no uncommitted auto-fixes remain
+
+**Important**: Never merge a PR unless explicitly instructed to do so by the user.

@@ -56,17 +56,45 @@ async fn main() -> Result<()> {
         .context("Failed to parse database URL")?
         .disable_statement_logging();
 
+    // Extract database name from options
+    let database_name = options
+        .get_database()
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "tanah_test".to_string());
+
+    // First connect without specifying a database to create it if needed
+    let options_no_db = options.clone().database("");
+
     println!(
         "Connecting to database at {}:{}...",
         options.get_host(),
         options.get_port()
     );
 
+    let mut conn = MySqlConnection::connect_with(&options_no_db)
+        .await
+        .context("Failed to connect to MySQL server")?;
+
+    // Create database if it doesn't exist
+    let create_db_sql = format!(
+        "CREATE DATABASE IF NOT EXISTS `{}` CHARACTER SET utf8mb3",
+        database_name
+    );
+    sqlx::raw_sql(&create_db_sql)
+        .execute(&mut conn)
+        .await
+        .with_context(|| format!("Failed to create database '{}'", database_name))?;
+    println!("Database '{}' ensured to exist", database_name);
+
+    // Close initial connection
+    conn.close().await.ok();
+
+    // Reconnect to the specific database
     let mut conn = MySqlConnection::connect_with(&options)
         .await
         .context("Failed to connect to database")?;
 
-    println!("Connected to database");
+    println!("Connected to database '{}'", database_name);
 
     // Resolve script paths relative to this crate's directory
     let base_path = Path::new(env!("CARGO_MANIFEST_DIR"));
