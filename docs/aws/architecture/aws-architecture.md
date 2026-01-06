@@ -47,3 +47,13 @@ The following diagram illustrates the high-level architecture of the Bible On Si
 - **Log Groups**: `/ecs/bible-on-site-website` (180 days retention)
 - **Auto Scaling**: Target Tracking on CPU (70%), Min 1 / Max 3 tasks
 - **Alarms**: Auto-created by Target Tracking for scale-in/scale-out
+
+### 8. Environment Variables
+
+The following environment variables must be configured in the ECS task definitions:
+
+#### Website Service
+
+| Variable | Value | Description |
+|----------|-------|-------------|
+| `NEXT_PUBLIC_ENV` | `production` | Enables production features like Google Analytics |
