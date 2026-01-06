@@ -11,6 +11,7 @@ repos:
         exclude: ^docs/aws/cloudformation/
       - id: check-ast
       - id: check-added-large-files
+        exclude: ^data/mysql/.*_data\.sql$
       - id: check-xml
       - id: check-case-conflict
       - id: check-symlinks

@@ -1,20 +1,22 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
-#[sea_orm(table_name = "tanah_perek")]
+#[sea_orm(table_name = "tanah_perek_view")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     pub perek_id: Option<i32>,
     pub sefer_id: Option<i32>,
+    pub sefer_name: Option<String>,
     pub additional: Option<i32>,
+    pub additional_letter: Option<String>,
     pub perek: Option<i32>,
+    pub perek_in_context: Option<i32>,
     #[sea_orm(column_name = "date")]
     pub date: Option<Date>,
     pub hebdate: Option<String>,
     pub tseit: Option<Time>,
     pub header: Option<String>,
-    pub source: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

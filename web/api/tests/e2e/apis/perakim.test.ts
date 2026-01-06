@@ -13,7 +13,7 @@ test.describe("PerakimService", () => {
 					operationName: null,
 					variables: {},
 					query:
-						"{\n  perekByPerekId(perekId: 1) {\n    id\n    perekId\n    seferId\n    additional\n    perek\n    date\n    hebdate\n    tseit\n    header\n    source\n  }\n}\n",
+						"{\n  perekByPerekId(perekId: 1) {\n    id\n    perekId\n    seferId\n    additional\n    perek\n    date\n    hebdate\n    compiledHebdate\n    tseit\n    header\n    compiledSource\n  }\n}\n",
 				},
 			});
 			const responseBody = await response.json();
@@ -25,10 +25,13 @@ test.describe("PerakimService", () => {
 						seferId: 1,
 						additional: null,
 						perek: 1,
-						date: "2022-02-06",
-						hebdate: "ה׳ אַדָר א׳ תשפ״ב",
+						// date and hebdate come from current valid cycle (cycle 4 as of 2026)
+						date: "2024-12-07",
+						hebdate: "57851207",
+						// 57851207 = Year 5785, Month 12 (Elul), Day 07
+						compiledHebdate: "ז׳ אלול תשפ״ה",
 						header: "בריאת העולם",
-						source: "בראשית א",
+						compiledSource: "בראשית א׳",
 					},
 				},
 			});
@@ -55,7 +58,7 @@ test.describe("PerakimService", () => {
 						perekId: 233,
 						seferId: 8,
 						additional: 1,
-						perek: 1,
+						perek: 233, // Global perek number, not chapter within sefer
 					},
 				},
 			});

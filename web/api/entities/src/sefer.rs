@@ -3,10 +3,10 @@ use sea_orm::entity::prelude::*;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
 #[sea_orm(table_name = "tanah_sefer")]
 pub struct Model {
-    #[sea_orm(primary_key, column_name = "sefer_id")]
+    #[sea_orm(primary_key)]
     pub id: i32,
     pub name: String,
-    pub tanach_us_name: String,
+    pub tanach_us_name: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

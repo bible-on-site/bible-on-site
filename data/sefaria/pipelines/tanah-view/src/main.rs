@@ -28,6 +28,7 @@ struct Cli {
 #[derive(Clone, ValueEnum)]
 enum OutputFormat {
     Json,
+    Mysql,
     Sqlite,
     CompassStages,
 }
@@ -53,6 +54,9 @@ async fn main() -> Result<()> {
     match format {
         OutputFormat::Json => {
             commands::json::generate(&sefarim, &cli.dump_name, cli.output_to_dependant_modules)?
+        }
+        OutputFormat::Mysql => {
+            commands::mysql::generate(&sefarim, &cli.dump_name, cli.output_to_dependant_modules)?
         }
         OutputFormat::Sqlite => {
             commands::sqlite::generate(&sefarim, &cli.dump_name, cli.output_to_dependant_modules)?
