@@ -26,7 +26,7 @@
     <PackageReference Include="FluentAssertions" Version="7.0.0" />
     <!-- FlaUI for Windows UI Automation -->
     <PackageReference Include="FlaUI.Core" Version="4.0.0" />
-    <PackageReference Include="FlaUI.UIA3" Version="4.0.0" />
+    <PackageReference Include="FlaUI.UIA3" Version="5.0.0" />
   </ItemGroup>
 
 </Project>
