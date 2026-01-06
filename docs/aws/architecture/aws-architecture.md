@@ -50,10 +50,20 @@ The following diagram illustrates the high-level architecture of the Bible On Si
 
 ### 8. Environment Variables
 
-The following environment variables must be configured in the ECS task definitions:
+The following environment variables are configured in the ECS task definitions:
 
-#### Website Service
+#### Website Service (`bible-on-site-website`)
 
 | Variable | Value | Description |
 |----------|-------|-------------|
 | `NEXT_PUBLIC_ENV` | `production` | Enables production features like Google Analytics |
+
+#### Modifying Environment Variables
+
+To add or update environment variables:
+
+1. Login via AWS SSO: `aws sso login --profile AdministratorAccess-250598594267`
+2. Get current task definition: `aws ecs describe-task-definition --task-definition <family> --profile AdministratorAccess-250598594267 --region il-central-1`
+3. Modify the JSON to update the `containerDefinitions[*].environment` array
+4. Register new revision: `aws ecs register-task-definition --cli-input-json file://new-task-def.json --profile AdministratorAccess-250598594267 --region il-central-1`
+5. Update service to use new revision: `aws ecs update-service --cluster bible-on-site-cluster --service <service> --task-definition <family>:<revision> --force-new-deployment --profile AdministratorAccess-250598594267 --region il-central-1`
