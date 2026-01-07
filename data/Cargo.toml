@@ -25,6 +25,6 @@ chrono-tz = "0.10"
 icu_calendar = "2.1"
 dotenvy = "0.15"
 rusqlite = { version = "0.32", features = ["bundled"] }
-bson = "2"
+bson = "3"
 sqlx = { version = "0.8", features = ["runtime-tokio", "mysql"] }
 sunrise = "3"
