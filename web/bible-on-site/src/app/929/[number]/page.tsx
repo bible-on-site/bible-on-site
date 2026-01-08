@@ -13,6 +13,7 @@ import styles from "./page.module.css";
 export const dynamicParams = false;
 
 // this reserverd function is a magic for caching
+/* istanbul ignore next: only runs during next build */
 export function generateStaticParams() {
 	// Return an array of objects with the key "number" as a string
 	return Array.from({ length: 929 }, (_, i) => ({ number: String(i + 1) }));

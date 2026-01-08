@@ -26,7 +26,9 @@ export interface SitemapConfig {
 /**
  * Generates the root URL entry for the sitemap
  */
-export function generateRootEntry(config: SitemapConfig): MetadataRoute.Sitemap[0] {
+export function generateRootEntry(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap[0] {
 	return {
 		url: config.baseUrl,
 		lastModified: config.lastModified,
@@ -38,7 +40,9 @@ export function generateRootEntry(config: SitemapConfig): MetadataRoute.Sitemap[
 /**
  * Generates section URL entries for the sitemap
  */
-export function generateSectionEntries(config: SitemapConfig): MetadataRoute.Sitemap {
+export function generateSectionEntries(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap {
 	return SITEMAP_SECTIONS.map((section) => ({
 		url: `${config.baseUrl}/${section}`,
 		lastModified: config.lastModified,
@@ -50,7 +54,9 @@ export function generateSectionEntries(config: SitemapConfig): MetadataRoute.Sit
 /**
  * Generates the 929 index page entry
  */
-export function generate929IndexEntry(config: SitemapConfig): MetadataRoute.Sitemap[0] {
+export function generate929IndexEntry(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap[0] {
 	return {
 		url: `${config.baseUrl}/929`,
 		lastModified: config.lastModified,
@@ -62,7 +68,9 @@ export function generate929IndexEntry(config: SitemapConfig): MetadataRoute.Site
 /**
  * Generates all 929 perek URL entries
  */
-export function generatePerekEntries(config: SitemapConfig): MetadataRoute.Sitemap {
+export function generatePerekEntries(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap {
 	return Array.from({ length: TOTAL_PERAKIM }, (_, i) => ({
 		url: `${config.baseUrl}/929/${i + 1}`,
 		lastModified: config.lastModified,
@@ -74,7 +82,9 @@ export function generatePerekEntries(config: SitemapConfig): MetadataRoute.Sitem
 /**
  * Generates the complete sitemap entries (pure function for testing)
  */
-export function generateSitemapEntries(config: SitemapConfig): MetadataRoute.Sitemap {
+export function generateSitemapEntries(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap {
 	return [
 		generateRootEntry(config),
 		...generateSectionEntries(config),
