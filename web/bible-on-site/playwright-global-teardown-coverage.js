@@ -9,7 +9,7 @@ const globalTeardown = async (config) => {
 		client = await CDPClient({
 			port: getRouterDebugPort(),
 		});
-	} catch (error) {
+	} catch {
 		// If we can't connect to the debug port, the server wasn't started with --inspect
 		// This happens when reuseExistingServer picks up a pre-running dev server
 		console.warn(
