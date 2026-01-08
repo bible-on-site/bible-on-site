@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.202",
+	"version": "0.2.203",
 	"private": true,
 	"license": "MIT",
 	"scripts": {
@@ -32,7 +32,7 @@
 	"dependencies": {
 		"autoprefixer": "10.4.23",
 		"flowbite": "4.0.1",
-		"flowbite-react": "0.12.15",
+		"flowbite-react": "0.12.16",
 		"gematry": "1.0.2",
 		"html-flip-book-react": "0.0.0-alpha.1",
 		"moment-timezone": "0.6.0",
