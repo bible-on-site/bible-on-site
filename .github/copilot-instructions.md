@@ -156,9 +156,10 @@ When modifying the pre-commit process, always update `docs/devops/pre-commit.md`
 
 When committing changes:
 
-1. After `git commit`, pre-commit hooks may apply auto-fixes (e.g., formatting, import sorting)
-2. Before pushing, always check for unstaged changes: `git status`
-3. If pre-commit modified files, stage and amend: `git diff-tree --no-commit-id --name-only -r HEAD | xargs git add && git commit --amend --no-edit` (only re-stages files from the original commit)
-4. Only push after confirming no uncommitted auto-fixes remain
+1. **Before committing**, review staged changes for PII (Personally Identifiable Information) such as AWS account IDs, API keys, passwords, email addresses, or other sensitive data. Use `git diff --cached` to inspect.
+2. After `git commit`, pre-commit hooks may apply auto-fixes (e.g., formatting, import sorting)
+3. Before pushing, always check for unstaged changes: `git status`
+4. If pre-commit modified files, stage and amend: `git diff-tree --no-commit-id --name-only -r HEAD | xargs git add && git commit --amend --no-edit` (only re-stages files from the original commit)
+5. Only push after confirming no uncommitted auto-fixes remain
 
 **Important**: Never merge a PR unless explicitly instructed to do so by the user.
