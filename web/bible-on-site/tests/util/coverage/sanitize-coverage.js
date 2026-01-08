@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import picomatch from "picomatch";
 import { covIgnoreList } from "../../../.covignore.mjs";
@@ -77,9 +78,81 @@ function isTracked(entry, srcDir) {
 	return isPartOfSrc && !isIgnored;
 }
 
+/**
+ * Parse source file and find lines that should be ignored based on
+ * /* istanbul ignore next * / comments. SWC coverage plugin doesn't
+ * respect these comments, so we handle them manually.
+ *
+ * @param {string} filePath - Absolute path to source file
+ * @returns {Set<number>} - Set of line numbers to ignore
+ */
+function findIstanbulIgnoreLines(filePath) {
+	const ignoredLines = new Set();
+	try {
+		const content = fs.readFileSync(filePath, "utf8");
+		const lines = content.split("\n");
+
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i];
+			// Match /* istanbul ignore next */ or /* istanbul ignore next: reason */
+			if (/\/\*\s*istanbul\s+ignore\s+next\b/.test(line)) {
+				// Ignore the next line (1-indexed)
+				ignoredLines.add(i + 2);
+			}
+		}
+	} catch {
+		// File not readable, skip ignore handling
+	}
+	return ignoredLines;
+}
+
+/**
+ * Apply istanbul ignore directives to coverage data.
+ * For ignored lines, mark statements as covered and branches as fully covered.
+ *
+ * @param {EntryData} entryData - Coverage entry data
+ * @param {Set<number>} ignoredLines - Lines to ignore
+ */
+function applyIstanbulIgnore(entryData, ignoredLines) {
+	if (ignoredLines.size === 0) return;
+
+	// Mark statements on ignored lines as covered
+	for (const [key, stmt] of Object.entries(entryData.statementMap ?? {})) {
+		const line = stmt.start?.line;
+		if (line && ignoredLines.has(line)) {
+			entryData.s[key] = Math.max(entryData.s[key] ?? 0, 1);
+		}
+	}
+
+	// Mark branches on ignored lines as fully covered
+	for (const [key, branch] of Object.entries(entryData.branchMap ?? {})) {
+		const line = branch.line ?? branch.loc?.start?.line ?? branch.loc?.line;
+		if (line && ignoredLines.has(line)) {
+			const branchCount = entryData.b[key]?.length ?? 0;
+			entryData.b[key] = Array(branchCount).fill(1);
+		}
+	}
+
+	// Mark functions on ignored lines as covered
+	for (const [key, fn] of Object.entries(entryData.fnMap ?? {})) {
+		const line = fn.line ?? fn.decl?.start?.line ?? fn.loc?.start?.line;
+		if (line && ignoredLines.has(line)) {
+			entryData.f[key] = Math.max(entryData.f[key] ?? 0, 1);
+		}
+	}
+}
+
 function sanitizeEntryData(entryData) {
 	if (!entryData) return;
 	debugEntry(entryData, "before");
+
+	// Apply istanbul ignore comments (SWC doesn't respect them)
+	const filePath = entryData.path;
+	if (filePath) {
+		const ignoredLines = findIstanbulIgnoreLines(filePath);
+		applyIstanbulIgnore(entryData, ignoredLines);
+	}
+
 	const statementHelper = sanitizeStatementMap(entryData);
 	sanitizeBranchMap(entryData, statementHelper);
 	sanitizeFunctionMap(entryData);

@@ -95,6 +95,24 @@ Performance tests measure application behavior under load and track metrics over
 
 Coverage data is collected during test runs and reported to external services for tracking and analysis.
 
+### Istanbul Ignore Comments
+
+Use `/* istanbul ignore next */` comments to exclude defensive/unreachable code from coverage:
+
+```typescript
+/* istanbul ignore next: should never happen */
+if (!data) {
+  throw new Error("Unexpected null data");
+}
+```
+
+**Important**: The SWC coverage instrumentation plugin used by Next.js doesn't natively respect `/* istanbul ignore next */` comments. We implement custom handling in `tests/util/coverage/sanitize-coverage.js` that:
+
+1. Parses source files for `/* istanbul ignore next */` comments
+2. Marks statements, branches, and functions on the following line as covered
+
+This workaround ensures defensive error-handling code doesn't artificially lower coverage metrics.
+
 ### Coverage Services
 
 | Service | Scope        | Purpose                                    |

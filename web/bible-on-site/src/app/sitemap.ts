@@ -85,9 +85,8 @@ export function generateSitemapEntries(config: SitemapConfig): MetadataRoute.Sit
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 	const headersList = await headers();
-	// Host header is mandatory in HTTP/1.1 (RFC 7230)
-	// biome-ignore lint/style/noNonNullAssertion: host header is always present in valid HTTP requests
-	const host = headersList.get("host")!;
+	/* istanbul ignore next: fallback for malformed requests without Host header */
+	const host = headersList.get("host") ?? "xn--febl3a.co.il";
 	const baseUrl = `https://${host}`;
 
 	return generateSitemapEntries({
