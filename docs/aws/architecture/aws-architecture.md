@@ -47,3 +47,23 @@ The following diagram illustrates the high-level architecture of the Bible On Si
 - **Log Groups**: `/ecs/bible-on-site-website` (180 days retention)
 - **Auto Scaling**: Target Tracking on CPU (70%), Min 1 / Max 3 tasks
 - **Alarms**: Auto-created by Target Tracking for scale-in/scale-out
+
+### 8. Environment Variables
+
+The following environment variables are configured in the ECS task definitions:
+
+#### Website Service (`bible-on-site-website`)
+
+| Variable | Value | Description |
+|----------|-------|-------------|
+| `NEXT_PUBLIC_ENV` | `production` | Enables production features like Google Analytics |
+
+#### Modifying Environment Variables
+
+To add or update environment variables:
+
+1. Login via AWS SSO: `aws sso login --profile <your-sso-profile>`
+2. Get current task definition: `aws ecs describe-task-definition --task-definition <family> --profile <your-sso-profile> --region il-central-1`
+3. Modify the JSON to update the `containerDefinitions[*].environment` array
+4. Register new revision: `aws ecs register-task-definition --cli-input-json file://new-task-def.json --profile <your-sso-profile> --region il-central-1`
+5. Update service to use new revision: `aws ecs update-service --cluster bible-on-site-cluster --service <service> --task-definition <family>:<revision> --force-new-deployment --profile <your-sso-profile> --region il-central-1`
