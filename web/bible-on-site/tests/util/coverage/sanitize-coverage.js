@@ -79,16 +79,47 @@ function isTracked(entry, srcDir) {
 }
 
 /**
+ * Find the closing brace for a block starting at the given line.
+ * Tracks brace depth to handle nested blocks.
+ *
+ * @param {string[]} lines - Source file lines
+ * @param {number} startLineIndex - 0-indexed line where the block starts
+ * @returns {number} - 0-indexed line of closing brace, or startLineIndex if not found
+ */
+function findBlockEnd(lines, startLineIndex) {
+	let braceDepth = 0;
+	let foundOpening = false;
+
+	for (let i = startLineIndex; i < lines.length; i++) {
+		const line = lines[i];
+		for (const char of line) {
+			if (char === "{") {
+				braceDepth++;
+				foundOpening = true;
+			} else if (char === "}") {
+				braceDepth--;
+				if (foundOpening && braceDepth === 0) {
+					return i;
+				}
+			}
+		}
+	}
+	return startLineIndex;
+}
+
+/**
  * Parse source file and find lines that should be ignored based on
  * /* istanbul ignore next * / comments. SWC coverage plugin doesn't
  * respect these comments, so we handle them manually.
+ * For blocks (if statements, functions), includes all lines within the block.
  *
  * @param {string} filePath - Absolute path to source file
- * @returns {Set<number>} - Set of line numbers to ignore
+ * @returns {Set<number>} - Set of line numbers to ignore (1-indexed)
  */
 function findIstanbulIgnoreLines(filePath) {
 	const ignoredLines = new Set();
 	try {
+		// codacy:disable-next-line:javascript:S6314 -- source file paths come from istanbul coverage keys which are validated
 		const content = fs.readFileSync(filePath, "utf8");
 		const lines = content.split("\n");
 
@@ -96,8 +127,21 @@ function findIstanbulIgnoreLines(filePath) {
 			const line = lines[i];
 			// Match /* istanbul ignore next */ or /* istanbul ignore next: reason */
 			if (/\/\*\s*istanbul\s+ignore\s+next\b/.test(line)) {
-				// Ignore the next line (1-indexed)
-				ignoredLines.add(i + 2);
+				const nextLineIndex = i + 1;
+				if (nextLineIndex < lines.length) {
+					const nextLine = lines[nextLineIndex];
+					// Check if next line starts a block (if, function, etc.)
+					if (nextLine.includes("{")) {
+						// Find the end of the block and ignore all lines in between
+						const blockEndIndex = findBlockEnd(lines, nextLineIndex);
+						for (let j = nextLineIndex; j <= blockEndIndex; j++) {
+							ignoredLines.add(j + 1); // Convert to 1-indexed
+						}
+					} else {
+						// Just ignore the next line (1-indexed)
+						ignoredLines.add(nextLineIndex + 1);
+					}
+				}
 			}
 		}
 	} catch {
