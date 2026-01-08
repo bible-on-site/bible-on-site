@@ -94,4 +94,16 @@ export class SeferPage {
 		const articles = this.page.locator("article");
 		return await articles.count();
 	}
+
+	/**
+	 * Verify that qri elements are visible in the sefer view
+	 * Qri elements are rendered with parentheses when they differ from ktiv
+	 */
+	async verifyQriElementsAreVisible(): Promise<void> {
+		// Qri elements have a specific CSS class
+		const qriElements = this.page.locator('[class*="qri"]');
+		await expect(qriElements.first()).toBeVisible({ timeout: 10_000 });
+		const count = await qriElements.count();
+		expect(count).toBeGreaterThan(0);
+	}
 }

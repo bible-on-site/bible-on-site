@@ -1,9 +1,10 @@
 const { CoverageReport } = require("monocart-coverage-reports");
-
-import { sanitizeCoverage } from "../../coverage/sanitize-coverage";
-
 const fs = require("node:fs");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
+
+// ESM sanitize-coverage module - loaded dynamically since this is CommonJS
+let sanitizeCoverageModule = null;
 
 const COVERAGE_FILE = path.join(
 	process.cwd(),
@@ -28,6 +29,19 @@ class MonocartCoverageReporter {
 
 	// biome-ignore lint/correctness/noUnusedFunctionParameters: framework required function signature
 	async onRunComplete(testContexts, results) {
+		// Load ESM sanitize-coverage module (dynamic import required from CommonJS)
+		if (!sanitizeCoverageModule) {
+			const modulePath = path.resolve(
+				__dirname,
+				"../../coverage/sanitize-coverage.js",
+			);
+			sanitizeCoverageModule = await import(pathToFileURL(modulePath).href);
+		}
+		const sanitizeCoverage =
+			sanitizeCoverageModule.sanitizeCoverage ||
+			sanitizeCoverageModule.default?.sanitizeCoverage ||
+			sanitizeCoverageModule.default;
+
 		// Read coverage from the file written by jest.coverage-setup.js
 		if (!fs.existsSync(COVERAGE_FILE)) {
 			console.warn(

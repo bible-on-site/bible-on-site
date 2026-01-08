@@ -94,30 +94,17 @@ When working on the `web/api` project (Rust GraphQL API):
 - **MySQL CLI access**: Use `mysql -u root -ptest_123 tanah_test` to query test data directly (MySQL bin is at `/c/Program Files/MySQL/MySQL Server 8.4/bin` or in PATH)
 - Entities are in the `entities/` crate, services in `src/services/`, resolvers in `src/resolvers/`, DTOs in `src/dtos/`
 
-### Playwright Tests (currently applies to website-e2e/perf, api-e2e)
+### Testing
 
-#### Test Description Conventions
+For detailed testing philosophy, strategy, and conventions, see [`docs/tests/tests.md`](../docs/tests/tests.md).
 
-When writing tests, follow this naming convention for `describe` and `it`/`test` blocks:
+#### E2E Tests (Playwright)
 
-- **Top-level `describe` blocks**: Use the subject being tested (e.g., component name, function name, module name)
-- **Nested `describe` blocks**: Use contextual descriptions or scenarios (e.g., "when user is authenticated", "with invalid input")
-- **Leaf `it`/`test` blocks**: Use expectation verbs describing the expected behavior (e.g., "returns the correct value", "throws an error", "renders the component")
+Applies to: website-e2e, website-perf, api-e2e
 
-Example:
-
-```typescript
-describe('UserService', () => {
-  describe('getUser', () => {
-    describe('when user exists', () => {
-      it('returns the user object', () => { ... });
-    });
-    describe('when user does not exist', () => {
-      it('throws UserNotFoundError', () => { ... });
-    });
-  });
-});
-```
+- **Website**: Uses Playwright with Monocart reporter
+- **API**: Uses Playwright with cargo-make orchestration
+- Test files located in `tests/e2e/` directories
 
 ### AWS Infrastructure Instructions
 

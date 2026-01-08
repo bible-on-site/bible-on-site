@@ -6,6 +6,7 @@ export const covIgnoreList = [
 	"__nextjs-internal-proxy.mjs",
 	"app/geistmono*.js",
 	"app/geistsans*.js",
+	"src/app/*--route-entry.js", // Next.js generated route entry files
 	"**/*.css",
 	"**/*.woff",
 	"**/*.ico",

@@ -4,10 +4,28 @@ import { getRouterDebugPort } from "./get-debug-port";
 import { sanitizeCoverage } from "./tests/util/coverage/sanitize-coverage";
 
 const globalTeardown = async (config) => {
-	const client = await CDPClient({
-		port: getRouterDebugPort(),
-	});
-	if (!client.getIstanbulCoverage) return;
+	let client;
+	try {
+		client = await CDPClient({
+			port: getRouterDebugPort(),
+		});
+	} catch {
+		// If we can't connect to the debug port, the server wasn't started with --inspect
+		// This happens when reuseExistingServer picks up a pre-running dev server
+		console.warn(
+			`[coverage] Could not connect to debug port ${getRouterDebugPort()}. ` +
+				"Coverage data will not be collected. " +
+				"Stop any existing dev server and let Playwright start a fresh one with coverage instrumentation.",
+		);
+		return;
+	}
+	if (!client || !client.getIstanbulCoverage) {
+		console.warn(
+			`[coverage] Debug port ${getRouterDebugPort()} connected but Istanbul coverage not available. ` +
+				"The dev server may not have been started with --inspect flag.",
+		);
+		return;
+	}
 	const coverageData = await client.getIstanbulCoverage();
 	await client.close();
 	sanitizeCoverage(coverageData);

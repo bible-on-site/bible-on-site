@@ -58,4 +58,17 @@ test.describe("Sefer view", () => {
 			await seferPage.verifyPesukimAreVisible();
 		});
 	});
+
+	test.describe("Qri/Ktiv rendering", () => {
+		test("Shows qri elements with parentheses when different from ktiv", async ({
+			page,
+		}) => {
+			const seferPage = new SeferPage(page);
+			// Perek 406 (Mishlei 19) has qri sequences that differ from ktiv
+			await seferPage.openSeferViewForPerek(406);
+			await seferPage.verifySeferViewIsOpen();
+			await seferPage.verifyPesukimAreVisible();
+			await seferPage.verifyQriElementsAreVisible();
+		});
+	});
 });

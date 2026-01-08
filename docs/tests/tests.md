@@ -4,6 +4,58 @@
 
 This project follows a "catch things early" philosophy—issues should be detected as early as possible in the development lifecycle. Testing is structured to provide multiple layers of verification, and coverage measurement gives confidence in how representative the tests are.
 
+## Testing Strategy
+
+**Prefer unit tests over e2e tests.** When implementing features:
+
+1. **Extract pure business logic** into separate, testable functions that don't depend on framework-specific APIs (e.g., Next.js `headers()`, React hooks).
+2. **Write unit tests first** for the extracted logic - they run faster, are more reliable, and provide better error isolation.
+3. **Add e2e tests** for integration verification - confirming the full stack works together (e.g., HTTP endpoints, rendered pages).
+4. **Design for testability** - if a function can only be tested via e2e, refactor it to separate pure logic from side effects.
+
+Example pattern:
+
+```typescript
+// ❌ Hard to unit test - depends on Next.js headers
+export default async function sitemap() {
+  const headers = await headers();
+  // ... all logic mixed with framework code
+}
+
+// ✅ Testable - pure logic extracted
+export function generateSitemapEntries(config: SitemapConfig) {
+  // ... pure business logic, easily unit tested
+}
+
+export default async function sitemap() {
+  const headersList = await headers();
+  return generateSitemapEntries({ baseUrl: ..., lastModified: new Date() });
+}
+```
+
+### Test Description Conventions
+
+When writing tests, follow this naming convention for `describe` and `it`/`test` blocks:
+
+- **Top-level `describe` blocks**: Use the subject being tested (e.g., component name, function name, module name)
+- **Nested `describe` blocks**: Use contextual descriptions or scenarios (e.g., "when user is authenticated", "with invalid input")
+- **Leaf `it`/`test` blocks**: Use expectation verbs describing the expected behavior (e.g., "returns the correct value", "throws an error", "renders the component")
+
+Example:
+
+```typescript
+describe('UserService', () => {
+  describe('getUser', () => {
+    describe('when user exists', () => {
+      it('returns the user object', () => { ... });
+    });
+    describe('when user does not exist', () => {
+      it('throws UserNotFoundError', () => { ... });
+    });
+  });
+});
+```
+
 ## Test Types
 
 Ideally, all modules should have unit tests, E2E tests, and performance tests. The table below shows the current implementation status:
@@ -12,13 +64,14 @@ Ideally, all modules should have unit tests, E2E tests, and performance tests. T
 | ------- | ---------- | --------- | ----------------- |
 | Website | ✅         | ✅        | ✅                |
 | API     | ❌         | ✅        | ❌                |
-| App     | ❌         | ❌        | ❌                |
+| App     | ✅         | ✅        | ❌                |
 
 ### Unit Tests
 
 Unit tests verify individual functions, components, and modules in isolation. They run quickly and provide fast feedback during development.
 
 - **Website**: Uses Jest with SWC transformation
+- **App**: Uses xUnit with FluentAssertions and Moq (tests in `BibleOnSite.Tests`)
 - See: [Website Coverage Documentation](./website/coverage/coverage.md)
 
 ### End-to-End (E2E) Tests
@@ -27,6 +80,7 @@ E2E tests verify complete user flows through the application, testing the integr
 
 - **Website**: Uses Playwright with Monocart reporter
 - **API**: Uses Playwright with cargo-make orchestration
+- **App**: Uses xUnit with FlaUI for Windows UI Automation (tests in `BibleOnSite.Tests.E2E`)
 - See: [Website Coverage Documentation](./website/coverage/coverage.md), [API Coverage Documentation](./api/coverage/coverage.md)
 
 ### Performance & Benchmarking
@@ -40,6 +94,24 @@ Performance tests measure application behavior under load and track metrics over
 ## Coverage Reporting
 
 Coverage data is collected during test runs and reported to external services for tracking and analysis.
+
+### Istanbul Ignore Comments
+
+Use `/* istanbul ignore next */` comments to exclude defensive/unreachable code from coverage:
+
+```typescript
+/* istanbul ignore next: should never happen */
+if (!data) {
+  throw new Error("Unexpected null data");
+}
+```
+
+**Important**: The SWC coverage instrumentation plugin used by Next.js doesn't natively respect `/* istanbul ignore next */` comments. We implement custom handling in `tests/util/coverage/sanitize-coverage.js` that:
+
+1. Parses source files for `/* istanbul ignore next */` comments
+2. Marks statements, branches, and functions on the following line as covered
+
+This workaround ensures defensive error-handling code doesn't artificially lower coverage metrics.
 
 ### Coverage Services
 
@@ -91,6 +163,30 @@ cargo make test-e2e
 # Coverage
 cargo make coverage-e2e
 ```
+
+### App
+
+```bash
+cd app
+
+# All tests (unit + integration)
+dotnet run --project devops -- Test
+
+# Unit tests only (fast)
+dotnet run --project devops -- TestUnit
+
+# Integration tests (requires API server)
+dotnet run --project devops -- TestIntegration
+
+# E2E tests (Windows, auto-starts API)
+dotnet run --project devops -- TestE2E
+
+# Coverage
+dotnet run --project devops -- CoverageUnit
+dotnet run --project devops -- CoverageIntegration
+```
+
+**Note**: Integration tests use `[Trait("Category", "Integration")]` to distinguish from unit tests. The API server must be running at `http://127.0.0.1:3003` for integration tests.
 
 ## CI/CD Integration
 

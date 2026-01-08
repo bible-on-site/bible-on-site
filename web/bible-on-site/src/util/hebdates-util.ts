@@ -33,6 +33,7 @@ function uniformMonthToTemporalMonthCode(
 		// Adar II in leap year
 		return "M06";
 	}
+	/* istanbul ignore next: defensive - should never happen with valid data */
 	throw new Error(`Invalid uniform month: ${uniformMonth}`);
 }
 
@@ -231,8 +232,8 @@ function calculateTset(date: Date): Date {
 		timezoneId: "Asia/Jerusalem",
 	});
 
+	/* istanbul ignore next: only happens in polar region, which Jerusalem is not */
 	if (!twilight?.civilDusk) {
-		// Fallback: if no civil dusk (polar regions), use sunset + 20 minutes
 		throw new Error("Unable to calculate tzeit for the given date/location");
 	}
 
