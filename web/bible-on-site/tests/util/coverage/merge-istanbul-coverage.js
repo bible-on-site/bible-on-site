@@ -39,7 +39,9 @@ function mergeIstanbulCoverage(existing, incoming) {
 			if (!existingData.b[key]) {
 				existingData.b[key] = counts;
 			} else {
-				existingData.b[key] = existingData.b[key].map((c, i) => c + (counts[i] || 0));
+				existingData.b[key] = existingData.b[key].map(
+					(c, i) => c + (counts[i] || 0),
+				);
 			}
 		}
 	}

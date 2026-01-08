@@ -9,7 +9,9 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { mergeIstanbulCoverage } = require("./tests/util/coverage/merge-istanbul-coverage");
+const {
+	mergeIstanbulCoverage,
+} = require("./tests/util/coverage/merge-istanbul-coverage");
 
 const COVERAGE_FILE = path.join(
 	process.cwd(),

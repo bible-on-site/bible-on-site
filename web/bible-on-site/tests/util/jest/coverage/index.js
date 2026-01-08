@@ -31,12 +31,16 @@ class MonocartCoverageReporter {
 	async onRunComplete(testContexts, results) {
 		// Load ESM sanitize-coverage module (dynamic import required from CommonJS)
 		if (!sanitizeCoverageModule) {
-			const modulePath = path.resolve(__dirname, "../../coverage/sanitize-coverage.js");
+			const modulePath = path.resolve(
+				__dirname,
+				"../../coverage/sanitize-coverage.js",
+			);
 			sanitizeCoverageModule = await import(pathToFileURL(modulePath).href);
 		}
-		const sanitizeCoverage = sanitizeCoverageModule.sanitizeCoverage
-			|| sanitizeCoverageModule.default?.sanitizeCoverage
-			|| sanitizeCoverageModule.default;
+		const sanitizeCoverage =
+			sanitizeCoverageModule.sanitizeCoverage ||
+			sanitizeCoverageModule.default?.sanitizeCoverage ||
+			sanitizeCoverageModule.default;
 
 		// Read coverage from the file written by jest.coverage-setup.js
 		if (!fs.existsSync(COVERAGE_FILE)) {
