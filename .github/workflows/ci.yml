@@ -1,5 +1,7 @@
 # TODO: cleanup artifacts using geekyeggo/delete-artifact
 name: Continous Integration
+permissions:
+  contents: read
 
 on:
   # Better practice is to run on any push instead of just either master push or PR.
