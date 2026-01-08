@@ -64,13 +64,14 @@ Ideally, all modules should have unit tests, E2E tests, and performance tests. T
 | ------- | ---------- | --------- | ----------------- |
 | Website | ✅         | ✅        | ✅                |
 | API     | ❌         | ✅        | ❌                |
-| App     | ❌         | ❌        | ❌                |
+| App     | ✅         | ✅        | ❌                |
 
 ### Unit Tests
 
 Unit tests verify individual functions, components, and modules in isolation. They run quickly and provide fast feedback during development.
 
 - **Website**: Uses Jest with SWC transformation
+- **App**: Uses xUnit with FluentAssertions and Moq (tests in `BibleOnSite.Tests`)
 - See: [Website Coverage Documentation](./website/coverage/coverage.md)
 
 ### End-to-End (E2E) Tests
@@ -79,6 +80,7 @@ E2E tests verify complete user flows through the application, testing the integr
 
 - **Website**: Uses Playwright with Monocart reporter
 - **API**: Uses Playwright with cargo-make orchestration
+- **App**: Uses xUnit with FlaUI for Windows UI Automation (tests in `BibleOnSite.Tests.E2E`)
 - See: [Website Coverage Documentation](./website/coverage/coverage.md), [API Coverage Documentation](./api/coverage/coverage.md)
 
 ### Performance & Benchmarking
@@ -143,6 +145,30 @@ cargo make test-e2e
 # Coverage
 cargo make coverage-e2e
 ```
+
+### App
+
+```bash
+cd app
+
+# All tests (unit + integration)
+dotnet run --project devops -- Test
+
+# Unit tests only (fast)
+dotnet run --project devops -- TestUnit
+
+# Integration tests (requires API server)
+dotnet run --project devops -- TestIntegration
+
+# E2E tests (Windows, auto-starts API)
+dotnet run --project devops -- TestE2E
+
+# Coverage
+dotnet run --project devops -- CoverageUnit
+dotnet run --project devops -- CoverageIntegration
+```
+
+**Note**: Integration tests use `[Trait("Category", "Integration")]` to distinguish from unit tests. The API server must be running at `http://127.0.0.1:3003` for integration tests.
 
 ## CI/CD Integration
 
