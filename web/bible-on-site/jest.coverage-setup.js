@@ -9,6 +9,9 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const {
+	mergeIstanbulCoverage,
+} = require("./tests/util/coverage/merge-istanbul-coverage");
 
 const COVERAGE_FILE = path.join(
 	process.cwd(),
@@ -33,10 +36,25 @@ afterAll(() => {
 	const coverage = globalThis.__coverage__;
 
 	if (coverage && Object.keys(coverage).length > 0) {
+		// Read existing coverage and merge with new coverage
+		let existingCoverage = {};
+		// codacy:disable-next-line:javascript:S6314 -- coverage file path is safely constructed from cwd
+		if (fs.existsSync(COVERAGE_FILE)) {
+			try {
+				// codacy:disable-next-line:javascript:S6314 -- coverage file path is safely constructed from cwd
+				existingCoverage = JSON.parse(fs.readFileSync(COVERAGE_FILE, "utf8"));
+			} catch {
+				// File might be empty or corrupted, start fresh
+			}
+		}
+
+		const mergedCoverage = mergeIstanbulCoverage(existingCoverage, coverage);
+
 		console.log(
-			`[jest.coverage-setup] Writing coverage for ${Object.keys(coverage).length} files`,
+			`[jest.coverage-setup] Writing coverage for ${Object.keys(mergedCoverage).length} files`,
 		);
-		fs.writeFileSync(COVERAGE_FILE, JSON.stringify(coverage, null, 2));
+		// codacy:disable-next-line:javascript:S6314 -- coverage file path is safely constructed from cwd
+		fs.writeFileSync(COVERAGE_FILE, JSON.stringify(mergedCoverage, null, 2));
 	} else {
 		console.log("[jest.coverage-setup] No coverage data found");
 	}

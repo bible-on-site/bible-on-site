@@ -1,5 +1,6 @@
 import type { AdditionalsItem } from "../../../src/data/db/tanah-view-types";
 import {
+	getAllPerakim,
 	getSeferByName,
 	getSeferOrAdditionalByName,
 } from "../../../src/data/sefer-dto";
@@ -103,5 +104,43 @@ describe("getSeferByName", () => {
 				"Invalid sefer name: ספר מקבים",
 			);
 		});
+	});
+});
+
+describe("getAllPerakim", () => {
+	const allPerakim = getAllPerakim();
+
+	it("returns 929 perakim total", () => {
+		expect(allPerakim).toHaveLength(929);
+	});
+
+	it("assigns sequential perekId starting from 1", () => {
+		expect(allPerakim[0].perekId).toBe(1);
+		expect(allPerakim[928].perekId).toBe(929);
+	});
+
+	it("first perek has pesukim with segments", () => {
+		expect(allPerakim[0].pesukim.length).toBeGreaterThan(0);
+		expect(allPerakim[0].pesukim[0].segments).toBeDefined();
+	});
+
+	it("last perek has pesukim with segments", () => {
+		expect(allPerakim[928].pesukim.length).toBeGreaterThan(0);
+		expect(allPerakim[928].pesukim[0].segments).toBeDefined();
+	});
+
+	it("all perakim have pesukim array", () => {
+		for (const perek of allPerakim) {
+			expect(perek.pesukim).toBeDefined();
+			expect(Array.isArray(perek.pesukim)).toBe(true);
+		}
+	});
+
+	it("includes perakim from sefarim with additionals", () => {
+		// Shemuel has 62 perakim (31 + 31), starting at perek 233
+		const shemuelPerakim = allPerakim.filter(
+			(p) => p.perekId >= 233 && p.perekId <= 294,
+		);
+		expect(shemuelPerakim).toHaveLength(62);
 	});
 });

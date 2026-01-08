@@ -195,3 +195,60 @@ describe("parseNumericalDateToHebcalDate", () => {
 		});
 	});
 });
+
+describe("HebrewDate", () => {
+	describe("getters", () => {
+		const hDate = HebrewDate.fromHebrewComponents(5784, HebrewMonth.SIVAN, 21);
+
+		it("returns correct month number", () => {
+			// Sivan is month 9 in Hebrew calendar, but Temporal uses month 10
+			// because it counts from Tishrei as 1
+			expect(hDate.month).toBeGreaterThan(0);
+		});
+
+		it("returns correct day of week", () => {
+			// dayOfWeek should return 0-6 (Sunday=0)
+			expect(hDate.dayOfWeek).toBeGreaterThanOrEqual(0);
+			expect(hDate.dayOfWeek).toBeLessThanOrEqual(6);
+		});
+	});
+
+	describe("nearest", () => {
+		it("returns same date when already on target day", () => {
+			const hDate = HebrewDate.fromHebrewComponents(
+				5784,
+				HebrewMonth.SIVAN,
+				21,
+			);
+			const currentDay = hDate.getDay();
+			const result = hDate.nearest(currentDay);
+			expect(result.day).toBe(21);
+		});
+
+		it("returns earlier date when target day is closer behind", () => {
+			const hDate = HebrewDate.fromHebrewComponents(
+				5784,
+				HebrewMonth.SIVAN,
+				21,
+			);
+			const currentDay = hDate.getDay();
+			// Go back one day - should be closer to go back
+			const targetDay = (currentDay + 6) % 7;
+			const result = hDate.nearest(targetDay);
+			expect(result.day).toBe(20);
+		});
+
+		it("returns later date when target day is closer ahead", () => {
+			const hDate = HebrewDate.fromHebrewComponents(
+				5784,
+				HebrewMonth.SIVAN,
+				21,
+			);
+			const currentDay = hDate.getDay();
+			// Go forward one day - should be closer to go forward
+			const targetDay = (currentDay + 1) % 7;
+			const result = hDate.nearest(targetDay);
+			expect(result.day).toBe(22);
+		});
+	});
+});

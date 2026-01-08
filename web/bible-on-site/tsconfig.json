@@ -30,6 +30,7 @@
 		"./src/**/*.ts",
 		"./src/**/*.tsx",
 		"./tests/**/*.ts",
+		"./tests/**/*.tsx",
 		"./tests/**/*.mts",
 		".next/types/**/*.ts",
 		"playwright.config.ts",

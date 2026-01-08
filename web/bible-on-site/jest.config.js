@@ -41,6 +41,10 @@ const config = {
 	// Use setupFilesAfterEnv to collect coverage after tests complete
 	setupFilesAfterEnv: shouldMeasureCov ? ["./jest.coverage-setup.js"] : [],
 	preset: "ts-jest",
+	// Path aliases from tsconfig.json - needed for test files to resolve @/ imports
+	moduleNameMapper: {
+		"^@/(.*)$": "<rootDir>/src/$1",
+	},
 	reporters: [
 		isCI ? ["github-actions", { silent: false }] : "default",
 		...(isCI
@@ -69,11 +73,11 @@ const config = {
 			: []),
 	],
 	testEnvironment: "jsdom",
-	testMatch: ["**/tests/(unit|integration)/**/*.test.ts"],
+	testMatch: ["**/tests/(unit|integration)/**/*.test.ts?(x)"],
 	// Use SWC with coverage plugin when measuring coverage, otherwise use ts-jest
 	transform: shouldMeasureCov
 		? { "^.+\\.(t|j)sx?$": swcCoverageConfig }
-		: { "^.+\\.ts$": "ts-jest" },
+		: { "^.+\\.tsx?$": "ts-jest" },
 	extensionsToTreatAsEsm: [".ts", ".json"],
 };
 

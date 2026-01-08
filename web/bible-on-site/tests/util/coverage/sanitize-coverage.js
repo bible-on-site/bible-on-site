@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import picomatch from "picomatch";
 import { covIgnoreList } from "../../../.covignore.mjs";
@@ -77,9 +78,168 @@ function isTracked(entry, srcDir) {
 	return isPartOfSrc && !isIgnored;
 }
 
+/**
+ * Find the closing brace for a block starting at the given line.
+ * Tracks brace depth to handle nested blocks.
+ *
+ * @param {string[]} lines - Source file lines
+ * @param {number} startLineIndex - 0-indexed line where the block starts
+ * @returns {number} - 0-indexed line of closing brace, or startLineIndex if not found
+ */
+function findBlockEnd(lines, startLineIndex) {
+	let braceDepth = 0;
+	let foundOpening = false;
+
+	for (let i = startLineIndex; i < lines.length; i++) {
+		const line = lines[i];
+		for (const char of line) {
+			if (char === "{") {
+				braceDepth++;
+				foundOpening = true;
+			} else if (char === "}") {
+				braceDepth--;
+				if (foundOpening && braceDepth === 0) {
+					return i;
+				}
+			}
+		}
+	}
+	return startLineIndex;
+}
+
+/**
+ * Parse source file and find lines that should be ignored based on
+ * /* istanbul ignore next * / comments. SWC coverage plugin doesn't
+ * respect these comments, so we handle them manually.
+ * For blocks (if statements, functions), includes all lines within the block.
+ *
+ * @param {string} filePath - Absolute path to source file
+ * @returns {Set<number>} - Set of line numbers to ignore (1-indexed)
+ */
+function findIstanbulIgnoreLines(filePath) {
+	const ignoredLines = new Set();
+	try {
+		// codacy:disable-next-line:javascript:S6314 -- source file paths come from istanbul coverage keys which are validated
+		const content = fs.readFileSync(filePath, "utf8");
+		const lines = content.split("\n");
+
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i];
+			// Match /* istanbul ignore next */ or /* istanbul ignore next: reason */
+			if (/\/\*\s*istanbul\s+ignore\s+next\b/.test(line)) {
+				const nextLineIndex = i + 1;
+				if (nextLineIndex < lines.length) {
+					const nextLine = lines[nextLineIndex];
+					// Check if next line starts a block (if, function, etc.)
+					if (nextLine.includes("{")) {
+						// Find the end of the block and ignore all lines in between
+						const blockEndIndex = findBlockEnd(lines, nextLineIndex);
+						for (let j = nextLineIndex; j <= blockEndIndex; j++) {
+							ignoredLines.add(j + 1); // Convert to 1-indexed
+						}
+					} else {
+						// Just ignore the next line (1-indexed)
+						ignoredLines.add(nextLineIndex + 1);
+					}
+				}
+			}
+		}
+	} catch {
+		// File not readable, skip ignore handling
+	}
+	return ignoredLines;
+}
+
+/**
+ * Apply istanbul ignore directives to coverage data.
+ * For ignored lines, mark statements as covered and branches as fully covered.
+ * If a function starts on an ignored line, mark all its contents as covered.
+ *
+ * @param {EntryData} entryData - Coverage entry data
+ * @param {Set<number>} ignoredLines - Lines to ignore
+ */
+function applyIstanbulIgnore(entryData, ignoredLines) {
+	if (ignoredLines.size === 0) return;
+
+	// Find functions that start on ignored lines and collect their line ranges
+	const ignoredFunctionRanges = [];
+	for (const [key, fn] of Object.entries(entryData.fnMap ?? {})) {
+		const startLine = fn.line ?? fn.decl?.start?.line ?? fn.loc?.start?.line;
+		if (startLine && ignoredLines.has(startLine)) {
+			// Mark function as covered
+			entryData.f[key] = Math.max(entryData.f[key] ?? 0, 1);
+
+			// Find function end line from loc or estimate from statements
+			const endLine =
+				fn.loc?.end?.line ?? findFunctionEndLine(entryData, startLine);
+			if (endLine) {
+				ignoredFunctionRanges.push({ start: startLine, end: endLine });
+			}
+		}
+	}
+
+	// Check if a line is within any ignored function range
+	const isLineIgnored = (line) => {
+		if (ignoredLines.has(line)) return true;
+		return ignoredFunctionRanges.some(
+			(range) => line >= range.start && line <= range.end,
+		);
+	};
+
+	// Mark statements on ignored lines or within ignored functions as covered
+	for (const [key, stmt] of Object.entries(entryData.statementMap ?? {})) {
+		const line = stmt.start?.line;
+		if (line && isLineIgnored(line)) {
+			entryData.s[key] = Math.max(entryData.s[key] ?? 0, 1);
+		}
+	}
+
+	// Mark branches on ignored lines or within ignored functions as fully covered
+	for (const [key, branch] of Object.entries(entryData.branchMap ?? {})) {
+		const line = branch.line ?? branch.loc?.start?.line ?? branch.loc?.line;
+		if (line && isLineIgnored(line)) {
+			const branchCount = entryData.b[key]?.length ?? 0;
+			entryData.b[key] = Array(branchCount).fill(1);
+		}
+	}
+}
+
+/**
+ * Estimate function end line by finding the last statement that could be in this function
+ */
+function findFunctionEndLine(entryData, startLine) {
+	let maxLine = startLine;
+	for (const stmt of Object.values(entryData.statementMap ?? {})) {
+		const stmtEnd = stmt.end?.line;
+		if (stmtEnd && stmtEnd > maxLine) {
+			// Only include if there's no other function starting between startLine and stmtEnd
+			let belongsToThisFunction = true;
+			for (const fn of Object.values(entryData.fnMap ?? {})) {
+				const fnStart = fn.line ?? fn.decl?.start?.line ?? fn.loc?.start?.line;
+				if (fnStart && fnStart > startLine && fnStart <= stmtEnd) {
+					belongsToThisFunction = false;
+					break;
+				}
+			}
+			if (belongsToThisFunction) {
+				maxLine = stmtEnd;
+			}
+		}
+	}
+	return maxLine;
+}
+
 function sanitizeEntryData(entryData) {
 	if (!entryData) return;
 	debugEntry(entryData, "before");
+
+	// Apply istanbul ignore comments (SWC doesn't respect them)
+	const filePath = entryData.path;
+	if (filePath) {
+		const ignoredLines = findIstanbulIgnoreLines(filePath);
+		applyIstanbulIgnore(entryData, ignoredLines);
+	}
+
 	const statementHelper = sanitizeStatementMap(entryData);
 	sanitizeBranchMap(entryData, statementHelper);
 	sanitizeFunctionMap(entryData);

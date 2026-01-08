@@ -27,6 +27,7 @@ const hePageSemantics: PageSemantics = {
 	indexToSemanticName(pageIndex: number): string {
 		return hePageSemanticsDict[pageIndex] ?? "";
 	},
+	/* istanbul ignore next: client-only FlipBook URL hash navigation callback */
 	semanticNameToIndex(semanticPageName: string): number | null {
 		const entry = Object.entries(hePageSemanticsDict).find(
 			([, value]) => value === semanticPageName,
