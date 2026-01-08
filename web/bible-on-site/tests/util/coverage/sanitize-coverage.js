@@ -109,6 +109,7 @@ function findIstanbulIgnoreLines(filePath) {
 /**
  * Apply istanbul ignore directives to coverage data.
  * For ignored lines, mark statements as covered and branches as fully covered.
+ * If a function starts on an ignored line, mark all its contents as covered.
  *
  * @param {EntryData} entryData - Coverage entry data
  * @param {Set<number>} ignoredLines - Lines to ignore
@@ -116,30 +117,72 @@ function findIstanbulIgnoreLines(filePath) {
 function applyIstanbulIgnore(entryData, ignoredLines) {
 	if (ignoredLines.size === 0) return;
 
-	// Mark statements on ignored lines as covered
+	// Find functions that start on ignored lines and collect their line ranges
+	const ignoredFunctionRanges = [];
+	for (const [key, fn] of Object.entries(entryData.fnMap ?? {})) {
+		const startLine = fn.line ?? fn.decl?.start?.line ?? fn.loc?.start?.line;
+		if (startLine && ignoredLines.has(startLine)) {
+			// Mark function as covered
+			entryData.f[key] = Math.max(entryData.f[key] ?? 0, 1);
+
+			// Find function end line from loc or estimate from statements
+			const endLine =
+				fn.loc?.end?.line ?? findFunctionEndLine(entryData, startLine);
+			if (endLine) {
+				ignoredFunctionRanges.push({ start: startLine, end: endLine });
+			}
+		}
+	}
+
+	// Check if a line is within any ignored function range
+	const isLineIgnored = (line) => {
+		if (ignoredLines.has(line)) return true;
+		return ignoredFunctionRanges.some(
+			(range) => line >= range.start && line <= range.end,
+		);
+	};
+
+	// Mark statements on ignored lines or within ignored functions as covered
 	for (const [key, stmt] of Object.entries(entryData.statementMap ?? {})) {
 		const line = stmt.start?.line;
-		if (line && ignoredLines.has(line)) {
+		if (line && isLineIgnored(line)) {
 			entryData.s[key] = Math.max(entryData.s[key] ?? 0, 1);
 		}
 	}
 
-	// Mark branches on ignored lines as fully covered
+	// Mark branches on ignored lines or within ignored functions as fully covered
 	for (const [key, branch] of Object.entries(entryData.branchMap ?? {})) {
 		const line = branch.line ?? branch.loc?.start?.line ?? branch.loc?.line;
-		if (line && ignoredLines.has(line)) {
+		if (line && isLineIgnored(line)) {
 			const branchCount = entryData.b[key]?.length ?? 0;
 			entryData.b[key] = Array(branchCount).fill(1);
 		}
 	}
+}
 
-	// Mark functions on ignored lines as covered
-	for (const [key, fn] of Object.entries(entryData.fnMap ?? {})) {
-		const line = fn.line ?? fn.decl?.start?.line ?? fn.loc?.start?.line;
-		if (line && ignoredLines.has(line)) {
-			entryData.f[key] = Math.max(entryData.f[key] ?? 0, 1);
+/**
+ * Estimate function end line by finding the last statement that could be in this function
+ */
+function findFunctionEndLine(entryData, startLine) {
+	let maxLine = startLine;
+	for (const stmt of Object.values(entryData.statementMap ?? {})) {
+		const stmtEnd = stmt.end?.line;
+		if (stmtEnd && stmtEnd > maxLine) {
+			// Only include if there's no other function starting between startLine and stmtEnd
+			let belongsToThisFunction = true;
+			for (const fn of Object.values(entryData.fnMap ?? {})) {
+				const fnStart = fn.line ?? fn.decl?.start?.line ?? fn.loc?.start?.line;
+				if (fnStart && fnStart > startLine && fnStart <= stmtEnd) {
+					belongsToThisFunction = false;
+					break;
+				}
+			}
+			if (belongsToThisFunction) {
+				maxLine = stmtEnd;
+			}
 		}
 	}
+	return maxLine;
 }
 
 function sanitizeEntryData(entryData) {
