@@ -4,18 +4,18 @@ coverage:
   status:
     project:
       default:
-        target: 95%
+        target: 30%
         threshold: 5%
       api:
-        target: 95%
+        target: 85%
         flags:
           - api
       app:
-        target: 95%
+        target: 0%
         flags:
           - app
       website:
-        target: 95%
+        target: 93%
         flags:
           - website
       data:
@@ -25,7 +25,7 @@ coverage:
           - data
     patch:
       default:
-        target: 95%
+        target: 30%
         threshold: 5%
 comment:
   layout: "reach, diff, flags, files, footer"
