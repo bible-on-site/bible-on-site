@@ -96,6 +96,34 @@ When working on the `web/api` project (Rust GraphQL API):
 
 ### Playwright Tests (currently applies to website-e2e/perf, api-e2e)
 
+#### Testing Strategy
+
+**Prefer unit tests over e2e tests.** When implementing features:
+
+1. **Extract pure business logic** into separate, testable functions that don't depend on framework-specific APIs (e.g., Next.js `headers()`, React hooks).
+2. **Write unit tests first** for the extracted logic - they run faster, are more reliable, and provide better error isolation.
+3. **Add e2e tests** for integration verification - confirming the full stack works together (e.g., HTTP endpoints, rendered pages).
+4. **Design for testability** - if a function can only be tested via e2e, refactor it to separate pure logic from side effects.
+
+Example pattern:
+```typescript
+// ❌ Hard to unit test - depends on Next.js headers
+export default async function sitemap() {
+  const headers = await headers();
+  // ... all logic mixed with framework code
+}
+
+// ✅ Testable - pure logic extracted
+export function generateSitemapEntries(config: SitemapConfig) {
+  // ... pure business logic, easily unit tested
+}
+
+export default async function sitemap() {
+  const headersList = await headers();
+  return generateSitemapEntries({ baseUrl: ..., lastModified: new Date() });
+}
+```
+
 #### Test Description Conventions
 
 When writing tests, follow this naming convention for `describe` and `it`/`test` blocks:
