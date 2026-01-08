@@ -94,58 +94,17 @@ When working on the `web/api` project (Rust GraphQL API):
 - **MySQL CLI access**: Use `mysql -u root -ptest_123 tanah_test` to query test data directly (MySQL bin is at `/c/Program Files/MySQL/MySQL Server 8.4/bin` or in PATH)
 - Entities are in the `entities/` crate, services in `src/services/`, resolvers in `src/resolvers/`, DTOs in `src/dtos/`
 
-### Playwright Tests (currently applies to website-e2e/perf, api-e2e)
+### Testing
 
-#### Testing Strategy
+For detailed testing philosophy, strategy, and conventions, see [`docs/tests/tests.md`](../docs/tests/tests.md).
 
-**Prefer unit tests over e2e tests.** When implementing features:
+#### E2E Tests (Playwright)
 
-1. **Extract pure business logic** into separate, testable functions that don't depend on framework-specific APIs (e.g., Next.js `headers()`, React hooks).
-2. **Write unit tests first** for the extracted logic - they run faster, are more reliable, and provide better error isolation.
-3. **Add e2e tests** for integration verification - confirming the full stack works together (e.g., HTTP endpoints, rendered pages).
-4. **Design for testability** - if a function can only be tested via e2e, refactor it to separate pure logic from side effects.
+Applies to: website-e2e, website-perf, api-e2e
 
-Example pattern:
-```typescript
-// ❌ Hard to unit test - depends on Next.js headers
-export default async function sitemap() {
-  const headers = await headers();
-  // ... all logic mixed with framework code
-}
-
-// ✅ Testable - pure logic extracted
-export function generateSitemapEntries(config: SitemapConfig) {
-  // ... pure business logic, easily unit tested
-}
-
-export default async function sitemap() {
-  const headersList = await headers();
-  return generateSitemapEntries({ baseUrl: ..., lastModified: new Date() });
-}
-```
-
-#### Test Description Conventions
-
-When writing tests, follow this naming convention for `describe` and `it`/`test` blocks:
-
-- **Top-level `describe` blocks**: Use the subject being tested (e.g., component name, function name, module name)
-- **Nested `describe` blocks**: Use contextual descriptions or scenarios (e.g., "when user is authenticated", "with invalid input")
-- **Leaf `it`/`test` blocks**: Use expectation verbs describing the expected behavior (e.g., "returns the correct value", "throws an error", "renders the component")
-
-Example:
-
-```typescript
-describe('UserService', () => {
-  describe('getUser', () => {
-    describe('when user exists', () => {
-      it('returns the user object', () => { ... });
-    });
-    describe('when user does not exist', () => {
-      it('throws UserNotFoundError', () => { ... });
-    });
-  });
-});
-```
+- **Website**: Uses Playwright with Monocart reporter
+- **API**: Uses Playwright with cargo-make orchestration
+- Test files located in `tests/e2e/` directories
 
 ### AWS Infrastructure Instructions
 

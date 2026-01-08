@@ -1,12 +1,12 @@
 import {
-	SITEMAP_SECTIONS,
-	TOTAL_PERAKIM,
-	generateRootEntry,
-	generateSectionEntries,
 	generate929IndexEntry,
 	generatePerekEntries,
+	generateRootEntry,
+	generateSectionEntries,
 	generateSitemapEntries,
+	SITEMAP_SECTIONS,
 	type SitemapConfig,
+	TOTAL_PERAKIM,
 } from "@/app/sitemap";
 
 describe("sitemap", () => {
