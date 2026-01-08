@@ -64,4 +64,31 @@ test.describe("Today's Perek redirect", () => {
 		const breadcrumb = page.getByTestId(`perek-breadcrumb-${perekId}`);
 		await expect(breadcrumb).toBeVisible();
 	});
+
+	test("Preserves single query parameter during redirect", async ({ page }) => {
+		await page.goto("/929?foo=bar");
+
+		// Verify the URL redirected to a valid perek and preserved the query param
+		await expect(page).toHaveURL(/\/929\/\d+\?foo=bar/);
+	});
+
+	test("Preserves multiple query parameters during redirect", async ({
+		page,
+	}) => {
+		await page.goto("/929?foo=bar&baz=qux");
+
+		// Verify the URL preserved multiple query params
+		const url = page.url();
+		expect(url).toContain("foo=bar");
+		expect(url).toContain("baz=qux");
+	});
+
+	test("Preserves array query parameters during redirect", async ({ page }) => {
+		await page.goto("/929?arr=val1&arr=val2");
+
+		// Verify the URL preserved array query params
+		const url = page.url();
+		expect(url).toContain("arr=val1");
+		expect(url).toContain("arr=val2");
+	});
 });
