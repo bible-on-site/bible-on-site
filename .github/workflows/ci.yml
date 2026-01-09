@@ -25,11 +25,20 @@ env:
   API_COVERAGE_ARTIFACT_NAME_MASTER: api-coverage.master
   API_COVERAGE_ARTIFACT_NAME_WF: api-coverage.${{ github.run_id }}
   API_COVERAGE_DIRECTORY: web/api/.coverage
-  API_COVERAGE_REPORT: web/api/.coverage/lcov.info
+  API_COVERAGE_REPORT: web/api/.coverage/merged/lcov.info
   API_DIRECTORY: web/api
+  API_E2E_JUNIT_REPORT_ARTIFACT_NAME: api-e2e-junit-report-${{ github.run_id }}
+  API_MERGED_COVERAGE_DIRECTORY: web/api/.coverage/merged
   API_TESTS_DIRECTORY: web/api/tests
   API_TESTS_NODE_CACHE_PATH: web/api/tests/package-lock.json
   API_TESTS_NODE_VERSION_FILE: web/api/tests/package.json
+  API_UNIT_JUNIT_REPORT_ARTIFACT_NAME: api-unit-junit-report-${{ github.run_id }}
+  APP_COVERAGE_ARTIFACT_NAME_MASTER: app-coverage.master
+  APP_COVERAGE_ARTIFACT_NAME_WF: app-coverage.${{ github.run_id }}
+  APP_COVERAGE_DIRECTORY: app/.coverage
+  APP_COVERAGE_REPORT: app/.coverage/merged/lcov.info
+  APP_MERGED_COVERAGE_DIRECTORY: app/.coverage/merged
+  APP_DIRECTORY: app
   CROSS_MODULE_COVERAGE_REPORT: .coverage/lcov.info
   DATA_DIRECTORY: data
   DEVOPS_DIRECTORY: devops
@@ -47,6 +56,7 @@ env:
   WEBSITE_NODE_VERSION_FILE: web/bible-on-site/package.json
   WEBSITE_PERF_JUNIT_REPORT_ARTIFACT_NAME: website-perf-junit-report-${{ github.run_id }}
   WEBSITE_UNIT_JUNIT_REPORT_ARTIFACT_NAME: website-unit-junit-report-${{ github.run_id }}
+  APP_UNIT_JUNIT_REPORT_ARTIFACT_NAME: app-unit-junit-report-${{ github.run_id }}
 
 jobs:
   setup_env:
@@ -55,6 +65,7 @@ jobs:
     outputs:
       api_directory: ${{ env.API_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       api_playwright_version: ${{ steps.get_api_playwright_version.outputs.PLAYWRIGHT_VERSION }}
+      app_directory: ${{ env.APP_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       is_master_branch: ${{ env.IS_MASTER_BRANCH }} # a workaround for places where only needs.<job_id>.<output> is allowed
       website_directory: ${{ env.WEBSITE_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       website_playwright_version: ${{ steps.get_website_playwright_version.outputs.PLAYWRIGHT_VERSION }}
@@ -81,6 +92,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       is_api_master_coverage_available: ${{ steps.master_api_coverage_report_exists.outputs.exists }}
+      is_app_master_coverage_available: ${{ steps.master_app_coverage_report_exists.outputs.exists }}
       is_website_master_coverage_available: ${{ steps.master_website_coverage_report_exists.outputs.exists }}
     steps:
       - name: Check for master API coverage report
@@ -88,6 +100,12 @@ jobs:
         uses: LIT-Protocol/artifact-exists-action@v0
         with:
           name: ${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
+
+      - name: Check for master App coverage report
+        id: master_app_coverage_report_exists
+        uses: LIT-Protocol/artifact-exists-action@v0
+        with:
+          name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
 
       - name: Check for master Website coverage report
         id: master_website_coverage_report_exists
@@ -113,6 +131,16 @@ jobs:
     with:
       module_directory: ${{ needs.setup_env.outputs.api_directory }}
       module_name: ${{ needs.setup_env.outputs.api_directory }}
+      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
+
+  determine_app_changes:
+    name: Determine App Changes
+    needs: setup_env
+    secrets: inherit
+    uses: ./.github/workflows/shared-ci.yml
+    with:
+      module_directory: ${{ needs.setup_env.outputs.app_directory }}
+      module_name: ${{ needs.setup_env.outputs.app_directory }}
       ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
 
   package_website:
@@ -414,7 +442,7 @@ jobs:
   api_e2e:
     name: API CI
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_api_changes, determine_baseline_availability]
+    needs: [setup_env, determine_api_changes, determine_baseline_availability, build_lcov_docker]
     if: ${{ needs.determine_api_changes.outputs.module_changed == 'true' || needs.determine_api_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_api_master_coverage_available == 'false' }}
     permissions:
       contents: read
@@ -433,7 +461,7 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make, cargo-llvm-cov
+          tool: cargo-make, cargo-llvm-cov, cargo-nextest
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -446,6 +474,11 @@ jobs:
         id: lint
         working-directory: ${{ env.API_DIRECTORY }}
         run: cargo make lint
+
+      - name: Unit Test
+        id: unit-test
+        working-directory: ${{ env.API_DIRECTORY }}
+        run: cargo make coverage-unit
 
       - name: Setup DevOps Node.js
         id: setup-devops-node
@@ -512,12 +545,47 @@ jobs:
         run: |
           cargo make coverage-e2e
 
-      - name: Publish API E2E Report To Codecov
+      - name: Restore lcov Docker image
+        uses: actions/download-artifact@v7
+        with:
+          name: lcov-docker-image
+          path: /tmp
+
+      - name: Load lcov Docker image
+        run: docker load --input /tmp/lcov-docker-image.tar
+
+      - name: Merge Test Coverage (Unit + E2E)
+        working-directory: ${{ env.API_DIRECTORY }}
+        run: cargo make coverage-merge
+
+      - name: Store API Unit JUnit Report
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.API_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
+          path: ${{ env.API_DIRECTORY }}/.junit-report/unit/results.xml
+          retention-days: 1
+          overwrite: true
+
+      - name: Store API E2E JUnit Report
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.API_E2E_JUNIT_REPORT_ARTIFACT_NAME }}
+          path: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/junit/results.xml
+          retention-days: 1
+          overwrite: true
+
+      - name: List API JUnit files
+        id: list_api_junit_files
+        run: |
+          files="${{ env.API_DIRECTORY }}/.junit-report/unit/results.xml,${{ env.API_DIRECTORY }}/.playwright-report/e2e/junit/results.xml"
+          echo "junit_files=$files" >> $GITHUB_OUTPUT
+
+      - name: Publish API Unit/E2E Report To Codecov
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/junit/results.xml
+          files: ${{ steps.list_api_junit_files.outputs.junit_files }}
           flags: api
           report_type: test_results
 
@@ -543,6 +611,84 @@ jobs:
         with:
           name: ${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.API_COVERAGE_REPORT }}
+          retention-days: 400
+          overwrite: true
+
+  app_ci:
+    name: App CI
+    runs-on: ubuntu-latest
+    needs: [setup_env, determine_app_changes, determine_baseline_availability]
+    if: ${{ needs.determine_app_changes.outputs.module_changed == 'true' || needs.determine_app_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_app_master_coverage_available == 'false' }}
+    defaults:
+      run:
+        working-directory: ${{ env.APP_DIRECTORY }}
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/BibleOnSite.Tests.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dotnet tools
+        run: dotnet tool restore
+
+      - name: Run Unit Tests with Coverage
+        run: dotnet run --project devops -- CoverageUnit --configuration Release
+
+      - name: Store App Unit JUnit Report
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.APP_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
+          path: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
+          retention-days: 1
+          overwrite: true
+
+      - name: Publish App Unit Report To Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
+          flags: app
+          report_type: test_results
+
+      # TODO: that's a workaround, a placeholder before implementing integration tests with coverage in CI
+      - name: Copy Coverage to Output Location
+        run: |
+          mkdir -p .coverage/merged
+          cp .coverage/unit/lcov.info .coverage/merged/lcov.info
+
+      - name: Store App Coverage Report (wf)
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_WF }}
+          path: ${{ env.APP_COVERAGE_REPORT }}
+          retention-days: 400
+          overwrite: true
+          if-no-files-found: error
+
+      - name: Store App Coverage Report (master)
+        if: ${{ env.IS_MASTER_BRANCH == 'true' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
+          path: ${{ env.APP_COVERAGE_REPORT }}
           retention-days: 400
           overwrite: true
 
@@ -591,9 +737,11 @@ jobs:
       [
         determine_website_changes,
         determine_api_changes,
+        determine_app_changes,
         website_performance,
         website_e2e,
         api_e2e,
+        app_ci,
         build_lcov_docker,
         determine_baseline_availability,
       ]
@@ -604,10 +752,12 @@ jobs:
         run: |
           WEBSITE_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_website_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
           API_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_api_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-          if [ "$WEBSITE_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$API_CHANGES_DETERMINATION_STATUS" = "failure" ]; then
+          APP_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_app_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+          if [ "$WEBSITE_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$API_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$APP_CHANGES_DETERMINATION_STATUS" = "failure" ]; then
             echo "Could not determine module changes."
             [ "$WEBSITE_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine website changes."
             [ "$API_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine API changes."
+            [ "$APP_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine app changes."
             echo "Overall status: failure"
             exit 1
           fi
@@ -633,6 +783,16 @@ jobs:
           if [ "$API_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$API_MASTER_COVERAGE_AVAILABLE" = "true" ]; then
             API_STATUS=$([ "${{ needs.api_e2e.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$API_STATUS" = "failure" ]; then
+              echo "Overall status: failure"
+              exit 1
+            fi
+          fi
+
+          APP_MODULE_CHANGED=$([ "${{ needs.determine_app_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          APP_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_app_master_coverage_available }}" = "false" ] && echo "true" || echo "false") # Generated
+          if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$APP_MASTER_COVERAGE_AVAILABLE" = "true" ]; then
+            APP_STATUS=$([ "${{ needs.app_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "$APP_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
             fi
@@ -665,7 +825,7 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: ${{ needs.api_e2e.result != 'skipped' && env.API_COVERAGE_ARTIFACT_NAME_WF || env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: ${{ env.API_COVERAGE_DIRECTORY }}
+          path: ${{ env.API_MERGED_COVERAGE_DIRECTORY }}
 
       - name: Publish API Coverage To Codecov
         uses: codecov/codecov-action@v5
@@ -674,6 +834,21 @@ jobs:
           files: ${{ env.API_COVERAGE_REPORT }}
           disable_search: true
           flags: api
+          fail_ci_if_error: true
+
+      - name: Restore App Coverage Report
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.app_ci.result != 'skipped' && env.APP_COVERAGE_ARTIFACT_NAME_WF || env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
+          path: ${{ env.APP_MERGED_COVERAGE_DIRECTORY }}
+
+      - name: Publish App Coverage To Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.APP_COVERAGE_REPORT }}
+          disable_search: true
+          flags: app
           fail_ci_if_error: true
 
       - name: Restore lcov Docker image
@@ -712,7 +887,7 @@ jobs:
       - name: Verify Coverage 3rd Party Reporting
         run: |
           # Check Codecov status using the Codecov API
-            MAX_RETRIES=30
+            MAX_RETRIES=10
             RETRY_COUNT=0
             while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
               OWNER_REPO=(${GITHUB_REPOSITORY/\// })

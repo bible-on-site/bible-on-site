@@ -30,12 +30,20 @@ env = { PROFILE = "test" }
 command = "cargo"
 args = ["llvm-cov", "run", "--profile", "dev", "--no-report"]
 
-[tasks.coverage-dir-create]
+[tasks.coverage-e2e-dir-create]
 command = "mkdir"
-args = ["-p", ".coverage"]
+args = ["-p", ".coverage/e2e"]
+
+[tasks.coverage-unit-dir-create]
+command = "mkdir"
+args = ["-p", ".coverage/unit"]
+
+[tasks.coverage-merged-dir-create]
+command = "mkdir"
+args = ["-p", ".coverage/merged"]
 
 [tasks.coverage-report-lcov]
-dependencies = ["coverage-dir-create"]
+dependencies = ["coverage-e2e-dir-create"]
 command = "cargo"
 args = [
   "llvm-cov",
@@ -44,7 +52,7 @@ args = [
   "dev",
   "--lcov",
   "--output-path",
-  ".coverage/lcov.info",
+  ".coverage/e2e/lcov.info",
 ]
 
 [tasks.coverage-report-browser]
@@ -72,9 +80,55 @@ args = ["run", "--profile", "dev"]
 command = "${NPM_BIN}"
 args = ["run", "--prefix", "tests", "test:e2e"]
 
+[tasks.test-unit]
+command = "cargo"
+args = ["test"]
+
+[tasks.coverage-unit-lcov]
+dependencies = ["coverage-unit-dir-create"]
+command = "cargo"
+args = [
+  "llvm-cov",
+  "test",
+  "--lcov",
+  "--output-path",
+  ".coverage/unit/lcov.info",
+]
+
+[tasks.coverage-unit-junit]
+command = "cargo"
+args = ["nextest", "run", "--profile", "ci"]
+
+# TODO: run unit tests only once and report both lcov and junit. There should be some good alternative. Worse alternative: once cargo2junit supports output path configuration, add it here to output to .junit-report/unit/
+[tasks.coverage-unit]
+dependencies = ["coverage-unit-lcov", "coverage-unit-junit"]
+
 [tasks.coverage-e2e]
 command = "${NPM_BIN}"
 args = ["run", "--prefix", "tests", "coverage:e2e"]
+
+[tasks.coverage-merge]
+command = "docker"
+dependencies = ["coverage-merged-dir-create"]
+args = [
+  "run",
+  "--rm",
+  "-t",
+  "-v",
+  "${CARGO_MAKE_WORKING_DIRECTORY}/.coverage:/.coverage",
+  "lcov-cli:0.0.2",
+  "--rc",
+  "branch_coverage=1",
+  "-a",
+  "/.coverage/unit/lcov.info",
+  "-a",
+  "/.coverage/e2e/lcov.info",
+  "-o",
+  "/.coverage/merged/lcov.info",
+]
+
+[tasks.coverage-all]
+dependencies = ["coverage-unit", "coverage-e2e", "coverage-merge"]
 
 [tasks.bump-patch-version]
 command = "cargo"
