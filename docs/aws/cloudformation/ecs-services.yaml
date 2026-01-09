@@ -250,48 +250,105 @@ Resources:
           Value: website
 
   # =============================================================================
-  # Future: API Service (Rust)
+  # Cloud Map Service: API
   # =============================================================================
-  # Uncomment when API is ready for deployment
-  #
-  # ApiServiceDiscovery:
-  #   Type: AWS::ServiceDiscovery::Service
-  #   Properties:
-  #     Name: api
-  #     NamespaceId: !Ref ServiceDiscoveryNamespace
-  #     DnsConfig:
-  #       RoutingPolicy: MULTIVALUE
-  #       DnsRecords:
-  #         - Type: A
-  #           TTL: 10
-  #     HealthCheckCustomConfig:
-  #       FailureThreshold: 1
-  #
-  # ApiTaskDefinition:
-  #   Type: AWS::ECS::TaskDefinition
-  #   Properties:
-  #     Family: bible-on-site-api
-  #     NetworkMode: awsvpc
-  #     RequiresCompatibilities:
-  #       - FARGATE
-  #     Cpu: "256"
-  #     Memory: "512"
-  #     ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
-  #     ContainerDefinitions:
-  #       - Name: api
-  #         Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/bible-on-site-api:latest"
-  #         Essential: true
-  #         PortMappings:
-  #           - ContainerPort: 3003
-  #             HostPort: 3003
-  #             Protocol: tcp
-  #         LogConfiguration:
-  #           LogDriver: awslogs
-  #           Options:
-  #             awslogs-group: /ecs/bible-on-site-api
-  #             awslogs-create-group: "true"
-  #             awslogs-region: !Ref AWS::Region
-  #             awslogs-stream-prefix: ecs
+  # Registers as: api.bible-on-site.local
+  # nginx resolves this DNS name to get the ECS task IPs
+  ApiServiceDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: api
+      NamespaceId: !Ref ServiceDiscoveryNamespace
+      Description: Service discovery for bible-on-site API
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  # =============================================================================
+  # Task Definition: API (Rust)
+  # =============================================================================
+  ApiTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: bible-on-site-api
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: "256" # 0.25 vCPU
+      Memory: "512" # 512 MB
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: api
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/bible-on-site-api:latest"
+          Essential: true
+          PortMappings:
+            - ContainerPort: 3003
+              HostPort: 3003
+              Protocol: tcp
+          # TODO: Add container health check once /api/health endpoint is implemented
+          # HealthCheck:
+          #   Command:
+          #     - CMD-SHELL
+          #     - curl -f http://localhost:3003/api/health || exit 1
+          #   Interval: 30
+          #   Timeout: 10
+          #   Retries: 3
+          #   StartPeriod: 60
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: /ecs/bible-on-site-api
+              awslogs-create-group: "true"
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Environment:
+            - Name: PROFILE
+              Value: prod
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Component
+          Value: api
+
+  # =============================================================================
+  # ECS Service: API
+  # =============================================================================
+  ApiService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - ApiServiceDiscovery
+    Properties:
+      ServiceName: bible-on-site-api
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref ApiTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      PlatformVersion: LATEST
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets: !Ref SubnetIds
+          SecurityGroups:
+            - !Ref ECSSecurityGroupId
+          AssignPublicIp: ENABLED # Required for pulling from ECR without NAT Gateway
+      # Service Discovery - registers task IPs with Cloud Map
+      ServiceRegistries:
+        - RegistryArn: !GetAtt ApiServiceDiscovery.Arn
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+        DeploymentCircuitBreaker:
+          Enable: false
+          Rollback: false
+      EnableExecuteCommand: false
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Component
+          Value: api
 
 Outputs:
   ClusterArn:
