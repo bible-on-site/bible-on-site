@@ -87,6 +87,13 @@ public class ApiServerFixture : IAsyncLifetime
         // Set environment for test mode
         startInfo.Environment["PROFILE"] = "test";
 
+        // Forward DB_URL from environment (set by CI or local dev)
+        var dbUrl = Environment.GetEnvironmentVariable("DB_URL");
+        if (!string.IsNullOrEmpty(dbUrl))
+        {
+            startInfo.Environment["DB_URL"] = dbUrl;
+        }
+
         _apiProcess = new Process { StartInfo = startInfo };
 
         _apiProcess.OutputDataReceived += (_, e) =>

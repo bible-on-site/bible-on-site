@@ -2,7 +2,7 @@
 	"unwantedRecommendations": ["dbaeumer.vscode-eslint"],
 	"recommendations": [
 		"yzhang.markdown-all-in-one", // Markdown (General)
-		"github.vscode-github-actions", // GitHub Actions (Website, planned for API and App)
+		// "github.vscode-github-actions", // GitHub Actions (.github) - Disabled per docs/practices/implementation.md
 		"ms-playwright.playwright", // Playwright (Website, API)
 		"tamasfe.even-better-toml", // TOML (API)
 		"ms-dotnettools.csharp", // C# (App)

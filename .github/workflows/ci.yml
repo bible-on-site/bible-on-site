@@ -57,6 +57,7 @@ env:
   WEBSITE_PERF_JUNIT_REPORT_ARTIFACT_NAME: website-perf-junit-report-${{ github.run_id }}
   WEBSITE_UNIT_JUNIT_REPORT_ARTIFACT_NAME: website-unit-junit-report-${{ github.run_id }}
   APP_UNIT_JUNIT_REPORT_ARTIFACT_NAME: app-unit-junit-report-${{ github.run_id }}
+  APP_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME: app-integration-junit-report-${{ github.run_id }}
 
 jobs:
   setup_env:
@@ -617,7 +618,7 @@ jobs:
   app_ci:
     name: App CI
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_app_changes, determine_baseline_availability]
+    needs: [setup_env, determine_app_changes, determine_baseline_availability, build_lcov_docker]
     if: ${{ needs.determine_app_changes.outputs.module_changed == 'true' || needs.determine_app_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_app_master_coverage_available == 'false' }}
     defaults:
       run:
@@ -668,11 +669,70 @@ jobs:
           flags: app
           report_type: test_results
 
-      # TODO: that's a workaround, a placeholder before implementing integration tests with coverage in CI
-      - name: Copy Coverage to Output Location
-        run: |
-          mkdir -p .coverage/merged
-          cp .coverage/unit/lcov.info .coverage/merged/lcov.info
+      # ============ Integration Tests Setup ============
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-make
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ${{ env.API_DIRECTORY }}
+            ${{ env.DATA_DIRECTORY }}
+
+      - name: Install and start MySQL
+        id: mysql
+        uses: shogo82148/actions-setup-mysql@v1
+        with:
+          mysql-version: "8.4"
+          root-password: test_123
+          distribution: "mysql"
+          auto-start: true
+
+      - name: Populate Test Database
+        working-directory: ${{ env.DATA_DIRECTORY }}
+        env:
+          DB_URL: mysql://root:test_123@127.0.0.1:${{ steps.mysql.outputs.port }}/tanah_test
+        run: cargo make mysql-populate
+
+      - name: Run Integration Tests with Coverage
+        env:
+          DB_URL: mysql://root:test_123@127.0.0.1:${{ steps.mysql.outputs.port }}/tanah_test
+        run: dotnet run --project devops -- CoverageIntegration --configuration Release
+
+      - name: Store App Integration JUnit Report
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.APP_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME }}
+          path: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
+          retention-days: 1
+          overwrite: true
+
+      - name: Publish App Integration Report To Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
+          flags: app
+          report_type: test_results
+
+      # ============ Coverage Merge ============
+      - name: Restore lcov Docker image
+        uses: actions/download-artifact@v7
+        with:
+          name: lcov-docker-image
+          path: /tmp
+
+      - name: Load lcov Docker image
+        run: docker load --input /tmp/lcov-docker-image.tar
+
+      - name: Merge Coverage Reports
+        run: dotnet run --project devops -- CoverageMerge --configuration Release
 
       - name: Store App Coverage Report (wf)
         uses: actions/upload-artifact@v6

@@ -135,8 +135,6 @@ When modifying the AWS infrastructure process, always update `docs/aws/` to refl
 Before modifying `.github/workflows/` files:
 
 1. **Re-enable GitHub Actions extension** in VS Code:
-   - Open `.vscode/settings.json`
-   - Remove or set `"github-actions.enable": true`
-   - Remove the TODO comment about re-enabling
+   - Install `github.vscode-github-actions` if not already installed.
 
-2. After completing workflow changes, disable the extension again as it causes noise by setting `"github-actions.enable": false`.
+2. After completing workflow changes, remove the extension as there is some noise created by it (it's polluting the problems view).
