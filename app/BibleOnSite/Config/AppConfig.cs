@@ -38,12 +38,26 @@ public sealed class AppConfig
 
     /// <summary>
     /// Gets the appropriate API URL based on build configuration.
+    /// Can be overridden by setting the API_URL environment variable.
     /// </summary>
     public string GetApiUrl()
     {
+        // Allow environment variable override for testing
+        var envApiUrl = Environment.GetEnvironmentVariable("API_URL");
+        if (!string.IsNullOrEmpty(envApiUrl))
+        {
+            // TODO: remove me - debug logging
+            Console.WriteLine($"[DEBUG] GetApiUrl: Using API_URL env var: {envApiUrl}");
+            return envApiUrl;
+        }
+
 #if DEBUG
+        // TODO: remove me - debug logging
+        Console.WriteLine($"[DEBUG] GetApiUrl: Using DevApiUrl (DEBUG build): {DevApiUrl}");
         return DevApiUrl;
 #else
+        // TODO: remove me - debug logging
+        Console.WriteLine($"[DEBUG] GetApiUrl: Using ApiUrl (RELEASE build): {ApiUrl}");
         return ApiUrl;
 #endif
     }
