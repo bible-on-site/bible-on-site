@@ -37,6 +37,7 @@ env:
   APP_COVERAGE_ARTIFACT_NAME_WF: app-coverage.${{ github.run_id }}
   APP_COVERAGE_DIRECTORY: app/.coverage
   APP_COVERAGE_REPORT: app/.coverage/merged/lcov.info
+  APP_MERGED_COVERAGE_DIRECTORY: app/.coverage/merged
   APP_DIRECTORY: app
   CROSS_MODULE_COVERAGE_REPORT: .coverage/lcov.info
   DATA_DIRECTORY: data
@@ -839,7 +840,7 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: ${{ needs.app_ci.result != 'skipped' && env.APP_COVERAGE_ARTIFACT_NAME_WF || env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: ${{ env.APP_COVERAGE_DIRECTORY }}
+          path: ${{ env.APP_MERGED_COVERAGE_DIRECTORY }}
 
       - name: Publish App Coverage To Codecov
         uses: codecov/codecov-action@v5
