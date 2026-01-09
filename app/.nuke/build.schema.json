@@ -37,6 +37,7 @@
         "Lint",
         "Package",
         "Restore",
+        "RestoreTests",
         "RunAndroid",
         "RunIos",
         "RunMac",

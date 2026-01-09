@@ -5,10 +5,17 @@ using static Nuke.Common.Tools.DotNet.DotNetTasks;
 partial class Build
 {
     Target Restore => _ => _
-        .Description("Restore NuGet packages")
+        .Description("Restore NuGet packages for all projects")
         .Executes(() =>
         {
             DotNetRestore(s => s.SetProjectFile(MainProject));
+            DotNetRestore(s => s.SetProjectFile(TestProject));
+        });
+
+    Target RestoreTests => _ => _
+        .Description("Restore NuGet packages for test project only (no MAUI workloads needed)")
+        .Executes(() =>
+        {
             DotNetRestore(s => s.SetProjectFile(TestProject));
         });
 
@@ -44,11 +51,11 @@ partial class Build
         });
 
     /// <summary>
-    /// Compile only the test project (fastest for local development).
+    /// Compile only the test project (fastest for local development, no MAUI workloads needed).
     /// </summary>
     Target CompileTests => _ => _
-        .Description("Build test project only (fastest)")
-        .DependsOn(Restore)
+        .Description("Build test project only (fastest, no MAUI workloads needed)")
+        .DependsOn(RestoreTests)
         .Executes(() =>
         {
             DotNetBuild(s => s
