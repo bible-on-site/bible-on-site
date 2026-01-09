@@ -30,12 +30,20 @@ env = { PROFILE = "test" }
 command = "cargo"
 args = ["llvm-cov", "run", "--profile", "dev", "--no-report"]
 
-[tasks.coverage-dir-create]
+[tasks.coverage-e2e-dir-create]
 command = "mkdir"
-args = ["-p", ".coverage"]
+args = ["-p", ".coverage/e2e"]
+
+[tasks.coverage-unit-dir-create]
+command = "mkdir"
+args = ["-p", ".coverage/unit"]
+
+[tasks.coverage-merged-dir-create]
+command = "mkdir"
+args = ["-p", ".coverage/merged"]
 
 [tasks.coverage-report-lcov]
-dependencies = ["coverage-dir-create"]
+dependencies = ["coverage-e2e-dir-create"]
 command = "cargo"
 args = [
   "llvm-cov",
@@ -44,7 +52,7 @@ args = [
   "dev",
   "--lcov",
   "--output-path",
-  ".coverage/lcov.info",
+  ".coverage/e2e/lcov.info",
 ]
 
 [tasks.coverage-report-browser]
@@ -72,9 +80,47 @@ args = ["run", "--profile", "dev"]
 command = "${NPM_BIN}"
 args = ["run", "--prefix", "tests", "test:e2e"]
 
+[tasks.test-unit]
+command = "cargo"
+args = ["test"]
+
+[tasks.coverage-unit]
+command = "cargo"
+dependencies = ["coverage-unit-dir-create"]
+args = [
+  "llvm-cov",
+  "test",
+  "--lcov",
+  "--output-path",
+  ".coverage/unit/lcov.info",
+]
+
 [tasks.coverage-e2e]
 command = "${NPM_BIN}"
 args = ["run", "--prefix", "tests", "coverage:e2e"]
+
+[tasks.coverage-merge]
+command = "docker"
+dependencies = ["coverage-merged-dir-create"]
+args = [
+  "run",
+  "--rm",
+  "-t",
+  "-v",
+  "${CARGO_MAKE_WORKING_DIRECTORY}/.coverage:/.coverage",
+  "lcov-cli:0.0.2",
+  "--rc",
+  "branch_coverage=1",
+  "-a",
+  "/.coverage/unit/lcov.info",
+  "-a",
+  "/.coverage/e2e/lcov.info",
+  "-o",
+  "/.coverage/merged/lcov.info",
+]
+
+[tasks.coverage-all]
+dependencies = ["coverage-unit", "coverage-e2e", "coverage-merge"]
 
 [tasks.bump-patch-version]
 command = "cargo"

@@ -63,14 +63,17 @@ Ideally, all modules should have unit tests, E2E tests, and performance tests. T
 | Module  | Unit Tests | E2E Tests | Performance Tests |
 | ------- | ---------- | --------- | ----------------- |
 | Website | ✅         | ✅        | ✅                |
-| API     | ❌         | ✅        | ❌                |
+| API     | 🚧         | ✅        | ❌                |
 | App     | ✅         | ✅        | ❌                |
+
+> **TODO (API Unit Tests)**: Extend API unit test coverage with mocking (using `mockall`) to test DB failure scenarios (internal_server_error paths). Once complete, set up coverage merging (unit + E2E) similar to website pattern: add `coverage-all` and `coverage-merge` tasks to Makefile.toml that use the shared lcov-cli Docker image.
 
 ### Unit Tests
 
 Unit tests verify individual functions, components, and modules in isolation. They run quickly and provide fast feedback during development.
 
 - **Website**: Uses Jest with SWC transformation
+- **API**: Uses Cargo test with inline `#[cfg(test)]` modules. Run with `cargo make test-unit`
 - **App**: Uses xUnit with FluentAssertions and Moq (tests in `BibleOnSite.Tests`)
 - See: [Website Coverage Documentation](./website/coverage/coverage.md)
 

@@ -19,7 +19,7 @@ function main() {
 	mkdirSync(logDir, { recursive: true });
 	const out = openSync(path.resolve(logDir, "api.log"), "w");
 	const shouldMeasureCov = process.argv.includes("--measure-cov");
-	const coverageFilePath = path.resolve(__dirname, "../.coverage/lcov.info");
+	const coverageFilePath = path.resolve(__dirname, "../.coverage/e2e/lcov.info");
 
 	if (shouldMeasureCov) {
 		rmSync(coverageFilePath, { force: true });

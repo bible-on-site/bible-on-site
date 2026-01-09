@@ -167,3 +167,84 @@ impl Perek {
         Ok(count)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn number_to_hebrew_handles_invalid_numbers() {
+        // n <= 0 returns number as string
+        assert_eq!(number_to_hebrew(0), "0");
+        assert_eq!(number_to_hebrew(-1), "-1");
+        assert_eq!(number_to_hebrew(-100), "-100");
+
+        // n > 999 returns number as string
+        assert_eq!(number_to_hebrew(1000), "1000");
+        assert_eq!(number_to_hebrew(5785), "5785");
+    }
+
+    #[test]
+    fn number_to_hebrew_handles_valid_numbers() {
+        // Single digit (gets geresh ׳)
+        assert_eq!(number_to_hebrew(1), "א׳");
+        assert_eq!(number_to_hebrew(5), "ה׳");
+
+        // Two digits (gets gershayim ״)
+        assert_eq!(number_to_hebrew(10), "י׳");
+        assert_eq!(number_to_hebrew(11), "י״א");
+        assert_eq!(number_to_hebrew(22), "כ״ב");
+
+        // Special cases: 15 and 16
+        assert_eq!(number_to_hebrew(15), "ט״ו");
+        assert_eq!(number_to_hebrew(16), "ט״ז");
+
+        // Three digits
+        assert_eq!(number_to_hebrew(100), "ק׳");
+        assert_eq!(number_to_hebrew(785), "תשפ״ה");
+        assert_eq!(number_to_hebrew(999), "תתקצ״ט"); // 900+90+9 = ת + ת + ק + צ + ט
+    }
+
+    #[test]
+    fn add_gershayim_handles_empty_string() {
+        assert_eq!(add_gershayim(""), "");
+    }
+
+    #[test]
+    fn hebrew_month_name_covers_all_months() {
+        // Non-leap year months
+        assert_eq!(hebrew_month_name(1, false), "תשרי");
+        assert_eq!(hebrew_month_name(2, false), "חשון");
+        assert_eq!(hebrew_month_name(3, false), "כסלו");
+        assert_eq!(hebrew_month_name(4, false), "טבת");
+        assert_eq!(hebrew_month_name(5, false), "שבט");
+        assert_eq!(hebrew_month_name(6, false), "אדר"); // Non-leap year Adar
+        assert_eq!(hebrew_month_name(7, false), "ניסן");
+        assert_eq!(hebrew_month_name(8, false), "אייר");
+        assert_eq!(hebrew_month_name(9, false), "סיון");
+        assert_eq!(hebrew_month_name(10, false), "תמוז");
+        assert_eq!(hebrew_month_name(11, false), "אב");
+        assert_eq!(hebrew_month_name(12, false), "אלול");
+
+        // Leap year months
+        assert_eq!(hebrew_month_name(6, true), "אדר א׳"); // Leap year Adar I
+        assert_eq!(hebrew_month_name(13, true), "אדר א׳");
+        assert_eq!(hebrew_month_name(14, true), "אדר ב׳");
+
+        // Invalid month
+        assert_eq!(hebrew_month_name(0, false), "?");
+        assert_eq!(hebrew_month_name(15, false), "?");
+        assert_eq!(hebrew_month_name(-1, false), "?");
+    }
+
+    #[test]
+    fn is_hebrew_leap_year_works_correctly() {
+        // Leap years in the 19-year cycle are at positions 3, 6, 8, 11, 14, 17, 19
+        // 5784 is position 8 in cycle -> leap year
+        assert!(is_hebrew_leap_year(5784));
+        // 5785 is position 9 in cycle -> not leap year
+        assert!(!is_hebrew_leap_year(5785));
+        // 5787 is position 11 in cycle -> leap year
+        assert!(is_hebrew_leap_year(5787));
+    }
+}
