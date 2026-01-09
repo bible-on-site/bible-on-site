@@ -10,7 +10,6 @@
 	},
 	// TODO: Re-enable GitHub Actions extension when modifying workflows
 	// See docs/practices/implementation.md for instructions
-	"github-actions.enable": false,
 	"[javascript]": {
 		"editor.defaultFormatter": "biomejs.biome"
 	},
@@ -20,7 +19,6 @@
 	"[json]": {
 		"editor.defaultFormatter": "biomejs.biome"
 	},
-
 	"rust-analyzer.linkedProjects": [
 		"web/api/Cargo.toml",
 		"web/api/entities/Cargo.toml"
