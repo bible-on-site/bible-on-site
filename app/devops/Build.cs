@@ -188,48 +188,144 @@ class Build : NukeBuild
         });
 
     // ============ Coverage Targets ============
+
+    AbsolutePath CoverageDirectory => RootDirectory / ".coverage";
+    AbsolutePath UnitCoverageDirectory => CoverageDirectory / "unit";
+    AbsolutePath IntegrationCoverageDirectory => CoverageDirectory / "integration";
+    AbsolutePath MergedCoverageDirectory => CoverageDirectory / "merged";
+    AbsolutePath RunSettingsFile => RootDirectory / "coverlet.runsettings";
+
     Target CoverageUnit => _ => _
         .Description("Run unit tests with coverage")
-        .DependsOn(Compile)
+        .DependsOn(CompileTests)
         .Executes(() =>
         {
-            // TODO: Add coverlet or other coverage tool
-            // DotNetTest with --collect:"XPlat Code Coverage"
-            Serilog.Log.Information("Coverage target not yet implemented - add coverlet integration");
+            // Clean previous coverage
+            UnitCoverageDirectory.CreateOrCleanDirectory();
 
             DotNetTest(s => s
-                .SetProjectFile(TestsDirectory / "BibleOnSite.Tests.csproj")
+                .SetProjectFile(TestProject)
                 .SetConfiguration(Configuration)
                 .SetFilter("Category!=Integration")
                 .EnableNoRestore()
                 .EnableNoBuild()
+                .SetResultsDirectory(UnitCoverageDirectory)
+                .SetSettingsFile(RunSettingsFile)
                 .SetDataCollector("XPlat Code Coverage"));
+
+            // Find and copy the coverage file to a predictable location
+            var coverageFiles = UnitCoverageDirectory.GlobFiles("**/coverage.cobertura.xml");
+            if (coverageFiles.Count > 0)
+            {
+                var destFile = UnitCoverageDirectory / "coverage.cobertura.xml";
+                if (coverageFiles.First() != destFile)
+                    FileSystemTasks.CopyFile(coverageFiles.First(), destFile, FileExistsPolicy.Overwrite);
+                Serilog.Log.Information($"Unit coverage report: {destFile}");
+            }
+            else
+            {
+                Serilog.Log.Warning("No unit coverage file was generated");
+            }
         });
 
     Target CoverageIntegration => _ => _
-        .Description("Run integration tests with coverage")
-        .DependsOn(Compile)
+        .Description("Run integration tests with coverage (requires API server)")
+        .DependsOn(CompileTests)
         .Executes(() =>
         {
-            // TODO: Start API server if not running
+            // Clean previous coverage
+            IntegrationCoverageDirectory.CreateOrCleanDirectory();
 
             DotNetTest(s => s
-                .SetProjectFile(TestsDirectory / "BibleOnSite.Tests.csproj")
+                .SetProjectFile(TestProject)
                 .SetConfiguration(Configuration)
                 .SetFilter("Category=Integration")
                 .EnableNoRestore()
                 .EnableNoBuild()
+                .SetResultsDirectory(IntegrationCoverageDirectory)
+                .SetSettingsFile(RunSettingsFile)
                 .SetDataCollector("XPlat Code Coverage"));
+
+            // Find and copy the coverage file to a predictable location
+            var coverageFiles = IntegrationCoverageDirectory.GlobFiles("**/coverage.cobertura.xml");
+            if (coverageFiles.Count > 0)
+            {
+                var destFile = IntegrationCoverageDirectory / "coverage.cobertura.xml";
+                if (coverageFiles.First() != destFile)
+                    FileSystemTasks.CopyFile(coverageFiles.First(), destFile, FileExistsPolicy.Overwrite);
+                Serilog.Log.Information($"Integration coverage report: {destFile}");
+            }
+            else
+            {
+                Serilog.Log.Warning("No integration coverage file was generated");
+            }
+        });
+
+    Target CoverageMerge => _ => _
+        .Description("Merge unit and integration coverage reports into LCOV format")
+        .Executes(() =>
+        {
+            MergedCoverageDirectory.CreateOrCleanDirectory();
+
+            // Collect all Cobertura XML files
+            var coverageFiles = new List<AbsolutePath>();
+            var unitFile = UnitCoverageDirectory / "coverage.cobertura.xml";
+            var integrationFile = IntegrationCoverageDirectory / "coverage.cobertura.xml";
+
+            if (unitFile.FileExists())
+                coverageFiles.Add(unitFile);
+            if (integrationFile.FileExists())
+                coverageFiles.Add(integrationFile);
+
+            if (coverageFiles.Count == 0)
+            {
+                Serilog.Log.Warning("No coverage files found to merge");
+                return;
+            }
+
+            // Use dotnet-coverage tool to merge and convert to LCOV
+            // First, try to ensure dotnet-coverage is available
+            var mergeResult = DotNetTasks.DotNet($"tool run dotnet-coverage merge " +
+                $"{string.Join(" ", coverageFiles.Select(f => $"\"{f}\""))} " +
+                $"--output \"{MergedCoverageDirectory / "lcov.info"}\" " +
+                $"--output-format lcov",
+                workingDirectory: RootDirectory,
+                exitHandler: p => p.ExitCode);
+
+            if (mergeResult != 0)
+            {
+                Serilog.Log.Warning("dotnet-coverage merge failed. Trying reportgenerator fallback...");
+
+                // Fallback: Use ReportGenerator to merge and convert
+                var reportGenResult = DotNetTasks.DotNet($"tool run reportgenerator " +
+                    $"-reports:{string.Join(";", coverageFiles)} " +
+                    $"-targetdir:\"{MergedCoverageDirectory}\" " +
+                    $"-reporttypes:lcov",
+                    workingDirectory: RootDirectory,
+                    exitHandler: p => p.ExitCode);
+
+                if (reportGenResult != 0)
+                {
+                    Serilog.Log.Error("Failed to merge coverage reports. Ensure dotnet-coverage or reportgenerator is installed.");
+                    return;
+                }
+            }
+
+            var lcovFile = MergedCoverageDirectory / "lcov.info";
+            if (lcovFile.FileExists())
+            {
+                Serilog.Log.Information($"Merged coverage report: {lcovFile}");
+            }
+            else
+            {
+                Serilog.Log.Warning("Merged LCOV file was not generated");
+            }
         });
 
     Target CoverageAll => _ => _
         .Description("Run all tests with coverage and merge reports")
         .DependsOn(CoverageUnit, CoverageIntegration)
-        .Executes(() =>
-        {
-            // TODO: Merge coverage reports
-            Serilog.Log.Information("Coverage merge not yet implemented");
-        });
+        .Triggers(CoverageMerge);
 
     // ============ Run / Launch Targets ============
 

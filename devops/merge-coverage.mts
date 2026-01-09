@@ -17,6 +17,10 @@ const apiCoverageFilePath = path.resolve(
 	__dirname,
 	"../web/api/.coverage/lcov.info",
 );
+const appCoverageFilePath = path.resolve(
+	__dirname,
+	"../app/.coverage/merged/lcov.info",
+);
 const outputDir = path.resolve(__dirname, "..", ".coverage");
 const outputFilePath = path.resolve(outputDir, "lcov.info");
 
@@ -29,6 +33,13 @@ try {
 const stream = fs.createWriteStream(outputFilePath);
 stream.write(await fs.promises.readFile(websiteCoverageFilePath));
 stream.write(await fs.promises.readFile(apiCoverageFilePath));
+
+// App coverage is optional - only include if the file exists
+if (fs.existsSync(appCoverageFilePath)) {
+	stream.write(await fs.promises.readFile(appCoverageFilePath));
+	await fs.promises.rm(path.dirname(appCoverageFilePath), { recursive: true });
+}
+
 stream.end();
 
 await fs.promises.rm(websiteCoverageDir, { recursive: true });

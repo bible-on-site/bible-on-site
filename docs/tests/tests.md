@@ -75,7 +75,7 @@ Unit tests verify individual functions, components, and modules in isolation. Th
 - **Website**: Uses Jest with SWC transformation
 - **API**: Uses Cargo test with inline `#[cfg(test)]` modules. Run with `cargo make test-unit`
 - **App**: Uses xUnit with FluentAssertions and Moq (tests in `BibleOnSite.Tests`)
-- See: [Website Coverage Documentation](./website/coverage/coverage.md)
+- See: [Website Coverage Documentation](./website/coverage/coverage.md), [App Coverage Documentation](./app/coverage/coverage.md)
 
 ### End-to-End (E2E) Tests
 
@@ -84,7 +84,7 @@ E2E tests verify complete user flows through the application, testing the integr
 - **Website**: Uses Playwright with Monocart reporter
 - **API**: Uses Playwright with cargo-make orchestration
 - **App**: Uses xUnit with FlaUI for Windows UI Automation (tests in `BibleOnSite.Tests.E2E`)
-- See: [Website Coverage Documentation](./website/coverage/coverage.md), [API Coverage Documentation](./api/coverage/coverage.md)
+- See: [Website Coverage Documentation](./website/coverage/coverage.md), [API Coverage Documentation](./api/coverage/coverage.md), [App Coverage Documentation](./app/coverage/coverage.md)
 
 ### Performance & Benchmarking
 
