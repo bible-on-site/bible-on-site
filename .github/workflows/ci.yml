@@ -631,8 +631,11 @@ jobs:
       - name: Run Unit Tests with Coverage
         run: dotnet run --project devops -- CoverageUnit --configuration Release
 
-      - name: Merge Coverage Reports
-        run: dotnet run --project devops -- CoverageMerge
+      # TODO: that's a workaround, a placeholder before implementing integration tests with coverage in CI
+      - name: Copy Coverage to Output Location
+        run: |
+          mkdir -p .coverage/merged
+          cp .coverage/unit/lcov.info .coverage/merged/lcov.info
 
       - name: Store App Coverage Report (wf)
         uses: actions/upload-artifact@v6

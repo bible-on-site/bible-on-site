@@ -2,9 +2,11 @@
 
 ## Overview
 
-The App module (`app/`) uses Coverlet for .NET coverage instrumentation. Coverage is collected during unit and integration test runs using the `XPlat Code Coverage` data collector, then merged and converted to LCOV format using ReportGenerator.
+The App module (`app/`) uses Coverlet for .NET coverage instrumentation. Coverage is collected during unit and integration test runs using the `XPlat Code Coverage` data collector, then converted to LCOV format using ReportGenerator.
 
 ## Architecture
+
+Each coverage target runs tests and generates LCOV internally:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -20,21 +22,19 @@ The App module (`app/`) uses Coverlet for .NET coverage instrumentation. Coverag
                               │
                               ▼
               ┌───────────────────────────────────────┐
-              │   Cobertura XML Reports              │
-              │   (.coverage/unit/, .coverage/       │
-              │    integration/)                      │
+              │   Cobertura XML (intermediate)        │
               └───────────────────────────────────────┘
                               │
                               ▼
               ┌───────────────────────────────────────┐
-              │   ReportGenerator                     │
-              │   (dotnet tool)                       │
+              │   ReportGenerator (internal)          │
               └───────────────────────────────────────┘
                               │
                               ▼
               ┌───────────────────────────────────────┐
               │   LCOV Report                         │
-              │   (.coverage/merged/lcov.info)        │
+              │   (.coverage/unit/lcov.info or        │
+              │    .coverage/integration/lcov.info)   │
               └───────────────────────────────────────┘
                               │
                               ▼
@@ -49,20 +49,20 @@ The app uses [NUKE Build](https://nuke.build/) ([devops/Build.cs](../../../../ap
 
 ### Coverage Targets
 
-| Target                | Description                                              |
-| --------------------- | -------------------------------------------------------- |
-| `CoverageUnit`        | Run unit tests with coverage (excludes Integration)      |
-| `CoverageIntegration` | Run integration tests with coverage (requires API)       |
-| `CoverageMerge`       | Merge coverage reports and convert to LCOV               |
-| `CoverageAll`         | Run both unit + integration coverage, then merge         |
+| Target                | Description                                                         |
+| --------------------- | ------------------------------------------------------------------- |
+| `CoverageUnit`        | Run unit tests with coverage → outputs `.coverage/unit/lcov.info`   |
+| `CoverageIntegration` | Run integration tests with coverage → outputs `.coverage/integration/lcov.info` |
+| `CoverageMerge`       | Merge unit + integration LCOV files → outputs `.coverage/merged/lcov.info` |
+| `CoverageAll`         | Run both unit + integration coverage, then merge                    |
 
-### Target Dependencies
+### Target Flow
 
 ```
-CoverageAll
-    ├── CoverageUnit        ← Unit tests, generates .coverage/unit/coverage.cobertura.xml
-    ├── CoverageIntegration ← Integration tests, generates .coverage/integration/coverage.cobertura.xml
-    └── Triggers: CoverageMerge ← Merges both into .coverage/merged/lcov.info
+CoverageUnit        → .coverage/unit/lcov.info
+CoverageIntegration → .coverage/integration/lcov.info
+CoverageMerge       → .coverage/merged/lcov.info (from unit + integration)
+CoverageAll         → Runs Unit + Integration, then triggers Merge
 ```
 
 ## Configuration
@@ -78,9 +78,11 @@ Coverage collection is configured via a runsettings file:
       <DataCollector friendlyName="XPlat Code Coverage">
         <Configuration>
           <Format>cobertura</Format>
-          <Include>[BibleOnSite]*</Include>
-          <Exclude>[*.Tests]*,[*.Tests.E2E]*,[xunit.*]*,[FluentAssertions]*,[Moq]*</Exclude>
+          <ExcludeByFile>**/obj/**,**/bin/**,**/.nuget/**</ExcludeByFile>
+          <Include>[BibleOnSite.Tests]*</Include>
+          <Exclude>[xunit.*]*,[FluentAssertions]*,[Moq]*,[coverlet.*]*,[Microsoft.*]*</Exclude>
           <ExcludeByAttribute>Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
+          <IncludeTestAssembly>true</IncludeTestAssembly>
           <SkipAutoProps>true</SkipAutoProps>
         </Configuration>
       </DataCollector>
@@ -90,8 +92,10 @@ Coverage collection is configured via a runsettings file:
 ```
 
 Key configuration:
-- **Include**: Only cover `BibleOnSite` namespace
-- **Exclude**: Skip test assemblies and third-party libraries
+- **Include**: Coverage is collected on `BibleOnSite.Tests` assembly (which includes linked source files from BibleOnSite)
+- **IncludeTestAssembly**: Set to `true` because source files are linked into the test project
+- **Exclude**: Skip test frameworks and third-party libraries
+- **ExcludeByFile**: Skip build artifacts and NuGet cache
 - **ExcludeByAttribute**: Skip generated code and explicitly excluded code
 - **SkipAutoProps**: Don't count auto-properties in coverage
 
@@ -110,13 +114,14 @@ cd app
 # Restore tools first
 dotnet tool restore
 
-# Run unit tests with coverage
+# Run unit tests with coverage (generates .coverage/unit/lcov.info)
 dotnet run --project devops -- CoverageUnit
 
-# Run integration tests with coverage (requires API server)
+# Run integration tests with coverage (generates .coverage/integration/lcov.info)
+# Note: Requires API server running at http://127.0.0.1:3003
 dotnet run --project devops -- CoverageIntegration
 
-# Merge coverage reports
+# Merge unit + integration coverage
 dotnet run --project devops -- CoverageMerge
 
 # Run everything (unit + integration + merge)
@@ -125,11 +130,11 @@ dotnet run --project devops -- CoverageAll
 
 ## Output Locations
 
-| Output                     | Path                                    |
-| -------------------------- | --------------------------------------- |
-| Unit coverage (Cobertura)  | `.coverage/unit/coverage.cobertura.xml` |
-| Integration coverage       | `.coverage/integration/coverage.cobertura.xml` |
-| Merged LCOV                | `.coverage/merged/lcov.info`            |
+| Output              | Path                                 |
+| ------------------- | ------------------------------------ |
+| Unit coverage       | `.coverage/unit/lcov.info`           |
+| Integration coverage| `.coverage/integration/lcov.info`    |
+| Merged coverage     | `.coverage/merged/lcov.info`         |
 
 ## Test Project Structure
 
@@ -163,8 +168,8 @@ In CI ([.github/workflows/ci.yml](../../../../.github/workflows/ci.yml)), the `a
 1. Checks out the repository
 2. Sets up .NET 9.0
 3. Restores dotnet tools and dependencies
-4. Runs unit tests with coverage via `CoverageUnit` target
-5. Merges coverage reports via `CoverageMerge` target
+4. Runs unit tests with coverage via `CoverageUnit` target (generates LCOV directly)
+5. Copies coverage to merged location for artifact upload
 6. Uploads coverage artifact for cross-module merge
 
 The coverage is then:

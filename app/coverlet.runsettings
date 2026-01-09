@@ -5,15 +5,15 @@
       <DataCollector friendlyName="XPlat Code Coverage">
         <Configuration>
           <Format>cobertura</Format>
-          <ExcludeByFile>**/obj/**,**/bin/**</ExcludeByFile>
-          <Include>[BibleOnSite]*</Include>
-          <Exclude>[*.Tests]*,[*.Tests.E2E]*,[xunit.*]*,[FluentAssertions]*,[Moq]*</Exclude>
+          <ExcludeByFile>**/obj/**,**/bin/**,**/.nuget/**</ExcludeByFile>
+          <Include>[BibleOnSite.Tests]*</Include>
+          <Exclude>[xunit.*]*,[FluentAssertions]*,[Moq]*,[coverlet.*]*,[Microsoft.*]*</Exclude>
           <ExcludeByAttribute>Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
           <SingleHit>false</SingleHit>
-          <UseSourceLink>true</UseSourceLink>
-          <IncludeTestAssembly>false</IncludeTestAssembly>
+          <UseSourceLink>false</UseSourceLink>
+          <IncludeTestAssembly>true</IncludeTestAssembly>
           <SkipAutoProps>true</SkipAutoProps>
-          <DeterministicReport>true</DeterministicReport>
+          <DeterministicReport>false</DeterministicReport>
         </Configuration>
       </DataCollector>
     </DataCollectors>

@@ -1,3 +1,4 @@
 .nuke/temp/
 **/bin/
 **/obj/
+.coverage/
