@@ -27,10 +27,12 @@ env:
   API_COVERAGE_DIRECTORY: web/api/.coverage
   API_COVERAGE_REPORT: web/api/.coverage/merged/lcov.info
   API_DIRECTORY: web/api
+  API_E2E_JUNIT_REPORT_ARTIFACT_NAME: api-e2e-junit-report-${{ github.run_id }}
   API_MERGED_COVERAGE_DIRECTORY: web/api/.coverage/merged
   API_TESTS_DIRECTORY: web/api/tests
   API_TESTS_NODE_CACHE_PATH: web/api/tests/package-lock.json
   API_TESTS_NODE_VERSION_FILE: web/api/tests/package.json
+  API_UNIT_JUNIT_REPORT_ARTIFACT_NAME: api-unit-junit-report-${{ github.run_id }}
   APP_COVERAGE_ARTIFACT_NAME_MASTER: app-coverage.master
   APP_COVERAGE_ARTIFACT_NAME_WF: app-coverage.${{ github.run_id }}
   APP_COVERAGE_DIRECTORY: app/.coverage
@@ -53,6 +55,7 @@ env:
   WEBSITE_NODE_VERSION_FILE: web/bible-on-site/package.json
   WEBSITE_PERF_JUNIT_REPORT_ARTIFACT_NAME: website-perf-junit-report-${{ github.run_id }}
   WEBSITE_UNIT_JUNIT_REPORT_ARTIFACT_NAME: website-unit-junit-report-${{ github.run_id }}
+  APP_UNIT_JUNIT_REPORT_ARTIFACT_NAME: app-unit-junit-report-${{ github.run_id }}
 
 jobs:
   setup_env:
@@ -457,7 +460,7 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make, cargo-llvm-cov
+          tool: cargo-make, cargo-llvm-cov, cargo-nextest
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -554,12 +557,34 @@ jobs:
         working-directory: ${{ env.API_DIRECTORY }}
         run: cargo make coverage-merge
 
-      - name: Publish API E2E Report To Codecov
+      - name: Store API Unit JUnit Report
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.API_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
+          path: ${{ env.API_DIRECTORY }}/.junit-report/unit/results.xml
+          retention-days: 1
+          overwrite: true
+
+      - name: Store API E2E JUnit Report
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.API_E2E_JUNIT_REPORT_ARTIFACT_NAME }}
+          path: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/junit/results.xml
+          retention-days: 1
+          overwrite: true
+
+      - name: List API JUnit files
+        id: list_api_junit_files
+        run: |
+          files="${{ env.API_DIRECTORY }}/.junit-report/unit/results.xml,${{ env.API_DIRECTORY }}/.playwright-report/e2e/junit/results.xml"
+          echo "junit_files=$files" >> $GITHUB_OUTPUT
+
+      - name: Publish API Unit/E2E Report To Codecov
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/junit/results.xml
+          files: ${{ steps.list_api_junit_files.outputs.junit_files }}
           flags: api
           report_type: test_results
 
@@ -622,14 +647,25 @@ jobs:
       - name: Restore dotnet tools
         run: dotnet tool restore
 
-      - name: Restore dependencies
-        run: dotnet restore BibleOnSite.Tests/BibleOnSite.Tests.csproj
-
-      - name: Build Test Project
-        run: dotnet build BibleOnSite.Tests/BibleOnSite.Tests.csproj --configuration Release --no-restore
-
       - name: Run Unit Tests with Coverage
         run: dotnet run --project devops -- CoverageUnit --configuration Release
+
+      - name: Store App Unit JUnit Report
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.APP_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
+          path: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
+          retention-days: 1
+          overwrite: true
+
+      - name: Publish App Unit Report To Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
+          flags: app
+          report_type: test_results
 
       # TODO: that's a workaround, a placeholder before implementing integration tests with coverage in CI
       - name: Copy Coverage to Output Location
@@ -850,7 +886,7 @@ jobs:
       - name: Verify Coverage 3rd Party Reporting
         run: |
           # Check Codecov status using the Codecov API
-            MAX_RETRIES=30
+            MAX_RETRIES=10
             RETRY_COUNT=0
             while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
               OWNER_REPO=(${GITHUB_REPOSITORY/\// })

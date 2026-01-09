@@ -84,9 +84,9 @@ args = ["run", "--prefix", "tests", "test:e2e"]
 command = "cargo"
 args = ["test"]
 
-[tasks.coverage-unit]
-command = "cargo"
+[tasks.coverage-unit-lcov]
 dependencies = ["coverage-unit-dir-create"]
+command = "cargo"
 args = [
   "llvm-cov",
   "test",
@@ -94,6 +94,14 @@ args = [
   "--output-path",
   ".coverage/unit/lcov.info",
 ]
+
+[tasks.coverage-unit-junit]
+command = "cargo"
+args = ["nextest", "run", "--profile", "ci"]
+
+# TODO: run unit tests only once and report both lcov and junit. There should be some good alternative. Worse alternative: once cargo2junit supports output path configuration, add it here to output to .junit-report/unit/
+[tasks.coverage-unit]
+dependencies = ["coverage-unit-lcov", "coverage-unit-junit"]
 
 [tasks.coverage-e2e]
 command = "${NPM_BIN}"

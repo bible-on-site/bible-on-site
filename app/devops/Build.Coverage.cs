@@ -12,6 +12,7 @@ partial class Build
     AbsolutePath IntegrationCoverageDirectory => CoverageDirectory / "integration";
     AbsolutePath MergedCoverageDirectory => CoverageDirectory / "merged";
     AbsolutePath RunSettingsFile => RootDirectory / "coverlet.runsettings";
+    AbsolutePath TestResultsDirectory => TestProject.Parent / "TestResults";
 
     /// <summary>
     /// Runs tests with coverage and converts the result to LCOV format.
@@ -19,6 +20,7 @@ partial class Build
     void RunTestsWithCoverage(AbsolutePath outputDirectory, string filter, string description)
     {
         outputDirectory.CreateOrCleanDirectory();
+        TestResultsDirectory.CreateOrCleanDirectory();
 
         DotNetTest(s => s
             .SetProjectFile(TestProject)
@@ -28,7 +30,8 @@ partial class Build
             .EnableNoBuild()
             .SetResultsDirectory(outputDirectory)
             .SetSettingsFile(RunSettingsFile)
-            .SetDataCollector("XPlat Code Coverage"));
+            .SetDataCollector("XPlat Code Coverage")
+            .AddLoggers($"junit;LogFileName={TestResultsDirectory / "test-results.xml"}"));
 
         // Find the Cobertura XML and convert to LCOV
         var coverageFiles = outputDirectory.GlobFiles("**/coverage.cobertura.xml");
