@@ -13,14 +13,10 @@ const websiteCoverageFilePath = path.resolve(
 	websiteCoverageDir,
 	"lcov.info",
 );
-const apiCoverageFilePath = path.resolve(
-	__dirname,
-	"../web/api/.coverage/lcov.info",
-);
-const appCoverageFilePath = path.resolve(
-	__dirname,
-	"../app/.coverage/merged/lcov.info",
-);
+const apiCoverageDir = path.resolve(__dirname, "../web/api/.coverage/merged");
+const apiCoverageFilePath = path.resolve(apiCoverageDir, "lcov.info");
+const appCoverageDir = path.resolve(__dirname, "../app/.coverage/merged");
+const appCoverageFilePath = path.resolve(appCoverageDir, "lcov.info");
 const outputDir = path.resolve(__dirname, "..", ".coverage");
 const outputFilePath = path.resolve(outputDir, "lcov.info");
 
@@ -37,10 +33,10 @@ stream.write(await fs.promises.readFile(apiCoverageFilePath));
 // App coverage is optional - only include if the file exists
 if (fs.existsSync(appCoverageFilePath)) {
 	stream.write(await fs.promises.readFile(appCoverageFilePath));
-	await fs.promises.rm(path.dirname(appCoverageFilePath), { recursive: true });
+	await fs.promises.rm(appCoverageDir, { recursive: true });
 }
 
 stream.end();
 
 await fs.promises.rm(websiteCoverageDir, { recursive: true });
-await fs.promises.rm(apiCoverageFilePath, { recursive: true });
+await fs.promises.rm(apiCoverageDir, { recursive: true });
