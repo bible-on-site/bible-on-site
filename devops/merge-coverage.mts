@@ -1,24 +1,24 @@
 import fs from "node:fs"; // Import the 'fs' module
-import path from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url); // get the resolved path to the file
-const __dirname = path.dirname(__filename); // get the name of the directory
-const websiteCoverageDir = path.resolve(
+const __dirname = dirname(__filename); // get the name of the directory
+const websiteCoverageDir = resolve(
 	__dirname,
 	"../web/bible-on-site/.coverage/merged",
 );
-const websiteCoverageFilePath = path.resolve(
+const websiteCoverageFilePath = resolve(
 	__dirname,
 	websiteCoverageDir,
 	"lcov.info",
 );
-const apiCoverageDir = path.resolve(__dirname, "../web/api/.coverage/merged");
-const apiCoverageFilePath = path.resolve(apiCoverageDir, "lcov.info");
-const appCoverageDir = path.resolve(__dirname, "../app/.coverage/merged");
-const appCoverageFilePath = path.resolve(appCoverageDir, "lcov.info");
-const outputDir = path.resolve(__dirname, "..", ".coverage");
-const outputFilePath = path.resolve(outputDir, "lcov.info");
+const apiCoverageDir = resolve(__dirname, "../web/api/.coverage/merged");
+const apiCoverageFilePath = resolve(apiCoverageDir, "lcov.info");
+const appCoverageDir = resolve(__dirname, "../app/.coverage/merged");
+const appCoverageFilePath = resolve(appCoverageDir, "lcov.info");
+const outputDir = resolve(__dirname, "..", ".coverage");
+const outputFilePath = resolve(outputDir, "lcov.info");
 
 try {
 	fs.mkdirSync(outputDir);
