@@ -1,13 +1,16 @@
 {
-  "version": 1,
-  "isRoot": true,
-  "tools": {
-    "nuke.globaltool": {
-      "version": "8.1.4",
-      "commands": [
-        "nuke"
-      ],
-      "rollForward": false
-    }
-  }
+	"version": 1,
+	"isRoot": true,
+	"tools": {
+		"nuke.globaltool": {
+			"version": "8.1.4",
+			"commands": ["nuke"],
+			"rollForward": false
+		},
+		"dotnet-reportgenerator-globaltool": {
+			"version": "5.4.4",
+			"commands": ["reportgenerator"],
+			"rollForward": false
+		}
+	}
 }

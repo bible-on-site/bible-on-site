@@ -5,7 +5,7 @@ import { shouldMeasureCov } from "../../shared/tests-util/environment.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const COVERAGE_FILE_PATH = path.resolve(__dirname, "../.coverage/lcov.info");
+const COVERAGE_FILE_PATH = path.resolve(__dirname, "../.coverage/e2e/lcov.info");
 const COVERAGE_DIR_PATH = path.dirname(COVERAGE_FILE_PATH);
 const COVERAGE_FILE_NAME = path.basename(COVERAGE_FILE_PATH);
 const COVERAGE_WAIT_TIMEOUT_MS = 30_000;

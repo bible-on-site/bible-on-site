@@ -174,3 +174,117 @@ pub async fn count_by_perek_id(db: &Database, perek_id: i32) -> Result<i64, Serv
     tracing::info!("Perek {} has {} articles", perek_id, count);
     Ok(count)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sea_orm::{DatabaseBackend, DbErr, MockDatabase};
+
+    fn create_mock_db_with_query_error(error_message: &str) -> Database {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_errors([DbErr::Custom(error_message.to_string())])
+            .into_connection();
+        Database::from_connection(mock_db)
+    }
+
+    #[tokio::test]
+    async fn find_one_by_id_returns_internal_server_error_on_db_failure() {
+        let db = create_mock_db_with_query_error("Connection lost");
+
+        let result = find_one_by_id(&db, 1).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ServiceError::InternalServerError(_)));
+        assert_eq!(err.to_string(), "Internal Server Error");
+    }
+
+    #[tokio::test]
+    async fn find_by_perek_id_returns_internal_server_error_on_db_failure() {
+        let db = create_mock_db_with_query_error("Database timeout");
+
+        let result = find_by_perek_id(&db, 1).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ServiceError::InternalServerError(_)));
+        assert_eq!(err.to_string(), "Internal Server Error");
+    }
+
+    #[tokio::test]
+    async fn find_by_author_id_returns_internal_server_error_on_db_failure() {
+        let db = create_mock_db_with_query_error("Query failed");
+
+        let result = find_by_author_id(&db, 1).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ServiceError::InternalServerError(_)));
+        assert_eq!(err.to_string(), "Internal Server Error");
+    }
+
+    #[tokio::test]
+    async fn count_by_perek_returns_internal_server_error_on_db_failure() {
+        let db = create_mock_db_with_query_error("Connection refused");
+
+        let result = count_by_perek(&db).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ServiceError::InternalServerError(_)));
+        assert_eq!(err.to_string(), "Internal Server Error");
+    }
+
+    #[tokio::test]
+    async fn count_by_author_id_returns_internal_server_error_on_db_failure() {
+        let db = create_mock_db_with_query_error("Network error");
+
+        let result = count_by_author_id(&db, 1).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ServiceError::InternalServerError(_)));
+        assert_eq!(err.to_string(), "Internal Server Error");
+    }
+
+    #[tokio::test]
+    async fn count_by_author_returns_internal_server_error_on_db_failure() {
+        let db = create_mock_db_with_query_error("Socket closed");
+
+        let result = count_by_author(&db).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ServiceError::InternalServerError(_)));
+        assert_eq!(err.to_string(), "Internal Server Error");
+    }
+
+    #[tokio::test]
+    async fn count_by_perek_id_returns_internal_server_error_on_db_failure() {
+        let db = create_mock_db_with_query_error("Timeout");
+
+        let result = count_by_perek_id(&db, 1).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ServiceError::InternalServerError(_)));
+        assert_eq!(err.to_string(), "Internal Server Error");
+    }
+
+    #[tokio::test]
+    async fn find_one_by_id_returns_not_found_when_article_does_not_exist() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<entities::article::Model, Vec<entities::article::Model>, _>([
+                vec![],
+            ])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let result = find_one_by_id(&db, 999).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ServiceError::NotFound(_)));
+        assert_eq!(err.to_string(), "Article Not Found");
+    }
+}
