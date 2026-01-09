@@ -8,6 +8,9 @@
 		"**/*.tanah_view.json": true,
 		"**/.output/**": true
 	},
+	// TODO: Re-enable GitHub Actions extension when modifying workflows
+	// See docs/practices/implementation.md for instructions
+	"github-actions.enable": false,
 	"[javascript]": {
 		"editor.defaultFormatter": "biomejs.biome"
 	},
