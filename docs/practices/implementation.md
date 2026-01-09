@@ -129,3 +129,14 @@ When working on the AWS infrastructure:
 - Do **not** invoke CloudFormation based on templates in `infrastructure/` as they are currently for reference only and never really tested
 
 When modifying the AWS infrastructure process, always update `docs/aws/` to reflect the changes.
+
+### GitHub Actions Workflows
+
+Before modifying `.github/workflows/` files:
+
+1. **Re-enable GitHub Actions extension** in VS Code:
+   - Open `.vscode/settings.json`
+   - Remove or set `"github-actions.enable": true`
+   - Remove the TODO comment about re-enabling
+
+2. After completing workflow changes, disable the extension again as it causes noise by setting `"github-actions.enable": false`.

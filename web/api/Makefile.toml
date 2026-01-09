@@ -84,6 +84,9 @@ args = ["run", "--prefix", "tests", "test:e2e"]
 command = "cargo"
 args = ["test"]
 
+[tasks.test-all]
+dependencies = ["test-unit", "test-e2e"]
+
 [tasks.coverage-unit-lcov]
 dependencies = ["coverage-unit-dir-create"]
 command = "cargo"
