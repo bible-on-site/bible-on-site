@@ -18,6 +18,16 @@ public class ApiServerFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
+        // TODO: remove me - debug logging
+        Console.WriteLine($"[DEBUG] ApiServerFixture.InitializeAsync: Starting...");
+        Console.WriteLine($"[DEBUG] ApiServerFixture.InitializeAsync: Current directory = {Directory.GetCurrentDirectory()}");
+        Console.WriteLine($"[DEBUG] ApiServerFixture.InitializeAsync: API_URL env before = {Environment.GetEnvironmentVariable("API_URL") ?? "(null)"}");
+        Console.WriteLine($"[DEBUG] ApiServerFixture.InitializeAsync: DB_URL env set = {!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DB_URL"))}");
+
+        // Set API_URL for tests to use local server (AppConfig.GetApiUrl() reads this)
+        Environment.SetEnvironmentVariable("API_URL", ApiUrl);
+        Console.WriteLine($"[DEBUG] ApiServerFixture.InitializeAsync: Set API_URL to {ApiUrl}");
+
         // Check if API is already running
         if (await IsApiRunning())
         {
@@ -27,6 +37,7 @@ public class ApiServerFixture : IAsyncLifetime
 
         Console.WriteLine("Starting API server...");
         await StartApiServer();
+        Console.WriteLine("[DEBUG] ApiServerFixture.InitializeAsync: StartApiServer completed, waiting for ready...");
         await WaitForApiReady();
         Console.WriteLine("API server is ready.");
     }

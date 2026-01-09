@@ -702,6 +702,7 @@ jobs:
       - name: Run Integration Tests with Coverage
         env:
           DB_URL: mysql://root:test_123@127.0.0.1:${{ steps.mysql.outputs.port }}/tanah_test
+          API_URL: http://127.0.0.1:3003/api/graphql
         run: dotnet run --project devops -- CoverageIntegration --configuration Release
 
       - name: Store App Integration JUnit Report
