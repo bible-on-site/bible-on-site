@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.201",
+	"version": "0.2.202",
 	"private": true,
 	"license": "MIT",
 	"scripts": {
@@ -53,8 +53,8 @@
 		"@testing-library/dom": "10.4.1",
 		"@testing-library/react": "16.3.1",
 		"@types/jest": "30.0.0",
-		"@types/node": "24.10.4",
-		"@types/react": "19.2.7",
+		"@types/node": "24.10.7",
+		"@types/react": "19.2.8",
 		"@types/react-dom": "19.2.3",
 		"cross-env": "10.1.0",
 		"get-port": "7.1.0",
