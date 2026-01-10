@@ -48,3 +48,10 @@ The following diagram illustrates the high-level architecture of the Bible On Si
 - **Auto Scaling**: Target Tracking on CPU (70%), Min 1 / Max 3 tasks
 - **Alarms**: Auto-created by Target Tracking for scale-in/scale-out
 
+### 8. Database (RDS MySQL)
+
+- **Instance**: `tanah-mysql` (MySQL 8.0, db.t3.micro)
+- **Storage**: 20GB gp3, encrypted with AWS-managed KMS key
+- **Networking**: Private subnets only, accessible from ECS via security group
+- **Backups**: 7-day retention period
+- **Credentials**: Stored in SSM Parameter Store (SecureString)

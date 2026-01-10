@@ -11,18 +11,18 @@
 	"scripts": {
 		"coverage:merge": "node --import tsx ./merge-coverage.mts",
 		"setup_dev_env": "node --import tsx ./setup-dev-env.mts",
-		"deploy": "echo 'Use deploy:bare-metal or deploy:ecr' && exit 1",
-		"deploy:bare-metal": "node --import tsx ./deploy/bare-metal-deploy/index.mts",
-		"deploy:ecr": "node --import tsx ./deploy/ecr-deploy/index.mts"
+		"deploy": "echo 'Use deploy:ecr or deploy:data' && exit 1",
+		"deploy:ecr": "node --import tsx ./deploy/ecr-deploy/index.mts",
+		"deploy:data": "node --import tsx ./deploy/data-deploy/index.mts"
 	},
 	"dependencies": {
 		"@aws-sdk/client-ecr": "3.965.0",
+		"@aws-sdk/client-rds": "3.965.0",
+		"@aws-sdk/client-ssm": "3.965.0",
 		"@aws-sdk/client-sts": "3.965.0",
 		"@aws-sdk/credential-providers": "3.965.0",
 		"dotenv": "17.2.3",
-		"node-ssh": "13.2.1",
-		"ssh-config": "5.0.4",
-		"p-memoize": "8.0.0",
+		"mysql2": "3.14.1",
 		"semver": "7.7.3",
 		"yargs": "18.0.0"
 	}
