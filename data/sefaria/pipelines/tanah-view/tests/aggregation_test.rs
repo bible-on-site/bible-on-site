@@ -358,7 +358,7 @@ mod ktiv_qri_pairs {
         }
 
         assert!(
-            qri_with_offset_count >= 1200 && qri_with_offset_count <= 1400,
+            (1200..=1400).contains(&qri_with_offset_count),
             "Expected ~1279 qri segments with ktivOffset, got {}",
             qri_with_offset_count
         );
@@ -520,7 +520,7 @@ mod ktiv_qri_pairs {
 
             // We know from data analysis there are 30 כתיב ולא קרי cases
             assert!(
-                ktiv_zero_count >= 25 && ktiv_zero_count <= 40,
+                (25..=40).contains(&ktiv_zero_count),
                 "Expected ~30 ktiv segments with qriOffset=0 (כתיב ולא קרי), got {}. Examples: {:?}",
                 ktiv_zero_count,
                 ktiv_zero_examples
@@ -573,7 +573,7 @@ mod ktiv_qri_pairs {
 
             // We know from data analysis there are 11 קרי ולא כתיב cases
             assert!(
-                qri_zero_count >= 8 && qri_zero_count <= 15,
+                (8..=15).contains(&qri_zero_count),
                 "Expected ~11 qri segments with ktivOffset=0 (קרי ולא כתיב), got {}. Examples: {:?}",
                 qri_zero_count,
                 qri_zero_examples
@@ -666,7 +666,7 @@ mod ktiv_qri_pairs {
                 regular_qri_count
             );
             assert!(
-                bracket_qri_count >= 1200 && bracket_qri_count <= 1400,
+                (1200..=1400).contains(&bracket_qri_count),
                 "Expected ~1279 bracket qri segments with ktivOffset, got {}",
                 bracket_qri_count
             );
