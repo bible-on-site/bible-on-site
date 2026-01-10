@@ -319,7 +319,7 @@ Resources:
             - Name: PROFILE
               Value: prod
             - Name: HOST
-              Value: "0.0.0.0"  # Required to accept connections from nginx
+              Value: "0.0.0.0" # Required to accept connections from nginx
           # Database credentials injected from SSM Parameter Store
           Secrets:
             - Name: DB_URL
