@@ -4,7 +4,7 @@
 //! Requires MongoDB to be running with the Sefaria dump loaded.
 
 use bson::Document;
-use mongodb::{options::ClientOptions, Client};
+use mongodb::{Client, options::ClientOptions};
 use once_cell::sync::Lazy;
 use serde_json::Value;
 use std::path::Path;
@@ -221,8 +221,7 @@ mod segment_types {
                 for perek in perakim {
                     if let Some(pesukim) = perek.get("pesukim").and_then(|p| p.as_array()) {
                         for pasuk in pesukim {
-                            if let Some(segments) =
-                                pasuk.get("segments").and_then(|s| s.as_array())
+                            if let Some(segments) = pasuk.get("segments").and_then(|s| s.as_array())
                             {
                                 for segment in segments {
                                     if segment["type"].as_str() == Some("ktiv") {
@@ -251,8 +250,7 @@ mod segment_types {
                 for perek in perakim {
                     if let Some(pesukim) = perek.get("pesukim").and_then(|p| p.as_array()) {
                         for pasuk in pesukim {
-                            if let Some(segments) =
-                                pasuk.get("segments").and_then(|s| s.as_array())
+                            if let Some(segments) = pasuk.get("segments").and_then(|s| s.as_array())
                             {
                                 for segment in segments {
                                     if segment["type"].as_str() == Some("ktiv") {
@@ -376,8 +374,7 @@ mod ktiv_qri_pairs {
                 for perek in perakim {
                     if let Some(pesukim) = perek.get("pesukim").and_then(|p| p.as_array()) {
                         for pasuk in pesukim {
-                            if let Some(segments) =
-                                pasuk.get("segments").and_then(|s| s.as_array())
+                            if let Some(segments) = pasuk.get("segments").and_then(|s| s.as_array())
                             {
                                 for (idx, segment) in segments.iter().enumerate() {
                                     if segment["type"].as_str() == Some("ktiv")
@@ -421,8 +418,7 @@ mod ktiv_qri_pairs {
                 for perek in perakim {
                     if let Some(pesukim) = perek.get("pesukim").and_then(|p| p.as_array()) {
                         for pasuk in pesukim {
-                            if let Some(segments) =
-                                pasuk.get("segments").and_then(|s| s.as_array())
+                            if let Some(segments) = pasuk.get("segments").and_then(|s| s.as_array())
                             {
                                 for (idx, segment) in segments.iter().enumerate() {
                                     if segment["type"].as_str() == Some("qri")
@@ -478,8 +474,7 @@ mod ktiv_qri_pairs {
                     let perek_id = perek["perekId"].as_i64().unwrap_or(0) as i32;
                     if let Some(pesukim) = perek.get("pesukim").and_then(|p| p.as_array()) {
                         for pasuk in pesukim {
-                            if let Some(segments) =
-                                pasuk.get("segments").and_then(|s| s.as_array())
+                            if let Some(segments) = pasuk.get("segments").and_then(|s| s.as_array())
                             {
                                 for segment in segments {
                                     if segment["type"].as_str() == Some("ktiv")
@@ -488,10 +483,8 @@ mod ktiv_qri_pairs {
                                     {
                                         ktiv_zero_count += 1;
                                         if ktiv_zero_examples.len() < 5 {
-                                            let value = segment["value"]
-                                                .as_str()
-                                                .unwrap_or("")
-                                                .to_string();
+                                            let value =
+                                                segment["value"].as_str().unwrap_or("").to_string();
                                             ktiv_zero_examples.push((
                                                 sefer_name.to_string(),
                                                 perek_id,
@@ -530,8 +523,7 @@ mod ktiv_qri_pairs {
                     let perek_id = perek["perekId"].as_i64().unwrap_or(0) as i32;
                     if let Some(pesukim) = perek.get("pesukim").and_then(|p| p.as_array()) {
                         for pasuk in pesukim {
-                            if let Some(segments) =
-                                pasuk.get("segments").and_then(|s| s.as_array())
+                            if let Some(segments) = pasuk.get("segments").and_then(|s| s.as_array())
                             {
                                 for segment in segments {
                                     if segment["type"].as_str() == Some("qri")
@@ -540,10 +532,8 @@ mod ktiv_qri_pairs {
                                     {
                                         qri_zero_count += 1;
                                         if qri_zero_examples.len() < 5 {
-                                            let value = segment["value"]
-                                                .as_str()
-                                                .unwrap_or("")
-                                                .to_string();
+                                            let value =
+                                                segment["value"].as_str().unwrap_or("").to_string();
                                             qri_zero_examples.push((
                                                 sefer_name.to_string(),
                                                 perek_id,
@@ -581,17 +571,14 @@ mod ktiv_qri_pairs {
                     let perek_id = perek["perekId"].as_i64().unwrap_or(0) as i32;
                     if let Some(pesukim) = perek.get("pesukim").and_then(|p| p.as_array()) {
                         for pasuk in pesukim {
-                            if let Some(segments) =
-                                pasuk.get("segments").and_then(|s| s.as_array())
+                            if let Some(segments) = pasuk.get("segments").and_then(|s| s.as_array())
                             {
                                 for segment in segments {
                                     if segment["type"].as_str() == Some("ktiv")
                                         && segment.get("qriOffset").is_none()
                                     {
-                                        let value = segment["value"]
-                                            .as_str()
-                                            .unwrap_or("")
-                                            .to_string();
+                                        let value =
+                                            segment["value"].as_str().unwrap_or("").to_string();
                                         ktiv_without_offset.push((
                                             sefer_name.to_string(),
                                             perek_id,
@@ -627,8 +614,7 @@ mod ktiv_qri_pairs {
                 for perek in perakim {
                     if let Some(pesukim) = perek.get("pesukim").and_then(|p| p.as_array()) {
                         for pasuk in pesukim {
-                            if let Some(segments) =
-                                pasuk.get("segments").and_then(|s| s.as_array())
+                            if let Some(segments) = pasuk.get("segments").and_then(|s| s.as_array())
                             {
                                 for segment in segments {
                                     if segment["type"].as_str() == Some("qri") {

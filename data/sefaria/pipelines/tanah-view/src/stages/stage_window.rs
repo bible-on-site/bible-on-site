@@ -1,6 +1,6 @@
 //! Window stage: Calculate running total for perek numbering.
 
-use bson::{doc, Bson, Document};
+use bson::{Bson, Document, doc};
 
 /// Returns the `$setWindowFields` stage document.
 ///

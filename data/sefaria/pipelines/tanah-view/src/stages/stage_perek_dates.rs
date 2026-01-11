@@ -6,7 +6,7 @@
 //! - `date`: Array of 4 cycle dates (Hebrew date in YYYYMMDD format)
 //! - `star_rise`: Array of 4 star rise times (HH:MM format)
 
-use bson::{doc, Bson, Document};
+use bson::{Bson, Document, doc};
 
 /// Builds the `$set` stage document for perek enrichment.
 ///

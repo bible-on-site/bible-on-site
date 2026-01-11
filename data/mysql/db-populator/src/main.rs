@@ -43,8 +43,7 @@ struct Cli {
 #[tokio::main]
 async fn main() -> Result<()> {
     // Load .test.env if it exists
-    let test_env_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../.test.env");
+    let test_env_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../.test.env");
     if test_env_path.exists() {
         dotenvy::from_path(&test_env_path).ok();
     }

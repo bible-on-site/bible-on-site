@@ -1,6 +1,6 @@
 //! Cleanup stage: Remove internal fields and handle nulls.
 
-use bson::{doc, Bson, Document};
+use bson::{Bson, Document, doc};
 
 /// Returns the final `$set` stage document for cleanup.
 ///

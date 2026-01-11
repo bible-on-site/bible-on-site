@@ -3,7 +3,7 @@
 use anyhow::{Context, Result};
 use bson::Document;
 use clap::{Parser, ValueEnum};
-use mongodb::{options::ClientOptions, Client};
+use mongodb::{Client, options::ClientOptions};
 use std::path::Path;
 
 use tanah_view::{aggregation, commands, models::Sefer};
