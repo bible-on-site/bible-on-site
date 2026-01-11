@@ -208,7 +208,7 @@ fn hebdate_to_mysql_date(hebdate: i64) -> String {
 
     // Use a fixed year range for MySQL DATE type (MySQL requires valid dates)
     // Map Hebrew year 5775-5799 to 2014-2038 (approximately)
-    let greg_year = if year >= 5775 && year <= 5799 {
+    let greg_year = if (5775..=5799).contains(&year) {
         year - 3761 // Approximate Hebrew to Gregorian
     } else {
         2024 // Default fallback
@@ -217,8 +217,8 @@ fn hebdate_to_mysql_date(hebdate: i64) -> String {
     format!(
         "{:04}-{:02}-{:02}",
         greg_year,
-        month.min(12).max(1),
-        day.min(28).max(1)
+        month.clamp(1, 12),
+        day.clamp(1, 28)
     )
 }
 

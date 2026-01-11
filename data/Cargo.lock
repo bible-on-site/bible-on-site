@@ -116,6 +116,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "authors"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_yaml",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

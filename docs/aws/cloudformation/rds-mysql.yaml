@@ -1,0 +1,162 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: RDS MySQL instance for tanah database
+
+# NOTE: This template documents the RDS configuration created via AWS CLI.
+# See cloudformation.md for important disclaimer about template testing status.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID for the RDS instance
+    Default: vpc-0d6af72e472db138c
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnet IDs for the DB subnet group
+    Default: subnet-056e95f1b766e6b0d,subnet-02c538ecab687f8bd,subnet-07bf7408f0795eacc
+
+  ECSSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group ID for ECS tasks (to allow access from ECS)
+    Default: sg-00f432d2c66f99885
+
+  DBInstanceClass:
+    Type: String
+    Description: RDS instance class
+    Default: db.t3.micro
+    AllowedValues:
+      - db.t3.micro
+      - db.t3.small
+      - db.t3.medium
+
+  DBAllocatedStorage:
+    Type: Number
+    Description: Allocated storage in GB
+    Default: 20
+    MinValue: 20
+    MaxValue: 100
+
+Resources:
+  # DB Subnet Group
+  TanahDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: tanah-db-subnet-group
+      DBSubnetGroupDescription: Subnet group for tanah MySQL RDS
+      SubnetIds: !Ref SubnetIds
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+
+  # Security Group for RDS
+  TanahRDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: tanah-rds-sg
+      GroupDescription: Security group for tanah MySQL RDS
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref ECSSecurityGroupId
+          Description: Allow MySQL access from ECS tasks
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+
+  # RDS MySQL Instance
+  TanahMySQLInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: tanah-mysql
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: mysql
+      EngineVersion: "8.0"
+      MasterUsername: admin
+      ManageMasterUserPassword: true # Auto-generates password in Secrets Manager
+      DBName: tanah
+      AllocatedStorage: !Ref DBAllocatedStorage
+      StorageType: gp3
+      StorageEncrypted: true
+      DBSubnetGroupName: !Ref TanahDBSubnetGroup
+      VPCSecurityGroups:
+        - !GetAtt TanahRDSSecurityGroup.GroupId
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 7
+      AutoMinorVersionUpgrade: true
+      DeletionProtection: false
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+
+  # SSM Parameters for database connection info
+  TanahDBUsernameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: bible-on-site-tanah-db-username
+      Type: String
+      Value: admin
+      Description: Username for tanah MySQL RDS
+
+  TanahDBNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: bible-on-site-tanah-db-name
+      Type: String
+      Value: tanah
+      Description: Database name for tanah MySQL RDS
+
+  TanahDBHostParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: bible-on-site-tanah-db-host
+      Type: String
+      Value: !GetAtt TanahMySQLInstance.Endpoint.Address
+      Description: Host endpoint for tanah MySQL RDS
+
+  TanahDBPortParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: bible-on-site-tanah-db-port
+      Type: String
+      Value: !GetAtt TanahMySQLInstance.Endpoint.Port
+      Description: Port for tanah MySQL RDS
+
+  # Note: The DB_URL parameter (bible-on-site-tanah-db-url) is a SecureString
+  # that must be created manually after the RDS instance is available.
+  # Format: mysql://admin:<password>@<host>:3306/tanah
+  # This cannot be created via CloudFormation as it requires the password value.
+
+Outputs:
+  DBInstanceIdentifier:
+    Description: RDS instance identifier
+    Value: !Ref TanahMySQLInstance
+    Export:
+      Name: TanahDBInstanceId
+
+  DBEndpointAddress:
+    Description: RDS endpoint address
+    Value: !GetAtt TanahMySQLInstance.Endpoint.Address
+    Export:
+      Name: TanahDBEndpoint
+
+  DBEndpointPort:
+    Description: RDS endpoint port
+    Value: !GetAtt TanahMySQLInstance.Endpoint.Port
+    Export:
+      Name: TanahDBPort
+
+  DBSecurityGroupId:
+    Description: RDS security group ID
+    Value: !GetAtt TanahRDSSecurityGroup.GroupId
+    Export:
+      Name: TanahDBSecurityGroupId
+
+  DBSubnetGroupName:
+    Description: DB subnet group name
+    Value: !Ref TanahDBSubnetGroup
+    Export:
+      Name: TanahDBSubnetGroup

@@ -140,6 +140,42 @@ Route53 hosted zones and DNS records.
 ### 10. `master-stack.yaml`
 Nested stack that deploys all components together (for reference).
 
+### 11. `rds-mysql.yaml`
+RDS MySQL instance for the tanah database.
+
+**Components:**
+- DB Subnet Group: `tanah-db-subnet-group` (spans 3 AZs)
+- Security Group: `tanah-rds-sg` (allows MySQL from ECS)
+- RDS Instance: `tanah-mysql` (MySQL 8.0, db.t3.micro, 20GB gp3)
+- SSM Parameters: Database connection info (username, dbname, host, port)
+
+**Features:**
+- Encrypted storage (AWS-managed KMS key)
+- 7-day backup retention
+- Not publicly accessible (VPC only)
+- Password stored in SSM Parameter Store (SecureString)
+
+**Deploy:**
+```bash
+aws cloudformation deploy \
+  --template-file rds-mysql.yaml \
+  --stack-name bible-on-site-rds \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region il-central-1 \
+  --profile AdministratorAccess-<AWS_ACCOUNT_ID>
+```
+
+**Retrieve Connection Info:**
+```bash
+# Get endpoint
+aws rds describe-db-instances --db-instance-identifier tanah-mysql \
+  --query "DBInstances[0].Endpoint" --region il-central-1
+
+# Get password from SSM
+aws ssm get-parameter --name bible-on-site-tanah-db-password \
+  --with-decryption --query "Parameter.Value" --output text --region il-central-1
+```
+
 ## Data Flow: ECR → ECS → nginx → Internet
 
 1. **GitHub Actions** pushes Docker images to **ECR** (via OIDC role)
@@ -163,6 +199,7 @@ As of the last export (see git history for date):
 | **ECR** | `bible-on-site` (website), `bible-on-site-api` (future) |
 | **EC2** | `<INSTANCE_ID>` (t3.small, nginx, `<EC2_PUBLIC_IP>`) |
 | **Route53** | `xn--febl3a.com`, `xn--febl3a.co.il` → `<EC2_PUBLIC_IP>` |
+| **RDS** | `tanah-mysql` (MySQL 8.0, db.t3.micro, encrypted) |
 | **OIDC Provider** | `token.actions.githubusercontent.com` |
 | **IAM Roles** | `GitHubActionsECRDeployRole`, `ecsTaskExecutionRole` |
 | **SSO Users** | `dorad` (admin), `bible-on-site-github-ci-bot` (CI) |

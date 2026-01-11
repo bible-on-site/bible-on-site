@@ -8,7 +8,11 @@ use std::path::Path;
 
 use crate::models::{Perek, Sefer};
 
-pub fn generate(sefarim: &[Sefer], dump_name: &str, output_to_dependant_modules: bool) -> Result<()> {
+pub fn generate(
+    sefarim: &[Sefer],
+    dump_name: &str,
+    output_to_dependant_modules: bool,
+) -> Result<()> {
     let output_path = if output_to_dependant_modules {
         // Output to app/BibleOnSite/Resources/Raw/
         Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -193,11 +197,21 @@ fn insert_perakim(tx: &rusqlite::Transaction, sefer_id: i64, perakim: &[Perek]) 
             let cycle = (cycle_idx + 1) as i64;
             // date_val is Hebrew date in YYYYMMDD format (e.g., 57750329)
             // star_rise is in HH:MM format
-            let star_rise = perek.star_rise.get(cycle_idx).map(|s| s.as_str()).unwrap_or("");
+            let star_rise = perek
+                .star_rise
+                .get(cycle_idx)
+                .map(|s| s.as_str())
+                .unwrap_or("");
             tx.execute(
                 "INSERT OR IGNORE INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
                  VALUES (?1, ?2, ?3, ?4, ?5)",
-                (perek.perek_id, cycle, date_val.to_string(), date_val.to_string(), star_rise),
+                (
+                    perek.perek_id,
+                    cycle,
+                    date_val.to_string(),
+                    date_val.to_string(),
+                    star_rise,
+                ),
             )?;
         }
 

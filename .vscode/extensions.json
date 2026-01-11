@@ -19,6 +19,7 @@
 		"ryanluker.vscode-coverage-gutters", // Code coverage (Website, planned for more)
 		"ms-toolsai.jupyter", // Jupyter (Data generation)
 		"Orta.vscode-jest", // Jest (Website)
-		"jebbs.plantuml" // PlantUML (documentation)
+		"jebbs.plantuml", // PlantUML (documentation)
+		"hediet.vscode-drawio" // draw.io (documentation)
 	]
 }

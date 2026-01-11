@@ -21,34 +21,41 @@ npm run deploy:ecr -- --module-name website
 npm run deploy:ecr -- --module-name api
 ```
 
-### 2. Bare Metal Deployment (Legacy/Deprecated)
+### 2. Data Deployment (Database Population)
 
-Deploys Docker images directly to bare metal servers via SSH.
+Populates the production database with SQL files from the `data/mysql/` directory.
 
-**Command:**
+- **SSM Parameter Store** provides: username, password, database name
+- **RDS Describe** provides: host, port (from endpoint)
+
+**Commands:**
 ```bash
 cd devops
-npm run deploy:bare-metal -- --module-name website
-npm run deploy:bare-metal -- --module-name api
+npm run deploy:data
 ```
+
+**Required Environment Variables (set via OIDC in CI):**
+- `AWS_REGION` - AWS region (e.g., `il-central-1`)
+
+**SSM Parameters used:**
+- `bible-on-site-tanah-db-username`
+- `bible-on-site-tanah-db-password` (SecureString)
+- `bible-on-site-tanah-db-name`
 
 ## Directory Structure
 
 ```
 deploy/
 ├── README.md           # This file
+├── deployer-base.mts   # Abstract base deployer class
 ├── ecr-deploy/         # AWS ECR deployment scripts
 │   ├── .env.example    # Template for AWS SSO credentials
 │   ├── index.mts       # Entry point
 │   ├── ecr-client.mts  # AWS ECR client utilities
-│   ├── ecr-deployer-base.mts  # Base deployer class
+│   ├── ecr-deployer-base.mts  # ECR-specific deployer (extends DeployerBase)
 │   ├── api-deployer.mts       # API-specific deployer
 │   └── website-deployer.mts   # Website-specific deployer
-└── bare-metal-deploy/  # Bare metal deployment scripts (legacy)
-    ├── .env            # SSH credentials (gitignored)
-    ├── index.mts       # Entry point
-    ├── deployer-base.mts
-    ├── api-deployer.mts
-    ├── website-deployer.mts
-    └── ssh/            # SSH connection utilities
+└── data-deploy/        # Database deployment scripts
+    ├── .env.example    # Template for environment variables
+    └── index.mts       # DataDeployer (extends DeployerBase)
 ```

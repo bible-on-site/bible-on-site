@@ -108,6 +108,26 @@ command = "cargo"
 args = ["run", "--release", "--", "--skip-structure"]
 
 # =============================================================================
+# Unit Test Tasks
+# =============================================================================
+
+[tasks.test-unit-dir-create]
+description = "Create JUnit report output directory"
+command = "mkdir"
+args = ["-p", ".junit-report/unit"]
+
+[tasks.test-unit]
+description = "Run all unit tests"
+command = "cargo"
+args = ["test", "--workspace"]
+
+[tasks.test-unit-junit]
+description = "Run all unit tests with JUnit output"
+dependencies = ["test-unit-dir-create"]
+command = "cargo"
+args = ["nextest", "run", "--workspace", "--profile", "ci"]
+
+# =============================================================================
 # Coverage Tasks (tanah-view)
 # =============================================================================
 

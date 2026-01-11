@@ -2,9 +2,16 @@
 //!
 //! These tests run the aggregation pipeline against MongoDB and verify the output.
 //! Requires MongoDB to be running with the Sefaria dump loaded.
+//!
+//! Tests are ignored in CI environments unless the `integration` feature is enabled.
+//! Run locally with: `cargo test --features integration`
+//!
+//! TODO: Replace this workaround with proper nextest filtering when available.
+//! See: https://github.com/nextest-rs/nextest/discussions/1757
+//! Workaround based on: https://stackoverflow.com/a/50568293
 
 use bson::Document;
-use mongodb::{options::ClientOptions, Client};
+use mongodb::{Client, options::ClientOptions};
 use once_cell::sync::Lazy;
 use serde_json::Value;
 use std::path::Path;
@@ -108,6 +115,7 @@ mod pasek {
     use super::*;
 
     #[test]
+    #[cfg_attr(not(feature = "integration"), ignore)]
     fn glues_with_space_in_bereshit_2_5() {
         let data = get_tanah_view();
         let bereshit = find_sefer(&data, "בראשית");
@@ -128,6 +136,7 @@ mod segment_types {
         use super::*;
 
         #[test]
+        #[cfg_attr(not(feature = "integration"), ignore)]
         fn regular_word_has_type_qri_without_offset() {
             let data = get_tanah_view();
             let bereshit = find_sefer(&data, "בראשית");
@@ -149,6 +158,7 @@ mod segment_types {
         }
 
         #[test]
+        #[cfg_attr(not(feature = "integration"), ignore)]
         fn is_vocalized_with_niqqud() {
             let data = get_tanah_view();
             let niqqud_pattern =
@@ -170,6 +180,7 @@ mod segment_types {
         }
 
         #[test]
+        #[cfg_attr(not(feature = "integration"), ignore)]
         fn regular_segments_have_recording_time_frame() {
             let data = get_tanah_view();
             let mut checked = 0;
@@ -177,23 +188,21 @@ mod segment_types {
             for sefer in &data {
                 let perakim = get_all_perakim(sefer);
 
-                if let Some(first_perek) = perakim.first() {
-                    if let Some(pesukim) = first_perek.get("pesukim").and_then(|p| p.as_array()) {
-                        for pasuk in pesukim {
-                            if let Some(segments) =
-                                pasuk.get("segments").and_then(|s| s.as_array())
-                            {
-                                for segment in segments {
-                                    if segment["type"].as_str() == Some("qri")
-                                        && segment.get("ktivOffset").is_none()
-                                    {
-                                        assert!(
-                                            segment.get("recordingTimeFrame").is_some(),
-                                            "Regular qri segment '{}' should have recordingTimeFrame",
-                                            segment["value"].as_str().unwrap_or("")
-                                        );
-                                        checked += 1;
-                                    }
+                if let Some(first_perek) = perakim.first()
+                    && let Some(pesukim) = first_perek.get("pesukim").and_then(|p| p.as_array())
+                {
+                    for pasuk in pesukim {
+                        if let Some(segments) = pasuk.get("segments").and_then(|s| s.as_array()) {
+                            for segment in segments {
+                                if segment["type"].as_str() == Some("qri")
+                                    && segment.get("ktivOffset").is_none()
+                                {
+                                    assert!(
+                                        segment.get("recordingTimeFrame").is_some(),
+                                        "Regular qri segment '{}' should have recordingTimeFrame",
+                                        segment["value"].as_str().unwrap_or("")
+                                    );
+                                    checked += 1;
                                 }
                             }
                         }
@@ -212,6 +221,7 @@ mod segment_types {
         use super::*;
 
         #[test]
+        #[cfg_attr(not(feature = "integration"), ignore)]
         fn is_unvocalized_without_niqqud() {
             let data = get_tanah_view();
             let niqqud_pattern =
@@ -223,8 +233,7 @@ mod segment_types {
                 for perek in perakim {
                     if let Some(pesukim) = perek.get("pesukim").and_then(|p| p.as_array()) {
                         for pasuk in pesukim {
-                            if let Some(segments) =
-                                pasuk.get("segments").and_then(|s| s.as_array())
+                            if let Some(segments) = pasuk.get("segments").and_then(|s| s.as_array())
                             {
                                 for segment in segments {
                                     if segment["type"].as_str() == Some("ktiv") {
@@ -244,6 +253,7 @@ mod segment_types {
         }
 
         #[test]
+        #[cfg_attr(not(feature = "integration"), ignore)]
         fn never_has_recording_time_frame() {
             let data = get_tanah_view();
 
@@ -253,8 +263,7 @@ mod segment_types {
                 for perek in perakim {
                     if let Some(pesukim) = perek.get("pesukim").and_then(|p| p.as_array()) {
                         for pasuk in pesukim {
-                            if let Some(segments) =
-                                pasuk.get("segments").and_then(|s| s.as_array())
+                            if let Some(segments) = pasuk.get("segments").and_then(|s| s.as_array())
                             {
                                 for segment in segments {
                                     if segment["type"].as_str() == Some("ktiv") {
@@ -277,6 +286,7 @@ mod segment_types {
         use super::*;
 
         #[test]
+        #[cfg_attr(not(feature = "integration"), ignore)]
         fn has_no_recording_time_frame() {
             let data = get_tanah_view();
             let bereshit = find_sefer(&data, "בראשית");
@@ -305,6 +315,7 @@ mod ktiv_qri_pairs {
     use super::*;
 
     #[test]
+    #[cfg_attr(not(feature = "integration"), ignore)]
     fn bereshit_8_17_has_correct_offsets() {
         let data = get_tanah_view();
         let bereshit = find_sefer(&data, "בראשית");
@@ -333,6 +344,7 @@ mod ktiv_qri_pairs {
     }
 
     #[test]
+    #[cfg_attr(not(feature = "integration"), ignore)]
     fn count_is_reasonable() {
         let data = get_tanah_view();
         let mut qri_with_offset_count = 0;
@@ -358,7 +370,7 @@ mod ktiv_qri_pairs {
         }
 
         assert!(
-            qri_with_offset_count >= 1200 && qri_with_offset_count <= 1400,
+            (1200..=1400).contains(&qri_with_offset_count),
             "Expected ~1279 qri segments with ktivOffset, got {}",
             qri_with_offset_count
         );
@@ -368,6 +380,7 @@ mod ktiv_qri_pairs {
         use super::*;
 
         #[test]
+        #[cfg_attr(not(feature = "integration"), ignore)]
         fn ktiv_points_to_qri() {
             let data = get_tanah_view();
             let mut checked_count = 0;
@@ -378,30 +391,24 @@ mod ktiv_qri_pairs {
                 for perek in perakim {
                     if let Some(pesukim) = perek.get("pesukim").and_then(|p| p.as_array()) {
                         for pasuk in pesukim {
-                            if let Some(segments) =
-                                pasuk.get("segments").and_then(|s| s.as_array())
+                            if let Some(segments) = pasuk.get("segments").and_then(|s| s.as_array())
                             {
                                 for (idx, segment) in segments.iter().enumerate() {
-                                    if segment["type"].as_str() == Some("ktiv") {
-                                        if let Some(offset) = segment.get("qriOffset") {
-                                            if let Some(offset_val) = get_offset_as_i64(offset) {
-                                                if offset_val > 0
-                                                    && (idx as i64 + offset_val)
-                                                        < segments.len() as i64
-                                                {
-                                                    let target =
-                                                        &segments[idx + offset_val as usize];
-                                                    assert_eq!(
-                                                        target["type"].as_str(),
-                                                        Some("qri"),
-                                                        "Ktiv at index {} with qriOffset {} should point to qri",
-                                                        idx,
-                                                        offset_val
-                                                    );
-                                                    checked_count += 1;
-                                                }
-                                            }
-                                        }
+                                    if segment["type"].as_str() == Some("ktiv")
+                                        && let Some(offset) = segment.get("qriOffset")
+                                        && let Some(offset_val) = get_offset_as_i64(offset)
+                                        && offset_val > 0
+                                        && (idx as i64 + offset_val) < segments.len() as i64
+                                    {
+                                        let target = &segments[idx + offset_val as usize];
+                                        assert_eq!(
+                                            target["type"].as_str(),
+                                            Some("qri"),
+                                            "Ktiv at index {} with qriOffset {} should point to qri",
+                                            idx,
+                                            offset_val
+                                        );
+                                        checked_count += 1;
                                     }
                                 }
                             }
@@ -418,6 +425,7 @@ mod ktiv_qri_pairs {
         }
 
         #[test]
+        #[cfg_attr(not(feature = "integration"), ignore)]
         fn qri_points_to_ktiv() {
             let data = get_tanah_view();
             let mut checked_count = 0;
@@ -428,31 +436,26 @@ mod ktiv_qri_pairs {
                 for perek in perakim {
                     if let Some(pesukim) = perek.get("pesukim").and_then(|p| p.as_array()) {
                         for pasuk in pesukim {
-                            if let Some(segments) =
-                                pasuk.get("segments").and_then(|s| s.as_array())
+                            if let Some(segments) = pasuk.get("segments").and_then(|s| s.as_array())
                             {
                                 for (idx, segment) in segments.iter().enumerate() {
-                                    if segment["type"].as_str() == Some("qri") {
-                                        if let Some(offset) = segment.get("ktivOffset") {
-                                            if let Some(offset_val) = get_offset_as_i64(offset) {
-                                                if offset_val < 0 {
-                                                    let target_idx = idx as i64 + offset_val;
-                                                    if target_idx >= 0
-                                                        && (target_idx as usize) < segments.len()
-                                                    {
-                                                        let target =
-                                                            &segments[target_idx as usize];
-                                                        assert_eq!(
-                                                            target["type"].as_str(),
-                                                            Some("ktiv"),
-                                                            "Qri at index {} with ktivOffset {} should point to ktiv",
-                                                            idx,
-                                                            offset_val
-                                                        );
-                                                        checked_count += 1;
-                                                    }
-                                                }
-                                            }
+                                    if segment["type"].as_str() == Some("qri")
+                                        && let Some(offset) = segment.get("ktivOffset")
+                                        && let Some(offset_val) = get_offset_as_i64(offset)
+                                        && offset_val < 0
+                                    {
+                                        let target_idx = idx as i64 + offset_val;
+                                        if target_idx >= 0 && (target_idx as usize) < segments.len()
+                                        {
+                                            let target = &segments[target_idx as usize];
+                                            assert_eq!(
+                                                target["type"].as_str(),
+                                                Some("ktiv"),
+                                                "Qri at index {} with ktivOffset {} should point to ktiv",
+                                                idx,
+                                                offset_val
+                                            );
+                                            checked_count += 1;
                                         }
                                     }
                                 }
@@ -475,6 +478,7 @@ mod ktiv_qri_pairs {
         use super::*;
 
         #[test]
+        #[cfg_attr(not(feature = "integration"), ignore)]
         fn ktiv_without_qri_has_zero_offset() {
             // כתיב ולא קרי - ktiv segments with no matching qri should have qriOffset=0
             let data = get_tanah_view();
@@ -489,26 +493,22 @@ mod ktiv_qri_pairs {
                     let perek_id = perek["perekId"].as_i64().unwrap_or(0) as i32;
                     if let Some(pesukim) = perek.get("pesukim").and_then(|p| p.as_array()) {
                         for pasuk in pesukim {
-                            if let Some(segments) =
-                                pasuk.get("segments").and_then(|s| s.as_array())
+                            if let Some(segments) = pasuk.get("segments").and_then(|s| s.as_array())
                             {
                                 for segment in segments {
-                                    if segment["type"].as_str() == Some("ktiv") {
-                                        if let Some(offset) = segment.get("qriOffset") {
-                                            if get_offset_as_i64(offset) == Some(0) {
-                                                ktiv_zero_count += 1;
-                                                if ktiv_zero_examples.len() < 5 {
-                                                    let value = segment["value"]
-                                                        .as_str()
-                                                        .unwrap_or("")
-                                                        .to_string();
-                                                    ktiv_zero_examples.push((
-                                                        sefer_name.to_string(),
-                                                        perek_id,
-                                                        value,
-                                                    ));
-                                                }
-                                            }
+                                    if segment["type"].as_str() == Some("ktiv")
+                                        && let Some(offset) = segment.get("qriOffset")
+                                        && get_offset_as_i64(offset) == Some(0)
+                                    {
+                                        ktiv_zero_count += 1;
+                                        if ktiv_zero_examples.len() < 5 {
+                                            let value =
+                                                segment["value"].as_str().unwrap_or("").to_string();
+                                            ktiv_zero_examples.push((
+                                                sefer_name.to_string(),
+                                                perek_id,
+                                                value,
+                                            ));
                                         }
                                     }
                                 }
@@ -520,7 +520,7 @@ mod ktiv_qri_pairs {
 
             // We know from data analysis there are 30 כתיב ולא קרי cases
             assert!(
-                ktiv_zero_count >= 25 && ktiv_zero_count <= 40,
+                (25..=40).contains(&ktiv_zero_count),
                 "Expected ~30 ktiv segments with qriOffset=0 (כתיב ולא קרי), got {}. Examples: {:?}",
                 ktiv_zero_count,
                 ktiv_zero_examples
@@ -528,6 +528,7 @@ mod ktiv_qri_pairs {
         }
 
         #[test]
+        #[cfg_attr(not(feature = "integration"), ignore)]
         fn qri_without_ktiv_has_zero_offset() {
             // קרי ולא כתיב - bracket qri segments with no matching ktiv should have ktivOffset=0
             let data = get_tanah_view();
@@ -542,26 +543,22 @@ mod ktiv_qri_pairs {
                     let perek_id = perek["perekId"].as_i64().unwrap_or(0) as i32;
                     if let Some(pesukim) = perek.get("pesukim").and_then(|p| p.as_array()) {
                         for pasuk in pesukim {
-                            if let Some(segments) =
-                                pasuk.get("segments").and_then(|s| s.as_array())
+                            if let Some(segments) = pasuk.get("segments").and_then(|s| s.as_array())
                             {
                                 for segment in segments {
-                                    if segment["type"].as_str() == Some("qri") {
-                                        if let Some(offset) = segment.get("ktivOffset") {
-                                            if get_offset_as_i64(offset) == Some(0) {
-                                                qri_zero_count += 1;
-                                                if qri_zero_examples.len() < 5 {
-                                                    let value = segment["value"]
-                                                        .as_str()
-                                                        .unwrap_or("")
-                                                        .to_string();
-                                                    qri_zero_examples.push((
-                                                        sefer_name.to_string(),
-                                                        perek_id,
-                                                        value,
-                                                    ));
-                                                }
-                                            }
+                                    if segment["type"].as_str() == Some("qri")
+                                        && let Some(offset) = segment.get("ktivOffset")
+                                        && get_offset_as_i64(offset) == Some(0)
+                                    {
+                                        qri_zero_count += 1;
+                                        if qri_zero_examples.len() < 5 {
+                                            let value =
+                                                segment["value"].as_str().unwrap_or("").to_string();
+                                            qri_zero_examples.push((
+                                                sefer_name.to_string(),
+                                                perek_id,
+                                                value,
+                                            ));
                                         }
                                     }
                                 }
@@ -573,7 +570,7 @@ mod ktiv_qri_pairs {
 
             // We know from data analysis there are 11 קרי ולא כתיב cases
             assert!(
-                qri_zero_count >= 8 && qri_zero_count <= 15,
+                (8..=15).contains(&qri_zero_count),
                 "Expected ~11 qri segments with ktivOffset=0 (קרי ולא כתיב), got {}. Examples: {:?}",
                 qri_zero_count,
                 qri_zero_examples
@@ -581,6 +578,7 @@ mod ktiv_qri_pairs {
         }
 
         #[test]
+        #[cfg_attr(not(feature = "integration"), ignore)]
         fn all_ktiv_segments_have_qri_offset() {
             // Every ktiv segment should have qriOffset (either pointing to qri or 0 for orphan)
             let data = get_tanah_view();
@@ -594,17 +592,14 @@ mod ktiv_qri_pairs {
                     let perek_id = perek["perekId"].as_i64().unwrap_or(0) as i32;
                     if let Some(pesukim) = perek.get("pesukim").and_then(|p| p.as_array()) {
                         for pasuk in pesukim {
-                            if let Some(segments) =
-                                pasuk.get("segments").and_then(|s| s.as_array())
+                            if let Some(segments) = pasuk.get("segments").and_then(|s| s.as_array())
                             {
                                 for segment in segments {
                                     if segment["type"].as_str() == Some("ktiv")
                                         && segment.get("qriOffset").is_none()
                                     {
-                                        let value = segment["value"]
-                                            .as_str()
-                                            .unwrap_or("")
-                                            .to_string();
+                                        let value =
+                                            segment["value"].as_str().unwrap_or("").to_string();
                                         ktiv_without_offset.push((
                                             sefer_name.to_string(),
                                             perek_id,
@@ -627,6 +622,7 @@ mod ktiv_qri_pairs {
         }
 
         #[test]
+        #[cfg_attr(not(feature = "integration"), ignore)]
         fn regular_qri_has_no_ktiv_offset() {
             // Regular qri (קרי וכתיב) should NOT have ktivOffset property at all
             // Only bracket-derived qri should have ktivOffset
@@ -640,8 +636,7 @@ mod ktiv_qri_pairs {
                 for perek in perakim {
                     if let Some(pesukim) = perek.get("pesukim").and_then(|p| p.as_array()) {
                         for pasuk in pesukim {
-                            if let Some(segments) =
-                                pasuk.get("segments").and_then(|s| s.as_array())
+                            if let Some(segments) = pasuk.get("segments").and_then(|s| s.as_array())
                             {
                                 for segment in segments {
                                     if segment["type"].as_str() == Some("qri") {
@@ -666,7 +661,7 @@ mod ktiv_qri_pairs {
                 regular_qri_count
             );
             assert!(
-                bracket_qri_count >= 1200 && bracket_qri_count <= 1400,
+                (1200..=1400).contains(&bracket_qri_count),
                 "Expected ~1279 bracket qri segments with ktivOffset, got {}",
                 bracket_qri_count
             );
@@ -681,6 +676,7 @@ mod additionals {
         use super::*;
 
         #[test]
+        #[cfg_attr(not(feature = "integration"), ignore)]
         fn has_correct_structure() {
             let data = get_tanah_view();
             let shmuel = find_sefer_with_additionals(&data, "שמואל");
@@ -698,6 +694,7 @@ mod additionals {
         }
 
         #[test]
+        #[cfg_attr(not(feature = "integration"), ignore)]
         fn ktiv_qri_works_in_additionals() {
             let data = get_tanah_view();
             let shmuel = find_sefer_with_additionals(&data, "שמואל");
@@ -718,6 +715,7 @@ mod additionals {
         use super::*;
 
         #[test]
+        #[cfg_attr(not(feature = "integration"), ignore)]
         fn has_correct_structure() {
             let data = get_tanah_view();
             let melachim = find_sefer_with_additionals(&data, "מלכים");
@@ -734,6 +732,7 @@ mod additionals {
         use super::*;
 
         #[test]
+        #[cfg_attr(not(feature = "integration"), ignore)]
         fn has_correct_structure() {
             let data = get_tanah_view();
             let ezra = find_sefer_with_additionals(&data, "עזרא");
@@ -750,6 +749,7 @@ mod additionals {
         use super::*;
 
         #[test]
+        #[cfg_attr(not(feature = "integration"), ignore)]
         fn has_correct_structure() {
             let data = get_tanah_view();
             let dh = find_sefer_with_additionals(&data, "דברי הימים");

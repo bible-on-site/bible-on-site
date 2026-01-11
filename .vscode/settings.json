@@ -21,7 +21,8 @@
 	},
 	"rust-analyzer.linkedProjects": [
 		"web/api/Cargo.toml",
-		"web/api/entities/Cargo.toml"
+		"web/api/entities/Cargo.toml",
+		"data/Cargo.toml"
 	],
 	"rust-analyzer.check.command": "clippy",
 	"sonarlint.analysisExcludesStandalone": "**/web/**",

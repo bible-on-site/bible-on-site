@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import type { ECRClient } from "@aws-sdk/client-ecr";
 import * as semver from "semver";
+import { DeployerBase } from "../deployer-base.mjs";
 import {
 	type ECRConfig,
 	ensureRepositoryExists,
@@ -18,19 +19,21 @@ export enum Diff {
 	LocalRemoteSame = "LocalRemoteSame",
 }
 
-export abstract class ECRDeployerBase {
+export abstract class ECRDeployerBase extends DeployerBase {
 	protected wrappedLocalVersion?: string;
 	protected dockerImagePath?: string;
 
 	constructor(
-		protected readonly moduleName: string,
+		moduleName: string,
 		protected readonly dockerImageName: string,
 		protected readonly ecrRepositoryName: string,
 		protected readonly client: ECRClient,
 		protected readonly config: ECRConfig,
-	) {}
+	) {
+		super(moduleName);
+	}
 
-	async deploy(): Promise<void> {
+	override async deploy(): Promise<void> {
 		this.info(`Deploying ${this.moduleName} to ECR...`);
 		await this.deployPreConditions();
 		await this.coreDeploy();
@@ -109,7 +112,7 @@ export abstract class ECRDeployerBase {
 		return Diff.LocalRemoteSame;
 	}
 
-	protected async deployPreConditions(): Promise<void> {
+	protected override async deployPreConditions(): Promise<void> {
 		this.info("Checking preconditions for deployment...");
 		try {
 			const diff = await this.localRemoteVersionDiff();
@@ -125,7 +128,7 @@ export abstract class ECRDeployerBase {
 		this.info("Preconditions for deployment passed.");
 	}
 
-	protected async deployPostConditions(): Promise<void> {
+	protected override async deployPostConditions(): Promise<void> {
 		this.info("Checking postconditions for deployment...");
 
 		await withRetry(
@@ -153,7 +156,7 @@ export abstract class ECRDeployerBase {
 		this.info("Postconditions for deployment passed.");
 	}
 
-	private async coreDeploy(): Promise<void> {
+	protected override async coreDeploy(): Promise<void> {
 		this.info("Starting core deployment to ECR...");
 
 		// Ensure repository exists
@@ -385,13 +388,13 @@ export abstract class ECRDeployerBase {
 		return process.cwd();
 	}
 
-	protected info(message: string): void {
+	protected override info(message: string): void {
 		console.info(`[ECR:${this.moduleName}] ${message}`);
 	}
-	protected warn(message: string): void {
+	protected override warn(message: string): void {
 		console.warn(`[ECR:${this.moduleName}] ${message}`);
 	}
-	protected error(message: string): void {
+	protected override error(message: string): void {
 		console.error(`[ECR:${this.moduleName}] ${message}`);
 	}
 }

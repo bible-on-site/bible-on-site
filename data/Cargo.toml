@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "authors",
     "mysql/db-populator",
     "sefaria/setup-and-population",
     "sefaria/pipelines/tanah-view",
