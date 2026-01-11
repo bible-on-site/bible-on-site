@@ -1104,14 +1104,19 @@ jobs:
   release_data:
     name: Release Data
     needs: [setup_env, determine_data_changes, cross_module_ci, data_ci]
-    # Note: cross_module_ci already validates data_ci succeeded, so we don't need to check data_ci.result here.
-    # Keeping data_ci in needs to ensure proper ordering.
-    if: ${{ needs.determine_data_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    # Run always after cross_module_ci (which validates data_ci succeeded), check conditions in step
+    if: ${{ always() && needs.cross_module_ci.result == 'success' }}
     permissions:
       contents: read
     runs-on: ubuntu-latest
     steps:
+      - name: Debug outputs
+        run: |
+          echo "module_changed: ${{ needs.determine_data_changes.outputs.module_changed }}"
+          echo "is_master_branch: ${{ needs.setup_env.outputs.is_master_branch }}"
+          echo "event_name: ${{ github.event_name }}"
       - name: Trigger Data CD Workflow
+        if: ${{ needs.determine_data_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
         uses: peter-evans/repository-dispatch@v4
         with:
           repository: ${{ github.repository }}
