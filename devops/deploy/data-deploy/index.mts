@@ -167,18 +167,31 @@ class DataDeployer extends DeployerBase {
 	): Promise<void> {
 		this.info(`Executing SQL file: ${filePath}`);
 
-		let sql = fs.readFileSync(filePath, "utf8");
+		const sql = fs.readFileSync(filePath, "utf8");
 
-		// Remove CREATE DATABASE and USE statements (we're already connected to the correct DB)
-		sql = sql.replace(/^CREATE\s+DATABASE\s+.*?;/gim, "");
-		sql = sql.replace(/^USE\s+.*?;/gim, "");
+		// Split by delimiter and execute each statement
+		const statements = sql
+			.split(/;\s*(?=\n|$)/)
+			.map((s) => s.trim())
+			.filter((s) => {
+				// Skip empty statements and comments
+				if (s.length === 0 || s.startsWith("--")) return false;
+				// Skip CREATE DATABASE and USE statements (we're already connected to the correct DB)
+				if (/^(CREATE\s+DATABASE|USE\s+)/i.test(s)) return false;
+				return true;
+			});
 
-		// Execute the entire SQL file as multi-statement (connection has multipleStatements: true)
-		try {
-			await connection.query(sql);
-		} catch (error) {
-			this.error(`Failed to execute SQL file: ${filePath}`);
-			throw error;
+		for (const statement of statements) {
+			if (statement.length > 0) {
+				try {
+					await connection.query(statement);
+				} catch (error) {
+					this.error(
+						`Failed to execute statement: ${statement.substring(0, 100)}...`,
+					);
+					throw error;
+				}
+			}
 		}
 
 		this.info(`Successfully executed: ${path.basename(filePath)}`);
