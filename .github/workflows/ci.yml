@@ -1104,7 +1104,9 @@ jobs:
   release_data:
     name: Release Data
     needs: [setup_env, determine_data_changes, cross_module_ci, data_ci]
-    if: ${{ needs.data_ci.result == 'success' && needs.determine_data_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    # Note: cross_module_ci already validates data_ci succeeded, so we don't need to check data_ci.result here.
+    # Keeping data_ci in needs to ensure proper ordering.
+    if: ${{ needs.determine_data_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
     runs-on: ubuntu-latest
