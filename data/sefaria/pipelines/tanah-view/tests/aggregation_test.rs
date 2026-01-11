@@ -2,6 +2,7 @@
 //!
 //! These tests run the aggregation pipeline against MongoDB and verify the output.
 //! Requires MongoDB to be running with the Sefaria dump loaded.
+//! Tests are skipped in CI environments (when CI env var is set).
 
 use bson::Document;
 use mongodb::{Client, options::ClientOptions};
@@ -9,6 +10,16 @@ use once_cell::sync::Lazy;
 use serde_json::Value;
 use std::path::Path;
 use std::sync::Mutex;
+
+/// Skip test if running in CI environment
+macro_rules! skip_in_ci {
+    () => {
+        if std::env::var("CI").is_ok() {
+            eprintln!("Skipping test in CI - requires MongoDB with Sefaria dump");
+            return;
+        }
+    };
+}
 
 /// Cached aggregation results - runs pipeline once for all tests
 static TANAH_VIEW: Lazy<Mutex<Option<Vec<Value>>>> = Lazy::new(|| Mutex::new(None));
@@ -109,6 +120,7 @@ mod pasek {
 
     #[test]
     fn glues_with_space_in_bereshit_2_5() {
+        skip_in_ci!();
         let data = get_tanah_view();
         let bereshit = find_sefer(&data, "בראשית");
         let segment = get_segment(bereshit, 2, 5, 0);
@@ -129,6 +141,7 @@ mod segment_types {
 
         #[test]
         fn regular_word_has_type_qri_without_offset() {
+            skip_in_ci!();
             let data = get_tanah_view();
             let bereshit = find_sefer(&data, "בראשית");
             let segment = get_segment(bereshit, 1, 1, 0);
@@ -150,6 +163,7 @@ mod segment_types {
 
         #[test]
         fn is_vocalized_with_niqqud() {
+            skip_in_ci!();
             let data = get_tanah_view();
             let niqqud_pattern =
                 regex::Regex::new(r"[\u05B0-\u05BD\u05BF\u05C1\u05C2\u05C7]").unwrap();
@@ -171,6 +185,7 @@ mod segment_types {
 
         #[test]
         fn regular_segments_have_recording_time_frame() {
+            skip_in_ci!();
             let data = get_tanah_view();
             let mut checked = 0;
 
@@ -211,6 +226,7 @@ mod segment_types {
 
         #[test]
         fn is_unvocalized_without_niqqud() {
+            skip_in_ci!();
             let data = get_tanah_view();
             let niqqud_pattern =
                 regex::Regex::new(r"[\u05B0-\u05BD\u05BF\u05C1\u05C2\u05C7]").unwrap();
@@ -242,6 +258,7 @@ mod segment_types {
 
         #[test]
         fn never_has_recording_time_frame() {
+            skip_in_ci!();
             let data = get_tanah_view();
 
             for sefer in &data {
@@ -274,6 +291,7 @@ mod segment_types {
 
         #[test]
         fn has_no_recording_time_frame() {
+            skip_in_ci!();
             let data = get_tanah_view();
             let bereshit = find_sefer(&data, "בראשית");
 
@@ -330,6 +348,7 @@ mod ktiv_qri_pairs {
 
     #[test]
     fn count_is_reasonable() {
+        skip_in_ci!();
         let data = get_tanah_view();
         let mut qri_with_offset_count = 0;
 
@@ -365,6 +384,7 @@ mod ktiv_qri_pairs {
 
         #[test]
         fn ktiv_points_to_qri() {
+            skip_in_ci!();
             let data = get_tanah_view();
             let mut checked_count = 0;
 
@@ -409,6 +429,7 @@ mod ktiv_qri_pairs {
 
         #[test]
         fn qri_points_to_ktiv() {
+            skip_in_ci!();
             let data = get_tanah_view();
             let mut checked_count = 0;
 
@@ -461,6 +482,7 @@ mod ktiv_qri_pairs {
 
         #[test]
         fn ktiv_without_qri_has_zero_offset() {
+            skip_in_ci!();
             // כתיב ולא קרי - ktiv segments with no matching qri should have qriOffset=0
             let data = get_tanah_view();
             let mut ktiv_zero_count = 0;
@@ -510,6 +532,7 @@ mod ktiv_qri_pairs {
 
         #[test]
         fn qri_without_ktiv_has_zero_offset() {
+            skip_in_ci!();
             // קרי ולא כתיב - bracket qri segments with no matching ktiv should have ktivOffset=0
             let data = get_tanah_view();
             let mut qri_zero_count = 0;
@@ -559,6 +582,7 @@ mod ktiv_qri_pairs {
 
         #[test]
         fn all_ktiv_segments_have_qri_offset() {
+            skip_in_ci!();
             // Every ktiv segment should have qriOffset (either pointing to qri or 0 for orphan)
             let data = get_tanah_view();
             let mut ktiv_without_offset: Vec<(String, i32, String)> = Vec::new();
@@ -602,6 +626,7 @@ mod ktiv_qri_pairs {
 
         #[test]
         fn regular_qri_has_no_ktiv_offset() {
+            skip_in_ci!();
             // Regular qri (קרי וכתיב) should NOT have ktivOffset property at all
             // Only bracket-derived qri should have ktivOffset
             let data = get_tanah_view();
@@ -655,6 +680,7 @@ mod additionals {
 
         #[test]
         fn has_correct_structure() {
+            skip_in_ci!();
             let data = get_tanah_view();
             let shmuel = find_sefer_with_additionals(&data, "שמואל");
 
@@ -672,6 +698,7 @@ mod additionals {
 
         #[test]
         fn ktiv_qri_works_in_additionals() {
+            skip_in_ci!();
             let data = get_tanah_view();
             let shmuel = find_sefer_with_additionals(&data, "שמואל");
             let shmuel_a = &shmuel["additionals"].as_array().unwrap()[0];
@@ -692,6 +719,7 @@ mod additionals {
 
         #[test]
         fn has_correct_structure() {
+            skip_in_ci!();
             let data = get_tanah_view();
             let melachim = find_sefer_with_additionals(&data, "מלכים");
 
@@ -708,6 +736,7 @@ mod additionals {
 
         #[test]
         fn has_correct_structure() {
+            skip_in_ci!();
             let data = get_tanah_view();
             let ezra = find_sefer_with_additionals(&data, "עזרא");
 
@@ -724,6 +753,7 @@ mod additionals {
 
         #[test]
         fn has_correct_structure() {
+            skip_in_ci!();
             let data = get_tanah_view();
             let dh = find_sefer_with_additionals(&data, "דברי הימים");
 
