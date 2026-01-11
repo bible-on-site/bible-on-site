@@ -177,23 +177,21 @@ mod segment_types {
             for sefer in &data {
                 let perakim = get_all_perakim(sefer);
 
-                if let Some(first_perek) = perakim.first() {
-                    if let Some(pesukim) = first_perek.get("pesukim").and_then(|p| p.as_array()) {
-                        for pasuk in pesukim {
-                            if let Some(segments) =
-                                pasuk.get("segments").and_then(|s| s.as_array())
-                            {
-                                for segment in segments {
-                                    if segment["type"].as_str() == Some("qri")
-                                        && segment.get("ktivOffset").is_none()
-                                    {
-                                        assert!(
-                                            segment.get("recordingTimeFrame").is_some(),
-                                            "Regular qri segment '{}' should have recordingTimeFrame",
-                                            segment["value"].as_str().unwrap_or("")
-                                        );
-                                        checked += 1;
-                                    }
+                if let Some(first_perek) = perakim.first()
+                    && let Some(pesukim) = first_perek.get("pesukim").and_then(|p| p.as_array())
+                {
+                    for pasuk in pesukim {
+                        if let Some(segments) = pasuk.get("segments").and_then(|s| s.as_array()) {
+                            for segment in segments {
+                                if segment["type"].as_str() == Some("qri")
+                                    && segment.get("ktivOffset").is_none()
+                                {
+                                    assert!(
+                                        segment.get("recordingTimeFrame").is_some(),
+                                        "Regular qri segment '{}' should have recordingTimeFrame",
+                                        segment["value"].as_str().unwrap_or("")
+                                    );
+                                    checked += 1;
                                 }
                             }
                         }
@@ -382,26 +380,21 @@ mod ktiv_qri_pairs {
                                 pasuk.get("segments").and_then(|s| s.as_array())
                             {
                                 for (idx, segment) in segments.iter().enumerate() {
-                                    if segment["type"].as_str() == Some("ktiv") {
-                                        if let Some(offset) = segment.get("qriOffset") {
-                                            if let Some(offset_val) = get_offset_as_i64(offset) {
-                                                if offset_val > 0
-                                                    && (idx as i64 + offset_val)
-                                                        < segments.len() as i64
-                                                {
-                                                    let target =
-                                                        &segments[idx + offset_val as usize];
-                                                    assert_eq!(
-                                                        target["type"].as_str(),
-                                                        Some("qri"),
-                                                        "Ktiv at index {} with qriOffset {} should point to qri",
-                                                        idx,
-                                                        offset_val
-                                                    );
-                                                    checked_count += 1;
-                                                }
-                                            }
-                                        }
+                                    if segment["type"].as_str() == Some("ktiv")
+                                        && let Some(offset) = segment.get("qriOffset")
+                                        && let Some(offset_val) = get_offset_as_i64(offset)
+                                        && offset_val > 0
+                                        && (idx as i64 + offset_val) < segments.len() as i64
+                                    {
+                                        let target = &segments[idx + offset_val as usize];
+                                        assert_eq!(
+                                            target["type"].as_str(),
+                                            Some("qri"),
+                                            "Ktiv at index {} with qriOffset {} should point to qri",
+                                            idx,
+                                            offset_val
+                                        );
+                                        checked_count += 1;
                                     }
                                 }
                             }
@@ -432,27 +425,23 @@ mod ktiv_qri_pairs {
                                 pasuk.get("segments").and_then(|s| s.as_array())
                             {
                                 for (idx, segment) in segments.iter().enumerate() {
-                                    if segment["type"].as_str() == Some("qri") {
-                                        if let Some(offset) = segment.get("ktivOffset") {
-                                            if let Some(offset_val) = get_offset_as_i64(offset) {
-                                                if offset_val < 0 {
-                                                    let target_idx = idx as i64 + offset_val;
-                                                    if target_idx >= 0
-                                                        && (target_idx as usize) < segments.len()
-                                                    {
-                                                        let target =
-                                                            &segments[target_idx as usize];
-                                                        assert_eq!(
-                                                            target["type"].as_str(),
-                                                            Some("ktiv"),
-                                                            "Qri at index {} with ktivOffset {} should point to ktiv",
-                                                            idx,
-                                                            offset_val
-                                                        );
-                                                        checked_count += 1;
-                                                    }
-                                                }
-                                            }
+                                    if segment["type"].as_str() == Some("qri")
+                                        && let Some(offset) = segment.get("ktivOffset")
+                                        && let Some(offset_val) = get_offset_as_i64(offset)
+                                        && offset_val < 0
+                                    {
+                                        let target_idx = idx as i64 + offset_val;
+                                        if target_idx >= 0 && (target_idx as usize) < segments.len()
+                                        {
+                                            let target = &segments[target_idx as usize];
+                                            assert_eq!(
+                                                target["type"].as_str(),
+                                                Some("ktiv"),
+                                                "Qri at index {} with ktivOffset {} should point to ktiv",
+                                                idx,
+                                                offset_val
+                                            );
+                                            checked_count += 1;
                                         }
                                     }
                                 }
@@ -493,22 +482,21 @@ mod ktiv_qri_pairs {
                                 pasuk.get("segments").and_then(|s| s.as_array())
                             {
                                 for segment in segments {
-                                    if segment["type"].as_str() == Some("ktiv") {
-                                        if let Some(offset) = segment.get("qriOffset") {
-                                            if get_offset_as_i64(offset) == Some(0) {
-                                                ktiv_zero_count += 1;
-                                                if ktiv_zero_examples.len() < 5 {
-                                                    let value = segment["value"]
-                                                        .as_str()
-                                                        .unwrap_or("")
-                                                        .to_string();
-                                                    ktiv_zero_examples.push((
-                                                        sefer_name.to_string(),
-                                                        perek_id,
-                                                        value,
-                                                    ));
-                                                }
-                                            }
+                                    if segment["type"].as_str() == Some("ktiv")
+                                        && let Some(offset) = segment.get("qriOffset")
+                                        && get_offset_as_i64(offset) == Some(0)
+                                    {
+                                        ktiv_zero_count += 1;
+                                        if ktiv_zero_examples.len() < 5 {
+                                            let value = segment["value"]
+                                                .as_str()
+                                                .unwrap_or("")
+                                                .to_string();
+                                            ktiv_zero_examples.push((
+                                                sefer_name.to_string(),
+                                                perek_id,
+                                                value,
+                                            ));
                                         }
                                     }
                                 }
@@ -546,22 +534,21 @@ mod ktiv_qri_pairs {
                                 pasuk.get("segments").and_then(|s| s.as_array())
                             {
                                 for segment in segments {
-                                    if segment["type"].as_str() == Some("qri") {
-                                        if let Some(offset) = segment.get("ktivOffset") {
-                                            if get_offset_as_i64(offset) == Some(0) {
-                                                qri_zero_count += 1;
-                                                if qri_zero_examples.len() < 5 {
-                                                    let value = segment["value"]
-                                                        .as_str()
-                                                        .unwrap_or("")
-                                                        .to_string();
-                                                    qri_zero_examples.push((
-                                                        sefer_name.to_string(),
-                                                        perek_id,
-                                                        value,
-                                                    ));
-                                                }
-                                            }
+                                    if segment["type"].as_str() == Some("qri")
+                                        && let Some(offset) = segment.get("ktivOffset")
+                                        && get_offset_as_i64(offset) == Some(0)
+                                    {
+                                        qri_zero_count += 1;
+                                        if qri_zero_examples.len() < 5 {
+                                            let value = segment["value"]
+                                                .as_str()
+                                                .unwrap_or("")
+                                                .to_string();
+                                            qri_zero_examples.push((
+                                                sefer_name.to_string(),
+                                                perek_id,
+                                                value,
+                                            ));
                                         }
                                     }
                                 }
