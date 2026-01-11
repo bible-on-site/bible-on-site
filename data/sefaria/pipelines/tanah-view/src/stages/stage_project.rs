@@ -12,7 +12,7 @@
 //! Due to the complexity of this stage (deeply nested MongoDB expressions),
 //! the inner content is defined as JSON and parsed at runtime.
 
-use bson::{doc, Document};
+use bson::{Document, doc};
 
 /// JSON representation of the project stage inner content.
 /// This is parsed at runtime to avoid doc! macro recursion issues.

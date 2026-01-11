@@ -1,6 +1,6 @@
 //! Sort stage: Order sefarim by their canonical order.
 
-use bson::{doc, Document};
+use bson::{Document, doc};
 
 /// Returns the `$sort` stage document.
 pub fn build() -> Document {

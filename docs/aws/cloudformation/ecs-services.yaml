@@ -160,6 +160,16 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: "*"
+        # Permissions to read SSM parameters for database credentials
+        - PolicyName: SSMParameterReadAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameters
+                  - ssm:GetParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-*"
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -308,6 +318,12 @@ Resources:
           Environment:
             - Name: PROFILE
               Value: prod
+            - Name: HOST
+              Value: "0.0.0.0" # Required to accept connections from nginx
+          # Database credentials injected from SSM Parameter Store
+          Secrets:
+            - Name: DB_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-url"
       Tags:
         - Key: Project
           Value: bible-on-site

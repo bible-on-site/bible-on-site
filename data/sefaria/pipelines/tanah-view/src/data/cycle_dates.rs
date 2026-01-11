@@ -7,7 +7,7 @@
 use bson::Bson;
 use chrono::{Datelike, NaiveDate, Timelike};
 use chrono_tz::Asia::Jerusalem;
-use icu_calendar::{cal::Hebrew, Date};
+use icu_calendar::{Date, cal::Hebrew};
 use sunrise::{Coordinates, SolarDay, SolarEvent};
 
 /// Number of perakim in the Tanah

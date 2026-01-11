@@ -3,7 +3,7 @@
 //! This stage groups sefarim that are traditionally considered single books
 //! but are split in the source data (e.g., שמואל א + שמואל ב → שמואל).
 
-use bson::{doc, Document};
+use bson::{Document, doc};
 
 /// Returns the `$group` stage document.
 ///

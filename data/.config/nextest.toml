@@ -1,0 +1,3 @@
+[profile.ci]
+# Output JUnit XML for CI reporting
+junit.path = "../.junit-report/unit/results.xml"

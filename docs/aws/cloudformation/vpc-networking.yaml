@@ -118,12 +118,12 @@ Resources:
           ToPort: 3000
           CidrIp: 172.31.0.0/16
           Description: Next.js from within VPC (nginx proxy)
-        # Future: API service on port 3003
-        # - IpProtocol: tcp
-        #   FromPort: 3003
-        #   ToPort: 3003
-        #   CidrIp: 172.31.0.0/16
-        #   Description: API from within VPC (nginx proxy)
+        # API service on port 3003
+        - IpProtocol: tcp
+          FromPort: 3003
+          ToPort: 3003
+          CidrIp: 172.31.0.0/16
+          Description: API from within VPC (nginx proxy)
       SecurityGroupEgress:
         - IpProtocol: "-1"
           CidrIp: 0.0.0.0/0

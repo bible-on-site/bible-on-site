@@ -118,6 +118,23 @@ Resources:
               - sts:GetCallerIdentity
             Resource: "*"
 
+          # SSM Parameter Store - read database connection info
+          - Sid: SSMParameterStoreRead
+            Effect: Allow
+            Action:
+              - ssm:GetParameter
+              - ssm:GetParameters
+            Resource:
+              - !Sub "arn:aws:ssm:*:${AWS::AccountId}:parameter/bible-on-site-tanah-db-*"
+
+          # RDS - describe instances to get endpoint (host/port)
+          - Sid: RDSDescribe
+            Effect: Allow
+            Action:
+              - rds:DescribeDBInstances
+            Resource:
+              - !Sub "arn:aws:rds:*:${AWS::AccountId}:db:tanah-mysql"
+
   # =============================================================================
   # IAM Role: GitHub Actions ECR Deploy Role
   # =============================================================================

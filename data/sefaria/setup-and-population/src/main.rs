@@ -63,7 +63,9 @@ fn run_setup() -> Result<()> {
         } else {
             println!("❌ MongoDB Tools not found at: {}", tools_path.display());
             println!("\n📋 TODO: Automate MongoDB Tools installation");
-            println!("   For now, manually install from: https://www.mongodb.com/try/download/database-tools");
+            println!(
+                "   For now, manually install from: https://www.mongodb.com/try/download/database-tools"
+            );
         }
     } else {
         println!("📋 TODO: Add MongoDB check for non-Windows platforms");

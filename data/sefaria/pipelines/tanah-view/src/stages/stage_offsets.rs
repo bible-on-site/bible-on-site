@@ -5,7 +5,7 @@
 //! - `ktivOffset` and `ktivSpan` on qri segments (pointing back to ktiv)
 //! - Removes the internal `_fromBracket` marker
 
-use bson::{doc, Bson, Document};
+use bson::{Bson, Document, doc};
 
 /// JavaScript function body for processing perakim segments.
 ///
