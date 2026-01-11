@@ -1,4 +1,4 @@
-# Data Processing (v0.1.1)
+# Data Processing (v0.1.2)
 
 This directory contains data processing tools and pipelines for the Bible On Site project.
 
