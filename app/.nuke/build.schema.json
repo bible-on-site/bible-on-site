@@ -24,6 +24,7 @@
     "ExecutableTarget": {
       "type": "string",
       "enum": [
+        "BumpVersion",
         "Clean",
         "Compile",
         "CompileE2E",
@@ -33,6 +34,8 @@
         "CoverageIntegration",
         "CoverageMerge",
         "CoverageUnit",
+        "DeployGooglePlay",
+        "DeployMsStore",
         "Dev",
         "Lint",
         "Package",
@@ -121,9 +124,57 @@
   "allOf": [
     {
       "properties": {
+        "AabPath": {
+          "type": "string",
+          "description": "Path to AAB file for Google Play upload"
+        },
+        "AndroidKeyAlias": {
+          "type": "string",
+          "description": "Android key alias"
+        },
+        "AndroidKeyPassword": {
+          "type": "string",
+          "description": "Android key password"
+        },
+        "AndroidKeystore": {
+          "type": "string",
+          "description": "Android keystore path"
+        },
+        "AndroidKeystorePassword": {
+          "type": "string",
+          "description": "Android keystore password"
+        },
+        "CertificateThumbprint": {
+          "type": "string",
+          "description": "Windows signing certificate thumbprint (for MSIX signing)"
+        },
         "Configuration": {
           "type": "string",
           "description": "Configuration to build - Default is 'Debug' (local) or 'Release' (server)"
+        },
+        "GooglePlayKeyFile": {
+          "type": "string",
+          "description": "Path to Google Play service account JSON file"
+        },
+        "GooglePlayTrack": {
+          "type": "string",
+          "description": "Google Play track (internal, alpha, beta, production). Default: internal"
+        },
+        "MsixPath": {
+          "type": "string",
+          "description": "Path to MSIX file for Microsoft Store upload"
+        },
+        "MsStoreFlightId": {
+          "type": "string",
+          "description": "Microsoft Store flight ID for internal testing (required unless --production is set)"
+        },
+        "Platform": {
+          "type": "string",
+          "description": "Target platform for packaging: Windows, Android, or All"
+        },
+        "Production": {
+          "type": "boolean",
+          "description": "Deploy to production instead of flight/internal (requires store review)"
         }
       }
     },
