@@ -1,0 +1,146 @@
+name: Continuous Deployment
+
+on:
+  repository_dispatch:
+    types: [deploy-app]
+
+jobs:
+  deploy_google_play:
+    name: Deploy to Google Play (Internal Track)
+    if: ${{ github.event.client_payload.android_artifact_name != '' }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+
+    env:
+      MODULE_VERSION: ${{ github.event.client_payload.module_version }}
+      ANDROID_ARTIFACT_NAME: ${{ github.event.client_payload.android_artifact_name }}
+      CI_RUN_ID: ${{ github.event.client_payload.ci_run_id }}
+      APP_DIRECTORY: app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.client_payload.ref }}
+
+      - name: Restore Android AAB
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ env.ANDROID_ARTIFACT_NAME }}
+          path: ${{ env.APP_DIRECTORY }}/.artifacts
+          run-id: ${{ env.CI_RUN_ID }}
+          github-token: ${{ secrets.BOT_PAT }}
+
+      - name: Find AAB file
+        id: find_aab
+        run: |
+          AAB_FILE=$(find ${{ env.APP_DIRECTORY }}/.artifacts -name "*.aab" | head -1)
+          if [ -z "$AAB_FILE" ]; then
+            echo "Error: No AAB file found"
+            exit 1
+          fi
+          echo "AAB_FILE=$AAB_FILE" >> $GITHUB_OUTPUT
+          echo "Found AAB: $AAB_FILE"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Write service account key
+        run: |
+          echo '${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}' > ${{ runner.temp }}/service-account.json
+
+      - name: Restore dotnet tools
+        working-directory: ${{ env.APP_DIRECTORY }}
+        run: dotnet tool restore
+
+      - name: Upload to Google Play
+        working-directory: ${{ env.APP_DIRECTORY }}
+        run: |
+          dotnet run --project devops -- DeployGooglePlay \
+            --aab-path "${{ steps.find_aab.outputs.AAB_FILE }}" \
+            --google-play-key-file "${{ runner.temp }}/service-account.json"
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ${{ runner.temp }}/service-account.json
+
+      - name: Deployment Summary
+        run: |
+          echo "## Android Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ env.MODULE_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Track:** Internal" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** Deployed ✅" >> $GITHUB_STEP_SUMMARY
+
+  deploy_microsoft_store:
+    name: Deploy to Microsoft Store
+    if: ${{ github.event.client_payload.windows_artifact_name != '' }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+
+    env:
+      MODULE_VERSION: ${{ github.event.client_payload.module_version }}
+      WINDOWS_ARTIFACT_NAME: ${{ github.event.client_payload.windows_artifact_name }}
+      CI_RUN_ID: ${{ github.event.client_payload.ci_run_id }}
+      APP_DIRECTORY: app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.client_payload.ref }}
+
+      - name: Restore Windows MSIX
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ env.WINDOWS_ARTIFACT_NAME }}
+          path: ${{ env.APP_DIRECTORY }}/.artifacts
+          run-id: ${{ env.CI_RUN_ID }}
+          github-token: ${{ secrets.BOT_PAT }}
+
+      - name: Find MSIX file
+        id: find_msix
+        run: |
+          MSIX_FILE=$(find ${{ env.APP_DIRECTORY }}/.artifacts -name "*.msix" -o -name "*.msixupload" | head -1)
+          if [ -z "$MSIX_FILE" ]; then
+            echo "Error: No MSIX file found"
+            exit 1
+          fi
+          echo "MSIX_FILE=$MSIX_FILE" >> $GITHUB_OUTPUT
+          echo "Found MSIX: $MSIX_FILE"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Install Microsoft Store CLI
+        run: dotnet tool install -g MSStoreCLI
+
+      - name: Restore dotnet tools
+        working-directory: ${{ env.APP_DIRECTORY }}
+        run: dotnet tool restore
+
+      - name: Upload to Microsoft Store
+        working-directory: ${{ env.APP_DIRECTORY }}
+        env:
+          PARTNER_CENTER_TENANT_ID: ${{ secrets.MS_STORE_TENANT_ID }}
+          PARTNER_CENTER_CLIENT_ID: ${{ secrets.MS_STORE_CLIENT_ID }}
+          PARTNER_CENTER_CLIENT_SECRET: ${{ secrets.MS_STORE_CLIENT_SECRET }}
+        run: |
+          # Deploy to "Internal" flight by default
+          dotnet run --project devops -- DeployMsStore \
+            --msix-path "${{ steps.find_msix.outputs.MSIX_FILE }}" \
+            --ms-store-flight-id "${{ secrets.MS_STORE_FLIGHT_ID }}"
+
+      - name: Deployment Summary
+        run: |
+          echo "## Windows Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ env.MODULE_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Target:** Microsoft Store (Internal Flight)" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** Submitted ✅" >> $GITHUB_STEP_SUMMARY

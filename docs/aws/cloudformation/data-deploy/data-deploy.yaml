@@ -13,6 +13,8 @@ Description: |
   This Lambda runs in the VPC and can access the RDS MySQL instance.
   It is invoked by GitHub Actions CD workflow to populate the database.
 
+  Lambda code: See data-deploy-lambda.py in this directory.
+
   Sensitive Information Restoration:
   | Placeholder | Description | Restoration Command |
   |---|---|---|
@@ -130,16 +132,10 @@ Resources:
           Value: data-deploy-lambda
 
   # =============================================================================
-  # Lambda Layer for pymysql
-  # =============================================================================
-  # Note: You can use a public layer or create your own
-  # AWS provides a MySQL layer in some regions, or you can package pymysql
-  # For simplicity, we'll use inline installation in the Lambda code
-  # or use a Lambda layer uploaded to S3
-
-  # =============================================================================
   # Lambda Function
   # =============================================================================
+  # ⚠️ NOTE: The actual Lambda is deployed with pymysql bundled.
+  # See data-deploy-lambda.py for the source code.
   DataDeployLambda:
     Type: AWS::Lambda::Function
     Properties:
@@ -159,91 +155,9 @@ Resources:
           S3_BUCKET: !Ref DataDeployBucket
           SSM_PREFIX: bible-on-site-tanah-db
       Code:
-        ZipFile: |
-          import json
-          import os
-          import boto3
-          import pymysql
-
-          def handler(event, context):
-              """
-              Lambda handler for database population.
-
-              Expected event format:
-              {
-                  "sql_files": ["file1.sql", "file2.sql"],
-                  "s3_prefix": "sql/2024-01-01-120000/"
-              }
-              """
-              ssm = boto3.client('ssm')
-              s3 = boto3.client('s3')
-
-              bucket = os.environ.get('S3_BUCKET', 'bible-on-site-data-deploy')
-              ssm_prefix = os.environ.get('SSM_PREFIX', 'bible-on-site-tanah-db')
-
-              # Get database credentials from SSM
-              params = ssm.get_parameters(
-                  Names=[
-                      f'{ssm_prefix}-host',
-                      f'{ssm_prefix}-port',
-                      f'{ssm_prefix}-name',
-                      f'{ssm_prefix}-username',
-                      f'{ssm_prefix}-url'
-                  ],
-                  WithDecryption=True
-              )
-
-              param_dict = {p['Name'].split('-')[-1]: p['Value'] for p in params['Parameters']}
-
-              # Extract password from URL (format: mysql://user:pass@host:port/db)
-              db_url = param_dict.get('url', '')
-              password = db_url.split(':')[2].split('@')[0] if '://' in db_url else ''
-
-              # Connect to database
-              connection = pymysql.connect(
-                  host=param_dict['host'],
-                  port=int(param_dict.get('port', 3306)),
-                  user=param_dict['username'],
-                  password=password,
-                  database=param_dict['name'],
-                  connect_timeout=30,
-                  autocommit=True
-              )
-
-              try:
-                  sql_files = event.get('sql_files', [])
-                  s3_prefix = event.get('s3_prefix', '')
-                  results = []
-
-                  for sql_file in sql_files:
-                      s3_key = f"{s3_prefix}{sql_file}"
-                      print(f"Processing: s3://{bucket}/{s3_key}")
-
-                      # Download SQL from S3
-                      response = s3.get_object(Bucket=bucket, Key=s3_key)
-                      sql_content = response['Body'].read().decode('utf-8')
-
-                      # Execute SQL statements
-                      with connection.cursor() as cursor:
-                          statements = [s.strip() for s in sql_content.split(';') if s.strip()]
-                          for stmt in statements:
-                              cursor.execute(stmt)
-                          results.append({
-                              'file': sql_file,
-                              'statements': len(statements),
-                              'status': 'success'
-                          })
-                      print(f"Executed {len(statements)} statements from {sql_file}")
-
-                  return {
-                      'statusCode': 200,
-                      'body': json.dumps({
-                          'message': 'Database population completed',
-                          'results': results
-                      })
-                  }
-              finally:
-                  connection.close()
+        # Deploy using: See data-deploy-lambda.py docstring for instructions
+        S3Bucket: bible-on-site-data-deploy
+        S3Key: lambda/lambda.zip
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -264,6 +178,72 @@ Resources:
       ToPort: 3306
       SourceSecurityGroupId: !Ref LambdaSecurityGroup
       Description: Allow MySQL access from data deploy Lambda
+
+  # =============================================================================
+  # VPC Endpoints (Required for Lambda in VPC to access AWS services)
+  # =============================================================================
+  # Lambda runs in a private VPC with no NAT Gateway. These endpoints
+  # allow the Lambda to reach S3 and SSM without internet access.
+
+  # S3 Gateway Endpoint (free, uses route tables)
+  S3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VpcId
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - rtb-0123456789abcdef0 # Replace with actual route table ID
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+            Resource:
+              - !Sub "arn:aws:s3:::${DataDeployBucket}/*"
+
+  # SSM Interface Endpoint (has hourly cost)
+  SSMInterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VpcId
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ssm"
+      VpcEndpointType: Interface
+      SubnetIds: !Ref SubnetIds
+      SecurityGroupIds:
+        - !Ref VPCEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
+  # Security group for VPC Interface Endpoints
+  VPCEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: vpc-endpoint-sg
+      GroupDescription: Security group for VPC interface endpoints
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 172.31.0.0/16
+          Description: HTTPS from VPC CIDR for interface endpoints
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+
+  # Add HTTPS ingress to Lambda SG for VPC endpoint communication
+  LambdaSecurityGroupHTTPSIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref LambdaSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: 172.31.0.0/16
+      Description: HTTPS for VPC endpoint communication
 
 Outputs:
   LambdaFunctionArn:
@@ -309,10 +289,55 @@ Outputs:
 #
 # 5. Create IAM role for Lambda with SSM and S3 read permissions
 #
-# 6. Create Lambda function with pymysql layer
+# 6. Create Lambda function with pymysql bundled:
+#    a. Create deployment package:
+#       mkdir lambda-package && cd lambda-package
+#       pip install pymysql -t .
+#       cp data-deploy-lambda.py index.py
+#       zip -r ../lambda.zip .
+#    b. Deploy:
+#       aws lambda create-function \
+#         --function-name bible-on-site-db-populator \
+#         --runtime python3.11 \
+#         --handler index.handler \
+#         --zip-file fileb://lambda.zip \
+#         --role <LAMBDA_ROLE_ARN> \
+#         --timeout 300 \
+#         --memory-size 256 \
+#         --vpc-config SubnetIds=...,SecurityGroupIds=... \
+#         --region il-central-1
 #
-# 7. Update GitHub Actions IAM role to allow:
+# 7. Create VPC Endpoints (REQUIRED - Lambda in VPC has no internet access):
+#    a. S3 Gateway Endpoint (free):
+#       aws ec2 create-vpc-endpoint \
+#         --vpc-id vpc-0d6af72e472db138c \
+#         --service-name com.amazonaws.il-central-1.s3 \
+#         --vpc-endpoint-type Gateway \
+#         --route-table-ids <ROUTE_TABLE_ID> \
+#         --region il-central-1
+#
+#    b. SSM Interface Endpoint (has hourly cost ~$7/month):
+#       aws ec2 create-vpc-endpoint \
+#         --vpc-id vpc-0d6af72e472db138c \
+#         --service-name com.amazonaws.il-central-1.ssm \
+#         --vpc-endpoint-type Interface \
+#         --subnet-ids subnet-056e95f1b766e6b0d subnet-02c538ecab687f8bd \
+#         --security-group-ids <VPC_ENDPOINT_SG_ID> \
+#         --private-dns-enabled \
+#         --region il-central-1
+#
+#    c. Add HTTPS ingress to Lambda SG from VPC CIDR (for endpoint communication)
+#
+# 8. Update GitHub Actions IAM role to allow:
 #    - s3:PutObject on the bucket
 #    - lambda:InvokeFunction on the Lambda
 #
+# =============================================================================
+# DEPLOYED RESOURCES (as of January 2026)
+# =============================================================================
+# - S3 Bucket: bible-on-site-data-deploy
+# - Lambda: bible-on-site-db-populator
+# - Lambda SG: sg-0cdca171d4f33dd34 (data-deploy-lambda-sg)
+# - S3 Gateway Endpoint: vpce-0388b3ea36b6a3214
+# - SSM Interface Endpoint: vpce-0dd7903d30e03208c
 # =============================================================================

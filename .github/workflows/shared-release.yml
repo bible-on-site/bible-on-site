@@ -10,8 +10,8 @@ on:
         description: The version of the module.
         required: true
         type: string
-      docker_artifact_name:
-        description: The name of the Docker artifact.
+      released_artifact_name:
+        description: The name of the artifact to attach to the release.
         required: true
         type: string
     secrets:
@@ -40,7 +40,7 @@ jobs:
           repository: ${{ github.repository }}
           token: ${{ secrets.BOT_PAT }} # Might be able to use the default GITHUB_TOKEN, but using a PAT as I don't have time to test it right now.
           event-type: deploy
-          client-payload: '{"ref": "${{ github.ref }}", "module_directory": "${{ inputs.module_directory }}", "module_name": "${{ env.MODULE_NAME }}", "module_version": "${{ inputs.module_version }}", "ci_run_id": "${{ github.run_id }}", "docker_artifact_name": "${{ inputs.docker_artifact_name }}"}'
+          client-payload: '{"ref": "${{ github.ref }}", "module_directory": "${{ inputs.module_directory }}", "module_name": "${{ env.MODULE_NAME }}", "module_version": "${{ inputs.module_version }}", "ci_run_id": "${{ github.run_id }}", "released_artifact_name": "${{ inputs.released_artifact_name }}"}'
 
   setup_env:
     name: Setup Environment Variables
@@ -122,22 +122,22 @@ jobs:
           git remote set-url origin git@github.com:${{ github.repository }}
           git push origin ${{ steps.create_tag.outputs.TAG_NAME }}
 
-      - name: Prepare Docker Restore
-        id: prepare_docker_restore
+      - name: Prepare Artifact Restore
+        id: prepare_artifact_restore
         run: |
           mkdir -p ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
           DOCKER_IMAGE_TAR_NAME="${{ env.DOCKER_IMAGE_NAME }}-v${{ inputs.module_version }}.tar"
           DOCKER_IMAGE_TAR_PATH="${{ env.DOCKER_IMAGE_OUTPUT_DIR }}/${DOCKER_IMAGE_TAR_NAME}"
           DOCKER_IMAGE_TAR_GZ_PATH="${DOCKER_IMAGE_TAR_PATH}.gz"
-          echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
+          echo "ARTIFACT_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
 
-      - name: Restore Docker Image
+      - name: Restore Artifact
         uses: actions/download-artifact@v7
         with:
-          name: ${{ inputs.docker_artifact_name }}
+          name: ${{ inputs.released_artifact_name }}
           path: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
 
-      - name: Create GitHub Release and Upload ${{ env.MODULE_NAME_CAPITALIZED }} Image
+      - name: Create GitHub Release and Upload ${{ env.MODULE_NAME_CAPITALIZED }} Artifact
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.create_tag.outputs.TAG_NAME }}
@@ -145,7 +145,7 @@ jobs:
           body: |
             Automated release for ${{ env.MODULE_NAME_CAPITALIZED }} version ${{ inputs.module_version }}.
           token: ${{ secrets.GITHUB_TOKEN }}
-          files: ${{ steps.prepare_docker_restore.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
+          files: ${{ steps.prepare_artifact_restore.outputs.ARTIFACT_PATH }}
 
       - name: Bump ${{ env.MODULE_NAME_CAPITALIZED }} Version
         working-directory: ${{ inputs.module_directory }}

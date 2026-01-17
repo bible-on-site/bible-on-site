@@ -18,7 +18,7 @@ jobs:
       MODULE_NAME: ${{ github.event.client_payload.module_name }}
       MODULE_DIRECTORY: ${{ github.event.client_payload.module_directory }}
       MODULE_VERSION: ${{ github.event.client_payload.module_version }}
-      DOCKER_ARTIFACT_NAME: ${{ github.event.client_payload.docker_artifact_name }}
+      RELEASED_ARTIFACT_NAME: ${{ github.event.client_payload.released_artifact_name }}
       DOCKER_IMAGE_NAME: ${{ github.event.client_payload.module_directory == 'web/bible-on-site' && 'bible-on-site' || 'bible-on-site-api' }}
       DOCKER_IMAGE_OUTPUT_DIR: ${{ github.event.client_payload.module_directory }}/.release
       CI_RUN_ID: ${{ github.event.client_payload.ci_run_id }}
@@ -71,7 +71,7 @@ jobs:
       - name: Restore Docker Image
         uses: actions/download-artifact@v7
         with:
-          name: ${{ env.DOCKER_ARTIFACT_NAME }}
+          name: ${{ env.RELEASED_ARTIFACT_NAME }}
           path: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
           run-id: ${{ env.CI_RUN_ID }}
           github-token: ${{ secrets.BOT_PAT }}
