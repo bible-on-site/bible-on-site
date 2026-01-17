@@ -176,6 +176,24 @@ aws ssm get-parameter --name bible-on-site-tanah-db-password \
   --with-decryption --query "Parameter.Value" --output text --region il-central-1
 ```
 
+### 12. `data-deploy-lambda.yaml`
+Lambda function for deploying SQL data to RDS MySQL.
+
+**Components:**
+- S3 Bucket: `bible-on-site-data-deploy` (SQL file staging)
+- Lambda Function: `bible-on-site-db-populator` (Python 3.11)
+- Security Group: `data-deploy-lambda-sg` (VPC access)
+- IAM Role: `DataDeployLambdaRole` (SSM read, S3 read)
+
+**Features:**
+- Runs in VPC (can access RDS)
+- Gets DB credentials from SSM Parameter Store
+- Downloads SQL files from S3
+- Executes SQL statements against RDS
+- Invoked by GitHub Actions CD workflow
+
+**Flow:** GitHub Actions → S3 (upload SQL) → Lambda invoke → RDS MySQL
+
 ## Data Flow: ECR → ECS → nginx → Internet
 
 1. **GitHub Actions** pushes Docker images to **ECR** (via OIDC role)

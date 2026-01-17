@@ -13,20 +13,17 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      DATA_DIRECTORY: data
       DEVOPS_DIRECTORY: devops
       DEVOPS_NODE_CACHE_PATH: devops/package-lock.json
       DEVOPS_NODE_VERSION_FILE: devops/package.json
 
     steps:
       - name: Checkout
-        id: checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.client_payload.ref }}
 
       - name: Setup Node.js
-        id: setup-node
         uses: actions/setup-node@v6
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
@@ -34,10 +31,8 @@ jobs:
           cache: npm
 
       - name: Install npm Dependencies
-        id: npm_ci
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        run: |
-          npm ci --no-audit
+        run: npm ci --no-audit
 
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v5
@@ -47,7 +42,4 @@ jobs:
 
       - name: Deploy Data to Production
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        env:
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-        run: |
-          npm run deploy:data
+        run: npm run deploy:data

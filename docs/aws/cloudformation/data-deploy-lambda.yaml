@@ -1,0 +1,318 @@
+# ============================================================================
+# ⚠️ DISCLAIMER: This CloudFormation template has NEVER been tested or deployed.
+# It is maintained as Infrastructure as Code DOCUMENTATION ONLY to reflect the
+# de-facto AWS configuration. Do not assume it will work without thorough testing.
+# ============================================================================
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: |
+  Lambda function for deploying SQL data to RDS MySQL.
+
+  ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
+
+  This Lambda runs in the VPC and can access the RDS MySQL instance.
+  It is invoked by GitHub Actions CD workflow to populate the database.
+
+  Sensitive Information Restoration:
+  | Placeholder | Description | Restoration Command |
+  |---|---|---|
+  | `<RDS_SECURITY_GROUP_ID>` | RDS MySQL security group | `aws ec2 describe-security-groups --filters "Name=group-name,Values=tanah-rds-sg" --query "SecurityGroups[0].GroupId" --output text --region il-central-1` |
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID for the Lambda function
+    Default: vpc-0d6af72e472db138c
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnet IDs for the Lambda function
+    Default: subnet-056e95f1b766e6b0d,subnet-02c538ecab687f8bd,subnet-07bf7408f0795eacc
+
+  RDSSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group ID for RDS (to allow Lambda access)
+    Default: <RDS_SECURITY_GROUP_ID> # tanah-rds-sg
+
+Resources:
+  # =============================================================================
+  # S3 Bucket for SQL Files
+  # =============================================================================
+  DataDeployBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: bible-on-site-data-deploy
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldSQLFiles
+            Status: Enabled
+            ExpirationInDays: 1
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Purpose
+          Value: data-deploy
+
+  # =============================================================================
+  # Security Group for Lambda
+  # =============================================================================
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: data-deploy-lambda-sg
+      GroupDescription: Security group for data deploy Lambda function
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        # Allow HTTPS outbound (for SSM, S3)
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS for AWS APIs (SSM, S3)
+        # Allow MySQL outbound (for RDS)
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 172.31.0.0/16
+          Description: MySQL access to RDS
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Purpose
+          Value: data-deploy-lambda
+
+  # =============================================================================
+  # IAM Role for Lambda
+  # =============================================================================
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: DataDeployLambdaRole
+      Description: Role for data deploy Lambda function
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: DataDeployLambdaPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # SSM Parameter Store - read database credentials
+              - Sid: SSMParameterStoreRead
+                Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-*"
+              # S3 - read SQL files
+              - Sid: S3Read
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource:
+                  - !Sub "arn:aws:s3:::${DataDeployBucket}/*"
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Purpose
+          Value: data-deploy-lambda
+
+  # =============================================================================
+  # Lambda Layer for pymysql
+  # =============================================================================
+  # Note: You can use a public layer or create your own
+  # AWS provides a MySQL layer in some regions, or you can package pymysql
+  # For simplicity, we'll use inline installation in the Lambda code
+  # or use a Lambda layer uploaded to S3
+
+  # =============================================================================
+  # Lambda Function
+  # =============================================================================
+  DataDeployLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: bible-on-site-db-populator
+      Description: Populates RDS MySQL database with SQL files from S3
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300 # 5 minutes
+      MemorySize: 256
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds: !Ref SubnetIds
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref DataDeployBucket
+          SSM_PREFIX: bible-on-site-tanah-db
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import boto3
+          import pymysql
+
+          def handler(event, context):
+              """
+              Lambda handler for database population.
+
+              Expected event format:
+              {
+                  "sql_files": ["file1.sql", "file2.sql"],
+                  "s3_prefix": "sql/2024-01-01-120000/"
+              }
+              """
+              ssm = boto3.client('ssm')
+              s3 = boto3.client('s3')
+
+              bucket = os.environ.get('S3_BUCKET', 'bible-on-site-data-deploy')
+              ssm_prefix = os.environ.get('SSM_PREFIX', 'bible-on-site-tanah-db')
+
+              # Get database credentials from SSM
+              params = ssm.get_parameters(
+                  Names=[
+                      f'{ssm_prefix}-host',
+                      f'{ssm_prefix}-port',
+                      f'{ssm_prefix}-name',
+                      f'{ssm_prefix}-username',
+                      f'{ssm_prefix}-url'
+                  ],
+                  WithDecryption=True
+              )
+
+              param_dict = {p['Name'].split('-')[-1]: p['Value'] for p in params['Parameters']}
+
+              # Extract password from URL (format: mysql://user:pass@host:port/db)
+              db_url = param_dict.get('url', '')
+              password = db_url.split(':')[2].split('@')[0] if '://' in db_url else ''
+
+              # Connect to database
+              connection = pymysql.connect(
+                  host=param_dict['host'],
+                  port=int(param_dict.get('port', 3306)),
+                  user=param_dict['username'],
+                  password=password,
+                  database=param_dict['name'],
+                  connect_timeout=30,
+                  autocommit=True
+              )
+
+              try:
+                  sql_files = event.get('sql_files', [])
+                  s3_prefix = event.get('s3_prefix', '')
+                  results = []
+
+                  for sql_file in sql_files:
+                      s3_key = f"{s3_prefix}{sql_file}"
+                      print(f"Processing: s3://{bucket}/{s3_key}")
+
+                      # Download SQL from S3
+                      response = s3.get_object(Bucket=bucket, Key=s3_key)
+                      sql_content = response['Body'].read().decode('utf-8')
+
+                      # Execute SQL statements
+                      with connection.cursor() as cursor:
+                          statements = [s.strip() for s in sql_content.split(';') if s.strip()]
+                          for stmt in statements:
+                              cursor.execute(stmt)
+                          results.append({
+                              'file': sql_file,
+                              'statements': len(statements),
+                              'status': 'success'
+                          })
+                      print(f"Executed {len(statements)} statements from {sql_file}")
+
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'message': 'Database population completed',
+                          'results': results
+                      })
+                  }
+              finally:
+                  connection.close()
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Purpose
+          Value: data-deploy
+
+  # =============================================================================
+  # Update RDS Security Group to Allow Lambda Access
+  # =============================================================================
+  # Note: This creates an ingress rule on the RDS security group
+  # to allow traffic from the Lambda security group
+  RDSSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref RDSSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      SourceSecurityGroupId: !Ref LambdaSecurityGroup
+      Description: Allow MySQL access from data deploy Lambda
+
+Outputs:
+  LambdaFunctionArn:
+    Description: ARN of the data deploy Lambda function
+    Value: !GetAtt DataDeployLambda.Arn
+    Export:
+      Name: DataDeployLambdaArn
+
+  LambdaFunctionName:
+    Description: Name of the data deploy Lambda function
+    Value: !Ref DataDeployLambda
+    Export:
+      Name: DataDeployLambdaName
+
+  S3BucketName:
+    Description: S3 bucket for SQL files
+    Value: !Ref DataDeployBucket
+    Export:
+      Name: DataDeployS3Bucket
+
+  LambdaSecurityGroupId:
+    Description: Security group ID for Lambda
+    Value: !Ref LambdaSecurityGroup
+    Export:
+      Name: DataDeployLambdaSecurityGroup
+# =============================================================================
+# MANUAL SETUP STEPS
+# =============================================================================
+#
+# 1. Create S3 bucket:
+#    aws s3 mb s3://bible-on-site-data-deploy --region il-central-1
+#
+# 2. Create Lambda security group:
+#    aws ec2 create-security-group \
+#      --group-name data-deploy-lambda-sg \
+#      --description "Security group for data deploy Lambda" \
+#      --vpc-id vpc-0d6af72e472db138c \
+#      --region il-central-1
+#
+# 3. Add egress rules to Lambda SG (for SSM/S3/RDS)
+#
+# 4. Add ingress rule to RDS SG to allow Lambda SG
+#
+# 5. Create IAM role for Lambda with SSM and S3 read permissions
+#
+# 6. Create Lambda function with pymysql layer
+#
+# 7. Update GitHub Actions IAM role to allow:
+#    - s3:PutObject on the bucket
+#    - lambda:InvokeFunction on the Lambda
+#
+# =============================================================================
