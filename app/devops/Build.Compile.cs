@@ -19,6 +19,24 @@ partial class Build
             DotNetRestore(s => s.SetProjectFile(TestProject));
         });
 
+    Target RestoreAndroid => _ => _
+        .Description("Restore NuGet packages for Android target only")
+        .Executes(() =>
+        {
+            DotNetRestore(s => s
+                .SetProjectFile(MainProject)
+                .SetProperty("TargetFramework", "net9.0-android"));
+        });
+
+    Target RestoreWindows => _ => _
+        .Description("Restore NuGet packages for Windows target only")
+        .Executes(() =>
+        {
+            DotNetRestore(s => s
+                .SetProjectFile(MainProject)
+                .SetProperty("TargetFramework", "net9.0-windows10.0.19041.0"));
+        });
+
     Target Compile => _ => _
         .Description("Build all projects")
         .DependsOn(Restore)
@@ -34,9 +52,21 @@ partial class Build
                 .EnableNoRestore());
         });
 
+    Target CompileAndroid => _ => _
+        .Description("Build Android target only")
+        .DependsOn(RestoreAndroid)
+        .Executes(() =>
+        {
+            DotNetBuild(s => s
+                .SetProjectFile(MainProject)
+                .SetConfiguration(Configuration)
+                .SetFramework("net9.0-android")
+                .EnableNoRestore());
+        });
+
     Target CompileWindows => _ => _
         .Description("Build Windows target only (fast development build)")
-        .DependsOn(Restore)
+        .DependsOn(RestoreWindows)
         .Executes(() =>
         {
             DotNetBuild(s => s

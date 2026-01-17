@@ -30,7 +30,7 @@ partial class Build
 
     Target Package => _ => _
         .Description("Package app for distribution (Windows MSIX and/or Android AAB)")
-        .DependsOn(Compile)
+        .DependsOn(PackagePrepare)
         .Executes(() =>
         {
             ArtifactsDirectory.CreateOrCleanDirectory();
@@ -56,6 +56,50 @@ partial class Build
             }
         });
 
+    Target PackagePrepare => _ => _
+        .Description("Prepare for packaging by restoring and compiling the appropriate platform")
+        .Unlisted()
+        .Executes(() =>
+        {
+            // This target dynamically decides what to compile based on Platform parameter
+            if (Platform.Equals("Windows", StringComparison.OrdinalIgnoreCase))
+            {
+                if (OperatingSystem.IsWindows())
+                {
+                    DotNetRestore(s => s
+                        .SetProjectFile(MainProject)
+                        .SetProperty("TargetFramework", "net9.0-windows10.0.19041.0")
+                        .SetRuntime("win-x64"));
+                    DotNetBuild(s => s
+                        .SetProjectFile(MainProject)
+                        .SetConfiguration(Configuration)
+                        .SetFramework("net9.0-windows10.0.19041.0")
+                        .SetRuntime("win-x64")
+                        .EnableNoRestore());
+                }
+            }
+            else if (Platform.Equals("Android", StringComparison.OrdinalIgnoreCase))
+            {
+                DotNetRestore(s => s
+                    .SetProjectFile(MainProject)
+                    .SetProperty("TargetFramework", "net9.0-android"));
+                DotNetBuild(s => s
+                    .SetProjectFile(MainProject)
+                    .SetConfiguration(Configuration)
+                    .SetFramework("net9.0-android")
+                    .EnableNoRestore());
+            }
+            else
+            {
+                // For "All", restore and build everything (requires all workloads)
+                DotNetRestore(s => s.SetProjectFile(MainProject));
+                DotNetBuild(s => s
+                    .SetProjectFile(MainProject)
+                    .SetConfiguration(Configuration)
+                    .EnableNoRestore());
+            }
+        });
+
     void PackageWindows(string version)
     {
         Serilog.Log.Information("Packaging for Windows (MSIX)...");
@@ -65,7 +109,8 @@ partial class Build
             ["WindowsPackageType"] = "MSIX",
             ["GenerateAppxPackageOnBuild"] = "true",
             ["AppxPackageDir"] = $"{ArtifactsDirectory}/",
-            ["AppxPackageSigningEnabled"] = "true"
+            ["AppxPackageSigningEnabled"] = "true",
+            ["TargetFramework"] = "net9.0-windows10.0.19041.0"
         };
 
         if (!string.IsNullOrEmpty(CertificateThumbprint))
@@ -78,7 +123,9 @@ partial class Build
             .SetProject(MainProject)
             .SetConfiguration(Configuration)
             .SetFramework("net9.0-windows10.0.19041.0")
-            .SetProperties(msbuildProperties));
+            .SetRuntime("win-x64")
+            .SetProperties(msbuildProperties)
+            .EnableNoRestore());
 
         Serilog.Log.Information($"Windows MSIX package created in {ArtifactsDirectory}");
     }
@@ -89,7 +136,8 @@ partial class Build
 
         var msbuildProperties = new Dictionary<string, object>
         {
-            ["AndroidPackageFormat"] = "aab"
+            ["AndroidPackageFormat"] = "aab",
+            ["TargetFramework"] = "net9.0-android"
         };
 
         // Add signing configuration if provided
@@ -112,7 +160,8 @@ partial class Build
             .SetConfiguration(Configuration)
             .SetFramework("net9.0-android")
             .SetOutput(ArtifactsDirectory)
-            .SetProperties(msbuildProperties));
+            .SetProperties(msbuildProperties)
+            .EnableNoRestore());
 
         Serilog.Log.Information($"Android AAB package created in {ArtifactsDirectory}");
     }
