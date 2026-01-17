@@ -6,13 +6,13 @@
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   IgnorableNamespaces="uap rescap">
 
-  <Identity Name="maui-package-name-placeholder" Publisher="CN=User Name" Version="0.0.0.0" />
+  <Identity Name="54181DoradSoft.929-" Publisher="CN=89549FF8-687E-4A0E-B9EB-D872BBFFE2B6" Version="0.0.0.0" />
 
   <mp:PhoneIdentity PhoneProductId="972C538D-A678-4BCD-8FF1-501794C5380B" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
     <DisplayName>$placeholder$</DisplayName>
-    <PublisherDisplayName>User Name</PublisherDisplayName>
+    <PublisherDisplayName>DoradSoft</PublisherDisplayName>
     <Logo>$placeholder$.png</Logo>
   </Properties>
 

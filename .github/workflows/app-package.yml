@@ -1,0 +1,243 @@
+name: App Package Flow
+on:
+  workflow_call:
+    inputs:
+      platform:
+        description: "Target platform: Windows, Android, or All"
+        required: false
+        type: string
+        default: "All"
+    secrets:
+      WINDOWS_SIGNING_CERT_BASE64:
+        required: false
+      WINDOWS_SIGNING_CERT_PASSWORD:
+        required: false
+      WINDOWS_SIGNING_CERT_THUMBPRINT:
+        required: false
+      ANDROID_KEYSTORE_BASE64:
+        required: false
+      ANDROID_KEYSTORE_PASSWORD:
+        required: false
+      ANDROID_KEY_ALIAS:
+        required: false
+      ANDROID_KEY_PASSWORD:
+        required: false
+    outputs:
+      module_version:
+        description: The version of the app.
+        value: ${{ jobs.package.outputs.module_version }}
+      windows_artifact_name:
+        description: The name of the Windows MSIX artifact.
+        value: ${{ jobs.package_windows.outputs.artifact_name }}
+      android_artifact_name:
+        description: The name of the Android AAB artifact.
+        value: ${{ jobs.package_android.outputs.artifact_name }}
+
+permissions:
+  contents: read
+
+env:
+  APP_DIRECTORY: app
+
+jobs:
+  setup_env:
+    name: Setup Environment
+    runs-on: ubuntu-latest
+    outputs:
+      module_version: ${{ steps.get_version.outputs.VERSION }}
+      dotnet_version: ${{ steps.get_dotnet_version.outputs.DOTNET_VERSION }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get .NET version from csproj
+        id: get_dotnet_version
+        working-directory: ${{ env.APP_DIRECTORY }}
+        run: |
+          # Extract .NET version from TargetFrameworks using grep (before .NET SDK is available)
+          DOTNET_VERSION=$(grep -oP 'net\K[0-9]+\.[0-9]+' BibleOnSite/BibleOnSite.csproj | head -1)
+          echo "DOTNET_VERSION=${DOTNET_VERSION}.x" >> $GITHUB_OUTPUT
+          echo ".NET version: ${DOTNET_VERSION}.x"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ steps.get_dotnet_version.outputs.DOTNET_VERSION }}
+
+      - name: Restore dotnet tools
+        working-directory: ${{ env.APP_DIRECTORY }}
+        run: dotnet tool restore
+
+      - name: Get version from NUKE
+        id: get_version
+        working-directory: ${{ env.APP_DIRECTORY }}
+        run: |
+          VERSION=$(dotnet run --project devops -- Version 2>&1 | grep 'ApplicationDisplayVersion' | sed 's/.*: //')
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "App version: $VERSION"
+
+  package_windows:
+    name: Package Windows (MSIX)
+    needs: setup_env
+    if: ${{ inputs.platform == 'Windows' || inputs.platform == 'All' }}
+    runs-on: windows-latest
+    outputs:
+      artifact_name: ${{ steps.set_artifact_name.outputs.artifact_name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ needs.setup_env.outputs.dotnet_version }}
+
+      - name: Install MAUI workload
+        run: dotnet workload install maui-windows
+
+      - name: Decode signing certificate
+        run: |
+          $certBytes = [Convert]::FromBase64String("${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}")
+          [IO.File]::WriteAllBytes("${{ runner.temp }}\SigningCert.pfx", $certBytes)
+
+          # Import certificate to store
+          $password = ConvertTo-SecureString -String "${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}" -Force -AsPlainText
+          Import-PfxCertificate -FilePath "${{ runner.temp }}\SigningCert.pfx" -CertStoreLocation Cert:\CurrentUser\My -Password $password
+        shell: pwsh
+
+      - name: Restore dotnet tools
+        working-directory: ${{ env.APP_DIRECTORY }}
+        run: dotnet tool restore
+
+      - name: Package MSIX
+        working-directory: ${{ env.APP_DIRECTORY }}
+        run: |
+          dotnet run --project devops -- Package --platform Windows --configuration Release --certificate-thumbprint "${{ secrets.WINDOWS_SIGNING_CERT_THUMBPRINT }}"
+
+      - name: Find MSIX file
+        id: find_msix
+        # TODO: Determine which file type (.msix or .msixupload) is actually produced and remove the other branch
+        run: |
+          $msix = Get-ChildItem -Path "${{ env.APP_DIRECTORY }}/.artifacts" -Filter "*.msix" -Recurse | Select-Object -First 1
+          if ($msix) {
+            echo "Found .msix file (primary branch)"
+            echo "MSIX_PATH=$($msix.FullName)" >> $env:GITHUB_OUTPUT
+            echo "MSIX_NAME=$($msix.Name)" >> $env:GITHUB_OUTPUT
+          } else {
+            # Try finding .msixupload or .appxupload
+            $upload = Get-ChildItem -Path "${{ env.APP_DIRECTORY }}/.artifacts" -Filter "*.msixupload" -Recurse | Select-Object -First 1
+            if ($upload) {
+              echo "Found .msixupload file (fallback branch)"
+              echo "MSIX_PATH=$($upload.FullName)" >> $env:GITHUB_OUTPUT
+              echo "MSIX_NAME=$($upload.Name)" >> $env:GITHUB_OUTPUT
+            } else {
+              echo "No MSIX or MSIXUPLOAD file found!"
+            }
+          }
+        shell: pwsh
+
+      - name: Set artifact name output
+        id: set_artifact_name
+        run: echo "artifact_name=app-windows-v${{ needs.setup_env.outputs.module_version }}" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Upload MSIX artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ steps.set_artifact_name.outputs.artifact_name }}
+          path: ${{ env.APP_DIRECTORY }}/.artifacts/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Cleanup certificate
+        if: always()
+        run: |
+          if (Test-Path "${{ runner.temp }}\SigningCert.pfx") {
+            Remove-Item "${{ runner.temp }}\SigningCert.pfx" -Force
+          }
+        shell: pwsh
+
+  package_android:
+    name: Package Android (AAB)
+    needs: setup_env
+    if: ${{ inputs.platform == 'Android' || inputs.platform == 'All' }}
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_name: ${{ steps.set_artifact_name.outputs.artifact_name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ needs.setup_env.outputs.dotnet_version }}
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "microsoft"
+          java-version: "17"
+
+      - name: Install MAUI workload
+        run: dotnet workload install maui-android
+
+      - name: Decode Android keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > ${{ runner.temp }}/keystore.jks
+          echo "ANDROID_KEYSTORE_PATH=${{ runner.temp }}/keystore.jks" >> $GITHUB_ENV
+
+      - name: Restore dotnet tools
+        working-directory: ${{ env.APP_DIRECTORY }}
+        run: dotnet tool restore
+
+      - name: Package AAB
+        working-directory: ${{ env.APP_DIRECTORY }}
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            dotnet run --project devops -- Package --platform Android --configuration Release \
+              --android-keystore "${{ env.ANDROID_KEYSTORE_PATH }}" \
+              --android-keystore-password "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
+              --android-key-alias "${{ secrets.ANDROID_KEY_ALIAS }}" \
+              --android-key-password "${{ secrets.ANDROID_KEY_PASSWORD }}"
+          else
+            dotnet run --project devops -- Package --platform Android --configuration Release
+          fi
+
+      - name: Set artifact name output
+        id: set_artifact_name
+        run: echo "artifact_name=app-android-v${{ needs.setup_env.outputs.module_version }}" >> $GITHUB_OUTPUT
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ steps.set_artifact_name.outputs.artifact_name }}
+          path: ${{ env.APP_DIRECTORY }}/.artifacts/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Cleanup keystore
+        if: always()
+        run: |
+          if [ -f "${{ runner.temp }}/keystore.jks" ]; then
+            rm -f "${{ runner.temp }}/keystore.jks"
+          fi
+
+  package:
+    name: Package Summary
+    needs: [setup_env, package_windows, package_android]
+    if: always()
+    runs-on: ubuntu-latest
+    outputs:
+      module_version: ${{ needs.setup_env.outputs.module_version }}
+    steps:
+      - name: Summary
+        run: |
+          echo "## App Packaging Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.setup_env.outputs.module_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Windows MSIX | ${{ needs.package_windows.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Android AAB | ${{ needs.package_android.result }} |" >> $GITHUB_STEP_SUMMARY

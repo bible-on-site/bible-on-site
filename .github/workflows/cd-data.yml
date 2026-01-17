@@ -1,4 +1,4 @@
-name: Data Continuous Deployment
+name: Continuous Deployment
 
 on:
   repository_dispatch:

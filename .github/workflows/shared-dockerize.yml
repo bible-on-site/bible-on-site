@@ -1,4 +1,4 @@
-name: Shared Package Flow
+name: Shared Dockerize Flow
 on:
   workflow_call:
     inputs:
