@@ -1,12 +1,15 @@
-// Data Deployer - Populates production database with SQL files
+// Data Deployer - Populates production database with SQL files via Lambda
 
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DescribeDBInstancesCommand, RDSClient } from "@aws-sdk/client-rds";
-import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
+import { InvokeCommand, LambdaClient } from "@aws-sdk/client-lambda";
+import {
+	DeleteObjectsCommand,
+	PutObjectCommand,
+	S3Client,
+} from "@aws-sdk/client-s3";
 import * as dotenv from "dotenv";
-import mysql from "mysql2/promise";
 import { DeployerBase } from "../deployer-base.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -17,24 +20,9 @@ dotenv.config({
 	path: "./deploy/data-deploy/.env",
 });
 
-interface DatabaseCredentials {
-	host: string;
-	port: number;
-	username: string;
-	password: string;
-	database: string;
-}
-
-// SSM Parameter names (credentials stored in SSM Parameter Store)
-const SSM_PARAM_PREFIX = "bible-on-site-tanah-db";
-const SSM_PARAMS = {
-	username: `${SSM_PARAM_PREFIX}-username`,
-	password: `${SSM_PARAM_PREFIX}-password`,
-	dbname: `${SSM_PARAM_PREFIX}-name`,
-} as const;
-
-// RDS instance identifier (for getting host/port)
-const RDS_INSTANCE_ID = "tanah-mysql";
+// Configuration
+const S3_BUCKET = "bible-on-site-data-deploy";
+const LAMBDA_FUNCTION_NAME = "bible-on-site-db-populator";
 
 class DataDeployer extends DeployerBase {
 	private readonly region: string;
@@ -43,6 +31,7 @@ class DataDeployer extends DeployerBase {
 		"tanah_structure.sql",
 		"tanah_sefarim_and_perakim_data.sql",
 	];
+	private s3Prefix = "";
 
 	constructor() {
 		super("data");
@@ -72,129 +61,114 @@ class DataDeployer extends DeployerBase {
 	}
 
 	protected override async coreDeploy(): Promise<void> {
-		this.info("Fetching database credentials...");
-		const credentials = await this.getDbCredentials();
-
-		this.info(
-			`Connecting to database at ${credentials.host}:${credentials.port}...`,
-		);
-		const connection = await mysql.createConnection({
-			host: credentials.host,
-			port: credentials.port,
-			user: credentials.username,
-			password: credentials.password,
-			database: credentials.database,
-			multipleStatements: true,
-		});
+		const s3Client = new S3Client({ region: this.region });
+		const lambdaClient = new LambdaClient({ region: this.region });
 
 		try {
-			for (const sqlFile of this.sqlFiles) {
-				const filePath = path.join(this.dataDir, sqlFile);
-				await this.executeSqlFile(connection, filePath);
-			}
+			// Upload SQL files to S3
+			await this.uploadSqlFiles(s3Client);
+
+			// Invoke Lambda to populate database
+			await this.invokeLambda(lambdaClient);
 		} finally {
-			await connection.end();
+			// Cleanup S3 files
+			await this.cleanupS3Files(s3Client);
 		}
 	}
 
-	private async getDbCredentials(): Promise<DatabaseCredentials> {
-		const ssmClient = new SSMClient({ region: this.region });
-		const rdsClient = new RDSClient({ region: this.region });
+	private async uploadSqlFiles(s3Client: S3Client): Promise<void> {
+		const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+		this.s3Prefix = `sql/${timestamp}/`;
 
-		// Fetch credentials from SSM Parameter Store (in parallel)
-		this.info("Fetching credentials from SSM Parameter Store...");
-		const [usernameParam, passwordParam, dbnameParam] = await Promise.all([
-			ssmClient.send(
-				new GetParameterCommand({
-					Name: SSM_PARAMS.username,
-					WithDecryption: true,
-				}),
-			),
-			ssmClient.send(
-				new GetParameterCommand({
-					Name: SSM_PARAMS.password,
-					WithDecryption: true,
-				}),
-			),
-			ssmClient.send(
-				new GetParameterCommand({
-					Name: SSM_PARAMS.dbname,
-					WithDecryption: true,
-				}),
-			),
-		]);
+		this.info(`Uploading SQL files to s3://${S3_BUCKET}/${this.s3Prefix}...`);
 
-		const username = usernameParam.Parameter?.Value;
-		const password = passwordParam.Parameter?.Value;
-		const database = dbnameParam.Parameter?.Value;
+		for (const sqlFile of this.sqlFiles) {
+			const filePath = path.join(this.dataDir, sqlFile);
+			const content = fs.readFileSync(filePath);
 
-		if (!username || !password || !database) {
-			throw new Error(
-				"Missing required SSM parameters for database connection",
+			await s3Client.send(
+				new PutObjectCommand({
+					Bucket: S3_BUCKET,
+					Key: `${this.s3Prefix}${sqlFile}`,
+					Body: content,
+					ContentType: "text/plain",
+				}),
 			);
-		}
 
-		// Fetch host/port from RDS instance endpoint
-		this.info("Fetching endpoint from RDS...");
-		const rdsResponse = await rdsClient.send(
-			new DescribeDBInstancesCommand({
-				DBInstanceIdentifier: RDS_INSTANCE_ID,
+			this.info(`Uploaded: ${sqlFile}`);
+		}
+	}
+
+	private async invokeLambda(lambdaClient: LambdaClient): Promise<void> {
+		this.info(`Invoking Lambda function: ${LAMBDA_FUNCTION_NAME}...`);
+
+		const payload = {
+			sql_files: this.sqlFiles,
+			s3_prefix: this.s3Prefix,
+		};
+
+		const response = await lambdaClient.send(
+			new InvokeCommand({
+				FunctionName: LAMBDA_FUNCTION_NAME,
+				Payload: Buffer.from(JSON.stringify(payload)),
+				LogType: "Tail",
 			}),
 		);
 
-		const dbInstance = rdsResponse.DBInstances?.[0];
-		const host = dbInstance?.Endpoint?.Address;
-		const port = dbInstance?.Endpoint?.Port;
+		// Decode and log the Lambda logs
+		if (response.LogResult) {
+			const logs = Buffer.from(response.LogResult, "base64").toString("utf-8");
+			this.info("Lambda logs:");
+			console.log(logs);
+		}
 
-		if (!host || !port) {
+		// Check for errors
+		if (response.FunctionError) {
+			const errorPayload = response.Payload
+				? JSON.parse(Buffer.from(response.Payload).toString("utf-8"))
+				: {};
 			throw new Error(
-				`Could not get endpoint for RDS instance: ${RDS_INSTANCE_ID}`,
+				`Lambda execution failed: ${errorPayload.errorMessage || response.FunctionError}`,
 			);
 		}
 
-		return {
-			host,
-			port,
-			username,
-			password,
-			database,
-		};
-	}
+		// Parse response
+		const result = response.Payload
+			? JSON.parse(Buffer.from(response.Payload).toString("utf-8"))
+			: {};
 
-	private async executeSqlFile(
-		connection: mysql.Connection,
-		filePath: string,
-	): Promise<void> {
-		this.info(`Executing SQL file: ${filePath}`);
+		this.info("Lambda response:");
+		console.log(JSON.stringify(result, null, 2));
 
-		const sql = fs.readFileSync(filePath, "utf8");
-
-		// Split by delimiter and execute each statement
-		const statements = sql
-			.split(/;\s*(?=\n|$)/)
-			.map((s) => s.trim())
-			.filter((s) => {
-				// Skip empty statements and comments
-				if (s.length === 0 || s.startsWith("--")) return false;
-				// Skip CREATE DATABASE and USE statements (we're already connected to the correct DB)
-				if (/^(CREATE\s+DATABASE|USE\s+)/i.test(s)) return false;
-				return true;
-			});
-
-		for (const statement of statements) {
-			if (statement.length > 0) {
-				try {
-					await connection.query(statement);
-				} catch (error) {
-					this.error(
-						`Failed to execute statement: ${statement.substring(0, 100)}...`,
-					);
-					throw error;
-				}
-			}
+		if (result.statusCode !== 200) {
+			throw new Error(
+				`Lambda returned non-200 status: ${JSON.stringify(result)}`,
+			);
 		}
 
-		this.info(`Successfully executed: ${path.basename(filePath)}`);
+		this.info("Database population completed successfully.");
+	}
+
+	private async cleanupS3Files(s3Client: S3Client): Promise<void> {
+		if (!this.s3Prefix) return;
+
+		this.info(`Cleaning up S3 files at s3://${S3_BUCKET}/${this.s3Prefix}...`);
+
+		try {
+			await s3Client.send(
+				new DeleteObjectsCommand({
+					Bucket: S3_BUCKET,
+					Delete: {
+						Objects: this.sqlFiles.map((f) => ({
+							Key: `${this.s3Prefix}${f}`,
+						})),
+					},
+				}),
+			);
+			this.info("S3 cleanup completed.");
+		} catch (error) {
+			this.warn(`S3 cleanup failed (non-fatal): ${error}`);
+		}
 	}
 }
 

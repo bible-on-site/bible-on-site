@@ -135,6 +135,23 @@ Resources:
             Resource:
               - !Sub "arn:aws:rds:*:${AWS::AccountId}:db:tanah-mysql"
 
+          # S3 - upload SQL files for data deployment
+          - Sid: S3DataDeploy
+            Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource:
+              - !Sub "arn:aws:s3:::bible-on-site-data-deploy/*"
+
+          # Lambda - invoke data deploy function
+          - Sid: LambdaInvoke
+            Effect: Allow
+            Action:
+              - lambda:InvokeFunction
+            Resource:
+              - !Sub "arn:aws:lambda:*:${AWS::AccountId}:function:bible-on-site-db-populator"
+
   # =============================================================================
   # IAM Role: GitHub Actions ECR Deploy Role
   # =============================================================================
