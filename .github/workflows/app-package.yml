@@ -72,7 +72,8 @@ jobs:
         id: get_version
         working-directory: ${{ env.APP_DIRECTORY }}
         run: |
-          VERSION=$(dotnet run --project devops -- Version 2>&1 | grep 'ApplicationDisplayVersion' | sed 's/.*: //')
+          # Extract version and strip ANSI color codes
+          VERSION=$(dotnet run --project devops -- Version 2>&1 | grep 'ApplicationDisplayVersion' | sed 's/.*: //' | sed 's/\x1b\[[0-9;]*m//g')
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "App version: $VERSION"
 
@@ -92,8 +93,17 @@ jobs:
         with:
           dotnet-version: ${{ needs.setup_env.outputs.dotnet_version }}
 
+      - name: Cache NuGet packages
+        uses: actions/cache@v5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-maui-windows-${{ hashFiles('app/**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-maui-windows-
+            ${{ runner.os }}-nuget-
+
       - name: Install MAUI workload
-        run: dotnet workload install maui-windows
+        run: dotnet workload install maui-windows --skip-manifest-update
 
       - name: Decode signing certificate
         run: |
@@ -180,8 +190,17 @@ jobs:
           distribution: "microsoft"
           java-version: "17"
 
+      - name: Cache NuGet packages
+        uses: actions/cache@v5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-maui-android-${{ hashFiles('app/**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-maui-android-
+            ${{ runner.os }}-nuget-
+
       - name: Install MAUI workload
-        run: dotnet workload install maui-android
+        run: dotnet workload install maui-android --skip-manifest-update
 
       - name: Decode Android keystore
         run: |
