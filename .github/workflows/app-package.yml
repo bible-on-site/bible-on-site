@@ -141,18 +141,6 @@ jobs:
         run: echo "artifact_name=app-windows-v${{ needs.setup_env.outputs.module_version }}" >> $GITHUB_OUTPUT
         shell: bash
 
-      - name: Debug - List artifacts directory
-        run: |
-          Write-Host "Current directory: $(Get-Location)"
-          Write-Host "Looking for artifacts in: ${{ env.APP_DIRECTORY }}/.artifacts/"
-          if (Test-Path "${{ env.APP_DIRECTORY }}/.artifacts/") {
-            Get-ChildItem -Path "${{ env.APP_DIRECTORY }}/.artifacts/" -Recurse
-          } else {
-            Write-Host "Directory does not exist"
-          }
-          Get-ChildItem -Path "${{ env.APP_DIRECTORY }}" -Filter "*.msix*" -Recurse -ErrorAction SilentlyContinue
-        shell: pwsh
-
       - name: Upload MSIX artifact
         uses: actions/upload-artifact@v4
         with:
@@ -220,14 +208,6 @@ jobs:
       - name: Set artifact name output
         id: set_artifact_name
         run: echo "artifact_name=app-android-v${{ needs.setup_env.outputs.module_version }}" >> $GITHUB_OUTPUT
-
-      - name: Debug - List artifacts directory
-        run: |
-          echo "Current directory: $(pwd)"
-          echo "Looking for artifacts in: ${{ env.APP_DIRECTORY }}/.artifacts/"
-          echo "Full path: $(realpath ${{ env.APP_DIRECTORY }}/.artifacts/ 2>/dev/null || echo 'path does not exist')"
-          ls -la ${{ env.APP_DIRECTORY }}/.artifacts/ 2>/dev/null || echo "Directory does not exist or is empty"
-          find ${{ env.APP_DIRECTORY }} -name "*.aab" -type f 2>/dev/null || echo "No AAB files found"
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4

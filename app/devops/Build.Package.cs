@@ -153,33 +153,17 @@ partial class Build
         var binDir = MainProject.Parent / "bin" / Configuration / "net9.0-android";
         var aabFiles = binDir.GlobFiles("**/*-Signed.aab");  // Only get signed AABs
 
-        Serilog.Log.Information($"Found {aabFiles.Count} signed AAB files in {binDir}");
-
         if (aabFiles.Count > 0)
         {
             foreach (var aab in aabFiles)
             {
-                Serilog.Log.Information($"Copying {aab} to {ArtifactsDirectory}");
                 aab.CopyToDirectory(ArtifactsDirectory, ExistsPolicy.FileOverwrite);
-            }
-
-            // Verify copy
-            var copiedFiles = ArtifactsDirectory.GlobFiles("*.aab");
-            Serilog.Log.Information($"Verified {copiedFiles.Count} AAB files in artifacts directory");
-            foreach (var file in copiedFiles)
-            {
-                Serilog.Log.Information($"  - {file.Name}");
+                Serilog.Log.Information($"Copied {aab.Name} to {ArtifactsDirectory}");
             }
         }
         else
         {
             Serilog.Log.Warning($"No signed AAB files found in {binDir}");
-            // List what IS in binDir
-            var allFiles = binDir.GlobFiles("**/*");
-            foreach (var file in allFiles.Take(10))
-            {
-                Serilog.Log.Information($"  Found: {file}");
-            }
         }
 
         Serilog.Log.Information($"Android AAB package created in {ArtifactsDirectory}");
