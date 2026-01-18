@@ -1123,11 +1123,17 @@ jobs:
       actions: read
     runs-on: ubuntu-latest
     steps:
+      - name: Debug outputs
+        run: |
+          echo "package_app.outputs.module_version: '${{ needs.package_app.outputs.module_version }}'"
+          echo "determine_app_changes.outputs.module_changed: '${{ needs.determine_app_changes.outputs.module_changed }}'"
+          echo "setup_env.outputs.is_master_branch: '${{ needs.setup_env.outputs.is_master_branch }}'"
+          echo "github.event_name: '${{ github.event_name }}'"
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Configure Git
         run: |
           git config --global user.email "actions@github.com"
