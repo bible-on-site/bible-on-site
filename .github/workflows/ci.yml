@@ -1116,8 +1116,9 @@ jobs:
   release_app:
     name: Release App
     needs: [setup_env, determine_app_changes, cross_module_ci, package_app]
-    # Note: Checking outputs instead of result as a workaround for reusable workflow result evaluation issues (see #1065)
-    if: ${{ always() && needs.package_app.outputs.module_version != '' && needs.determine_app_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
+    # Also verify cross_module_ci passed to ensure quality gate
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_app.outputs.module_version != '' && needs.determine_app_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
