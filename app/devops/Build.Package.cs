@@ -57,25 +57,21 @@ partial class Build
         });
 
     Target PackagePrepare => _ => _
-        .Description("Prepare for packaging by restoring and compiling the appropriate platform")
+        .Description("Prepare for packaging by restoring the appropriate platform")
         .Unlisted()
         .Executes(() =>
         {
-            // This target dynamically decides what to compile based on Platform parameter
+            // This target only restores the appropriate platform - build happens in publish
             if (Platform.Equals("Windows", StringComparison.OrdinalIgnoreCase))
             {
                 if (OperatingSystem.IsWindows())
                 {
+                    // Restore with RuntimeIdentifier to get RID-specific packages for PublishReadyToRun
                     DotNetRestore(s => s
                         .SetProjectFile(MainProject)
                         .SetProperty("TargetFramework", "net9.0-windows10.0.19041.0")
-                        .SetRuntime("win-x64"));
-                    DotNetBuild(s => s
-                        .SetProjectFile(MainProject)
-                        .SetConfiguration(Configuration)
-                        .SetFramework("net9.0-windows10.0.19041.0")
-                        .SetRuntime("win-x64")
-                        .EnableNoRestore());
+                        .SetProperty("RuntimeIdentifier", "win-x64")
+                        .SetProperty("PublishReadyToRun", "true"));
                 }
             }
             else if (Platform.Equals("Android", StringComparison.OrdinalIgnoreCase))
@@ -83,20 +79,11 @@ partial class Build
                 DotNetRestore(s => s
                     .SetProjectFile(MainProject)
                     .SetProperty("TargetFramework", "net9.0-android"));
-                DotNetBuild(s => s
-                    .SetProjectFile(MainProject)
-                    .SetConfiguration(Configuration)
-                    .SetFramework("net9.0-android")
-                    .EnableNoRestore());
             }
             else
             {
                 // For "All", restore and build everything (requires all workloads)
                 DotNetRestore(s => s.SetProjectFile(MainProject));
-                DotNetBuild(s => s
-                    .SetProjectFile(MainProject)
-                    .SetConfiguration(Configuration)
-                    .EnableNoRestore());
             }
         });
 
@@ -159,9 +146,26 @@ partial class Build
             .SetProject(MainProject)
             .SetConfiguration(Configuration)
             .SetFramework("net9.0-android")
-            .SetOutput(ArtifactsDirectory)
             .SetProperties(msbuildProperties)
             .EnableNoRestore());
+
+        // Find and copy AAB to artifacts directory (MAUI doesn't respect --output for AAB)
+        var binDir = MainProject.Parent / "bin" / Configuration / "net9.0-android";
+        var aabFiles = binDir.GlobFiles("**/*.aab");
+        
+        if (aabFiles.Count > 0)
+        {
+            foreach (var aab in aabFiles)
+            {
+                var destPath = ArtifactsDirectory / aab.Name;
+                Nuke.Common.IO.FileSystemTasks.CopyFile(aab, destPath, Nuke.Common.IO.FileExistsPolicy.Overwrite);
+                Serilog.Log.Information($"Copied {aab.Name} to {ArtifactsDirectory}");
+            }
+        }
+        else
+        {
+            Serilog.Log.Warning($"No AAB files found in {binDir}");
+        }
 
         Serilog.Log.Information($"Android AAB package created in {ArtifactsDirectory}");
     }
