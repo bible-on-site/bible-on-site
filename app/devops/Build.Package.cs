@@ -152,13 +152,13 @@ partial class Build
         // Find and copy AAB to artifacts directory (MAUI doesn't respect --output for AAB)
         var binDir = MainProject.Parent / "bin" / Configuration / "net9.0-android";
         var aabFiles = binDir.GlobFiles("**/*.aab");
-        
+
         if (aabFiles.Count > 0)
         {
             foreach (var aab in aabFiles)
             {
                 var destPath = ArtifactsDirectory / aab.Name;
-                Nuke.Common.IO.FileSystemTasks.CopyFile(aab, destPath, Nuke.Common.IO.FileExistsPolicy.Overwrite);
+                aab.Copy(destPath, ExistsPolicy.FileOverwrite);
                 Serilog.Log.Information($"Copied {aab.Name} to {ArtifactsDirectory}");
             }
         }
