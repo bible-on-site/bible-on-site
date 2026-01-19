@@ -82,7 +82,7 @@ jobs:
     if: ${{ github.event.client_payload.windows_artifact_name != '' }}
     permissions:
       contents: read
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     env:
       MODULE_VERSION: ${{ github.event.client_payload.module_version }}
@@ -106,19 +106,18 @@ jobs:
 
       - name: Find MSIX file
         id: find_msix
+        shell: pwsh
         run: |
           # Find the app MSIX (not dependencies like WindowsAppRuntime)
-          MSIX_FILE=$(find ${{ env.APP_DIRECTORY }}/.artifacts -name "BibleOnSite*.msix" -o -name "BibleOnSite*.msixupload" | head -1)
-          if [ -z "$MSIX_FILE" ]; then
-            echo "Error: No app MSIX file found"
-            echo "Available files:"
-            find ${{ env.APP_DIRECTORY }}/.artifacts -type f -name "*.msix*"
+          $msixFiles = Get-ChildItem -Path "${{ env.APP_DIRECTORY }}/.artifacts" -Recurse -Include "BibleOnSite*.msix","BibleOnSite*.msixupload" | Select-Object -First 1
+          if (-not $msixFiles) {
+            Write-Error "No app MSIX file found"
+            Get-ChildItem -Path "${{ env.APP_DIRECTORY }}/.artifacts" -Recurse -Include "*.msix*"
             exit 1
-          fi
-          # NUKE requires absolute paths
-          MSIX_FILE=$(realpath "$MSIX_FILE")
-          echo "MSIX_FILE=$MSIX_FILE" >> $GITHUB_OUTPUT
-          echo "Found MSIX: $MSIX_FILE"
+          }
+          $msixPath = $msixFiles.FullName
+          "MSIX_FILE=$msixPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Found MSIX: $msixPath"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -129,11 +128,12 @@ jobs:
         uses: microsoft/setup-msstore-cli@v1
 
       - name: Configure Microsoft Store Developer CLI
+        shell: pwsh
         run: |
-          msstore reconfigure \
-            --tenantId ${{ secrets.MS_STORE_TENANT_ID }} \
-            --sellerId ${{ secrets.MS_STORE_SELLER_ID }} \
-            --clientId ${{ secrets.MS_STORE_CLIENT_ID }} \
+          msstore reconfigure `
+            --tenantId ${{ secrets.MS_STORE_TENANT_ID }} `
+            --sellerId ${{ secrets.MS_STORE_SELLER_ID }} `
+            --clientId ${{ secrets.MS_STORE_CLIENT_ID }} `
             --clientSecret ${{ secrets.MS_STORE_CLIENT_SECRET }}
 
       - name: Restore dotnet tools
@@ -142,20 +142,22 @@ jobs:
 
       - name: Upload to Microsoft Store
         working-directory: ${{ env.APP_DIRECTORY }}
+        shell: pwsh
         env:
           PARTNER_CENTER_TENANT_ID: ${{ secrets.MS_STORE_TENANT_ID }}
           PARTNER_CENTER_CLIENT_ID: ${{ secrets.MS_STORE_CLIENT_ID }}
           PARTNER_CENTER_CLIENT_SECRET: ${{ secrets.MS_STORE_CLIENT_SECRET }}
         run: |
           # Deploy to "Internal" flight by default
-          dotnet run --project devops -- DeployMsStore \
-            --msix-path "${{ steps.find_msix.outputs.MSIX_FILE }}" \
+          dotnet run --project devops -- DeployMsStore `
+            --msix-path "${{ steps.find_msix.outputs.MSIX_FILE }}" `
             --ms-store-flight-id "${{ secrets.MS_STORE_FLIGHT_ID }}"
 
       - name: Deployment Summary
+        shell: pwsh
         run: |
-          echo "## Windows Deployment Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** ${{ env.MODULE_VERSION }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Target:** Microsoft Store (Internal Flight)" >> $GITHUB_STEP_SUMMARY
-          echo "**Status:** Submitted ✅" >> $GITHUB_STEP_SUMMARY
+          "## Windows Deployment Summary" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "**Version:** ${{ env.MODULE_VERSION }}" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "**Target:** Microsoft Store (Internal Flight)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "**Status:** Submitted ✅" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
