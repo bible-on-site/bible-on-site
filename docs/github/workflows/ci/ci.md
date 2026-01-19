@@ -21,9 +21,7 @@ Each module (Website, API, App, Data) is checked for changes. CI jobs only run i
 The `determine_baseline_availability` job checks if master coverage artifacts exist across all workflow runs using `gh api`. This prevents unnecessary CI runs when only unrelated modules changed.
 
 ### App Packaging
-App packaging runs in parallel for Windows (MSIX) and Android (AAB):
-- **Windows**: Uses platform-specific `ApplicationVersion` (max 65535 per MSIX spec)
-- **Android**: Uses large `versionCode` continuing from Play Store sequence
+App packaging runs in parallel for Windows (MSIX) and Android (AAB)
 
 ## Architecture
 ![ci](./ci.svg)
