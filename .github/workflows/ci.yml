@@ -113,10 +113,10 @@ jobs:
 
             if [ "$artifact_info" != "null" ] && [ -n "$artifact_info" ]; then
               local artifact_id=$(echo "$artifact_info" | jq -r '.id')
-              echo "Found artifact $artifact_name (id: $artifact_id), downloading..."
+              echo "Found artifact $artifact_name (id: $artifact_id), downloading..." >&2
               mkdir -p "/tmp/$artifact_name"
               gh api repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip > "/tmp/$artifact_name.zip"
-              unzip -o "/tmp/$artifact_name.zip" -d "/tmp/$artifact_name"
+              unzip -o "/tmp/$artifact_name.zip" -d "/tmp/$artifact_name" >&2
               echo "true"
             else
               echo "false"
