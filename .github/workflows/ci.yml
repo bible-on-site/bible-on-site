@@ -1211,7 +1211,8 @@ jobs:
       - name: Commit App Version Bump Changes
         working-directory: app
         run: |
-          NEXT_VERSION=$(dotnet run --project devops -- Version 2>&1 | grep 'ApplicationDisplayVersion' | sed 's/.*: //')
+          # Strip ANSI color codes from version output
+          NEXT_VERSION=$(dotnet run --project devops -- Version 2>&1 | grep 'ApplicationDisplayVersion' | sed 's/.*: //' | sed 's/\x1b\[[0-9;]*m//g')
           git add BibleOnSite/BibleOnSite.csproj
           git commit -n -m "chore(release): Bump app version to ${NEXT_VERSION} [skip ci]"
 
@@ -1220,6 +1221,9 @@ jobs:
           set -e
           CURRENT_BRANCH=$(git symbolic-ref --short HEAD)
           git fetch origin "$CURRENT_BRANCH"
+          # Clean up any unstaged changes (e.g., build artifacts from dotnet run)
+          git checkout -- . || true
+          git clean -fd || true
           if ! git rebase "origin/$CURRENT_BRANCH"; then
             echo "Error: Failed to rebase version bump commit."
             git rebase --abort
