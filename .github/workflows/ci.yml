@@ -1230,8 +1230,8 @@ jobs:
             - **Android (AAB)**: For internal testing via Google Play
           token: ${{ secrets.GITHUB_TOKEN }}
           files: |
-            app/.artifacts/windows/*
-            app/.artifacts/android/*
+            app/.artifacts/windows/**/*.msix
+            app/.artifacts/android/**/*.aab
 
       - name: Trigger App CD Workflow
         uses: peter-evans/repository-dispatch@v4
