@@ -228,7 +228,7 @@ jobs:
 
   package_app:
     name: Package App
-    needs: [setup_env, determine_app_changes, app_ci]
+    needs: [setup_env, determine_app_changes]
     if: ${{ needs.determine_app_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
@@ -1230,7 +1230,7 @@ jobs:
             - **Android (AAB)**: For internal testing via Google Play
           token: ${{ secrets.GITHUB_TOKEN }}
           files: |
-            app/.artifacts/windows/**/*.msix
+            app/.artifacts/windows/**/BibleOnSite*.msix
             app/.artifacts/android/**/*.aab
 
       - name: Trigger App CD Workflow
