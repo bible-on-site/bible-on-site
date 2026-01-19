@@ -125,8 +125,16 @@ jobs:
         with:
           dotnet-version: "9.0.x"
 
-      - name: Install Microsoft Store CLI
-        run: dotnet tool install -g MSStoreCLI
+      - name: Setup Microsoft Store Developer CLI
+        uses: microsoft/setup-msstore-cli@v1
+
+      - name: Configure Microsoft Store Developer CLI
+        run: |
+          msstore reconfigure \
+            --tenantId ${{ secrets.MS_STORE_TENANT_ID }} \
+            --sellerId ${{ secrets.MS_STORE_SELLER_ID }} \
+            --clientId ${{ secrets.MS_STORE_CLIENT_ID }} \
+            --clientSecret ${{ secrets.MS_STORE_CLIENT_SECRET }}
 
       - name: Restore dotnet tools
         working-directory: ${{ env.APP_DIRECTORY }}

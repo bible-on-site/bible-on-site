@@ -127,11 +127,11 @@ partial class Build
 
             Serilog.Log.Information($"Uploading {msixFile.Name} to Microsoft Store...");
 
-            var arguments = $"publish \"{msixFile}\" --app-id \"{MsStoreAppId}\"";
+            var arguments = $"publish \"{msixFile}\" --appId \"{MsStoreAppId}\"";
 
             if (!string.IsNullOrEmpty(MsStoreFlightId))
             {
-                arguments += $" --flight-id \"{MsStoreFlightId}\"";
+                arguments += $" --flightId \"{MsStoreFlightId}\"";
                 Serilog.Log.Information($"Deploying to flight: {MsStoreFlightId} (internal testing)");
             }
             else
@@ -139,7 +139,7 @@ partial class Build
                 Serilog.Log.Warning("Deploying to PRODUCTION - will require Microsoft review");
             }
 
-            // msstore CLI is installed globally via: dotnet tool install -g MSStoreCLI
+            // msstore CLI is installed via: microsoft/setup-msstore-cli GitHub Action
             ProcessTasks.StartProcess("msstore", arguments)
                 .AssertZeroExitCode();
 
