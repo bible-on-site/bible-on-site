@@ -236,23 +236,3 @@ jobs:
           if [ -f "${{ runner.temp }}/keystore.jks" ]; then
             rm -f "${{ runner.temp }}/keystore.jks"
           fi
-
-  package:
-    name: Package Summary
-    needs: [package_windows, package_android]
-    if: always()
-    runs-on: ubuntu-latest
-    outputs:
-      module_version: ${{ needs.package_android.outputs.module_version || needs.package_windows.outputs.module_version }}
-    steps:
-      - name: Summary
-        run: |
-          VERSION="${{ needs.package_android.outputs.module_version || needs.package_windows.outputs.module_version }}"
-          echo "## App Packaging Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** $VERSION" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Windows MSIX | ${{ needs.package_windows.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Android AAB | ${{ needs.package_android.result }} |" >> $GITHUB_STEP_SUMMARY
