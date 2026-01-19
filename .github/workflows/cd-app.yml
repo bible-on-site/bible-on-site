@@ -40,6 +40,8 @@ jobs:
             echo "Error: No AAB file found"
             exit 1
           fi
+          # NUKE requires absolute paths
+          AAB_FILE=$(realpath "$AAB_FILE")
           echo "AAB_FILE=$AAB_FILE" >> $GITHUB_OUTPUT
           echo "Found AAB: $AAB_FILE"
 
@@ -110,6 +112,8 @@ jobs:
             echo "Error: No MSIX file found"
             exit 1
           fi
+          # NUKE requires absolute paths
+          MSIX_FILE=$(realpath "$MSIX_FILE")
           echo "MSIX_FILE=$MSIX_FILE" >> $GITHUB_OUTPUT
           echo "Found MSIX: $MSIX_FILE"
 
