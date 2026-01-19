@@ -2,26 +2,48 @@
 
 | Workflow | Purpose |
 |----------|---------|
-| [`auto-create-pr`](../../../../.github/workflows/auto-create-pr.yml) | Auto-create PRs when publishing a branch |
-| [`ci.yml`](../../../../.github/workflows/ci.yml) | Continuous Integration pipeline |
-| [`shared-ci.yml`](../../../../.github/workflows/shared-ci.yml) | Shared CI components (change detection) |
-| [`shared-dockerize.yml`](../../../../.github/workflows/shared-dockerize.yml) | Docker packaging |
+| [`ci.yml`](../../../../.github/workflows/ci.yml) | Main CI pipeline (test, build, package, release) |
+| [`shared-ci.yml`](../../../../.github/workflows/shared-ci.yml) | Shared change detection logic |
+| [`shared-dockerize.yml`](../../../../.github/workflows/shared-dockerize.yml) | Docker image packaging |
 | [`app-package.yml`](../../../../.github/workflows/app-package.yml) | App packaging (MSIX, AAB) |
-| [`shared-release.yml`](../../../../.github/workflows/shared-release.yml) | Release automation |
+| [`shared-release.yml`](../../../../.github/workflows/shared-release.yml) | Release automation (tag, GitHub Release, trigger CD) |
+| [`auto-create-pr`](../../../../.github/workflows/auto-create-pr.yml) | Auto-create PRs when publishing a branch |
 
-## Key Features
+## Pipeline Stages
 
-### Module Change Detection
-Each module (Website, API, App, Data) is checked for changes. CI jobs only run if:
-- The module's source files changed, OR
-- CI workflow files changed, OR
-- Master coverage baseline is unavailable (ensures coverage reporting works)
+### 1. Setup & Detection
+- **Setup Environment Variables**: Extract Playwright versions, set env vars
+- **Determine Baseline Availability**: Check if master coverage artifacts exist (cross-workflow)
+  - Downloads and re-uploads master artifacts to make them available in current run
+- **Determine Changes**: Per-module change detection (Website, API, App, Data)
+- **Build LCOV Docker Image**: Prepare coverage tooling
 
-### Coverage Baseline Availability
-The `determine_baseline_availability` job checks if master coverage artifacts exist across all workflow runs using `gh api`. This prevents unnecessary CI runs when only unrelated modules changed.
+### 2. CI Jobs (Conditional)
+Each module CI runs only if: module changed OR CI files changed OR baseline unavailable
 
-### App Packaging
-App packaging runs in parallel for Windows (MSIX) and Android (AAB)
+| Job | Module | Tests |
+|-----|--------|-------|
+| Website CI | `web/bible-on-site` | Lint, Unit, E2E |
+| Website Performance | `web/bible-on-site` | Lighthouse perf tests |
+| API CI | `web/api` | Lint, E2E |
+| App CI | `app` | Lint, Unit, Integration |
+| Data CI | `data` | Lint, Unit |
+
+### 3. Cross Module CI
+- Restores coverage from module CIs (or master baseline if skipped)
+- Publishes coverage to Codecov (per-module flags)
+- Merges and publishes cross-module coverage to Codacy
+
+### 4. Packaging (Master Only)
+| Job | Output | Purpose |
+|-----|--------|---------|
+| Package Website | Docker `.tar.gz` | For AWS ECS |
+| Package API | Docker `.tar.gz` | For AWS ECS |
+| Package App | MSIX + AAB | For stores |
+
+### 5. Release (Master Only)
+- Creates Git tag and GitHub Release
+- Triggers CD workflow via `repository_dispatch`
 
 ## Architecture
 ![ci](./ci.svg)

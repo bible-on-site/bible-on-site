@@ -2,7 +2,7 @@ name: Continuous Deployment
 
 on:
   repository_dispatch:
-    types: [deploy]
+    types: [deploy-aws]
 
 jobs:
   deploy:
