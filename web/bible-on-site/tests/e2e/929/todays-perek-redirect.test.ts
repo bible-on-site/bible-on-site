@@ -31,6 +31,8 @@ test.describe("Today's Perek redirect", () => {
 		const mockResponse = await request.post("/api/dev/mock-date", {
 			data: { date: MOCKED_DATE },
 		});
+
+		// TODO: Handle occasional failures in CI environment
 		if (!mockResponse.ok()) {
 			testInfo.skip(true, "Failed to set mock date - API may not be available");
 		}
