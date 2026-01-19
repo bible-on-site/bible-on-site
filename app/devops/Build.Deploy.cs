@@ -9,7 +9,7 @@ using Nuke.Common.Tooling;
 
 partial class Build
 {
-    const string MsStoreAppId = "54181DoradSoft.929-";
+    const string MsStoreAppId = "9NBLGGH6B55K";
     const string GooglePlayPackageName = "com.tanah.daily929";
 
     // ============ Deploy Parameters ============
