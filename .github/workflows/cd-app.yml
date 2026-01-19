@@ -107,9 +107,12 @@ jobs:
       - name: Find MSIX file
         id: find_msix
         run: |
-          MSIX_FILE=$(find ${{ env.APP_DIRECTORY }}/.artifacts -name "*.msix" -o -name "*.msixupload" | head -1)
+          # Find the app MSIX (not dependencies like WindowsAppRuntime)
+          MSIX_FILE=$(find ${{ env.APP_DIRECTORY }}/.artifacts -name "BibleOnSite*.msix" -o -name "BibleOnSite*.msixupload" | head -1)
           if [ -z "$MSIX_FILE" ]; then
-            echo "Error: No MSIX file found"
+            echo "Error: No app MSIX file found"
+            echo "Available files:"
+            find ${{ env.APP_DIRECTORY }}/.artifacts -type f -name "*.msix*"
             exit 1
           fi
           # NUKE requires absolute paths
