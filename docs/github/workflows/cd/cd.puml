@@ -9,8 +9,8 @@ skinparam ActivityBarColor #1976D2
 
 title Continuous Deployment Workflow
 
+|#E8F4FD|AWS Deployment|
 start
-
 :repository_dispatch (deploy);
 note right
   From CI:
@@ -19,17 +19,48 @@ note right
 end note
 
 :Setup & AWS Auth;
-
 :Restore Docker Image from CI;
-
 :**Deploy to ECR**;
-
 :ECS Auto-Deploy (EventBridge);
 note right
   Triggered when 'latest'
   tag pushed to ECR
 end note
+stop
 
+|#E8F5E9|App Deployment|
+start
+:Push to master;
+note right
+  Triggered on app module changes
+  after CI passes
+end note
+
+fork
+  :Package Windows (MSIX);
+  note right
+    - Build MSIX
+    - Sign with certificate
+  end note
+  :Publish to MS Store;
+  note right
+    - Flight deployment
+    - Partner Center API
+  end note
+fork again
+  :Package Android (AAB);
+  note right
+    - Build AAB
+    - Sign with keystore
+  end note
+  :Publish to Google Play;
+  note right
+    - Internal track
+    - Play Console API
+  end note
+end fork
+
+:Create GitHub Release;
 stop
 
 @enduml
