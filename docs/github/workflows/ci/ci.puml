@@ -28,6 +28,12 @@ fork again
   :Determine Changes / Determine API Changes;
   note right: 8s
 fork again
+  :Determine Changes / Determine App Changes;
+  note right: 8s
+fork again
+  :Determine Changes / Determine Data Changes;
+  note right: 8s
+fork again
   :Build LCOV Docker Image;
   note right: 17s
 end fork
@@ -117,6 +123,38 @@ fork again
     - Post Setup DevOps Node.js (0s)
     - Post Cache Cargo dependencies (0s)
     - Post Checkout (0s)
+  end note
+fork again
+  :App CI;
+  note right
+    3m 30s
+    ----
+    - Checkout (2s)
+    - Setup .NET (5s)
+    - Restore Dependencies (30s)
+    - **Lint** (15s)
+    - **Unit Test** (45s)
+    - Store App Unit JUnit Report (1s)
+    - Start API Server (10s)
+    - **Integration Test** (1m 30s)
+    - Store App Integration JUnit Report (1s)
+    - Restore lcov Docker image (1s)
+    - Load lcov Docker image (2s)
+    - Merge Test Coverage (1s)
+    - Store App Coverage Report (wf) (1s)
+    - Store App Coverage Report (master) (1s)
+  end note
+fork again
+  :Data CI;
+  note right
+    1m 15s
+    ----
+    - Checkout (2s)
+    - Setup Rust (4s)
+    - Cache Cargo dependencies (10s)
+    - **Lint** (20s)
+    - **Unit Test** (30s)
+    - Store Data Unit JUnit Report (1s)
   end note
 end fork
 

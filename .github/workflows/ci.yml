@@ -99,26 +99,33 @@ jobs:
       is_app_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_app_master_coverage_available }}
       is_website_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_website_master_coverage_available }}
     steps:
-      - name: Check for master coverage artifacts
+      - name: Check and restore master coverage artifacts
         id: check_master_coverage_artifacts
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Function to check if artifact exists across all workflow runs
-          check_artifact_exists() {
+          # Function to check if artifact exists and download it
+          # Downloads to make it available in current workflow run via re-upload
+          check_and_download_artifact() {
             local artifact_name=$1
-            local count=$(gh api repos/${{ github.repository }}/actions/artifacts \
-              --jq "[.artifacts[] | select(.name == \"$artifact_name\" and .expired == false)] | length")
-            if [ "$count" -gt "0" ]; then
+            local artifact_info=$(gh api repos/${{ github.repository }}/actions/artifacts \
+              --jq "[.artifacts[] | select(.name == \"$artifact_name\" and .expired == false)] | first")
+
+            if [ "$artifact_info" != "null" ] && [ -n "$artifact_info" ]; then
+              local artifact_id=$(echo "$artifact_info" | jq -r '.id')
+              echo "Found artifact $artifact_name (id: $artifact_id), downloading..."
+              mkdir -p "/tmp/$artifact_name"
+              gh api repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip > "/tmp/$artifact_name.zip"
+              unzip -o "/tmp/$artifact_name.zip" -d "/tmp/$artifact_name"
               echo "true"
             else
               echo "false"
             fi
           }
 
-          IS_API_MASTER_COVERAGE_AVAILABLE=$(check_artifact_exists "${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}")
-          IS_APP_MASTER_COVERAGE_AVAILABLE=$(check_artifact_exists "${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}")
-          IS_WEBSITE_MASTER_COVERAGE_AVAILABLE=$(check_artifact_exists "${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}")
+          IS_API_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}")
+          IS_APP_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}")
+          IS_WEBSITE_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}")
 
           echo "API master coverage available: $IS_API_MASTER_COVERAGE_AVAILABLE"
           echo "App master coverage available: $IS_APP_MASTER_COVERAGE_AVAILABLE"
@@ -127,6 +134,33 @@ jobs:
           echo "is_api_master_coverage_available=$IS_API_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_app_master_coverage_available=$IS_APP_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_website_master_coverage_available=$IS_WEBSITE_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
+
+      - name: Re-upload API master coverage for current workflow
+        if: steps.check_master_coverage_artifacts.outputs.is_api_master_coverage_available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
+          path: /tmp/${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
+          retention-days: 90
+          overwrite: true
+
+      - name: Re-upload App master coverage for current workflow
+        if: steps.check_master_coverage_artifacts.outputs.is_app_master_coverage_available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
+          path: /tmp/${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
+          retention-days: 90
+          overwrite: true
+
+      - name: Re-upload Website master coverage for current workflow
+        if: steps.check_master_coverage_artifacts.outputs.is_website_master_coverage_available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
+          path: /tmp/${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
+          retention-days: 90
+          overwrite: true
 
   determine_website_changes:
     name: Determine Website Changes
