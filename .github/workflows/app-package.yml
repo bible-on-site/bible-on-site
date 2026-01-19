@@ -25,7 +25,7 @@ on:
     outputs:
       module_version:
         description: The version of the app.
-        value: ${{ jobs.package.outputs.module_version }}
+        value: ${{ jobs.package_android.outputs.module_version || jobs.package_windows.outputs.module_version }}
       windows_artifact_name:
         description: The name of the Windows MSIX artifact.
         value: ${{ jobs.package_windows.outputs.artifact_name }}
@@ -40,58 +40,40 @@ env:
   APP_DIRECTORY: app
 
 jobs:
-  setup_env:
-    name: Setup Environment
-    runs-on: ubuntu-latest
-    outputs:
-      module_version: ${{ steps.get_version.outputs.VERSION }}
-      dotnet_version: ${{ steps.get_dotnet_version.outputs.DOTNET_VERSION }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Get .NET version from csproj
-        id: get_dotnet_version
-        working-directory: ${{ env.APP_DIRECTORY }}
-        run: |
-          # Extract .NET version from TargetFrameworks using grep (before .NET SDK is available)
-          DOTNET_VERSION=$(grep -oP 'net\K[0-9]+\.[0-9]+' BibleOnSite/BibleOnSite.csproj | head -1)
-          echo "DOTNET_VERSION=${DOTNET_VERSION}.x" >> $GITHUB_OUTPUT
-          echo ".NET version: ${DOTNET_VERSION}.x"
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: ${{ steps.get_dotnet_version.outputs.DOTNET_VERSION }}
-
-      - name: Restore dotnet tools
-        working-directory: ${{ env.APP_DIRECTORY }}
-        run: dotnet tool restore
-
-      - name: Get version from NUKE
-        id: get_version
-        working-directory: ${{ env.APP_DIRECTORY }}
-        run: |
-          # Extract version and strip ANSI color codes
-          VERSION=$(dotnet run --project devops -- Version 2>&1 | grep 'ApplicationDisplayVersion' | sed 's/.*: //' | sed 's/\x1b\[[0-9;]*m//g')
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "App version: $VERSION"
-
   package_windows:
     name: Package Windows (MSIX)
-    needs: setup_env
     if: ${{ inputs.platform == 'Windows' || inputs.platform == 'All' }}
     runs-on: windows-latest
     outputs:
       artifact_name: ${{ steps.set_artifact_name.outputs.artifact_name }}
+      module_version: ${{ steps.get_version.outputs.VERSION }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Get .NET version and app version from csproj
+        id: get_version
+        working-directory: ${{ env.APP_DIRECTORY }}
+        shell: pwsh
+        run: |
+          $content = Get-Content BibleOnSite/BibleOnSite.csproj -Raw
+          # Extract .NET version
+          if ($content -match 'net(\d+\.\d+)') {
+            $dotnetVersion = "$($Matches[1]).x"
+            echo "DOTNET_VERSION=$dotnetVersion" >> $env:GITHUB_OUTPUT
+            echo ".NET version: $dotnetVersion"
+          }
+          # Extract ApplicationDisplayVersion
+          if ($content -match '<ApplicationDisplayVersion>([^<]+)</ApplicationDisplayVersion>') {
+            $version = $Matches[1]
+            echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+            echo "App version: $version"
+          }
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: ${{ needs.setup_env.outputs.dotnet_version }}
+          dotnet-version: ${{ steps.get_version.outputs.DOTNET_VERSION }}
 
       - name: Cache NuGet packages
         uses: actions/cache@v5
@@ -126,18 +108,16 @@ jobs:
 
       - name: Find MSIX file
         id: find_msix
-        # TODO: Determine which file type (.msix or .msixupload) is actually produced and remove the other branch
         run: |
           $msix = Get-ChildItem -Path "${{ env.APP_DIRECTORY }}/.artifacts" -Filter "*.msix" -Recurse | Select-Object -First 1
           if ($msix) {
-            echo "Found .msix file (primary branch)"
+            echo "Found .msix file"
             echo "MSIX_PATH=$($msix.FullName)" >> $env:GITHUB_OUTPUT
             echo "MSIX_NAME=$($msix.Name)" >> $env:GITHUB_OUTPUT
           } else {
-            # Try finding .msixupload or .appxupload
             $upload = Get-ChildItem -Path "${{ env.APP_DIRECTORY }}/.artifacts" -Filter "*.msixupload" -Recurse | Select-Object -First 1
             if ($upload) {
-              echo "Found .msixupload file (fallback branch)"
+              echo "Found .msixupload file"
               echo "MSIX_PATH=$($upload.FullName)" >> $env:GITHUB_OUTPUT
               echo "MSIX_NAME=$($upload.Name)" >> $env:GITHUB_OUTPUT
             } else {
@@ -148,7 +128,7 @@ jobs:
 
       - name: Set artifact name output
         id: set_artifact_name
-        run: echo "artifact_name=app-windows-v${{ needs.setup_env.outputs.module_version }}" >> $GITHUB_OUTPUT
+        run: echo "artifact_name=app-windows-v${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Upload MSIX artifact
@@ -170,19 +150,32 @@ jobs:
 
   package_android:
     name: Package Android (AAB)
-    needs: setup_env
     if: ${{ inputs.platform == 'Android' || inputs.platform == 'All' }}
     runs-on: ubuntu-latest
     outputs:
       artifact_name: ${{ steps.set_artifact_name.outputs.artifact_name }}
+      module_version: ${{ steps.get_version.outputs.VERSION }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Get .NET version and app version from csproj
+        id: get_version
+        working-directory: ${{ env.APP_DIRECTORY }}
+        run: |
+          # Extract .NET version from TargetFrameworks
+          DOTNET_VERSION=$(grep -oP 'net\K[0-9]+\.[0-9]+' BibleOnSite/BibleOnSite.csproj | head -1)
+          echo "DOTNET_VERSION=${DOTNET_VERSION}.x" >> $GITHUB_OUTPUT
+          echo ".NET version: ${DOTNET_VERSION}.x"
+          # Extract ApplicationDisplayVersion
+          VERSION=$(grep -oP '<ApplicationDisplayVersion>\K[^<]+' BibleOnSite/BibleOnSite.csproj)
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "App version: $VERSION"
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: ${{ needs.setup_env.outputs.dotnet_version }}
+          dotnet-version: ${{ steps.get_version.outputs.DOTNET_VERSION }}
 
       - name: Setup Java
         uses: actions/setup-java@v5
@@ -226,7 +219,7 @@ jobs:
 
       - name: Set artifact name output
         id: set_artifact_name
-        run: echo "artifact_name=app-android-v${{ needs.setup_env.outputs.module_version }}" >> $GITHUB_OUTPUT
+        run: echo "artifact_name=app-android-v${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v6
@@ -246,17 +239,18 @@ jobs:
 
   package:
     name: Package Summary
-    needs: [setup_env, package_windows, package_android]
+    needs: [package_windows, package_android]
     if: always()
     runs-on: ubuntu-latest
     outputs:
-      module_version: ${{ needs.setup_env.outputs.module_version }}
+      module_version: ${{ needs.package_android.outputs.module_version || needs.package_windows.outputs.module_version }}
     steps:
       - name: Summary
         run: |
+          VERSION="${{ needs.package_android.outputs.module_version || needs.package_windows.outputs.module_version }}"
           echo "## App Packaging Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** ${{ needs.setup_env.outputs.module_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** $VERSION" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
