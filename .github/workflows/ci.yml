@@ -202,6 +202,33 @@ jobs:
       module_name: ${{ needs.setup_env.outputs.data_directory }}
       ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml"
 
+  # Version Verification Jobs
+  # These jobs run on PRs and master to verify that module versions are properly bumped
+  # before any release can occur. This prevents CD failures due to duplicate versions.
+  verify_website_version:
+    name: Verify Website Version
+    needs: [setup_env, determine_website_changes]
+    if: ${{ needs.determine_website_changes.outputs.module_changed == 'true' }}
+    uses: ./.github/workflows/shared-verify-version.yml
+    with:
+      module_name: website
+
+  verify_api_version:
+    name: Verify API Version
+    needs: [setup_env, determine_api_changes]
+    if: ${{ needs.determine_api_changes.outputs.module_changed == 'true' }}
+    uses: ./.github/workflows/shared-verify-version.yml
+    with:
+      module_name: api
+
+  verify_app_version:
+    name: Verify App Version
+    needs: [setup_env, determine_app_changes]
+    if: ${{ needs.determine_app_changes.outputs.module_changed == 'true' }}
+    uses: ./.github/workflows/shared-verify-version.yml
+    with:
+      module_name: app
+
   package_website:
     name: Package Website
     needs: [setup_env, determine_website_changes]
@@ -931,6 +958,9 @@ jobs:
         determine_api_changes,
         determine_app_changes,
         determine_data_changes,
+        verify_website_version,
+        verify_api_version,
+        verify_app_version,
         website_performance,
         website_e2e,
         api_e2e,
@@ -958,7 +988,28 @@ jobs:
             exit 1
           fi
 
+          # Version verification checks (only fail if the job ran and failed, not if skipped)
           WEBSITE_MODULE_CHANGED=$([ "${{ needs.determine_website_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$WEBSITE_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_website_version.result }}" = "failure" ]; then
+            echo "Website version verification failed."
+            echo "Overall status: failure"
+            exit 1
+          fi
+
+          API_MODULE_CHANGED=$([ "${{ needs.determine_api_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$API_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_api_version.result }}" = "failure" ]; then
+            echo "API version verification failed."
+            echo "Overall status: failure"
+            exit 1
+          fi
+
+          APP_MODULE_CHANGED=$([ "${{ needs.determine_app_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$APP_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_app_version.result }}" = "failure" ]; then
+            echo "App version verification failed."
+            echo "Overall status: failure"
+            exit 1
+          fi
+
           CI_CHANGED=$([ "${{ needs.determine_website_changes.outputs.ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           WEBSITE_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_website_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
           if [ "$WEBSITE_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$WEBSITE_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
