@@ -1,4 +1,4 @@
-name: Continuous Deployment
+name: App CD
 
 on:
   repository_dispatch:
