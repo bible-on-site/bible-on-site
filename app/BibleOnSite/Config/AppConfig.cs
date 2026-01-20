@@ -18,8 +18,9 @@ public sealed class AppConfig
 
     /// <summary>
     /// The full GraphQL API URL.
+    /// Note: Production API still uses /api/graphql path until API is redeployed.
     /// </summary>
-    public string ApiUrl => $"https://api.{RemoteHost}";
+    public string ApiUrl => $"https://api.{RemoteHost}/api/graphql";
 
     /// <summary>
     /// Development API URL for local testing (Android emulator uses 10.0.2.2 for host loopback).
