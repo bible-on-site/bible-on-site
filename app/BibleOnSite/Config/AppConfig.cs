@@ -29,9 +29,9 @@ public sealed class AppConfig
         get
         {
 #if ANDROID
-            return "http://10.0.2.2:3003/api/graphql";
+            return "http://10.0.2.2:3003";
 #else
-            return "http://localhost:3003/api/graphql";
+            return "http://localhost:3003";
 #endif
         }
     }

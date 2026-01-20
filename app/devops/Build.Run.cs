@@ -16,7 +16,7 @@ partial class Build
         try
         {
             using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
-            var response = client.GetAsync("http://localhost:3003/api/graphql").Result;
+            var response = client.GetAsync("http://localhost:3003").Result;
             return response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.BadRequest;
         }
         catch

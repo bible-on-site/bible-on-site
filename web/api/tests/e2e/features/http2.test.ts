@@ -26,7 +26,7 @@ test.describe("HTTP/2", () => {
 
 			const req = client.request({
 				":method": "POST",
-				":path": "/api/graphql",
+				":path": "/",
 				"content-type": "application/json",
 				"content-length": Buffer.byteLength(requestBody),
 			});

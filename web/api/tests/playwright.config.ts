@@ -9,7 +9,7 @@ import {
 	shouldMeasureCov,
 } from "../../shared/tests-util/environment.mjs";
 
-const WEB_SERVER_URL = "http://127.0.0.1:3003/api/graphql";
+const WEB_SERVER_URL = "http://127.0.0.1:3003";
 const isNonInteractive = isCI || isCopilot;
 export default defineConfig({
 	testMatch: ["**/*.test.ts"],

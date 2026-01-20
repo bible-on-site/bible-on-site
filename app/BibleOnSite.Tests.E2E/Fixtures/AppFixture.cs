@@ -18,7 +18,7 @@ public class AppFixture : IAsyncLifetime
     private Process? _apiProcess;
     private bool _weStartedApi;
 
-    private const string ApiUrl = "http://localhost:3003/api/graphql";
+    private const string ApiUrl = "http://localhost:3003";
 
     /// <summary>
     /// The FlaUI Application instance for UI automation.
