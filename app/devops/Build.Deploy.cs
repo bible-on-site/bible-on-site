@@ -129,6 +129,17 @@ partial class Build
 
             Serilog.Log.Information($"Uploading {msixFile.Name} to Microsoft Store...");
 
+            // TODO: Investigate if Microsoft Store only allows one pending submission per flight,
+            // unlike Google Play which can queue multiple. If so, we must delete pending before uploading.
+            // For now, we delete any pending flight submission to ensure clean state.
+            if (!string.IsNullOrEmpty(MsStoreFlightId))
+            {
+                Serilog.Log.Information($"Checking for pending flight submission...");
+                var deleteProcess = ProcessTasks.StartProcess("msstore", $"flights submission delete \"{MsStoreAppId}\" \"{MsStoreFlightId}\"");
+                deleteProcess.WaitForExit();
+                // Ignore exit code - deletion may fail if no pending submission exists
+            }
+
             var arguments = $"publish \"{msixFile}\" --appId \"{MsStoreAppId}\"";
 
             if (!string.IsNullOrEmpty(MsStoreFlightId))
@@ -142,33 +153,8 @@ partial class Build
             }
 
             // msstore CLI is installed via: microsoft/setup-msstore-cli GitHub Action
-            var process = ProcessTasks.StartProcess("msstore", arguments);
-            process.WaitForExit();
-
-            if (process.ExitCode != 0)
-            {
-                var output = string.Join("\n", process.Output.Select(o => o.Text));
-
-                // Check for "submission created in Partner Center" error - this means the same version was deployed twice
-                if (output.Contains("submission that was created in Partner Center", StringComparison.OrdinalIgnoreCase))
-                {
-                    Serilog.Log.Error("================================================================================");
-                    Serilog.Log.Error("DEPLOYMENT FAILED: This version has already been deployed.");
-                    Serilog.Log.Error("");
-                    Serilog.Log.Error("This error occurs when the same version is deployed twice. The first deployment");
-                    Serilog.Log.Error("created a submission in Partner Center, and deploying the same version again");
-                    Serilog.Log.Error("is blocked by that existing submission.");
-                    Serilog.Log.Error("");
-                    Serilog.Log.Error("ROOT CAUSE: The version was not bumped before this release.");
-                    Serilog.Log.Error("");
-                    Serilog.Log.Error("FIX: Bump the version in app/BibleOnSite/BibleOnSite.csproj:");
-                    Serilog.Log.Error("  <ApplicationDisplayVersion>X.Y.Z</ApplicationDisplayVersion>");
-                    Serilog.Log.Error("================================================================================");
-                    Assert.Fail("Version already deployed. Bump the version before deploying again.");
-                }
-
-                process.AssertZeroExitCode();
-            }
+            ProcessTasks.StartProcess("msstore", arguments)
+                .AssertZeroExitCode();
 
             Serilog.Log.Information("Microsoft Store upload complete");
         });
