@@ -24,6 +24,31 @@ public class PerekPageTests
     }
 
     [Fact]
+    public async Task PerekPage_LoadsPasukimFromDatabase()
+    {
+        // Wait for the loading label to disappear (data loaded)
+        var timeout = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < timeout)
+        {
+            var loadingLabel = _fixture.FindByAutomationId("PerekLoadingLabel");
+            if (loadingLabel == null)
+            {
+                break;
+            }
+
+            await Task.Delay(200);
+        }
+
+        _fixture.FindByAutomationId("PerekLoadingLabel")
+            .Should().BeNull("loading indicator should disappear once pasukim are loaded");
+
+        // Verify at least one pasuk text item is rendered
+        var pasukTextElements = _fixture.MainWindow.FindAllDescendants(_fixture.CF.ByAutomationId("PasukText"));
+        pasukTextElements.Should().NotBeNull();
+        pasukTextElements.Length.Should().BeGreaterThan(0, "at least one pasuk should be rendered from the local database");
+    }
+
+    [Fact]
     public async Task PerekPage_DisplaysToolbarButtons()
     {
         // Assert - Should have the toolbar buttons
