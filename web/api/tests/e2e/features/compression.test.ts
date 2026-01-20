@@ -1,6 +1,6 @@
 import { type APIResponse, expect, test } from "@playwright/test";
 
-const ROOT_URL = "http://127.0.0.1:3003/api/graphql";
+const ROOT_URL = "http://127.0.0.1:3003";
 
 test.describe("Compression", () => {
 	test("returns brotli-compressed response when Accept-Encoding: br is sent", async ({

@@ -12,7 +12,7 @@ public class ApiServerFixture : IAsyncLifetime
     private Process? _apiProcess;
     private readonly HttpClient _httpClient = new();
 
-    public const string ApiUrl = "http://127.0.0.1:3003/api/graphql";
+    public const string ApiUrl = "http://127.0.0.1:3003";
     public const int StartupTimeoutSeconds = 120;
     public const int HealthCheckIntervalMs = 500;
 

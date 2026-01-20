@@ -38,7 +38,7 @@
 		{
 			"label": "api: check-health",
 			"type": "shell",
-			"command": "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3003/api/graphql || exit 0",
+			"command": "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3003 || exit 0",
 			"options": {
 				"cwd": "${workspaceFolder}"
 			},

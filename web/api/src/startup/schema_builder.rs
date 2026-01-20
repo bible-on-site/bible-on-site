@@ -40,7 +40,7 @@ pub async fn graphql_request(
 }
 
 pub async fn graphql_playground() -> Result<HttpResponse> {
-    let source = playground_source(GraphQLPlaygroundConfig::new("/api/graphql"));
+    let source = playground_source(GraphQLPlaygroundConfig::new("/"));
     Ok(HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
         .body(source))
