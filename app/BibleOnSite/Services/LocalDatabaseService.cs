@@ -8,7 +8,7 @@ namespace BibleOnSite.Services;
 /// </summary>
 public class LocalDatabaseService
 {
-    private const string DbName = "db.sqlite";
+    private const string DbName = "sefaria-dump-5784-sivan-4.tanah_view.sqlite";
     private static readonly Lazy<LocalDatabaseService> _instance = new(() => new LocalDatabaseService());
 
     /// <summary>

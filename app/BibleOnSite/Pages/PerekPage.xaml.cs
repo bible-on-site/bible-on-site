@@ -44,6 +44,7 @@ public partial class PerekPage : ContentPage
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"Failed to load perek: {ex.Message}");
+                await DisplayAlert("Error", $"Failed to load perek: {ex.Message}", "OK");
             }
             finally
             {

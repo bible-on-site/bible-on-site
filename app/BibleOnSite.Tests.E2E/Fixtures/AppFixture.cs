@@ -179,11 +179,13 @@ public class AppFixture : IAsyncLifetime
         var startInfo = new ProcessStartInfo
         {
             FileName = AppPath,
-            UseShellExecute = true,
+            UseShellExecute = false,
             WorkingDirectory = Path.GetDirectoryName(AppPath)
         };
 
-        _appProcess = Process.Start(startInfo);
+        _app = Application.Launch(startInfo);
+        _appProcess = Process.GetProcessById(_app.ProcessId);
+
         if (_appProcess == null)
         {
             throw new InvalidOperationException("Failed to start the application");
@@ -192,14 +194,35 @@ public class AppFixture : IAsyncLifetime
         // Wait for the app to start and get the Application instance
         await Task.Delay(3000); // Give app time to initialize
 
-        _app = Application.Attach(_appProcess);
-
-        // Wait for main window to be available
-        var window = App.GetMainWindow(Automation, TimeSpan.FromSeconds(15));
-        if (window == null)
+        // Wait for main window to be available (startup can be slow on first run)
+        var timeout = DateTime.UtcNow.AddSeconds(60);
+        Exception? lastException = null;
+        while (DateTime.UtcNow < timeout)
         {
-            throw new InvalidOperationException("Main window not found after 15 seconds");
+            if (_appProcess.HasExited)
+            {
+                throw new InvalidOperationException($"App process exited before window was available. Exit code: {_appProcess.ExitCode}");
+            }
+
+            try
+            {
+                var window = App.GetMainWindow(Automation, TimeSpan.FromSeconds(5));
+                if (window != null)
+                {
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                lastException = ex;
+            }
+
+            await Task.Delay(500);
         }
+
+        throw new InvalidOperationException(
+            "Main window not found after 60 seconds.",
+            lastException);
     }
 
     public async Task DisposeAsync()
