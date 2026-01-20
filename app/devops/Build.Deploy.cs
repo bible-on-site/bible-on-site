@@ -149,20 +149,22 @@ partial class Build
             {
                 var output = string.Join("\n", process.Output.Select(o => o.Text));
 
-                // Check for "submission created in Partner Center" error - this means there's a stale submission blocking new uploads
+                // Check for "submission created in Partner Center" error - this means the same version was deployed twice
                 if (output.Contains("submission that was created in Partner Center", StringComparison.OrdinalIgnoreCase))
                 {
                     Serilog.Log.Error("================================================================================");
-                    Serilog.Log.Error("DEPLOYMENT FAILED: A pending submission is blocking new uploads.");
-                    Serilog.Log.Error("This happens when a previous deployment left a submission in Partner Center.");
+                    Serilog.Log.Error("DEPLOYMENT FAILED: This version has already been deployed.");
                     Serilog.Log.Error("");
-                    Serilog.Log.Error("To fix this, delete the pending submission in Partner Center:");
-                    Serilog.Log.Error("  1. Go to https://partner.microsoft.com/dashboard");
-                    Serilog.Log.Error("  2. Navigate to: Apps → Bible On Site → Package flights");
-                    Serilog.Log.Error("  3. Delete the pending submission");
-                    Serilog.Log.Error("  4. Re-run this workflow");
+                    Serilog.Log.Error("This error occurs when the same version is deployed twice. The first deployment");
+                    Serilog.Log.Error("created a submission in Partner Center, and deploying the same version again");
+                    Serilog.Log.Error("is blocked by that existing submission.");
+                    Serilog.Log.Error("");
+                    Serilog.Log.Error("ROOT CAUSE: The version was not bumped before this release.");
+                    Serilog.Log.Error("");
+                    Serilog.Log.Error("FIX: Bump the version in app/BibleOnSite/BibleOnSite.csproj:");
+                    Serilog.Log.Error("  <ApplicationDisplayVersion>X.Y.Z</ApplicationDisplayVersion>");
                     Serilog.Log.Error("================================================================================");
-                    Assert.Fail("Pending submission blocking upload. Delete it in Partner Center and retry.");
+                    Assert.Fail("Version already deployed. Bump the version before deploying again.");
                 }
 
                 process.AssertZeroExitCode();
