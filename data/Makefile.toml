@@ -145,7 +145,15 @@ args = ["test", "--workspace", "--features", "integration"]
 description = "Run integration tests with JUnit output"
 dependencies = ["test-integration-dir-create"]
 command = "cargo"
-args = ["nextest", "run", "--workspace", "--features", "integration", "--profile", "ci-integration"]
+args = [
+    "nextest",
+    "run",
+    "--workspace",
+    "--features",
+    "integration",
+    "--profile",
+    "ci-integration",
+]
 
 # =============================================================================
 # Coverage Tasks (tanah-view)
