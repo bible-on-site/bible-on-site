@@ -1053,16 +1053,16 @@ jobs:
         run: |
           docker run -d --name sefaria-mongo -p 27017:27017 sefaria-mongo:latest
           echo "Waiting for MongoDB to be ready..."
-          # Data is pre-loaded at build time, so we just need to wait for MongoDB to start
+          # Data is restored at container startup via mongorestore (~5-6 minutes)
           # The database name in the dump is 'sefaria' (not 'sefaria-dump-*')
-          for i in {1..30}; do
+          for i in {1..200}; do
             # Check if MongoDB is accepting connections and has data
             count=$(docker exec sefaria-mongo mongosh --quiet --eval "db.getSiblingDB('sefaria').texts.countDocuments({})" 2>/dev/null || echo "0")
             if [ "$count" != "0" ] && [ -n "$count" ]; then
               echo "MongoDB is ready with $count documents in sefaria.texts collection!"
               exit 0
             fi
-            echo "Attempt $i/30: Waiting for MongoDB (count: $count)..."
+            echo "Attempt $i/200: Waiting for MongoDB (count: $count)..."
             sleep 2
           done
           echo "MongoDB failed to be ready within timeout"

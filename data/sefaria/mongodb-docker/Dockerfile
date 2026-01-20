@@ -1,11 +1,11 @@
-# MongoDB with Sefaria dump pre-loaded at BUILD TIME
+# MongoDB with Sefaria dump pre-loaded
 # Used for CI integration tests
 #
 # Build: docker build -t sefaria-mongo:latest .
 # Run: docker run -d -p 27017:27017 sefaria-mongo:latest
 #
-# Note: Data is restored during Docker build, not at container startup.
-# This makes container startup instant (~1 second) instead of waiting for mongorestore.
+# Note: The dump is restored at first container startup.
+# This uses the MongoDB docker-entrypoint-initdb.d mechanism with an inline script.
 
 FROM mongo:7
 
@@ -30,17 +30,11 @@ RUN curl -L ${DUMP_URL} -o dump.tar.gz \
     && echo "Found extracted directory: $EXTRACTED_DIR" \
     && mv "$EXTRACTED_DIR" /dump
 
-# Restore data at BUILD TIME (not runtime) for instant container startup
-# 1. Start MongoDB in background
-# 2. Wait for it to be ready
-# 3. Run mongorestore
-# 4. Shutdown MongoDB gracefully (ensures data is flushed to disk)
-# 5. Clean up dump files to reduce image size
-RUN mongod --fork --logpath /var/log/mongodb/mongod.log --dbpath /data/db \
-    && sleep 2 \
-    && mongorestore --drop /dump \
-    && mongod --shutdown \
-    && rm -rf /dump /var/log/mongodb/mongod.log
+# Create init script inline to restore the dump on first startup
+# The MongoDB docker-entrypoint.sh runs scripts in /docker-entrypoint-initdb.d/
+# Note: This is an inline script in the Dockerfile, not a separate .sh file
+RUN printf '#!/bin/bash\nmongorestore --drop /dump\n' > /docker-entrypoint-initdb.d/restore-dump.sh \
+    && chmod +x /docker-entrypoint-initdb.d/restore-dump.sh
 
 # Expose MongoDB port
 EXPOSE 27017
