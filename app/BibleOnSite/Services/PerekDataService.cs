@@ -1,5 +1,6 @@
 using BibleOnSite.Helpers;
 using BibleOnSite.Models;
+using System.Text;
 using Newtonsoft.Json;
 using SQLite;
 
@@ -125,7 +126,7 @@ public class PerekDataService
                 Date = FormatDate(row.Date),
                 HasRecording = false,
                 Header = row.Header ?? string.Empty,
-                HebDate = FormatDate(row.HebDate),
+                HebDate = FormatHebrewDate(row.HebDate),
                 PerekNumber = row.PerekInContext,
                 SeferId = row.SeferId,
                 SeferName = row.SeferName ?? sefer?.Name ?? string.Empty,
@@ -160,7 +161,7 @@ public class PerekDataService
 
         var pasukim = new List<Pasuk>();
         var currentPasukId = -1;
-        var currentTextParts = new List<string>();
+        var currentText = new StringBuilder();
 
         foreach (var row in segmentRows)
         {
@@ -171,12 +172,12 @@ public class PerekDataService
                     pasukim.Add(new Pasuk
                     {
                         PasukNum = currentPasukId,
-                        Text = string.Concat(currentTextParts)
+                        Text = currentText.ToString()
                     });
                 }
 
                 currentPasukId = row.PasukId;
-                currentTextParts = new List<string>();
+                currentText.Clear();
             }
 
             var value = row.Value ?? string.Empty;
@@ -186,16 +187,19 @@ public class PerekDataService
                 case "qri":
                     if (!string.IsNullOrEmpty(value))
                     {
-                        if (currentTextParts.Count > 0 && currentTextParts[^1] != "\n")
+                        if (currentText.Length > 0 && currentText[^1] != '\n')
                         {
-                            currentTextParts.Add(" ");
+                            currentText.Append(' ');
                         }
-                        currentTextParts.Add(value);
+                        currentText.Append(value);
                     }
                     break;
                 case "ptuha":
                 case "stuma":
-                    currentTextParts.Add("\n");
+                    if (currentText.Length > 0 && currentText[^1] != '\n')
+                    {
+                        currentText.Append('\n');
+                    }
                     break;
             }
         }
@@ -205,7 +209,7 @@ public class PerekDataService
             pasukim.Add(new Pasuk
             {
                 PasukNum = currentPasukId,
-                Text = string.Concat(currentTextParts)
+                Text = currentText.ToString()
             });
         }
 
@@ -244,6 +248,55 @@ public class PerekDataService
         }
 
         return date.Length >= 10 ? date[..10] : date;
+    }
+
+    private static string FormatHebrewDate(string? hebDate)
+    {
+        if (string.IsNullOrWhiteSpace(hebDate))
+            return string.Empty;
+
+        if (hebDate.Length != 8 || !int.TryParse(hebDate, out var _))
+            return hebDate;
+
+        var year = int.Parse(hebDate[..4]);
+        var month = int.Parse(hebDate.Substring(4, 2));
+        var day = int.Parse(hebDate.Substring(6, 2));
+
+        var dayText = day.ToHebrewLetters();
+        var monthText = GetHebrewMonthName(month, IsHebrewLeapYear(year));
+        var yearText = GimatryHelper.ToLetters(year % 1000);
+
+        return string.IsNullOrEmpty(monthText)
+            ? hebDate
+            : $"{dayText} {monthText} {yearText}";
+    }
+
+    private static bool IsHebrewLeapYear(int hebrewYear)
+    {
+        // Leap years in the 19-year cycle: 3, 6, 8, 11, 14, 17, 19
+        var mod = hebrewYear % 19;
+        return mod is 0 or 3 or 6 or 8 or 11 or 14 or 17;
+    }
+
+    private static string GetHebrewMonthName(int month, bool isLeapYear)
+    {
+        return month switch
+        {
+            1 => "תשרי",
+            2 => "חשוון",
+            3 => "כסלו",
+            4 => "טבת",
+            5 => "שבט",
+            6 => isLeapYear ? "אדר א" : "אדר",
+            7 => isLeapYear ? "אדר ב" : "ניסן",
+            8 => isLeapYear ? "ניסן" : "אייר",
+            9 => isLeapYear ? "אייר" : "סיון",
+            10 => isLeapYear ? "סיון" : "תמוז",
+            11 => isLeapYear ? "תמוז" : "אב",
+            12 => isLeapYear ? "אב" : "אלול",
+            13 => "אלול",
+            _ => string.Empty
+        };
     }
 
     #region Database Row Classes
