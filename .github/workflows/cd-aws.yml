@@ -1,4 +1,4 @@
-name: AWS CD
+name: Continuous Deployment - AWS
 
 on:
   repository_dispatch:
