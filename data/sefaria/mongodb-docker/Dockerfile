@@ -7,9 +7,9 @@
 FROM mongo:7
 
 # Install curl for downloading the dump
-# Pin version and use --no-install-recommends per Codacy guidelines
+# Use --no-install-recommends per Codacy guidelines
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl=7.81.0-1ubuntu1.21 \
+    && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Download and extract Sefaria dump
@@ -30,9 +30,12 @@ RUN curl -L ${DUMP_URL} -o dump.tar.gz \
 
 # Import the dump into MongoDB at build time
 # This pre-populates the database so it's ready immediately when the container starts
-RUN mongod --fork --logpath /var/log/mongodb.log \
+# Note: mongod requires a data directory
+RUN mkdir -p /data/db \
+    && mongod --fork --logpath /var/log/mongodb.log --dbpath /data/db \
+    && sleep 5 \
     && mongorestore --drop /dump \
-    && mongod --shutdown
+    && mongod --shutdown --dbpath /data/db
 
 # Expose MongoDB port
 EXPOSE 27017
