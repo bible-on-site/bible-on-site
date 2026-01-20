@@ -135,7 +135,7 @@ partial class Build
             if (!string.IsNullOrEmpty(MsStoreFlightId))
             {
                 Serilog.Log.Information($"Checking for pending flight submission...");
-                var deleteProcess = ProcessTasks.StartProcess("msstore", $"flights submission delete \"{MsStoreAppId}\" \"{MsStoreFlightId}\"");
+                var deleteProcess = ProcessTasks.StartProcess("msstore", $"flights submission delete \"{MsStoreAppId}\" \"{MsStoreFlightId}\" --no-confirm");
                 deleteProcess.WaitForExit();
                 // Ignore exit code - deletion may fail if no pending submission exists
             }
