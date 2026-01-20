@@ -142,8 +142,31 @@ partial class Build
             }
 
             // msstore CLI is installed via: microsoft/setup-msstore-cli GitHub Action
-            ProcessTasks.StartProcess("msstore", arguments)
-                .AssertZeroExitCode();
+            var process = ProcessTasks.StartProcess("msstore", arguments);
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+            {
+                var output = string.Join("\n", process.Output.Select(o => o.Text));
+
+                // Check for "submission created in Partner Center" error - this means the version was already deployed
+                if (output.Contains("submission that was created in Partner Center", StringComparison.OrdinalIgnoreCase))
+                {
+                    Serilog.Log.Error("================================================================================");
+                    Serilog.Log.Error("DEPLOYMENT FAILED: This version was already deployed to Microsoft Store.");
+                    Serilog.Log.Error("The previous deployment created a submission that blocks new uploads.");
+                    Serilog.Log.Error("");
+                    Serilog.Log.Error("To fix this, bump the app version in BibleOnSite.csproj:");
+                    Serilog.Log.Error("  <ApplicationDisplayVersion>X.Y.Z</ApplicationDisplayVersion>");
+                    Serilog.Log.Error("");
+                    Serilog.Log.Error("Alternatively, delete the pending submission in Partner Center:");
+                    Serilog.Log.Error("  https://partner.microsoft.com/dashboard → Apps → Bible On Site → Package flights");
+                    Serilog.Log.Error("================================================================================");
+                    Assert.Fail("Version already deployed. Bump the version before deploying again.");
+                }
+
+                process.AssertZeroExitCode();
+            }
 
             Serilog.Log.Information("Microsoft Store upload complete");
         });
