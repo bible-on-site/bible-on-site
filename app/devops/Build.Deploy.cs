@@ -149,20 +149,20 @@ partial class Build
             {
                 var output = string.Join("\n", process.Output.Select(o => o.Text));
 
-                // Check for "submission created in Partner Center" error - this means the version was already deployed
+                // Check for "submission created in Partner Center" error - this means there's a stale submission blocking new uploads
                 if (output.Contains("submission that was created in Partner Center", StringComparison.OrdinalIgnoreCase))
                 {
                     Serilog.Log.Error("================================================================================");
-                    Serilog.Log.Error("DEPLOYMENT FAILED: This version was already deployed to Microsoft Store.");
-                    Serilog.Log.Error("The previous deployment created a submission that blocks new uploads.");
+                    Serilog.Log.Error("DEPLOYMENT FAILED: A pending submission is blocking new uploads.");
+                    Serilog.Log.Error("This happens when a previous deployment left a submission in Partner Center.");
                     Serilog.Log.Error("");
-                    Serilog.Log.Error("To fix this, bump the app version in BibleOnSite.csproj:");
-                    Serilog.Log.Error("  <ApplicationDisplayVersion>X.Y.Z</ApplicationDisplayVersion>");
-                    Serilog.Log.Error("");
-                    Serilog.Log.Error("Alternatively, delete the pending submission in Partner Center:");
-                    Serilog.Log.Error("  https://partner.microsoft.com/dashboard → Apps → Bible On Site → Package flights");
+                    Serilog.Log.Error("To fix this, delete the pending submission in Partner Center:");
+                    Serilog.Log.Error("  1. Go to https://partner.microsoft.com/dashboard");
+                    Serilog.Log.Error("  2. Navigate to: Apps → Bible On Site → Package flights");
+                    Serilog.Log.Error("  3. Delete the pending submission");
+                    Serilog.Log.Error("  4. Re-run this workflow");
                     Serilog.Log.Error("================================================================================");
-                    Assert.Fail("Version already deployed. Bump the version before deploying again.");
+                    Assert.Fail("Pending submission blocking upload. Delete it in Partner Center and retry.");
                 }
 
                 process.AssertZeroExitCode();
