@@ -219,6 +219,23 @@ public partial class PerekViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Navigates to the authors page.
+    /// </summary>
+    [RelayCommand]
+    public async Task GoToAuthorsAsync()
+    {
+        try
+        {
+            await Shell.Current.GoToAsync("AuthorsPage");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Navigation to AuthorsPage failed: {ex}");
+            await Shell.Current.DisplayAlert("שגיאה", $"לא ניתן לטעון רבנים: {ex.Message}", "אישור");
+        }
+    }
+
     #endregion
 #endif
 

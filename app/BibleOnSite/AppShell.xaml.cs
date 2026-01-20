@@ -10,5 +10,6 @@ public partial class AppShell : Shell
 
 		// Register routes for pages that are navigated to with parameters
 		Routing.RegisterRoute("ArticlesPage", typeof(ArticlesPage));
+		Routing.RegisterRoute("AuthorsPage", typeof(AuthorsPage));
 	}
 }

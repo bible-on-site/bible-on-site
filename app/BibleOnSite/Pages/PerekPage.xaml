@@ -16,6 +16,12 @@
             Command="{Binding GoToArticlesCommand}"
             SemanticProperties.Description="View articles"/>
         <ToolbarItem
+            x:Name="AuthorsButton"
+            AutomationId="AuthorsButton"
+            Text="👤"
+            Command="{Binding GoToAuthorsCommand}"
+            SemanticProperties.Description="View authors"/>
+        <ToolbarItem
             x:Name="BookmarkButton"
             AutomationId="BookmarkButton"
             Text="⭐"
