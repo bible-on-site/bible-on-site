@@ -7,60 +7,65 @@ skinparam ActivityFontColor #1565C0
 skinparam ArrowColor #1976D2
 skinparam ActivityBarColor #1976D2
 
-title Continuous Deployment Workflow
+title Continuous Deployment Workflows
 
-|#E8F4FD|AWS Deployment|
+|#E8F4FD|cd-aws.yml|
 start
-:repository_dispatch (deploy);
+:repository_dispatch\n(deploy-aws);
 note right
-  From CI:
+  From shared-release.yml:
   module_name, module_version,
-  docker_artifact_name, ci_run_id
+  released_artifact_name, ci_run_id
 end note
 
-:Setup & AWS Auth;
+:Setup & AWS Auth (OIDC);
 :Restore Docker Image from CI;
-:**Deploy to ECR**;
-:ECS Auto-Deploy (EventBridge);
+:**Push to ECR**;
 note right
-  Triggered when 'latest'
-  tag pushed to ECR
+  Tags: version + latest
+end note
+:ECS Auto-Deploy;
+note right
+  EventBridge triggers
+  on 'latest' tag
 end note
 stop
 
-|#E8F5E9|App Deployment|
+|#E8F5E9|cd-app.yml|
 start
-:Push to master;
+:repository_dispatch\n(deploy-app);
 note right
-  Triggered on app module changes
-  after CI passes
+  From release_app job in ci.yml:
+  module_version, ci_run_id,
+  windows/android artifact names
 end note
 
 fork
-  :Package Windows (MSIX);
+  :Restore MSIX;
+  :**Deploy to MS Store**;
   note right
-    - Build MSIX
-    - Sign with certificate
-  end note
-  :Publish to MS Store;
-  note right
-    - Flight deployment
-    - Partner Center API
+    Flight: Internal
+    Partner Center API
   end note
 fork again
-  :Package Android (AAB);
+  :Restore AAB;
+  :**Deploy to Google Play**;
   note right
-    - Build AAB
-    - Sign with keystore
-  end note
-  :Publish to Google Play;
-  note right
-    - Internal track
-    - Play Console API
+    Track: Internal
+    Play Console API
   end note
 end fork
+stop
 
-:Create GitHub Release;
+|#FFF3E0|cd-data.yml|
+start
+:repository_dispatch\n(deploy-data);
+note right
+  From release_data job in ci.yml
+end note
+
+:Setup & AWS Auth (OIDC);
+:**Run Data Migration**;
 stop
 
 @enduml

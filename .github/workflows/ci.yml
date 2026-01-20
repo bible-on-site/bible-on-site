@@ -113,10 +113,10 @@ jobs:
 
             if [ "$artifact_info" != "null" ] && [ -n "$artifact_info" ]; then
               local artifact_id=$(echo "$artifact_info" | jq -r '.id')
-              echo "Found artifact $artifact_name (id: $artifact_id), downloading..."
+              echo "Found artifact $artifact_name (id: $artifact_id), downloading..." >&2
               mkdir -p "/tmp/$artifact_name"
               gh api repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip > "/tmp/$artifact_name.zip"
-              unzip -o "/tmp/$artifact_name.zip" -d "/tmp/$artifact_name"
+              unzip -o "/tmp/$artifact_name.zip" -d "/tmp/$artifact_name" >&2
               echo "true"
             else
               echo "false"
@@ -228,7 +228,7 @@ jobs:
 
   package_app:
     name: Package App
-    needs: [setup_env, determine_app_changes, app_ci]
+    needs: [setup_env, determine_app_changes]
     if: ${{ needs.determine_app_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
@@ -1230,8 +1230,8 @@ jobs:
             - **Android (AAB)**: For internal testing via Google Play
           token: ${{ secrets.GITHUB_TOKEN }}
           files: |
-            app/.artifacts/windows/*
-            app/.artifacts/android/*
+            app/.artifacts/windows/**/BibleOnSite*.msix
+            app/.artifacts/android/**/*.aab
 
       - name: Trigger App CD Workflow
         uses: peter-evans/repository-dispatch@v4

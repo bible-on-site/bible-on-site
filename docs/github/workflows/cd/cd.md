@@ -1,32 +1,40 @@
-# CD Workflow
+# CD Workflows
 
-| Workflow | Purpose |
-|----------|----------|
-| [`cd-aws.yml`](../../../../.github/workflows/cd-aws.yml) | AWS ECR/ECS Deployment (Website, API) |
-| [`cd-app.yml`](../../../../.github/workflows/cd-app.yml) | App Store Deployment (Google Play, Microsoft Store) |
-| [`cd-data.yml`](../../../../.github/workflows/cd-data.yml) | Data Deployment pipeline |
+All CD workflows are triggered via `repository_dispatch` events from CI after successful builds.
 
-## App Store Deployment (`cd-app.yml`)
+| Workflow | Trigger Event | Purpose |
+|----------|---------------|---------|
+| [`cd-aws.yml`](../../../../.github/workflows/cd-aws.yml) | `deploy-aws` | Deploy Website/API Docker images to AWS ECR → ECS |
+| [`cd-app.yml`](../../../../.github/workflows/cd-app.yml) | `deploy-app` | Deploy mobile/desktop app to Google Play & Microsoft Store |
+| [`cd-data.yml`](../../../../.github/workflows/cd-data.yml) | `deploy-data` | Deploy data updates to production database |
 
-Triggered on push to master (via `app-package.yml` artifacts).
+## AWS Deployment (`cd-aws.yml`)
 
-### Platforms
+Triggered by `shared-release.yml` after Website or API release.
 
-| Platform | Store | Artifact | Tool |
-|----------|-------|----------|------|
-| Android | Google Play | `.aab` | `r0adkll/upload-google-play` |
-| Windows | Microsoft Store | `.msix` | `isaacrlevin/windows-store-action` |
+**Flow:**
+1. Restore Docker image artifact from CI run
+2. Push to AWS ECR with version tag + `latest`
+3. ECS auto-deploys via EventBridge (watches `latest` tag)
 
-### Key Secrets
-- `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`: Service account for Play Console API
-- `ANDROID_SIGNING_KEY_*`: Keystore for AAB signing
-- `MS_STORE_TENANT_ID`, `MS_STORE_CLIENT_ID`, `MS_STORE_CLIENT_SECRET`: Azure AD app for Partner Center API
-- `MS_STORE_SELLER_ID`, `MS_STORE_FLIGHT_ID`: Store identifiers
+## App Deployment (`cd-app.yml`)
 
-### Version Strategy
-- **Display Version**: Semantic (e.g., `4.0.6`)
-- **Windows ApplicationVersion**: Small incrementing value (≤65535 per MSIX spec)
-- **Android versionCode**: Large value continuing Play Store sequence (e.g., `40000020`)
+Triggered by `release_app` job in `ci.yml` after App CI passes.
+
+**Platforms:**
+
+| Platform | Store | Artifact | Track |
+|----------|-------|----------|-------|
+| Android | Google Play | `.aab` | Internal |
+| Windows | Microsoft Store | `.msix` | Flight |
+
+## Data Deployment (`cd-data.yml`)
+
+Triggered by `release_data` job in `ci.yml` after Data CI passes.
+
+**Flow:**
+1. Configure AWS credentials (OIDC)
+2. Run data migration scripts against production RDS
 
 ## Architecture
 ![cd](./cd.svg)
