@@ -1,4 +1,5 @@
 # TODO: cleanup artifacts using geekyeggo/delete-artifact
+# Version verification: Prevents duplicate version releases by verifying module versions are bumped
 name: Continuous Integration
 permissions:
   contents: read
