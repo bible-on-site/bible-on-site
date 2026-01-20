@@ -10,7 +10,6 @@
 
 - **DevOps tooling**: Use Node.js/TypeScript (see `devops/` directory)
 - **Data processing**: Use Rust (see `data/` directory)
-- **CI/CD workflows**: Use GitHub Actions YAML with inline commands only
 
 This ensures consistency, type safety, and maintainability across the codebase.
 
