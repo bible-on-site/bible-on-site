@@ -137,7 +137,7 @@ jobs:
 
       - name: Re-upload API master coverage for current workflow
         if: steps.check_master_coverage_artifacts.outputs.is_api_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
@@ -146,7 +146,7 @@ jobs:
 
       - name: Re-upload App master coverage for current workflow
         if: steps.check_master_coverage_artifacts.outputs.is_app_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
@@ -155,7 +155,7 @@ jobs:
 
       - name: Re-upload Website master coverage for current workflow
         if: steps.check_master_coverage_artifacts.outputs.is_website_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
