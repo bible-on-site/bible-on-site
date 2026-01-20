@@ -4,6 +4,16 @@
 
 - **Always prefer the latest stable version** of any toolset, framework, or package unless there's a specific compatibility concern.
 
+## Language Policy
+
+**No shell scripts (.sh, .bash) are allowed in this repository.**
+
+- **DevOps tooling**: Use Node.js/TypeScript (see `devops/` directory)
+- **Data processing**: Use Rust (see `data/` directory)
+- **CI/CD workflows**: Use GitHub Actions YAML with inline commands only
+
+This ensures consistency, type safety, and maintainability across the codebase.
+
 ## Tool Learning Protocol
 
 ### Automatic Process (Copilot/Agents)

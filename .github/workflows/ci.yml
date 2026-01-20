@@ -974,7 +974,6 @@ jobs:
         env:
           MONGO_HOST: localhost
           MONGO_PORT: 27017
-          DUMP_NAME: sefaria_dump_5784-sivan-4
         run: cargo make test-integration-junit
 
       - name: Store Data Integration JUnit Report

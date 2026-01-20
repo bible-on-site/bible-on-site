@@ -25,10 +25,11 @@ cargo test --features integration
 
 ## Environment Variables
 
-The container expects these environment variables (with defaults):
+The container uses these build-time variables:
 
 - `DUMP_URL` - URL to download the Sefaria dump (default: Google Storage URL)
-- `DUMP_NAME` - Name of the extracted dump directory (default: `sefaria_dump_5784-sivan-4`)
+
+The dump is imported at build time, so the container starts with data pre-loaded.
 
 ## CI Integration
 
@@ -38,6 +39,6 @@ In CI, this image is built, cached, and used to run data integration tests. See 
 
 When Sefaria releases a new dump:
 
-1. Update `DUMP_URL` and `DUMP_NAME` in the Dockerfile
+1. Update `DUMP_URL` in the Dockerfile
 2. Rebuild the image
 3. The CI cache will be invalidated automatically due to the Dockerfile change

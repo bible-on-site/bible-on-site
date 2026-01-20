@@ -7,7 +7,10 @@
 FROM mongo:7
 
 # Install curl for downloading the dump
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+# Pin version and use --no-install-recommends per Codacy guidelines
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl=7.81.0-1ubuntu1.21 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Download and extract Sefaria dump
 # The dump URL may change - check https://github.com/Sefaria/Sefaria-Export for latest
@@ -25,11 +28,11 @@ RUN curl -L ${DUMP_URL} -o dump.tar.gz \
     && echo "Found extracted directory: $EXTRACTED_DIR" \
     && mv "$EXTRACTED_DIR" /dump
 
-# Copy the initialization script
-COPY init-mongo.sh /docker-entrypoint-initdb.d/
-
-# Make the script executable
-RUN chmod +x /docker-entrypoint-initdb.d/init-mongo.sh
+# Import the dump into MongoDB at build time
+# This pre-populates the database so it's ready immediately when the container starts
+RUN mongod --fork --logpath /var/log/mongodb.log \
+    && mongorestore --drop /dump \
+    && mongod --shutdown
 
 # Expose MongoDB port
 EXPOSE 27017

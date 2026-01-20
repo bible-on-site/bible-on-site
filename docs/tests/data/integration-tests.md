@@ -49,8 +49,7 @@ In CI, a Docker image is used that contains MongoDB with the Sefaria dump pre-lo
 
 The Docker image is defined in `data/sefaria/mongodb-docker/`:
 
-- `Dockerfile` - Builds MongoDB with Sefaria dump pre-loaded
-- `init-mongo.sh` - Initialization script for importing the dump
+- `Dockerfile` - Builds MongoDB with Sefaria dump pre-loaded and imported at build time
 - `README.md` - Docker-specific documentation
 
 ### CI Workflow
@@ -68,7 +67,6 @@ Integration tests use these environment variables:
 |----------|---------|-------------|
 | `MONGO_HOST` | `localhost` | MongoDB host |
 | `MONGO_PORT` | `27017` | MongoDB port |
-| `DUMP_NAME` | `sefaria_dump_5784-sivan-4` | Database name from dump |
 
 ## Test Structure
 
@@ -82,6 +80,5 @@ Tests use the `#[cfg_attr(not(feature = "integration"), ignore)]` attribute to s
 
 When Sefaria releases a new dump:
 
-1. Update `DUMP_URL` and `DUMP_NAME` in `data/sefaria/mongodb-docker/Dockerfile`
-2. Update `DUMP_NAME` default in test files if needed
-3. The CI cache will be invalidated automatically due to the Dockerfile change
+1. Update `DUMP_URL` in `data/sefaria/mongodb-docker/Dockerfile`
+2. The CI cache will be invalidated automatically due to the Dockerfile change
