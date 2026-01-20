@@ -199,14 +199,16 @@ partial class Build
                 Serilog.Log.Information($"Bumped ApplicationDisplayVersion: {major}.{minor}.{patch} → {newVersion}");
             }
 
-            // Bump ApplicationVersion (integer build number)
-            var buildVersionRegex = new Regex(@"<ApplicationVersion>(\d+)</ApplicationVersion>");
-            var buildMatch = buildVersionRegex.Match(content);
-            if (buildMatch.Success)
+            // Bump ApplicationVersion (integer build number) - handles conditional versions
+            // Matches: <ApplicationVersion>123</ApplicationVersion> or <ApplicationVersion Condition="...">123</ApplicationVersion>
+            var buildVersionRegex = new Regex(@"(<ApplicationVersion[^>]*>)(\d+)(</ApplicationVersion>)");
+            var matches = buildVersionRegex.Matches(content);
+            foreach (Match match in matches)
             {
-                var buildNumber = int.Parse(buildMatch.Groups[1].Value);
+                var buildNumber = int.Parse(match.Groups[2].Value);
                 var newBuildNumber = buildNumber + 1;
-                content = buildVersionRegex.Replace(content, $"<ApplicationVersion>{newBuildNumber}</ApplicationVersion>");
+                var replacement = $"{match.Groups[1].Value}{newBuildNumber}{match.Groups[3].Value}";
+                content = content.Replace(match.Value, replacement);
                 Serilog.Log.Information($"Bumped ApplicationVersion: {buildNumber} → {newBuildNumber}");
             }
 
