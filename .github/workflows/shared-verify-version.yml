@@ -1,0 +1,39 @@
+name: Shared Version Verification
+on:
+  workflow_call:
+    inputs:
+      module_name:
+        description: "Module name (app, website, api)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  DEVOPS_DIRECTORY: devops
+
+jobs:
+  verify:
+    name: Verify Version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Need full history for tags
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: devops/package.json
+          cache-dependency-path: devops/package-lock.json
+          cache: npm
+
+      - name: Install dependencies
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        run: npm ci --no-audit
+
+      - name: Verify version
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        run: npm run verify-version -- --module ${{ inputs.module_name }}

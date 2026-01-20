@@ -11,10 +11,12 @@ else
     echo "Skipping pre-commit for cross-module; devops venv not found."
 fi
 
-modules=$(echo "$changed_files" | sed -E 's|^web/bible-on-site/|website/|; s|^web/api/|api/|; s|^app/|app/|' | cut -d'/' -f1 | sort -u)
+modules=$(echo "$changed_files" | sed -E 's|^web/bible-on-site/|web/bible-on-site |; s|^web/api/|web/api |; s|^app/|app |' | tr ' ' '\n' | grep -E '^(app|web/api|web/bible-on-site)$' | sort -u)
 echo "Detected changes in modules: $modules"
 
 if echo "$changed_files" | grep -q '^web/bible-on-site/'; then
+    echo "Running shared checks for web/bible-on-site..."
+    .husky/shared-checks.sh web/bible-on-site || exit 1
     echo "Running pre-commit tasks for web/bible-on-site..."
     cd ./web/bible-on-site
     .husky/pre-commit
@@ -22,8 +24,15 @@ if echo "$changed_files" | grep -q '^web/bible-on-site/'; then
 fi
 
 if echo "$changed_files" | grep -q '^web/api/'; then
+    echo "Running shared checks for web/api..."
+    .husky/shared-checks.sh web/api || exit 1
     echo "Running pre-commit tasks for web/api..."
     cd ./web/api
     .husky/pre-commit
     cd - >/dev/null
+fi
+
+if echo "$changed_files" | grep -q '^app/'; then
+    echo "Running shared checks for app..."
+    .husky/shared-checks.sh app || exit 1
 fi
