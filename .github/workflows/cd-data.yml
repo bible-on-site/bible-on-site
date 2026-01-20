@@ -1,4 +1,4 @@
-name: Data CD
+name: Continuous Deployment - Data
 
 on:
   repository_dispatch:
