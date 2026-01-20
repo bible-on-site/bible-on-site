@@ -56,7 +56,8 @@ public class PerekDataService
     {
         _sefarim = new Dictionary<int, Sefer>();
 
-        var seferRows = await db.QueryAsync<SeferRow>("SELECT * FROM tanah_sefer ORDER BY sefer_id");
+        var seferRows = await db.QueryAsync<SeferRow>(
+            "SELECT id, name, tanach_us_name FROM tanah_sefer ORDER BY id");
 
         foreach (var row in seferRows)
         {
@@ -86,35 +87,50 @@ public class PerekDataService
         _perakim = new Dictionary<int, Perek>();
 
         var perekRows = await db.QueryAsync<PerekRow>(
-            "SELECT perek_id, additional, date, has_recording, header, hebdate, perek, sefer_id, tseit FROM tanah_perek WHERE perek_id IS NOT NULL");
+            "SELECT p.id AS perek_id, " +
+            "p.perek, " +
+            "CASE " +
+            "  WHEN a.id IS NOT NULL THEN p.id - a.perek_from + 1 " +
+            "  ELSE p.id - s.perek_id_from + 1 " +
+            "END AS perek_in_context, " +
+            "s.id AS sefer_id, " +
+            "s.name AS sefer_name, " +
+            "s.tanach_us_name AS sefer_tanach_us_name, " +
+            "a.letter AS additional_letter, " +
+            "a.tanach_us_name AS additional_tanach_us_name, " +
+            "pd.date AS date, " +
+            "pd.hebdate AS hebdate, " +
+            "pd.star_rise AS tseit " +
+            "FROM tanah_perek p " +
+            "JOIN tanah_sefer s ON p.id BETWEEN s.perek_id_from AND s.perek_id_to " +
+            "LEFT JOIN tanah_additional a ON a.sefer_id = s.id AND p.id BETWEEN a.perek_from AND a.perek_to " +
+            "LEFT JOIN tanah_perek_date pd ON pd.perek_id = p.id AND pd.cycle = (" +
+            "  SELECT MAX(pd2.cycle) FROM tanah_perek_date pd2 WHERE pd2.perek_id = p.id" +
+            ") " +
+            "ORDER BY p.id");
 
         foreach (var row in perekRows)
         {
             var sefer = _sefarim!.GetValueOrDefault(row.SeferId);
 
-            string seferTanahUsName;
-            if (sefer != null)
-            {
-                seferTanahUsName = sefer.GetTanahUsName(row.Additional == 0 ? null : row.Additional);
-            }
-            else
-            {
-                seferTanahUsName = string.Empty;
-            }
+            var additionalNumber = ParseAdditionalLetter(row.AdditionalLetter);
+            var seferTanahUsName = !string.IsNullOrWhiteSpace(row.AdditionalTanahUsName)
+                ? row.AdditionalTanahUsName
+                : sefer?.GetTanahUsName(null) ?? string.Empty;
 
             _perakim[row.PerekId] = new Perek
             {
                 PerekId = row.PerekId,
-                Additional = row.Additional == 0 ? null : row.Additional,
-                Date = row.Date.Length >= 10 ? row.Date[..10] : row.Date,
-                HasRecording = row.HasRecording == 1,
+                Additional = additionalNumber,
+                Date = FormatDate(row.Date),
+                HasRecording = false,
                 Header = row.Header ?? string.Empty,
-                HebDate = row.HebDate,
-                PerekNumber = row.Perek,
+                HebDate = FormatDate(row.HebDate),
+                PerekNumber = row.PerekInContext,
                 SeferId = row.SeferId,
-                SeferName = sefer?.Name ?? string.Empty,
+                SeferName = row.SeferName ?? sefer?.Name ?? string.Empty,
                 SeferTanahUsName = seferTanahUsName,
-                Tseit = row.Tseit
+                Tseit = row.Tseit ?? string.Empty
             };
         }
     }
@@ -134,73 +150,113 @@ public class PerekDataService
     {
         var db = await LocalDatabaseService.Instance.GetDatabaseAsync();
 
-        var pasukRows = await db.QueryAsync<PasukContentRow>(
-            "SELECT pasuk, pasuk_content FROM tanah_app_pasuk_content WHERE perek_id = ? ORDER BY pasuk",
+        var segmentRows = await db.QueryAsync<PasukSegmentRow>(
+            "SELECT s.pasuk_id AS pasuk_id, s.segment_type AS segment_type, v.value AS value " +
+            "FROM tanah_pasuk_segment s " +
+            "LEFT JOIN tanah_pasuk_segment_value v ON v.id = s.id " +
+            "WHERE s.perek_id = ? " +
+            "ORDER BY s.pasuk_id, s.id",
             perekId);
 
         var pasukim = new List<Pasuk>();
+        var currentPasukId = -1;
+        var currentTextParts = new List<string>();
 
-        foreach (var row in pasukRows)
+        foreach (var row in segmentRows)
         {
-            var text = ParsePasukContent(row.PasukContent);
+            if (row.PasukId != currentPasukId)
+            {
+                if (currentPasukId != -1)
+                {
+                    pasukim.Add(new Pasuk
+                    {
+                        PasukNum = currentPasukId,
+                        Text = string.Concat(currentTextParts)
+                    });
+                }
+
+                currentPasukId = row.PasukId;
+                currentTextParts = new List<string>();
+            }
+
+            var value = row.Value ?? string.Empty;
+            switch (row.SegmentType)
+            {
+                case "ktiv":
+                case "qri":
+                    if (!string.IsNullOrEmpty(value))
+                    {
+                        if (currentTextParts.Count > 0 && currentTextParts[^1] != "\n")
+                        {
+                            currentTextParts.Add(" ");
+                        }
+                        currentTextParts.Add(value);
+                    }
+                    break;
+                case "ptuha":
+                case "stuma":
+                    currentTextParts.Add("\n");
+                    break;
+            }
+        }
+
+        if (currentPasukId != -1)
+        {
             pasukim.Add(new Pasuk
             {
-                PasukNum = row.Pasuk,
-                Text = text
+                PasukNum = currentPasukId,
+                Text = string.Concat(currentTextParts)
             });
         }
 
         return pasukim;
     }
 
-    private static string ParsePasukContent(string jsonContent)
+    private static int? ParseAdditionalLetter(string? letter)
     {
-        try
+        if (string.IsNullOrWhiteSpace(letter))
+            return null;
+
+        return letter switch
         {
-            // The content is a JSON array of text segments and formatting objects
-            var components = JsonConvert.DeserializeObject<List<object>>(jsonContent);
-            if (components == null)
-                return string.Empty;
+            "א" => 1,
+            "ב" => 2,
+            "ג" => 3,
+            "ד" => 4,
+            "ה" => 5,
+            "ו" => 6,
+            "ז" => 7,
+            "ח" => 8,
+            "ט" => 9,
+            "י" => 10,
+            _ => null
+        };
+    }
 
-            var textParts = new List<string>();
+    private static string FormatDate(string? date)
+    {
+        if (string.IsNullOrWhiteSpace(date))
+            return string.Empty;
 
-            foreach (var component in components)
-            {
-                if (component is string text)
-                {
-                    // Skip parsha markers
-                    if (text is "{ס}" or "{פ}" or "׆")
-                        continue;
-                    textParts.Add(text);
-                }
-                else if (component is Newtonsoft.Json.Linq.JObject obj)
-                {
-                    // Extract text value from formatting object (e.g., {"strong": "word"})
-                    var value = obj.Values<Newtonsoft.Json.Linq.JToken>().FirstOrDefault()?.ToString();
-                    if (!string.IsNullOrEmpty(value))
-                        textParts.Add(value);
-                }
-            }
-
-            return string.Join("", textParts);
-        }
-        catch
+        if (date.Length == 8)
         {
-            return jsonContent;
+            return $"{date[..4]}-{date.Substring(4, 2)}-{date.Substring(6, 2)}";
         }
+
+        return date.Length >= 10 ? date[..10] : date;
     }
 
     #region Database Row Classes
 
     private class SeferRow
     {
-        [Column("sefer_id")]
+        [Column("id")]
         public int SeferId { get; set; }
 
         [Column("name")]
         public string Name { get; set; } = string.Empty;
 
-        [Column("tanah_us_name")]
+        [Column("tanach_us_name")]
         public string TanahUsName { get; set; } = string.Empty;
     }
 
@@ -209,38 +265,50 @@ public class PerekDataService
         [Column("perek_id")]
         public int PerekId { get; set; }
 
-        [Column("additional")]
-        public int Additional { get; set; }
-
-        [Column("date")]
-        public string Date { get; set; } = string.Empty;
-
-        [Column("has_recording")]
-        public int HasRecording { get; set; }
-
-        [Column("header")]
-        public string? Header { get; set; }
-
-        [Column("hebdate")]
-        public string HebDate { get; set; } = string.Empty;
-
         [Column("perek")]
         public int Perek { get; set; }
+
+        [Column("perek_in_context")]
+        public int PerekInContext { get; set; }
 
         [Column("sefer_id")]
         public int SeferId { get; set; }
 
+        [Column("sefer_name")]
+        public string? SeferName { get; set; }
+
+        [Column("sefer_tanach_us_name")]
+        public string? SeferTanachUsName { get; set; }
+
+        [Column("additional_letter")]
+        public string? AdditionalLetter { get; set; }
+
+        [Column("additional_tanach_us_name")]
+        public string? AdditionalTanahUsName { get; set; }
+
+        [Column("date")]
+        public string? Date { get; set; }
+
+        [Column("hebdate")]
+        public string? HebDate { get; set; }
+
+        [Column("header")]
+        public string? Header { get; set; }
+
         [Column("tseit")]
-        public string Tseit { get; set; } = string.Empty;
+        public string? Tseit { get; set; }
     }
 
-    private class PasukContentRow
+    private class PasukSegmentRow
     {
-        [Column("pasuk")]
-        public int Pasuk { get; set; }
+        [Column("pasuk_id")]
+        public int PasukId { get; set; }
 
-        [Column("pasuk_content")]
-        public string PasukContent { get; set; } = string.Empty;
+        [Column("segment_type")]
+        public string SegmentType { get; set; } = string.Empty;
+
+        [Column("value")]
+        public string? Value { get; set; }
     }
 
     #endregion
