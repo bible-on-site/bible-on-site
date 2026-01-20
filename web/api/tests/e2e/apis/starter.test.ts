@@ -38,9 +38,9 @@ test.describe("StarterService", () => {
 			});
 
 			// Verify perekArticlesCounters is array of 929 elements
-			expect(Array.isArray(responseBody.data.starter.perekArticlesCounters)).toBe(
-				true,
-			);
+			expect(
+				Array.isArray(responseBody.data.starter.perekArticlesCounters),
+			).toBe(true);
 			expect(responseBody.data.starter.perekArticlesCounters.length).toBe(929);
 
 			// Verify first perek has 3 articles (our test data has 3 articles for perek_id=1)
@@ -59,7 +59,8 @@ test.describe("StarterService", () => {
 				data: {
 					operationName: null,
 					variables: {},
-					query: "{\n  starter {\n    authors {\n      id\n      name\n      details\n    }\n  }\n}\n",
+					query:
+						"{\n  starter {\n    authors {\n      id\n      name\n      details\n    }\n  }\n}\n",
 				},
 			});
 			const responseBody = await response.json();
@@ -82,7 +83,9 @@ test.describe("StarterService", () => {
 			expect(authorWithLongDetails.details).toContain("מאוד");
 		});
 
-		test("returns correct perekArticlesCounters length", async ({ request }) => {
+		test("returns correct perekArticlesCounters length", async ({
+			request,
+		}) => {
 			const response: APIResponse = await request.post(ROOT_URL, {
 				headers: {
 					"Content-Type": "application/json",
