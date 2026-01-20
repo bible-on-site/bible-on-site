@@ -33,7 +33,8 @@ RUN curl -L ${DUMP_URL} -o dump.tar.gz \
 # Create init script inline to restore the dump on first startup
 # The MongoDB docker-entrypoint.sh runs scripts in /docker-entrypoint-initdb.d/
 # Note: This is an inline script in the Dockerfile, not a separate .sh file
-RUN printf '#!/bin/bash\nmongorestore --drop /dump\n' > /docker-entrypoint-initdb.d/restore-dump.sh \
+# The script creates a marker file on completion that can be checked by the host
+RUN printf '#!/bin/bash\nset -e\necho "Starting mongorestore..."\nmongorestore --drop /dump\necho "mongorestore completed successfully"\ntouch /tmp/mongorestore-complete\n' > /docker-entrypoint-initdb.d/restore-dump.sh \
     && chmod +x /docker-entrypoint-initdb.d/restore-dump.sh
 
 # Expose MongoDB port
