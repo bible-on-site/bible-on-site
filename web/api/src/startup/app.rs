@@ -86,11 +86,7 @@ impl ActixApp {
         let db = db.clone();
         move |cfg: &mut web::ServiceConfig| {
             cfg.app_data(web::Data::new(build_schema(&db)))
-                .service(
-                    web::resource("/")
-                        .guard(guard::Post())
-                        .to(graphql_request),
-                )
+                .service(web::resource("/").guard(guard::Post()).to(graphql_request))
                 .service(
                     web::resource("/")
                         .guard(guard::Get())

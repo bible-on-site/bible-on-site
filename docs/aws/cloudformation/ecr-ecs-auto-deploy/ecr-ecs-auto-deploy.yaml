@@ -1,14 +1,15 @@
 # ============================================================================
-# ⚠️ DISCLAIMER: This CloudFormation template has NEVER been tested or deployed.
-# It is maintained as Infrastructure as Code DOCUMENTATION ONLY to reflect the
-# de-facto AWS configuration. Do not assume it will work without thorough testing.
+# This CloudFormation template documents the ECR→ECS auto-deploy infrastructure.
+# The resources were manually created via AWS CLI (January 2026) and this template
+# reflects the current AWS configuration.
 # ============================================================================
 
 AWSTemplateFormatVersion: "2010-09-09"
 Description: |
   ECR to ECS Auto-Deploy Infrastructure.
 
-  ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
+  This template documents the infrastructure that automatically triggers ECS
+  service deployments whenever a new Docker image is pushed to ECR.
 
   This template creates EventBridge rules and a Lambda function that automatically
   triggers ECS service deployments whenever a new Docker image is pushed to ECR.
