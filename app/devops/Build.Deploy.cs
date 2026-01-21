@@ -6,6 +6,7 @@ using Google.Apis.Upload;
 using Nuke.Common;
 using Nuke.Common.IO;
 using Nuke.Common.Tooling;
+using System.Text.Json;
 
 partial class Build
 {
@@ -22,14 +23,20 @@ partial class Build
     [Parameter("Path to Google Play service account JSON file")]
     readonly string? GooglePlayKeyFile;
 
-    [Parameter("Microsoft Store flight ID for internal testing (required unless --production is set)")]
+    [Parameter("Microsoft Store flight ID for internal testing (if not provided, a new flight will be created)")]
     readonly string? MsStoreFlightId;
+
+    [Parameter("Microsoft Store flight group ID (required when creating a new flight)")]
+    readonly string? MsStoreFlightGroupId;
 
     [Parameter("Google Play track (internal, alpha, beta, production). Default: internal")]
     readonly string GooglePlayTrack = "internal";
 
     [Parameter("Deploy to production instead of flight/internal (requires store review)")]
     readonly bool Production;
+
+    [Parameter("Maximum number of flights to keep (older flights will be deleted). Default: 5")]
+    readonly int MaxFlightsToKeep = 5;
 
     Target DeployGooglePlay => _ => _
         .Description("Deploy AAB to Google Play")
@@ -108,11 +115,13 @@ partial class Build
             var msixFile = (AbsolutePath)MsixPath!;
             Assert.FileExists(msixFile, $"MSIX file not found: {msixFile}");
 
-            // Require either flight ID or explicit production flag
-            if (string.IsNullOrEmpty(MsStoreFlightId) && !Production)
+            // Require either flight ID, flight group ID (to create new flight), or explicit production flag
+            if (string.IsNullOrEmpty(MsStoreFlightId) && string.IsNullOrEmpty(MsStoreFlightGroupId) && !Production)
             {
-                Serilog.Log.Error("Must specify either --ms-store-flight-id for internal testing or --production for production deployment");
-                Serilog.Log.Information("To create a flight: Partner Center → Your app → Package flights → New flight");
+                Serilog.Log.Error("Must specify one of:");
+                Serilog.Log.Error("  --ms-store-flight-id: Use existing flight");
+                Serilog.Log.Error("  --ms-store-flight-group-id: Create new flight (recommended for CI/CD)");
+                Serilog.Log.Error("  --production: Deploy to production (requires store review)");
                 Assert.Fail("Missing deployment target");
             }
 
@@ -129,23 +138,26 @@ partial class Build
 
             Serilog.Log.Information($"Uploading {msixFile.Name} to Microsoft Store...");
 
-            // TODO: Investigate if Microsoft Store only allows one pending submission per flight,
-            // unlike Google Play which can queue multiple. If so, we must delete pending before uploading.
-            // For now, we delete any pending flight submission to ensure clean state.
-            if (!string.IsNullOrEmpty(MsStoreFlightId))
+            string? flightId = MsStoreFlightId;
+
+            // Create a new flight if no flight ID is provided
+            if (string.IsNullOrEmpty(flightId) && !Production)
             {
-                Serilog.Log.Information($"Checking for pending flight submission...");
-                var deleteProcess = ProcessTasks.StartProcess("msstore", $"flights submission delete \"{MsStoreAppId}\" \"{MsStoreFlightId}\" --no-confirm");
-                deleteProcess.WaitForExit();
-                // Ignore exit code - deletion may fail if no pending submission exists
+                flightId = CreateMsStoreFlight();
+            }
+
+            // Delete any pending flight submission if using existing flight
+            if (!string.IsNullOrEmpty(flightId) && !string.IsNullOrEmpty(MsStoreFlightId))
+            {
+                DeletePendingFlightSubmission(flightId);
             }
 
             var arguments = $"publish \"{msixFile}\" --appId \"{MsStoreAppId}\"";
 
-            if (!string.IsNullOrEmpty(MsStoreFlightId))
+            if (!string.IsNullOrEmpty(flightId))
             {
-                arguments += $" --flightId \"{MsStoreFlightId}\"";
-                Serilog.Log.Information($"Deploying to flight: {MsStoreFlightId} (internal testing)");
+                arguments += $" --flightId \"{flightId}\"";
+                Serilog.Log.Information($"Deploying to flight: {flightId} (internal testing)");
             }
             else
             {
@@ -157,5 +169,120 @@ partial class Build
                 .AssertZeroExitCode();
 
             Serilog.Log.Information("Microsoft Store upload complete");
+
+            // Clean up old flights if we created a new one
+            if (!string.IsNullOrEmpty(MsStoreFlightGroupId) && MaxFlightsToKeep > 0)
+            {
+                CleanupOldFlights();
+            }
         });
+
+    string CreateMsStoreFlight()
+    {
+        var version = GetCurrentVersion();
+        var flightName = $"v{version}-{DateTime.UtcNow:yyyyMMdd-HHmmss}";
+        Serilog.Log.Information($"Creating new flight: {flightName}");
+
+        var output = new List<Nuke.Common.Tooling.Output>();
+        var process = ProcessTasks.StartProcess(
+            "msstore",
+            $"flights create \"{MsStoreAppId}\" \"{flightName}\" --group-ids \"{MsStoreFlightGroupId}\"",
+            logOutput: true,
+            logInvocation: true
+        );
+        process.WaitForExit();
+        output.AddRange(process.Output);
+        process.AssertZeroExitCode();
+
+        // Parse the flight ID from the JSON output
+        var jsonOutput = string.Join("", output.Select(o => o.Text));
+        var startIndex = jsonOutput.IndexOf('{');
+        if (startIndex >= 0)
+        {
+            var jsonPart = jsonOutput.Substring(startIndex);
+            using var doc = JsonDocument.Parse(jsonPart);
+            if (doc.RootElement.TryGetProperty("FlightId", out var flightIdProp))
+            {
+                var flightId = flightIdProp.GetString();
+                Serilog.Log.Information($"Created flight with ID: {flightId}");
+                return flightId!;
+            }
+        }
+
+        Assert.Fail("Failed to parse flight ID from msstore output");
+        return null!;
+    }
+
+    void DeletePendingFlightSubmission(string flightId)
+    {
+        Serilog.Log.Information($"Checking for pending flight submission...");
+        var deleteProcess = ProcessTasks.StartProcess("msstore", $"flights submission delete \"{MsStoreAppId}\" \"{flightId}\" --no-confirm");
+        deleteProcess.WaitForExit();
+        // Ignore exit code - deletion may fail if no pending submission exists or if it was created in Partner Center
+        if (deleteProcess.ExitCode != 0)
+        {
+            Serilog.Log.Warning("Could not delete pending submission (may not exist or was created in Partner Center)");
+        }
+    }
+
+    void CleanupOldFlights()
+    {
+        Serilog.Log.Information($"Cleaning up old flights (keeping {MaxFlightsToKeep} most recent)...");
+
+        var listProcess = ProcessTasks.StartProcess(
+            "msstore",
+            $"flights list \"{MsStoreAppId}\"",
+            logOutput: false,
+            logInvocation: true
+        );
+        listProcess.WaitForExit();
+        var output = listProcess.Output.Select(o => o.Text).ToList();
+
+        if (listProcess.ExitCode != 0)
+        {
+            Serilog.Log.Warning("Could not list flights for cleanup");
+            return;
+        }
+
+        // Parse flights from output - look for flight IDs that match our naming pattern (v*-*)
+        var flightPattern = new System.Text.RegularExpressions.Regex(@"v[\d\.]+-\d{8}-\d{6}");
+        var flights = new List<(string Id, string Name)>();
+
+        foreach (var line in output)
+        {
+            // The list output contains FlightId and FriendlyName columns
+            if (flightPattern.IsMatch(line))
+            {
+                // Try to extract flight ID (UUID format)
+                var uuidMatch = System.Text.RegularExpressions.Regex.Match(line, @"([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})");
+                var nameMatch = flightPattern.Match(line);
+                if (uuidMatch.Success && nameMatch.Success)
+                {
+                    flights.Add((uuidMatch.Value, nameMatch.Value));
+                }
+            }
+        }
+
+        // Sort by name (timestamp) descending and delete old ones
+        var flightsToDelete = flights
+            .OrderByDescending(f => f.Name)
+            .Skip(MaxFlightsToKeep)
+            .ToList();
+
+        foreach (var flight in flightsToDelete)
+        {
+            Serilog.Log.Information($"Deleting old flight: {flight.Name} ({flight.Id})");
+            var deleteProcess = ProcessTasks.StartProcess("msstore", $"flights delete \"{MsStoreAppId}\" \"{flight.Id}\"");
+            deleteProcess.WaitForExit();
+            if (deleteProcess.ExitCode != 0)
+            {
+                Serilog.Log.Warning($"Could not delete flight {flight.Name}");
+            }
+        }
+
+        if (flightsToDelete.Count > 0)
+        {
+            Serilog.Log.Information($"Cleaned up {flightsToDelete.Count} old flight(s)");
+        }
+    }
 }

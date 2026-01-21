@@ -148,10 +148,11 @@ jobs:
           PARTNER_CENTER_CLIENT_ID: ${{ secrets.MS_STORE_CLIENT_ID }}
           PARTNER_CENTER_CLIENT_SECRET: ${{ secrets.MS_STORE_CLIENT_SECRET }}
         run: |
-          # Deploy to "Internal" flight by default
+          # Create a new flight for each deployment (avoids issues with Partner Center-created submissions)
           dotnet run --project devops -- DeployMsStore `
             --msix-path "${{ steps.find_msix.outputs.MSIX_FILE }}" `
-            --ms-store-flight-id "${{ secrets.MS_STORE_FLIGHT_ID }}"
+            --ms-store-flight-group-id "${{ secrets.MS_STORE_FLIGHT_GROUP_ID }}" `
+            --max-flights-to-keep 99999
 
       - name: Deployment Summary
         shell: pwsh
