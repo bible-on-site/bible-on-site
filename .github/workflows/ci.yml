@@ -385,15 +385,11 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Compress Docker Image
-        run: gzip -1 /tmp/sefaria-mongo-image.tar
-
       - name: Store Docker Image
         uses: actions/upload-artifact@v6
         with:
           name: ${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }}
-          path: /tmp/sefaria-mongo-image.tar.gz
-          compression-level: 0
+          path: /tmp/sefaria-mongo-image.tar
           retention-days: 7
 
   # ACTUAL JOBS
@@ -1032,7 +1028,7 @@ jobs:
           report_type: test_results
 
       # Free disk space for loading the ~5GB Docker image
-      # docker-images: true is fast (~30s) and frees ~3GB which we need for decompression
+      # Need large-packages: true (~170s) to free enough space for docker load
       - name: Free Disk Space
         uses: jlumbroso/free-disk-space@v1.3.1
         with:
@@ -1040,7 +1036,7 @@ jobs:
           android: true
           dotnet: true
           haskell: true
-          large-packages: false
+          large-packages: true
           docker-images: true
           swap-storage: false
 
@@ -1052,7 +1048,7 @@ jobs:
 
       # ============ Integration Test Setup: MongoDB Container ============
       - name: Load Sefaria MongoDB Docker Image
-        run: gunzip -c /tmp/sefaria-mongo-image.tar.gz | docker load
+        run: docker load --input /tmp/sefaria-mongo-image.tar
 
       - name: Setup MongoDB Container for Integration Tests
         id: setup-mongodb
