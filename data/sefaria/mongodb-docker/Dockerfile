@@ -34,6 +34,7 @@ RUN curl -L ${DUMP_URL} -o dump.tar.gz \
 
 # Restore MongoDB data at BUILD TIME to /mongodb-data (NOT /data/db which is a volume!)
 # We use shell background process (&) instead of --fork which doesn't work in buildkit
+# IMPORTANT: sync before shutdown to ensure all data is flushed to disk
 RUN mkdir -p /mongodb-data && \
     mongod --dbpath /mongodb-data --bind_ip 127.0.0.1 --nojournal & \
     MONGOD_PID=$! && \
@@ -50,12 +51,25 @@ RUN mkdir -p /mongodb-data && \
     mongorestore --drop /dump && \
     echo "mongorestore completed. Document count:" && \
     mongosh --quiet --eval "db.getSiblingDB('sefaria').texts.countDocuments({})" && \
+    echo "Flushing data to disk..." && \
+    sync && \
     echo "Stopping MongoDB gracefully..." && \
     mongosh --quiet --eval "db.adminCommand({shutdown:1})" || true && \
+    sleep 2 && \
     wait $MONGOD_PID 2>/dev/null || true && \
+    sync && \
     echo "Cleaning up dump files..." && \
     rm -rf /dump && \
     echo "Build-time restore complete! Data is in /mongodb-data"
+
+# Verify the data was actually written to disk in a separate RUN layer
+# This ensures buildkit commits the /mongodb-data directory to the image
+RUN echo "Verifying /mongodb-data exists and has data..." && \
+    ls -la /mongodb-data && \
+    du -sh /mongodb-data && \
+    test -d /mongodb-data && \
+    test "$(ls -A /mongodb-data)" && \
+    echo "Verification passed: /mongodb-data contains $(ls -1 /mongodb-data | wc -l) items"
 
 # Create a custom entrypoint script that copies data from /mongodb-data to /data/db
 # on first startup, then starts mongod normally
