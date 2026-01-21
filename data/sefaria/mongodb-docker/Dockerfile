@@ -59,8 +59,9 @@ RUN mkdir -p /mongodb-data && \
 
 # Create a custom entrypoint script that copies data from /mongodb-data to /data/db
 # on first startup, then starts mongod normally
+# Use sed to ensure LF line endings (in case of CRLF from Windows)
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 
 # Expose MongoDB port
 EXPOSE 27017
