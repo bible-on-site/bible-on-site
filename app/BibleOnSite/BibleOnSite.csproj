@@ -23,8 +23,10 @@
 		<!-- Define MAUI symbol for conditional compilation -->
 		<DefineConstants>$(DefineConstants);MAUI</DefineConstants>
 
-		<!-- Display name -->
-		<ApplicationTitle>BibleOnSite</ApplicationTitle>
+		<!-- Display name - must match reserved name in Partner Center for Microsoft Store -->
+		<!-- Windows uses the Hebrew store-reserved name, Android uses English for consistency -->
+		<ApplicationTitle Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">929 - תנ"ך על הפרק</ApplicationTitle>
+		<ApplicationTitle Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'windows'">BibleOnSite</ApplicationTitle>
 
 		<!-- App Identifier -->
 		<ApplicationId>com.tanah.daily929</ApplicationId>
