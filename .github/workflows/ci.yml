@@ -385,11 +385,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Compress Docker Image
+        run: gzip -1 /tmp/sefaria-mongo-image.tar
+
       - name: Store Docker Image
         uses: actions/upload-artifact@v6
         with:
           name: ${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }}
-          path: /tmp/sefaria-mongo-image.tar
+          path: /tmp/sefaria-mongo-image.tar.gz
+          compression-level: 0
           retention-days: 7
 
   # ACTUAL JOBS
@@ -995,6 +999,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: ${{ env.DATA_DIRECTORY }}
+          cache-on-failure: true
+          shared-key: "data-rust"
 
       - name: Lint
         id: lint
@@ -1025,8 +1031,8 @@ jobs:
           flags: data
           report_type: test_results
 
-      # Free disk space for loading the MongoDB Docker image (~5GB+ needed)
-      # Enable large-packages and docker-images to maximize available space
+      # Free disk space - minimal cleanup just for loading the ~5GB Docker image
+      # Don't use large-packages (takes ~2 min) - android/dotnet/haskell is enough
       - name: Free Disk Space
         uses: jlumbroso/free-disk-space@v1.3.1
         with:
@@ -1034,9 +1040,9 @@ jobs:
           android: true
           dotnet: true
           haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
+          large-packages: false
+          docker-images: false
+          swap-storage: false
 
       - name: Download Sefaria MongoDB Docker Image
         uses: actions/download-artifact@v4
@@ -1046,7 +1052,7 @@ jobs:
 
       # ============ Integration Test Setup: MongoDB Container ============
       - name: Load Sefaria MongoDB Docker Image
-        run: docker load --input /tmp/sefaria-mongo-image.tar
+        run: gunzip -c /tmp/sefaria-mongo-image.tar.gz | docker load
 
       - name: Setup MongoDB Container for Integration Tests
         id: setup-mongodb
