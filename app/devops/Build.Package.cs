@@ -97,7 +97,10 @@ partial class Build
             ["GenerateAppxPackageOnBuild"] = "true",
             ["AppxPackageDir"] = $"{ArtifactsDirectory}/",
             ["AppxPackageSigningEnabled"] = "true",
-            ["TargetFramework"] = "net9.0-windows10.0.19041.0"
+            ["TargetFramework"] = "net9.0-windows10.0.19041.0",
+            // Microsoft Store requires revision (4th component) to be 0
+            // Override ApplicationVersion to 0 to produce X.Y.Z.0 version format
+            ["ApplicationVersion"] = "0"
         };
 
         if (!string.IsNullOrEmpty(CertificateThumbprint))
