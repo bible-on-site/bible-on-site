@@ -1008,6 +1008,19 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
 
+      # Free disk space EARLY - before Rust cache restore which can consume several GB
+      # This ensures enough space for the ~5GB MongoDB Docker image later
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -1052,19 +1065,6 @@ jobs:
           files: ${{ env.DATA_DIRECTORY }}/.junit-report/unit/results.xml
           flags: data
           report_type: test_results
-
-      # Free disk space for loading the ~5GB Docker image
-      # Try large-packages: false first - if it fails, we can enable it
-      - name: Free Disk Space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: false
 
       # Download using gh api (faster than actions/download-artifact: ~2m vs ~6m)
       - name: Download Sefaria MongoDB Docker Image
