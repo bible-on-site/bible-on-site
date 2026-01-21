@@ -35,8 +35,9 @@ RUN curl -L ${DUMP_URL} -o dump.tar.gz \
 # Restore MongoDB data at BUILD TIME to /mongodb-data (NOT /data/db which is a volume!)
 # We use shell background process (&) instead of --fork which doesn't work in buildkit
 # IMPORTANT: sync before shutdown to ensure all data is flushed to disk
+# NOTE: In MongoDB 7.x, --nojournal was removed. We use a tmpfs-like approach for performance.
 RUN mkdir -p /mongodb-data && \
-    mongod --dbpath /mongodb-data --bind_ip 127.0.0.1 --nojournal & \
+    mongod --dbpath /mongodb-data --bind_ip 127.0.0.1 & \
     MONGOD_PID=$! && \
     echo "Waiting for MongoDB to start (PID: $MONGOD_PID)..." && \
     for i in $(seq 1 60); do \
