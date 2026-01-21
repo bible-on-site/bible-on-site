@@ -109,10 +109,11 @@ jobs:
         run: |
           # Function to check if artifact exists and download it
           # Downloads to make it available in current workflow run via re-upload
+          # Use ?name= filter to avoid pagination issues (25k+ artifacts in repo)
           check_and_download_artifact() {
             local artifact_name=$1
-            local artifact_info=$(gh api repos/${{ github.repository }}/actions/artifacts \
-              --jq "[.artifacts[] | select(.name == \"$artifact_name\" and .expired == false)] | first")
+            local artifact_info=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$artifact_name" \
+              --jq "[.artifacts[] | select(.expired == false)] | first")
 
             if [ "$artifact_info" != "null" ] && [ -n "$artifact_info" ]; then
               local artifact_id=$(echo "$artifact_info" | jq -r '.id')
@@ -183,9 +184,10 @@ jobs:
         run: |
           # Check if LCOV Docker artifact exists and download it
           # LCOV is small (~150MB) and used by 4+ jobs, so caching is worthwhile
+          # Use ?name= filter to avoid pagination issues (25k+ artifacts in repo)
           artifact_name="${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}"
-          artifact_info=$(gh api repos/${{ github.repository }}/actions/artifacts \
-            --jq "[.artifacts[] | select(.name == \"$artifact_name\" and .expired == false)] | first")
+          artifact_info=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$artifact_name" \
+            --jq "[.artifacts[] | select(.expired == false)] | first")
 
           if [ "$artifact_info" != "null" ] && [ -n "$artifact_info" ]; then
             artifact_id=$(echo "$artifact_info" | jq -r '.id')
@@ -215,9 +217,10 @@ jobs:
         run: |
           # Only check if artifact exists - don't download here
           # MongoDB image is ~5GB, only data_ci needs it, so download there directly via gh api (faster than actions/download-artifact)
+          # Use ?name= filter to avoid pagination issues (25k+ artifacts in repo)
           artifact_name="${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }}"
-          artifact_info=$(gh api repos/${{ github.repository }}/actions/artifacts \
-            --jq "[.artifacts[] | select(.name == \"$artifact_name\" and .expired == false)] | first")
+          artifact_info=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$artifact_name" \
+            --jq "[.artifacts[] | select(.expired == false)] | first")
 
           if [ "$artifact_info" != "null" ] && [ -n "$artifact_info" ]; then
             artifact_id=$(echo "$artifact_info" | jq -r '.id')
