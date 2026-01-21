@@ -350,8 +350,8 @@ jobs:
     if: ${{ needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      # Free just enough disk space for the build (~10GB needed)
-      # Skip large-packages (slow, saves 4.6GB) - we have enough space without it
+      # Free disk space for the MongoDB Docker image build (~10GB+ needed for mongorestore)
+      # Enable large-packages and docker-images to maximize available space
       - name: Free Disk Space
         uses: jlumbroso/free-disk-space@v1.3.1
         with:
@@ -359,9 +359,9 @@ jobs:
           android: true
           dotnet: true
           haskell: true
-          large-packages: false
-          docker-images: false
-          swap-storage: false
+          large-packages: true
+          docker-images: true
+          swap-storage: true
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -1025,8 +1025,8 @@ jobs:
           flags: data
           report_type: test_results
 
-      # Free just enough disk space for the MongoDB image (~3GB)
-      # Skip large-packages (saves 4.6GB but takes 2+ minutes) - not needed
+      # Free disk space for loading the MongoDB Docker image (~5GB+ needed)
+      # Enable large-packages and docker-images to maximize available space
       - name: Free Disk Space
         uses: jlumbroso/free-disk-space@v1.3.1
         with:
@@ -1034,9 +1034,9 @@ jobs:
           android: true
           dotnet: true
           haskell: true
-          large-packages: false
-          docker-images: false
-          swap-storage: false
+          large-packages: true
+          docker-images: true
+          swap-storage: true
 
       - name: Download Sefaria MongoDB Docker Image
         uses: actions/download-artifact@v4
