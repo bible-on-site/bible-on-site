@@ -173,6 +173,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       is_lcov_docker_available: ${{ steps.check_docker_images.outputs.is_lcov_docker_available }}
+      is_sefaria_mongo_available: ${{ steps.check_sefaria_mongo.outputs.is_sefaria_mongo_available }}
     steps:
       - name: Check and restore LCOV Docker image artifact
         id: check_docker_images
@@ -204,6 +205,38 @@ jobs:
           name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp/${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           retention-days: 400
+          overwrite: true
+
+      - name: Check and restore Sefaria MongoDB image artifact
+        id: check_sefaria_mongo
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Check if Sefaria MongoDB Docker artifact exists and download it
+          # MongoDB image is ~5GB and takes ~600s to build, so caching saves significant time
+          artifact_name="${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }}"
+          artifact_info=$(gh api repos/${{ github.repository }}/actions/artifacts \
+            --jq "[.artifacts[] | select(.name == \"$artifact_name\" and .expired == false)] | first")
+
+          if [ "$artifact_info" != "null" ] && [ -n "$artifact_info" ]; then
+            artifact_id=$(echo "$artifact_info" | jq -r '.id')
+            echo "Found artifact $artifact_name (id: $artifact_id), downloading..."
+            mkdir -p "/tmp/$artifact_name"
+            gh api repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip > "/tmp/$artifact_name.zip"
+            unzip -o "/tmp/$artifact_name.zip" -d "/tmp/$artifact_name"
+            echo "is_sefaria_mongo_available=true" >> $GITHUB_OUTPUT
+          else
+            echo "Sefaria MongoDB image not found in artifacts"
+            echo "is_sefaria_mongo_available=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Re-upload Sefaria MongoDB image for current workflow
+        if: steps.check_sefaria_mongo.outputs.is_sefaria_mongo_available == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }}
+          path: /tmp/${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }}
+          retention-days: 90
           overwrite: true
 
   determine_website_changes:
@@ -346,8 +379,8 @@ jobs:
 
   build_sefaria_mongo_docker:
     name: Build Sefaria MongoDB Docker Image
-    needs: [setup_env, determine_data_changes]
-    if: ${{ needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true' }}
+    needs: [setup_env, determine_data_changes, determine_docker_image_availability]
+    if: ${{ needs.determine_docker_image_availability.outputs.is_sefaria_mongo_available != 'true' && (needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true') }}
     runs-on: ubuntu-latest
     steps:
       # Free disk space for the MongoDB Docker image build (~10GB+ needed for mongorestore)
@@ -390,7 +423,7 @@ jobs:
         with:
           name: ${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }}
           path: /tmp/sefaria-mongo-image.tar
-          retention-days: 7
+          retention-days: 90
 
   # ACTUAL JOBS
   website_performance:
@@ -967,7 +1000,7 @@ jobs:
   data_ci:
     name: Data CI
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_data_changes, build_sefaria_mongo_docker]
+    needs: [setup_env, determine_data_changes, determine_docker_image_availability, build_sefaria_mongo_docker]
     if: ${{ always() && !cancelled() && !failure() && (needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true') }}
     defaults:
       run:
