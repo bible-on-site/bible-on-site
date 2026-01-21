@@ -1,13 +1,563 @@
 {
 	"servers": {
-		"Context7": {
+		"io.github.mongodb-js/mongodb-mcp-server": {
 			"type": "stdio",
 			"command": "npx",
-			"args": ["-y", "@upstash/context7-mcp@latest"]
+			"args": [
+				"mongodb-mcp-server@1.5.0",
+				"--connectionString",
+				"mongodb://localhost:27017"
+			],
+			"env": {
+				"MDB_MCP_ALLOW_REQUEST_OVERRIDES": "${input:MDB_MCP_ALLOW_REQUEST_OVERRIDES}",
+				"MDB_MCP_API_CLIENT_ID": "${input:MDB_MCP_API_CLIENT_ID}",
+				"MDB_MCP_API_CLIENT_SECRET": "${input:MDB_MCP_API_CLIENT_SECRET}",
+				"MDB_MCP_ATLAS_TEMPORARY_DATABASE_USER_LIFETIME_MS": "${input:MDB_MCP_ATLAS_TEMPORARY_DATABASE_USER_LIFETIME_MS}",
+				"MDB_MCP_CONFIRMATION_REQUIRED_TOOLS": "${input:MDB_MCP_CONFIRMATION_REQUIRED_TOOLS}",
+				"MDB_MCP_CONNECTION_STRING": "${input:MDB_MCP_CONNECTION_STRING}",
+				"MDB_MCP_DISABLED_TOOLS": "${input:MDB_MCP_DISABLED_TOOLS}",
+				"MDB_MCP_DRY_RUN": "${input:MDB_MCP_DRY_RUN}",
+				"MDB_MCP_EMBEDDINGS_VALIDATION": "${input:MDB_MCP_EMBEDDINGS_VALIDATION}",
+				"MDB_MCP_EXPORT_CLEANUP_INTERVAL_MS": "${input:MDB_MCP_EXPORT_CLEANUP_INTERVAL_MS}",
+				"MDB_MCP_EXPORT_TIMEOUT_MS": "${input:MDB_MCP_EXPORT_TIMEOUT_MS}",
+				"MDB_MCP_EXPORTS_PATH": "${input:MDB_MCP_EXPORTS_PATH}",
+				"MDB_MCP_HTTP_BODY_LIMIT": "${input:MDB_MCP_HTTP_BODY_LIMIT}",
+				"MDB_MCP_HTTP_HEADERS": "${input:MDB_MCP_HTTP_HEADERS}",
+				"MDB_MCP_HTTP_HOST": "${input:MDB_MCP_HTTP_HOST}",
+				"MDB_MCP_HTTP_PORT": "${input:MDB_MCP_HTTP_PORT}",
+				"MDB_MCP_IDLE_TIMEOUT_MS": "${input:MDB_MCP_IDLE_TIMEOUT_MS}",
+				"MDB_MCP_INDEX_CHECK": "${input:MDB_MCP_INDEX_CHECK}",
+				"MDB_MCP_LOG_PATH": "${input:MDB_MCP_LOG_PATH}",
+				"MDB_MCP_LOGGERS": "${input:MDB_MCP_LOGGERS}",
+				"MDB_MCP_MAX_BYTES_PER_QUERY": "${input:MDB_MCP_MAX_BYTES_PER_QUERY}",
+				"MDB_MCP_MAX_DOCUMENTS_PER_QUERY": "${input:MDB_MCP_MAX_DOCUMENTS_PER_QUERY}",
+				"MDB_MCP_NOTIFICATION_TIMEOUT_MS": "${input:MDB_MCP_NOTIFICATION_TIMEOUT_MS}",
+				"MDB_MCP_PREVIEW_FEATURES": "${input:MDB_MCP_PREVIEW_FEATURES}",
+				"MDB_MCP_READ_ONLY": "${input:MDB_MCP_READ_ONLY}",
+				"MDB_MCP_TELEMETRY": "${input:MDB_MCP_TELEMETRY}",
+				"MDB_MCP_TRANSPORT": "${input:MDB_MCP_TRANSPORT}",
+				"MDB_MCP_VECTOR_SEARCH_DIMENSIONS": "${input:MDB_MCP_VECTOR_SEARCH_DIMENSIONS}",
+				"MDB_MCP_VECTOR_SEARCH_SIMILARITY_FUNCTION": "${input:MDB_MCP_VECTOR_SEARCH_SIMILARITY_FUNCTION}",
+				"MDB_MCP_VOYAGE_API_KEY": "${input:MDB_MCP_VOYAGE_API_KEY}"
+			}
 		},
-		"playwright": {
+		"io.github.ChromeDevTools/chrome-devtools-mcp": {
+			"type": "stdio",
 			"command": "npx",
-			"args": ["@playwright/mcp@latest", "--vision"]
+			"args": [
+				"chrome-devtools-mcp@0.13.0"
+			]
+		},
+		"microsoftdocs/mcp": {
+			"type": "http",
+			"url": "https://learn.microsoft.com/api/mcp"
+		},
+		"microsoft/playwright-mcp": {
+			"type": "stdio",
+			"command": "npx",
+			"args": [
+				"@playwright/mcp@latest",
+				"--vision"
+			]
+		},
+		"io.github.upstash/context7": {
+			"type": "stdio",
+			"command": "npx",
+			"args": [
+				"@upstash/context7-mcp@1.0.31"
+			],
+			"env": {
+				"CONTEXT7_API_KEY": "${input:CONTEXT7_API_KEY}"
+			}
+		},
+		"io.github.bytebase/dbhub": {
+			"type": "stdio",
+			"command": "npx",
+			"args": [
+				"@bytebase/dbhub@0.13.2"
+			],
+			"env": {
+				"DSN": "${input:DSN}",
+				"DB_TYPE": "${input:DB_TYPE}",
+				"DB_HOST": "${input:DB_HOST}",
+				"DB_PORT": "${input:DB_PORT}",
+				"DB_USER": "${input:DB_USER}",
+				"DB_PASSWORD": "${input:DB_PASSWORD}",
+				"DB_NAME": "${input:DB_NAME}",
+				"TRANSPORT": "${input:TRANSPORT}",
+				"PORT": "${input:PORT}",
+				"ID": "${input:ID}",
+				"SSH_HOST": "${input:SSH_HOST}",
+				"SSH_PORT": "${input:SSH_PORT}",
+				"SSH_USER": "${input:SSH_USER}",
+				"SSH_PASSWORD": "${input:SSH_PASSWORD}",
+				"SSH_KEY": "${input:SSH_KEY}",
+				"SSH_PASSPHRASE": "${input:SSH_PASSPHRASE}"
+			},
 		}
-	}
+	},
+	"inputs": [
+		{
+			"id": "MDB_MCP_ALLOW_REQUEST_OVERRIDES",
+			"type": "promptString",
+			"description": "When set to true, allows configuration values to be overridden via request headers and query parameters.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_API_CLIENT_ID",
+			"type": "promptString",
+			"description": "Atlas API client ID for authentication. Required for running Atlas tools.",
+			"password": true
+		},
+		{
+			"id": "MDB_MCP_API_CLIENT_SECRET",
+			"type": "promptString",
+			"description": "Atlas API client secret for authentication. Required for running Atlas tools.",
+			"password": true
+		},
+		{
+			"id": "MDB_MCP_ATLAS_TEMPORARY_DATABASE_USER_LIFETIME_MS",
+			"type": "promptString",
+			"description": "Time in milliseconds that temporary database users created when connecting to MongoDB Atlas clusters will remain active before being automatically deleted.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_CONFIRMATION_REQUIRED_TOOLS",
+			"type": "promptString",
+			"description": "Comma separated values of tool names that require user confirmation before execution. Requires the client to support elicitation.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_CONNECTION_STRING",
+			"type": "promptString",
+			"description": "MongoDB connection string for direct database connections. Optional, if not set, you'll need to call the connect tool before interacting with MongoDB data.",
+			"password": true
+		},
+		{
+			"id": "MDB_MCP_DISABLED_TOOLS",
+			"type": "promptString",
+			"description": "Comma separated values of tool names, operation types, and/or categories of tools that will be disabled.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_DRY_RUN",
+			"type": "promptString",
+			"description": "When true, runs the server in dry mode: dumps configuration and enabled tools, then exits without starting the server.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_EMBEDDINGS_VALIDATION",
+			"type": "promptString",
+			"description": "When set to false, disables validation of embeddings dimensions.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_EXPORT_CLEANUP_INTERVAL_MS",
+			"type": "promptString",
+			"description": "Time in milliseconds between export cleanup cycles that remove expired export files.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_EXPORT_TIMEOUT_MS",
+			"type": "promptString",
+			"description": "Time in milliseconds after which an export is considered expired and eligible for cleanup.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_EXPORTS_PATH",
+			"type": "promptString",
+			"description": "Folder to store exported data files.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_HTTP_BODY_LIMIT",
+			"type": "promptString",
+			"description": "Maximum size of the HTTP request body in bytes (only used when transport is 'http'). This value is passed as the optional limit parameter to the Express.js json() middleware.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_HTTP_HEADERS",
+			"type": "promptString",
+			"description": "Header that the HTTP server will validate when making requests (only used when transport is 'http').",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_HTTP_HOST",
+			"type": "promptString",
+			"description": "Host address to bind the HTTP server to (only used when transport is 'http').",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_HTTP_PORT",
+			"type": "promptString",
+			"description": "Port number for the HTTP server (only used when transport is 'http'). Use 0 for a random port.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_IDLE_TIMEOUT_MS",
+			"type": "promptString",
+			"description": "Idle timeout for a client to disconnect (only applies to http transport).",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_INDEX_CHECK",
+			"type": "promptString",
+			"description": "When set to true, enforces that query operations must use an index, rejecting queries that perform a collection scan.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_LOG_PATH",
+			"type": "promptString",
+			"description": "Folder to store logs.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_LOGGERS",
+			"type": "promptString",
+			"description": "Comma separated values of logger types.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_MAX_BYTES_PER_QUERY",
+			"type": "promptString",
+			"description": "The maximum size in bytes for results from a find or aggregate tool call. This serves as an upper bound for the responseBytesLimit parameter in those tools.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_MAX_DOCUMENTS_PER_QUERY",
+			"type": "promptString",
+			"description": "The maximum number of documents that can be returned by a find or aggregate tool call. For the find tool, the effective limit will be the smaller of this value and the tool's limit parameter.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_NOTIFICATION_TIMEOUT_MS",
+			"type": "promptString",
+			"description": "Notification timeout for a client to be aware of disconnect (only applies to http transport).",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_PREVIEW_FEATURES",
+			"type": "promptString",
+			"description": "Comma separated values of preview features that are enabled.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_READ_ONLY",
+			"type": "promptString",
+			"description": "When set to true, only allows read, connect, and metadata operation types, disabling create/update/delete operations.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_TELEMETRY",
+			"type": "promptString",
+			"description": "When set to disabled, disables telemetry collection.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_TRANSPORT",
+			"type": "promptString",
+			"description": "Either 'stdio' or 'http'.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_VECTOR_SEARCH_DIMENSIONS",
+			"type": "promptString",
+			"description": "Default number of dimensions for vector search embeddings.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_VECTOR_SEARCH_SIMILARITY_FUNCTION",
+			"type": "promptString",
+			"description": "Default similarity function for vector search: 'euclidean', 'cosine', or 'dotProduct'.",
+			"password": false
+		},
+		{
+			"id": "MDB_MCP_VOYAGE_API_KEY",
+			"type": "promptString",
+			"description": "API key for Voyage AI embeddings service (required for vector search operations with text-to-embedding conversion).",
+			"password": true
+		},
+		{
+			"id": "allowRequestOverrides",
+			"type": "promptString",
+			"description": "When set to true, allows configuration values to be overridden via request headers and query parameters.",
+			"password": false
+		},
+		{
+			"id": "apiClientId",
+			"type": "promptString",
+			"description": "Atlas API client ID for authentication. Required for running Atlas tools.",
+			"password": false
+		},
+		{
+			"id": "apiClientSecret",
+			"type": "promptString",
+			"description": "Atlas API client secret for authentication. Required for running Atlas tools.",
+			"password": false
+		},
+		{
+			"id": "atlasTemporaryDatabaseUserLifetimeMs",
+			"type": "promptString",
+			"description": "Time in milliseconds that temporary database users created when connecting to MongoDB Atlas clusters will remain active before being automatically deleted.",
+			"password": false
+		},
+		{
+			"id": "confirmationRequiredTools",
+			"type": "promptString",
+			"description": "Comma separated values of tool names that require user confirmation before execution. Requires the client to support elicitation.",
+			"password": false
+		},
+		{
+			"id": "connectionString",
+			"type": "promptString",
+			"description": "MongoDB connection string for direct database connections. Optional, if not set, you'll need to call the connect tool before interacting with MongoDB data.",
+			"password": false
+		},
+		{
+			"id": "disabledTools",
+			"type": "promptString",
+			"description": "Comma separated values of tool names, operation types, and/or categories of tools that will be disabled.",
+			"password": false
+		},
+		{
+			"id": "dryRun",
+			"type": "promptString",
+			"description": "When true, runs the server in dry mode: dumps configuration and enabled tools, then exits without starting the server.",
+			"password": false
+		},
+		{
+			"id": "embeddingsValidation",
+			"type": "promptString",
+			"description": "When set to false, disables validation of embeddings dimensions.",
+			"password": false
+		},
+		{
+			"id": "exportCleanupIntervalMs",
+			"type": "promptString",
+			"description": "Time in milliseconds between export cleanup cycles that remove expired export files.",
+			"password": false
+		},
+		{
+			"id": "exportTimeoutMs",
+			"type": "promptString",
+			"description": "Time in milliseconds after which an export is considered expired and eligible for cleanup.",
+			"password": false
+		},
+		{
+			"id": "exportsPath",
+			"type": "promptString",
+			"description": "Folder to store exported data files.",
+			"password": false
+		},
+		{
+			"id": "httpBodyLimit",
+			"type": "promptString",
+			"description": "Maximum size of the HTTP request body in bytes (only used when transport is 'http'). This value is passed as the optional limit parameter to the Express.js json() middleware.",
+			"password": false
+		},
+		{
+			"id": "httpHeaders",
+			"type": "promptString",
+			"description": "Header that the HTTP server will validate when making requests (only used when transport is 'http').",
+			"password": false
+		},
+		{
+			"id": "httpHost",
+			"type": "promptString",
+			"description": "Host address to bind the HTTP server to (only used when transport is 'http').",
+			"password": false
+		},
+		{
+			"id": "httpPort",
+			"type": "promptString",
+			"description": "Port number for the HTTP server (only used when transport is 'http'). Use 0 for a random port.",
+			"password": false
+		},
+		{
+			"id": "idleTimeoutMs",
+			"type": "promptString",
+			"description": "Idle timeout for a client to disconnect (only applies to http transport).",
+			"password": false
+		},
+		{
+			"id": "indexCheck",
+			"type": "promptString",
+			"description": "When set to true, enforces that query operations must use an index, rejecting queries that perform a collection scan.",
+			"password": false
+		},
+		{
+			"id": "logPath",
+			"type": "promptString",
+			"description": "Folder to store logs.",
+			"password": false
+		},
+		{
+			"id": "loggers",
+			"type": "promptString",
+			"description": "Comma separated values of logger types.",
+			"password": false
+		},
+		{
+			"id": "maxBytesPerQuery",
+			"type": "promptString",
+			"description": "The maximum size in bytes for results from a find or aggregate tool call. This serves as an upper bound for the responseBytesLimit parameter in those tools.",
+			"password": false
+		},
+		{
+			"id": "maxDocumentsPerQuery",
+			"type": "promptString",
+			"description": "The maximum number of documents that can be returned by a find or aggregate tool call. For the find tool, the effective limit will be the smaller of this value and the tool's limit parameter.",
+			"password": false
+		},
+		{
+			"id": "notificationTimeoutMs",
+			"type": "promptString",
+			"description": "Notification timeout for a client to be aware of disconnect (only applies to http transport).",
+			"password": false
+		},
+		{
+			"id": "previewFeatures",
+			"type": "promptString",
+			"description": "Comma separated values of preview features that are enabled.",
+			"password": false
+		},
+		{
+			"id": "readOnly",
+			"type": "promptString",
+			"description": "When set to true, only allows read, connect, and metadata operation types, disabling create/update/delete operations.",
+			"password": false
+		},
+		{
+			"id": "telemetry",
+			"type": "promptString",
+			"description": "When set to disabled, disables telemetry collection.",
+			"password": false
+		},
+		{
+			"id": "transport",
+			"type": "promptString",
+			"description": "Either 'stdio' or 'http'.",
+			"password": false
+		},
+		{
+			"id": "vectorSearchDimensions",
+			"type": "promptString",
+			"description": "Default number of dimensions for vector search embeddings.",
+			"password": false
+		},
+		{
+			"id": "vectorSearchSimilarityFunction",
+			"type": "promptString",
+			"description": "Default similarity function for vector search: 'euclidean', 'cosine', or 'dotProduct'.",
+			"password": false
+		},
+		{
+			"id": "voyageApiKey",
+			"type": "promptString",
+			"description": "API key for Voyage AI embeddings service (required for vector search operations with text-to-embedding conversion).",
+			"password": false
+		},
+		{
+			"id": "CONTEXT7_API_KEY",
+			"type": "promptString",
+			"description": "API key for authentication",
+			"password": true
+		},
+		{
+			"id": "DSN",
+			"type": "promptString",
+			"description": "Database connection string (e.g., postgres://user:pass@host:5432/db)",
+			"password": true
+		},
+		{
+			"id": "DB_TYPE",
+			"type": "promptString",
+			"description": "Database type: postgres, mysql, mariadb, sqlserver, sqlite",
+			"password": false
+		},
+		{
+			"id": "DB_HOST",
+			"type": "promptString",
+			"description": "Database hostname",
+			"password": false
+		},
+		{
+			"id": "DB_PORT",
+			"type": "promptString",
+			"description": "Database port",
+			"password": false
+		},
+		{
+			"id": "DB_USER",
+			"type": "promptString",
+			"description": "Database username",
+			"password": false
+		},
+		{
+			"id": "DB_PASSWORD",
+			"type": "promptString",
+			"description": "Database password",
+			"password": true
+		},
+		{
+			"id": "DB_NAME",
+			"type": "promptString",
+			"description": "Database name or SQLite file path",
+			"password": false
+		},
+		{
+			"id": "TRANSPORT",
+			"type": "promptString",
+			"description": "Transport mode: stdio or http",
+			"password": false
+		},
+		{
+			"id": "PORT",
+			"type": "promptString",
+			"description": "HTTP server port (default: 8080)",
+			"password": false
+		},
+		{
+			"id": "ID",
+			"type": "promptString",
+			"description": "Instance identifier for tool names",
+			"password": false
+		},
+		{
+			"id": "SSH_HOST",
+			"type": "promptString",
+			"description": "SSH server hostname",
+			"password": false
+		},
+		{
+			"id": "SSH_PORT",
+			"type": "promptString",
+			"description": "SSH server port (default: 22)",
+			"password": false
+		},
+		{
+			"id": "SSH_USER",
+			"type": "promptString",
+			"description": "SSH username",
+			"password": false
+		},
+		{
+			"id": "SSH_PASSWORD",
+			"type": "promptString",
+			"description": "SSH password",
+			"password": true
+		},
+		{
+			"id": "SSH_KEY",
+			"type": "promptString",
+			"description": "Path to SSH private key",
+			"password": false
+		},
+		{
+			"id": "SSH_PASSPHRASE",
+			"type": "promptString",
+			"description": "SSH key passphrase",
+			"password": true
+		}
+	]
 }
