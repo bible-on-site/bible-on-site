@@ -1010,6 +1010,7 @@ jobs:
 
       # Free disk space EARLY - before Rust cache restore which can consume several GB
       # This ensures enough space for the ~5GB MongoDB Docker image later
+      # Note: swap-storage must be true to match build_sefaria_mongo_docker job settings
       - name: Free Disk Space
         uses: jlumbroso/free-disk-space@v1.3.1
         with:
@@ -1019,7 +1020,7 @@ jobs:
           haskell: true
           large-packages: true
           docker-images: true
-          swap-storage: false
+          swap-storage: true
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
