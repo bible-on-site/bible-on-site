@@ -1,6 +1,4 @@
-#!/bin/bash
-set -e
-
+#!/bin/sh
 # Custom entrypoint for Sefaria MongoDB Docker image
 # This script copies pre-restored data from /mongodb-data to /data/db
 # on first startup, then runs mongod.
@@ -11,11 +9,20 @@ set -e
 # To work around this, we restore data to /mongodb-data at build time,
 # then copy it to /data/db at container startup.
 
+set -e
+
 echo "Sefaria MongoDB starting..."
 
 # Check if /data/db is empty (first startup)
 if [ ! -f /data/db/.initialized ]; then
     echo "First startup: copying pre-restored data from /mongodb-data to /data/db..."
+
+    # Check if source directory exists
+    if [ ! -d /mongodb-data ]; then
+        echo "ERROR: /mongodb-data does not exist! Build-time restore may have failed."
+        ls -la /
+        exit 1
+    fi
 
     # Copy all files from /mongodb-data to /data/db
     # Using cp -a to preserve permissions and attributes
