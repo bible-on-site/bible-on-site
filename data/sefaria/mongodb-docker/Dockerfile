@@ -4,8 +4,8 @@
 # Build: docker build -t sefaria-mongo:latest .
 # Run: docker run -d -p 27017:27017 sefaria-mongo:latest
 #
-# Note: The dump is restored at first container startup.
-# This uses the MongoDB docker-entrypoint-initdb.d mechanism with an inline script.
+# The data is restored at BUILD TIME, so container startup is instant.
+# This uses a shell background process (not --fork) to run mongod during build.
 
 FROM mongo:7
 
@@ -30,12 +30,31 @@ RUN curl -L ${DUMP_URL} -o dump.tar.gz \
     && echo "Found extracted directory: $EXTRACTED_DIR" \
     && mv "$EXTRACTED_DIR" /dump
 
-# Create init script inline to restore the dump on first startup
-# The MongoDB docker-entrypoint.sh runs scripts in /docker-entrypoint-initdb.d/
-# Note: This is an inline script in the Dockerfile, not a separate .sh file
-# The script creates a marker file on completion that can be checked by the host
-RUN printf '#!/bin/bash\nset -e\necho "Starting mongorestore..."\nmongorestore --drop /dump\necho "mongorestore completed successfully"\ntouch /tmp/mongorestore-complete\n' > /docker-entrypoint-initdb.d/restore-dump.sh \
-    && chmod +x /docker-entrypoint-initdb.d/restore-dump.sh
+# Restore MongoDB data at BUILD TIME
+# This makes container startup instant since data is already in the image
+# We use shell background process (&) instead of --fork which doesn't work in buildkit
+RUN mkdir -p /data/db && \
+    mongod --dbpath /data/db --bind_ip 127.0.0.1 --nojournal & \
+    MONGOD_PID=$! && \
+    echo "Waiting for MongoDB to start (PID: $MONGOD_PID)..." && \
+    for i in $(seq 1 30); do \
+        if mongosh --quiet --eval "db.runCommand({ping:1})" 2>/dev/null; then \
+            echo "MongoDB is ready"; \
+            break; \
+        fi; \
+        echo "Attempt $i/30: waiting..."; \
+        sleep 1; \
+    done && \
+    echo "Running mongorestore..." && \
+    mongorestore --drop /dump && \
+    echo "mongorestore completed. Document count:" && \
+    mongosh --quiet --eval "db.getSiblingDB('sefaria').texts.countDocuments({})" && \
+    echo "Stopping MongoDB..." && \
+    mongosh --quiet --eval "db.adminCommand({shutdown:1})" || true && \
+    wait $MONGOD_PID || true && \
+    echo "Cleaning up dump files..." && \
+    rm -rf /dump && \
+    echo "Build-time restore complete!"
 
 # Expose MongoDB port
 EXPOSE 27017
