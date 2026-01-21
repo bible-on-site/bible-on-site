@@ -164,13 +164,22 @@
           "type": "string",
           "description": "Google Play track (internal, alpha, beta, production). Default: internal"
         },
+        "MaxFlightsToKeep": {
+          "type": "integer",
+          "description": "Maximum number of flights to keep (older flights will be deleted). Default: 5",
+          "format": "int32"
+        },
         "MsixPath": {
           "type": "string",
           "description": "Path to MSIX file for Microsoft Store upload"
         },
+        "MsStoreFlightGroupId": {
+          "type": "string",
+          "description": "Microsoft Store flight group ID (required when creating a new flight)"
+        },
         "MsStoreFlightId": {
           "type": "string",
-          "description": "Microsoft Store flight ID for internal testing (required unless --production is set)"
+          "description": "Microsoft Store flight ID for internal testing (if not provided, a new flight will be created)"
         },
         "Platform": {
           "type": "string",
