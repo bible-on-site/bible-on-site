@@ -1031,8 +1031,8 @@ jobs:
           flags: data
           report_type: test_results
 
-      # Free disk space - minimal cleanup just for loading the ~5GB Docker image
-      # Don't use large-packages (takes ~2 min) - android/dotnet/haskell is enough
+      # Free disk space for loading the ~5GB Docker image
+      # docker-images: true is fast (~30s) and frees ~3GB which we need for decompression
       - name: Free Disk Space
         uses: jlumbroso/free-disk-space@v1.3.1
         with:
@@ -1041,7 +1041,7 @@ jobs:
           dotnet: true
           haskell: true
           large-packages: false
-          docker-images: false
+          docker-images: true
           swap-storage: false
 
       - name: Download Sefaria MongoDB Docker Image
