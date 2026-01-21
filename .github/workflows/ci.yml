@@ -1077,14 +1077,21 @@ jobs:
             echo "Downloading cached artifact (id: $artifact_id) via gh api..."
             gh api repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip > /tmp/sefaria-mongo-image.zip
             unzip -o /tmp/sefaria-mongo-image.zip -d /tmp
+            # Remove zip to free ~5GB before docker load needs to extract layers
+            rm -f /tmp/sefaria-mongo-image.zip
           else
             echo "No cached artifact, downloading from current workflow..."
             gh run download ${{ github.run_id }} -n ${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }} -D /tmp
           fi
+          echo "Disk space before docker load:"
+          df -h /
 
       # ============ Integration Test Setup: MongoDB Container ============
       - name: Load Sefaria MongoDB Docker Image
-        run: docker load --input /tmp/sefaria-mongo-image.tar
+        run: |
+          docker load --input /tmp/sefaria-mongo-image.tar
+          # Remove tar to free space after loading
+          rm -f /tmp/sefaria-mongo-image.tar
 
       - name: Setup MongoDB Container for Integration Tests
         id: setup-mongodb
