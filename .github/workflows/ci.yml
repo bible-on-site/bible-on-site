@@ -174,6 +174,7 @@ jobs:
     outputs:
       is_lcov_docker_available: ${{ steps.check_docker_images.outputs.is_lcov_docker_available }}
       is_sefaria_mongo_available: ${{ steps.check_sefaria_mongo.outputs.is_sefaria_mongo_available }}
+      sefaria_mongo_artifact_id: ${{ steps.check_sefaria_mongo.outputs.sefaria_mongo_artifact_id }}
     steps:
       - name: Check and restore LCOV Docker image artifact
         id: check_docker_images
@@ -207,37 +208,26 @@ jobs:
           retention-days: 400
           overwrite: true
 
-      - name: Check and restore Sefaria MongoDB image artifact
+      - name: Check Sefaria MongoDB image artifact availability
         id: check_sefaria_mongo
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Check if Sefaria MongoDB Docker artifact exists and download it
-          # MongoDB image is ~5GB and takes ~600s to build, so caching saves significant time
+          # Only check if artifact exists - don't download here
+          # MongoDB image is ~5GB, only data_ci needs it, so download there directly via gh api (faster than actions/download-artifact)
           artifact_name="${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }}"
           artifact_info=$(gh api repos/${{ github.repository }}/actions/artifacts \
             --jq "[.artifacts[] | select(.name == \"$artifact_name\" and .expired == false)] | first")
 
           if [ "$artifact_info" != "null" ] && [ -n "$artifact_info" ]; then
             artifact_id=$(echo "$artifact_info" | jq -r '.id')
-            echo "Found artifact $artifact_name (id: $artifact_id), downloading..."
-            mkdir -p "/tmp/$artifact_name"
-            gh api repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip > "/tmp/$artifact_name.zip"
-            unzip -o "/tmp/$artifact_name.zip" -d "/tmp/$artifact_name"
+            echo "Found cached Sefaria MongoDB image (artifact id: $artifact_id)"
             echo "is_sefaria_mongo_available=true" >> $GITHUB_OUTPUT
+            echo "sefaria_mongo_artifact_id=$artifact_id" >> $GITHUB_OUTPUT
           else
-            echo "Sefaria MongoDB image not found in artifacts"
+            echo "Sefaria MongoDB image not found in artifacts - will need to build"
             echo "is_sefaria_mongo_available=false" >> $GITHUB_OUTPUT
           fi
-
-      - name: Re-upload Sefaria MongoDB image for current workflow
-        if: steps.check_sefaria_mongo.outputs.is_sefaria_mongo_available == 'true'
-        uses: actions/upload-artifact@v6
-        with:
-          name: ${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }}
-          path: /tmp/${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }}
-          retention-days: 90
-          overwrite: true
 
   determine_website_changes:
     name: Determine Website Changes
@@ -1061,7 +1051,7 @@ jobs:
           report_type: test_results
 
       # Free disk space for loading the ~5GB Docker image
-      # Need large-packages: true (~170s) to free enough space for docker load
+      # Try large-packages: false first - if it fails, we can enable it
       - name: Free Disk Space
         uses: jlumbroso/free-disk-space@v1.3.1
         with:
@@ -1069,15 +1059,24 @@ jobs:
           android: true
           dotnet: true
           haskell: true
-          large-packages: true
+          large-packages: false
           docker-images: true
           swap-storage: false
 
+      # Download using gh api (faster than actions/download-artifact: ~2m vs ~6m)
       - name: Download Sefaria MongoDB Docker Image
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }}
-          path: /tmp
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          artifact_id="${{ needs.determine_docker_image_availability.outputs.sefaria_mongo_artifact_id }}"
+          if [ -n "$artifact_id" ] && [ "$artifact_id" != "" ]; then
+            echo "Downloading cached artifact (id: $artifact_id) via gh api..."
+            gh api repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip > /tmp/sefaria-mongo-image.zip
+            unzip -o /tmp/sefaria-mongo-image.zip -d /tmp
+          else
+            echo "No cached artifact, downloading from current workflow..."
+            gh run download ${{ github.run_id }} -n ${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }} -D /tmp
+          fi
 
       # ============ Integration Test Setup: MongoDB Container ============
       - name: Load Sefaria MongoDB Docker Image
