@@ -42,4 +42,9 @@ chown -R mongodb:mongodb /data/db
 # Start mongod with default settings
 # The original mongo:7 entrypoint uses docker-entrypoint.sh
 # We call the original entrypoint script to get proper signal handling
-exec docker-entrypoint.sh "$@"
+# Pass 'mongod' as the command if no arguments were provided
+if [ $# -eq 0 ]; then
+    exec docker-entrypoint.sh mongod
+else
+    exec docker-entrypoint.sh "$@"
+fi
