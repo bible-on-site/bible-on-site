@@ -73,7 +73,7 @@ public class ArticleService : BaseGraphQLService
     }
 
     /// <summary>
-    /// Fetches a single article by its ID.
+    /// Fetches a single article by its ID, including full content.
     /// </summary>
     public async Task<Article?> GetArticleByIdAsync(int articleId)
     {
@@ -86,6 +86,7 @@ public class ArticleService : BaseGraphQLService
                         perekId
                         authorId
                         abstract
+                        articleContent
                         name
                         priority
                     }
@@ -107,14 +108,19 @@ public class ArticleService : BaseGraphQLService
             if (dto == null)
                 return null;
 
+            // Get the author info from StarterService
+            var author = StarterService.Instance.Authors.FirstOrDefault(a => a.Id == dto.AuthorId);
+
             return new Article
             {
                 Id = dto.Id,
                 PerekId = dto.PerekId,
                 AuthorId = dto.AuthorId,
                 Abstract = dto.Abstract ?? string.Empty,
+                ArticleContent = dto.ArticleContent,
                 Name = dto.Name ?? string.Empty,
-                Priority = dto.Priority
+                Priority = dto.Priority,
+                Author = author
             };
         }
         catch (Exception ex)
@@ -197,6 +203,7 @@ public class ArticleService : BaseGraphQLService
         public int PerekId { get; set; }
         public int AuthorId { get; set; }
         public string? Abstract { get; set; }
+        public string? ArticleContent { get; set; }
         public string? Name { get; set; }
         public int Priority { get; set; }
     }

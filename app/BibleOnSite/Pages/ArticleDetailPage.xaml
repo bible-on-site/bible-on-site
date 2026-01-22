@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
+             x:Class="BibleOnSite.Pages.ArticleDetailPage"
+             x:DataType="viewmodels:ArticleDetailViewModel"
+             Title="{Binding ArticleName}"
+             FlowDirection="RightToLeft"
+             Shell.NavBarIsVisible="False">
+
+    <Grid RowDefinitions="Auto,*">
+        <!-- Header with back and share buttons -->
+        <Grid Grid.Row="0"
+              Padding="8,8,8,4"
+              ColumnDefinitions="Auto,*,Auto"
+              BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+            <Button Grid.Column="0"
+                    Text="→"
+                    FontSize="24"
+                    BackgroundColor="Transparent"
+                    TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
+                    Command="{Binding GoBackCommand}"
+                    SemanticProperties.Description="חזור"/>
+
+            <Button Grid.Column="2"
+                    Text="⎘"
+                    FontSize="20"
+                    BackgroundColor="Transparent"
+                    TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
+                    Command="{Binding ShareCommand}"
+                    SemanticProperties.Description="שתף"/>
+        </Grid>
+
+        <!-- Content -->
+        <ScrollView Grid.Row="1" Padding="16,0">
+            <VerticalStackLayout Spacing="16">
+                <!-- Author section -->
+                <VerticalStackLayout HorizontalOptions="Center" Spacing="8" Margin="0,16,0,0">
+                    <!-- Author Image (tappable) -->
+                    <Border WidthRequest="80"
+                            HeightRequest="80"
+                            StrokeShape="RoundRectangle 40"
+                            Stroke="{StaticResource Primary}"
+                            StrokeThickness="2"
+                            HorizontalOptions="Center">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding GoToAuthorCommand}"/>
+                        </Border.GestureRecognizers>
+                        <Image Source="{Binding AuthorImageUrl}"
+                               Aspect="AspectFill"
+                               WidthRequest="76"
+                               HeightRequest="76"/>
+                    </Border>
+
+                    <!-- Author Name -->
+                    <Label Text="{Binding AuthorName}"
+                           FontSize="16"
+                           HorizontalTextAlignment="Center"
+                           TextColor="{StaticResource Primary}">
+                        <Label.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding GoToAuthorCommand}"/>
+                        </Label.GestureRecognizers>
+                    </Label>
+                </VerticalStackLayout>
+
+                <!-- Divider -->
+                <BoxView HeightRequest="1"
+                         Color="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
+                         Margin="32,8"/>
+
+                <!-- Loading indicator -->
+                <ActivityIndicator IsRunning="{Binding IsLoading}"
+                                   IsVisible="{Binding IsLoading}"
+                                   HorizontalOptions="Center"
+                                   Color="{StaticResource Primary}"/>
+
+                <!-- Article Content (HTML) -->
+                <Label x:Name="ArticleContentLabel"
+                       IsVisible="{Binding HasContent}"
+                       TextType="Html"
+                       Text="{Binding Article.ArticleContent}"
+                       FontSize="16"
+                       LineHeight="1.5"
+                       Margin="0,0,0,32"/>
+
+                <!-- No content message -->
+                <Label Text="אין תוכן זמין"
+                       IsVisible="{Binding HasContent, Converter={StaticResource InvertedBoolConverter}}"
+                       HorizontalTextAlignment="Center"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
+                       FontSize="14"/>
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</ContentPage>
