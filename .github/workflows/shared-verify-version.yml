@@ -23,7 +23,9 @@ jobs:
         with:
           ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref }}
           fetch-depth: 0
-          fetch-tags: true # Required to fetch tags for version comparison
+
+      - name: Fetch all tags
+        run: git fetch --tags origin
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
