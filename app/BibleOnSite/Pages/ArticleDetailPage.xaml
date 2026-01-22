@@ -9,7 +9,7 @@
              Shell.NavBarIsVisible="False">
 
     <Grid RowDefinitions="Auto,*">
-        <!-- Header with back and share buttons -->
+        <!-- Header with back button, title, and share button -->
         <Grid Grid.Row="0"
               Padding="8,8,8,4"
               ColumnDefinitions="Auto,*,Auto"
@@ -22,6 +22,15 @@
                     Command="{Binding GoBackCommand}"
                     SemanticProperties.Description="חזור"/>
 
+            <Label Grid.Column="1"
+                   Text="{Binding ArticleName}"
+                   FontSize="16"
+                   FontAttributes="Bold"
+                   VerticalTextAlignment="Center"
+                   LineBreakMode="TailTruncation"
+                   MaxLines="1"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+
             <Button Grid.Column="2"
                     Text="⎘"
                     FontSize="20"
@@ -32,10 +41,13 @@
         </Grid>
 
         <!-- Content -->
-        <ScrollView Grid.Row="1" Padding="16,0">
+        <ScrollView Grid.Row="1"
+                Padding="16,0">
             <VerticalStackLayout Spacing="16">
                 <!-- Author section -->
-                <VerticalStackLayout HorizontalOptions="Center" Spacing="8" Margin="0,16,0,0">
+                <VerticalStackLayout HorizontalOptions="Center"
+                        Spacing="8"
+                        Margin="0,16,0,0">
                     <!-- Author Image (tappable) -->
                     <Border WidthRequest="80"
                             HeightRequest="80"

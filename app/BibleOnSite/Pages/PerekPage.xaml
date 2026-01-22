@@ -8,67 +8,9 @@
              Title="{Binding Source}"
              FlowDirection="RightToLeft">
 
-    <ContentPage.ToolbarItems>
-        <ToolbarItem
-            x:Name="ArticlesButton"
-            AutomationId="ArticlesButton"
-            Text="📚"
-            Command="{Binding GoToArticlesCommand}"
-            SemanticProperties.Description="View articles"/>
-        <ToolbarItem
-            x:Name="AuthorsButton"
-            AutomationId="AuthorsButton"
-            Text="👤"
-            Command="{Binding GoToAuthorsCommand}"
-            SemanticProperties.Description="View authors"/>
-        <ToolbarItem
-            x:Name="BookmarkButton"
-            AutomationId="BookmarkButton"
-            Text="⭐"
-            Command="{Binding ToggleBookmarkCommand}"
-            SemanticProperties.Description="Toggle bookmark"/>
-        <ToolbarItem
-            x:Name="PreviousButton"
-            AutomationId="PreviousButton"
-            Text="◀"
-            Command="{Binding LoadPreviousCommand}"
-            SemanticProperties.Description="Previous perek"/>
-        <ToolbarItem
-            x:Name="NextButton"
-            AutomationId="NextButton"
-            Text="▶"
-            Command="{Binding LoadNextCommand}"
-            SemanticProperties.Description="Next perek"/>
-    </ContentPage.ToolbarItems>
-
-    <Grid RowDefinitions="Auto,*,Auto">
-        <!-- Header Section -->
-        <VerticalStackLayout Grid.Row="0"
-                             Padding="16,12"
-                             BackgroundColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}">
-            <Label
-                Text="{Binding Source}"
-                FontSize="24"
-                FontAttributes="Bold"
-                HorizontalTextAlignment="Center"
-                TextColor="White"/>
-            <Label
-                Text="{Binding HebDate}"
-                FontSize="14"
-                HorizontalTextAlignment="Center"
-                TextColor="White"
-                Opacity="0.9"/>
-            <Label
-                Text="{Binding Header}"
-                FontSize="16"
-                HorizontalTextAlignment="Center"
-                TextColor="White"
-                IsVisible="{Binding Header, Converter={StaticResource StringNotEmptyConverter}}"
-                Margin="0,8,0,0"/>
-        </VerticalStackLayout>
-
+    <Grid RowDefinitions="*,Auto">
         <!-- Perek Text - Pasukim List -->
-        <CollectionView Grid.Row="1"
+        <CollectionView Grid.Row="0"
                         ItemsSource="{Binding Perek.Pasukim}"
                         SelectionMode="None"
                         Margin="8,0">
@@ -112,7 +54,7 @@
         </CollectionView>
 
         <!-- Bottom Navigation Bar -->
-        <Grid Grid.Row="2"
+        <Grid Grid.Row="1"
               ColumnDefinitions="*,*,*"
               Padding="8"
               BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray900}}">

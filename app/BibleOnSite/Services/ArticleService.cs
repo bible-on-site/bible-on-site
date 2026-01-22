@@ -55,14 +55,25 @@ public class ArticleService : BaseGraphQLService
 
             var articles = response.Data?.ArticlesByPerekId ?? new List<ArticleDto>();
 
-            return articles.Select(dto => new Article
+            // Ensure StarterService is loaded for author lookup
+            if (!StarterService.Instance.IsLoaded)
             {
-                Id = dto.Id,
-                PerekId = dto.PerekId,
-                AuthorId = dto.AuthorId,
-                Abstract = dto.Abstract ?? string.Empty,
-                Name = dto.Name ?? string.Empty,
-                Priority = dto.Priority
+                await StarterService.Instance.LoadAsync();
+            }
+
+            return articles.Select(dto =>
+            {
+                var author = StarterService.Instance.Authors.FirstOrDefault(a => a.Id == dto.AuthorId);
+                return new Article
+                {
+                    Id = dto.Id,
+                    PerekId = dto.PerekId,
+                    AuthorId = dto.AuthorId,
+                    Abstract = dto.Abstract ?? string.Empty,
+                    Name = dto.Name ?? string.Empty,
+                    Priority = dto.Priority,
+                    Author = author
+                };
             }).OrderBy(a => a.Priority).ToList();
         }
         catch (Exception ex)
@@ -86,7 +97,6 @@ public class ArticleService : BaseGraphQLService
                         perekId
                         authorId
                         abstract
-                        articleContent
                         name
                         priority
                     }
@@ -108,6 +118,12 @@ public class ArticleService : BaseGraphQLService
             if (dto == null)
                 return null;
 
+            // Ensure StarterService is loaded for author lookup
+            if (!StarterService.Instance.IsLoaded)
+            {
+                await StarterService.Instance.LoadAsync();
+            }
+
             // Get the author info from StarterService
             var author = StarterService.Instance.Authors.FirstOrDefault(a => a.Id == dto.AuthorId);
 
@@ -117,7 +133,6 @@ public class ArticleService : BaseGraphQLService
                 PerekId = dto.PerekId,
                 AuthorId = dto.AuthorId,
                 Abstract = dto.Abstract ?? string.Empty,
-                ArticleContent = dto.ArticleContent,
                 Name = dto.Name ?? string.Empty,
                 Priority = dto.Priority,
                 Author = author
@@ -163,14 +178,25 @@ public class ArticleService : BaseGraphQLService
 
             var articles = response.Data?.ArticlesByAuthorId ?? new List<ArticleDto>();
 
-            return articles.Select(dto => new Article
+            // Ensure StarterService is loaded for author lookup
+            if (!StarterService.Instance.IsLoaded)
             {
-                Id = dto.Id,
-                PerekId = dto.PerekId,
-                AuthorId = dto.AuthorId,
-                Abstract = dto.Abstract ?? string.Empty,
-                Name = dto.Name ?? string.Empty,
-                Priority = dto.Priority
+                await StarterService.Instance.LoadAsync();
+            }
+
+            return articles.Select(dto =>
+            {
+                var author = StarterService.Instance.Authors.FirstOrDefault(a => a.Id == dto.AuthorId);
+                return new Article
+                {
+                    Id = dto.Id,
+                    PerekId = dto.PerekId,
+                    AuthorId = dto.AuthorId,
+                    Abstract = dto.Abstract ?? string.Empty,
+                    Name = dto.Name ?? string.Empty,
+                    Priority = dto.Priority,
+                    Author = author
+                };
             }).OrderBy(a => a.Priority).ToList();
         }
         catch (Exception ex)

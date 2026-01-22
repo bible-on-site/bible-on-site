@@ -55,4 +55,9 @@ public partial class ArticlesPage : ContentPage
             await _viewModel.OpenArticleCommand.ExecuteAsync(article);
         }
     }
+
+    private async void OnBackClicked(object? sender, EventArgs e)
+    {
+        await Shell.Current.GoToAsync("..");
+    }
 }
