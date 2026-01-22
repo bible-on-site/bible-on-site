@@ -42,12 +42,12 @@
 
         <!-- Content -->
         <ScrollView Grid.Row="1"
-                Padding="16,0">
+                    Padding="16,0">
             <VerticalStackLayout Spacing="16">
                 <!-- Author section -->
                 <VerticalStackLayout HorizontalOptions="Center"
-                        Spacing="8"
-                        Margin="0,16,0,0">
+                                     Spacing="8"
+                                     Margin="0,16,0,0">
                     <!-- Author Image (tappable) -->
                     <Border WidthRequest="80"
                             HeightRequest="80"

@@ -19,7 +19,7 @@
 
         <!-- Authors Grid (Masonry-style with FlexLayout wrapped in ScrollView) -->
         <ScrollView Grid.Row="1"
-                Margin="8,8,8,0">
+                    Margin="8,8,8,0">
             <FlexLayout BindableLayout.ItemsSource="{Binding FilteredAuthors}"
                         Wrap="Wrap"
                         JustifyContent="Start"
@@ -37,10 +37,10 @@
                                HasShadow="True">
                             <Frame.GestureRecognizers>
                                 <TapGestureRecognizer Tapped="OnAuthorTapped"
-                                        CommandParameter="{Binding .}"/>
+                                                      CommandParameter="{Binding .}"/>
                             </Frame.GestureRecognizers>
                             <Grid RowDefinitions="Auto,Auto,Auto,*"
-                                    Padding="8">
+                                  Padding="8">
                                 <!-- Author Image -->
                                 <Frame Grid.Row="0"
                                        WidthRequest="80"

@@ -14,7 +14,8 @@
         <Grid HeightRequest="120"
               BackgroundColor="{StaticResource Primary}"
               Padding="16">
-            <VerticalStackLayout VerticalOptions="End" Spacing="4">
+            <VerticalStackLayout VerticalOptions="End"
+                    Spacing="4">
                 <Label Text="תנ״ך על הפרק"
                        FontSize="22"
                        FontAttributes="Bold"
@@ -28,21 +29,27 @@
     </Shell.FlyoutHeader>
 
     <!-- Menu Items -->
-    <FlyoutItem Title="על הפרק" FlyoutDisplayOptions="AsSingleItem">
+    <FlyoutItem Title="על הפרק"
+            FlyoutDisplayOptions="AsSingleItem">
         <ShellContent
             ContentTemplate="{DataTemplate pages:PerekPage}"
             Route="PerekPage"/>
     </FlyoutItem>
 
-    <FlyoutItem Title="רבנים" FlyoutDisplayOptions="AsSingleItem">
+    <FlyoutItem Title="רבנים"
+            FlyoutDisplayOptions="AsSingleItem">
         <ShellContent
             ContentTemplate="{DataTemplate pages:AuthorsPage}"
             Route="AuthorsPage"/>
     </FlyoutItem>
 
-    <MenuItem Text="תנאי שימוש" Clicked="OnTermsClicked"/>
-    <MenuItem Text="העדפות" Clicked="OnPreferencesClicked"/>
-    <MenuItem Text="צור קשר" Clicked="OnContactClicked"/>
-    <MenuItem Text="תרומות" Clicked="OnDonationsClicked"/>
+    <MenuItem Text="תנאי שימוש"
+            Clicked="OnTermsClicked"/>
+    <MenuItem Text="העדפות"
+            Clicked="OnPreferencesClicked"/>
+    <MenuItem Text="צור קשר"
+            Clicked="OnContactClicked"/>
+    <MenuItem Text="תרומות"
+            Clicked="OnDonationsClicked"/>
 
 </Shell>
