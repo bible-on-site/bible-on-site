@@ -122,12 +122,21 @@ partial class Build
         .DependsOn(Compile)
         .Executes(() =>
         {
-            DotNetRun(s => s
-                .SetProjectFile(MainProject)
-                .SetFramework("net9.0-android")
-                .SetConfiguration(Configuration)
-                .EnableNoRestore()
-                .EnableNoBuild());
+            // Android doesn't support dotnet run - use dotnet build -t:Run
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "dotnet",
+                Arguments = $"build \"{MainProject}\" -t:Run -f net9.0-android -c {Configuration} --no-restore",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            using var process = Process.Start(startInfo);
+            process?.WaitForExit();
+            if (process?.ExitCode != 0)
+            {
+                throw new Exception($"Android run failed with exit code {process?.ExitCode}");
+            }
         });
 
     Target RunIos => _ => _
@@ -135,12 +144,21 @@ partial class Build
         .DependsOn(Compile)
         .Executes(() =>
         {
-            DotNetRun(s => s
-                .SetProjectFile(MainProject)
-                .SetFramework("net9.0-ios")
-                .SetConfiguration(Configuration)
-                .EnableNoRestore()
-                .EnableNoBuild());
+            // iOS doesn't support dotnet run - use dotnet build -t:Run
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "dotnet",
+                Arguments = $"build \"{MainProject}\" -t:Run -f net9.0-ios -c {Configuration} --no-restore",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            using var process = Process.Start(startInfo);
+            process?.WaitForExit();
+            if (process?.ExitCode != 0)
+            {
+                throw new Exception($"iOS run failed with exit code {process?.ExitCode}");
+            }
         });
 
     Target RunMac => _ => _
@@ -148,11 +166,20 @@ partial class Build
         .DependsOn(Compile)
         .Executes(() =>
         {
-            DotNetRun(s => s
-                .SetProjectFile(MainProject)
-                .SetFramework("net9.0-maccatalyst")
-                .SetConfiguration(Configuration)
-                .EnableNoRestore()
-                .EnableNoBuild());
+            // Mac Catalyst doesn't support dotnet run - use dotnet build -t:Run
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "dotnet",
+                Arguments = $"build \"{MainProject}\" -t:Run -f net9.0-maccatalyst -c {Configuration} --no-restore",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            using var process = Process.Start(startInfo);
+            process?.WaitForExit();
+            if (process?.ExitCode != 0)
+            {
+                throw new Exception($"Mac run failed with exit code {process?.ExitCode}");
+            }
         });
 }
