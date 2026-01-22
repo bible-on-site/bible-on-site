@@ -111,6 +111,8 @@ partial class Build
                 .SetProjectFile(MainProject)
                 .SetFramework("net9.0-windows10.0.19041.0")
                 .SetConfiguration(Configuration)
+                .SetProperty("WindowsPackageType", "None")
+                .SetProperty("WindowsAppSDKSelfContained", "true")
                 .EnableNoRestore()
                 .EnableNoBuild());
         });

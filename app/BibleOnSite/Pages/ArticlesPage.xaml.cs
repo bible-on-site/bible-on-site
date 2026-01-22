@@ -4,16 +4,20 @@ using BibleOnSite.ViewModels;
 namespace BibleOnSite.Pages;
 
 /// <summary>
-/// Page displaying articles related to a specific perek.
+/// Page displaying articles related to a specific perek or author.
 /// </summary>
 [QueryProperty(nameof(PerekId), "perekId")]
 [QueryProperty(nameof(PerekTitle), "perekTitle")]
+[QueryProperty(nameof(AuthorId), "authorId")]
+[QueryProperty(nameof(AuthorName), "authorName")]
 public partial class ArticlesPage : ContentPage
 {
     private readonly ArticlesViewModel _viewModel;
 
     public int PerekId { get; set; }
     public string PerekTitle { get; set; } = string.Empty;
+    public int AuthorId { get; set; }
+    public string AuthorName { get; set; } = string.Empty;
 
     public ArticlesPage()
     {
@@ -27,24 +31,27 @@ public partial class ArticlesPage : ContentPage
         base.OnAppearing();
 
         // Set the ViewModel properties from query parameters
-        _viewModel.PerekId = PerekId;
-        _viewModel.PerekTitle = PerekTitle;
+        if (AuthorId > 0)
+        {
+            // Filter by author
+            _viewModel.AuthorId = AuthorId;
+            _viewModel.AuthorName = AuthorName;
+        }
+        else
+        {
+            // Filter by perek
+            _viewModel.PerekId = PerekId;
+            _viewModel.PerekTitle = PerekTitle;
+        }
 
         // Load articles from API
         await _viewModel.LoadArticlesCommand.ExecuteAsync(null);
     }
 
-    private async void OnArticleSelected(object? sender, SelectionChangedEventArgs e)
+    private async void OnArticleTapped(object? sender, TappedEventArgs e)
     {
-        if (e.CurrentSelection.FirstOrDefault() is Article article)
+        if (e.Parameter is Article article)
         {
-            // Clear selection
-            if (sender is CollectionView collectionView)
-            {
-                collectionView.SelectedItem = null;
-            }
-
-            // Navigate to article
             await _viewModel.OpenArticleCommand.ExecuteAsync(article);
         }
     }

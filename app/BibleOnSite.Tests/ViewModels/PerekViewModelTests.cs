@@ -58,6 +58,34 @@ public class PerekViewModelTests
         viewModel.IsBookmarked.Should().BeFalse();
     }
 
+    [Fact]
+    public void Source_ShouldIncludePerekIdAfterDash()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var perek = CreatePerek(123, 5, null, "בראשית", "Genesis", "תשרי");
+
+        var viewModel = new PerekViewModel(preferences, _ => perek);
+        viewModel.LoadByPerekId(123);
+
+        // Source should be "SeferName PerekHeb - PerekId"
+        viewModel.Source.Should().Be("בראשית ה - 123");
+    }
+
+    [Fact]
+    public void Source_WithAdditional_ShouldIncludePerekIdAfterDash()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var perek = CreatePerek(456, 3, 2, "שמואל", "Samuel", "חשוון");
+
+        var viewModel = new PerekViewModel(preferences, _ => perek);
+        viewModel.LoadByPerekId(456);
+
+        // Source should be "SeferName Additional PerekHeb - PerekId"
+        viewModel.Source.Should().Be("שמואל ב ג - 456");
+    }
+
     private static Perek CreatePerek(int perekId, int perekNumber, int? additional, string seferName, string seferTanahUsName, string hebDate)
     {
         return new Perek

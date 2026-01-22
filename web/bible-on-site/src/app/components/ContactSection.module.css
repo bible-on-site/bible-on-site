@@ -1,0 +1,147 @@
+.contactSection {
+	position: relative;
+	text-align: center;
+	width: 100%;
+	z-index: 2;
+	background-color: #1552ac;
+	background-image: url(/root/dots-primary-dark.webp);
+	background-repeat: repeat;
+	background-size: 6px;
+	color: #fff;
+}
+
+.contactContent {
+	padding: 3.2em 0;
+}
+
+.contactHeader {
+	padding: 0.75em 0;
+	letter-spacing: 0.3em;
+	text-align: center;
+}
+
+.contactHeader h1 {
+	font-size: 1.8em;
+	margin: 0.5em 0;
+}
+
+.contactHeader h2 {
+	font-size: 1.4em;
+	margin: 0.3em 0;
+}
+
+.contactInfo {
+	padding: 0 1em;
+}
+
+.contactList {
+	list-style: none;
+	margin: 0 auto;
+	text-align: right;
+	padding: 0 1em 1.1em 1.1em;
+	max-width: 20em;
+}
+
+.contactList li {
+	display: grid;
+	grid-template-columns: 1.5em 3.5em 0.05em 1fr;
+	column-gap: 0.75em;
+	align-items: center;
+	margin-bottom: 0.75em;
+}
+
+.contactList li img {
+	max-height: 1.25em;
+	max-width: 1.25em;
+}
+
+.contactList li a,
+.contactList li a:visited,
+.contactList li a:focus {
+	color: rgb(189, 196, 255);
+	margin-right: 0.4em;
+}
+
+.contactList li a:hover {
+	text-decoration: underline;
+}
+
+.separator {
+	background-color: white;
+	width: 100%;
+	height: 100%;
+	min-height: 1em;
+}
+
+.contactList li span {
+	margin: 0 0.5em 0 0;
+}
+
+/* Dividers */
+.topDivider,
+.bottomDivider {
+	background-repeat: no-repeat;
+	background-size: 110%;
+	right: 0;
+	height: 3em;
+	pointer-events: none;
+	position: absolute;
+	width: 100%;
+	z-index: 2;
+}
+
+.topDivider {
+	background-position: top;
+	top: -0.5em;
+}
+
+.bottomDivider {
+	background-position: bottom;
+	bottom: -0.5em;
+}
+
+/* Responsive divider images */
+@media screen and (max-width: 960px) {
+	.topDivider {
+		background-image: url(/root/contact-top-devider-xs.svg);
+	}
+	.bottomDivider {
+		background-image: url(/root/contact-bottom-devider-xs.svg);
+	}
+}
+
+@media screen and (min-width: 960px) and (max-width: 1280px) {
+	.topDivider {
+		background-image: url(/root/contact-top-devider-s.svg);
+	}
+	.bottomDivider {
+		background-image: url(/root/contact-bottom-devider-s.svg);
+	}
+}
+
+@media screen and (min-width: 1280px) and (max-width: 1920px) {
+	.topDivider {
+		background-image: url(/root/contact-top-devider-m.svg);
+	}
+	.bottomDivider {
+		background-image: url(/root/contact-bottom-devider-m.svg);
+	}
+}
+
+@media screen and (min-width: 1920px) and (max-width: 2560px) {
+	.topDivider {
+		background-image: url(/root/contact-top-devider-l.svg);
+	}
+	.bottomDivider {
+		background-image: url(/root/contact-bottom-devider-l.svg);
+	}
+}
+
+@media screen and (min-width: 2560px) {
+	.topDivider {
+		background-image: url(/root/contact-top-devider-xl.svg);
+	}
+	.bottomDivider {
+		background-image: url(/root/contact-bottom-devider-xl.svg);
+	}
+}

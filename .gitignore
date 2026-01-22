@@ -11,6 +11,7 @@ monocart-report/
 .cache/
 legacy-app/
 legacy-api/
+legacy-website/
 web/api/docs/migration.md
 actionlint
 test-results/

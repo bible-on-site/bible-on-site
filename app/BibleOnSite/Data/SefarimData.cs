@@ -47,4 +47,21 @@ public static class SefarimData
         }
         return SeferGroup.Torah; // Default fallback
     }
+
+    /// <summary>
+    /// Gets the sefer ID range (from, to) for a given group index.
+    /// </summary>
+    public static (int From, int To) GetSeferGroupRange(int groupIndex)
+    {
+        // Map 0-based index to 1-based group key
+        var groupKey = groupIndex + 1;
+
+        if (SefarimGroups.TryGetValue(groupKey, out var group))
+        {
+            return (group.From, group.To);
+        }
+
+        // Default to Torah range
+        return (1, 5);
+    }
 }
