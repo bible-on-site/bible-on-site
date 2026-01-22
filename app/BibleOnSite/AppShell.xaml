@@ -5,13 +5,44 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:local="clr-namespace:BibleOnSite"
     xmlns:pages="clr-namespace:BibleOnSite.Pages"
-    Shell.FlyoutBehavior="Disabled"
-    Title="תנ״ך על הפרק">
+    Shell.FlyoutBehavior="Flyout"
+    FlyoutWidth="280"
+    FlowDirection="RightToLeft">
 
-    <!-- PerekPage is the main/home page -->
-    <ShellContent
-        Title="הפרק"
-        ContentTemplate="{DataTemplate pages:PerekPage}"
-        Route="PerekPage"/>
+    <!-- Flyout Header -->
+    <Shell.FlyoutHeader>
+        <Grid HeightRequest="120"
+              BackgroundColor="{StaticResource Primary}"
+              Padding="16">
+            <VerticalStackLayout VerticalOptions="End" Spacing="4">
+                <Label Text="תנ״ך על הפרק"
+                       FontSize="22"
+                       FontAttributes="Bold"
+                       TextColor="White"/>
+                <Label Text="לימוד יומי"
+                       FontSize="12"
+                       TextColor="White"
+                       Opacity="0.8"/>
+            </VerticalStackLayout>
+        </Grid>
+    </Shell.FlyoutHeader>
+
+    <!-- Menu Items -->
+    <FlyoutItem Title="על הפרק" FlyoutDisplayOptions="AsSingleItem">
+        <ShellContent
+            ContentTemplate="{DataTemplate pages:PerekPage}"
+            Route="PerekPage"/>
+    </FlyoutItem>
+
+    <FlyoutItem Title="רבנים" FlyoutDisplayOptions="AsSingleItem">
+        <ShellContent
+            ContentTemplate="{DataTemplate pages:AuthorsPage}"
+            Route="AuthorsPage"/>
+    </FlyoutItem>
+
+    <MenuItem Text="תנאי שימוש" Clicked="OnTermsClicked"/>
+    <MenuItem Text="העדפות" Clicked="OnPreferencesClicked"/>
+    <MenuItem Text="צור קשר" Clicked="OnContactClicked"/>
+    <MenuItem Text="תרומות" Clicked="OnDonationsClicked"/>
 
 </Shell>

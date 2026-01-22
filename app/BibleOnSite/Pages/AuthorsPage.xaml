@@ -8,20 +8,9 @@
              Title="רבנים"
              FlowDirection="RightToLeft">
 
-    <Grid RowDefinitions="Auto,Auto,*">
-        <!-- Header -->
-        <VerticalStackLayout Grid.Row="0"
-                             Padding="16,12"
-                             BackgroundColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}">
-            <Label Text="רבנים"
-                   FontSize="20"
-                   FontAttributes="Bold"
-                   HorizontalTextAlignment="Center"
-                   TextColor="White"/>
-        </VerticalStackLayout>
-
+    <Grid RowDefinitions="Auto,*">
         <!-- Search Bar -->
-        <SearchBar Grid.Row="1"
+        <SearchBar Grid.Row="0"
                    Placeholder="חיפוש רבנים..."
                    Text="{Binding SearchPhrase}"
                    TextChanged="OnSearchTextChanged"
@@ -29,7 +18,8 @@
                    Margin="8,8,8,0"/>
 
         <!-- Authors Grid (Masonry-style with FlexLayout wrapped in ScrollView) -->
-        <ScrollView Grid.Row="2" Margin="8,8,8,0">
+        <ScrollView Grid.Row="1"
+                Margin="8,8,8,0">
             <FlexLayout BindableLayout.ItemsSource="{Binding FilteredAuthors}"
                         Wrap="Wrap"
                         JustifyContent="Start"
@@ -46,9 +36,11 @@
                                BorderColor="Transparent"
                                HasShadow="True">
                             <Frame.GestureRecognizers>
-                                <TapGestureRecognizer Tapped="OnAuthorTapped" CommandParameter="{Binding .}"/>
+                                <TapGestureRecognizer Tapped="OnAuthorTapped"
+                                        CommandParameter="{Binding .}"/>
                             </Frame.GestureRecognizers>
-                            <Grid RowDefinitions="Auto,Auto,Auto,*" Padding="8">
+                            <Grid RowDefinitions="Auto,Auto,Auto,*"
+                                    Padding="8">
                                 <!-- Author Image -->
                                 <Frame Grid.Row="0"
                                        WidthRequest="80"
@@ -98,7 +90,7 @@
         </ScrollView>
 
         <!-- Empty/Loading State Overlay -->
-        <VerticalStackLayout Grid.Row="2"
+        <VerticalStackLayout Grid.Row="1"
                              VerticalOptions="Center"
                              HorizontalOptions="Center"
                              Padding="20"
