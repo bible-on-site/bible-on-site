@@ -1,0 +1,4 @@
+* text=auto
+
+# Force LF line endings for shell scripts in this directory
+*.sh text eol=lf
