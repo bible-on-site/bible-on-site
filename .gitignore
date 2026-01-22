@@ -24,3 +24,4 @@ app/BibleOnSite/Resources/Raw/
 **/.raw/
 **/.outputs/
 app/.artifacts/
+data/mysql/tanah_full_dump.sql

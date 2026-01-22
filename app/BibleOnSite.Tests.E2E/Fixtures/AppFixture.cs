@@ -135,7 +135,7 @@ public class AppFixture : IAsyncLifetime
         var startInfo = new ProcessStartInfo
         {
             FileName = "cmd.exe",
-            Arguments = "/c cargo make run-api",
+            Arguments = "/c cargo make run-api-test",
             WorkingDirectory = ApiDirectory,
             UseShellExecute = true,
             CreateNoWindow = false,

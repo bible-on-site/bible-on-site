@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ContactSection } from "../components/ContactSection";
 import { ScrollToSection } from "../components/ScrollToSection";
+import { TosSection } from "../components/TosSection";
 import styles from "./page.module.css";
 
 // sections are a closed list.
@@ -28,7 +29,8 @@ export default async function Home({
 }) {
 	const { section } = await params;
 	// Only scroll to section if it's a valid section with an element on the page
-	const scrollTarget = section === "contact" ? "contact" : undefined;
+	const scrollTarget =
+		section === "contact" || section === "tos" ? section : undefined;
 	return (
 		<div className={styles.page}>
 			{scrollTarget && <ScrollToSection sectionId={scrollTarget} />}
@@ -75,7 +77,9 @@ export default async function Home({
 						</p>
 					</article>
 				</section>
+				<div className={styles.alHaperekDivider} />
 			</section>
+			<TosSection />
 			<ContactSection />
 		</div>
 	);

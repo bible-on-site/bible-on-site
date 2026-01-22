@@ -1,4 +1,5 @@
-﻿using BibleOnSite.Pages;
+﻿using BibleOnSite.Config;
+using BibleOnSite.Pages;
 
 namespace BibleOnSite;
 
@@ -17,7 +18,8 @@ public partial class AppShell : Shell
 	private async void OnTermsClicked(object? sender, EventArgs e)
 	{
 		FlyoutIsPresented = false;
-		await DisplayAlert("תנאי שימוש", "תנאי השימוש והצהרת הפרטיות יתווספו בקרוב.", "אישור");
+		var tosUrl = AppConfig.Instance.TosUrl;
+		await Launcher.OpenAsync(new Uri(tosUrl));
 	}
 
 	private async void OnPreferencesClicked(object? sender, EventArgs e)

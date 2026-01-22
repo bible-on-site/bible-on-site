@@ -1,4 +1,4 @@
-USE `tanah_test`;
+-- Database selection handled by the executing tool (db-populator, Lambda, etc.)
 
 -- Representative test data for tanah_author
 INSERT INTO tanah_author (NAME, DETAILS) VALUES

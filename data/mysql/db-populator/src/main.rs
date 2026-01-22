@@ -19,8 +19,8 @@ struct Cli {
     #[arg(long, env = "DB_URL")]
     db_url: String,
 
-    /// Path to structure SQL file
-    #[arg(long, default_value = "../tanah_structure.sql")]
+    /// Path to structure SQL file (static structure only - dynamic is managed via admin zone)
+    #[arg(long, default_value = "../tanah_static_structure.sql")]
     structure_script: String,
 
     /// Path to data SQL file
@@ -128,8 +128,11 @@ async fn execute_script(
     let script = std::fs::read_to_string(script_path)
         .with_context(|| format!("Failed to read {} script: {:?}", script_type, script_path))?;
 
+    // Filter out USE statements - database is already selected via connection options
+    let script = filter_use_statements(&script);
+
     // Use raw_sql to execute the entire script at once
-    // This handles USE statements, MySQL comments, and other DDL that prepared statements don't support
+    // This handles MySQL comments and other DDL that prepared statements don't support
     sqlx::raw_sql(&script)
         .execute(&mut *conn)
         .await
@@ -137,4 +140,16 @@ async fn execute_script(
 
     println!("{} script executed successfully", script_type);
     Ok(())
+}
+
+/// Filters out USE statements from SQL script.
+/// Database selection is handled by the connection options, not embedded in SQL files.
+fn filter_use_statements(sql: &str) -> String {
+    sql.lines()
+        .filter(|line| {
+            let trimmed = line.trim().to_uppercase();
+            !trimmed.starts_with("USE ") && !trimmed.starts_with("USE`")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
