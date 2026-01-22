@@ -21,7 +21,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Need full history for tags
+          fetch-depth: 0
+          fetch-tags: true # Required to fetch tags for version comparison
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
