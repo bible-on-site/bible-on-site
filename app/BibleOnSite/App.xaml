@@ -13,6 +13,7 @@
 
             <converters:StringNotEmptyConverter x:Key="StringNotEmptyConverter"/>
             <converters:InvertedBoolConverter x:Key="InvertedBoolConverter"/>
+            <converters:ZeroToTrueConverter x:Key="ZeroToTrueConverter"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

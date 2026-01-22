@@ -132,6 +132,17 @@
   margin: 0.5rem;
 }
 
+.menuItemLabel {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  width: 100%;
+}
+
+.menuItemLabel > * {
+  margin-right: 0.5rem;
+}
+
 /* Ribbon base styles */
 .ribbonBuilding,
 .ribbonComingSoon {

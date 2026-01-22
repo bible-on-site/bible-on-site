@@ -6,7 +6,8 @@ using System.Collections.ObjectModel;
 namespace BibleOnSite.ViewModels;
 
 /// <summary>
-/// ViewModel for displaying articles related to a perek.
+/// ViewModel for displaying articles related to a perek or by an author.
+/// Supports filtering by either perek ID or author ID.
 /// </summary>
 public partial class ArticlesViewModel : ObservableObject
 {
@@ -16,6 +17,12 @@ public partial class ArticlesViewModel : ObservableObject
 
     [ObservableProperty]
     private string _perekTitle = string.Empty;
+
+    [ObservableProperty]
+    private int? _authorId;
+
+    [ObservableProperty]
+    private string _authorName = string.Empty;
 
     [ObservableProperty]
     private ObservableCollection<Article> _articles = new();
@@ -30,40 +37,95 @@ public partial class ArticlesViewModel : ObservableObject
     private string _errorMessage = string.Empty;
 #pragma warning restore MVVMTK0045
 
+    /// <summary>
+    /// Gets whether we are filtering by perek.
+    /// </summary>
+    public bool IsFilterByPerek => PerekId > 0;
+
+    /// <summary>
+    /// Gets whether we are filtering by author.
+    /// </summary>
+    public bool IsFilterByAuthor => AuthorId.HasValue && AuthorId > 0;
+
+    /// <summary>
+    /// Gets the display title based on filter mode.
+    /// </summary>
+    public string DisplayTitle
+    {
+        get
+        {
+            if (IsFilterByAuthor)
+                return $"מאמרים מאת {AuthorName}";
+            return $"מאמרים על {PerekTitle}";
+        }
+    }
+
     public ArticlesViewModel()
     {
     }
 
+    /// <summary>
+    /// Creates a view model for articles filtered by perek.
+    /// </summary>
     public ArticlesViewModel(int perekId, string perekTitle)
     {
         _perekId = perekId;
         _perekTitle = perekTitle;
     }
 
+    /// <summary>
+    /// Creates a view model for articles filtered by author.
+    /// </summary>
+    public static ArticlesViewModel ForAuthor(int authorId, string authorName)
+    {
+        return new ArticlesViewModel
+        {
+            AuthorId = authorId,
+            AuthorName = authorName
+        };
+    }
+
+    /// <summary>
+    /// Sets the articles collection (useful for testing and initialization).
+    /// </summary>
+    public void SetArticles(IEnumerable<Article> articles)
+    {
+        Articles.Clear();
+        foreach (var article in articles)
+        {
+            Articles.Add(article);
+        }
+        HasArticles = Articles.Count > 0;
+    }
+
 #if MAUI
     /// <summary>
-    /// Loads articles for the current perek from the API.
+    /// Loads articles for the current filter (perek or author).
     /// </summary>
     [RelayCommand]
     public async Task LoadArticlesAsync()
     {
-        if (PerekId <= 0)
-            return;
-
         try
         {
             IsLoading = true;
             ErrorMessage = string.Empty;
 
-            var articles = await Services.ArticleService.Instance.GetArticlesByPerekIdAsync(PerekId);
+            IEnumerable<Article> articles;
 
-            Articles.Clear();
-            foreach (var article in articles)
+            if (IsFilterByAuthor && AuthorId.HasValue)
             {
-                Articles.Add(article);
+                articles = await Services.ArticleService.Instance.GetArticlesByAuthorIdAsync(AuthorId.Value);
+            }
+            else if (IsFilterByPerek)
+            {
+                articles = await Services.ArticleService.Instance.GetArticlesByPerekIdAsync(PerekId);
+            }
+            else
+            {
+                articles = Array.Empty<Article>();
             }
 
-            HasArticles = Articles.Count > 0;
+            SetArticles(articles);
         }
         catch (Exception ex)
         {

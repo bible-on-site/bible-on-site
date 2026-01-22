@@ -73,6 +73,8 @@ partial class Build
                 .SetProjectFile(MainProject)
                 .SetConfiguration(Configuration)
                 .SetFramework("net9.0-windows10.0.19041.0")
+                .SetProperty("WindowsPackageType", "None")
+                .SetProperty("WindowsAppSDKSelfContained", "true")
                 .EnableNoRestore());
             DotNetBuild(s => s
                 .SetProjectFile(TestProject)

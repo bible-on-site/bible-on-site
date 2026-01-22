@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { ContactSection } from "../components/ContactSection";
 import styles from "./page.module.css";
 
 // sections are a closed list.
@@ -71,6 +72,7 @@ export default async function Home({
 					</article>
 				</section>
 			</section>
+			<ContactSection />
 			{section}
 		</div>
 	);

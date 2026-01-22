@@ -124,11 +124,66 @@ public class ArticleService : BaseGraphQLService
         }
     }
 
+    /// <summary>
+    /// Fetches all articles by a specific author.
+    /// </summary>
+    public async Task<List<Article>> GetArticlesByAuthorIdAsync(int authorId)
+    {
+        var query = new GraphQLRequest
+        {
+            Query = @"
+                query ArticlesByAuthorId($authorId: Int!) {
+                    articlesByAuthorId(authorId: $authorId) {
+                        id
+                        perekId
+                        authorId
+                        abstract
+                        name
+                        priority
+                    }
+                }",
+            Variables = new { authorId }
+        };
+
+        try
+        {
+            var response = await Client.SendQueryAsync<ArticlesByAuthorIdResponse>(query);
+
+            if (response.Errors != null && response.Errors.Length > 0)
+            {
+                Console.Error.WriteLine($"GraphQL errors fetching articles for author {authorId}: {string.Join(", ", response.Errors.Select(e => e.Message))}");
+                return new List<Article>();
+            }
+
+            var articles = response.Data?.ArticlesByAuthorId ?? new List<ArticleDto>();
+
+            return articles.Select(dto => new Article
+            {
+                Id = dto.Id,
+                PerekId = dto.PerekId,
+                AuthorId = dto.AuthorId,
+                Abstract = dto.Abstract ?? string.Empty,
+                Name = dto.Name ?? string.Empty,
+                Priority = dto.Priority
+            }).OrderBy(a => a.Priority).ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error fetching articles for author {authorId}: {ex.Message}");
+            return new List<Article>();
+        }
+    }
+
     #region DTOs for GraphQL responses
 
     private class ArticlesByPerekIdResponse
     {
         public List<ArticleDto>? ArticlesByPerekId { get; set; }
+    }
+
+    private class ArticlesByAuthorIdResponse
+    {
+        public List<ArticleDto>? ArticlesByAuthorId { get; set; }
     }
 
     private class ArticleByIdResponse
