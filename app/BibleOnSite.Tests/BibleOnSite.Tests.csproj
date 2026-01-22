@@ -49,6 +49,7 @@
     <Compile Include="..\BibleOnSite\ViewModels\AuthorsViewModel.cs" Link="ViewModels\AuthorsViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\SearchViewModel.cs" Link="ViewModels\SearchViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\ArticlesViewModel.cs" Link="ViewModels\ArticlesViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\ArticleDetailViewModel.cs" Link="ViewModels\ArticleDetailViewModel.cs" />
   </ItemGroup>
 
 </Project>

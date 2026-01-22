@@ -8,6 +8,8 @@
 	background-repeat: repeat;
 	background-size: 6px;
 	color: #fff;
+	overflow: hidden;
+	scroll-margin-top: 1em;
 }
 
 .contactContent {

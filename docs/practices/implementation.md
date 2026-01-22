@@ -65,7 +65,14 @@ The following are currently expected and can be ignored:
 **Development:**
 
 - Use Playwright at http://localhost:3001 (`npm run dev` might be required if not already running)
-- Use of client components is forbidden unless explicitly requested
+- **Prefer server components for content.** The rule of thumb:
+  - **Content-rich components** (text, articles, sections) → **SSG/SSR only** for best SEO and AIO (AI Optimization)
+  - **Interactive/glue components** (navigation, animation, scroll-to-section, menu close) → **Client components OK**
+  - Client components are acceptable when:
+    - The component handles navigation/animation/UI glue logic
+    - It's minimal and isolated (not wrapping content)
+    - The actual content is still server-rendered
+  - SSG still works with client components - the initial HTML is server-rendered, client code hydrates for interactivity
 
 **Commands:**
 

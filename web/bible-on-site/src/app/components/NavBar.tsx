@@ -78,32 +78,26 @@ export const NavBar = () => {
 					</Link>
 				</li>
 				<li className={styles.menuItem}>
-					{/* biome-ignore lint/a11y/noLabelWithoutControl: label is for closing the menu on click */}
-					<label htmlFor="menu-toggle" className={styles.menuItemLabel}>
-						<Image
-							src="/icons/contact.svg"
-							alt="צור קשר"
-							width={16}
-							height={16}
-						/>
-						<a href="#contact">
-							<span>צור קשר</span>
-						</a>
-					</label>
+					<Image
+						src="/icons/contact.svg"
+						alt="צור קשר"
+						width={16}
+						height={16}
+					/>
+					<Link href="/contact">
+						<span>צור קשר</span>
+					</Link>
 				</li>
 				<li className={styles.menuItem}>
-					{/* biome-ignore lint/a11y/noLabelWithoutControl: label is for closing the menu on click */}
-					<label htmlFor="menu-toggle" className={styles.menuItemLabel}>
-						<Image
-							src="/icons/donation.svg"
-							alt="תרומות"
-							width={16}
-							height={16}
-						/>
-						<Link href="/donation">
-							<span>תרומות</span>
-						</Link>
-					</label>
+					<Image
+						src="/icons/donation.svg"
+						alt="תרומות"
+						width={16}
+						height={16}
+					/>
+					<Link href="/donation">
+						<span>תרומות</span>
+					</Link>
 				</li>
 				<li
 					className={styles.versionItem}
