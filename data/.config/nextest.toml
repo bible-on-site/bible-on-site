@@ -1,3 +1,6 @@
 [profile.ci]
 # Output JUnit XML for CI reporting
 junit.path = "../.junit-report/unit/results.xml"
+[profile.ci-integration]
+# Output JUnit XML for CI integration test reporting
+junit.path = "../.junit-report/integration/results.xml"

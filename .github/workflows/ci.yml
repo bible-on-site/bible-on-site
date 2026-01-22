@@ -59,6 +59,9 @@ env:
   APP_UNIT_JUNIT_REPORT_ARTIFACT_NAME: app-unit-junit-report-${{ github.run_id }}
   APP_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME: app-integration-junit-report-${{ github.run_id }}
   DATA_UNIT_JUNIT_REPORT_ARTIFACT_NAME: data-unit-junit-report-${{ github.run_id }}
+  DATA_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME: data-integration-junit-report-${{ github.run_id }}
+  LCOV_DOCKER_IMAGE_ARTIFACT_NAME: lcov-docker-image
+  SEFARIA_MONGO_IMAGE_ARTIFACT_NAME: sefaria-mongo-image
 
 jobs:
   setup_env:
@@ -106,10 +109,11 @@ jobs:
         run: |
           # Function to check if artifact exists and download it
           # Downloads to make it available in current workflow run via re-upload
+          # Use ?name= filter to avoid pagination issues (25k+ artifacts in repo)
           check_and_download_artifact() {
             local artifact_name=$1
-            local artifact_info=$(gh api repos/${{ github.repository }}/actions/artifacts \
-              --jq "[.artifacts[] | select(.name == \"$artifact_name\" and .expired == false)] | first")
+            local artifact_info=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$artifact_name" \
+              --jq "[.artifacts[] | select(.expired == false)] | first")
 
             if [ "$artifact_info" != "null" ] && [ -n "$artifact_info" ]; then
               local artifact_id=$(echo "$artifact_info" | jq -r '.id')
@@ -161,6 +165,72 @@ jobs:
           path: /tmp/${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           retention-days: 90
           overwrite: true
+
+  determine_docker_image_availability:
+    name: Determine Docker Image Availability
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-latest
+    outputs:
+      is_lcov_docker_available: ${{ steps.check_docker_images.outputs.is_lcov_docker_available }}
+      is_sefaria_mongo_available: ${{ steps.check_sefaria_mongo.outputs.is_sefaria_mongo_available }}
+      sefaria_mongo_artifact_id: ${{ steps.check_sefaria_mongo.outputs.sefaria_mongo_artifact_id }}
+    steps:
+      - name: Check and restore LCOV Docker image artifact
+        id: check_docker_images
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Check if LCOV Docker artifact exists and download it
+          # LCOV is small (~150MB) and used by 4+ jobs, so caching is worthwhile
+          # Use ?name= filter to avoid pagination issues (25k+ artifacts in repo)
+          artifact_name="${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}"
+          artifact_info=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$artifact_name" \
+            --jq "[.artifacts[] | select(.expired == false)] | first")
+
+          if [ "$artifact_info" != "null" ] && [ -n "$artifact_info" ]; then
+            artifact_id=$(echo "$artifact_info" | jq -r '.id')
+            echo "Found artifact $artifact_name (id: $artifact_id), downloading..."
+            mkdir -p "/tmp/$artifact_name"
+            gh api repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip > "/tmp/$artifact_name.zip"
+            unzip -o "/tmp/$artifact_name.zip" -d "/tmp/$artifact_name"
+            echo "is_lcov_docker_available=true" >> $GITHUB_OUTPUT
+          else
+            echo "LCOV Docker image not found in artifacts"
+            echo "is_lcov_docker_available=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Re-upload LCOV Docker image for current workflow
+        if: steps.check_docker_images.outputs.is_lcov_docker_available == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
+          path: /tmp/${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
+          retention-days: 400
+          overwrite: true
+
+      - name: Check Sefaria MongoDB image artifact availability
+        id: check_sefaria_mongo
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Only check if artifact exists - don't download here
+          # MongoDB image is ~5GB, only data_ci needs it, so download there directly via gh api (faster than actions/download-artifact)
+          # Use ?name= filter to avoid pagination issues (25k+ artifacts in repo)
+          artifact_name="${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }}"
+          artifact_info=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$artifact_name" \
+            --jq "[.artifacts[] | select(.expired == false)] | first")
+
+          if [ "$artifact_info" != "null" ] && [ -n "$artifact_info" ]; then
+            artifact_id=$(echo "$artifact_info" | jq -r '.id')
+            echo "Found cached Sefaria MongoDB image (artifact id: $artifact_id)"
+            echo "is_sefaria_mongo_available=true" >> $GITHUB_OUTPUT
+            echo "sefaria_mongo_artifact_id=$artifact_id" >> $GITHUB_OUTPUT
+          else
+            echo "Sefaria MongoDB image not found in artifacts - will need to build"
+            echo "is_sefaria_mongo_available=false" >> $GITHUB_OUTPUT
+          fi
 
   determine_website_changes:
     name: Determine Website Changes
@@ -267,7 +337,8 @@ jobs:
 
   build_lcov_docker:
     name: Build LCOV Docker Image
-    needs: setup_env
+    needs: [setup_env, determine_docker_image_availability]
+    if: ${{ needs.determine_docker_image_availability.outputs.is_lcov_docker_available != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -295,9 +366,57 @@ jobs:
       - name: Store Docker Image
         uses: actions/upload-artifact@v6
         with:
-          name: lcov-docker-image
+          name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp/lcov-docker-image.tar
           retention-days: 400
+
+  build_sefaria_mongo_docker:
+    name: Build Sefaria MongoDB Docker Image
+    needs: [setup_env, determine_data_changes, determine_docker_image_availability]
+    if: ${{ needs.determine_docker_image_availability.outputs.is_sefaria_mongo_available != 'true' && (needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true') }}
+    runs-on: ubuntu-latest
+    steps:
+      # Free disk space for the MongoDB Docker image build (~10GB+ needed for mongorestore)
+      # Enable large-packages and docker-images to maximize available space
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            network=host
+            image=moby/buildkit:v0.22.0
+
+      - name: Build And Cache Sefaria MongoDB Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: data/sefaria/mongodb-docker/
+          file: data/sefaria/mongodb-docker/Dockerfile
+          tags: sefaria-mongo:latest
+          outputs: type=docker,dest=/tmp/sefaria-mongo-image.tar
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Store Docker Image
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }}
+          path: /tmp/sefaria-mongo-image.tar
+          retention-days: 90
 
   # ACTUAL JOBS
   website_performance:
@@ -406,8 +525,15 @@ jobs:
   website_e2e:
     name: Website CI
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_website_changes, determine_baseline_availability, build_lcov_docker]
-    if: ${{ needs.determine_website_changes.outputs.module_changed == 'true' || needs.determine_website_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_website_master_coverage_available == 'false' }}
+    needs:
+      [
+        setup_env,
+        determine_website_changes,
+        determine_baseline_availability,
+        determine_docker_image_availability,
+        build_lcov_docker,
+      ]
+    if: ${{ always() && !cancelled() && !failure() && (needs.determine_website_changes.outputs.module_changed == 'true' || needs.determine_website_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_website_master_coverage_available == 'false') }}
     defaults:
       run:
         working-directory: ${{ env.WEBSITE_DIRECTORY }}
@@ -500,7 +626,7 @@ jobs:
       - name: Restore lcov Docker image
         uses: actions/download-artifact@v7
         with:
-          name: lcov-docker-image
+          name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp
 
       - name: Load lcov Docker image
@@ -540,8 +666,15 @@ jobs:
   api_e2e:
     name: API CI
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_api_changes, determine_baseline_availability, build_lcov_docker]
-    if: ${{ needs.determine_api_changes.outputs.module_changed == 'true' || needs.determine_api_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_api_master_coverage_available == 'false' }}
+    needs:
+      [
+        setup_env,
+        determine_api_changes,
+        determine_baseline_availability,
+        determine_docker_image_availability,
+        build_lcov_docker,
+      ]
+    if: ${{ always() && !cancelled() && !failure() && (needs.determine_api_changes.outputs.module_changed == 'true' || needs.determine_api_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_api_master_coverage_available == 'false') }}
     permissions:
       contents: read
 
@@ -646,7 +779,7 @@ jobs:
       - name: Restore lcov Docker image
         uses: actions/download-artifact@v7
         with:
-          name: lcov-docker-image
+          name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp
 
       - name: Load lcov Docker image
@@ -715,8 +848,15 @@ jobs:
   app_ci:
     name: App CI
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_app_changes, determine_baseline_availability, build_lcov_docker]
-    if: ${{ needs.determine_app_changes.outputs.module_changed == 'true' || needs.determine_app_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_app_master_coverage_available == 'false' }}
+    needs:
+      [
+        setup_env,
+        determine_app_changes,
+        determine_baseline_availability,
+        determine_docker_image_availability,
+        build_lcov_docker,
+      ]
+    if: ${{ always() && !cancelled() && !failure() && (needs.determine_app_changes.outputs.module_changed == 'true' || needs.determine_app_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_app_master_coverage_available == 'false') }}
     defaults:
       run:
         working-directory: ${{ env.APP_DIRECTORY }}
@@ -823,7 +963,7 @@ jobs:
       - name: Restore lcov Docker image
         uses: actions/download-artifact@v7
         with:
-          name: lcov-docker-image
+          name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp
 
       - name: Load lcov Docker image
@@ -853,8 +993,8 @@ jobs:
   data_ci:
     name: Data CI
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_data_changes]
-    if: ${{ needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true' }}
+    needs: [setup_env, determine_data_changes, determine_docker_image_availability, build_sefaria_mongo_docker]
+    if: ${{ always() && !cancelled() && !failure() && (needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true') }}
     defaults:
       run:
         working-directory: ${{ env.DATA_DIRECTORY }}
@@ -867,6 +1007,20 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+
+      # Free disk space EARLY - before Rust cache restore which can consume several GB
+      # This ensures enough space for the ~5GB MongoDB Docker image later
+      # Note: swap-storage must be true to match build_sefaria_mongo_docker job settings
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -881,6 +1035,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: ${{ env.DATA_DIRECTORY }}
+          cache-on-failure: true
+          shared-key: "data-rust"
 
       - name: Lint
         id: lint
@@ -910,6 +1066,84 @@ jobs:
           files: ${{ env.DATA_DIRECTORY }}/.junit-report/unit/results.xml
           flags: data
           report_type: test_results
+
+      # Download using gh api (faster than actions/download-artifact: ~2m vs ~6m)
+      - name: Download Sefaria MongoDB Docker Image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          artifact_id="${{ needs.determine_docker_image_availability.outputs.sefaria_mongo_artifact_id }}"
+          if [ -n "$artifact_id" ] && [ "$artifact_id" != "" ]; then
+            echo "Downloading cached artifact (id: $artifact_id) via gh api..."
+            gh api repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip > /tmp/sefaria-mongo-image.zip
+            unzip -o /tmp/sefaria-mongo-image.zip -d /tmp
+            # Remove zip to free ~5GB before docker load needs to extract layers
+            rm -f /tmp/sefaria-mongo-image.zip
+          else
+            echo "No cached artifact, downloading from current workflow..."
+            gh run download ${{ github.run_id }} -n ${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }} -D /tmp
+          fi
+          echo "Disk space before docker load:"
+          df -h /
+
+      # ============ Integration Test Setup: MongoDB Container ============
+      - name: Load Sefaria MongoDB Docker Image
+        run: |
+          docker load --input /tmp/sefaria-mongo-image.tar
+          # Remove tar to free space after loading
+          rm -f /tmp/sefaria-mongo-image.tar
+
+      - name: Setup MongoDB Container for Integration Tests
+        id: setup-mongodb
+        run: |
+          docker run -d --name sefaria-mongo -p 27017:27017 sefaria-mongo:latest
+          echo "Waiting for MongoDB to be ready..."
+          # Data was restored at Docker BUILD time to /mongodb-data
+          # On first container startup, entrypoint.sh copies it to /data/db
+          # This should take ~15-30 seconds vs 5+ minutes for runtime mongorestore
+          for i in {1..60}; do
+            count=$(docker exec sefaria-mongo mongosh --quiet --eval "db.getSiblingDB('sefaria').texts.countDocuments({})" 2>/dev/null || echo "0")
+            if [ "$count" != "0" ] && [ -n "$count" ]; then
+              echo "MongoDB is ready with $count documents in sefaria.texts collection!"
+              exit 0
+            fi
+            echo "Attempt $i/60: Waiting for MongoDB (count: $count)..."
+            sleep 2
+          done
+          echo "MongoDB failed to be ready within timeout"
+          docker logs sefaria-mongo
+          exit 1
+
+      # ============ Integration Tests ============
+      - name: Integration Test
+        id: integration-test
+        env:
+          MONGO_HOST: localhost
+          MONGO_PORT: 27017
+          DUMP_NAME: sefaria
+        run: cargo make test-integration-junit
+
+      - name: Store Data Integration JUnit Report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.DATA_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME }}
+          path: ${{ env.DATA_DIRECTORY }}/.junit-report/integration/results.xml
+          retention-days: 1
+          overwrite: true
+
+      - name: Publish Data Integration Report To Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.DATA_DIRECTORY }}/.junit-report/integration/results.xml
+          flags: data-integration
+          report_type: test_results
+
+      - name: Stop MongoDB Container
+        if: ${{ always() }}
+        run: docker stop sefaria-mongo || true
 
   website_publish_test_results_to_codecov:
     name: Publish Website Test Results To Codecov
@@ -968,6 +1202,7 @@ jobs:
         data_ci,
         build_lcov_docker,
         determine_baseline_availability,
+        determine_docker_image_availability,
       ]
     if: ${{ always() }}
     steps:
@@ -1110,7 +1345,7 @@ jobs:
       - name: Restore lcov Docker image
         uses: actions/download-artifact@v7
         with:
-          name: lcov-docker-image
+          name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp
 
       - name: Load lcov Docker image
