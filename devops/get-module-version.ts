@@ -40,7 +40,10 @@ export const MODULES: Record<ModulePath, ModuleConfig> = {
 		versionFile: "web/bible-on-site/package.json",
 		nativeCommand: "npm run version --silent",
 		workingDir: "web/bible-on-site",
-		extractFromFile: null, // npm is always available in devops context
+		extractFromFile: (content: string) => {
+			const parsed = JSON.parse(content);
+			return parsed.version ?? null;
+		},
 	},
 	"web/api": {
 		path: "web/api",
