@@ -18,37 +18,14 @@ jobs:
     name: Verify Version
     runs-on: ubuntu-latest
     steps:
-      - name: Debug context
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          HEAD_REF: ${{ github.head_ref }}
-          REF: ${{ github.ref }}
-          SHA: ${{ github.sha }}
-        run: |
-          echo "event_name: $EVENT_NAME"
-          echo "head_ref: $HEAD_REF"
-          echo "ref: $REF"
-          echo "sha: $SHA"
-
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.head_ref || github.ref }}
           fetch-depth: 0
 
       - name: Fetch all tags
         run: git fetch --tags origin
-
-      - name: Debug git state
-        run: |
-          echo "Current commit:"
-          git log -1 --oneline
-          echo ""
-          echo "Latest website tags:"
-          git tag -l "website-v*" --sort=-v:refname | head -5
-          echo ""
-          echo "Website package.json version:"
-          cat web/bible-on-site/package.json | grep '"version"'
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
