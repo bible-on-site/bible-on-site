@@ -19,9 +19,13 @@ struct Cli {
     #[arg(long, env = "DB_URL")]
     db_url: String,
 
-    /// Path to structure SQL file
-    #[arg(long, default_value = "../tanah_structure.sql")]
-    structure_script: String,
+    /// Path to static structure SQL file (sefarim, perakim, dates - rarely changes)
+    #[arg(long, default_value = "../tanah_static_structure.sql")]
+    static_structure_script: String,
+
+    /// Path to dynamic structure SQL file (articles, dedications, authors - changes frequently)
+    #[arg(long, default_value = "../tanah_dynamic_structure.sql")]
+    dynamic_structure_script: String,
 
     /// Path to data SQL file
     #[arg(long, default_value = "../tanah_test_data.sql")]
@@ -99,8 +103,13 @@ async fn main() -> Result<()> {
     let base_path = Path::new(env!("CARGO_MANIFEST_DIR"));
 
     if !cli.skip_structure {
-        let structure_path = base_path.join(&cli.structure_script);
-        execute_script(&mut conn, &structure_path, "structure").await?;
+        // Execute static structure first (sefarim, perakim, dates)
+        let static_structure_path = base_path.join(&cli.static_structure_script);
+        execute_script(&mut conn, &static_structure_path, "static-structure").await?;
+
+        // Execute dynamic structure (articles, dedications, authors)
+        let dynamic_structure_path = base_path.join(&cli.dynamic_structure_script);
+        execute_script(&mut conn, &dynamic_structure_path, "dynamic-structure").await?;
     }
 
     if !cli.skip_data {
