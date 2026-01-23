@@ -4,6 +4,8 @@ import { toLetters } from "gematry";
 import React, { Suspense } from "react";
 import { isQriDifferentThanKtiv } from "../../../data/db/tanah-view-types";
 import { getPerekByPerekId } from "../../../data/perek-dto";
+import { getArticlesByPerekId } from "../../../lib/articles";
+import { ArticlesSection } from "./components/ArticlesSection";
 import Breadcrumb from "./components/Breadcrumb";
 import { Ptuah } from "./components/Ptuha";
 import SeferComposite from "./components/SeferComposite";
@@ -28,6 +30,10 @@ export default async function Perek({
 	const { number } = await params;
 	const perekId = Number.parseInt(number, 10); // convert string to number
 	const perekObj = getPerekByPerekId(perekId);
+
+	// Fetch articles for this perek directly from database
+	const articles = await getArticlesByPerekId(perekId);
+
 	return (
 		<>
 			<Suspense>
@@ -87,6 +93,9 @@ export default async function Perek({
 						);
 					})}
 				</article>
+
+				{/* Articles section - fetched directly from database for lower latency */}
+				<ArticlesSection articles={articles} />
 			</div>
 		</>
 	);

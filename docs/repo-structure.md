@@ -15,7 +15,8 @@ bible-on-site/
 │   │   ├── architecture/ <-- Architecture Docs
 │   │   └── cloudformation/ <-- CloudFormation IaC Docs
 │   ├── github/ <-- GitHub related Docs
-│   └── repo-structure/ <-- This Documentation
+│   ├── repo-structure/ <-- This Documentation
+│   └── website/ <-- Website Architecture Docs
 └── web/ <-- Services
     ├── api/ <-- Backend API (Mostly for mobile app) Service
     │   ├── .husky/ <-- pre-commit hooks for git
@@ -47,6 +48,8 @@ bible-on-site/
     │   │   │   └── fonts/ <-- font files
     │   │   ├── data/ <-- data as code and DAL
     │   │   │   └── db/ <-- data as code
+    │   │   ├── lib/ <-- shared libraries (DB client, services)
+    │   │   │   └── articles/ <-- articles data service
     │   │   └── util/ <-- utilities / BL
     │   └── tests/ <-- Tests
     │       ├── e2e/ <-- End to End Tests per Page
