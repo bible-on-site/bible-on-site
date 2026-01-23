@@ -19,8 +19,8 @@ struct Cli {
     #[arg(long, env = "DB_URL")]
     db_url: String,
 
-    /// Path to structure SQL file (static structure only - dynamic is managed via admin zone)
-    #[arg(long, default_value = "../tanah_static_structure.sql")]
+    /// Path to structure SQL file
+    #[arg(long, default_value = "../tanah_structure.sql")]
     structure_script: String,
 
     /// Path to data SQL file
