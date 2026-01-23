@@ -17,7 +17,7 @@
 		"deploy:data": "node --import tsx ./deploy/data-deploy/index.mts"
 	},
 	"dependencies": {
-		"@aws-sdk/client-ecr": "3.965.0",
+		"@aws-sdk/client-ecr": "3.974.0",
 		"@aws-sdk/client-lambda": "3.965.0",
 		"@aws-sdk/client-s3": "3.965.0",
 		"@aws-sdk/client-sts": "3.965.0",
