@@ -61,4 +61,41 @@ public sealed class AppConfig
         return ApiUrl;
 #endif
     }
+
+    /// <summary>
+    /// Development website URL for local testing (Android emulator uses 10.0.2.2 for host loopback).
+    /// </summary>
+    public string DevWebsiteUrl
+    {
+        get
+        {
+#if ANDROID
+            return "http://10.0.2.2:3001";
+#else
+            return "http://localhost:3001";
+#endif
+        }
+    }
+
+    /// <summary>
+    /// The production website URL.
+    /// </summary>
+    public string WebsiteUrl => $"https://{RemoteHost}";
+
+    /// <summary>
+    /// Gets the appropriate website URL based on build configuration.
+    /// </summary>
+    public string GetWebsiteUrl()
+    {
+#if DEBUG
+        return DevWebsiteUrl;
+#else
+        return WebsiteUrl;
+#endif
+    }
+
+    /// <summary>
+    /// Gets the Terms of Service URL.
+    /// </summary>
+    public string TosUrl => $"{GetWebsiteUrl()}/tos";
 }

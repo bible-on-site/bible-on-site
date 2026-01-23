@@ -4,6 +4,8 @@
   top: 72px;
   width: 100%;
   height: calc(100vh - 72px);
+  overflow-y: auto;
+  background-color: white;
 }
 
 .perekText {

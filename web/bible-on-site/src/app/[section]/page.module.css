@@ -41,6 +41,7 @@
   background-repeat: repeat;
   background-size: 6px;
   color: #fff;
+  padding-bottom: 3em;
 }
 .page fieldset {
   border: none;
@@ -200,4 +201,48 @@
 .headlineTitle {
   font-size: 1.25rem;
   font-weight: bold;
+}
+
+/* AlHaperek bottom divider */
+.alHaperekDivider {
+  background-repeat: no-repeat;
+  background-size: 110%;
+  right: 0;
+  height: 3em;
+  pointer-events: none;
+  position: absolute;
+  width: 100%;
+  z-index: 3;
+  background-position: bottom;
+  bottom: -0.5em;
+}
+
+@media screen and (max-width: 960px) {
+  .alHaperekDivider {
+    background-image: url(/root/al-haperek-devider-xs.svg);
+  }
+}
+
+@media screen and (min-width: 960px) and (max-width: 1280px) {
+  .alHaperekDivider {
+    background-image: url(/root/al-haperek-devider-s.svg);
+  }
+}
+
+@media screen and (min-width: 1280px) and (max-width: 1920px) {
+  .alHaperekDivider {
+    background-image: url(/root/al-haperek-devider-m.svg);
+  }
+}
+
+@media screen and (min-width: 1920px) and (max-width: 2560px) {
+  .alHaperekDivider {
+    background-image: url(/root/al-haperek-devider-l.svg);
+  }
+}
+
+@media screen and (min-width: 2560px) {
+  .alHaperekDivider {
+    background-image: url(/root/al-haperek-devider-xl.svg);
+  }
 }

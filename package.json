@@ -2,11 +2,13 @@
 	"name": "bible-on-site-monorepo",
 	"devDependencies": {
 		"@types/node": "^22.14.1",
-
 		"husky": "9.1.7"
 	},
 	"scripts": {
 		"prepare": "husky",
 		"version": "cross-env-shell echo ${npm_package_version}"
+	},
+	"dependencies": {
+		"mysql2": "^3.16.1"
 	}
 }
