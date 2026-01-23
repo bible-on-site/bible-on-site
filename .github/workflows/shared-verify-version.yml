@@ -6,6 +6,11 @@ on:
         description: "Module name (app, website, api)"
         required: true
         type: string
+      ref:
+        description: "Git ref to checkout (branch name or SHA)"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -21,7 +26,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref || github.ref }}
+          ref: ${{ inputs.ref || github.head_ref || github.ref }}
           fetch-depth: 0
 
       - name: Fetch all tags
