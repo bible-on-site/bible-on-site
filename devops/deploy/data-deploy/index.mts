@@ -1,4 +1,7 @@
-// Data Deployer - Populates production database with SQL files via Lambda
+// Data Deployer - Populates production database with static SQL structure via Lambda
+//
+// Deploys static structure only (sefarim, perakim, dates).
+// Dynamic structure (articles, dedications, authors, etc.) is managed manually via admin zone.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -24,13 +27,16 @@ dotenv.config({
 const S3_BUCKET = "bible-on-site-data-deploy";
 const LAMBDA_FUNCTION_NAME = "bible-on-site-db-populator";
 
+// SQL files to deploy (static structure only - dynamic is managed via admin zone)
+const SQL_FILES = [
+	"tanah_static_structure.sql",
+	"tanah_sefarim_and_perakim_data.sql",
+];
+
 class DataDeployer extends DeployerBase {
 	private readonly region: string;
 	private readonly dataDir: string;
-	private readonly sqlFiles = [
-		"tanah_structure.sql",
-		"tanah_sefarim_and_perakim_data.sql",
-	];
+	private readonly sqlFiles = SQL_FILES;
 	private s3Prefix = "";
 
 	constructor() {

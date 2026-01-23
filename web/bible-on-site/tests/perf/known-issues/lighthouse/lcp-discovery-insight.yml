@@ -1,0 +1,9 @@
+# Known Lighthouse audit issue
+id: lcp-discovery-insight
+strategy: desktop
+explanation: |
+  LCP request discovery insight reports 0% score intermittently in CI.
+  The LCP element (likely an image or text block) may not be immediately
+  discoverable in the initial HTML due to Next.js SSR/hydration timing.
+  This audit is flaky in CI environments due to varying network conditions
+  and server response times affecting when the LCP element becomes visible.

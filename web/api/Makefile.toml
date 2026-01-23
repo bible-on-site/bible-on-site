@@ -13,6 +13,12 @@ PORT = 3003
 BUMP_VERSION_SCRIPT_PATH = { source = "${CARGO_MAKE_RUST_TARGET_OS}", default_value = "/devops/bump_version.sh", mapping = { "windows" = "\\devops\\bump_version.sh" } }
 
 [tasks.run-api]
+env = { PROFILE = "dev" }
+command = "cargo"
+args = ["run"]
+
+[tasks.run-api-test]
+env = { PROFILE = "test" }
 command = "cargo"
 args = ["run"]
 

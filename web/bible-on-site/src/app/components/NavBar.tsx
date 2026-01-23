@@ -55,7 +55,7 @@ export const NavBar = () => {
 						</li>
 					</ul>
 				</li>
-				<li className={`${styles.menuItem} ${styles.ribbonComingSoon}`}>
+				<li className={styles.menuItem}>
 					<Image
 						src="/icons/handshake.svg"
 						alt="תנאי שימוש"

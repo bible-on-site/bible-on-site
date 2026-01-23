@@ -6,6 +6,11 @@ on:
         description: "Module name (app, website, api)"
         required: true
         type: string
+      ref:
+        description: "Git ref to checkout (branch name or SHA)"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -21,8 +26,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.ref || github.head_ref || github.ref }}
           fetch-depth: 0
-          fetch-tags: true # Required to fetch tags for version comparison
+
+      - name: Fetch all tags
+        run: git fetch --tags origin
 
       - name: Setup Node.js
         uses: actions/setup-node@v6

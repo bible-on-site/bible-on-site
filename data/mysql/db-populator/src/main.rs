@@ -19,9 +19,13 @@ struct Cli {
     #[arg(long, env = "DB_URL")]
     db_url: String,
 
-    /// Path to structure SQL file
-    #[arg(long, default_value = "../tanah_structure.sql")]
-    structure_script: String,
+    /// Path to static structure SQL file (sefarim, perakim, dates - rarely changes)
+    #[arg(long, default_value = "../tanah_static_structure.sql")]
+    static_structure_script: String,
+
+    /// Path to dynamic structure SQL file (articles, dedications, authors - changes frequently)
+    #[arg(long, default_value = "../tanah_dynamic_structure.sql")]
+    dynamic_structure_script: String,
 
     /// Path to data SQL file
     #[arg(long, default_value = "../tanah_test_data.sql")]
@@ -99,8 +103,13 @@ async fn main() -> Result<()> {
     let base_path = Path::new(env!("CARGO_MANIFEST_DIR"));
 
     if !cli.skip_structure {
-        let structure_path = base_path.join(&cli.structure_script);
-        execute_script(&mut conn, &structure_path, "structure").await?;
+        // Execute static structure first (sefarim, perakim, dates)
+        let static_structure_path = base_path.join(&cli.static_structure_script);
+        execute_script(&mut conn, &static_structure_path, "static-structure").await?;
+
+        // Execute dynamic structure (articles, dedications, authors)
+        let dynamic_structure_path = base_path.join(&cli.dynamic_structure_script);
+        execute_script(&mut conn, &dynamic_structure_path, "dynamic-structure").await?;
     }
 
     if !cli.skip_data {
@@ -128,8 +137,11 @@ async fn execute_script(
     let script = std::fs::read_to_string(script_path)
         .with_context(|| format!("Failed to read {} script: {:?}", script_type, script_path))?;
 
+    // Filter out USE statements - database is already selected via connection options
+    let script = filter_use_statements(&script);
+
     // Use raw_sql to execute the entire script at once
-    // This handles USE statements, MySQL comments, and other DDL that prepared statements don't support
+    // This handles MySQL comments and other DDL that prepared statements don't support
     sqlx::raw_sql(&script)
         .execute(&mut *conn)
         .await
@@ -137,4 +149,16 @@ async fn execute_script(
 
     println!("{} script executed successfully", script_type);
     Ok(())
+}
+
+/// Filters out USE statements from SQL script.
+/// Database selection is handled by the connection options, not embedded in SQL files.
+fn filter_use_statements(sql: &str) -> String {
+    sql.lines()
+        .filter(|line| {
+            let trimmed = line.trim().to_uppercase();
+            !trimmed.starts_with("USE ") && !trimmed.starts_with("USE`")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }

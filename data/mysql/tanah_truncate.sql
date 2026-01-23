@@ -1,7 +1,6 @@
 -- Truncate all tanah tables
 -- Use this to clear all data while preserving the schema
-
-USE `tanah_test`;
+-- Database selection handled by the executing tool
 
 SET FOREIGN_KEY_CHECKS = 0;
 
