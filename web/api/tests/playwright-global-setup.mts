@@ -10,7 +10,7 @@
  */
 
 import { execSync, spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,14 +19,29 @@ const __dirname = path.dirname(__filename);
 
 // Create a log file for debugging CI issues
 const logDir = path.resolve(__dirname, ".log");
-mkdirSync(logDir, { recursive: true });
+try {
+	mkdirSync(logDir, { recursive: true });
+} catch (e) {
+	console.error(`[GlobalSetup] Failed to create log directory ${logDir}:`, e);
+}
 const logFile = path.resolve(logDir, "global-setup.log");
+
+// Write an initial marker immediately to confirm module was loaded
+try {
+	writeFileSync(logFile, `[${new Date().toISOString()}] [INIT] Module loaded. __dirname=${__dirname}\n`);
+} catch (e) {
+	console.error(`[GlobalSetup] Failed to write initial log to ${logFile}:`, e);
+}
 
 function log(message: string): void {
 	const timestamp = new Date().toISOString();
 	const line = `[${timestamp}] ${message}\n`;
 	console.log(message);
-	writeFileSync(logFile, line, { flag: "a" });
+	try {
+		writeFileSync(logFile, line, { flag: "a" });
+	} catch (e) {
+		console.error(`[GlobalSetup] Failed to append log:`, e);
+	}
 }
 
 async function globalSetup(): Promise<void> {
