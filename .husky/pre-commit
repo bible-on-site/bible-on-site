@@ -1,6 +1,15 @@
 ## compare against their staged version (begin with not --name-only? sound complicated)
 changed_files=$(git diff --cached --name-only --diff-filter=ACM HEAD)
 
+# Check for Windows "nul" files (common artifact on Windows)
+nul_files=$(echo "$changed_files" | grep -E '(^|/)nul$' || true)
+if [ -n "$nul_files" ]; then
+    echo "❌ Error: Found 'nul' files staged for commit (Windows artifact):"
+    echo "$nul_files"
+    echo "Please unstage and delete these files before committing."
+    exit 1
+fi
+
 # cross-module pre-commit hook
 if [ -f "./devops/.venv/Scripts/activate" ]; then
     echo "Running pre-commit for cross-module..."

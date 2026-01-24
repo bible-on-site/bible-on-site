@@ -6,11 +6,14 @@ namespace BibleOnSite.Tests.Fixtures;
 /// <summary>
 /// xUnit fixture that starts the API server before tests and stops it after.
 /// Use with [Collection("ApiServer")] attribute on test classes that need the API.
+/// IMPORTANT: Integration tests require the API to run with PROFILE=test (tanah_test database).
+/// If an API server is already running with dev profile, tests may fail with unexpected data.
 /// </summary>
 public class ApiServerFixture : IAsyncLifetime
 {
     private Process? _apiProcess;
     private readonly HttpClient _httpClient = new();
+    private bool _usingExternalServer;
 
     public const string ApiUrl = "http://127.0.0.1:3003";
     public const int StartupTimeoutSeconds = 120;
@@ -18,26 +21,34 @@ public class ApiServerFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        // TODO: remove me - debug logging
-        Console.WriteLine($"[DEBUG] ApiServerFixture.InitializeAsync: Starting...");
-        Console.WriteLine($"[DEBUG] ApiServerFixture.InitializeAsync: Current directory = {Directory.GetCurrentDirectory()}");
-        Console.WriteLine($"[DEBUG] ApiServerFixture.InitializeAsync: API_URL env before = {Environment.GetEnvironmentVariable("API_URL") ?? "(null)"}");
-        Console.WriteLine($"[DEBUG] ApiServerFixture.InitializeAsync: DB_URL env set = {!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DB_URL"))}");
-
         // Set API_URL for tests to use local server (AppConfig.GetApiUrl() reads this)
         Environment.SetEnvironmentVariable("API_URL", ApiUrl);
-        Console.WriteLine($"[DEBUG] ApiServerFixture.InitializeAsync: Set API_URL to {ApiUrl}");
 
-        // Check if API is already running
+        // Check if API is already running - DO NOT reuse it!
+        // An existing API server may be running with dev database, not test database.
+        // Integration tests require the test database (tanah_test) for predictable data.
         if (await IsApiRunning())
         {
-            Console.WriteLine("API server is already running, reusing existing instance.");
+            Console.WriteLine("WARNING: API server is already running on port 3003.");
+            Console.WriteLine("Integration tests require the API to run with PROFILE=test (uses tanah_test database).");
+            Console.WriteLine("Please stop any running 'api: start' task and re-run the tests.");
+            Console.WriteLine("The tests will attempt to use the existing server, but may fail if it's using dev data.");
+
+            // Check if we started it ourselves in a previous test run
+            if (_apiProcess != null)
+            {
+                Console.WriteLine("Reusing API server started by this test fixture.");
+                return;
+            }
+
+            // Mark that we're using an external server we didn't start
+            _usingExternalServer = true;
+            Console.WriteLine("Using external API server - tests may fail if it's not using test database!");
             return;
         }
 
-        Console.WriteLine("Starting API server...");
+        Console.WriteLine("Starting API server with PROFILE=test (uses tanah_test database)...");
         await StartApiServer();
-        Console.WriteLine("[DEBUG] ApiServerFixture.InitializeAsync: StartApiServer completed, waiting for ready...");
         await WaitForApiReady();
         Console.WriteLine("API server is ready.");
     }
@@ -188,11 +199,19 @@ public class ApiServerFixture : IAsyncLifetime
 
 /// <summary>
 /// Collection definition for tests that need the API server.
+/// Includes DatabasePopulatorFixture to ensure test data is populated before the API starts.
+///
+/// Fixture execution order (xUnit guarantees):
+/// 1. DatabasePopulatorFixture.InitializeAsync() - Populates test database (if local dev)
+/// 2. ApiServerFixture.InitializeAsync() - Starts API server with test profile
 /// </summary>
 [CollectionDefinition("ApiServer")]
-public class ApiServerCollection : ICollectionFixture<ApiServerFixture>
+public class ApiServerCollection : ICollectionFixture<DatabasePopulatorFixture>, ICollectionFixture<ApiServerFixture>
 {
     // This class has no code, and is never created. Its purpose is simply
     // to be the place to apply [CollectionDefinition] and all the
     // ICollectionFixture<> interfaces.
+    //
+    // The DatabasePopulatorFixture is listed first to ensure database is populated
+    // before ApiServerFixture starts the API server.
 }

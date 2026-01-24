@@ -135,8 +135,8 @@ public class ArticleDetailViewModelTests
 
         viewModel.SetArticle(article);
 
-        // ImageUrl is computed from Id: https://{host}/img/authors/{Id}.jpg
-        viewModel.AuthorImageUrl.Should().Contain("/img/authors/5.jpg");
+        // ImageUrl is computed from Id: S3 bucket URL with author ID
+        viewModel.AuthorImageUrl.Should().Contain("/authors/high-res/5.jpg");
     }
 
     [Fact]

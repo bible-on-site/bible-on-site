@@ -737,13 +737,6 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
-      - name: Populate Test Database
-        id: populate-test-db
-        working-directory: ${{ env.DATA_DIRECTORY }}
-        env:
-          DB_URL: mysql://root:test_123@127.0.0.1:${{ steps.mysql.outputs.port }}/tanah_test
-        run: cargo make mysql-populate
-
       - name: Setup Tests Node.js
         id: setup-tests-node
         uses: actions/setup-node@v6
@@ -932,12 +925,6 @@ jobs:
           root-password: test_123
           distribution: "mysql"
           auto-start: true
-
-      - name: Populate Test Database
-        working-directory: ${{ env.DATA_DIRECTORY }}
-        env:
-          DB_URL: mysql://root:test_123@127.0.0.1:${{ steps.mysql.outputs.port }}/tanah_test
-        run: cargo make mysql-populate
 
       - name: Run Integration Tests with Coverage
         env:
