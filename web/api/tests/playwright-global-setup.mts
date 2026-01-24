@@ -1,11 +1,12 @@
 /**
- * Playwright Global Setup - Database Population for Local Development
+ * Playwright Global Setup - Database Population
  *
  * This setup ensures the test database is populated before running E2E tests.
- * - In CI: Skips population (already done by CI workflow before tests)
- * - Locally: Runs `cargo make mysql-populate` from the data/ directory
+ * Runs `cargo make mysql-populate` from the data/ directory to populate
+ * the tanah_test database with test data.
  *
- * Reuses the same logic as CI to maintain consistency.
+ * IMPORTANT: This must succeed for the API server to start correctly.
+ * If database population fails, the setup will throw an error to fail fast.
  */
 
 import { execSync, spawnSync } from "node:child_process";
@@ -60,10 +61,10 @@ async function globalSetup(): Promise<void> {
 		console.log("[DB Setup] Database population completed successfully.");
 	} catch (error) {
 		console.error("[DB Setup] ERROR: Failed to populate database:", error);
-		console.warn(
-			"[DB Setup] Tests will continue but may fail if database is not properly populated.",
+		// Fail fast - don't continue with tests if DB population failed
+		throw new Error(
+			"Database population failed. The API server cannot start without a populated database.",
 		);
-		console.warn("[DB Setup] Make sure MySQL is running and accessible.");
 	}
 }
 
