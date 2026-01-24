@@ -8,11 +8,16 @@ namespace BibleOnSite.Tests.Fixtures;
 /// Use with [Collection("ApiServer")] attribute on test classes that need the API.
 /// IMPORTANT: Integration tests require the API to run with PROFILE=test (tanah_test database).
 /// If an API server is already running with dev profile, tests may fail with unexpected data.
+///
+/// NOTE: This fixture ensures the test database is populated before starting the API server.
+/// xUnit does NOT guarantee ICollectionFixture initialization order, so we must handle
+/// database population directly in this fixture rather than relying on fixture ordering.
 /// </summary>
 public class ApiServerFixture : IAsyncLifetime
 {
     private Process? _apiProcess;
     private readonly HttpClient _httpClient = new();
+    private readonly DatabasePopulatorFixture _dbPopulator = new();
 
     public const string ApiUrl = "http://127.0.0.1:3003";
     public const int StartupTimeoutSeconds = 120;
@@ -20,6 +25,11 @@ public class ApiServerFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
+        // IMPORTANT: Ensure database is populated BEFORE starting the API server.
+        // xUnit does not guarantee ICollectionFixture initialization order, so we
+        // must call the database populator directly here.
+        await _dbPopulator.InitializeAsync();
+
         // Set API_URL for tests to use local server (AppConfig.GetApiUrl() reads this)
         Environment.SetEnvironmentVariable("API_URL", ApiUrl);
 
@@ -196,19 +206,12 @@ public class ApiServerFixture : IAsyncLifetime
 
 /// <summary>
 /// Collection definition for tests that need the API server.
-/// Includes DatabasePopulatorFixture to ensure test data is populated before the API starts.
-///
-/// Fixture execution order (xUnit guarantees):
-/// 1. DatabasePopulatorFixture.InitializeAsync() - Populates test database (if local dev)
-/// 2. ApiServerFixture.InitializeAsync() - Starts API server with test profile
+/// The ApiServerFixture internally handles database population before starting the API.
 /// </summary>
 [CollectionDefinition("ApiServer")]
-public class ApiServerCollection : ICollectionFixture<DatabasePopulatorFixture>, ICollectionFixture<ApiServerFixture>
+public class ApiServerCollection : ICollectionFixture<ApiServerFixture>
 {
     // This class has no code, and is never created. Its purpose is simply
     // to be the place to apply [CollectionDefinition] and all the
     // ICollectionFixture<> interfaces.
-    //
-    // The DatabasePopulatorFixture is listed first to ensure database is populated
-    // before ApiServerFixture starts the API server.
 }
