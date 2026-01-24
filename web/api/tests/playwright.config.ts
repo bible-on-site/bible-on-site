@@ -3,11 +3,16 @@ import {
 	devices,
 	type ReporterDescription,
 } from "@playwright/test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
 	isCI,
 	isCopilot,
 	shouldMeasureCov,
 } from "../../shared/tests-util/environment.mjs";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const WEB_SERVER_URL = "http://127.0.0.1:3003";
 const isNonInteractive = isCI || isCopilot;
@@ -26,8 +31,8 @@ export default defineConfig({
 	},
 	// Increase the default timeout to 1 min in case of CI (slow servers).
 	timeout: isNonInteractive ? 60000 : 30000,
-	globalSetup: "./playwright-global-setup.ts",
-	globalTeardown: "./playwright-global-teardown.mjs",
+	globalSetup: path.resolve(__dirname, "./playwright-global-setup.ts"),
+	globalTeardown: path.resolve(__dirname, "./playwright-global-teardown.mjs"),
 	projects: [
 		{
 			name: "chromium",
