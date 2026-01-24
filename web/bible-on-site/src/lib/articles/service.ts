@@ -14,7 +14,9 @@ interface ArticleRow {
  * Fetch articles for a specific perek directly from database
  * Returns empty array if database is unavailable or no articles found
  */
-export async function getArticlesByPerekId(perekId: number): Promise<Article[]> {
+export async function getArticlesByPerekId(
+	perekId: number,
+): Promise<Article[]> {
 	try {
 		const rows = await query<ArticleRow>(
 			`SELECT id, perek_id, author_id, abstract, name, priority

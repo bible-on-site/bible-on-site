@@ -10,22 +10,35 @@
  */
 
 import { execSync, spawnSync } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Create a log file for debugging CI issues
+const logDir = path.resolve(__dirname, ".log");
+mkdirSync(logDir, { recursive: true });
+const logFile = path.resolve(logDir, "global-setup.log");
+
+function log(message: string): void {
+	const timestamp = new Date().toISOString();
+	const line = `[${timestamp}] ${message}\n`;
+	console.log(message);
+	writeFileSync(logFile, line, { flag: "a" });
+}
+
 async function globalSetup(): Promise<void> {
-	console.log("[DB Setup] ========================================");
-	console.log("[DB Setup] Ensuring test database is populated...");
-	console.log("[DB Setup] Current directory:", process.cwd());
+	log("[DB Setup] ========================================");
+	log("[DB Setup] Ensuring test database is populated...");
+	log(`[DB Setup] Current directory: ${process.cwd()}`);
 
 	// Path to data directory (relative to web/api/tests)
 	const dataDirectory = path.resolve(__dirname, "../../../data");
-	console.log("[DB Setup] Data directory:", dataDirectory);
+	log(`[DB Setup] Data directory: ${dataDirectory}`);
 
-	console.log("[DB Setup] Checking if cargo-make is available...");
+	log("[DB Setup] Checking if cargo-make is available...");
 
 	// Check if cargo-make is available
 	const cargoMakeCheck = spawnSync("cargo", ["make", "--version"], {
@@ -34,28 +47,24 @@ async function globalSetup(): Promise<void> {
 	});
 
 	if (cargoMakeCheck.status !== 0) {
-		console.error("[DB Setup] cargo-make check failed with status:", cargoMakeCheck.status);
-		console.error("[DB Setup] stderr:", cargoMakeCheck.stderr?.toString());
+		log(`[DB Setup] cargo-make check failed with status: ${cargoMakeCheck.status}`);
+		log(`[DB Setup] stderr: ${cargoMakeCheck.stderr?.toString()}`);
 		throw new Error(
 			"cargo-make is not installed. Install with: cargo install cargo-make",
 		);
 	}
 
-	console.log("[DB Setup] cargo-make is available");
+	log("[DB Setup] cargo-make is available");
 
 	// Check if DB_URL is set, if not use default test database URL
 	const dbUrl =
 		process.env.DB_URL || "mysql://root:test_123@localhost:3306/tanah_test";
 
-	console.log(
-		`[DB Setup] Using database URL: ${dbUrl.replace(/:[^:@]+@/, ":***@")}`,
-	);
-	console.log(
-		`[DB Setup] Running: cargo make mysql-populate in ${dataDirectory}`,
-	);
+	log(`[DB Setup] Using database URL: ${dbUrl.replace(/:[^:@]+@/, ":***@")}`);
+	log(`[DB Setup] Running: cargo make mysql-populate in ${dataDirectory}`);
 
 	try {
-		console.log("[DB Setup] Starting database population...");
+		log("[DB Setup] Starting database population...");
 		execSync("cargo make mysql-populate", {
 			cwd: dataDirectory,
 			stdio: "inherit",
@@ -64,11 +73,11 @@ async function globalSetup(): Promise<void> {
 				DB_URL: dbUrl,
 			},
 		});
-		console.log("[DB Setup] Database population completed successfully.");
-		console.log("[DB Setup] ========================================");
+		log("[DB Setup] Database population completed successfully.");
+		log("[DB Setup] ========================================");
 	} catch (error) {
-		console.error("[DB Setup] ERROR: Failed to populate database:", error);
-		console.error("[DB Setup] ========================================");
+		log(`[DB Setup] ERROR: Failed to populate database: ${error}`);
+		log("[DB Setup] ========================================");
 		// Fail fast - don't continue with tests if DB population failed
 		throw new Error(
 			"Database population failed. The API server cannot start without a populated database.",

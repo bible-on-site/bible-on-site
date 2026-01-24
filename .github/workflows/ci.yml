@@ -774,6 +774,19 @@ jobs:
         run: |
           cargo make coverage-e2e
 
+      - name: Show E2E Debug Logs
+        if: ${{ always() }}
+        working-directory: ${{ env.API_DIRECTORY }}
+        run: |
+          echo "=== API E2E Debug Logs ==="
+          echo "--- Global Setup Log ---"
+          cat tests/.log/global-setup.log 2>/dev/null || echo "(no global-setup.log)"
+          echo "--- API Server Log ---"
+          cat tests/.log/api.log 2>/dev/null || echo "(no api.log)"
+          echo "--- API Launcher Log ---"
+          cat tests/.log/api_launcher.log 2>/dev/null || echo "(no api_launcher.log)"
+          echo "========================="
+
       - name: Restore lcov Docker image
         uses: actions/download-artifact@v7
         with:

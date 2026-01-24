@@ -54,10 +54,7 @@ function getPool(): mysql.Pool {
 /**
  * Execute a parameterized SQL query
  */
-export async function query<T>(
-	sql: string,
-	params?: unknown[],
-): Promise<T[]> {
+export async function query<T>(sql: string, params?: unknown[]): Promise<T[]> {
 	const connection = getPool();
 	const [rows] = await connection.execute(sql, params);
 	return rows as T[];
