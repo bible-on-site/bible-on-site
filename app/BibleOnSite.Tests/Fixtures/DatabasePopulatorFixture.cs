@@ -11,7 +11,13 @@ namespace BibleOnSite.Tests.Fixtures;
 /// </summary>
 public class DatabasePopulatorFixture : IAsyncLifetime
 {
-    private const string TestDbUrl = "mysql://root:test_123@localhost:3306/tanah_test?ssl-mode=DISABLED";
+    private const string DefaultTestDbUrl = "mysql://root:test_123@localhost:3306/tanah_test?ssl-mode=DISABLED";
+
+    /// <summary>
+    /// Gets the database URL, preferring the DB_URL environment variable (set by CI) over the default.
+    /// </summary>
+    private static string GetDbUrl() =>
+        Environment.GetEnvironmentVariable("DB_URL") ?? DefaultTestDbUrl;
 
     public async Task InitializeAsync()
     {
@@ -72,7 +78,9 @@ public class DatabasePopulatorFixture : IAsyncLifetime
 
     private static async Task PopulateDatabase(string dataDir)
     {
+        var dbUrl = GetDbUrl();
         Console.WriteLine($"[DatabasePopulatorFixture] Populating test database from {dataDir}...");
+        Console.WriteLine($"[DatabasePopulatorFixture] Using DB_URL: {dbUrl.Replace(":test_123@", ":***@")}");
 
         var startInfo = new ProcessStartInfo
         {
@@ -86,7 +94,7 @@ public class DatabasePopulatorFixture : IAsyncLifetime
         };
 
         // Set DB_URL for the populator
-        startInfo.Environment["DB_URL"] = TestDbUrl;
+        startInfo.Environment["DB_URL"] = dbUrl;
 
         using var process = new Process { StartInfo = startInfo };
 

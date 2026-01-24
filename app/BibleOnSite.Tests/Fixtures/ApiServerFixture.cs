@@ -13,7 +13,6 @@ public class ApiServerFixture : IAsyncLifetime
 {
     private Process? _apiProcess;
     private readonly HttpClient _httpClient = new();
-    private bool _usingExternalServer;
 
     public const string ApiUrl = "http://127.0.0.1:3003";
     public const int StartupTimeoutSeconds = 120;
@@ -41,8 +40,6 @@ public class ApiServerFixture : IAsyncLifetime
                 return;
             }
 
-            // Mark that we're using an external server we didn't start
-            _usingExternalServer = true;
             Console.WriteLine("Using external API server - tests may fail if it's not using test database!");
             return;
         }
