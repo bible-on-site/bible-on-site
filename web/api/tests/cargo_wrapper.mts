@@ -27,7 +27,7 @@ function main() {
 
 	const cargo = spawn(
 		"cargo",
-		["make", shouldMeasureCov ? "run-for-coverage" : "run-for-tests", "&"],
+		["make", shouldMeasureCov ? "run-for-coverage" : "run-for-tests"],
 		{ detached: true, stdio: ["ignore", out, out] },
 	);
 	cargo.unref();
