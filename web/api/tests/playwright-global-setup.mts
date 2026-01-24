@@ -17,10 +17,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function globalSetup(): Promise<void> {
+	console.log("[DB Setup] ========================================");
 	console.log("[DB Setup] Ensuring test database is populated...");
+	console.log("[DB Setup] Current directory:", process.cwd());
 
 	// Path to data directory (relative to web/api/tests)
 	const dataDirectory = path.resolve(__dirname, "../../../data");
+	console.log("[DB Setup] Data directory:", dataDirectory);
+
+	console.log("[DB Setup] Checking if cargo-make is available...");
 
 	// Check if cargo-make is available
 	const cargoMakeCheck = spawnSync("cargo", ["make", "--version"], {
@@ -29,14 +34,14 @@ async function globalSetup(): Promise<void> {
 	});
 
 	if (cargoMakeCheck.status !== 0) {
-		console.warn(
-			"[DB Setup] WARNING: cargo-make is not installed. Install with: cargo install cargo-make",
+		console.error("[DB Setup] cargo-make check failed with status:", cargoMakeCheck.status);
+		console.error("[DB Setup] stderr:", cargoMakeCheck.stderr?.toString());
+		throw new Error(
+			"cargo-make is not installed. Install with: cargo install cargo-make",
 		);
-		console.warn(
-			"[DB Setup] Skipping database population - tests may fail if database is empty.",
-		);
-		return;
 	}
+
+	console.log("[DB Setup] cargo-make is available");
 
 	// Check if DB_URL is set, if not use default test database URL
 	const dbUrl =
@@ -50,6 +55,7 @@ async function globalSetup(): Promise<void> {
 	);
 
 	try {
+		console.log("[DB Setup] Starting database population...");
 		execSync("cargo make mysql-populate", {
 			cwd: dataDirectory,
 			stdio: "inherit",
@@ -59,8 +65,10 @@ async function globalSetup(): Promise<void> {
 			},
 		});
 		console.log("[DB Setup] Database population completed successfully.");
+		console.log("[DB Setup] ========================================");
 	} catch (error) {
 		console.error("[DB Setup] ERROR: Failed to populate database:", error);
+		console.error("[DB Setup] ========================================");
 		// Fail fast - don't continue with tests if DB population failed
 		throw new Error(
 			"Database population failed. The API server cannot start without a populated database.",
