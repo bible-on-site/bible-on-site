@@ -28,7 +28,10 @@ const logFile = path.resolve(logDir, "global-setup.log");
 
 // Write an initial marker immediately to confirm module was loaded
 try {
-	writeFileSync(logFile, `[${new Date().toISOString()}] [INIT] Module loaded. __dirname=${__dirname}\n`);
+	writeFileSync(
+		logFile,
+		`[${new Date().toISOString()}] [INIT] Module loaded. __dirname=${__dirname}\n`,
+	);
 } catch (e) {
 	console.error(`[GlobalSetup] Failed to write initial log to ${logFile}:`, e);
 }
@@ -62,7 +65,9 @@ async function globalSetup(): Promise<void> {
 	});
 
 	if (cargoMakeCheck.status !== 0) {
-		log(`[DB Setup] cargo-make check failed with status: ${cargoMakeCheck.status}`);
+		log(
+			`[DB Setup] cargo-make check failed with status: ${cargoMakeCheck.status}`,
+		);
 		log(`[DB Setup] stderr: ${cargoMakeCheck.stderr?.toString()}`);
 		throw new Error(
 			"cargo-make is not installed. Install with: cargo install cargo-make",

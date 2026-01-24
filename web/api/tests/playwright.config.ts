@@ -26,7 +26,7 @@ export default defineConfig({
 	},
 	// Increase the default timeout to 1 min in case of CI (slow servers).
 	timeout: isNonInteractive ? 60000 : 30000,
-	globalSetup: "./playwright-global-setup.mts",
+	globalSetup: "./playwright-global-setup.ts",
 	globalTeardown: "./playwright-global-teardown.mjs",
 	projects: [
 		{
