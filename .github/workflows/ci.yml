@@ -770,7 +770,7 @@ jobs:
         id: api-e2e
         working-directory: ${{ env.API_DIRECTORY }}
         env:
-          DB_URL: mysql://root:test_123@127.0.0.1:${{ steps.mysql.outputs.port }}/tanah_test
+          DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
         run: |
           cargo make coverage-e2e
 
@@ -930,7 +930,7 @@ jobs:
 
       - name: Run Integration Tests with Coverage
         env:
-          DB_URL: mysql://root:test_123@127.0.0.1:${{ steps.mysql.outputs.port }}/tanah_test
+          DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
           API_URL: http://127.0.0.1:3003
         run: dotnet run --project devops -- CoverageIntegration --configuration Release
 
