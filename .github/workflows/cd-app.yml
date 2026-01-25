@@ -232,7 +232,7 @@ jobs:
           cat > fastlane/Appfile << EOF
           app_identifier("com.tanah.daily929")
           EOF
-          
+
           # Upload and distribute using Fastlane pilot
           fastlane pilot upload \
             --ipa "${{ steps.find_ipa.outputs.IPA_FILE }}" \
