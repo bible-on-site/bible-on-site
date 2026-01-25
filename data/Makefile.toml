@@ -101,6 +101,12 @@ cwd = "./mysql/db-populator"
 command = "cargo"
 args = ["run", "--release"]
 
+[tasks.mysql-drop]
+description = "Drop the MySQL test database (for clean state testing)"
+cwd = "./mysql/db-populator"
+command = "cargo"
+args = ["run", "--release", "--", "--drop-only"]
+
 [tasks.mysql-populate-data-only]
 description = "Populate MySQL database with test data only (skip structure)"
 cwd = "./mysql/db-populator"

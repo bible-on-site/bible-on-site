@@ -1,5 +1,6 @@
 use async_graphql::{Context, ErrorExtensions, Object, Result};
 
+use crate::dtos::article::Article;
 use crate::dtos::author::Author;
 use crate::dtos::starter::Starter;
 use crate::providers::Database;
@@ -10,12 +11,16 @@ pub struct StarterQuery;
 
 #[Object]
 impl StarterQuery {
-    /// Get starter data including all authors and article counts per perek
+    /// Get starter data including all authors, all articles, and article counts per perek
     async fn starter(&self, ctx: &Context<'_>) -> Result<Starter> {
         let db = ctx.data::<Database>()?;
 
-        // Fetch authors and article counts in parallel-friendly single queries
+        // Fetch authors, articles, and counts in parallel-friendly single queries
         let authors = authors_service::find_all(db)
+            .await
+            .map_err(|e| e.extend())?;
+
+        let all_articles = articles_service::find_all(db)
             .await
             .map_err(|e| e.extend())?;
 
@@ -36,8 +41,12 @@ impl StarterQuery {
             })
             .collect();
 
+        // Convert articles to DTOs
+        let articles: Vec<Article> = all_articles.into_iter().map(Article::from).collect();
+
         Ok(Starter {
             authors: authors_with_counts,
+            articles,
             perek_articles_counters,
         })
     }

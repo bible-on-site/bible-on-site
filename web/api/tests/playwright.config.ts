@@ -26,7 +26,8 @@ export default defineConfig({
 	},
 	// Increase the default timeout to 1 min in case of CI (slow servers).
 	timeout: isNonInteractive ? 60000 : 30000,
-	globalTeardown: "./playwright-global-teardown.mjs",
+	// Database population is handled by launch-api-for-tests.mts before starting the API
+	globalTeardown: require.resolve("./playwright-global-teardown.mjs"),
 	projects: [
 		{
 			name: "chromium",

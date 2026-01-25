@@ -737,13 +737,6 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
-      - name: Populate Test Database
-        id: populate-test-db
-        working-directory: ${{ env.DATA_DIRECTORY }}
-        env:
-          DB_URL: mysql://root:test_123@127.0.0.1:${{ steps.mysql.outputs.port }}/tanah_test
-        run: cargo make mysql-populate
-
       - name: Setup Tests Node.js
         id: setup-tests-node
         uses: actions/setup-node@v6
@@ -776,8 +769,23 @@ jobs:
       - name: E2E Test
         id: api-e2e
         working-directory: ${{ env.API_DIRECTORY }}
+        env:
+          DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
         run: |
           cargo make coverage-e2e
+
+      - name: Show E2E Debug Logs
+        if: ${{ always() }}
+        working-directory: ${{ env.API_DIRECTORY }}
+        run: |
+          echo "=== API E2E Debug Logs ==="
+          echo "--- Global Setup Log ---"
+          cat tests/.log/global-setup.log 2>/dev/null || echo "(no global-setup.log)"
+          echo "--- API Server Log ---"
+          cat tests/.log/api.log 2>/dev/null || echo "(no api.log)"
+          echo "--- API Launcher Log ---"
+          cat tests/.log/api_launcher.log 2>/dev/null || echo "(no api_launcher.log)"
+          echo "========================="
 
       - name: Restore lcov Docker image
         uses: actions/download-artifact@v7
@@ -933,15 +941,9 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
-      - name: Populate Test Database
-        working-directory: ${{ env.DATA_DIRECTORY }}
-        env:
-          DB_URL: mysql://root:test_123@127.0.0.1:${{ steps.mysql.outputs.port }}/tanah_test
-        run: cargo make mysql-populate
-
       - name: Run Integration Tests with Coverage
         env:
-          DB_URL: mysql://root:test_123@127.0.0.1:${{ steps.mysql.outputs.port }}/tanah_test
+          DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
           API_URL: http://127.0.0.1:3003
         run: dotnet run --project devops -- CoverageIntegration --configuration Release
 

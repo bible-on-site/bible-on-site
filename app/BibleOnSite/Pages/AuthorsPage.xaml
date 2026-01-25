@@ -8,103 +8,98 @@
              Title="רבנים"
              FlowDirection="RightToLeft">
 
-    <Grid RowDefinitions="Auto,*">
-        <!-- Search Bar -->
-        <SearchBar Grid.Row="0"
-                   Placeholder="חיפוש רבנים..."
-                   Text="{Binding SearchPhrase}"
-                   TextChanged="OnSearchTextChanged"
-                   BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray900}}"
-                   Margin="8,8,8,0"/>
+       <Grid RowDefinitions="Auto,*">
+              <!-- Search Bar -->
+              <SearchBar Grid.Row="0"
+                         Placeholder="חיפוש רבנים..."
+                         Text="{Binding SearchPhrase}"
+                         TextChanged="OnSearchTextChanged"
+                         BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray900}}"
+                         Margin="8,8,8,0"/>
 
-        <!-- Authors Grid (Masonry-style with FlexLayout wrapped in ScrollView) -->
-        <ScrollView Grid.Row="1"
-                    Margin="8,8,8,0">
-            <FlexLayout BindableLayout.ItemsSource="{Binding FilteredAuthors}"
-                        Wrap="Wrap"
-                        JustifyContent="Start"
-                        AlignContent="Start"
-                        AlignItems="Start"
-                        Direction="Row">
-                <BindableLayout.ItemTemplate>
-                    <DataTemplate x:DataType="models:Author">
-                        <Frame Padding="0"
-                               Margin="4"
-                               CornerRadius="12"
-                               WidthRequest="160"
-                               BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}"
-                               BorderColor="Transparent"
-                               HasShadow="True">
-                            <Frame.GestureRecognizers>
-                                <TapGestureRecognizer Tapped="OnAuthorTapped"
-                                                      CommandParameter="{Binding .}"/>
-                            </Frame.GestureRecognizers>
-                            <Grid RowDefinitions="Auto,Auto,Auto,*"
-                                  Padding="8">
-                                <!-- Author Image -->
-                                <Frame Grid.Row="0"
-                                       WidthRequest="80"
-                                       HeightRequest="80"
-                                       CornerRadius="40"
-                                       Padding="0"
-                                       HorizontalOptions="Center"
-                                       IsClippedToBounds="True"
-                                       BorderColor="{StaticResource Primary}">
-                                    <Image Source="{Binding ImageUrl}"
-                                           Aspect="AspectFill"
-                                           WidthRequest="80"
-                                           HeightRequest="80"/>
-                                </Frame>
+              <!-- Authors Grid with CollectionView for virtualization/lazy loading -->
+              <CollectionView Grid.Row="1"
+                              ItemsSource="{Binding FilteredAuthors}"
+                              Margin="8,8,8,0"
+                              ItemsLayout="VerticalGrid, 2"
+                              SelectionMode="None">
+                     <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="models:Author">
+                                   <Frame Padding="0"
+                                          Margin="4"
+                                          CornerRadius="12"
+                                          BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}"
+                                          BorderColor="Transparent"
+                                          HasShadow="True">
+                                          <Frame.GestureRecognizers>
+                                                 <TapGestureRecognizer Tapped="OnAuthorTapped"
+                                                                       CommandParameter="{Binding .}"/>
+                                          </Frame.GestureRecognizers>
+                                          <Grid RowDefinitions="Auto,Auto,Auto,*"
+                                                Padding="8">
+                                                 <!-- Author Image with lazy loading -->
+                                                 <Frame Grid.Row="0"
+                                                        WidthRequest="80"
+                                                        HeightRequest="80"
+                                                        CornerRadius="40"
+                                                        Padding="0"
+                                                        HorizontalOptions="Center"
+                                                        IsClippedToBounds="True"
+                                                        BorderColor="{StaticResource Primary}">
+                                                        <Image Source="{Binding ImageUrl}"
+                                                               Aspect="AspectFill"
+                                                               WidthRequest="80"
+                                                               HeightRequest="80"/>
+                                                 </Frame>
 
-                                <!-- Author Name -->
-                                <Label Grid.Row="1"
-                                       Text="{Binding Name}"
-                                       FontSize="14"
-                                       FontAttributes="Bold"
-                                       HorizontalTextAlignment="Center"
-                                       MaxLines="2"
-                                       LineBreakMode="TailTruncation"
-                                       Margin="0,8,0,0"/>
+                                                 <!-- Author Name -->
+                                                 <Label Grid.Row="1"
+                                                        Text="{Binding Name}"
+                                                        FontSize="14"
+                                                        FontAttributes="Bold"
+                                                        HorizontalTextAlignment="Center"
+                                                        MaxLines="2"
+                                                        LineBreakMode="TailTruncation"
+                                                        Margin="0,8,0,0"/>
 
-                                <!-- Articles Count -->
-                                <Label Grid.Row="2"
-                                       Text="{Binding ArticlesCount, StringFormat='{0} מאמרים'}"
-                                       FontSize="11"
-                                       HorizontalTextAlignment="Center"
-                                       TextColor="{StaticResource Primary}"/>
+                                                 <!-- Articles Count -->
+                                                 <Label Grid.Row="2"
+                                                        Text="{Binding ArticlesCount, StringFormat='{0} מאמרים'}"
+                                                        FontSize="11"
+                                                        HorizontalTextAlignment="Center"
+                                                        TextColor="{StaticResource Primary}"/>
 
-                                <!-- Details -->
-                                <Label Grid.Row="3"
-                                       Text="{Binding Details}"
-                                       FontSize="11"
-                                       HorizontalTextAlignment="Center"
-                                       LineBreakMode="TailTruncation"
-                                       MaxLines="2"
-                                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                                       Margin="0,4,0,8"/>
-                            </Grid>
-                        </Frame>
-                    </DataTemplate>
-                </BindableLayout.ItemTemplate>
-            </FlexLayout>
-        </ScrollView>
+                                                 <!-- Details -->
+                                                 <Label Grid.Row="3"
+                                                        Text="{Binding Details}"
+                                                        FontSize="11"
+                                                        HorizontalTextAlignment="Center"
+                                                        LineBreakMode="TailTruncation"
+                                                        MaxLines="2"
+                                                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
+                                                        Margin="0,4,0,8"/>
+                                          </Grid>
+                                   </Frame>
+                            </DataTemplate>
+                     </CollectionView.ItemTemplate>
+              </CollectionView>
 
-        <!-- Empty/Loading State Overlay -->
-        <VerticalStackLayout Grid.Row="1"
-                             VerticalOptions="Center"
-                             HorizontalOptions="Center"
-                             Padding="20"
-                             IsVisible="{Binding FilteredAuthors.Count, Converter={StaticResource ZeroToTrueConverter}}">
-            <ActivityIndicator IsRunning="{Binding IsLoading}"
-                               IsVisible="{Binding IsLoading}"/>
-            <Label Text="טוען רבנים..."
-                   FontSize="16"
-                   HorizontalTextAlignment="Center"
-                   IsVisible="{Binding IsLoading}"/>
-            <Label Text="לא נמצאו רבנים"
-                   FontSize="16"
-                   HorizontalTextAlignment="Center"
-                   IsVisible="{Binding IsLoading, Converter={StaticResource InvertedBoolConverter}}"/>
-        </VerticalStackLayout>
-    </Grid>
+              <!-- Empty/Loading State Overlay -->
+              <VerticalStackLayout Grid.Row="1"
+                                   VerticalOptions="Center"
+                                   HorizontalOptions="Center"
+                                   Padding="20"
+                                   IsVisible="{Binding FilteredAuthors.Count, Converter={StaticResource ZeroToTrueConverter}}">
+                     <ActivityIndicator IsRunning="{Binding IsLoading}"
+                                        IsVisible="{Binding IsLoading}"/>
+                     <Label Text="טוען רבנים..."
+                            FontSize="16"
+                            HorizontalTextAlignment="Center"
+                            IsVisible="{Binding IsLoading}"/>
+                     <Label Text="לא נמצאו רבנים"
+                            FontSize="16"
+                            HorizontalTextAlignment="Center"
+                            IsVisible="{Binding IsLoading, Converter={StaticResource InvertedBoolConverter}}"/>
+              </VerticalStackLayout>
+       </Grid>
 </ContentPage>

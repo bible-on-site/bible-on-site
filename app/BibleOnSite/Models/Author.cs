@@ -1,5 +1,3 @@
-using BibleOnSite.Config;
-
 namespace BibleOnSite.Models;
 
 /// <summary>
@@ -11,6 +9,11 @@ public class Author
     /// System author ID for system-generated content.
     /// </summary>
     public const int SystemId = 99;
+
+    /// <summary>
+    /// S3 bucket base URL for author images.
+    /// </summary>
+    private const string ImageBaseUrl = "https://bible-on-site-images.s3.il-central-1.amazonaws.com/authors";
 
     public int Id { get; set; }
     public int ArticlesCount { get; set; }
@@ -35,7 +38,7 @@ public class Author
     }
 
     /// <summary>
-    /// URL to the author's image.
+    /// URL to the author's image (high resolution).
     /// </summary>
-    public string ImageUrl => $"https://{AppConfig.Instance.RemoteHost}/img/authors/{Id}.jpg";
+    public string ImageUrl => $"{ImageBaseUrl}/high-res/{Id}.jpg";
 }

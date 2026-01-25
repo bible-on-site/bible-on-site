@@ -101,6 +101,7 @@ public partial class ArticlesViewModel : ObservableObject
 #if MAUI
     /// <summary>
     /// Loads articles for the current filter (perek or author).
+    /// Uses cached Starter data for instant loading (no API calls).
     /// </summary>
     [RelayCommand]
     public async Task LoadArticlesAsync()
@@ -110,15 +111,23 @@ public partial class ArticlesViewModel : ObservableObject
             IsLoading = true;
             ErrorMessage = string.Empty;
 
+            // Ensure Starter data is loaded
+            if (!Services.StarterService.Instance.IsLoaded)
+            {
+                await Services.StarterService.Instance.LoadAsync();
+            }
+
             IEnumerable<Article> articles;
 
             if (IsFilterByAuthor && AuthorId.HasValue)
             {
-                articles = await Services.ArticleService.Instance.GetArticlesByAuthorIdAsync(AuthorId.Value);
+                // Use cached Starter data - instant, no API call
+                articles = Services.StarterService.Instance.GetArticlesByAuthorId(AuthorId.Value);
             }
             else if (IsFilterByPerek)
             {
-                articles = await Services.ArticleService.Instance.GetArticlesByPerekIdAsync(PerekId);
+                // Use cached Starter data - instant, no API call
+                articles = Services.StarterService.Instance.GetArticlesByPerekId(PerekId);
             }
             else
             {

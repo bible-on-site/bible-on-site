@@ -19,7 +19,10 @@ function main() {
 	mkdirSync(logDir, { recursive: true });
 	const out = openSync(path.resolve(logDir, "api.log"), "w");
 	const shouldMeasureCov = process.argv.includes("--measure-cov");
-	const coverageFilePath = path.resolve(__dirname, "../.coverage/e2e/lcov.info");
+	const coverageFilePath = path.resolve(
+		__dirname,
+		"../.coverage/e2e/lcov.info",
+	);
 
 	if (shouldMeasureCov) {
 		rmSync(coverageFilePath, { force: true });
@@ -27,7 +30,7 @@ function main() {
 
 	const cargo = spawn(
 		"cargo",
-		["make", shouldMeasureCov ? "run-for-coverage" : "run-for-tests", "&"],
+		["make", shouldMeasureCov ? "run-for-coverage" : "run-for-tests"],
 		{ detached: true, stdio: ["ignore", out, out] },
 	);
 	cargo.unref();

@@ -42,6 +42,10 @@ struct Cli {
     /// Skip data script execution
     #[arg(long, default_value = "false")]
     skip_data: bool,
+
+    /// Only drop the database (do not create or populate)
+    #[arg(long, default_value = "false")]
+    drop_only: bool,
 }
 
 #[tokio::main]
@@ -77,6 +81,18 @@ async fn main() -> Result<()> {
     let mut conn = MySqlConnection::connect_with(&options_no_db)
         .await
         .context("Failed to connect to MySQL server")?;
+
+    // Handle --drop-only mode
+    if cli.drop_only {
+        let drop_db_sql = format!("DROP DATABASE IF EXISTS `{}`", database_name);
+        sqlx::raw_sql(&drop_db_sql)
+            .execute(&mut conn)
+            .await
+            .with_context(|| format!("Failed to drop database '{}'", database_name))?;
+        println!("Database '{}' dropped successfully", database_name);
+        conn.close().await.ok();
+        return Ok(());
+    }
 
     // Create database if it doesn't exist
     let create_db_sql = format!(
