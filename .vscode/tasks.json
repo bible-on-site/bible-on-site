@@ -173,6 +173,39 @@
 			"dependsOn": ["api: start"],
 			"group": "test",
 			"problemMatcher": "$msCompile"
+		},
+
+		// ============ Admin Tasks ============
+		{
+			"type": "npm",
+			"script": "dev",
+			"path": "web/admin",
+			"problemMatcher": [],
+			"label": "admin: dev"
+		},
+		{
+			"type": "npm",
+			"script": "build",
+			"path": "web/admin",
+			"problemMatcher": [],
+			"label": "admin: build",
+			"group": "build"
+		},
+		{
+			"type": "npm",
+			"script": "test:unit",
+			"path": "web/admin",
+			"problemMatcher": [],
+			"label": "admin: test-unit",
+			"group": "test"
+		},
+		{
+			"type": "npm",
+			"script": "test:e2e",
+			"path": "web/admin",
+			"problemMatcher": [],
+			"label": "admin: test-e2e",
+			"group": "test"
 		}
 	]
 }
