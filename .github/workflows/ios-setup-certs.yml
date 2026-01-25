@@ -15,7 +15,7 @@ jobs:
   generate_certificates:
     name: Generate iOS Certificates
     runs-on: macos-14
-    
+
     steps:
       - name: Install Fastlane
         run: |
@@ -30,17 +30,17 @@ jobs:
         run: |
           # Decode API key
           echo -n "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 --decode > AuthKey.p8
-          
+
           # Create Fastlane directory and config
           mkdir -p fastlane
-          
+
           cat > fastlane/Appfile << EOF
           app_identifier("com.tanah.daily929")
           EOF
-          
+
           cat > fastlane/Fastfile << 'EOF'
           default_platform(:ios)
-          
+
           platform :ios do
             desc "Generate certificates and provisioning profiles"
             lane :generate_certs do
@@ -51,14 +51,14 @@ jobs:
                 key_filepath: "AuthKey.p8",
                 in_house: false
               )
-              
+
               # Create or get distribution certificate
               cert(
                 api_key: api_key,
                 generate_apple_certs: true,
                 output_path: "./certs"
               )
-              
+
               # Create App Store provisioning profile
               sigh(
                 api_key: api_key,
@@ -69,42 +69,42 @@ jobs:
             end
           end
           EOF
-          
+
           # Run Fastlane
           fastlane generate_certs
-          
+
           # Find the generated files
           echo "=== Generated Files ==="
           ls -la certs/ || echo "No certs directory"
           ls -la profiles/ || echo "No profiles directory"
-          
+
           # Get Team ID from the certificate
           CERT_FILE=$(find certs -name "*.cer" | head -1)
           if [ -n "$CERT_FILE" ]; then
             echo "Certificate found: $CERT_FILE"
           fi
-          
+
           # Find private key and certificate
           CERT_ID=$(find certs -name "*.cert_id" | head -1)
           if [ -n "$CERT_ID" ]; then
             echo "Certificate ID: $(cat $CERT_ID)"
           fi
-          
+
           # The certificate is in the macOS keychain - export as .p12
           echo "=== Exporting P12 ==="
-          
+
           # Find the signing identity
           security find-identity -v -p codesigning
-          
+
           # Get the identity hash
           IDENTITY=$(security find-identity -v -p codesigning | grep "Apple Distribution" | head -1 | awk '{print $2}')
-          
+
           if [ -n "$IDENTITY" ]; then
             echo "Found identity: $IDENTITY"
-            
+
             # Export as p12
             security export -k ~/Library/Keychains/login.keychain-db -t identities -f pkcs12 -P "$CERT_PASSWORD" -o certificate.p12
-            
+
             # Base64 encode the p12
             echo ""
             echo "=========================================="
@@ -116,11 +116,11 @@ jobs:
           else
             echo "No Apple Distribution identity found in keychain"
             echo "Trying alternate export method..."
-            
+
             # List all available certs
             ls -la certs/
           fi
-          
+
           # Base64 encode the provisioning profile
           PROFILE=$(find profiles -name "*.mobileprovision" | head -1)
           if [ -n "$PROFILE" ]; then
@@ -131,7 +131,7 @@ jobs:
             base64 -i "$PROFILE"
             echo ""
             echo "=========================================="
-            
+
             # Extract Team ID from profile
             echo ""
             echo "=========================================="
@@ -140,7 +140,7 @@ jobs:
             security cms -D -i "$PROFILE" | grep -A1 "TeamIdentifier" | grep string | sed 's/.*<string>\(.*\)<\/string>.*/\1/'
             echo "=========================================="
           fi
-          
+
           echo ""
           echo "IOS_CERTIFICATE_PASSWORD: Use the password you entered when triggering this workflow"
           echo ""
