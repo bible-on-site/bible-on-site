@@ -9,143 +9,141 @@
              FlowDirection="RightToLeft"
              Shell.NavBarIsVisible="False">
 
-    <Grid RowDefinitions="Auto,*">
-        <!-- Toolbar with back button and title -->
-        <Grid Grid.Row="0"
-              Padding="8,8,8,4"
-              ColumnDefinitions="Auto,*,Auto"
-              BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
-            <Button Grid.Column="0"
-                    Text="→"
-                    FontSize="24"
-                    BackgroundColor="Transparent"
-                    TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
-                    Clicked="OnBackClicked"
-                    SemanticProperties.Description="חזור"/>
-            <Label Grid.Column="1"
-                   Text="{Binding DisplayTitle}"
-                   FontSize="18"
-                   FontAttributes="Bold"
-                   VerticalTextAlignment="Center"
-                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-            <Label Grid.Column="2"
-                   Text="{Binding Articles.Count, StringFormat='{0} מאמרים'}"
-                   FontSize="12"
-                   VerticalTextAlignment="Center"
-                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
-                   IsVisible="{Binding HasArticles}"/>
-        </Grid>
+       <Grid RowDefinitions="Auto,*">
+              <!-- Toolbar with back button and title -->
+              <Grid Grid.Row="0"
+                    Padding="8,8,8,4"
+                    ColumnDefinitions="Auto,*,Auto"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+                     <Button Grid.Column="0"
+                             Text="→"
+                             FontSize="24"
+                             BackgroundColor="Transparent"
+                             TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
+                             Clicked="OnBackClicked"
+                             SemanticProperties.Description="חזור"/>
+                     <Label Grid.Column="1"
+                            Text="{Binding DisplayTitle}"
+                            FontSize="18"
+                            FontAttributes="Bold"
+                            VerticalTextAlignment="Center"
+                            TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                     <Label Grid.Column="2"
+                            Text="{Binding Articles.Count, StringFormat='{0} מאמרים'}"
+                            FontSize="12"
+                            VerticalTextAlignment="Center"
+                            TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
+                            IsVisible="{Binding HasArticles}"/>
+              </Grid>
 
-        <!-- Articles Grid (Masonry-style with FlexLayout) -->
-        <ScrollView Grid.Row="1"
-                    Margin="8,8,8,0">
-            <FlexLayout BindableLayout.ItemsSource="{Binding Articles}"
-                        Wrap="Wrap"
-                        JustifyContent="Start"
-                        AlignContent="Start"
-                        AlignItems="Start"
-                        Direction="Row">
-                <BindableLayout.ItemTemplate>
-                    <DataTemplate x:DataType="models:Article">
-                        <Frame Padding="0"
-                               Margin="4"
-                               CornerRadius="12"
-                               WidthRequest="180"
-                               BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}"
-                               BorderColor="Transparent"
-                               HasShadow="True">
-                            <Frame.GestureRecognizers>
-                                <TapGestureRecognizer Tapped="OnArticleTapped"
-                                                      CommandParameter="{Binding .}"/>
-                            </Frame.GestureRecognizers>
-                            <Grid RowDefinitions="Auto,Auto,Auto,Auto"
-                                  Padding="12">
-                                <!-- Article Name -->
-                                <Label Grid.Row="0"
-                                       Text="{Binding Name}"
-                                       FontSize="14"
-                                       FontAttributes="Bold"
-                                       LineBreakMode="WordWrap"
-                                       MaxLines="2"/>
+              <!-- Articles Grid with CollectionView for lazy loading/virtualization -->
+              <CollectionView Grid.Row="1"
+                              ItemsSource="{Binding Articles}"
+                              Margin="8,8,8,0">
+                     <CollectionView.ItemsLayout>
+                            <GridItemsLayout Orientation="Vertical"
+                                             Span="2"
+                                             HorizontalItemSpacing="8"
+                                             VerticalItemSpacing="8"/>
+                     </CollectionView.ItemsLayout>
+                     <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="models:Article">
+                                   <Frame Padding="0"
+                                          CornerRadius="12"
+                                          BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}"
+                                          BorderColor="Transparent"
+                                          HasShadow="True">
+                                          <Frame.GestureRecognizers>
+                                                 <TapGestureRecognizer Tapped="OnArticleTapped"
+                                                                       CommandParameter="{Binding .}"/>
+                                          </Frame.GestureRecognizers>
+                                          <Grid RowDefinitions="Auto,Auto,Auto,Auto"
+                                                Padding="12">
+                                                 <!-- Article Name -->
+                                                 <Label Grid.Row="0"
+                                                        Text="{Binding Name}"
+                                                        FontSize="14"
+                                                        FontAttributes="Bold"
+                                                        LineBreakMode="WordWrap"
+                                                        MaxLines="2"/>
 
-                                <!-- Short Abstract -->
-                                <Label Grid.Row="1"
-                                       Text="{Binding ShortAbstract}"
-                                       FontSize="12"
-                                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                                       LineBreakMode="TailTruncation"
-                                       MaxLines="3"
-                                       Margin="0,4,0,8"/>
+                                                 <!-- Short Abstract -->
+                                                 <Label Grid.Row="1"
+                                                        Text="{Binding ShortAbstract}"
+                                                        FontSize="12"
+                                                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
+                                                        LineBreakMode="TailTruncation"
+                                                        MaxLines="3"
+                                                        Margin="0,4,0,8"/>
 
-                                <!-- Author Info (when viewing by perek) -->
-                                <HorizontalStackLayout Grid.Row="2"
-                                                       Spacing="6"
-                                                       VerticalOptions="Center"
-                                                       IsVisible="{Binding Author, Converter={StaticResource NotNullConverter}}">
-                                    <Frame WidthRequest="24"
-                                           HeightRequest="24"
-                                           CornerRadius="12"
-                                           Padding="0"
-                                           IsClippedToBounds="True"
-                                           BorderColor="{StaticResource Primary}">
-                                        <Image Source="{Binding Author.ImageUrl}"
-                                               Aspect="AspectFill"
-                                               WidthRequest="24"
-                                               HeightRequest="24"/>
-                                    </Frame>
-                                    <Label Text="{Binding Author.ShortenedName}"
-                                           FontSize="11"
-                                           VerticalTextAlignment="Center"
-                                           TextColor="{StaticResource Primary}"/>
-                                </HorizontalStackLayout>
+                                                 <!-- Author Info (when viewing by perek) -->
+                                                 <HorizontalStackLayout Grid.Row="2"
+                                                                        Spacing="6"
+                                                                        VerticalOptions="Center"
+                                                                        IsVisible="{Binding Author, Converter={StaticResource NotNullConverter}}">
+                                                        <Frame WidthRequest="24"
+                                                               HeightRequest="24"
+                                                               CornerRadius="12"
+                                                               Padding="0"
+                                                               IsClippedToBounds="True"
+                                                               BorderColor="{StaticResource Primary}">
+                                                               <Image Source="{Binding Author.ImageUrl}"
+                                                                      Aspect="AspectFill"
+                                                                      WidthRequest="24"
+                                                                      HeightRequest="24"/>
+                                                        </Frame>
+                                                        <Label Text="{Binding Author.ShortenedName}"
+                                                               FontSize="11"
+                                                               VerticalTextAlignment="Center"
+                                                               TextColor="{StaticResource Primary}"/>
+                                                 </HorizontalStackLayout>
 
-                                <!-- Read indicator -->
-                                <Label Grid.Row="3"
-                                       Text="קרא עוד ◀"
-                                       FontSize="11"
-                                       HorizontalTextAlignment="End"
-                                       TextColor="{StaticResource Primary}"
-                                       Margin="0,4,0,0"/>
-                            </Grid>
-                        </Frame>
-                    </DataTemplate>
-                </BindableLayout.ItemTemplate>
-            </FlexLayout>
-        </ScrollView>
+                                                 <!-- Read indicator -->
+                                                 <Label Grid.Row="3"
+                                                        Text="קרא עוד ◀"
+                                                        FontSize="11"
+                                                        HorizontalTextAlignment="End"
+                                                        TextColor="{StaticResource Primary}"
+                                                        Margin="0,4,0,0"/>
+                                          </Grid>
+                                   </Frame>
+                            </DataTemplate>
+                     </CollectionView.ItemTemplate>
+              </CollectionView>
 
-        <!-- Empty/Loading State Overlay -->
-        <VerticalStackLayout Grid.Row="1"
-                             VerticalOptions="Center"
-                             HorizontalOptions="Center"
-                             Padding="20"
-                             IsVisible="{Binding HasArticles, Converter={StaticResource InvertedBoolConverter}}">
-            <!-- Loading State -->
-            <VerticalStackLayout IsVisible="{Binding IsLoading}">
-                <ActivityIndicator IsRunning="{Binding IsLoading}"
+              <!-- Empty/Loading State Overlay -->
+              <VerticalStackLayout Grid.Row="1"
+                                   VerticalOptions="Center"
+                                   HorizontalOptions="Center"
+                                   Padding="20"
+                                   IsVisible="{Binding HasArticles, Converter={StaticResource InvertedBoolConverter}}">
+                     <!-- Loading State -->
+                     <VerticalStackLayout IsVisible="{Binding IsLoading}">
+                            <ActivityIndicator IsRunning="{Binding IsLoading}"
+                                               Margin="0,10,0,0"/>
+                            <Label Text="טוען מאמרים..."
+                                   FontSize="16"
+                                   HorizontalTextAlignment="Center"
                                    Margin="0,10,0,0"/>
-                <Label Text="טוען מאמרים..."
-                       FontSize="16"
-                       HorizontalTextAlignment="Center"
-                       Margin="0,10,0,0"/>
-            </VerticalStackLayout>
+                     </VerticalStackLayout>
 
-            <!-- No Articles State -->
-            <VerticalStackLayout IsVisible="{Binding IsLoading, Converter={StaticResource InvertedBoolConverter}}">
-                <Label Text="📚"
-                       FontSize="48"
-                       HorizontalTextAlignment="Center"/>
-                <Label Text="אין מאמרים"
-                       FontSize="18"
-                       HorizontalTextAlignment="Center"
-                       Margin="0,10,0,0"/>
-                <Label Text="{Binding ErrorMessage}"
-                       FontSize="14"
-                       TextColor="{StaticResource Error}"
-                       HorizontalTextAlignment="Center"
-                       IsVisible="{Binding ErrorMessage, Converter={StaticResource StringNotEmptyConverter}}"
-                       Margin="0,10,0,0"/>
-            </VerticalStackLayout>
-        </VerticalStackLayout>
-    </Grid>
+                     <!-- No Articles State -->
+                     <VerticalStackLayout IsVisible="{Binding IsLoading, Converter={StaticResource InvertedBoolConverter}}">
+                            <Label Text="📚"
+                                   FontSize="48"
+                                   HorizontalTextAlignment="Center"/>
+                            <Label Text="אין מאמרים"
+                                   FontSize="18"
+                                   HorizontalTextAlignment="Center"
+                                   Margin="0,10,0,0"/>
+                            <Label Text="{Binding ErrorMessage}"
+                                   FontSize="14"
+                                   TextColor="{StaticResource Error}"
+                                   HorizontalTextAlignment="Center"
+                                   IsVisible="{Binding ErrorMessage, Converter={StaticResource StringNotEmptyConverter}}"
+                                   Margin="0,10,0,0"/>
+                     </VerticalStackLayout>
+              </VerticalStackLayout>
+       </Grid>
 
 </ContentPage>

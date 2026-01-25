@@ -36,6 +36,30 @@
 			}
 		},
 		{
+			"label": "api: start-test",
+			"type": "shell",
+			"command": "cargo make run-api-test",
+			"options": {
+				"cwd": "${workspaceFolder}/web/api"
+			},
+			"isBackground": true,
+			"problemMatcher": {
+				"pattern": {
+					"regexp": "^$"
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": "cargo make",
+					"endsPattern": "Server running on port 3003"
+				}
+			},
+			"presentation": {
+				"reveal": "silent",
+				"panel": "dedicated",
+				"group": "api"
+			}
+		},
+		{
 			"label": "api: check-health",
 			"type": "shell",
 			"command": "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3003 || exit 0",
