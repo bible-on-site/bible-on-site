@@ -218,13 +218,29 @@ jobs:
           echo -n "$API_KEY_BASE64" | base64 --decode -o ~/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}.p8
           echo "API_KEY_PATH=~/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}.p8" >> $GITHUB_ENV
 
-      - name: Upload to TestFlight
+      - name: Install Fastlane
+        run: gem install fastlane -NV
+
+      - name: Upload to TestFlight and Distribute to Beta Group
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          TESTFLIGHT_BETA_GROUP: ${{ secrets.TESTFLIGHT_BETA_GROUP_NAME }}
         run: |
-          xcrun altool --upload-app \
-            --type ios \
-            --file "${{ steps.find_ipa.outputs.IPA_FILE }}" \
-            --apiKey "${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}" \
-            --apiIssuer "${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}"
+          # Create Fastlane config
+          mkdir -p fastlane
+          cat > fastlane/Appfile << EOF
+          app_identifier("com.tanah.daily929")
+          EOF
+          
+          # Upload and distribute using Fastlane pilot
+          fastlane pilot upload \
+            --ipa "${{ steps.find_ipa.outputs.IPA_FILE }}" \
+            --api_key_path "${{ env.API_KEY_PATH }}" \
+            --skip_waiting_for_build_processing false \
+            --distribute_external true \
+            --groups "${TESTFLIGHT_BETA_GROUP}" \
+            --changelog "Automated build v${{ env.MODULE_VERSION }}"
 
       - name: Cleanup
         if: always()
