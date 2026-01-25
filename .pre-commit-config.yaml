@@ -11,7 +11,7 @@ repos:
         exclude: ^docs/aws/cloudformation/
       - id: check-ast
       - id: check-added-large-files
-        exclude: ^data/mysql/.*_data\.sql$
+        exclude: ^(data/mysql/.*_data\.sql|app/BibleOnSite/Resources/Raw/.*\.sqlite)$
       - id: check-xml
       - id: check-case-conflict
       - id: check-symlinks
