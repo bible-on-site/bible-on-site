@@ -87,13 +87,13 @@ export function ImageUpload({
 					<img
 						src={displayUrl}
 						alt="תמונת רב"
-						className="w-32 h-32 object-cover rounded-lg shadow"
+						className="w-40 h-40 object-cover rounded-xl shadow-md ring-4 ring-gray-100"
 					/>
 					{onRemove && (
 						<button
 							type="button"
 							onClick={onRemove}
-							className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600 transition-colors"
+							className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-lg hover:bg-red-600 transition-all shadow-md hover:scale-110"
 						>
 							×
 						</button>
@@ -107,19 +107,20 @@ export function ImageUpload({
 				onDragLeave={handleDrag}
 				onDragOver={handleDrag}
 				onDrop={handleDrop}
-				className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+				className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${
 					dragActive
-						? "border-blue-500 bg-blue-50"
-						: "border-gray-300 hover:border-gray-400"
+						? "border-blue-500 bg-blue-50 scale-[1.02]"
+						: "border-gray-300 hover:border-blue-400 hover:bg-gray-50"
 				}`}
 			>
 				{isUploading ? (
-					<div className="flex items-center justify-center gap-2">
-						<div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" />
-						<span>מעלה תמונה...</span>
+					<div className="flex flex-col items-center justify-center gap-3">
+						<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+						<span className="text-blue-600 font-medium">מעלה תמונה...</span>
 					</div>
 				) : (
 					<>
+						<div className="text-4xl mb-3">📤</div>
 						<input
 							type="file"
 							accept="image/*"
@@ -129,12 +130,12 @@ export function ImageUpload({
 						/>
 						<label
 							htmlFor="image-upload"
-							className="cursor-pointer text-blue-600 hover:text-blue-700 font-medium"
+							className="cursor-pointer inline-block bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-all font-medium shadow-sm hover:shadow-md"
 						>
-							לחץ להעלאת תמונה
+							בחר תמונה להעלאה
 						</label>
-						<p className="text-sm text-gray-500 mt-1">
-							או גרור ושחרר קובץ תמונה
+						<p className="text-sm text-gray-500 mt-3">
+							או גרור ושחרר קובץ תמונה לכאן
 						</p>
 					</>
 				)}

@@ -178,18 +178,20 @@ function ArticleEditPage() {
 	}
 
 	return (
-		<div className="space-y-6">
-			<div className="flex justify-between items-center">
+		<div className="space-y-8">
+			{/* Header */}
+			<div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
 				<div>
 					<Link
 						to="/articles/perek/$perekId"
 						params={{ perekId: String(formData.perek_id) }}
-						className="text-blue-600 hover:text-blue-700 text-sm"
+						className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
 					>
-						← חזרה לפרק {formData.perek_id}
+						<span>→</span>
+						<span>חזרה לפרק {formData.perek_id}</span>
 					</Link>
-					<h1 className="text-2xl font-bold text-gray-900 mt-1">
-						{isNew ? "מאמר חדש" : "עריכת מאמר"}
+					<h1 className="text-3xl font-bold text-gray-900 mt-2">
+						{isNew ? "➕ מאמר חדש" : "✏️ עריכת מאמר"}
 					</h1>
 				</div>
 				<div className="flex items-center gap-4">
@@ -202,140 +204,145 @@ function ArticleEditPage() {
 						<button
 							type="button"
 							onClick={handleDelete}
-							className="text-red-600 hover:text-red-700 text-sm"
+							className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 px-4 py-2 border border-red-200 rounded-lg hover:bg-red-50 transition-all font-medium text-sm"
 						>
-							מחק מאמר
+							<span>🗑️</span>
+							<span>מחק מאמר</span>
 						</button>
 					)}
 				</div>
 			</div>
 
-			<form className="space-y-6 bg-white p-6 rounded-lg shadow border border-gray-200">
-				<div className="grid md:grid-cols-2 gap-6">
+			<form className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+				{/* Basic Info Section */}
+				<div className="p-8 space-y-6">
+					<div className="grid md:grid-cols-2 gap-6">
+						<div>
+							<label
+								htmlFor="name"
+								className="block text-sm font-semibold text-gray-700 mb-2"
+							>
+								שם המאמר <span className="text-red-500">*</span>
+							</label>
+							<input
+								id="name"
+								type="text"
+								value={formData.name}
+								onChange={(e) => handleFieldChange("name", e.target.value)}
+								className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+								placeholder="הכנס שם מאמר"
+							/>
+						</div>
+
+						<div>
+							<label
+								htmlFor="author"
+								className="block text-sm font-semibold text-gray-700 mb-2"
+							>
+								👤 מחבר
+							</label>
+							<select
+								id="author"
+								value={formData.author_id}
+								onChange={(e) =>
+									handleFieldChange(
+										"author_id",
+										Number.parseInt(e.target.value, 10),
+									)
+								}
+								className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+							>
+								{authors?.map((author: Author) => (
+									<option key={author.id} value={author.id}>
+										{author.name}
+									</option>
+								))}
+							</select>
+						</div>
+
+						<div>
+							<label
+								htmlFor="perek"
+								className="block text-sm font-semibold text-gray-700 mb-2"
+							>
+								📖 פרק (1-929)
+							</label>
+							<input
+								id="perek"
+								type="number"
+								min={1}
+								max={929}
+								value={formData.perek_id}
+								onChange={(e) =>
+									handleFieldChange(
+										"perek_id",
+										Number.parseInt(e.target.value, 10),
+									)
+								}
+								className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+							/>
+						</div>
+
+						<div>
+							<label
+								htmlFor="priority"
+								className="block text-sm font-semibold text-gray-700 mb-2"
+							>
+								⭐ עדיפות (1-10)
+							</label>
+							<input
+								id="priority"
+								type="number"
+								min={1}
+								max={10}
+								value={formData.priority}
+								onChange={(e) =>
+									handleFieldChange(
+										"priority",
+										Number.parseInt(e.target.value, 10),
+									)
+								}
+								className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+							/>
+						</div>
+					</div>
+
 					<div>
 						<label
-							htmlFor="name"
-							className="block text-sm font-medium text-gray-700 mb-1"
+							htmlFor="abstract"
+							className="block text-sm font-semibold text-gray-700 mb-2"
 						>
-							שם המאמר *
+							📝 תקציר
 						</label>
-						<input
-							id="name"
-							type="text"
-							value={formData.name}
-							onChange={(e) => handleFieldChange("name", e.target.value)}
-							className="w-full border border-gray-300 rounded-lg px-4 py-2"
-							placeholder="הכנס שם מאמר"
+						<textarea
+							id="abstract"
+							value={formData.abstract}
+							onChange={(e) => handleFieldChange("abstract", e.target.value)}
+							rows={3}
+							className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
+							placeholder="תקציר קצר של המאמר"
 						/>
 					</div>
 
 					<div>
-						<label
-							htmlFor="author"
-							className="block text-sm font-medium text-gray-700 mb-1"
-						>
-							מחבר
+						{/* biome-ignore lint/a11y/noLabelWithoutControl: WysiwygEditor is a custom component */}
+						<label className="block text-sm font-semibold text-gray-700 mb-2">
+							📄 תוכן המאמר
 						</label>
-						<select
-							id="author"
-							value={formData.author_id}
-							onChange={(e) =>
-								handleFieldChange(
-									"author_id",
-									Number.parseInt(e.target.value, 10),
-								)
-							}
-							className="w-full border border-gray-300 rounded-lg px-4 py-2"
-						>
-							{authors?.map((author: Author) => (
-								<option key={author.id} value={author.id}>
-									{author.name}
-								</option>
-							))}
-						</select>
-					</div>
-
-					<div>
-						<label
-							htmlFor="perek"
-							className="block text-sm font-medium text-gray-700 mb-1"
-						>
-							פרק (1-929)
-						</label>
-						<input
-							id="perek"
-							type="number"
-							min={1}
-							max={929}
-							value={formData.perek_id}
-							onChange={(e) =>
-								handleFieldChange(
-									"perek_id",
-									Number.parseInt(e.target.value, 10),
-								)
-							}
-							className="w-full border border-gray-300 rounded-lg px-4 py-2"
-						/>
-					</div>
-
-					<div>
-						<label
-							htmlFor="priority"
-							className="block text-sm font-medium text-gray-700 mb-1"
-						>
-							עדיפות (1-10)
-						</label>
-						<input
-							id="priority"
-							type="number"
-							min={1}
-							max={10}
-							value={formData.priority}
-							onChange={(e) =>
-								handleFieldChange(
-									"priority",
-									Number.parseInt(e.target.value, 10),
-								)
-							}
-							className="w-full border border-gray-300 rounded-lg px-4 py-2"
+						<WysiwygEditor
+							content={formData.content}
+							onChange={handleContentChange}
+							placeholder="הכנס את תוכן המאמר..."
 						/>
 					</div>
 				</div>
 
-				<div>
-					<label
-						htmlFor="abstract"
-						className="block text-sm font-medium text-gray-700 mb-1"
-					>
-						תקציר
-					</label>
-					<textarea
-						id="abstract"
-						value={formData.abstract}
-						onChange={(e) => handleFieldChange("abstract", e.target.value)}
-						rows={3}
-						className="w-full border border-gray-300 rounded-lg px-4 py-2"
-						placeholder="תקציר קצר של המאמר"
-					/>
-				</div>
-
-				<div>
-					{/* biome-ignore lint/a11y/noLabelWithoutControl: WysiwygEditor is a custom component */}
-					<label className="block text-sm font-medium text-gray-700 mb-1">
-						תוכן המאמר
-					</label>
-					<WysiwygEditor
-						content={formData.content}
-						onChange={handleContentChange}
-						placeholder="הכנס את תוכן המאמר..."
-					/>
-				</div>
-
-				<div className="flex justify-end gap-3">
+				{/* Action Buttons */}
+				<div className="flex justify-end gap-4 px-8 py-5 bg-gray-50 border-t border-gray-200">
 					<Link
 						to="/articles/perek/$perekId"
 						params={{ perekId: String(formData.perek_id) }}
-						className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+						className="px-6 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-100 transition-all font-medium text-gray-700"
 					>
 						ביטול
 					</Link>
@@ -343,9 +350,9 @@ function ArticleEditPage() {
 						type="button"
 						onClick={() => saveMutation.mutate(formData)}
 						disabled={saveMutation.isPending || !formData.name.trim()}
-						className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+						className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-sm hover:shadow-md"
 					>
-						{saveMutation.isPending ? "שומר..." : "שמור עכשיו"}
+						{saveMutation.isPending ? "⏳ שומר..." : "💾 שמור עכשיו"}
 					</button>
 				</div>
 			</form>
