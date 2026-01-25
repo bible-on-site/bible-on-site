@@ -98,7 +98,8 @@ public partial class PerekViewModel : ObservableObject
             if (Perek == null) return string.Empty;
 
             var additionalPart = Additional.HasValue ? $"{Additional.Value.ToHebrewLetters()} " : string.Empty;
-            return $"{SeferName} {additionalPart}{PerekHeb} - {PerekId}";
+            var datePart = !string.IsNullOrEmpty(HebDate) ? $" | {HebDate}" : string.Empty;
+            return $"{SeferName} {additionalPart}{PerekHeb} - {PerekId}{datePart}";
         }
     }
 
