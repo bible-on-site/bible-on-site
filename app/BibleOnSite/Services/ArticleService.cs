@@ -231,7 +231,13 @@ public class ArticleService : BaseGraphQLService
         public int PerekId { get; set; }
         public int AuthorId { get; set; }
         public string? Abstract { get; set; }
+
+        // JsonProperty required to prevent IL trimming in Release builds.
+        // This property is only accessed via reflection (JSON deserialization + XAML binding),
+        // so the trimmer would remove it without this attribute. See #1142 for details.
+        [Newtonsoft.Json.JsonProperty("articleContent")]
         public string? ArticleContent { get; set; }
+
         public string? Name { get; set; }
         public int Priority { get; set; }
     }
