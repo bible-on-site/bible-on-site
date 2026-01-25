@@ -804,7 +804,7 @@ jobs:
           auto-start: true
 
       - name: Start LocalStack
-        uses: LocalStack/setup-localstack@v0.2.3
+        uses: LocalStack/setup-localstack@v0.2.4
         with:
           image-tag: "latest"
           install-awslocal: "true"
