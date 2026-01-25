@@ -58,6 +58,13 @@ env:
   WEBSITE_UNIT_JUNIT_REPORT_ARTIFACT_NAME: website-unit-junit-report-${{ github.run_id }}
   APP_UNIT_JUNIT_REPORT_ARTIFACT_NAME: app-unit-junit-report-${{ github.run_id }}
   APP_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME: app-integration-junit-report-${{ github.run_id }}
+  ADMIN_DIRECTORY: web/admin
+  ADMIN_API_DIRECTORY: web/admin-api
+  ADMIN_NODE_CACHE_PATH: web/admin/package-lock.json
+  ADMIN_NODE_VERSION_FILE: web/admin/package.json
+  ADMIN_API_NODE_CACHE_PATH: web/admin-api/package-lock.json
+  ADMIN_API_NODE_VERSION_FILE: web/admin-api/package.json
+  ADMIN_UNIT_JUNIT_REPORT_ARTIFACT_NAME: admin-unit-junit-report-${{ github.run_id }}
   DATA_UNIT_JUNIT_REPORT_ARTIFACT_NAME: data-unit-junit-report-${{ github.run_id }}
   DATA_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME: data-integration-junit-report-${{ github.run_id }}
   LCOV_DOCKER_IMAGE_ARTIFACT_NAME: lcov-docker-image
@@ -71,6 +78,8 @@ jobs:
       api_directory: ${{ env.API_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       api_playwright_version: ${{ steps.get_api_playwright_version.outputs.PLAYWRIGHT_VERSION }}
       app_directory: ${{ env.APP_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
+      admin_directory: ${{ env.ADMIN_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
+      admin_api_directory: ${{ env.ADMIN_API_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       data_directory: ${{ env.DATA_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       is_master_branch: ${{ env.IS_MASTER_BRANCH }} # a workaround for places where only needs.<job_id>.<output> is allowed
       website_directory: ${{ env.WEBSITE_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
@@ -261,6 +270,26 @@ jobs:
       module_directory: ${{ needs.setup_env.outputs.app_directory }}
       module_name: ${{ needs.setup_env.outputs.app_directory }}
       ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
+
+  determine_admin_changes:
+    name: Determine Admin Changes
+    needs: setup_env
+    secrets: inherit
+    uses: ./.github/workflows/shared-ci.yml
+    with:
+      module_directory: ${{ needs.setup_env.outputs.admin_directory }}
+      module_name: ${{ needs.setup_env.outputs.admin_directory }}
+      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml"
+
+  determine_admin_api_changes:
+    name: Determine Admin API Changes
+    needs: setup_env
+    secrets: inherit
+    uses: ./.github/workflows/shared-ci.yml
+    with:
+      module_directory: ${{ needs.setup_env.outputs.admin_api_directory }}
+      module_name: ${{ needs.setup_env.outputs.admin_api_directory }}
+      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml"
 
   determine_data_changes:
     name: Determine Data Changes
@@ -665,6 +694,107 @@ jobs:
           path: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
           retention-days: 400
           overwrite: true
+
+  admin_ci:
+    name: Admin CI
+    runs-on: ubuntu-latest
+    needs: [setup_env, determine_admin_changes]
+    if: ${{ needs.determine_admin_changes.outputs.module_changed == 'true' || needs.determine_admin_changes.outputs.ci_changed == 'true' }}
+    defaults:
+      run:
+        working-directory: ${{ env.ADMIN_DIRECTORY }}
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+
+      - name: Setup Node.js
+        id: setup-node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ${{ env.ADMIN_NODE_VERSION_FILE }}
+          cache-dependency-path: ${{ env.ADMIN_NODE_CACHE_PATH }}
+          cache: npm
+
+      - name: Install npm Dependencies
+        id: npm_ci
+        run: npm ci --no-audit
+
+      - name: Lint
+        id: npm-lint
+        run: npm run lint
+
+      - name: Type Check
+        id: npm-typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit Test
+        id: npm-unit-test
+        run: npm run test:unit
+
+      - name: Build
+        id: npm-build
+        run: npm run build
+
+      - name: Store Admin Unit JUnit Report
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.ADMIN_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
+          path: ${{ env.ADMIN_DIRECTORY }}/.junit-report/unit-results.xml
+          retention-days: 1
+          overwrite: true
+          if-no-files-found: ignore
+
+  admin_api_ci:
+    name: Admin API CI
+    runs-on: ubuntu-latest
+    needs: [setup_env, determine_admin_api_changes]
+    if: ${{ needs.determine_admin_api_changes.outputs.module_changed == 'true' || needs.determine_admin_api_changes.outputs.ci_changed == 'true' }}
+    defaults:
+      run:
+        working-directory: ${{ env.ADMIN_API_DIRECTORY }}
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+
+      - name: Setup Node.js
+        id: setup-node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ${{ env.ADMIN_API_NODE_VERSION_FILE }}
+          cache-dependency-path: ${{ env.ADMIN_API_NODE_CACHE_PATH }}
+          cache: npm
+
+      - name: Install npm Dependencies
+        id: npm_ci
+        run: npm ci --no-audit
+
+      - name: Lint
+        id: npm-lint
+        run: npm run lint
+
+      - name: Type Check
+        id: npm-typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit Test
+        id: npm-unit-test
+        run: npm run test:unit
+
+      - name: Build
+        id: npm-build
+        run: npm run build
 
   api_e2e:
     name: API CI
