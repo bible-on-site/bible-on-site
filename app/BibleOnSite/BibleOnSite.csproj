@@ -48,8 +48,8 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<!-- App Icon - using legacy app icon -->
-		<MauiIcon Include="Resources\AppIcon\appicon_legacy.png" />
+		<!-- App Icon -->
+		<MauiIcon Include="Resources\AppIcon\appicon.svg" />
 
 		<!-- Splash Screen -->
 		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
