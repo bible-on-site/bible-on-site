@@ -1674,6 +1674,13 @@ jobs:
           name: ${{ needs.package_app.outputs.android_artifact_name }}
           path: app/.artifacts/android
 
+      - name: Restore iOS Artifact
+        if: ${{ needs.package_app.outputs.ios_artifact_name != '' }}
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.package_app.outputs.ios_artifact_name }}
+          path: app/.artifacts/ios
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -1685,10 +1692,12 @@ jobs:
             ## Downloads
             - **Windows (MSIX)**: For sideloading on Windows 10/11
             - **Android (AAB)**: For internal testing via Google Play
+            - **iOS (IPA)**: For TestFlight distribution
           token: ${{ secrets.GITHUB_TOKEN }}
           files: |
             app/.artifacts/windows/**/BibleOnSite*.msix
             app/.artifacts/android/**/*.aab
+            app/.artifacts/ios/**/*.ipa
 
       - name: Trigger App CD Workflow
         uses: peter-evans/repository-dispatch@v4
@@ -1696,7 +1705,7 @@ jobs:
           repository: ${{ github.repository }}
           token: ${{ secrets.BOT_PAT }}
           event-type: deploy-app
-          client-payload: '{"ref": "${{ github.ref }}", "module_version": "${{ needs.package_app.outputs.module_version }}", "ci_run_id": "${{ github.run_id }}", "windows_artifact_name": "${{ needs.package_app.outputs.windows_artifact_name }}", "android_artifact_name": "${{ needs.package_app.outputs.android_artifact_name }}"}'
+          client-payload: '{"ref": "${{ github.ref }}", "module_version": "${{ needs.package_app.outputs.module_version }}", "ci_run_id": "${{ github.run_id }}", "windows_artifact_name": "${{ needs.package_app.outputs.windows_artifact_name }}", "android_artifact_name": "${{ needs.package_app.outputs.android_artifact_name }}", "ios_artifact_name": "${{ needs.package_app.outputs.ios_artifact_name }}"}'
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
