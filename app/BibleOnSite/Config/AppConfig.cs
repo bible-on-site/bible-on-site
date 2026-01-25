@@ -1,4 +1,6 @@
+#if MAUI
 using Microsoft.Maui.Devices;
+#endif
 
 namespace BibleOnSite.Config;
 
@@ -57,6 +59,7 @@ public sealed class AppConfig
 #if DEBUG
         // Only use DevApiUrl on emulators/simulators - real devices should use production API
         // because 10.0.2.2 (Android) or localhost is not accessible from real devices
+#if MAUI
         if (DeviceInfo.Current.DeviceType == DeviceType.Virtual)
         {
             // TODO: remove me - debug logging
@@ -69,6 +72,11 @@ public sealed class AppConfig
             Console.WriteLine($"[DEBUG] GetApiUrl: Using ApiUrl (DEBUG + real device): {ApiUrl}");
             return ApiUrl;
         }
+#else
+        // Non-MAUI (e.g., unit tests) - use DevApiUrl in debug mode
+        Console.WriteLine($"[DEBUG] GetApiUrl: Using DevApiUrl (DEBUG + non-MAUI): {DevApiUrl}");
+        return DevApiUrl;
+#endif
 #else
         // TODO: remove me - debug logging
         Console.WriteLine($"[DEBUG] GetApiUrl: Using ApiUrl (RELEASE build): {ApiUrl}");
