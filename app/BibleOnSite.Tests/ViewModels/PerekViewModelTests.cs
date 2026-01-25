@@ -68,8 +68,8 @@ public class PerekViewModelTests
         var viewModel = new PerekViewModel(preferences, _ => perek);
         viewModel.LoadByPerekId(123);
 
-        // Source should be "SeferName PerekHeb - PerekId"
-        viewModel.Source.Should().Be("בראשית ה - 123");
+        // Source should be "SeferName PerekHeb - PerekId | HebDate"
+        viewModel.Source.Should().Be("בראשית ה - 123 | תשרי");
     }
 
     [Fact]
@@ -82,8 +82,8 @@ public class PerekViewModelTests
         var viewModel = new PerekViewModel(preferences, _ => perek);
         viewModel.LoadByPerekId(456);
 
-        // Source should be "SeferName Additional PerekHeb - PerekId"
-        viewModel.Source.Should().Be("שמואל ב ג - 456");
+        // Source should be "SeferName Additional PerekHeb - PerekId | HebDate"
+        viewModel.Source.Should().Be("שמואל ב ג - 456 | חשוון");
     }
 
     private static Perek CreatePerek(int perekId, int perekNumber, int? additional, string seferName, string seferTanahUsName, string hebDate)

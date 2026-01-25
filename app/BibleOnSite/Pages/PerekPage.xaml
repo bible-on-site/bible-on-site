@@ -8,20 +8,37 @@
              Title="{Binding Source}"
              FlowDirection="RightToLeft">
 
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <Color x:Key="SelectedPasukBackground">#E3F2FD</Color>
+            <Color x:Key="SelectedPasukBackgroundDark">#1E3A5F</Color>
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
     <Grid RowDefinitions="*,Auto">
         <!-- Perek Text - Pasukim List -->
         <CollectionView Grid.Row="0"
+                        x:Name="PasukimCollection"
                         ItemsSource="{Binding Perek.Pasukim}"
                         SelectionMode="None"
                         Margin="8,0">
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:Pasuk">
-                    <Frame Padding="12,8"
-                           Margin="0,4"
-                           CornerRadius="8"
-                           BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}"
-                           BorderColor="Transparent">
+                    <Border Padding="12,8"
+                            Margin="0,4"
+                            StrokeShape="RoundRectangle 8"
+                            Stroke="Transparent"
+                            x:Name="PasukBorder"
+                            BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnPasukTapped"
+                                                  CommandParameter="{Binding PasukNum}"/>
+                        </Border.GestureRecognizers>
                         <Grid ColumnDefinitions="40,*">
+                            <Grid.GestureRecognizers>
+                                <PointerGestureRecognizer PointerPressed="OnPasukPointerPressed"
+                                                          PointerReleased="OnPasukPointerReleased"/>
+                            </Grid.GestureRecognizers>
                             <Label Grid.Column="0"
                                    Text="{Binding PasukNumHeb}"
                                    FontSize="16"
@@ -33,9 +50,10 @@
                                    Text="{Binding Text}"
                                    FontSize="18"
                                    LineBreakMode="WordWrap"
-                                   LineHeight="1.4"/>
+                                   LineHeight="1.4"
+                                   HorizontalTextAlignment="End"/>
                         </Grid>
-                    </Frame>
+                    </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
 

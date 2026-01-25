@@ -93,6 +93,7 @@
                        Text="{Binding Article.ArticleContent}"
                        FontSize="16"
                        LineHeight="1.5"
+                       HorizontalTextAlignment="End"
                        Margin="0,0,0,32"/>
 
                 <!-- No content message -->
