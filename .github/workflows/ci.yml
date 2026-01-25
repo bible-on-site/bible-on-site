@@ -1587,8 +1587,9 @@ jobs:
   release_website:
     name: Release Website
     needs: [setup_env, determine_website_changes, cross_module_ci, package_website]
-    # Note: Checking outputs instead of result as a workaround for reusable workflow result evaluation issues (see #1065)
-    if: ${{ needs.package_website.outputs.module_version != '' && needs.determine_website_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
+    # Also verify cross_module_ci and package_website passed to ensure quality gate
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_website.result == 'success' && needs.package_website.outputs.module_version != '' && needs.determine_website_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -1602,8 +1603,9 @@ jobs:
   release_api:
     name: Release API
     needs: [setup_env, determine_api_changes, cross_module_ci, package_api]
-    # Note: Checking outputs instead of result as a workaround for reusable workflow result evaluation issues (see #1065)
-    if: ${{ needs.package_api.outputs.module_version != '' && needs.determine_api_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
+    # Also verify cross_module_ci and package_api passed to ensure quality gate
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_api.result == 'success' && needs.package_api.outputs.module_version != '' && needs.determine_api_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
