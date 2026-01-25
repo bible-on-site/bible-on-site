@@ -90,7 +90,6 @@ module.exports = async function globalSetup(config) {
 	mkdirSync(BENCHMARK_OUTPUT_DIR, { recursive: true });
 	writeFileSync(BENCHMARK_OUTPUT_FILE, "{}", "utf8");
 
-
 	// Warm up server when running with coverage
 	await warmUpServer();
 };
