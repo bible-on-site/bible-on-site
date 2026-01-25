@@ -23,10 +23,8 @@
 		<!-- Define MAUI symbol for conditional compilation -->
 		<DefineConstants>$(DefineConstants);MAUI</DefineConstants>
 
-		<!-- Display name - must match reserved name in Partner Center for Microsoft Store -->
-		<!-- Windows uses the Hebrew store-reserved name, Android uses English for consistency -->
-		<ApplicationTitle Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">929 - תנ"ך על הפרק</ApplicationTitle>
-		<ApplicationTitle Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'windows'">BibleOnSite</ApplicationTitle>
+		<!-- Display name - Hebrew name for all platforms -->
+		<ApplicationTitle>תנ"ך על הפרק</ApplicationTitle>
 
 		<!-- App Identifier -->
 		<ApplicationId>com.tanah.daily929</ApplicationId>
@@ -50,8 +48,8 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<!-- App Icon -->
-		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
+		<!-- App Icon - using legacy app icon -->
+		<MauiIcon Include="Resources\AppIcon\appicon_legacy.png" />
 
 		<!-- Splash Screen -->
 		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />

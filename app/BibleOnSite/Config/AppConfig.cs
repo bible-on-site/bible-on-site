@@ -1,3 +1,5 @@
+using Microsoft.Maui.Devices;
+
 namespace BibleOnSite.Config;
 
 /// <summary>
@@ -39,6 +41,7 @@ public sealed class AppConfig
     /// <summary>
     /// Gets the appropriate API URL based on build configuration.
     /// Can be overridden by setting the API_URL environment variable.
+    /// In DEBUG mode, uses DevApiUrl only on emulators (real devices use production API).
     /// </summary>
     public string GetApiUrl()
     {
@@ -52,9 +55,20 @@ public sealed class AppConfig
         }
 
 #if DEBUG
-        // TODO: remove me - debug logging
-        Console.WriteLine($"[DEBUG] GetApiUrl: Using DevApiUrl (DEBUG build): {DevApiUrl}");
-        return DevApiUrl;
+        // Only use DevApiUrl on emulators/simulators - real devices should use production API
+        // because 10.0.2.2 (Android) or localhost is not accessible from real devices
+        if (DeviceInfo.Current.DeviceType == DeviceType.Virtual)
+        {
+            // TODO: remove me - debug logging
+            Console.WriteLine($"[DEBUG] GetApiUrl: Using DevApiUrl (DEBUG + emulator): {DevApiUrl}");
+            return DevApiUrl;
+        }
+        else
+        {
+            // TODO: remove me - debug logging
+            Console.WriteLine($"[DEBUG] GetApiUrl: Using ApiUrl (DEBUG + real device): {ApiUrl}");
+            return ApiUrl;
+        }
 #else
         // TODO: remove me - debug logging
         Console.WriteLine($"[DEBUG] GetApiUrl: Using ApiUrl (RELEASE build): {ApiUrl}");
