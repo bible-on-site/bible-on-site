@@ -18,6 +18,7 @@ In order to understand some topic related to this repository, refer to the `docs
 
 - **Terminal Commands**: Due to a temporary bug, always prepend a leading space before running any commands in terminal (e.g., ` cd /path && command` instead of `cd /path && command`).
 - **Windows "nul" Files**: Before committing, check for and remove any accidentally created `nul` files (a Windows artifact). Run: `find . -name "nul" -type f -delete` or manually delete them.
+- **Branch Verification**: Before pushing to a branch, verify it doesn't already exist on remote (may have been merged). See `docs/practices/git.md` for details.
 
 ### Tool Learning Protocol
 
