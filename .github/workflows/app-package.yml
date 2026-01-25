@@ -1,9 +1,21 @@
 name: App Package Flow
 on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Target platform: Windows, Android, iOS, or All"
+        required: false
+        type: choice
+        options:
+          - All
+          - Windows
+          - Android
+          - iOS
+        default: "All"
   workflow_call:
     inputs:
       platform:
-        description: "Target platform: Windows, Android, or All"
+        description: "Target platform: Windows, Android, iOS, or All"
         required: false
         type: string
         default: "All"
@@ -22,16 +34,27 @@ on:
         required: false
       ANDROID_KEY_PASSWORD:
         required: false
+      IOS_CERTIFICATE_BASE64:
+        required: false
+      IOS_CERTIFICATE_PASSWORD:
+        required: false
+      IOS_PROVISIONING_PROFILE_BASE64:
+        required: false
+      IOS_TEAM_ID:
+        required: false
     outputs:
       module_version:
         description: The version of the app.
-        value: ${{ jobs.package_android.outputs.module_version || jobs.package_windows.outputs.module_version }}
+        value: ${{ jobs.package_android.outputs.module_version || jobs.package_windows.outputs.module_version || jobs.package_ios.outputs.module_version }}
       windows_artifact_name:
         description: The name of the Windows MSIX artifact.
         value: ${{ jobs.package_windows.outputs.artifact_name }}
       android_artifact_name:
         description: The name of the Android AAB artifact.
         value: ${{ jobs.package_android.outputs.artifact_name }}
+      ios_artifact_name:
+        description: The name of the iOS IPA artifact.
+        value: ${{ jobs.package_ios.outputs.artifact_name }}
 
 permissions:
   contents: read
@@ -236,3 +259,134 @@ jobs:
           if [ -f "${{ runner.temp }}/keystore.jks" ]; then
             rm -f "${{ runner.temp }}/keystore.jks"
           fi
+
+  package_ios:
+    name: Package iOS (IPA)
+    if: ${{ inputs.platform == 'iOS' || inputs.platform == 'All' }}
+    runs-on: macos-15
+    outputs:
+      artifact_name: ${{ steps.set_artifact_name.outputs.artifact_name }}
+      module_version: ${{ steps.get_version.outputs.VERSION }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get .NET version and app version from csproj
+        id: get_version
+        working-directory: ${{ env.APP_DIRECTORY }}
+        run: |
+          # Extract .NET version from TargetFrameworks
+          DOTNET_VERSION=$(grep -oE 'net[0-9]+\.[0-9]+' BibleOnSite/BibleOnSite.csproj | head -1 | sed 's/net//')
+          echo "DOTNET_VERSION=${DOTNET_VERSION}.x" >> $GITHUB_OUTPUT
+          echo ".NET version: ${DOTNET_VERSION}.x"
+          # Extract ApplicationDisplayVersion
+          VERSION=$(grep -oE '<ApplicationDisplayVersion>[^<]+</ApplicationDisplayVersion>' BibleOnSite/BibleOnSite.csproj | sed 's/<[^>]*>//g')
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "App version: $VERSION"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ steps.get_version.outputs.DOTNET_VERSION }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-maui-ios-${{ hashFiles('app/**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-maui-ios-
+            ${{ runner.os }}-nuget-
+
+      - name: Install MAUI workload
+        run: |
+          # Show .NET SDK info to debug
+          dotnet --info
+          # Install the MAUI iOS workload
+          dotnet workload install maui-ios --skip-manifest-update
+          # Show installed workloads
+          dotnet workload list
+
+      - name: Select Xcode version
+        run: |
+          # List available Xcode versions
+          echo "Available Xcode installations:"
+          ls -la /Applications/ | grep -i xcode || true
+          # Select Xcode 26.0 for .NET 10 iOS SDK compatibility
+          sudo xcode-select -s /Applications/Xcode_26.0.1.app/Contents/Developer
+          echo "Selected Xcode path:"
+          xcode-select -p
+          # Show Xcode version
+          echo "Xcode version:"
+          xcodebuild -version
+
+      - name: Setup iOS signing
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          # Create temporary keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          # Create keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # Decode and import certificate
+          CERTIFICATE_PATH=$RUNNER_TEMP/certificate.p12
+          echo -n "$CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+          security import $CERTIFICATE_PATH -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          # Decode and install provisioning profile
+          PROFILE_PATH=$RUNNER_TEMP/profile.mobileprovision
+          echo -n "$PROVISIONING_PROFILE_BASE64" | base64 --decode -o $PROFILE_PATH
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          PROFILE_UUID=$(security cms -D -i $PROFILE_PATH | grep -A1 UUID | grep string | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
+          cp $PROFILE_PATH ~/Library/MobileDevice/Provisioning\ Profiles/$PROFILE_UUID.mobileprovision
+
+          # Export for later cleanup
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
+          echo "PROFILE_UUID=$PROFILE_UUID" >> $GITHUB_ENV
+
+      - name: Restore dotnet tools
+        working-directory: ${{ env.APP_DIRECTORY }}
+        run: dotnet tool restore
+
+      - name: Package IPA
+        working-directory: ${{ env.APP_DIRECTORY }}
+        run: |
+          dotnet run --project devops -- Package --platform iOS --configuration Release \
+            --ios-team-id "${{ secrets.IOS_TEAM_ID }}"
+
+      - name: Set artifact name output
+        id: set_artifact_name
+        run: echo "artifact_name=app-ios-v${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ steps.set_artifact_name.outputs.artifact_name }}
+          path: ${{ env.APP_DIRECTORY }}/.artifacts/*.ipa
+          retention-days: 30
+          if-no-files-found: error
+          include-hidden-files: true
+
+      - name: Cleanup signing
+        if: always()
+        run: |
+          # Delete keychain
+          if [ -f "$KEYCHAIN_PATH" ]; then
+            security delete-keychain $KEYCHAIN_PATH || true
+          fi
+          # Delete provisioning profile
+          if [ -n "$PROFILE_UUID" ]; then
+            rm -f ~/Library/MobileDevice/Provisioning\ Profiles/$PROFILE_UUID.mobileprovision || true
+          fi
+          # Delete temp files
+          rm -f $RUNNER_TEMP/certificate.p12 || true
+          rm -f $RUNNER_TEMP/profile.mobileprovision || true
