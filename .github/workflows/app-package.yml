@@ -299,7 +299,25 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Install MAUI workload
-        run: dotnet workload install maui-ios --skip-manifest-update
+        run: |
+          # Show .NET SDK info to debug
+          dotnet --info
+          # Install the MAUI iOS workload
+          dotnet workload install maui-ios --skip-manifest-update
+          # Show installed workloads
+          dotnet workload list
+
+      - name: Select Xcode version
+        run: |
+          # List available Xcode versions
+          echo "Available Xcode installations:"
+          ls -la /Applications/ | grep -i xcode || true
+          # Use the default Xcode path
+          echo "Current Xcode path:"
+          xcode-select -p
+          # Show Xcode version
+          echo "Xcode version:"
+          xcodebuild -version
 
       - name: Setup iOS signing
         env:
