@@ -613,7 +613,7 @@ jobs:
           auto-start: true
 
       - name: Setup Rust
-        uses: dtolnay/rust-action@master
+        uses: dtolnay/rust-toolchain@master
 
       - name: Install cargo-make
         uses: taiki-e/install-action@v2
