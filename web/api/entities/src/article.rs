@@ -11,6 +11,8 @@ pub struct Model {
     pub article_abstract: Option<String>,
     pub name: String,
     pub priority: i8,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub content: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

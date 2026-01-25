@@ -97,6 +97,7 @@ public class ArticleService : BaseGraphQLService
                         perekId
                         authorId
                         abstract
+                        articleContent
                         name
                         priority
                     }
@@ -133,6 +134,7 @@ public class ArticleService : BaseGraphQLService
                 PerekId = dto.PerekId,
                 AuthorId = dto.AuthorId,
                 Abstract = dto.Abstract ?? string.Empty,
+                ArticleContent = dto.ArticleContent,
                 Name = dto.Name ?? string.Empty,
                 Priority = dto.Priority,
                 Author = author

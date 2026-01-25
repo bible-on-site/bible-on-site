@@ -41,6 +41,7 @@
     <Compile Include="..\BibleOnSite\Helpers\*.cs" Link="Helpers\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Models\*.cs" Link="Models\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Services\BaseGraphQLService.cs" Link="Services\BaseGraphQLService.cs" />
+    <Compile Include="..\BibleOnSite\Services\ArticleService.cs" Link="Services\ArticleService.cs" />
     <Compile Include="..\BibleOnSite\Services\StarterService.cs" Link="Services\StarterService.cs" />
     <Compile Include="..\BibleOnSite\Services\IPreferencesStorage.cs" Link="Services\IPreferencesStorage.cs" />
     <Compile Include="..\BibleOnSite\Services\PreferencesService.cs" Link="Services\PreferencesService.cs" />

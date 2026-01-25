@@ -175,33 +175,115 @@ public class AppFixture : IAsyncLifetime
         // Ensure API is running first (reuse if already running)
         await EnsureApiRunningAsync();
 
-        // Start the application
+        // Kill any existing BibleOnSite processes to ensure clean start
+        foreach (var proc in Process.GetProcessesByName("BibleOnSite"))
+        {
+            try { proc.Kill(); proc.WaitForExit(2000); } catch { }
+        }
+        await Task.Delay(1000); // Give time for processes to fully terminate
+
+        // Start the application using dotnet run (which handles Windows App SDK properly)
+        var projectDir = Path.GetFullPath(Path.Combine(AppPath, "..", "..", "..", "..", "..")); // Go up to BibleOnSite project folder
         var startInfo = new ProcessStartInfo
         {
-            FileName = AppPath,
+            FileName = "dotnet",
+            Arguments = "run -f net9.0-windows10.0.19041.0 --no-build",
+            WorkingDirectory = projectDir,
             UseShellExecute = false,
-            WorkingDirectory = Path.GetDirectoryName(AppPath)
+            CreateNoWindow = false,
+            RedirectStandardOutput = false,
+            RedirectStandardError = false,
         };
 
-        _app = Application.Launch(startInfo);
-        _appProcess = Process.GetProcessById(_app.ProcessId);
+        // Set API_URL to use local test API
+        startInfo.EnvironmentVariables["API_URL"] = ApiUrl;
+
+        Console.WriteLine($"Starting app from {projectDir} with API_URL={ApiUrl}");
+
+        _appProcess = Process.Start(startInfo);
 
         if (_appProcess == null)
         {
-            throw new InvalidOperationException("Failed to start the application");
+            throw new InvalidOperationException("Failed to start dotnet run process");
         }
 
-        // Wait for the app to start and get the Application instance
-        await Task.Delay(3000); // Give app time to initialize
+        // Wait for the app to start and initialize
+        await Task.Delay(8000); // Give app more time to compile if needed and fully initialize
+
+        // Find the actual BibleOnSite.exe process that dotnet run started
+        Process? targetProcess = null;
+        var processes = Process.GetProcessesByName("BibleOnSite");
+
+        Console.WriteLine($"Found {processes.Length} BibleOnSite processes");
+
+        foreach (var proc in processes)
+        {
+            try
+            {
+                proc.Refresh();
+                if (proc.MainWindowHandle != IntPtr.Zero)
+                {
+                    Console.WriteLine($"Process {proc.Id} has a main window");
+                    targetProcess = proc;
+                    break;
+                }
+            }
+            catch
+            {
+                // Skip processes that can't be queried
+            }
+        }
+
+        // If no process with window found, try to use the first one that hasn't exited
+        if (targetProcess == null)
+        {
+            foreach (var proc in processes)
+            {
+                try
+                {
+                    proc.Refresh();
+                    if (!proc.HasExited)
+                    {
+                        Console.WriteLine($"Using process {proc.Id} (no window handle but still running)");
+                        targetProcess = proc;
+                        break;
+                    }
+                }
+                catch
+                {
+                    // Skip
+                }
+            }
+        }
+
+        if (targetProcess == null)
+        {
+            throw new InvalidOperationException("BibleOnSite process not found after startup");
+        }
+
+        // Attach FlaUI to the BibleOnSite process (not the dotnet process)
+        _app = Application.Attach(targetProcess.Id);
 
         // Wait for main window to be available (startup can be slow on first run)
         var timeout = DateTime.UtcNow.AddSeconds(60);
         Exception? lastException = null;
         while (DateTime.UtcNow < timeout)
         {
-            if (_appProcess.HasExited)
+            try
             {
-                throw new InvalidOperationException($"App process exited before window was available. Exit code: {_appProcess.ExitCode}");
+                targetProcess.Refresh();
+                if (targetProcess.HasExited)
+                {
+                    throw new InvalidOperationException("App process exited before window was available.");
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                throw;
+            }
+            catch
+            {
+                // Ignore Refresh errors
             }
 
             try

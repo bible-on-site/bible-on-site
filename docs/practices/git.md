@@ -55,6 +55,23 @@ Copilot and agents follow the same workflow as above but should:
 3. If changes exist, stage and amend automatically
 4. Verify clean working tree before pushing
 
+### Branch Management
+
+**Before pushing to a branch**, always verify the branch doesn't already exist on remote (it may have been merged/deleted):
+
+```bash
+# Check if remote branch exists
+git ls-remote --heads origin <branch-name>
+
+# If empty output: branch doesn't exist, safe to push
+# If output exists: branch exists, investigate before pushing
+```
+
+**Why this matters:** Pushing to an already-merged branch can cause conflicts and confusion. If the branch already exists:
+1. Check if it was merged (PR closed)
+2. If merged, create a new branch with a different name
+3. If not merged, fetch and rebase before pushing
+
 ### Pull Request Management
 - Always create a new branch for each feature or fix
 - Pull request is automatically created when publishing a branch
