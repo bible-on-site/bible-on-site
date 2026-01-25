@@ -47,7 +47,7 @@ Start the development server:
 npm run dev
 ```
 
-This will start the Vite dev server at http://localhost:3002
+This will start the Vite dev server at http://localhost:3101
 
 ### Building
 

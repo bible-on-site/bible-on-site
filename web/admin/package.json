@@ -4,10 +4,10 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "vite --port 3002",
-		"dev:full": "npm run docker:up && npm run s3:populate && vite --port 3002",
+		"dev": "vite --port 3101",
+		"dev:full": "npm run docker:up && npm run s3:populate && vite --port 3101",
 		"build": "vite build",
-		"start": "vite preview --port 3002",
+		"start": "vite preview --port 3101",
 		"lint": "biome lint",
 		"format": "biome format --write",
 		"check": "biome check --write",
