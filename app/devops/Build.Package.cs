@@ -99,7 +99,8 @@ partial class Build
             {
                 DotNetRestore(s => s
                     .SetProjectFile(MainProject)
-                    .SetProperty("TargetFramework", "net9.0-ios"));
+                    .SetProperty("TargetFramework", "net9.0-ios")
+                    .SetProperty("RuntimeIdentifier", "ios-arm64"));
             }
             else
             {
