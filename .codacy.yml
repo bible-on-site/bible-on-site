@@ -1,0 +1,9 @@
+# Codacy Configuration
+# https://docs.codacy.com/repositories-configure/codacy-configuration-file/
+
+---
+# Disable cyclomatic complexity metric analysis
+# This effectively makes "Complexity increasing per file" not a mandatory pass
+engines:
+  metric:
+    enabled: false

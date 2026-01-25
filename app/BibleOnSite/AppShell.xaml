@@ -9,6 +9,14 @@
     FlyoutWidth="280"
     FlowDirection="RightToLeft">
 
+    <!-- Loading Page (shown first on startup) -->
+    <ShellContent
+        ContentTemplate="{DataTemplate pages:LoadingPage}"
+        Route="LoadingPage"
+        FlyoutItemIsVisible="False"
+        Shell.NavBarIsVisible="False"
+        Shell.TabBarIsVisible="False"/>
+
     <!-- Flyout Header -->
     <Shell.FlyoutHeader>
         <Grid HeightRequest="120"

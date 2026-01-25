@@ -1,6 +1,5 @@
 namespace BibleOnSite.Pages;
 
-using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 
 /// <summary>
@@ -37,9 +36,6 @@ public partial class PerekPage : ContentPage
             {
                 // Load data from SQLite database
                 await _viewModel.LoadByPerekIdAsync(1);
-
-                // Also load starter data from API in background
-                _ = LoadApiDataAsync();
             }
             catch (Exception ex)
             {
@@ -50,22 +46,6 @@ public partial class PerekPage : ContentPage
             {
                 _isLoading = false;
             }
-        }
-    }
-
-    private static async Task LoadApiDataAsync()
-    {
-        try
-        {
-            if (!StarterService.Instance.IsLoaded)
-            {
-                await StarterService.Instance.LoadAsync();
-                Console.WriteLine($"Loaded {StarterService.Instance.Authors.Count} authors from API");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Failed to load API data: {ex.Message}");
         }
     }
 

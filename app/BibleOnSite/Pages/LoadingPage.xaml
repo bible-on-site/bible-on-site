@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="BibleOnSite.Pages.LoadingPage"
+             BackgroundColor="{StaticResource Primary}"
+             Shell.NavBarIsVisible="False"
+             Shell.TabBarIsVisible="False">
+
+    <Grid RowDefinitions="*,Auto,*"
+          Padding="40">
+
+        <!-- Logo -->
+        <Image Grid.Row="0"
+               Source="appicon.png"
+               HeightRequest="150"
+               WidthRequest="150"
+               VerticalOptions="End"
+               HorizontalOptions="Center"
+               Margin="0,0,0,40"/>
+
+        <!-- Loading Indicator and Text -->
+        <VerticalStackLayout Grid.Row="1"
+                             Spacing="20"
+                             VerticalOptions="Center"
+                             HorizontalOptions="Center">
+
+            <ActivityIndicator IsRunning="True"
+                               Color="White"
+                               HeightRequest="50"
+                               WidthRequest="50"/>
+
+            <Label x:Name="LoadingLabel"
+                   Text="טוען נתונים..."
+                   TextColor="White"
+                   FontSize="18"
+                   HorizontalTextAlignment="Center"/>
+
+        </VerticalStackLayout>
+
+        <!-- App Title -->
+        <VerticalStackLayout Grid.Row="2"
+                             VerticalOptions="End"
+                             HorizontalOptions="Center"
+                             Spacing="4"
+                             Margin="0,0,0,40">
+
+            <Label Text="תנ״ך על הפרק"
+                   TextColor="White"
+                   FontSize="24"
+                   FontAttributes="Bold"
+                   HorizontalTextAlignment="Center"/>
+
+            <Label Text="לימוד יומי"
+                   TextColor="White"
+                   Opacity="0.8"
+                   FontSize="14"
+                   HorizontalTextAlignment="Center"/>
+
+        </VerticalStackLayout>
+
+    </Grid>
+
+</ContentPage>
