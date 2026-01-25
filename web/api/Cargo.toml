@@ -5,7 +5,7 @@ description = "Bible on Site API"
 license-file = "../../license"
 repository = "https://github.com/bible-on-site/bible-on-site"
 publish = false
-version = "0.1.14"
+version = "0.1.15"
 edition = "2024"
 
 [dependencies]
@@ -36,7 +36,7 @@ sea-orm = { version = "1.1.19", default-features = false, features = [
 entities = { path = "./entities" }
 
 [dev-dependencies]
-cargo-llvm-cov = "0.6.21"
+cargo-llvm-cov = "0.7.0"
 cargo-make = "0.37.24"
 semver-bump = "1.0.1"
 tomato-toml = { git = "https://github.com/doradsoft/rust-tomato-toml", branch = "latest" }
