@@ -312,8 +312,9 @@ jobs:
           # List available Xcode versions
           echo "Available Xcode installations:"
           ls -la /Applications/ | grep -i xcode || true
-          # Use the default Xcode path
-          echo "Current Xcode path:"
+          # Select Xcode 26.0 for .NET 10 iOS SDK compatibility
+          sudo xcode-select -s /Applications/Xcode_26.0.1.app/Contents/Developer
+          echo "Selected Xcode path:"
           xcode-select -p
           # Show Xcode version
           echo "Xcode version:"
