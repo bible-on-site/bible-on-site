@@ -63,7 +63,9 @@ export function getBaseConfig(testType: TestType) {
 			...(shouldMeasureCov && {
 				env: { NODE_OPTIONS: `--inspect=${getDebugPort()}` },
 			}),
-			timeout: 60000,
+			// 180 seconds to accommodate Rust compilation when cache is cold
+			// The launcher runs `cargo make mysql-populate` which compiles the data crate
+			timeout: 180000,
 			command:
 				"echo 'Error: A derived playwright config must set the web server command' && exit 1",
 			url: WEB_SERVER_URL,

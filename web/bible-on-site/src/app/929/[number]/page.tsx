@@ -1,6 +1,7 @@
 // import Image from "next/image";
 
 import { toLetters } from "gematry";
+import { unstable_cache } from "next/cache";
 import React, { Suspense } from "react";
 import { isQriDifferentThanKtiv } from "../../../data/db/tanah-view-types";
 import { getPerekByPerekId } from "../../../data/perek-dto";
@@ -21,6 +22,29 @@ export function generateStaticParams() {
 	return Array.from({ length: 929 }, (_, i) => ({ number: String(i + 1) }));
 }
 
+/**
+ * Cache articles with on-demand revalidation support.
+ *
+ * IMPORTANT: We use on-demand revalidation only (no periodic/time-based revalidation).
+ * Periodic revalidation should be avoided because:
+ * - It causes unpredictable cache invalidation across server instances
+ * - It can lead to stale data being served inconsistently
+ * - It makes debugging cache issues difficult
+ * - On-demand revalidation provides precise control over when content updates
+ *
+ * To invalidate:
+ * - Single page: revalidatePath('/929/{perekId}')
+ * - All articles: revalidateTag('articles')
+ */
+const getCachedArticles = unstable_cache(
+	async (perekId: number) => getArticlesByPerekId(perekId),
+	["articles"],
+	{
+		tags: ["articles"],
+		revalidate: false, // No periodic revalidation - on-demand only
+	},
+);
+
 // TODO: figure out if need to use generateMetadata
 export default async function Perek({
 	params,
@@ -31,8 +55,8 @@ export default async function Perek({
 	const perekId = Number.parseInt(number, 10); // convert string to number
 	const perekObj = getPerekByPerekId(perekId);
 
-	// Fetch articles for this perek directly from database
-	const articles = await getArticlesByPerekId(perekId);
+	// Fetch articles using cached function (ISR with on-demand revalidation support)
+	const articles = await getCachedArticles(perekId);
 
 	return (
 		<>
