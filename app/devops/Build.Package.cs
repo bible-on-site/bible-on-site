@@ -28,6 +28,9 @@ partial class Build
     [Parameter("Android key password")]
     readonly string? AndroidKeyPassword;
 
+    [Parameter("iOS Team ID")]
+    readonly string? IosTeamId;
+
     Target Package => _ => _
         .Description("Package app for distribution (Windows MSIX and/or Android AAB)")
         .DependsOn(PackagePrepare)
@@ -54,6 +57,18 @@ partial class Build
             {
                 PackageAndroid(version);
             }
+
+            if (Platform.Equals("iOS", StringComparison.OrdinalIgnoreCase) || Platform.Equals("All", StringComparison.OrdinalIgnoreCase))
+            {
+                if (OperatingSystem.IsMacOS())
+                {
+                    PackageIos(version);
+                }
+                else
+                {
+                    Serilog.Log.Warning("Skipping iOS packaging - not running on macOS");
+                }
+            }
         });
 
     Target PackagePrepare => _ => _
@@ -79,6 +94,12 @@ partial class Build
                 DotNetRestore(s => s
                     .SetProjectFile(MainProject)
                     .SetProperty("TargetFramework", "net9.0-android"));
+            }
+            else if (Platform.Equals("iOS", StringComparison.OrdinalIgnoreCase))
+            {
+                DotNetRestore(s => s
+                    .SetProjectFile(MainProject)
+                    .SetProperty("TargetFramework", "net9.0-ios"));
             }
             else
             {
@@ -170,6 +191,64 @@ partial class Build
         }
 
         Serilog.Log.Information($"Android AAB package created in {ArtifactsDirectory}");
+    }
+
+    void PackageIos(string version)
+    {
+        Serilog.Log.Information("Packaging for iOS (IPA)...");
+
+        var msbuildProperties = new Dictionary<string, object>
+        {
+            ["TargetFramework"] = "net9.0-ios",
+            ["ArchiveOnBuild"] = "true",
+            ["BuildIpa"] = "true",
+            ["IpaPackageDir"] = $"{ArtifactsDirectory}/"
+        };
+
+        // Add code signing configuration
+        if (!string.IsNullOrEmpty(IosTeamId))
+        {
+            msbuildProperties["CodesignKey"] = "Apple Distribution";
+            msbuildProperties["CodesignProvision"] = "";
+            msbuildProperties["RuntimeIdentifier"] = "ios-arm64";
+            Serilog.Log.Information($"iOS code signing enabled with Team ID: {IosTeamId}");
+        }
+        else
+        {
+            Serilog.Log.Warning("No iOS Team ID provided - building without specific signing");
+        }
+
+        DotNetPublish(s => s
+            .SetProject(MainProject)
+            .SetConfiguration(Configuration)
+            .SetFramework("net9.0-ios")
+            .SetRuntime("ios-arm64")
+            .SetProperties(msbuildProperties)
+            .EnableNoRestore());
+
+        // Find and copy IPA to artifacts directory
+        var binDir = MainProject.Parent / "bin" / Configuration / "net9.0-ios" / "ios-arm64";
+        var ipaFiles = binDir.GlobFiles("**/*.ipa");
+
+        if (ipaFiles.Count > 0)
+        {
+            foreach (var ipa in ipaFiles)
+            {
+                ipa.CopyToDirectory(ArtifactsDirectory, ExistsPolicy.FileOverwrite);
+                Serilog.Log.Information($"Copied {ipa.Name} to {ArtifactsDirectory}");
+            }
+        }
+        else
+        {
+            // IPA might be directly in artifacts directory
+            var artifactIpas = ArtifactsDirectory.GlobFiles("*.ipa");
+            if (artifactIpas.Count == 0)
+            {
+                Serilog.Log.Warning($"No IPA files found in {binDir} or {ArtifactsDirectory}");
+            }
+        }
+
+        Serilog.Log.Information($"iOS IPA package created in {ArtifactsDirectory}");
     }
 
     Target Version => _ => _
