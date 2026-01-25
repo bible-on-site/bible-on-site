@@ -25,6 +25,6 @@ export default defineConfig({
 		command: webServerCommand,
 		url: "http://localhost:3002",
 		reuseExistingServer: !process.env.CI,
-		timeout: 120000,
+		timeout: 300000, // 5 minutes for CI to handle Rust compilation
 	},
 });
