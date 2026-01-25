@@ -12,7 +12,7 @@ export default defineConfig({
 	reporter: [["html", { outputFolder: ".playwright-report" }]],
 	outputDir: ".playwright-results",
 	use: {
-		baseURL: "http://localhost:3002",
+		baseURL: "http://localhost:3101",
 		trace: "on-first-retry",
 	},
 	projects: [
@@ -23,7 +23,7 @@ export default defineConfig({
 	],
 	webServer: {
 		command: webServerCommand,
-		url: "http://localhost:3002",
+		url: "http://localhost:3101",
 		reuseExistingServer: !process.env.CI,
 		timeout: 300000, // 5 minutes for CI to handle Rust compilation
 	},
