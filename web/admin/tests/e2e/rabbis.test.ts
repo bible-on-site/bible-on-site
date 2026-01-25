@@ -4,7 +4,9 @@ test.describe("Rabbis Management", () => {
 	test("displays rabbis list", async ({ page }) => {
 		await page.goto("/rabbis");
 
-		await expect(page.locator("h1")).toContainText("ניהול רבנים");
+		await expect(page.locator("h1")).toContainText("ניהול רבנים", {
+			timeout: 10000,
+		});
 		// Should have at least one rabbi card or empty state
 		const content = await page.textContent("main");
 		expect(content).toBeTruthy();

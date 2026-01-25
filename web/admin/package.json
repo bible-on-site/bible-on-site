@@ -17,7 +17,7 @@
 		"coverage:all": "npm run coverage:unit && npm run coverage:e2e && npm run coverage:merge",
 		"coverage:unit": "vitest run --coverage",
 		"coverage:e2e": "playwright test --reporter=html",
-		"coverage:merge": "echo 'TODO: Implement coverage merge for admin'",
+		"coverage:merge": "node --import tsx ./tests/util/merge-coverage.mts",
 		"docker:up": "docker compose -f ../../devops/docker-compose.yml up -d",
 		"docker:down": "docker compose -f ../../devops/docker-compose.yml down",
 		"s3:populate": "cd ../../data && cargo make s3-populate-dev",

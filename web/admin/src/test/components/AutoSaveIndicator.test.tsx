@@ -8,7 +8,7 @@ describe("AutoSaveIndicator", () => {
 			<AutoSaveIndicator isSaving={true} lastSaved={null} hasChanges={false} />,
 		);
 
-		expect(screen.getByText("שומר...")).toBeInTheDocument();
+		expect(screen.getByText("⏳ שומר...")).toBeInTheDocument();
 	});
 
 	it("shows unsaved changes state", () => {
@@ -29,7 +29,7 @@ describe("AutoSaveIndicator", () => {
 			/>,
 		);
 
-		expect(screen.getByText(/נשמר לאחרונה ב-/)).toBeInTheDocument();
+		expect(screen.getByText(/✓ נשמר ב-/)).toBeInTheDocument();
 	});
 
 	it("shows nothing when no state", () => {

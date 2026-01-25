@@ -13,5 +13,17 @@ export default defineConfig({
 		environment: "jsdom",
 		globals: true,
 		setupFiles: ["./src/test/setup.ts"],
+		coverage: {
+			provider: "v8",
+			reportsDirectory: ".coverage/unit",
+			reporter: ["text", "lcov", "html"],
+			include: ["src/**/*.{ts,tsx}"],
+			exclude: [
+				"src/routeTree.gen.ts",
+				"src/test/**",
+				"**/*.d.ts",
+				"**/*.test.ts",
+			],
+		},
 	},
 });
