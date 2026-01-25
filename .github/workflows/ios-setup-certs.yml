@@ -1,0 +1,150 @@
+name: iOS Certificate Setup (One-Time)
+
+# This workflow generates iOS signing certificates and provisioning profiles
+# Run this ONCE to set up iOS code signing, then delete or disable this workflow
+# The secrets are uploaded as an encrypted artifact - download and extract with the password you provide
+
+on:
+  workflow_dispatch:
+    inputs:
+      certificate_password:
+        description: 'Password for the .p12 certificate AND artifact encryption'
+        required: true
+        type: string
+
+jobs:
+  generate_certificates:
+    name: Generate iOS Certificates
+    runs-on: macos-14
+    
+    steps:
+      - name: Install Fastlane
+        run: |
+          gem install fastlane -NV
+
+      - name: Generate Certificate and Profile
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          CERT_PASSWORD: ${{ inputs.certificate_password }}
+        run: |
+          # Decode API key
+          echo -n "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 --decode > AuthKey.p8
+          
+          # Create Fastlane directory and config
+          mkdir -p fastlane
+          
+          cat > fastlane/Appfile << EOF
+          app_identifier("com.tanah.daily929")
+          EOF
+          
+          cat > fastlane/Fastfile << 'EOF'
+          default_platform(:ios)
+          
+          platform :ios do
+            desc "Generate certificates and provisioning profiles"
+            lane :generate_certs do
+              # Set up App Store Connect API
+              api_key = app_store_connect_api_key(
+                key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
+                issuer_id: ENV["APP_STORE_CONNECT_API_ISSUER_ID"],
+                key_filepath: "AuthKey.p8",
+                in_house: false
+              )
+              
+              # Create or get distribution certificate
+              cert(
+                api_key: api_key,
+                generate_apple_certs: true,
+                output_path: "./certs"
+              )
+              
+              # Create App Store provisioning profile
+              sigh(
+                api_key: api_key,
+                app_identifier: "com.tanah.daily929",
+                output_path: "./profiles",
+                force: true
+              )
+            end
+          end
+          EOF
+          
+          # Run Fastlane
+          fastlane generate_certs
+          
+          # Create output directory for secrets
+          mkdir -p ios-secrets
+          
+          # Export certificate as p12
+          echo "=== Exporting P12 ==="
+          security find-identity -v -p codesigning
+          
+          # Find and export the certificate with private key
+          IDENTITY=$(security find-identity -v -p codesigning | grep "Apple Distribution" | head -1 | awk '{print $2}')
+          
+          if [ -n "$IDENTITY" ]; then
+            echo "Found identity: $IDENTITY"
+            security export -k ~/Library/Keychains/login.keychain-db -t identities -f pkcs12 -P "$CERT_PASSWORD" -o ios-secrets/certificate.p12
+          fi
+          
+          # Copy provisioning profile
+          PROFILE=$(find profiles -name "*.mobileprovision" | head -1)
+          if [ -n "$PROFILE" ]; then
+            cp "$PROFILE" ios-secrets/profile.mobileprovision
+          fi
+          
+          # Extract Team ID and create secrets file
+          TEAM_ID=$(security cms -D -i "$PROFILE" | grep -A1 "TeamIdentifier" | grep string | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
+          
+          # Create a secrets summary file
+          cat > ios-secrets/SECRETS_README.txt << SECRETSEOF
+          iOS Signing Secrets for GitHub Actions
+          =======================================
+          
+          Add these secrets to your GitHub repository:
+          
+          1. IOS_CERTIFICATE_PASSWORD
+             Value: (the password you used when running this workflow)
+          
+          2. IOS_TEAM_ID
+             Value: $TEAM_ID
+          
+          3. IOS_CERTIFICATE_BASE64
+             Run: base64 -i certificate.p12 | pbcopy
+             (or use the value in certificate_base64.txt)
+          
+          4. IOS_PROVISIONING_PROFILE_BASE64
+             Run: base64 -i profile.mobileprovision | pbcopy
+             (or use the value in profile_base64.txt)
+          
+          SECRETSEOF
+          
+          # Create base64 encoded files
+          base64 -i ios-secrets/certificate.p12 > ios-secrets/certificate_base64.txt
+          base64 -i ios-secrets/profile.mobileprovision > ios-secrets/profile_base64.txt
+          echo "$TEAM_ID" > ios-secrets/team_id.txt
+          
+          # Create encrypted zip with the password
+          cd ios-secrets
+          zip -P "$CERT_PASSWORD" ../ios-secrets-encrypted.zip *
+          cd ..
+          
+          echo ""
+          echo "=========================================="
+          echo "Secrets generated and encrypted!"
+          echo "Download the artifact, extract with your password"
+          echo "=========================================="
+
+      - name: Upload Encrypted Secrets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-secrets-encrypted
+          path: ios-secrets-encrypted.zip
+          retention-days: 1
+
+      - name: Cleanup sensitive files
+        if: always()
+        run: |
+          rm -rf ios-secrets certs profiles AuthKey.p8 fastlane || true
