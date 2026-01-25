@@ -13,6 +13,7 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute("ArticlesPage", typeof(ArticlesPage));
 		Routing.RegisterRoute("AuthorsPage", typeof(AuthorsPage));
 		Routing.RegisterRoute("articleDetail", typeof(ArticleDetailPage));
+		Routing.RegisterRoute("LoadingPage", typeof(LoadingPage));
 	}
 
 	private async void OnTermsClicked(object? sender, EventArgs e)
