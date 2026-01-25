@@ -31,7 +31,7 @@ public class ArticlesNavigationTests
         // MAUI Shell uses a hamburger icon that may have different automation properties
         var menuButton = _fixture.MainWindow.FindFirstDescendant(
             _fixture.CF.ByAutomationId("FlyoutButton").Or(_fixture.CF.ByName("☰")));
-        
+
         if (menuButton != null)
         {
             menuButton.Click();
@@ -94,7 +94,7 @@ public class ArticlesNavigationTests
 
         // The page should have loaded (either we see the title or Back button)
         var backButton = _fixture.MainWindow.FindFirstDescendant(_fixture.CF.ByName("Back"));
-        
+
         // At minimum, the window should still be responsive
         _fixture.MainWindow.Should().NotBeNull();
     }

@@ -194,14 +194,14 @@ public class AppFixture : IAsyncLifetime
             RedirectStandardOutput = false,
             RedirectStandardError = false,
         };
-        
+
         // Set API_URL to use local test API
         startInfo.EnvironmentVariables["API_URL"] = ApiUrl;
-        
+
         Console.WriteLine($"Starting app from {projectDir} with API_URL={ApiUrl}");
 
         _appProcess = Process.Start(startInfo);
-        
+
         if (_appProcess == null)
         {
             throw new InvalidOperationException("Failed to start dotnet run process");
@@ -213,9 +213,9 @@ public class AppFixture : IAsyncLifetime
         // Find the actual BibleOnSite.exe process that dotnet run started
         Process? targetProcess = null;
         var processes = Process.GetProcessesByName("BibleOnSite");
-        
+
         Console.WriteLine($"Found {processes.Length} BibleOnSite processes");
-        
+
         foreach (var proc in processes)
         {
             try
