@@ -9,7 +9,7 @@
 # To work around this, we restore to /mongodb-data (not a volume) and
 # copy it to /data/db at container startup via a custom entrypoint.
 
-FROM mongo:7
+FROM mongo:8
 
 # Install curl for downloading the dump
 # Use --no-install-recommends per Codacy guidelines
