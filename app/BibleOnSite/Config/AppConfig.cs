@@ -73,7 +73,8 @@ public sealed class AppConfig
             return ApiUrl;
         }
 #else
-        // Non-MAUI builds (tests) - use DevApiUrl in DEBUG mode
+        // Non-MAUI (e.g., unit tests) - use DevApiUrl in debug mode
+        Console.WriteLine($"[DEBUG] GetApiUrl: Using DevApiUrl (DEBUG + non-MAUI): {DevApiUrl}");
         return DevApiUrl;
 #endif
 #else
