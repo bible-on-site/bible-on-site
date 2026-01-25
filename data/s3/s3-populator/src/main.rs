@@ -208,9 +208,7 @@ async fn build_s3_client(cli: &Cli) -> Result<Client> {
         .credentials_provider(credentials);
 
     if let Some(ref endpoint) = cli.endpoint {
-        config_builder = config_builder
-            .endpoint_url(endpoint)
-            .force_path_style(true);
+        config_builder = config_builder.endpoint_url(endpoint).force_path_style(true);
     }
 
     let config = config_builder.build();
@@ -323,6 +321,9 @@ async fn populate_sample_images(client: &Client, bucket: &str) -> Result<()> {
         println!("  Uploaded: {}", key);
     }
 
-    println!("Uploaded {} sample images + 1 default avatar", SAMPLE_IMAGES.len());
+    println!(
+        "Uploaded {} sample images + 1 default avatar",
+        SAMPLE_IMAGES.len()
+    );
     Ok(())
 }
