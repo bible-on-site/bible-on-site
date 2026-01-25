@@ -79,14 +79,12 @@ fn create_solid_png(width: u32, height: u32, r: u8, g: u8, b: u8) -> Vec<u8> {
     write_chunk(&mut png_data, b"IHDR", &ihdr_data);
 
     // IDAT chunk - compressed image data
-    let mut raw_data = Vec::new();
+    // Each row has a filter byte (0 = none) followed by RGB pixels
+    let row_size = 1 + (width as usize) * 3;
+    let mut raw_data = Vec::with_capacity(row_size * (height as usize));
     for _ in 0..height {
         raw_data.push(0); // filter byte (none)
-        for _ in 0..width {
-            raw_data.push(r);
-            raw_data.push(g);
-            raw_data.push(b);
-        }
+        raw_data.extend(std::iter::repeat_n([r, g, b], width as usize).flatten());
     }
 
     // Compress with zlib
@@ -189,10 +187,8 @@ fn load_env_files() {
 
     for file in &env_files {
         let path = repo_root.join(file);
-        if path.exists() {
-            if dotenvy::from_path(&path).is_ok() {
-                println!("Loaded environment from: {}", file);
-            }
+        if path.exists() && dotenvy::from_path(&path).is_ok() {
+            println!("Loaded environment from: {}", file);
         }
     }
 }

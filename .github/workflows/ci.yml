@@ -803,10 +803,11 @@ jobs:
         with:
           workspaces: ${{ env.DATA_DIRECTORY }}
 
-      # Pre-build the data crate to warm the cache before E2E tests
-      - name: Pre-build data crate for E2E tests
+      # Pre-build the data crates to warm the cache before E2E tests
+      # This prevents timeout when the E2E launcher runs cargo make mysql-populate and s3-populate-test
+      - name: Pre-build data crates for E2E tests
         working-directory: ${{ env.DATA_DIRECTORY }}
-        run: cargo build --release
+        run: cargo build --release --workspace
 
       - name: E2E Test
         id: npm-e2e-test
