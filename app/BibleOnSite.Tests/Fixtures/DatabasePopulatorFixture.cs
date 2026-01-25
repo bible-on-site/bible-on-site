@@ -44,10 +44,80 @@ public class DatabasePopulatorFixture : IAsyncLifetime
         await PopulateDatabase(dataDir);
     }
 
-    public Task DisposeAsync()
+    public async Task DisposeAsync()
     {
-        // Nothing to clean up - we leave the test data for inspection if needed
-        return Task.CompletedTask;
+        // Drop the test database to ensure clean state for next run
+        // This helps reproduce CI issues locally
+        Console.WriteLine("[DatabasePopulatorFixture] Dropping test database for clean state...");
+
+        var dataDir = FindDataDirectory();
+        if (dataDir == null || !await IsCargoMakeAvailable())
+        {
+            Console.WriteLine("[DatabasePopulatorFixture] WARNING: Cannot drop database - cargo-make or data dir not available");
+            return;
+        }
+
+        await DropDatabase(dataDir);
+    }
+
+    private static async Task DropDatabase(string dataDir)
+    {
+        var dbUrl = GetDbUrl();
+        Console.WriteLine($"[DatabasePopulatorFixture] Dropping test database...");
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "cargo",
+            Arguments = "make mysql-drop",
+            WorkingDirectory = dataDir,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+
+        // Set DB_URL for the populator
+        startInfo.Environment["DB_URL"] = dbUrl;
+
+        using var process = new Process { StartInfo = startInfo };
+
+        process.OutputDataReceived += (_, e) =>
+        {
+            if (!string.IsNullOrEmpty(e.Data))
+            {
+                Console.WriteLine($"[db-drop] {e.Data}");
+            }
+        };
+
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (!string.IsNullOrEmpty(e.Data))
+            {
+                Console.Error.WriteLine($"[db-drop ERROR] {e.Data}");
+            }
+        };
+
+        process.Start();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        // Wait up to 30 seconds for database drop
+        var completed = await Task.Run(() => process.WaitForExit(30_000));
+
+        if (!completed)
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            Console.WriteLine("[DatabasePopulatorFixture] WARNING: Database drop timed out");
+            return;
+        }
+
+        if (process.ExitCode != 0)
+        {
+            Console.WriteLine($"[DatabasePopulatorFixture] WARNING: Database drop failed with exit code {process.ExitCode}");
+            return;
+        }
+
+        Console.WriteLine("[DatabasePopulatorFixture] Test database dropped successfully");
     }
 
     private static async Task<bool> IsCargoMakeAvailable()
