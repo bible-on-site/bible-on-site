@@ -1,17 +1,20 @@
 /**
- * Playwright Global Setup - Database Population
+ * Playwright Global Setup - JavaScript Wrapper
  *
- * This setup ensures the test database is populated before running E2E tests.
- * Runs `cargo make mysql-populate` from the data/ directory to populate
- * the tanah_test database with test data.
+ * This is a plain ESM JavaScript file that Playwright can load directly.
+ * It dynamically imports the TypeScript setup using tsx.
  *
- * IMPORTANT: This must succeed for the API server to start correctly.
- * If database population fails, the setup will throw an error to fail fast.
+ * We use this wrapper because Playwright's built-in TypeScript transpiler
+ * has compatibility issues with certain ESM/CJS patterns in .ts files.
  */
 
 import { execSync, spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Create a log file for debugging CI issues
 const logDir = path.resolve(__dirname, ".log");
@@ -26,13 +29,13 @@ const logFile = path.resolve(logDir, "global-setup.log");
 try {
 	writeFileSync(
 		logFile,
-		`[${new Date().toISOString()}] [INIT] Module loaded. __dirname=${__dirname}\n`,
+		`[${new Date().toISOString()}] [INIT] Module loaded (mjs wrapper). __dirname=${__dirname}\n`,
 	);
 } catch (e) {
 	console.error(`[GlobalSetup] Failed to write initial log to ${logFile}:`, e);
 }
 
-function log(message: string): void {
+function log(message) {
 	const timestamp = new Date().toISOString();
 	const line = `[${timestamp}] ${message}\n`;
 	console.log(message);
@@ -43,7 +46,7 @@ function log(message: string): void {
 	}
 }
 
-async function globalSetup(): Promise<void> {
+async function globalSetup() {
 	log("[DB Setup] ========================================");
 	log("[DB Setup] Ensuring test database is populated...");
 	log(`[DB Setup] Current directory: ${process.cwd()}`);
