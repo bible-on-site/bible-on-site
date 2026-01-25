@@ -3,6 +3,16 @@ name: Continuous Deployment - App
 on:
   repository_dispatch:
     types: [deploy-app]
+  workflow_dispatch:
+    inputs:
+      ios_artifact_name:
+        description: "iOS artifact name (e.g., app-ios-v4.0.35)"
+        required: false
+        type: string
+      ci_run_id:
+        description: "CI run ID that created the artifact"
+        required: false
+        type: string
 
 jobs:
   deploy_google_play:
@@ -165,22 +175,20 @@ jobs:
 
   deploy_app_store:
     name: Deploy to App Store (TestFlight)
-    if: ${{ github.event.client_payload.ios_artifact_name != '' }}
+    if: ${{ github.event.client_payload.ios_artifact_name != '' || inputs.ios_artifact_name != '' }}
     permissions:
       contents: read
     runs-on: macos-15
 
     env:
-      MODULE_VERSION: ${{ github.event.client_payload.module_version }}
-      IOS_ARTIFACT_NAME: ${{ github.event.client_payload.ios_artifact_name }}
-      CI_RUN_ID: ${{ github.event.client_payload.ci_run_id }}
+      MODULE_VERSION: ${{ github.event.client_payload.module_version || '0.0.0' }}
+      IOS_ARTIFACT_NAME: ${{ github.event.client_payload.ios_artifact_name || inputs.ios_artifact_name }}
+      CI_RUN_ID: ${{ github.event.client_payload.ci_run_id || inputs.ci_run_id }}
       APP_DIRECTORY: app
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.client_payload.ref }}
 
       - name: Restore iOS IPA
         uses: actions/download-artifact@v7
