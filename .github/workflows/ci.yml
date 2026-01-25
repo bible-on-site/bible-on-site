@@ -58,6 +58,11 @@ env:
   WEBSITE_UNIT_JUNIT_REPORT_ARTIFACT_NAME: website-unit-junit-report-${{ github.run_id }}
   APP_UNIT_JUNIT_REPORT_ARTIFACT_NAME: app-unit-junit-report-${{ github.run_id }}
   APP_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME: app-integration-junit-report-${{ github.run_id }}
+  ADMIN_DIRECTORY: web/admin
+  ADMIN_NODE_CACHE_PATH: web/admin/package-lock.json
+  ADMIN_NODE_VERSION_FILE: web/admin/package.json
+  ADMIN_UNIT_JUNIT_REPORT_ARTIFACT_NAME: admin-unit-junit-report-${{ github.run_id }}
+  ADMIN_E2E_JUNIT_REPORT_ARTIFACT_NAME: admin-e2e-junit-report-${{ github.run_id }}
   DATA_UNIT_JUNIT_REPORT_ARTIFACT_NAME: data-unit-junit-report-${{ github.run_id }}
   DATA_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME: data-integration-junit-report-${{ github.run_id }}
   LCOV_DOCKER_IMAGE_ARTIFACT_NAME: lcov-docker-image
@@ -71,6 +76,7 @@ jobs:
       api_directory: ${{ env.API_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       api_playwright_version: ${{ steps.get_api_playwright_version.outputs.PLAYWRIGHT_VERSION }}
       app_directory: ${{ env.APP_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
+      admin_directory: ${{ env.ADMIN_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       data_directory: ${{ env.DATA_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       is_master_branch: ${{ env.IS_MASTER_BRANCH }} # a workaround for places where only needs.<job_id>.<output> is allowed
       website_directory: ${{ env.WEBSITE_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
@@ -261,6 +267,16 @@ jobs:
       module_directory: ${{ needs.setup_env.outputs.app_directory }}
       module_name: ${{ needs.setup_env.outputs.app_directory }}
       ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
+
+  determine_admin_changes:
+    name: Determine Admin Changes
+    needs: setup_env
+    secrets: inherit
+    uses: ./.github/workflows/shared-ci.yml
+    with:
+      module_directory: ${{ needs.setup_env.outputs.admin_directory }}
+      module_name: ${{ needs.setup_env.outputs.admin_directory }}
+      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml"
 
   determine_data_changes:
     name: Determine Data Changes
@@ -695,6 +711,123 @@ jobs:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
           retention-days: 400
+          overwrite: true
+
+  admin_ci:
+    name: Admin CI
+    runs-on: ubuntu-latest
+    needs: [setup_env, determine_admin_changes]
+    if: ${{ needs.determine_admin_changes.outputs.module_changed == 'true' || needs.determine_admin_changes.outputs.ci_changed == 'true' }}
+    defaults:
+      run:
+        working-directory: ${{ env.ADMIN_DIRECTORY }}
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+
+      - name: Setup Node.js
+        id: setup-node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ${{ env.ADMIN_NODE_VERSION_FILE }}
+          cache-dependency-path: ${{ env.ADMIN_NODE_CACHE_PATH }}
+          cache: npm
+
+      - name: Install npm Dependencies
+        id: npm_ci
+        run: npm ci --no-audit
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Lint
+        id: npm-lint
+        run: npm run lint
+
+      - name: Type Check
+        id: npm-typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit Test
+        id: npm-unit-test
+        run: npm run test:unit
+
+      - name: Build
+        id: npm-build
+        run: npm run build
+
+      - name: Store Admin Unit JUnit Report
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.ADMIN_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
+          path: ${{ env.ADMIN_DIRECTORY }}/.junit-report/unit-results.xml
+          retention-days: 1
+          overwrite: true
+          if-no-files-found: ignore
+
+      # ============ MySQL and LocalStack Setup for E2E Tests ============
+      - name: Install and start MySQL
+        id: mysql
+        uses: shogo82148/actions-setup-mysql@v1
+        with:
+          mysql-version: "8.4"
+          root-password: test_123
+          distribution: "mysql"
+          auto-start: true
+
+      - name: Start LocalStack
+        uses: LocalStack/setup-localstack@v0.2.3
+        with:
+          image-tag: "latest"
+          install-awslocal: "true"
+
+      - name: Create S3 bucket in LocalStack
+        run: awslocal s3 mb s3://bible-on-site-rabbis-test
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-make
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-make
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ env.DATA_DIRECTORY }}
+
+      # Pre-build the data crates to warm the cache before E2E tests
+      # This prevents timeout when the E2E launcher runs cargo make mysql-populate and s3-populate-test
+      - name: Pre-build data crates for E2E tests
+        working-directory: ${{ env.DATA_DIRECTORY }}
+        run: cargo build --release --workspace
+
+      - name: E2E Test
+        id: npm-e2e-test
+        env:
+          DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
+          S3_ENDPOINT: http://localhost:4566
+          S3_BUCKET: bible-on-site-rabbis-test
+          S3_REGION: us-east-1
+          S3_ACCESS_KEY_ID: test
+          S3_SECRET_ACCESS_KEY: test
+          S3_FORCE_PATH_STYLE: "true"
+        run: npm run test:e2e
+
+      - name: Store Admin E2E HTML Report
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: admin-e2e-html-report-${{ github.run_id }}
+          path: ${{ env.ADMIN_DIRECTORY }}/.playwright-report
+          retention-days: 7
           overwrite: true
 
   api_e2e:

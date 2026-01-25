@@ -15,6 +15,8 @@ const websiteCoverageFilePath = resolve(
 );
 const apiCoverageDir = resolve(__dirname, "../web/api/.coverage/merged");
 const apiCoverageFilePath = resolve(apiCoverageDir, "lcov.info");
+const adminCoverageDir = resolve(__dirname, "../web/admin/.coverage/merged");
+const adminCoverageFilePath = resolve(adminCoverageDir, "lcov.info");
 const appCoverageDir = resolve(__dirname, "../app/.coverage/merged");
 const appCoverageFilePath = resolve(appCoverageDir, "lcov.info");
 const outputDir = resolve(__dirname, "..", ".coverage");
@@ -29,6 +31,12 @@ try {
 const stream = fs.createWriteStream(outputFilePath);
 stream.write(await fs.promises.readFile(websiteCoverageFilePath));
 stream.write(await fs.promises.readFile(apiCoverageFilePath));
+
+// Admin coverage is optional - only include if the file exists
+if (fs.existsSync(adminCoverageFilePath)) {
+	stream.write(await fs.promises.readFile(adminCoverageFilePath));
+	await fs.promises.rm(adminCoverageDir, { recursive: true });
+}
 
 // App coverage is optional - only include if the file exists
 if (fs.existsSync(appCoverageFilePath)) {
