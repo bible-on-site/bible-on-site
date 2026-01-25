@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { mkdir, stat, watch } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +10,32 @@ const COVERAGE_FILE_PATH = path.resolve(__dirname, "../.coverage/e2e/lcov.info")
 const COVERAGE_DIR_PATH = path.dirname(COVERAGE_FILE_PATH);
 const COVERAGE_FILE_NAME = path.basename(COVERAGE_FILE_PATH);
 const COVERAGE_WAIT_TIMEOUT_MS = 30_000;
+
+/**
+ * Drop the test database to ensure a clean state for the next run.
+ * This helps reproduce CI issues locally where the database doesn't persist.
+ */
+const dropTestDatabase = async () => {
+	const dbUrl =
+		process.env.DB_URL || "mysql://root:test_123@localhost:3306/tanah_test";
+	const dataDirectory = path.resolve(__dirname, "../../../data");
+
+	console.log("[Teardown] Dropping test database for clean state...");
+	try {
+		execSync("cargo make mysql-drop", {
+			cwd: dataDirectory,
+			stdio: "inherit",
+			env: {
+				...process.env,
+				DB_URL: dbUrl,
+			},
+		});
+		console.log("[Teardown] Test database dropped successfully.");
+	} catch (error) {
+		// Non-fatal - database might not exist or drop might fail for other reasons
+		console.log(`[Teardown] Warning: Failed to drop test database: ${error.message}`);
+	}
+};
 
 const isCoverageReady = async () => {
 	try {
@@ -79,6 +106,10 @@ const globalTeardown = async () => {
 	if (shouldMeasureCov) {
 		await waitForCoverageFile();
 	}
+
+	// Drop the test database to ensure clean state for next run
+	// This helps reproduce CI issues locally
+	await dropTestDatabase();
 };
 
 export default globalTeardown;
