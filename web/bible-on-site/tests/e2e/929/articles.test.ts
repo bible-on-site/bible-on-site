@@ -5,10 +5,6 @@ import { expect, test } from "../../util/playwright/test-fixture";
  *
  * Tests verify that articles are displayed correctly when available.
  * Perek 1 (Bereshit א) has test articles seeded in the database.
- *
- * NOTE: These tests require MySQL database with test data to be available.
- * In CI, the database is not available during build, so articles won't be rendered
- * and these tests will be skipped automatically.
  */
 
 test.describe("Articles Section", () => {
@@ -24,13 +20,7 @@ test.describe("Articles Section", () => {
 			has: page.locator("text=מאמרים על הפרק"),
 		});
 
-		// In CI, database may not be available during build, so articles section may not exist
-		// Skip test if articles section is not present (no database connection during build)
-		const isSectionVisible = await articlesSection.isVisible();
-		if (!isSectionVisible) {
-			test.skip(true, "Articles not available - database not connected during build");
-			return;
-		}
+		await expect(articlesSection).toBeVisible();
 
 		// Check that at least one article card is displayed
 		const articleCards = articlesSection.locator("article");
@@ -49,12 +39,7 @@ test.describe("Articles Section", () => {
 			has: page.locator("text=מאמרים על הפרק"),
 		});
 
-		// Skip test if articles section is not present
-		const isSectionVisible = await articlesSection.isVisible();
-		if (!isSectionVisible) {
-			test.skip(true, "Articles not available - database not connected during build");
-			return;
-		}
+		await expect(articlesSection).toBeVisible();
 
 		// Check for abstract content (rendered from HTML in test data)
 		// The test data has: '<h1>מאמר של הרב לדוגמא שליט"א על בראשית א</h1>'
@@ -69,12 +54,7 @@ test.describe("Articles Section", () => {
 			has: page.locator("text=מאמרים על הפרק"),
 		});
 
-		// Skip test if articles section is not present
-		const isSectionVisible = await articlesSection.isVisible();
-		if (!isSectionVisible) {
-			test.skip(true, "Articles not available - database not connected during build");
-			return;
-		}
+		await expect(articlesSection).toBeVisible();
 
 		// Check for "Read more" text
 		const readMoreLinks = articlesSection.locator("text=קרא עוד");

@@ -602,12 +602,37 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nextjs-${{ hashFiles(format('{0}/package-lock.json', env.WEBSITE_DIRECTORY)) }}-
 
+      # ============ MySQL Setup for Articles ============
+      - name: Install and start MySQL
+        id: mysql
+        uses: shogo82148/actions-setup-mysql@v1
+        with:
+          mysql-version: "8.4"
+          root-password: test_123
+          distribution: "mysql"
+          auto-start: true
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@master
+
+      - name: Install cargo-make
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-make
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ env.DATA_DIRECTORY }}
+
       - name: Build
         id: npm-build
         run: npm run build
 
       - name: E2E Test
         id: npm-e2e-test
+        env:
+          DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
         run: npm run coverage:e2e
 
       - name: Store Website E2E HTML Report
