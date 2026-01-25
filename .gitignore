@@ -19,8 +19,10 @@ test-results/
 # Rust build artifacts
 **/target/
 
-# Raw data files (too large for git, downloaded/generated locally)
-app/BibleOnSite/Resources/Raw/
+# Raw data files (downloaded/generated locally, except tracked assets)
+app/BibleOnSite/Resources/Raw/*
+!app/BibleOnSite/Resources/Raw/*.sqlite
+!app/BibleOnSite/Resources/Raw/AboutAssets.txt
 **/.raw/
 **/.outputs/
 app/.artifacts/
