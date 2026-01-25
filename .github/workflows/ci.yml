@@ -625,6 +625,12 @@ jobs:
         with:
           workspaces: ${{ env.DATA_DIRECTORY }}
 
+      # Pre-build the data crate to warm the cache before E2E tests
+      # This prevents timeout when launcher runs cargo make mysql-populate
+      - name: Pre-build data crate for E2E tests
+        working-directory: ${{ env.DATA_DIRECTORY }}
+        run: cargo build --release
+
       - name: Build
         id: npm-build
         run: npm run build
