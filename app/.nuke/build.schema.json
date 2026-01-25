@@ -164,6 +164,10 @@
           "type": "string",
           "description": "Google Play track (internal, alpha, beta, production). Default: internal"
         },
+        "IosTeamId": {
+          "type": "string",
+          "description": "iOS Team ID"
+        },
         "MaxFlightsToKeep": {
           "type": "integer",
           "description": "Maximum number of flights to keep (older flights will be deleted). Default: 5",
