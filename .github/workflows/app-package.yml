@@ -263,7 +263,7 @@ jobs:
   package_ios:
     name: Package iOS (IPA)
     if: ${{ inputs.platform == 'iOS' || inputs.platform == 'All' }}
-    runs-on: macos-14
+    runs-on: macos-15
     outputs:
       artifact_name: ${{ steps.set_artifact_name.outputs.artifact_name }}
       module_version: ${{ steps.get_version.outputs.VERSION }}
