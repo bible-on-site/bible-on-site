@@ -1,3 +1,25 @@
+# ====================================================================================
+# CI WORKFLOW - Continuous Integration Pipeline
+# ====================================================================================
+#
+# IMPORTANT: Reusable Workflow Result Evaluation Bug (see #1065)
+# -------------------------------------------------------------
+# GitHub Actions has a known issue where jobs depending on reusable workflows may be
+# incorrectly skipped, even when the upstream workflow completes successfully.
+#
+# WORKAROUND: When adding jobs that depend on reusable workflows (like cross_module_ci
+# or package_* jobs), you MUST use this pattern:
+#
+#   if: ${{ always() && needs.upstream_job.result == 'success' && <your conditions> }}
+#
+# Rule: When adding job X that depends on reusable workflow Y:
+#   1. Start with always()
+#   2. Check needs.Y.result == 'success' for EACH reusable workflow dependency
+#   3. Then add your business logic conditions (outputs, branch checks, etc.)
+#
+# See docs/github/workflows/ci/ci.md for detailed documentation and examples.
+# ====================================================================================
+
 # TODO: cleanup artifacts using geekyeggo/delete-artifact
 name: Continuous Integration
 permissions:

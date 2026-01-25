@@ -23,8 +23,8 @@
 		<!-- Define MAUI symbol for conditional compilation -->
 		<DefineConstants>$(DefineConstants);MAUI</DefineConstants>
 
-		<!-- Display name - Hebrew name for all platforms -->
-		<ApplicationTitle>תנ"ך על הפרק</ApplicationTitle>
+		<!-- Display name - must match Partner Center reserved name for MS Store -->
+		<ApplicationTitle>929 - תנ"ך על הפרק</ApplicationTitle>
 
 		<!-- App Identifier -->
 		<ApplicationId>com.tanah.daily929</ApplicationId>
