@@ -199,23 +199,13 @@
 			"label": "admin: test-unit",
 			"group": "test"
 		},
-
-		// ============ Admin API Tasks ============
 		{
 			"type": "npm",
-			"script": "dev",
-			"path": "web/admin-api",
+			"script": "test:e2e",
+			"path": "web/admin",
 			"problemMatcher": [],
-			"label": "admin-api: dev",
-			"isBackground": true
-		},
-		{
-			"type": "npm",
-			"script": "build",
-			"path": "web/admin-api",
-			"problemMatcher": [],
-			"label": "admin-api: build",
-			"group": "build"
+			"label": "admin: test-e2e",
+			"group": "test"
 		}
 	]
 }
