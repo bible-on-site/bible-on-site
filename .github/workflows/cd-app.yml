@@ -245,8 +245,8 @@ jobs:
           app_identifier("com.tanah.daily929")
           EOF
 
-          # Upload and distribute using Fastlane pilot
-          fastlane pilot upload \
+          # Try to upload, and if build already exists, just distribute the existing one
+          UPLOAD_OUTPUT=$(fastlane pilot upload \
             --ipa "${{ steps.find_ipa.outputs.IPA_FILE }}" \
             --api_key_path "${{ env.API_KEY_PATH }}" \
             --skip_waiting_for_build_processing false \
@@ -254,7 +254,23 @@ jobs:
             --groups "${TESTFLIGHT_BETA_GROUP}" \
             --beta_app_description "929 - תנ\"ך על הפרק: Daily Bible study app following the 929 project curriculum." \
             --beta_app_feedback_email "support@929.org.il" \
-            --changelog "Automated build v${{ env.MODULE_VERSION }}"
+            --changelog "Automated build v${{ env.MODULE_VERSION }}" 2>&1) || {
+            if echo "$UPLOAD_OUTPUT" | grep -q "bundle version must be higher"; then
+              echo "Build already exists in TestFlight. Distributing existing build..."
+              # Extract build number from IPA (it's in the version string)
+              fastlane pilot distribute \
+                --api_key_path "${{ env.API_KEY_PATH }}" \
+                --app_identifier "com.tanah.daily929" \
+                --distribute_external true \
+                --groups "${TESTFLIGHT_BETA_GROUP}" \
+                --beta_app_description "929 - תנ\"ך על הפרק: Daily Bible study app following the 929 project curriculum." \
+                --beta_app_feedback_email "support@929.org.il"
+            else
+              echo "$UPLOAD_OUTPUT"
+              exit 1
+            fi
+          }
+          echo "$UPLOAD_OUTPUT"
 
       - name: Cleanup
         if: always()
