@@ -252,6 +252,8 @@ jobs:
             --skip_waiting_for_build_processing false \
             --distribute_external true \
             --groups "${TESTFLIGHT_BETA_GROUP}" \
+            --beta_app_description "929 - תנ\"ך על הפרק: Daily Bible study app following the 929 project curriculum." \
+            --beta_app_feedback_email "support@929.org.il" \
             --changelog "Automated build v${{ env.MODULE_VERSION }}"
 
       - name: Cleanup
