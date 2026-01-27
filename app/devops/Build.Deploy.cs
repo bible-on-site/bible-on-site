@@ -247,7 +247,7 @@ partial class Build
         var rawOutput = string.Join("", listProcess.Output.Select(o => o.Text));
         // Remove table characters and whitespace to get clean UUIDs
         var cleanedOutput = System.Text.RegularExpressions.Regex.Replace(rawOutput, @"[\s│├┤┌┐└┘─┬┴┼╬╔╗╚╝═╠╣╦╩╪]+", "");
-        
+
         // Parse flight IDs - the CLI returns flights in creation order (oldest first)
         // Microsoft Store has a hard limit of 25 flights per app
         var uuidPattern = new System.Text.RegularExpressions.Regex(
