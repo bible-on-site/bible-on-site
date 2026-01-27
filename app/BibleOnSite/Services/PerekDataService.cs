@@ -145,6 +145,58 @@ public class PerekDataService
     }
 
     /// <summary>
+    /// Gets today's perek ID based on the date stored in the database.
+    /// If today is Shabbat, returns the next day's perek.
+    /// Uses the tseit (star rise) time to determine if we've crossed into the next perek.
+    /// </summary>
+    public int GetTodaysPerekId()
+    {
+        if (_perakim == null || _perakim.Count == 0)
+            return 1;
+
+        var now = DateTime.Now;
+        var dateStr = now.ToString("yyyy-MM-dd");
+
+        // Check if it's Shabbat (Saturday = 6 in .NET, Friday = 5)
+        // On Shabbat, skip to Sunday's perek
+        if (now.DayOfWeek == DayOfWeek.Saturday)
+        {
+            return GetTodaysPerekId(now.AddDays(1));
+        }
+
+        return GetTodaysPerekId(now);
+    }
+
+    private int GetTodaysPerekId(DateTime date)
+    {
+        var dateStr = date.ToString("yyyy-MM-dd");
+
+        for (int perekId = 1; perekId <= 929; perekId++)
+        {
+            if (_perakim!.TryGetValue(perekId, out var perek) && perek.Date == dateStr)
+            {
+                // Check if we've passed the tseit time
+                if (!string.IsNullOrEmpty(perek.Tseit) && perek.Tseit.Length >= 5)
+                {
+                    if (int.TryParse(perek.Tseit[..2], out var hours) &&
+                        int.TryParse(perek.Tseit.Substring(3, 2), out var minutes))
+                    {
+                        var tseitTime = new DateTime(date.Year, date.Month, date.Day, hours, minutes, 0);
+                        if (DateTime.Now > tseitTime && perekId < 929)
+                        {
+                            return perekId + 1;
+                        }
+                    }
+                }
+                return perekId;
+            }
+        }
+
+        // Fallback to first perek if no date match found
+        return 1;
+    }
+
+    /// <summary>
     /// Loads the pasukim text for a given perek.
     /// </summary>
     public async Task<List<Pasuk>> LoadPasukimAsync(int perekId)

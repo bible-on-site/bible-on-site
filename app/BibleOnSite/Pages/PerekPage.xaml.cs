@@ -14,6 +14,11 @@ public partial class PerekPage : ContentPage
     private CancellationTokenSource? _longPressTokenSource;
     private const int LongPressDurationMs = 500;
 
+    // Circular menu state
+    private bool _isMenuOpen;
+    private const double MenuRadius = 80.0;
+    private const int AnimationDurationMs = 300;
+
     public PerekPage()
     {
         InitializeComponent();
@@ -180,4 +185,152 @@ public partial class PerekPage : ContentPage
             Console.Error.WriteLine($"Haptic feedback failed: {ex.Message}");
         }
     }
+
+    #region Circular Menu Methods
+
+    /// <summary>
+    /// Toggles the circular menu open/closed state with animation.
+    /// </summary>
+    private async void OnCircularMenuClicked(object? sender, EventArgs e)
+    {
+        _isMenuOpen = !_isMenuOpen;
+
+        if (_isMenuOpen)
+        {
+            await OpenCircularMenuAsync();
+        }
+        else
+        {
+            await CloseCircularMenuAsync();
+        }
+    }
+
+    /// <summary>
+    /// Opens the circular menu with animated expansion.
+    /// </summary>
+    private async Task OpenCircularMenuAsync()
+    {
+        CircularMenuOverlay.IsVisible = true;
+        CircularMenuOverlay.InputTransparent = false;
+
+        // Rotate the toggle button
+        _ = CircularMenuButton.RotateTo(45, (uint)AnimationDurationMs, Easing.BounceOut);
+
+        // Calculate positions for 4 items in an arc (from ~220° to ~320°)
+        var angles = new[] { 220.0, 250.0, 290.0, 320.0 }; // degrees
+        var buttons = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
+
+        var animationTasks = new List<Task>();
+
+        for (int i = 0; i < buttons.Length; i++)
+        {
+            var button = buttons[i];
+            var angleRad = angles[i] * Math.PI / 180.0;
+
+            var x = Math.Cos(angleRad) * MenuRadius;
+            var y = Math.Sin(angleRad) * MenuRadius;
+
+            // Reset position to center
+            button.TranslationX = 0;
+            button.TranslationY = 0;
+
+            // Animate to arc position
+            animationTasks.Add(button.TranslateTo(x, y, (uint)AnimationDurationMs, Easing.BounceOut));
+            animationTasks.Add(button.FadeTo(1, (uint)(AnimationDurationMs * 0.6)));
+            animationTasks.Add(button.ScaleTo(1, (uint)AnimationDurationMs, Easing.BounceOut));
+        }
+
+        await Task.WhenAll(animationTasks);
+    }
+
+    /// <summary>
+    /// Closes the circular menu with animated contraction.
+    /// </summary>
+    private async Task CloseCircularMenuAsync()
+    {
+        // Rotate the toggle button back
+        _ = CircularMenuButton.RotateTo(0, (uint)(AnimationDurationMs * 0.6), Easing.CubicIn);
+
+        var buttons = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
+        var animationTasks = new List<Task>();
+
+        foreach (var button in buttons)
+        {
+            animationTasks.Add(button.TranslateTo(0, 0, (uint)(AnimationDurationMs * 0.6), Easing.CubicIn));
+            animationTasks.Add(button.FadeTo(0, (uint)(AnimationDurationMs * 0.4)));
+            animationTasks.Add(button.ScaleTo(0, (uint)(AnimationDurationMs * 0.6), Easing.CubicIn));
+        }
+
+        await Task.WhenAll(animationTasks);
+
+        CircularMenuOverlay.IsVisible = false;
+        CircularMenuOverlay.InputTransparent = true;
+    }
+
+    /// <summary>
+    /// Handles menu item click - closes the menu after action.
+    /// </summary>
+    private async void OnMenuItemClicked(object? sender, EventArgs e)
+    {
+        _isMenuOpen = false;
+        await CloseCircularMenuAsync();
+    }
+
+    /// <summary>
+    /// Shows the perek picker dialog.
+    /// </summary>
+    private async void OnPerekPickerClicked(object? sender, EventArgs e)
+    {
+        _isMenuOpen = false;
+        await CloseCircularMenuAsync();
+
+        // Show perek picker - simple input for now
+        var result = await DisplayPromptAsync(
+            "בחר פרק",
+            "הזן מספר פרק (1-929):",
+            "עבור",
+            "ביטול",
+            "1",
+            maxLength: 3,
+            keyboard: Keyboard.Numeric);
+
+        if (!string.IsNullOrEmpty(result) && int.TryParse(result, out var perekId))
+        {
+            if (perekId >= 1 && perekId <= 929)
+            {
+                await _viewModel.LoadByPerekIdAsync(perekId);
+            }
+            else
+            {
+                await DisplayAlert("שגיאה", "מספר פרק לא תקין. נא להזין מספר בין 1 ל-929.", "אישור");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Handles text button click - scrolls to first pasuk.
+    /// </summary>
+    private void OnTextButtonClicked(object? sender, EventArgs e)
+    {
+        // Scroll to first pasuk
+        if (_viewModel.Perek?.Pasukim?.Count > 0)
+        {
+            PasukimCollection.ScrollTo(0);
+        }
+    }
+
+    /// <summary>
+    /// Handles expand button click - toggles full screen mode.
+    /// </summary>
+    private void OnExpandClicked(object? sender, EventArgs e)
+    {
+        // Toggle shell visibility for immersive mode
+        Shell.SetNavBarIsVisible(this, !Shell.GetNavBarIsVisible(this));
+        Shell.SetTabBarIsVisible(this, !Shell.GetTabBarIsVisible(this));
+
+        // Update button text
+        ExpandButton.Text = Shell.GetNavBarIsVisible(this) ? "⛶" : "⛶";
+    }
+
+    #endregion
 }

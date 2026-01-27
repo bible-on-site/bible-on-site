@@ -1,6 +1,8 @@
 ﻿using Microsoft.Extensions.Logging;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
+using BibleOnSite.Controls;
+using BibleOnSite.Handlers;
 
 namespace BibleOnSite;
 
@@ -15,6 +17,10 @@ public static class MauiProgram
 			{
 				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
 				fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
+			})
+			.ConfigureMauiHandlers(handlers =>
+			{
+				handlers.AddHandler<HtmlView, HtmlViewHandler>();
 			});
 
 		// Initialize PreferencesService with MAUI storage

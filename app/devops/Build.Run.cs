@@ -53,6 +53,8 @@ partial class Build
         }
     }
 
+    Process? _apiProcess;
+
     /// <summary>
     /// Starts the API server in background if not already running.
     /// </summary>
@@ -72,36 +74,78 @@ partial class Build
             FileName = "cargo",
             Arguments = $"make {ApiMakeTarget}",
             WorkingDirectory = apiPath,
-            UseShellExecute = true,
-            CreateNoWindow = false,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
         };
 
-        var process = Process.Start(startInfo);
-        if (process == null)
-        {
-            Serilog.Log.Warning("Failed to start API server process");
-            return;
-        }
+        _apiProcess = new Process { StartInfo = startInfo };
 
-        // Wait for API to be ready (max 120 seconds - Rust compilation can take a while)
-        var timeout = DateTime.Now.AddSeconds(120);
+        var lastLogLine = string.Empty;
+        var lockObj = new object();
+
+        DataReceivedEventHandler handler = (sender, e) =>
+        {
+            if (!string.IsNullOrWhiteSpace(e.Data))
+            {
+                lock (lockObj) lastLogLine = e.Data;
+            }
+        };
+
+        _apiProcess.OutputDataReceived += handler;
+        _apiProcess.ErrorDataReceived += handler;
+
+        _apiProcess.Start();
+        _apiProcess.BeginOutputReadLine();
+        _apiProcess.BeginErrorReadLine();
+
+        // Wait for API to be ready (max 300 seconds)
+        var timeout = DateTime.Now.AddSeconds(300);
         var attempts = 0;
+
         while (DateTime.Now < timeout)
         {
             attempts++;
-            System.Threading.Thread.Sleep(2000);
+
+            // Log output to console with carriage return to update in-place
+            string currentLine;
+            lock (lockObj) currentLine = lastLogLine;
+
+            if (!string.IsNullOrEmpty(currentLine))
+            {
+                try
+                {
+                    var maxLen = Math.Max(0, Console.WindowWidth - 25);
+                    if (currentLine.Length > maxLen) currentLine = currentLine.Substring(0, maxLen) + "...";
+                    Console.Write($"\rAPI: {currentLine}".PadRight(Console.WindowWidth - 1));
+                }
+                catch
+                {
+                    // Fallback if console manipulation fails
+                    if (attempts % 4 == 0) Console.WriteLine($"API: {currentLine}");
+                }
+            }
+
             if (IsApiRunning())
             {
-                Serilog.Log.Information($"API server started successfully (after ~{attempts * 2} seconds)");
+                Console.WriteLine(); // Final newline
+                Serilog.Log.Information($"API server started successfully (after ~{attempts * 0.5} seconds)");
                 return;
             }
-            if (attempts % 10 == 0)
+
+            if (_apiProcess.HasExited)
             {
-                Serilog.Log.Information($"Still waiting for API... ({attempts * 2}s elapsed)");
+                Console.WriteLine();
+                Serilog.Log.Error($"API server process exited unexpectedly with code {_apiProcess.ExitCode}");
+                throw new Exception("API server failed to start.");
             }
+
+            System.Threading.Thread.Sleep(500);
         }
 
-        Serilog.Log.Warning("API server did not respond within 120 seconds - check the API terminal");
+        Console.WriteLine();
+        Serilog.Log.Warning("API server did not respond within 300 seconds");
     }
 
     void ApplyAppEnvFile()
@@ -192,14 +236,14 @@ partial class Build
 
             ApplyAppEnvFile();
 
-            // Android doesn't support dotnet run - use dotnet watch build -t:Run for hot reload
+            // Use dotnet watch for hot reload support in VS Code
+            // Working directory is set to project folder to avoid --project argument issues
             var startInfo = new ProcessStartInfo
             {
                 FileName = "dotnet",
-                Arguments = $"watch --project \"{MainProject}\" -- build -t:Run -f net9.0-android -c {Configuration} --no-restore",
+                Arguments = $"watch build -t:Run -f net9.0-android -c {Configuration}",
+                WorkingDirectory = SourceDirectory,
                 UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
             };
             using var process = Process.Start(startInfo);
             process?.WaitForExit();
