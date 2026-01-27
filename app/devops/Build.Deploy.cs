@@ -274,6 +274,11 @@ partial class Build
         }
         
         var flightIdColumn = flightIdColumnParts.ToString();
+        
+        // Strip ANSI escape codes (the CLI adds formatting like [1;4m for underline/bold)
+        var ansiPattern = new System.Text.RegularExpressions.Regex(@"\x1b\[[0-9;]*m");
+        flightIdColumn = ansiPattern.Replace(flightIdColumn, "");
+        
         Serilog.Log.Information($"FlightId column content (first 200): {flightIdColumn.Substring(0, Math.Min(200, flightIdColumn.Length))}");
         
         // Now extract complete UUIDs from the concatenated FlightId column
