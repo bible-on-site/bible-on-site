@@ -42,7 +42,7 @@ partial class Build
         var startInfo = new ProcessStartInfo
         {
             FileName = "cargo",
-            Arguments = "make run-api",
+            Arguments = "make dev",
             WorkingDirectory = apiPath,
             UseShellExecute = true,
             CreateNoWindow = false,
@@ -107,6 +107,7 @@ partial class Build
         .DependsOn(Compile)
         .Executes(() =>
         {
+            EnsureApiRunning();
             DotNetRun(s => s
                 .SetProjectFile(MainProject)
                 .SetFramework("net9.0-windows10.0.19041.0")
@@ -124,6 +125,9 @@ partial class Build
         {
             // Ensure emulator is running
             EnsureAndroidEmulatorRunning();
+
+            // Ensure API is running with dev environment
+            EnsureApiRunning();
 
             // Android doesn't support dotnet run - use dotnet build -t:Run
             var startInfo = new ProcessStartInfo
