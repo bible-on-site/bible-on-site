@@ -23,10 +23,10 @@
 		"coverage:merge": "node --import tsx ./tests/util/merge-coverage.mts",
 		"docker:up": "docker compose -f ../../devops/docker-compose.yml up -d",
 		"docker:down": "docker compose -f ../../devops/docker-compose.yml down",
-		"db:populate:dev": "cd ../../data && cargo make mysql-populate",
-		"db:populate:test": "cd ../../data && cargo make mysql-populate",
-		"s3:populate:dev": "cd ../../data && cargo make s3-populate",
-		"s3:populate:test": "cd ../../data && cargo make s3-populate"
+		"db:populate:dev": "cd ../../data && cargo make mysql-populate-dev",
+		"db:populate:test": "cd ../../data && cargo make mysql-populate-test",
+		"s3:populate:dev": "cd ../../data && cargo make s3-populate-dev",
+		"s3:populate:test": "cd ../../data && cargo make s3-populate-test"
 	},
 	"engines": {
 		"node": ">=24.11.1 <24.12.0"
