@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Net.Http;
+using System.Net.Sockets;
 using Nuke.Common;
 using Nuke.Common.IO;
 using Nuke.Common.Tools.DotNet;
@@ -23,11 +24,28 @@ partial class Build
     /// </summary>
     bool IsApiRunning()
     {
+        if (IsPortOpen("127.0.0.1", 3003))
+            return true;
+
         try
         {
             using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
             var response = client.GetAsync("http://localhost:3003").Result;
             return response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.BadRequest;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    static bool IsPortOpen(string host, int port)
+    {
+        try
+        {
+            using var client = new TcpClient();
+            var connectTask = client.ConnectAsync(host, port);
+            return connectTask.Wait(TimeSpan.FromSeconds(1)) && client.Connected;
         }
         catch
         {
