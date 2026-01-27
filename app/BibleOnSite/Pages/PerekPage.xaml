@@ -51,7 +51,7 @@
                                    FontSize="18"
                                    LineBreakMode="WordWrap"
                                    LineHeight="1.4"
-                                   HorizontalTextAlignment="End"/>
+                                   HorizontalTextAlignment="Start"/>
                         </Grid>
                     </Border>
                 </DataTemplate>
