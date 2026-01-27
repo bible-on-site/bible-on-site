@@ -76,6 +76,36 @@ partial class Build
         Serilog.Log.Warning("API server did not respond within 120 seconds - check the API terminal");
     }
 
+    /// <summary>
+    /// Populates the dev database (uses web/api Makefile task to load .dev.env).
+    /// </summary>
+    void PopulateDevDatabase()
+    {
+        Serilog.Log.Information("Populating dev database...");
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "cargo",
+            Arguments = "make populate-dev-db",
+            WorkingDirectory = ApiDirectory,
+            UseShellExecute = true,
+            CreateNoWindow = false,
+        };
+
+        using var process = Process.Start(startInfo);
+        if (process == null)
+        {
+            Serilog.Log.Warning("Failed to start dev DB population process");
+            return;
+        }
+
+        process.WaitForExit();
+        if (process.ExitCode != 0)
+        {
+            Serilog.Log.Warning($"Dev DB population exited with code {process.ExitCode}");
+        }
+    }
+
     Target StartApi => _ => _
         .Description("Start the API server (background)")
         .Executes(() =>
@@ -107,6 +137,7 @@ partial class Build
         .DependsOn(Compile)
         .Executes(() =>
         {
+            PopulateDevDatabase();
             EnsureApiRunning();
             DotNetRun(s => s
                 .SetProjectFile(MainProject)
@@ -125,6 +156,9 @@ partial class Build
         {
             // Ensure emulator is running
             EnsureAndroidEmulatorRunning();
+
+            // Refresh dev data before app launch
+            PopulateDevDatabase();
 
             // Ensure API is running with dev environment
             EnsureApiRunning();
