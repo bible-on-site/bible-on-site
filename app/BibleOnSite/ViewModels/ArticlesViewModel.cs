@@ -132,10 +132,14 @@ public partial class ArticlesViewModel : ObservableObject
             ErrorMessage = string.Empty;
 
             // Ensure Starter data is loaded
+#if DEBUG
+            await Services.StarterService.Instance.LoadAsync(forceReload: true);
+#else
             if (!Services.StarterService.Instance.IsLoaded)
             {
                 await Services.StarterService.Instance.LoadAsync();
             }
+#endif
 
             IEnumerable<Article> articles;
 

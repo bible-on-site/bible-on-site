@@ -68,6 +68,17 @@ public class StarterService : BaseGraphQLService
         if (IsLoaded)
             return;
 
+        await LoadAsync(forceReload: false);
+    }
+
+    /// <summary>
+    /// Loads starter data from the API with a 5-second timeout.
+    /// </summary>
+    public async Task LoadAsync(bool forceReload)
+    {
+        if (IsLoaded && !forceReload)
+            return;
+
         var response = await QueryWithTimeoutAsync<StarterResponse>(
             GetStarterQuery,
             TimeSpan.FromSeconds(5),
