@@ -100,9 +100,8 @@ partial class Build
             service.Edits.Tracks.Update(trackUpdate, GooglePlayPackageName, edit.Id, track).Execute();
             Serilog.Log.Information($"Assigned to {track} track");
 
-            // Commit edit (changesNotSentForReview=true for apps not yet published)
+            // Commit edit
             var commitRequest = service.Edits.Commit(GooglePlayPackageName, edit.Id);
-            commitRequest.ChangesNotSentForReview = true;
             commitRequest.Execute();
             Serilog.Log.Information("Google Play upload complete");
         });
