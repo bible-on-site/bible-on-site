@@ -17,10 +17,25 @@ env = { PROFILE = "dev" }
 command = "cargo"
 args = ["run"]
 
+[tasks.run-api-dev]
+env_files = [".dev.env"]
+env = { PROFILE = "dev" }
+command = "cargo"
+args = ["run"]
+
 [tasks.run-api-test]
 env = { PROFILE = "test" }
 command = "cargo"
 args = ["run"]
+
+[tasks.populate-dev-db]
+env_files = [".dev.env"]
+cwd = "../../data"
+command = "cargo"
+args = ["make", "mysql-populate"]
+
+[tasks.dev]
+dependencies = ["populate-dev-db", "run-api-dev"]
 
 [tasks.lint]
 command = "cargo"
