@@ -263,8 +263,7 @@ jobs:
                 --app_platform ios \
                 --distribute_external true \
                 --groups "${TESTFLIGHT_BETA_GROUP}" \
-                --beta_app_description "929 - תנ\"ך על הפרק: Daily Bible study app following the 929 project curriculum." \
-                --beta_app_feedback_email "support@929.org.il"
+                --localized_app_info '{"default": {"description": "929 - תנ\"ך על הפרק: Daily Bible study app following the 929 project curriculum.", "feedback_email": "support@929.org.il"}}'
             else
               echo "$UPLOAD_OUTPUT"
               exit 1
