@@ -298,7 +298,7 @@ jobs:
           echo "$UPLOAD_OUTPUT"
 
       - name: Cleanup
-        if: always:()
+        if: always()
         run: rm -rf $HOME/private_keys
 
       - name: Deployment Summary
