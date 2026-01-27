@@ -241,22 +241,47 @@ partial class Build
             return;
         }
 
-        // The CLI output wraps long UUIDs across multiple lines, so we need to:
-        // 1. Remove all whitespace and line breaks
-        // 2. Extract UUIDs from the combined string
-        var rawOutput = string.Join("", listProcess.Output.Select(o => o.Text));
-        Serilog.Log.Information($"Raw output length: {rawOutput.Length} chars");
-        Serilog.Log.Information($"Raw output (first 500): {rawOutput.Substring(0, Math.Min(500, rawOutput.Length))}");
-        // Remove table characters and whitespace to get clean UUIDs
-        var cleanedOutput = System.Text.RegularExpressions.Regex.Replace(rawOutput, @"[\s│├┤┌┐└┘─┬┴┼╬╔╗╚╝═╠╣╦╩╪]+", "");
-        Serilog.Log.Information($"Cleaned output (first 500): {cleanedOutput.Substring(0, Math.Min(500, cleanedOutput.Length))}");
+        // The CLI wraps long content across multiple lines in a table format.
+        // Each column is wrapped separately. We need to extract the FlightId column (2nd column)
+        // and concatenate the partial UUIDs from consecutive rows.
+        // 
+        // Example table output:
+        // │ 1  │ 67df6395-6 │ v3         │ ...
+        // │    │ 07a-4da7-b │            │ ...
+        // │    │ 718-80c949 │            │ ...
+        // │    │ c69e73     │            │ ...
+        // │ 2  │ c30667c3-9 │ v4.0.29-20 │ ...
         
-        // Parse flight IDs - the CLI returns flights in creation order (oldest first)
+        var rawOutput = string.Join("\n", listProcess.Output.Select(o => o.Text));
+        Serilog.Log.Information($"Raw output length: {rawOutput.Length} chars");
+        
+        // Split into lines and extract the FlightId column (2nd column after splitting by │)
+        var lines = rawOutput.Split('\n');
+        var flightIdColumnParts = new System.Text.StringBuilder();
+        
+        foreach (var line in lines)
+        {
+            var columns = line.Split('│');
+            if (columns.Length >= 3)
+            {
+                // Column 0 is empty (before first │), column 1 is row number, column 2 is FlightId
+                var flightIdPart = columns[2].Trim();
+                if (!string.IsNullOrEmpty(flightIdPart) && !flightIdPart.Contains("FlightId") && !flightIdPart.Contains("─"))
+                {
+                    flightIdColumnParts.Append(flightIdPart);
+                }
+            }
+        }
+        
+        var flightIdColumn = flightIdColumnParts.ToString();
+        Serilog.Log.Information($"FlightId column content (first 200): {flightIdColumn.Substring(0, Math.Min(200, flightIdColumn.Length))}");
+        
+        // Now extract complete UUIDs from the concatenated FlightId column
         // Microsoft Store has a hard limit of 25 flights per app
         var uuidPattern = new System.Text.RegularExpressions.Regex(
             @"([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        var matches = uuidPattern.Matches(cleanedOutput);
+        var matches = uuidPattern.Matches(flightIdColumn);
         var flightIds = matches.Cast<System.Text.RegularExpressions.Match>()
             .Select(m => m.Value.ToLowerInvariant())
             .Distinct()
