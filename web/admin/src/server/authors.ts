@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { query, queryOne, execute } from "./db";
+import { execute, query, queryOne } from "./db";
 
 export interface Author {
 	id: number;
@@ -41,7 +41,9 @@ export const getAuthor = createServerFn({ method: "GET" })
 			name: string;
 			details: string;
 			image_url?: string;
-		}>("SELECT id, name, details, image_url FROM tanah_author WHERE id = ?", [id]);
+		}>("SELECT id, name, details, image_url FROM tanah_author WHERE id = ?", [
+			id,
+		]);
 
 		if (!author) {
 			throw new Error("Author not found");
@@ -76,10 +78,14 @@ export const createAuthor = createServerFn({ method: "POST" })
 			result.insertId,
 		]);
 
+		if (!newAuthor) {
+			throw new Error("Failed to retrieve created author");
+		}
+
 		return {
-			id: newAuthor!.id,
-			name: newAuthor!.name,
-			details: newAuthor!.details,
+			id: newAuthor.id,
+			name: newAuthor.name,
+			details: newAuthor.details,
 			imageUrl: null,
 		};
 	});
@@ -103,10 +109,14 @@ export const updateAuthor = createServerFn({ method: "POST" })
 			details: string;
 		}>("SELECT id, name, details FROM tanah_author WHERE id = ?", [data.id]);
 
+		if (!updated) {
+			throw new Error("Failed to retrieve updated author");
+		}
+
 		return {
-			id: updated!.id,
-			name: updated!.name,
-			details: updated!.details,
+			id: updated.id,
+			name: updated.name,
+			details: updated.details,
 			imageUrl: null,
 		};
 	});

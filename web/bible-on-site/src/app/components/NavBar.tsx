@@ -1,12 +1,35 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 import packageJson from "../../../package.json";
 import styles from "./navbar.module.css";
 
 export const NavBar = () => {
+	const pathname = usePathname();
+	const checkboxRef = useRef<HTMLInputElement>(null);
+	const previousPathnameRef = useRef(pathname);
+
+	// Close sidebar when navigation occurs (pathname changes)
+	useEffect(() => {
+		if (previousPathnameRef.current !== pathname) {
+			previousPathnameRef.current = pathname;
+			if (checkboxRef.current) {
+				checkboxRef.current.checked = false;
+			}
+		}
+	}, [pathname]);
+
 	return (
 		<div className={styles.hamburgerMenu}>
-			<input type="checkbox" className={styles.menuToggle} id="menu-toggle" />
+			<input
+				type="checkbox"
+				className={styles.menuToggle}
+				id="menu-toggle"
+				ref={checkboxRef}
+			/>
 			<label className={styles.menuBtn} htmlFor="menu-toggle">
 				<span className={styles.menuIcon} />
 			</label>
@@ -29,6 +52,12 @@ export const NavBar = () => {
 					<Image src="/icons/book.svg" alt="על הפרק" width={16} height={16} />
 					<Link href="./929">
 						<span>על הפרק</span>
+					</Link>
+				</li>
+				<li className={`${styles.menuItem} ${styles.ribbonBuilding}`}>
+					<Image src="/icons/rabbi.svg" alt="הרבנים" width={16} height={16} />
+					<Link href="/authors">
+						<span>הרבנים</span>
 					</Link>
 				</li>
 				<li className={`${styles.menuItem} ${styles.ribbonComingSoon}`}>

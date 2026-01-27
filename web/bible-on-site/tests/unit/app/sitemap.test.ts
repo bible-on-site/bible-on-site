@@ -1,5 +1,7 @@
 import {
 	generate929IndexEntry,
+	generateAuthorEntries,
+	generateAuthorsIndexEntry,
 	generatePerekEntries,
 	generateRootEntry,
 	generateSectionEntries,
@@ -132,12 +134,59 @@ describe("sitemap", () => {
 		});
 	});
 
+	describe("generateAuthorsIndexEntry", () => {
+		it("returns authors index page with correct properties", () => {
+			const result = generateAuthorsIndexEntry(mockConfig);
+
+			expect(result).toEqual({
+				url: "https://example.com/authors",
+				lastModified: mockConfig.lastModified,
+				changeFrequency: "monthly",
+				priority: 0.7,
+			});
+		});
+	});
+
+	describe("generateAuthorEntries", () => {
+		it("returns author entries for provided IDs", () => {
+			const result = generateAuthorEntries(mockConfig, [1, 5, 10]);
+
+			expect(result).toHaveLength(3);
+			expect(result[0].url).toBe("https://example.com/authors/1");
+			expect(result[1].url).toBe("https://example.com/authors/5");
+			expect(result[2].url).toBe("https://example.com/authors/10");
+		});
+
+		it("returns empty array when no author IDs provided", () => {
+			const result = generateAuthorEntries(mockConfig, []);
+
+			expect(result).toHaveLength(0);
+		});
+
+		it("sets monthly change frequency for authors", () => {
+			const result = generateAuthorEntries(mockConfig, [1, 2]);
+
+			result.forEach((entry) => {
+				expect(entry.changeFrequency).toBe("monthly");
+			});
+		});
+
+		it("sets priority 0.6 for authors", () => {
+			const result = generateAuthorEntries(mockConfig, [1, 2]);
+
+			result.forEach((entry) => {
+				expect(entry.priority).toBe(0.6);
+			});
+		});
+	});
+
 	describe("generateSitemapEntries", () => {
 		it("returns all entries combined", () => {
 			const result = generateSitemapEntries(mockConfig);
 
-			// 1 root + 6 sections + 1 929 index + 929 perakim = 937
-			const expectedLength = 1 + SITEMAP_SECTIONS.length + 1 + TOTAL_PERAKIM;
+			// 1 root + 6 sections + 1 929 index + 929 perakim + 1 authors index = 938
+			const expectedLength =
+				1 + SITEMAP_SECTIONS.length + 1 + TOTAL_PERAKIM + 1;
 			expect(result).toHaveLength(expectedLength);
 		});
 
@@ -163,12 +212,40 @@ describe("sitemap", () => {
 			expect(result[indexPosition].url).toBe("https://example.com/929");
 		});
 
-		it("has perek entries at the end", () => {
+		it("has perek entries after 929 index", () => {
 			const result = generateSitemapEntries(mockConfig);
 
 			const perekStartPosition = 1 + SITEMAP_SECTIONS.length + 1;
 			expect(result[perekStartPosition].url).toBe("https://example.com/929/1");
-			expect(result[result.length - 1].url).toBe("https://example.com/929/929");
+			expect(result[perekStartPosition + TOTAL_PERAKIM - 1].url).toBe(
+				"https://example.com/929/929",
+			);
+		});
+
+		it("has authors index at the end", () => {
+			const result = generateSitemapEntries(mockConfig);
+
+			expect(result[result.length - 1].url).toBe("https://example.com/authors");
+		});
+
+		it("includes author entries when authorIds provided", () => {
+			const result = generateSitemapEntries(mockConfig, [1, 2, 3]);
+
+			// 1 root + 6 sections + 1 929 index + 929 perakim + 1 authors index + 3 authors = 941
+			const expectedLength =
+				1 + SITEMAP_SECTIONS.length + 1 + TOTAL_PERAKIM + 1 + 3;
+			expect(result).toHaveLength(expectedLength);
+
+			// Check last 3 entries are author pages
+			expect(result[result.length - 1].url).toBe(
+				"https://example.com/authors/3",
+			);
+			expect(result[result.length - 2].url).toBe(
+				"https://example.com/authors/2",
+			);
+			expect(result[result.length - 3].url).toBe(
+				"https://example.com/authors/1",
+			);
 		});
 	});
 });

@@ -10,6 +10,35 @@ const nextConfig = {
 	turbopack: {
 		root: import.meta.dirname,
 	},
+	images: {
+		// Allow fetching images from loopback addresses in development
+		dangerouslyAllowSVG: true,
+		remotePatterns: [
+			// LocalStack/MinIO for development
+			{
+				protocol: "http",
+				hostname: "localhost",
+				port: "4566",
+				pathname: "/bible-on-site-rabbis/**",
+			},
+			// Also allow 127.0.0.1 for LocalStack
+			{
+				protocol: "http",
+				hostname: "127.0.0.1",
+				port: "4566",
+				pathname: "/bible-on-site-rabbis/**",
+			},
+			// AWS S3 for production
+			{
+				protocol: "https",
+				hostname: "bible-on-site-rabbis.s3.*.amazonaws.com",
+			},
+			{
+				protocol: "https",
+				hostname: "*.s3.*.amazonaws.com",
+			},
+		],
+	},
 	experimental: {
 		esmExternals: true,
 		externalDir: true,
