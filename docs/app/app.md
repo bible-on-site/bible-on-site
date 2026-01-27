@@ -80,3 +80,17 @@ dotnet run --project devops -- Test           # Run all tests
 dotnet run --project devops -- RunWindows     # Launch on Windows
 dotnet run --project devops -- --help         # Show all targets
 ```
+
+## Deployment
+
+The app is deployed via GitHub Actions CD workflow (`cd-app.yml`).
+
+### Store Limits & Cleanup
+
+| Store | Testing Channel | Hard Limit | Cleanup Strategy |
+|-------|-----------------|------------|------------------|
+| **Microsoft Store** | Package Flights | **25 flights max** | Auto-cleanup keeps 15 most recent |
+| **Google Play** | Internal Track | No known limit | N/A |
+| **Apple TestFlight** | External Beta | 90-day build expiration | Auto-expires |
+
+> ⚠️ **Microsoft Store Flight Limit**: Partner Center enforces a hard limit of 25 package flights per app. The CD workflow automatically deletes old flights before creating new ones to stay under this limit.
