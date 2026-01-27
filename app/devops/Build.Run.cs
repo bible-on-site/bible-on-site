@@ -105,9 +105,9 @@ partial class Build
     }
 
     /// <summary>
-    /// Populates the dev database (uses web/api Makefile task to load .dev.env).
+    /// Populates the API database for the current env level (dev/test) using web/api Makefile tasks.
     /// </summary>
-    void PopulateDatabase()
+    void PopulateApiDatabase()
     {
         Serilog.Log.Information($"Populating {EnvLevel} database...");
 
@@ -197,7 +197,7 @@ partial class Build
         .DependsOn(Compile)
         .Executes(() =>
         {
-            PopulateDatabase();
+            PopulateApiDatabase();
             EnsureApiRunning();
             ApplyAppEnvFile();
             DotNetRun(s => s
@@ -218,8 +218,8 @@ partial class Build
             // Ensure emulator is running
             EnsureAndroidEmulatorRunning();
 
-            // Refresh dev data before app launch
-            PopulateDatabase();
+            // Refresh API data before app launch
+            PopulateApiDatabase();
 
             // Ensure API is running with dev environment
             EnsureApiRunning();
