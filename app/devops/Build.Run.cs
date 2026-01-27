@@ -208,11 +208,11 @@ partial class Build
 
             ApplyAppEnvFile();
 
-            // Android doesn't support dotnet run - use dotnet build -t:Run
+            // Android doesn't support dotnet run - use dotnet watch build -t:Run for hot reload
             var startInfo = new ProcessStartInfo
             {
                 FileName = "dotnet",
-                Arguments = $"build \"{MainProject}\" -t:Run -f net9.0-android -c {Configuration} --no-restore",
+                Arguments = $"watch --project \"{MainProject}\" -- build -t:Run -f net9.0-android -c {Configuration} --no-restore",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
