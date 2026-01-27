@@ -262,6 +262,8 @@ jobs:
                 api_key: api_key,
                 app_identifier: "com.tanah.daily929",
                 app_platform: "ios",
+                skip_submission: true,
+                distribute_only: true,
                 distribute_external: true,
                 groups: [ENV["TESTFLIGHT_BETA_GROUP"]],
                 localized_app_info: {
