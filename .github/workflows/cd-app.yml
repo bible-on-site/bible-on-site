@@ -213,33 +213,38 @@ jobs:
       - name: Setup App Store Connect API Key
         env:
           API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
         run: |
           mkdir -p $HOME/private_keys
-          echo -n "$API_KEY_BASE64" | base64 --decode -o $HOME/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}.p8
-          echo "API_KEY_PATH=$HOME/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}.p8" >> $GITHUB_ENV
+          # Decode the .p8 key file
+          echo -n "$API_KEY_BASE64" | base64 --decode > $HOME/private_keys/AuthKey_${API_KEY_ID}.p8
+          # Create JSON file that Fastlane expects
+          cat > $HOME/private_keys/api_key.json << EOF
+          {
+            "key_id": "${API_KEY_ID}",
+            "issuer_id": "${API_ISSUER_ID}",
+            "key": "$(cat $HOME/private_keys/AuthKey_${API_KEY_ID}.p8 | sed 's/$/\\n/' | tr -d '\n')",
+            "in_house": false
+          }
+          EOF
+          echo "API_KEY_PATH=$HOME/private_keys/api_key.json" >> $GITHUB_ENV
 
       - name: Install Fastlane
         run: gem install fastlane -NV
 
       - name: Upload to TestFlight and Distribute to Beta Group
         env:
-          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
           TESTFLIGHT_BETA_GROUP: ${{ secrets.TESTFLIGHT_BETA_GROUP_NAME }}
         run: |
-          # Create Fastlane config
-          mkdir -p fastlane
-          cat > fastlane/Appfile << EOF
-          app_identifier("com.tanah.daily929")
-          EOF
-
-          # Upload and distribute using Fastlane pilot
           fastlane pilot upload \
             --ipa "${{ steps.find_ipa.outputs.IPA_FILE }}" \
             --api_key_path "${{ env.API_KEY_PATH }}" \
             --skip_waiting_for_build_processing false \
             --distribute_external true \
             --groups "${TESTFLIGHT_BETA_GROUP}" \
+            --beta_app_description "929 - תנ\"ך על הפרק: Daily Bible study app following the 929 project curriculum." \
+            --beta_app_feedback_email "tanah.site@gmail.com" \
             --changelog "Automated build v${{ env.MODULE_VERSION }}"
 
       - name: Cleanup
