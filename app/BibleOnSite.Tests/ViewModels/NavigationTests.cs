@@ -39,8 +39,8 @@ public class NavigationTests
         var viewModel = new PerekViewModel(preferences, _ => perek);
         viewModel.LoadByPerekId(123);
 
-        // Verify the source includes the perek ID for navigation
-        viewModel.Source.Should().Be("בראשית ה - 123");
+        // Verify the source includes the perek ID and Hebrew date for navigation
+        viewModel.Source.Should().Be("בראשית ה - 123 | תשרי");
         viewModel.PerekId.Should().Be(123);
     }
 

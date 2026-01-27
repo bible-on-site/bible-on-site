@@ -165,6 +165,19 @@ public partial class PerekViewModel : ObservableObject
             await LoadByPerekIdAsync(PreviousPerekId);
         }
     }
+
+    /// <summary>
+    /// Loads today's perek based on the current date.
+    /// </summary>
+    [RelayCommand]
+    public async Task LoadTodayAsync()
+    {
+        var todayPerekId = PerekDataService.Instance.GetTodaysPerekId();
+        if (todayPerekId != PerekId)
+        {
+            await LoadByPerekIdAsync(todayPerekId);
+        }
+    }
 #endif
 
     /// <summary>

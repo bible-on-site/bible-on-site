@@ -48,17 +48,20 @@
                      </CollectionView.ItemsLayout>
                      <CollectionView.ItemTemplate>
                             <DataTemplate x:DataType="models:Article">
-                                   <Frame Padding="0"
-                                          CornerRadius="12"
-                                          BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}"
-                                          BorderColor="Transparent"
-                                          HasShadow="True">
-                                          <Frame.GestureRecognizers>
+                                   <Border Padding="0"
+                                           StrokeShape="RoundRectangle 12"
+                                           Stroke="Transparent"
+                                           BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+                                          <Border.Shadow>
+                                                 <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.15"/>
+                                          </Border.Shadow>
+                                          <Border.GestureRecognizers>
                                                  <TapGestureRecognizer Tapped="OnArticleTapped"
                                                                        CommandParameter="{Binding .}"/>
-                                          </Frame.GestureRecognizers>
+                                          </Border.GestureRecognizers>
                                           <Grid RowDefinitions="Auto,Auto,Auto,Auto"
-                                                Padding="12">
+                                                Padding="12"
+                                                InputTransparent="True">
                                                  <!-- Article Name -->
                                                  <Label Grid.Row="0"
                                                         Text="{Binding Name}"
@@ -81,17 +84,16 @@
                                                                         Spacing="6"
                                                                         VerticalOptions="Center"
                                                                         IsVisible="{Binding Author, Converter={StaticResource NotNullConverter}}">
-                                                        <Frame WidthRequest="24"
-                                                               HeightRequest="24"
-                                                               CornerRadius="12"
-                                                               Padding="0"
-                                                               IsClippedToBounds="True"
-                                                               BorderColor="{StaticResource Primary}">
+                                                        <Border WidthRequest="24"
+                                                                HeightRequest="24"
+                                                                StrokeShape="RoundRectangle 12"
+                                                                Stroke="{StaticResource Primary}"
+                                                                StrokeThickness="1">
                                                                <Image Source="{Binding Author.ImageUrl}"
                                                                       Aspect="AspectFill"
                                                                       WidthRequest="24"
                                                                       HeightRequest="24"/>
-                                                        </Frame>
+                                                        </Border>
                                                         <Label Text="{Binding Author.ShortenedName}"
                                                                FontSize="11"
                                                                VerticalTextAlignment="Center"
@@ -106,7 +108,7 @@
                                                         TextColor="{StaticResource Primary}"
                                                         Margin="0,4,0,0"/>
                                           </Grid>
-                                   </Frame>
+                                   </Border>
                             </DataTemplate>
                      </CollectionView.ItemTemplate>
               </CollectionView>

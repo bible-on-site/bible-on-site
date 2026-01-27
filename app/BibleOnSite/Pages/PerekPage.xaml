@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:models="clr-namespace:BibleOnSite.Models"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
              x:Class="BibleOnSite.Pages.PerekPage"
              x:DataType="viewmodels:PerekViewModel"
              Title="{Binding Source}"
@@ -21,7 +22,7 @@
                         x:Name="PasukimCollection"
                         ItemsSource="{Binding Perek.Pasukim}"
                         SelectionMode="None"
-                        Margin="8,0">
+                        Margin="8,0,8,0">
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:Pasuk">
                     <Border Padding="12,8"
@@ -71,26 +72,168 @@
             </CollectionView.EmptyView>
         </CollectionView>
 
-        <!-- Bottom Navigation Bar -->
+        <!-- Bottom Navigation Bar with Circular Menu -->
         <Grid Grid.Row="1"
-              ColumnDefinitions="*,*,*"
-              Padding="8"
-              BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray900}}">
-            <Button Grid.Column="0"
-                    Text="הקודם"
-                    Command="{Binding LoadPreviousCommand}"
-                    BackgroundColor="Transparent"
-                    TextColor="{StaticResource Primary}"/>
-            <Label Grid.Column="1"
-                   Text="{Binding PerekId, StringFormat='{0}/929'}"
-                   FontSize="14"
-                   VerticalTextAlignment="Center"
-                   HorizontalTextAlignment="Center"/>
-            <Button Grid.Column="2"
-                    Text="הבא"
-                    Command="{Binding LoadNextCommand}"
-                    BackgroundColor="Transparent"
-                    TextColor="{StaticResource Primary}"/>
+              HeightRequest="90"
+              BackgroundColor="Transparent">
+            <!-- Background shape with notch -->
+            <AbsoluteLayout>
+                <!-- White/dark background with curved notch -->
+                <GraphicsView x:Name="BottomBarBackground"
+                              AbsoluteLayout.LayoutBounds="0,0,1,1"
+                              AbsoluteLayout.LayoutFlags="All"
+                              Drawable="{StaticResource BottomBarDrawable}"/>
+
+                <!-- Left side buttons -->
+                <HorizontalStackLayout AbsoluteLayout.LayoutBounds="0.1,0.6"
+                                       AbsoluteLayout.LayoutFlags="PositionProportional"
+                                       Spacing="8">
+                    <Button Text="מאמרים"
+                            FontSize="12"
+                            WidthRequest="70"
+                            HeightRequest="40"
+                            Padding="4"
+                            BackgroundColor="Transparent"
+                            TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
+                            Command="{Binding GoToArticlesCommand}"/>
+                    <Button Text="טקסט"
+                            FontSize="12"
+                            WidthRequest="60"
+                            HeightRequest="40"
+                            Padding="4"
+                            BackgroundColor="Transparent"
+                            TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
+                            Clicked="OnTextButtonClicked"/>
+                </HorizontalStackLayout>
+
+                <!-- Right side buttons -->
+                <HorizontalStackLayout AbsoluteLayout.LayoutBounds="0.9,0.6"
+                                       AbsoluteLayout.LayoutFlags="PositionProportional"
+                                       Spacing="8">
+                    <Button x:Name="ExpandButton"
+                            Text="⛶"
+                            FontSize="20"
+                            WidthRequest="40"
+                            HeightRequest="40"
+                            Padding="0"
+                            BackgroundColor="Transparent"
+                            TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
+                            Clicked="OnExpandClicked"/>
+                    <Label Text="{Binding PerekId, StringFormat='{0}/929'}"
+                           FontSize="11"
+                           VerticalTextAlignment="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                </HorizontalStackLayout>
+
+                <!-- Center Circular FAB -->
+                <Button x:Name="CircularMenuButton"
+                        AbsoluteLayout.LayoutBounds="0.5,0,-1,-1"
+                        AbsoluteLayout.LayoutFlags="XProportional"
+                        Text="☰"
+                        FontSize="22"
+                        WidthRequest="56"
+                        HeightRequest="56"
+                        CornerRadius="28"
+                        Margin="0,-8,0,0"
+                        BackgroundColor="{StaticResource Primary}"
+                        TextColor="White"
+                        Clicked="OnCircularMenuClicked">
+                    <Button.Shadow>
+                        <Shadow Brush="Black" Offset="0,3" Radius="6" Opacity="0.3"/>
+                    </Button.Shadow>
+                </Button>
+
+                <!-- Circular Menu Items (hidden by default) -->
+                <Grid x:Name="CircularMenuOverlay"
+                      AbsoluteLayout.LayoutBounds="0,0,1,1"
+                      AbsoluteLayout.LayoutFlags="All"
+                      IsVisible="False"
+                      InputTransparent="True">
+
+                    <!-- Previous Perek Button -->
+                    <Button x:Name="PrevPerekButton"
+                            Text="→"
+                            FontSize="20"
+                            WidthRequest="48"
+                            HeightRequest="48"
+                            CornerRadius="24"
+                            BackgroundColor="{StaticResource PrimaryDark}"
+                            TextColor="White"
+                            Command="{Binding LoadPreviousCommand}"
+                            Clicked="OnMenuItemClicked"
+                            HorizontalOptions="Center"
+                            VerticalOptions="End"
+                            Margin="0,0,0,30"
+                            Opacity="0"
+                            Scale="0">
+                        <Button.Shadow>
+                            <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.25"/>
+                        </Button.Shadow>
+                    </Button>
+
+                    <!-- Today Button -->
+                    <Button x:Name="TodayButton"
+                            Text="📅"
+                            FontSize="18"
+                            WidthRequest="48"
+                            HeightRequest="48"
+                            CornerRadius="24"
+                            BackgroundColor="{StaticResource PrimaryDark}"
+                            TextColor="White"
+                            Command="{Binding LoadTodayCommand}"
+                            Clicked="OnMenuItemClicked"
+                            HorizontalOptions="Center"
+                            VerticalOptions="End"
+                            Margin="0,0,0,30"
+                            Opacity="0"
+                            Scale="0">
+                        <Button.Shadow>
+                            <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.25"/>
+                        </Button.Shadow>
+                    </Button>
+
+                    <!-- Perek Picker Button -->
+                    <Button x:Name="PerekPickerButton"
+                            Text="📚"
+                            FontSize="18"
+                            WidthRequest="48"
+                            HeightRequest="48"
+                            CornerRadius="24"
+                            BackgroundColor="{StaticResource PrimaryDark}"
+                            TextColor="White"
+                            Clicked="OnPerekPickerClicked"
+                            HorizontalOptions="Center"
+                            VerticalOptions="End"
+                            Margin="0,0,0,30"
+                            Opacity="0"
+                            Scale="0">
+                        <Button.Shadow>
+                            <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.25"/>
+                        </Button.Shadow>
+                    </Button>
+
+                    <!-- Next Perek Button -->
+                    <Button x:Name="NextPerekButton"
+                            Text="←"
+                            FontSize="20"
+                            WidthRequest="48"
+                            HeightRequest="48"
+                            CornerRadius="24"
+                            BackgroundColor="{StaticResource PrimaryDark}"
+                            TextColor="White"
+                            Command="{Binding LoadNextCommand}"
+                            Clicked="OnMenuItemClicked"
+                            HorizontalOptions="Center"
+                            VerticalOptions="End"
+                            Margin="0,0,0,30"
+                            Opacity="0"
+                            Scale="0">
+                        <Button.Shadow>
+                            <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.25"/>
+                        </Button.Shadow>
+                    </Button>
+                </Grid>
+            </AbsoluteLayout>
         </Grid>
     </Grid>
 
