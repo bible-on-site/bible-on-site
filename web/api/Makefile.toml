@@ -32,13 +32,13 @@ args = ["run"]
 env_files = [".dev.env"]
 cwd = "../../data"
 command = "cargo"
-args = ["make", "mysql-populate"]
+args = ["make", "mysql-populate-dev"]
 
 [tasks.populate-test-db]
 env_files = [".test.env"]
 cwd = "../../data"
 command = "cargo"
-args = ["make", "mysql-populate"]
+args = ["make", "mysql-populate-test"]
 
 [tasks.dev]
 dependencies = ["populate-dev-db", "run-api-dev"]

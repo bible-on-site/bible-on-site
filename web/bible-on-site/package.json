@@ -25,10 +25,10 @@
 		"coverage:merge": "node --import tsx ./tests/util/coverage/merge-coverage.mts",
 		"package": "cross-env-shell \"docker build -t bible-on-site:${npm_package_version} .\"",
 		"version": "cross-env-shell echo ${npm_package_version}",
-		"db:populate:dev": "cd ../../data && cargo make mysql-populate",
-		"db:populate:test": "cd ../../data && cargo make mysql-populate",
-		"s3:populate:dev": "cd ../../data && cargo make s3-populate",
-		"s3:populate:test": "cd ../../data && cargo make s3-populate"
+		"db:populate:dev": "cd ../../data && cargo make mysql-populate-dev",
+		"db:populate:test": "cd ../../data && cargo make mysql-populate-test",
+		"s3:populate:dev": "cd ../../data && cargo make s3-populate-dev",
+		"s3:populate:test": "cd ../../data && cargo make s3-populate-test"
 	},
 	"bin": {
 		"biome": "./node_modules/@biomejs/biome/bin/biome"
