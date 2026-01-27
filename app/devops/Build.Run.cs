@@ -8,6 +8,16 @@ using static Nuke.Common.Tools.DotNet.DotNetTasks;
 
 partial class Build
 {
+    [Parameter("Environment level for local runs: dev or test")]
+    readonly string EnvLevel = "dev";
+
+    bool IsTestEnv => string.Equals(EnvLevel, "test", StringComparison.OrdinalIgnoreCase);
+
+    string ApiMakeTarget => IsTestEnv ? "test" : "dev";
+    string PopulateMakeTarget => IsTestEnv ? "populate-test-db" : "populate-dev-db";
+
+    string AppEnvFile => IsTestEnv ? (RootDirectory / ".test.env") : (RootDirectory / ".dev.env");
+
     /// <summary>
     /// Checks if API server is running on port 3003.
     /// </summary>
@@ -42,7 +52,7 @@ partial class Build
         var startInfo = new ProcessStartInfo
         {
             FileName = "cargo",
-            Arguments = "make dev",
+            Arguments = $"make {ApiMakeTarget}",
             WorkingDirectory = apiPath,
             UseShellExecute = true,
             CreateNoWindow = false,
@@ -79,14 +89,14 @@ partial class Build
     /// <summary>
     /// Populates the dev database (uses web/api Makefile task to load .dev.env).
     /// </summary>
-    void PopulateDevDatabase()
+    void PopulateDatabase()
     {
-        Serilog.Log.Information("Populating dev database...");
+        Serilog.Log.Information($"Populating {EnvLevel} database...");
 
         var startInfo = new ProcessStartInfo
         {
             FileName = "cargo",
-            Arguments = "make populate-dev-db",
+            Arguments = $"make {PopulateMakeTarget}",
             WorkingDirectory = ApiDirectory,
             UseShellExecute = true,
             CreateNoWindow = false,
@@ -102,7 +112,39 @@ partial class Build
         process.WaitForExit();
         if (process.ExitCode != 0)
         {
-            Serilog.Log.Warning($"Dev DB population exited with code {process.ExitCode}");
+            Serilog.Log.Warning($"{EnvLevel} DB population exited with code {process.ExitCode}");
+        }
+    }
+
+    void ApplyAppEnvFile()
+    {
+        try
+        {
+            if (!System.IO.File.Exists(AppEnvFile))
+                return;
+
+            foreach (var rawLine in System.IO.File.ReadAllLines(AppEnvFile))
+            {
+                var line = rawLine.Trim();
+                if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#'))
+                    continue;
+
+                var separatorIndex = line.IndexOf('=');
+                if (separatorIndex <= 0)
+                    continue;
+
+                var key = line.Substring(0, separatorIndex).Trim();
+                var value = line.Substring(separatorIndex + 1).Trim();
+
+                if (!string.IsNullOrEmpty(key))
+                {
+                    Environment.SetEnvironmentVariable(key, value);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Warning($"Failed to load app env file {AppEnvFile}: {ex.Message}");
         }
     }
 
@@ -137,8 +179,9 @@ partial class Build
         .DependsOn(Compile)
         .Executes(() =>
         {
-            PopulateDevDatabase();
+            PopulateDatabase();
             EnsureApiRunning();
+            ApplyAppEnvFile();
             DotNetRun(s => s
                 .SetProjectFile(MainProject)
                 .SetFramework("net9.0-windows10.0.19041.0")
@@ -158,10 +201,12 @@ partial class Build
             EnsureAndroidEmulatorRunning();
 
             // Refresh dev data before app launch
-            PopulateDevDatabase();
+            PopulateDatabase();
 
             // Ensure API is running with dev environment
             EnsureApiRunning();
+
+            ApplyAppEnvFile();
 
             // Android doesn't support dotnet run - use dotnet build -t:Run
             var startInfo = new ProcessStartInfo
