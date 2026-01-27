@@ -55,9 +55,29 @@ public partial class ArticlesViewModel : ObservableObject
         get
         {
             if (IsFilterByAuthor)
-                return $"מאמרים מאת {AuthorName}";
+                return $"מאמרים של {AuthorName}";
             return $"מאמרים על {PerekTitle}";
         }
+    }
+
+    partial void OnAuthorIdChanged(int? value)
+    {
+        OnPropertyChanged(nameof(DisplayTitle));
+    }
+
+    partial void OnAuthorNameChanged(string value)
+    {
+        OnPropertyChanged(nameof(DisplayTitle));
+    }
+
+    partial void OnPerekIdChanged(int value)
+    {
+        OnPropertyChanged(nameof(DisplayTitle));
+    }
+
+    partial void OnPerekTitleChanged(string value)
+    {
+        OnPropertyChanged(nameof(DisplayTitle));
     }
 
     public ArticlesViewModel()

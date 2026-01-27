@@ -26,6 +26,13 @@ public partial class ArticleDetailViewModel : ObservableObject
     public bool HasContent => !string.IsNullOrEmpty(Article?.ArticleContent);
 
     /// <summary>
+    /// Gets the article content wrapped with RTL justify styling.
+    /// </summary>
+    public string? StyledContent => Article?.ArticleContent != null
+        ? $"<div style=\"direction: rtl; text-align: justify;\">{Article.ArticleContent}</div>"
+        : null;
+
+    /// <summary>
     /// Gets the article name.
     /// </summary>
     public string ArticleName => Article?.Name ?? string.Empty;
@@ -55,6 +62,7 @@ public partial class ArticleDetailViewModel : ObservableObject
         Article = article;
         IsLoading = false;
         OnPropertyChanged(nameof(HasContent));
+        OnPropertyChanged(nameof(StyledContent));
         OnPropertyChanged(nameof(ArticleName));
         OnPropertyChanged(nameof(AuthorName));
         OnPropertyChanged(nameof(AuthorImageUrl));
