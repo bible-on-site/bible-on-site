@@ -159,10 +159,11 @@ jobs:
           PARTNER_CENTER_CLIENT_SECRET: ${{ secrets.MS_STORE_CLIENT_SECRET }}
         run: |
           # Create a new flight for each deployment (avoids issues with Partner Center-created submissions)
+          # MaxFlightsToKeep=15 ensures we stay well under the 25 flight limit
           dotnet run --project devops -- DeployMsStore `
             --msix-path "${{ steps.find_msix.outputs.MSIX_FILE }}" `
             --ms-store-flight-group-id "${{ secrets.MS_STORE_FLIGHT_GROUP_ID }}" `
-            --max-flights-to-keep 99999
+            --max-flights-to-keep 15
 
       - name: Deployment Summary
         shell: pwsh
