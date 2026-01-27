@@ -245,9 +245,12 @@ partial class Build
         // 1. Remove all whitespace and line breaks
         // 2. Extract UUIDs from the combined string
         var rawOutput = string.Join("", listProcess.Output.Select(o => o.Text));
+        Serilog.Log.Information($"Raw output length: {rawOutput.Length} chars");
+        Serilog.Log.Information($"Raw output (first 500): {rawOutput.Substring(0, Math.Min(500, rawOutput.Length))}");
         // Remove table characters and whitespace to get clean UUIDs
         var cleanedOutput = System.Text.RegularExpressions.Regex.Replace(rawOutput, @"[\s│├┤┌┐└┘─┬┴┼╬╔╗╚╝═╠╣╦╩╪]+", "");
-
+        Serilog.Log.Information($"Cleaned output (first 500): {cleanedOutput.Substring(0, Math.Min(500, cleanedOutput.Length))}");
+        
         // Parse flight IDs - the CLI returns flights in creation order (oldest first)
         // Microsoft Store has a hard limit of 25 flights per app
         var uuidPattern = new System.Text.RegularExpressions.Regex(
