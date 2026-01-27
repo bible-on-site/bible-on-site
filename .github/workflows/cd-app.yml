@@ -243,7 +243,7 @@ jobs:
             --skip_waiting_for_build_processing false \
             --distribute_external true \
             --groups "${TESTFLIGHT_BETA_GROUP}" \
-            --localized_app_info '{"default":{"feedback_email":"tanah.site@gmail.com","description":"929 - תנ\"ך על הפרק: Daily Bible study app following the 929 project curriculum. Study one chapter of Tanakh every day with commentary and insights."},"he":{"feedback_email":"tanah.site@gmail.com","description":"929 - תנ\"ך על הפרק: אפליקציה ללימוד תנ\"ך יומי בעקבות פרויקט 929. לומדים פרק אחד של תנ\"ך בכל יום עם פירושים ותובנות."}}' \
+            --localized_app_info '{"en-US":{"feedback_email":"tanah.site@gmail.com","description":"929 - תנ\"ך על הפרק: Daily Bible study app following the 929 project curriculum. Study one chapter of Tanakh every day with commentary and insights."},"he-IL":{"feedback_email":"tanah.site@gmail.com","description":"929 - תנ\"ך על הפרק: אפליקציה ללימוד תנ\"ך יומי בעקבות פרויקט 929. לומדים פרק אחד של תנ\"ך בכל יום עם פירושים ותובנות."}}' \
             --changelog "Automated build v${{ env.MODULE_VERSION }}"
 
       - name: Cleanup
