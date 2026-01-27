@@ -257,10 +257,10 @@ jobs:
             --changelog "Automated build v${{ env.MODULE_VERSION }}" 2>&1) || {
             if echo "$UPLOAD_OUTPUT" | grep -q "bundle version must be higher"; then
               echo "Build already exists in TestFlight. Distributing existing build..."
-              # Extract build number from IPA (it's in the version string)
               fastlane pilot distribute \
                 --api_key_path "${{ env.API_KEY_PATH }}" \
                 --app_identifier "com.tanah.daily929" \
+                --app_platform ios \
                 --distribute_external true \
                 --groups "${TESTFLIGHT_BETA_GROUP}" \
                 --beta_app_description "929 - תנ\"ך על הפרק: Daily Bible study app following the 929 project curriculum." \
