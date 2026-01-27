@@ -235,69 +235,17 @@ jobs:
 
       - name: Upload to TestFlight and Distribute to Beta Group
         env:
-          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
           TESTFLIGHT_BETA_GROUP: ${{ secrets.TESTFLIGHT_BETA_GROUP_NAME }}
         run: |
-          # Create Fastlane config
-          mkdir -p fastlane
-          cat > fastlane/Appfile << EOF
-          app_identifier("com.tanah.daily929")
-          EOF
-
-          # Create Fastfile with custom lane for distribution
-          cat > fastlane/Fastfile << 'FASTFILE'
-          default_platform(:ios)
-
-          platform :ios do
-            desc "Distribute an existing build to external testers"
-            lane :distribute_existing do |options|
-              api_key = app_store_connect_api_key(
-                key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
-                issuer_id: ENV["APP_STORE_CONNECT_API_ISSUER_ID"],
-                key_filepath: ENV["API_KEY_P8_PATH"]
-              )
-
-              pilot(
-                api_key: api_key,
-                app_identifier: "com.tanah.daily929",
-                app_platform: "ios",
-                skip_submission: true,
-                distribute_only: true,
-                distribute_external: true,
-                groups: [ENV["TESTFLIGHT_BETA_GROUP"]],
-                localized_app_info: {
-                  "default" => {
-                    "description" => "929 - תנ\"ך על הפרק: Daily Bible study app following the 929 project curriculum.",
-                    "feedback_email" => "support@929.org.il"
-                  }
-                }
-              )
-            end
-          end
-          FASTFILE
-
-          # Try to upload, and if build already exists, just distribute the existing one
-          UPLOAD_OUTPUT=$(fastlane pilot upload \
+          fastlane pilot upload \
             --ipa "${{ steps.find_ipa.outputs.IPA_FILE }}" \
             --api_key_path "${{ env.API_KEY_PATH }}" \
             --skip_waiting_for_build_processing false \
             --distribute_external true \
             --groups "${TESTFLIGHT_BETA_GROUP}" \
             --beta_app_description "929 - תנ\"ך על הפרק: Daily Bible study app following the 929 project curriculum." \
-            --beta_app_feedback_email "support@929.org.il" \
-            --changelog "Automated build v${{ env.MODULE_VERSION }}" 2>&1) || {
-            if echo "$UPLOAD_OUTPUT" | grep -q "bundle version must be higher"; then
-              echo "Build already exists in TestFlight. Distributing existing build using Fastfile..."
-              # Extract the raw .p8 key path for the Fastfile
-              export API_KEY_P8_PATH="$HOME/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
-              fastlane ios distribute_existing
-            else
-              echo "$UPLOAD_OUTPUT"
-              exit 1
-            fi
-          }
-          echo "$UPLOAD_OUTPUT"
+            --beta_app_feedback_email "tanah.site@gmail.com" \
+            --changelog "Automated build v${{ env.MODULE_VERSION }}"
 
       - name: Cleanup
         if: always()
