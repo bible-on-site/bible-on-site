@@ -245,7 +245,7 @@ jobs:
             --groups "${TESTFLIGHT_BETA_GROUP}" \
             --beta_app_description "929 - תנ\"ך על הפרק: Daily Bible study app following the 929 project curriculum. Study one chapter of Tanakh every day with commentary and insights." \
             --beta_app_feedback_email "tanah.site@gmail.com" \
-            --beta_app_review_info '{"contact_email":"tanah.site@gmail.com","contact_first_name":"929","contact_last_name":"Support","contact_phone":"+1 555 555 5555"}' \
+            --beta_app_review_info '{"contact_email":"tanah.site@gmail.com","contact_first_name":"Dorad","contact_last_name":"Levinshtein","contact_phone":"37257078640"}' \
             --changelog "Automated build v${{ env.MODULE_VERSION }}"
 
       - name: Cleanup
