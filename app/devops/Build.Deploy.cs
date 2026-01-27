@@ -230,11 +230,10 @@ partial class Build
         var listProcess = ProcessTasks.StartProcess(
             "msstore",
             $"flights list \"{MsStoreAppId}\"",
-            logOutput: false,
+            logOutput: true,
             logInvocation: true
         );
         listProcess.WaitForExit();
-        var output = listProcess.Output.Select(o => o.Text).ToList();
 
         if (listProcess.ExitCode != 0)
         {
@@ -242,26 +241,30 @@ partial class Build
             return;
         }
 
-        // Parse flight IDs from output - the CLI returns flights in creation order (oldest first)
-        // Each flight ID is a UUID that appears in the table output
-        var uuidPattern = new System.Text.RegularExpressions.Regex(@"([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})");
-        var flightIds = new List<string>();
+        // The CLI output wraps long UUIDs across multiple lines, so we need to:
+        // 1. Remove all whitespace and line breaks
+        // 2. Extract UUIDs from the combined string
+        var rawOutput = string.Join("", listProcess.Output.Select(o => o.Text));
+        // Remove table characters and whitespace to get clean UUIDs
+        var cleanedOutput = System.Text.RegularExpressions.Regex.Replace(rawOutput, @"[\s│├┤┌┐└┘─┬┴┼╬╔╗╚╝═╠╣╦╩╪]+", "");
 
-        foreach (var line in output)
-        {
-            var match = uuidPattern.Match(line);
-            if (match.Success)
-            {
-                var id = match.Value;
-                // Avoid duplicates (same ID might appear in multi-line row)
-                if (!flightIds.Contains(id))
-                {
-                    flightIds.Add(id);
-                }
-            }
-        }
+        // Parse flight IDs - the CLI returns flights in creation order (oldest first)
+        // Microsoft Store has a hard limit of 25 flights per app
+        var uuidPattern = new System.Text.RegularExpressions.Regex(
+            @"([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var matches = uuidPattern.Matches(cleanedOutput);
+        var flightIds = matches.Cast<System.Text.RegularExpressions.Match>()
+            .Select(m => m.Value.ToLowerInvariant())
+            .Distinct()
+            .ToList();
 
         Serilog.Log.Information($"Found {flightIds.Count} flights");
+        if (flightIds.Count > 0)
+        {
+            Serilog.Log.Information($"First flight ID: {flightIds.First()}");
+            Serilog.Log.Information($"Last flight ID: {flightIds.Last()}");
+        }
 
         // Delete oldest flights (first in list), keep the most recent ones (last in list)
         var countToDelete = Math.Max(0, flightIds.Count - MaxFlightsToKeep);
