@@ -38,7 +38,8 @@
       Instead, we include the source files directly for testing.
     -->
     <Compile Include="..\BibleOnSite\Config\*.cs" Link="Config\%(Filename)%(Extension)" />
-    <Compile Include="..\BibleOnSite\Controls\*.cs" Link="Controls\%(Filename)%(Extension)" />
+    <!-- Exclude XAML code-behind files as they require MAUI XAML compilation -->
+    <Compile Include="..\BibleOnSite\Controls\*.cs" Exclude="..\BibleOnSite\Controls\*.xaml.cs" Link="Controls\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Data\*.cs" Link="Data\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Helpers\*.cs" Link="Helpers\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Models\*.cs" Link="Models\%(Filename)%(Extension)" />

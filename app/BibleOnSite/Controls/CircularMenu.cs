@@ -14,7 +14,6 @@ public partial class CircularMenu : ContentView
     private readonly List<CircularMenuItem> _menuItems = [];
     private readonly double _startAngle;
     private readonly double _endAngle;
-    private readonly double _radius;
 
     /// <summary>
     /// Bindable property for menu items.
@@ -108,7 +107,6 @@ public partial class CircularMenu : ContentView
     {
         _startAngle = startAngle;
         _endAngle = endAngle;
-        _radius = 80;
         _isExpanded = false;
 
         _container = new Grid

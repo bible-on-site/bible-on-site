@@ -110,8 +110,7 @@ public partial class PerekViewModel : ObservableObject
             if (Perek == null) return string.Empty;
 
             var additionalPart = Additional.HasValue ? $"{Additional.Value.ToHebrewLetters()} " : string.Empty;
-            var datePart = !string.IsNullOrEmpty(HebDate) ? $" | {HebDate}" : string.Empty;
-            return $"{SeferName} {additionalPart}{PerekHeb} - {PerekId}{datePart}";
+            return $"{SeferName} {additionalPart}{PerekHeb}";
         }
     }
 
@@ -184,6 +183,12 @@ public partial class PerekViewModel : ObservableObject
     [RelayCommand]
     public async Task LoadTodayAsync()
     {
+        // Ensure data is loaded before getting today's perek
+        if (!PerekDataService.Instance.IsLoaded)
+        {
+            await PerekDataService.Instance.LoadAsync();
+        }
+
         var todayPerekId = PerekDataService.Instance.GetTodaysPerekId();
         if (todayPerekId != PerekId)
         {

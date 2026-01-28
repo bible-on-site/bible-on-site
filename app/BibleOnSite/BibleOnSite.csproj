@@ -23,6 +23,9 @@
 		<!-- Define MAUI symbol for conditional compilation -->
 		<DefineConstants>$(DefineConstants);MAUI</DefineConstants>
 
+		<!-- Suppress XamlC warnings for bindings without x:DataType (internal picker classes) -->
+		<NoWarn>$(NoWarn);XC0022</NoWarn>
+
 		<!-- Enable XAML Hot Reload -->
 		<MauiEnableXamlHotReload>true</MauiEnableXamlHotReload>
 

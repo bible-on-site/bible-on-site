@@ -1,5 +1,7 @@
 namespace BibleOnSite.Pages;
 
+using BibleOnSite.Models;
+using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 
 /// <summary>
@@ -17,6 +19,9 @@ public partial class PerekPage : ContentPage
     // Circular menu state
     private bool _isMenuOpen;
     private const int AnimationDurationMs = 300;
+
+    // Articles view state
+    private bool _isShowingArticles;
 
     public PerekPage()
     {
@@ -44,6 +49,8 @@ public partial class PerekPage : ContentPage
             {
                 // Load data from SQLite database
                 await _viewModel.LoadByPerekIdAsync(1);
+                // Update articles count badge
+                await UpdateArticlesCountAsync();
             }
             catch (Exception ex)
             {
@@ -54,6 +61,30 @@ public partial class PerekPage : ContentPage
             {
                 _isLoading = false;
             }
+        }
+    }
+
+    /// <summary>
+    /// Updates the articles count badge for the current perek.
+    /// </summary>
+    private async Task UpdateArticlesCountAsync()
+    {
+        try
+        {
+            var articles = await ArticleService.Instance.GetArticlesByPerekIdAsync(_viewModel.PerekId);
+            var count = articles.Count;
+
+            // Update badge visibility and text
+            ArticlesBadge.IsVisible = count > 0;
+            if (count > 0 && ArticlesBadge.Content is Label badgeLabel)
+            {
+                badgeLabel.Text = count.ToString();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error fetching articles count: {ex.Message}");
+            ArticlesBadge.IsVisible = false;
         }
     }
 
@@ -289,44 +320,155 @@ public partial class PerekPage : ContentPage
     }
 
     /// <summary>
-    /// Shows the perek picker dialog.
+    /// Shows the perek picker popup.
     /// </summary>
-    private async void OnPerekPickerClicked(object? sender, EventArgs e)
+    private void OnPerekPickerClicked(object? sender, EventArgs e)
     {
         // Menu stays open - don't close
+        // Show the cascading perek picker popup with current perek pre-selected
+        PerekPickerPopup.Show(_viewModel.PerekId);
+    }
 
-        // Show perek picker - simple input for now
-        var result = await DisplayPromptAsync(
-            "בחר פרק",
-            "הזן מספר פרק (1-929):",
-            "עבור",
-            "ביטול",
-            "1",
-            maxLength: 3,
-            keyboard: Keyboard.Numeric);
-
-        if (!string.IsNullOrEmpty(result) && int.TryParse(result, out var perekId))
+    /// <summary>
+    /// Handles perek selection from the picker popup.
+    /// </summary>
+    private async void OnPerekPickerSelected(object? sender, int perekId)
+    {
+        if (perekId >= 1 && perekId <= 929 && perekId != _viewModel.PerekId)
         {
-            if (perekId >= 1 && perekId <= 929)
+            await _viewModel.LoadByPerekIdAsync(perekId);
+            // Scroll to top after loading new perek
+            PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
+            // Update articles badge
+            await UpdateArticlesCountAsync();
+        }
+    }
+
+    /// <summary>
+    /// Handles text button click - returns to perek view if showing articles,
+    /// otherwise scrolls to header/top of perek.
+    /// </summary>
+    private void OnTextButtonClicked(object? sender, EventArgs e)
+    {
+        if (_isShowingArticles)
+        {
+            // Return to perek view
+            ShowPerekView();
+        }
+        else
+        {
+            // Scroll to header (top)
+            if (_viewModel.Perek?.Pasukim?.Count > 0)
             {
-                await _viewModel.LoadByPerekIdAsync(perekId);
-            }
-            else
-            {
-                await DisplayAlert("שגיאה", "מספר פרק לא תקין. נא להזין מספר בין 1 ל-929.", "אישור");
+                PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: true);
             }
         }
     }
 
     /// <summary>
-    /// Handles text button click - scrolls to header/top of perek.
+    /// Handles articles button click - shows articles view.
     /// </summary>
-    private void OnTextButtonClicked(object? sender, EventArgs e)
+    private async void OnArticlesButtonClicked(object? sender, EventArgs e)
     {
-        // Scroll to header (top)
-        if (_viewModel.Perek?.Pasukim?.Count > 0)
+        if (_isShowingArticles)
         {
-            PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: true);
+            // Already showing articles, do nothing or toggle back
+            return;
+        }
+
+        await ShowArticlesViewAsync();
+    }
+
+    /// <summary>
+    /// Shows the articles view with flip animation.
+    /// </summary>
+    private async Task ShowArticlesViewAsync()
+    {
+        _isShowingArticles = true;
+
+        // Load articles for the current perek (header stays the same)
+        await LoadArticlesAsync();
+
+        // Flip animation - rotate Y axis
+        await AnimateFlipAsync(PasukimCollection, ArticlesCollection);
+
+        // Update button states - highlight articles button
+        ArticlesButton.TextColor = Application.Current?.RequestedTheme == AppTheme.Dark
+            ? Color.FromArgb("#BB86FC")
+            : Color.FromArgb("#512BD4");
+    }
+
+    /// <summary>
+    /// Returns to the perek view with flip animation.
+    /// </summary>
+    private async void ShowPerekView()
+    {
+        _isShowingArticles = false;
+
+        // Flip animation back (header stays the same)
+        await AnimateFlipAsync(ArticlesCollection, PasukimCollection);
+
+        // Reset button color
+        ArticlesButton.TextColor = Application.Current?.RequestedTheme == AppTheme.Dark
+            ? Color.FromArgb("#9CA3AF")
+            : Color.FromArgb("#6B7280");
+    }
+
+    /// <summary>
+    /// Performs a flip animation between two views.
+    /// </summary>
+    private async Task AnimateFlipAsync(View fromView, View toView)
+    {
+        const uint duration = 200;
+
+        // First half - rotate out (scale X to simulate flip)
+        await fromView.ScaleXTo(0, duration, Easing.CubicIn);
+
+        // Switch visibility at midpoint
+        fromView.IsVisible = false;
+        toView.IsVisible = true;
+        toView.ScaleX = 0;
+
+        // Second half - rotate in
+        await toView.ScaleXTo(1, duration, Easing.CubicOut);
+    }
+
+    /// <summary>
+    /// Handles article selection - navigates to article detail.
+    /// </summary>
+    private async void OnArticleSelected(object? sender, SelectionChangedEventArgs e)
+    {
+        if (e.CurrentSelection.FirstOrDefault() is Article article)
+        {
+            // Clear selection
+            ArticlesCollection.SelectedItem = null;
+
+            // Navigate to article detail page
+            try
+            {
+                await Shell.Current.GoToAsync($"ArticleDetailPage?articleId={article.Id}");
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Error navigating to article: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Loads articles for the current perek.
+    /// </summary>
+    private async Task LoadArticlesAsync()
+    {
+        try
+        {
+            var articles = await ArticleService.Instance.GetArticlesByPerekIdAsync(_viewModel.PerekId);
+            ArticlesCollection.ItemsSource = articles;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error loading articles: {ex.Message}");
+            ArticlesCollection.ItemsSource = new List<Article>();
         }
     }
 
@@ -347,10 +489,8 @@ public partial class PerekPage : ContentPage
     /// <summary>
     /// Handles full screen button click - hides top and bottom bars, shows exit button.
     /// </summary>
-    private bool _isFullScreen;
     private void OnFullScreenClicked(object? sender, EventArgs e)
     {
-        _isFullScreen = true;
         EnterFullScreen();
     }
 
@@ -359,40 +499,128 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private void OnExitFullScreenClicked(object? sender, EventArgs e)
     {
-        _isFullScreen = false;
         ExitFullScreen();
     }
 
     #region Swipe Navigation
 
-    /// <summary>
-    /// Handles swipe left gesture - navigates to next perek.
-    /// Note: In RTL layout, swipe left = forward/next.
-    /// </summary>
-    private async void OnSwipedLeft(object? sender, SwipedEventArgs e)
-    {
-        // Don't navigate if we're at the last perek
-        if (_viewModel.PerekId >= 929)
-            return;
-
-        await _viewModel.LoadNextAsync();
-        // Scroll to top after loading new perek
-        PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
-    }
+    private bool _isNavigating;
 
     /// <summary>
-    /// Handles swipe right gesture - navigates to previous perek.
-    /// Note: In RTL layout, swipe right = backward/previous.
+    /// Handles swipe left gesture - navigates to previous perek.
+    /// In RTL layout, swipe left = backward/previous (like turning page forward in Hebrew book).
     /// </summary>
-    private async void OnSwipedRight(object? sender, SwipedEventArgs e)
+    private void OnSwipedLeft(object? sender, SwipedEventArgs e)
     {
+        if (_isShowingArticles || _isNavigating) return;
+
         // Don't navigate if we're at the first perek
         if (_viewModel.PerekId <= 1)
             return;
 
-        await _viewModel.LoadPreviousAsync();
-        // Scroll to top after loading new perek
-        PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
+        _isNavigating = true;
+        MainThread.BeginInvokeOnMainThread(async () =>
+        {
+            try
+            {
+                await _viewModel.LoadPreviousAsync();
+                await Task.Delay(50); // Small delay to let binding update
+                PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
+                _ = UpdateArticlesCountAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Swipe left error: {ex.Message}");
+            }
+            finally
+            {
+                _isNavigating = false;
+            }
+        });
+    }
+
+    /// <summary>
+    /// Handles swipe right gesture - navigates to next perek.
+    /// In RTL layout, swipe right = forward/next (like turning page backward in Hebrew book).
+    /// </summary>
+    private void OnSwipedRight(object? sender, SwipedEventArgs e)
+    {
+        if (_isShowingArticles || _isNavigating) return;
+
+        // Don't navigate if we're at the last perek
+        if (_viewModel.PerekId >= 929)
+            return;
+
+        _isNavigating = true;
+        MainThread.BeginInvokeOnMainThread(async () =>
+        {
+            try
+            {
+                await _viewModel.LoadNextAsync();
+                await Task.Delay(50); // Small delay to let binding update
+                PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
+                _ = UpdateArticlesCountAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Swipe right error: {ex.Message}");
+            }
+            finally
+            {
+                _isNavigating = false;
+            }
+        });
+    }
+
+    /// <summary>
+    /// Navigates to another perek with swipe animation.
+    /// </summary>
+    private async Task NavigateWithSwipeAnimationAsync(SwipeDirection direction, Func<Task> loadAction)
+    {
+        _isNavigating = true;
+        const uint duration = 150;
+        const double slideDistance = 300; // Fixed distance instead of dynamic
+
+        // Determine slide direction
+        var endX = direction == SwipeDirection.Left ? slideDistance : -slideDistance;
+        var newStartX = direction == SwipeDirection.Left ? -slideDistance : slideDistance;
+
+        try
+        {
+            // Fade and slide out current content
+            var slideOut = PasukimCollection.TranslateTo(endX, 0, duration, Easing.CubicIn);
+            var fadeOut = PasukimCollection.FadeTo(0.3, duration);
+            await Task.WhenAll(slideOut, fadeOut);
+
+            // Load new content
+            await loadAction();
+
+            // Position for slide in
+            PasukimCollection.TranslationX = newStartX;
+            PasukimCollection.Opacity = 0.3;
+
+            // Scroll to top
+            PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
+
+            // Slide and fade in new content
+            var slideIn = PasukimCollection.TranslateTo(0, 0, duration, Easing.CubicOut);
+            var fadeIn = PasukimCollection.FadeTo(1, duration);
+            await Task.WhenAll(slideIn, fadeIn);
+
+            // Update articles badge
+            _ = UpdateArticlesCountAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Swipe animation error: {ex.Message}");
+            // Reset state on error
+            PasukimCollection.TranslationX = 0;
+            PasukimCollection.Opacity = 1;
+        }
+        finally
+        {
+            _isNavigating = false;
+        }
     }
 
     #endregion

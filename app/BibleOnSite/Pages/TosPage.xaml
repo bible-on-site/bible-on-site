@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="BibleOnSite.Pages.TosPage"
+             Title="תנאי שימוש"
+             FlowDirection="RightToLeft"
+             BackgroundColor="{AppThemeBinding Light={StaticResource Background}, Dark={StaticResource BackgroundDark}}">
+
+    <ScrollView Padding="16">
+        <VerticalStackLayout Spacing="16">
+
+            <!-- Main Title -->
+            <Label Text="תנאי שימוש"
+                   FontSize="24"
+                   FontAttributes="Bold"
+                   HorizontalOptions="Center"
+                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
+
+            <!-- Privacy Policy Section -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="מדיניות פרטיות"
+                       FontSize="18"
+                       FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                <Label Text="בעת שימוש באתר ו/או בישומון תנ&quot;ך על הפרק אתה מצהיר שהינך מאשר למערכת תנ&quot;ך על הפרק לאסוף נתונים שסופקו על ידיך באופן ידני או באמצעות המכשיר דרכו התחברת אף באופן נסתר, לרבות מזהה Android Advertising ID."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+                <Label Text="צוות התכנית מתחייב להשתמש בנתונים הנ&quot;ל אך ורק לצרכי המערכת. הנתונים הנ&quot;ל לא יסופקו על ידינו לשום גורם צד ג'. כמו כן הנתונים נשמרים באופן מאובטח בשרתי תנ&quot;ך על הפרק."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+            </VerticalStackLayout>
+
+            <!-- Divider -->
+            <BoxView HeightRequest="1" Color="{StaticResource Gray300}" Margin="0,8"/>
+
+            <!-- Tanachpedia Section -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="תנכפדיה"
+                       FontSize="18"
+                       FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+
+                <Label Text="שימוש"
+                       FontSize="16"
+                       FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray200}}"/>
+                <Label Text="השימוש בתנכפדיה הוא על אחריות המשתמש, אין בעלי האתר והעורכים נושאים בשום נזק ישיר או עקיף מכל סוג שהוא שייגרמו משימוש במידע, שכן הוא מוגש 'כמות שהוא'."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+                <Label Text="אנו מתפללים שלא תצא תקלה מתחת ידינו, עם זאת לפעמים נופלות טעויות בתחומים שונים, ביניהם כאלו שיכולות להזיק או לפגוע, אם הבחנתם בכאלה אתם יותר ממוזמנים לפנות ובע&quot;ה הנושא ייבחן ובמידת הצורך יטופל בהקדם."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+
+                <Label Text="שימוש חוזר"
+                       FontSize="16"
+                       FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray200}}"
+                       Margin="0,8,0,0"/>
+                <Label FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}">
+                    <Label.FormattedText>
+                        <FormattedString>
+                            <Span Text="תנכפדיה "/>
+                            <Span Text="אינה" FontAttributes="Bold"/>
+                            <Span Text=" אנציקלופדיה חופשית כמו ויקיפדיה, ויקישיבה ודומיהם."/>
+                        </FormattedString>
+                    </Label.FormattedText>
+                </Label>
+            </VerticalStackLayout>
+
+            <!-- Divider -->
+            <BoxView HeightRequest="1" Color="{StaticResource Gray300}" Margin="0,8"/>
+
+            <!-- Tanach Al Haperek Section -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="תנ&quot;ך על הפרק"
+                       FontSize="18"
+                       FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+
+                <Label Text="שימוש"
+                       FontSize="16"
+                       FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray200}}"/>
+                <Label Text="ניתן להשתמש לכל צורך אישי או לימודי שאינם מסחריים."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+                <Label Text="כמו כן ניתן להפנות אלינו שאלות ונעביר לרבנים הכותבים."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+
+                <Label Text="שימוש חוזר"
+                       FontSize="16"
+                       FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray200}}"
+                       Margin="0,8,0,0"/>
+                <Label Text="מצווה להפיץ הפניות למאמרים אל מכריכם, אך אין להעתיק את המאמרים לאתר אחר או ספר וכד' ללא הסכמה מפורשת מהרב המחבר."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+                <Label FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}">
+                    <Label.FormattedText>
+                        <FormattedString>
+                            <Span Text="המפרשים על הפרק באדיבות "/>
+                            <Span Text="ספאריה" TextColor="{StaticResource Primary}" TextDecorations="Underline">
+                                <Span.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnSefariaTapped"/>
+                                </Span.GestureRecognizers>
+                            </Span>
+                            <Span Text=". שימוש חוזר על פי תנאי השימוש שלהם."/>
+                        </FormattedString>
+                    </Label.FormattedText>
+                </Label>
+                <Label FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}">
+                    <Label.FormattedText>
+                        <FormattedString>
+                            <Span Text="הפרקים המוקלטים באדיבות "/>
+                            <Span Text="הרב דן בארי" TextColor="{StaticResource Primary}" TextDecorations="Underline">
+                                <Span.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnDanBarryTapped"/>
+                                </Span.GestureRecognizers>
+                            </Span>
+                            <Span Text=". שימוש חוזר על פי תנאי השימוש שיציב."/>
+                        </FormattedString>
+                    </Label.FormattedText>
+                </Label>
+            </VerticalStackLayout>
+
+            <!-- Bottom spacing -->
+            <BoxView HeightRequest="20"/>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
