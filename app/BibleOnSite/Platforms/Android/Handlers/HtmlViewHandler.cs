@@ -85,7 +85,8 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
         var styledHtml = WrapWithStyles(html);
 
         // Parse HTML using Android's native parser
-        ISpanned spanned;
+        ISpanned? spanned;
+#pragma warning disable CA1416, CA1422, CS8600 // Platform compatibility, nullable
         if (Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.N)
         {
             spanned = Html.FromHtml(styledHtml, FromHtmlOptions.ModeLegacy);
@@ -94,10 +95,14 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
         {
 #pragma warning disable CS0618 // Type or member is obsolete
             spanned = Html.FromHtml(styledHtml);
-#pragma warning restore CS0618 // Type or member is obsolete
+#pragma warning restore CS0618
         }
+#pragma warning restore CA1416, CA1422, CS8600
 
-        PlatformView.SetText(spanned, TextView.BufferType.Spannable);
+        if (spanned != null)
+        {
+            PlatformView.SetText(spanned, TextView.BufferType.Spannable);
+        }
         PlatformView.SetTextColor(GetTextColor());
     }
 
@@ -148,6 +153,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
             };
 
             // For justify, we need to use Justification mode on API 26+
+#pragma warning disable CA1416 // Platform compatibility (we check version above)
             if (view.TextAlignment == HtmlTextAlignment.Justify &&
                 Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.O)
             {
@@ -157,6 +163,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
             {
                 handler.PlatformView.JustificationMode = Android.Text.JustificationMode.None;
             }
+#pragma warning restore CA1416
 
             handler.UpdateContent();
         }

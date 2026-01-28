@@ -10,37 +10,48 @@ public class BottomBarDrawable : IDrawable
     {
         var width = dirtyRect.Width;
         var height = dirtyRect.Height;
-        var notchWidth = 80f;
-        var notchDepth = 24f;
-        var curveStart = (width - notchWidth) / 2f;
-        var curveEnd = (width + notchWidth) / 2f;
+        var notchRadius = 44f; // Wider notch with more spacing around FAB
+        var notchDepth = 68f; // Extra deep notch - bottom at ~30% of bar height
+        var edgeCurveHeight = 18f; // Height of the curved edges
+        var centerX = width / 2f;
 
         // Determine if dark mode
         var isDarkMode = Application.Current?.RequestedTheme == AppTheme.Dark;
         var barColor = isDarkMode ? Color.FromArgb("#1C1C1E") : Colors.White;
 
-        // Create path for the bar with curved notch
+        // Create path for the bar with curved edges and deep notch
         var path = new PathF();
 
-        // Start from top-left with subtle curve
-        path.MoveTo(0, notchDepth);
-        path.QuadTo(width * 0.18f, 0, curveStart - 20, 0);
+        // Start from bottom-left, go up to start of left curve
+        path.MoveTo(0, height);
+        path.LineTo(0, edgeCurveHeight);
 
-        // Left curve into notch
-        path.QuadTo(curveStart - 5, 0, curveStart, notchDepth - 5);
+        // Left edge curve up and inward toward notch
+        path.QuadTo(width * 0.15f, 0, centerX - notchRadius - 20, 0);
 
-        // Notch arc (semi-circle going down into the bar)
+        // Smooth curve down into the notch (using cubic bezier for smoother radius)
         path.CurveTo(
-            curveStart + notchWidth * 0.2f, notchDepth + 12,
-            curveEnd - notchWidth * 0.2f, notchDepth + 12,
-            curveEnd, notchDepth - 5
+            centerX - notchRadius - 5, 0,
+            centerX - notchRadius, notchDepth * 0.3f,
+            centerX - notchRadius * 0.5f, notchDepth
         );
 
-        // Right curve out of notch
-        path.QuadTo(curveEnd + 5, 0, curveEnd + 20, 0);
+        // Bottom arc of notch (smooth semi-circle)
+        path.CurveTo(
+            centerX - notchRadius * 0.15f, notchDepth + 8,
+            centerX + notchRadius * 0.15f, notchDepth + 8,
+            centerX + notchRadius * 0.5f, notchDepth
+        );
 
-        // Top-right curve
-        path.QuadTo(width * 0.82f, 0, width, notchDepth);
+        // Smooth curve up out of notch
+        path.CurveTo(
+            centerX + notchRadius, notchDepth * 0.3f,
+            centerX + notchRadius + 5, 0,
+            centerX + notchRadius + 20, 0
+        );
+
+        // Right edge curve up and outward
+        path.QuadTo(width * 0.85f, 0, width, edgeCurveHeight);
 
         // Right side down
         path.LineTo(width, height);

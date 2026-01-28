@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="BibleOnSite.Pages.DonationsPage"
+             Title="תרומות"
+             FlowDirection="RightToLeft"
+             BackgroundColor="{AppThemeBinding Light={StaticResource Background}, Dark={StaticResource BackgroundDark}}">
+
+    <ScrollView Padding="16">
+        <VerticalStackLayout Spacing="24">
+
+            <!-- Introduction Text -->
+            <Border StrokeShape="RoundRectangle 12"
+                    Stroke="Transparent"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}"
+                    Padding="20">
+                <Border.Shadow>
+                    <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.1"/>
+                </Border.Shadow>
+                <Label Text="פיתוח ותחזוק התוכנית דורשים משאבים רבים.&#10;נשמח אם תוכלו להשתתף בנטל.&#10;איננו מציגים פרסומות.&#10;ההכנסות קודש ל'תנ&quot;ך על הפרק'.&#10;&#10;ניתן להקדיש לימוד למטרות קדושות כגון:&#10;לעילוי נשמת יקירכם, לרפואה, לזיווג וכדומה."
+                       FontSize="16"
+                       LineHeight="1.4"
+                       HorizontalTextAlignment="Center"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+            </Border>
+
+            <!-- Coming soon message -->
+            <Label Text="אפשרויות תרומה יתווספו בקרוב"
+                   FontSize="16"
+                   HorizontalOptions="Center"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
+                   Margin="0,20,0,0"/>
+
+            <!-- Thank you message -->
+            <Label Text="תודה רבה על תמיכתכם!"
+                   FontSize="18"
+                   FontAttributes="Bold"
+                   HorizontalOptions="Center"
+                   TextColor="{StaticResource Primary}"
+                   Margin="0,16,0,0"/>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
