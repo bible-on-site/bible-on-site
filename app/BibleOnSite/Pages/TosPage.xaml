@@ -4,7 +4,7 @@
              x:Class="BibleOnSite.Pages.TosPage"
              Title="תנאי שימוש"
              FlowDirection="RightToLeft"
-             BackgroundColor="{AppThemeBinding Light={StaticResource Background}, Dark={StaticResource BackgroundDark}}">
+             BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}">
 
     <ScrollView Padding="16">
         <VerticalStackLayout Spacing="16">
@@ -25,11 +25,11 @@
                 <Label Text="בעת שימוש באתר ו/או בישומון תנ&quot;ך על הפרק אתה מצהיר שהינך מאשר למערכת תנ&quot;ך על הפרק לאסוף נתונים שסופקו על ידיך באופן ידני או באמצעות המכשיר דרכו התחברת אף באופן נסתר, לרבות מזהה Android Advertising ID."
                        FontSize="14"
                        LineHeight="1.4"
-                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                 <Label Text="צוות התכנית מתחייב להשתמש בנתונים הנ&quot;ל אך ורק לצרכי המערכת. הנתונים הנ&quot;ל לא יסופקו על ידינו לשום גורם צד ג'. כמו כן הנתונים נשמרים באופן מאובטח בשרתי תנ&quot;ך על הפרק."
                        FontSize="14"
                        LineHeight="1.4"
-                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
             </VerticalStackLayout>
 
             <!-- Divider -->
@@ -49,11 +49,11 @@
                 <Label Text="השימוש בתנכפדיה הוא על אחריות המשתמש, אין בעלי האתר והעורכים נושאים בשום נזק ישיר או עקיף מכל סוג שהוא שייגרמו משימוש במידע, שכן הוא מוגש 'כמות שהוא'."
                        FontSize="14"
                        LineHeight="1.4"
-                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                 <Label Text="אנו מתפללים שלא תצא תקלה מתחת ידינו, עם זאת לפעמים נופלות טעויות בתחומים שונים, ביניהם כאלו שיכולות להזיק או לפגוע, אם הבחנתם בכאלה אתם יותר ממוזמנים לפנות ובע&quot;ה הנושא ייבחן ובמידת הצורך יטופל בהקדם."
                        FontSize="14"
                        LineHeight="1.4"
-                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
 
                 <Label Text="שימוש חוזר"
                        FontSize="16"
@@ -62,7 +62,7 @@
                        Margin="0,8,0,0"/>
                 <Label FontSize="14"
                        LineHeight="1.4"
-                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}">
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}">
                     <Label.FormattedText>
                         <FormattedString>
                             <Span Text="תנכפדיה "/>
@@ -90,11 +90,11 @@
                 <Label Text="ניתן להשתמש לכל צורך אישי או לימודי שאינם מסחריים."
                        FontSize="14"
                        LineHeight="1.4"
-                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                 <Label Text="כמו כן ניתן להפנות אלינו שאלות ונעביר לרבנים הכותבים."
                        FontSize="14"
                        LineHeight="1.4"
-                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
 
                 <Label Text="שימוש חוזר"
                        FontSize="16"
@@ -104,37 +104,39 @@
                 <Label Text="מצווה להפיץ הפניות למאמרים אל מכריכם, אך אין להעתיק את המאמרים לאתר אחר או ספר וכד' ללא הסכמה מפורשת מהרב המחבר."
                        FontSize="14"
                        LineHeight="1.4"
-                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
-                <Label FontSize="14"
-                       LineHeight="1.4"
-                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}">
-                    <Label.FormattedText>
-                        <FormattedString>
-                            <Span Text="המפרשים על הפרק באדיבות "/>
-                            <Span Text="ספאריה" TextColor="{StaticResource Primary}" TextDecorations="Underline">
-                                <Span.GestureRecognizers>
-                                    <TapGestureRecognizer Tapped="OnSefariaTapped"/>
-                                </Span.GestureRecognizers>
-                            </Span>
-                            <Span Text=". שימוש חוזר על פי תנאי השימוש שלהם."/>
-                        </FormattedString>
-                    </Label.FormattedText>
-                </Label>
-                <Label FontSize="14"
-                       LineHeight="1.4"
-                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}">
-                    <Label.FormattedText>
-                        <FormattedString>
-                            <Span Text="הפרקים המוקלטים באדיבות "/>
-                            <Span Text="הרב דן בארי" TextColor="{StaticResource Primary}" TextDecorations="Underline">
-                                <Span.GestureRecognizers>
-                                    <TapGestureRecognizer Tapped="OnDanBarryTapped"/>
-                                </Span.GestureRecognizers>
-                            </Span>
-                            <Span Text=". שימוש חוזר על פי תנאי השימוש שיציב."/>
-                        </FormattedString>
-                    </Label.FormattedText>
-                </Label>
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                <HorizontalStackLayout Spacing="4">
+                    <Label Text="המפרשים על הפרק באדיבות"
+                           FontSize="14"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                    <Label Text="ספאריה"
+                           FontSize="14"
+                           TextColor="{StaticResource Primary}"
+                           TextDecorations="Underline">
+                        <Label.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnSefariaTapped"/>
+                        </Label.GestureRecognizers>
+                    </Label>
+                    <Label Text=". שימוש חוזר על פי תנאי השימוש שלהם."
+                           FontSize="14"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                </HorizontalStackLayout>
+                <HorizontalStackLayout Spacing="4">
+                    <Label Text="הפרקים המוקלטים באדיבות"
+                           FontSize="14"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                    <Label Text="הרב דן בארי"
+                           FontSize="14"
+                           TextColor="{StaticResource Primary}"
+                           TextDecorations="Underline">
+                        <Label.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnDanBarryTapped"/>
+                        </Label.GestureRecognizers>
+                    </Label>
+                    <Label Text=". שימוש חוזר על פי תנאי השימוש שיציב."
+                           FontSize="14"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                </HorizontalStackLayout>
             </VerticalStackLayout>
 
             <!-- Bottom spacing -->

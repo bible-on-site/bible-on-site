@@ -22,7 +22,7 @@
         <!-- DEBUG WATERMARK - Remove after testing -->
         <Label x:Name="DebugWatermark"
                Grid.Row="0"
-               Text="DEBUG v37"
+               Text="DEBUG v38"
                FontSize="10"
                TextColor="Red"
                BackgroundColor="#40FFFF00"

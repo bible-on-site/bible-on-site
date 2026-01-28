@@ -4,7 +4,7 @@
              x:Class="BibleOnSite.Pages.DonationsPage"
              Title="תרומות"
              FlowDirection="RightToLeft"
-             BackgroundColor="{AppThemeBinding Light={StaticResource Background}, Dark={StaticResource BackgroundDark}}">
+             BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}">
 
     <ScrollView Padding="16">
         <VerticalStackLayout Spacing="24">
@@ -21,7 +21,7 @@
                        FontSize="16"
                        LineHeight="1.4"
                        HorizontalTextAlignment="Center"
-                       TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
             </Border>
 
             <!-- Coming soon message -->
