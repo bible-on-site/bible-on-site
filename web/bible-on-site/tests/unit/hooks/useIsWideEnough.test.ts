@@ -1,10 +1,10 @@
 /**
  * @jest-environment jsdom
  */
-import { renderHook, act } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import {
-	useIsWideEnough,
 	TABLET_MIN_WIDTH,
+	useIsWideEnough,
 } from "../../../src/hooks/useIsWideEnough";
 
 describe("useIsWideEnough", () => {

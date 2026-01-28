@@ -159,10 +159,11 @@ jobs:
           PARTNER_CENTER_CLIENT_SECRET: ${{ secrets.MS_STORE_CLIENT_SECRET }}
         run: |
           # Create a new flight for each deployment (avoids issues with Partner Center-created submissions)
+          # MaxFlightsToKeep=15 ensures we stay well under the 25 flight limit
           dotnet run --project devops -- DeployMsStore `
             --msix-path "${{ steps.find_msix.outputs.MSIX_FILE }}" `
             --ms-store-flight-group-id "${{ secrets.MS_STORE_FLIGHT_GROUP_ID }}" `
-            --max-flights-to-keep 99999
+            --max-flights-to-keep 15
 
       - name: Deployment Summary
         shell: pwsh
@@ -233,19 +234,38 @@ jobs:
       - name: Install Fastlane
         run: gem install fastlane -NV
 
+      # TODO: Split upload and distribution into separate workflows (see #1183)
+      # This stdout checker is a workaround for Apple's submission limit errors -
+      # we consider the job successful if the build was processed, even if
+      # external distribution fails due to rate limits.
       - name: Upload to TestFlight and Distribute to Beta Group
         env:
           TESTFLIGHT_BETA_GROUP: ${{ secrets.TESTFLIGHT_BETA_GROUP_NAME }}
         run: |
-          fastlane pilot upload \
+          set +e
+          OUTPUT=$(fastlane pilot upload \
             --ipa "${{ steps.find_ipa.outputs.IPA_FILE }}" \
             --api_key_path "${{ env.API_KEY_PATH }}" \
             --skip_waiting_for_build_processing false \
             --distribute_external true \
             --groups "${TESTFLIGHT_BETA_GROUP}" \
-            --beta_app_description "929 - תנ\"ך על הפרק: Daily Bible study app following the 929 project curriculum." \
+            --beta_app_description "בכ\"ט כסלו תשע\"ה(21 דצמ' 14) התחילה תכנית לימוד תנ\"ך יומי של משרד החינוך, פרק ליום. כחודש לאחר מכן עלה לרשת אתר לימוד תנך באותו פורמט אשר מתעדכן מיום ליום במאמרים של רבנים. כמו כן יש רעיונות נוספים שעתידים להתחדש, תעקבו אחרינו! לימוד פורה, תנך.co.il" \
             --beta_app_feedback_email "tanah.site@gmail.com" \
-            --changelog "Automated build v${{ env.MODULE_VERSION }}"
+            --beta_app_review_info '{"contact_email":"tanah.site@gmail.com","contact_first_name":"Dorad","contact_last_name":"Levinshtein","contact_phone":"+372 5707 8640"}' \
+            --changelog "Automated build v${{ env.MODULE_VERSION }}" 2>&1)
+          EXIT_CODE=$?
+          echo "$OUTPUT"
+
+          if echo "$OUTPUT" | grep -q "Successfully finished processing the build"; then
+            echo "✅ Build was uploaded and processed successfully"
+            if [ $EXIT_CODE -ne 0 ]; then
+              echo "::warning::Distribution may have failed (e.g., submission limits) - manual distribution may be required"
+            fi
+            exit 0
+          else
+            echo "❌ Build upload/processing failed"
+            exit $EXIT_CODE
+          fi
 
       - name: Cleanup
         if: always()

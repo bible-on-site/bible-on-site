@@ -100,9 +100,8 @@ partial class Build
             service.Edits.Tracks.Update(trackUpdate, GooglePlayPackageName, edit.Id, track).Execute();
             Serilog.Log.Information($"Assigned to {track} track");
 
-            // Commit edit (changesNotSentForReview=true for apps not yet published)
+            // Commit edit
             var commitRequest = service.Edits.Commit(GooglePlayPackageName, edit.Id);
-            commitRequest.ChangesNotSentForReview = true;
             commitRequest.Execute();
             Serilog.Log.Information("Google Play upload complete");
         });
@@ -143,6 +142,11 @@ partial class Build
             // Create a new flight if no flight ID is provided
             if (string.IsNullOrEmpty(flightId) && !Production)
             {
+                // Clean up old flights BEFORE creating new one to avoid hitting 25 flight limit
+                if (!string.IsNullOrEmpty(MsStoreFlightGroupId) && MaxFlightsToKeep > 0)
+                {
+                    CleanupOldFlights();
+                }
                 flightId = CreateMsStoreFlight();
             }
 
@@ -169,12 +173,6 @@ partial class Build
                 .AssertZeroExitCode();
 
             Serilog.Log.Information("Microsoft Store upload complete");
-
-            // Clean up old flights if we created a new one
-            if (!string.IsNullOrEmpty(MsStoreFlightGroupId) && MaxFlightsToKeep > 0)
-            {
-                CleanupOldFlights();
-            }
         });
 
     string CreateMsStoreFlight()
@@ -216,7 +214,7 @@ partial class Build
     void DeletePendingFlightSubmission(string flightId)
     {
         Serilog.Log.Information($"Checking for pending flight submission...");
-        var deleteProcess = ProcessTasks.StartProcess("msstore", $"flights submission delete \"{MsStoreAppId}\" \"{flightId}\" --no-confirm");
+        var deleteProcess = ProcessTasks.StartProcess("msstore", $"flights submission delete \"{MsStoreAppId}\" \"{flightId}\"");
         deleteProcess.WaitForExit();
         // Ignore exit code - deletion may fail if no pending submission exists or if it was created in Partner Center
         if (deleteProcess.ExitCode != 0)
@@ -232,11 +230,10 @@ partial class Build
         var listProcess = ProcessTasks.StartProcess(
             "msstore",
             $"flights list \"{MsStoreAppId}\"",
-            logOutput: false,
+            logOutput: true,
             logInvocation: true
         );
         listProcess.WaitForExit();
-        var output = listProcess.Output.Select(o => o.Text).ToList();
 
         if (listProcess.ExitCode != 0)
         {
@@ -244,39 +241,78 @@ partial class Build
             return;
         }
 
-        // Parse flights from output - look for flight IDs that match our naming pattern (v*-*)
-        var flightPattern = new System.Text.RegularExpressions.Regex(@"v[\d\.]+-\d{8}-\d{6}");
-        var flights = new List<(string Id, string Name)>();
+        // The CLI wraps long content across multiple lines in a table format.
+        // Each column is wrapped separately. We need to extract the FlightId column (2nd column)
+        // and concatenate the partial UUIDs from consecutive rows.
+        //
+        // Example table output:
+        // │ 1  │ 67df6395-6 │ v3         │ ...
+        // │    │ 07a-4da7-b │            │ ...
+        // │    │ 718-80c949 │            │ ...
+        // │    │ c69e73     │            │ ...
+        // │ 2  │ c30667c3-9 │ v4.0.29-20 │ ...
 
-        foreach (var line in output)
+        var rawOutput = string.Join("\n", listProcess.Output.Select(o => o.Text));
+        Serilog.Log.Information($"Raw output length: {rawOutput.Length} chars");
+
+        // Split into lines and extract the FlightId column (2nd column after splitting by │)
+        var lines = rawOutput.Split('\n');
+        var flightIdColumnParts = new System.Text.StringBuilder();
+
+        foreach (var line in lines)
         {
-            // The list output contains FlightId and FriendlyName columns
-            if (flightPattern.IsMatch(line))
+            var columns = line.Split('│');
+            if (columns.Length >= 3)
             {
-                // Try to extract flight ID (UUID format)
-                var uuidMatch = System.Text.RegularExpressions.Regex.Match(line, @"([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})");
-                var nameMatch = flightPattern.Match(line);
-                if (uuidMatch.Success && nameMatch.Success)
+                // Column 0 is empty (before first │), column 1 is row number, column 2 is FlightId
+                var flightIdPart = columns[2].Trim();
+                if (!string.IsNullOrEmpty(flightIdPart) && !flightIdPart.Contains("FlightId") && !flightIdPart.Contains("─"))
                 {
-                    flights.Add((uuidMatch.Value, nameMatch.Value));
+                    flightIdColumnParts.Append(flightIdPart);
                 }
             }
         }
 
-        // Sort by name (timestamp) descending and delete old ones
-        var flightsToDelete = flights
-            .OrderByDescending(f => f.Name)
-            .Skip(MaxFlightsToKeep)
+        var flightIdColumn = flightIdColumnParts.ToString();
+
+        // Strip ANSI escape codes (the CLI adds formatting like [1;4m for underline/bold)
+        var ansiPattern = new System.Text.RegularExpressions.Regex(@"\x1b\[[0-9;]*m");
+        flightIdColumn = ansiPattern.Replace(flightIdColumn, "");
+
+        Serilog.Log.Information($"FlightId column content (first 200): {flightIdColumn.Substring(0, Math.Min(200, flightIdColumn.Length))}");
+
+        // Now extract complete UUIDs from the concatenated FlightId column
+        // Microsoft Store has a hard limit of 25 flights per app
+        var uuidPattern = new System.Text.RegularExpressions.Regex(
+            @"([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var matches = uuidPattern.Matches(flightIdColumn);
+        var flightIds = matches.Cast<System.Text.RegularExpressions.Match>()
+            .Select(m => m.Value.ToLowerInvariant())
+            .Distinct()
             .ToList();
 
-        foreach (var flight in flightsToDelete)
+        Serilog.Log.Information($"Found {flightIds.Count} flights");
+        if (flightIds.Count > 0)
         {
-            Serilog.Log.Information($"Deleting old flight: {flight.Name} ({flight.Id})");
-            var deleteProcess = ProcessTasks.StartProcess("msstore", $"flights delete \"{MsStoreAppId}\" \"{flight.Id}\"");
+            Serilog.Log.Information($"First flight ID: {flightIds.First()}");
+            Serilog.Log.Information($"Last flight ID: {flightIds.Last()}");
+        }
+
+        // Delete oldest flights (first in list), keep the most recent ones (last in list)
+        var countToDelete = Math.Max(0, flightIds.Count - MaxFlightsToKeep);
+        var flightsToDelete = flightIds.Take(countToDelete).ToList();
+
+        Serilog.Log.Information($"Will delete {flightsToDelete.Count} oldest flight(s)");
+
+        foreach (var flightId in flightsToDelete)
+        {
+            Serilog.Log.Information($"Deleting flight: {flightId}");
+            var deleteProcess = ProcessTasks.StartProcess("msstore", $"flights delete \"{MsStoreAppId}\" \"{flightId}\"");
             deleteProcess.WaitForExit();
             if (deleteProcess.ExitCode != 0)
             {
-                Serilog.Log.Warning($"Could not delete flight {flight.Name}");
+                Serilog.Log.Warning($"Could not delete flight {flightId}");
             }
         }
 

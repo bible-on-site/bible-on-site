@@ -1,19 +1,22 @@
 import {
-	S3Client,
-	PutObjectCommand,
 	DeleteObjectCommand,
+	PutObjectCommand,
+	S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createServerFn } from "@tanstack/react-start";
 import { execute } from "./db";
 
 // S3 configuration from environment
-const S3_REGION = process.env.S3_REGION || process.env.AWS_REGION || "us-east-1";
+const S3_REGION =
+	process.env.S3_REGION || process.env.AWS_REGION || "us-east-1";
 const S3_BUCKET = process.env.S3_BUCKET || "bible-on-site-rabbis";
 const S3_ENDPOINT = process.env.S3_ENDPOINT; // Optional: for LocalStack/MinIO
 const S3_FORCE_PATH_STYLE = process.env.S3_FORCE_PATH_STYLE === "true"; // Required for LocalStack/MinIO
-const S3_ACCESS_KEY = process.env.S3_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || "";
-const S3_SECRET_KEY = process.env.S3_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || "";
+const S3_ACCESS_KEY =
+	process.env.S3_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || "";
+const S3_SECRET_KEY =
+	process.env.S3_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || "";
 
 const s3Client = new S3Client({
 	region: S3_REGION,
@@ -118,11 +121,10 @@ export const uploadAuthorImage = createServerFn({ method: "POST" })
 		const imageUrl = await uploadImage(buffer, contentType, authorId);
 
 		// Update author record with new image URL
-		await execute(
-			"UPDATE tanah_author SET image_url = ? WHERE id = ?",
-			[imageUrl, authorId],
-		);
+		await execute("UPDATE tanah_author SET image_url = ? WHERE id = ?", [
+			imageUrl,
+			authorId,
+		]);
 
 		return { imageUrl };
 	});
-

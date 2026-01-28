@@ -37,3 +37,23 @@ When using a tool/library/framework for the first time:
   2. Fix the issue or ask clarifying questions if unsure
   3. Never say "this is unrelated" and move on without resolution
 - Use of client components in `web/bible-on-site` is forbidden unless explicitly requested
+
+### GitHub Issue Creation
+
+When creating GitHub issues, **always** include:
+
+1. **Priority label** (required): `P1` (Top Priority), `P2` (Prioritized), or `P3` (Nice to have)
+2. **Difficulty label** (required): `D1` (Low), `D2` (Medium), `D3` (High), or `D4` (Huge)
+3. **Project** (required): Add to the appropriate project:
+   - `App` (project #4) — for mobile app issues
+   - `API` (project #3) — for backend API issues
+   - `website` (project #2) — for frontend website issues
+   - `Data` (project #5) — for data pipeline issues
+   - `Admin` (project #6) — for admin portal issues
+
+Use gh CLI to add labels and project:
+
+```bash
+gh issue edit <number> --repo bible-on-site/bible-on-site --add-label "P3,D1"
+gh project item-add <project-number> --owner bible-on-site --url <issue-url>
+```
