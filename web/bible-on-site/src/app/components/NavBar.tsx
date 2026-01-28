@@ -31,7 +31,7 @@ export const NavBar = () => {
 				</header>
 				<li className={`${styles.menuItem} ${styles.ribbonBuilding}`}>
 					<Image src="/icons/book.svg" alt="על הפרק" width={16} height={16} />
-					<Link href="./929">
+					<Link href="/929">
 						<span>על הפרק</span>
 					</Link>
 				</li>
