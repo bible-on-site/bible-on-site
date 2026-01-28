@@ -1,34 +1,15 @@
-"use client";
-
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useRef } from "react";
 import packageJson from "../../../package.json";
 import styles from "./navbar.module.css";
 
 export const NavBar = () => {
-	const pathname = usePathname();
-	const checkboxRef = useRef<HTMLInputElement>(null);
-	const previousPathnameRef = useRef(pathname);
-
-	// Close sidebar when navigation occurs (pathname changes)
-	useEffect(() => {
-		if (previousPathnameRef.current !== pathname) {
-			previousPathnameRef.current = pathname;
-			if (checkboxRef.current) {
-				checkboxRef.current.checked = false;
-			}
-		}
-	}, [pathname]);
-
 	return (
 		<div className={styles.hamburgerMenu}>
 			<input
 				type="checkbox"
 				className={styles.menuToggle}
 				id="menu-toggle"
-				ref={checkboxRef}
 			/>
 			<label className={styles.menuBtn} htmlFor="menu-toggle">
 				<span className={styles.menuIcon} />
