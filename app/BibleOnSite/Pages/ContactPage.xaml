@@ -4,7 +4,7 @@
              x:Class="BibleOnSite.Pages.ContactPage"
              Title="יצירת קשר"
              FlowDirection="RightToLeft"
-             BackgroundColor="{AppThemeBinding Light={StaticResource Background}, Dark={StaticResource BackgroundDark}}">
+             BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}">
 
     <ScrollView Padding="16">
         <VerticalStackLayout Spacing="16">
