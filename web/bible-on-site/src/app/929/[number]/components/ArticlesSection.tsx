@@ -23,7 +23,11 @@ export function ArticlesSection({ articles }: ArticlesSectionProps) {
 
 			<div className={styles.articlesList}>
 				{articles.map((article) => (
-					<article key={article.id} className={styles.articleCard}>
+					<article
+						key={article.id}
+						id={`article-${article.id}`}
+						className={styles.articleCard}
+					>
 						<h3 className={styles.articleName}>{article.name}</h3>
 						{article.abstract && (
 							<div

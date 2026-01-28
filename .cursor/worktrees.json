@@ -1,0 +1,12 @@
+{
+	"setup-worktree": [
+		"npm install",
+		"npm install --prefix devops",
+		"npm install --prefix web/bible-on-site",
+		"npm install --prefix web/admin",
+		"npm install --prefix web/api/tests",
+		"cargo build --manifest-path data/Cargo.toml",
+		"cargo build --manifest-path web/api/Cargo.toml",
+		"dotnet restore bible-on-site.sln"
+	]
+}

@@ -1,0 +1,4 @@
+/* Set the nav background color for authors pages */
+body:has(.authors-layout) .top-nav {
+  background-color: #1552ac;
+}

@@ -23,7 +23,7 @@
 		"moduleResolution": "node",
 		"outDir": "./dist",
 		"baseUrl": ".",
-		"types": ["node"],
+		"types": ["node", "jest"],
 		"jsx": "preserve"
 	},
 

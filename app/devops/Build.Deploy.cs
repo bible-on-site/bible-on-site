@@ -244,21 +244,21 @@ partial class Build
         // The CLI wraps long content across multiple lines in a table format.
         // Each column is wrapped separately. We need to extract the FlightId column (2nd column)
         // and concatenate the partial UUIDs from consecutive rows.
-        // 
+        //
         // Example table output:
         // │ 1  │ 67df6395-6 │ v3         │ ...
         // │    │ 07a-4da7-b │            │ ...
         // │    │ 718-80c949 │            │ ...
         // │    │ c69e73     │            │ ...
         // │ 2  │ c30667c3-9 │ v4.0.29-20 │ ...
-        
+
         var rawOutput = string.Join("\n", listProcess.Output.Select(o => o.Text));
         Serilog.Log.Information($"Raw output length: {rawOutput.Length} chars");
-        
+
         // Split into lines and extract the FlightId column (2nd column after splitting by │)
         var lines = rawOutput.Split('\n');
         var flightIdColumnParts = new System.Text.StringBuilder();
-        
+
         foreach (var line in lines)
         {
             var columns = line.Split('│');
@@ -272,15 +272,15 @@ partial class Build
                 }
             }
         }
-        
+
         var flightIdColumn = flightIdColumnParts.ToString();
-        
+
         // Strip ANSI escape codes (the CLI adds formatting like [1;4m for underline/bold)
         var ansiPattern = new System.Text.RegularExpressions.Regex(@"\x1b\[[0-9;]*m");
         flightIdColumn = ansiPattern.Replace(flightIdColumn, "");
-        
+
         Serilog.Log.Information($"FlightId column content (first 200): {flightIdColumn.Substring(0, Math.Min(200, flightIdColumn.Length))}");
-        
+
         // Now extract complete UUIDs from the concatenated FlightId column
         // Microsoft Store has a hard limit of 25 flights per app
         var uuidPattern = new System.Text.RegularExpressions.Regex(
