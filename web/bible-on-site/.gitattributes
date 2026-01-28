@@ -1,1 +1,2 @@
-data/raw/** filter=lfs diff=lfs merge=lfs -text
+# Raw data files - binary, already compressed, exclude from stats
+data/raw/** binary -delta linguist-generated

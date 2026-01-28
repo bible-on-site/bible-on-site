@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
+<!-- FlyoutBackdrop needed for iOS to show overlay when flyout is open.
+     On iOS, the default is transparent unlike Android.
+     See: https://github.com/xamarin/Xamarin.Forms/issues/15156 -->
 <Shell
     x:Class="BibleOnSite.AppShell"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
@@ -6,8 +9,10 @@
     xmlns:local="clr-namespace:BibleOnSite"
     xmlns:pages="clr-namespace:BibleOnSite.Pages"
     Shell.FlyoutBehavior="Flyout"
-    FlyoutWidth="280"
-    FlowDirection="RightToLeft">
+    FlyoutWidth="300"
+    FlyoutBackgroundColor="White"
+    FlowDirection="RightToLeft"
+    FlyoutBackdrop="#80000000">
 
     <!-- Loading Page (shown first on startup) -->
     <ShellContent
@@ -17,47 +22,232 @@
         Shell.NavBarIsVisible="False"
         Shell.TabBarIsVisible="False"/>
 
-    <!-- Flyout Header -->
+    <!-- Flyout Header with Logo -->
     <Shell.FlyoutHeader>
-        <Grid HeightRequest="120"
-              BackgroundColor="{StaticResource Primary}"
-              Padding="16">
-            <VerticalStackLayout VerticalOptions="End"
-                    Spacing="4">
-                <Label Text="תנ״ך על הפרק"
-                       FontSize="22"
-                       FontAttributes="Bold"
-                       TextColor="White"/>
-                <Label Text="לימוד יומי"
-                       FontSize="12"
-                       TextColor="White"
-                       Opacity="0.8"/>
-            </VerticalStackLayout>
+        <Grid HeightRequest="180"
+              BackgroundColor="White"
+              Padding="0">
+            <Image Source="logo_header.jpg"
+                   Aspect="AspectFit"
+                   VerticalOptions="Center"
+                   HorizontalOptions="Center"
+                   Margin="20"/>
         </Grid>
     </Shell.FlyoutHeader>
 
-    <!-- Menu Items -->
-    <FlyoutItem Title="על הפרק"
-            FlyoutDisplayOptions="AsSingleItem">
+    <!-- Custom Flyout Content with Icons and Subtitles -->
+    <Shell.FlyoutContentTemplate>
+        <DataTemplate>
+            <ScrollView>
+                <VerticalStackLayout Spacing="0" BackgroundColor="White">
+                    <!-- על הפרק -->
+                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnAlHaperekTapped"/>
+                        </Grid.GestureRecognizers>
+                        <!-- Icon: calendar_today_24_regular = \uf23d -->
+                        <Label Grid.Column="0"
+                               Text="&#xf23d;"
+                               FontFamily="FluentIcons"
+                               FontSize="24"
+                               TextColor="{StaticResource Gray600}"
+                               VerticalOptions="Center"
+                               Margin="0,0,12,0"/>
+                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
+                            <Label Text="על הפרק"
+                                   FontSize="16"
+                                   TextColor="{StaticResource Gray900}"/>
+                            <Label Text="לימוד תנ&quot;ך יומי"
+                                   FontSize="12"
+                                   TextColor="{StaticResource Gray500}"/>
+                        </VerticalStackLayout>
+                        <!-- chevron_left_24_regular = \ue314 -->
+                        <Label Grid.Column="2"
+                               Text="&#xe314;"
+                               FontFamily="FluentIcons"
+                               FontSize="20"
+                               TextColor="{StaticResource Gray400}"
+                               VerticalOptions="Center"/>
+                    </Grid>
+
+                    <!-- רבנים -->
+                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnAuthorsTapped"/>
+                        </Grid.GestureRecognizers>
+                        <!-- edit_person_24_regular = \U000f0568 -->
+                        <Label Grid.Column="0"
+                               Text="&#xf0568;"
+                               FontFamily="FluentIcons"
+                               FontSize="24"
+                               TextColor="{StaticResource Gray600}"
+                               VerticalOptions="Center"
+                               Margin="0,0,12,0"/>
+                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
+                            <Label Text="רבנים"
+                                   FontSize="16"
+                                   TextColor="{StaticResource Gray900}"/>
+                            <Label Text="כותבים בתכנית"
+                                   FontSize="12"
+                                   TextColor="{StaticResource Gray500}"/>
+                        </VerticalStackLayout>
+                        <Label Grid.Column="2"
+                               Text="&#xe314;"
+                               FontFamily="FluentIcons"
+                               FontSize="20"
+                               TextColor="{StaticResource Gray400}"
+                               VerticalOptions="Center"/>
+                    </Grid>
+
+                    <!-- תנאי שימוש -->
+                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnTermsTapped"/>
+                        </Grid.GestureRecognizers>
+                        <!-- shield_question_24_regular = \uef23 -->
+                        <Label Grid.Column="0"
+                               Text="&#xef23;"
+                               FontFamily="FluentIcons"
+                               FontSize="24"
+                               TextColor="{StaticResource Gray600}"
+                               VerticalOptions="Center"
+                               Margin="0,0,12,0"/>
+                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
+                            <Label Text="תנאי שימוש"
+                                   FontSize="16"
+                                   TextColor="{StaticResource Gray900}"/>
+                            <Label Text="והצהרת פרטיות"
+                                   FontSize="12"
+                                   TextColor="{StaticResource Gray500}"/>
+                        </VerticalStackLayout>
+                        <Label Grid.Column="2"
+                               Text="&#xe314;"
+                               FontFamily="FluentIcons"
+                               FontSize="20"
+                               TextColor="{StaticResource Gray400}"
+                               VerticalOptions="Center"/>
+                    </Grid>
+
+                    <!-- העדפות -->
+                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnPreferencesTapped"/>
+                        </Grid.GestureRecognizers>
+                        <!-- settings_24_regular = \uf6aa -->
+                        <Label Grid.Column="0"
+                               Text="&#xf6aa;"
+                               FontFamily="FluentIcons"
+                               FontSize="24"
+                               TextColor="{StaticResource Gray600}"
+                               VerticalOptions="Center"
+                               Margin="0,0,12,0"/>
+                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
+                            <Label Text="העדפות"
+                                   FontSize="16"
+                                   TextColor="{StaticResource Gray900}"/>
+                            <Label Text="הגדרות משתמש"
+                                   FontSize="12"
+                                   TextColor="{StaticResource Gray500}"/>
+                        </VerticalStackLayout>
+                        <Label Grid.Column="2"
+                               Text="&#xe314;"
+                               FontFamily="FluentIcons"
+                               FontSize="20"
+                               TextColor="{StaticResource Gray400}"
+                               VerticalOptions="Center"/>
+                    </Grid>
+
+                    <!-- צור קשר -->
+                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnContactTapped"/>
+                        </Grid.GestureRecognizers>
+                        <!-- contact_card_24_regular = \uf320 -->
+                        <Label Grid.Column="0"
+                               Text="&#xf320;"
+                               FontFamily="FluentIcons"
+                               FontSize="24"
+                               TextColor="{StaticResource Gray600}"
+                               VerticalOptions="Center"
+                               Margin="0,0,12,0"/>
+                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
+                            <Label Text="צור קשר"
+                                   FontSize="16"
+                                   TextColor="{StaticResource Gray900}"/>
+                            <Label Text="צוות התכנית"
+                                   FontSize="12"
+                                   TextColor="{StaticResource Gray500}"/>
+                        </VerticalStackLayout>
+                        <Label Grid.Column="2"
+                               Text="&#xe314;"
+                               FontFamily="FluentIcons"
+                               FontSize="20"
+                               TextColor="{StaticResource Gray400}"
+                               VerticalOptions="Center"/>
+                    </Grid>
+
+                    <!-- תרומות -->
+                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnDonationsTapped"/>
+                        </Grid.GestureRecognizers>
+                        <!-- money_hand_24_regular = \ue81d -->
+                        <Label Grid.Column="0"
+                               Text="&#xe81d;"
+                               FontFamily="FluentIcons"
+                               FontSize="24"
+                               TextColor="{StaticResource Gray600}"
+                               VerticalOptions="Center"
+                               Margin="0,0,12,0"/>
+                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
+                            <Label Text="תרומות"
+                                   FontSize="16"
+                                   TextColor="{StaticResource Gray900}"/>
+                            <Label Text="תמיכה בקיום התכנית"
+                                   FontSize="12"
+                                   TextColor="{StaticResource Gray500}"/>
+                        </VerticalStackLayout>
+                        <Label Grid.Column="2"
+                               Text="&#xe314;"
+                               FontFamily="FluentIcons"
+                               FontSize="20"
+                               TextColor="{StaticResource Gray400}"
+                               VerticalOptions="Center"/>
+                    </Grid>
+                </VerticalStackLayout>
+            </ScrollView>
+        </DataTemplate>
+    </Shell.FlyoutContentTemplate>
+
+    <!-- Hidden routes for navigation -->
+    <FlyoutItem FlyoutItemIsVisible="False">
         <ShellContent
             ContentTemplate="{DataTemplate pages:PerekPage}"
             Route="PerekPage"/>
     </FlyoutItem>
 
-    <FlyoutItem Title="רבנים"
-            FlyoutDisplayOptions="AsSingleItem">
+    <FlyoutItem FlyoutItemIsVisible="False">
         <ShellContent
             ContentTemplate="{DataTemplate pages:AuthorsPage}"
             Route="AuthorsPage"/>
     </FlyoutItem>
 
-    <MenuItem Text="תנאי שימוש"
-            Clicked="OnTermsClicked"/>
-    <MenuItem Text="העדפות"
-            Clicked="OnPreferencesClicked"/>
-    <MenuItem Text="צור קשר"
-            Clicked="OnContactClicked"/>
-    <MenuItem Text="תרומות"
-            Clicked="OnDonationsClicked"/>
+    <FlyoutItem FlyoutItemIsVisible="False">
+        <ShellContent
+            ContentTemplate="{DataTemplate pages:ContactPage}"
+            Route="ContactPage"/>
+    </FlyoutItem>
+
+    <FlyoutItem FlyoutItemIsVisible="False">
+        <ShellContent
+            ContentTemplate="{DataTemplate pages:DonationsPage}"
+            Route="DonationsPage"/>
+    </FlyoutItem>
+
+    <FlyoutItem FlyoutItemIsVisible="False">
+        <ShellContent
+            ContentTemplate="{DataTemplate pages:TosPage}"
+            Route="TosPage"/>
+    </FlyoutItem>
 
 </Shell>

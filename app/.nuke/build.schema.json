@@ -156,6 +156,10 @@
           "type": "string",
           "description": "Configuration to build - Default is 'Debug' (local) or 'Release' (server)"
         },
+        "EnvLevel": {
+          "type": "string",
+          "description": "Environment level for local runs: dev or test"
+        },
         "GooglePlayKeyFile": {
           "type": "string",
           "description": "Path to Google Play service account JSON file"

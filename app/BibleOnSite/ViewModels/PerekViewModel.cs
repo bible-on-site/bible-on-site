@@ -36,6 +36,8 @@ public partial class PerekViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(NextPerekId))]
     [NotifyPropertyChangedFor(nameof(PreviousPerekId))]
     [NotifyPropertyChangedFor(nameof(DayOfWeek))]
+    [NotifyPropertyChangedFor(nameof(ArticlesCount))]
+    [NotifyPropertyChangedFor(nameof(HasArticles))]
     private Perek? _perek;
 
     [ObservableProperty]
@@ -91,6 +93,16 @@ public partial class PerekViewModel : ObservableObject
 
     public string SeferTanahUsName => Perek?.SeferTanahUsName ?? string.Empty;
 
+    /// <summary>
+    /// The count of articles for the current perek.
+    /// </summary>
+    public int ArticlesCount => Perek?.ArticlesCount ?? 0;
+
+    /// <summary>
+    /// Whether the current perek has any articles.
+    /// </summary>
+    public bool HasArticles => ArticlesCount > 0;
+
     public string Source
     {
         get
@@ -98,7 +110,7 @@ public partial class PerekViewModel : ObservableObject
             if (Perek == null) return string.Empty;
 
             var additionalPart = Additional.HasValue ? $"{Additional.Value.ToHebrewLetters()} " : string.Empty;
-            return $"{SeferName} {additionalPart}{PerekHeb} - {PerekId}";
+            return $"{SeferName} {additionalPart}{PerekHeb}";
         }
     }
 
@@ -162,6 +174,25 @@ public partial class PerekViewModel : ObservableObject
         if (PreviousPerekId > 0 && PreviousPerekId != PerekId)
         {
             await LoadByPerekIdAsync(PreviousPerekId);
+        }
+    }
+
+    /// <summary>
+    /// Loads today's perek based on the current date.
+    /// </summary>
+    [RelayCommand]
+    public async Task LoadTodayAsync()
+    {
+        // Ensure data is loaded before getting today's perek
+        if (!PerekDataService.Instance.IsLoaded)
+        {
+            await PerekDataService.Instance.LoadAsync();
+        }
+
+        var todayPerekId = PerekDataService.Instance.GetTodaysPerekId();
+        if (todayPerekId != PerekId)
+        {
+            await LoadByPerekIdAsync(todayPerekId);
         }
     }
 #endif

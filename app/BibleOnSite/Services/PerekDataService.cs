@@ -1,5 +1,6 @@
 using BibleOnSite.Helpers;
 using BibleOnSite.Models;
+using System.Globalization;
 using System.Text;
 using Newtonsoft.Json;
 using SQLite;
@@ -90,6 +91,7 @@ public class PerekDataService
         var perekRows = await db.QueryAsync<PerekRow>(
             "SELECT p.id AS perek_id, " +
             "p.perek, " +
+            "p.header, " +
             "CASE " +
             "  WHEN a.id IS NOT NULL THEN p.id - a.perek_from + 1 " +
             "  ELSE p.id - s.perek_id_from + 1 " +
@@ -127,6 +129,7 @@ public class PerekDataService
                 HasRecording = false,
                 Header = row.Header ?? string.Empty,
                 HebDate = FormatHebrewDate(row.HebDate),
+                HebDateNumeric = ParseHebDateNumeric(row.HebDate),
                 PerekNumber = row.PerekInContext,
                 SeferId = row.SeferId,
                 SeferName = row.SeferName ?? sefer?.Name ?? string.Empty,
@@ -145,6 +148,20 @@ public class PerekDataService
     }
 
     /// <summary>
+    /// Gets today's perek ID based on Hebrew date calculation.
+    /// Uses the same logic as the web implementation for consistency.
+    /// Handles tzeit (nightfall), weekend adjustment, and cycle boundaries.
+    /// </summary>
+    public int GetTodaysPerekId()
+    {
+        if (_perakim == null || _perakim.Count == 0)
+            return 1;
+
+        // Use the Hebrew date helper for proper calculation
+        return HebrewDateHelper.GetTodaysPerekIdByHebrew(_perakim);
+    }
+
+    /// <summary>
     /// Loads the pasukim text for a given perek.
     /// </summary>
     public async Task<List<Pasuk>> LoadPasukimAsync(int perekId)
@@ -152,9 +169,11 @@ public class PerekDataService
         var db = await LocalDatabaseService.Instance.GetDatabaseAsync();
 
         var segmentRows = await db.QueryAsync<PasukSegmentRow>(
-            "SELECT s.pasuk_id AS pasuk_id, s.segment_type AS segment_type, v.value AS value " +
+            "SELECT s.id AS segment_id, s.pasuk_id AS pasuk_id, s.segment_type AS segment_type, " +
+            "v.value AS value, o.qri_ktiv_offset AS qri_ktiv_offset " +
             "FROM tanah_pasuk_segment s " +
             "LEFT JOIN tanah_pasuk_segment_value v ON v.id = s.id " +
+            "LEFT JOIN tanah_pasuk_segment_qri_ktiv_offset o ON o.id = s.id " +
             "WHERE s.perek_id = ? " +
             "ORDER BY s.pasuk_id, s.id",
             perekId);
@@ -162,6 +181,7 @@ public class PerekDataService
         var pasukim = new List<Pasuk>();
         var currentPasukId = -1;
         var currentText = new StringBuilder();
+        var currentSegments = new List<PasukSegment>();
 
         foreach (var row in segmentRows)
         {
@@ -172,22 +192,37 @@ public class PerekDataService
                     pasukim.Add(new Pasuk
                     {
                         PasukNum = currentPasukId,
-                        Text = currentText.ToString()
+                        Text = currentText.ToString().TrimEnd(),
+                        Segments = new List<PasukSegment>(currentSegments)
                     });
                 }
 
                 currentPasukId = row.PasukId;
                 currentText.Clear();
+                currentSegments.Clear();
             }
 
             var value = row.Value ?? string.Empty;
+            var segmentType = ParseSegmentType(row.SegmentType);
+            var segment = new PasukSegment
+            {
+                Type = segmentType,
+                Value = value,
+                PairedOffset = row.QriKtivOffset
+            };
+            currentSegments.Add(segment);
+
             switch (row.SegmentType)
             {
                 case "ktiv":
                 case "qri":
                     if (!string.IsNullOrEmpty(value))
                     {
-                        if (currentText.Length > 0 && currentText[^1] != '\n')
+                        // Add space before word unless:
+                        // - it's the first word
+                        // - previous char is a newline
+                        // - previous char is a maqaf (Hebrew hyphen)
+                        if (currentText.Length > 0 && currentText[^1] != '\n' && currentText[^1] != '־')
                         {
                             currentText.Append(' ');
                         }
@@ -209,11 +244,24 @@ public class PerekDataService
             pasukim.Add(new Pasuk
             {
                 PasukNum = currentPasukId,
-                Text = currentText.ToString()
+                Text = currentText.ToString().TrimEnd(),
+                Segments = new List<PasukSegment>(currentSegments)
             });
         }
 
         return pasukim;
+    }
+
+    private static SegmentType ParseSegmentType(string type)
+    {
+        return type switch
+        {
+            "ktiv" => SegmentType.Ktiv,
+            "qri" => SegmentType.Qri,
+            "ptuha" => SegmentType.Ptuha,
+            "stuma" => SegmentType.Stuma,
+            _ => SegmentType.Qri // Default to qri for unknown types
+        };
     }
 
     private static int? ParseAdditionalLetter(string? letter)
@@ -248,6 +296,20 @@ public class PerekDataService
         }
 
         return date.Length >= 10 ? date[..10] : date;
+    }
+
+    /// <summary>
+    /// Parses Hebrew date from database format to numeric YYYYMMDD format.
+    /// </summary>
+    private static int ParseHebDateNumeric(string? hebDate)
+    {
+        if (string.IsNullOrWhiteSpace(hebDate) || hebDate.Length != 8)
+            return 0;
+
+        if (int.TryParse(hebDate, out var result))
+            return result;
+
+        return 0;
     }
 
     private static string FormatHebrewDate(string? hebDate)
@@ -354,6 +416,9 @@ public class PerekDataService
 
     private class PasukSegmentRow
     {
+        [Column("segment_id")]
+        public int SegmentId { get; set; }
+
         [Column("pasuk_id")]
         public int PasukId { get; set; }
 
@@ -362,6 +427,9 @@ public class PerekDataService
 
         [Column("value")]
         public string? Value { get; set; }
+
+        [Column("qri_ktiv_offset")]
+        public int? QriKtivOffset { get; set; }
     }
 
     #endregion

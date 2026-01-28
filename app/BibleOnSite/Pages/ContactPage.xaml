@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="BibleOnSite.Pages.ContactPage"
+             Title="יצירת קשר"
+             FlowDirection="RightToLeft"
+             BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}">
+
+    <ScrollView Padding="16">
+        <VerticalStackLayout Spacing="16">
+
+            <!-- WhatsApp Card -->
+            <Border StrokeShape="RoundRectangle 8"
+                    Stroke="Transparent"
+                    BackgroundColor="White">
+                <Border.Shadow>
+                    <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.1"/>
+                </Border.Shadow>
+                <VerticalStackLayout Spacing="0">
+                    <!-- Header -->
+                    <Grid BackgroundColor="#075E55" Padding="16" HeightRequest="80">
+                        <Image Source="whatsapp.svg"
+                               HeightRequest="50"
+                               WidthRequest="50"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center"/>
+                    </Grid>
+                    <!-- Content -->
+                    <VerticalStackLayout Padding="16" Spacing="12" BackgroundColor="#ECE5DD">
+                        <Border BackgroundColor="#DCF8C6"
+                                StrokeShape="RoundRectangle 8"
+                                Stroke="Transparent"
+                                Padding="12"
+                                HorizontalOptions="End">
+                            <Label Text="דברו איתנו בווטסאפ"
+                                   FontSize="15"
+                                   TextColor="#303030"/>
+                        </Border>
+                        <Border BackgroundColor="White"
+                                StrokeShape="RoundRectangle 8"
+                                Stroke="Transparent"
+                                Padding="12"
+                                HorizontalOptions="Start">
+                            <Label Text="מה המספר?"
+                                   FontSize="15"
+                                   TextColor="#303030"/>
+                        </Border>
+                        <Border BackgroundColor="#DCF8C6"
+                                StrokeShape="RoundRectangle 8"
+                                Stroke="Transparent"
+                                Padding="12"
+                                HorizontalOptions="End">
+                            <Label Text="לחצו כאן"
+                                   FontSize="15"
+                                   TextColor="#1E88E5"
+                                   TextDecorations="Underline">
+                                <Label.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnWhatsAppTapped"/>
+                                </Label.GestureRecognizers>
+                            </Label>
+                        </Border>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Telegram Card -->
+            <Border StrokeShape="RoundRectangle 8"
+                    Stroke="Transparent"
+                    BackgroundColor="White">
+                <Border.Shadow>
+                    <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.1"/>
+                </Border.Shadow>
+                <VerticalStackLayout Spacing="0">
+                    <!-- Header -->
+                    <Grid BackgroundColor="#517BA3" Padding="16" HeightRequest="80">
+                        <Image Source="telegram.svg"
+                               HeightRequest="50"
+                               WidthRequest="50"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center"/>
+                    </Grid>
+                    <!-- Content -->
+                    <VerticalStackLayout Padding="16" Spacing="12" BackgroundColor="#E8E8E8">
+                        <Border BackgroundColor="White"
+                                StrokeShape="RoundRectangle 8"
+                                Stroke="Transparent"
+                                Padding="12"
+                                HorizontalOptions="Start">
+                            <Label Text="אפשר לפנות בטלגרם?"
+                                   FontSize="15"
+                                   TextColor="#303030"/>
+                        </Border>
+                        <Border BackgroundColor="#EFFDDE"
+                                StrokeShape="RoundRectangle 8"
+                                Stroke="Transparent"
+                                Padding="12"
+                                HorizontalOptions="End">
+                            <Label Text="כן"
+                                   FontSize="15"
+                                   TextColor="#303030"/>
+                        </Border>
+                        <Border BackgroundColor="#EFFDDE"
+                                StrokeShape="RoundRectangle 8"
+                                Stroke="Transparent"
+                                Padding="12"
+                                HorizontalOptions="End">
+                            <Label Text="@BibleOnSite"
+                                   FontSize="15"
+                                   TextColor="#1E88E5"
+                                   TextDecorations="Underline">
+                                <Label.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnTelegramTapped"/>
+                                </Label.GestureRecognizers>
+                            </Label>
+                        </Border>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Email Card -->
+            <Border StrokeShape="RoundRectangle 8"
+                    Stroke="#404040"
+                    StrokeThickness="1"
+                    BackgroundColor="White">
+                <Border.Shadow>
+                    <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.1"/>
+                </Border.Shadow>
+                <VerticalStackLayout Spacing="0">
+                    <!-- Header -->
+                    <Grid BackgroundColor="#404040" Padding="16" HeightRequest="70">
+                        <Image Source="gmail.svg"
+                               HeightRequest="45"
+                               WidthRequest="45"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center"/>
+                    </Grid>
+                    <!-- Content -->
+                    <VerticalStackLayout Padding="24" BackgroundColor="White">
+                        <Label Text="tanah.site@gmail.com"
+                               FontSize="16"
+                               TextColor="#1E88E5"
+                               TextDecorations="Underline"
+                               HorizontalOptions="Center">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnEmailTapped"/>
+                            </Label.GestureRecognizers>
+                        </Label>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

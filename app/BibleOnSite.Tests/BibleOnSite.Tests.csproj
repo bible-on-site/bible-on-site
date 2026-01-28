@@ -26,6 +26,7 @@
     <PackageReference Include="FluentAssertions" Version="7.2.0" />
     <PackageReference Include="Moq" Version="4.20.72" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="Microsoft.Maui.Controls" Version="9.0.100" />
     <PackageReference Include="GraphQL.Client" Version="6.1.0" />
     <PackageReference Include="GraphQL.Client.Serializer.Newtonsoft" Version="6.1.0" />
     <PackageReference Include="Xunit.SkippableFact" Version="1.5.23" />
@@ -37,6 +38,8 @@
       Instead, we include the source files directly for testing.
     -->
     <Compile Include="..\BibleOnSite\Config\*.cs" Link="Config\%(Filename)%(Extension)" />
+    <!-- Exclude XAML code-behind files as they require MAUI XAML compilation -->
+    <Compile Include="..\BibleOnSite\Controls\*.cs" Exclude="..\BibleOnSite\Controls\*.xaml.cs" Link="Controls\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Data\*.cs" Link="Data\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Helpers\*.cs" Link="Helpers\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Models\*.cs" Link="Models\%(Filename)%(Extension)" />
