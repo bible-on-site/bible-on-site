@@ -6,7 +6,11 @@ import styles from "./navbar.module.css";
 export const NavBar = () => {
 	return (
 		<div className={styles.hamburgerMenu}>
-			<input type="checkbox" className={styles.menuToggle} id="menu-toggle" />
+			<input
+				type="checkbox"
+				className={styles.menuToggle}
+				id="menu-toggle"
+			/>
 			<label className={styles.menuBtn} htmlFor="menu-toggle">
 				<span className={styles.menuIcon} />
 			</label>
@@ -27,8 +31,14 @@ export const NavBar = () => {
 				</header>
 				<li className={`${styles.menuItem} ${styles.ribbonBuilding}`}>
 					<Image src="/icons/book.svg" alt="על הפרק" width={16} height={16} />
-					<Link href="./929">
+					<Link href="/929">
 						<span>על הפרק</span>
+					</Link>
+				</li>
+				<li className={`${styles.menuItem} ${styles.ribbonBuilding}`}>
+					<Image src="/icons/rabbi.svg" alt="הרבנים" width={16} height={16} />
+					<Link href="/authors">
+						<span>הרבנים</span>
 					</Link>
 				</li>
 				<li className={`${styles.menuItem} ${styles.ribbonComingSoon}`}>
