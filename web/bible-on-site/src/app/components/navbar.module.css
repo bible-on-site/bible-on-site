@@ -134,6 +134,14 @@
   margin: 0.5rem;
 }
 
+/* Ensure menu icons maintain their aspect ratio */
+.menuItem img {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
 .menuItemLabel {
   display: flex;
   align-items: center;
