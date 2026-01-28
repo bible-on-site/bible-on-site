@@ -1,9 +1,10 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 using BibleOnSite.Controls;
 using BibleOnSite.Handlers;
 
+// Force rebuild for font resource loading
 namespace BibleOnSite;
 
 public static class MauiProgram
@@ -17,6 +18,7 @@ public static class MauiProgram
 			{
 				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
 				fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
+				fonts.AddFont("FluentSystemIcons-Regular.ttf", "FluentIcons");
 			})
 			.ConfigureMauiHandlers(handlers =>
 			{

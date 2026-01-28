@@ -192,9 +192,8 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private async void OnCircularMenuClicked(object? sender, EventArgs e)
     {
-        System.Diagnostics.Debug.WriteLine($"=== CircularMenu clicked! _isMenuOpen was: {_isMenuOpen} ===");
         _isMenuOpen = !_isMenuOpen;
-        System.Diagnostics.Debug.WriteLine($"=== _isMenuOpen is now: {_isMenuOpen} ===");
+        DebugWatermark.Text = $"Menu: {(_isMenuOpen ? "OPEN" : "CLOSED")}";
 
         if (_isMenuOpen)
         {
@@ -211,64 +210,30 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private async Task OpenCircularMenuAsync()
     {
-        System.Diagnostics.Debug.WriteLine("=== OpenCircularMenuAsync started ===");
-        
-        // Show all menu buttons (they start invisible)
         var buttons = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
+
+        // Enable clicks and fade in (buttons are already at final positions via AbsoluteLayout)
         foreach (var button in buttons)
         {
-            button.IsVisible = true;
-            button.Opacity = 0;
-            button.Scale = 0;
-            button.TranslationX = 0;
-            button.TranslationY = 0;
-            System.Diagnostics.Debug.WriteLine($"=== Button {button.Text} set to visible ===");
+            button.InputTransparent = false;
         }
 
-        // Change icon and color immediately before rotation
-        CircularMenuButton.Text = "✕"; // X/close
+        // Change FAB icon to X
+        CircularMenuButton.Text = "✕";
         CircularMenuButton.BackgroundColor = Colors.Red;
-        System.Diagnostics.Debug.WriteLine("=== FAB changed to X/Red ===");
 
-        // Animate hamburger to X with rotation
-        var buttonRotation = CircularMenuButton.RotateTo(180, (uint)AnimationDurationMs, Easing.SpringOut);
-
-        // Animate all menu buttons with staggered timing in arc pattern
-        // Buttons fan out upward and outward from the FAB position
-        var positions = new[]
+        // Animate FAB rotation and fade in all buttons
+        var animations = new List<Task>
         {
-            new { X = -70.0, Y = -70.0 },   // Previous (left)
-            new { X = -30.0, Y = -100.0 },  // Today (upper-left)
-            new { X = 30.0, Y = -100.0 },   // Picker (upper-right)
-            new { X = 70.0, Y = -70.0 }     // Next (right)
+            CircularMenuButton.RotateTo(180, 250, Easing.SpringOut)
         };
 
-        var buttonAnimations = new List<Task> { buttonRotation };
-
-        for (int i = 0; i < buttons.Length; i++)
+        foreach (var button in buttons)
         {
-            var button = buttons[i];
-            var pos = positions[i];
-            var delay = i * 40;
-
-            var capturedButton = button;
-            var capturedPos = pos;
-            var capturedDelay = delay;
-
-            buttonAnimations.Add(Task.Run(async () =>
-            {
-                await Task.Delay(capturedDelay);
-                await MainThread.InvokeOnMainThreadAsync(async () =>
-                {
-                    var fadeTask = capturedButton.FadeTo(1, (uint)(AnimationDurationMs * 0.5));
-                    var scaleTask = capturedButton.ScaleTo(1, (uint)AnimationDurationMs, Easing.SpringOut);
-                    var translateTask = capturedButton.TranslateTo(capturedPos.X, capturedPos.Y, (uint)AnimationDurationMs, Easing.SpringOut);
-                    await Task.WhenAll(fadeTask, scaleTask, translateTask);
-                });
-            }));
+            animations.Add(button.FadeTo(1, 200));
         }
 
-        await Task.WhenAll(buttonAnimations);
+        await Task.WhenAll(animations);
     }
 
     /// <summary>
@@ -277,31 +242,28 @@ public partial class PerekPage : ContentPage
     private async Task CloseCircularMenuAsync()
     {
         var buttons = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
-        var buttonAnimations = new List<Task>();
 
-        // Animate buttons back to center (FAB position)
+        // Change back to hamburger
+        CircularMenuButton.Text = "☰";
+        CircularMenuButton.BackgroundColor = Color.FromArgb("#512BD4");
+
+        // Animate FAB rotation and fade out all buttons
+        var animations = new List<Task>
+        {
+            CircularMenuButton.RotateTo(0, 200, Easing.SpringOut)
+        };
+
         foreach (var button in buttons)
         {
-            buttonAnimations.Add(button.FadeTo(0, (uint)(AnimationDurationMs * 0.3)));
-            buttonAnimations.Add(button.ScaleTo(0, (uint)(AnimationDurationMs * 0.4), Easing.CubicIn));
-            buttonAnimations.Add(button.TranslateTo(0, 0, (uint)(AnimationDurationMs * 0.4), Easing.CubicIn));
+            animations.Add(button.FadeTo(0, 150));
         }
 
-        // Change back to hamburger immediately
-        CircularMenuButton.Text = "☰"; // hamburger menu
-        CircularMenuButton.BackgroundColor = Color.FromArgb("#512BD4"); // Primary purple
+        await Task.WhenAll(animations);
 
-        // Animate X back to hamburger with rotation
-        buttonAnimations.Add(CircularMenuButton.RotateTo(0, (uint)(AnimationDurationMs * 0.5), Easing.SpringOut));
-
-        await Task.WhenAll(buttonAnimations);
-
-        // Hide buttons after animation
+        // Disable clicks on hidden buttons
         foreach (var button in buttons)
         {
-            button.IsVisible = false;
-            button.TranslationX = 0;
-            button.TranslationY = 0;
+            button.InputTransparent = true;
         }
     }
 
@@ -318,12 +280,12 @@ public partial class PerekPage : ContentPage
     }
 
     /// <summary>
-    /// Handles menu item click - closes the menu after action.
+    /// Handles menu item click - keeps menu open (don't close).
     /// </summary>
-    private async void OnMenuItemClicked(object? sender, EventArgs e)
+    private void OnMenuItemClicked(object? sender, EventArgs e)
     {
-        _isMenuOpen = false;
-        await CloseCircularMenuAsync();
+        // Menu stays open - user can click multiple satellites
+        // Menu closes only when clicking the hamburger button again
     }
 
     /// <summary>
@@ -331,8 +293,7 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private async void OnPerekPickerClicked(object? sender, EventArgs e)
     {
-        _isMenuOpen = false;
-        await CloseCircularMenuAsync();
+        // Menu stays open - don't close
 
         // Show perek picker - simple input for now
         var result = await DisplayPromptAsync(
@@ -370,16 +331,15 @@ public partial class PerekPage : ContentPage
     }
 
     /// <summary>
-    /// Handles perushim chevron button click - toggles chevron direction with animation.
+    /// Handles perushim chevron button click - toggles chevron direction.
     /// </summary>
     private bool _isPerushimOpen;
-    private async void OnPerushimChevronClicked(object? sender, EventArgs e)
+    private void OnPerushimChevronClicked(object? sender, EventArgs e)
     {
         _isPerushimOpen = !_isPerushimOpen;
 
-        // Animate rotation for chevron toggle
-        var targetRotation = _isPerushimOpen ? 180 : 0;
-        await PerushimChevronButton.RotateTo(targetRotation, 200, Easing.CubicOut);
+        // Toggle chevron icon: up (\uf2b7) vs down (\uf2a4)
+        PerushimChevronButton.Text = _isPerushimOpen ? "\uf2a4" : "\uf2b7";
 
         // TODO: Open/close perushim panel when implemented
     }
@@ -442,13 +402,29 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private void EnterFullScreen()
     {
-        // Hide Shell navigation bars
-        Shell.SetNavBarIsVisible(this, false);
-        Shell.SetTabBarIsVisible(this, false);
+        // Close circular menu if open
+        if (_isMenuOpen)
+        {
+            _isMenuOpen = false;
+            var buttons = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
+            foreach (var b in buttons)
+            {
+                b.Opacity = 0;
+                b.InputTransparent = true;
+            }
+            CircularMenuButton.Text = "☰";
+            CircularMenuButton.BackgroundColor = Color.FromArgb("#512BD4");
+            CircularMenuButton.Rotation = 0;
+        }
 
-        // Hide bottom bar and FAB
+        // Hide Shell navigation bar (no TabBar in this app - single page per FlyoutItem)
+        Shell.SetNavBarIsVisible(this, false);
+
+        // Hide bottom bar completely
         BottomBar.IsVisible = false;
         FloatingMenuContainer.IsVisible = false;
+
+        // Set row height to 0
         MainGrid.RowDefinitions[1].Height = new GridLength(0);
 
         // Show floating exit button
@@ -460,19 +436,30 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private void ExitFullScreen()
     {
-        // Show Shell navigation bars
-        Shell.SetNavBarIsVisible(this, true);
-        Shell.SetTabBarIsVisible(this, true);
-
         // Hide floating exit button first
         ExitFullScreenButton.IsVisible = false;
 
-        // Restore bottom bar row height first
+        // Show Shell navigation bar (no TabBar in this app - single page per FlyoutItem)
+        Shell.SetNavBarIsVisible(this, true);
+
+        // Set row height back to 90 BEFORE showing elements
         MainGrid.RowDefinitions[1].Height = new GridLength(90);
-        
-        // Then show the elements
+
+        // Show bottom bar with strict height constraints
         BottomBar.IsVisible = true;
+        BottomBar.HeightRequest = 90;
+        BottomBar.MaximumHeightRequest = 90;
+        BottomBar.MinimumHeightRequest = 90;
         FloatingMenuContainer.IsVisible = true;
+
+        // Force layout update
+        MainGrid.InvalidateMeasure();
+
+        // Debug: show more details after a delay
+        Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(200), () =>
+        {
+            DebugWatermark.Text = $"Bar H={BottomBar.Height:F0} Page={this.Height:F0}";
+        });
     }
 
     #endregion

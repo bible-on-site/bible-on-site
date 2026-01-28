@@ -23,6 +23,9 @@
 		<!-- Define MAUI symbol for conditional compilation -->
 		<DefineConstants>$(DefineConstants);MAUI</DefineConstants>
 
+		<!-- Enable XAML Hot Reload -->
+		<MauiEnableXamlHotReload>true</MauiEnableXamlHotReload>
+
 		<!-- Display name - must match Partner Center reserved name for MS Store -->
 		<ApplicationTitle>929 - תנ"ך על הפרק</ApplicationTitle>
 
@@ -30,11 +33,11 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.0.24</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>5.0.25</ApplicationDisplayVersion>
 		<!-- Windows MSIX requires each version component ≤65535, so we use a separate incrementing value -->
 		<!-- Android versionCode can be large, continuing from Play Store's 40000017 -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000024</ApplicationVersion>
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">24</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000025</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">25</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<!-- WindowsPackageType: None for local dev, MSIX for Store publishing (set via CLI: /p:WindowsPackageType=MSIX) -->

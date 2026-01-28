@@ -53,10 +53,10 @@ partial class Build
         }
     }
 
-    Process? _apiProcess;
-
     /// <summary>
     /// Starts the API server in background if not already running.
+    /// The API is started as a detached process that will continue running
+    /// even after the parent NUKE process exits (e.g., when RunAndroid is closed).
     /// </summary>
     void EnsureApiRunning()
     {
@@ -66,41 +66,45 @@ partial class Build
             return;
         }
 
-        Serilog.Log.Information("Starting API server...");
+        Serilog.Log.Information("Starting API server in background...");
 
         var apiPath = ApiDirectory;
-        var startInfo = new ProcessStartInfo
+
+        // Start API as a fully detached process that survives parent exit.
+        // We use UseShellExecute=true to create a completely independent process
+        // that is NOT part of the parent's job object/process tree.
+        ProcessStartInfo startInfo;
+        if (OperatingSystem.IsWindows())
         {
-            FileName = "cargo",
-            Arguments = $"make {ApiMakeTarget}",
-            WorkingDirectory = apiPath,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-
-        _apiProcess = new Process { StartInfo = startInfo };
-
-        var lastLogLine = string.Empty;
-        var lockObj = new object();
-
-        DataReceivedEventHandler handler = (sender, e) =>
-        {
-            if (!string.IsNullOrWhiteSpace(e.Data))
+            // UseShellExecute=true creates a truly independent process on Windows
+            // WindowStyle=Hidden keeps it hidden but running independently
+            startInfo = new ProcessStartInfo
             {
-                lock (lockObj) lastLogLine = e.Data;
-            }
-        };
+                FileName = "cmd.exe",
+                Arguments = $"/c cargo make {ApiMakeTarget}",
+                WorkingDirectory = apiPath,
+                UseShellExecute = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+            };
+        }
+        else
+        {
+            // On Unix-like systems, use setsid to create a new session (detached process)
+            startInfo = new ProcessStartInfo
+            {
+                FileName = "/bin/bash",
+                Arguments = $"-c \"setsid cargo make {ApiMakeTarget} > /dev/null 2>&1 &\"",
+                WorkingDirectory = apiPath,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+        }
 
-        _apiProcess.OutputDataReceived += handler;
-        _apiProcess.ErrorDataReceived += handler;
-
-        _apiProcess.Start();
-        _apiProcess.BeginOutputReadLine();
-        _apiProcess.BeginErrorReadLine();
+        // Start the process - don't wait for it since it's meant to run independently
+        Process.Start(startInfo);
 
         // Wait for API to be ready (max 300 seconds)
+        Serilog.Log.Information("Waiting for API server to be ready...");
         var timeout = DateTime.Now.AddSeconds(300);
         var attempts = 0;
 
@@ -108,43 +112,20 @@ partial class Build
         {
             attempts++;
 
-            // Log output to console with carriage return to update in-place
-            string currentLine;
-            lock (lockObj) currentLine = lastLogLine;
-
-            if (!string.IsNullOrEmpty(currentLine))
+            if (attempts % 4 == 0)
             {
-                try
-                {
-                    var maxLen = Math.Max(0, Console.WindowWidth - 25);
-                    if (currentLine.Length > maxLen) currentLine = currentLine.Substring(0, maxLen) + "...";
-                    Console.Write($"\rAPI: {currentLine}".PadRight(Console.WindowWidth - 1));
-                }
-                catch
-                {
-                    // Fallback if console manipulation fails
-                    if (attempts % 4 == 0) Console.WriteLine($"API: {currentLine}");
-                }
+                Serilog.Log.Information($"Still waiting for API... (attempt {attempts})");
             }
 
             if (IsApiRunning())
             {
-                Console.WriteLine(); // Final newline
                 Serilog.Log.Information($"API server started successfully (after ~{attempts * 0.5} seconds)");
                 return;
-            }
-
-            if (_apiProcess.HasExited)
-            {
-                Console.WriteLine();
-                Serilog.Log.Error($"API server process exited unexpectedly with code {_apiProcess.ExitCode}");
-                throw new Exception("API server failed to start.");
             }
 
             System.Threading.Thread.Sleep(500);
         }
 
-        Console.WriteLine();
         Serilog.Log.Warning("API server did not respond within 300 seconds");
     }
 
