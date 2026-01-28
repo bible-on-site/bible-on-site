@@ -22,7 +22,7 @@
         <!-- DEBUG WATERMARK - Remove after testing -->
         <Label x:Name="DebugWatermark"
                Grid.Row="0"
-               Text="DEBUG v38"
+               Text="DEBUG v42"
                FontSize="10"
                TextColor="Red"
                BackgroundColor="#40FFFF00"
@@ -105,7 +105,7 @@
                                        TextColor="{StaticResource Primary}"/>
                                 <Label Grid.Column="1"
                                        AutomationId="PasukText"
-                                       Text="{Binding Text}"
+                                       FormattedText="{Binding FormattedText}"
                                        FontSize="18"
                                        LineBreakMode="WordWrap"
                                        LineHeight="1.4"
@@ -200,6 +200,58 @@
                 </CollectionView.EmptyView>
             </CollectionView>
         </Grid>
+
+        <!-- Perushim Panel (slides up from bottom, behind the bottom bar) -->
+        <!-- Uses Grid.RowSpan="2" to extend behind bottom bar, ZIndex=-1 to stay behind -->
+        <Border x:Name="PerushimPanel"
+                Grid.Row="0"
+                Grid.RowSpan="2"
+                BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}"
+                StrokeShape="RoundRectangle 16,16,0,0"
+                Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
+                StrokeThickness="1"
+                VerticalOptions="End"
+                ZIndex="-1"
+                IsVisible="False">
+            <Border.Shadow>
+                <Shadow Brush="Black" Offset="0,-3" Radius="8" Opacity="0.2"/>
+            </Border.Shadow>
+            <Grid RowDefinitions="Auto,*" Padding="16">
+                <!-- Header with drag handle -->
+                <VerticalStackLayout Grid.Row="0" Spacing="8">
+                    <!-- Drag handle indicator -->
+                    <BoxView WidthRequest="40"
+                             HeightRequest="4"
+                             CornerRadius="2"
+                             BackgroundColor="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray500}}"
+                             HorizontalOptions="Center"
+                             Margin="0,0,0,8"/>
+                    <!-- Title -->
+                    <Label Text="פירושים"
+                           FontSize="20"
+                           FontAttributes="Bold"
+                           HorizontalTextAlignment="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
+                    <!-- Divider -->
+                    <BoxView HeightRequest="1"
+                             BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
+                             Margin="0,8,0,0"/>
+                </VerticalStackLayout>
+                <!-- Content placeholder -->
+                <VerticalStackLayout Grid.Row="1"
+                                     VerticalOptions="Center"
+                                     HorizontalOptions="Center"
+                                     Spacing="12">
+                    <Label Text="📚"
+                           FontSize="48"
+                           HorizontalTextAlignment="Center"/>
+                    <Label Text="בקרוב יחזרו הפירושים"
+                           FontSize="18"
+                           HorizontalTextAlignment="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"/>
+                </VerticalStackLayout>
+            </Grid>
+        </Border>
 
         <!-- Bottom Navigation Bar with Circular Menu -->
         <Grid Grid.Row="1"

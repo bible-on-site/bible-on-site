@@ -26,6 +26,100 @@ public class Pasuk
     /// The segments that make up this pasuk (for rich rendering).
     /// </summary>
     public List<PasukSegment> Segments { get; set; } = new();
+
+    /// <summary>
+    /// Gets the formatted text representation with qri/ktiv handling.
+    /// Qri segments that differ from ktiv are displayed as "(קְרִי: value)" in a distinct color.
+    /// </summary>
+    public FormattedString FormattedText
+    {
+        get
+        {
+            var formatted = new FormattedString();
+
+            for (int i = 0; i < Segments.Count; i++)
+            {
+                var segment = Segments[i];
+                bool isLast = i == Segments.Count - 1;
+
+                switch (segment.Type)
+                {
+                    case SegmentType.Ktiv:
+                        // Ktiv: always show the written text
+                        if (!string.IsNullOrEmpty(segment.Value))
+                        {
+                            formatted.Spans.Add(new Span { Text = segment.Value });
+                        }
+                        break;
+
+                    case SegmentType.Qri:
+                        if (segment.IsQriDifferentThanKtiv)
+                        {
+                            // Qri differs from ktiv: show "(קְרִי: value)" with special styling
+                            formatted.Spans.Add(new Span
+                            {
+                                Text = "(קְרִי: ",
+                                TextColor = Color.FromArgb("#637598"),
+                                FontSize = 14
+                            });
+                            formatted.Spans.Add(new Span
+                            {
+                                Text = segment.Value,
+                                TextColor = Color.FromArgb("#637598")
+                            });
+                            formatted.Spans.Add(new Span
+                            {
+                                Text = ")",
+                                TextColor = Color.FromArgb("#637598"),
+                                FontSize = 14
+                            });
+                        }
+                        else
+                        {
+                            // Regular qri (same as ktiv): show normally
+                            if (!string.IsNullOrEmpty(segment.Value))
+                            {
+                                formatted.Spans.Add(new Span { Text = segment.Value });
+                            }
+                        }
+                        break;
+
+                    case SegmentType.Ptuha:
+                        formatted.Spans.Add(new Span
+                        {
+                            Text = " {פ} ",
+                            TextColor = Color.FromArgb("#9a92d1"),
+                            FontAttributes = FontAttributes.Bold
+                        });
+                        break;
+
+                    case SegmentType.Stuma:
+                        formatted.Spans.Add(new Span
+                        {
+                            Text = " {ס} ",
+                            TextColor = Color.FromArgb("#9a92d1"),
+                            FontAttributes = FontAttributes.Bold
+                        });
+                        break;
+                }
+
+                // Add space after segment unless:
+                // - It's the last segment
+                // - The segment ends with maqaf (Hebrew hyphen)
+                // - It's a parsha marker (already has spaces)
+                if (!isLast &&
+                    segment.Type != SegmentType.Ptuha &&
+                    segment.Type != SegmentType.Stuma &&
+                    !segment.EndsWithMaqaf &&
+                    !string.IsNullOrEmpty(segment.Value))
+                {
+                    formatted.Spans.Add(new Span { Text = " " });
+                }
+            }
+
+            return formatted;
+        }
+    }
 }
 
 /// <summary>

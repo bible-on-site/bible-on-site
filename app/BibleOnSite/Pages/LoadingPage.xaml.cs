@@ -41,7 +41,7 @@ public partial class LoadingPage : ContentPage
     {
         try
         {
-            LoadingLabel.Text = "טוען נתונים...";
+            LoadingLabel.Text = "מתחבר לפרק...";
             await StarterService.Instance.LoadWithRetryAsync();
             Console.WriteLine($"Loaded {StarterService.Instance.Authors.Count} authors from API");
         }
