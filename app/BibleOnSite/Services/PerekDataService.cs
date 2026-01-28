@@ -90,6 +90,7 @@ public class PerekDataService
         var perekRows = await db.QueryAsync<PerekRow>(
             "SELECT p.id AS perek_id, " +
             "p.perek, " +
+            "p.header, " +
             "CASE " +
             "  WHEN a.id IS NOT NULL THEN p.id - a.perek_from + 1 " +
             "  ELSE p.id - s.perek_id_from + 1 " +

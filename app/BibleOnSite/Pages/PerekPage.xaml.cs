@@ -16,7 +16,6 @@ public partial class PerekPage : ContentPage
 
     // Circular menu state
     private bool _isMenuOpen;
-    private const double MenuRadius = 80.0;
     private const int AnimationDurationMs = 300;
 
     public PerekPage()
@@ -213,34 +212,42 @@ public partial class PerekPage : ContentPage
         CircularMenuOverlay.IsVisible = true;
         CircularMenuOverlay.InputTransparent = false;
 
-        // Rotate the toggle button
-        _ = CircularMenuButton.RotateTo(45, (uint)AnimationDurationMs, Easing.BounceOut);
+        // Animate hamburger to X with rotation
+        var buttonAnimations = new List<Task>
+        {
+            CircularMenuButton.RotateTo(180, (uint)AnimationDurationMs, Easing.CubicOut)
+        };
 
-        // Calculate positions for 4 items in an arc (from ~220° to ~320°)
-        var angles = new[] { 220.0, 250.0, 290.0, 320.0 }; // degrees
+        // Change to X (dismiss icon) after rotation starts
+        await Task.Delay(AnimationDurationMs / 3);
+        CircularMenuButton.Text = "✕"; // X/close
+        CircularMenuButton.BackgroundColor = Colors.Red;
+
+        // Animate all menu buttons with staggered timing
         var buttons = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
-
-        var animationTasks = new List<Task>();
 
         for (int i = 0; i < buttons.Length; i++)
         {
             var button = buttons[i];
-            var angleRad = angles[i] * Math.PI / 180.0;
+            button.Opacity = 0;
+            button.Scale = 0;
 
-            var x = Math.Cos(angleRad) * MenuRadius;
-            var y = Math.Sin(angleRad) * MenuRadius;
+            // Stagger the animations slightly
+            var delay = i * 50;
 
-            // Reset position to center
-            button.TranslationX = 0;
-            button.TranslationY = 0;
-
-            // Animate to arc position
-            animationTasks.Add(button.TranslateTo(x, y, (uint)AnimationDurationMs, Easing.BounceOut));
-            animationTasks.Add(button.FadeTo(1, (uint)(AnimationDurationMs * 0.6)));
-            animationTasks.Add(button.ScaleTo(1, (uint)AnimationDurationMs, Easing.BounceOut));
+            buttonAnimations.Add(Task.Run(async () =>
+            {
+                await Task.Delay(delay);
+                await MainThread.InvokeOnMainThreadAsync(async () =>
+                {
+                    var fadeTask = button.FadeTo(1, (uint)(AnimationDurationMs * 0.5));
+                    var scaleTask = button.ScaleTo(1, (uint)AnimationDurationMs, Easing.BounceOut);
+                    await Task.WhenAll(fadeTask, scaleTask);
+                });
+            }));
         }
 
-        await Task.WhenAll(animationTasks);
+        await Task.WhenAll(buttonAnimations);
     }
 
     /// <summary>
@@ -248,23 +255,41 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private async Task CloseCircularMenuAsync()
     {
-        // Rotate the toggle button back
-        _ = CircularMenuButton.RotateTo(0, (uint)(AnimationDurationMs * 0.6), Easing.CubicIn);
+        // Animate X back to hamburger with rotation
+        var buttonAnimations = new List<Task>
+        {
+            CircularMenuButton.RotateTo(0, (uint)(AnimationDurationMs * 0.6), Easing.CubicIn)
+        };
+
+        // Change back to hamburger (navigation icon) after rotation starts
+        await Task.Delay(AnimationDurationMs / 4);
+        CircularMenuButton.Text = "☰"; // hamburger menu
+        CircularMenuButton.BackgroundColor = Color.FromArgb("#2196F3"); // Primary blue
 
         var buttons = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
-        var animationTasks = new List<Task>();
 
         foreach (var button in buttons)
         {
-            animationTasks.Add(button.TranslateTo(0, 0, (uint)(AnimationDurationMs * 0.6), Easing.CubicIn));
-            animationTasks.Add(button.FadeTo(0, (uint)(AnimationDurationMs * 0.4)));
-            animationTasks.Add(button.ScaleTo(0, (uint)(AnimationDurationMs * 0.6), Easing.CubicIn));
+            buttonAnimations.Add(button.FadeTo(0, (uint)(AnimationDurationMs * 0.3)));
+            buttonAnimations.Add(button.ScaleTo(0, (uint)(AnimationDurationMs * 0.5), Easing.CubicIn));
         }
 
-        await Task.WhenAll(animationTasks);
+        await Task.WhenAll(buttonAnimations);
 
         CircularMenuOverlay.IsVisible = false;
         CircularMenuOverlay.InputTransparent = true;
+    }
+
+    /// <summary>
+    /// Handles tap on overlay background - closes the menu.
+    /// </summary>
+    private async void OnOverlayTapped(object? sender, TappedEventArgs e)
+    {
+        if (_isMenuOpen)
+        {
+            _isMenuOpen = false;
+            await CloseCircularMenuAsync();
+        }
     }
 
     /// <summary>
@@ -308,28 +333,114 @@ public partial class PerekPage : ContentPage
     }
 
     /// <summary>
-    /// Handles text button click - scrolls to first pasuk.
+    /// Handles text button click - scrolls to header/top of perek.
     /// </summary>
     private void OnTextButtonClicked(object? sender, EventArgs e)
     {
-        // Scroll to first pasuk
+        // Scroll to header (top)
         if (_viewModel.Perek?.Pasukim?.Count > 0)
         {
-            PasukimCollection.ScrollTo(0);
+            PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: true);
         }
     }
 
     /// <summary>
-    /// Handles expand button click - toggles full screen mode.
+    /// Handles perushim chevron button click - toggles chevron direction.
     /// </summary>
-    private void OnExpandClicked(object? sender, EventArgs e)
+    private bool _isPerushimOpen;
+    private void OnPerushimChevronClicked(object? sender, EventArgs e)
     {
-        // Toggle shell visibility for immersive mode
-        Shell.SetNavBarIsVisible(this, !Shell.GetNavBarIsVisible(this));
-        Shell.SetTabBarIsVisible(this, !Shell.GetTabBarIsVisible(this));
+        _isPerushimOpen = !_isPerushimOpen;
+        // Toggle chevron direction (up vs down) - FluentUI icons
+        PerushimChevronButton.Text = _isPerushimOpen ? "\uf2a4" : "\uf2b7"; // chevron_down vs chevron_up
 
-        // Update button text
-        ExpandButton.Text = Shell.GetNavBarIsVisible(this) ? "⛶" : "⛶";
+        // TODO: Open/close perushim panel when implemented
+    }
+
+    /// <summary>
+    /// Handles full screen button click - hides top and bottom bars, shows exit button.
+    /// </summary>
+    private bool _isFullScreen;
+    private void OnFullScreenClicked(object? sender, EventArgs e)
+    {
+        _isFullScreen = true;
+        EnterFullScreen();
+    }
+
+    /// <summary>
+    /// Handles exit full screen button click - restores normal view.
+    /// </summary>
+    private void OnExitFullScreenClicked(object? sender, EventArgs e)
+    {
+        _isFullScreen = false;
+        ExitFullScreen();
+    }
+
+    #region Swipe Navigation
+
+    /// <summary>
+    /// Handles swipe left gesture - navigates to next perek.
+    /// Note: In RTL layout, swipe left = forward/next.
+    /// </summary>
+    private async void OnSwipedLeft(object? sender, SwipedEventArgs e)
+    {
+        // Don't navigate if we're at the last perek
+        if (_viewModel.PerekId >= 929)
+            return;
+
+        await _viewModel.LoadNextAsync();
+        // Scroll to top after loading new perek
+        PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
+    }
+
+    /// <summary>
+    /// Handles swipe right gesture - navigates to previous perek.
+    /// Note: In RTL layout, swipe right = backward/previous.
+    /// </summary>
+    private async void OnSwipedRight(object? sender, SwipedEventArgs e)
+    {
+        // Don't navigate if we're at the first perek
+        if (_viewModel.PerekId <= 1)
+            return;
+
+        await _viewModel.LoadPreviousAsync();
+        // Scroll to top after loading new perek
+        PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
+    }
+
+    #endregion
+
+    /// <summary>
+    /// Enters full screen mode - hides navigation and bottom bar.
+    /// </summary>
+    private void EnterFullScreen()
+    {
+        // Hide Shell navigation bars
+        Shell.SetNavBarIsVisible(this, false);
+        Shell.SetTabBarIsVisible(this, false);
+
+        // Hide bottom bar
+        BottomBar.IsVisible = false;
+
+        // Show floating exit button
+        ExitFullScreenButton.IsVisible = true;
+    }
+
+    /// <summary>
+    /// Exits full screen mode - restores navigation and bottom bar.
+    /// </summary>
+    private void ExitFullScreen()
+    {
+        // Show Shell navigation bars
+        Shell.SetNavBarIsVisible(this, true);
+        Shell.SetTabBarIsVisible(this, true);
+
+        // Show bottom bar and ensure correct height
+        BottomBar.IsVisible = true;
+        BottomBar.HeightRequest = 80;
+
+        // Hide floating exit button
+        ExitFullScreenButton.IsVisible = false;
     }
 
     #endregion

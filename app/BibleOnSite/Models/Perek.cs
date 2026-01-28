@@ -62,6 +62,11 @@ public class Perek
     public required string Tseit { get; set; }
 
     /// <summary>
+    /// The count of articles available for this perek.
+    /// </summary>
+    public int ArticlesCount { get; set; }
+
+    /// <summary>
     /// The pasukim (verses) within this perek.
     /// </summary>
     public List<Pasuk> Pasukim { get; set; } = new();
