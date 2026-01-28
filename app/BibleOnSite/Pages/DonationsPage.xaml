@@ -24,12 +24,20 @@
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
             </Border>
 
-            <!-- Coming soon message -->
-            <Label Text="אפשרויות תרומה יתווספו בקרוב"
-                   FontSize="16"
-                   HorizontalOptions="Center"
-                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
-                   Margin="0,20,0,0"/>
+            <!-- Contact link for donations -->
+            <HorizontalStackLayout HorizontalOptions="Center" Spacing="4" Margin="0,20,0,0">
+                <Label Text="צור קשר"
+                       FontSize="16"
+                       TextColor="{StaticResource Primary}"
+                       TextDecorations="Underline">
+                    <Label.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnContactTapped"/>
+                    </Label.GestureRecognizers>
+                </Label>
+                <Label Text="למתן תרומה"
+                       FontSize="16"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+            </HorizontalStackLayout>
 
             <!-- Thank you message -->
             <Label Text="תודה רבה על תמיכתכם!"

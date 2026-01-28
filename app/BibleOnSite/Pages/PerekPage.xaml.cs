@@ -473,17 +473,40 @@ public partial class PerekPage : ContentPage
     }
 
     /// <summary>
-    /// Handles perushim chevron button click - toggles chevron direction.
+    /// Handles perushim chevron button click - toggles the perushim sliding panel.
     /// </summary>
     private bool _isPerushimOpen;
-    private void OnPerushimChevronClicked(object? sender, EventArgs e)
+    private double _perushimPanelHeight;
+
+    private async void OnPerushimChevronClicked(object? sender, EventArgs e)
     {
         _isPerushimOpen = !_isPerushimOpen;
 
         // Toggle chevron icon: up (\uf2b7) vs down (\uf2a4)
         PerushimChevronButton.Text = _isPerushimOpen ? "\uf2a4" : "\uf2b7";
 
-        // TODO: Open/close perushim panel when implemented
+        // Calculate panel height: 33% of total page height + bottom bar (90)
+        // This ensures panel extends to the bottom of the viewport
+        var totalHeight = MainGrid.Height;
+        _perushimPanelHeight = (totalHeight * 0.33) + 90; // 90 = bottom bar height
+
+        // Animate perushim panel slide up/down
+        if (_isPerushimOpen)
+        {
+            // Set height and make visible, start below
+            PerushimPanel.HeightRequest = _perushimPanelHeight;
+            PerushimPanel.TranslationY = _perushimPanelHeight;
+            PerushimPanel.IsVisible = true;
+
+            // Slide up
+            await PerushimPanel.TranslateTo(0, 0, 250, Easing.CubicOut);
+        }
+        else
+        {
+            // Slide down then hide
+            await PerushimPanel.TranslateTo(0, _perushimPanelHeight, 250, Easing.CubicIn);
+            PerushimPanel.IsVisible = false;
+        }
     }
 
     /// <summary>

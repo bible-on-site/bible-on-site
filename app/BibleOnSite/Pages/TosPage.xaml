@@ -45,7 +45,7 @@
                 <Label Text="שימוש"
                        FontSize="16"
                        FontAttributes="Bold"
-                       TextColor="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray200}}"/>
+                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}"/>
                 <Label Text="השימוש בתנכפדיה הוא על אחריות המשתמש, אין בעלי האתר והעורכים נושאים בשום נזק ישיר או עקיף מכל סוג שהוא שייגרמו משימוש במידע, שכן הוא מוגש 'כמות שהוא'."
                        FontSize="14"
                        LineHeight="1.4"
@@ -58,7 +58,7 @@
                 <Label Text="שימוש חוזר"
                        FontSize="16"
                        FontAttributes="Bold"
-                       TextColor="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray200}}"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}"
                        Margin="0,8,0,0"/>
                 <Label FontSize="14"
                        LineHeight="1.4"
@@ -86,7 +86,7 @@
                 <Label Text="שימוש"
                        FontSize="16"
                        FontAttributes="Bold"
-                       TextColor="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray200}}"/>
+                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}"/>
                 <Label Text="ניתן להשתמש לכל צורך אישי או לימודי שאינם מסחריים."
                        FontSize="14"
                        LineHeight="1.4"
@@ -99,7 +99,7 @@
                 <Label Text="שימוש חוזר"
                        FontSize="16"
                        FontAttributes="Bold"
-                       TextColor="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray200}}"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}"
                        Margin="0,8,0,0"/>
                 <Label Text="מצווה להפיץ הפניות למאמרים אל מכריכם, אך אין להעתיק את המאמרים לאתר אחר או ספר וכד' ללא הסכמה מפורשת מהרב המחבר."
                        FontSize="14"
@@ -117,10 +117,11 @@
                             <TapGestureRecognizer Tapped="OnSefariaTapped"/>
                         </Label.GestureRecognizers>
                     </Label>
-                    <Label Text=". שימוש חוזר על פי תנאי השימוש שלהם."
-                           FontSize="14"
-                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                 </HorizontalStackLayout>
+                <Label Text=". שימוש חוזר על פי תנאי השימוש שלהם."
+                       FontSize="14"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+
                 <HorizontalStackLayout Spacing="4">
                     <Label Text="הפרקים המוקלטים באדיבות"
                            FontSize="14"
@@ -133,10 +134,11 @@
                             <TapGestureRecognizer Tapped="OnDanBarryTapped"/>
                         </Label.GestureRecognizers>
                     </Label>
-                    <Label Text=". שימוש חוזר על פי תנאי השימוש שיציב."
-                           FontSize="14"
-                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                 </HorizontalStackLayout>
+                <Label Text=". שימוש חוזר על פי תנאי השימוש שיציב."
+                       FontSize="14"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+
             </VerticalStackLayout>
 
             <!-- Bottom spacing -->
