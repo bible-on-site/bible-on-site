@@ -192,7 +192,9 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private async void OnCircularMenuClicked(object? sender, EventArgs e)
     {
+        System.Diagnostics.Debug.WriteLine($"=== CircularMenu clicked! _isMenuOpen was: {_isMenuOpen} ===");
         _isMenuOpen = !_isMenuOpen;
+        System.Diagnostics.Debug.WriteLine($"=== _isMenuOpen is now: {_isMenuOpen} ===");
 
         if (_isMenuOpen)
         {
@@ -209,40 +211,59 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private async Task OpenCircularMenuAsync()
     {
-        CircularMenuOverlay.IsVisible = true;
-        CircularMenuOverlay.InputTransparent = false;
-
-        // Animate hamburger to X with rotation
-        var buttonAnimations = new List<Task>
+        System.Diagnostics.Debug.WriteLine("=== OpenCircularMenuAsync started ===");
+        
+        // Show all menu buttons (they start invisible)
+        var buttons = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
+        foreach (var button in buttons)
         {
-            CircularMenuButton.RotateTo(180, (uint)AnimationDurationMs, Easing.CubicOut)
-        };
+            button.IsVisible = true;
+            button.Opacity = 0;
+            button.Scale = 0;
+            button.TranslationX = 0;
+            button.TranslationY = 0;
+            System.Diagnostics.Debug.WriteLine($"=== Button {button.Text} set to visible ===");
+        }
 
-        // Change to X (dismiss icon) after rotation starts
-        await Task.Delay(AnimationDurationMs / 3);
+        // Change icon and color immediately before rotation
         CircularMenuButton.Text = "✕"; // X/close
         CircularMenuButton.BackgroundColor = Colors.Red;
+        System.Diagnostics.Debug.WriteLine("=== FAB changed to X/Red ===");
 
-        // Animate all menu buttons with staggered timing
-        var buttons = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
+        // Animate hamburger to X with rotation
+        var buttonRotation = CircularMenuButton.RotateTo(180, (uint)AnimationDurationMs, Easing.SpringOut);
+
+        // Animate all menu buttons with staggered timing in arc pattern
+        // Buttons fan out upward and outward from the FAB position
+        var positions = new[]
+        {
+            new { X = -70.0, Y = -70.0 },   // Previous (left)
+            new { X = -30.0, Y = -100.0 },  // Today (upper-left)
+            new { X = 30.0, Y = -100.0 },   // Picker (upper-right)
+            new { X = 70.0, Y = -70.0 }     // Next (right)
+        };
+
+        var buttonAnimations = new List<Task> { buttonRotation };
 
         for (int i = 0; i < buttons.Length; i++)
         {
             var button = buttons[i];
-            button.Opacity = 0;
-            button.Scale = 0;
+            var pos = positions[i];
+            var delay = i * 40;
 
-            // Stagger the animations slightly
-            var delay = i * 50;
+            var capturedButton = button;
+            var capturedPos = pos;
+            var capturedDelay = delay;
 
             buttonAnimations.Add(Task.Run(async () =>
             {
-                await Task.Delay(delay);
+                await Task.Delay(capturedDelay);
                 await MainThread.InvokeOnMainThreadAsync(async () =>
                 {
-                    var fadeTask = button.FadeTo(1, (uint)(AnimationDurationMs * 0.5));
-                    var scaleTask = button.ScaleTo(1, (uint)AnimationDurationMs, Easing.BounceOut);
-                    await Task.WhenAll(fadeTask, scaleTask);
+                    var fadeTask = capturedButton.FadeTo(1, (uint)(AnimationDurationMs * 0.5));
+                    var scaleTask = capturedButton.ScaleTo(1, (uint)AnimationDurationMs, Easing.SpringOut);
+                    var translateTask = capturedButton.TranslateTo(capturedPos.X, capturedPos.Y, (uint)AnimationDurationMs, Easing.SpringOut);
+                    await Task.WhenAll(fadeTask, scaleTask, translateTask);
                 });
             }));
         }
@@ -255,29 +276,33 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private async Task CloseCircularMenuAsync()
     {
-        // Animate X back to hamburger with rotation
-        var buttonAnimations = new List<Task>
-        {
-            CircularMenuButton.RotateTo(0, (uint)(AnimationDurationMs * 0.6), Easing.CubicIn)
-        };
-
-        // Change back to hamburger (navigation icon) after rotation starts
-        await Task.Delay(AnimationDurationMs / 4);
-        CircularMenuButton.Text = "☰"; // hamburger menu
-        CircularMenuButton.BackgroundColor = Color.FromArgb("#2196F3"); // Primary blue
-
         var buttons = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
+        var buttonAnimations = new List<Task>();
 
+        // Animate buttons back to center (FAB position)
         foreach (var button in buttons)
         {
             buttonAnimations.Add(button.FadeTo(0, (uint)(AnimationDurationMs * 0.3)));
-            buttonAnimations.Add(button.ScaleTo(0, (uint)(AnimationDurationMs * 0.5), Easing.CubicIn));
+            buttonAnimations.Add(button.ScaleTo(0, (uint)(AnimationDurationMs * 0.4), Easing.CubicIn));
+            buttonAnimations.Add(button.TranslateTo(0, 0, (uint)(AnimationDurationMs * 0.4), Easing.CubicIn));
         }
+
+        // Change back to hamburger immediately
+        CircularMenuButton.Text = "☰"; // hamburger menu
+        CircularMenuButton.BackgroundColor = Color.FromArgb("#512BD4"); // Primary purple
+
+        // Animate X back to hamburger with rotation
+        buttonAnimations.Add(CircularMenuButton.RotateTo(0, (uint)(AnimationDurationMs * 0.5), Easing.SpringOut));
 
         await Task.WhenAll(buttonAnimations);
 
-        CircularMenuOverlay.IsVisible = false;
-        CircularMenuOverlay.InputTransparent = true;
+        // Hide buttons after animation
+        foreach (var button in buttons)
+        {
+            button.IsVisible = false;
+            button.TranslationX = 0;
+            button.TranslationY = 0;
+        }
     }
 
     /// <summary>
@@ -345,14 +370,16 @@ public partial class PerekPage : ContentPage
     }
 
     /// <summary>
-    /// Handles perushim chevron button click - toggles chevron direction.
+    /// Handles perushim chevron button click - toggles chevron direction with animation.
     /// </summary>
     private bool _isPerushimOpen;
-    private void OnPerushimChevronClicked(object? sender, EventArgs e)
+    private async void OnPerushimChevronClicked(object? sender, EventArgs e)
     {
         _isPerushimOpen = !_isPerushimOpen;
-        // Toggle chevron direction (up vs down) - FluentUI icons
-        PerushimChevronButton.Text = _isPerushimOpen ? "\uf2a4" : "\uf2b7"; // chevron_down vs chevron_up
+
+        // Animate rotation for chevron toggle
+        var targetRotation = _isPerushimOpen ? 180 : 0;
+        await PerushimChevronButton.RotateTo(targetRotation, 200, Easing.CubicOut);
 
         // TODO: Open/close perushim panel when implemented
     }
@@ -419,8 +446,10 @@ public partial class PerekPage : ContentPage
         Shell.SetNavBarIsVisible(this, false);
         Shell.SetTabBarIsVisible(this, false);
 
-        // Hide bottom bar
+        // Hide bottom bar and FAB
         BottomBar.IsVisible = false;
+        FloatingMenuContainer.IsVisible = false;
+        MainGrid.RowDefinitions[1].Height = new GridLength(0);
 
         // Show floating exit button
         ExitFullScreenButton.IsVisible = true;
@@ -435,12 +464,15 @@ public partial class PerekPage : ContentPage
         Shell.SetNavBarIsVisible(this, true);
         Shell.SetTabBarIsVisible(this, true);
 
-        // Show bottom bar and ensure correct height
-        BottomBar.IsVisible = true;
-        BottomBar.HeightRequest = 80;
-
-        // Hide floating exit button
+        // Hide floating exit button first
         ExitFullScreenButton.IsVisible = false;
+
+        // Restore bottom bar row height first
+        MainGrid.RowDefinitions[1].Height = new GridLength(90);
+        
+        // Then show the elements
+        BottomBar.IsVisible = true;
+        FloatingMenuContainer.IsVisible = true;
     }
 
     #endregion
