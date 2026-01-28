@@ -5,7 +5,7 @@ export interface AuthorDetails {
 	id: number;
 	name: string;
 	details: string;
-	imageUrl: string | null;
+	imageUrl: string;
 }
 
 /**

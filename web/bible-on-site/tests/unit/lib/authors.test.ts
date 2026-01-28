@@ -34,26 +34,12 @@ describe("authors service", () => {
 	});
 
 	describe("getAuthorImageUrl", () => {
-		it("returns null for null input", () => {
-			expect(getAuthorImageUrl(null)).toBeNull();
-		});
-
-		it("returns full URL as-is for http URLs", () => {
-			const url = "http://example.com/image.jpg";
-			expect(getAuthorImageUrl(url)).toBe(url);
-		});
-
-		it("returns full URL as-is for https URLs", () => {
-			const url = "https://example.com/image.jpg";
-			expect(getAuthorImageUrl(url)).toBe(url);
-		});
-
 		it("builds LocalStack URL when S3_ENDPOINT is set", () => {
 			process.env.S3_ENDPOINT = "http://localhost:4566";
 			process.env.S3_BUCKET = "my-bucket";
 
-			expect(getAuthorImageUrl("path/to/image.jpg")).toBe(
-				"http://localhost:4566/my-bucket/path/to/image.jpg",
+			expect(getAuthorImageUrl(123)).toBe(
+				"http://localhost:4566/my-bucket/authors/high-res/123.jpg",
 			);
 		});
 
@@ -61,8 +47,8 @@ describe("authors service", () => {
 			process.env.S3_ENDPOINT = "http://localhost:4566";
 			delete process.env.S3_BUCKET;
 
-			expect(getAuthorImageUrl("image.jpg")).toBe(
-				"http://localhost:4566/bible-on-site-rabbis/image.jpg",
+			expect(getAuthorImageUrl(1)).toBe(
+				"http://localhost:4566/bible-on-site-rabbis/authors/high-res/1.jpg",
 			);
 		});
 
@@ -71,8 +57,8 @@ describe("authors service", () => {
 			process.env.S3_BUCKET = "my-bucket";
 			process.env.S3_REGION = "eu-west-1";
 
-			expect(getAuthorImageUrl("image.jpg")).toBe(
-				"https://my-bucket.s3.eu-west-1.amazonaws.com/image.jpg",
+			expect(getAuthorImageUrl(42)).toBe(
+				"https://my-bucket.s3.eu-west-1.amazonaws.com/authors/high-res/42.jpg",
 			);
 		});
 
@@ -82,8 +68,8 @@ describe("authors service", () => {
 			process.env.AWS_REGION = "ap-southeast-1";
 			process.env.S3_BUCKET = "my-bucket";
 
-			expect(getAuthorImageUrl("image.jpg")).toBe(
-				"https://my-bucket.s3.ap-southeast-1.amazonaws.com/image.jpg",
+			expect(getAuthorImageUrl(5)).toBe(
+				"https://my-bucket.s3.ap-southeast-1.amazonaws.com/authors/high-res/5.jpg",
 			);
 		});
 
@@ -93,8 +79,8 @@ describe("authors service", () => {
 			delete process.env.AWS_REGION;
 			process.env.S3_BUCKET = "my-bucket";
 
-			expect(getAuthorImageUrl("image.jpg")).toBe(
-				"https://my-bucket.s3.us-east-1.amazonaws.com/image.jpg",
+			expect(getAuthorImageUrl(99)).toBe(
+				"https://my-bucket.s3.us-east-1.amazonaws.com/authors/high-res/99.jpg",
 			);
 		});
 	});
@@ -105,7 +91,6 @@ describe("authors service", () => {
 				id: 1,
 				name: "Test Author",
 				details: "Some details",
-				image_url: "author.jpg",
 			};
 
 			mockQuery.mockResolvedValue([mockRow]);
@@ -114,7 +99,7 @@ describe("authors service", () => {
 			const result = await getAuthorById(1);
 
 			expect(mockQuery).toHaveBeenCalledWith(
-				expect.stringContaining("SELECT id, name, details, image_url"),
+				expect.stringContaining("SELECT id, name, details"),
 				[1],
 			);
 
@@ -122,7 +107,7 @@ describe("authors service", () => {
 				id: 1,
 				name: "Test Author",
 				details: "Some details",
-				imageUrl: "http://localhost:4566/bible-on-site-rabbis/author.jpg",
+				imageUrl: "http://localhost:4566/bible-on-site-rabbis/authors/high-res/1.jpg",
 			});
 		});
 
@@ -154,15 +139,17 @@ describe("authors service", () => {
 				id: 1,
 				name: "Test Author",
 				details: "",
-				image_url: null,
 			};
 
 			mockQuery.mockResolvedValue([mockRow]);
+			process.env.S3_ENDPOINT = "http://localhost:4566";
 
 			const result = await getAuthorById(1);
 
 			expect(result?.details).toBe("");
-			expect(result?.imageUrl).toBeNull();
+			expect(result?.imageUrl).toBe(
+				"http://localhost:4566/bible-on-site-rabbis/authors/high-res/1.jpg",
+			);
 		});
 	});
 

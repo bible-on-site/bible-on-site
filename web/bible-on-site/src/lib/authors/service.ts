@@ -5,7 +5,6 @@ interface AuthorRow {
 	id: number;
 	name: string;
 	details: string;
-	image_url: string | null;
 }
 
 interface ArticleRow {
@@ -15,17 +14,44 @@ interface ArticleRow {
 	abstract: string | null;
 }
 
+// Track if we've already warned about S3 unavailability (avoid spam)
+let s3WarningShown = false;
+
 /**
- * Build the public URL for author images based on environment configuration.
+ * Check if S3/LocalStack is available (dev environment only).
+ * Logs a warning once if not available.
+ */
+async function checkS3Availability(): Promise<void> {
+	if (s3WarningShown || process.env.NODE_ENV === "production") return;
+
+	const S3_ENDPOINT = process.env.S3_ENDPOINT;
+	if (!S3_ENDPOINT) return; // Not using LocalStack
+
+	try {
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), 1000);
+		await fetch(`${S3_ENDPOINT}/_localstack/health`, {
+			signal: controller.signal,
+		});
+		clearTimeout(timeoutId);
+	} catch {
+		s3WarningShown = true;
+		console.warn(
+			"⚠️  S3/LocalStack not available at",
+			S3_ENDPOINT,
+			"- Author images will not load.",
+			"\n   Start Docker and run: docker compose -f devops/docker-compose.yml up -d localstack",
+		);
+	}
+}
+
+/**
+ * Build the public URL for author images based on author ID.
+ * Images are stored in S3 with naming convention: authors/high-res/{id}.jpg
  * Handles both LocalStack (dev) and AWS S3 (prod) URLs.
  */
-export function getAuthorImageUrl(imageUrl: string | null): string | null {
-	if (!imageUrl) return null;
-
-	// If the URL is already a full URL, return as-is
-	if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
-		return imageUrl;
-	}
+export function getAuthorImageUrl(authorId: number): string {
+	const imagePath = `authors/high-res/${authorId}.jpg`;
 
 	// Build URL from S3 configuration
 	const S3_ENDPOINT = process.env.S3_ENDPOINT;
@@ -33,12 +59,15 @@ export function getAuthorImageUrl(imageUrl: string | null): string | null {
 	const S3_REGION =
 		process.env.S3_REGION || process.env.AWS_REGION || "us-east-1";
 
+	// Check S3 availability asynchronously (fire-and-forget, logs warning if down)
+	checkS3Availability();
+
 	if (S3_ENDPOINT) {
 		// LocalStack/MinIO style URL
-		return `${S3_ENDPOINT}/${S3_BUCKET}/${imageUrl}`;
+		return `${S3_ENDPOINT}/${S3_BUCKET}/${imagePath}`;
 	}
 	// Standard AWS S3 URL
-	return `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${imageUrl}`;
+	return `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${imagePath}`;
 }
 
 /**
@@ -47,7 +76,7 @@ export function getAuthorImageUrl(imageUrl: string | null): string | null {
 export async function getAuthorById(id: number): Promise<AuthorDetails | null> {
 	try {
 		const rows = await query<AuthorRow>(
-			`SELECT id, name, details, image_url
+			`SELECT id, name, details
 			 FROM tanah_author
 			 WHERE id = ?`,
 			[id],
@@ -62,7 +91,7 @@ export async function getAuthorById(id: number): Promise<AuthorDetails | null> {
 			id: row.id,
 			name: row.name,
 			details: row.details || "",
-			imageUrl: getAuthorImageUrl(row.image_url),
+			imageUrl: getAuthorImageUrl(row.id),
 		};
 	} catch (error) {
 		console.warn(

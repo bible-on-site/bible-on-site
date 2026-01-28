@@ -9,14 +9,13 @@ interface AuthorRow {
 	id: number;
 	name: string;
 	details: string;
-	image_url: string | null;
 }
 
 interface AuthorSummary {
 	id: number;
 	name: string;
 	details: string;
-	imageUrl: string | null;
+	imageUrl: string;
 }
 
 /**
@@ -25,7 +24,7 @@ interface AuthorSummary {
 async function getAllAuthors(): Promise<AuthorSummary[]> {
 	try {
 		const rows = await query<AuthorRow>(
-			`SELECT id, name, details, image_url
+			`SELECT id, name, details
 			 FROM tanah_author
 			 ORDER BY name ASC`,
 		);
@@ -34,7 +33,7 @@ async function getAllAuthors(): Promise<AuthorSummary[]> {
 			id: row.id,
 			name: row.name,
 			details: row.details || "",
-			imageUrl: getAuthorImageUrl(row.image_url),
+			imageUrl: getAuthorImageUrl(row.id),
 		}));
 	} catch (error) {
 		console.warn(
