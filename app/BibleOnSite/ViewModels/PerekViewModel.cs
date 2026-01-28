@@ -36,6 +36,8 @@ public partial class PerekViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(NextPerekId))]
     [NotifyPropertyChangedFor(nameof(PreviousPerekId))]
     [NotifyPropertyChangedFor(nameof(DayOfWeek))]
+    [NotifyPropertyChangedFor(nameof(ArticlesCount))]
+    [NotifyPropertyChangedFor(nameof(HasArticles))]
     private Perek? _perek;
 
     [ObservableProperty]
@@ -90,6 +92,16 @@ public partial class PerekViewModel : ObservableObject
     public Data.SeferGroup SeferGroup => SefarimData.GetSeferGroup(SeferId);
 
     public string SeferTanahUsName => Perek?.SeferTanahUsName ?? string.Empty;
+
+    /// <summary>
+    /// The count of articles for the current perek.
+    /// </summary>
+    public int ArticlesCount => Perek?.ArticlesCount ?? 0;
+
+    /// <summary>
+    /// Whether the current perek has any articles.
+    /// </summary>
+    public bool HasArticles => ArticlesCount > 0;
 
     public string Source
     {
