@@ -1618,9 +1618,11 @@ jobs:
     secrets: inherit
     uses: ./.github/workflows/shared-release.yml
     with:
+      module_name: website
       module_directory: ${{ needs.setup_env.outputs.website_directory }}
       module_version: ${{ needs.package_website.outputs.module_version }}
-      released_artifact_name: ${{ needs.package_website.outputs.docker_artifact_name }}
+      artifacts_json: '[{"name": "${{ needs.package_website.outputs.docker_artifact_name }}", "path": "web/bible-on-site/.release", "glob": "*.tar.gz"}]'
+      cd_event_type: deploy-aws
 
   release_api:
     name: Release API
@@ -1634,9 +1636,11 @@ jobs:
     secrets: inherit
     uses: ./.github/workflows/shared-release.yml
     with:
+      module_name: api
       module_directory: ${{ needs.setup_env.outputs.api_directory }}
       module_version: ${{ needs.package_api.outputs.module_version }}
-      released_artifact_name: ${{ needs.package_api.outputs.docker_artifact_name }}
+      artifacts_json: '[{"name": "${{ needs.package_api.outputs.docker_artifact_name }}", "path": "web/api/.release", "glob": "*.tar.gz"}]'
+      cd_event_type: deploy-aws
 
   release_app:
     name: Release App
@@ -1647,123 +1651,19 @@ jobs:
     permissions:
       contents: write
       actions: read
-    runs-on: ubuntu-latest
-    steps:
-      - name: Debug outputs
-        run: |
-          echo "package_app.outputs.module_version: '${{ needs.package_app.outputs.module_version }}'"
-          echo "determine_app_changes.outputs.module_changed: '${{ needs.determine_app_changes.outputs.module_changed }}'"
-          echo "setup_env.outputs.is_master_branch: '${{ needs.setup_env.outputs.is_master_branch }}'"
-          echo "github.event_name: '${{ github.event_name }}'"
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Configure Git
-        run: |
-          git config --global user.email "actions@github.com"
-          git config --global user.name "GitHub Actions"
-
-      - name: Create Tag
-        id: create_tag
-        run: |
-          TAG_NAME="app-v${{ needs.package_app.outputs.module_version }}"
-          git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
-          echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_OUTPUT
-
-      - name: Add Deploy Key
-        uses: webfactory/ssh-agent@72c0bfd31ab22a2e11716951e3f107a9647dc97e
-        with:
-          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
-
-      - name: Push Tag
-        run: |
-          git remote set-url origin git@github.com:${{ github.repository }}
-          git push origin ${{ steps.create_tag.outputs.TAG_NAME }}
-
-      - name: Restore Windows Artifact
-        if: ${{ needs.package_app.outputs.windows_artifact_name != '' }}
-        uses: actions/download-artifact@v7
-        with:
-          name: ${{ needs.package_app.outputs.windows_artifact_name }}
-          path: app/.artifacts/windows
-
-      - name: Restore Android Artifact
-        if: ${{ needs.package_app.outputs.android_artifact_name != '' }}
-        uses: actions/download-artifact@v7
-        with:
-          name: ${{ needs.package_app.outputs.android_artifact_name }}
-          path: app/.artifacts/android
-
-      - name: Restore iOS Artifact
-        if: ${{ needs.package_app.outputs.ios_artifact_name != '' }}
-        uses: actions/download-artifact@v7
-        with:
-          name: ${{ needs.package_app.outputs.ios_artifact_name }}
-          path: app/.artifacts/ios
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.create_tag.outputs.TAG_NAME }}
-          name: Release App v${{ needs.package_app.outputs.module_version }}
-          body: |
-            Automated release for BibleOnSite App version ${{ needs.package_app.outputs.module_version }}.
-
-            ## Downloads
-            - **Windows (MSIX)**: For sideloading on Windows 10/11
-            - **Android (AAB)**: For internal testing via Google Play
-            - **iOS (IPA)**: For TestFlight distribution
-          token: ${{ secrets.GITHUB_TOKEN }}
-          files: |
-            app/.artifacts/windows/**/BibleOnSite*.msix
-            app/.artifacts/android/**/*.aab
-            app/.artifacts/ios/**/*.ipa
-
-      - name: Trigger App CD Workflow
-        uses: peter-evans/repository-dispatch@v4
-        with:
-          repository: ${{ github.repository }}
-          token: ${{ secrets.BOT_PAT }}
-          event-type: deploy-app
-          client-payload: '{"ref": "${{ github.ref }}", "module_version": "${{ needs.package_app.outputs.module_version }}", "ci_run_id": "${{ github.run_id }}", "windows_artifact_name": "${{ needs.package_app.outputs.windows_artifact_name }}", "android_artifact_name": "${{ needs.package_app.outputs.android_artifact_name }}", "ios_artifact_name": "${{ needs.package_app.outputs.ios_artifact_name }}"}'
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: "9.0.x"
-
-      - name: Restore dotnet tools
-        working-directory: app
-        run: dotnet tool restore
-
-      - name: Bump App Version
-        working-directory: app
-        run: dotnet run --project devops -- BumpVersion
-
-      - name: Commit App Version Bump Changes
-        working-directory: app
-        run: |
-          # Strip ANSI color codes from version output
-          NEXT_VERSION=$(dotnet run --project devops -- Version 2>&1 | grep 'ApplicationDisplayVersion' | sed 's/.*: //' | sed 's/\x1b\[[0-9;]*m//g')
-          git add BibleOnSite/BibleOnSite.csproj
-          git commit -n -m "chore(release): Bump app version to ${NEXT_VERSION} [skip ci]"
-
-      - name: Push Version Bump Changes
-        run: |
-          set -e
-          CURRENT_BRANCH=$(git symbolic-ref --short HEAD)
-          git fetch origin "$CURRENT_BRANCH"
-          # Clean up any unstaged changes (e.g., build artifacts from dotnet run)
-          git checkout -- . || true
-          git clean -fd || true
-          if ! git rebase "origin/$CURRENT_BRANCH"; then
-            echo "Error: Failed to rebase version bump commit."
-            git rebase --abort
-            exit 1
-          fi
-          git push origin HEAD
+    secrets: inherit
+    uses: ./.github/workflows/shared-release.yml
+    with:
+      module_name: app
+      module_directory: app
+      module_version: ${{ needs.package_app.outputs.module_version }}
+      artifacts_json: |
+        [
+          {"name": "${{ needs.package_app.outputs.windows_artifact_name }}", "path": "app/.artifacts/windows", "glob": "**/BibleOnSite*.msix", "label": "Windows (MSIX)", "cd_key": "windows_artifact_name"},
+          {"name": "${{ needs.package_app.outputs.android_artifact_name }}", "path": "app/.artifacts/android", "glob": "**/*.aab", "label": "Android (AAB)", "cd_key": "android_artifact_name"},
+          {"name": "${{ needs.package_app.outputs.ios_artifact_name }}", "path": "app/.artifacts/ios", "glob": "**/*.ipa", "label": "iOS (IPA)", "cd_key": "ios_artifact_name"}
+        ]
+      cd_event_type: deploy-app
 
   release_data:
     name: Release Data
@@ -1780,3 +1680,146 @@ jobs:
           token: ${{ secrets.BOT_PAT }}
           event-type: deploy-data
           client-payload: '{"ref": "${{ github.ref }}"}'
+
+  # ====================================================================================
+  # VERSION BUMP JOB - Consolidated version bumping to avoid race conditions
+  # ====================================================================================
+  # This job runs after all release jobs and bumps versions for all released modules
+  # in a single commit/push, avoiding the race conditions that occur when multiple
+  # release jobs try to push version bumps in parallel.
+  # ====================================================================================
+  bump_versions:
+    name: Bump Versions
+    needs: [setup_env, release_website, release_api, release_app]
+    # Run if at least one module was released
+    # Note: Using always() + result check as a workaround for reusable workflow result evaluation issues (see #1065)
+    # For each release job, we check both result == 'success' AND outputs.released == 'true'
+    if: >-
+      ${{ always() && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' && 
+      ((needs.release_website.result == 'success' && needs.release_website.outputs.released == 'true') || 
+       (needs.release_api.result == 'success' && needs.release_api.outputs.released == 'true') || 
+       (needs.release_app.result == 'success' && needs.release_app.outputs.released == 'true')) }}
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    # Single concurrency group for all version bumps to prevent any race conditions
+    concurrency:
+      group: ${{ github.repository }}-version-bump
+      cancel-in-progress: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+      - name: Add Deploy Key
+        uses: webfactory/ssh-agent@72c0bfd31ab22a2e11716951e3f107a9647dc97e
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
+
+      # Setup toolchains for modules that need version bumps
+      - name: Setup Node.js (for Website)
+        if: ${{ needs.release_website.outputs.released == 'true' }}
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ${{ needs.setup_env.outputs.website_directory }}/package.json
+          cache-dependency-path: ${{ needs.setup_env.outputs.website_directory }}/package-lock.json
+          cache: npm
+
+      - name: Setup Rust (for API)
+        if: ${{ needs.release_api.outputs.released == 'true' }}
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Rust tools (for API)
+        if: ${{ needs.release_api.outputs.released == 'true' }}
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-make, tomato-toml, semver-bump
+
+      - name: Setup .NET (for App)
+        if: ${{ needs.release_app.outputs.released == 'true' }}
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Restore dotnet tools (for App)
+        if: ${{ needs.release_app.outputs.released == 'true' }}
+        working-directory: app
+        run: dotnet tool restore
+
+      # Bump versions for each released module
+      - name: Bump Website Version
+        if: ${{ needs.release_website.outputs.released == 'true' }}
+        working-directory: ${{ needs.setup_env.outputs.website_directory }}
+        run: npm version patch --no-git-tag-version
+
+      - name: Bump API Version
+        if: ${{ needs.release_api.outputs.released == 'true' }}
+        working-directory: ${{ needs.setup_env.outputs.api_directory }}
+        run: cargo make bump-version
+
+      - name: Bump App Version
+        if: ${{ needs.release_app.outputs.released == 'true' }}
+        working-directory: app
+        run: dotnet run --project devops -- BumpVersion
+
+      # Collect all changed files and create a single commit
+      - name: Commit All Version Bumps
+        run: |
+          set -e
+
+          FILES_TO_ADD=""
+          MODULES_BUMPED=""
+
+          if [ "${{ needs.release_website.outputs.released }}" = "true" ]; then
+            FILES_TO_ADD="$FILES_TO_ADD ${{ needs.setup_env.outputs.website_directory }}/package.json ${{ needs.setup_env.outputs.website_directory }}/package-lock.json"
+            WEBSITE_VERSION=$(node -e "const pkg = require('./${{ needs.setup_env.outputs.website_directory }}/package.json'); console.log(pkg.version)")
+            MODULES_BUMPED="${MODULES_BUMPED}website to ${WEBSITE_VERSION}, "
+          fi
+
+          if [ "${{ needs.release_api.outputs.released }}" = "true" ]; then
+            FILES_TO_ADD="$FILES_TO_ADD ${{ needs.setup_env.outputs.api_directory }}/Cargo.toml ${{ needs.setup_env.outputs.api_directory }}/Cargo.lock"
+            API_VERSION=$(grep -m1 '^version' ${{ needs.setup_env.outputs.api_directory }}/Cargo.toml | sed 's/.*"\(.*\)"/\1/')
+            MODULES_BUMPED="${MODULES_BUMPED}api to ${API_VERSION}, "
+          fi
+
+          if [ "${{ needs.release_app.outputs.released }}" = "true" ]; then
+            FILES_TO_ADD="$FILES_TO_ADD app/BibleOnSite/BibleOnSite.csproj"
+            APP_VERSION=$(grep -o '<ApplicationDisplayVersion>[^<]*</ApplicationDisplayVersion>' app/BibleOnSite/BibleOnSite.csproj | sed 's/<[^>]*>//g')
+            MODULES_BUMPED="${MODULES_BUMPED}app to ${APP_VERSION}, "
+          fi
+
+          # Remove trailing comma and space
+          MODULES_BUMPED=$(echo "$MODULES_BUMPED" | sed 's/, $//')
+
+          if [ -n "$FILES_TO_ADD" ]; then
+            git add $FILES_TO_ADD
+            git checkout -- . 2>/dev/null || true
+            git clean -fd 2>/dev/null || true
+            git commit -n -m "chore(release): Bump versions ($MODULES_BUMPED) [skip ci]"
+          else
+            echo "No version files to commit"
+            exit 0
+          fi
+
+      - name: Push Version Bump Changes
+        run: |
+          set -e
+          CURRENT_BRANCH=$(git symbolic-ref --short HEAD)
+          git remote set-url origin git@github.com:${{ github.repository }}
+          git fetch origin "$CURRENT_BRANCH"
+
+          # Rebase on top of any changes that happened during the release
+          if ! git rebase "origin/$CURRENT_BRANCH"; then
+            echo "Error: Failed to rebase version bump commit. This may indicate a conflict."
+            echo "Aborting rebase..."
+            git rebase --abort
+            exit 1
+          fi
+
+          git push origin HEAD
