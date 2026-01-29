@@ -1,3 +1,4 @@
+using BibleOnSite.Config;
 using BibleOnSite.Services;
 
 namespace BibleOnSite.Pages;
@@ -26,6 +27,10 @@ public partial class LoadingPage : ContentPage
 
         try
         {
+            // Initialize config (loads API URL override from build config)
+            await AppConfig.Instance.InitializeAsync();
+            Console.WriteLine($"API URL: {AppConfig.Instance.GetApiUrl()}");
+
             await LoadStarterDataAsync();
             await NavigateToMainPageAsync();
         }

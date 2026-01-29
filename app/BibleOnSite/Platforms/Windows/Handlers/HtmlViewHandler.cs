@@ -3,8 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml;
 using BibleOnSite.Controls;
-using System.Xml.Linq;
-using System.Text.RegularExpressions;
+using HtmlAgilityPack;
 using WinFlowDirection = Microsoft.UI.Xaml.FlowDirection;
 using WinSpan = Microsoft.UI.Xaml.Documents.Span;
 using WinTextWrapping = Microsoft.UI.Xaml.TextWrapping;
@@ -13,7 +12,7 @@ namespace BibleOnSite.Handlers;
 
 /// <summary>
 /// Windows handler for HtmlView control.
-/// Uses RichTextBlock with inline parsing for HTML content with text-align justify support.
+/// Uses RichTextBlock with HtmlAgilityPack for proper HTML parsing.
 /// </summary>
 public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
 {
@@ -73,13 +72,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
 
         try
         {
-            // Wrap in a root element for parsing
-            var wrappedHtml = $"<root>{html}</root>";
+            // Parse HTML using HtmlAgilityPack
+            var doc = new HtmlDocument();
+            doc.LoadHtml(html);
 
-            // Clean up common HTML issues
-            wrappedHtml = Regex.Replace(wrappedHtml, @"<br\s*/?>", "<br></br>", RegexOptions.IgnoreCase);
-
-            var element = XElement.Parse(wrappedHtml);
             var paragraph = new Paragraph
             {
                 FontSize = VirtualView.FontSize,
@@ -107,49 +103,85 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
                 PlatformView.FlowDirection = WinFlowDirection.LeftToRight;
             }
 
-            ParseElement(element, paragraph.Inlines);
+            // Parse HTML nodes
+            ParseNode(doc.DocumentNode, paragraph.Inlines);
             PlatformView.Blocks.Add(paragraph);
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"HtmlViewHandler Windows error: {ex.Message}");
             // Fallback to plain text
-            var paragraph = new Paragraph();
+            var paragraph = new Paragraph { FontSize = VirtualView.FontSize };
             paragraph.Inlines.Add(new Run { Text = html });
             PlatformView.Blocks.Add(paragraph);
         }
     }
 
-    private void ParseElement(XElement element, InlineCollection inlines)
+    private void ParseNode(HtmlNode node, InlineCollection inlines)
     {
-        foreach (var node in element.Nodes())
+        foreach (var child in node.ChildNodes)
         {
-            if (node is XText textNode)
+            if (child.NodeType == HtmlNodeType.Text)
             {
-                inlines.Add(new Run { Text = textNode.Value });
+                var text = System.Net.WebUtility.HtmlDecode(child.InnerText);
+                if (!string.IsNullOrEmpty(text))
+                {
+                    inlines.Add(new Run { Text = text });
+                }
             }
-            else if (node is XElement childElement)
+            else if (child.NodeType == HtmlNodeType.Element)
             {
-                var tagName = childElement.Name.LocalName.ToUpperInvariant();
+                var tagName = child.Name.ToUpperInvariant();
                 switch (tagName)
                 {
+                    case "H1":
+                    case "H2":
+                    case "H3":
+                    case "H4":
+                    case "H5":
+                    case "H6":
+                        // Headers: bold, larger font, own line
+                        if (inlines.Count > 0)
+                        {
+                            inlines.Add(new LineBreak());
+                            inlines.Add(new LineBreak()); // Extra spacing before header
+                        }
+                        var headerBold = new Bold();
+                        var headerSpan = new WinSpan
+                        {
+                            FontSize = tagName switch
+                            {
+                                "H1" => VirtualView.FontSize * (VirtualView.H1FontSizeMultiplier > 0 ? VirtualView.H1FontSizeMultiplier : 1.8),
+                                "H2" => VirtualView.FontSize * (VirtualView.H2FontSizeMultiplier > 0 ? VirtualView.H2FontSizeMultiplier : 1.5),
+                                "H3" => VirtualView.FontSize * (VirtualView.H3FontSizeMultiplier > 0 ? VirtualView.H3FontSizeMultiplier : 1.3),
+                                "H4" => VirtualView.FontSize * 1.15,
+                                "H5" => VirtualView.FontSize * 1.1,
+                                _ => VirtualView.FontSize * 1.05
+                            }
+                        };
+                        ParseNode(child, headerSpan.Inlines);
+                        headerBold.Inlines.Add(headerSpan);
+                        inlines.Add(headerBold);
+                        inlines.Add(new LineBreak());
+                        break;
+
                     case "B":
                     case "STRONG":
                         var bold = new Bold();
-                        ParseElement(childElement, bold.Inlines);
+                        ParseNode(child, bold.Inlines);
                         inlines.Add(bold);
                         break;
 
                     case "I":
                     case "EM":
                         var italic = new Italic();
-                        ParseElement(childElement, italic.Inlines);
+                        ParseNode(child, italic.Inlines);
                         inlines.Add(italic);
                         break;
 
                     case "U":
                         var underline = new Underline();
-                        ParseElement(childElement, underline.Inlines);
+                        ParseNode(child, underline.Inlines);
                         inlines.Add(underline);
                         break;
 
@@ -164,14 +196,14 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
                         {
                             inlines.Add(new LineBreak());
                         }
-                        var span = new WinSpan();
-                        ParseElement(childElement, span.Inlines);
-                        inlines.Add(span);
+                        var pSpan = new WinSpan();
+                        ParseNode(child, pSpan.Inlines);
+                        inlines.Add(pSpan);
                         inlines.Add(new LineBreak());
                         break;
 
                     case "A":
-                        var href = childElement.Attribute("href")?.Value;
+                        var href = child.GetAttributeValue("href", string.Empty);
                         if (!string.IsNullOrEmpty(href))
                         {
                             var hyperlink = new Hyperlink();
@@ -180,18 +212,18 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
                                 hyperlink.NavigateUri = new Uri(href);
                             }
                             catch { /* Invalid URI */ }
-                            ParseElement(childElement, hyperlink.Inlines);
+                            ParseNode(child, hyperlink.Inlines);
                             inlines.Add(hyperlink);
                         }
                         else
                         {
-                            ParseElement(childElement, inlines);
+                            ParseNode(child, inlines);
                         }
                         break;
 
                     case "SPAN":
                         var spanElement = new WinSpan();
-                        ParseElement(childElement, spanElement.Inlines);
+                        ParseNode(child, spanElement.Inlines);
                         inlines.Add(spanElement);
                         break;
 
@@ -201,18 +233,43 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
                         {
                             inlines.Add(new LineBreak());
                         }
-                        ParseElement(childElement, inlines);
+                        ParseNode(child, inlines);
                         break;
 
                     case "LI":
                         inlines.Add(new Run { Text = "• " });
-                        ParseElement(childElement, inlines);
+                        ParseNode(child, inlines);
                         inlines.Add(new LineBreak());
+                        break;
+
+                    case "VIDEO":
+                        // Show placeholder for video
+                        if (inlines.Count > 0) inlines.Add(new LineBreak());
+                        inlines.Add(new Run { Text = "[🎬 וידאו]" });
+                        inlines.Add(new LineBreak());
+                        break;
+
+                    case "AUDIO":
+                        // Show placeholder for audio
+                        if (inlines.Count > 0) inlines.Add(new LineBreak());
+                        inlines.Add(new Run { Text = "[🔊 אודיו]" });
+                        inlines.Add(new LineBreak());
+                        break;
+
+                    case "IMG":
+                        // Skip images for now (RichTextBlock doesn't support inline images easily)
+                        inlines.Add(new Run { Text = "[תמונה]" });
+                        break;
+
+                    case "SCRIPT":
+                    case "STYLE":
+                    case "SOURCE":
+                        // Skip these entirely
                         break;
 
                     default:
                         // For unknown tags, just process children
-                        ParseElement(childElement, inlines);
+                        ParseNode(child, inlines);
                         break;
                 }
             }

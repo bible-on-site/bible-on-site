@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:models="clr-namespace:BibleOnSite.Models"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
              x:Class="BibleOnSite.Pages.ArticlesPage"
              x:DataType="viewmodels:ArticlesViewModel"
              Title="{Binding DisplayTitle}"
@@ -48,67 +49,12 @@
                      </CollectionView.ItemsLayout>
                      <CollectionView.ItemTemplate>
                             <DataTemplate x:DataType="models:Article">
-                                   <Border Padding="0"
-                                           StrokeShape="RoundRectangle 12"
-                                           Stroke="Transparent"
-                                           BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
-                                          <Border.Shadow>
-                                                 <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.15"/>
-                                          </Border.Shadow>
-                                          <Border.GestureRecognizers>
+                                   <controls:ArticleCard Article="{Binding .}" ShowPerekSource="True">
+                                          <controls:ArticleCard.GestureRecognizers>
                                                  <TapGestureRecognizer Tapped="OnArticleTapped"
                                                                        CommandParameter="{Binding .}"/>
-                                          </Border.GestureRecognizers>
-                                          <Grid RowDefinitions="Auto,Auto,Auto,Auto"
-                                                Padding="12"
-                                                InputTransparent="True">
-                                                 <!-- Article Name -->
-                                                 <Label Grid.Row="0"
-                                                        Text="{Binding Name}"
-                                                        FontSize="14"
-                                                        FontAttributes="Bold"
-                                                        LineBreakMode="WordWrap"
-                                                        MaxLines="2"/>
-
-                                                 <!-- Short Abstract -->
-                                                 <Label Grid.Row="1"
-                                                        Text="{Binding ShortAbstract}"
-                                                        FontSize="12"
-                                                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                                                        LineBreakMode="TailTruncation"
-                                                        MaxLines="3"
-                                                        Margin="0,4,0,8"/>
-
-                                                 <!-- Author Info (when viewing by perek) -->
-                                                 <HorizontalStackLayout Grid.Row="2"
-                                                                        Spacing="6"
-                                                                        VerticalOptions="Center"
-                                                                        IsVisible="{Binding Author, Converter={StaticResource NotNullConverter}}">
-                                                        <Border WidthRequest="24"
-                                                                HeightRequest="24"
-                                                                StrokeShape="RoundRectangle 12"
-                                                                Stroke="{StaticResource Primary}"
-                                                                StrokeThickness="1">
-                                                               <Image Source="{Binding Author.ImageUrl}"
-                                                                      Aspect="AspectFill"
-                                                                      WidthRequest="24"
-                                                                      HeightRequest="24"/>
-                                                        </Border>
-                                                        <Label Text="{Binding Author.ShortenedName}"
-                                                               FontSize="11"
-                                                               VerticalTextAlignment="Center"
-                                                               TextColor="{StaticResource Primary}"/>
-                                                 </HorizontalStackLayout>
-
-                                                 <!-- Read indicator -->
-                                                 <Label Grid.Row="3"
-                                                        Text="קרא עוד ◀"
-                                                        FontSize="11"
-                                                        HorizontalTextAlignment="End"
-                                                        TextColor="{StaticResource Primary}"
-                                                        Margin="0,4,0,0"/>
-                                          </Grid>
-                                   </Border>
+                                          </controls:ArticleCard.GestureRecognizers>
+                                   </controls:ArticleCard>
                             </DataTemplate>
                      </CollectionView.ItemTemplate>
               </CollectionView>

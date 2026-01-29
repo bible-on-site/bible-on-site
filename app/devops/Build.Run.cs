@@ -12,12 +12,39 @@ partial class Build
     [Parameter("Environment level for local runs: dev or test")]
     readonly string EnvLevel = "dev";
 
+    [Parameter("API environment: dev (local) or prod (remote). Default: dev")]
+    readonly string ApiEnv = "dev";
+
     bool IsTestEnv => string.Equals(EnvLevel, "test", StringComparison.OrdinalIgnoreCase);
+    bool IsProdApi => string.Equals(ApiEnv, "prod", StringComparison.OrdinalIgnoreCase);
+
+    const string ProdApiUrl = "https://api.xn--febl3a.com";
 
     string ApiMakeTarget => IsTestEnv ? "test" : "dev";
     string PopulateMakeTarget => IsTestEnv ? "populate-test-db" : "populate-dev-db";
 
     string AppEnvFile => IsTestEnv ? (RootDirectory / ".test.env") : (RootDirectory / ".dev.env");
+
+    /// <summary>
+    /// Writes the API config file for runtime API URL override.
+    /// </summary>
+    void WriteApiConfigFile()
+    {
+        var apiConfigPath = System.IO.Path.Combine(SourceDirectory, "Resources", "Raw", "api-config.txt");
+        System.IO.File.WriteAllText(apiConfigPath, IsProdApi ? ProdApiUrl : "");
+        if (IsProdApi)
+        {
+            Serilog.Log.Information($"Using production API: {ProdApiUrl}");
+        }
+    }
+
+    Target PrepareApiConfig => _ => _
+        .Description("Prepare API configuration (prod vs dev)")
+        .Before(Restore)
+        .Executes(() =>
+        {
+            WriteApiConfigFile();
+        });
 
     /// <summary>
     /// Checks if API server is running on port 3003.
@@ -154,6 +181,13 @@ partial class Build
                     Environment.SetEnvironmentVariable(key, value);
                 }
             }
+
+            // Override API_URL if using prod API
+            if (IsProdApi)
+            {
+                Serilog.Log.Information($"Using production API: {ProdApiUrl}");
+                Environment.SetEnvironmentVariable("API_URL", ProdApiUrl);
+            }
         }
         catch (Exception ex)
         {
@@ -188,34 +222,38 @@ partial class Build
         });
 
     Target RunWindows => _ => _
-        .Description("Run app on Windows (use 'Dev' target for full environment)")
-        .DependsOn(Compile)
+        .Description("Run app on Windows. Use --api-env prod for production API")
+        .DependsOn(PrepareApiConfig, Compile)
         .Executes(() =>
         {
-            EnsureApiRunning();
-            ApplyAppEnvFile();
+            // Only start local API if not using prod
+            if (!IsProdApi)
+            {
+                EnsureApiRunning();
+            }
             DotNetRun(s => s
                 .SetProjectFile(MainProject)
                 .SetFramework("net9.0-windows10.0.19041.0")
                 .SetConfiguration(Configuration)
                 .SetProperty("WindowsPackageType", "None")
-                .SetProperty("WindowsAppSDKSelfContained", "true")
+                .SetProperty("WindowsAppSDKSelfContained", "false")
                 .EnableNoRestore()
                 .EnableNoBuild());
         });
 
     Target RunAndroid => _ => _
-        .Description("Run app on Android emulator (starts emulator and API if needed)")
-        .DependsOn(Compile)
+        .Description("Run app on Android emulator. Use --api-env prod for production API")
+        .DependsOn(PrepareApiConfig, Compile)
         .Executes(() =>
         {
             // Ensure emulator is running
             EnsureAndroidEmulatorRunning();
 
-            // Ensure API is running with dev environment
-            EnsureApiRunning();
-
-            ApplyAppEnvFile();
+            // Only start local API if not using prod
+            if (!IsProdApi)
+            {
+                EnsureApiRunning();
+            }
 
             // Use dotnet watch for hot reload support in VS Code
             // Working directory is set to project folder to avoid --project argument issues
@@ -226,6 +264,7 @@ partial class Build
                 WorkingDirectory = SourceDirectory,
                 UseShellExecute = false,
             };
+
             using var process = Process.Start(startInfo);
             process?.WaitForExit();
             if (process?.ExitCode != 0)

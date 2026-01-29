@@ -15,6 +15,10 @@ public class BottomBarDrawable : IDrawable
         var edgeCurveHeight = 18f; // Height of the curved edges
         var centerX = width / 2f;
 
+        // Clear canvas with transparent background first
+        canvas.FillColor = Colors.Transparent;
+        canvas.FillRectangle(dirtyRect);
+
         // Determine if dark mode
         var isDarkMode = Application.Current?.RequestedTheme == AppTheme.Dark;
         var barColor = isDarkMode ? Color.FromArgb("#1C1C1E") : Colors.White;
