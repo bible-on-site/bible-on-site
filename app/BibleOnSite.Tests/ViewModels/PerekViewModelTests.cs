@@ -59,7 +59,7 @@ public class PerekViewModelTests
     }
 
     [Fact]
-    public void Source_ShouldIncludePerekIdAfterDash()
+    public void Source_ShouldShowLeanFormat()
     {
         var storage = new InMemoryPreferencesStorage();
         var preferences = PreferencesService.CreateForTesting(storage);
@@ -68,12 +68,12 @@ public class PerekViewModelTests
         var viewModel = new PerekViewModel(preferences, _ => perek);
         viewModel.LoadByPerekId(123);
 
-        // Source should be "SeferName PerekHeb - PerekId"
-        viewModel.Source.Should().Be("בראשית ה - 123");
+        // Source should be lean: "SeferName PerekHeb" (no dash, perekId, or date)
+        viewModel.Source.Should().Be("בראשית ה");
     }
 
     [Fact]
-    public void Source_WithAdditional_ShouldIncludePerekIdAfterDash()
+    public void Source_WithAdditional_ShouldShowLeanFormat()
     {
         var storage = new InMemoryPreferencesStorage();
         var preferences = PreferencesService.CreateForTesting(storage);
@@ -82,8 +82,8 @@ public class PerekViewModelTests
         var viewModel = new PerekViewModel(preferences, _ => perek);
         viewModel.LoadByPerekId(456);
 
-        // Source should be "SeferName Additional PerekHeb - PerekId"
-        viewModel.Source.Should().Be("שמואל ב ג - 456");
+        // Source should be lean: "SeferName Additional PerekHeb" (no dash, perekId, or date)
+        viewModel.Source.Should().Be("שמואל ב ג");
     }
 
     private static Perek CreatePerek(int perekId, int perekNumber, int? additional, string seferName, string seferTanahUsName, string hebDate)

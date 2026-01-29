@@ -69,7 +69,7 @@ public class ArticlesViewModelTests
     {
         var viewModel = ArticlesViewModel.ForAuthor(5, "הרב משה לוי");
 
-        viewModel.DisplayTitle.Should().Be("מאמרים מאת הרב משה לוי");
+        viewModel.DisplayTitle.Should().Be("מאמרים של הרב משה לוי");
     }
 
     #endregion

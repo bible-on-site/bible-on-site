@@ -55,9 +55,29 @@ public partial class ArticlesViewModel : ObservableObject
         get
         {
             if (IsFilterByAuthor)
-                return $"מאמרים מאת {AuthorName}";
+                return $"מאמרים של {AuthorName}";
             return $"מאמרים על {PerekTitle}";
         }
+    }
+
+    partial void OnAuthorIdChanged(int? value)
+    {
+        OnPropertyChanged(nameof(DisplayTitle));
+    }
+
+    partial void OnAuthorNameChanged(string value)
+    {
+        OnPropertyChanged(nameof(DisplayTitle));
+    }
+
+    partial void OnPerekIdChanged(int value)
+    {
+        OnPropertyChanged(nameof(DisplayTitle));
+    }
+
+    partial void OnPerekTitleChanged(string value)
+    {
+        OnPropertyChanged(nameof(DisplayTitle));
     }
 
     public ArticlesViewModel()
@@ -112,10 +132,14 @@ public partial class ArticlesViewModel : ObservableObject
             ErrorMessage = string.Empty;
 
             // Ensure Starter data is loaded
+#if DEBUG
+            await Services.StarterService.Instance.LoadAsync(forceReload: true);
+#else
             if (!Services.StarterService.Instance.IsLoaded)
             {
                 await Services.StarterService.Instance.LoadAsync();
             }
+#endif
 
             IEnumerable<Article> articles;
 

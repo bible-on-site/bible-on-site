@@ -2,6 +2,7 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
              x:Class="BibleOnSite.Pages.ArticleDetailPage"
              x:DataType="viewmodels:ArticleDetailViewModel"
              Title="{Binding ArticleName}"
@@ -87,13 +88,15 @@
                                    Color="{StaticResource Primary}"/>
 
                 <!-- Article Content (HTML) -->
-                <Label x:Name="ArticleContentLabel"
-                       IsVisible="{Binding HasContent}"
-                       TextType="Html"
-                       Text="{Binding Article.ArticleContent}"
-                       FontSize="16"
-                       LineHeight="1.5"
-                       Margin="0,0,0,32"/>
+                <controls:HtmlView x:Name="ArticleContentView"
+                                   IsVisible="{Binding HasContent}"
+                                   HtmlContent="{Binding Article.ArticleContent}"
+                                   FontSize="16"
+                                   LineHeight="1.5"
+                                   TextAlignment="Justify"
+                                   TextDirection="Rtl"
+                                   HorizontalOptions="Fill"
+                                   Margin="0,0,0,32"/>
 
                 <!-- No content message -->
                 <Label Text="אין תוכן זמין"
