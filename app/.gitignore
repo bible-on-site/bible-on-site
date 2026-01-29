@@ -3,3 +3,6 @@
 **/obj/
 .coverage/
 **/TestResults/
+
+# Generated at build time by MSBuild (API URL override)
+BibleOnSite/Resources/Raw/api-config.txt

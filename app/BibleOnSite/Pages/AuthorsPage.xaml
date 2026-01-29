@@ -14,7 +14,7 @@
                          Placeholder="חיפוש רבנים..."
                          Text="{Binding SearchPhrase}"
                          TextChanged="OnSearchTextChanged"
-                         HorizontalTextAlignment="End"
+                         HorizontalTextAlignment="Start"
                          BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray900}}"
                          Margin="8,8,8,0"/>
 
@@ -43,16 +43,18 @@
                                                 InputTransparent="True">
                                                  <!-- Author Image with lazy loading -->
                                                  <Border Grid.Row="0"
-                                                         WidthRequest="80"
-                                                         HeightRequest="80"
-                                                         StrokeShape="RoundRectangle 40"
+                                                         WidthRequest="82"
+                                                         HeightRequest="82"
+                                                         StrokeShape="RoundRectangle 41"
                                                          Stroke="{StaticResource Primary}"
                                                          StrokeThickness="1"
                                                          HorizontalOptions="Center">
                                                         <Image Source="{Binding ImageUrl}"
                                                                Aspect="AspectFill"
-                                                               WidthRequest="80"
-                                                               HeightRequest="80"/>
+                                                               WidthRequest="78"
+                                                               HeightRequest="78"
+                                                               HorizontalOptions="Center"
+                                                               VerticalOptions="Center"/>
                                                  </Border>
 
                                                  <!-- Author Name -->

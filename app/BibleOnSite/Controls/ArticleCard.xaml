@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
+             x:Class="BibleOnSite.Controls.ArticleCard"
+             x:Name="ThisCard"
+             x:DataType="controls:ArticleCard">
+
+    <Border Padding="0"
+            StrokeShape="RoundRectangle 12"
+            Stroke="Transparent"
+            BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+        <Border.Shadow>
+            <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.15"/>
+        </Border.Shadow>
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto"
+              Padding="12">
+            <!-- Short Abstract (contains the h1/title extracted from HTML) -->
+            <Label Grid.Row="0"
+                   Text="{Binding Article.ShortAbstract, Source={x:Reference ThisCard}}"
+                   FontSize="12"
+                   FontAttributes="Bold"
+                   TextColor="{AppThemeBinding Light=Black, Dark=White}"
+                   LineBreakMode="TailTruncation"
+                   MaxLines="3"
+                   Margin="0,0,0,8"/>
+
+            <!-- Perek Source (only shown when ShowPerekSource is true, e.g., rabbi articles) -->
+            <Label Grid.Row="1"
+                   Text="{Binding Article.PerekDisplayName, Source={x:Reference ThisCard}}"
+                   FontSize="11"
+                   TextColor="{AppThemeBinding Light=Black, Dark=White}"
+                   IsVisible="{Binding ShowPerekSource, Source={x:Reference ThisCard}}"
+                   Margin="0,0,0,4"/>
+
+            <!-- Author Info with picture -->
+            <HorizontalStackLayout Grid.Row="2"
+                                   Spacing="6"
+                                   Margin="2,0,0,0"
+                                   VerticalOptions="Center">
+                <Border WidthRequest="26"
+                        HeightRequest="26"
+                        StrokeShape="RoundRectangle 13"
+                        Stroke="{StaticResource Primary}"
+                        StrokeThickness="1">
+                    <Image Source="{Binding Article.Author.ImageUrl, Source={x:Reference ThisCard}}"
+                           Aspect="AspectFill"
+                           WidthRequest="24"
+                           HeightRequest="24"
+                           HorizontalOptions="Center"
+                           VerticalOptions="Center"/>
+                </Border>
+                <Label Text="{Binding Article.Author.Name, Source={x:Reference ThisCard}}"
+                       FontSize="11"
+                       VerticalTextAlignment="Center"
+                       LineBreakMode="TailTruncation"
+                       TextColor="{StaticResource Primary}"/>
+            </HorizontalStackLayout>
+
+            <!-- Read indicator -->
+            <Label Grid.Row="3"
+                   Text="קרא עוד ◀"
+                   FontSize="11"
+                   HorizontalTextAlignment="End"
+                   TextColor="{StaticResource Primary}"
+                   Margin="0,4,0,0"/>
+        </Grid>
+    </Border>
+
+</ContentView>

@@ -19,6 +19,12 @@ public class Article
     public Author? Author { get; set; }
 
     /// <summary>
+    /// The display name of the perek this article belongs to (e.g., "דברי הימים א יג").
+    /// Populated when needed (e.g., when showing articles by author).
+    /// </summary>
+    public string? PerekDisplayName { get; set; }
+
+    /// <summary>
     /// Extracts plain text from the HTML abstract.
     /// </summary>
     public string ShortAbstract
