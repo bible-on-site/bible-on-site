@@ -32,9 +32,14 @@ public class Perek
     public string Header { get; set; } = string.Empty;
 
     /// <summary>
-    /// The Hebrew date string.
+    /// The Hebrew date string (formatted for display).
     /// </summary>
     public required string HebDate { get; set; }
+
+    /// <summary>
+    /// The Hebrew date in numeric format YYYYMMDD for comparison.
+    /// </summary>
+    public int HebDateNumeric { get; set; }
 
     /// <summary>
     /// The perek number within the sefer.
@@ -60,6 +65,11 @@ public class Perek
     /// The tzeis hakochavim (nightfall) time for this date (HH:mm:ss format).
     /// </summary>
     public required string Tseit { get; set; }
+
+    /// <summary>
+    /// The count of articles available for this perek.
+    /// </summary>
+    public int ArticlesCount { get; set; }
 
     /// <summary>
     /// The pasukim (verses) within this perek.

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#FFFFFF">
+  <!-- Shelf -->
+  <rect x="2" y="21" width="20" height="2" rx="0.5" />
+
+  <!-- Book 1 - Short, vertical (left) -->
+  <rect x="4" y="13" width="4" height="6" rx="0.5" />
+
+  <!-- Book 2 - Tall, vertical (middle) -->
+  <rect x="9" y="5" width="4" height="14" rx="0.5" />
+
+  <!-- Book 3 - Tall, angled toward middle (right) - flipped horizontally -->
+  <rect x="15" y="4" width="4" height="15" rx="0.5" transform="rotate(-8, 17, 19)" />
+</svg>

@@ -30,7 +30,7 @@
                                WidthRequest="50"/>
 
             <Label x:Name="LoadingLabel"
-                   Text="טוען נתונים..."
+                   Text="מתחבר לפרק..."
                    TextColor="White"
                    FontSize="18"
                    HorizontalTextAlignment="Center"/>

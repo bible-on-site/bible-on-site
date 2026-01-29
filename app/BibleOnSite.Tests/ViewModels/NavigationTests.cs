@@ -39,8 +39,8 @@ public class NavigationTests
         var viewModel = new PerekViewModel(preferences, _ => perek);
         viewModel.LoadByPerekId(123);
 
-        // Verify the source includes the perek ID for navigation
-        viewModel.Source.Should().Be("בראשית ה - 123");
+        // Source is now lean format (no dash, perekId, or date)
+        viewModel.Source.Should().Be("בראשית ה");
         viewModel.PerekId.Should().Be(123);
     }
 
@@ -51,11 +51,11 @@ public class NavigationTests
     [Fact]
     public void ArticlesViewModel_ByPerek_ShouldHaveCorrectRoute()
     {
-        var viewModel = new ArticlesViewModel(123, "בראשית ה - 123");
+        var viewModel = new ArticlesViewModel(123, "בראשית ה");
 
         viewModel.IsFilterByPerek.Should().BeTrue();
         viewModel.PerekId.Should().Be(123);
-        viewModel.PerekTitle.Should().Be("בראשית ה - 123");
+        viewModel.PerekTitle.Should().Be("בראשית ה");
 
         // Route format: ArticlesPage?perekId=123&perekTitle=...
     }
@@ -99,13 +99,14 @@ public class NavigationTests
     #region Route Path Format Tests
 
     [Theory]
-    [InlineData(1, "בראשית א - 1")]
-    [InlineData(123, "בראשית ה - 123")]
-    [InlineData(929, "דברי הימים ב א - 929")]
-    public void PerekSource_ShouldContainPerekId(int perekId, string expectedPattern)
+    [InlineData("בראשית א")]
+    [InlineData("בראשית ה")]
+    [InlineData("דברי הימים ב א")]
+    public void PerekSource_ShouldBeLeanFormat(string expectedSource)
     {
-        // The Source should end with " - {perekId}"
-        expectedPattern.Should().EndWith($" - {perekId}");
+        // Source is lean format: "SeferName [Additional] PerekHeb" without dash or perekId
+        expectedSource.Should().NotContain(" - ");
+        expectedSource.Should().NotContain("|");
     }
 
     [Fact]
@@ -113,7 +114,7 @@ public class NavigationTests
     {
         // Expected: ArticlesPage?perekId={id}&perekTitle={title}
         var perekId = 123;
-        var perekTitle = Uri.EscapeDataString("בראשית ה - 123");
+        var perekTitle = Uri.EscapeDataString("בראשית ה");
 
         var route = $"ArticlesPage?perekId={perekId}&perekTitle={perekTitle}";
 
@@ -151,7 +152,7 @@ public class NavigationTests
     public void ArticlesViewModel_BackNavigation_ShouldNotLoseState()
     {
         // When navigating back, the filter state should be preserved
-        var viewModel = new ArticlesViewModel(123, "בראשית ה - 123");
+        var viewModel = new ArticlesViewModel(123, "בראשית ה");
 
         // Simulate adding articles
         viewModel.SetArticles(new List<Article>
