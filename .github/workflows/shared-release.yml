@@ -2,18 +2,38 @@ name: Shared Release Flow
 on:
   workflow_call:
     inputs:
+      module_name:
+        description: Short module name (website, api, app)
+        required: true
+        type: string
       module_directory:
-        description: The directory of the module to release. Should be either 'web/bible-on-site' or 'web/api'.
+        description: Module directory path (e.g., web/bible-on-site, web/api, app)
         required: true
         type: string
       module_version:
-        description: The version of the module.
+        description: The version of the module
         required: true
         type: string
-      released_artifact_name:
-        description: The name of the artifact to attach to the release.
+      artifacts_json:
+        description: |
+          JSON array of artifacts to download and attach to the release.
+          Each artifact object should have:
+            - name: artifact name to download (empty names are skipped)
+            - path: directory to download artifact to
+            - glob: file pattern for release attachment
+            - label: (optional) human-readable label for release notes
+            - cd_key: (optional) key name for CD payload, defaults to artifact name
+          Example: [{"name": "my-artifact", "path": ".artifacts", "glob": "**/*.zip", "label": "Windows", "cd_key": "windows_artifact_name"}]
         required: true
         type: string
+      cd_event_type:
+        description: Event type for the CD workflow trigger (e.g., deploy-aws, deploy-app)
+        required: true
+        type: string
+    outputs:
+      released:
+        description: Whether the module was successfully released (for version bump coordination)
+        value: ${{ jobs.release.outputs.released }}
     secrets:
       DEPLOY_KEY:
         required: true
@@ -22,83 +42,79 @@ on:
 
 permissions:
   contents: write
-env:
-  IS_NPM: ${{ inputs.module_directory == 'web/bible-on-site' }}
-  IS_CARGO: ${{ inputs.module_directory == 'web/api' }}
-  MODULE_NAME: ${{ inputs.module_directory == 'web/bible-on-site' && 'website' || 'api' }}
-  MODULE_NAME_CAPITALIZED: ${{ inputs.module_directory == 'web/bible-on-site' && 'Website' || 'API' }}
-  DOCKER_IMAGE_NAME: ${{ inputs.module_directory == 'web/bible-on-site' && 'bible-on-site' || 'bible-on-site-api' }}
-  DOCKER_IMAGE_OUTPUT_DIR: ${{ inputs.module_directory }}/.release
 
 jobs:
   trigger_cd:
     name: Trigger CD Workflow
     runs-on: ubuntu-latest
     steps:
-      - uses: peter-evans/repository-dispatch@v4
+      - name: Build CD Payload
+        id: build_payload
+        run: |
+          ARTIFACTS='${{ inputs.artifacts_json }}'
+
+          # Start with base payload
+          PAYLOAD=$(jq -n \
+            --arg ref "${{ github.ref }}" \
+            --arg module_name "${{ inputs.module_name }}" \
+            --arg module_directory "${{ inputs.module_directory }}" \
+            --arg module_version "${{ inputs.module_version }}" \
+            --arg ci_run_id "${{ github.run_id }}" \
+            '{ref: $ref, module_name: $module_name, module_directory: $module_directory, module_version: $module_version, ci_run_id: $ci_run_id}')
+
+          # Add artifact names to payload using cd_key or default key
+          while read -r artifact; do
+            NAME=$(echo "$artifact" | jq -r '.name // empty')
+            CD_KEY=$(echo "$artifact" | jq -r '.cd_key // empty')
+
+            # Skip empty artifacts
+            if [ -z "$NAME" ] || [ "$NAME" = "null" ]; then
+              continue
+            fi
+
+            # Use cd_key if provided, otherwise use a sanitized version of the name or "released_artifact_name" as default
+            if [ -z "$CD_KEY" ] || [ "$CD_KEY" = "null" ]; then
+              # For single artifact releases, use "released_artifact_name"
+              ARTIFACT_COUNT=$(echo "$ARTIFACTS" | jq '[.[] | select(.name != null and .name != "")] | length')
+              if [ "$ARTIFACT_COUNT" -eq 1 ]; then
+                CD_KEY="released_artifact_name"
+              else
+                # Sanitize name: replace dashes/dots with underscores
+                CD_KEY=$(echo "$NAME" | sed 's/[-.]/_/g')
+              fi
+            fi
+
+            PAYLOAD=$(echo "$PAYLOAD" | jq --arg key "$CD_KEY" --arg val "$NAME" '. + {($key): $val}')
+          done < <(echo "$ARTIFACTS" | jq -c '.[]')
+
+          echo "CD_PAYLOAD=$PAYLOAD" >> $GITHUB_OUTPUT
+          echo "Generated CD payload: $PAYLOAD"
+
+      - name: Trigger CD Workflow
+        uses: peter-evans/repository-dispatch@v4
         with:
           repository: ${{ github.repository }}
-          token: ${{ secrets.BOT_PAT }} # Might be able to use the default GITHUB_TOKEN, but using a PAT as I don't have time to test it right now.
-          event-type: deploy-aws
-          client-payload: '{"ref": "${{ github.ref }}", "module_directory": "${{ inputs.module_directory }}", "module_name": "${{ env.MODULE_NAME }}", "module_version": "${{ inputs.module_version }}", "ci_run_id": "${{ github.run_id }}", "released_artifact_name": "${{ inputs.released_artifact_name }}"}'
-
-  setup_env:
-    name: Setup Environment Variables
-    runs-on: ubuntu-latest
-    outputs:
-      MODULE_NAME: ${{ env.MODULE_NAME }} # a workaround for places where only needs.<job_id>.<output> is allowed
-    steps:
-      - run: echo "Setting up environment variables"
+          token: ${{ secrets.BOT_PAT }}
+          event-type: ${{ inputs.cd_event_type }}
+          client-payload: ${{ steps.build_payload.outputs.CD_PAYLOAD }}
 
   release:
-    needs: setup_env
     name: Release
-    # Ensures only one release job runs at a time for this repository.
+    outputs:
+      released: ${{ steps.mark_released.outputs.released }}
+    # Ensures only one release job runs at a time for this module.
     # This prevents potential race conditions which has been proven to occur.
-    #
-    # It acts as a safeguard against:
-    # - Multiple triggers if the merge queue (despite squash settings) pushes multiple commits rapidly.
-    #   TODO: Investigate the root cause of multiple triggers from the merge queue.
-    # - Collisions from manual workflow runs or other concurrent triggers.
     concurrency:
-      group: ${{ github.repository }}-release-${{ needs.setup_env.outputs.MODULE_NAME }}
+      group: ${{ github.repository }}-release-${{ inputs.module_name }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup Node.js
-        if: ${{ env.IS_NPM == 'true' }}
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: ${{ inputs.MODULE_DIRECTORY }}/package.json
-          cache-dependency-path: ${{ inputs.MODULE_DIRECTORY }}/package-lock.json
-          cache: npm
-
-      - name: Install NPM Dependencies
-        if: ${{ env.IS_NPM == 'true' }}
-        working-directory: ${{ inputs.module_directory }}
-        id: npm_ci
-        run: |
-          npm ci --no-audit
-
-      - name: Setup Rust
-        if: ${{ env.IS_CARGO == 'true' }}
-        uses: dtolnay/rust-toolchain@stable
-
-      - uses: taiki-e/install-action@v2
-        if: ${{ env.IS_CARGO == 'true' }}
-        with:
-          tool: cargo-make, tomato-toml, semver-bump
-
-      - name: Cache Cargo dependencies
-        if: ${{ env.IS_CARGO == 'true' }}
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: ${{ inputs.module_directory }}
 
       - name: Configure Git
         run: |
@@ -108,7 +124,7 @@ jobs:
       - name: Create Tag
         id: create_tag
         run: |
-          TAG_NAME=$(echo "${{ env.MODULE_NAME }}-v${{ inputs.module_version }}")
+          TAG_NAME="${{ inputs.module_name }}-v${{ inputs.module_version }}"
           git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
           echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_OUTPUT
 
@@ -122,73 +138,96 @@ jobs:
           git remote set-url origin git@github.com:${{ github.repository }}
           git push origin ${{ steps.create_tag.outputs.TAG_NAME }}
 
-      - name: Prepare Artifact Restore
-        id: prepare_artifact_restore
+      - name: Download Artifacts
         run: |
-          mkdir -p ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
-          DOCKER_IMAGE_TAR_NAME="${{ env.DOCKER_IMAGE_NAME }}-v${{ inputs.module_version }}.tar"
-          DOCKER_IMAGE_TAR_PATH="${{ env.DOCKER_IMAGE_OUTPUT_DIR }}/${DOCKER_IMAGE_TAR_NAME}"
-          DOCKER_IMAGE_TAR_GZ_PATH="${DOCKER_IMAGE_TAR_PATH}.gz"
-          echo "ARTIFACT_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
+          set -e
 
-      - name: Restore Artifact
-        uses: actions/download-artifact@v7
-        with:
-          name: ${{ inputs.released_artifact_name }}
-          path: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
+          ARTIFACTS='${{ inputs.artifacts_json }}'
+          echo "Processing artifacts: $ARTIFACTS"
 
-      - name: Create GitHub Release and Upload ${{ env.MODULE_NAME_CAPITALIZED }} Artifact
+          # Process each artifact using gh CLI for precise control
+          echo "$ARTIFACTS" | jq -c '.[]' | while read -r artifact; do
+            NAME=$(echo "$artifact" | jq -r '.name // empty')
+            PATH_DIR=$(echo "$artifact" | jq -r '.path')
+
+            # Skip if artifact name is empty or null
+            if [ -z "$NAME" ] || [ "$NAME" = "null" ]; then
+              echo "Skipping artifact with empty name"
+              continue
+            fi
+
+            echo "Downloading artifact '$NAME' to '$PATH_DIR'"
+            mkdir -p "$PATH_DIR"
+
+            # Download artifact using gh CLI
+            gh run download ${{ github.run_id }} --name "$NAME" --dir "$PATH_DIR" || {
+              echo "Warning: Failed to download artifact '$NAME', it may not exist"
+            }
+
+            echo "Contents of $PATH_DIR:"
+            ls -la "$PATH_DIR" 2>/dev/null || echo "  (empty or not found)"
+          done
+
+      - name: Prepare Release
+        id: prepare_release
+        run: |
+          set -e
+
+          ARTIFACTS='${{ inputs.artifacts_json }}'
+          MODULE_NAME_CAP="$(echo '${{ inputs.module_name }}' | awk '{print toupper(substr($0,1,1)) substr($0,2)}')"
+
+          # Build file patterns for release
+          FILE_PATTERNS=$(echo "$ARTIFACTS" | jq -r '.[] | select(.name != null and .name != "" and .glob != null) | "\(.path)/\(.glob)"')
+
+          echo "FILE_PATTERNS<<EOF" >> $GITHUB_OUTPUT
+          echo "$FILE_PATTERNS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # Build release body dynamically
+          # Check if any artifacts have labels (indicating multi-artifact release)
+          HAS_LABELS=$(echo "$ARTIFACTS" | jq '[.[] | select(.label != null and .label != "")] | length')
+
+          if [ "$HAS_LABELS" -gt 0 ]; then
+            # Multi-artifact release with download section
+            BODY="Automated release for ${MODULE_NAME_CAP} version ${{ inputs.module_version }}."
+            BODY="${BODY}"$'\n\n'"## Downloads"
+
+            while read -r artifact; do
+              NAME=$(echo "$artifact" | jq -r '.name // empty')
+              LABEL=$(echo "$artifact" | jq -r '.label // empty')
+
+              if [ -n "$NAME" ] && [ "$NAME" != "null" ] && [ -n "$LABEL" ] && [ "$LABEL" != "null" ]; then
+                BODY="${BODY}"$'\n'"- **${LABEL}**"
+              fi
+            done < <(echo "$ARTIFACTS" | jq -c '.[]')
+          else
+            # Simple single-artifact release
+            BODY="Automated release for ${MODULE_NAME_CAP} version ${{ inputs.module_version }}."
+          fi
+
+          echo "BODY<<EOF" >> $GITHUB_OUTPUT
+          echo "$BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "MODULE_NAME_CAP=$MODULE_NAME_CAP" >> $GITHUB_OUTPUT
+
+          echo "File patterns:"
+          echo "$FILE_PATTERNS"
+          echo ""
+          echo "Release body:"
+          echo "$BODY"
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.create_tag.outputs.TAG_NAME }}
-          name: Release ${{ env.MODULE_NAME_CAPITALIZED }} v${{ inputs.module_version }}
-          body: |
-            Automated release for ${{ env.MODULE_NAME_CAPITALIZED }} version ${{ inputs.module_version }}.
+          name: Release ${{ steps.prepare_release.outputs.MODULE_NAME_CAP }} v${{ inputs.module_version }}
+          body: ${{ steps.prepare_release.outputs.BODY }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          files: ${{ steps.prepare_artifact_restore.outputs.ARTIFACT_PATH }}
+          files: ${{ steps.prepare_release.outputs.FILE_PATTERNS }}
 
-      - name: Bump ${{ env.MODULE_NAME_CAPITALIZED }} Version
-        working-directory: ${{ inputs.module_directory }}
-        run: |
-          if [ "${{ env.IS_NPM }}" = "true" ]; then
-            npm version patch --no-git-tag-version
-          elif [ "${{ env.IS_CARGO }}" = "true" ]; then
-            cargo make bump-version
-          fi
-
-      - name: Commit ${{ env.MODULE_NAME_CAPITALIZED }} Version Bump Changes
-        working-directory: ${{ inputs.module_directory }}
-        run: |
-          if [ "${{ env.IS_NPM }}" = "true" ]; then
-            FILES_TO_ADD="package.json package-lock.json"
-            NEXT_MODULE_VERSION=$(node -e "const pkg = require('./package.json'); console.log(pkg.version)")
-          elif [ "${{ env.IS_CARGO }}" = "true" ]; then
-            FILES_TO_ADD="Cargo.toml Cargo.lock"
-            NEXT_MODULE_VERSION=$(cargo make version | grep -v 'INFO')
-          fi
-          git add $FILES_TO_ADD
-          git commit -n -m "chore(release): Bump ${{ env.MODULE_NAME }} version to ${NEXT_MODULE_VERSION} [skip ci]"
-
-      - name: Push Version Bump Changes
-        run: |
-          set -e  # Exit immediately if any command fails
-
-          # Get the current branch name
-          CURRENT_BRANCH=$(git symbolic-ref --short HEAD)
-          echo "Current branch: $CURRENT_BRANCH"
-
-          # Fetch the latest changes from the remote branch
-          git fetch origin "$CURRENT_BRANCH"
-
-          # Rebase the local commit on top of the remote branch
-          # This ensures that version bump commit is applied on top of any changes
-          # that may have been pushed since this WF was checking out (e.g., from parallel releases)
-          if ! git rebase "origin/$CURRENT_BRANCH"; then
-            echo "Error: Failed to rebase version bump commit. This may indicate a conflict."
-            echo "Aborting rebase..."
-            git rebase --abort
-            exit 1
-          fi
-
-          # Push the rebased commit
-          git push origin HEAD
+      # Note: Version bump is handled by the centralized bump_versions job in ci.yml
+      # to avoid race conditions when multiple modules are released in parallel
+      - name: Mark Release Complete
+        id: mark_released
+        run: echo "released=true" >> $GITHUB_OUTPUT
