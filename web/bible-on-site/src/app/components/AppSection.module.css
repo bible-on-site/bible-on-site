@@ -1,0 +1,105 @@
+.appSection {
+  position: relative;
+  text-align: center;
+  width: 100%;
+  z-index: 2;
+  /* White background creates contrast between al-haperek (blue) divider and TOS (gray).
+     When daily bulletin is added back, this section can move after it and use #edf2f7 if needed. */
+  background-color: #fff;
+  padding: 2em 1em;
+  scroll-margin-top: 1em;
+}
+
+.appHeader {
+  padding: 0.75em 0;
+  letter-spacing: 0.1em;
+  text-align: center;
+  color: #1552ac;
+}
+
+.appHeader h1 {
+  font-size: 1.8em;
+  margin: 0.5em 0;
+}
+
+.appHeader h2 {
+  font-size: 1.1em;
+  margin: 0.3em 0;
+  color: #666;
+  letter-spacing: 0;
+}
+
+.appLinks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1.5em;
+  padding: 1.5em 0;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.appLink {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.75em 1.5em;
+  background-color: #1552ac;
+  color: white;
+  border-radius: 8px;
+  text-decoration: none;
+  transition:
+    background-color 0.2s,
+    transform 0.2s;
+  position: relative;
+}
+
+.appLink:hover {
+  background-color: #0d3d7a;
+  transform: translateY(-2px);
+}
+
+.appLink img {
+  filter: brightness(0) invert(1);
+}
+
+.appLink span {
+  font-size: 1.1em;
+  font-weight: 500;
+}
+
+/* Disabled link (no href) */
+.disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.disabled:hover {
+  background-color: #1552ac;
+  transform: none;
+}
+
+/* Ribbon base styles */
+.ribbonBuilding::after,
+.ribbonComingSoon::after {
+  position: absolute;
+  left: -8px;
+  top: -8px;
+  color: white;
+  font-size: 0.6rem;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  z-index: 1;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.ribbonBuilding::after {
+  content: "בבניה";
+  background-color: #e74c3c;
+}
+
+.ribbonComingSoon::after {
+  content: "יחזור בקרוב";
+  background-color: #f39c12;
+}
