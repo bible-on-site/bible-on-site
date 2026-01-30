@@ -66,12 +66,12 @@ jobs:
           while read -r artifact; do
             NAME=$(echo "$artifact" | jq -r '.name // empty')
             CD_KEY=$(echo "$artifact" | jq -r '.cd_key // empty')
-            
+
             # Skip empty artifacts
             if [ -z "$NAME" ] || [ "$NAME" = "null" ]; then
               continue
             fi
-            
+
             # Use cd_key if provided, otherwise use a sanitized version of the name or "released_artifact_name" as default
             if [ -z "$CD_KEY" ] || [ "$CD_KEY" = "null" ]; then
               # For single artifact releases, use "released_artifact_name"
@@ -83,7 +83,7 @@ jobs:
                 CD_KEY=$(echo "$NAME" | sed 's/[-.]/_/g')
               fi
             fi
-            
+
             PAYLOAD=$(echo "$PAYLOAD" | jq --arg key "$CD_KEY" --arg val "$NAME" '. + {($key): $val}')
           done < <(echo "$ARTIFACTS" | jq -c '.[]')
 
@@ -149,21 +149,21 @@ jobs:
           echo "$ARTIFACTS" | jq -c '.[]' | while read -r artifact; do
             NAME=$(echo "$artifact" | jq -r '.name // empty')
             PATH_DIR=$(echo "$artifact" | jq -r '.path')
-            
+
             # Skip if artifact name is empty or null
             if [ -z "$NAME" ] || [ "$NAME" = "null" ]; then
               echo "Skipping artifact with empty name"
               continue
             fi
-            
+
             echo "Downloading artifact '$NAME' to '$PATH_DIR'"
             mkdir -p "$PATH_DIR"
-            
+
             # Download artifact using gh CLI
             gh run download ${{ github.run_id }} --name "$NAME" --dir "$PATH_DIR" || {
               echo "Warning: Failed to download artifact '$NAME', it may not exist"
             }
-            
+
             echo "Contents of $PATH_DIR:"
             ls -la "$PATH_DIR" 2>/dev/null || echo "  (empty or not found)"
           done
@@ -191,11 +191,11 @@ jobs:
             # Multi-artifact release with download section
             BODY="Automated release for ${MODULE_NAME_CAP} version ${{ inputs.module_version }}."
             BODY="${BODY}"$'\n\n'"## Downloads"
-            
+
             while read -r artifact; do
               NAME=$(echo "$artifact" | jq -r '.name // empty')
               LABEL=$(echo "$artifact" | jq -r '.label // empty')
-              
+
               if [ -n "$NAME" ] && [ "$NAME" != "null" ] && [ -n "$LABEL" ] && [ "$LABEL" != "null" ]; then
                 BODY="${BODY}"$'\n'"- **${LABEL}**"
               fi
