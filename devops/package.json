@@ -20,7 +20,7 @@
 		"@aws-sdk/client-ecr": "3.965.0",
 		"@aws-sdk/client-lambda": "3.965.0",
 		"@aws-sdk/client-s3": "3.965.0",
-		"@aws-sdk/client-sts": "3.965.0",
+		"@aws-sdk/client-sts": "3.978.0",
 		"@aws-sdk/credential-providers": "3.965.0",
 		"dotenv": "17.2.3",
 		"semver": "7.7.3",
