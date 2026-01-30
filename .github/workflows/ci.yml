@@ -1695,9 +1695,9 @@ jobs:
     # Note: Using always() + result check as a workaround for reusable workflow result evaluation issues (see #1065)
     # For each release job, we check both result == 'success' AND outputs.released == 'true'
     if: >-
-      ${{ always() && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' && 
-      ((needs.release_website.result == 'success' && needs.release_website.outputs.released == 'true') || 
-       (needs.release_api.result == 'success' && needs.release_api.outputs.released == 'true') || 
+      ${{ always() && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' &&
+      ((needs.release_website.result == 'success' && needs.release_website.outputs.released == 'true') ||
+       (needs.release_api.result == 'success' && needs.release_api.outputs.released == 'true') ||
        (needs.release_app.result == 'success' && needs.release_app.outputs.released == 'true')) }}
     permissions:
       contents: write
