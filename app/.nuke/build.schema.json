@@ -1,0 +1,211 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "definitions": {
+    "Host": {
+      "type": "string",
+      "enum": [
+        "AppVeyor",
+        "AzurePipelines",
+        "Bamboo",
+        "Bitbucket",
+        "Bitrise",
+        "GitHubActions",
+        "GitLab",
+        "Jenkins",
+        "Rider",
+        "SpaceAutomation",
+        "TeamCity",
+        "Terminal",
+        "TravisCI",
+        "VisualStudio",
+        "VSCode"
+      ]
+    },
+    "ExecutableTarget": {
+      "type": "string",
+      "enum": [
+        "BumpVersion",
+        "Clean",
+        "Compile",
+        "CompileAndroid",
+        "CompileE2E",
+        "CompileTests",
+        "CompileWindows",
+        "CoverageAll",
+        "CoverageIntegration",
+        "CoverageMerge",
+        "CoverageUnit",
+        "DeployGooglePlay",
+        "DeployMsStore",
+        "Dev",
+        "Lint",
+        "Package",
+        "PackagePrepare",
+        "PrepareApiConfig",
+        "Restore",
+        "RestoreAndroid",
+        "RestoreTests",
+        "RestoreWindows",
+        "RunAndroid",
+        "RunIos",
+        "RunMac",
+        "RunWindows",
+        "StartApi",
+        "Test",
+        "TestE2E",
+        "TestIntegration",
+        "TestUnit",
+        "Version"
+      ]
+    },
+    "Verbosity": {
+      "type": "string",
+      "description": "",
+      "enum": [
+        "Verbose",
+        "Normal",
+        "Minimal",
+        "Quiet"
+      ]
+    },
+    "NukeBuild": {
+      "properties": {
+        "Continue": {
+          "type": "boolean",
+          "description": "Indicates to continue a previously failed build attempt"
+        },
+        "Help": {
+          "type": "boolean",
+          "description": "Shows the help text for this build assembly"
+        },
+        "Host": {
+          "description": "Host for execution. Default is 'automatic'",
+          "$ref": "#/definitions/Host"
+        },
+        "NoLogo": {
+          "type": "boolean",
+          "description": "Disables displaying the NUKE logo"
+        },
+        "Partition": {
+          "type": "string",
+          "description": "Partition to use on CI"
+        },
+        "Plan": {
+          "type": "boolean",
+          "description": "Shows the execution plan (HTML)"
+        },
+        "Profile": {
+          "type": "array",
+          "description": "Defines the profiles to load",
+          "items": {
+            "type": "string"
+          }
+        },
+        "Root": {
+          "type": "string",
+          "description": "Root directory during build execution"
+        },
+        "Skip": {
+          "type": "array",
+          "description": "List of targets to be skipped. Empty list skips all dependencies",
+          "items": {
+            "$ref": "#/definitions/ExecutableTarget"
+          }
+        },
+        "Target": {
+          "type": "array",
+          "description": "List of targets to be invoked. Default is '{default_target}'",
+          "items": {
+            "$ref": "#/definitions/ExecutableTarget"
+          }
+        },
+        "Verbosity": {
+          "description": "Logging verbosity during build execution. Default is 'Normal'",
+          "$ref": "#/definitions/Verbosity"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "properties": {
+        "AabPath": {
+          "type": "string",
+          "description": "Path to AAB file for Google Play upload"
+        },
+        "AndroidKeyAlias": {
+          "type": "string",
+          "description": "Android key alias"
+        },
+        "AndroidKeyPassword": {
+          "type": "string",
+          "description": "Android key password"
+        },
+        "AndroidKeystore": {
+          "type": "string",
+          "description": "Android keystore path"
+        },
+        "AndroidKeystorePassword": {
+          "type": "string",
+          "description": "Android keystore password"
+        },
+        "ApiEnv": {
+          "type": "string",
+          "description": "API environment: dev (local) or prod (remote). Default: dev"
+        },
+        "CertificateThumbprint": {
+          "type": "string",
+          "description": "Windows signing certificate thumbprint (for MSIX signing)"
+        },
+        "Configuration": {
+          "type": "string",
+          "description": "Configuration to build - Default is 'Debug' (local) or 'Release' (server)"
+        },
+        "EnvLevel": {
+          "type": "string",
+          "description": "Environment level for local runs: dev or test"
+        },
+        "GooglePlayKeyFile": {
+          "type": "string",
+          "description": "Path to Google Play service account JSON file"
+        },
+        "GooglePlayTrack": {
+          "type": "string",
+          "description": "Google Play track (internal, alpha, beta, production). Default: internal"
+        },
+        "IosTeamId": {
+          "type": "string",
+          "description": "iOS Team ID"
+        },
+        "MaxFlightsToKeep": {
+          "type": "integer",
+          "description": "Maximum number of flights to keep (older flights will be deleted). Default: 5",
+          "format": "int32"
+        },
+        "MsixPath": {
+          "type": "string",
+          "description": "Path to MSIX file for Microsoft Store upload"
+        },
+        "MsStoreFlightGroupId": {
+          "type": "string",
+          "description": "Microsoft Store flight group ID (required when creating a new flight)"
+        },
+        "MsStoreFlightId": {
+          "type": "string",
+          "description": "Microsoft Store flight ID for internal testing (if not provided, a new flight will be created)"
+        },
+        "Platform": {
+          "type": "string",
+          "description": "Target platform for packaging: Windows, Android, or All"
+        },
+        "Production": {
+          "type": "boolean",
+          "description": "Deploy to production instead of flight/internal (requires store review)"
+        }
+      }
+    },
+    {
+      "$ref": "#/definitions/NukeBuild"
+    }
+  ]
+}
