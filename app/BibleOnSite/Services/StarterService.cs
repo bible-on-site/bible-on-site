@@ -103,6 +103,7 @@ public class StarterService : BaseGraphQLService
                 authorsById[a.Id] = author;
                 return author;
             })
+            .OrderBy(a => a.Name)
             .ToList();
 
         // Build articles with author references
