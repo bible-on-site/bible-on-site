@@ -1,16 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import packageJson from "../../../package.json";
+import { appPlatforms } from "./appPlatforms";
 import styles from "./navbar.module.css";
 
 export const NavBar = () => {
 	return (
 		<div className={styles.hamburgerMenu}>
-			<input
-				type="checkbox"
-				className={styles.menuToggle}
-				id="menu-toggle"
-			/>
+			<input type="checkbox" className={styles.menuToggle} id="menu-toggle" />
 			<label className={styles.menuBtn} htmlFor="menu-toggle">
 				<span className={styles.menuIcon} />
 			</label>
@@ -76,16 +73,50 @@ export const NavBar = () => {
 						<span>תנאי שימוש</span>
 					</Link>
 				</li>
-				<li className={`${styles.menuItem} ${styles.ribbonComingSoon}`}>
+				<li className={styles.menuItem}>
 					<Image
-						src="/icons/google-play.svg"
-						alt="ישומון"
+						src="/icons/smartphone.svg"
+						alt="יישומון"
 						width={16}
 						height={16}
 					/>
 					<Link href="/app">
 						<span>יישומון</span>
 					</Link>
+					<ul>
+						{appPlatforms.map((platform) => {
+							const ribbonClass =
+								platform.ribbon === "building"
+									? styles.ribbonBuilding
+									: styles.ribbonComingSoon;
+
+							return (
+								<li
+									key={platform.id}
+									className={`${styles.menuItem} ${ribbonClass}`}
+									title={platform.description}
+								>
+									<Image
+										src={platform.icon}
+										alt={platform.description}
+										width={16}
+										height={16}
+									/>
+									{platform.href ? (
+										<a
+											href={platform.href}
+											target="_blank"
+											rel="noopener noreferrer"
+										>
+											<span>{platform.name}</span>
+										</a>
+									) : (
+										<span>{platform.name}</span>
+									)}
+								</li>
+							);
+						})}
+					</ul>
 				</li>
 				<li className={styles.menuItem}>
 					<Image
