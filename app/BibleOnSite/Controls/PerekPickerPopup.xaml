@@ -80,7 +80,11 @@
                                         SelectionMode="Single"
                                         SelectionChanged="OnSeferGroupSelected"
                                         HeightRequest="150"
+                                        ItemSizingStrategy="MeasureAllItems"
                                         InputTransparent="False">
+                            <CollectionView.ItemsLayout>
+                                <LinearItemsLayout Orientation="Vertical" ItemSpacing="0"/>
+                            </CollectionView.ItemsLayout>
                             <CollectionView.ItemTemplate>
                                 <DataTemplate>
                                     <Grid Padding="8,12">
@@ -115,7 +119,11 @@
                                         SelectionMode="Single"
                                         SelectionChanged="OnSeferSelected"
                                         HeightRequest="150"
+                                        ItemSizingStrategy="MeasureAllItems"
                                         InputTransparent="False">
+                            <CollectionView.ItemsLayout>
+                                <LinearItemsLayout Orientation="Vertical" ItemSpacing="0"/>
+                            </CollectionView.ItemsLayout>
                             <CollectionView.ItemTemplate>
                                 <DataTemplate>
                                     <Grid Padding="8,12">
@@ -150,7 +158,11 @@
                                         SelectionMode="Single"
                                         SelectionChanged="OnPerekSelected"
                                         HeightRequest="150"
+                                        ItemSizingStrategy="MeasureAllItems"
                                         InputTransparent="False">
+                            <CollectionView.ItemsLayout>
+                                <LinearItemsLayout Orientation="Vertical" ItemSpacing="0"/>
+                            </CollectionView.ItemsLayout>
                             <CollectionView.ItemTemplate>
                                 <DataTemplate>
                                     <Grid Padding="8,10">

@@ -4,7 +4,6 @@
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:models="clr-namespace:BibleOnSite.Models"
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
-             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
              x:Class="BibleOnSite.Pages.PerekPage"
              x:DataType="viewmodels:PerekViewModel"
              Title="{Binding Source}"
@@ -106,8 +105,7 @@
                                        FormattedText="{Binding FormattedText}"
                                        FontSize="18"
                                        LineBreakMode="WordWrap"
-                                       LineHeight="1.4"
-                                       HorizontalTextAlignment="Start"/>
+                                       LineHeight="1.4"/>
                             </Grid>
                         </Border>
                     </DataTemplate>
