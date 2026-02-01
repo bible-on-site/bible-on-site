@@ -148,6 +148,18 @@ public class PerekDataService
     }
 
     /// <summary>
+    /// Gets the display source string for a perek (e.g., "בראשית א", "שמואל א ג").
+    /// </summary>
+    public string? GetPerekSource(int perekId)
+    {
+        var perek = GetPerek(perekId);
+        if (perek == null) return null;
+
+        var additionalPart = perek.Additional.HasValue ? $"{perek.Additional.Value.ToHebrewLetters()} " : string.Empty;
+        return $"{perek.SeferName} {additionalPart}{perek.PerekNumber.ToHebrewLetters()}";
+    }
+
+    /// <summary>
     /// Gets today's perek ID based on Hebrew date calculation.
     /// Uses the same logic as the web implementation for consistency.
     /// Handles tzeit (nightfall), weekend adjustment, and cycle boundaries.

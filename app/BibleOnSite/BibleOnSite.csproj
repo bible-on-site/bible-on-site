@@ -26,6 +26,9 @@
 		<!-- Suppress XamlC warnings for bindings without x:DataType (internal picker classes) -->
 		<NoWarn>$(NoWarn);XC0022</NoWarn>
 
+		<!-- Enable compiled bindings with Source property -->
+		<MauiEnableXamlCBindingWithSourceCompilation>true</MauiEnableXamlCBindingWithSourceCompilation>
+
 		<!-- Enable XAML Hot Reload -->
 		<MauiEnableXamlHotReload>true</MauiEnableXamlHotReload>
 
@@ -75,6 +78,7 @@
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
 		<PackageReference Include="GraphQL.Client" Version="6.1.0" />
 		<PackageReference Include="GraphQL.Client.Serializer.Newtonsoft" Version="6.1.0" />
+		<PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.11" />
 		<PackageReference Include="sqlite-net-pcl" Version="1.9.172" />

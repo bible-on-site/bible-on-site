@@ -41,6 +41,7 @@
         "Lint",
         "Package",
         "PackagePrepare",
+        "PrepareApiConfig",
         "Restore",
         "RestoreAndroid",
         "RestoreTests",
@@ -147,6 +148,10 @@
         "AndroidKeystorePassword": {
           "type": "string",
           "description": "Android keystore password"
+        },
+        "ApiEnv": {
+          "type": "string",
+          "description": "API environment: dev (local) or prod (remote). Default: dev"
         },
         "CertificateThumbprint": {
           "type": "string",

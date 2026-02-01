@@ -224,7 +224,6 @@ public partial class PerekPage : ContentPage
     private async void OnCircularMenuClicked(object? sender, EventArgs e)
     {
         _isMenuOpen = !_isMenuOpen;
-        DebugWatermark.Text = $"Menu: {(_isMenuOpen ? "OPEN" : "CLOSED")}";
 
         if (_isMenuOpen)
         {
@@ -341,6 +340,12 @@ public partial class PerekPage : ContentPage
             PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
             // Update articles badge
             await UpdateArticlesCountAsync();
+
+            // If showing articles, reload them for the new perek
+            if (_isShowingArticles)
+            {
+                await LoadArticlesAsync();
+            }
         }
     }
 
@@ -370,13 +375,22 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private async void OnArticlesButtonClicked(object? sender, EventArgs e)
     {
-        if (_isShowingArticles)
+        try
         {
-            // Already showing articles, do nothing or toggle back
-            return;
-        }
+            Console.WriteLine("[Articles] Button clicked, _isShowingArticles=" + _isShowingArticles);
 
-        await ShowArticlesViewAsync();
+            if (_isShowingArticles)
+            {
+                // Already showing articles, do nothing or toggle back
+                return;
+            }
+
+            await ShowArticlesViewAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[Articles] Error in OnArticlesButtonClicked: {ex}");
+        }
     }
 
     /// <summary>
@@ -384,18 +398,33 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private async Task ShowArticlesViewAsync()
     {
-        _isShowingArticles = true;
+        try
+        {
+            Console.WriteLine("[Articles] ShowArticlesViewAsync starting...");
+            _isShowingArticles = true;
 
-        // Load articles for the current perek (header stays the same)
-        await LoadArticlesAsync();
+            // Load articles for the current perek (header stays the same)
+            Console.WriteLine("[Articles] Loading articles...");
+            await LoadArticlesAsync();
+            Console.WriteLine("[Articles] Articles loaded");
 
-        // Flip animation - rotate Y axis
-        await AnimateFlipAsync(PasukimCollection, ArticlesCollection);
+            // Simple visibility swap instead of animation (animation may crash on Windows)
+            Console.WriteLine("[Articles] Switching visibility...");
+            PasukimCollection.IsVisible = false;
+            ArticlesCollection.IsVisible = true;
+            Console.WriteLine("[Articles] Visibility switched");
 
-        // Update button states - highlight articles button
-        ArticlesButton.TextColor = Application.Current?.RequestedTheme == AppTheme.Dark
-            ? Color.FromArgb("#BB86FC")
-            : Color.FromArgb("#512BD4");
+            // Update button states - highlight articles button
+            Console.WriteLine("[Articles] Updating button color...");
+            ArticlesButton.TextColor = Application.Current?.RequestedTheme == AppTheme.Dark
+                ? Color.FromArgb("#BB86FC")
+                : Color.FromArgb("#512BD4");
+            Console.WriteLine("[Articles] ShowArticlesViewAsync complete");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[Articles] Error in ShowArticlesViewAsync: {ex}");
+        }
     }
 
     /// <summary>
@@ -403,15 +432,25 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private async void ShowPerekView()
     {
-        _isShowingArticles = false;
+        try
+        {
+            _isShowingArticles = false;
 
-        // Flip animation back (header stays the same)
-        await AnimateFlipAsync(ArticlesCollection, PasukimCollection);
+            // Simple visibility swap instead of animation
+            ArticlesCollection.IsVisible = false;
+            PasukimCollection.IsVisible = true;
 
-        // Reset button color
-        ArticlesButton.TextColor = Application.Current?.RequestedTheme == AppTheme.Dark
-            ? Color.FromArgb("#9CA3AF")
-            : Color.FromArgb("#6B7280");
+            // Reset button color
+            ArticlesButton.TextColor = Application.Current?.RequestedTheme == AppTheme.Dark
+                ? Color.FromArgb("#9CA3AF")
+                : Color.FromArgb("#6B7280");
+
+            await Task.CompletedTask; // Keep async signature
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[Articles] Error in ShowPerekView: {ex}");
+        }
     }
 
     /// <summary>
@@ -419,18 +458,28 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private async Task AnimateFlipAsync(View fromView, View toView)
     {
-        const uint duration = 200;
+        try
+        {
+            const uint duration = 200;
 
-        // First half - rotate out (scale X to simulate flip)
-        await fromView.ScaleXTo(0, duration, Easing.CubicIn);
+            // First half - rotate out (scale X to simulate flip)
+            await fromView.ScaleXTo(0, duration, Easing.CubicIn);
 
-        // Switch visibility at midpoint
-        fromView.IsVisible = false;
-        toView.IsVisible = true;
-        toView.ScaleX = 0;
+            // Switch visibility at midpoint
+            fromView.IsVisible = false;
+            toView.IsVisible = true;
+            toView.ScaleX = 0;
 
-        // Second half - rotate in
-        await toView.ScaleXTo(1, duration, Easing.CubicOut);
+            // Second half - rotate in
+            await toView.ScaleXTo(1, duration, Easing.CubicOut);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[Articles] Error in AnimateFlipAsync: {ex}");
+            // Fallback: just swap visibility
+            fromView.IsVisible = false;
+            toView.IsVisible = true;
+        }
     }
 
     /// <summary>
@@ -446,7 +495,7 @@ public partial class PerekPage : ContentPage
             // Navigate to article detail page
             try
             {
-                await Shell.Current.GoToAsync($"ArticleDetailPage?articleId={article.Id}");
+                await Shell.Current.GoToAsync($"articleDetail?articleId={article.Id}");
             }
             catch (Exception ex)
             {
@@ -675,8 +724,9 @@ public partial class PerekPage : ContentPage
         BottomBar.IsVisible = false;
         FloatingMenuContainer.IsVisible = false;
 
-        // Set row height to 0
-        MainGrid.RowDefinitions[1].Height = new GridLength(0);
+        // Remove footer spacers since bottom bar is hidden
+        PasukimFooterSpacer.HeightRequest = 0;
+        ArticlesFooterSpacer.HeightRequest = 0;
 
         // Show floating exit button
         ExitFullScreenButton.IsVisible = true;
@@ -693,24 +743,13 @@ public partial class PerekPage : ContentPage
         // Show Shell navigation bar (no TabBar in this app - single page per FlyoutItem)
         Shell.SetNavBarIsVisible(this, true);
 
-        // Set row height back to 90 BEFORE showing elements
-        MainGrid.RowDefinitions[1].Height = new GridLength(90);
-
-        // Show bottom bar with strict height constraints
+        // Show bottom bar
         BottomBar.IsVisible = true;
-        BottomBar.HeightRequest = 90;
-        BottomBar.MaximumHeightRequest = 90;
-        BottomBar.MinimumHeightRequest = 90;
         FloatingMenuContainer.IsVisible = true;
 
-        // Force layout update
-        MainGrid.InvalidateMeasure();
-
-        // Debug: show more details after a delay
-        Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(200), () =>
-        {
-            DebugWatermark.Text = $"Bar H={BottomBar.Height:F0} Page={this.Height:F0}";
-        });
+        // Restore footer spacers for bottom bar
+        PasukimFooterSpacer.HeightRequest = 90;
+        ArticlesFooterSpacer.HeightRequest = 90;
     }
 
     #endregion

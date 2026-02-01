@@ -130,6 +130,14 @@ public partial class PerekPickerPopup : ContentView
         // Load sefarim for this group
         LoadSefarimForGroup(_selectedGroup.Id);
         PerekList.ItemsSource = null;
+
+        // Auto-select first sefer
+        var sefarim = SeferList.ItemsSource as List<SeferItem>;
+        if (sefarim?.Count > 0)
+        {
+            SeferList.SelectedItem = sefarim[0];
+        }
+
         UpdateConfirmButtonState();
     }
 
@@ -225,6 +233,14 @@ public partial class PerekPickerPopup : ContentView
 
         // Load perakim for this sefer
         LoadPerakimForSefer(_selectedSefer);
+
+        // Auto-select first perek
+        var perakim = PerekList.ItemsSource as List<PerekItem>;
+        if (perakim?.Count > 0)
+        {
+            PerekList.SelectedItem = perakim[0];
+        }
+
         UpdateConfirmButtonState();
     }
 

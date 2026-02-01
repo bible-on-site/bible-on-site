@@ -147,6 +147,12 @@ public partial class ArticlesViewModel : ObservableObject
             {
                 // Use cached Starter data - instant, no API call
                 articles = Services.StarterService.Instance.GetArticlesByAuthorId(AuthorId.Value);
+
+                // Populate PerekDisplayName for each article (needed when showing articles by author)
+                foreach (var article in articles)
+                {
+                    article.PerekDisplayName = Services.PerekDataService.Instance.GetPerekSource(article.PerekId);
+                }
             }
             else if (IsFilterByPerek)
             {

@@ -7,22 +7,27 @@
              IsVisible="False"
              FlowDirection="RightToLeft">
 
-    <!-- Popup container with tap to dismiss -->
+    <!-- Popup container -->
     <Grid>
-        <!-- Tap to dismiss -->
-        <Grid.GestureRecognizers>
-            <TapGestureRecognizer Tapped="OnBackgroundTapped"/>
-        </Grid.GestureRecognizers>
+        <!-- Semi-transparent background for tap to dismiss -->
+        <BoxView BackgroundColor="#80000000"
+                 InputTransparent="False">
+            <BoxView.GestureRecognizers>
+                <TapGestureRecognizer Tapped="OnBackgroundTapped"/>
+            </BoxView.GestureRecognizers>
+        </BoxView>
 
         <!-- Picker container - centered card -->
         <Border Stroke="{StaticResource Primary}"
                 StrokeThickness="1"
                 BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}"
                 Padding="0"
-                Margin="20"
+                Margin="12,40"
                 VerticalOptions="Center"
-                HorizontalOptions="Fill"
-                MaximumWidthRequest="400">
+                HorizontalOptions="Center"
+                MinimumWidthRequest="340"
+                MaximumWidthRequest="500"
+                InputTransparent="False">
             <Border.StrokeShape>
                 <RoundRectangle CornerRadius="12"/>
             </Border.StrokeShape>
@@ -41,9 +46,9 @@
 
                 <!-- Three-column picker -->
                 <Grid Grid.Row="1"
-                      ColumnDefinitions="*,*,0.6*"
+                      ColumnDefinitions="*,1.2*,0.7*"
                       Padding="8"
-                      ColumnSpacing="8"
+                      ColumnSpacing="6"
                       RowDefinitions="Auto,*"
                       RowSpacing="4">
 
@@ -74,7 +79,8 @@
                         <CollectionView x:Name="SeferGroupList"
                                         SelectionMode="Single"
                                         SelectionChanged="OnSeferGroupSelected"
-                                        HeightRequest="250">
+                                        HeightRequest="150"
+                                        InputTransparent="False">
                             <CollectionView.ItemTemplate>
                                 <DataTemplate>
                                     <Grid Padding="8,12">
@@ -108,7 +114,8 @@
                         <CollectionView x:Name="SeferList"
                                         SelectionMode="Single"
                                         SelectionChanged="OnSeferSelected"
-                                        HeightRequest="250">
+                                        HeightRequest="150"
+                                        InputTransparent="False">
                             <CollectionView.ItemTemplate>
                                 <DataTemplate>
                                     <Grid Padding="8,12">
@@ -142,7 +149,8 @@
                         <CollectionView x:Name="PerekList"
                                         SelectionMode="Single"
                                         SelectionChanged="OnPerekSelected"
-                                        HeightRequest="250">
+                                        HeightRequest="150"
+                                        InputTransparent="False">
                             <CollectionView.ItemTemplate>
                                 <DataTemplate>
                                     <Grid Padding="8,10">
