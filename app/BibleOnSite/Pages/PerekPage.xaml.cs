@@ -574,6 +574,29 @@ public partial class PerekPage : ContentPage
         ExitFullScreen();
     }
 
+    private double _exitButtonPanX;
+    private double _exitButtonPanY;
+
+    /// <summary>
+    /// Handles pan gesture on exit full screen button - allows dragging.
+    /// Note: X is negated to account for RTL layout coordinate inversion.
+    /// </summary>
+    private void OnExitFullScreenButtonPan(object? sender, PanUpdatedEventArgs e)
+    {
+        switch (e.StatusType)
+        {
+            case GestureStatus.Running:
+                // Negate X for RTL layout
+                ExitFullScreenButton.TranslationX = _exitButtonPanX - e.TotalX;
+                ExitFullScreenButton.TranslationY = _exitButtonPanY + e.TotalY;
+                break;
+            case GestureStatus.Completed:
+                _exitButtonPanX = ExitFullScreenButton.TranslationX;
+                _exitButtonPanY = ExitFullScreenButton.TranslationY;
+                break;
+        }
+    }
+
     #region Swipe Navigation
 
     private bool _isNavigating;
@@ -728,7 +751,11 @@ public partial class PerekPage : ContentPage
         PasukimFooterSpacer.HeightRequest = 0;
         ArticlesFooterSpacer.HeightRequest = 0;
 
-        // Show floating exit button
+        // Show floating exit button (reset position first)
+        _exitButtonPanX = 0;
+        _exitButtonPanY = 0;
+        ExitFullScreenButton.TranslationX = 0;
+        ExitFullScreenButton.TranslationY = 0;
         ExitFullScreenButton.IsVisible = true;
     }
 

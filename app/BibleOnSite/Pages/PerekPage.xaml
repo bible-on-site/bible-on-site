@@ -4,6 +4,7 @@
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:models="clr-namespace:BibleOnSite.Models"
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
+             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
              x:Class="BibleOnSite.Pages.PerekPage"
              x:DataType="viewmodels:PerekViewModel"
              Title="{Binding Source}"
@@ -21,28 +22,35 @@
         <!-- Exit Full Screen Button (floating, hidden by default) -->
         <!-- Position: End = right side in RTL (where fullscreen button was) -->
         <!-- Icon: full_screen_minimize_24_regular = \ue688 -->
-        <Button x:Name="ExitFullScreenButton"
-                Text="&#xe688;"
-                FontFamily="FluentIcons"
-                FontSize="24"
+        <Border x:Name="ExitFullScreenButton"
                 WidthRequest="48"
                 HeightRequest="48"
-                CornerRadius="24"
+                StrokeShape="RoundRectangle 24"
                 BackgroundColor="{StaticResource Primary}"
-                TextColor="White"
                 HorizontalOptions="End"
                 VerticalOptions="End"
                 Margin="16,16,16,100"
-                Clicked="OnExitFullScreenClicked"
                 IsVisible="False"
                 ZIndex="100">
-            <Button.Shadow>
+            <Border.Shadow>
                 <Shadow Brush="Black"
                         Offset="0,3"
                         Radius="6"
                         Opacity="0.3"/>
-            </Button.Shadow>
-        </Button>
+            </Border.Shadow>
+            <Border.GestureRecognizers>
+                <TapGestureRecognizer Tapped="OnExitFullScreenClicked"/>
+                <PanGestureRecognizer PanUpdated="OnExitFullScreenButtonPan"/>
+            </Border.GestureRecognizers>
+            <Label Text="&#xe688;"
+                   FontFamily="FluentIcons"
+                   FontSize="24"
+                   TextColor="White"
+                   HorizontalOptions="Center"
+                   VerticalOptions="Center"
+                   HorizontalTextAlignment="Center"
+                   VerticalTextAlignment="Center"/>
+        </Border>
 
         <!-- Main Content Area - fills entire viewport -->
         <Grid x:Name="ContentArea"
