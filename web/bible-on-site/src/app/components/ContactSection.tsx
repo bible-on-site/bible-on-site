@@ -40,7 +40,9 @@ export function ContactSection() {
 							/>
 							<span>טלפון</span>
 							<span className={styles.separator} />
-							<a href="tel:+37257078640">+372-57078640</a>
+							<a href="tel:+37257078640" dir="ltr">
+								+372-57078640
+							</a>
 						</li>
 						<li>
 							<Image

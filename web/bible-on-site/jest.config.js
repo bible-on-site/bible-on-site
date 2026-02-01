@@ -37,6 +37,10 @@ const config = {
 	// When using SWC coverage instrumentation, we don't use Jest's built-in coverage
 	// The coverage is collected via the SWC plugin and processed by our custom reporter
 	collectCoverage: false,
+
+	// Run tests sequentially when measuring coverage to avoid race conditions
+	// in jest.coverage-setup.js where multiple workers write to the same file
+	...(shouldMeasureCov ? { maxWorkers: 1 } : {}),
 	setupFiles: ["./jest.setup.js"],
 	// Use setupFilesAfterEnv to collect coverage after tests complete
 	setupFilesAfterEnv: shouldMeasureCov ? ["./jest.coverage-setup.js"] : [],

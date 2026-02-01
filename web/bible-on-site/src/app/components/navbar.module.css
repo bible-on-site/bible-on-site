@@ -179,7 +179,7 @@
 }
 
 .ribbonComingSoon::after {
-  content: "יחזור בהמשך";
+  content: "בקרוב";
 }
 
 .menuItem * {

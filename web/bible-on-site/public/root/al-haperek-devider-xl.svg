@@ -1,1 +1,12 @@
-<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1366 32"><defs><style>.cls-1{fill:#edf2f7;}</style></defs><title>al-haperek-devider-xl</title><path class="cls-1" d="M1364.86816,0Q994.5315,3.422,705.85333,24.8311c-7.8753.58415-15.94366.87669-24.01251.87777v-.00533c-8.051-.00108-16.10138-.29385-23.95917-.8785Q370.9065,3.47359,3.01752,0H0V31.99994H681.84082V32H1366V0Z"/></svg>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1366 32">
+    <defs>
+        <style>
+            .cls-1 {
+                fill: #fff;
+            }
+        </style>
+    </defs>
+    <title>al-haperek-devider-xl</title>
+    <path class="cls-1"
+        d="M1364.86816,0Q994.5315,3.422,705.85333,24.8311c-7.8753.58415-15.94366.87669-24.01251.87777v-.00533c-8.051-.00108-16.10138-.29385-23.95917-.8785Q370.9065,3.47359,3.01752,0H0V31.99994H681.84082V32H1366V0Z" />
+</svg>
