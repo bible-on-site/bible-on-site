@@ -1,107 +1,122 @@
 .tosSection {
-	position: relative;
-	text-align: center;
-	width: 100%;
-	z-index: 2;
-	background-color: #edf2f7;
-	overflow: hidden;
-	scroll-margin-top: 1em;
+  position: relative;
+  text-align: center;
+  width: 100%;
+  z-index: 2;
+  background-color: #edf2f7;
+  overflow: hidden;
+  scroll-margin-top: 1em;
+}
+
+/* Top divider */
+.topDivider {
+  background-image: url(/root/tos-top-devider.svg);
+  background-repeat: no-repeat;
+  background-size: 110%;
+  background-position: top;
+  right: 0;
+  height: 3em;
+  pointer-events: none;
+  position: absolute;
+  width: 100%;
+  z-index: 2;
+  top: -0.5em;
 }
 
 .tosHeader {
-	padding: 3em 0 0 0;
-	letter-spacing: 0.3em;
-	text-align: center;
+  padding: 3em 0 0 0;
+  letter-spacing: 0.3em;
+  text-align: center;
 }
 
 .tosHeader h1 {
-	font-size: 1.8em;
-	margin: 0.5em 0;
-	color: #333;
+  font-size: 1.8em;
+  margin: 0.5em 0;
+  color: #333;
 }
 
 .tosBody {
-	padding: 0 1.2em 1em 1.2em;
-	text-align: right;
-	max-width: 60em;
-	margin: 0 auto;
+  padding: 0 1.2em 1em 1.2em;
+  text-align: right;
+  max-width: 60em;
+  margin: 0 auto;
 }
 
 .tosList {
-	list-style: none;
-	padding: 0;
-	margin: 0;
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
 
 .tosList li {
-	margin-bottom: 1.5em;
+  margin-bottom: 1.5em;
 }
 
 .tosList h2 {
-	font-size: 1.4em;
-	margin: 0.5em 0;
-	color: #333;
+  font-size: 1.4em;
+  margin: 0.5em 0;
+  color: #333;
 }
 
 .tosList h3 {
-	font-size: 1.2em;
-	margin: 0.5em 0;
-	color: #444;
+  font-size: 1.2em;
+  margin: 0.5em 0;
+  color: #444;
 }
 
 .tosList p {
-	margin: 0.5em 0;
-	line-height: 1.6;
-	color: #555;
+  margin: 0.5em 0;
+  line-height: 1.6;
+  color: #555;
 }
 
 .tosSubList {
-	list-style: none;
-	padding: 0;
-	margin: 0 1em 0 0;
+  list-style: none;
+  padding: 0;
+  margin: 0 1em 0 0;
 }
 
 .tosSubList li {
-	margin-bottom: 1em;
+  margin-bottom: 1em;
 }
 
 .tosSubList ul {
-	list-style: disc;
-	padding: 0 1.5em 0 0;
-	margin: 0.5em 0;
+  list-style: disc;
+  padding: 0 1.5em 0 0;
+  margin: 0.5em 0;
 }
 
 .tosSubList ul li {
-	margin-bottom: 0.5em;
-	line-height: 1.5;
-	color: #555;
+  margin-bottom: 0.5em;
+  line-height: 1.5;
+  color: #555;
 }
 
 .tosList a,
 .tosList a:visited {
-	color: #1552ac;
-	text-decoration: none;
+  color: #1552ac;
+  text-decoration: none;
 }
 
 .tosList a:hover {
-	text-decoration: underline;
+  text-decoration: underline;
 }
 
 /* Responsive header margin */
 @media screen and (min-width: 1280px) and (max-width: 1920px) {
-	.tosHeader h1 {
-		margin-top: 2em;
-	}
+  .tosHeader h1 {
+    margin-top: 2em;
+  }
 }
 
 @media screen and (min-width: 1920px) and (max-width: 2560px) {
-	.tosHeader h1 {
-		margin-top: 2em;
-	}
+  .tosHeader h1 {
+    margin-top: 2em;
+  }
 }
 
 @media screen and (min-width: 2560px) {
-	.tosHeader h1 {
-		margin-top: 5em;
-	}
+  .tosHeader h1 {
+    margin-top: 5em;
+  }
 }
