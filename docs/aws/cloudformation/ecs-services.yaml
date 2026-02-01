@@ -185,7 +185,7 @@ Resources:
       RequiresCompatibilities:
         - FARGATE
       Cpu: "256" # 0.25 vCPU
-      Memory: "512" # 512 MB
+      Memory: "1024" # 1 GB
       ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
       # TaskRoleArn: # Add if tasks need to call AWS APIs
       ContainerDefinitions:
@@ -217,6 +217,11 @@ Resources:
             # NEXT_PUBLIC_ENV: Enables production features like Google Analytics
             - Name: NEXT_PUBLIC_ENV
               Value: production
+          # Database credentials injected from SSM Parameter Store
+          # Required for runtime database queries (dynamic pages, ISR, etc.)
+          Secrets:
+            - Name: DB_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-url"
       Tags:
         - Key: Project
           Value: bible-on-site
