@@ -61,7 +61,7 @@ public class Article
         {
             Id = -1,
             Abstract = "בטעינה",
-            ArticleContent = "טוען...",
+            ArticleContent = "מתחבר לפרק...",
             AuthorId = Author.SystemId,
             PerekId = -1,
             Priority = 1
