@@ -1,4 +1,5 @@
-# syntax=docker.io/docker/dockerfile:1
+# Note: Using classic docker build (DOCKER_BUILDKIT=0) for network:host support
+# Do not add BuildKit-specific syntax directives
 
 FROM node:24-alpine AS base
 
