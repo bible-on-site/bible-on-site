@@ -113,9 +113,9 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
-          # Use docker driver instead of docker-container to allow network: host in builds
-          # This is required for SSG builds to reach RDS through the whitelisted runner IP
-          driver: docker
+          driver-opts: |
+            network=host
+            image=moby/buildkit:v0.22.0
 
       # --- RDS Access for SSG Build (Website only) ---
       # Fetches DB_URL from SSM Parameter Store and dynamically whitelists runner IP
@@ -159,19 +159,19 @@ jobs:
             --tag-specifications 'ResourceType=security-group-rule,Tags=[{Key=Source,Value=github-actions-build},{Key=RunId,Value=${{ github.run_id }}}]' || true
       # --- End RDS Access Setup ---
       - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
-        uses: docker/build-push-action@v6
-        with:
-          context: ${{ env.SHARED_ROOT_DIR }}
-          file: ${{ inputs.module_directory }}/Dockerfile
-          tags: ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }}
-          # Load into local Docker daemon (docker driver doesn't support tar export directly)
-          load: true
-          # Note: GHA cache not supported with docker driver, using inline cache only
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
-            DB_URL=${{ steps.rds_creds.outputs.db_url || '' }}
-          # Use host network so Docker build can reach RDS through the whitelisted runner IP
-          network: host
+        working-directory: ${{ env.SHARED_ROOT_DIR }}
+        env:
+          DB_URL: ${{ steps.rds_creds.outputs.db_url || '' }}
+        run: |
+          # Use raw docker build with --network=host to ensure RDS connectivity
+          # Buildx with docker-container driver doesn't properly support network: host
+          DOCKER_BUILDKIT=0 docker build \
+            --network=host \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --build-arg DB_URL="${DB_URL}" \
+            -f ${{ inputs.module_directory }}/Dockerfile \
+            -t ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }} \
+            .
 
       - name: Export Docker Image to tarball
         run: |
