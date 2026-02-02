@@ -95,11 +95,16 @@ public class LongPressBehavior : Behavior<View>
     }
 
 #if ANDROID
+    private float _startX, _startY;
+    private const float MoveThreshold = 30f; // Pixels - cancel if moved more than this
+
     private void OnAndroidTouch(object? sender, Android.Views.View.TouchEventArgs e)
     {
         switch (e.Event?.Action)
         {
             case Android.Views.MotionEventActions.Down:
+                _startX = e.Event.GetX();
+                _startY = e.Event.GetY();
                 StartLongPressTimer();
                 e.Handled = false; // Allow other gestures to process
                 break;
@@ -111,7 +116,16 @@ public class LongPressBehavior : Behavior<View>
                 break;
 
             case Android.Views.MotionEventActions.Move:
-                // Cancel if finger moved too much
+                // Cancel if finger moved too much (scrolling)
+                if (_isPressed && e.Event != null)
+                {
+                    var dx = Math.Abs(e.Event.GetX() - _startX);
+                    var dy = Math.Abs(e.Event.GetY() - _startY);
+                    if (dx > MoveThreshold || dy > MoveThreshold)
+                    {
+                        CancelLongPressTimer();
+                    }
+                }
                 e.Handled = false;
                 break;
 
@@ -124,8 +138,8 @@ public class LongPressBehavior : Behavior<View>
 
     private void StartLongPressTimer()
     {
-        // Debounce: don't start if we just fired a long press
-        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 500)
+        // Debounce: don't start if we just fired a long press (reduced to 300ms for responsiveness)
+        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 300)
             return;
 
         _isPressed = true;

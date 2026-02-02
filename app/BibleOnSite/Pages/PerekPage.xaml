@@ -62,6 +62,7 @@
             <!-- Selection Bar (Row 0 - hidden by default) -->
             <Grid Grid.Row="0"
                   x:Name="SelectionBar"
+                  AutomationId="SelectionBar"
                   IsVisible="False"
                   BackgroundColor="{StaticResource Primary}"
                   Padding="4,5"
@@ -74,6 +75,7 @@
                 <!-- Back button - arrow_right_24_regular = \uf182 -->
                 <Button Grid.Column="0"
                         x:Name="SelectionBackButton"
+                        AutomationId="SelectionBackButton"
                         Text="&#xf182;"
                         FontFamily="FluentIcons"
                         FontSize="20"
@@ -94,6 +96,7 @@
                         VerticalOptions="Center"
                         Margin="4,0">
                     <Label x:Name="SelectionCountLabel"
+                           AutomationId="SelectionCountLabel"
                            Text="0"
                            FontSize="12"
                            FontAttributes="Bold"
@@ -105,6 +108,7 @@
                 <ContentView Grid.Column="2"/>
                 <!-- Share button - share_24_regular = \uf6b0 -->
                 <Button Grid.Column="3"
+                        AutomationId="SelectionShareButton"
                         Text="&#xf6b0;"
                         FontFamily="FluentIcons"
                         FontSize="20"
@@ -117,6 +121,7 @@
                 <!-- Copy button - copy_24_regular = \uf32b -->
                 <Button Grid.Column="4"
                         x:Name="SelectionCopyButton"
+                        AutomationId="SelectionCopyButton"
                         Text="&#xf32b;"
                         FontFamily="FluentIcons"
                         FontSize="20"
