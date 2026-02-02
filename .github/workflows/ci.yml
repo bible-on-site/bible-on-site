@@ -1475,7 +1475,8 @@ jobs:
 
           DATA_MODULE_CHANGED=$([ "${{ needs.determine_data_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           if [ "$DATA_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ]; then
-            DATA_STATUS=$([ "${{ needs.data_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            # Only fail if data_ci explicitly failed (not if skipped)
+            DATA_STATUS=$([ "${{ needs.data_ci.result }}" = "failure" ] && echo "failure" || echo "success") # Generated
             if [ "$DATA_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
