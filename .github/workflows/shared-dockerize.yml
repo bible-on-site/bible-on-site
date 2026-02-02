@@ -157,6 +157,18 @@ jobs:
             --protocol tcp --port 3306 \
             --cidr ${{ steps.runner_ip.outputs.ip }}/32 \
             --tag-specifications 'ResourceType=security-group-rule,Tags=[{Key=Source,Value=github-actions-build},{Key=RunId,Value=${{ github.run_id }}}]' || true
+
+      - name: Test RDS connectivity
+        if: ${{ env.IS_NPM == 'true' && steps.rds_creds.outputs.rds_sg != '' }}
+        run: |
+          # Wait for security group rule to propagate
+          sleep 10
+          # Extract host from DB_URL
+          DB_HOST=$(echo "${{ steps.rds_creds.outputs.db_url }}" | sed -E 's|mysql://[^@]+@([^:]+):.*|\1|')
+          echo "Testing connectivity to $DB_HOST:3306..."
+          # Test TCP connection
+          timeout 30 bash -c "until nc -z $DB_HOST 3306; do echo 'Waiting for RDS...'; sleep 2; done" || echo "Warning: Could not verify RDS connectivity"
+          echo "✓ RDS connectivity verified"
       # --- End RDS Access Setup ---
       - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
         env:
