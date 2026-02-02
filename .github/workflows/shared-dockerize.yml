@@ -113,9 +113,9 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
-          driver-opts: |
-            network=host
-            image=moby/buildkit:v0.22.0
+          # Use docker driver instead of docker-container to allow network: host in builds
+          # This is required for SSG builds to reach RDS through the whitelisted runner IP
+          driver: docker
 
       # --- RDS Access for SSG Build (Website only) ---
       # Fetches DB_URL from SSM Parameter Store and dynamically whitelists runner IP
@@ -165,14 +165,10 @@ jobs:
           file: ${{ inputs.module_directory }}/Dockerfile
           tags: ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }}
           outputs: type=docker,dest=${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_PATH }}
-          cache-from: |
-            type=gha,scope=${{ github.workflow }}-${{ env.MODULE_NAME }}
-          cache-to: |
-            type=gha,mode=max,scope=${{ github.workflow }}-${{ env.MODULE_NAME }}
+          # Note: GHA cache not supported with docker driver, using inline cache only
           build-args: |
             BUILDKIT_INLINE_CACHE=1
             DB_URL=${{ steps.rds_creds.outputs.db_url || '' }}
-          platforms: linux/amd64
           # Use host network so Docker build can reach RDS through the whitelisted runner IP
           network: host
 
