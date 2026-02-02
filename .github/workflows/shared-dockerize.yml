@@ -23,7 +23,7 @@ on:
         value: ${{ jobs.package.outputs.docker_artifact_name }}
 permissions:
   contents: write
-  id-token: write # Required for AWS OIDC authentication
+  # Note: id-token: write must be granted by the calling workflow for AWS OIDC auth
 env:
   IS_NPM: ${{ inputs.module_directory == 'web/bible-on-site' }}
   IS_CARGO: ${{ inputs.module_directory == 'web/api' }}
