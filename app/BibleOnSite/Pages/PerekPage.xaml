@@ -62,7 +62,7 @@
                   IsVisible="False"
                   BackgroundColor="{StaticResource Primary}"
                   Padding="4,5"
-                  HeightRequest="46"
+                  HeightRequest="47"
                   ColumnDefinitions="Auto,Auto,*,Auto,Auto">
                 <!-- Back button - arrow_right_24_regular = \uf182 -->
                 <Button Grid.Column="0"
