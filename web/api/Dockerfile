@@ -36,7 +36,7 @@ RUN --mount=type=bind,source=api/src,target=src \
 # runtime dependencies for the application. This often uses a different base
 # image from the build stage where the necessary files are copied from the build
 # stage.
-FROM alpine:3.23.2 AS final
+FROM alpine:3.23.3 AS final
 
 # Create a non-privileged user that the app will run under.
 # See https://docs.docker.com/go/dockerfile-user-best-practices/

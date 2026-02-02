@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.225",
+	"version": "0.2.226",
 	"private": true,
 	"license": "MIT",
 	"scripts": {
@@ -34,11 +34,11 @@
 		"flowbite": "4.0.1",
 		"flowbite-react": "0.12.16",
 		"gematry": "1.0.2",
-		"html-flip-book-react": "0.0.0-alpha.1",
+		"html-flip-book-react": "0.0.0-alpha.18",
 		"moment-timezone": "0.6.0",
 		"mysql2": "3.16.2",
 		"next": "16.1.6",
-		"nuqs": "2.8.7",
+		"nuqs": "2.8.8",
 		"react": "19.2.4",
 		"react-dom": "19.2.4",
 		"react-phone-number-input": "3.4.14",
