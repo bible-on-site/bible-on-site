@@ -152,6 +152,16 @@ Resources:
             Resource:
               - !Sub "arn:aws:lambda:*:${AWS::AccountId}:function:bible-on-site-db-populator"
 
+          # EC2 Security Groups - dynamically whitelist GitHub runner IP for RDS access during SSG build
+          - Sid: EC2SecurityGroupSSGBuild
+            Effect: Allow
+            Action:
+              - ec2:AuthorizeSecurityGroupIngress
+              - ec2:RevokeSecurityGroupIngress
+              - ec2:CreateTags
+            Resource:
+              - !Sub "arn:aws:ec2:*:${AWS::AccountId}:security-group/*"
+
   # =============================================================================
   # IAM Role: GitHub Actions ECR Deploy Role
   # =============================================================================
