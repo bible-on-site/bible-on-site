@@ -97,8 +97,8 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private void OnPasukTapped(object? sender, TappedEventArgs e)
     {
-        // Skip tap if long press just happened (within 800ms)
-        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 800)
+        // Skip tap if long press just happened (within 500ms) - prevents tap-on-release
+        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 500)
             return;
 
         if (e.Parameter is int pasukNum)
@@ -113,24 +113,18 @@ public partial class PerekPage : ContentPage
     }
 
     /// <summary>
-    /// Handles right-click on pasuk - enters selection mode (Windows).
+    /// Handles right-click on pasuk - enters selection mode (Windows only).
     /// </summary>
     private void OnPasukRightClicked(object? sender, TappedEventArgs e)
     {
-        try
+#if WINDOWS
+        // Don't set _lastLongPressTime - right-click doesn't need debounce
+        if (e.Parameter is int pasukNum)
         {
-            if (e.Parameter is int pasukNum)
-            {
-                _lastLongPressTime = DateTime.Now;
-                _viewModel.ToggleSelectedPasuk(pasukNum);
-                UpdatePasukSelection(sender, pasukNum);
-                TriggerHapticFeedback();
-            }
+            _viewModel.ToggleSelectedPasuk(pasukNum);
+            UpdatePasukSelection(sender, pasukNum);
         }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"OnPasukRightClicked error: {ex.Message}");
-        }
+#endif
     }
 
     /// <summary>

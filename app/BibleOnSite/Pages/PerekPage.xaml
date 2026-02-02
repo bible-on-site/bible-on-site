@@ -64,8 +64,12 @@
                   IsVisible="False"
                   BackgroundColor="{StaticResource Primary}"
                   Padding="4,5"
-                  HeightRequest="48"
                   ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+                <Grid.HeightRequest>
+                    <OnPlatform x:TypeArguments="x:Double" Default="48">
+                        <On Platform="Android,iOS" Value="56"/>
+                    </OnPlatform>
+                </Grid.HeightRequest>
                 <!-- Back button - arrow_right_24_regular = \uf182 -->
                 <Button Grid.Column="0"
                         x:Name="SelectionBackButton"
