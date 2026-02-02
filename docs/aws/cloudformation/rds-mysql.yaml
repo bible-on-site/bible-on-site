@@ -84,7 +84,10 @@ Resources:
       DBSubnetGroupName: !Ref TanahDBSubnetGroup
       VPCSecurityGroups:
         - !GetAtt TanahRDSSecurityGroup.GroupId
-      PubliclyAccessible: false
+      # PubliclyAccessible is enabled to allow GitHub Actions to connect during SSG builds.
+      # Access is still protected by security group rules - runner IP is dynamically whitelisted
+      # only during the build (~5 min window) and removed immediately after.
+      PubliclyAccessible: true
       BackupRetentionPeriod: 7
       AutoMinorVersionUpgrade: true
       DeletionProtection: false
