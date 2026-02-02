@@ -1,5 +1,5 @@
 /**
- * Article type matching the GraphQL API schema
+ * Article type with author information for display
  */
 export interface Article {
 	id: number;
@@ -9,6 +9,10 @@ export interface Article {
 	abstract: string | null;
 	name: string;
 	priority: number;
+	/** Author name for display */
+	authorName: string;
+	/** Author image URL from S3 */
+	authorImageUrl: string;
 }
 
 /**

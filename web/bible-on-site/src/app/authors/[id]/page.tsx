@@ -9,8 +9,8 @@ import {
 } from "../../../lib/authors";
 import styles from "./page.module.css";
 
-// Authors are fetched dynamically but can be cached
-export const dynamicParams = true;
+// Authors are pre-generated at build time. ISR handles new authors via revalidation.
+export const dynamicParams = false;
 
 /**
  * Generate static params for known authors at build time.

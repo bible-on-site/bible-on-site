@@ -14,6 +14,8 @@ describe("ArticlesSection", () => {
 			name: "מאמר ראשון",
 			abstract: "<p>תקציר המאמר הראשון</p>",
 			priority: 1,
+			authorName: "הרב ישראל",
+			authorImageUrl: "https://test.s3.amazonaws.com/authors/high-res/1.jpg",
 		},
 		{
 			id: 2,
@@ -22,6 +24,8 @@ describe("ArticlesSection", () => {
 			name: "מאמר שני",
 			abstract: null,
 			priority: 2,
+			authorName: "הרב יעקב",
+			authorImageUrl: "https://test.s3.amazonaws.com/authors/high-res/2.jpg",
 		},
 	];
 
@@ -40,11 +44,27 @@ describe("ArticlesSection", () => {
 			expect(screen.getByText("מאמרים על הפרק")).toBeTruthy();
 		});
 
-		it("renders all article cards", () => {
+		it("renders all article titles", () => {
 			render(<ArticlesSection articles={mockArticles} />);
 
 			expect(screen.getByText("מאמר ראשון")).toBeTruthy();
 			expect(screen.getByText("מאמר שני")).toBeTruthy();
+		});
+
+		it("renders author names", () => {
+			render(<ArticlesSection articles={mockArticles} />);
+
+			expect(screen.getByText("הרב ישראל")).toBeTruthy();
+			expect(screen.getByText("הרב יעקב")).toBeTruthy();
+		});
+
+		it("renders author images", () => {
+			render(<ArticlesSection articles={mockArticles} />);
+
+			const images = screen.getAllByRole("img");
+			expect(images).toHaveLength(2);
+			expect(images[0]).toHaveAttribute("alt", "הרב ישראל");
+			expect(images[1]).toHaveAttribute("alt", "הרב יעקב");
 		});
 
 		it("renders article abstract when provided", () => {
@@ -54,30 +74,13 @@ describe("ArticlesSection", () => {
 			expect(screen.getByText("תקציר המאמר הראשון")).toBeTruthy();
 		});
 
-		it("does not render abstract div when abstract is null", () => {
-			render(<ArticlesSection articles={[mockArticles[1]]} />);
-
-			// Article with null abstract should not have abstract content
-			expect(screen.getByText("מאמר שני")).toBeTruthy();
-			// Should only have one article card
-			const articleCards = screen.getAllByRole("article");
-			expect(articleCards).toHaveLength(1);
-		});
-
-		it("renders read more link for each article", () => {
+		it("links to author page", () => {
 			render(<ArticlesSection articles={mockArticles} />);
 
-			const readMoreLinks = screen.getAllByText("קרא עוד");
-			expect(readMoreLinks).toHaveLength(2);
-		});
-
-		it("uses article id as key for mapping", () => {
-			const { container } = render(
-				<ArticlesSection articles={mockArticles} />,
-			);
-
-			const articleCards = container.querySelectorAll("article");
-			expect(articleCards).toHaveLength(2);
+			const links = screen.getAllByRole("link");
+			expect(links).toHaveLength(2);
+			expect(links[0]).toHaveAttribute("href", "/authors/1");
+			expect(links[1]).toHaveAttribute("href", "/authors/2");
 		});
 	});
 
@@ -91,6 +94,8 @@ describe("ArticlesSection", () => {
 					name: "מאמר עם HTML",
 					abstract: "<strong>טקסט מודגש</strong>",
 					priority: 1,
+					authorName: "הרב משה",
+					authorImageUrl: "https://test.s3.amazonaws.com/authors/high-res/1.jpg",
 				},
 			];
 
