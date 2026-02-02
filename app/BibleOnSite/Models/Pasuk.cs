@@ -1,16 +1,23 @@
 using BibleOnSite.Helpers;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace BibleOnSite.Models;
 
 /// <summary>
 /// Represents a single Pasuk (verse) within a Perek.
 /// </summary>
-public class Pasuk
+public partial class Pasuk : ObservableObject
 {
     /// <summary>
     /// The verse number within the perek (1-based).
     /// </summary>
     public int PasukNum { get; set; }
+
+    /// <summary>
+    /// Whether this pasuk is currently selected.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isSelected;
 
     /// <summary>
     /// The verse number in Hebrew letters (e.g., א, ב, ג).

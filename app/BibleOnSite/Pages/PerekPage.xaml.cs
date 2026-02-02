@@ -11,10 +11,6 @@ public partial class PerekPage : ContentPage
 {
     private readonly PerekViewModel _viewModel;
     private bool _isLoading;
-    private DateTime _pointerPressedTime;
-    private int _pressedPasukNum;
-    private CancellationTokenSource? _longPressTokenSource;
-    private const int LongPressDurationMs = 500;
     private DateTime _lastLongPressTime = DateTime.MinValue;
 
     // Circular menu state
@@ -117,116 +113,48 @@ public partial class PerekPage : ContentPage
     }
 
     /// <summary>
-    /// Handles right-click on pasuk - enters selection mode.
+    /// Handles right-click on pasuk - enters selection mode (Windows).
     /// </summary>
     private void OnPasukRightClicked(object? sender, TappedEventArgs e)
     {
-        if (e.Parameter is int pasukNum)
+        try
         {
-            _viewModel.ToggleSelectedPasuk(pasukNum);
-            UpdatePasukSelection(sender, pasukNum);
+            if (e.Parameter is int pasukNum)
+            {
+                _lastLongPressTime = DateTime.Now;
+                _viewModel.ToggleSelectedPasuk(pasukNum);
+                UpdatePasukSelection(sender, pasukNum);
+                TriggerHapticFeedback();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"OnPasukRightClicked error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Handles long press on pasuk via TouchBehavior - enters selection mode.
+    /// </summary>
+    private void OnPasukLongPress(object? sender, CommunityToolkit.Maui.Core.LongPressCompletedEventArgs e)
+    {
+        _lastLongPressTime = DateTime.Now;
+
+        // The sender is the TouchBehavior - get the Pasuk from BindingContext
+        if (sender is BindableObject bindable && bindable.BindingContext is Pasuk pasuk)
+        {
+            _viewModel.ToggleSelectedPasuk(pasuk.PasukNum);
+            UpdateSelectionBar();
             TriggerHapticFeedback();
         }
     }
 
     /// <summary>
-    /// Handles pointer/touch press start - begins long press detection.
-    /// </summary>
-    private void OnPasukPointerPressed(object? sender, PointerEventArgs e)
-    {
-        Border? border = sender as Border;
-        if (border == null && sender is View view)
-        {
-            border = view.Parent as Border;
-        }
-
-        if (border != null)
-        {
-            var pasuk = border.BindingContext as Models.Pasuk;
-            if (pasuk != null)
-            {
-                _pressedPasukNum = pasuk.PasukNum;
-                _pointerPressedTime = DateTime.Now;
-
-                // Start long press detection
-                _longPressTokenSource?.Cancel();
-                _longPressTokenSource = new CancellationTokenSource();
-
-                _ = DetectLongPressAsync(pasuk.PasukNum, border, _longPressTokenSource.Token);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Handles pointer/touch release - cancels long press detection.
-    /// </summary>
-    private void OnPasukPointerReleased(object? sender, PointerEventArgs e)
-    {
-        // Only cancel if long press hasn't been detected yet
-        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds > 100)
-        {
-            _longPressTokenSource?.Cancel();
-        }
-        _longPressTokenSource = null;
-    }
-
-    /// <summary>
-    /// Detects long press and triggers pasuk selection with vibration.
-    /// </summary>
-    private async Task DetectLongPressAsync(int pasukNum, Border border, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await Task.Delay(LongPressDurationMs, cancellationToken);
-
-            if (!cancellationToken.IsCancellationRequested)
-            {
-                // Set this BEFORE toggling to prevent tap from firing
-                _lastLongPressTime = DateTime.Now;
-
-                // Long press detected - toggle selection and vibrate
-                MainThread.BeginInvokeOnMainThread(() =>
-                {
-                    _viewModel.ToggleSelectedPasuk(pasukNum);
-                    UpdatePasukSelection(border, pasukNum);
-                    TriggerHapticFeedback();
-                });
-            }
-        }
-        catch (TaskCanceledException)
-        {
-            // Long press was cancelled (finger lifted before threshold)
-        }
-    }
-
-    /// <summary>
-    /// Updates the visual selection state of a pasuk.
+    /// Updates the selection bar after selection change.
+    /// The visual state is handled by DataTrigger in XAML.
     /// </summary>
     private void UpdatePasukSelection(object? sender, int pasukNum)
     {
-        Border? border = null;
-
-        if (sender is Border b)
-        {
-            border = b;
-        }
-        else if (sender is View view)
-        {
-            border = view.Parent as Border ?? view.Parent?.Parent as Border;
-        }
-
-        if (border != null)
-        {
-            bool isSelected = _viewModel.IsPasukSelected(pasukNum);
-            border.BackgroundColor = isSelected
-                ? (Application.Current?.RequestedTheme == AppTheme.Dark
-                    ? Color.FromArgb("#1E3A5F")
-                    : Color.FromArgb("#E3F2FD"))
-                : (Application.Current?.RequestedTheme == AppTheme.Dark
-                    ? Color.FromArgb("#1C1C1E")
-                    : Colors.White);
-        }
-
         UpdateSelectionBar();
     }
 
@@ -244,15 +172,6 @@ public partial class PerekPage : ContentPage
 
     private void ClearAllSelections()
     {
-        foreach (var item in PasukimCollection.GetVisualTreeDescendants())
-        {
-            if (item is Border border && border.BindingContext is Pasuk)
-            {
-                border.BackgroundColor = Application.Current?.RequestedTheme == AppTheme.Dark
-                    ? Color.FromArgb("#1C1C1E")
-                    : Colors.White;
-            }
-        }
         _viewModel.ClearSelected();
         UpdateSelectionBar();
     }
