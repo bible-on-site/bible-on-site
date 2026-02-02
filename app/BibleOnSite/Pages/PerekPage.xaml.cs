@@ -12,10 +12,12 @@ public partial class PerekPage : ContentPage
     private readonly PerekViewModel _viewModel;
     private bool _isLoading;
     private DateTime _lastLongPressTime = DateTime.MinValue;
+#if WINDOWS
     private DateTime _pointerPressedTime = DateTime.MinValue;
     private int _pressedPasukNum = -1;
     private CancellationTokenSource? _longPressTokenSource;
     private const int LongPressDurationMs = 600;
+#endif
 
     // Circular menu state
     private bool _isMenuOpen;
