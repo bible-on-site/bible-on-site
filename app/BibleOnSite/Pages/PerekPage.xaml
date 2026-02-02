@@ -153,7 +153,7 @@
                                 BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
                             <Border.Triggers>
                                 <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
-                                    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SelectedPasukBackground}, Dark={StaticResource SelectedPasukBackgroundDark}}"/>
+                                    <Setter Property="BackgroundColor" Value="{StaticResource SelectedPasukBackground}"/>
                                 </DataTrigger>
                             </Border.Triggers>
                             <Border.GestureRecognizers>
