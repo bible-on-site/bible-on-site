@@ -120,14 +120,16 @@ jobs:
       # --- RDS Access for SSG Build (Website only) ---
       # Fetches DB_URL from SSM Parameter Store and dynamically whitelists runner IP
       - name: Configure AWS Credentials for RDS Access
-        if: ${{ env.IS_NPM == 'true' && secrets.AWS_DEPLOY_ROLE_ARN != '' }}
+        if: ${{ env.IS_NPM == 'true' }}
+        id: aws_creds
+        continue-on-error: true
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Fetch RDS credentials from AWS
-        if: ${{ env.IS_NPM == 'true' && secrets.AWS_DEPLOY_ROLE_ARN != '' }}
+        if: ${{ env.IS_NPM == 'true' && steps.aws_creds.outcome == 'success' }}
         id: rds_creds
         run: |
           # Fetch DB_URL from SSM Parameter Store (SecureString)
