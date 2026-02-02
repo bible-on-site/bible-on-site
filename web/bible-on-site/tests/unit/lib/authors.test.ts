@@ -48,7 +48,7 @@ describe("authors service", () => {
 			delete process.env.S3_BUCKET;
 
 			expect(getAuthorImageUrl(1)).toBe(
-				"http://localhost:4566/bible-on-site-rabbis/authors/high-res/1.jpg",
+				"http://localhost:4566/bible-on-site-images/authors/high-res/1.jpg",
 			);
 		});
 
@@ -80,7 +80,7 @@ describe("authors service", () => {
 			process.env.S3_BUCKET = "my-bucket";
 
 			expect(getAuthorImageUrl(99)).toBe(
-				"https://my-bucket.s3.us-east-1.amazonaws.com/authors/high-res/99.jpg",
+				"https://my-bucket.s3.il-central-1.amazonaws.com/authors/high-res/99.jpg",
 			);
 		});
 	});
@@ -107,7 +107,7 @@ describe("authors service", () => {
 				id: 1,
 				name: "Test Author",
 				details: "Some details",
-				imageUrl: "http://localhost:4566/bible-on-site-rabbis/authors/high-res/1.jpg",
+				imageUrl: "http://localhost:4566/bible-on-site-images/authors/high-res/1.jpg",
 			});
 		});
 
@@ -148,7 +148,7 @@ describe("authors service", () => {
 
 			expect(result?.details).toBe("");
 			expect(result?.imageUrl).toBe(
-				"http://localhost:4566/bible-on-site-rabbis/authors/high-res/1.jpg",
+				"http://localhost:4566/bible-on-site-images/authors/high-res/1.jpg",
 			);
 		});
 	});
