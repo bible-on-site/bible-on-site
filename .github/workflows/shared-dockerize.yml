@@ -159,7 +159,6 @@ jobs:
             --tag-specifications 'ResourceType=security-group-rule,Tags=[{Key=Source,Value=github-actions-build},{Key=RunId,Value=${{ github.run_id }}}]' || true
       # --- End RDS Access Setup ---
       - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
-        working-directory: ${{ env.SHARED_ROOT_DIR }}
         env:
           DB_URL: ${{ steps.rds_creds.outputs.db_url || '' }}
         run: |
@@ -171,7 +170,7 @@ jobs:
             --build-arg DB_URL="${DB_URL}" \
             -f ${{ inputs.module_directory }}/Dockerfile \
             -t ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }} \
-            .
+            ${{ env.SHARED_ROOT_DIR }}
 
       - name: Export Docker Image to tarball
         run: |
