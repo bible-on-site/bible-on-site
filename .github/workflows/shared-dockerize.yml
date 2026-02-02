@@ -173,6 +173,8 @@ jobs:
             BUILDKIT_INLINE_CACHE=1
             DB_URL=${{ steps.rds_creds.outputs.db_url || '' }}
           platforms: linux/amd64
+          # Use host network so Docker build can reach RDS through the whitelisted runner IP
+          network: host
 
       # --- RDS Cleanup (runs even if build fails) ---
       - name: Remove runner IP from RDS security group
