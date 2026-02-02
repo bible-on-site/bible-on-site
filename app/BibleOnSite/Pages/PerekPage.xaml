@@ -54,10 +54,75 @@
         <!-- Main Content Area - fills entire viewport -->
         <Grid x:Name="ContentArea"
               ZIndex="0"
-              RowDefinitions="Auto,*">
+              RowDefinitions="Auto,Auto,*">
 
-            <!-- Perek Header -->
-            <Label Grid.Row="0"
+            <!-- Selection Bar (Row 0 - hidden by default) -->
+            <Grid Grid.Row="0"
+                  x:Name="SelectionBar"
+                  IsVisible="False"
+                  BackgroundColor="{StaticResource Primary}"
+                  Padding="4,4"
+                  HeightRequest="44"
+                  ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+                <!-- Back button - arrow_right_24_regular = \uf182 -->
+                <Button Grid.Column="0"
+                        x:Name="SelectionBackButton"
+                        Text="&#xf182;"
+                        FontFamily="FluentIcons"
+                        FontSize="20"
+                        WidthRequest="36"
+                        HeightRequest="36"
+                        Padding="0"
+                        BackgroundColor="Transparent"
+                        TextColor="White"
+                        Clicked="OnSelectionBackClicked"/>
+                <!-- Badge with count -->
+                <Border Grid.Column="1"
+                        BackgroundColor="White"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="Transparent"
+                        Padding="8,2"
+                        MinimumWidthRequest="24"
+                        HeightRequest="24"
+                        VerticalOptions="Center"
+                        Margin="4,0">
+                    <Label x:Name="SelectionCountLabel"
+                           Text="0"
+                           FontSize="12"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource Primary}"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Center"/>
+                </Border>
+                <!-- Spacer (transparent) -->
+                <ContentView Grid.Column="2"/>
+                <!-- Share button - share_24_regular = \uf6b0 -->
+                <Button Grid.Column="3"
+                        Text="&#xf6b0;"
+                        FontFamily="FluentIcons"
+                        FontSize="20"
+                        WidthRequest="36"
+                        HeightRequest="36"
+                        Padding="0"
+                        BackgroundColor="Transparent"
+                        TextColor="White"
+                        Clicked="OnSelectionShareClicked"/>
+                <!-- Copy button - copy_24_regular = \uf32b -->
+                <Button Grid.Column="4"
+                        x:Name="SelectionCopyButton"
+                        Text="&#xf32b;"
+                        FontFamily="FluentIcons"
+                        FontSize="20"
+                        WidthRequest="36"
+                        HeightRequest="36"
+                        Padding="0"
+                        BackgroundColor="Transparent"
+                        TextColor="White"
+                        Clicked="OnSelectionCopyClicked"/>
+            </Grid>
+
+            <!-- Perek Header (Row 1 - always visible) -->
+            <Label Grid.Row="1"
                    x:Name="PerekHeader"
                    Text="{Binding Header}"
                    FontSize="22"
@@ -66,8 +131,8 @@
                    Padding="16,12"
                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
 
-            <!-- Perek Text - Pasukim List - fills entire height, scrolls under bottom bar -->
-            <CollectionView Grid.Row="1"
+            <!-- Perek Text - Pasukim List (Row 2) -->
+            <CollectionView Grid.Row="2"
                             x:Name="PasukimCollection"
                             ItemsSource="{Binding Perek.Pasukim}"
                             SelectionMode="None"
@@ -87,12 +152,13 @@
                             <Border.GestureRecognizers>
                                 <TapGestureRecognizer Tapped="OnPasukTapped"
                                                       CommandParameter="{Binding PasukNum}"/>
+                                <TapGestureRecognizer Tapped="OnPasukRightClicked"
+                                                      CommandParameter="{Binding PasukNum}"
+                                                      Buttons="Secondary"/>
+                                <PointerGestureRecognizer PointerPressed="OnPasukPointerPressed"
+                                                          PointerReleased="OnPasukPointerReleased"/>
                             </Border.GestureRecognizers>
                             <Grid ColumnDefinitions="40,*">
-                                <Grid.GestureRecognizers>
-                                    <PointerGestureRecognizer PointerPressed="OnPasukPointerPressed"
-                                                              PointerReleased="OnPasukPointerReleased"/>
-                                </Grid.GestureRecognizers>
                                 <Label Grid.Column="0"
                                        Text="{Binding PasukNumHeb}"
                                        FontSize="16"
@@ -133,7 +199,7 @@
 
             <!-- Articles View (hidden by default, shown when articles button clicked) -->
             <!-- Uses shared ArticleCard component -->
-            <CollectionView Grid.Row="1"
+            <CollectionView Grid.Row="2"
                             x:Name="ArticlesCollection"
                             IsVisible="False"
                             SelectionMode="Single"

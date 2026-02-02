@@ -15,6 +15,7 @@ public partial class PerekPage : ContentPage
     private int _pressedPasukNum;
     private CancellationTokenSource? _longPressTokenSource;
     private const int LongPressDurationMs = 500;
+    private DateTime _lastLongPressTime = DateTime.MinValue;
 
     // Circular menu state
     private bool _isMenuOpen;
@@ -96,14 +97,18 @@ public partial class PerekPage : ContentPage
     }
 
     /// <summary>
-    /// Handles tap on pasuk - toggles selection if any pasuk is already selected.
+    /// Handles tap on pasuk - toggles selection if in selection mode.
     /// </summary>
     private void OnPasukTapped(object? sender, TappedEventArgs e)
     {
+        // Skip tap if long press just happened (within 800ms)
+        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 800)
+            return;
+
         if (e.Parameter is int pasukNum)
         {
-            // If any pasuk is selected, tap toggles selection
-            if (_viewModel.SelectedPasukNums.Count > 0 || _viewModel.IsPasukSelected(pasukNum))
+            // If in selection mode, tap toggles selection
+            if (_viewModel.SelectedPasukNums.Count > 0)
             {
                 _viewModel.ToggleSelectedPasuk(pasukNum);
                 UpdatePasukSelection(sender, pasukNum);
@@ -112,11 +117,30 @@ public partial class PerekPage : ContentPage
     }
 
     /// <summary>
+    /// Handles right-click on pasuk - enters selection mode.
+    /// </summary>
+    private void OnPasukRightClicked(object? sender, TappedEventArgs e)
+    {
+        if (e.Parameter is int pasukNum)
+        {
+            _viewModel.ToggleSelectedPasuk(pasukNum);
+            UpdatePasukSelection(sender, pasukNum);
+            TriggerHapticFeedback();
+        }
+    }
+
+    /// <summary>
     /// Handles pointer/touch press start - begins long press detection.
     /// </summary>
     private void OnPasukPointerPressed(object? sender, PointerEventArgs e)
     {
-        if (sender is Grid grid && grid.Parent is Border border)
+        Border? border = sender as Border;
+        if (border == null && sender is View view)
+        {
+            border = view.Parent as Border;
+        }
+
+        if (border != null)
         {
             var pasuk = border.BindingContext as Models.Pasuk;
             if (pasuk != null)
@@ -138,7 +162,11 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private void OnPasukPointerReleased(object? sender, PointerEventArgs e)
     {
-        _longPressTokenSource?.Cancel();
+        // Only cancel if long press hasn't been detected yet
+        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds > 100)
+        {
+            _longPressTokenSource?.Cancel();
+        }
         _longPressTokenSource = null;
     }
 
@@ -153,13 +181,14 @@ public partial class PerekPage : ContentPage
 
             if (!cancellationToken.IsCancellationRequested)
             {
+                // Set this BEFORE toggling to prevent tap from firing
+                _lastLongPressTime = DateTime.Now;
+
                 // Long press detected - toggle selection and vibrate
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
                     _viewModel.ToggleSelectedPasuk(pasukNum);
                     UpdatePasukSelection(border, pasukNum);
-
-                    // Trigger haptic feedback (vibration)
                     TriggerHapticFeedback();
                 });
             }
@@ -197,7 +226,77 @@ public partial class PerekPage : ContentPage
                     ? Color.FromArgb("#1C1C1E")
                     : Colors.White);
         }
+
+        UpdateSelectionBar();
     }
+
+    #region Selection Bar Methods
+
+    private void UpdateSelectionBar()
+    {
+        var count = _viewModel.SelectedPasukNums.Count;
+        var isSelectionMode = count > 0;
+
+        Shell.SetNavBarIsVisible(this, !isSelectionMode);
+        SelectionBar.IsVisible = isSelectionMode;
+        SelectionCountLabel.Text = count.ToString();
+    }
+
+    private void ClearAllSelections()
+    {
+        foreach (var item in PasukimCollection.GetVisualTreeDescendants())
+        {
+            if (item is Border border && border.BindingContext is Pasuk)
+            {
+                border.BackgroundColor = Application.Current?.RequestedTheme == AppTheme.Dark
+                    ? Color.FromArgb("#1C1C1E")
+                    : Colors.White;
+            }
+        }
+        _viewModel.ClearSelected();
+        UpdateSelectionBar();
+    }
+
+    private void OnSelectionBackClicked(object? sender, EventArgs e)
+    {
+        ClearAllSelections();
+    }
+
+    private async void OnSelectionShareClicked(object? sender, EventArgs e)
+    {
+        var text = GetSelectedPesukimText();
+        if (!string.IsNullOrEmpty(text))
+        {
+            await Share.RequestAsync(new ShareTextRequest { Text = text, Title = _viewModel.Source });
+        }
+    }
+
+    private async void OnSelectionCopyClicked(object? sender, EventArgs e)
+    {
+        var text = GetSelectedPesukimText();
+        if (!string.IsNullOrEmpty(text))
+        {
+            await Clipboard.SetTextAsync(text);
+            SelectionCopyButton.Text = "\uf32a";
+            TriggerHapticFeedback();
+            await DisplayAlert("", "בחירה הועתקה ללוח", "אישור");
+            SelectionCopyButton.Text = "\uf32b";
+        }
+    }
+
+    private string GetSelectedPesukimText()
+    {
+        if (_viewModel.Perek == null) return string.Empty;
+        var selected = _viewModel.Perek.Pasukim?
+            .Where(p => _viewModel.IsPasukSelected(p.PasukNum))
+            .OrderBy(p => p.PasukNum)
+            .ToList();
+        if (selected == null || selected.Count == 0) return string.Empty;
+        var lines = selected.Select(p => $"{p.PasukNumHeb}. {p.Text}");
+        return $"{_viewModel.Source}\n\n{string.Join("\n", lines)}";
+    }
+
+    #endregion
 
     /// <summary>
     /// Triggers haptic feedback (vibration) for long press.
