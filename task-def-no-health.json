@@ -1,0 +1,51 @@
+{
+  "containerDefinitions": [
+    {
+      "name": "website",
+      "image": "250598594267.dkr.ecr.il-central-1.amazonaws.com/bible-on-site:latest",
+      "cpu": 0,
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "hostPort": 3000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "NEXT_PUBLIC_ENV",
+          "value": "production"
+        }
+      ],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "secrets": [
+        {
+          "name": "DB_URL",
+          "valueFrom": "arn:aws:ssm:il-central-1:250598594267:parameter/bible-on-site-tanah-db-url"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/bible-on-site-website",
+          "awslogs-create-group": "true",
+          "awslogs-region": "il-central-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "systemControls": []
+    }
+  ],
+  "family": "bible-on-site-website",
+  "executionRoleArn": "arn:aws:iam::250598594267:role/ecsTaskExecutionRole",
+  "networkMode": "awsvpc",
+  "volumes": [],
+  "placementConstraints": [],
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "256",
+  "memory": "1024"
+}

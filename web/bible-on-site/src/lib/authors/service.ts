@@ -55,9 +55,9 @@ export function getAuthorImageUrl(authorId: number): string {
 
 	// Build URL from S3 configuration
 	const S3_ENDPOINT = process.env.S3_ENDPOINT;
-	const S3_BUCKET = process.env.S3_BUCKET || "bible-on-site-rabbis";
+	const S3_BUCKET = process.env.S3_BUCKET || "bible-on-site-images";
 	const S3_REGION =
-		process.env.S3_REGION || process.env.AWS_REGION || "us-east-1";
+		process.env.S3_REGION || process.env.AWS_REGION || "il-central-1";
 
 	// Check S3 availability asynchronously (fire-and-forget, logs warning if down)
 	checkS3Availability();
