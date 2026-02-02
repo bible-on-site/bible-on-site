@@ -107,7 +107,8 @@ describe("authors service", () => {
 				id: 1,
 				name: "Test Author",
 				details: "Some details",
-				imageUrl: "http://localhost:4566/bible-on-site-images/authors/high-res/1.jpg",
+				imageUrl:
+					"http://localhost:4566/bible-on-site-images/authors/high-res/1.jpg",
 			});
 		});
 
