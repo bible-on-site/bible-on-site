@@ -164,13 +164,19 @@ jobs:
           context: ${{ env.SHARED_ROOT_DIR }}
           file: ${{ inputs.module_directory }}/Dockerfile
           tags: ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }}
-          outputs: type=docker,dest=${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_PATH }}
+          # Load into local Docker daemon (docker driver doesn't support tar export directly)
+          load: true
           # Note: GHA cache not supported with docker driver, using inline cache only
           build-args: |
             BUILDKIT_INLINE_CACHE=1
             DB_URL=${{ steps.rds_creds.outputs.db_url || '' }}
           # Use host network so Docker build can reach RDS through the whitelisted runner IP
           network: host
+
+      - name: Export Docker Image to tarball
+        run: |
+          docker save ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }} \
+            -o ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_PATH }}
 
       # --- RDS Cleanup (runs even if build fails) ---
       - name: Remove runner IP from RDS security group
