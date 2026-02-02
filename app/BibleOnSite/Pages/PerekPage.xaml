@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:models="clr-namespace:BibleOnSite.Models"
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
@@ -13,6 +14,7 @@
         <ResourceDictionary>
             <Color x:Key="SelectedPasukBackground">#E3F2FD</Color>
             <Color x:Key="SelectedPasukBackgroundDark">#1E3A5F</Color>
+            <!-- DataTrigger helper for selection background -->
         </ResourceDictionary>
     </ContentPage.Resources>
 
@@ -62,7 +64,7 @@
                   IsVisible="False"
                   BackgroundColor="{StaticResource Primary}"
                   Padding="4,5"
-                  HeightRequest="47"
+                  HeightRequest="48"
                   ColumnDefinitions="Auto,Auto,*,Auto,Auto">
                 <!-- Back button - arrow_right_24_regular = \uf182 -->
                 <Button Grid.Column="0"
@@ -149,15 +151,23 @@
                                 Stroke="Transparent"
                                 x:Name="PasukBorder"
                                 BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+                            <Border.Triggers>
+                                <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
+                                    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SelectedPasukBackground}, Dark={StaticResource SelectedPasukBackgroundDark}}"/>
+                                </DataTrigger>
+                            </Border.Triggers>
                             <Border.GestureRecognizers>
                                 <TapGestureRecognizer Tapped="OnPasukTapped"
                                                       CommandParameter="{Binding PasukNum}"/>
                                 <TapGestureRecognizer Tapped="OnPasukRightClicked"
                                                       CommandParameter="{Binding PasukNum}"
                                                       Buttons="Secondary"/>
-                                <PointerGestureRecognizer PointerPressed="OnPasukPointerPressed"
-                                                          PointerReleased="OnPasukPointerReleased"/>
                             </Border.GestureRecognizers>
+                            <Border.Behaviors>
+                                <toolkit:TouchBehavior LongPressDuration="500"
+                                                       LongPressCompleted="OnPasukLongPress"
+                                                       ShouldMakeChildrenInputTransparent="False"/>
+                            </Border.Behaviors>
                             <Grid ColumnDefinitions="40,*">
                                 <Label Grid.Column="0"
                                        Text="{Binding PasukNumHeb}"

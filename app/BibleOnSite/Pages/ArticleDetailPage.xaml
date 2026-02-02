@@ -33,8 +33,9 @@
                    TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
 
             <Button Grid.Column="2"
-                    Text="⎘"
-                    FontSize="20"
+                    Text="&#xf6b2;"
+                    FontFamily="FluentIcons"
+                    FontSize="22"
                     BackgroundColor="Transparent"
                     TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
                     Command="{Binding ShareCommand}"
