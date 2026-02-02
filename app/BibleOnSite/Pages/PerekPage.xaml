@@ -5,6 +5,7 @@
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:models="clr-namespace:BibleOnSite.Models"
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
+             xmlns:behaviors="clr-namespace:BibleOnSite.Behaviors"
              x:Class="BibleOnSite.Pages.PerekPage"
              x:DataType="viewmodels:PerekViewModel"
              Title="{Binding Source}"
@@ -166,11 +167,12 @@
                                 <TapGestureRecognizer Tapped="OnPasukRightClicked"
                                                       CommandParameter="{Binding PasukNum}"
                                                       Buttons="Secondary"/>
+                                <PointerGestureRecognizer PointerPressed="OnPasukPointerPressed"
+                                                          PointerReleased="OnPasukPointerReleased"/>
                             </Border.GestureRecognizers>
                             <Border.Behaviors>
-                                <toolkit:TouchBehavior LongPressDuration="500"
-                                                       LongPressCompleted="OnPasukLongPress"
-                                                       ShouldMakeChildrenInputTransparent="False"/>
+                                <behaviors:LongPressBehavior LongPressDuration="600"
+                                                             LongPressed="OnPasukLongPressed"/>
                             </Border.Behaviors>
                             <Grid ColumnDefinitions="40,*">
                                 <Label Grid.Column="0"

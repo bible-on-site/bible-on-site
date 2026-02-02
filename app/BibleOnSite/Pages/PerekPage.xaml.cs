@@ -12,6 +12,10 @@ public partial class PerekPage : ContentPage
     private readonly PerekViewModel _viewModel;
     private bool _isLoading;
     private DateTime _lastLongPressTime = DateTime.MinValue;
+    private DateTime _pointerPressedTime = DateTime.MinValue;
+    private int _pressedPasukNum = -1;
+    private CancellationTokenSource? _longPressTokenSource;
+    private const int LongPressDurationMs = 600;
 
     // Circular menu state
     private bool _isMenuOpen;
@@ -121,26 +125,108 @@ public partial class PerekPage : ContentPage
         // Don't set _lastLongPressTime - right-click doesn't need debounce
         if (e.Parameter is int pasukNum)
         {
+            var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
             _viewModel.ToggleSelectedPasuk(pasukNum);
             UpdatePasukSelection(sender, pasukNum);
+            // Vibrate when entering selection mode
+            if (wasEmpty && _viewModel.SelectedPasukNums.Count > 0)
+            {
+                TriggerHapticFeedback();
+            }
         }
 #endif
     }
 
     /// <summary>
-    /// Handles long press on pasuk via TouchBehavior - enters selection mode.
+    /// Handles pointer press - starts long-press timer (Windows only, touch uses TouchBehavior).
     /// </summary>
-    private void OnPasukLongPress(object? sender, CommunityToolkit.Maui.Core.LongPressCompletedEventArgs e)
+    private void OnPasukPointerPressed(object? sender, PointerEventArgs e)
     {
+#if WINDOWS
+        _longPressTokenSource?.Cancel();
+        _longPressTokenSource = new CancellationTokenSource();
+
+        if (sender is Border border && border.BindingContext is Pasuk pasuk)
+        {
+            _pressedPasukNum = pasuk.PasukNum;
+            _pointerPressedTime = DateTime.Now;
+
+            // Start long-press detection
+            _ = DetectLongPressAsync(pasuk.PasukNum, _longPressTokenSource.Token);
+        }
+#endif
+    }
+
+    /// <summary>
+    /// Handles pointer release - cancels long-press timer (Windows only).
+    /// </summary>
+    private void OnPasukPointerReleased(object? sender, PointerEventArgs e)
+    {
+#if WINDOWS
+        _longPressTokenSource?.Cancel();
+        _pressedPasukNum = -1;
+#endif
+    }
+
+#if WINDOWS
+    /// <summary>
+    /// Detects long press after duration (Windows only).
+    /// </summary>
+    private async Task DetectLongPressAsync(int pasukNum, CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(LongPressDurationMs, token);
+
+            // If we get here, the press was held long enough
+            if (!token.IsCancellationRequested && _pressedPasukNum == pasukNum)
+            {
+                _lastLongPressTime = DateTime.Now;
+
+                var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
+                _viewModel.ToggleSelectedPasuk(pasukNum);
+
+                // Must run on UI thread
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    UpdateSelectionBar();
+                    // Vibrate when entering selection mode
+                    if (wasEmpty && _viewModel.SelectedPasukNums.Count > 0)
+                    {
+                        TriggerHapticFeedback();
+                    }
+                });
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            // Press was released before long press duration - ignore
+        }
+    }
+#endif
+
+    /// <summary>
+    /// Handles long press on pasuk via custom LongPressBehavior - enters selection mode (Android).
+    /// </summary>
+    private void OnPasukLongPressed(object? sender, EventArgs e)
+    {
+#if ANDROID
         _lastLongPressTime = DateTime.Now;
 
-        // The sender is the TouchBehavior - get the Pasuk from BindingContext
-        if (sender is BindableObject bindable && bindable.BindingContext is Pasuk pasuk)
+        // The sender is the LongPressBehavior - get the Pasuk from the associated view's BindingContext
+        if (sender is Behaviors.LongPressBehavior behavior &&
+            behavior.AssociatedView?.BindingContext is Pasuk pasuk)
         {
+            var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
             _viewModel.ToggleSelectedPasuk(pasuk.PasukNum);
             UpdateSelectionBar();
-            TriggerHapticFeedback();
+            // Vibrate when entering selection mode
+            if (wasEmpty && _viewModel.SelectedPasukNums.Count > 0)
+            {
+                TriggerHapticFeedback();
+            }
         }
+#endif
     }
 
     /// <summary>
@@ -212,13 +298,15 @@ public partial class PerekPage : ContentPage
     #endregion
 
     /// <summary>
-    /// Triggers haptic feedback (vibration) for long press.
+    /// Triggers haptic feedback (vibration) for selection mode entry.
     /// </summary>
     private static void TriggerHapticFeedback()
     {
         try
         {
-#if ANDROID || IOS
+#if ANDROID
+            Vibration.Vibrate(TimeSpan.FromMilliseconds(50));
+#elif IOS
             HapticFeedback.Perform(HapticFeedbackType.LongPress);
 #endif
         }
