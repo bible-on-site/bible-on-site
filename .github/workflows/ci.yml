@@ -347,6 +347,7 @@ jobs:
     permissions:
       contents: write
       actions: read
+      id-token: write # Required for AWS OIDC authentication to access RDS during SSG build
     secrets: inherit
     uses: ./.github/workflows/shared-dockerize.yml
     with:

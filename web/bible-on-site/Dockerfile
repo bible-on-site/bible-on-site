@@ -26,6 +26,11 @@ COPY shared/ ../shared/
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# DB_URL is passed at build time for SSG pages that need database access
+# This enables generateStaticParams to fetch data during `npm run build`
+ARG DB_URL
+ENV DB_URL=$DB_URL
+
 RUN npm run build
 
 # Production image, copy all the files and run next
