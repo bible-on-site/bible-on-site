@@ -61,8 +61,8 @@
                   x:Name="SelectionBar"
                   IsVisible="False"
                   BackgroundColor="{StaticResource Primary}"
-                  Padding="4,4"
-                  HeightRequest="44"
+                  Padding="4,5"
+                  HeightRequest="46"
                   ColumnDefinitions="Auto,Auto,*,Auto,Auto">
                 <!-- Back button - arrow_right_24_regular = \uf182 -->
                 <Button Grid.Column="0"
