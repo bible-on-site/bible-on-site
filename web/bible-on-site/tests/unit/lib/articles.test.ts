@@ -7,6 +7,11 @@ jest.mock("../../../src/lib/api-client", () => ({
 	query: jest.fn(),
 }));
 
+// Mock the authors service to avoid S3 availability checks
+jest.mock("../../../src/lib/authors/service", () => ({
+	getAuthorImageUrl: jest.fn((authorId: number) => `https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/${authorId}.jpg`),
+}));
+
 import { query } from "../../../src/lib/api-client";
 import { getArticlesByPerekId } from "../../../src/lib/articles";
 
@@ -24,7 +29,7 @@ describe("articles service", () => {
 	});
 
 	describe("getArticlesByPerekId", () => {
-		it("returns mapped articles when query succeeds", async () => {
+		it("returns mapped articles with author info when query succeeds", async () => {
 			const mockRows = [
 				{
 					id: 1,
@@ -33,6 +38,7 @@ describe("articles service", () => {
 					abstract: "<p>Test abstract</p>",
 					name: "Test Article",
 					priority: 1,
+					author_name: "הרב ישראל",
 				},
 				{
 					id: 2,
@@ -41,6 +47,7 @@ describe("articles service", () => {
 					abstract: null,
 					name: "Another Article",
 					priority: 2,
+					author_name: "הרב יעקב",
 				},
 			];
 
@@ -50,7 +57,7 @@ describe("articles service", () => {
 
 			expect(mockQuery).toHaveBeenCalledTimes(1);
 			expect(mockQuery).toHaveBeenCalledWith(
-				expect.stringContaining("SELECT id, perek_id, author_id, abstract, name, priority"),
+				expect.stringContaining("a.id, a.perek_id, a.author_id, a.abstract, a.name, a.priority"),
 				[42],
 			);
 
@@ -62,6 +69,8 @@ describe("articles service", () => {
 					abstract: "<p>Test abstract</p>",
 					name: "Test Article",
 					priority: 1,
+					authorName: "הרב ישראל",
+					authorImageUrl: "https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/10.jpg",
 				},
 				{
 					id: 2,
@@ -70,6 +79,8 @@ describe("articles service", () => {
 					abstract: null,
 					name: "Another Article",
 					priority: 2,
+					authorName: "הרב יעקב",
+					authorImageUrl: "https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/20.jpg",
 				},
 			]);
 		});
@@ -107,15 +118,17 @@ describe("articles service", () => {
 			);
 		});
 
-		it("queries with correct SQL structure", async () => {
+		it("queries with correct SQL structure including author JOIN", async () => {
 			mockQuery.mockResolvedValue([]);
 
 			await getArticlesByPerekId(100);
 
 			const sqlCall = mockQuery.mock.calls[0][0];
-			expect(sqlCall).toContain("FROM tanah_article");
-			expect(sqlCall).toContain("WHERE perek_id = ?");
-			expect(sqlCall).toContain("ORDER BY priority ASC");
+			expect(sqlCall).toContain("FROM tanah_article a");
+			expect(sqlCall).toContain("JOIN tanah_author au ON a.author_id = au.id");
+			expect(sqlCall).toContain("WHERE a.perek_id = ?");
+			expect(sqlCall).toContain("ORDER BY a.priority ASC");
+			expect(sqlCall).toContain("au.name AS author_name");
 		});
 	});
 });
