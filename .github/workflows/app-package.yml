@@ -298,6 +298,16 @@ jobs:
             ${{ runner.os }}-nuget-maui-ios-
             ${{ runner.os }}-nuget-
 
+      - name: Pin .NET SDK version
+        run: |
+          # Pin to .NET 9.x SDK to avoid using .NET 10 preview workloads
+          # The macos-15 runner has .NET 10 installed which brings iOS SDK 26.0 requiring Xcode 26
+          SDK_VERSION=$(dotnet --list-sdks | grep "^9\." | tail -1 | cut -d' ' -f1)
+          echo "Pinning to SDK version: $SDK_VERSION"
+          echo "{\"sdk\": {\"version\": \"$SDK_VERSION\"}}" > global.json
+          cat global.json
+          dotnet --version
+
       - name: Install MAUI workload
         run: |
           # Show .NET SDK info to debug
