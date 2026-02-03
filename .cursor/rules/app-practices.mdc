@@ -1,0 +1,22 @@
+---
+description: App (.NET MAUI) development and testing practices
+globs: app/**/*
+alwaysApply: false
+---
+
+# App (app/) Practices
+
+## Testing
+
+Use devops project for orchestration:
+
+| Task | Command |
+| ---- | ------- |
+| All Tests | `dotnet run --project devops -- Test` |
+| Unit Only | `dotnet run --project devops -- TestUnit` |
+| Integration | `dotnet run --project devops -- TestIntegration` |
+| E2E (Windows) | `dotnet run --project devops -- TestE2E` |
+| Unit Coverage | `dotnet run --project devops -- CoverageUnit` |
+| Integration Coverage | `dotnet run --project devops -- CoverageIntegration` |
+
+Integration tests use `[Trait("Category", "Integration")]`; API server must be at `http://127.0.0.1:3003`. Unit tests: xUnit, FluentAssertions, Moq in `BibleOnSite.Tests`. E2E: FlaUI in `BibleOnSite.Tests.E2E`.

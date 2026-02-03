@@ -1,0 +1,27 @@
+---
+description: Project context, terminology, and code quality standards
+alwaysApply: true
+---
+
+# Implementation Context
+
+## Project
+
+Jewish Orthodox project. Avoid Christian terminology and reformist expressions. Perakim division is still used (not Parashot).
+
+## Terminology
+
+| Use This | Instead Of |
+| -------- | ---------- |
+| Tanah | Bible |
+| Sefer (Pl: Sefarim) | Book |
+| Perek (Pl: Perakim) | Chapter |
+| Pasuk (Pl: Pesukim) | Verse |
+
+Book “additionals” (e.g. שמואל א/ב): use Hebrew names in code; sub-splits are "Additional" in UI. See `docs/practices/implementation.md` for the full table.
+
+## Code Quality
+
+**Never ignore compiler or linter errors/warnings.** Fix all issues from TypeScript, Rust (Clippy), .NET, Biome, ESLint, and other static analysis. Maintain 0 problems in VS Code.
+
+**Known exceptions** (ignore only these): In `.github/workflows/ci.yml`, "Context access might be invalid: module_changed" and "Unable to find reusable workflow".
