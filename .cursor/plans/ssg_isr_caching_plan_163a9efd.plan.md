@@ -141,7 +141,7 @@ RUN npm run build
 
 ### Infrastructure Setup
 
-1. **Create EFS file system** ([docs/aws/cloudformation/efs-cache.yaml](docs/aws/cloudformation/efs-cache.yaml) - new file):
+1. **Create EFS file system** (`docs/aws/cloudformation/efs-cache.yaml` — to be created):
 
 ```yaml
 Resources:
