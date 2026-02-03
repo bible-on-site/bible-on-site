@@ -9,17 +9,19 @@
     <Border Padding="0"
             StrokeShape="RoundRectangle 12"
             Stroke="Transparent"
+            FlowDirection="RightToLeft"
             BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
         <Border.Shadow>
             <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.15"/>
         </Border.Shadow>
         <Grid RowDefinitions="Auto,Auto,Auto,Auto"
               Padding="12">
-            <!-- Short Abstract (contains the h1/title extracted from HTML) -->
+            <!-- Short Abstract (RTL: right-aligned) -->
             <Label Grid.Row="0"
                    Text="{Binding Article.ShortAbstract, Source={x:Reference ThisCard}}"
                    FontSize="12"
                    FontAttributes="Bold"
+                   HorizontalTextAlignment="Start"
                    TextColor="{AppThemeBinding Light=Black, Dark=White}"
                    LineBreakMode="TailTruncation"
                    MaxLines="3"
@@ -33,11 +35,17 @@
                    IsVisible="{Binding ShowPerekSource, Source={x:Reference ThisCard}}"
                    Margin="0,0,0,4"/>
 
-            <!-- Author Info with picture -->
+            <!-- Author Info (RTL: rabbi name then image) -->
             <HorizontalStackLayout Grid.Row="2"
                                    Spacing="6"
-                                   Margin="2,0,0,0"
-                                   VerticalOptions="Center">
+                                   Margin="0,0,2,0"
+                                   VerticalOptions="Center"
+                                   FlowDirection="RightToLeft">
+                <Label Text="{Binding Article.Author.Name, Source={x:Reference ThisCard}}"
+                       FontSize="11"
+                       VerticalTextAlignment="Center"
+                       LineBreakMode="TailTruncation"
+                       TextColor="{StaticResource Primary}"/>
                 <Border WidthRequest="26"
                         HeightRequest="26"
                         StrokeShape="RoundRectangle 13"
@@ -50,14 +58,9 @@
                            HorizontalOptions="Center"
                            VerticalOptions="Center"/>
                 </Border>
-                <Label Text="{Binding Article.Author.Name, Source={x:Reference ThisCard}}"
-                       FontSize="11"
-                       VerticalTextAlignment="Center"
-                       LineBreakMode="TailTruncation"
-                       TextColor="{StaticResource Primary}"/>
             </HorizontalStackLayout>
 
-            <!-- Read indicator -->
+            <!-- Read indicator (RTL: left side) -->
             <Label Grid.Row="3"
                    Text="קרא עוד ◀"
                    FontSize="11"

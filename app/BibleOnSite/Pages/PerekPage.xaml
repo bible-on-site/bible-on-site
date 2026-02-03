@@ -6,7 +6,9 @@
              xmlns:models="clr-namespace:BibleOnSite.Models"
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
              xmlns:behaviors="clr-namespace:BibleOnSite.Behaviors"
+             xmlns:converters="clr-namespace:BibleOnSite.Converters"
              x:Class="BibleOnSite.Pages.PerekPage"
+             x:Name="PerekPageRoot"
              x:DataType="viewmodels:PerekViewModel"
              Title="{Binding Source}"
              FlowDirection="RightToLeft">
@@ -15,6 +17,7 @@
         <ResourceDictionary>
             <Color x:Key="SelectedPasukBackground">#E3F2FD</Color>
             <Color x:Key="SelectedPasukBackgroundDark">#1E3A5F</Color>
+            <converters:IntEqualityConverter x:Key="IntEqualityConverter"/>
             <!-- DataTrigger helper for selection background -->
         </ResourceDictionary>
     </ContentPage.Resources>
@@ -239,7 +242,24 @@
                 </CollectionView.ItemsLayout>
                 <CollectionView.ItemTemplate>
                     <DataTemplate x:DataType="models:Article">
-                        <controls:ArticleCard Article="{Binding .}"/>
+                        <Border Padding="0"
+                                StrokeShape="RoundRectangle 12"
+                                Stroke="Transparent"
+                                BackgroundColor="Transparent">
+                                <Border.Triggers>
+                                <DataTrigger TargetType="Border" Value="True">
+                                    <DataTrigger.Binding>
+                                        <MultiBinding Converter="{StaticResource IntEqualityConverter}">
+                                            <Binding Path="Id"/>
+                                            <Binding Source="{x:Reference PerekPageRoot}" Path="SelectedArticleId"/>
+                                        </MultiBinding>
+                                    </DataTrigger.Binding>
+                                    <Setter Property="BackgroundColor"
+                                            Value="{AppThemeBinding Light={StaticResource SelectedPasukBackground}, Dark={StaticResource SelectedPasukBackgroundDark}}"/>
+                                </DataTrigger>
+                            </Border.Triggers>
+                            <controls:ArticleCard Article="{Binding .}"/>
+                        </Border>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
 

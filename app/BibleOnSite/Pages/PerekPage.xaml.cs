@@ -4,6 +4,9 @@ using BibleOnSite.Behaviors;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
+#if IOS
+using Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific;
+#endif
 
 /// <summary>
 /// Page for displaying a Perek (chapter) with its pasukim (verses).
@@ -35,11 +38,17 @@ public partial class PerekPage : ContentPage
     /// </summary>
     public static bool IsScrolling => (DateTime.Now - _lastScrollTime).TotalMilliseconds < ScrollCooldownMs;
 
+    /// <summary>
+    /// Proxy for article selection highlight binding (avoids XC0045 when binding from Article template).
+    /// </summary>
+    public int? SelectedArticleId => _viewModel.SelectedArticleId;
+
     public PerekPage()
     {
         InitializeComponent();
         _viewModel = new PerekViewModel();
         BindingContext = _viewModel;
+        ForwardSelectedArticleIdChanged();
         SetupGlobalTouchHandler();
     }
 
@@ -48,7 +57,17 @@ public partial class PerekPage : ContentPage
         InitializeComponent();
         _viewModel = viewModel;
         BindingContext = _viewModel;
+        ForwardSelectedArticleIdChanged();
         SetupGlobalTouchHandler();
+    }
+
+    private void ForwardSelectedArticleIdChanged()
+    {
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PerekViewModel.SelectedArticleId))
+                OnPropertyChanged(nameof(SelectedArticleId));
+        };
     }
 
     /// <summary>
@@ -161,7 +180,9 @@ public partial class PerekPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-
+#if IOS
+        ApplyBottomBarSafeArea();
+#endif
         // If no perek is loaded, load perek 1
         if (_viewModel.Perek == null && !_isLoading)
         {
@@ -215,12 +236,29 @@ public partial class PerekPage : ContentPage
         SetAnalyticsScreenForPerek();
     }
 
+#if IOS
+    /// <summary>
+    /// Extends the bottom bar to the physical bottom on iOS (safe area) so there is no gap.
+    /// </summary>
+    private void ApplyBottomBarSafeArea()
+    {
+        var insets = Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific.Page.GetSafeAreaInsets(this);
+        var bottom = insets.Bottom;
+        if (bottom <= 0)
+            return;
+        BottomBar.Padding = new Thickness(0, 0, 0, bottom);
+        BottomBar.HeightRequest = 90 + bottom;
+        PasukimFooterSpacer.HeightRequest = 90 + bottom;
+        ArticlesFooterSpacer.HeightRequest = 90 + bottom;
+    }
+#endif
+
     /// <summary>
     /// Logs current perek screen to analytics (legacy-style: AlHaperek/{perekId}).
     /// </summary>
     private void SetAnalyticsScreenForPerek()
     {
-        var analytics = Application.Current?.Handler?.MauiContext?.Services.GetService<IAnalyticsService>();
+        var analytics = Microsoft.Maui.Controls.Application.Current?.Handler?.MauiContext?.Services.GetService<IAnalyticsService>();
         analytics?.SetScreen($"AlHaperek/{_viewModel.PerekId}", "PerekPage");
     }
 
@@ -647,7 +685,7 @@ public partial class PerekPage : ContentPage
 
             // Update button states - highlight articles button
             Console.WriteLine("[Articles] Updating button color...");
-            ArticlesButton.TextColor = Application.Current?.RequestedTheme == AppTheme.Dark
+            ArticlesButton.TextColor = Microsoft.Maui.Controls.Application.Current?.RequestedTheme == AppTheme.Dark
                 ? Color.FromArgb("#BB86FC")
                 : Color.FromArgb("#512BD4");
             Console.WriteLine("[Articles] ShowArticlesViewAsync complete");
@@ -666,13 +704,14 @@ public partial class PerekPage : ContentPage
         try
         {
             _isShowingArticles = false;
+            _viewModel.SelectedArticleId = null;
 
             // Simple visibility swap instead of animation
             ArticlesCollection.IsVisible = false;
             PasukimCollection.IsVisible = true;
 
             // Reset button color
-            ArticlesButton.TextColor = Application.Current?.RequestedTheme == AppTheme.Dark
+            ArticlesButton.TextColor = Microsoft.Maui.Controls.Application.Current?.RequestedTheme == AppTheme.Dark
                 ? Color.FromArgb("#9CA3AF")
                 : Color.FromArgb("#6B7280");
 
@@ -720,7 +759,8 @@ public partial class PerekPage : ContentPage
     {
         if (e.CurrentSelection.FirstOrDefault() is Article article)
         {
-            // Clear selection
+            _viewModel.SelectedArticleId = article.Id;
+            // Clear selection (highlight remains via SelectedArticleId until navigation)
             ArticlesCollection.SelectedItem = null;
 
             // Navigate to article detail page
