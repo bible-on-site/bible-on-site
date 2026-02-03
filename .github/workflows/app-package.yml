@@ -298,25 +298,12 @@ jobs:
             ${{ runner.os }}-nuget-maui-ios-
             ${{ runner.os }}-nuget-
 
-      - name: Pin .NET SDK version
-        run: |
-          # Pin to .NET 9.x SDK to avoid using .NET 10 preview workloads
-          # The macos-15 runner has .NET 10 installed which brings iOS SDK 26.0 requiring Xcode 26
-          SDK_VERSION=$(dotnet --list-sdks | grep "^9\." | tail -1 | cut -d' ' -f1)
-          echo "Pinning to SDK version: $SDK_VERSION"
-          echo "{\"sdk\": {\"version\": \"$SDK_VERSION\"}}" > global.json
-          cat global.json
-          dotnet --version
-
       - name: Install MAUI workload
         run: |
           # Show .NET SDK info to debug
           dotnet --info
-          # Install the MAUI iOS workload for .NET 9.0 (not .NET 10 preview)
-          # Use --sdk-version to ensure workload is installed for the correct SDK
-          SDK_VERSION=$(dotnet --list-sdks | grep "^9\." | tail -1 | cut -d' ' -f1)
-          echo "Installing workload for SDK version: $SDK_VERSION"
-          dotnet workload install maui-ios --skip-manifest-update --sdk-version "$SDK_VERSION"
+          # Install the MAUI iOS workload
+          dotnet workload install maui-ios --skip-manifest-update
           # Show installed workloads
           dotnet workload list
 
@@ -326,14 +313,13 @@ jobs:
           echo "Available Xcode installations:"
           ls -la /Applications/ | grep -i xcode || true
 
-          # For .NET 9.0 iOS SDK, use Xcode 16.x (stable) instead of Xcode 26.x (preview)
-          # Xcode 26.x has simulator runtime compatibility issues on macos-15 runners
-          # TODO: Revert to Xcode 26.x once .NET 10 is set up (see #1018)
-          # Find the latest Xcode 16.x installation
-          XCODE_PATH=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          # Use Xcode 26.x (stable since Dec 2025) which is required by iOS SDK 26.0
+          # The MAUI iOS workload installs iOS SDK 26.0 which requires Xcode 26.0+
+          # Find the latest stable Xcode 26.x installation
+          XCODE_PATH=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
           if [ -z "$XCODE_PATH" ]; then
-            # Fallback to default Xcode if 16.x not found
-            echo "Xcode 16.x not found, using default Xcode"
+            # Fallback to default Xcode if 26.x not found
+            echo "Xcode 26.x not found, using default Xcode"
             XCODE_PATH=$(xcode-select -p | sed 's|/Contents/Developer||')
           fi
 
