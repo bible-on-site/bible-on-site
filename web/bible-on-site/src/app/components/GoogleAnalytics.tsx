@@ -1,7 +1,7 @@
 import Script from "next/script";
 import { isProduction } from "@/util/environment";
 
-const GA_MEASUREMENT_ID = "G-220MEPY7WL";
+const GA_MEASUREMENT_ID = "G-2CHER7MM85";
 
 export function GoogleAnalytics() {
 	// Only enable Google Analytics in production

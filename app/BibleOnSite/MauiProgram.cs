@@ -29,7 +29,8 @@ public static class MauiProgram
 				// Use optimized CollectionView handler for iOS/Mac (default in .NET 10)
 				handlers.AddHandler<CollectionView, Microsoft.Maui.Controls.Handlers.Items2.CollectionViewHandler2>();
 #endif
-			});
+			})
+			;
 
 		// Initialize PreferencesService with MAUI storage
 		PreferencesService.Initialize(new MauiPreferencesStorage());
@@ -37,6 +38,7 @@ public static class MauiProgram
 		// Register services
 		builder.Services.AddSingleton(_ => PreferencesService.Instance);
 		builder.Services.AddSingleton(_ => StarterService.Instance);
+		builder.Services.AddSingleton<IAnalyticsService, AnalyticsService>();
 
 		// Register ViewModels
 		builder.Services.AddTransient<PerekViewModel>();
