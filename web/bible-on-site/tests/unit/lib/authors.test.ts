@@ -48,7 +48,7 @@ describe("authors service", () => {
 			delete process.env.S3_BUCKET;
 
 			expect(getAuthorImageUrl(1)).toBe(
-				"http://localhost:4566/bible-on-site-images/authors/high-res/1.jpg",
+				"http://localhost:4566/bible-on-site-assets/authors/high-res/1.jpg",
 			);
 		});
 
@@ -108,7 +108,7 @@ describe("authors service", () => {
 				name: "Test Author",
 				details: "Some details",
 				imageUrl:
-					"http://localhost:4566/bible-on-site-images/authors/high-res/1.jpg",
+					"http://localhost:4566/bible-on-site-assets/authors/high-res/1.jpg",
 			});
 		});
 
@@ -149,7 +149,7 @@ describe("authors service", () => {
 
 			expect(result?.details).toBe("");
 			expect(result?.imageUrl).toBe(
-				"http://localhost:4566/bible-on-site-images/authors/high-res/1.jpg",
+				"http://localhost:4566/bible-on-site-assets/authors/high-res/1.jpg",
 			);
 		});
 	});

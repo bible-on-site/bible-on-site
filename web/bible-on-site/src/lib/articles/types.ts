@@ -7,6 +7,8 @@ export interface Article {
 	authorId: number;
 	/** HTML content abstract of the article */
 	abstract: string | null;
+	/** Full HTML content of the article */
+	content: string | null;
 	name: string;
 	priority: number;
 	/** Author name for display */
