@@ -21,6 +21,10 @@ alwaysApply: true
 3. Update the registry with tool name, version, date, and key learnings.
 4. Apply learnings.
 
+## Agent execution
+
+**Do not ask the user to execute commands or steps.** Run commands, builds, and runs yourself (e.g. terminal, build, run app). If something is blocked (e.g. app already running), document what to do in comments or a short note; do not assign the user to "close the app and run again."
+
 ## Investigation
 
 Use **GitHub CLI (`gh`)** for GitHub-related issues:
