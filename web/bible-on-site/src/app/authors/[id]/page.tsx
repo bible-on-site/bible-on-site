@@ -124,7 +124,7 @@ export default async function AuthorPage({
 						{articles.map((article) => (
 							<Link
 								key={article.id}
-								href={`/929/${article.perekId}#article-${article.id}`}
+								href={`/929/${article.perekId}/${article.id}`}
 								className={styles.articleCard}
 							>
 								<h3 className={styles.articleName}>{article.name}</h3>

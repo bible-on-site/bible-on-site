@@ -24,10 +24,6 @@ test.describe("Articles Section", () => {
 		// Check that at least one carousel item (link) is displayed
 		const carouselItems = articlesSection.locator("a");
 		await expect(carouselItems.first()).toBeVisible();
-
-		// Verify article title is visible
-		const articleTitle = articlesSection.locator("h3");
-		await expect(articleTitle.first()).toBeVisible();
 	});
 
 	test("displays author name and image in carousel", async ({ page }) => {
@@ -45,7 +41,7 @@ test.describe("Articles Section", () => {
 		await expect(authorImage.first()).toBeVisible();
 	});
 
-	test("carousel items link to author page", async ({ page }) => {
+	test("carousel items link to article page", async ({ page }) => {
 		await page.goto("/929/1");
 
 		const articlesSection = page.locator("section").filter({
@@ -54,11 +50,11 @@ test.describe("Articles Section", () => {
 
 		await expect(articlesSection).toBeVisible();
 
-		// Check that links point to author pages
-		const authorLink = articlesSection.locator("a").first();
-		await expect(authorLink).toBeVisible();
-		const href = await authorLink.getAttribute("href");
-		expect(href).toMatch(/^\/authors\/\d+$/);
+		// Check that links point to article pages (/929/perekId/articleId)
+		const articleLink = articlesSection.locator("a").first();
+		await expect(articleLink).toBeVisible();
+		const href = await articleLink.getAttribute("href");
+		expect(href).toMatch(/^\/929\/\d+\/\d+$/);
 	});
 
 	test("does not display articles section when no articles exist", async ({

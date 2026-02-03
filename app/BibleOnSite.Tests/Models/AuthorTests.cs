@@ -21,7 +21,7 @@ public class AuthorTests
             Details = "פוסק הדור"
         };
 
-        author.ImageUrl.Should().Be("https://bible-on-site-images.s3.il-central-1.amazonaws.com/authors/high-res/42.jpg");
+        author.ImageUrl.Should().Be("https://bible-on-site-assets.s3.il-central-1.amazonaws.com/authors/high-res/42.jpg");
     }
 
     [Fact]

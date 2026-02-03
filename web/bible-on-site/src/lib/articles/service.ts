@@ -7,6 +7,7 @@ interface ArticleWithAuthorRow {
 	perek_id: number;
 	author_id: number;
 	abstract: string | null;
+	content: string | null;
 	name: string;
 	priority: number;
 	author_name: string;
@@ -23,7 +24,7 @@ export async function getArticlesByPerekId(
 	try {
 		const rows = await query<ArticleWithAuthorRow>(
 			`SELECT
-				a.id, a.perek_id, a.author_id, a.abstract, a.name, a.priority,
+				a.id, a.perek_id, a.author_id, a.abstract, a.content, a.name, a.priority,
 				au.name AS author_name
 			 FROM tanah_article a
 			 JOIN tanah_author au ON a.author_id = au.id
@@ -37,6 +38,7 @@ export async function getArticlesByPerekId(
 			perekId: row.perek_id,
 			authorId: row.author_id,
 			abstract: row.abstract,
+			content: row.content,
 			name: row.name,
 			priority: row.priority,
 			authorName: row.author_name,
@@ -50,5 +52,48 @@ export async function getArticlesByPerekId(
 			error instanceof Error ? error.message : error,
 		);
 		return [];
+	}
+}
+
+/**
+ * Fetch a single article by ID with author information.
+ * Returns null if not found or database unavailable.
+ */
+export async function getArticleById(
+	articleId: number,
+): Promise<Article | null> {
+	try {
+		const rows = await query<ArticleWithAuthorRow>(
+			`SELECT
+				a.id, a.perek_id, a.author_id, a.abstract, a.content, a.name, a.priority,
+				au.name AS author_name
+			 FROM tanah_article a
+			 JOIN tanah_author au ON a.author_id = au.id
+			 WHERE a.id = ?`,
+			[articleId],
+		);
+
+		if (rows.length === 0) {
+			return null;
+		}
+
+		const row = rows[0];
+		return {
+			id: row.id,
+			perekId: row.perek_id,
+			authorId: row.author_id,
+			abstract: row.abstract,
+			content: row.content,
+			name: row.name,
+			priority: row.priority,
+			authorName: row.author_name,
+			authorImageUrl: getAuthorImageUrl(row.author_id),
+		};
+	} catch (error) {
+		console.warn(
+			`Failed to fetch article ${articleId}:`,
+			error instanceof Error ? error.message : error,
+		);
+		return null;
 	}
 }
