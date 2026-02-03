@@ -58,13 +58,13 @@ describe("ArticlesSection", () => {
 			expect(screen.getByText("הרב יעקב")).toBeTruthy();
 		});
 
-		it("renders author images", () => {
+		it("renders author images with correct alt text", () => {
 			render(<ArticlesSection articles={mockArticles} />);
 
 			const images = screen.getAllByRole("img");
 			expect(images).toHaveLength(2);
-			expect(images[0]).toHaveAttribute("alt", "הרב ישראל");
-			expect(images[1]).toHaveAttribute("alt", "הרב יעקב");
+			expect(images[0].getAttribute("alt")).toBe("הרב ישראל");
+			expect(images[1].getAttribute("alt")).toBe("הרב יעקב");
 		});
 
 		it("renders article abstract when provided", () => {
@@ -79,8 +79,8 @@ describe("ArticlesSection", () => {
 
 			const links = screen.getAllByRole("link");
 			expect(links).toHaveLength(2);
-			expect(links[0]).toHaveAttribute("href", "/authors/1");
-			expect(links[1]).toHaveAttribute("href", "/authors/2");
+			expect(links[0].getAttribute("href")).toBe("/authors/1");
+			expect(links[1].getAttribute("href")).toBe("/authors/2");
 		});
 	});
 
