@@ -1759,7 +1759,9 @@ jobs:
       - name: Bump Website Version
         if: ${{ needs.release_website.outputs.released == 'true' }}
         working-directory: ${{ needs.setup_env.outputs.website_directory }}
-        run: npm version patch --no-git-tag-version
+        # Use --ignore-scripts to avoid running the 'version' script which requires cross-env-shell
+        # The version script just echoes the version and isn't needed during the bump
+        run: npm version patch --no-git-tag-version --ignore-scripts
 
       - name: Bump API Version
         if: ${{ needs.release_api.outputs.released == 'true' }}
