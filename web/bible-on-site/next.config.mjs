@@ -31,7 +31,7 @@ const nextConfig = {
 			// AWS S3 for production
 			{
 				protocol: "https",
-				hostname: "bible-on-site-rabbis.s3.*.amazonaws.com",
+				hostname: "bible-on-site-images.s3.*.amazonaws.com",
 			},
 			{
 				protocol: "https",
