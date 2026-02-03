@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using CommunityToolkit.Maui;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 using BibleOnSite.Controls;
@@ -14,6 +15,7 @@ public static class MauiProgram
 		var builder = MauiApp.CreateBuilder();
 		builder
 			.UseMauiApp<App>()
+			.UseMauiCommunityToolkit()
 			.ConfigureFonts(fonts =>
 			{
 				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
@@ -23,6 +25,10 @@ public static class MauiProgram
 			.ConfigureMauiHandlers(handlers =>
 			{
 				handlers.AddHandler<HtmlView, HtmlViewHandler>();
+#if IOS || MACCATALYST
+				// Use optimized CollectionView handler for iOS/Mac (default in .NET 10)
+				handlers.AddHandler<CollectionView, Microsoft.Maui.Controls.Handlers.Items2.CollectionViewHandler2>();
+#endif
 			});
 
 		// Initialize PreferencesService with MAUI storage

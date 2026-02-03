@@ -19,9 +19,10 @@
                 <VerticalStackLayout Spacing="0">
                     <!-- Header -->
                     <Grid BackgroundColor="#075E55" Padding="16" HeightRequest="80">
-                        <Image Source="whatsapp.svg"
-                               HeightRequest="50"
-                               WidthRequest="50"
+<Image Source="whatsapp.png"
+                                       HeightRequest="60"
+                                       WidthRequest="60"
+                               Aspect="AspectFit"
                                HorizontalOptions="Center"
                                VerticalOptions="Center"/>
                     </Grid>
@@ -73,9 +74,10 @@
                 <VerticalStackLayout Spacing="0">
                     <!-- Header -->
                     <Grid BackgroundColor="#517BA3" Padding="16" HeightRequest="80">
-                        <Image Source="telegram.svg"
-                               HeightRequest="50"
-                               WidthRequest="50"
+<Image Source="telegram.png"
+                                       HeightRequest="60"
+                                       WidthRequest="60"
+                               Aspect="AspectFit"
                                HorizontalOptions="Center"
                                VerticalOptions="Center"/>
                     </Grid>
@@ -128,9 +130,10 @@
                 <VerticalStackLayout Spacing="0">
                     <!-- Header -->
                     <Grid BackgroundColor="#404040" Padding="16" HeightRequest="70">
-                        <Image Source="gmail.svg"
-                               HeightRequest="45"
-                               WidthRequest="45"
+<Image Source="gmail.png"
+                                       HeightRequest="32"
+                                       WidthRequest="32"
+                                       Aspect="AspectFit"
                                HorizontalOptions="Center"
                                VerticalOptions="Center"/>
                     </Grid>

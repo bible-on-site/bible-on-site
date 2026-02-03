@@ -1,0 +1,64 @@
+---
+description: GitHub issue management - labels and projects for bible-on-site
+alwaysApply: true
+---
+
+# GitHub Issues Management
+
+When creating GitHub issues, ALWAYS include:
+1. Appropriate **labels** (Priority + Difficulty + Type + Component)
+2. Add to relevant **projects**
+
+## Labels (REQUIRED categories)
+
+### Priority (pick one)
+- `P1` - Top Priority
+- `P2` - Prioritized
+- `P3` - Nice to have
+
+### Difficulty (pick one)
+- `D1` - Low Difficulty
+- `D2` - Medium Difficulty
+- `D3` - High Difficulty
+- `D4` - Huge Difficulty
+
+### Type (pick one)
+- `bug`, `enhancement`, `documentation`, `security`, `performance`, `investigation`
+
+### Component (pick all that apply)
+- `app` - Mobile app (.NET MAUI)
+- `admin` - Admin panel
+- `FE` - Frontend (website)
+- `DB`, `MySQL` - Database
+- `AWS` - AWS infrastructure
+- `devops`, `CI`, `CD` - DevOps/CI/CD
+- `tests`, `e2e`, `API Tests`, `E2E Tests`
+
+## Projects (add to ALL relevant)
+
+After creating issue, add to projects:
+```bash
+gh project item-add <ID> --owner bible-on-site --url <issue-url>
+```
+
+Project IDs:
+- `6` = Admin
+- `5` = Data
+- `4` = App
+- `3` = API
+- `2` = website
+
+## Complete Example
+
+```bash
+# 1. Create issue with labels
+gh issue create \
+  --title "Feature title" \
+  --body "Description..." \
+  --label "enhancement,P2,D2,app,admin,DB"
+
+# 2. Add to all relevant projects
+gh project item-add 6 --owner bible-on-site --url <url>
+gh project item-add 5 --owner bible-on-site --url <url>
+gh project item-add 4 --owner bible-on-site --url <url>
+```
