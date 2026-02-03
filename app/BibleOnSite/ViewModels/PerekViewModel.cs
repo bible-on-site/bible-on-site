@@ -42,6 +42,10 @@ public partial class PerekViewModel : ObservableObject
 
     [ObservableProperty]
     private List<int> _selectedPasukNums = new();
+
+    /// <summary>Used for article list selection highlight (rounded, theme-aware).</summary>
+    [ObservableProperty]
+    private int? _selectedArticleId;
 #pragma warning restore MVVMTK0045
 
     public PerekViewModel() : this(PreferencesService.Instance, null)
