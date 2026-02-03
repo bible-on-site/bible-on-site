@@ -285,7 +285,9 @@ public class PreferencesViewModelTests : IDisposable
         _viewModel.PropertyChanged += (_, args) =>
         {
             if (args.PropertyName == nameof(PreferencesViewModel.FontFactor))
+            {
                 fontPropertyChanged = true;
+            }
         };
 
         // Act - change via service directly
