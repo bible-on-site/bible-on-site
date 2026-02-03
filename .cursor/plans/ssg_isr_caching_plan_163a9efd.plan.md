@@ -83,7 +83,7 @@ flowchart TB
 1. **One-time AWS change:** Make RDS publicly accessible
   - AWS Console → RDS → Modify → Publicly accessible: Yes
   - This gives RDS a public DNS name (but still protected by security group)
-2. **CI workflow changes** (`.github/workflows/shared-dockerize.yml` - to be created):
+2. **CI workflow changes** ([.github/workflows/shared-dockerize.yml](.github/workflows/shared-dockerize.yml)):
 
 ```yaml
 - name: Configure AWS Credentials
@@ -119,7 +119,7 @@ flowchart TB
       --cidr ${{ steps.ip.outputs.ip }}/32
 ```
 
-1. **Dockerfile changes** (`web/bible-on-site/Dockerfile` - to be updated):
+1. **Dockerfile changes** ([web/bible-on-site/Dockerfile](web/bible-on-site/Dockerfile)):
 
 ```dockerfile
 # In builder stage
@@ -141,7 +141,7 @@ RUN npm run build
 
 ### Infrastructure Setup
 
-1. **Create EFS file system** (`docs/aws/cloudformation/efs-cache.yaml` - to be created):
+1. **Create EFS file system** ([docs/aws/cloudformation/efs-cache.yaml](docs/aws/cloudformation/efs-cache.yaml) - new file):
 
 ```yaml
 Resources:
@@ -165,7 +165,7 @@ Resources:
         - !Ref EFSSecurityGroup
 ```
 
-1. **Update ECS Task Definition** (`docs/aws/cloudformation/ecs-services.yaml` - to be updated):
+1. **Update ECS Task Definition** ([docs/aws/cloudformation/ecs-services.yaml](docs/aws/cloudformation/ecs-services.yaml)):
 
 ```yaml
 WebsiteTaskDefinition:
@@ -198,7 +198,7 @@ WebsiteTaskDefinition:
 
 ### Current Implementation
 
-The `/api/revalidate` endpoint already exists at `web/bible-on-site/src/app/api/revalidate/route.ts`:
+The `/api/revalidate` endpoint already exists at [web/bible-on-site/src/app/api/revalidate/route.ts](web/bible-on-site/src/app/api/revalidate/route.ts):
 
 ```typescript
 // Supports both path and tag revalidation
