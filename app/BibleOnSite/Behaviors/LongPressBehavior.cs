@@ -4,15 +4,32 @@ using System.Windows.Input;
 namespace BibleOnSite.Behaviors;
 
 /// <summary>
-/// A cross-platform long-press behavior that uses a timer-based approach.
-/// More reliable than TouchBehavior for preventing rapid-tap false positives.
+/// A cross-platform long-press behavior using timer-based detection.
+/// Checks scroll state to prevent triggering during scroll.
 /// </summary>
 public class LongPressBehavior : Behavior<View>
 {
     private View? _associatedView;
     private System.Timers.Timer? _longPressTimer;
     private bool _isPressed;
-    private static DateTime _lastLongPressTime = DateTime.MinValue;
+
+    // Static list of all active behaviors for global cancellation
+    private static readonly List<LongPressBehavior> _activeBehaviors = new();
+    private static readonly object _lock = new();
+
+    /// <summary>
+    /// Cancels all pending long-press timers. Called when scroll starts.
+    /// </summary>
+    public static void CancelAllPending()
+    {
+        lock (_lock)
+        {
+            foreach (var behavior in _activeBehaviors)
+            {
+                behavior.CancelLongPressTimer();
+            }
+        }
+    }
 
     public static readonly BindableProperty LongPressDurationProperty =
         BindableProperty.Create(nameof(LongPressDuration), typeof(int), typeof(LongPressBehavior), 600);
@@ -48,17 +65,35 @@ public class LongPressBehavior : Behavior<View>
     /// </summary>
     public View? AssociatedView => _associatedView;
 
+    /// <summary>
+    /// Call this when a tap is detected to cancel any pending long-press.
+    /// Used because Android CollectionView swallows Up events.
+    /// </summary>
+    public void OnTapDetected()
+    {
+        System.Diagnostics.Debug.WriteLine("[LongPress] Tap detected, cancelling timer");
+        CancelLongPressTimer();
+    }
+
     protected override void OnAttachedTo(View bindable)
     {
         base.OnAttachedTo(bindable);
         _associatedView = bindable;
-
-        // Use Handler to attach native touch events
         bindable.HandlerChanged += OnHandlerChanged;
+
+        lock (_lock)
+        {
+            _activeBehaviors.Add(this);
+        }
     }
 
     protected override void OnDetachingFrom(View bindable)
     {
+        lock (_lock)
+        {
+            _activeBehaviors.Remove(this);
+        }
+
         bindable.HandlerChanged -= OnHandlerChanged;
         CleanupTimer();
         DetachNativeEvents();
@@ -74,74 +109,60 @@ public class LongPressBehavior : Behavior<View>
         }
     }
 
+#if ANDROID
     private void AttachNativeEvents()
     {
-#if ANDROID
         if (_associatedView?.Handler?.PlatformView is Android.Views.View androidView)
         {
             androidView.Touch += OnAndroidTouch;
         }
-#endif
     }
 
     private void DetachNativeEvents()
     {
-#if ANDROID
         if (_associatedView?.Handler?.PlatformView is Android.Views.View androidView)
         {
             androidView.Touch -= OnAndroidTouch;
         }
-#endif
     }
-
-#if ANDROID
-    private float _startX, _startY;
-    private const float MoveThreshold = 30f; // Pixels - cancel if moved more than this
 
     private void OnAndroidTouch(object? sender, Android.Views.View.TouchEventArgs e)
     {
-        switch (e.Event?.Action)
+        var action = e.Event?.Action & Android.Views.MotionEventActions.Mask;
+
+        switch (action)
         {
             case Android.Views.MotionEventActions.Down:
-                _startX = e.Event.GetX();
-                _startY = e.Event.GetY();
-                StartLongPressTimer();
-                e.Handled = false; // Allow other gestures to process
+                // Only start timer if not currently scrolling
+                if (!Pages.PerekPage.IsScrolling)
+                {
+                    StartLongPressTimer();
+                }
                 break;
 
             case Android.Views.MotionEventActions.Up:
             case Android.Views.MotionEventActions.Cancel:
+            case Android.Views.MotionEventActions.PointerUp:
                 CancelLongPressTimer();
-                e.Handled = false;
                 break;
 
             case Android.Views.MotionEventActions.Move:
-                // Cancel if finger moved too much (scrolling)
-                if (_isPressed && e.Event != null)
+                // Cancel if scrolling started
+                if (_isPressed && Pages.PerekPage.IsScrolling)
                 {
-                    var dx = Math.Abs(e.Event.GetX() - _startX);
-                    var dy = Math.Abs(e.Event.GetY() - _startY);
-                    if (dx > MoveThreshold || dy > MoveThreshold)
-                    {
-                        CancelLongPressTimer();
-                    }
+                    CancelLongPressTimer();
                 }
-                e.Handled = false;
-                break;
-
-            default:
-                e.Handled = false;
                 break;
         }
+        e.Handled = false; // Allow other gestures
     }
+#else
+    private void AttachNativeEvents() { }
+    private void DetachNativeEvents() { }
 #endif
 
     private void StartLongPressTimer()
     {
-        // Debounce: don't start if we just fired a long press (reduced to 300ms for responsiveness)
-        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 300)
-            return;
-
         _isPressed = true;
         CleanupTimer();
 
@@ -162,7 +183,9 @@ public class LongPressBehavior : Behavior<View>
         if (!_isPressed)
             return;
 
-        _lastLongPressTime = DateTime.Now;
+        // Double-check scroll state before firing
+        if (Pages.PerekPage.IsScrolling)
+            return;
 
         MainThread.BeginInvokeOnMainThread(() =>
         {
