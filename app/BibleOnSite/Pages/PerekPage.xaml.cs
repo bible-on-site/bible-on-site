@@ -224,6 +224,10 @@ public partial class PerekPage : ContentPage
         // Cancel any pending long-press timers (Android doesn't receive Up events in CollectionView)
         LongPressBehavior.CancelAllPending();
 
+        // Skip tap if long press just happened (prevents tap-on-release from toggling selection off)
+        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 300)
+            return;
+
         if (e.Parameter is int pasukNum)
         {
             // If in selection mode, tap toggles selection
