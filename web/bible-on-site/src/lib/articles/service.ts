@@ -23,7 +23,7 @@ export async function getArticlesByPerekId(
 ): Promise<Article[]> {
 	try {
 		const rows = await query<ArticleWithAuthorRow>(
-			`SELECT 
+			`SELECT
 				a.id, a.perek_id, a.author_id, a.abstract, a.content, a.name, a.priority,
 				au.name AS author_name
 			 FROM tanah_article a
@@ -64,7 +64,7 @@ export async function getArticleById(
 ): Promise<Article | null> {
 	try {
 		const rows = await query<ArticleWithAuthorRow>(
-			`SELECT 
+			`SELECT
 				a.id, a.perek_id, a.author_id, a.abstract, a.content, a.name, a.priority,
 				au.name AS author_name
 			 FROM tanah_article a

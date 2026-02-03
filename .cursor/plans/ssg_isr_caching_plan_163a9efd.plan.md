@@ -51,17 +51,17 @@ flowchart TB
         CI -->|"3. Build with DB"| RDS
         CI -->|"4. Remove IP from SG"| SG
     end
-    
+
     subgraph vpc [AWS VPC]
         SG[RDS Security Group]
         RDS[(RDS MySQL)]
         SG --> RDS
-        
+
         subgraph ecs [ECS Cluster]
             Task1[ECS Task 1]
             Task2[ECS Task 2]
         end
-        
+
         Task1 --> RDS
         Task2 --> RDS
         Task1 --> EFS
