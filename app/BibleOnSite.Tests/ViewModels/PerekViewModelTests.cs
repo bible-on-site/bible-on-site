@@ -86,6 +86,165 @@ public class PerekViewModelTests
         viewModel.Source.Should().Be("שמואל ב ג");
     }
 
+    #region Pasuk Selection Tests
+
+    [Fact]
+    public void ToggleSelectedPasuk_ShouldSelectPasuk()
+    {
+        var viewModel = CreateViewModelWithPasukim();
+
+        viewModel.ToggleSelectedPasuk(1);
+
+        viewModel.IsPasukSelected(1).Should().BeTrue();
+        viewModel.SelectedPasukNums.Should().Contain(1);
+        viewModel.Perek!.Pasukim![0].IsSelected.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ToggleSelectedPasuk_ShouldDeselectWhenCalledTwice()
+    {
+        var viewModel = CreateViewModelWithPasukim();
+
+        viewModel.ToggleSelectedPasuk(1);
+        viewModel.ToggleSelectedPasuk(1);
+
+        viewModel.IsPasukSelected(1).Should().BeFalse();
+        viewModel.SelectedPasukNums.Should().NotContain(1);
+        viewModel.Perek!.Pasukim![0].IsSelected.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ToggleSelectedPasuk_ShouldAllowMultipleSelections()
+    {
+        var viewModel = CreateViewModelWithPasukim();
+
+        viewModel.ToggleSelectedPasuk(1);
+        viewModel.ToggleSelectedPasuk(3);
+
+        viewModel.IsPasukSelected(1).Should().BeTrue();
+        viewModel.IsPasukSelected(2).Should().BeFalse();
+        viewModel.IsPasukSelected(3).Should().BeTrue();
+        viewModel.SelectedPasukNums.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void ClearSelected_ShouldClearAllSelections()
+    {
+        var viewModel = CreateViewModelWithPasukim();
+        viewModel.ToggleSelectedPasuk(1);
+        viewModel.ToggleSelectedPasuk(2);
+        viewModel.ToggleSelectedPasuk(3);
+
+        viewModel.ClearSelected();
+
+        viewModel.SelectedPasukNums.Should().BeEmpty();
+        viewModel.IsPasukSelected(1).Should().BeFalse();
+        viewModel.IsPasukSelected(2).Should().BeFalse();
+        viewModel.IsPasukSelected(3).Should().BeFalse();
+        viewModel.Perek!.Pasukim!.All(p => !p.IsSelected).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsPasukSelected_ShouldReturnFalseForUnselectedPasuk()
+    {
+        var viewModel = CreateViewModelWithPasukim();
+
+        viewModel.IsPasukSelected(1).Should().BeFalse();
+        viewModel.IsPasukSelected(999).Should().BeFalse();
+    }
+
+    [Fact]
+    public void SelectedPasukNums_ShouldBeEmptyInitially()
+    {
+        var viewModel = CreateViewModelWithPasukim();
+
+        viewModel.SelectedPasukNums.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ToggleSelectedPasuk_ShouldUpdateIsSelectedOnPasukModel()
+    {
+        var viewModel = CreateViewModelWithPasukim();
+
+        viewModel.ToggleSelectedPasuk(2);
+
+        viewModel.Perek!.Pasukim![0].IsSelected.Should().BeFalse();
+        viewModel.Perek!.Pasukim![1].IsSelected.Should().BeTrue();
+        viewModel.Perek!.Pasukim![2].IsSelected.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ClearSelected_ShouldResetIsSelectedOnAllPasukim()
+    {
+        var viewModel = CreateViewModelWithPasukim();
+        viewModel.ToggleSelectedPasuk(1);
+        viewModel.ToggleSelectedPasuk(2);
+
+        viewModel.ClearSelected();
+
+        viewModel.Perek!.Pasukim!.Should().AllSatisfy(p => p.IsSelected.Should().BeFalse());
+    }
+
+    [Fact]
+    public void ToggleSelectedPasuk_WithNonExistentPasuk_ShouldStillAddToList()
+    {
+        var viewModel = CreateViewModelWithPasukim();
+
+        viewModel.ToggleSelectedPasuk(999);
+
+        viewModel.SelectedPasukNums.Should().Contain(999);
+        viewModel.IsPasukSelected(999).Should().BeTrue();
+    }
+
+    [Fact]
+    public void SelectionOrder_ShouldBePreserved()
+    {
+        var viewModel = CreateViewModelWithPasukim();
+
+        viewModel.ToggleSelectedPasuk(3);
+        viewModel.ToggleSelectedPasuk(1);
+        viewModel.ToggleSelectedPasuk(2);
+
+        viewModel.SelectedPasukNums.Should().ContainInOrder(3, 1, 2);
+    }
+
+    private PerekViewModel CreateViewModelWithPasukim()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var perek = CreatePerekWithPasukim(1, 1, null, "בראשית", "Genesis", "תשרי");
+
+        var viewModel = new PerekViewModel(preferences, _ => perek);
+        viewModel.LoadByPerekId(1);
+        return viewModel;
+    }
+
+    private static Perek CreatePerekWithPasukim(int perekId, int perekNumber, int? additional, string seferName, string seferTanahUsName, string hebDate)
+    {
+        return new Perek
+        {
+            PerekId = perekId,
+            PerekNumber = perekNumber,
+            Additional = additional,
+            Date = "2026-01-20",
+            HebDate = hebDate,
+            HasRecording = false,
+            Header = "Header",
+            SeferId = 1,
+            SeferName = seferName,
+            SeferTanahUsName = seferTanahUsName,
+            Tseit = "18:00",
+            Pasukim = new List<Pasuk>
+            {
+                new() { PasukNum = 1, Text = "בראשית ברא אלהים" },
+                new() { PasukNum = 2, Text = "והארץ היתה תהו ובהו" },
+                new() { PasukNum = 3, Text = "ויאמר אלהים יהי אור" }
+            }
+        };
+    }
+
+    #endregion
+
     private static Perek CreatePerek(int perekId, int perekNumber, int? additional, string seferName, string seferTanahUsName, string hebDate)
     {
         return new Perek
