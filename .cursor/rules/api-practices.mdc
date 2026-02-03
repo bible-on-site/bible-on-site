@@ -1,0 +1,30 @@
+---
+description: Rust GraphQL API development and testing practices
+globs: web/api/**/*
+alwaysApply: false
+---
+
+# API (web/api) Practices
+
+## Development
+
+Use **cargo-make** (`Makefile.toml`):
+
+| Task | Command |
+| ---- | ------- |
+| Run API | `cargo make run-api` |
+| E2E Tests | `cargo make test-e2e` |
+| E2E Coverage | `cargo make coverage-e2e` |
+| Lint | `cargo make lint` |
+| Clean | `cargo make clean` |
+| Build Docker | `cargo make package` |
+
+## Testing
+
+- E2E in `tests/e2e/` with Playwright. Use `DB_URL` or `.test.env`.
+- Populate test DB: `cd data && DB_URL="mysql://root:test_123@localhost:3306/tanah_test" cargo make mysql-populate`
+- MySQL CLI: `mysql -u root -ptest_123 tanah_test`
+
+## Structure
+
+- Entities: `entities/`; Services: `src/services/`; Resolvers: `src/resolvers/`; DTOs: `src/dtos/`.
