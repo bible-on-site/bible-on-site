@@ -337,6 +337,19 @@ jobs:
           echo "Xcode version:"
           xcodebuild -version
 
+      - name: Install compatible iOS simulator runtime
+        run: |
+          echo "Current simulator runtimes:"
+          xcrun simctl list runtimes
+          echo ""
+          # The .NET iOS SDK uses iphonesimulator SDK 23A339 which requires a compatible runtime
+          # The pre-installed runtimes (iOS 18.x/26.x) aren't compatible - download one that is
+          echo "Downloading compatible iOS simulator runtime..."
+          xcodebuild -downloadPlatform iOS 2>/dev/null || echo "Download completed or not needed"
+          echo ""
+          echo "Updated simulator runtimes:"
+          xcrun simctl list runtimes
+
       - name: Setup iOS signing
         env:
           CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
