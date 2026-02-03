@@ -1,57 +1,188 @@
+.bookWrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 12px;
+}
+
+.bookArea {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
 .page {
-	background-color: white;
-	padding: 15px;
+  background-color: white;
+  padding: 15px;
+  position: relative;
+  box-sizing: border-box;
 }
-.perekText::-webkit-scrollbar {
-	width: 11px;
+
+/* Right page (content): flex column so header stays on top, scroller outside text */
+.pageContentPage {
+  background-color: white;
+  padding: 15px;
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
 }
-.perekText::-webkit-scrollbar-track {
-	background: var(--scrollbarBG);
+
+/* Header in flow (no overlap); sefer + perek on opposite edges */
+.pageHeaderRight {
+  flex-shrink: 0;
+  padding-top: 2px;
+  padding-bottom: 4px;
+  direction: rtl;
+  max-width: 100%;
 }
-.perekText::-webkit-scrollbar-thumb {
-	background-color: var(--thumbBG);
-	border-radius: 6px;
-	border: 3px solid var(--scrollbarBG);
+
+/* Scroll wrapper outside the text only; scrollbar on outer edge (RTL = left) */
+.perekTextScrollWrapper {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  direction: rtl;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbarBG) var(--scrollbarBG);
+  --scrollbarBG: #cfd8dc;
+}
+
+.perekTextScrollWrapper::-webkit-scrollbar {
+  width: 11px;
+}
+
+.perekTextScrollWrapper::-webkit-scrollbar-track {
+  background: var(--scrollbarBG);
+}
+
+.perekTextScrollWrapper::-webkit-scrollbar-thumb {
+  background-color: #90a4ae;
+  border-radius: 6px;
+  border: 3px solid var(--scrollbarBG);
+}
+
+.pageHeaderRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 0.95rem;
+  color: #1c2c5d;
+  font-weight: 600;
+}
+
+.pageHeaderSefer {
+  flex-shrink: 0;
+}
+
+.pageHeaderPerek {
+  flex-shrink: 0;
+}
+
+.perekHeader {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #637598;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* Left page (blank): flex column, Hebrew date at top, then articles carousel */
+.pageBlank {
+  background-color: white;
+  padding: 15px;
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.blankPageDate {
+  font-size: 1rem;
+  color: #637598;
+  text-align: center;
+  padding-top: 6px;
+  direction: rtl;
+  flex-shrink: 0;
+}
+
+.blankPageArticles {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin-top: 8px;
+}
+
+.coverContent {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem;
+  box-sizing: border-box;
+}
+
+.coverTitle {
+  color: #1c2c5d;
+  font-size: clamp(1.5rem, 4vw, 2.5rem);
+  font-weight: 700;
+  margin: 0 0 0.5em;
+}
+
+.coverSubtitle {
+  color: #637598;
+  font-size: 1rem;
+  margin: 0 0 1.5em;
+}
+
+.coverAuthor {
+  color: #90a4ae;
+  font-size: 0.875rem;
+  margin: 0;
 }
 
 .perekText {
-	scrollbar-width: thin;
-	scrollbar-color: var(--thumbBG) var(--scrollbarBG);
-	direction: rtl;
-	--scrollbarBG: #cfd8dc;
-	--thumbBG: #90a4ae;
-	letter-spacing: 0.04em;
-	word-spacing: 0.12em;
-	line-height: 1.5em;
-	padding-left: 10px;
-	text-align: justify;
-	-moz-text-align-last: right;
-	text-align-last: right;
-	overflow-y: auto;
-	overflow-x: hidden;
-	display: flow-root;
-	height: 100%;
+  direction: rtl;
+  letter-spacing: 0.04em;
+  word-spacing: 0.12em;
+  line-height: 1.5em;
+  padding: 8px 10px 10px;
+  text-align: justify;
+  -moz-text-align-last: right;
+  text-align-last: right;
+  overflow-x: hidden;
+  display: flow-root;
 }
 .pasukNum {
-	color: #1c2c5d;
-	cursor: pointer;
-	font-weight: 700;
-	text-decoration: underline;
+  color: #1c2c5d;
+  cursor: pointer;
+  font-weight: 700;
+  text-decoration: underline;
 }
 .perekTextHeader h1 {
-	color: #9a92d1;
-	font-size: 1.2em;
-	font-weight: 700;
-	margin: 0.1em 0 1em;
-	text-align: justify;
+  color: #9a92d1;
+  font-size: 1.2em;
+  font-weight: 700;
+  margin: 0.1em 0 1em;
+  text-align: justify;
 }
 .qri label::before {
-	color: #637598;
-	content: "קְרִי:";
-	cursor: text;
-	display: inherit;
-	font-size: 14px;
-	font-weight: 400;
-	margin: 0 0 0 1vmin;
-	vertical-align: baseline;
+  color: #637598;
+  content: "קְרִי:";
+  cursor: text;
+  display: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  margin: 0 0 0 1vmin;
+  vertical-align: baseline;
 }

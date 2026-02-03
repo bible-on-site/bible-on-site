@@ -197,10 +197,21 @@ export class HebrewDate {
 	}
 
 	/**
-	 * Returns a string representation of the Hebrew date
+	 * Returns a string representation of the Hebrew date (English locale)
 	 */
 	toString(): string {
 		return this.date.toLocaleString("en-u-ca-hebrew", {
+			day: "numeric",
+			month: "long",
+			year: "numeric",
+		});
+	}
+
+	/**
+	 * Returns the Hebrew date in Hebrew script for display (he-IL locale, hebrew calendar).
+	 */
+	toHebrewLocaleString(): string {
+		return this.date.toLocaleString("he-IL-u-ca-hebrew", {
 			day: "numeric",
 			month: "long",
 			year: "numeric",

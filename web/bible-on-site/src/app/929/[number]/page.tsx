@@ -61,7 +61,7 @@ export default async function Perek({
 	return (
 		<>
 			<Suspense>
-				<SeferComposite perekObj={perekObj} />
+				<SeferComposite perekObj={perekObj} articles={articles} />
 			</Suspense>
 			<div className={styles.perekContainer}>
 				<Breadcrumb perekObj={perekObj} />
