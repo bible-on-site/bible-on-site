@@ -1,5 +1,6 @@
 namespace BibleOnSite.Pages;
 
+using BibleOnSite.Behaviors;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
@@ -11,10 +12,11 @@ public partial class PerekPage : ContentPage
 {
     private readonly PerekViewModel _viewModel;
     private bool _isLoading;
-    private DateTime _pointerPressedTime;
-    private int _pressedPasukNum;
+    private DateTime _lastLongPressTime = DateTime.MinValue;
+    private DateTime _pointerPressedTime = DateTime.MinValue;
+    private int _pressedPasukNum = -1;
     private CancellationTokenSource? _longPressTokenSource;
-    private const int LongPressDurationMs = 500;
+    private const int LongPressDurationMs = 600;
 
     // Circular menu state
     private bool _isMenuOpen;
@@ -23,11 +25,22 @@ public partial class PerekPage : ContentPage
     // Articles view state
     private bool _isShowingArticles;
 
+    // Scroll state tracking - used to prevent long-press during scroll
+    private static DateTime _lastScrollTime = DateTime.MinValue;
+    private const int ScrollCooldownMs = 500; // Don't allow long-press within 500ms of scroll
+
+    /// <summary>
+    /// Returns true if the user is currently scrolling or just finished scrolling.
+    /// Used by LongPressBehavior to prevent false triggers during scroll.
+    /// </summary>
+    public static bool IsScrolling => (DateTime.Now - _lastScrollTime).TotalMilliseconds < ScrollCooldownMs;
+
     public PerekPage()
     {
         InitializeComponent();
         _viewModel = new PerekViewModel();
         BindingContext = _viewModel;
+        SetupGlobalTouchHandler();
     }
 
     public PerekPage(PerekViewModel viewModel)
@@ -35,6 +48,114 @@ public partial class PerekPage : ContentPage
         InitializeComponent();
         _viewModel = viewModel;
         BindingContext = _viewModel;
+        SetupGlobalTouchHandler();
+    }
+
+    /// <summary>
+    /// Sets up a global touch handler to catch taps that CollectionView swallows.
+    /// </summary>
+    private void SetupGlobalTouchHandler()
+    {
+#if ANDROID
+        MainActivity.TapDetected += OnGlobalTapDetected;
+#endif
+    }
+
+#if ANDROID
+    private void OnGlobalTapDetected(object? sender, (float X, float Y) position)
+    {
+        // Only process taps in selection mode
+        if (_viewModel.SelectedPasukNums.Count == 0)
+            return;
+
+        // Find which pasuk was tapped by hit-testing
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            try
+            {
+                var pasukNum = FindTappedPasuk(position.X, position.Y);
+                if (pasukNum > 0)
+                {
+                    _viewModel.ToggleSelectedPasuk(pasukNum);
+                    UpdateSelectionBar();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Error in global tap handler: {ex.Message}");
+            }
+        });
+    }
+
+    /// <summary>
+    /// Finds which pasuk was tapped by checking bounds of visible items.
+    /// </summary>
+    private int FindTappedPasuk(float screenX, float screenY)
+    {
+        if (_viewModel.Perek?.Pasukim == null)
+            return -1;
+
+        // Get the CollectionView's native view
+        if (PasukimCollection.Handler?.PlatformView is not Android.Views.View collectionView)
+            return -1;
+
+        // Convert screen coordinates to view coordinates
+        var location = new int[2];
+        collectionView.GetLocationOnScreen(location);
+        var localX = screenX - location[0];
+        var localY = screenY - location[1];
+
+        // Check if tap is within CollectionView bounds
+        if (localX < 0 || localY < 0 || localX > collectionView.Width || localY > collectionView.Height)
+            return -1;
+
+        // Find the child view at this position
+        if (collectionView is Android.Views.ViewGroup viewGroup)
+        {
+            for (int i = 0; i < viewGroup.ChildCount; i++)
+            {
+                var child = viewGroup.GetChildAt(i);
+                if (child == null) continue;
+
+                var childLocation = new int[2];
+                child.GetLocationOnScreen(childLocation);
+
+                if (screenX >= childLocation[0] && screenX <= childLocation[0] + child.Width &&
+                    screenY >= childLocation[1] && screenY <= childLocation[1] + child.Height)
+                {
+                    // Found the child - try to get its binding context
+                    if (child.Tag is Java.Lang.Integer tagInt)
+                    {
+                        return tagInt.IntValue();
+                    }
+
+                    // Try to find the pasuk by index
+                    // The CollectionView items are in order, so child index maps to pasuk index
+                    // But we need to account for header if any
+                    var pasukIndex = i; // Adjust if there's a header
+                    if (pasukIndex >= 0 && pasukIndex < _viewModel.Perek.Pasukim.Count)
+                    {
+                        return _viewModel.Perek.Pasukim[pasukIndex].PasukNum;
+                    }
+                }
+            }
+        }
+
+        return -1;
+    }
+#endif
+
+    /// <summary>
+    /// Tracks scroll events to prevent long-press during scroll.
+    /// </summary>
+    private void OnPasukimScrolled(object? sender, ItemsViewScrolledEventArgs e)
+    {
+        _lastScrollTime = DateTime.Now;
+        // Cancel any pending long-press (pointer-based for Windows)
+        _longPressTokenSource?.Cancel();
+        _pressedPasukNum = -1;
+        // Cancel any pending long-press (behavior-based for Android)
+        LongPressBehavior.CancelAllPending();
     }
 
     protected override async void OnAppearing()
@@ -96,14 +217,21 @@ public partial class PerekPage : ContentPage
     }
 
     /// <summary>
-    /// Handles tap on pasuk - toggles selection if any pasuk is already selected.
+    /// Handles tap on pasuk - toggles selection if in selection mode.
     /// </summary>
     private void OnPasukTapped(object? sender, TappedEventArgs e)
     {
+        // Cancel any pending long-press timers (Android doesn't receive Up events in CollectionView)
+        LongPressBehavior.CancelAllPending();
+
+        // Skip tap if long press just happened (prevents tap-on-release from toggling selection off)
+        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 300)
+            return;
+
         if (e.Parameter is int pasukNum)
         {
-            // If any pasuk is selected, tap toggles selection
-            if (_viewModel.SelectedPasukNums.Count > 0 || _viewModel.IsPasukSelected(pasukNum))
+            // If in selection mode, tap toggles selection
+            if (_viewModel.SelectedPasukNums.Count > 0)
             {
                 _viewModel.ToggleSelectedPasuk(pasukNum);
                 UpdatePasukSelection(sender, pasukNum);
@@ -112,101 +240,195 @@ public partial class PerekPage : ContentPage
     }
 
     /// <summary>
-    /// Handles pointer/touch press start - begins long press detection.
+    /// Handles right-click on pasuk - enters selection mode (Windows only).
+    /// </summary>
+    private void OnPasukRightClicked(object? sender, TappedEventArgs e)
+    {
+#if WINDOWS
+        // Don't set _lastLongPressTime - right-click doesn't need debounce
+        if (e.Parameter is int pasukNum)
+        {
+            var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
+            _viewModel.ToggleSelectedPasuk(pasukNum);
+            UpdatePasukSelection(sender, pasukNum);
+            // Vibrate when entering selection mode
+            if (wasEmpty && _viewModel.SelectedPasukNums.Count > 0)
+            {
+                TriggerHapticFeedback();
+            }
+        }
+#endif
+    }
+
+    /// <summary>
+    /// Handles pointer press - starts long-press timer.
     /// </summary>
     private void OnPasukPointerPressed(object? sender, PointerEventArgs e)
     {
-        if (sender is Grid grid && grid.Parent is Border border)
+        // Don't start long-press detection if scrolling
+        if (IsScrolling)
+            return;
+
+        _longPressTokenSource?.Cancel();
+        _longPressTokenSource = new CancellationTokenSource();
+
+        if (sender is Border border && border.BindingContext is Pasuk pasuk)
         {
-            var pasuk = border.BindingContext as Models.Pasuk;
-            if (pasuk != null)
-            {
-                _pressedPasukNum = pasuk.PasukNum;
-                _pointerPressedTime = DateTime.Now;
+            _pressedPasukNum = pasuk.PasukNum;
+            _pointerPressedTime = DateTime.Now;
 
-                // Start long press detection
-                _longPressTokenSource?.Cancel();
-                _longPressTokenSource = new CancellationTokenSource();
-
-                _ = DetectLongPressAsync(pasuk.PasukNum, border, _longPressTokenSource.Token);
-            }
+            // Start long-press detection
+            _ = DetectLongPressAsync(pasuk.PasukNum, _longPressTokenSource.Token);
         }
     }
 
     /// <summary>
-    /// Handles pointer/touch release - cancels long press detection.
+    /// Handles pointer release - cancels long-press timer.
     /// </summary>
     private void OnPasukPointerReleased(object? sender, PointerEventArgs e)
     {
         _longPressTokenSource?.Cancel();
-        _longPressTokenSource = null;
+        _pressedPasukNum = -1;
     }
 
     /// <summary>
-    /// Detects long press and triggers pasuk selection with vibration.
+    /// Detects long press after duration.
     /// </summary>
-    private async Task DetectLongPressAsync(int pasukNum, Border border, CancellationToken cancellationToken)
+    private async Task DetectLongPressAsync(int pasukNum, CancellationToken token)
     {
         try
         {
-            await Task.Delay(LongPressDurationMs, cancellationToken);
+            await Task.Delay(LongPressDurationMs, token);
 
-            if (!cancellationToken.IsCancellationRequested)
+            // If we get here, the press was held long enough
+            // Double-check we're not scrolling and pasuk is still pressed
+            if (!token.IsCancellationRequested && _pressedPasukNum == pasukNum && !IsScrolling)
             {
-                // Long press detected - toggle selection and vibrate
+                _lastLongPressTime = DateTime.Now;
+
+                var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
+                _viewModel.ToggleSelectedPasuk(pasukNum);
+
+                // Must run on UI thread
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
-                    _viewModel.ToggleSelectedPasuk(pasukNum);
-                    UpdatePasukSelection(border, pasukNum);
-
-                    // Trigger haptic feedback (vibration)
-                    TriggerHapticFeedback();
+                    UpdateSelectionBar();
+                    // Vibrate when entering selection mode
+                    if (wasEmpty && _viewModel.SelectedPasukNums.Count > 0)
+                    {
+                        TriggerHapticFeedback();
+                    }
                 });
             }
         }
         catch (TaskCanceledException)
         {
-            // Long press was cancelled (finger lifted before threshold)
+            // Press was released before long press duration - ignore
         }
     }
 
     /// <summary>
-    /// Updates the visual selection state of a pasuk.
+    /// Handles long press on pasuk via custom LongPressBehavior - enters selection mode (Android).
+    /// </summary>
+    private void OnPasukLongPressed(object? sender, EventArgs e)
+    {
+#if ANDROID
+        _lastLongPressTime = DateTime.Now;
+
+        // The sender is the LongPressBehavior - get the Pasuk from the associated view's BindingContext
+        if (sender is LongPressBehavior behavior &&
+            behavior.AssociatedView?.BindingContext is Pasuk pasuk)
+        {
+            var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
+            _viewModel.ToggleSelectedPasuk(pasuk.PasukNum);
+            UpdateSelectionBar();
+            // Vibrate when entering selection mode
+            if (wasEmpty && _viewModel.SelectedPasukNums.Count > 0)
+            {
+                TriggerHapticFeedback();
+            }
+        }
+#endif
+    }
+
+    /// <summary>
+    /// Updates the selection bar after selection change.
+    /// The visual state is handled by DataTrigger in XAML.
     /// </summary>
     private void UpdatePasukSelection(object? sender, int pasukNum)
     {
-        Border? border = null;
+        UpdateSelectionBar();
+    }
 
-        if (sender is Border b)
-        {
-            border = b;
-        }
-        else if (sender is View view)
-        {
-            border = view.Parent as Border ?? view.Parent?.Parent as Border;
-        }
+    #region Selection Bar Methods
 
-        if (border != null)
+    private void UpdateSelectionBar()
+    {
+        var count = _viewModel.SelectedPasukNums.Count;
+        var isSelectionMode = count > 0;
+
+        Shell.SetNavBarIsVisible(this, !isSelectionMode);
+        SelectionBar.IsVisible = isSelectionMode;
+        SelectionCountLabel.Text = count.ToString();
+    }
+
+    private void ClearAllSelections()
+    {
+        _viewModel.ClearSelected();
+        UpdateSelectionBar();
+    }
+
+    private void OnSelectionBackClicked(object? sender, EventArgs e)
+    {
+        ClearAllSelections();
+    }
+
+    private async void OnSelectionShareClicked(object? sender, EventArgs e)
+    {
+        var text = GetSelectedPesukimText();
+        if (!string.IsNullOrEmpty(text))
         {
-            bool isSelected = _viewModel.IsPasukSelected(pasukNum);
-            border.BackgroundColor = isSelected
-                ? (Application.Current?.RequestedTheme == AppTheme.Dark
-                    ? Color.FromArgb("#1E3A5F")
-                    : Color.FromArgb("#E3F2FD"))
-                : (Application.Current?.RequestedTheme == AppTheme.Dark
-                    ? Color.FromArgb("#1C1C1E")
-                    : Colors.White);
+            await Share.RequestAsync(new ShareTextRequest { Text = text, Title = _viewModel.Source });
         }
     }
 
+    private async void OnSelectionCopyClicked(object? sender, EventArgs e)
+    {
+        var text = GetSelectedPesukimText();
+        if (!string.IsNullOrEmpty(text))
+        {
+            await Clipboard.SetTextAsync(text);
+            SelectionCopyButton.Text = "\uf32a";
+            TriggerHapticFeedback();
+            await DisplayAlert("", "בחירה הועתקה ללוח", "אישור");
+            SelectionCopyButton.Text = "\uf32b";
+        }
+    }
+
+    private string GetSelectedPesukimText()
+    {
+        if (_viewModel.Perek == null) return string.Empty;
+        var selected = _viewModel.Perek.Pasukim?
+            .Where(p => _viewModel.IsPasukSelected(p.PasukNum))
+            .OrderBy(p => p.PasukNum)
+            .ToList();
+        if (selected == null || selected.Count == 0) return string.Empty;
+        var lines = selected.Select(p => $"{p.PasukNumHeb}. {p.Text}");
+        return $"{_viewModel.Source}\n\n{string.Join("\n", lines)}";
+    }
+
+    #endregion
+
     /// <summary>
-    /// Triggers haptic feedback (vibration) for long press.
+    /// Triggers haptic feedback (vibration) for selection mode entry.
     /// </summary>
     private static void TriggerHapticFeedback()
     {
         try
         {
-#if ANDROID || IOS
+#if ANDROID
+            Vibration.Vibrate(TimeSpan.FromMilliseconds(50));
+#elif IOS
             HapticFeedback.Perform(HapticFeedbackType.LongPress);
 #endif
         }
@@ -574,6 +796,29 @@ public partial class PerekPage : ContentPage
         ExitFullScreen();
     }
 
+    private double _exitButtonPanX;
+    private double _exitButtonPanY;
+
+    /// <summary>
+    /// Handles pan gesture on exit full screen button - allows dragging.
+    /// Note: X is negated to account for RTL layout coordinate inversion.
+    /// </summary>
+    private void OnExitFullScreenButtonPan(object? sender, PanUpdatedEventArgs e)
+    {
+        switch (e.StatusType)
+        {
+            case GestureStatus.Running:
+                // Negate X for RTL layout
+                ExitFullScreenButton.TranslationX = _exitButtonPanX - e.TotalX;
+                ExitFullScreenButton.TranslationY = _exitButtonPanY + e.TotalY;
+                break;
+            case GestureStatus.Completed:
+                _exitButtonPanX = ExitFullScreenButton.TranslationX;
+                _exitButtonPanY = ExitFullScreenButton.TranslationY;
+                break;
+        }
+    }
+
     #region Swipe Navigation
 
     private bool _isNavigating;
@@ -728,7 +973,11 @@ public partial class PerekPage : ContentPage
         PasukimFooterSpacer.HeightRequest = 0;
         ArticlesFooterSpacer.HeightRequest = 0;
 
-        // Show floating exit button
+        // Show floating exit button (reset position first)
+        _exitButtonPanX = 0;
+        _exitButtonPanY = 0;
+        ExitFullScreenButton.TranslationX = 0;
+        ExitFullScreenButton.TranslationY = 0;
         ExitFullScreenButton.IsVisible = true;
     }
 

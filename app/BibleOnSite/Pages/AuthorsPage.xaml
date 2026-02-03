@@ -14,7 +14,6 @@
                          Placeholder="חיפוש רבנים..."
                          Text="{Binding SearchPhrase}"
                          TextChanged="OnSearchTextChanged"
-                         HorizontalTextAlignment="Start"
                          BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray900}}"
                          Margin="8,8,8,0"/>
 

@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:models="clr-namespace:BibleOnSite.Models"
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
+             xmlns:behaviors="clr-namespace:BibleOnSite.Behaviors"
              x:Class="BibleOnSite.Pages.PerekPage"
              x:DataType="viewmodels:PerekViewModel"
              Title="{Binding Source}"
@@ -13,6 +15,7 @@
         <ResourceDictionary>
             <Color x:Key="SelectedPasukBackground">#E3F2FD</Color>
             <Color x:Key="SelectedPasukBackgroundDark">#1E3A5F</Color>
+            <!-- DataTrigger helper for selection background -->
         </ResourceDictionary>
     </ContentPage.Resources>
 
@@ -21,36 +24,117 @@
         <!-- Exit Full Screen Button (floating, hidden by default) -->
         <!-- Position: End = right side in RTL (where fullscreen button was) -->
         <!-- Icon: full_screen_minimize_24_regular = \ue688 -->
-        <Button x:Name="ExitFullScreenButton"
-                Text="&#xe688;"
-                FontFamily="FluentIcons"
-                FontSize="24"
+        <Border x:Name="ExitFullScreenButton"
                 WidthRequest="48"
                 HeightRequest="48"
-                CornerRadius="24"
+                StrokeShape="RoundRectangle 24"
                 BackgroundColor="{StaticResource Primary}"
-                TextColor="White"
                 HorizontalOptions="End"
                 VerticalOptions="End"
                 Margin="16,16,16,100"
-                Clicked="OnExitFullScreenClicked"
                 IsVisible="False"
                 ZIndex="100">
-            <Button.Shadow>
+            <Border.Shadow>
                 <Shadow Brush="Black"
                         Offset="0,3"
                         Radius="6"
                         Opacity="0.3"/>
-            </Button.Shadow>
-        </Button>
+            </Border.Shadow>
+            <Border.GestureRecognizers>
+                <TapGestureRecognizer Tapped="OnExitFullScreenClicked"/>
+                <PanGestureRecognizer PanUpdated="OnExitFullScreenButtonPan"/>
+            </Border.GestureRecognizers>
+            <Label Text="&#xe688;"
+                   FontFamily="FluentIcons"
+                   FontSize="24"
+                   TextColor="White"
+                   HorizontalOptions="Center"
+                   VerticalOptions="Center"
+                   HorizontalTextAlignment="Center"
+                   VerticalTextAlignment="Center"/>
+        </Border>
 
         <!-- Main Content Area - fills entire viewport -->
         <Grid x:Name="ContentArea"
               ZIndex="0"
-              RowDefinitions="Auto,*">
+              RowDefinitions="Auto,Auto,*">
 
-            <!-- Perek Header -->
-            <Label Grid.Row="0"
+            <!-- Selection Bar (Row 0 - hidden by default) -->
+            <Grid Grid.Row="0"
+                  x:Name="SelectionBar"
+                  AutomationId="SelectionBar"
+                  IsVisible="False"
+                  BackgroundColor="{StaticResource Primary}"
+                  Padding="4,5"
+                  ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+                <Grid.HeightRequest>
+                    <OnPlatform x:TypeArguments="x:Double" Default="48">
+                        <On Platform="Android,iOS" Value="56"/>
+                    </OnPlatform>
+                </Grid.HeightRequest>
+                <!-- Back button - arrow_right_24_regular = \uf182 -->
+                <Button Grid.Column="0"
+                        x:Name="SelectionBackButton"
+                        AutomationId="SelectionBackButton"
+                        Text="&#xf182;"
+                        FontFamily="FluentIcons"
+                        FontSize="20"
+                        WidthRequest="36"
+                        HeightRequest="36"
+                        Padding="0"
+                        BackgroundColor="Transparent"
+                        TextColor="White"
+                        Clicked="OnSelectionBackClicked"/>
+                <!-- Badge with count -->
+                <Border Grid.Column="1"
+                        BackgroundColor="White"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="Transparent"
+                        Padding="8,2"
+                        MinimumWidthRequest="24"
+                        HeightRequest="24"
+                        VerticalOptions="Center"
+                        Margin="4,0">
+                    <Label x:Name="SelectionCountLabel"
+                           AutomationId="SelectionCountLabel"
+                           Text="0"
+                           FontSize="12"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource Primary}"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Center"/>
+                </Border>
+                <!-- Spacer (transparent) -->
+                <ContentView Grid.Column="2"/>
+                <!-- Share button - share_24_regular = \uf6b0 -->
+                <Button Grid.Column="3"
+                        AutomationId="SelectionShareButton"
+                        Text="&#xf6b0;"
+                        FontFamily="FluentIcons"
+                        FontSize="20"
+                        WidthRequest="36"
+                        HeightRequest="36"
+                        Padding="0"
+                        BackgroundColor="Transparent"
+                        TextColor="White"
+                        Clicked="OnSelectionShareClicked"/>
+                <!-- Copy button - copy_24_regular = \uf32b -->
+                <Button Grid.Column="4"
+                        x:Name="SelectionCopyButton"
+                        AutomationId="SelectionCopyButton"
+                        Text="&#xf32b;"
+                        FontFamily="FluentIcons"
+                        FontSize="20"
+                        WidthRequest="36"
+                        HeightRequest="36"
+                        Padding="0"
+                        BackgroundColor="Transparent"
+                        TextColor="White"
+                        Clicked="OnSelectionCopyClicked"/>
+            </Grid>
+
+            <!-- Perek Header (Row 1 - always visible) -->
+            <Label Grid.Row="1"
                    x:Name="PerekHeader"
                    Text="{Binding Header}"
                    FontSize="22"
@@ -59,11 +143,12 @@
                    Padding="16,12"
                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
 
-            <!-- Perek Text - Pasukim List - fills entire height, scrolls under bottom bar -->
-            <CollectionView Grid.Row="1"
+            <!-- Perek Text - Pasukim List (Row 2) -->
+            <CollectionView Grid.Row="2"
                             x:Name="PasukimCollection"
                             ItemsSource="{Binding Perek.Pasukim}"
                             SelectionMode="None"
+                            Scrolled="OnPasukimScrolled"
                             Margin="8,0,8,0">
                 <!-- Footer spacer so last item can scroll above bottom bar -->
                 <CollectionView.Footer>
@@ -77,15 +162,25 @@
                                 Stroke="Transparent"
                                 x:Name="PasukBorder"
                                 BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+                            <Border.Triggers>
+                                <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
+                                    <Setter Property="BackgroundColor" Value="{StaticResource SelectedPasukBackground}"/>
+                                </DataTrigger>
+                            </Border.Triggers>
                             <Border.GestureRecognizers>
                                 <TapGestureRecognizer Tapped="OnPasukTapped"
                                                       CommandParameter="{Binding PasukNum}"/>
+                                <TapGestureRecognizer Tapped="OnPasukRightClicked"
+                                                      CommandParameter="{Binding PasukNum}"
+                                                      Buttons="Secondary"/>
+                                <PointerGestureRecognizer PointerPressed="OnPasukPointerPressed"
+                                                          PointerReleased="OnPasukPointerReleased"/>
                             </Border.GestureRecognizers>
+                            <Border.Behaviors>
+                                <behaviors:LongPressBehavior LongPressDuration="600"
+                                                             LongPressed="OnPasukLongPressed"/>
+                            </Border.Behaviors>
                             <Grid ColumnDefinitions="40,*">
-                                <Grid.GestureRecognizers>
-                                    <PointerGestureRecognizer PointerPressed="OnPasukPointerPressed"
-                                                              PointerReleased="OnPasukPointerReleased"/>
-                                </Grid.GestureRecognizers>
                                 <Label Grid.Column="0"
                                        Text="{Binding PasukNumHeb}"
                                        FontSize="16"
@@ -98,8 +193,7 @@
                                        FormattedText="{Binding FormattedText}"
                                        FontSize="18"
                                        LineBreakMode="WordWrap"
-                                       LineHeight="1.4"
-                                       HorizontalTextAlignment="Start"/>
+                                       LineHeight="1.4"/>
                             </Grid>
                         </Border>
                     </DataTemplate>
@@ -127,7 +221,7 @@
 
             <!-- Articles View (hidden by default, shown when articles button clicked) -->
             <!-- Uses shared ArticleCard component -->
-            <CollectionView Grid.Row="1"
+            <CollectionView Grid.Row="2"
                             x:Name="ArticlesCollection"
                             IsVisible="False"
                             SelectionMode="Single"

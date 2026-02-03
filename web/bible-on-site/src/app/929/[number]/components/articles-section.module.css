@@ -150,20 +150,20 @@
     width: 180px;
     padding: 10px;
   }
-  
+
   .authorImage {
     width: 32px;
     height: 32px;
   }
-  
+
   .authorName {
     font-size: 0.75rem;
   }
-  
+
   .articleTitle {
     font-size: 0.8rem;
   }
-  
+
   .articleAbstract {
     font-size: 0.7rem;
   }
