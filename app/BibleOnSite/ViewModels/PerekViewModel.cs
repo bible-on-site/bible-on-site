@@ -278,6 +278,14 @@ public partial class PerekViewModel : ObservableObject
     [RelayCommand]
     public void ClearSelected()
     {
+        // Clear IsSelected on all pasukim
+        if (Perek?.Pasukim != null)
+        {
+            foreach (var pasuk in Perek.Pasukim)
+            {
+                pasuk.IsSelected = false;
+            }
+        }
         SelectedPasukNums = new List<int>();
     }
 
@@ -288,14 +296,17 @@ public partial class PerekViewModel : ObservableObject
     public void ToggleSelectedPasuk(int pasukNum)
     {
         var newList = new List<int>(SelectedPasukNums);
+        var pasuk = Perek?.Pasukim?.FirstOrDefault(p => p.PasukNum == pasukNum);
 
         if (newList.Contains(pasukNum))
         {
             newList.Remove(pasukNum);
+            if (pasuk != null) pasuk.IsSelected = false;
         }
         else
         {
             newList.Add(pasukNum);
+            if (pasuk != null) pasuk.IsSelected = true;
         }
 
         SelectedPasukNums = newList;
