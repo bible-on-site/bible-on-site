@@ -1,5 +1,8 @@
 name: App Package Flow
 on:
+  push:
+    branches:
+      - test/ios-package-fix  # Temporary: test iOS packaging fix
   workflow_dispatch:
     inputs:
       platform:
@@ -376,6 +379,9 @@ jobs:
 
       - name: Package IPA
         working-directory: ${{ env.APP_DIRECTORY }}
+        env:
+          # Skip simulator runtime validation - actool fails without matching simulator runtimes
+          DISABLE_SIMULATOR_DESTINATION_RESOLUTION: "YES"
         run: |
           dotnet run --project devops -- Package --platform iOS --configuration Release \
             --ios-team-id "${{ secrets.IOS_TEAM_ID }}"
