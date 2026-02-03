@@ -16,14 +16,14 @@ public class ArticleServiceIntegrationTests
     public async Task GetArticleByIdAsync_ShouldReturnArticleContent()
     {
         // Arrange
-        // Article ID 1 is the only article with content in dev DB
+        // Article ID 1 has content in the test database (tanah_test)
         const int articleIdWithContent = 1;
 
         // Act
         var article = await ArticleService.Instance.GetArticleByIdAsync(articleIdWithContent);
 
         // Assert
-        article.Should().NotBeNull("Article 1 should exist in dev DB");
+        article.Should().NotBeNull("Article 1 should exist in test database");
         article!.ArticleContent.Should().NotBeNullOrEmpty(
             "Article 1 should have content - the GraphQL query must request articleContent field");
     }
