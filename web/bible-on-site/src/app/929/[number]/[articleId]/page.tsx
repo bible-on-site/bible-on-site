@@ -22,10 +22,9 @@ import { ScrollToArticle } from "./ScrollToArticle";
 export async function generateStaticParams({
 	params,
 }: {
-	params: Promise<{ number: string }>;
+	params: { number: string };
 }) {
-	const { number } = await params;
-	const perekId = Number.parseInt(number, 10);
+	const perekId = Number.parseInt(params.number, 10);
 	const articles = await getArticlesByPerekId(perekId);
 	return articles.map((article) => ({ articleId: String(article.id) }));
 }
