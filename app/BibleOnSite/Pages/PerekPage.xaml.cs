@@ -1,5 +1,6 @@
 namespace BibleOnSite.Pages;
 
+using BibleOnSite.Behaviors;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
@@ -12,12 +13,10 @@ public partial class PerekPage : ContentPage
     private readonly PerekViewModel _viewModel;
     private bool _isLoading;
     private DateTime _lastLongPressTime = DateTime.MinValue;
-#if WINDOWS
     private DateTime _pointerPressedTime = DateTime.MinValue;
     private int _pressedPasukNum = -1;
     private CancellationTokenSource? _longPressTokenSource;
     private const int LongPressDurationMs = 600;
-#endif
 
     // Circular menu state
     private bool _isMenuOpen;
@@ -26,11 +25,22 @@ public partial class PerekPage : ContentPage
     // Articles view state
     private bool _isShowingArticles;
 
+    // Scroll state tracking - used to prevent long-press during scroll
+    private static DateTime _lastScrollTime = DateTime.MinValue;
+    private const int ScrollCooldownMs = 500; // Don't allow long-press within 500ms of scroll
+
+    /// <summary>
+    /// Returns true if the user is currently scrolling or just finished scrolling.
+    /// Used by LongPressBehavior to prevent false triggers during scroll.
+    /// </summary>
+    public static bool IsScrolling => (DateTime.Now - _lastScrollTime).TotalMilliseconds < ScrollCooldownMs;
+
     public PerekPage()
     {
         InitializeComponent();
         _viewModel = new PerekViewModel();
         BindingContext = _viewModel;
+        SetupGlobalTouchHandler();
     }
 
     public PerekPage(PerekViewModel viewModel)
@@ -38,6 +48,114 @@ public partial class PerekPage : ContentPage
         InitializeComponent();
         _viewModel = viewModel;
         BindingContext = _viewModel;
+        SetupGlobalTouchHandler();
+    }
+
+    /// <summary>
+    /// Sets up a global touch handler to catch taps that CollectionView swallows.
+    /// </summary>
+    private void SetupGlobalTouchHandler()
+    {
+#if ANDROID
+        MainActivity.TapDetected += OnGlobalTapDetected;
+#endif
+    }
+
+#if ANDROID
+    private void OnGlobalTapDetected(object? sender, (float X, float Y) position)
+    {
+        // Only process taps in selection mode
+        if (_viewModel.SelectedPasukNums.Count == 0)
+            return;
+
+        // Find which pasuk was tapped by hit-testing
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            try
+            {
+                var pasukNum = FindTappedPasuk(position.X, position.Y);
+                if (pasukNum > 0)
+                {
+                    _viewModel.ToggleSelectedPasuk(pasukNum);
+                    UpdateSelectionBar();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Error in global tap handler: {ex.Message}");
+            }
+        });
+    }
+
+    /// <summary>
+    /// Finds which pasuk was tapped by checking bounds of visible items.
+    /// </summary>
+    private int FindTappedPasuk(float screenX, float screenY)
+    {
+        if (_viewModel.Perek?.Pasukim == null)
+            return -1;
+
+        // Get the CollectionView's native view
+        if (PasukimCollection.Handler?.PlatformView is not Android.Views.View collectionView)
+            return -1;
+
+        // Convert screen coordinates to view coordinates
+        var location = new int[2];
+        collectionView.GetLocationOnScreen(location);
+        var localX = screenX - location[0];
+        var localY = screenY - location[1];
+
+        // Check if tap is within CollectionView bounds
+        if (localX < 0 || localY < 0 || localX > collectionView.Width || localY > collectionView.Height)
+            return -1;
+
+        // Find the child view at this position
+        if (collectionView is Android.Views.ViewGroup viewGroup)
+        {
+            for (int i = 0; i < viewGroup.ChildCount; i++)
+            {
+                var child = viewGroup.GetChildAt(i);
+                if (child == null) continue;
+
+                var childLocation = new int[2];
+                child.GetLocationOnScreen(childLocation);
+
+                if (screenX >= childLocation[0] && screenX <= childLocation[0] + child.Width &&
+                    screenY >= childLocation[1] && screenY <= childLocation[1] + child.Height)
+                {
+                    // Found the child - try to get its binding context
+                    if (child.Tag is Java.Lang.Integer tagInt)
+                    {
+                        return tagInt.IntValue();
+                    }
+
+                    // Try to find the pasuk by index
+                    // The CollectionView items are in order, so child index maps to pasuk index
+                    // But we need to account for header if any
+                    var pasukIndex = i; // Adjust if there's a header
+                    if (pasukIndex >= 0 && pasukIndex < _viewModel.Perek.Pasukim.Count)
+                    {
+                        return _viewModel.Perek.Pasukim[pasukIndex].PasukNum;
+                    }
+                }
+            }
+        }
+
+        return -1;
+    }
+#endif
+
+    /// <summary>
+    /// Tracks scroll events to prevent long-press during scroll.
+    /// </summary>
+    private void OnPasukimScrolled(object? sender, ItemsViewScrolledEventArgs e)
+    {
+        _lastScrollTime = DateTime.Now;
+        // Cancel any pending long-press (pointer-based for Windows)
+        _longPressTokenSource?.Cancel();
+        _pressedPasukNum = -1;
+        // Cancel any pending long-press (behavior-based for Android)
+        LongPressBehavior.CancelAllPending();
     }
 
     protected override async void OnAppearing()
@@ -103,9 +221,8 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private void OnPasukTapped(object? sender, TappedEventArgs e)
     {
-        // Skip tap if long press just happened (within 500ms) - prevents tap-on-release
-        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 500)
-            return;
+        // Cancel any pending long-press timers (Android doesn't receive Up events in CollectionView)
+        LongPressBehavior.CancelAllPending();
 
         if (e.Parameter is int pasukNum)
         {
@@ -140,11 +257,14 @@ public partial class PerekPage : ContentPage
     }
 
     /// <summary>
-    /// Handles pointer press - starts long-press timer (Windows only, touch uses TouchBehavior).
+    /// Handles pointer press - starts long-press timer.
     /// </summary>
     private void OnPasukPointerPressed(object? sender, PointerEventArgs e)
     {
-#if WINDOWS
+        // Don't start long-press detection if scrolling
+        if (IsScrolling)
+            return;
+
         _longPressTokenSource?.Cancel();
         _longPressTokenSource = new CancellationTokenSource();
 
@@ -156,23 +276,19 @@ public partial class PerekPage : ContentPage
             // Start long-press detection
             _ = DetectLongPressAsync(pasuk.PasukNum, _longPressTokenSource.Token);
         }
-#endif
     }
 
     /// <summary>
-    /// Handles pointer release - cancels long-press timer (Windows only).
+    /// Handles pointer release - cancels long-press timer.
     /// </summary>
     private void OnPasukPointerReleased(object? sender, PointerEventArgs e)
     {
-#if WINDOWS
         _longPressTokenSource?.Cancel();
         _pressedPasukNum = -1;
-#endif
     }
 
-#if WINDOWS
     /// <summary>
-    /// Detects long press after duration (Windows only).
+    /// Detects long press after duration.
     /// </summary>
     private async Task DetectLongPressAsync(int pasukNum, CancellationToken token)
     {
@@ -181,7 +297,8 @@ public partial class PerekPage : ContentPage
             await Task.Delay(LongPressDurationMs, token);
 
             // If we get here, the press was held long enough
-            if (!token.IsCancellationRequested && _pressedPasukNum == pasukNum)
+            // Double-check we're not scrolling and pasuk is still pressed
+            if (!token.IsCancellationRequested && _pressedPasukNum == pasukNum && !IsScrolling)
             {
                 _lastLongPressTime = DateTime.Now;
 
@@ -205,7 +322,6 @@ public partial class PerekPage : ContentPage
             // Press was released before long press duration - ignore
         }
     }
-#endif
 
     /// <summary>
     /// Handles long press on pasuk via custom LongPressBehavior - enters selection mode (Android).
@@ -216,7 +332,7 @@ public partial class PerekPage : ContentPage
         _lastLongPressTime = DateTime.Now;
 
         // The sender is the LongPressBehavior - get the Pasuk from the associated view's BindingContext
-        if (sender is Behaviors.LongPressBehavior behavior &&
+        if (sender is LongPressBehavior behavior &&
             behavior.AssociatedView?.BindingContext is Pasuk pasuk)
         {
             var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;

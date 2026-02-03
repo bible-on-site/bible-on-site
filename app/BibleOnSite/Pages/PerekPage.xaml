@@ -148,6 +148,7 @@
                             x:Name="PasukimCollection"
                             ItemsSource="{Binding Perek.Pasukim}"
                             SelectionMode="None"
+                            Scrolled="OnPasukimScrolled"
                             Margin="8,0,8,0">
                 <!-- Footer spacer so last item can scroll above bottom bar -->
                 <CollectionView.Footer>
