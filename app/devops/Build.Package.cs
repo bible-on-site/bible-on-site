@@ -203,7 +203,11 @@ partial class Build
             ["TargetFramework"] = "net9.0-ios",
             ["ArchiveOnBuild"] = "true",
             ["BuildIpa"] = "true",
-            ["IpaPackageDir"] = $"{ArtifactsDirectory}/"
+            ["IpaPackageDir"] = $"{ArtifactsDirectory}/",
+            // Skip simulator-related checks that fail due to missing iOS 17 simulator runtime
+            // The .NET iOS SDK bundles iphonesimulator SDK 23A339 (iOS 17) but only iOS 18.x/26.x runtimes are installed
+            ["SupportedOSPlatformVersion"] = "17.0",
+            ["_ExcludeSimulatorArchitectures"] = "true"
         };
 
         // Add code signing configuration

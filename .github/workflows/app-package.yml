@@ -340,18 +340,20 @@ jobs:
           echo "Xcode version:"
           xcodebuild -version
 
-      - name: List and install simulator runtimes
+      - name: Install iOS 17 simulator runtime
         run: |
           echo "Available simulator runtimes:"
           xcrun simctl list runtimes
           echo ""
-          echo "Available simulator runtime downloads:"
-          xcrun simctl runtime list --json 2>/dev/null | head -50 || true
-          echo ""
-          # The actool error requires simulator runtime version matching iphonesimulator SDK 23A339 (iOS 17.0)
-          # Try to find and install compatible runtime if available
-          echo "Checking for bundled simulator runtimes in Xcode..."
-          ls -la "$(xcode-select -p)/Platforms/iPhoneOS.platform/Library/Developer/CoreSimulator/Profiles/Runtimes/" 2>/dev/null || true
+          # The .NET iOS SDK uses iphonesimulator SDK 23A339 (iOS 17.0) but only iOS 18.x/26.x runtimes are installed
+          # Install iOS 17 simulator runtime to fix actool compatibility
+          echo "Installing iOS 17 simulator runtime..."
+          # Try xcodebuild first (faster if available)
+          xcodebuild -downloadPlatform iOS 17.0 2>/dev/null || \
+            xcrun simctl runtime add "com.apple.CoreSimulator.SimRuntime.iOS-17-0" 2>/dev/null || \
+            echo "Could not install iOS 17 runtime, will try xcrun"
+          echo "Updated simulator runtimes:"
+          xcrun simctl list runtimes
 
       - name: Setup iOS signing
         env:
@@ -395,8 +397,6 @@ jobs:
         env:
           # Skip simulator runtime validation - actool fails without matching simulator runtimes
           DISABLE_SIMULATOR_DESTINATION_RESOLUTION: "YES"
-          # Force actool to use standalone mode without simulator validation
-          ACTOOL_STANDALONE_ASSET_CATALOG_COMPILER: "YES"
         run: |
           # Set SDKROOT to iphoneos explicitly to avoid simulator SDK issues
           export SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)
