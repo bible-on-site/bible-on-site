@@ -302,8 +302,11 @@ jobs:
         run: |
           # Show .NET SDK info to debug
           dotnet --info
-          # Install the MAUI iOS workload
-          dotnet workload install maui-ios --skip-manifest-update
+          # Install the MAUI iOS workload for .NET 9.0 (not .NET 10 preview)
+          # Use --sdk-version to ensure workload is installed for the correct SDK
+          SDK_VERSION=$(dotnet --list-sdks | grep "^9\." | tail -1 | cut -d' ' -f1)
+          echo "Installing workload for SDK version: $SDK_VERSION"
+          dotnet workload install maui-ios --skip-manifest-update --sdk-version "$SDK_VERSION"
           # Show installed workloads
           dotnet workload list
 
