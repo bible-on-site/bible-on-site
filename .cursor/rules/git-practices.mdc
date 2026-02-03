@@ -1,0 +1,37 @@
+---
+description: Pre-commit, commit process, branch management, and PR practices
+alwaysApply: true
+---
+
+# Git Practices
+
+## Pre-commit
+
+- Config: `.pre-commit-config.yaml`; venv: `devops/.venv/`; tool config: `devops/pyproject.toml`.
+- Husky runs pre-commit via `.husky/pre-commit`.
+- Adding a hook: add to `.pre-commit-config.yaml`, then update `docs/devops/pre-commit.md`.
+
+## Commit Process
+
+1. **Before commit**: Review staged changes for PII (AWS IDs, API keys, passwords, emails). Use `git diff --cached`.
+2. After `git commit`, pre-commit may auto-fix; check `git status`.
+3. If files were auto-fixed, stage and amend:
+   `git diff-tree --no-commit-id --name-only -r HEAD | xargs git add && git commit --amend --no-edit`
+4. Push only when the working tree is clean.
+
+**Agents**: After committing, always check `git status` and amend if pre-commit changed files.
+
+## Branch Management
+
+Before pushing, check if the branch already exists on remote (may be merged/deleted):
+
+```bash
+git ls-remote --heads origin <branch-name>
+```
+
+If it exists: check if merged; if merged, use a new branch name; if not, fetch and rebase before pushing.
+
+## Pull Requests
+
+- Use a new branch per feature/fix. PR is created when publishing the branch.
+- Only @DoradSoft can merge unless explicitly delegated.

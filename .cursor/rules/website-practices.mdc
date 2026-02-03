@@ -1,0 +1,26 @@
+---
+description: Website (Next.js) development and testing practices
+globs: web/bible-on-site/**/*
+alwaysApply: false
+---
+
+# Website (web/bible-on-site) Practices
+
+## Development
+
+- Use Playwright at http://localhost:3001 (`npm run dev` if needed).
+- **Prefer server components for content**: content-rich (text, articles, sections) → SSG/SSR only for SEO and AIO. Use client components only for interactive/glue (navigation, animation, scroll, menu). Keep client components minimal and isolated; content should remain server-rendered.
+
+## Commands
+
+| Task | Command |
+| ---- | ------- |
+| Unit Tests | `npm run test:unit` |
+| E2E Tests | `npm run test:e2e` |
+| Unit Coverage | `npm run coverage:unit` |
+| E2E Coverage | `npm run coverage:e2e` |
+
+## Implementation Notes
+
+- For test assertions: non-null assertion with a linter suppression comment explaining why it's safe.
+- When catching errors, log with `console.warn` or `console.error`.

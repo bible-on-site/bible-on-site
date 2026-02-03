@@ -1,0 +1,21 @@
+---
+description: AWS infrastructure and GitHub Actions workflow guidelines
+globs: .github/workflows/**/*,docs/aws/**/*
+alwaysApply: false
+---
+
+# AWS & GitHub Actions
+
+## AWS
+
+- Connect: `aws sso login --profile AdministratorAccess-<AccountID>`.
+- All accepted changes must be reflected in IaC under `infrastructure/`.
+- Do **not** run CloudFormation from `infrastructure/` templates; they are reference-only.
+- When changing AWS process, update `docs/aws/`.
+
+## GitHub Actions
+
+Before editing `.github/workflows/`:
+
+1. Re-enable VS Code extension `github.vscode-github-actions` if needed.
+2. After changes, remove or disable the extension to avoid noise in the problems view.

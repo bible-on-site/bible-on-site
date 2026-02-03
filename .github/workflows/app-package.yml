@@ -313,12 +313,17 @@ jobs:
           echo "Available Xcode installations:"
           ls -la /Applications/ | grep -i xcode || true
 
-          # Use Xcode 26.x (stable since Dec 2025) which is required by iOS SDK 26.0
-          # The MAUI iOS workload installs iOS SDK 26.0 which requires Xcode 26.0+
-          # Find the latest stable Xcode 26.x installation
-          XCODE_PATH=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          # The MAUI iOS workload installs iOS SDK 26.0.9766 which requires exactly Xcode 26.0
+          # Using Xcode 26.1 or 26.2 causes: "requires Xcode 26.0. The current version of Xcode is 26.2"
+          # Find Xcode 26.0.x installation specifically
+          XCODE_PATH=$(ls -d /Applications/Xcode_26.0*.app 2>/dev/null | sort -V | tail -1)
           if [ -z "$XCODE_PATH" ]; then
-            # Fallback to default Xcode if 26.x not found
+            # Fallback to any 26.x if 26.0.x not found
+            echo "Xcode 26.0.x not found, trying any 26.x"
+            XCODE_PATH=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | head -1)
+          fi
+          if [ -z "$XCODE_PATH" ]; then
+            # Fallback to default Xcode
             echo "Xcode 26.x not found, using default Xcode"
             XCODE_PATH=$(xcode-select -p | sed 's|/Contents/Developer||')
           fi

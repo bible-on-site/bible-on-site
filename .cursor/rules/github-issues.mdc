@@ -1,5 +1,5 @@
 ---
-description: GitHub issue management - labels and projects for bible-on-site
+description: GitHub issue management - labels, projects, and body template for bible-on-site
 alwaysApply: true
 ---
 
@@ -48,13 +48,35 @@ Project IDs:
 - `3` = API
 - `2` = website
 
+## Title & Body
+
+- **Title**: Descriptive; optional prefixes `[P1-P3]`, `[D1-D4]` (or use labels). Example: `Data CI: JUnit report file not generated`.
+- **Body template**:
+```markdown
+## Problem
+Brief description of the issue.
+
+## Reference
+- Link to failing CI run, error logs, or related code
+
+## Root Cause (if known)
+Analysis of why this is happening.
+
+## Solution (if known)
+Proposed fix or approach.
+```
+
 ## Complete Example
 
 ```bash
 # 1. Create issue with labels
 gh issue create \
   --title "Feature title" \
-  --body "Description..." \
+  --body "## Problem
+Description here
+
+## Reference
+- https://github.com/..." \
   --label "enhancement,P2,D2,app,admin,DB"
 
 # 2. Add to all relevant projects

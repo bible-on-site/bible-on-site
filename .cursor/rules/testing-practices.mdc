@@ -1,0 +1,30 @@
+---
+description: Testing strategy, conventions, and commands
+alwaysApply: true
+---
+
+# Testing Practices
+
+## Strategy
+
+**Prefer unit tests over e2e.** Extract pure business logic into testable functions; unit test first, then add e2e for integration. Design for testability—if something is only testable via e2e, refactor to separate pure logic from side effects.
+
+## Test Naming
+
+- **Top-level describe**: subject (component, function, module).
+- **Nested describe**: context (e.g. "when user is authenticated", "with invalid input").
+- **it/test**: expectation verb ("returns the correct value", "throws an error", "renders the component").
+
+## Coverage (Website)
+
+Use `/* istanbul ignore next */` for defensive/unreachable code; add a short reason. Custom handling in `tests/util/coverage/sanitize-coverage.js` makes SWC instrumentation respect these comments.
+
+## Commands by Module
+
+| Module | Unit | E2E | Coverage |
+| ------ | -----|-----|----------|
+| Website | `npm run test:unit` | `npm run test:e2e` | `npm run coverage:unit` / `coverage:e2e` |
+| API | (cargo) | `cargo make test-e2e` | `cargo make coverage-e2e` |
+| App | `dotnet run --project devops -- TestUnit` | `dotnet run --project devops -- TestE2E` | `dotnet run --project devops -- CoverageUnit` |
+
+App integration tests need API at `http://127.0.0.1:3003`; they use `[Trait("Category", "Integration")]`.

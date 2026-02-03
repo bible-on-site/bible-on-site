@@ -1,0 +1,32 @@
+---
+description: General principles, language policy, tool learning, and investigation
+alwaysApply: true
+---
+
+# General Practices
+
+- **Prefer the latest stable version** of any toolset, framework, or package unless there is a specific compatibility concern.
+
+## Language Policy
+
+**No shell scripts (.sh, .bash) in this repository.**
+
+- **DevOps**: Node.js/TypeScript (`devops/`)
+- **Data processing**: Rust (`data/`)
+
+## Tool Learning (Agents/Copilot)
+
+1. Check `.github/tool-registry.md` for existing research.
+2. If missing/outdated: use Context7 (`resolve-library-id` → `get-library-docs`), official docs, or GitHub.
+3. Update the registry with tool name, version, date, and key learnings.
+4. Apply learnings.
+
+## Investigation
+
+Use **GitHub CLI (`gh`)** for GitHub-related issues:
+
+```bash
+gh run view <run-id> --log-failed
+gh run view <run-id> --json workflowName,event,conclusion
+gh api repos/<owner>/<repo>/commits/<sha>
+```
