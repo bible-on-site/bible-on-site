@@ -212,8 +212,16 @@ public partial class PerekPage : ContentPage
     protected override void OnNavigatedTo(NavigatedToEventArgs args)
     {
         base.OnNavigatedTo(args);
+        SetAnalyticsScreenForPerek();
+    }
 
-        // Handle navigation parameters if needed
+    /// <summary>
+    /// Logs current perek screen to analytics (legacy-style: AlHaperek/{perekId}).
+    /// </summary>
+    private void SetAnalyticsScreenForPerek()
+    {
+        var analytics = Application.Current?.Handler?.MauiContext?.Services.GetService<IAnalyticsService>();
+        analytics?.SetScreen($"AlHaperek/{_viewModel.PerekId}", "PerekPage");
     }
 
     /// <summary>
@@ -558,6 +566,7 @@ public partial class PerekPage : ContentPage
         if (perekId >= 1 && perekId <= 929 && perekId != _viewModel.PerekId)
         {
             await _viewModel.LoadByPerekIdAsync(perekId);
+            SetAnalyticsScreenForPerek();
             // Scroll to top after loading new perek
             PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
             // Update articles badge
@@ -911,6 +920,7 @@ public partial class PerekPage : ContentPage
 
             // Load new content
             await loadAction();
+            SetAnalyticsScreenForPerek();
 
             // Position for slide in
             PasukimCollection.TranslationX = newStartX;
