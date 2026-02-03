@@ -36,6 +36,7 @@ describe("articles service", () => {
 					perek_id: 42,
 					author_id: 10,
 					abstract: "<p>Test abstract</p>",
+					content: "<p>Full content</p>",
 					name: "Test Article",
 					priority: 1,
 					author_name: "הרב ישראל",
@@ -45,6 +46,7 @@ describe("articles service", () => {
 					perek_id: 42,
 					author_id: 20,
 					abstract: null,
+					content: null,
 					name: "Another Article",
 					priority: 2,
 					author_name: "הרב יעקב",
@@ -57,7 +59,7 @@ describe("articles service", () => {
 
 			expect(mockQuery).toHaveBeenCalledTimes(1);
 			expect(mockQuery).toHaveBeenCalledWith(
-				expect.stringContaining("a.id, a.perek_id, a.author_id, a.abstract, a.name, a.priority"),
+				expect.stringContaining("a.id, a.perek_id, a.author_id, a.abstract, a.content, a.name, a.priority"),
 				[42],
 			);
 
@@ -67,6 +69,7 @@ describe("articles service", () => {
 					perekId: 42,
 					authorId: 10,
 					abstract: "<p>Test abstract</p>",
+					content: "<p>Full content</p>",
 					name: "Test Article",
 					priority: 1,
 					authorName: "הרב ישראל",
@@ -77,6 +80,7 @@ describe("articles service", () => {
 					perekId: 42,
 					authorId: 20,
 					abstract: null,
+					content: null,
 					name: "Another Article",
 					priority: 2,
 					authorName: "הרב יעקב",
