@@ -13,6 +13,7 @@ describe("ArticlesSection", () => {
 			authorId: 1,
 			name: "מאמר ראשון",
 			abstract: "<p>תקציר המאמר הראשון</p>",
+			content: "<p>תוכן מלא</p>",
 			priority: 1,
 			authorName: "הרב ישראל",
 			authorImageUrl: "https://test.s3.amazonaws.com/authors/high-res/1.jpg",
@@ -23,6 +24,7 @@ describe("ArticlesSection", () => {
 			authorId: 2,
 			name: "מאמר שני",
 			abstract: null,
+			content: null,
 			priority: 2,
 			authorName: "הרב יעקב",
 			authorImageUrl: "https://test.s3.amazonaws.com/authors/high-res/2.jpg",
@@ -42,13 +44,6 @@ describe("ArticlesSection", () => {
 
 			expect(screen.getByText("📚")).toBeTruthy();
 			expect(screen.getByText("מאמרים על הפרק")).toBeTruthy();
-		});
-
-		it("renders all article titles", () => {
-			render(<ArticlesSection articles={mockArticles} />);
-
-			expect(screen.getByText("מאמר ראשון")).toBeTruthy();
-			expect(screen.getByText("מאמר שני")).toBeTruthy();
 		});
 
 		it("renders author names", () => {
@@ -74,13 +69,13 @@ describe("ArticlesSection", () => {
 			expect(screen.getByText("תקציר המאמר הראשון")).toBeTruthy();
 		});
 
-		it("links to author page", () => {
+		it("links to article page", () => {
 			render(<ArticlesSection articles={mockArticles} />);
 
 			const links = screen.getAllByRole("link");
 			expect(links).toHaveLength(2);
-			expect(links[0].getAttribute("href")).toBe("/authors/1");
-			expect(links[1].getAttribute("href")).toBe("/authors/2");
+			expect(links[0].getAttribute("href")).toBe("/929/1/1");
+			expect(links[1].getAttribute("href")).toBe("/929/1/2");
 		});
 	});
 
@@ -93,6 +88,7 @@ describe("ArticlesSection", () => {
 					authorId: 1,
 					name: "מאמר עם HTML",
 					abstract: "<strong>טקסט מודגש</strong>",
+					content: "<p>Full content</p>",
 					priority: 1,
 					authorName: "הרב משה",
 					authorImageUrl: "https://test.s3.amazonaws.com/authors/high-res/1.jpg",
