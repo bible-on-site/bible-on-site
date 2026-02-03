@@ -55,7 +55,7 @@
 
 .carouselItem {
   flex: 0 0 auto;
-  width: 220px;
+  width: 240px;
   background: #ffffff;
   border-radius: 8px;
   padding: 12px;
@@ -67,6 +67,7 @@
   color: inherit;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 8px;
 }
 
@@ -76,16 +77,10 @@
   transform: translateY(-1px);
 }
 
-/* Author section with image and name */
-.authorSection {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
+/* Author image - centered, own row */
 .authorImage {
-  width: 40px;
-  height: 40px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   overflow: hidden;
   flex-shrink: 0;
@@ -99,10 +94,15 @@
 }
 
 .authorName {
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   font-weight: 600;
   color: #1c2c5d;
   line-height: 1.2;
+  text-align: center;
+  padding-bottom: 6px;
+  margin-bottom: 0;
+  border-bottom: 1px solid #c4c4c4;
+  width: 100%;
   /* Limit to 2 lines */
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -111,60 +111,49 @@
   overflow: hidden;
 }
 
-/* Article content */
-.articleContent {
-  flex: 1;
-  min-height: 0;
-}
-
-.articleTitle {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: #374151;
-  margin: 0 0 4px 0;
-  line-height: 1.3;
-  /* Limit to 2 lines */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
+/* Abstract */
 .articleAbstract {
-  font-size: 0.75rem;
-  color: #6b7280;
-  line-height: 1.4;
+  font-size: 0.9rem;
+  color: #374151;
+  line-height: 1.5;
   margin: 0;
-  /* Limit to 2 lines */
+  padding: 18px 10px;
+  text-align: center;
+  /* Limit to 3 lines */
   display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  vertical-align: middle;
+}
+
+/* Style headings inside abstract */
+.articleAbstract h1,
+.articleAbstract h2,
+.articleAbstract h3,
+.articleAbstract h4,
+.articleAbstract h5,
+.articleAbstract h6 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0;
+  display: inline;
 }
 
 /* Responsive: smaller items on mobile */
 @media (max-width: 640px) {
   .carouselItem {
-    width: 180px;
+    width: 200px;
     padding: 10px;
   }
 
   .authorImage {
-    width: 32px;
-    height: 32px;
+    width: 64px;
+    height: 64px;
   }
 
   .authorName {
-    font-size: 0.75rem;
-  }
-
-  .articleTitle {
-    font-size: 0.8rem;
-  }
-
-  .articleAbstract {
-    font-size: 0.7rem;
+    font-size: 0.85rem;
   }
 }
