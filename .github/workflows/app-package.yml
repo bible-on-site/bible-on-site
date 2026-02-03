@@ -312,8 +312,21 @@ jobs:
           # List available Xcode versions
           echo "Available Xcode installations:"
           ls -la /Applications/ | grep -i xcode || true
-          # Select Xcode 26.0 for .NET 10 iOS SDK compatibility
-          sudo xcode-select -s /Applications/Xcode_26.0.1.app/Contents/Developer
+
+          # For .NET 9.0 iOS SDK, use Xcode 16.x (stable) instead of Xcode 26.x (preview)
+          # Xcode 26.x has simulator runtime compatibility issues on macos-15 runners
+          # TODO: Revert to Xcode 26.x once .NET 10 is set up (see #1018)
+          # Find the latest Xcode 16.x installation
+          XCODE_PATH=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE_PATH" ]; then
+            # Fallback to default Xcode if 16.x not found
+            echo "Xcode 16.x not found, using default Xcode"
+            XCODE_PATH=$(xcode-select -p | sed 's|/Contents/Developer||')
+          fi
+
+          echo "Selecting Xcode: $XCODE_PATH"
+          sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+
           echo "Selected Xcode path:"
           xcode-select -p
           # Show Xcode version
