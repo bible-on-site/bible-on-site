@@ -5,6 +5,7 @@ import { unstable_cache } from "next/cache";
 import React, { Suspense } from "react";
 import { isQriDifferentThanKtiv } from "../../../data/db/tanah-view-types";
 import { getPerekByPerekId } from "../../../data/perek-dto";
+import { getSeferByName, getPerekIdsForSefer } from "../../../data/sefer-dto";
 import { getArticlesByPerekId } from "../../../lib/articles";
 import { ArticlesSection } from "./components/ArticlesSection";
 import Breadcrumb from "./components/Breadcrumb";
@@ -54,14 +55,22 @@ export default async function Perek({
 	const { number } = await params;
 	const perekId = Number.parseInt(number, 10); // convert string to number
 	const perekObj = getPerekByPerekId(perekId);
-
-	// Fetch articles using cached function (ISR with on-demand revalidation support)
+	const sefer = getSeferByName(perekObj.sefer);
+	const perekIds = getPerekIdsForSefer(sefer);
+	// Fetch articles for every perek in the sefer so each blank page shows the correct articles
+	const articlesByPerekIndex = await Promise.all(
+		perekIds.map((id) => getCachedArticles(id)),
+	);
 	const articles = await getCachedArticles(perekId);
 
 	return (
 		<>
 			<Suspense>
-				<SeferComposite perekObj={perekObj} articles={articles} />
+				<SeferComposite
+					perekObj={perekObj}
+					articles={articles}
+					articlesByPerekIndex={articlesByPerekIndex}
+				/>
 			</Suspense>
 			<div className={styles.perekContainer}>
 				<Breadcrumb perekObj={perekObj} />

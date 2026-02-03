@@ -59,8 +59,11 @@
   box-sizing: border-box;
 }
 
-/* TODO: uncomment when supported */
-/* .page.current-page, .page.prev-page, .page.next-page */
+/* Every page has a subtle frame so the next/previous page is visible before and during the turn */
+.he-book .page {
+  box-shadow: 0 0 4px 0 rgb(0 0 0 / 0.08);
+}
+/* Current spread gets a stronger frame so it stands out */
 .he-book .page.current-page {
   box-shadow: 0 0 10px 0 rgb(0 0 0 / 0.1);
 }
@@ -133,4 +136,33 @@
   min-width: 60px;
   text-align: center;
   padding: 0 8px;
+}
+
+/* Semantic page input: narrow, tall, dark text on light bg (override toolbar inherit) */
+.flipbook-toolbar .flipbook-toolbar-indicator-input {
+  background: #e2e8f0;
+  border: 1px solid rgb(0 0 0 / 0.2);
+  border-radius: 4px;
+  color: #0f172a;
+  font: inherit;
+  width: 1.5ch;
+  min-width: 18px;
+  max-width: 1.5ch;
+  min-height: 72px;
+  padding: 8px 2px;
+  text-align: center;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flipbook-toolbar-indicator-input:hover {
+  border-color: rgb(255 255 255 / 0.3);
+}
+
+.flipbook-toolbar-indicator-input:focus {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+  border-color: transparent;
 }

@@ -1,3 +1,4 @@
+import { toLetters } from "gematry";
 import { getTwilight } from "sunrise-sunset-js";
 import { Temporal } from "temporal-polyfill";
 
@@ -216,6 +217,22 @@ export class HebrewDate {
 			month: "long",
 			year: "numeric",
 		});
+	}
+
+	/**
+	 * Traditional Hebrew date format: day (Hebrew letters + geresh), month name, year (e.g. י"ח שבט התשפ"ו).
+	 * Uses standard Intl for month name and gematry (project dependency) for day/year letters.
+	 */
+	toTraditionalHebrewString(): string {
+		const dayStr = toLetters(this.day, { addQuotes: true });
+		const monthStr = this.date.toLocaleString("he-IL-u-ca-hebrew", {
+			month: "long",
+		});
+		const yearStr =
+			this.year >= 5000
+				? `ה'${toLetters(this.year - 5000, { addQuotes: true })}`
+				: toLetters(this.year, { addQuotes: true });
+		return `${dayStr} ${monthStr} ${yearStr}`;
 	}
 }
 

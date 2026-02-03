@@ -16,7 +16,7 @@ import type { PerekObj } from "@/data/perek-dto";
 import { getSeferByName } from "@/data/sefer-dto";
 import type { Article } from "@/lib/articles";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
-import { ArticlesSection } from "./ArticlesSection";
+import { BlankPageContent } from "./BlankPageContent";
 import { Ptuah } from "./Ptuha";
 import { Stuma } from "./Stuma";
 import styles from "./sefer.module.css";
@@ -28,6 +28,8 @@ type FlipBookProps = {
 	pages: React.ReactNode[];
 	pageSemantics?: PageSemantics;
 	direction?: "rtl" | "ltr";
+	/** Leaves to keep visible before/after current for performance */
+	leavesBuffer?: number;
 };
 
 /** Dynamic FlipBook with ref forwarded (library uses forwardRef) */
@@ -37,8 +39,12 @@ const FlipBook = dynamic<
 	ssr: false,
 });
 
-const Sefer = (props: { perekObj: PerekObj; articles: Article[] }) => {
-	const { perekObj, articles } = props;
+const Sefer = (props: {
+	perekObj: PerekObj;
+	articles: Article[];
+	articlesByPerekIndex?: Article[][];
+}) => {
+	const { perekObj, articles, articlesByPerekIndex } = props;
 	const sefer = getSeferByName(perekObj.sefer);
 	const flipBookRef = useRef<FlipBookHandle>(null);
 	const perakim =
@@ -90,20 +96,8 @@ const Sefer = (props: { perekObj: PerekObj; articles: Article[] }) => {
 	);
 
 	const hebrewDateStr = useMemo(
-		() => constructTsetAwareHDate(new Date()).toHebrewLocaleString(),
+		() => constructTsetAwareHDate(new Date()).toTraditionalHebrewString(),
 		[],
-	);
-
-	const blankPage = (
-		<section
-			className={styles.pageBlank}
-			aria-label="עמוד ריק (פירושים ומאמרים)"
-		>
-			<div className={styles.blankPageDate}>{hebrewDateStr}</div>
-			<div className={styles.blankPageArticles}>
-				<ArticlesSection articles={articles} />
-			</div>
-		</section>
 	);
 
 	const contentPages = perakim.flatMap((perek, perekIdx) => [
@@ -122,61 +116,68 @@ const Sefer = (props: { perekObj: PerekObj; articles: Article[] }) => {
 				</div>
 				<div className={styles.perekTextScrollWrapper}>
 					<article className={styles.perekText}>
-					{perek.pesukim.map((pasuk, pasukIdx) => {
-						const pasukKey = pasukIdx + 1;
-						const pasukNumElement = (
-							<span className={styles.pasukNum}>{toLetters(pasukIdx + 1)}</span>
-						);
-						const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
-							const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
-							const isQriWithDifferentKtiv =
-								segment.type === "qri" && isQriDifferentThanKtiv(segment);
-							// TODO: merge qris sequnce like in 929/406
-							return (
-								<React.Fragment key={segmentKey}>
-									<span className={isQriWithDifferentKtiv ? styles.qri : ""}>
-										{segment.type === "ktiv" ? (
-											segment.value
-										) : segment.type === "qri" ? (
-											isQriWithDifferentKtiv ? (
-												<>
-													(
-													{/* biome-ignore lint/a11y/noLabelWithoutControl: It'll take some time to validate this fix altogether with css rules */}
-													<label />
-													{segment.value})
-												</>
-											) : (
+						{perek.pesukim.map((pasuk, pasukIdx) => {
+							const pasukKey = pasukIdx + 1;
+							const pasukNumElement = (
+								<span className={styles.pasukNum}>
+									{toLetters(pasukIdx + 1)}
+								</span>
+							);
+							const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
+								const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
+								const isQriWithDifferentKtiv =
+									segment.type === "qri" && isQriDifferentThanKtiv(segment);
+								// TODO: merge qris sequnce like in 929/406
+								return (
+									<React.Fragment key={segmentKey}>
+										<span className={isQriWithDifferentKtiv ? styles.qri : ""}>
+											{segment.type === "ktiv" ? (
 												segment.value
-											)
-										) : segment.type === "ptuha" ? (
-											Ptuah()
-										) : (
-											Stuma()
+											) : segment.type === "qri" ? (
+												isQriWithDifferentKtiv ? (
+													<>
+														(
+														{/* biome-ignore lint/a11y/noLabelWithoutControl: It'll take some time to validate this fix altogether with css rules */}
+														<label />
+														{segment.value})
+													</>
+												) : (
+													segment.value
+												)
+											) : segment.type === "ptuha" ? (
+												Ptuah()
+											) : (
+												Stuma()
+											)}
+										</span>
+										{segmentIdx === pasuk.segments.length - 1 ||
+										((segment.type === "ktiv" || segment.type === "qri") &&
+											segment.value.at(segment.value.length - 1) ===
+												"־") ? null : (
+											<span> </span>
 										)}
-									</span>
-									{segmentIdx === pasuk.segments.length - 1 ||
-									((segment.type === "ktiv" || segment.type === "qri") &&
-										segment.value.at(segment.value.length - 1) ===
-											"־") ? null : (
-										<span> </span>
-									)}
+									</React.Fragment>
+								);
+							});
+							return (
+								<React.Fragment key={pasukKey}>
+									{pasukNumElement}
+									<span> </span>
+									{pasukElement}
+									<span> </span>
 								</React.Fragment>
 							);
-						});
-						return (
-							<React.Fragment key={pasukKey}>
-								{pasukNumElement}
-								<span> </span>
-								{pasukElement}
-								<span> </span>
-							</React.Fragment>
-						);
-					})}
+						})}
 					</article>
 				</div>
 			</section>
 		</React.Fragment>,
-		<React.Fragment key={`blank-${perekIdx + 1}`}>{blankPage}</React.Fragment>,
+		<React.Fragment key={`blank-${perekIdx + 1}`}>
+			<BlankPageContent
+				articles={articlesByPerekIndex?.[perekIdx] ?? articles}
+				hebrewDateStr={hebrewDateStr}
+			/>
+		</React.Fragment>,
 	]);
 
 	const pages = [frontCover, ...contentPages, backCover];
@@ -190,6 +191,7 @@ const Sefer = (props: { perekObj: PerekObj; articles: Article[] }) => {
 					pages={pages}
 					pageSemantics={hePageSemantics}
 					direction="rtl"
+					leavesBuffer={7}
 				/>
 			</div>
 			<Toolbar

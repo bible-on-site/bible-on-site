@@ -3,8 +3,8 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import type { PerekObj } from "@/data/perek-dto";
-import type { Article } from "@/lib/articles";
 import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
+import type { Article } from "@/lib/articles";
 import ReadModeToggler from "./ReadModeToggler";
 import Sefer from "./Sefer";
 import styles from "./sefer-composite.module.css";
@@ -12,6 +12,7 @@ import styles from "./sefer-composite.module.css";
 const ClientWrapper = (props: {
 	perekObj: PerekObj;
 	articles: Article[];
+	articlesByPerekIndex?: Article[][];
 }) => {
 	const isWideEnough = useIsWideEnough(TABLET_MIN_WIDTH);
 
@@ -74,8 +75,12 @@ const ClientWrapper = (props: {
 			>
 				{/* TODO: figure out how to not affecting INP when toggling (some sort of async rendering?)) */}
 				{everToggled && (
-				<Sefer perekObj={props.perekObj} articles={props.articles} />
-			)}
+					<Sefer
+						perekObj={props.perekObj}
+						articles={props.articles}
+						articlesByPerekIndex={props.articlesByPerekIndex}
+					/>
+				)}
 			</div>
 		</>
 	);
