@@ -165,6 +165,13 @@
                                 Stroke="Transparent"
                                 x:Name="PasukBorder"
                                 BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+                            <!-- iOS (and MacCatalyst): FlowDirection not cascading into template; set explicitly so pesukim layout RTL. -->
+                            <Border.FlowDirection>
+                                <OnPlatform x:TypeArguments="FlowDirection">
+                                    <On Platform="iOS" Value="RightToLeft"/>
+                                    <On Platform="MacCatalyst" Value="RightToLeft"/>
+                                </OnPlatform>
+                            </Border.FlowDirection>
                             <Border.Triggers>
                                 <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
                                     <Setter Property="BackgroundColor" Value="{StaticResource SelectedPasukBackground}"/>
