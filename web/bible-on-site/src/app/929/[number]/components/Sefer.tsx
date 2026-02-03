@@ -12,7 +12,15 @@ import { Stuma } from "./Stuma";
 import styles from "./sefer.module.css";
 import "./sefer.css";
 
-const FlipBook = dynamic(
+/** Props we pass to FlipBook; matches html-flip-book-react FlipBookProps for typing dynamic() */
+type FlipBookProps = {
+	className: string;
+	pages: React.ReactNode[];
+	pageSemantics?: PageSemantics;
+	direction?: "rtl" | "ltr";
+};
+
+const FlipBook = dynamic<FlipBookProps>(
 	() => import("html-flip-book-react").then((mod) => mod.FlipBook),
 	{ ssr: false },
 );
