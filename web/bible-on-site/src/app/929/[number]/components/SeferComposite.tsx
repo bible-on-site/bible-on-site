@@ -4,11 +4,16 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { PerekObj } from "@/data/perek-dto";
 import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
+import type { Article } from "@/lib/articles";
 import ReadModeToggler from "./ReadModeToggler";
 import Sefer from "./Sefer";
 import styles from "./sefer-composite.module.css";
 
-const ClientWrapper = (props: { perekObj: PerekObj }) => {
+const ClientWrapper = (props: {
+	perekObj: PerekObj;
+	articles: Article[];
+	articlesByPerekIndex?: Article[][];
+}) => {
 	const isWideEnough = useIsWideEnough(TABLET_MIN_WIDTH);
 
 	// A better design is to control the toggling state from outside this
@@ -69,7 +74,13 @@ const ClientWrapper = (props: { perekObj: PerekObj }) => {
 				}`}
 			>
 				{/* TODO: figure out how to not affecting INP when toggling (some sort of async rendering?)) */}
-				{everToggled && <Sefer perekObj={props.perekObj} />}
+				{everToggled && (
+					<Sefer
+						perekObj={props.perekObj}
+						articles={props.articles}
+						articlesByPerekIndex={props.articlesByPerekIndex}
+					/>
+				)}
 			</div>
 		</>
 	);

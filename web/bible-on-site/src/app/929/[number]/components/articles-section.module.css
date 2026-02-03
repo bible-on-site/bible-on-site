@@ -27,6 +27,14 @@
   margin: 0;
 }
 
+.emptyMessage {
+  margin: 0;
+  padding: 12px 16px;
+  color: #637598;
+  font-size: 0.95rem;
+  text-align: center;
+}
+
 /* Horizontal carousel */
 .carousel {
   display: flex;
@@ -75,6 +83,14 @@
   border-color: #1c2c5d;
   box-shadow: 0 2px 8px rgba(28, 44, 93, 0.12);
   transform: translateY(-1px);
+}
+
+/* When carousel item is a button (in-place open in flipbook), match link appearance */
+button.carouselItem {
+  appearance: none;
+  font: inherit;
+  cursor: pointer;
+  text-align: inherit;
 }
 
 /* Author image - centered, own row */

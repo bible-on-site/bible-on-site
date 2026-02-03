@@ -120,6 +120,13 @@
   border-color: #1c2c5d;
 }
 
+/* When .backLink is used as a button (e.g. in flipbook article view) */
+button.backLink {
+  cursor: pointer;
+  font: inherit;
+  font-family: inherit;
+}
+
 @media (max-width: 640px) {
   .expandedArticle {
     margin: 16px 8px;

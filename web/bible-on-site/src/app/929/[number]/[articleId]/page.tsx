@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import React, { Suspense } from "react";
 import { isQriDifferentThanKtiv } from "../../../../data/db/tanah-view-types";
 import { getPerekByPerekId } from "../../../../data/perek-dto";
+import { getSeferByName, getPerekIdsForSefer } from "../../../../data/sefer-dto";
 import { getArticleById, getArticlesByPerekId } from "../../../../lib/articles";
 import { ArticlesSection } from "../components/ArticlesSection";
 import Breadcrumb from "../components/Breadcrumb";
@@ -95,12 +96,21 @@ export default async function ArticlePage({
 
 	const perekObj = getPerekByPerekId(perekId);
 	const articles = await getCachedArticles(perekId);
+	const sefer = getSeferByName(perekObj.sefer);
+	const perekIds = getPerekIdsForSefer(sefer);
+	const articlesByPerekIndex = await Promise.all(
+		perekIds.map((pid) => getCachedArticles(pid)),
+	);
 
 	return (
 		<>
 			<ScrollToArticle />
 			<Suspense>
-				<SeferComposite perekObj={perekObj} />
+				<SeferComposite
+					perekObj={perekObj}
+					articles={articles}
+					articlesByPerekIndex={articlesByPerekIndex}
+				/>
 			</Suspense>
 			<div className={perekStyles.perekContainer}>
 				<Breadcrumb perekObj={perekObj} />

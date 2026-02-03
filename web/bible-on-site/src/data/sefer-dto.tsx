@@ -5,6 +5,8 @@ import type {
 	SefarimItem,
 	SefarimItemWithPerakim,
 } from "./db/tanah-view-types";
+
+export type { SefarimItem };
 export type Sefer = SefarimItemWithPerakim;
 export type Additional = AdditionalsItem;
 
@@ -45,6 +47,22 @@ export function getSeferByName(seferName: string): SefarimItem {
 		throw new Error(`Invalid sefer name: ${seferName}`);
 	}
 	return sefer;
+}
+
+/**
+ * Returns perek IDs for the sefer in the same order as the perakim array
+ * used by the flipbook (perakim from getSeferByName, or additionals.flatMap).
+ */
+export function getPerekIdsForSefer(sefer: SefarimItem): number[] {
+	if ("perakim" in sefer) {
+		return Array.from(
+			{ length: sefer.perakim.length },
+			(_, i) => sefer.perekFrom + i,
+		);
+	}
+	return sefer.additionals.flatMap((a) =>
+		Array.from({ length: a.perakim.length }, (_, i) => a.perekFrom + i),
+	);
 }
 
 export function getAllPerakim(): (Perek & { perekId: number })[] {
