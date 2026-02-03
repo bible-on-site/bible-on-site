@@ -1,0 +1,22 @@
+# Article Resources Mapping
+# Total: 67 media files (mp3/mp4)
+# Source: C:\old laptop\source\tanah-back\wwwvirtualroot\929\articles\
+# Target: s3://bible-on-site-assets/articles/
+#
+# DB URL Pattern: https://xn--febl3a.co.il/server/929/articles/<perek_id>/<filename>
+# New S3 Pattern: https://bible-on-site-assets.s3.il-central-1.amazonaws.com/articles/<perek_id>/<filename>
+#
+# Perek ID -> Files:
+
+Perek 1 (בראשית א):
+  - 1_בראשית א_ברכת הרב דוד חי הכהן.mp3
+  - 1_בראשית א_ברכת הרב דוד חי הכהן.mp4
+  - 1_בראשית א_ברכת הרב שמואל אליהו.mp3
+  - 1_בראשית א_ברכת הרב שמואל אליהו.mp4
+  - 1_ברכת הרב בראשית א_אריאל.mp3
+  - 1_ברכת הרב בראשית א_אריאל.mp4
+
+Perek 188-226 (יהושע - הרב זמיר ינון series):
+  - יהושע פרק א - הרב זמיר ינון.mp3/.mp4
+  - יהושע פרק ב - הרב זמיר ינון.mp3/.mp4
+  - ... continues through פרק לד

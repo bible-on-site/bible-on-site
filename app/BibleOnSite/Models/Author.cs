@@ -13,7 +13,7 @@ public class Author
     /// <summary>
     /// S3 bucket base URL for author images.
     /// </summary>
-    private const string ImageBaseUrl = "https://bible-on-site-images.s3.il-central-1.amazonaws.com/authors";
+    private const string ImageBaseUrl = "https://bible-on-site-assets.s3.il-central-1.amazonaws.com/authors";
 
     public int Id { get; set; }
     public int ArticlesCount { get; set; }

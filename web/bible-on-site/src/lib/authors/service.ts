@@ -55,7 +55,7 @@ export function getAuthorImageUrl(authorId: number): string {
 
 	// Build URL from S3 configuration
 	const S3_ENDPOINT = process.env.S3_ENDPOINT;
-	const S3_BUCKET = process.env.S3_BUCKET || "bible-on-site-images";
+	const S3_BUCKET = process.env.S3_BUCKET || "bible-on-site-assets";
 	const S3_REGION =
 		process.env.S3_REGION || process.env.AWS_REGION || "il-central-1";
 
