@@ -8,6 +8,12 @@ on:
     secrets:
       DEPLOY_KEY:
         required: true
+      # AWS credentials for SSG builds (website only) - used to fetch DB_URL from SSM
+      # and dynamically whitelist runner IP in RDS security group
+      AWS_DEPLOY_ROLE_ARN:
+        required: false
+      AWS_REGION:
+        required: false
     outputs:
       module_version:
         description: The version of the module.
@@ -17,6 +23,7 @@ on:
         value: ${{ jobs.package.outputs.docker_artifact_name }}
 permissions:
   contents: write
+  id-token: write # Required for AWS OIDC authentication
 env:
   IS_NPM: ${{ inputs.module_directory == 'web/bible-on-site' }}
   IS_CARGO: ${{ inputs.module_directory == 'web/api' }}
@@ -110,21 +117,88 @@ jobs:
             network=host
             image=moby/buildkit:v0.22.0
 
-      - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
-        uses: docker/build-push-action@v6
+      # --- RDS Access for SSG Build (Website only) ---
+      # Fetches DB_URL from SSM Parameter Store and dynamically whitelists runner IP
+      - name: Configure AWS Credentials for RDS Access
+        if: ${{ env.IS_NPM == 'true' }}
+        id: aws_creds
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@v5
         with:
-          context: ${{ env.SHARED_ROOT_DIR }}
-          file: ${{ inputs.module_directory }}/Dockerfile
-          tags: ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }}
-          outputs: type=docker,dest=${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_PATH }}
-          cache-from: |
-            type=gha,scope=${{ github.workflow }}-${{ env.MODULE_NAME }}
-          cache-to: |
-            type=gha,mode=max,scope=${{ github.workflow }}-${{ env.MODULE_NAME }}
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
-          platforms: linux/amd64
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Fetch RDS credentials from AWS
+        if: ${{ env.IS_NPM == 'true' && steps.aws_creds.outcome == 'success' }}
+        id: rds_creds
+        run: |
+          # Fetch DB_URL from SSM Parameter Store (SecureString)
+          DB_URL=$(aws ssm get-parameter --name "/bible-on-site-tanah-db-url" --with-decryption --query 'Parameter.Value' --output text)
+          echo "::add-mask::$DB_URL"
+          echo "db_url=$DB_URL" >> $GITHUB_OUTPUT
+
+          # Fetch RDS security group ID dynamically from the RDS instance
+          RDS_SG=$(aws rds describe-db-instances --db-instance-identifier tanah-mysql --query 'DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId' --output text)
+          echo "rds_sg=$RDS_SG" >> $GITHUB_OUTPUT
+
+          echo "✓ Fetched DB_URL from SSM and security group $RDS_SG from RDS"
+
+      - name: Get runner public IP
+        if: ${{ env.IS_NPM == 'true' && steps.rds_creds.outputs.rds_sg != '' }}
+        id: runner_ip
+        run: echo "ip=$(curl -s ifconfig.me)" >> $GITHUB_OUTPUT
+
+      - name: Whitelist runner IP in RDS security group
+        if: ${{ env.IS_NPM == 'true' && steps.rds_creds.outputs.rds_sg != '' }}
+        run: |
+          echo "Adding runner IP ${{ steps.runner_ip.outputs.ip }} to RDS security group ${{ steps.rds_creds.outputs.rds_sg }}..."
+          aws ec2 authorize-security-group-ingress \
+            --group-id ${{ steps.rds_creds.outputs.rds_sg }} \
+            --protocol tcp --port 3306 \
+            --cidr ${{ steps.runner_ip.outputs.ip }}/32 \
+            --tag-specifications 'ResourceType=security-group-rule,Tags=[{Key=Source,Value=github-actions-build},{Key=RunId,Value=${{ github.run_id }}}]' || true
+
+      - name: Test RDS connectivity
+        if: ${{ env.IS_NPM == 'true' && steps.rds_creds.outputs.rds_sg != '' }}
+        run: |
+          # Wait for security group rule to propagate
+          sleep 10
+          # Extract host from DB_URL
+          DB_HOST=$(echo "${{ steps.rds_creds.outputs.db_url }}" | sed -E 's|mysql://[^@]+@([^:]+):.*|\1|')
+          echo "Testing connectivity to $DB_HOST:3306..."
+          # Test TCP connection
+          timeout 30 bash -c "until nc -z $DB_HOST 3306; do echo 'Waiting for RDS...'; sleep 2; done" || echo "Warning: Could not verify RDS connectivity"
+          echo "✓ RDS connectivity verified"
+      # --- End RDS Access Setup ---
+      - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
+        env:
+          DB_URL: ${{ steps.rds_creds.outputs.db_url || '' }}
+        run: |
+          # Use raw docker build with --network=host to ensure RDS connectivity
+          # Buildx with docker-container driver doesn't properly support network: host
+          DOCKER_BUILDKIT=0 docker build \
+            --network=host \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --build-arg DB_URL="${DB_URL}" \
+            -f ${{ inputs.module_directory }}/Dockerfile \
+            -t ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }} \
+            ${{ env.SHARED_ROOT_DIR }}
+
+      - name: Export Docker Image to tarball
+        run: |
+          docker save ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }} \
+            -o ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_PATH }}
+
+      # --- RDS Cleanup (runs even if build fails) ---
+      - name: Remove runner IP from RDS security group
+        if: ${{ always() && env.IS_NPM == 'true' && steps.rds_creds.outputs.rds_sg != '' && steps.runner_ip.outputs.ip != '' }}
+        run: |
+          echo "Removing runner IP ${{ steps.runner_ip.outputs.ip }} from RDS security group..."
+          aws ec2 revoke-security-group-ingress \
+            --group-id ${{ steps.rds_creds.outputs.rds_sg }} \
+            --protocol tcp --port 3306 \
+            --cidr ${{ steps.runner_ip.outputs.ip }}/32 || true
+      # --- End RDS Cleanup ---
       - name: GZip Docker Image
         working-directory: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
         run: |

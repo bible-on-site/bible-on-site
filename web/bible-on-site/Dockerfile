@@ -1,4 +1,5 @@
-# syntax=docker.io/docker/dockerfile:1
+# Note: Using classic docker build (DOCKER_BUILDKIT=0) for network:host support
+# Do not add BuildKit-specific syntax directives
 
 FROM node:24-alpine AS base
 
@@ -25,6 +26,11 @@ COPY shared/ ../shared/
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# DB_URL is passed at build time for SSG pages that need database access
+# This enables generateStaticParams to fetch data during `npm run build`
+ARG DB_URL
+ENV DB_URL=$DB_URL
 
 RUN npm run build
 

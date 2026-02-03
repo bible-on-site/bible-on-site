@@ -87,7 +87,9 @@ jobs:
             PAYLOAD=$(echo "$PAYLOAD" | jq --arg key "$CD_KEY" --arg val "$NAME" '. + {($key): $val}')
           done < <(echo "$ARTIFACTS" | jq -c '.[]')
 
-          echo "CD_PAYLOAD=$PAYLOAD" >> $GITHUB_OUTPUT
+          # Compact JSON to single line for GITHUB_OUTPUT compatibility
+          PAYLOAD_COMPACT=$(echo "$PAYLOAD" | jq -c '.')
+          echo "CD_PAYLOAD=$PAYLOAD_COMPACT" >> $GITHUB_OUTPUT
           echo "Generated CD payload: $PAYLOAD"
 
       - name: Trigger CD Workflow
