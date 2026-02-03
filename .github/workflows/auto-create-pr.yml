@@ -51,9 +51,12 @@ jobs:
           # Using BOT_PAT instead of GITHUB_TOKEN to trigger CI workflows on the created PR.
           # PRs created with GITHUB_TOKEN don't trigger pull_request events (by design).
           GH_TOKEN: ${{ secrets.BOT_PAT }}
+          PR_TITLE: ${{ steps.commit-msg.outputs.title }}
+          PR_BODY: ${{ steps.commit-msg.outputs.body }}
         run: |
-          gh pr create \
-            --title "${{ steps.commit-msg.outputs.title }}" \
-            --body "${{ steps.commit-msg.outputs.body }}" \
+          # Use --body-file with stdin to avoid shell quoting issues with special characters
+          echo "$PR_BODY" | gh pr create \
+            --title "$PR_TITLE" \
+            --body-file - \
             --base master \
             --head "${{ github.ref_name }}"
