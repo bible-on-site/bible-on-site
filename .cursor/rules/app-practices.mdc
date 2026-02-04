@@ -6,6 +6,14 @@ alwaysApply: false
 
 # App (app/) Practices
 
+## Agent behavior
+
+When the user asks to run the app (e.g. "run the emulator", "run Android"), **run the command yourself** — start the process (e.g. in background) and report when it's started or if it failed. Do not reply with instructions for the user to run in their terminal unless they explicitly ask for the command.
+
+**Always check the terminal output.** After running any command (build, deploy, run, tests), **read the full terminal output**. If it shows errors (e.g. "Build FAILED", "error XA…", "error CS…", non-zero exit code, "Exception", "FATAL") then **do not report success**. Report that it failed, quote or summarize the error, and fix or investigate. For background processes, read the terminal file (e.g. under `.cursor/projects/…/terminals/`) to see the actual output and exit state.
+
+**After fixing or editing app code (XAML or C#):** Run `dotnet build` from `app/BibleOnSite` (e.g. `-f net9.0-android` or `-f net9.0-windows10.0.19041.0`) and fix all errors and warnings so the build finishes with 0 errors and 0 warnings.
+
 ## Testing
 
 Use devops project for orchestration:
@@ -20,3 +28,166 @@ Use devops project for orchestration:
 | Integration Coverage | `dotnet run --project devops -- CoverageIntegration` |
 
 Integration tests use `[Trait("Category", "Integration")]`; API server must be at `http://127.0.0.1:3003`. Unit tests: xUnit, FluentAssertions, Moq in `BibleOnSite.Tests`. E2E: FlaUI in `BibleOnSite.Tests.E2E`.
+
+## Running the app (Android)
+
+**When the user asks to run the emulator or run Android, execute the run yourself** (e.g. in background or foreground); do not only output the command for the user to run.
+
+### Nuke RunAndroid (recommended)
+
+From the **app** directory:
+
+```bash
+# Default: one-shot build + install + launch (auto-detects full vs fast deploy)
+dotnet run --project devops -- RunAndroid
+
+# Options:
+#   --full-apk     Force full APK install (embed native libs)
+#   --fast-deploy  Force Fast Deployment (incremental, faster)
+#   --watch        Use dotnet watch for hot reload
+#   --api-env prod Use production API instead of local
+```
+
+**Auto-detection:** RunAndroid automatically:
+1. Ensures emulator is running (starts one if needed)
+2. Ensures API server is running (starts if needed, unless `--api-env prod`)
+3. Checks if app is installed on device:
+   - **Not installed** → uses full APK (~90s first deploy)
+   - **Already installed** → uses Fast Deployment (~18s incremental)
+4. Builds, installs, launches the app
+5. Verifies app is running (PID check, crash detection)
+
+**Required: run from `app/`.** Nuke looks for `.nuke` in the current directory; from repo root it fails with "Could not locate '.nuke' directory".
+
+### Quick Launch Cheatsheet (manual)
+
+```bash
+# Kill stale dotnet processes (if build lock errors)
+cmd //c "taskkill /F /IM dotnet.exe"
+
+# Build + Fast Deploy (from app/BibleOnSite) - ~10s for incremental changes
+dotnet build -t:Install -f net9.0-android -c Debug
+
+# Full APK (first deploy or after wipe) - ~90s
+dotnet build -t:Install -f net9.0-android -c Debug --property:EmbedAssembliesIntoApk=true
+
+# Launch app
+"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe" shell monkey -p com.tanah.daily929 -c android.intent.category.LAUNCHER 1
+
+# Verify running (returns PID if alive)
+"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe" shell pidof com.tanah.daily929
+```
+
+### Fast Deployment vs Full APK
+
+| Mode | Time | When to use |
+|------|------|-------------|
+| Fast Deployment | ~10-20s | App already installed, incremental code changes |
+| Full APK | ~90s | First deploy, after emulator wipe, or if crash with `libmonosgen-2.0.so not found` |
+
+**Configuration:** The csproj (`BibleOnSite.csproj`) sets:
+```xml
+<EmbedAssembliesIntoApk Condition="... == 'android' AND '$(Configuration)' == 'Release'">true</EmbedAssembliesIntoApk>
+```
+- **Debug builds** use Fast Deployment by default (fast iteration)
+- **Release builds** embed assemblies (required for distribution)
+- Override with `--property:EmbedAssembliesIntoApk=true/false` or Nuke `--full-apk`/`--fast-deploy`
+
+### Troubleshooting RunAndroid
+
+**If RunAndroid fails with build.log locked** ("The process cannot access the file ... \\.nuke\\temp\\build.log"): kill stale dotnet processes with `cmd //c "taskkill /F /IM dotnet.exe"` or use manual commands.
+
+**App crashes with `libmonosgen-2.0.so not found`:** Native libs missing. Run with `--full-apk` or manually add `--property:EmbedAssembliesIntoApk=true`.
+
+**dotnet watch "Too many changes":** Use one-shot build (`dotnet build -t:Install`) instead of watch for more reliable deploys.
+
+### Verify app is running
+
+**Always check the app is running after launch** — do not report success if it crashed:
+
+```bash
+# Returns PID if running, empty if crashed
+adb shell pidof com.tanah.daily929
+
+# If crashed, check logcat
+adb logcat -d -t 200 | grep -E "FATAL|AndroidRuntime|libmonosgen"
+```
+
+Nuke RunAndroid does this automatically. For manual runs, always verify and report result (e.g. "App running (PID 12345)" or "App crashed; logcat shows...").
+
+## Android deployment (manual / WiFi)
+
+**EmbedAssembliesIntoApk** is true by default (reliable emulator/device deploy; avoids XA0129).
+
+**WiFi:** Fast Deployment does not push native libs over network and the app crashes. For WiFi deploy: build with `-p:EmbedAssembliesIntoApk=true` (from `app/BibleOnSite`), then do a **full install**: `adb -s <device> install -r --no-incremental ...\com.tanah.daily929-Signed.apk`.
+
+**One-time setup (from device Wireless debugging):**
+1. Pair: `adb pair <pairing-ip>:<pairing-port>` and enter the 6-digit code.
+2. Connect: `adb connect <connection-ip>:<connection-port>`.
+3. Verify: `adb devices -l`.
+
+**Deploy and run (no user execution requested; agent runs commands):**
+1. Optional if code changed: `dotnet build -f net9.0-android` (from `app/BibleOnSite`).
+2. Full install (required for WiFi): `adb -s <device> install -r --no-incremental app/BibleOnSite/bin/Debug/net9.0-android/com.tanah.daily929-Signed.apk`.
+3. Launch: `adb -s <device> shell monkey -p com.tanah.daily929 -c android.intent.category.LAUNCHER 1`.
+
+Use full path to adb if not in PATH: `%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe` (Windows).
+
+**Why WiFi reload is slow:** Fast Deployment (incremental push of only changed assemblies) works over USB and gives very fast reloads. Over WiFi we use full APK install so native libs are present; that takes ~1 min. For fast iteration, use USB when possible.
+
+## Troubleshooting Android
+
+### Emulator storage full (ADB0060 InsufficientSpaceException)
+
+The emulator's `/data` partition fills up with APKs and caches. Fix with adb (use `$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe` on Windows):
+
+```bash
+# Check available space
+adb shell 'df -h /data'
+
+# Clear temporary APKs
+adb shell 'rm -rf /data/local/tmp/*.apk'
+
+# Uninstall old app versions
+adb shell 'pm uninstall com.tanah.daily929'
+adb shell 'pm list packages -3'  # List 3rd party apps to uninstall
+
+# Trim app caches (request 1-2GB)
+adb shell 'pm trim-caches 2G'
+```
+
+After clearing space, touch a source file to trigger `dotnet watch` rebuild.
+
+### App crashes on startup (TargetInvocationException in XAML)
+
+If the app crashes immediately with `TargetInvocationException` during `InitializeComponent`:
+1. Check `adb logcat` for the stack trace: `adb logcat -d | grep -A 50 "UNHANDLED EXCEPTION"`
+2. Common causes:
+   - XAML references an `x:Name` element that doesn't exist (code-behind out of sync with XAML)
+   - Missing resource (e.g., `StaticResource` not defined in App.xaml)
+   - Invalid font icon codes (5+ digit hex codes like `&#xf028a;` may cause issues)
+3. If recent changes broke it, revert both `.xaml` and `.xaml.cs` files together to stay in sync
+
+### dotnet watch property syntax
+
+When using `dotnet watch`, use `--property:` instead of `-p:` for MSBuild properties. The `-p` shorthand is interpreted as `--project` by dotnet watch:
+
+```bash
+# Wrong - will fail
+dotnet watch build -p:EmbedAssembliesIntoApk=true
+
+# Correct
+dotnet watch build --property:EmbedAssembliesIntoApk=true
+```
+
+### Launch app manually after deployment
+
+If the app doesn't launch automatically after deploy:
+
+```bash
+# Find the correct activity class
+adb shell 'dumpsys package com.tanah.daily929 | grep -A 5 "Activity Resolver"'
+
+# Launch the app
+adb shell am start -n com.tanah.daily929/<activity-class>
+```

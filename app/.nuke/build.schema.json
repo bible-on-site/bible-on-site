@@ -165,6 +165,17 @@
           "type": "string",
           "description": "Environment level for local runs: dev or test"
         },
+        "FastDeploy": {
+          "type": "boolean",
+          "description": "Force Fast Deployment (skip embedding). Overrides auto-detection"
+        },
+        "FullApk": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Force full APK install (embed assemblies). Auto-detected if not set"
+        },
         "GooglePlayKeyFile": {
           "type": "string",
           "description": "Path to Google Play service account JSON file"
@@ -201,6 +212,10 @@
         "Production": {
           "type": "boolean",
           "description": "Deploy to production instead of flight/internal (requires store review)"
+        },
+        "Watch": {
+          "type": "boolean",
+          "description": "Use dotnet watch for hot reload. Default: false (one-shot build)"
         }
       }
     },

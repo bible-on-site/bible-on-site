@@ -67,7 +67,39 @@ public partial class PerekPage : ContentPage
         {
             if (e.PropertyName == nameof(PerekViewModel.SelectedArticleId))
                 OnPropertyChanged(nameof(SelectedArticleId));
+            // When perek changes via prev/next, refresh articles, badge, and nav button visuals
+            if (e.PropertyName == nameof(PerekViewModel.Perek) || e.PropertyName == "Perek")
+            {
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    _ = UpdateArticlesCountAsync();
+                    if (_isShowingArticles)
+                        _ = LoadArticlesAsync();
+                    // Force visual refresh of prev/next buttons (workaround for MAUI not updating disabled visual)
+                    RefreshNavButtonVisuals();
+                });
+            }
         };
+    }
+
+    /// <summary>
+    /// Forces the prev/next buttons to update their visual state.
+    /// Workaround for MAUI bug where button disabled visual doesn't refresh in AbsoluteLayout.
+    /// We control opacity directly instead of relying on VSM.
+    /// </summary>
+    private void RefreshNavButtonVisuals()
+    {
+        // Only update if menu is open (buttons visible)
+        if (!_isMenuOpen) return;
+
+        var canPrev = _viewModel.CanGoToPreviousPerek;
+        var canNext = _viewModel.CanGoToNextPerek;
+
+        PrevPerekButton.IsEnabled = canPrev;
+        PrevPerekButton.Opacity = canPrev ? 1.0 : 0.4;
+
+        NextPerekButton.IsEnabled = canNext;
+        NextPerekButton.Opacity = canNext ? 1.0 : 0.4;
     }
 
     /// <summary>
@@ -441,14 +473,14 @@ public partial class PerekPage : ContentPage
     private async void OnSelectionCopyClicked(object? sender, EventArgs e)
     {
         var text = GetSelectedPesukimText();
-        if (!string.IsNullOrEmpty(text))
-        {
-            await Clipboard.SetTextAsync(text);
-            SelectionCopyButton.Text = "\uf32a";
-            TriggerHapticFeedback();
-            await DisplayAlert("", "בחירה הועתקה ללוח", "אישור");
-            SelectionCopyButton.Text = "\uf32b";
-        }
+        if (string.IsNullOrEmpty(text)) return;
+
+        await Clipboard.SetTextAsync(text);
+        TriggerHapticFeedback();
+        // Inline feedback: show clipboard-checkmark icon for 1.5s then restore copy icon
+        SelectionCopyButton.Text = "\ue34c"; // clipboard_checkmark_24_regular
+        await Task.Delay(1500);
+        SelectionCopyButton.Text = "\uf32b"; // copy_24_regular
     }
 
     private string GetSelectedPesukimText()
@@ -510,17 +542,22 @@ public partial class PerekPage : ContentPage
     {
         var buttons = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
 
-        // Enable clicks and fade in (buttons are already at final positions via AbsoluteLayout)
+        // Set prev/next enabled state before animating
+        PrevPerekButton.IsEnabled = _viewModel.CanGoToPreviousPerek;
+        NextPerekButton.IsEnabled = _viewModel.CanGoToNextPerek;
+
+        // Enable clicks and set initial opacity (buttons at final positions via AbsoluteLayout)
         foreach (var button in buttons)
         {
             button.InputTransparent = false;
+            button.Opacity = 0;
         }
 
         // Change FAB icon to X
         CircularMenuButton.Text = "✕";
         CircularMenuButton.BackgroundColor = Colors.Red;
 
-        // Animate FAB rotation and fade in all buttons
+        // Animate FAB rotation and fade in all buttons (disabled = 0.4, enabled = 1)
         var animations = new List<Task>
         {
             CircularMenuButton.RotateTo(180, 250, Easing.SpringOut)
@@ -528,7 +565,8 @@ public partial class PerekPage : ContentPage
 
         foreach (var button in buttons)
         {
-            animations.Add(button.FadeTo(1, 200));
+            var targetOpacity = button.IsEnabled ? 1.0 : 0.4;
+            animations.Add(button.FadeTo(targetOpacity, 200));
         }
 
         await Task.WhenAll(animations);
