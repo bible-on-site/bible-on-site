@@ -409,10 +409,27 @@ partial class Build
 
     /// <summary>
     /// Launches the app on the connected Android device/emulator and verifies it's running.
+    /// Always force-stops first to ensure fresh launch with new code.
     /// </summary>
     void LaunchAndVerifyApp()
     {
         var adbPath = GetAdbPath();
+
+        // Force stop the app first to ensure fresh launch
+        Serilog.Log.Information("Force stopping app...");
+        var stopInfo = new ProcessStartInfo
+        {
+            FileName = adbPath,
+            Arguments = "shell am force-stop com.tanah.daily929",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            CreateNoWindow = true,
+        };
+        using (var stopProcess = Process.Start(stopInfo))
+        {
+            stopProcess?.WaitForExit();
+        }
+        System.Threading.Thread.Sleep(500);
 
         // Launch the app
         Serilog.Log.Information("Launching app...");
