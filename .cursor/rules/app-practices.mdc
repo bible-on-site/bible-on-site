@@ -71,12 +71,15 @@ dotnet build -t:Install -f net9.0-android -c Debug
 # Full APK (first deploy or after wipe) - ~90s
 dotnet build -t:Install -f net9.0-android -c Debug --property:EmbedAssembliesIntoApk=true
 
-# Launch app
+# Force stop + Launch app (ensures new code runs)
+"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe" shell am force-stop com.tanah.daily929
 "$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe" shell monkey -p com.tanah.daily929 -c android.intent.category.LAUNCHER 1
 
 # Verify running (returns PID if alive)
 "$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe" shell pidof com.tanah.daily929
 ```
+
+**Important:** Always force-stop before launch after install to ensure the new code runs. Without force-stop, Android may keep the old process running.
 
 ### Fast Deployment vs Full APK
 
