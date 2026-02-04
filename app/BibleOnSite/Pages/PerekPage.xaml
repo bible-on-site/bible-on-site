@@ -7,6 +7,7 @@
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
              xmlns:behaviors="clr-namespace:BibleOnSite.Behaviors"
              xmlns:converters="clr-namespace:BibleOnSite.Converters"
+             xmlns:fonts="clr-namespace:Fonts"
              x:Class="BibleOnSite.Pages.PerekPage"
              x:Name="PerekPageRoot"
              x:DataType="viewmodels:PerekViewModel"
@@ -47,7 +48,7 @@
                 <TapGestureRecognizer Tapped="OnExitFullScreenClicked"/>
                 <PanGestureRecognizer PanUpdated="OnExitFullScreenButtonPan"/>
             </Border.GestureRecognizers>
-            <Label Text="&#xe688;"
+            <Label Text="{x:Static fonts:FluentUI.full_screen_minimize_24_regular}"
                    FontFamily="FluentIcons"
                    FontSize="24"
                    TextColor="White"
@@ -75,11 +76,11 @@
                         <On Platform="Android,iOS" Value="56"/>
                     </OnPlatform>
                 </Grid.HeightRequest>
-                <!-- Back button - arrow_right_24_regular = \uf182 -->
+                <!-- Back button -->
                 <Button Grid.Column="0"
                         x:Name="SelectionBackButton"
                         AutomationId="SelectionBackButton"
-                        Text="&#xf182;"
+                        Text="{x:Static fonts:FluentUI.arrow_right_24_regular}"
                         FontFamily="FluentIcons"
                         FontSize="20"
                         WidthRequest="36"
@@ -109,10 +110,10 @@
                 </Border>
                 <!-- Spacer (transparent) -->
                 <ContentView Grid.Column="2"/>
-                <!-- Share button - share_24_regular = \uf6b0 -->
+                <!-- Share button -->
                 <Button Grid.Column="3"
                         AutomationId="SelectionShareButton"
-                        Text="&#xf6b0;"
+                        Text="{x:Static fonts:FluentUI.share_24_regular}"
                         FontFamily="FluentIcons"
                         FontSize="20"
                         WidthRequest="36"
@@ -121,11 +122,11 @@
                         BackgroundColor="Transparent"
                         TextColor="White"
                         Clicked="OnSelectionShareClicked"/>
-                <!-- Copy button - copy_24_regular = \uf32b -->
+                <!-- Copy button -->
                 <Button Grid.Column="4"
                         x:Name="SelectionCopyButton"
                         AutomationId="SelectionCopyButton"
-                        Text="&#xf32b;"
+                        Text="{x:Static fonts:FluentUI.copy_20_regular}"
                         FontFamily="FluentIcons"
                         FontSize="20"
                         WidthRequest="36"
@@ -353,9 +354,8 @@
                 <!-- Original order from right to left: Chevron, Text, Articles, FullScreen -->
 
                 <!-- Perushim Chevron Button at 8% -->
-                <!-- Icon: chevron_up_24_regular = \uf2b7, chevron_down_24_regular = \uf2a4 -->
                 <Button x:Name="PerushimChevronButton"
-                        Text="&#xf2b7;"
+                        Text="{x:Static fonts:FluentUI.chevron_up_24_regular}"
                         FontFamily="FluentIcons"
                         FontSize="20"
                         WidthRequest="44"
@@ -383,13 +383,12 @@
                         AbsoluteLayout.LayoutFlags="PositionProportional"/>
 
                 <!-- Articles Button with Badge at 72% -->
-                <!-- Icon: document_24_regular = \uf379 -->
                 <Grid WidthRequest="50"
                       HeightRequest="44"
                       AbsoluteLayout.LayoutBounds="0.72,0.55"
                       AbsoluteLayout.LayoutFlags="PositionProportional">
                     <Button x:Name="ArticlesButton"
-                            Text="&#xf379;"
+                            Text="{x:Static fonts:FluentUI.document_24_regular}"
                             FontFamily="FluentIcons"
                             FontSize="20"
                             WidthRequest="44"
@@ -420,9 +419,8 @@
                 </Grid>
 
                 <!-- Full Screen Button at 92% -->
-                <!-- Icon: full_screen_maximize_24_regular = \ue685 -->
                 <Button x:Name="FullScreenButton"
-                        Text="&#xe685;"
+                        Text="{x:Static fonts:FluentUI.full_screen_maximize_24_regular}"
                         FontFamily="FluentIcons"
                         FontSize="22"
                         WidthRequest="44"
@@ -446,10 +444,9 @@
 
             <!-- 4 satellite buttons - fan out from center -->
 
-            <!-- Previous perek (bottom-left satellite, overlaps with bar) -->
-            <!-- Icon: document_arrow_right_24_regular = \ue4e7 -->
+            <!-- Previous perek (bottom-left satellite). Disabled at perek 1 via Command.CanExecute. -->
             <Button x:Name="PrevPerekButton"
-                    Text="&#xe4e7;"
+                    Text="{x:Static fonts:FluentUI.document_arrow_right_24_regular}"
                     FontFamily="FluentIcons"
                     FontSize="22"
                     WidthRequest="48"
@@ -465,9 +462,9 @@
                     AbsoluteLayout.LayoutFlags="PositionProportional"/>
 
             <!-- Today's perek (top-left satellite) -->
-            <!-- Icon: calendar_today_24_regular = \uf23d -->
+            <!-- Icon: calendar_date_24_regular (calendar with date) via x:Static for 5-digit Unicode -->
             <Button x:Name="TodayButton"
-                    Text="&#xf23d;"
+                    Text="{x:Static fonts:FluentUI.calendar_date_24_regular}"
                     FontFamily="FluentIcons"
                     FontSize="22"
                     WidthRequest="48"
@@ -483,9 +480,8 @@
                     AbsoluteLayout.LayoutFlags="PositionProportional"/>
 
             <!-- Perek Picker (top-right satellite) -->
-            <!-- Icon: library_24_regular = \uf4d3 -->
             <Button x:Name="PerekPickerButton"
-                    Text="&#xf4d3;"
+                    Text="{x:Static fonts:FluentUI.library_24_regular}"
                     FontFamily="FluentIcons"
                     FontSize="22"
                     WidthRequest="48"
@@ -499,10 +495,9 @@
                     AbsoluteLayout.LayoutBounds="0.58,0.87,48,48"
                     AbsoluteLayout.LayoutFlags="PositionProportional"/>
 
-            <!-- Next perek (bottom-right satellite, overlaps with bar) -->
-            <!-- Icon: document_arrow_right mirrored -->
+            <!-- Next perek (bottom-right satellite). Disabled at perek 929 via Command.CanExecute. -->
             <Button x:Name="NextPerekButton"
-                    Text="&#xe4e7;"
+                    Text="{x:Static fonts:FluentUI.document_arrow_right_24_regular}"
                     FontFamily="FluentIcons"
                     FontSize="22"
                     ScaleX="-1"

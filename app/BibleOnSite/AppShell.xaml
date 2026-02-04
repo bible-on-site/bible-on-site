@@ -8,6 +8,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:local="clr-namespace:BibleOnSite"
     xmlns:pages="clr-namespace:BibleOnSite.Pages"
+    xmlns:fonts="clr-namespace:Fonts"
     Shell.FlyoutBehavior="Flyout"
     FlyoutWidth="300"
     FlyoutBackgroundColor="White"
@@ -45,9 +46,8 @@
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Tapped="OnAlHaperekTapped"/>
                         </Grid.GestureRecognizers>
-                        <!-- Icon: calendar_today_24_regular = \uf23d -->
                         <Label Grid.Column="0"
-                               Text="&#xf23d;"
+                               Text="{x:Static fonts:FluentUI.calendar_today_24_regular}"
                                FontFamily="FluentIcons"
                                FontSize="24"
                                TextColor="{StaticResource Gray600}"
@@ -61,9 +61,8 @@
                                    FontSize="12"
                                    TextColor="{StaticResource Gray500}"/>
                         </VerticalStackLayout>
-                        <!-- chevron_left_24_regular = \ue314 -->
                         <Label Grid.Column="2"
-                               Text="&#xe314;"
+                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
                                FontFamily="FluentIcons"
                                FontSize="20"
                                TextColor="{StaticResource Gray400}"
@@ -75,9 +74,8 @@
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Tapped="OnAuthorsTapped"/>
                         </Grid.GestureRecognizers>
-                        <!-- edit_person_24_regular = \U000f0568 -->
                         <Label Grid.Column="0"
-                               Text="&#xf0568;"
+                               Text="{x:Static fonts:FluentUI.edit_person_24_regular}"
                                FontFamily="FluentIcons"
                                FontSize="24"
                                TextColor="{StaticResource Gray600}"
@@ -92,7 +90,7 @@
                                    TextColor="{StaticResource Gray500}"/>
                         </VerticalStackLayout>
                         <Label Grid.Column="2"
-                               Text="&#xe314;"
+                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
                                FontFamily="FluentIcons"
                                FontSize="20"
                                TextColor="{StaticResource Gray400}"
@@ -104,9 +102,8 @@
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Tapped="OnTermsTapped"/>
                         </Grid.GestureRecognizers>
-                        <!-- shield_question_24_regular = \uef23 -->
                         <Label Grid.Column="0"
-                               Text="&#xef23;"
+                               Text="{x:Static fonts:FluentUI.shield_question_24_regular}"
                                FontFamily="FluentIcons"
                                FontSize="24"
                                TextColor="{StaticResource Gray600}"
@@ -121,7 +118,7 @@
                                    TextColor="{StaticResource Gray500}"/>
                         </VerticalStackLayout>
                         <Label Grid.Column="2"
-                               Text="&#xe314;"
+                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
                                FontFamily="FluentIcons"
                                FontSize="20"
                                TextColor="{StaticResource Gray400}"
@@ -133,9 +130,8 @@
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Tapped="OnPreferencesTapped"/>
                         </Grid.GestureRecognizers>
-                        <!-- settings_24_regular = \uf6aa -->
                         <Label Grid.Column="0"
-                               Text="&#xf6aa;"
+                               Text="{x:Static fonts:FluentUI.settings_24_regular}"
                                FontFamily="FluentIcons"
                                FontSize="24"
                                TextColor="{StaticResource Gray600}"
@@ -150,7 +146,7 @@
                                    TextColor="{StaticResource Gray500}"/>
                         </VerticalStackLayout>
                         <Label Grid.Column="2"
-                               Text="&#xe314;"
+                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
                                FontFamily="FluentIcons"
                                FontSize="20"
                                TextColor="{StaticResource Gray400}"
@@ -162,9 +158,8 @@
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Tapped="OnContactTapped"/>
                         </Grid.GestureRecognizers>
-                        <!-- contact_card_24_regular = \uf320 -->
                         <Label Grid.Column="0"
-                               Text="&#xf320;"
+                               Text="{x:Static fonts:FluentUI.contact_card_24_regular}"
                                FontFamily="FluentIcons"
                                FontSize="24"
                                TextColor="{StaticResource Gray600}"
@@ -179,7 +174,7 @@
                                    TextColor="{StaticResource Gray500}"/>
                         </VerticalStackLayout>
                         <Label Grid.Column="2"
-                               Text="&#xe314;"
+                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
                                FontFamily="FluentIcons"
                                FontSize="20"
                                TextColor="{StaticResource Gray400}"
@@ -191,9 +186,8 @@
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Tapped="OnDonationsTapped"/>
                         </Grid.GestureRecognizers>
-                        <!-- money_hand_24_regular = \ue81d -->
                         <Label Grid.Column="0"
-                               Text="&#xe81d;"
+                               Text="{x:Static fonts:FluentUI.money_hand_24_regular}"
                                FontFamily="FluentIcons"
                                FontSize="24"
                                TextColor="{StaticResource Gray600}"
@@ -208,7 +202,7 @@
                                    TextColor="{StaticResource Gray500}"/>
                         </VerticalStackLayout>
                         <Label Grid.Column="2"
-                               Text="&#xe314;"
+                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
                                FontFamily="FluentIcons"
                                FontSize="20"
                                TextColor="{StaticResource Gray400}"
