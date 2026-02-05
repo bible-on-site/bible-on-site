@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2560 40" preserveAspectRatio="none">
+    <defs>
+        <style>
+            .cls-1 {
+                fill: #fff;
+            }
+        </style>
+    </defs>
+    <title>sefarim-bottom-devider-l</title>
+    <path class="cls-1" d="M0,0 C373,32 746,8 1280,20 C1814,32 2187,0 2560,0 L2560,40 L0,40 Z" />
+</svg>

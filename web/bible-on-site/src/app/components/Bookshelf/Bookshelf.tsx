@@ -155,40 +155,67 @@ function calculatePositionsForSefarim(sefarimList: SeferInfo[]): {
 	};
 }
 
+// Helek label info for single shelf mode
+type HelekLabelInfo = {
+	label: string;
+	centerX: number; // Center position in units
+};
+
 // Calculate positions for all books on single shelf (RTL order with gaps)
 function calculateAllBooksPositions(): {
 	positions: Array<{ sefer: SeferInfo; x: number }>;
 	totalWidth: number;
 	shelfStartX: number;
+	helekLabels: HelekLabelInfo[];
 } {
 	const positions: Array<{ sefer: SeferInfo; x: number }> = [];
+	const helekLabels: HelekLabelInfo[] = [];
 	// Start after left padding (+1 to account for shelf transform offset)
 	let currentX = SHELF_PADDING + 1;
 
 	// Ketuvim first (leftmost) - reversed within
+	const ketuvimStartX = currentX;
 	for (const sefer of [...helekGroups.כתובים].reverse()) {
 		positions.push({ sefer, x: currentX });
 		currentX += BOOK_WIDTH;
 	}
+	const ketuvimEndX = currentX;
+	helekLabels.push({
+		label: "כתובים",
+		centerX: (ketuvimStartX + ketuvimEndX) / 2,
+	});
 	currentX += HELEK_GAP;
 
 	// Neviim (middle) - all together, reversed within
+	const neviimStartX = currentX;
 	for (const sefer of [...allNeviim].reverse()) {
 		positions.push({ sefer, x: currentX });
 		currentX += BOOK_WIDTH;
 	}
+	const neviimEndX = currentX;
+	helekLabels.push({
+		label: "נביאים",
+		centerX: (neviimStartX + neviimEndX) / 2,
+	});
 	currentX += HELEK_GAP;
 
 	// Torah last (rightmost) - reversed within
+	const torahStartX = currentX;
 	for (const sefer of [...helekGroups.תורה].reverse()) {
 		positions.push({ sefer, x: currentX });
 		currentX += BOOK_WIDTH;
 	}
+	const torahEndX = currentX;
+	helekLabels.push({
+		label: "תורה",
+		centerX: (torahStartX + torahEndX) / 2,
+	});
 
 	return {
 		positions,
 		totalWidth: currentX + SHELF_PADDING,
 		shelfStartX: 1,
+		helekLabels,
 	};
 }
 
@@ -296,9 +323,16 @@ type ShelfFloorProps = {
 	sqSize: number;
 	startX?: number;
 	label?: string;
+	helekLabels?: HelekLabelInfo[]; // Multiple positioned labels for single shelf
 };
 
-function ShelfFloor({ width, sqSize, startX = 1, label }: ShelfFloorProps) {
+function ShelfFloor({
+	width,
+	sqSize,
+	startX = 1,
+	label,
+	helekLabels,
+}: ShelfFloorProps) {
 	const shelfColor = "#441e12";
 
 	const blockStyle = {
@@ -347,6 +381,19 @@ function ShelfFloor({ width, sqSize, startX = 1, label }: ShelfFloorProps) {
 					}}
 				>
 					{label && <div className={styles.shelfLabel}>{label}</div>}
+					{helekLabels?.map(({ label: helekLabel, centerX }) => (
+						<div
+							key={helekLabel}
+							className={styles.shelfLabel}
+							style={{
+								right: "auto",
+								left: `${sqSize * (centerX - startX)}px`,
+								transform: "translate(-50%, -50%)",
+							}}
+						>
+							{helekLabel}
+						</div>
+					))}
 				</div>
 				<div
 					className={styles.left}
@@ -380,6 +427,7 @@ type SingleShelfProps = {
 	shelfStartX?: number;
 	onSeferClick?: (seferName: string, perekFrom: number) => void;
 	label?: string;
+	helekLabels?: HelekLabelInfo[];
 };
 
 function SingleShelf({
@@ -389,6 +437,7 @@ function SingleShelf({
 	shelfStartX = 1,
 	onSeferClick,
 	label,
+	helekLabels,
 }: SingleShelfProps) {
 	return (
 		<div className={styles.shelfWrapper}>
@@ -402,6 +451,7 @@ function SingleShelf({
 						sqSize={sqSize}
 						startX={shelfStartX}
 						label={label}
+						helekLabels={helekLabels}
 					/>
 					{positions.map(({ sefer, x }) => (
 						<BookBlock
@@ -521,6 +571,7 @@ export function Bookshelf({ onSeferClick }: BookshelfProps) {
 				sqSize={sqSize}
 				shelfStartX={allBooksData.shelfStartX}
 				onSeferClick={onSeferClick}
+				helekLabels={allBooksData.helekLabels}
 			/>
 		</div>
 	);

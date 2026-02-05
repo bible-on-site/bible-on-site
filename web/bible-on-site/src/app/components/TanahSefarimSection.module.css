@@ -2,12 +2,10 @@
   position: relative;
   text-align: center;
   width: 100%;
-  z-index: 1; /* Lower than al-haperek (z-index: 2) so divider shows on top */
-  background-color: #ccc;
-  padding: 1.5em 0 5em; /* More bottom padding for ketuvim shelf */
+  z-index: 1;
+  background-color: #d8ebff;
+  padding: 2em 0 5em;
   scroll-margin-top: 1em;
-  margin-top: -3em; /* Pull up into the al-haperek divider to avoid white gap */
-  padding-top: 5em; /* Compensate for negative margin */
 }
 
 .header {
@@ -44,10 +42,51 @@
   font-size: 1.1em;
 }
 
-/* Multi-shelf mode (mobile) */
+/* Bottom divider - wave transition to white (AppSection) */
+.bottomDivider {
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  right: 0;
+  height: 3em;
+  pointer-events: none;
+  position: absolute;
+  width: 100%;
+  z-index: 3;
+  background-position: bottom;
+  bottom: 0;
+}
+
+/* Responsive divider images and multi-shelf height */
 @media screen and (max-width: 960px) {
+  .bottomDivider {
+    background-image: url(/root/sefarim-bottom-devider-xs.svg);
+  }
   .bookshelfContainer {
     height: auto;
     min-height: 1650px;
+  }
+}
+
+@media screen and (min-width: 960px) and (max-width: 1280px) {
+  .bottomDivider {
+    background-image: url(/root/sefarim-bottom-devider-s.svg);
+  }
+}
+
+@media screen and (min-width: 1280px) and (max-width: 1920px) {
+  .bottomDivider {
+    background-image: url(/root/sefarim-bottom-devider-m.svg);
+  }
+}
+
+@media screen and (min-width: 1920px) and (max-width: 2560px) {
+  .bottomDivider {
+    background-image: url(/root/sefarim-bottom-devider-l.svg);
+  }
+}
+
+@media screen and (min-width: 2560px) {
+  .bottomDivider {
+    background-image: url(/root/sefarim-bottom-devider-xl.svg);
   }
 }

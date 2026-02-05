@@ -13,7 +13,7 @@ $fFontSize: $sqSize * 0.75;
   position: relative;
   width: 100%;
   height: 100%;
-  background-color: #ccc;
+  background-color: #d8ebff;
   font-family: inherit;
   font-size: 20px;
   line-height: 1;
@@ -49,7 +49,7 @@ $fFontSize: $sqSize * 0.75;
   align-items: center;
 }
 
-// Helek label engraved on shelf front
+// Helek label engraved on shelf front (multi-shelf mode)
 .shelfLabel {
   font-family: inherit;
   font-size: 0.65rem;
