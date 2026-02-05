@@ -1,121 +1,14 @@
 $sqSize: 16px;
 $contW: 100%;
 $contH: 100%;
-$xSpaces: 24;
 $ySpaces: 14;
 $zSpaces: 19;
 $xAngle: 80deg;
 $zAngle: 0deg;
-$books: 11;
-$bookStart: 2;
 $trans: 0.25s;
 
 $fFontSize: $sqSize * 0.75;
 $rFontSize: $sqSize * 1.5;
-$cntntFontSize: $sqSize * 0.7;
-
-$shelfColor: #441e12;
-
-/* Block placement */
-// parameters: x-pos,y-pos,z-pos, width,depth,height, color, is-book
-$blocks:
-  // shelf (floor only - no walls or ceiling)
-  (2, 1, 1, 22, 14, 1, $shelfColor, false),
-  // books (all same height: 15)
-  (2, 3, 2, 2, 11, 15, #c00000, true),
-  (4, 3, 2, 2, 11, 15, #891a21, true), (6, 3, 2, 2, 10, 15, #bf3e22, true), (8, 3, 2, 2, 10, 15, #0e4326, true),
-  (10, 3, 2, 2, 11, 15, #0066cc, true), (12, 3, 2, 2, 11, 15, #0f7b7e, true), (14, 3, 2, 2, 10, 15, #084e6f, true),
-  (16, 3, 2, 2, 11, 15, #0b0823, true), (18, 3, 2, 2, 10, 15, #38103d, true), (20, 3, 2, 2, 10, 15, #443344, true),
-  (22, 3, 2, 2, 10, 15, #666777, true);
-
-@mixin placeBlock($x, $y, $z, $w, $d, $h, $c, $isBook) {
-  display: block;
-  transform: translate3d($sqSize * ($x - 1), $sqSize * (-$y - ($d - 1)), ($sqSize * $z) + ($sqSize * ($h - 1)));
-  .blockInner > div {
-    background-color: $c;
-    &.top,
-    &.bottom {
-      width: $sqSize * $w;
-      height: $sqSize * $d;
-    }
-    &.top {
-      transform: rotateX(-90deg) translateY(-$sqSize * ($d - 1));
-    }
-    &.bottom {
-      transform: rotateX(-90deg) translateY(-$sqSize * ($d - 1)) translateZ($sqSize * $h);
-    }
-    &.front,
-    &.back,
-    &.left,
-    &.right {
-      &::before {
-        background-color: #000;
-        content: "";
-        width: 100%;
-        height: 100%;
-      }
-    }
-    &.front,
-    &.back {
-      width: $sqSize * $w;
-      height: $sqSize * $h;
-      &::before {
-        opacity: 0.2;
-      }
-    }
-    &.front {
-      transform: translateZ($sqSize * ($d - 1));
-    }
-    &.left,
-    &.right {
-      width: $sqSize * $d;
-      height: $sqSize * $h;
-      @if ($isBook == true) {
-        &::before {
-          opacity: 0;
-        }
-      } @else {
-        &::before {
-          opacity: 0.4;
-        }
-      }
-    }
-    &.right {
-      transform: rotateY(-270deg) translate3d($sqSize, 0, $sqSize * ($w - $d));
-      transform-style: preserve-3d;
-      @if ($isBook == true) {
-        background-color: #fff;
-        &::after {
-          background-color: $c;
-          content: attr(data-title);
-        }
-      }
-    }
-    @if ($isBook == true) {
-      $pgC: #aaa;
-      &.top,
-      &.back,
-      &.bottom {
-        background: {
-          color: #fff;
-          image: repeating-linear-gradient(
-            90deg,
-            transparent,
-            transparent 21%,
-            $pgC 21%,
-            $pgC 25%,
-            transparent 25%,
-            transparent 46%,
-            $pgC 46%,
-            $pgC 50%,
-            transparent 50%
-          );
-          size: $sqSize $sqSize;
-        }
-      }
-    }
-  }
-}
 
 .root {
   position: relative;
@@ -154,20 +47,26 @@ $blocks:
 
 .surface {
   display: block;
-  width: $sqSize * $xSpaces;
   height: $sqSize * $ySpaces;
   margin: auto;
   transform-style: preserve-3d;
-  transform: translateY($sqSize * $zSpaces / 2) rotateX($xAngle) rotateZ($zAngle);
+  transform: translateY($sqSize * $zSpaces * 0.5) rotateX($xAngle) rotateZ($zAngle);
   transition: transform $trans;
   will-change: transform;
 }
 
 .block {
-  display: none;
+  display: block;
   transform-style: preserve-3d;
   position: absolute;
   bottom: 0;
+  cursor: pointer;
+  // Reset button styles
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  padding: 0;
 }
 
 .blockInner {
@@ -185,6 +84,17 @@ $blocks:
   position: absolute;
   width: $sqSize;
   height: $sqSize;
+
+  // Shadow overlay for 3D effect
+  &::before {
+    content: "";
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    opacity: 0.2;
+    pointer-events: none;
+  }
 }
 
 .back {
@@ -194,17 +104,20 @@ $blocks:
 .left {
   transform-origin: center left;
   transform: rotateY(270deg) translateX(-$sqSize);
+
+  &::before {
+    opacity: 0;
+  }
 }
 
 .right {
   transform-origin: top right;
-  &::after,
-  div {
-    top: 0;
-    left: 0;
-    transform-origin: 0 50%;
-    transition: transform $trans $trans linear;
+  transform-style: preserve-3d;
+
+  &::before {
+    opacity: 0;
   }
+
   &::after {
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
@@ -214,14 +127,14 @@ $blocks:
     text-align: center;
     padding: 20% 5%;
     position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
     z-index: 2;
-    content: "";
-  }
-  div {
-    width: 100%;
-    height: 100%;
+    content: attr(data-title);
+    transform-origin: 0 50%;
+    transition: transform $trans $trans linear;
   }
 }
 
@@ -254,41 +167,15 @@ $blocks:
   height: $sqSize;
 }
 
-/* Render blocks */
-@if length(nth($blocks, 1)) == 1 {
-  .b1 {
-    @include placeBlock(
-      nth($blocks, 1),
-      nth($blocks, 2),
-      nth($blocks, 3),
-      nth($blocks, 4),
-      nth($blocks, 5),
-      nth($blocks, 6),
-      nth($blocks, 7),
-      nth($blocks, 8)
-    );
-  }
-} @else {
-  @for $b from 1 through length($blocks) {
-    .b#{$b} {
-      @include placeBlock(
-        nth(nth($blocks, $b), 1),
-        nth(nth($blocks, $b), 2),
-        nth(nth($blocks, $b), 3),
-        nth(nth($blocks, $b), 4),
-        nth(nth($blocks, $b), 5),
-        nth(nth($blocks, $b), 6),
-        nth(nth($blocks, $b), 7),
-        nth(nth($blocks, $b), 8)
-      );
-    }
-  }
-}
-
+// Book hover effect
 .book:hover .blockInner,
 .book:active .blockInner,
 .book:focus .blockInner {
   transform: rotateX(-90deg) translateZ($sqSize * 4);
+}
+
+.book:focus {
+  outline: none;
 }
 
 @keyframes fadeIn {
