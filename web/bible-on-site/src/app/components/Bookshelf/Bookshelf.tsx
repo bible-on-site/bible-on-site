@@ -1,7 +1,7 @@
 import styles from "./bookshelf.module.scss";
 
-const blocks = 16;
-const bookStart = 6;
+const blocks = 12; // 1 shelf floor + 11 books
+const bookStart = 2; // books start after shelf floor
 const titles = [
 	"The Color Chucknorris",
 	"The Phisherman and His Wife",
