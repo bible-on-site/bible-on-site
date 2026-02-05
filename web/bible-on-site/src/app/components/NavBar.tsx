@@ -32,7 +32,7 @@ export const NavBar = () => {
 						<span>על הפרק</span>
 					</Link>
 				</li>
-				<li className={`${styles.menuItem} ${styles.ribbonBuilding}`}>
+				<li className={styles.menuItem}>
 					<Image src="/icons/rabbi.svg" alt="הרבנים" width={16} height={16} />
 					<Link href="/authors">
 						<span>הרבנים</span>
@@ -84,38 +84,27 @@ export const NavBar = () => {
 						<span>יישומון</span>
 					</Link>
 					<ul>
-						{appPlatforms.map((platform) => {
-							const ribbonClass =
-								platform.ribbon === "building"
-									? styles.ribbonBuilding
-									: styles.ribbonComingSoon;
-
-							return (
-								<li
-									key={platform.id}
-									className={`${styles.menuItem} ${ribbonClass}`}
-									title={platform.description}
+						{appPlatforms.map((platform) => (
+							<li
+								key={platform.id}
+								className={styles.menuItem}
+								title={platform.description}
+							>
+								<Image
+									src={platform.icon}
+									alt={platform.description}
+									width={16}
+									height={16}
+								/>
+								<a
+									href={platform.href}
+									target="_blank"
+									rel="noopener noreferrer"
 								>
-									<Image
-										src={platform.icon}
-										alt={platform.description}
-										width={16}
-										height={16}
-									/>
-									{platform.href ? (
-										<a
-											href={platform.href}
-											target="_blank"
-											rel="noopener noreferrer"
-										>
-											<span>{platform.name}</span>
-										</a>
-									) : (
-										<span>{platform.name}</span>
-									)}
-								</li>
-							);
-						})}
+									<span>{platform.name}</span>
+								</a>
+							</li>
+						))}
 					</ul>
 				</li>
 				<li className={styles.menuItem}>
