@@ -32,7 +32,9 @@ test.describe("Article page", () => {
 
 		// Article body content (test data has "פתיחה" and "בראשית" in content)
 		await expect(articleView.getByText("פתיחה")).toBeVisible();
-		await expect(articleView.getByText("בראשית", { exact: false })).toBeVisible();
+		await expect(
+			articleView.getByRole("heading", { name: /פירוש המילה "בראשית"/ }),
+		).toBeVisible();
 	});
 
 	test("author name links to author page", async ({ page }) => {

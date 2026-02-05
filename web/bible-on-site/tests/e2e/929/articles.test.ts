@@ -66,11 +66,13 @@ test.describe("Articles Section", () => {
 		// Wait for the page to load by checking perek text area exists
 		await expect(page.locator("article").first()).toBeVisible();
 
-		// Articles section should NOT be visible (returns null when no articles)
+		// Articles section renders with an empty message when no articles exist
 		const articlesSection = page.locator("section").filter({
 			has: page.locator("text=מאמרים על הפרק"),
 		});
-
-		await expect(articlesSection).not.toBeVisible();
+		await expect(articlesSection).toBeVisible();
+		// Should show the empty message and have no article links
+		await expect(articlesSection.getByText("אין מאמרים לפרק זה")).toBeVisible();
+		await expect(articlesSection.locator("a")).toHaveCount(0);
 	});
 });
