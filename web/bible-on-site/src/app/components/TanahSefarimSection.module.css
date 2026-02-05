@@ -6,8 +6,8 @@
   background-color: #ccc;
   padding: 1.5em 0 3em;
   scroll-margin-top: 1em;
-  margin-top: -2em; /* Pull up into the al-haperek divider to avoid white gap */
-  padding-top: 3.5em; /* Compensate for negative margin */
+  margin-top: -3em; /* Pull up into the al-haperek divider to avoid white gap */
+  padding-top: 5em; /* Compensate for negative margin */
 }
 
 .header {
@@ -32,7 +32,7 @@
 
 .bookshelfContainer {
   width: 100%;
-  min-height: 350px;
+  height: 450px; /* Single shelf mode - explicit height needed for absolute positioning */
 }
 
 .loading {
@@ -64,6 +64,7 @@
     background-image: url(/root/tanah-sefarim-bottom-devider-xs.svg);
   }
   .bookshelfContainer {
+    height: auto;
     min-height: 1550px;
   }
 }
