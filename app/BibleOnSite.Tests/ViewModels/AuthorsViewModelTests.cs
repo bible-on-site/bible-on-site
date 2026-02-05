@@ -113,6 +113,23 @@ public class AuthorsViewModelTests
         viewModel.FilteredAuthors.Should().HaveCount(1);
     }
 
+    [Fact]
+    public void FilteredAuthors_ShouldExcludeAuthorsWithNoArticles()
+    {
+        var viewModel = new AuthorsViewModel();
+        viewModel.SetAuthors(new List<Author>
+        {
+            new Author { Id = 1, Name = "הרב משה לוי", Details = "רב", ArticlesCount = 10 },
+            new Author { Id = 2, Name = "הרב יוסף כהן", Details = "מרצה", ArticlesCount = 0 },
+            new Author { Id = 3, Name = "הרב דוד ישראלי", Details = "דיין", ArticlesCount = 3 }
+        });
+
+        viewModel.SearchPhrase = "";
+
+        viewModel.FilteredAuthors.Should().HaveCount(2);
+        viewModel.FilteredAuthors.Should().NotContain(a => a.ArticlesCount == 0);
+    }
+
     private static List<Author> CreateTestAuthors()
     {
         return new List<Author>

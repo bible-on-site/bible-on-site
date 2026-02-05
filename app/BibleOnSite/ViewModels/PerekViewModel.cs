@@ -40,8 +40,10 @@ public partial class PerekViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(DayOfWeek))]
     [NotifyPropertyChangedFor(nameof(ArticlesCount))]
     [NotifyPropertyChangedFor(nameof(HasArticles))]
+#if MAUI
     [NotifyCanExecuteChangedFor(nameof(LoadNextCommand))]
     [NotifyCanExecuteChangedFor(nameof(LoadPreviousCommand))]
+#endif
     private Perek? _perek;
 
     [ObservableProperty]
