@@ -124,19 +124,25 @@ Nuke RunAndroid does this automatically. For manual runs, always verify and repo
 
 ## Android deployment (manual / WiFi)
 
-**EmbedAssembliesIntoApk** is true by default (reliable emulator/device deploy; avoids XA0129).
-
-**WiFi:** Fast Deployment does not push native libs over network and the app crashes. For WiFi deploy: build with `-p:EmbedAssembliesIntoApk=true` (from `app/BibleOnSite`), then do a **full install**: `adb -s <device> install -r --no-incremental ...\com.tanah.daily929-Signed.apk`.
+**WiFi:** Fast Deployment does not push native libs over network and the app crashes with `libmonosgen-2.0.so not found`. For WiFi deploy, use `--full-apk` flag.
 
 **One-time setup (from device Wireless debugging):**
 1. Pair: `adb pair <pairing-ip>:<pairing-port>` and enter the 6-digit code.
 2. Connect: `adb connect <connection-ip>:<connection-port>`.
 3. Verify: `adb devices -l`.
 
-**Deploy and run (no user execution requested; agent runs commands):**
-1. Optional if code changed: `dotnet build -f net9.0-android` (from `app/BibleOnSite`).
-2. Full install (required for WiFi): `adb -s <device> install -r --no-incremental app/BibleOnSite/bin/Debug/net9.0-android/com.tanah.daily929-Signed.apk`.
-3. Launch: `adb -s <device> shell monkey -p com.tanah.daily929 -c android.intent.category.LAUNCHER 1`.
+**Deploy to WiFi device (recommended - use Nuke):**
+```bash
+# From app/ directory - Nuke handles full APK build automatically
+dotnet run --project devops -- RunAndroid --full-apk
+
+# Then manually install to WiFi device (Nuke targets emulator by default)
+adb -s <device-ip:port> install -r --no-incremental bin/Debug/net9.0-android/com.tanah.daily929-Signed.apk
+adb -s <device-ip:port> shell am force-stop com.tanah.daily929
+adb -s <device-ip:port> shell am start -n com.tanah.daily929/crc640368fd9db13d8734.MainActivity
+```
+
+**Note:** Don't manually build with `--property:EmbedAssembliesIntoApk=true` - it's slow (~3 min). Nuke's `--full-apk` reuses cached builds when possible.
 
 Use full path to adb if not in PATH: `%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe` (Windows).
 
