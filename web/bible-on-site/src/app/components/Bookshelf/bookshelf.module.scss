@@ -63,6 +63,12 @@ $fFontSize: $sqSize * 0.75;
   transform: translate(50%, -50%);
   white-space: nowrap;
   letter-spacing: 0.1em;
+
+  // Smaller label on narrow screens
+  @media (max-width: 540px) {
+    font-size: 0.45rem;
+    letter-spacing: 0.05em;
+  }
 }
 
 // Container for the 3D shelf
