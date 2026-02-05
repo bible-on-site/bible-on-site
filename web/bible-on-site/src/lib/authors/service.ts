@@ -18,29 +18,29 @@ interface ArticleRow {
 let s3WarningShown = false;
 
 /**
- * Check if S3/LocalStack is available (dev environment only).
+ * Check if S3/MinIO is available (dev environment only).
  * Logs a warning once if not available.
  */
 async function checkS3Availability(): Promise<void> {
 	if (s3WarningShown || process.env.NODE_ENV === "production") return;
 
 	const S3_ENDPOINT = process.env.S3_ENDPOINT;
-	if (!S3_ENDPOINT) return; // Not using LocalStack
+	if (!S3_ENDPOINT) return; // Not using MinIO
 
 	try {
 		const controller = new AbortController();
 		const timeoutId = setTimeout(() => controller.abort(), 1000);
-		await fetch(`${S3_ENDPOINT}/_localstack/health`, {
+		await fetch(`${S3_ENDPOINT}/minio/health/live`, {
 			signal: controller.signal,
 		});
 		clearTimeout(timeoutId);
 	} catch {
 		s3WarningShown = true;
 		console.warn(
-			"⚠️  S3/LocalStack not available at",
+			"⚠️  S3/MinIO not available at",
 			S3_ENDPOINT,
 			"- Author images will not load.",
-			"\n   Start Docker and run: docker compose -f devops/docker-compose.yml up -d localstack",
+			"\n   Start Docker and run: docker compose -f devops/docker-compose.yml up -d minio",
 		);
 	}
 }
@@ -48,7 +48,7 @@ async function checkS3Availability(): Promise<void> {
 /**
  * Build the public URL for author images based on author ID.
  * Images are stored in S3 with naming convention: authors/high-res/{id}.jpg
- * Handles both LocalStack (dev) and AWS S3 (prod) URLs.
+ * Handles both MinIO (dev) and AWS S3 (prod) URLs.
  */
 export function getAuthorImageUrl(authorId: number): string {
 	const imagePath = `authors/high-res/${authorId}.jpg`;
@@ -63,7 +63,7 @@ export function getAuthorImageUrl(authorId: number): string {
 	checkS3Availability();
 
 	if (S3_ENDPOINT) {
-		// LocalStack/MinIO style URL
+		// MinIO style URL
 		return `${S3_ENDPOINT}/${S3_BUCKET}/${imagePath}`;
 	}
 	// Standard AWS S3 URL

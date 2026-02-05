@@ -151,4 +151,4 @@ AWS_PROFILE=AdministratorAccess-250598594267 npx tsx devops/setup-dev-env.mts sy
 - `PROD_DB_URL` – Override production DB URL (skips SSM fetch)
 - `PROD_RDS_SG_ID` – Override security group ID (skips describe-security-groups)
 - `PROD_S3_BUCKET`, `S3_BUCKET` – Override S3 bucket names
-- `S3_ENDPOINT` – e.g. `http://localhost:4566` for LocalStack
+- `S3_ENDPOINT` – e.g. `http://localhost:4566` for MinIO

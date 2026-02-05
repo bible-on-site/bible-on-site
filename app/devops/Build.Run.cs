@@ -203,6 +203,37 @@ partial class Build
         });
 
     /// <summary>
+    /// Ensures Docker MinIO container is running for S3 access.
+    /// </summary>
+    void EnsureMinioRunning()
+    {
+        var devopsDir = RootDirectory.Parent / "devops";
+        var composeFile = devopsDir / "docker-compose.yml";
+
+        Serilog.Log.Information("Ensuring MinIO is running...");
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "docker",
+            Arguments = $"compose -f \"{composeFile}\" up -d minio",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+
+        using var process = Process.Start(startInfo);
+        process?.WaitForExit();
+
+        if (process?.ExitCode == 0)
+        {
+            Serilog.Log.Information("MinIO is running");
+        }
+        else
+        {
+            Serilog.Log.Warning("Failed to start MinIO - S3 resources may not be available");
+        }
+    }
+
+    /// <summary>
     /// Dev target - one command to start everything for local development.
     /// Similar to "npm run dev" or "next dev".
     /// </summary>
@@ -211,6 +242,7 @@ partial class Build
         .DependsOn(CompileWindows)
         .Executes(() =>
         {
+            EnsureMinioRunning();
             EnsureApiRunning();
 
             DotNetRun(s => s
@@ -226,6 +258,7 @@ partial class Build
         .DependsOn(PrepareApiConfig, Compile)
         .Executes(() =>
         {
+            EnsureMinioRunning();
             // Only start local API if not using prod
             if (!IsProdApi)
             {
@@ -248,6 +281,7 @@ partial class Build
         {
             // Ensure emulator is running
             EnsureAndroidEmulatorRunning();
+            EnsureMinioRunning();
 
             // Only start local API if not using prod
             if (!IsProdApi)

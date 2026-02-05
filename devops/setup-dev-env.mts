@@ -495,9 +495,15 @@ async function runSyncFromProd(): Promise<void> {
 				console.info(
 					`[dry-run] Would ensure bucket s3://${devS3Bucket} exists`,
 				);
-				console.info(
-					`[dry-run] Would run: aws s3 sync s3://${prodS3Bucket} s3://${devS3Bucket} --delete`,
-				);
+				if (s3Endpoint) {
+					console.info(
+						`[dry-run] Would sync: AWS s3://${prodS3Bucket} → local temp → MinIO s3://${devS3Bucket}`,
+					);
+				} else {
+					console.info(
+						`[dry-run] Would run: aws s3 sync s3://${prodS3Bucket} s3://${devS3Bucket} --delete`,
+					);
+				}
 			} else {
 				// Ensure dev bucket exists (upsert principle)
 				console.info(`Ensuring S3 bucket '${devS3Bucket}' exists...`);
@@ -528,26 +534,98 @@ async function runSyncFromProd(): Promise<void> {
 					}
 				}
 
-				// Sync from prod to dev
-				console.info("Syncing S3 from prod to dev...");
-				const s3Args = [
-					"s3",
-					"sync",
-					`s3://${prodS3Bucket}`,
-					`s3://${devS3Bucket}`,
-					"--delete",
-				];
-				if (s3Endpoint) s3Args.push("--endpoint-url", s3Endpoint);
-				const s3Result = spawnSync("aws", s3Args, {
-					stdio: ["ignore", "pipe", "pipe"],
-					shell: isWin,
-					encoding: "utf-8",
-				});
-				if (s3Result.status !== 0) {
-					const stderr = s3Result.stderr || "";
-					console.warn(`  Warning: S3 sync failed: ${stderr}`);
+				if (s3Endpoint) {
+					// Two-step sync: AWS prod → local temp dir → MinIO dev
+					// Required because --endpoint-url applies to both source and dest
+					const tempS3Dir = path.join(projectDir, "data", ".s3-sync-temp");
+					fs.mkdirSync(tempS3Dir, { recursive: true });
+
+					console.info(
+						`Downloading S3 from prod (s3://${prodS3Bucket}) to temp dir...`,
+					);
+					const downloadResult = spawnSync(
+						"aws",
+						[
+							"s3",
+							"sync",
+							`s3://${prodS3Bucket}`,
+							tempS3Dir,
+							"--delete",
+							"--region",
+							awsRegion,
+						],
+						{
+							stdio: ["ignore", "pipe", "pipe"],
+							shell: isWin,
+							encoding: "utf-8",
+						},
+					);
+					if (downloadResult.status !== 0) {
+						const stderr = downloadResult.stderr || "";
+						console.warn(`  Warning: S3 download failed: ${stderr}`);
+					} else {
+						console.info("  S3 download complete");
+						console.info(
+							`Uploading to MinIO (s3://${devS3Bucket}) at ${s3Endpoint}...`,
+						);
+						const uploadResult = spawnSync(
+							"aws",
+							[
+								"s3",
+								"sync",
+								tempS3Dir,
+								`s3://${devS3Bucket}`,
+								"--delete",
+								"--endpoint-url",
+								s3Endpoint,
+							],
+							{
+								stdio: ["ignore", "pipe", "pipe"],
+								shell: isWin,
+								encoding: "utf-8",
+								env: {
+									...process.env,
+									AWS_ACCESS_KEY_ID:
+										process.env.S3_ACCESS_KEY_ID || "test",
+									AWS_SECRET_ACCESS_KEY:
+										process.env.S3_SECRET_ACCESS_KEY || "test_1234",
+								},
+							},
+						);
+						if (uploadResult.status !== 0) {
+							const stderr = uploadResult.stderr || "";
+							console.warn(`  Warning: MinIO upload failed: ${stderr}`);
+						} else {
+							console.info("  MinIO upload complete");
+						}
+					}
+
+					// Clean up temp dir
+					fs.rmSync(tempS3Dir, { recursive: true, force: true });
 				} else {
-					console.info("  S3 sync complete");
+					// Direct S3-to-S3 sync (both on AWS)
+					console.info("Syncing S3 from prod to dev...");
+					const s3Result = spawnSync(
+						"aws",
+						[
+							"s3",
+							"sync",
+							`s3://${prodS3Bucket}`,
+							`s3://${devS3Bucket}`,
+							"--delete",
+						],
+						{
+							stdio: ["ignore", "pipe", "pipe"],
+							shell: isWin,
+							encoding: "utf-8",
+						},
+					);
+					if (s3Result.status !== 0) {
+						const stderr = s3Result.stderr || "";
+						console.warn(`  Warning: S3 sync failed: ${stderr}`);
+					} else {
+						console.info("  S3 sync complete");
+					}
 				}
 			}
 		} else if (!dryRun) {

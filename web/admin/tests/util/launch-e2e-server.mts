@@ -135,7 +135,7 @@ async function populateDatabase(): Promise<void> {
 /**
  * Populate S3 with test images.
  * Runs `cargo make s3-populate-test` from the data/ directory.
- * Only runs if S3_ENDPOINT environment variable is set (LocalStack mode).
+ * Only runs if S3_ENDPOINT environment variable is set (MinIO mode).
  */
 async function populateS3(): Promise<void> {
 	const s3Endpoint = process.env.S3_ENDPOINT;

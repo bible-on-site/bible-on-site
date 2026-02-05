@@ -34,7 +34,7 @@ describe("authors service", () => {
 	});
 
 	describe("getAuthorImageUrl", () => {
-		it("builds LocalStack URL when S3_ENDPOINT is set", () => {
+		it("builds MinIO URL when S3_ENDPOINT is set", () => {
 			process.env.S3_ENDPOINT = "http://localhost:4566";
 			process.env.S3_BUCKET = "my-bucket";
 

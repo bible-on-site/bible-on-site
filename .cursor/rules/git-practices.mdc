@@ -19,7 +19,10 @@ alwaysApply: true
    `git diff-tree --no-commit-id --name-only -r HEAD | xargs git add && git commit --amend --no-edit`
 4. Push only when the working tree is clean.
 
-**Agents**: After committing, always check `git status` and amend if pre-commit changed files. When you make changes that should be committed, **you** commit and push—do not tell the user to run git commands.
+**Agents**:
+- **MANDATORY**: After every `git commit`, you MUST run `git status` and inspect the output. If the working tree is not clean (pre-commit hooks often auto-fix files), stage all changed files and amend: `git diff-tree --no-commit-id --name-only -r HEAD | xargs git add && git commit --amend --no-edit`. Repeat until the working tree is clean.
+- When you make changes that should be committed, **you** commit and push—do not tell the user to run git commands.
+- **NEVER** tell the user to run commands. You execute all commands yourself using the shell tool. This includes git commands, AWS CLI, docker, npm scripts, and any other CLI operations.
 
 ## Branch Management
 

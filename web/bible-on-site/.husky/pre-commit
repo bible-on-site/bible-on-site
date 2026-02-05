@@ -1,5 +1,10 @@
 # Ensure html-flip-book-react is set to npm version (not local file:)
-npm run flip-book:check || exit 1
+# Auto-fix: if set to local, switch to npm and stage the changes
+if ! npm run flip-book:check 2>/dev/null; then
+    echo "⚙️  Auto-fixing: switching html-flip-book-react from local to npm..."
+    npm run flip-book:npm || exit 1
+    git add package.json package-lock.json
+fi
 
 npm run lint || exit 1
 npm run test:unit || exit 1
