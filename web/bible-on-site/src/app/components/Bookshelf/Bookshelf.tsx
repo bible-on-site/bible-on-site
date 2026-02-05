@@ -13,14 +13,15 @@ const BOOK_START_Y = 3;
 const BOOK_START_Z = 2;
 const HELEK_GAP = 2; // Space between heleks (in book widths)
 const DEFAULT_SQ_SIZE = 16; // Base unit size in pixels (desktop)
-const MIN_SQ_SIZE = 10; // Minimum unit size for very small screens
+const MIN_SQ_SIZE = 8; // Minimum unit size for very small screens
 const SHELF_DEPTH = 14;
 
 // Breakpoint for switching between single and multi-shelf layout
 const MULTI_SHELF_BREAKPOINT = 900;
 
-// Screen padding for responsive sizing (pixels on each side)
-const SCREEN_PADDING = 16;
+// Responsive sizing constants
+const SCREEN_PADDING = 32; // Padding on each side
+const SIZE_SAFETY_FACTOR = 1.15; // Extra margin for 3D perspective effects
 
 export type BookshelfProps = {
 	onSeferClick?: (seferName: string, perekFrom: number) => void;
@@ -438,7 +439,9 @@ function calculateSqSize(
 	maxShelfWidthUnits: number,
 ): number {
 	const availableWidth = windowWidth - 2 * SCREEN_PADDING;
-	const idealSqSize = availableWidth / maxShelfWidthUnits;
+	// Account for 3D perspective effects that make content appear wider
+	const effectiveWidthNeeded = maxShelfWidthUnits * SIZE_SAFETY_FACTOR;
+	const idealSqSize = availableWidth / effectiveWidthNeeded;
 
 	// Clamp between MIN and DEFAULT
 	return Math.max(MIN_SQ_SIZE, Math.min(DEFAULT_SQ_SIZE, idealSqSize));
