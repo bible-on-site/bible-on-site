@@ -214,12 +214,16 @@
                     <VerticalStackLayout VerticalOptions="Center"
                                          HorizontalOptions="Center"
                                          Padding="20">
+                        <Image Source="loading_book_anim.gif"
+                               IsAnimationPlaying="True"
+                               HeightRequest="60"
+                               WidthRequest="60"
+                               Aspect="AspectFit"/>
                         <Label Text="מתחבר לפרק..."
                                AutomationId="PerekLoadingLabel"
                                FontSize="18"
-                               HorizontalTextAlignment="Center"/>
-                        <ActivityIndicator IsRunning="True"
-                                           Margin="0,10,0,0"/>
+                               HorizontalTextAlignment="Center"
+                               Margin="0,10,0,0"/>
                     </VerticalStackLayout>
                 </CollectionView.EmptyView>
             </CollectionView>

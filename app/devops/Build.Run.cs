@@ -345,7 +345,7 @@ partial class Build
         });
 
     /// <summary>
-    /// Checks if the app package is installed on the connected Android device/emulator.
+    /// Checks if the app package is installed on the connected Android emulator.
     /// </summary>
     bool IsAppInstalled()
     {
@@ -355,7 +355,7 @@ partial class Build
             var startInfo = new ProcessStartInfo
             {
                 FileName = adbPath,
-                Arguments = "shell pm list packages com.tanah.daily929",
+                Arguments = GetAdbDeviceArgs("shell pm list packages com.tanah.daily929"),
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 CreateNoWindow = true,
@@ -408,7 +408,7 @@ partial class Build
     }
 
     /// <summary>
-    /// Launches the app on the connected Android device/emulator and verifies it's running.
+    /// Launches the app on the connected Android emulator and verifies it's running.
     /// Always force-stops first to ensure fresh launch with new code.
     /// </summary>
     void LaunchAndVerifyApp()
@@ -420,7 +420,7 @@ partial class Build
         var stopInfo = new ProcessStartInfo
         {
             FileName = adbPath,
-            Arguments = "shell am force-stop com.tanah.daily929",
+            Arguments = GetAdbDeviceArgs("shell am force-stop com.tanah.daily929"),
             UseShellExecute = false,
             RedirectStandardOutput = true,
             CreateNoWindow = true,
@@ -436,7 +436,7 @@ partial class Build
         var launchInfo = new ProcessStartInfo
         {
             FileName = adbPath,
-            Arguments = "shell monkey -p com.tanah.daily929 -c android.intent.category.LAUNCHER 1",
+            Arguments = GetAdbDeviceArgs("shell monkey -p com.tanah.daily929 -c android.intent.category.LAUNCHER 1"),
             UseShellExecute = false,
             RedirectStandardOutput = true,
             CreateNoWindow = true,
@@ -453,7 +453,7 @@ partial class Build
         var pidInfo = new ProcessStartInfo
         {
             FileName = adbPath,
-            Arguments = "shell pidof com.tanah.daily929",
+            Arguments = GetAdbDeviceArgs("shell pidof com.tanah.daily929"),
             UseShellExecute = false,
             RedirectStandardOutput = true,
             CreateNoWindow = true,
@@ -474,7 +474,7 @@ partial class Build
             var logcatInfo = new ProcessStartInfo
             {
                 FileName = adbPath,
-                Arguments = "logcat -d -t 100 --pid=$(pidof com.tanah.daily929) 2>/dev/null || logcat -d -t 100",
+                Arguments = GetAdbDeviceArgs("logcat -d -t 100"),
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 CreateNoWindow = true,
@@ -539,6 +539,58 @@ partial class Build
     {
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         return System.IO.Path.Combine(localAppData, "Android", "Sdk", "platform-tools", "adb.exe");
+    }
+
+    /// <summary>
+    /// Gets the serial number of the first connected emulator.
+    /// Returns null if no emulator is found.
+    /// </summary>
+    string? GetEmulatorSerial()
+    {
+        try
+        {
+            var adbPath = GetAdbPath();
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = adbPath,
+                Arguments = "devices",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true,
+            };
+            using var process = Process.Start(startInfo);
+            var output = process?.StandardOutput.ReadToEnd() ?? "";
+            process?.WaitForExit();
+
+            // Find emulator line (starts with "emulator-")
+            var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var line in lines)
+            {
+                var trimmed = line.Trim();
+                if (trimmed.StartsWith("emulator-") && trimmed.Contains("device"))
+                {
+                    return trimmed.Split('\t')[0].Trim();
+                }
+            }
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Gets ADB arguments with device selector if multiple devices are connected.
+    /// </summary>
+    string GetAdbDeviceArgs(string command)
+    {
+        var emulatorSerial = GetEmulatorSerial();
+        if (emulatorSerial != null)
+        {
+            return $"-s {emulatorSerial} {command}";
+        }
+        return command;
     }
 
     /// <summary>
