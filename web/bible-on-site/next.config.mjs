@@ -7,6 +7,7 @@ const isProduction = process.env.NODE_ENV === "production";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	output: "standalone",
+	transpilePackages: ["html-flip-book-react"],
 	turbopack: {
 		root: import.meta.dirname,
 	},
