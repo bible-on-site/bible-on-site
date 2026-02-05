@@ -122,12 +122,17 @@ helekGroups.כתובים.forEach((sefer, index) => {
 });
 
 // Calculate book positions for a list of sefarim
-function calculatePositionsForSefarim(
-	sefarimList: SeferInfo[],
-	startX = 2,
-): { positions: Array<{ sefer: SeferInfo; x: number }>; totalWidth: number } {
+const SHELF_PADDING = 2; // Padding on each side of books
+
+function calculatePositionsForSefarim(sefarimList: SeferInfo[]): {
+	positions: Array<{ sefer: SeferInfo; x: number }>;
+	totalWidth: number;
+	shelfStartX: number;
+} {
 	const positions: Array<{ sefer: SeferInfo; x: number }> = [];
-	let currentX = startX;
+	// Books start after left padding (+1 to account for shelf transform offset)
+	const firstBookX = SHELF_PADDING + 1;
+	let currentX = firstBookX;
 
 	// Reverse for RTL display
 	const reversed = [...sefarimList].reverse();
@@ -136,16 +141,24 @@ function calculatePositionsForSefarim(
 		currentX += BOOK_WIDTH;
 	}
 
-	return { positions, totalWidth: currentX + 2 };
+	// Shelf starts at 1 (transform becomes 0), total width includes both paddings
+	const booksWidth = sefarimList.length * BOOK_WIDTH;
+	return {
+		positions,
+		totalWidth: 2 * SHELF_PADDING + booksWidth + 1,
+		shelfStartX: 1,
+	};
 }
 
 // Calculate positions for all books on single shelf (RTL order with gaps)
 function calculateAllBooksPositions(): {
 	positions: Array<{ sefer: SeferInfo; x: number }>;
 	totalWidth: number;
+	shelfStartX: number;
 } {
 	const positions: Array<{ sefer: SeferInfo; x: number }> = [];
-	let currentX = 2;
+	// Start after left padding (+1 to account for shelf transform offset)
+	let currentX = SHELF_PADDING + 1;
 
 	// Ketuvim first (leftmost) - reversed within
 	for (const sefer of [...helekGroups.כתובים].reverse()) {
@@ -167,7 +180,11 @@ function calculateAllBooksPositions(): {
 		currentX += BOOK_WIDTH;
 	}
 
-	return { positions, totalWidth: currentX + 2 };
+	return {
+		positions,
+		totalWidth: currentX + SHELF_PADDING,
+		shelfStartX: 1,
+	};
 }
 
 type BookBlockProps = {
@@ -270,14 +287,15 @@ function BookBlock({ sefer, x, onClick }: BookBlockProps) {
 
 type ShelfFloorProps = {
 	width: number;
+	startX?: number;
 	label?: string;
 };
 
-function ShelfFloor({ width, label }: ShelfFloorProps) {
+function ShelfFloor({ width, startX = 1, label }: ShelfFloorProps) {
 	const shelfColor = "#441e12";
 
 	const blockStyle = {
-		transform: `translate3d(${SQ_SIZE * (2 - 1)}px, ${SQ_SIZE * (-1 - (SHELF_DEPTH - 1))}px, ${SQ_SIZE * 1}px)`,
+		transform: `translate3d(${SQ_SIZE * (startX - 1)}px, ${SQ_SIZE * (-1 - (SHELF_DEPTH - 1))}px, ${SQ_SIZE * 1}px)`,
 		display: "block",
 	};
 
@@ -351,6 +369,7 @@ function ShelfFloor({ width, label }: ShelfFloorProps) {
 type SingleShelfProps = {
 	positions: Array<{ sefer: SeferInfo; x: number }>;
 	shelfWidth: number;
+	shelfStartX?: number;
 	onSeferClick?: (seferName: string, perekFrom: number) => void;
 	label?: string;
 };
@@ -358,6 +377,7 @@ type SingleShelfProps = {
 function SingleShelf({
 	positions,
 	shelfWidth,
+	shelfStartX = 1,
 	onSeferClick,
 	label,
 }: SingleShelfProps) {
@@ -368,7 +388,7 @@ function SingleShelf({
 					className={styles.surface}
 					style={{ width: `${SQ_SIZE * shelfWidth}px` }}
 				>
-					<ShelfFloor width={shelfWidth} label={label} />
+					<ShelfFloor width={shelfWidth} startX={shelfStartX} label={label} />
 					{positions.map(({ sefer, x }) => (
 						<BookBlock
 							key={sefer.name}
@@ -417,24 +437,28 @@ export function Bookshelf({ onSeferClick }: BookshelfProps) {
 					<SingleShelf
 						positions={torahData.positions}
 						shelfWidth={torahData.totalWidth}
+						shelfStartX={torahData.shelfStartX}
 						onSeferClick={onSeferClick}
 						label="תורה"
 					/>
 					<SingleShelf
 						positions={neviimRishonimData.positions}
 						shelfWidth={neviimRishonimData.totalWidth}
+						shelfStartX={neviimRishonimData.shelfStartX}
 						onSeferClick={onSeferClick}
 						label="נביאים: ראשונים + גדולים"
 					/>
 					<SingleShelf
 						positions={treiAsarData.positions}
 						shelfWidth={treiAsarData.totalWidth}
+						shelfStartX={treiAsarData.shelfStartX}
 						onSeferClick={onSeferClick}
 						label="נביאים (המשך): תרי עשר"
 					/>
 					<SingleShelf
 						positions={ketuvimData.positions}
 						shelfWidth={ketuvimData.totalWidth}
+						shelfStartX={ketuvimData.shelfStartX}
 						onSeferClick={onSeferClick}
 						label="כתובים"
 					/>
@@ -451,6 +475,7 @@ export function Bookshelf({ onSeferClick }: BookshelfProps) {
 			<SingleShelf
 				positions={allBooksData.positions}
 				shelfWidth={allBooksData.totalWidth}
+				shelfStartX={allBooksData.shelfStartX}
 				onSeferClick={onSeferClick}
 			/>
 		</div>
