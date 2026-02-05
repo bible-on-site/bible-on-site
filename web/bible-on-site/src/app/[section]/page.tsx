@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { AppSection } from "../components/AppSection";
 import { ContactSection } from "../components/ContactSection";
+import { Footer } from "../components/Footer";
 import { ScrollToSection } from "../components/ScrollToSection";
 import { TanahSefarimSection } from "../components/TanahSefarimSection";
 import { TosSection } from "../components/TosSection";
@@ -91,6 +92,7 @@ export default async function Home({
 			<AppSection />
 			<TosSection />
 			<ContactSection />
+			<Footer />
 		</div>
 	);
 }

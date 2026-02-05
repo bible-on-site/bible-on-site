@@ -1,0 +1,43 @@
+.journalismPage {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  padding-top: 88px; /* Account for fixed header (72px) + spacing */
+}
+
+.pageTitle {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1c2c5d;
+  margin: 0 0 24px 0;
+  text-align: right;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 64px 24px;
+  color: #6b7280;
+  font-size: 1rem;
+  line-height: 1.8;
+}
+
+.emptyState p {
+  margin: 0 0 8px 0;
+}
+
+.backLink {
+  display: inline-block;
+  margin-top: 24px;
+  padding: 10px 24px;
+  background: #1c2c5d;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.backLink:hover {
+  background: #2a3d7a;
+  transform: translateY(-1px);
+}
