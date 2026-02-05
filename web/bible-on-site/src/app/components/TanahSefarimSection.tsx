@@ -35,6 +35,7 @@ export function TanahSefarimSection() {
 			<div className={styles.bookshelfContainer}>
 				<Bookshelf onSeferClick={handleSeferClick} />
 			</div>
+			<div className={styles.bottomDivider} />
 		</section>
 	);
 }

@@ -2,11 +2,11 @@
     <defs>
         <style>
             .cls-1 {
-                fill: #ccc;
+                fill: #fff;
             }
         </style>
     </defs>
-    <title>al-haperek-devider-l</title>
+    <title>tanah-sefarim-bottom-devider-l</title>
     <path class="cls-1"
         d="M1364.87,0q-370.33,5-659,36.47a221.8,221.8,0,0,1-24,1.29h0a221,221,0,0,1-24-1.29Q370.9,5.11,3,0H0V47H1366V0Z" />
 </svg>

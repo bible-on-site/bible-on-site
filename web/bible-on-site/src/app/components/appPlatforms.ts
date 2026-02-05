@@ -12,7 +12,7 @@ export const appPlatforms: AppPlatform[] = [
 		name: "App Store",
 		description: 'יישומון תנ"ך על הפרק לאייפון',
 		icon: "/icons/app-store.svg",
-		href: null, // Coming soon
+		href: "https://apps.apple.com/il/app/%D7%AA-%D7%A0-%D7%9A-%D7%A2-%D7%9C-%D7%94-%D7%A4-%D7%A8-%D7%A7-929/id1045128150?l=he",
 	},
 	{
 		id: "google-play",
