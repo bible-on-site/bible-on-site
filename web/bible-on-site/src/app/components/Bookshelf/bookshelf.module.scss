@@ -1,0 +1,301 @@
+$sqSize: 16px;
+$contW: 100%;
+$contH: 100%;
+$xSpaces: 24;
+$ySpaces: 14;
+$zSpaces: 19;
+$xAngle: 80deg;
+$zAngle: 0deg;
+$books: 11;
+$bookStart: 6;
+$trans: 0.25s;
+
+$fFontSize: $sqSize * 0.75;
+$rFontSize: $sqSize * 1.5;
+$cntntFontSize: $sqSize * 0.7;
+
+$shelfColor: #441e12;
+
+/* Block placement */
+// parameters: x-pos,y-pos,z-pos, width,depth,height, color, is-book
+$blocks:
+  // shelf
+  (2, 1, 1, 22, 14, 1, $shelfColor, false), (1, 14, 1, 24, 1, 18, $shelfColor, false),
+  (1, 1, 1, 1, 13, 18, $shelfColor, false), (24, 1, 1, 1, 13, 18, $shelfColor, false),
+  (1, 1, 19, 24, 14, 1, $shelfColor, false),
+  // books
+  (2, 3, 2, 2, 11, 14, #c00000, true),
+  (4, 3, 2, 2, 11, 15, #891a21, true), (6, 3, 2, 2, 10, 16, #bf3e22, true), (8, 3, 2, 2, 10, 14, #0e4326, true),
+  (10, 3, 2, 2, 11, 15, #0066cc, true), (12, 3, 2, 2, 11, 16, #0f7b7e, true), (14, 3, 2, 2, 10, 15, #084e6f, true),
+  (16, 3, 2, 2, 11, 16, #0b0823, true), (18, 3, 2, 2, 10, 14, #38103d, true), (20, 3, 2, 2, 10, 15, #443344, true),
+  (22, 3, 2, 2, 10, 16, #666777, true);
+
+@mixin placeBlock($x, $y, $z, $w, $d, $h, $c, $isBook) {
+  display: block;
+  transform: translate3d($sqSize * ($x - 1), $sqSize * (-$y - ($d - 1)), ($sqSize * $z) + ($sqSize * ($h - 1)));
+  .blockInner > div {
+    background-color: $c;
+    &.top,
+    &.bottom {
+      width: $sqSize * $w;
+      height: $sqSize * $d;
+    }
+    &.top {
+      transform: rotateX(-90deg) translateY(-$sqSize * ($d - 1));
+    }
+    &.bottom {
+      transform: rotateX(-90deg) translateY(-$sqSize * ($d - 1)) translateZ($sqSize * $h);
+    }
+    &.front,
+    &.back,
+    &.left,
+    &.right {
+      &::before {
+        background-color: #000;
+        content: "";
+        width: 100%;
+        height: 100%;
+      }
+    }
+    &.front,
+    &.back {
+      width: $sqSize * $w;
+      height: $sqSize * $h;
+      &::before {
+        opacity: 0.2;
+      }
+    }
+    &.front {
+      transform: translateZ($sqSize * ($d - 1));
+    }
+    &.left,
+    &.right {
+      width: $sqSize * $d;
+      height: $sqSize * $h;
+      @if ($isBook == true) {
+        &::before {
+          opacity: 0;
+        }
+      } @else {
+        &::before {
+          opacity: 0.4;
+        }
+      }
+    }
+    &.right {
+      transform: rotateY(-270deg) translate3d($sqSize, 0, $sqSize * ($w - $d));
+      transform-style: preserve-3d;
+      @if ($isBook == true) {
+        background-color: #fff;
+        &::after {
+          background-color: $c;
+          content: attr(data-title);
+        }
+      }
+    }
+    @if ($isBook == true) {
+      $pgC: #aaa;
+      &.top,
+      &.back,
+      &.bottom {
+        background: {
+          color: #fff;
+          image: repeating-linear-gradient(
+            90deg,
+            transparent,
+            transparent 21%,
+            $pgC 21%,
+            $pgC 25%,
+            transparent 25%,
+            transparent 46%,
+            $pgC 46%,
+            $pgC 50%,
+            transparent 50%
+          );
+          size: $sqSize $sqSize;
+        }
+      }
+    }
+  }
+}
+
+.root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-color: #ccc;
+  font-family: "Hind", sans-serif;
+  font-size: 20px;
+  line-height: 1;
+  direction: ltr;
+  text-align: left;
+}
+
+.root,
+.root *,
+.root *::before,
+.root *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.container {
+  animation: fadeIn $trans $trans linear forwards;
+  display: flex;
+  margin: auto;
+  opacity: 0;
+  overflow: hidden;
+  position: absolute;
+  inset: 0;
+  width: $contW;
+  height: $contH;
+  perspective: 800px;
+  transform-style: preserve-3d;
+}
+
+.surface {
+  display: block;
+  width: $sqSize * $xSpaces;
+  height: $sqSize * $ySpaces;
+  margin: auto;
+  transform-style: preserve-3d;
+  transform: translateY($sqSize * $zSpaces / 2) rotateX($xAngle) rotateZ($zAngle);
+  transition: transform $trans;
+  will-change: transform;
+}
+
+.block {
+  display: none;
+  transform-style: preserve-3d;
+  position: absolute;
+  bottom: 0;
+}
+
+.blockInner {
+  position: relative;
+  width: $sqSize;
+  transition: transform $trans linear;
+  transform-style: preserve-3d;
+  transform: rotateX(-90deg) translateZ($sqSize);
+}
+
+.blockInner > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  position: absolute;
+  width: $sqSize;
+  height: $sqSize;
+}
+
+.back {
+  transform: translateZ(-$sqSize) rotateY(180deg);
+}
+
+.left {
+  transform-origin: center left;
+  transform: rotateY(270deg) translateX(-$sqSize);
+}
+
+.right {
+  transform-origin: top right;
+  &::after,
+  div {
+    top: 0;
+    left: 0;
+    transform-origin: 0 50%;
+    transition: transform $trans $trans linear;
+  }
+  &::after {
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    color: #fff;
+    font-size: $rFontSize;
+    line-height: $rFontSize;
+    text-align: center;
+    padding: 20% 5%;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+    content: "";
+  }
+  div {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.top,
+.bottom {
+  transform-origin: top center;
+}
+
+.spine,
+.right::after {
+  font: {
+    family: "Lora", serif;
+    weight: bold;
+  }
+  -webkit-font-smoothing: antialiased;
+}
+
+.spine {
+  background: transparent;
+  color: #ccc;
+  font-size: $fFontSize;
+  line-height: $fFontSize;
+  top: 0;
+  left: 0;
+  transform: rotate(90deg) translate($sqSize * 0.75, -50%);
+  white-space: nowrap;
+  width: 0;
+  height: $sqSize;
+}
+
+/* Render blocks */
+@if length(nth($blocks, 1)) == 1 {
+  .b1 {
+    @include placeBlock(
+      nth($blocks, 1),
+      nth($blocks, 2),
+      nth($blocks, 3),
+      nth($blocks, 4),
+      nth($blocks, 5),
+      nth($blocks, 6),
+      nth($blocks, 7),
+      nth($blocks, 8)
+    );
+  }
+} @else {
+  @for $b from 1 through length($blocks) {
+    .b#{$b} {
+      @include placeBlock(
+        nth(nth($blocks, $b), 1),
+        nth(nth($blocks, $b), 2),
+        nth(nth($blocks, $b), 3),
+        nth(nth($blocks, $b), 4),
+        nth(nth($blocks, $b), 5),
+        nth(nth($blocks, $b), 6),
+        nth(nth($blocks, $b), 7),
+        nth(nth($blocks, $b), 8)
+      );
+    }
+  }
+}
+
+.book:hover .blockInner,
+.book:active .blockInner,
+.book:focus .blockInner {
+  transform: rotateX(-90deg) translateZ($sqSize * 4);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

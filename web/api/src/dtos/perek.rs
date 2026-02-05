@@ -41,14 +41,14 @@ fn number_to_hebrew(n: i32) -> String {
     add_gershayim(&result)
 }
 
-/// Add gershayim (״) before the last character, or geresh (׳) for single character
+/// Add gershayim (״) before the last character, or geresh (') for single character
 fn add_gershayim(s: &str) -> String {
     let chars: Vec<char> = s.chars().collect();
     if chars.is_empty() {
         return String::new();
     }
     if chars.len() == 1 {
-        format!("{}׳", s)
+        format!("{}'", s)
     } else {
         let (before_last, last) = s.char_indices().last().map(|(i, c)| (&s[..i], c)).unwrap();
         format!("{}״{}", before_last, last)
@@ -63,7 +63,7 @@ fn hebrew_month_name(month: i64, is_leap_year: bool) -> &'static str {
         3 => "כסלו",
         4 => "טבת",
         5 => "שבט",
-        6 if is_leap_year => "אדר א׳",
+        6 if is_leap_year => "אדר א'",
         6 => "אדר",
         7 => "ניסן",
         8 => "אייר",
@@ -71,8 +71,8 @@ fn hebrew_month_name(month: i64, is_leap_year: bool) -> &'static str {
         10 => "תמוז",
         11 => "אב",
         12 => "אלול",
-        13 => "אדר א׳",
-        14 => "אדר ב׳",
+        13 => "אדר א'",
+        14 => "אדר ב'",
         _ => "?",
     }
 }
@@ -186,12 +186,12 @@ mod tests {
 
     #[test]
     fn number_to_hebrew_handles_valid_numbers() {
-        // Single digit (gets geresh ׳)
-        assert_eq!(number_to_hebrew(1), "א׳");
-        assert_eq!(number_to_hebrew(5), "ה׳");
+        // Single digit (gets geresh ')
+        assert_eq!(number_to_hebrew(1), "א'");
+        assert_eq!(number_to_hebrew(5), "ה'");
 
         // Two digits (gets gershayim ״)
-        assert_eq!(number_to_hebrew(10), "י׳");
+        assert_eq!(number_to_hebrew(10), "י'");
         assert_eq!(number_to_hebrew(11), "י״א");
         assert_eq!(number_to_hebrew(22), "כ״ב");
 
@@ -200,7 +200,7 @@ mod tests {
         assert_eq!(number_to_hebrew(16), "ט״ז");
 
         // Three digits
-        assert_eq!(number_to_hebrew(100), "ק׳");
+        assert_eq!(number_to_hebrew(100), "ק'");
         assert_eq!(number_to_hebrew(785), "תשפ״ה");
         assert_eq!(number_to_hebrew(999), "תתקצ״ט"); // 900+90+9 = ת + ת + ק + צ + ט
     }
@@ -227,9 +227,9 @@ mod tests {
         assert_eq!(hebrew_month_name(12, false), "אלול");
 
         // Leap year months
-        assert_eq!(hebrew_month_name(6, true), "אדר א׳"); // Leap year Adar I
-        assert_eq!(hebrew_month_name(13, true), "אדר א׳");
-        assert_eq!(hebrew_month_name(14, true), "אדר ב׳");
+        assert_eq!(hebrew_month_name(6, true), "אדר א'"); // Leap year Adar I
+        assert_eq!(hebrew_month_name(13, true), "אדר א'");
+        assert_eq!(hebrew_month_name(14, true), "אדר ב'");
 
         // Invalid month
         assert_eq!(hebrew_month_name(0, false), "?");

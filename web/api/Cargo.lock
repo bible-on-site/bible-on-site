@@ -557,7 +557,7 @@ checksum = "0e050f626429857a27ddccb31e0aca21356bfa709c04041aefddac081a8f068a"
 
 [[package]]
 name = "bible-on-site-api"
-version = "0.1.17"
+version = "0.1.18"
 dependencies = [
  "actix-web",
  "anyhow",

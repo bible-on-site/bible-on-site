@@ -812,7 +812,7 @@ jobs:
           install-awslocal: "true"
 
       - name: Create S3 bucket in LocalStack
-        run: awslocal s3 mb s3://bible-on-site-rabbis-test
+        run: awslocal s3 mb s3://bible-on-site-assets-test
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -838,7 +838,7 @@ jobs:
         env:
           DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
           S3_ENDPOINT: http://localhost:4566
-          S3_BUCKET: bible-on-site-rabbis-test
+          S3_BUCKET: bible-on-site-assets-test
           S3_REGION: us-east-1
           S3_ACCESS_KEY_ID: test
           S3_SECRET_ACCESS_KEY: test

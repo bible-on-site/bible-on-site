@@ -1,2 +1,5 @@
+# Ensure html-flip-book-react is set to npm version (not local file:)
+npm run flip-book:check || exit 1
+
 npm run lint || exit 1
 npm run test:unit || exit 1

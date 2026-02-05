@@ -5,6 +5,8 @@ alwaysApply: true
 
 # General Practices
 
+- **Do not hand off to the user.** The agent performs every step that can be performed. Forbidden: the phrase "(for you)" or "for you" in that sense; "you need to …"; "you should …"; "what you should do is …"; or any wording that assigns a remaining action to the user. Only state that the user must do something when they have explicitly asked to be informed, or when the agent cannot perform the action (e.g. token/permission/API limit).
+
 - **Prefer the latest stable version** of any toolset, framework, or package unless there is a specific compatibility concern.
 
 ## Language Policy
