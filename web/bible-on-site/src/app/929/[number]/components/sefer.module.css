@@ -167,14 +167,14 @@
 }
 
 .coverTitle {
-  color: #1c2c5d;
+  color: #fff;
   font-size: clamp(1.5rem, 4vw, 2.5rem);
   font-weight: 700;
   margin: 0 0 0.5em;
 }
 
 .coverSubtitle {
-  color: #637598;
+  color: #fff;
   font-size: 1rem;
   margin: 0 0 1.5em;
 }

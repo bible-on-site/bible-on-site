@@ -97,7 +97,7 @@ export const NavBar = () => {
 									height={16}
 								/>
 								<a
-									href={platform.href}
+									href={platform.href ?? undefined}
 									target="_blank"
 									rel="noopener noreferrer"
 								>

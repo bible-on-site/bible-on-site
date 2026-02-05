@@ -16,7 +16,7 @@ use std::path::Path;
 #[command(about = "Populate S3 buckets with test data")]
 struct Cli {
     /// S3 bucket name
-    #[arg(long, env = "S3_BUCKET", default_value = "bible-on-site-rabbis")]
+    #[arg(long, env = "S3_BUCKET", default_value = "bible-on-site-assets-dev")]
     bucket: String,
 
     /// AWS region

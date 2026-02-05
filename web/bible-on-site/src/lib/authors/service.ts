@@ -138,7 +138,9 @@ export async function getArticlesByAuthorId(
 export async function getAllAuthorIds(): Promise<number[]> {
 	try {
 		const rows = await query<{ id: number }>(
-			`SELECT id FROM tanah_author ORDER BY id`,
+			`SELECT a.id FROM tanah_author a
+			 WHERE EXISTS (SELECT 1 FROM tanah_article art WHERE art.author_id = a.id)
+			 ORDER BY a.id`,
 		);
 		return rows.map((row) => row.id);
 	} catch (error) {

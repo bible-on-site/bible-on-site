@@ -104,14 +104,14 @@ args = ["run", "--release"]
 [tasks.s3-populate-dev]
 description = "Populate S3 bucket with dev environment"
 cwd = "./s3/s3-populator"
-env = { "S3_ENDPOINT" = "http://localhost:4566", "S3_ACCESS_KEY_ID" = "test", "S3_SECRET_ACCESS_KEY" = "test" }
+env = { "S3_ENDPOINT" = "http://localhost:4566", "S3_ACCESS_KEY_ID" = "test", "S3_SECRET_ACCESS_KEY" = "test_1234", "S3_BUCKET" = "bible-on-site-assets-dev" }
 command = "cargo"
 args = ["run", "--release"]
 
 [tasks.s3-populate-test]
 description = "Populate S3 bucket with test environment"
 cwd = "./s3/s3-populator"
-env = { "S3_ENDPOINT" = "http://localhost:4566", "S3_ACCESS_KEY_ID" = "test", "S3_SECRET_ACCESS_KEY" = "test", "S3_BUCKET" = "bible-on-site-rabbis-test" }
+env = { "S3_ENDPOINT" = "http://localhost:4566", "S3_ACCESS_KEY_ID" = "test", "S3_SECRET_ACCESS_KEY" = "test_1234", "S3_BUCKET" = "bible-on-site-assets-test" }
 command = "cargo"
 args = ["run", "--release"]
 

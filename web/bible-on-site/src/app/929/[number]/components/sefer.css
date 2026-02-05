@@ -152,6 +152,7 @@
   color: #fff;
   min-width: 80px;
   min-height: 32px;
+  text-align: center;
 }
 
 /* Input: light bg when editing for Hebrew text visibility */

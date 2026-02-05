@@ -93,7 +93,79 @@
   transform: translateY(-2px);
 }
 
-/* Responsive adjustments */
+/* ── Poster inside grid card ── */
+.posterButton {
+  border: none;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+}
+
+.posterImage {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* ── Lightbox Modal ── */
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.modalContent {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.modalImage {
+  max-width: 90vw;
+  max-height: 85vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.modalClose {
+  position: absolute;
+  top: -16px;
+  left: -16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: #fff;
+  color: #1c2c5d;
+  font-size: 1.2rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s ease;
+  z-index: 1;
+}
+
+.modalClose:hover {
+  transform: scale(1.1);
+}
+
+/* ── Responsive ── */
 @media (max-width: 768px) {
   .videoGrid {
     grid-template-columns: 1fr;
@@ -102,5 +174,13 @@
 
   .pageTitle {
     font-size: 1.5rem;
+  }
+
+  .modalClose {
+    top: -12px;
+    left: -8px;
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
   }
 }

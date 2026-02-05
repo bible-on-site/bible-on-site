@@ -207,7 +207,7 @@ describe("authors service", () => {
 			const result = await getAllAuthorIds();
 
 			expect(mockQuery).toHaveBeenCalledWith(
-				expect.stringContaining("SELECT id FROM tanah_author"),
+				expect.stringContaining("SELECT a.id FROM tanah_author"),
 			);
 
 			expect(result).toEqual([1, 2, 3]);

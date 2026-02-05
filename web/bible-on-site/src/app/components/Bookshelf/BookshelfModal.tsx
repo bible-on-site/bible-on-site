@@ -1,7 +1,9 @@
 "use client";
 import { useRouter } from "next/navigation";
 import type React from "react";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { sefarim } from "@/data/db/sefarim";
+import { getTodaysPerekId } from "@/data/perek-dto";
 import { Bookshelf } from "./Bookshelf";
 import styles from "./bookshelf-modal.module.css";
 
@@ -19,6 +21,15 @@ interface BookshelfModalProps {
 const BookshelfModal: React.FC<BookshelfModalProps> = ({ isOpen, onClose }) => {
 	const router = useRouter();
 	const dialogRef = useRef<HTMLDialogElement>(null);
+
+	// Today's perek and its sefer — computed once per mount
+	const { todaysPerekId, todaysSeferName } = useMemo(() => {
+		const perekId = getTodaysPerekId();
+		const sefer = sefarim.find(
+			(s) => s.perekFrom <= perekId && s.perekTo >= perekId,
+		);
+		return { todaysPerekId: perekId, todaysSeferName: sefer?.name ?? "" };
+	}, []);
 
 	// Handle escape key
 	useEffect(() => {
@@ -55,13 +66,16 @@ const BookshelfModal: React.FC<BookshelfModalProps> = ({ isOpen, onClose }) => {
 		[onClose],
 	);
 
-	// Navigate to sefer and close modal
+	// Navigate to sefer and close modal.
+	// If the clicked sefer is today's sefer, jump to today's perek; otherwise go to the first perek.
 	const handleSeferClick = useCallback(
-		(_seferName: string, perekFrom: number) => {
+		(seferName: string, perekFrom: number) => {
 			onClose();
-			router.push(`/929/${perekFrom}`);
+			const targetPerek =
+				seferName === todaysSeferName ? todaysPerekId : perekFrom;
+			router.push(`/929/${targetPerek}`);
 		},
-		[router, onClose],
+		[router, onClose, todaysSeferName, todaysPerekId],
 	);
 
 	const handleBackdropKeyDown = useCallback(

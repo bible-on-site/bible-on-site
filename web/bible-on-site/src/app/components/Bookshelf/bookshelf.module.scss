@@ -244,6 +244,37 @@ button.block {
   margin-top: 4px;
 }
 
+// Bookmark ribbon on today's sefer — hangs from top of spine.
+// Uses two pseudo-layers: white outline (::before, slightly larger) behind
+// the red ribbon (::after), both V-notched via clip-path.
+.bookmarkRibbon {
+  position: absolute;
+  top: 0;
+  left: 25%;
+  width: 45%;
+  // height is set inline (sqSize * 3) for responsive sizing
+  pointer-events: none;
+  z-index: 2;
+
+  // White outline layer — extends 1px beyond the red to form the border
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0 -1px -1px;
+    background: rgba(255, 255, 255, 0.9);
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 70%, 0 100%);
+  }
+
+  // Red ribbon layer
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, #c0392b 85%, #a93226 100%);
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 70%, 0 100%);
+  }
+}
+
 // Book hover effect
 .book:hover .blockInner,
 .book:active .blockInner,

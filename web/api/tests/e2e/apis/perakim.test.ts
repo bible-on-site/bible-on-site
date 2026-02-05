@@ -102,7 +102,7 @@ test.describe("PerakimService", () => {
 			const responseBody = await response.json();
 			expect(responseBody.data.perekByPerekId).toMatchObject({
 				perekId: 1,
-				articlesCount: 3, // Test data: perek 1 has 3 articles
+				articlesCount: 4, // Test data: perek 1 has 4 articles
 			});
 		});
 

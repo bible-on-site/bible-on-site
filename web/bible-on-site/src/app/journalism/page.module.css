@@ -1,43 +1,231 @@
 .journalismPage {
-  max-width: 1000px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 24px 16px;
   padding-top: 88px; /* Account for fixed header (72px) + spacing */
 }
 
 .pageTitle {
-  font-size: 1.5rem;
+  font-size: 1.75rem;
   font-weight: 700;
   color: #1c2c5d;
-  margin: 0 0 24px 0;
-  text-align: right;
-}
-
-.emptyState {
-  text-align: center;
-  padding: 64px 24px;
-  color: #6b7280;
-  font-size: 1rem;
-  line-height: 1.8;
-}
-
-.emptyState p {
   margin: 0 0 8px 0;
+  text-align: center;
+}
+
+.pageSubtitle {
+  font-size: 1rem;
+  color: #6b7280;
+  margin: 0 0 32px 0;
+  text-align: center;
+}
+
+/* Masonry grid */
+.masonryGrid {
+  columns: 2;
+  column-gap: 24px;
+}
+
+.masonryItem {
+  display: block;
+  break-inside: avoid;
+  margin-bottom: 24px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  text-decoration: none;
+  position: relative;
+}
+
+.masonryItem:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.itemImage {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.itemOverlay {
+  padding: 16px;
+  text-align: right;
+  background: linear-gradient(to top, rgba(28, 44, 93, 0.95), rgba(28, 44, 93, 0.7));
+  color: #fff;
+}
+
+.itemTitle {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+}
+
+.itemDescription {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.backLinkWrapper {
+  text-align: center;
+  padding: 24px 0 48px;
 }
 
 .backLink {
   display: inline-block;
-  margin-top: 24px;
-  padding: 10px 24px;
+  padding: 12px 32px;
   background: #1c2c5d;
   color: #fff;
   text-decoration: none;
   border-radius: 8px;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   transition: all 0.2s ease;
 }
 
 .backLink:hover {
   background: #2a3d7a;
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+}
+
+/* Masonry items as buttons */
+.masonryItem {
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  text-align: inherit;
+}
+
+/* ── Lightbox Modal ── */
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.modalContent {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.modalImage {
+  max-width: 90vw;
+  max-height: 80vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.modalClose {
+  position: absolute;
+  top: -16px;
+  left: -16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: #fff;
+  color: #1c2c5d;
+  font-size: 1.2rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s ease;
+  z-index: 1;
+}
+
+.modalClose:hover {
+  transform: scale(1.1);
+}
+
+.modalNav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+  z-index: 1;
+  line-height: 1;
+}
+
+.modalNav:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.modalNavPrev {
+  right: -64px;
+}
+
+.modalNavNext {
+  left: -64px;
+}
+
+.modalCaption {
+  text-align: center;
+  margin-top: 16px;
+  color: #fff;
+}
+
+.modalTitle {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+}
+
+.modalDescription {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .masonryGrid {
+    columns: 1;
+  }
+
+  .pageTitle {
+    font-size: 1.5rem;
+  }
+
+  .modalNavPrev,
+  .modalNavNext {
+    display: none;
+  }
+
+  .modalClose {
+    top: -12px;
+    left: -8px;
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+  }
 }

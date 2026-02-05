@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { sefarim } from "@/data/db/sefarim";
+import { getTodaysPerekId } from "@/data/perek-dto";
 import { isTreiAsar } from "@/data/sefer-colors";
 import styles from "./bookshelf.module.scss";
 
@@ -224,9 +225,11 @@ type BookBlockProps = {
 	x: number;
 	sqSize: number;
 	onClick?: () => void;
+	/** Whether this book is today's sefer (shows bookmark ribbon) */
+	isToday?: boolean;
 };
 
-function BookBlock({ sefer, x, sqSize, onClick }: BookBlockProps) {
+function BookBlock({ sefer, x, sqSize, onClick, isToday }: BookBlockProps) {
 	const baseColor = seferColors.get(sefer.name) || "hsl(0, 0%, 50%)";
 	const spineColor = darkenColor(baseColor, 8);
 
@@ -287,6 +290,14 @@ function BookBlock({ sefer, x, sqSize, onClick }: BookBlockProps) {
 					}}
 				>
 					<div className={styles.spineText}>{sefer.displayName}</div>
+					{isToday && (
+						<div
+							className={styles.bookmarkRibbon}
+							style={{
+								height: `${sqSize * 3}px`,
+							}}
+						/>
+					)}
 				</div>
 				<div
 					className={styles.left}
@@ -428,6 +439,7 @@ type SingleShelfProps = {
 	onSeferClick?: (seferName: string, perekFrom: number) => void;
 	label?: string;
 	helekLabels?: HelekLabelInfo[];
+	todaySeferName?: string;
 };
 
 function SingleShelf({
@@ -438,6 +450,7 @@ function SingleShelf({
 	onSeferClick,
 	label,
 	helekLabels,
+	todaySeferName,
 }: SingleShelfProps) {
 	return (
 		<div className={styles.shelfWrapper}>
@@ -460,6 +473,7 @@ function SingleShelf({
 							x={x}
 							sqSize={sqSize}
 							onClick={() => onSeferClick?.(sefer.name, sefer.perekFrom)}
+							isToday={sefer.name === todaySeferName}
 						/>
 					))}
 				</div>
@@ -501,6 +515,15 @@ export function Bookshelf({ onSeferClick }: BookshelfProps) {
 	const windowWidth = useWindowWidth();
 	const useMultiShelf = windowWidth < MULTI_SHELF_BREAKPOINT;
 
+	// Compute today's sefer once per mount for the bookmark ribbon
+	const todaySeferName = useMemo(() => {
+		const perekId = getTodaysPerekId();
+		return (
+			sefarim.find((s) => s.perekFrom <= perekId && s.perekTo >= perekId)
+				?.name ?? ""
+		);
+	}, []);
+
 	if (useMultiShelf) {
 		// Four separate shelves (RTL order: Torah on top)
 		const torahData = calculatePositionsForSefarim(helekGroups.תורה);
@@ -529,6 +552,7 @@ export function Bookshelf({ onSeferClick }: BookshelfProps) {
 						shelfStartX={torahData.shelfStartX}
 						onSeferClick={onSeferClick}
 						label="תורה"
+						todaySeferName={todaySeferName}
 					/>
 					<SingleShelf
 						positions={neviimRishonimData.positions}
@@ -537,6 +561,7 @@ export function Bookshelf({ onSeferClick }: BookshelfProps) {
 						shelfStartX={neviimRishonimData.shelfStartX}
 						onSeferClick={onSeferClick}
 						label="נביאים: ראשונים + גדולים"
+						todaySeferName={todaySeferName}
 					/>
 					<SingleShelf
 						positions={treiAsarData.positions}
@@ -545,6 +570,7 @@ export function Bookshelf({ onSeferClick }: BookshelfProps) {
 						shelfStartX={treiAsarData.shelfStartX}
 						onSeferClick={onSeferClick}
 						label="נביאים (המשך): תרי עשר"
+						todaySeferName={todaySeferName}
 					/>
 					<SingleShelf
 						positions={ketuvimData.positions}
@@ -553,6 +579,7 @@ export function Bookshelf({ onSeferClick }: BookshelfProps) {
 						shelfStartX={ketuvimData.shelfStartX}
 						onSeferClick={onSeferClick}
 						label="כתובים"
+						todaySeferName={todaySeferName}
 					/>
 				</div>
 			</div>
@@ -572,6 +599,7 @@ export function Bookshelf({ onSeferClick }: BookshelfProps) {
 				shelfStartX={allBooksData.shelfStartX}
 				onSeferClick={onSeferClick}
 				helekLabels={allBooksData.helekLabels}
+				todaySeferName={todaySeferName}
 			/>
 		</div>
 	);

@@ -9,12 +9,10 @@ import {
 	ActionButton,
 	BookshelfIcon,
 	FirstPageButton,
-	FullscreenButton,
 	LastPageButton,
 	NextButton,
 	PageIndicator,
 	PrevButton,
-	TocButton,
 	Toolbar,
 } from "html-flip-book-react/toolbar";
 import dynamic from "next/dynamic";
@@ -239,26 +237,20 @@ const Sefer = (props: {
 						}}
 					/>
 				</div>
-				<Toolbar
-					flipBookRef={flipBookRef}
-					direction="rtl"
-					pageSemantics={hePageSemantics}
-				>
-					<ActionButton onClick={openBookshelf} ariaLabel="ספרי התנ״ך">
-						<BookshelfIcon size={18} />
-					</ActionButton>
-					<TocButton ariaLabel="עבור לתוכן העניינים" />
-					<FirstPageButton />
-					<PrevButton />
-					<PageIndicator ariaLabel="עבור לפרק (מספר עברי)" />
-					<NextButton />
-					<LastPageButton />
-					<FullscreenButton
-						targetRef={bookWrapperRef}
-						ariaLabelEnter="מצב מסך מלא"
-						ariaLabelExit="יציאה ממסך מלא"
-					/>
-				</Toolbar>
+			<Toolbar
+				flipBookRef={flipBookRef}
+				direction="rtl"
+				pageSemantics={hePageSemantics}
+			>
+				<ActionButton onClick={openBookshelf} ariaLabel="ספרי התנ״ך">
+					<BookshelfIcon size={18} />
+				</ActionButton>
+				<FirstPageButton />
+				<PrevButton />
+				<PageIndicator ariaLabel="עבור לפרק (מספר עברי)" />
+				<NextButton />
+				<LastPageButton />
+			</Toolbar>
 			</div>
 			<BookshelfModal isOpen={isBookshelfOpen} onClose={closeBookshelf} />
 		</>
