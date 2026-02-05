@@ -32,9 +32,9 @@ describe("ArticlesSection", () => {
 	];
 
 	describe("when articles array is empty", () => {
-		it("returns null and renders nothing", () => {
-			const { container } = render(<ArticlesSection articles={[]} />);
-			expect(container.firstChild).toBeNull();
+		it("renders section with empty message", () => {
+			render(<ArticlesSection articles={[]} />);
+			expect(screen.getByText("אין מאמרים לפרק זה")).toBeTruthy();
 		});
 	});
 
