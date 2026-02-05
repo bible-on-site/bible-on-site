@@ -11,7 +11,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 20px;
   padding-bottom: 8px;
   border-bottom: 1px solid #1c2c5d;
 }
@@ -35,14 +35,15 @@
   text-align: center;
 }
 
-/* Horizontal carousel */
+/* Horizontal carousel - extra top padding so hover lift + shadow aren't clipped */
 .carousel {
   display: flex;
   gap: 12px;
   overflow-x: auto;
+  overflow-y: visible;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: 8px;
+  padding: 10px 0 8px 0;
   /* Hide scrollbar but keep functionality */
   scrollbar-width: thin;
   scrollbar-color: #c4c4c4 transparent;

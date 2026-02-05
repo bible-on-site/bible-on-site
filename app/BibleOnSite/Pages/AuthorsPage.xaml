@@ -94,8 +94,12 @@
                                    HorizontalOptions="Center"
                                    Padding="20"
                                    IsVisible="{Binding FilteredAuthors.Count, Converter={StaticResource ZeroToTrueConverter}}">
-                     <ActivityIndicator IsRunning="{Binding IsLoading}"
-                                        IsVisible="{Binding IsLoading}"/>
+                     <Image Source="loading_book_anim.gif"
+                            IsAnimationPlaying="{Binding IsLoading}"
+                            IsVisible="{Binding IsLoading}"
+                            HeightRequest="60"
+                            WidthRequest="60"
+                            Aspect="AspectFit"/>
                      <Label Text="טוען רבנים..."
                             FontSize="16"
                             HorizontalTextAlignment="Center"

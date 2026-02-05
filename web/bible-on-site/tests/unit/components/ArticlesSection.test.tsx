@@ -32,7 +32,7 @@ describe("ArticlesSection", () => {
 	];
 
 	describe("when articles array is empty", () => {
-		it("renders an empty-state message", () => {
+		it("renders section with empty message", () => {
 			render(<ArticlesSection articles={[]} />);
 			expect(screen.getByText("אין מאמרים לפרק זה")).toBeTruthy();
 		});

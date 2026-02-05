@@ -15,6 +15,15 @@ partial class Build
     [Parameter("API environment: dev (local) or prod (remote). Default: dev")]
     readonly string ApiEnv = "dev";
 
+    [Parameter("Force full APK install (embed assemblies). Auto-detected if not set.")]
+    readonly bool? FullApk = null;
+
+    [Parameter("Force Fast Deployment (skip embedding). Overrides auto-detection.")]
+    readonly bool FastDeploy = false;
+
+    [Parameter("Use dotnet watch for hot reload. Default: false (one-shot build).")]
+    readonly bool Watch = false;
+
     bool IsTestEnv => string.Equals(EnvLevel, "test", StringComparison.OrdinalIgnoreCase);
     bool IsProdApi => string.Equals(ApiEnv, "prod", StringComparison.OrdinalIgnoreCase);
 
@@ -275,8 +284,8 @@ partial class Build
         });
 
     Target RunAndroid => _ => _
-        .Description("Run app on Android emulator. Use --api-env prod for production API")
-        .DependsOn(PrepareApiConfig, Compile)
+        .Description("Run app on Android emulator. Options: --full-apk, --fast-deploy, --watch, --api-env prod")
+        .DependsOn(PrepareApiConfig)  // Skip CompileAndroid - we do inline build to avoid file locks
         .Executes(() =>
         {
             // Ensure emulator is running
@@ -289,23 +298,243 @@ partial class Build
                 EnsureApiRunning();
             }
 
-            // Use dotnet watch for hot reload support in VS Code
-            // Working directory is set to project folder to avoid --project argument issues
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = "dotnet",
-                Arguments = $"watch build -t:Run -f net9.0-android -c {Configuration}",
-                WorkingDirectory = SourceDirectory,
-                UseShellExecute = false,
-            };
+            // Determine deployment mode (auto-detect or user override)
+            var embedApk = NeedsFullApk();
+            var embedArg = embedApk ? "--property:EmbedAssembliesIntoApk=true" : "";
 
-            using var process = Process.Start(startInfo);
-            process?.WaitForExit();
-            if (process?.ExitCode != 0)
+            if (Watch)
             {
-                throw new Exception($"Android run failed with exit code {process?.ExitCode}");
+                // Clean Android obj so dotnet watch doesn't hit locked dirs (XARDF7024)
+                using (var clean = Process.Start(new ProcessStartInfo
+                {
+                    FileName = "dotnet",
+                    Arguments = $"clean \"{MainProject}\" -c {Configuration} -f net9.0-android",
+                    WorkingDirectory = RootDirectory,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                }))
+                {
+                    clean?.WaitForExit(TimeSpan.FromMinutes(1));
+                }
+
+                // Use dotnet watch for hot reload support
+                // Note: Use --property: instead of -p: because dotnet watch interprets -p as --project
+                Serilog.Log.Information($"Starting dotnet watch (embedApk={embedApk})...");
+                var watchInfo = new ProcessStartInfo
+                {
+                    FileName = "dotnet",
+                    Arguments = $"watch build -t:Run -f net9.0-android -c {Configuration} {embedArg}".Trim(),
+                    WorkingDirectory = SourceDirectory,
+                    UseShellExecute = false,
+                };
+
+                using var watchProcess = Process.Start(watchInfo);
+                watchProcess?.WaitForExit();
+                if (watchProcess?.ExitCode != 0)
+                {
+                    throw new Exception($"Android run failed with exit code {watchProcess?.ExitCode}");
+                }
+            }
+            else
+            {
+                // One-shot build and install (faster for single iterations)
+                // We do the build inline (not via CompileAndroid target) to avoid file lock conflicts
+                Serilog.Log.Information($"Building and installing (embedApk={embedApk})...");
+                var buildInfo = new ProcessStartInfo
+                {
+                    FileName = "dotnet",
+                    Arguments = $"build -t:Install -f net9.0-android -c {Configuration} {embedArg}".Trim(),
+                    WorkingDirectory = SourceDirectory,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                };
+
+                using var buildProcess = Process.Start(buildInfo);
+                var stdout = buildProcess?.StandardOutput.ReadToEnd() ?? "";
+                var stderr = buildProcess?.StandardError.ReadToEnd() ?? "";
+                buildProcess?.WaitForExit();
+
+                // Log output
+                if (!string.IsNullOrWhiteSpace(stdout))
+                {
+                    foreach (var line in stdout.Split('\n').Where(l => !string.IsNullOrWhiteSpace(l)))
+                    {
+                        Serilog.Log.Information(line.TrimEnd());
+                    }
+                }
+
+                if (buildProcess?.ExitCode != 0)
+                {
+                    if (!string.IsNullOrWhiteSpace(stderr))
+                    {
+                        Serilog.Log.Error(stderr);
+                    }
+                    throw new Exception($"Android build/install failed with exit code {buildProcess?.ExitCode}");
+                }
+
+                // Launch and verify the app
+                LaunchAndVerifyApp();
             }
         });
+
+    /// <summary>
+    /// Checks if the app package is installed on the connected Android emulator.
+    /// </summary>
+    bool IsAppInstalled()
+    {
+        try
+        {
+            var adbPath = GetAdbPath();
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = adbPath,
+                Arguments = GetAdbDeviceArgs("shell pm list packages com.tanah.daily929"),
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true,
+            };
+            using var process = Process.Start(startInfo);
+            var output = process?.StandardOutput.ReadToEnd() ?? "";
+            process?.WaitForExit();
+
+            return output.Contains("package:com.tanah.daily929");
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Determines if full APK deployment (EmbedAssembliesIntoApk=true) is needed.
+    /// Full APK is needed when:
+    /// - App is not installed (first deploy or after uninstall/wipe)
+    /// - User explicitly requested --full-apk
+    /// Fast Deployment is used when:
+    /// - User explicitly requested --fast-deploy
+    /// - App is already installed (incremental update)
+    /// </summary>
+    bool NeedsFullApk()
+    {
+        // User overrides take precedence
+        if (FastDeploy)
+        {
+            Serilog.Log.Information("Fast Deployment forced via --fast-deploy");
+            return false;
+        }
+
+        if (FullApk == true)
+        {
+            Serilog.Log.Information("Full APK install forced via --full-apk");
+            return true;
+        }
+
+        // Auto-detect: check if app is installed
+        if (!IsAppInstalled())
+        {
+            Serilog.Log.Information("App not installed - using full APK install (includes native libs)");
+            return true;
+        }
+
+        Serilog.Log.Information("App already installed - using Fast Deployment (incremental)");
+        return false;
+    }
+
+    /// <summary>
+    /// Launches the app on the connected Android emulator and verifies it's running.
+    /// Always force-stops first to ensure fresh launch with new code.
+    /// </summary>
+    void LaunchAndVerifyApp()
+    {
+        var adbPath = GetAdbPath();
+
+        // Force stop the app first to ensure fresh launch
+        Serilog.Log.Information("Force stopping app...");
+        var stopInfo = new ProcessStartInfo
+        {
+            FileName = adbPath,
+            Arguments = GetAdbDeviceArgs("shell am force-stop com.tanah.daily929"),
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            CreateNoWindow = true,
+        };
+        using (var stopProcess = Process.Start(stopInfo))
+        {
+            stopProcess?.WaitForExit();
+        }
+        System.Threading.Thread.Sleep(500);
+
+        // Launch the app
+        Serilog.Log.Information("Launching app...");
+        var launchInfo = new ProcessStartInfo
+        {
+            FileName = adbPath,
+            Arguments = GetAdbDeviceArgs("shell monkey -p com.tanah.daily929 -c android.intent.category.LAUNCHER 1"),
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            CreateNoWindow = true,
+        };
+        using (var launchProcess = Process.Start(launchInfo))
+        {
+            launchProcess?.WaitForExit();
+        }
+
+        // Wait for app to start
+        System.Threading.Thread.Sleep(3000);
+
+        // Verify app is running
+        var pidInfo = new ProcessStartInfo
+        {
+            FileName = adbPath,
+            Arguments = GetAdbDeviceArgs("shell pidof com.tanah.daily929"),
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            CreateNoWindow = true,
+        };
+        using var pidProcess = Process.Start(pidInfo);
+        var pidOutput = pidProcess?.StandardOutput.ReadToEnd()?.Trim() ?? "";
+        pidProcess?.WaitForExit();
+
+        if (!string.IsNullOrEmpty(pidOutput))
+        {
+            Serilog.Log.Information($"App is running (PID {pidOutput})");
+        }
+        else
+        {
+            Serilog.Log.Warning("App may have crashed - checking logcat...");
+
+            // Get crash info
+            var logcatInfo = new ProcessStartInfo
+            {
+                FileName = adbPath,
+                Arguments = GetAdbDeviceArgs("logcat -d -t 100"),
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true,
+            };
+            using var logcatProcess = Process.Start(logcatInfo);
+            var logcatOutput = logcatProcess?.StandardOutput.ReadToEnd() ?? "";
+            logcatProcess?.WaitForExit();
+
+            // Look for crash indicators
+            if (logcatOutput.Contains("FATAL") || logcatOutput.Contains("AndroidRuntime") || logcatOutput.Contains("libmonosgen"))
+            {
+                var crashLines = string.Join("\n",
+                    logcatOutput.Split('\n')
+                        .Where(l => l.Contains("FATAL") || l.Contains("AndroidRuntime") || l.Contains("Exception") || l.Contains("libmonosgen"))
+                        .Take(10));
+                Serilog.Log.Error($"App crashed! Relevant logcat:\n{crashLines}");
+
+                if (logcatOutput.Contains("libmonosgen"))
+                {
+                    Serilog.Log.Information("Tip: Native libs missing - try running with --full-apk");
+                }
+            }
+
+            throw new Exception("App failed to start or crashed immediately");
+        }
+    }
 
     /// <summary>
     /// Checks if an Android device/emulator is connected via ADB.
@@ -344,6 +573,58 @@ partial class Build
     {
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         return System.IO.Path.Combine(localAppData, "Android", "Sdk", "platform-tools", "adb.exe");
+    }
+
+    /// <summary>
+    /// Gets the serial number of the first connected emulator.
+    /// Returns null if no emulator is found.
+    /// </summary>
+    string? GetEmulatorSerial()
+    {
+        try
+        {
+            var adbPath = GetAdbPath();
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = adbPath,
+                Arguments = "devices",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true,
+            };
+            using var process = Process.Start(startInfo);
+            var output = process?.StandardOutput.ReadToEnd() ?? "";
+            process?.WaitForExit();
+
+            // Find emulator line (starts with "emulator-")
+            var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var line in lines)
+            {
+                var trimmed = line.Trim();
+                if (trimmed.StartsWith("emulator-") && trimmed.Contains("device"))
+                {
+                    return trimmed.Split('\t')[0].Trim();
+                }
+            }
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Gets ADB arguments with device selector if multiple devices are connected.
+    /// </summary>
+    string GetAdbDeviceArgs(string command)
+    {
+        var emulatorSerial = GetEmulatorSerial();
+        if (emulatorSerial != null)
+        {
+            return $"-s {emulatorSerial} {command}";
+        }
+        return command;
     }
 
     /// <summary>

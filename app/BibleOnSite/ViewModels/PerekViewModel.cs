@@ -35,13 +35,23 @@ public partial class PerekViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsBookmarked))]
     [NotifyPropertyChangedFor(nameof(NextPerekId))]
     [NotifyPropertyChangedFor(nameof(PreviousPerekId))]
+    [NotifyPropertyChangedFor(nameof(CanGoToNextPerek))]
+    [NotifyPropertyChangedFor(nameof(CanGoToPreviousPerek))]
     [NotifyPropertyChangedFor(nameof(DayOfWeek))]
     [NotifyPropertyChangedFor(nameof(ArticlesCount))]
     [NotifyPropertyChangedFor(nameof(HasArticles))]
+#if MAUI
+    [NotifyCanExecuteChangedFor(nameof(LoadNextCommand))]
+    [NotifyCanExecuteChangedFor(nameof(LoadPreviousCommand))]
+#endif
     private Perek? _perek;
 
     [ObservableProperty]
     private List<int> _selectedPasukNums = new();
+
+    /// <summary>Used for article list selection highlight (rounded, theme-aware).</summary>
+    [ObservableProperty]
+    private int? _selectedArticleId;
 #pragma warning restore MVVMTK0045
 
     public PerekViewModel() : this(PreferencesService.Instance, null)
@@ -84,6 +94,12 @@ public partial class PerekViewModel : ObservableObject
     public string PerekHeb => PerekNumber > 0 ? PerekNumber.ToHebrewLetters() : string.Empty;
 
     public int PreviousPerekId => Perek == null ? 0 : Math.Max(1, PerekId - 1);
+
+    /// <summary>True when next perek button should be enabled (not at 929).</summary>
+    public bool CanGoToNextPerek => PerekId > 0 && PerekId < 929;
+
+    /// <summary>True when previous perek button should be enabled (not at 1).</summary>
+    public bool CanGoToPreviousPerek => PerekId > 1;
 
     public int SeferId => Perek?.SeferId ?? 0;
 
@@ -156,7 +172,7 @@ public partial class PerekViewModel : ObservableObject
     /// <summary>
     /// Loads the next perek in sequence.
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanGoToNextPerek))]
     public async Task LoadNextAsync()
     {
         if (NextPerekId > 0 && NextPerekId != PerekId)
@@ -168,7 +184,7 @@ public partial class PerekViewModel : ObservableObject
     /// <summary>
     /// Loads the previous perek in sequence.
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanGoToPreviousPerek))]
     public async Task LoadPreviousAsync()
     {
         if (PreviousPerekId > 0 && PreviousPerekId != PerekId)
