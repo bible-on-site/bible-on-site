@@ -26,8 +26,8 @@
     <Grid x:Name="MainGrid">
 
         <!-- Exit Full Screen Button (floating, hidden by default) -->
-        <!-- Position: End = right side in RTL (where fullscreen button was) -->
-        <!-- Icon: full_screen_minimize_24_regular = \ue688 -->
+        <!-- Gesture recognizers are set up in code-behind: native Android touch for
+             pixel-perfect drag tracking, MAUI gesture recognizers for other platforms. -->
         <Border x:Name="ExitFullScreenButton"
                 WidthRequest="48"
                 HeightRequest="48"
@@ -44,10 +44,6 @@
                         Radius="6"
                         Opacity="0.3"/>
             </Border.Shadow>
-            <Border.GestureRecognizers>
-                <TapGestureRecognizer Tapped="OnExitFullScreenClicked"/>
-                <PanGestureRecognizer PanUpdated="OnExitFullScreenButtonPan"/>
-            </Border.GestureRecognizers>
             <Label Text="{x:Static fonts:FluentUI.full_screen_minimize_24_regular}"
                    FontFamily="FluentIcons"
                    FontSize="24"
