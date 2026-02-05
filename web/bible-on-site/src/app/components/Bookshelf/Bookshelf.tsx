@@ -5,18 +5,22 @@ import { sefarim } from "@/data/db/sefarim";
 import { isTreiAsar } from "@/data/sefer-colors";
 import styles from "./bookshelf.module.scss";
 
-// Constants for layout
+// Constants for layout (in grid units)
 const BOOK_WIDTH = 2;
 const BOOK_DEPTH = 11;
 const BOOK_HEIGHT = 15;
 const BOOK_START_Y = 3;
 const BOOK_START_Z = 2;
 const HELEK_GAP = 2; // Space between heleks (in book widths)
-const SQ_SIZE = 16; // Base unit size in pixels
+const DEFAULT_SQ_SIZE = 16; // Base unit size in pixels (desktop)
+const MIN_SQ_SIZE = 10; // Minimum unit size for very small screens
 const SHELF_DEPTH = 14;
 
 // Breakpoint for switching between single and multi-shelf layout
 const MULTI_SHELF_BREAKPOINT = 900;
+
+// Screen padding for responsive sizing (pixels on each side)
+const SCREEN_PADDING = 16;
 
 export type BookshelfProps = {
 	onSeferClick?: (seferName: string, perekFrom: number) => void;
@@ -190,15 +194,16 @@ function calculateAllBooksPositions(): {
 type BookBlockProps = {
 	sefer: SeferInfo;
 	x: number;
+	sqSize: number;
 	onClick?: () => void;
 };
 
-function BookBlock({ sefer, x, onClick }: BookBlockProps) {
+function BookBlock({ sefer, x, sqSize, onClick }: BookBlockProps) {
 	const baseColor = seferColors.get(sefer.name) || "hsl(0, 0%, 50%)";
 	const spineColor = darkenColor(baseColor, 8);
 
 	const blockStyle = {
-		transform: `translate3d(${SQ_SIZE * (x - 1)}px, ${SQ_SIZE * (-BOOK_START_Y - (BOOK_DEPTH - 1))}px, ${SQ_SIZE * BOOK_START_Z + SQ_SIZE * (BOOK_HEIGHT - 1)}px)`,
+		transform: `translate3d(${sqSize * (x - 1)}px, ${sqSize * (-BOOK_START_Y - (BOOK_DEPTH - 1))}px, ${sqSize * BOOK_START_Z + sqSize * (BOOK_HEIGHT - 1)}px)`,
 		display: "block",
 	};
 
@@ -207,22 +212,22 @@ function BookBlock({ sefer, x, onClick }: BookBlockProps) {
 	const pageEdgeStyle = {
 		backgroundColor: "#fff",
 		backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent 21%, #aaa 21%, #aaa 25%, transparent 25%, transparent 46%, #aaa 46%, #aaa 50%, transparent 50%)`,
-		backgroundSize: `${SQ_SIZE}px ${SQ_SIZE}px`,
+		backgroundSize: `${sqSize}px ${sqSize}px`,
 	};
 
 	const topBottomStyle = {
-		width: `${SQ_SIZE * BOOK_WIDTH}px`,
-		height: `${SQ_SIZE * BOOK_DEPTH}px`,
+		width: `${sqSize * BOOK_WIDTH}px`,
+		height: `${sqSize * BOOK_DEPTH}px`,
 	};
 
 	const frontBackStyle = {
-		width: `${SQ_SIZE * BOOK_WIDTH}px`,
-		height: `${SQ_SIZE * BOOK_HEIGHT}px`,
+		width: `${sqSize * BOOK_WIDTH}px`,
+		height: `${sqSize * BOOK_HEIGHT}px`,
 	};
 
 	const leftRightStyle = {
-		width: `${SQ_SIZE * BOOK_DEPTH}px`,
-		height: `${SQ_SIZE * BOOK_HEIGHT}px`,
+		width: `${sqSize * BOOK_DEPTH}px`,
+		height: `${sqSize * BOOK_HEIGHT}px`,
 	};
 
 	return (
@@ -242,7 +247,7 @@ function BookBlock({ sefer, x, onClick }: BookBlockProps) {
 					style={{
 						...topBottomStyle,
 						...pageEdgeStyle,
-						transform: `rotateX(-90deg) translateY(-${SQ_SIZE * (BOOK_DEPTH - 1)}px) translateZ(${SQ_SIZE * BOOK_HEIGHT}px)`,
+						transform: `rotateX(-90deg) translateY(-${sqSize * (BOOK_DEPTH - 1)}px) translateZ(${sqSize * BOOK_HEIGHT}px)`,
 					}}
 				/>
 				<div
@@ -250,7 +255,7 @@ function BookBlock({ sefer, x, onClick }: BookBlockProps) {
 					style={{
 						...spineStyle,
 						...frontBackStyle,
-						transform: `translateZ(${SQ_SIZE * (BOOK_DEPTH - 1)}px)`,
+						transform: `translateZ(${sqSize * (BOOK_DEPTH - 1)}px)`,
 					}}
 				>
 					<div className={styles.spineText}>{sefer.displayName}</div>
@@ -269,7 +274,7 @@ function BookBlock({ sefer, x, onClick }: BookBlockProps) {
 					style={{
 						...coverStyle,
 						...leftRightStyle,
-						transform: `rotateY(-270deg) translate3d(${SQ_SIZE}px, 0, ${SQ_SIZE * (BOOK_WIDTH - BOOK_DEPTH)}px)`,
+						transform: `rotateY(-270deg) translate3d(${sqSize}px, 0, ${sqSize * (BOOK_WIDTH - BOOK_DEPTH)}px)`,
 					}}
 				/>
 				<div
@@ -277,7 +282,7 @@ function BookBlock({ sefer, x, onClick }: BookBlockProps) {
 					style={{
 						...topBottomStyle,
 						...pageEdgeStyle,
-						transform: `rotateX(-90deg) translateY(-${SQ_SIZE * (BOOK_DEPTH - 1)}px)`,
+						transform: `rotateX(-90deg) translateY(-${sqSize * (BOOK_DEPTH - 1)}px)`,
 					}}
 				/>
 			</div>
@@ -287,33 +292,34 @@ function BookBlock({ sefer, x, onClick }: BookBlockProps) {
 
 type ShelfFloorProps = {
 	width: number;
+	sqSize: number;
 	startX?: number;
 	label?: string;
 };
 
-function ShelfFloor({ width, startX = 1, label }: ShelfFloorProps) {
+function ShelfFloor({ width, sqSize, startX = 1, label }: ShelfFloorProps) {
 	const shelfColor = "#441e12";
 
 	const blockStyle = {
-		transform: `translate3d(${SQ_SIZE * (startX - 1)}px, ${SQ_SIZE * (-1 - (SHELF_DEPTH - 1))}px, ${SQ_SIZE * 1}px)`,
+		transform: `translate3d(${sqSize * (startX - 1)}px, ${sqSize * (-1 - (SHELF_DEPTH - 1))}px, ${sqSize * 1}px)`,
 		display: "block",
 	};
 
 	const faceStyle = { backgroundColor: shelfColor };
 
 	const topBottomStyle = {
-		width: `${SQ_SIZE * width}px`,
-		height: `${SQ_SIZE * SHELF_DEPTH}px`,
+		width: `${sqSize * width}px`,
+		height: `${sqSize * SHELF_DEPTH}px`,
 	};
 
 	const frontBackStyle = {
-		width: `${SQ_SIZE * width}px`,
-		height: `${SQ_SIZE * 1}px`,
+		width: `${sqSize * width}px`,
+		height: `${sqSize * 1}px`,
 	};
 
 	const leftRightStyle = {
-		width: `${SQ_SIZE * SHELF_DEPTH}px`,
-		height: `${SQ_SIZE * 1}px`,
+		width: `${sqSize * SHELF_DEPTH}px`,
+		height: `${sqSize * 1}px`,
 	};
 
 	return (
@@ -328,7 +334,7 @@ function ShelfFloor({ width, startX = 1, label }: ShelfFloorProps) {
 					style={{
 						...faceStyle,
 						...topBottomStyle,
-						transform: `rotateX(-90deg) translateY(-${SQ_SIZE * (SHELF_DEPTH - 1)}px) translateZ(${SQ_SIZE * 1}px)`,
+						transform: `rotateX(-90deg) translateY(-${sqSize * (SHELF_DEPTH - 1)}px) translateZ(${sqSize * 1}px)`,
 					}}
 				/>
 				<div
@@ -336,7 +342,7 @@ function ShelfFloor({ width, startX = 1, label }: ShelfFloorProps) {
 					style={{
 						...faceStyle,
 						...frontBackStyle,
-						transform: `translateZ(${SQ_SIZE * (SHELF_DEPTH - 1)}px)`,
+						transform: `translateZ(${sqSize * (SHELF_DEPTH - 1)}px)`,
 					}}
 				>
 					{label && <div className={styles.shelfLabel}>{label}</div>}
@@ -350,7 +356,7 @@ function ShelfFloor({ width, startX = 1, label }: ShelfFloorProps) {
 					style={{
 						...faceStyle,
 						...leftRightStyle,
-						transform: `rotateY(-270deg) translate3d(${SQ_SIZE}px, 0, ${SQ_SIZE * (width - SHELF_DEPTH)}px)`,
+						transform: `rotateY(-270deg) translate3d(${sqSize}px, 0, ${sqSize * (width - SHELF_DEPTH)}px)`,
 					}}
 				/>
 				<div
@@ -358,7 +364,7 @@ function ShelfFloor({ width, startX = 1, label }: ShelfFloorProps) {
 					style={{
 						...faceStyle,
 						...topBottomStyle,
-						transform: `rotateX(-90deg) translateY(-${SQ_SIZE * (SHELF_DEPTH - 1)}px)`,
+						transform: `rotateX(-90deg) translateY(-${sqSize * (SHELF_DEPTH - 1)}px)`,
 					}}
 				/>
 			</div>
@@ -369,6 +375,7 @@ function ShelfFloor({ width, startX = 1, label }: ShelfFloorProps) {
 type SingleShelfProps = {
 	positions: Array<{ sefer: SeferInfo; x: number }>;
 	shelfWidth: number;
+	sqSize: number;
 	shelfStartX?: number;
 	onSeferClick?: (seferName: string, perekFrom: number) => void;
 	label?: string;
@@ -377,6 +384,7 @@ type SingleShelfProps = {
 function SingleShelf({
 	positions,
 	shelfWidth,
+	sqSize,
 	shelfStartX = 1,
 	onSeferClick,
 	label,
@@ -386,14 +394,20 @@ function SingleShelf({
 			<div className={styles.container}>
 				<div
 					className={styles.surface}
-					style={{ width: `${SQ_SIZE * shelfWidth}px` }}
+					style={{ width: `${sqSize * shelfWidth}px` }}
 				>
-					<ShelfFloor width={shelfWidth} startX={shelfStartX} label={label} />
+					<ShelfFloor
+						width={shelfWidth}
+						sqSize={sqSize}
+						startX={shelfStartX}
+						label={label}
+					/>
 					{positions.map(({ sefer, x }) => (
 						<BookBlock
 							key={sefer.name}
 							sefer={sefer}
 							x={x}
+							sqSize={sqSize}
 							onClick={() => onSeferClick?.(sefer.name, sefer.perekFrom)}
 						/>
 					))}
@@ -418,6 +432,18 @@ function useWindowWidth(): number {
 	return width;
 }
 
+// Calculate responsive sqSize based on available width and required shelf width
+function calculateSqSize(
+	windowWidth: number,
+	maxShelfWidthUnits: number,
+): number {
+	const availableWidth = windowWidth - 2 * SCREEN_PADDING;
+	const idealSqSize = availableWidth / maxShelfWidthUnits;
+
+	// Clamp between MIN and DEFAULT
+	return Math.max(MIN_SQ_SIZE, Math.min(DEFAULT_SQ_SIZE, idealSqSize));
+}
+
 export function Bookshelf({ onSeferClick }: BookshelfProps) {
 	const windowWidth = useWindowWidth();
 	const useMultiShelf = windowWidth < MULTI_SHELF_BREAKPOINT;
@@ -431,12 +457,22 @@ export function Bookshelf({ onSeferClick }: BookshelfProps) {
 		const treiAsarData = calculatePositionsForSefarim(helekGroups.treiAsar);
 		const ketuvimData = calculatePositionsForSefarim(helekGroups.כתובים);
 
+		// Find the widest shelf to calculate sqSize
+		const maxShelfWidth = Math.max(
+			torahData.totalWidth,
+			neviimRishonimData.totalWidth,
+			treiAsarData.totalWidth,
+			ketuvimData.totalWidth,
+		);
+		const sqSize = calculateSqSize(windowWidth, maxShelfWidth);
+
 		return (
 			<div className={styles.root}>
 				<div className={styles.multiShelfContainer}>
 					<SingleShelf
 						positions={torahData.positions}
 						shelfWidth={torahData.totalWidth}
+						sqSize={sqSize}
 						shelfStartX={torahData.shelfStartX}
 						onSeferClick={onSeferClick}
 						label="תורה"
@@ -444,6 +480,7 @@ export function Bookshelf({ onSeferClick }: BookshelfProps) {
 					<SingleShelf
 						positions={neviimRishonimData.positions}
 						shelfWidth={neviimRishonimData.totalWidth}
+						sqSize={sqSize}
 						shelfStartX={neviimRishonimData.shelfStartX}
 						onSeferClick={onSeferClick}
 						label="נביאים: ראשונים + גדולים"
@@ -451,6 +488,7 @@ export function Bookshelf({ onSeferClick }: BookshelfProps) {
 					<SingleShelf
 						positions={treiAsarData.positions}
 						shelfWidth={treiAsarData.totalWidth}
+						sqSize={sqSize}
 						shelfStartX={treiAsarData.shelfStartX}
 						onSeferClick={onSeferClick}
 						label="נביאים (המשך): תרי עשר"
@@ -458,6 +496,7 @@ export function Bookshelf({ onSeferClick }: BookshelfProps) {
 					<SingleShelf
 						positions={ketuvimData.positions}
 						shelfWidth={ketuvimData.totalWidth}
+						sqSize={sqSize}
 						shelfStartX={ketuvimData.shelfStartX}
 						onSeferClick={onSeferClick}
 						label="כתובים"
@@ -469,12 +508,14 @@ export function Bookshelf({ onSeferClick }: BookshelfProps) {
 
 	// Single shelf with all books
 	const allBooksData = calculateAllBooksPositions();
+	const sqSize = calculateSqSize(windowWidth, allBooksData.totalWidth);
 
 	return (
 		<div className={styles.root}>
 			<SingleShelf
 				positions={allBooksData.positions}
 				shelfWidth={allBooksData.totalWidth}
+				sqSize={sqSize}
 				shelfStartX={allBooksData.shelfStartX}
 				onSeferClick={onSeferClick}
 			/>
