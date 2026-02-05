@@ -135,10 +135,8 @@ $fFontSize: $sqSize * 0.75;
 
 // Spine text - vertical, rotated 90 degrees
 .spineText {
-  font: {
-    family: "Lora", serif;
-    weight: bold;
-  }
+  font-family: inherit; // Use website font, avoid mixing font families
+  font-weight: bold;
   -webkit-font-smoothing: antialiased;
   position: absolute;
   background: transparent;
@@ -166,14 +164,12 @@ $fFontSize: $sqSize * 0.75;
 
 // Cover title - larger, horizontal
 .coverTitle {
-  font: {
-    family: "Lora", serif;
-    weight: bold;
-  }
+  font-family: inherit; // Use website font, avoid mixing font families
+  font-weight: bold;
   -webkit-font-smoothing: antialiased;
   color: #fff;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-  font-size: $fFontSize * 1.35;
+  font-size: $fFontSize * 1.5;
   line-height: 1.2;
   white-space: nowrap;
   margin: 0;
@@ -181,14 +177,12 @@ $fFontSize: $sqSize * 0.75;
 
 // Cover subtitle - smaller text below title
 .coverSubtitle {
-  font: {
-    family: "Lora", serif;
-    weight: normal;
-  }
+  font-family: inherit; // Use website font, avoid mixing font families
+  font-weight: normal;
   -webkit-font-smoothing: antialiased;
   color: rgba(255, 255, 255, 0.8);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  font-size: $fFontSize * 0.6;
+  font-size: $fFontSize * 0.7;
   line-height: 1.3;
   white-space: nowrap;
   margin-top: 4px;

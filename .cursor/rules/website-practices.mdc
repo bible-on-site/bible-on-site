@@ -24,3 +24,7 @@ alwaysApply: false
 
 - For test assertions: non-null assertion with a linter suppression comment explaining why it's safe.
 - When catching errors, log with `console.warn` or `console.error`.
+
+## Styling Guidelines
+
+- **Do not mix font families**: Use `font-family: inherit` to maintain consistency with the website's global font. Avoid introducing custom fonts (like "Lora", "Roboto", etc.) in component styles.

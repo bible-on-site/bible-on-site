@@ -17,10 +17,11 @@ export type BookshelfProps = {
 
 // Color spectrum generation using HSL for natural gradients
 // Each helek has a distinct hue range
+// Wider hue ranges for more differentiation between sibling books
 const HELEK_HUE_RANGES: Record<string, { start: number; end: number }> = {
-	תורה: { start: 0, end: 30 }, // Reds
-	נביאים: { start: 200, end: 240 }, // Blues
-	כתובים: { start: 100, end: 150 }, // Greens
+	תורה: { start: 0, end: 45 }, // Reds to oranges
+	נביאים: { start: 185, end: 270 }, // Cyans to purples
+	כתובים: { start: 75, end: 170 }, // Yellow-greens to teals
 };
 
 function generateSpectrumColor(

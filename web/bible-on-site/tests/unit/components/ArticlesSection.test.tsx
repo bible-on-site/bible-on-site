@@ -91,7 +91,8 @@ describe("ArticlesSection", () => {
 					content: "<p>Full content</p>",
 					priority: 1,
 					authorName: "הרב משה",
-					authorImageUrl: "https://test.s3.amazonaws.com/authors/high-res/1.jpg",
+					authorImageUrl:
+						"https://test.s3.amazonaws.com/authors/high-res/1.jpg",
 				},
 			];
 
