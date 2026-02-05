@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AppSection } from "../components/AppSection";
 import { ContactSection } from "../components/ContactSection";
 import { ScrollToSection } from "../components/ScrollToSection";
+import { TanahSefarimSection } from "../components/TanahSefarimSection";
 import { TosSection } from "../components/TosSection";
 import styles from "./page.module.css";
 
@@ -20,6 +21,7 @@ export function generateStaticParams() {
 		{ section: "app" },
 		{ section: "contact" },
 		{ section: "donation" },
+		{ section: "tanah-sefarim" },
 	];
 }
 
@@ -31,7 +33,10 @@ export default async function Home({
 	const { section } = await params;
 	// Only scroll to section if it's a valid section with an element on the page
 	const scrollTarget =
-		section === "contact" || section === "tos" || section === "app"
+		section === "contact" ||
+		section === "tos" ||
+		section === "app" ||
+		section === "tanah-sefarim"
 			? section
 			: undefined;
 	return (
@@ -82,6 +87,7 @@ export default async function Home({
 				</section>
 				<div className={styles.alHaperekDivider} />
 			</section>
+			<TanahSefarimSection />
 			<AppSection />
 			<TosSection />
 			<ContactSection />

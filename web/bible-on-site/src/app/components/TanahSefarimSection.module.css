@@ -1,0 +1,50 @@
+.section {
+  position: relative;
+  text-align: center;
+  width: 100%;
+  z-index: 2;
+  background-color: #ccc;
+  padding: 1.5em 0;
+  scroll-margin-top: 1em;
+}
+
+.header {
+  padding: 0.5em 0;
+  letter-spacing: 0.1em;
+  text-align: center;
+  color: #333;
+}
+
+.header h1 {
+  font-size: 1.6em;
+  margin: 0.3em 0;
+}
+
+.header h2 {
+  font-size: 1em;
+  margin: 0.2em 0;
+  color: #555;
+  letter-spacing: 0;
+  font-weight: normal;
+}
+
+.bookshelfContainer {
+  width: 100%;
+  min-height: 350px;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  color: #666;
+  font-size: 1.1em;
+}
+
+/* Multi-shelf mode needs more height */
+@media (max-width: 900px) {
+  .bookshelfContainer {
+    min-height: 1400px;
+  }
+}
