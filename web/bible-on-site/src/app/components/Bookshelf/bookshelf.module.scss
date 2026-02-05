@@ -111,13 +111,17 @@ $fFontSize: $sqSize * 0.75;
   transform-style: preserve-3d;
   position: absolute;
   bottom: 0;
-  cursor: pointer;
   // Reset button styles
   background: none;
   border: none;
   font: inherit;
   color: inherit;
   padding: 0;
+}
+
+// Only books (buttons) should be clickable
+button.block {
+  cursor: pointer;
 }
 
 .blockInner {

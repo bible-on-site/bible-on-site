@@ -38,8 +38,21 @@
   align-items: center;
   justify-content: center;
   min-height: 300px;
-  color: #666;
-  font-size: 1.1em;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #d8ebff;
+  border-top-color: #1552ac;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Bottom divider - wave transition to white (AppSection) */
@@ -57,7 +70,7 @@
 }
 
 /* Responsive divider images and multi-shelf height */
-@media screen and (max-width: 960px) {
+@media screen and (max-width: 899px) {
   .bottomDivider {
     background-image: url(/root/sefarim-bottom-devider-xs.svg);
   }

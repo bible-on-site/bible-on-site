@@ -14,7 +14,9 @@ const Bookshelf = dynamic(
 	{
 		ssr: false,
 		loading: () => (
-			<div className={styles.loading}>טוען ספרי התנ&quot;ך...</div>
+			<div className={styles.loading}>
+				<div className={styles.spinner} />
+			</div>
 		),
 	},
 );
