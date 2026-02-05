@@ -84,10 +84,13 @@
                          Margin="32,8"/>
 
                 <!-- Loading indicator -->
-                <ActivityIndicator IsRunning="{Binding IsLoading}"
-                                   IsVisible="{Binding IsLoading}"
-                                   HorizontalOptions="Center"
-                                   Color="{StaticResource Primary}"/>
+                <Image Source="loading_book_anim.gif"
+                       IsAnimationPlaying="{Binding IsLoading}"
+                       IsVisible="{Binding IsLoading}"
+                       HeightRequest="60"
+                       WidthRequest="60"
+                       Aspect="AspectFit"
+                       HorizontalOptions="Center"/>
 
                 <!-- Article Content (HTML) -->
                 <controls:HtmlView x:Name="ArticleContentView"

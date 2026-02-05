@@ -24,10 +24,11 @@
                              VerticalOptions="Center"
                              HorizontalOptions="Center">
 
-            <ActivityIndicator IsRunning="True"
-                               Color="White"
-                               HeightRequest="50"
-                               WidthRequest="50"/>
+            <Image Source="loading_book_anim.gif"
+                   IsAnimationPlaying="True"
+                   HeightRequest="80"
+                   WidthRequest="80"
+                   Aspect="AspectFit"/>
 
             <Label x:Name="LoadingLabel"
                    Text="מתחבר לפרק..."
