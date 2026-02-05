@@ -50,6 +50,7 @@ public partial class PerekPage : ContentPage
         BindingContext = _viewModel;
         ForwardSelectedArticleIdChanged();
         SetupGlobalTouchHandler();
+        SetupExitButtonDragHandler();
     }
 
     public PerekPage(PerekViewModel viewModel)
@@ -59,6 +60,7 @@ public partial class PerekPage : ContentPage
         BindingContext = _viewModel;
         ForwardSelectedArticleIdChanged();
         SetupGlobalTouchHandler();
+        SetupExitButtonDragHandler();
     }
 
     private void ForwardSelectedArticleIdChanged()
@@ -1034,28 +1036,117 @@ public partial class PerekPage : ContentPage
         ExitFullScreen();
     }
 
-    private double _exitButtonPanX;
-    private double _exitButtonPanY;
+    /// <summary>
+    /// Sets up drag handling for the exit fullscreen button.
+    /// On Android: uses native touch with raw screen coordinates for pixel-perfect tracking.
+    /// On other platforms: uses MAUI gesture recognizers.
+    /// </summary>
+    private void SetupExitButtonDragHandler()
+    {
+#if ANDROID
+        ExitFullScreenButton.HandlerChanged += (_, _) =>
+        {
+            if (ExitFullScreenButton.Handler?.PlatformView is Android.Views.View nativeView)
+            {
+                _exitButtonTouchSlop = (nativeView.Context is { } ctx
+                    ? Android.Views.ViewConfiguration.Get(ctx)?.ScaledTouchSlop
+                    : null) ?? 24;
+                _exitButtonDensity = (float)DeviceDisplay.MainDisplayInfo.Density;
+                nativeView.Touch += OnExitButtonNativeTouch;
+            }
+        };
+#else
+        var tap = new TapGestureRecognizer();
+        tap.Tapped += OnExitFullScreenClicked;
+        ExitFullScreenButton.GestureRecognizers.Add(tap);
+
+        var pan = new PanGestureRecognizer();
+        pan.PanUpdated += OnExitFullScreenButtonPan;
+        ExitFullScreenButton.GestureRecognizers.Add(pan);
+#endif
+    }
+
+#if ANDROID
+    private float _exitButtonTouchStartRawX;
+    private float _exitButtonTouchStartRawY;
+    private double _exitButtonDragStartTx;
+    private double _exitButtonDragStartTy;
+    private bool _exitButtonIsDragging;
+    private int _exitButtonTouchSlop;
+    private float _exitButtonDensity;
 
     /// <summary>
-    /// Handles pan gesture on exit full screen button - allows dragging.
-    /// Note: X is negated to account for RTL layout coordinate inversion.
+    /// Native Android touch handler for exit fullscreen button.
+    /// Uses getRawX/getRawY (screen coordinates) which are never affected by
+    /// view translation, RTL layout, or MAUI coordinate transforms.
     /// </summary>
+    private void OnExitButtonNativeTouch(object? sender, Android.Views.View.TouchEventArgs e)
+    {
+        if (e.Event is not { } motion) return;
+
+        switch (motion.ActionMasked)
+        {
+            case Android.Views.MotionEventActions.Down:
+                _exitButtonTouchStartRawX = motion.RawX;
+                _exitButtonTouchStartRawY = motion.RawY;
+                _exitButtonDragStartTx = ExitFullScreenButton.TranslationX;
+                _exitButtonDragStartTy = ExitFullScreenButton.TranslationY;
+                _exitButtonIsDragging = false;
+                e.Handled = true;
+                break;
+
+            case Android.Views.MotionEventActions.Move:
+            {
+                var dx = motion.RawX - _exitButtonTouchStartRawX;
+                var dy = motion.RawY - _exitButtonTouchStartRawY;
+
+                if (!_exitButtonIsDragging &&
+                    (Math.Abs(dx) > _exitButtonTouchSlop || Math.Abs(dy) > _exitButtonTouchSlop))
+                {
+                    _exitButtonIsDragging = true;
+                }
+
+                if (_exitButtonIsDragging)
+                {
+                    ExitFullScreenButton.TranslationX = _exitButtonDragStartTx + dx / _exitButtonDensity;
+                    ExitFullScreenButton.TranslationY = _exitButtonDragStartTy + dy / _exitButtonDensity;
+                }
+                e.Handled = true;
+                break;
+            }
+
+            case Android.Views.MotionEventActions.Up:
+                if (!_exitButtonIsDragging)
+                {
+                    ExitFullScreen();
+                }
+                e.Handled = true;
+                break;
+
+            case Android.Views.MotionEventActions.Cancel:
+                e.Handled = true;
+                break;
+        }
+    }
+#else
+    private double _exitButtonPanStartX;
+    private double _exitButtonPanStartY;
+
     private void OnExitFullScreenButtonPan(object? sender, PanUpdatedEventArgs e)
     {
         switch (e.StatusType)
         {
-            case GestureStatus.Running:
-                // Negate X for RTL layout
-                ExitFullScreenButton.TranslationX = _exitButtonPanX - e.TotalX;
-                ExitFullScreenButton.TranslationY = _exitButtonPanY + e.TotalY;
+            case GestureStatus.Started:
+                _exitButtonPanStartX = ExitFullScreenButton.TranslationX;
+                _exitButtonPanStartY = ExitFullScreenButton.TranslationY;
                 break;
-            case GestureStatus.Completed:
-                _exitButtonPanX = ExitFullScreenButton.TranslationX;
-                _exitButtonPanY = ExitFullScreenButton.TranslationY;
+            case GestureStatus.Running:
+                ExitFullScreenButton.TranslationX = _exitButtonPanStartX + e.TotalX;
+                ExitFullScreenButton.TranslationY = _exitButtonPanStartY + e.TotalY;
                 break;
         }
     }
+#endif
 
     #region Swipe Navigation
 
@@ -1213,8 +1304,6 @@ public partial class PerekPage : ContentPage
         ArticlesFooterSpacer.HeightRequest = 0;
 
         // Show floating exit button (reset position first)
-        _exitButtonPanX = 0;
-        _exitButtonPanY = 0;
         ExitFullScreenButton.TranslationX = 0;
         ExitFullScreenButton.TranslationY = 0;
         ExitFullScreenButton.IsVisible = true;
