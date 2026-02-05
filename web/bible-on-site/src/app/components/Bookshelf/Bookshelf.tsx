@@ -75,7 +75,9 @@ for (const [helek, sefers] of Object.entries(helekGroups)) {
 	});
 }
 
-// Calculate positions with gaps between heleks (RTL order - reversed)
+// Calculate positions with gaps between heleks (RTL order)
+// Heleks: Ketuvim (left) -> Neviim -> Torah (right)
+// Within each helek: last sefer (left) -> first sefer (right)
 function calculateBookPositions() {
 	const positions: Array<{
 		sefer: (typeof bookshelfSefarim)[0];
@@ -84,16 +86,16 @@ function calculateBookPositions() {
 
 	let currentX = 2; // Start position
 
-	// Torah (reversed for RTL)
-	const torahReversed = [...helekGroups.תורה].reverse();
-	for (const sefer of torahReversed) {
+	// Ketuvim first (leftmost) - reversed within
+	const ketuvimReversed = [...helekGroups.כתובים].reverse();
+	for (const sefer of ketuvimReversed) {
 		positions.push({ sefer, x: currentX });
 		currentX += BOOK_WIDTH;
 	}
 
-	currentX += HELEK_GAP; // Gap after Torah
+	currentX += HELEK_GAP; // Gap after Ketuvim
 
-	// Neviim (reversed for RTL)
+	// Neviim (middle) - reversed within
 	const neviimReversed = [...helekGroups.נביאים].reverse();
 	for (const sefer of neviimReversed) {
 		positions.push({ sefer, x: currentX });
@@ -102,9 +104,9 @@ function calculateBookPositions() {
 
 	currentX += HELEK_GAP; // Gap after Neviim
 
-	// Ketuvim (reversed for RTL)
-	const ketuvimReversed = [...helekGroups.כתובים].reverse();
-	for (const sefer of ketuvimReversed) {
+	// Torah last (rightmost) - reversed within
+	const torahReversed = [...helekGroups.תורה].reverse();
+	for (const sefer of torahReversed) {
 		positions.push({ sefer, x: currentX });
 		currentX += BOOK_WIDTH;
 	}
@@ -127,7 +129,6 @@ type BookBlockProps = {
 function BookBlock({ sefer, x, onClick }: BookBlockProps) {
 	const baseColor = seferColors.get(sefer.name) || "hsl(0, 0%, 50%)";
 	const spineColor = darkenColor(baseColor, 8); // Spine slightly darker
-	const pagesColor = lightenColor(baseColor, 25); // Pages lighter version of book color
 	const sqSize = 16; // Match SCSS $sqSize
 
 	const blockStyle = {
@@ -137,9 +138,10 @@ function BookBlock({ sefer, x, onClick }: BookBlockProps) {
 
 	const coverStyle = { backgroundColor: baseColor };
 	const spineStyle = { backgroundColor: spineColor };
+	// White pages with gray lines texture
 	const pageEdgeStyle = {
-		backgroundColor: pagesColor,
-		backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent 21%, rgba(0,0,0,0.1) 21%, rgba(0,0,0,0.1) 25%, transparent 25%, transparent 46%, rgba(0,0,0,0.1) 46%, rgba(0,0,0,0.1) 50%, transparent 50%)`,
+		backgroundColor: "#fff",
+		backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent 21%, #aaa 21%, #aaa 25%, transparent 25%, transparent 46%, #aaa 46%, #aaa 50%, transparent 50%)`,
 		backgroundSize: `${sqSize}px ${sqSize}px`,
 	};
 
@@ -166,13 +168,15 @@ function BookBlock({ sefer, x, onClick }: BookBlockProps) {
 			onClick={onClick}
 		>
 			<div className={styles.blockInner}>
+				{/* Back edge - page edges visible (opposite to spine) */}
 				<div
 					className={styles.back}
 					style={{
-						...coverStyle,
 						...frontBackStyle,
+						...pageEdgeStyle,
 					}}
 				/>
+				{/* Bottom - page edges */}
 				<div
 					className={styles.bottom}
 					style={{
@@ -181,6 +185,7 @@ function BookBlock({ sefer, x, onClick }: BookBlockProps) {
 						transform: `rotateX(-90deg) translateY(-${sqSize * (BOOK_DEPTH - 1)}px) translateZ(${sqSize * BOOK_HEIGHT}px)`,
 					}}
 				/>
+				{/* Front - spine with title */}
 				<div
 					className={styles.front}
 					style={{
@@ -189,21 +194,25 @@ function BookBlock({ sefer, x, onClick }: BookBlockProps) {
 						transform: `translateZ(${sqSize * (BOOK_DEPTH - 1)}px)`,
 					}}
 				>
-					<div className={styles.spine}>{sefer.displayName}</div>
+					<div className={styles.spineText}>{sefer.displayName}</div>
 				</div>
+				{/* Left - front cover (Hebrew books) with title */}
 				<div
 					className={styles.left}
 					style={{ ...coverStyle, ...leftRightStyle }}
-				/>
+				>
+					<div className={styles.coverTitle}>{sefer.displayName}</div>
+				</div>
+				{/* Right - back cover */}
 				<div
 					className={styles.right}
 					style={{
+						...coverStyle,
 						...leftRightStyle,
-						...pageEdgeStyle,
 						transform: `rotateY(-270deg) translate3d(${sqSize}px, 0, ${sqSize * (BOOK_WIDTH - BOOK_DEPTH)}px)`,
 					}}
-					data-title={sefer.displayName}
 				/>
+				{/* Top - page edges */}
 				<div
 					className={styles.top}
 					style={{

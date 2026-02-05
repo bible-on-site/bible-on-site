@@ -8,7 +8,6 @@ $zAngle: 0deg;
 $trans: 0.25s;
 
 $fFontSize: $sqSize * 0.75;
-$rFontSize: $sqSize * 1.5;
 
 .root {
   position: relative;
@@ -99,6 +98,16 @@ $rFontSize: $sqSize * 1.5;
 
 .back {
   transform: translateZ(-$sqSize) rotateY(180deg);
+
+  &::before {
+    opacity: 0;
+  }
+}
+
+.front {
+  &::before {
+    opacity: 0;
+  }
 }
 
 .left {
@@ -117,25 +126,6 @@ $rFontSize: $sqSize * 1.5;
   &::before {
     opacity: 0;
   }
-
-  &::after {
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-    color: #fff;
-    font-size: $rFontSize;
-    line-height: $rFontSize;
-    text-align: center;
-    padding: 20% 5%;
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 2;
-    content: attr(data-title);
-    transform-origin: 0 50%;
-    transition: transform $trans $trans linear;
-  }
 }
 
 .top,
@@ -143,19 +133,22 @@ $rFontSize: $sqSize * 1.5;
   transform-origin: top center;
 }
 
-.spine,
-.right::after {
+// Shared text styles for book titles
+.spineText,
+.coverTitle {
   font: {
     family: "Lora", serif;
     weight: bold;
   }
   -webkit-font-smoothing: antialiased;
-}
-
-.spine {
   position: absolute;
   background: transparent;
-  color: #ccc;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+// Spine text - vertical, rotated 90 degrees
+.spineText {
   font-size: $fFontSize;
   line-height: $fFontSize;
   top: 50%;
@@ -164,7 +157,17 @@ $rFontSize: $sqSize * 1.5;
   transform: rotate(90deg) translateX(-50%);
   white-space: nowrap;
   width: max-content;
-  height: $sqSize;
+}
+
+// Cover title - horizontal, centered
+.coverTitle {
+  font-size: $fFontSize;
+  line-height: 1.2;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  text-align: center;
 }
 
 // Book hover effect
