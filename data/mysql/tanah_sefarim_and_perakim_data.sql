@@ -1053,12 +1053,12 @@ INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         179,
         179,
-        'מקרא בכורים, ודוי מעשר, אזהרת משה ללכת בדרך ה'');
+        'מקרא בכורים, ודוי מעשר, אזהרת משה ללכת בדרך ה\'');
 INSERT INTO tanah_perek (id, perek, header) VALUES (180, 180, ' צווי על קיום מעמד ברכה וקללה בהר גרזים והר עיבל ');
 INSERT INTO tanah_perek (id, perek, header) VALUES (181, 181, ' ברית בערבות מואב / ברכות ותוכחות ');
 INSERT INTO tanah_perek (id, perek, header) VALUES (182, 182, ' ברית ערבות,
         אזהרה על האלה,
-        המכות - על עזיבת ה \ ''
+        המכות - על עזיבת ה\''
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (183, 183, 'פרשת התשובה, משה מזהיר לבחור בחיים');

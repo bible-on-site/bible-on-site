@@ -821,8 +821,9 @@ jobs:
       - name: Create S3 bucket in MinIO
         run: |
           docker run --rm --network host \
+            --entrypoint /bin/sh \
             minio/mc:latest \
-            /bin/sh -c "
+            -c "
               mc alias set ci http://localhost:4566 test test_1234 &&
               mc mb --ignore-existing ci/bible-on-site-assets-test &&
               mc anonymous set download ci/bible-on-site-assets-test
