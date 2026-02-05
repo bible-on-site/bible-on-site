@@ -242,15 +242,17 @@ $blocks:
 }
 
 .spine {
+  position: absolute;
   background: transparent;
   color: #ccc;
   font-size: $fFontSize;
   line-height: $fFontSize;
   top: 0;
   left: 0;
-  transform: rotate(90deg) translate($sqSize * 0.75, -50%);
+  transform-origin: 0 0;
+  transform: rotate(90deg) translateX($sqSize * 0.5);
   white-space: nowrap;
-  width: 0;
+  width: max-content;
   height: $sqSize;
 }
 
