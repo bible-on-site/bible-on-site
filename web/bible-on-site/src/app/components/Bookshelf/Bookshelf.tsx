@@ -1,7 +1,6 @@
 "use client";
 
 import { sefarim } from "@/data/db/sefarim";
-import { getSeferColor } from "@/data/sefer-colors";
 import styles from "./bookshelf.module.scss";
 
 // Constants for layout
@@ -15,6 +14,40 @@ const HELEK_GAP = 2; // Space between heleks (in book widths)
 export type BookshelfProps = {
 	onSeferClick?: (seferName: string, perekFrom: number) => void;
 };
+
+// Color spectrum generation using HSL for natural gradients
+// Each helek has a distinct hue range
+const HELEK_HUE_RANGES: Record<string, { start: number; end: number }> = {
+	תורה: { start: 0, end: 30 }, // Reds
+	נביאים: { start: 200, end: 240 }, // Blues
+	כתובים: { start: 100, end: 150 }, // Greens
+};
+
+function generateSpectrumColor(
+	helek: string,
+	index: number,
+	total: number,
+): string {
+	const range = HELEK_HUE_RANGES[helek] || { start: 0, end: 360 };
+	// Interpolate hue across the range
+	const hue =
+		range.start + ((range.end - range.start) * index) / (total - 1 || 1);
+	// Use consistent saturation and lightness for rich book colors
+	return `hsl(${hue}, 70%, 35%)`;
+}
+
+function lightenColor(hslColor: string, amount: number): string {
+	// Parse HSL and adjust lightness
+	const match = hslColor.match(/hsl\(([^,]+),\s*([^,]+)%,\s*([^)]+)%\)/);
+	if (!match) return hslColor;
+	const [, h, s, l] = match;
+	const newL = Math.min(100, Number.parseFloat(l) + amount);
+	return `hsl(${h}, ${s}%, ${newL}%)`;
+}
+
+function darkenColor(hslColor: string, amount: number): string {
+	return lightenColor(hslColor, -amount);
+}
 
 // All 35 sefarim displayed individually
 const bookshelfSefarim = sefarim.map((sefer) => ({
@@ -31,7 +64,18 @@ const helekGroups = {
 	כתובים: bookshelfSefarim.filter((s) => s.helek === "כתובים"),
 };
 
-// Calculate positions with gaps between heleks
+// Assign colors to each sefer based on position in helek
+const seferColors = new Map<string, string>();
+for (const [helek, sefers] of Object.entries(helekGroups)) {
+	sefers.forEach((sefer, index) => {
+		seferColors.set(
+			sefer.name,
+			generateSpectrumColor(helek, index, sefers.length),
+		);
+	});
+}
+
+// Calculate positions with gaps between heleks (RTL order - reversed)
 function calculateBookPositions() {
 	const positions: Array<{
 		sefer: (typeof bookshelfSefarim)[0];
@@ -40,24 +84,27 @@ function calculateBookPositions() {
 
 	let currentX = 2; // Start position
 
-	// Torah
-	for (const sefer of helekGroups.תורה) {
+	// Torah (reversed for RTL)
+	const torahReversed = [...helekGroups.תורה].reverse();
+	for (const sefer of torahReversed) {
 		positions.push({ sefer, x: currentX });
 		currentX += BOOK_WIDTH;
 	}
 
 	currentX += HELEK_GAP; // Gap after Torah
 
-	// Neviim
-	for (const sefer of helekGroups.נביאים) {
+	// Neviim (reversed for RTL)
+	const neviimReversed = [...helekGroups.נביאים].reverse();
+	for (const sefer of neviimReversed) {
 		positions.push({ sefer, x: currentX });
 		currentX += BOOK_WIDTH;
 	}
 
 	currentX += HELEK_GAP; // Gap after Neviim
 
-	// Ketuvim
-	for (const sefer of helekGroups.כתובים) {
+	// Ketuvim (reversed for RTL)
+	const ketuvimReversed = [...helekGroups.כתובים].reverse();
+	for (const sefer of ketuvimReversed) {
 		positions.push({ sefer, x: currentX });
 		currentX += BOOK_WIDTH;
 	}
@@ -78,7 +125,9 @@ type BookBlockProps = {
 };
 
 function BookBlock({ sefer, x, onClick }: BookBlockProps) {
-	const color = getSeferColor(sefer.name);
+	const baseColor = seferColors.get(sefer.name) || "hsl(0, 0%, 50%)";
+	const spineColor = darkenColor(baseColor, 8); // Spine slightly darker
+	const pagesColor = lightenColor(baseColor, 25); // Pages lighter version of book color
 	const sqSize = 16; // Match SCSS $sqSize
 
 	const blockStyle = {
@@ -86,10 +135,11 @@ function BookBlock({ sefer, x, onClick }: BookBlockProps) {
 		display: "block",
 	};
 
-	const faceStyle = { backgroundColor: color };
-	const pageStyle = {
-		backgroundColor: "#fff",
-		backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent 21%, #aaa 21%, #aaa 25%, transparent 25%, transparent 46%, #aaa 46%, #aaa 50%, transparent 50%)`,
+	const coverStyle = { backgroundColor: baseColor };
+	const spineStyle = { backgroundColor: spineColor };
+	const pageEdgeStyle = {
+		backgroundColor: pagesColor,
+		backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent 21%, rgba(0,0,0,0.1) 21%, rgba(0,0,0,0.1) 25%, transparent 25%, transparent 46%, rgba(0,0,0,0.1) 46%, rgba(0,0,0,0.1) 50%, transparent 50%)`,
 		backgroundSize: `${sqSize}px ${sqSize}px`,
 	};
 
@@ -119,23 +169,22 @@ function BookBlock({ sefer, x, onClick }: BookBlockProps) {
 				<div
 					className={styles.back}
 					style={{
-						...faceStyle,
+						...coverStyle,
 						...frontBackStyle,
-						...pageStyle,
 					}}
 				/>
 				<div
 					className={styles.bottom}
 					style={{
 						...topBottomStyle,
-						...pageStyle,
+						...pageEdgeStyle,
 						transform: `rotateX(-90deg) translateY(-${sqSize * (BOOK_DEPTH - 1)}px) translateZ(${sqSize * BOOK_HEIGHT}px)`,
 					}}
 				/>
 				<div
 					className={styles.front}
 					style={{
-						...faceStyle,
+						...spineStyle,
 						...frontBackStyle,
 						transform: `translateZ(${sqSize * (BOOK_DEPTH - 1)}px)`,
 					}}
@@ -144,13 +193,13 @@ function BookBlock({ sefer, x, onClick }: BookBlockProps) {
 				</div>
 				<div
 					className={styles.left}
-					style={{ ...faceStyle, ...leftRightStyle }}
+					style={{ ...coverStyle, ...leftRightStyle }}
 				/>
 				<div
 					className={styles.right}
 					style={{
 						...leftRightStyle,
-						backgroundColor: "#fff",
+						...pageEdgeStyle,
 						transform: `rotateY(-270deg) translate3d(${sqSize}px, 0, ${sqSize * (BOOK_WIDTH - BOOK_DEPTH)}px)`,
 					}}
 					data-title={sefer.displayName}
@@ -159,7 +208,7 @@ function BookBlock({ sefer, x, onClick }: BookBlockProps) {
 					className={styles.top}
 					style={{
 						...topBottomStyle,
-						...pageStyle,
+						...pageEdgeStyle,
 						transform: `rotateX(-90deg) translateY(-${sqSize * (BOOK_DEPTH - 1)}px)`,
 					}}
 				/>
