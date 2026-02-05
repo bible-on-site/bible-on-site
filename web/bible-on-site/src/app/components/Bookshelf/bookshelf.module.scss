@@ -247,10 +247,10 @@ $blocks:
   color: #ccc;
   font-size: $fFontSize;
   line-height: $fFontSize;
-  top: 0;
-  left: 0;
-  transform-origin: 0 0;
-  transform: rotate(90deg) translateX($sqSize * 0.5);
+  top: 50%;
+  left: 50%;
+  transform-origin: 0 50%;
+  transform: rotate(90deg) translateX(-50%);
   white-space: nowrap;
   width: max-content;
   height: $sqSize;
