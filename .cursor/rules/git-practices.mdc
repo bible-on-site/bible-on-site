@@ -19,7 +19,7 @@ alwaysApply: true
    `git diff-tree --no-commit-id --name-only -r HEAD | xargs git add && git commit --amend --no-edit`
 4. Push only when the working tree is clean.
 
-**Agents**: After committing, always check `git status` and amend if pre-commit changed files.
+**Agents**: After committing, always check `git status` and amend if pre-commit changed files. When you make changes that should be committed, **you** commit and push—do not tell the user to run git commands.
 
 ## Branch Management
 

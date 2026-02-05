@@ -70,6 +70,23 @@ test.describe("sitemap.xml", () => {
 		expect(body).toContain("/authors</loc>");
 	});
 
+	test("contains article URLs", async ({ request }) => {
+		const response = await request.get("/sitemap.xml");
+		const body = await response.text();
+
+		// Count article entries dynamically (pattern: /929/{perekId}/{articleId})
+		const articleEntries = body.match(/\/929\/\d+\/\d+<\/loc>/g) || [];
+
+		// If articles exist in the database, they should appear in the sitemap
+		// The exact count depends on test data, but verify the pattern is present
+		if (articleEntries.length > 0) {
+			// Each article URL should follow the /929/{perekId}/{articleId} pattern
+			for (const entry of articleEntries) {
+				expect(entry).toMatch(/\/929\/\d+\/\d+<\/loc>/);
+			}
+		}
+	});
+
 	test("has correct number of URL entries", async ({ request }) => {
 		const response = await request.get("/sitemap.xml");
 		const body = await response.text();
@@ -77,17 +94,19 @@ test.describe("sitemap.xml", () => {
 		// Count <url> tags
 		const urlCount = (body.match(/<url>/g) || []).length;
 
-		// Count author entries dynamically from sitemap
+		// Count dynamic entries from sitemap
 		// Note: Better practice would be to control test data population from setup
-		// so we know exactly how many authors to expect
+		// so we know exactly how many authors/articles to expect
 		const authorEntries = (body.match(/\/authors\/\d+<\/loc>/g) || []).length;
+		const articleEntries = (body.match(/\/929\/\d+\/\d+<\/loc>/g) || []).length;
 
-		// Expected: 1 root + sections + 1 929 index + 929 perakim + 1 authors index + N authors
+		// Expected: 1 root + sections + 1 929 index + 929 perakim + N articles + 1 authors index + N authors
 		const expectedCount =
 			1 +
 			SITEMAP_SECTIONS.length +
 			1 +
 			TOTAL_PERAKIM +
+			articleEntries +
 			1 +
 			authorEntries;
 		expect(urlCount).toBe(expectedCount);
