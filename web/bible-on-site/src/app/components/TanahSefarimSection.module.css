@@ -2,7 +2,7 @@
   position: relative;
   text-align: center;
   width: 100%;
-  z-index: 2;
+  z-index: 1; /* Lower than al-haperek (z-index: 2) so divider shows on top */
   background-color: #ccc;
   padding: 1.5em 0 5em; /* More bottom padding for ketuvim shelf */
   scroll-margin-top: 1em;
@@ -48,6 +48,6 @@
 @media screen and (max-width: 960px) {
   .bookshelfContainer {
     height: auto;
-    min-height: 1550px;
+    min-height: 1650px;
   }
 }
