@@ -201,7 +201,10 @@ function BookBlock({ sefer, x, onClick }: BookBlockProps) {
 					className={styles.left}
 					style={{ ...coverStyle, ...leftRightStyle }}
 				>
-					<div className={styles.coverTitle}>{sefer.displayName}</div>
+					<div className={styles.coverContent}>
+						<div className={styles.coverTitle}>{sefer.displayName}</div>
+						<div className={styles.coverSubtitle}>מקראות גדולות</div>
+					</div>
 				</div>
 				{/* Right - back cover */}
 				<div

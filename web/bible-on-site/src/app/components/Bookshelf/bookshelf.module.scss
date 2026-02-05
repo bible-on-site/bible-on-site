@@ -133,9 +133,8 @@ $fFontSize: $sqSize * 0.75;
   transform-origin: top center;
 }
 
-// Shared text styles for book titles
-.spineText,
-.coverTitle {
+// Spine text - vertical, rotated 90 degrees
+.spineText {
   font: {
     family: "Lora", serif;
     weight: bold;
@@ -145,10 +144,6 @@ $fFontSize: $sqSize * 0.75;
   background: transparent;
   color: #fff;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-}
-
-// Spine text - vertical, rotated 90 degrees
-.spineText {
   font-size: $fFontSize;
   line-height: $fFontSize;
   top: 50%;
@@ -159,15 +154,44 @@ $fFontSize: $sqSize * 0.75;
   width: max-content;
 }
 
-// Cover title - horizontal, centered
-.coverTitle {
-  font-size: $fFontSize;
-  line-height: 1.2;
-  top: 50%;
+// Cover content container - positioned at 25% from top
+.coverContent {
+  position: absolute;
+  top: 25%;
   left: 50%;
-  transform: translate(-50%, -50%);
-  white-space: nowrap;
+  transform: translateX(-50%);
   text-align: center;
+  direction: rtl;
+}
+
+// Cover title - larger, horizontal
+.coverTitle {
+  font: {
+    family: "Lora", serif;
+    weight: bold;
+  }
+  -webkit-font-smoothing: antialiased;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  font-size: $fFontSize * 1.35;
+  line-height: 1.2;
+  white-space: nowrap;
+  margin: 0;
+}
+
+// Cover subtitle - smaller text below title
+.coverSubtitle {
+  font: {
+    family: "Lora", serif;
+    weight: normal;
+  }
+  -webkit-font-smoothing: antialiased;
+  color: rgba(255, 255, 255, 0.8);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  font-size: $fFontSize * 0.6;
+  line-height: 1.3;
+  white-space: nowrap;
+  margin-top: 4px;
 }
 
 // Book hover effect
