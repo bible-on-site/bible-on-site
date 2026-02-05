@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { sefarim } from "@/data/db/sefarim";
+import { isTreiAsar } from "@/data/sefer-colors";
 import styles from "./bookshelf.module.scss";
 
 // Constants for layout
@@ -10,17 +12,22 @@ const BOOK_HEIGHT = 15;
 const BOOK_START_Y = 3;
 const BOOK_START_Z = 2;
 const HELEK_GAP = 2; // Space between heleks (in book widths)
+const SQ_SIZE = 16; // Base unit size in pixels
+const SHELF_DEPTH = 14;
+
+// Breakpoint for switching between single and multi-shelf layout
+const MULTI_SHELF_BREAKPOINT = 900;
 
 export type BookshelfProps = {
 	onSeferClick?: (seferName: string, perekFrom: number) => void;
 };
 
 // Color spectrum generation using HSL for natural gradients
-// Each helek has a distinct hue range
 // Wider hue ranges for more differentiation between sibling books
 const HELEK_HUE_RANGES: Record<string, { start: number; end: number }> = {
 	תורה: { start: 0, end: 45 }, // Reds to oranges
-	נביאים: { start: 185, end: 270 }, // Cyans to purples
+	נביאים: { start: 185, end: 240 }, // Cyans to blues (for ראשונים)
+	"תרי עשר": { start: 240, end: 270 }, // Blues to purples (for תרי עשר)
 	כתובים: { start: 75, end: 170 }, // Yellow-greens to teals
 };
 
@@ -30,15 +37,12 @@ function generateSpectrumColor(
 	total: number,
 ): string {
 	const range = HELEK_HUE_RANGES[helek] || { start: 0, end: 360 };
-	// Interpolate hue across the range
 	const hue =
 		range.start + ((range.end - range.start) * index) / (total - 1 || 1);
-	// Use consistent saturation and lightness for rich book colors
 	return `hsl(${hue}, 70%, 35%)`;
 }
 
 function lightenColor(hslColor: string, amount: number): string {
-	// Parse HSL and adjust lightness
 	const match = hslColor.match(/hsl\(([^,]+),\s*([^,]+)%,\s*([^)]+)%\)/);
 	if (!match) return hslColor;
 	const [, h, s, l] = match;
@@ -50,64 +54,84 @@ function darkenColor(hslColor: string, amount: number): string {
 	return lightenColor(hslColor, -amount);
 }
 
+// Sefer type
+type SeferInfo = {
+	name: string;
+	helek: string;
+	displayName: string;
+	perekFrom: number;
+};
+
 // All 35 sefarim displayed individually
-const bookshelfSefarim = sefarim.map((sefer) => ({
+const bookshelfSefarim: SeferInfo[] = sefarim.map((sefer) => ({
 	name: sefer.name,
 	helek: sefer.helek,
 	displayName: sefer.name,
 	perekFrom: sefer.perekFrom,
 }));
 
-// Group sefarim by helek
+// Group sefarim by helek and sub-groups
 const helekGroups = {
 	תורה: bookshelfSefarim.filter((s) => s.helek === "תורה"),
-	נביאים: bookshelfSefarim.filter((s) => s.helek === "נביאים"),
+	// Split Neviim into ראשונים+גדולים and תרי עשר
+	neviimRishonim: bookshelfSefarim.filter(
+		(s) => s.helek === "נביאים" && !isTreiAsar(s.name),
+	),
+	treiAsar: bookshelfSefarim.filter(
+		(s) => s.helek === "נביאים" && isTreiAsar(s.name),
+	),
 	כתובים: bookshelfSefarim.filter((s) => s.helek === "כתובים"),
 };
 
-// Assign colors to each sefer based on position in helek
+// All Neviim together (for single shelf mode)
+const allNeviim = bookshelfSefarim.filter((s) => s.helek === "נביאים");
+
+// Assign colors to each sefer based on position in their group
 const seferColors = new Map<string, string>();
-for (const [helek, sefers] of Object.entries(helekGroups)) {
-	sefers.forEach((sefer, index) => {
-		seferColors.set(
-			sefer.name,
-			generateSpectrumColor(helek, index, sefers.length),
-		);
-	});
-}
 
-// Calculate positions with gaps between heleks (RTL order)
-// Heleks: Ketuvim (left) -> Neviim -> Torah (right)
-// Within each helek: last sefer (left) -> first sefer (right)
-function calculateBookPositions() {
-	const positions: Array<{
-		sefer: (typeof bookshelfSefarim)[0];
-		x: number;
-	}> = [];
+// Torah colors
+helekGroups.תורה.forEach((sefer, index) => {
+	seferColors.set(
+		sefer.name,
+		generateSpectrumColor("תורה", index, helekGroups.תורה.length),
+	);
+});
 
-	let currentX = 2; // Start position
+// Neviim Rishonim colors
+helekGroups.neviimRishonim.forEach((sefer, index) => {
+	seferColors.set(
+		sefer.name,
+		generateSpectrumColor("נביאים", index, helekGroups.neviimRishonim.length),
+	);
+});
 
-	// Ketuvim first (leftmost) - reversed within
-	const ketuvimReversed = [...helekGroups.כתובים].reverse();
-	for (const sefer of ketuvimReversed) {
-		positions.push({ sefer, x: currentX });
-		currentX += BOOK_WIDTH;
-	}
+// Trei Asar colors
+helekGroups.treiAsar.forEach((sefer, index) => {
+	seferColors.set(
+		sefer.name,
+		generateSpectrumColor("תרי עשר", index, helekGroups.treiAsar.length),
+	);
+});
 
-	currentX += HELEK_GAP; // Gap after Ketuvim
+// Ketuvim colors
+helekGroups.כתובים.forEach((sefer, index) => {
+	seferColors.set(
+		sefer.name,
+		generateSpectrumColor("כתובים", index, helekGroups.כתובים.length),
+	);
+});
 
-	// Neviim (middle) - reversed within
-	const neviimReversed = [...helekGroups.נביאים].reverse();
-	for (const sefer of neviimReversed) {
-		positions.push({ sefer, x: currentX });
-		currentX += BOOK_WIDTH;
-	}
+// Calculate book positions for a list of sefarim
+function calculatePositionsForSefarim(
+	sefarimList: SeferInfo[],
+	startX = 2,
+): { positions: Array<{ sefer: SeferInfo; x: number }>; totalWidth: number } {
+	const positions: Array<{ sefer: SeferInfo; x: number }> = [];
+	let currentX = startX;
 
-	currentX += HELEK_GAP; // Gap after Neviim
-
-	// Torah last (rightmost) - reversed within
-	const torahReversed = [...helekGroups.תורה].reverse();
-	for (const sefer of torahReversed) {
+	// Reverse for RTL display
+	const reversed = [...sefarimList].reverse();
+	for (const sefer of reversed) {
 		positions.push({ sefer, x: currentX });
 		currentX += BOOK_WIDTH;
 	}
@@ -115,50 +139,73 @@ function calculateBookPositions() {
 	return { positions, totalWidth: currentX + 2 };
 }
 
-const { positions: bookPositions, totalWidth } = calculateBookPositions();
+// Calculate positions for all books on single shelf (RTL order with gaps)
+function calculateAllBooksPositions(): {
+	positions: Array<{ sefer: SeferInfo; x: number }>;
+	totalWidth: number;
+} {
+	const positions: Array<{ sefer: SeferInfo; x: number }> = [];
+	let currentX = 2;
 
-// Shelf floor dimensions
-const SHELF_WIDTH = totalWidth;
-const SHELF_DEPTH = 14;
+	// Ketuvim first (leftmost) - reversed within
+	for (const sefer of [...helekGroups.כתובים].reverse()) {
+		positions.push({ sefer, x: currentX });
+		currentX += BOOK_WIDTH;
+	}
+	currentX += HELEK_GAP;
+
+	// Neviim (middle) - all together, reversed within
+	for (const sefer of [...allNeviim].reverse()) {
+		positions.push({ sefer, x: currentX });
+		currentX += BOOK_WIDTH;
+	}
+	currentX += HELEK_GAP;
+
+	// Torah last (rightmost) - reversed within
+	for (const sefer of [...helekGroups.תורה].reverse()) {
+		positions.push({ sefer, x: currentX });
+		currentX += BOOK_WIDTH;
+	}
+
+	return { positions, totalWidth: currentX + 2 };
+}
 
 type BookBlockProps = {
-	sefer: (typeof bookshelfSefarim)[0];
+	sefer: SeferInfo;
 	x: number;
 	onClick?: () => void;
 };
 
 function BookBlock({ sefer, x, onClick }: BookBlockProps) {
 	const baseColor = seferColors.get(sefer.name) || "hsl(0, 0%, 50%)";
-	const spineColor = darkenColor(baseColor, 8); // Spine slightly darker
-	const sqSize = 16; // Match SCSS $sqSize
+	const spineColor = darkenColor(baseColor, 8);
 
 	const blockStyle = {
-		transform: `translate3d(${sqSize * (x - 1)}px, ${sqSize * (-BOOK_START_Y - (BOOK_DEPTH - 1))}px, ${sqSize * BOOK_START_Z + sqSize * (BOOK_HEIGHT - 1)}px)`,
+		transform: `translate3d(${SQ_SIZE * (x - 1)}px, ${SQ_SIZE * (-BOOK_START_Y - (BOOK_DEPTH - 1))}px, ${SQ_SIZE * BOOK_START_Z + SQ_SIZE * (BOOK_HEIGHT - 1)}px)`,
 		display: "block",
 	};
 
 	const coverStyle = { backgroundColor: baseColor };
 	const spineStyle = { backgroundColor: spineColor };
-	// White pages with gray lines texture
 	const pageEdgeStyle = {
 		backgroundColor: "#fff",
 		backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent 21%, #aaa 21%, #aaa 25%, transparent 25%, transparent 46%, #aaa 46%, #aaa 50%, transparent 50%)`,
-		backgroundSize: `${sqSize}px ${sqSize}px`,
+		backgroundSize: `${SQ_SIZE}px ${SQ_SIZE}px`,
 	};
 
 	const topBottomStyle = {
-		width: `${sqSize * BOOK_WIDTH}px`,
-		height: `${sqSize * BOOK_DEPTH}px`,
+		width: `${SQ_SIZE * BOOK_WIDTH}px`,
+		height: `${SQ_SIZE * BOOK_DEPTH}px`,
 	};
 
 	const frontBackStyle = {
-		width: `${sqSize * BOOK_WIDTH}px`,
-		height: `${sqSize * BOOK_HEIGHT}px`,
+		width: `${SQ_SIZE * BOOK_WIDTH}px`,
+		height: `${SQ_SIZE * BOOK_HEIGHT}px`,
 	};
 
 	const leftRightStyle = {
-		width: `${sqSize * BOOK_DEPTH}px`,
-		height: `${sqSize * BOOK_HEIGHT}px`,
+		width: `${SQ_SIZE * BOOK_DEPTH}px`,
+		height: `${SQ_SIZE * BOOK_HEIGHT}px`,
 	};
 
 	return (
@@ -169,35 +216,28 @@ function BookBlock({ sefer, x, onClick }: BookBlockProps) {
 			onClick={onClick}
 		>
 			<div className={styles.blockInner}>
-				{/* Back edge - page edges visible (opposite to spine) */}
 				<div
 					className={styles.back}
-					style={{
-						...frontBackStyle,
-						...pageEdgeStyle,
-					}}
+					style={{ ...frontBackStyle, ...pageEdgeStyle }}
 				/>
-				{/* Bottom - page edges */}
 				<div
 					className={styles.bottom}
 					style={{
 						...topBottomStyle,
 						...pageEdgeStyle,
-						transform: `rotateX(-90deg) translateY(-${sqSize * (BOOK_DEPTH - 1)}px) translateZ(${sqSize * BOOK_HEIGHT}px)`,
+						transform: `rotateX(-90deg) translateY(-${SQ_SIZE * (BOOK_DEPTH - 1)}px) translateZ(${SQ_SIZE * BOOK_HEIGHT}px)`,
 					}}
 				/>
-				{/* Front - spine with title */}
 				<div
 					className={styles.front}
 					style={{
 						...spineStyle,
 						...frontBackStyle,
-						transform: `translateZ(${sqSize * (BOOK_DEPTH - 1)}px)`,
+						transform: `translateZ(${SQ_SIZE * (BOOK_DEPTH - 1)}px)`,
 					}}
 				>
 					<div className={styles.spineText}>{sefer.displayName}</div>
 				</div>
-				{/* Left - front cover (Hebrew books) with title */}
 				<div
 					className={styles.left}
 					style={{ ...coverStyle, ...leftRightStyle }}
@@ -207,22 +247,20 @@ function BookBlock({ sefer, x, onClick }: BookBlockProps) {
 						<div className={styles.coverSubtitle}>מקראות גדולות</div>
 					</div>
 				</div>
-				{/* Right - back cover */}
 				<div
 					className={styles.right}
 					style={{
 						...coverStyle,
 						...leftRightStyle,
-						transform: `rotateY(-270deg) translate3d(${sqSize}px, 0, ${sqSize * (BOOK_WIDTH - BOOK_DEPTH)}px)`,
+						transform: `rotateY(-270deg) translate3d(${SQ_SIZE}px, 0, ${SQ_SIZE * (BOOK_WIDTH - BOOK_DEPTH)}px)`,
 					}}
 				/>
-				{/* Top - page edges */}
 				<div
 					className={styles.top}
 					style={{
 						...topBottomStyle,
 						...pageEdgeStyle,
-						transform: `rotateX(-90deg) translateY(-${sqSize * (BOOK_DEPTH - 1)}px)`,
+						transform: `rotateX(-90deg) translateY(-${SQ_SIZE * (BOOK_DEPTH - 1)}px)`,
 					}}
 				/>
 			</div>
@@ -230,30 +268,34 @@ function BookBlock({ sefer, x, onClick }: BookBlockProps) {
 	);
 }
 
-function ShelfFloor() {
-	const sqSize = 16;
+type ShelfFloorProps = {
+	width: number;
+	label?: string;
+};
+
+function ShelfFloor({ width, label }: ShelfFloorProps) {
 	const shelfColor = "#441e12";
 
 	const blockStyle = {
-		transform: `translate3d(${sqSize * (2 - 1)}px, ${sqSize * (-1 - (SHELF_DEPTH - 1))}px, ${sqSize * 1 + sqSize * (1 - 1)}px)`,
+		transform: `translate3d(${SQ_SIZE * (2 - 1)}px, ${SQ_SIZE * (-1 - (SHELF_DEPTH - 1))}px, ${SQ_SIZE * 1}px)`,
 		display: "block",
 	};
 
 	const faceStyle = { backgroundColor: shelfColor };
 
 	const topBottomStyle = {
-		width: `${sqSize * SHELF_WIDTH}px`,
-		height: `${sqSize * SHELF_DEPTH}px`,
+		width: `${SQ_SIZE * width}px`,
+		height: `${SQ_SIZE * SHELF_DEPTH}px`,
 	};
 
 	const frontBackStyle = {
-		width: `${sqSize * SHELF_WIDTH}px`,
-		height: `${sqSize * 1}px`,
+		width: `${SQ_SIZE * width}px`,
+		height: `${SQ_SIZE * 1}px`,
 	};
 
 	const leftRightStyle = {
-		width: `${sqSize * SHELF_DEPTH}px`,
-		height: `${sqSize * 1}px`,
+		width: `${SQ_SIZE * SHELF_DEPTH}px`,
+		height: `${SQ_SIZE * 1}px`,
 	};
 
 	return (
@@ -268,7 +310,7 @@ function ShelfFloor() {
 					style={{
 						...faceStyle,
 						...topBottomStyle,
-						transform: `rotateX(-90deg) translateY(-${sqSize * (SHELF_DEPTH - 1)}px) translateZ(${sqSize * 1}px)`,
+						transform: `rotateX(-90deg) translateY(-${SQ_SIZE * (SHELF_DEPTH - 1)}px) translateZ(${SQ_SIZE * 1}px)`,
 					}}
 				/>
 				<div
@@ -276,9 +318,11 @@ function ShelfFloor() {
 					style={{
 						...faceStyle,
 						...frontBackStyle,
-						transform: `translateZ(${sqSize * (SHELF_DEPTH - 1)}px)`,
+						transform: `translateZ(${SQ_SIZE * (SHELF_DEPTH - 1)}px)`,
 					}}
-				/>
+				>
+					{label && <div className={styles.shelfLabel}>{label}</div>}
+				</div>
 				<div
 					className={styles.left}
 					style={{ ...faceStyle, ...leftRightStyle }}
@@ -288,7 +332,7 @@ function ShelfFloor() {
 					style={{
 						...faceStyle,
 						...leftRightStyle,
-						transform: `rotateY(-270deg) translate3d(${sqSize}px, 0, ${sqSize * (SHELF_WIDTH - SHELF_DEPTH)}px)`,
+						transform: `rotateY(-270deg) translate3d(${SQ_SIZE}px, 0, ${SQ_SIZE * (width - SHELF_DEPTH)}px)`,
 					}}
 				/>
 				<div
@@ -296,7 +340,7 @@ function ShelfFloor() {
 					style={{
 						...faceStyle,
 						...topBottomStyle,
-						transform: `rotateX(-90deg) translateY(-${sqSize * (SHELF_DEPTH - 1)}px)`,
+						transform: `rotateX(-90deg) translateY(-${SQ_SIZE * (SHELF_DEPTH - 1)}px)`,
 					}}
 				/>
 			</div>
@@ -304,20 +348,28 @@ function ShelfFloor() {
 	);
 }
 
-export function Bookshelf({ onSeferClick }: BookshelfProps) {
-	const sqSize = 16;
+type SingleShelfProps = {
+	positions: Array<{ sefer: SeferInfo; x: number }>;
+	shelfWidth: number;
+	onSeferClick?: (seferName: string, perekFrom: number) => void;
+	label?: string;
+};
 
+function SingleShelf({
+	positions,
+	shelfWidth,
+	onSeferClick,
+	label,
+}: SingleShelfProps) {
 	return (
-		<div className={styles.root}>
+		<div className={styles.shelfWrapper}>
 			<div className={styles.container}>
 				<div
 					className={styles.surface}
-					style={{
-						width: `${sqSize * totalWidth}px`,
-					}}
+					style={{ width: `${SQ_SIZE * shelfWidth}px` }}
 				>
-					<ShelfFloor />
-					{bookPositions.map(({ sefer, x }) => (
+					<ShelfFloor width={shelfWidth} label={label} />
+					{positions.map(({ sefer, x }) => (
 						<BookBlock
 							key={sefer.name}
 							sefer={sefer}
@@ -327,6 +379,80 @@ export function Bookshelf({ onSeferClick }: BookshelfProps) {
 					))}
 				</div>
 			</div>
+		</div>
+	);
+}
+
+// Hook to detect window width
+function useWindowWidth(): number {
+	const [width, setWidth] = useState(
+		typeof window !== "undefined" ? window.innerWidth : 1200,
+	);
+
+	useEffect(() => {
+		const handleResize = () => setWidth(window.innerWidth);
+		window.addEventListener("resize", handleResize);
+		return () => window.removeEventListener("resize", handleResize);
+	}, []);
+
+	return width;
+}
+
+export function Bookshelf({ onSeferClick }: BookshelfProps) {
+	const windowWidth = useWindowWidth();
+	const useMultiShelf = windowWidth < MULTI_SHELF_BREAKPOINT;
+
+	if (useMultiShelf) {
+		// Four separate shelves (RTL order: Torah on top)
+		const torahData = calculatePositionsForSefarim(helekGroups.תורה);
+		const neviimRishonimData = calculatePositionsForSefarim(
+			helekGroups.neviimRishonim,
+		);
+		const treiAsarData = calculatePositionsForSefarim(helekGroups.treiAsar);
+		const ketuvimData = calculatePositionsForSefarim(helekGroups.כתובים);
+
+		return (
+			<div className={styles.root}>
+				<div className={styles.multiShelfContainer}>
+					<SingleShelf
+						positions={torahData.positions}
+						shelfWidth={torahData.totalWidth}
+						onSeferClick={onSeferClick}
+						label="תורה"
+					/>
+					<SingleShelf
+						positions={neviimRishonimData.positions}
+						shelfWidth={neviimRishonimData.totalWidth}
+						onSeferClick={onSeferClick}
+						label="נביאים: ראשונים + גדולים"
+					/>
+					<SingleShelf
+						positions={treiAsarData.positions}
+						shelfWidth={treiAsarData.totalWidth}
+						onSeferClick={onSeferClick}
+						label="נביאים (המשך): תרי עשר"
+					/>
+					<SingleShelf
+						positions={ketuvimData.positions}
+						shelfWidth={ketuvimData.totalWidth}
+						onSeferClick={onSeferClick}
+						label="כתובים"
+					/>
+				</div>
+			</div>
+		);
+	}
+
+	// Single shelf with all books
+	const allBooksData = calculateAllBooksPositions();
+
+	return (
+		<div className={styles.root}>
+			<SingleShelf
+				positions={allBooksData.positions}
+				shelfWidth={allBooksData.totalWidth}
+				onSeferClick={onSeferClick}
+			/>
 		</div>
 	);
 }
