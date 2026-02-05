@@ -834,19 +834,27 @@ public partial class PerekPage : ContentPage
     /// Handles perushim chevron button click - toggles the perushim sliding panel.
     /// </summary>
     private bool _isPerushimOpen;
+    private bool _isPerushimExpanded;
     private double _perushimPanelHeight;
+    private double _perushimPanelExpandedHeight;
+    private double _perushimPanStartY;
+    private double _perushimPanStartHeight;
+    private double _perushimLastPanY;
+    private DateTime _perushimLastPanTime;
 
     private async void OnPerushimChevronClicked(object? sender, EventArgs e)
     {
         _isPerushimOpen = !_isPerushimOpen;
+        _isPerushimExpanded = false;
 
         // Toggle chevron icon: up (\uf2b7) vs down (\uf2a4)
         PerushimChevronButton.Text = _isPerushimOpen ? "\uf2a4" : "\uf2b7";
 
-        // Calculate panel height: 33% of total page height + bottom bar (90)
-        // This ensures panel extends to the bottom of the viewport
+        // Calculate panel heights
         var totalHeight = MainGrid.Height;
-        _perushimPanelHeight = (totalHeight * 0.33) + 90; // 90 = bottom bar height
+        _perushimPanelHeight = (totalHeight * 0.33) + 90; // Default: 33% + bottom bar
+        // TODO: Calculate expanded height based on inner perushim rows occupation
+        _perushimPanelExpandedHeight = totalHeight - 50; // Full screen minus top margin
 
         // Animate perushim panel slide up/down
         if (_isPerushimOpen)
@@ -864,6 +872,113 @@ public partial class PerekPage : ContentPage
             // Slide down then hide
             await PerushimPanel.TranslateTo(0, _perushimPanelHeight, 250, Easing.CubicIn);
             PerushimPanel.IsVisible = false;
+        }
+    }
+
+    /// <summary>
+    /// Handles pan gesture on the perushim panel header for drag-to-dismiss or expand.
+    /// Supports velocity-based gestures and bi-directional dragging.
+    /// </summary>
+    private async void OnPerushimPanelPan(object? sender, PanUpdatedEventArgs e)
+    {
+        if (!_isPerushimOpen) return;
+
+        const double dismissThreshold = 0.3; // Position threshold: 30% of panel height
+        const double velocityThreshold = 800; // Velocity threshold: pixels per second
+
+        switch (e.StatusType)
+        {
+            case GestureStatus.Started:
+                _perushimPanStartY = PerushimPanel.TranslationY;
+                _perushimPanStartHeight = PerushimPanel.HeightRequest;
+                _perushimLastPanY = 0;
+                _perushimLastPanTime = DateTime.Now;
+                // Cancel any ongoing animations
+                PerushimPanel.CancelAnimations();
+                break;
+
+            case GestureStatus.Running:
+                // Track velocity
+                _perushimLastPanY = e.TotalY;
+                _perushimLastPanTime = DateTime.Now;
+
+                if (e.TotalY > 0)
+                {
+                    // Dragging down: translate panel down (toward dismiss)
+                    PerushimPanel.TranslationY = e.TotalY;
+                }
+                else
+                {
+                    // Dragging up: expand panel height (toward full screen)
+                    var newHeight = Math.Min(_perushimPanelExpandedHeight,
+                        _perushimPanStartHeight - e.TotalY);
+                    PerushimPanel.HeightRequest = newHeight;
+                }
+                break;
+
+            case GestureStatus.Completed:
+            case GestureStatus.Canceled:
+                // Calculate velocity (approximate using last movement)
+                var elapsedMs = (DateTime.Now - _perushimLastPanTime).TotalMilliseconds;
+                var velocity = elapsedMs > 0 ? Math.Abs(_perushimLastPanY) / (elapsedMs / 1000.0) : 0;
+
+                var dragY = PerushimPanel.TranslationY;
+                var currentHeight = PerushimPanel.HeightRequest;
+
+                // Check if dragging down (dismiss direction)
+                if (dragY > 0)
+                {
+                    var positionThreshold = _perushimPanelHeight * dismissThreshold;
+                    var shouldDismiss = dragY > positionThreshold || velocity > velocityThreshold;
+
+                    if (shouldDismiss)
+                    {
+                        // Dismiss: complete the slide down
+                        await PerushimPanel.TranslateTo(0, _perushimPanelHeight, 200, Easing.CubicIn);
+                        PerushimPanel.IsVisible = false;
+                        _isPerushimOpen = false;
+                        _isPerushimExpanded = false;
+                        PerushimChevronButton.Text = "\uf2b7"; // chevron_up
+                    }
+                    else
+                    {
+                        // Snap back to open position
+                        await PerushimPanel.TranslateTo(0, 0, 200, Easing.CubicOut);
+                    }
+                }
+                else
+                {
+                    // Dragging up (expand direction)
+                    var expandThreshold = (_perushimPanelExpandedHeight - _perushimPanelHeight) * 0.3;
+                    var heightIncrease = currentHeight - _perushimPanelHeight;
+                    var shouldExpand = heightIncrease > expandThreshold || velocity > velocityThreshold;
+
+                    if (shouldExpand && !_isPerushimExpanded)
+                    {
+                        // Expand to full screen
+                        _isPerushimExpanded = true;
+                        var animation = new Animation(v => PerushimPanel.HeightRequest = v,
+                            currentHeight, _perushimPanelExpandedHeight);
+                        animation.Commit(PerushimPanel, "ExpandPerushim", length: 200, easing: Easing.CubicOut);
+                    }
+                    else if (!shouldExpand && _isPerushimExpanded)
+                    {
+                        // Collapse back to default height
+                        _isPerushimExpanded = false;
+                        var animation = new Animation(v => PerushimPanel.HeightRequest = v,
+                            currentHeight, _perushimPanelHeight);
+                        animation.Commit(PerushimPanel, "CollapsePerushim", length: 200, easing: Easing.CubicOut);
+                    }
+                    else if (!shouldExpand)
+                    {
+                        // Snap back to current state
+                        var targetHeight = _isPerushimExpanded ? _perushimPanelExpandedHeight : _perushimPanelHeight;
+                        var animation = new Animation(v => PerushimPanel.HeightRequest = v,
+                            currentHeight, targetHeight);
+                        animation.Commit(PerushimPanel, "SnapPerushim", length: 200, easing: Easing.CubicOut);
+                    }
+                }
+                break;
         }
     }
 

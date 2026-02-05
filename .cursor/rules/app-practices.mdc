@@ -6,6 +6,10 @@ alwaysApply: false
 
 # App (app/) Practices
 
+## Legacy Reference
+
+When asked to **inspire from legacy app** or reference the old app implementation, look at the `legacy-app/` directory in the repo root. This is an untracked directory containing the previous app codebase for reference.
+
 ## Agent behavior
 
 When the user asks to run the app (e.g. "run the emulator", "run Android"), **run the command yourself** — start the process (e.g. in background) and report when it's started or if it failed. Do not reply with instructions for the user to run in their terminal unless they explicitly ask for the command.

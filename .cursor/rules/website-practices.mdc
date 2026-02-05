@@ -6,6 +6,10 @@ alwaysApply: false
 
 # Website (web/bible-on-site) Practices
 
+## Legacy Reference
+
+When asked to **inspire from legacy website** or reference the old website implementation, look at the `legacy-website/` directory in the repo root. This is an untracked directory containing the previous website codebase for reference.
+
 ## Development
 
 - Use Playwright at http://localhost:3001 (`npm run dev` if needed).

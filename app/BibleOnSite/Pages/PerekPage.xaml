@@ -297,8 +297,11 @@
                 <Shadow Brush="Black" Offset="0,-3" Radius="8" Opacity="0.2"/>
             </Border.Shadow>
             <Grid RowDefinitions="Auto,*" Padding="16,12,16,0">
-                <!-- Header with drag handle -->
-                <VerticalStackLayout Grid.Row="0" Spacing="4">
+                <!-- Header with drag handle - draggable to dismiss -->
+                <VerticalStackLayout x:Name="PerushimDragHandle" Grid.Row="0" Spacing="4">
+                    <VerticalStackLayout.GestureRecognizers>
+                        <PanGestureRecognizer PanUpdated="OnPerushimPanelPan"/>
+                    </VerticalStackLayout.GestureRecognizers>
                     <!-- Drag handle indicator -->
                     <BoxView WidthRequest="40"
                              HeightRequest="4"
