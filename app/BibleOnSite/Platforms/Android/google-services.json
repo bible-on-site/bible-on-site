@@ -1,0 +1,48 @@
+{
+	"project_info": {
+		"project_number": "264471534749",
+		"firebase_url": "https://tanah-al-haperek.firebaseio.com",
+		"project_id": "tanah-al-haperek",
+		"storage_bucket": "tanah-al-haperek.firebasestorage.app"
+	},
+	"client": [
+		{
+			"client_info": {
+				"mobilesdk_app_id": "1:264471534749:android:da523d4d03a6201a",
+				"android_client_info": {
+					"package_name": "com.tanah.daily929"
+				}
+			},
+			"oauth_client": [
+				{
+					"client_id": "264471534749-okn22rb08500t18n47s3jigrf4a6loia.apps.googleusercontent.com",
+					"client_type": 1,
+					"android_info": {
+						"package_name": "com.tanah.daily929",
+						"certificate_hash": "3c99adb03f99610f2a26b13da3c1fbcf8b899313"
+					}
+				},
+				{
+					"client_id": "264471534749-38ak6ndl80dd1qkn2btdb176ilep5kmq.apps.googleusercontent.com",
+					"client_type": 3
+				}
+			],
+			"api_key": [
+				{
+					"current_key": "AIzaSyBCfCJmRxyazWLApBP_t2pE5yExBKapvNY"
+				}
+			],
+			"services": {
+				"appinvite_service": {
+					"other_platform_oauth_client": [
+						{
+							"client_id": "264471534749-38ak6ndl80dd1qkn2btdb176ilep5kmq.apps.googleusercontent.com",
+							"client_type": 3
+						}
+					]
+				}
+			}
+		}
+	],
+	"configuration_version": "1"
+}

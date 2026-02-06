@@ -68,6 +68,21 @@
   box-shadow: 0 0 10px 0 rgb(0 0 0 / 0.1);
 }
 
+/* Hard covers - no page curl effect */
+.he-book .page--hard {
+  /* Disable the inner shadow/highlight effects for hard covers */
+  --inner-shadow-shadow: 0;
+  --inner-shadow-highlight: 0;
+}
+
+/* No shadow on covers */
+.he-book .page--no-shadow {
+  box-shadow: none;
+}
+.he-book .page--no-shadow.current-page {
+  box-shadow: none;
+}
+
 /* Toolbar (html-flip-book-react/toolbar) - package does not export CSS path */
 .flipbook-toolbar {
   display: flex;
@@ -129,40 +144,29 @@
   font-size: 16px;
 }
 
-.flipbook-toolbar-indicator {
+/* Page indicator - bible-on-site customizations */
+/* Input: dark bg when not editing */
+.flipbook-toolbar input.flipbook-toolbar-indicator {
+  background: rgb(30 30 30 / 0.8);
+  border-color: rgb(255 255 255 / 0.2);
   color: #fff;
-  font-size: 14px;
-  font-weight: 500;
-  min-width: 60px;
+  min-width: 80px;
+  min-height: 32px;
   text-align: center;
-  padding: 0 8px;
 }
 
-/* Semantic page input: narrow, tall, dark text on light bg (override toolbar inherit) */
-.flipbook-toolbar .flipbook-toolbar-indicator-input {
-  background: #e2e8f0;
-  border: 1px solid rgb(0 0 0 / 0.2);
-  border-radius: 4px;
+/* Input: light bg when editing for Hebrew text visibility */
+.flipbook-toolbar input.flipbook-toolbar-indicator--editing {
+  background: #fff;
+  border-color: rgb(0 0 0 / 0.2);
   color: #0f172a;
-  font: inherit;
-  width: 1.5ch;
-  min-width: 18px;
-  max-width: 1.5ch;
-  min-height: 72px;
-  padding: 8px 2px;
-  text-align: center;
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 
-.flipbook-toolbar-indicator-input:hover {
-  border-color: rgb(255 255 255 / 0.3);
+.flipbook-toolbar input.flipbook-toolbar-indicator:hover {
+  border-color: rgb(255 255 255 / 0.4);
 }
 
-.flipbook-toolbar-indicator-input:focus {
-  outline: 2px solid #fff;
-  outline-offset: 2px;
+.flipbook-toolbar input.flipbook-toolbar-indicator:focus {
+  outline-color: #fff;
   border-color: transparent;
 }

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>264471534749-okn22rb08500t18n47s3jigrf4a6loia.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyAfe4i3TA4pAHQimgY4yHD8COC83JuZoJs</string>
+	<key>GCM_SENDER_ID</key>
+	<string>264471534749</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.tanah.daily929</string>
+	<key>PROJECT_ID</key>
+	<string>tanah-al-haperek</string>
+	<key>STORAGE_BUCKET</key>
+	<string>tanah-al-haperek.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<true></true>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:264471534749:ios:76a29ea2e37f2b8dbc8874</string>
+	<key>DATABASE_URL</key>
+	<string>https://tanah-al-haperek.firebaseio.com</string>
+</dict>
+</plist>

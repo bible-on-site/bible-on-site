@@ -29,9 +29,9 @@ test.describe("PerakimService", () => {
 						date: "2024-12-07",
 						hebdate: "57851207",
 						// 57851207 = Year 5785, Month 12 (Elul), Day 07
-						compiledHebdate: "ז׳ אלול תשפ״ה",
+						compiledHebdate: "ז' אלול תשפ״ה",
 						header: "בריאת העולם",
-						compiledSource: "בראשית א׳",
+						compiledSource: "בראשית א'",
 					},
 				},
 			});
@@ -102,7 +102,7 @@ test.describe("PerakimService", () => {
 			const responseBody = await response.json();
 			expect(responseBody.data.perekByPerekId).toMatchObject({
 				perekId: 1,
-				articlesCount: 3, // Test data: perek 1 has 3 articles
+				articlesCount: 4, // Test data: perek 1 has 4 articles
 			});
 		});
 

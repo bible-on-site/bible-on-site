@@ -47,7 +47,7 @@ describe("GoogleAnalytics", () => {
 		it("includes the GA measurement ID in the script", () => {
 			const { getByTestId } = render(<GoogleAnalytics />);
 			const gaScript = getByTestId("google-analytics");
-			expect(gaScript.textContent).toContain("G-220MEPY7WL");
+			expect(gaScript.textContent).toContain("G-2CHER7MM85");
 		});
 	});
 

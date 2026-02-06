@@ -14,11 +14,6 @@ export function AppSection() {
 			</header>
 			<section className={styles.appLinks}>
 				{appPlatforms.map((platform) => {
-					const ribbonClass =
-						platform.ribbon === "building"
-							? styles.ribbonBuilding
-							: styles.ribbonComingSoon;
-
 					if (platform.href) {
 						return (
 							<a
@@ -26,7 +21,7 @@ export function AppSection() {
 								href={platform.href}
 								target="_blank"
 								rel="noopener noreferrer"
-								className={`${styles.appLink} ${ribbonClass}`}
+								className={styles.appLink}
 								title={platform.description}
 							>
 								<Image
@@ -43,7 +38,7 @@ export function AppSection() {
 					return (
 						<span
 							key={platform.id}
-							className={`${styles.appLink} ${styles.disabled} ${ribbonClass}`}
+							className={`${styles.appLink} ${styles.disabled}`}
 							title={platform.description}
 						>
 							<Image

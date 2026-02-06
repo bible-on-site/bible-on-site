@@ -1,7 +1,7 @@
 //! S3 Bucket Populator
 //!
 //! Populates S3 buckets with sample data for development and testing.
-//! Supports both real AWS S3 and LocalStack for local development.
+//! Supports both real AWS S3 and MinIO for local development.
 
 use anyhow::{Context, Result};
 use aws_config::BehaviorVersion;
@@ -16,14 +16,14 @@ use std::path::Path;
 #[command(about = "Populate S3 buckets with test data")]
 struct Cli {
     /// S3 bucket name
-    #[arg(long, env = "S3_BUCKET", default_value = "bible-on-site-rabbis")]
+    #[arg(long, env = "S3_BUCKET", default_value = "bible-on-site-assets-dev")]
     bucket: String,
 
     /// AWS region
     #[arg(long, env = "S3_REGION", default_value = "us-east-1")]
     region: String,
 
-    /// S3 endpoint URL (for LocalStack/MinIO)
+    /// S3 endpoint URL (for MinIO)
     #[arg(long, env = "S3_ENDPOINT")]
     endpoint: Option<String>,
 
@@ -148,7 +148,7 @@ async fn main() -> Result<()> {
     println!("Bucket: {}", cli.bucket);
     println!("Region: {}", cli.region);
     if let Some(ref endpoint) = cli.endpoint {
-        println!("Endpoint: {} (LocalStack/MinIO mode)", endpoint);
+        println!("Endpoint: {} (MinIO mode)", endpoint);
     } else {
         println!("Endpoint: AWS S3");
     }
@@ -156,7 +156,7 @@ async fn main() -> Result<()> {
     // Build S3 client
     let client = build_s3_client(&cli).await?;
 
-    // Ensure bucket exists (for LocalStack)
+    // Ensure bucket exists (for MinIO)
     if cli.endpoint.is_some() {
         ensure_bucket_exists(&client, &cli.bucket).await?;
     }

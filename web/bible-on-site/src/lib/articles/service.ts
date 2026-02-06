@@ -55,6 +55,34 @@ export async function getArticlesByPerekId(
 	}
 }
 
+export interface ArticlePerekPair {
+	articleId: number;
+	perekId: number;
+}
+
+/**
+ * Fetch all article ID and perek ID pairs.
+ * Used for sitemap generation to enumerate all article URLs.
+ * Returns empty array if database is unavailable.
+ */
+export async function getAllArticlePerekIdPairs(): Promise<ArticlePerekPair[]> {
+	try {
+		const rows = await query<{ id: number; perek_id: number }>(
+			`SELECT id, perek_id FROM tanah_article ORDER BY perek_id ASC, id ASC`,
+		);
+		return rows.map((row) => ({
+			articleId: row.id,
+			perekId: row.perek_id,
+		}));
+	} catch (error) {
+		console.warn(
+			"Failed to fetch article-perek pairs:",
+			error instanceof Error ? error.message : error,
+		);
+		return [];
+	}
+}
+
 /**
  * Fetch a single article by ID with author information.
  * Returns null if not found or database unavailable.

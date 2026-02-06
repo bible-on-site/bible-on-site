@@ -34,7 +34,7 @@ describe("authors service", () => {
 	});
 
 	describe("getAuthorImageUrl", () => {
-		it("builds LocalStack URL when S3_ENDPOINT is set", () => {
+		it("builds MinIO URL when S3_ENDPOINT is set", () => {
 			process.env.S3_ENDPOINT = "http://localhost:4566";
 			process.env.S3_BUCKET = "my-bucket";
 
@@ -207,7 +207,7 @@ describe("authors service", () => {
 			const result = await getAllAuthorIds();
 
 			expect(mockQuery).toHaveBeenCalledWith(
-				expect.stringContaining("SELECT id FROM tanah_author"),
+				expect.stringContaining("SELECT a.id FROM tanah_author"),
 			);
 
 			expect(result).toEqual([1, 2, 3]);

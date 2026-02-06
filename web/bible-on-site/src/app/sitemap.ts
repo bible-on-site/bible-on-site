@@ -1,5 +1,7 @@
 import type { MetadataRoute } from "next";
 import { headers } from "next/headers";
+import type { ArticlePerekPair } from "../lib/articles";
+import { getAllArticlePerekIdPairs } from "../lib/articles";
 import { getAllAuthorIds } from "../lib/authors";
 
 /**
@@ -81,6 +83,21 @@ export function generatePerekEntries(
 }
 
 /**
+ * Generates article URL entries for the sitemap
+ */
+export function generateArticleEntries(
+	config: SitemapConfig,
+	articles: ArticlePerekPair[],
+): MetadataRoute.Sitemap {
+	return articles.map((article) => ({
+		url: `${config.baseUrl}/929/${article.perekId}/${article.articleId}`,
+		lastModified: config.lastModified,
+		changeFrequency: "monthly" as const,
+		priority: 0.7,
+	}));
+}
+
+/**
  * Generates the authors index page entry
  */
 export function generateAuthorsIndexEntry(
@@ -115,12 +132,14 @@ export function generateAuthorEntries(
 export function generateSitemapEntries(
 	config: SitemapConfig,
 	authorIds: number[] = [],
+	articles: ArticlePerekPair[] = [],
 ): MetadataRoute.Sitemap {
 	return [
 		generateRootEntry(config),
 		...generateSectionEntries(config),
 		generate929IndexEntry(config),
 		...generatePerekEntries(config),
+		...generateArticleEntries(config, articles),
 		generateAuthorsIndexEntry(config),
 		...generateAuthorEntries(config, authorIds),
 	];
@@ -132,8 +151,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 	const host = headersList.get("host") ?? "xn--febl3a.co.il";
 	const baseUrl = `https://${host}`;
 
-	// Fetch author IDs for dynamic sitemap entries
-	const authorIds = await getAllAuthorIds();
+	// Fetch dynamic data for sitemap entries in parallel
+	const [authorIds, articles] = await Promise.all([
+		getAllAuthorIds(),
+		getAllArticlePerekIdPairs(),
+	]);
 
 	return generateSitemapEntries(
 		{
@@ -141,5 +163,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 			lastModified: new Date(),
 		},
 		authorIds,
+		articles,
 	);
 }

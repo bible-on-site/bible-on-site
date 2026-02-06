@@ -4,6 +4,9 @@ using BibleOnSite.Behaviors;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
+#if IOS
+using Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific;
+#endif
 
 /// <summary>
 /// Page for displaying a Perek (chapter) with its pasukim (verses).
@@ -35,12 +38,19 @@ public partial class PerekPage : ContentPage
     /// </summary>
     public static bool IsScrolling => (DateTime.Now - _lastScrollTime).TotalMilliseconds < ScrollCooldownMs;
 
+    /// <summary>
+    /// Proxy for article selection highlight binding (avoids XC0045 when binding from Article template).
+    /// </summary>
+    public int? SelectedArticleId => _viewModel.SelectedArticleId;
+
     public PerekPage()
     {
         InitializeComponent();
         _viewModel = new PerekViewModel();
         BindingContext = _viewModel;
+        ForwardSelectedArticleIdChanged();
         SetupGlobalTouchHandler();
+        SetupExitButtonDragHandler();
     }
 
     public PerekPage(PerekViewModel viewModel)
@@ -48,7 +58,50 @@ public partial class PerekPage : ContentPage
         InitializeComponent();
         _viewModel = viewModel;
         BindingContext = _viewModel;
+        ForwardSelectedArticleIdChanged();
         SetupGlobalTouchHandler();
+        SetupExitButtonDragHandler();
+    }
+
+    private void ForwardSelectedArticleIdChanged()
+    {
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PerekViewModel.SelectedArticleId))
+                OnPropertyChanged(nameof(SelectedArticleId));
+            // When perek changes via prev/next, refresh articles, badge, and nav button visuals
+            if (e.PropertyName == nameof(PerekViewModel.Perek) || e.PropertyName == "Perek")
+            {
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    _ = UpdateArticlesCountAsync();
+                    if (_isShowingArticles)
+                        _ = LoadArticlesAsync();
+                    // Force visual refresh of prev/next buttons (workaround for MAUI not updating disabled visual)
+                    RefreshNavButtonVisuals();
+                });
+            }
+        };
+    }
+
+    /// <summary>
+    /// Forces the prev/next buttons to update their visual state.
+    /// Workaround for MAUI bug where button disabled visual doesn't refresh in AbsoluteLayout.
+    /// We control opacity directly instead of relying on VSM.
+    /// </summary>
+    private void RefreshNavButtonVisuals()
+    {
+        // Only update if menu is open (buttons visible)
+        if (!_isMenuOpen) return;
+
+        var canPrev = _viewModel.CanGoToPreviousPerek;
+        var canNext = _viewModel.CanGoToNextPerek;
+
+        PrevPerekButton.IsEnabled = canPrev;
+        PrevPerekButton.Opacity = canPrev ? 1.0 : 0.4;
+
+        NextPerekButton.IsEnabled = canNext;
+        NextPerekButton.Opacity = canNext ? 1.0 : 0.4;
     }
 
     /// <summary>
@@ -161,7 +214,9 @@ public partial class PerekPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-
+#if IOS
+        ApplyBottomBarSafeArea();
+#endif
         // If no perek is loaded, load perek 1
         if (_viewModel.Perek == null && !_isLoading)
         {
@@ -212,8 +267,33 @@ public partial class PerekPage : ContentPage
     protected override void OnNavigatedTo(NavigatedToEventArgs args)
     {
         base.OnNavigatedTo(args);
+        SetAnalyticsScreenForPerek();
+    }
 
-        // Handle navigation parameters if needed
+#if IOS
+    /// <summary>
+    /// Extends the bottom bar to the physical bottom on iOS (safe area) so there is no gap.
+    /// </summary>
+    private void ApplyBottomBarSafeArea()
+    {
+        var insets = Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific.Page.GetSafeAreaInsets(this);
+        var bottom = insets.Bottom;
+        if (bottom <= 0)
+            return;
+        BottomBar.Padding = new Thickness(0, 0, 0, bottom);
+        BottomBar.HeightRequest = 90 + bottom;
+        PasukimFooterSpacer.HeightRequest = 90 + bottom;
+        ArticlesFooterSpacer.HeightRequest = 90 + bottom;
+    }
+#endif
+
+    /// <summary>
+    /// Logs current perek screen to analytics (legacy-style: AlHaperek/{perekId}).
+    /// </summary>
+    private void SetAnalyticsScreenForPerek()
+    {
+        var analytics = Microsoft.Maui.Controls.Application.Current?.Handler?.MauiContext?.Services.GetService<IAnalyticsService>();
+        analytics?.SetScreen($"AlHaperek/{_viewModel.PerekId}", "PerekPage");
     }
 
     /// <summary>
@@ -395,14 +475,14 @@ public partial class PerekPage : ContentPage
     private async void OnSelectionCopyClicked(object? sender, EventArgs e)
     {
         var text = GetSelectedPesukimText();
-        if (!string.IsNullOrEmpty(text))
-        {
-            await Clipboard.SetTextAsync(text);
-            SelectionCopyButton.Text = "\uf32a";
-            TriggerHapticFeedback();
-            await DisplayAlert("", "בחירה הועתקה ללוח", "אישור");
-            SelectionCopyButton.Text = "\uf32b";
-        }
+        if (string.IsNullOrEmpty(text)) return;
+
+        await Clipboard.SetTextAsync(text);
+        TriggerHapticFeedback();
+        // Inline feedback: show clipboard-checkmark icon for 1.5s then restore copy icon
+        SelectionCopyButton.Text = "\ue34c"; // clipboard_checkmark_24_regular
+        await Task.Delay(1500);
+        SelectionCopyButton.Text = "\uf32b"; // copy_24_regular
     }
 
     private string GetSelectedPesukimText()
@@ -464,17 +544,22 @@ public partial class PerekPage : ContentPage
     {
         var buttons = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
 
-        // Enable clicks and fade in (buttons are already at final positions via AbsoluteLayout)
+        // Set prev/next enabled state before animating
+        PrevPerekButton.IsEnabled = _viewModel.CanGoToPreviousPerek;
+        NextPerekButton.IsEnabled = _viewModel.CanGoToNextPerek;
+
+        // Enable clicks and set initial opacity (buttons at final positions via AbsoluteLayout)
         foreach (var button in buttons)
         {
             button.InputTransparent = false;
+            button.Opacity = 0;
         }
 
         // Change FAB icon to X
         CircularMenuButton.Text = "✕";
         CircularMenuButton.BackgroundColor = Colors.Red;
 
-        // Animate FAB rotation and fade in all buttons
+        // Animate FAB rotation and fade in all buttons (disabled = 0.4, enabled = 1)
         var animations = new List<Task>
         {
             CircularMenuButton.RotateTo(180, 250, Easing.SpringOut)
@@ -482,7 +567,8 @@ public partial class PerekPage : ContentPage
 
         foreach (var button in buttons)
         {
-            animations.Add(button.FadeTo(1, 200));
+            var targetOpacity = button.IsEnabled ? 1.0 : 0.4;
+            animations.Add(button.FadeTo(targetOpacity, 200));
         }
 
         await Task.WhenAll(animations);
@@ -558,6 +644,7 @@ public partial class PerekPage : ContentPage
         if (perekId >= 1 && perekId <= 929 && perekId != _viewModel.PerekId)
         {
             await _viewModel.LoadByPerekIdAsync(perekId);
+            SetAnalyticsScreenForPerek();
             // Scroll to top after loading new perek
             PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
             // Update articles badge
@@ -638,7 +725,7 @@ public partial class PerekPage : ContentPage
 
             // Update button states - highlight articles button
             Console.WriteLine("[Articles] Updating button color...");
-            ArticlesButton.TextColor = Application.Current?.RequestedTheme == AppTheme.Dark
+            ArticlesButton.TextColor = Microsoft.Maui.Controls.Application.Current?.RequestedTheme == AppTheme.Dark
                 ? Color.FromArgb("#BB86FC")
                 : Color.FromArgb("#512BD4");
             Console.WriteLine("[Articles] ShowArticlesViewAsync complete");
@@ -657,13 +744,14 @@ public partial class PerekPage : ContentPage
         try
         {
             _isShowingArticles = false;
+            _viewModel.SelectedArticleId = null;
 
             // Simple visibility swap instead of animation
             ArticlesCollection.IsVisible = false;
             PasukimCollection.IsVisible = true;
 
             // Reset button color
-            ArticlesButton.TextColor = Application.Current?.RequestedTheme == AppTheme.Dark
+            ArticlesButton.TextColor = Microsoft.Maui.Controls.Application.Current?.RequestedTheme == AppTheme.Dark
                 ? Color.FromArgb("#9CA3AF")
                 : Color.FromArgb("#6B7280");
 
@@ -711,7 +799,8 @@ public partial class PerekPage : ContentPage
     {
         if (e.CurrentSelection.FirstOrDefault() is Article article)
         {
-            // Clear selection
+            _viewModel.SelectedArticleId = article.Id;
+            // Clear selection (highlight remains via SelectedArticleId until navigation)
             ArticlesCollection.SelectedItem = null;
 
             // Navigate to article detail page
@@ -747,19 +836,27 @@ public partial class PerekPage : ContentPage
     /// Handles perushim chevron button click - toggles the perushim sliding panel.
     /// </summary>
     private bool _isPerushimOpen;
+    private bool _isPerushimExpanded;
     private double _perushimPanelHeight;
+    private double _perushimPanelExpandedHeight;
+    private double _perushimPanStartY;
+    private double _perushimPanStartHeight;
+    private double _perushimLastPanY;
+    private DateTime _perushimLastPanTime;
 
     private async void OnPerushimChevronClicked(object? sender, EventArgs e)
     {
         _isPerushimOpen = !_isPerushimOpen;
+        _isPerushimExpanded = false;
 
         // Toggle chevron icon: up (\uf2b7) vs down (\uf2a4)
         PerushimChevronButton.Text = _isPerushimOpen ? "\uf2a4" : "\uf2b7";
 
-        // Calculate panel height: 33% of total page height + bottom bar (90)
-        // This ensures panel extends to the bottom of the viewport
+        // Calculate panel heights
         var totalHeight = MainGrid.Height;
-        _perushimPanelHeight = (totalHeight * 0.33) + 90; // 90 = bottom bar height
+        _perushimPanelHeight = (totalHeight * 0.33) + 90; // Default: 33% + bottom bar
+        // TODO: Calculate expanded height based on inner perushim rows occupation
+        _perushimPanelExpandedHeight = totalHeight - 50; // Full screen minus top margin
 
         // Animate perushim panel slide up/down
         if (_isPerushimOpen)
@@ -781,6 +878,149 @@ public partial class PerekPage : ContentPage
     }
 
     /// <summary>
+    /// Handles pan gesture on the perushim panel header for drag-to-dismiss or expand.
+    /// Supports velocity-based gestures and bi-directional dragging.
+    /// When expanded, dragging down first collapses to middle size before dismissing.
+    /// </summary>
+    private async void OnPerushimPanelPan(object? sender, PanUpdatedEventArgs e)
+    {
+        if (!_isPerushimOpen) return;
+
+        const double dismissThreshold = 0.3; // Position threshold: 30% of panel height
+        const double velocityThreshold = 800; // Velocity threshold: pixels per second
+
+        switch (e.StatusType)
+        {
+            case GestureStatus.Started:
+                _perushimPanStartY = PerushimPanel.TranslationY;
+                _perushimPanStartHeight = PerushimPanel.HeightRequest;
+                _perushimLastPanY = 0;
+                _perushimLastPanTime = DateTime.Now;
+                // Cancel any ongoing animations
+                PerushimPanel.CancelAnimations();
+                break;
+
+            case GestureStatus.Running:
+                // Track velocity
+                _perushimLastPanY = e.TotalY;
+                _perushimLastPanTime = DateTime.Now;
+
+                if (e.TotalY > 0)
+                {
+                    if (_isPerushimExpanded)
+                    {
+                        // When expanded, dragging down shrinks height first
+                        var newHeight = Math.Max(_perushimPanelHeight,
+                            _perushimPanStartHeight - e.TotalY);
+                        PerushimPanel.HeightRequest = newHeight;
+                    }
+                    else
+                    {
+                        // When at default size, dragging down translates (toward dismiss)
+                        PerushimPanel.TranslationY = e.TotalY;
+                    }
+                }
+                else
+                {
+                    // Dragging up: expand panel height (toward full screen)
+                    var newHeight = Math.Min(_perushimPanelExpandedHeight,
+                        _perushimPanStartHeight - e.TotalY);
+                    PerushimPanel.HeightRequest = newHeight;
+                }
+                break;
+
+            case GestureStatus.Completed:
+            case GestureStatus.Canceled:
+                // Calculate velocity (approximate using last movement)
+                var elapsedMs = (DateTime.Now - _perushimLastPanTime).TotalMilliseconds;
+                var velocity = elapsedMs > 0 ? Math.Abs(_perushimLastPanY) / (elapsedMs / 1000.0) : 0;
+
+                var dragY = PerushimPanel.TranslationY;
+                var currentHeight = PerushimPanel.HeightRequest;
+
+                // Check if dragging down
+                if (_perushimLastPanY > 0)
+                {
+                    if (_isPerushimExpanded)
+                    {
+                        // When expanded and dragging down: collapse to middle size first
+                        var collapseThreshold = (_perushimPanelExpandedHeight - _perushimPanelHeight) * dismissThreshold;
+                        var heightDecrease = _perushimPanStartHeight - currentHeight;
+                        var shouldCollapse = heightDecrease > collapseThreshold || velocity > velocityThreshold;
+
+                        if (shouldCollapse)
+                        {
+                            // Collapse to middle/default size
+                            _isPerushimExpanded = false;
+                            var animation = new Animation(v => PerushimPanel.HeightRequest = v,
+                                currentHeight, _perushimPanelHeight);
+                            animation.Commit(PerushimPanel, "CollapsePerushim", length: 200, easing: Easing.CubicOut);
+                        }
+                        else
+                        {
+                            // Snap back to expanded
+                            var animation = new Animation(v => PerushimPanel.HeightRequest = v,
+                                currentHeight, _perushimPanelExpandedHeight);
+                            animation.Commit(PerushimPanel, "SnapExpandedPerushim", length: 200, easing: Easing.CubicOut);
+                        }
+                    }
+                    else
+                    {
+                        // When at default size and dragging down: dismiss
+                        var positionThreshold = _perushimPanelHeight * dismissThreshold;
+                        var shouldDismiss = dragY > positionThreshold || velocity > velocityThreshold;
+
+                        if (shouldDismiss)
+                        {
+                            // Dismiss: complete the slide down
+                            await PerushimPanel.TranslateTo(0, _perushimPanelHeight, 200, Easing.CubicIn);
+                            PerushimPanel.IsVisible = false;
+                            _isPerushimOpen = false;
+                            _isPerushimExpanded = false;
+                            PerushimChevronButton.Text = "\uf2b7"; // chevron_up
+                        }
+                        else
+                        {
+                            // Snap back to open position
+                            await PerushimPanel.TranslateTo(0, 0, 200, Easing.CubicOut);
+                        }
+                    }
+                }
+                else
+                {
+                    // Dragging up (expand direction)
+                    var expandThreshold = (_perushimPanelExpandedHeight - _perushimPanelHeight) * 0.3;
+                    var heightIncrease = currentHeight - _perushimPanelHeight;
+                    var shouldExpand = heightIncrease > expandThreshold || velocity > velocityThreshold;
+
+                    if (shouldExpand && !_isPerushimExpanded)
+                    {
+                        // Expand to full screen
+                        _isPerushimExpanded = true;
+                        var animation = new Animation(v => PerushimPanel.HeightRequest = v,
+                            currentHeight, _perushimPanelExpandedHeight);
+                        animation.Commit(PerushimPanel, "ExpandPerushim", length: 200, easing: Easing.CubicOut);
+                    }
+                    else if (!shouldExpand && _isPerushimExpanded)
+                    {
+                        // Snap back to expanded
+                        var animation = new Animation(v => PerushimPanel.HeightRequest = v,
+                            currentHeight, _perushimPanelExpandedHeight);
+                        animation.Commit(PerushimPanel, "SnapExpandedPerushim", length: 200, easing: Easing.CubicOut);
+                    }
+                    else if (!shouldExpand)
+                    {
+                        // Snap back to default size
+                        var animation = new Animation(v => PerushimPanel.HeightRequest = v,
+                            currentHeight, _perushimPanelHeight);
+                        animation.Commit(PerushimPanel, "SnapPerushim", length: 200, easing: Easing.CubicOut);
+                    }
+                }
+                break;
+        }
+    }
+
+    /// <summary>
     /// Handles full screen button click - hides top and bottom bars, shows exit button.
     /// </summary>
     private void OnFullScreenClicked(object? sender, EventArgs e)
@@ -796,28 +1036,117 @@ public partial class PerekPage : ContentPage
         ExitFullScreen();
     }
 
-    private double _exitButtonPanX;
-    private double _exitButtonPanY;
+    /// <summary>
+    /// Sets up drag handling for the exit fullscreen button.
+    /// On Android: uses native touch with raw screen coordinates for pixel-perfect tracking.
+    /// On other platforms: uses MAUI gesture recognizers.
+    /// </summary>
+    private void SetupExitButtonDragHandler()
+    {
+#if ANDROID
+        ExitFullScreenButton.HandlerChanged += (_, _) =>
+        {
+            if (ExitFullScreenButton.Handler?.PlatformView is Android.Views.View nativeView)
+            {
+                _exitButtonTouchSlop = (nativeView.Context is { } ctx
+                    ? Android.Views.ViewConfiguration.Get(ctx)?.ScaledTouchSlop
+                    : null) ?? 24;
+                _exitButtonDensity = (float)DeviceDisplay.MainDisplayInfo.Density;
+                nativeView.Touch += OnExitButtonNativeTouch;
+            }
+        };
+#else
+        var tap = new TapGestureRecognizer();
+        tap.Tapped += OnExitFullScreenClicked;
+        ExitFullScreenButton.GestureRecognizers.Add(tap);
+
+        var pan = new PanGestureRecognizer();
+        pan.PanUpdated += OnExitFullScreenButtonPan;
+        ExitFullScreenButton.GestureRecognizers.Add(pan);
+#endif
+    }
+
+#if ANDROID
+    private float _exitButtonTouchStartRawX;
+    private float _exitButtonTouchStartRawY;
+    private double _exitButtonDragStartTx;
+    private double _exitButtonDragStartTy;
+    private bool _exitButtonIsDragging;
+    private int _exitButtonTouchSlop;
+    private float _exitButtonDensity;
 
     /// <summary>
-    /// Handles pan gesture on exit full screen button - allows dragging.
-    /// Note: X is negated to account for RTL layout coordinate inversion.
+    /// Native Android touch handler for exit fullscreen button.
+    /// Uses getRawX/getRawY (screen coordinates) which are never affected by
+    /// view translation, RTL layout, or MAUI coordinate transforms.
     /// </summary>
+    private void OnExitButtonNativeTouch(object? sender, Android.Views.View.TouchEventArgs e)
+    {
+        if (e.Event is not { } motion) return;
+
+        switch (motion.ActionMasked)
+        {
+            case Android.Views.MotionEventActions.Down:
+                _exitButtonTouchStartRawX = motion.RawX;
+                _exitButtonTouchStartRawY = motion.RawY;
+                _exitButtonDragStartTx = ExitFullScreenButton.TranslationX;
+                _exitButtonDragStartTy = ExitFullScreenButton.TranslationY;
+                _exitButtonIsDragging = false;
+                e.Handled = true;
+                break;
+
+            case Android.Views.MotionEventActions.Move:
+            {
+                var dx = motion.RawX - _exitButtonTouchStartRawX;
+                var dy = motion.RawY - _exitButtonTouchStartRawY;
+
+                if (!_exitButtonIsDragging &&
+                    (Math.Abs(dx) > _exitButtonTouchSlop || Math.Abs(dy) > _exitButtonTouchSlop))
+                {
+                    _exitButtonIsDragging = true;
+                }
+
+                if (_exitButtonIsDragging)
+                {
+                    ExitFullScreenButton.TranslationX = _exitButtonDragStartTx + dx / _exitButtonDensity;
+                    ExitFullScreenButton.TranslationY = _exitButtonDragStartTy + dy / _exitButtonDensity;
+                }
+                e.Handled = true;
+                break;
+            }
+
+            case Android.Views.MotionEventActions.Up:
+                if (!_exitButtonIsDragging)
+                {
+                    ExitFullScreen();
+                }
+                e.Handled = true;
+                break;
+
+            case Android.Views.MotionEventActions.Cancel:
+                e.Handled = true;
+                break;
+        }
+    }
+#else
+    private double _exitButtonPanStartX;
+    private double _exitButtonPanStartY;
+
     private void OnExitFullScreenButtonPan(object? sender, PanUpdatedEventArgs e)
     {
         switch (e.StatusType)
         {
-            case GestureStatus.Running:
-                // Negate X for RTL layout
-                ExitFullScreenButton.TranslationX = _exitButtonPanX - e.TotalX;
-                ExitFullScreenButton.TranslationY = _exitButtonPanY + e.TotalY;
+            case GestureStatus.Started:
+                _exitButtonPanStartX = ExitFullScreenButton.TranslationX;
+                _exitButtonPanStartY = ExitFullScreenButton.TranslationY;
                 break;
-            case GestureStatus.Completed:
-                _exitButtonPanX = ExitFullScreenButton.TranslationX;
-                _exitButtonPanY = ExitFullScreenButton.TranslationY;
+            case GestureStatus.Running:
+                ExitFullScreenButton.TranslationX = _exitButtonPanStartX + e.TotalX;
+                ExitFullScreenButton.TranslationY = _exitButtonPanStartY + e.TotalY;
                 break;
         }
     }
+#endif
 
     #region Swipe Navigation
 
@@ -911,6 +1240,7 @@ public partial class PerekPage : ContentPage
 
             // Load new content
             await loadAction();
+            SetAnalyticsScreenForPerek();
 
             // Position for slide in
             PasukimCollection.TranslationX = newStartX;
@@ -974,8 +1304,6 @@ public partial class PerekPage : ContentPage
         ArticlesFooterSpacer.HeightRequest = 0;
 
         // Show floating exit button (reset position first)
-        _exitButtonPanX = 0;
-        _exitButtonPanY = 0;
         ExitFullScreenButton.TranslationX = 0;
         ExitFullScreenButton.TranslationY = 0;
         ExitFullScreenButton.IsVisible = true;

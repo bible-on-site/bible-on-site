@@ -1,0 +1,69 @@
+.footer {
+  /* Legacy footer styling: #272F41 background with #8B97AD text */
+  background-color: #272f41;
+  padding: calc(1vw + 3em) 16px;
+  padding-top: calc(1vw + 5em); /* Extra padding to account for overlap */
+  margin-top: -2em; /* Overlap with contact section divider */
+  text-align: center;
+  color: #8b97ad;
+}
+
+.footerNav {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.footerLink {
+  color: rgb(189, 196, 255); /* Light blue - matches contact section links */
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: color 0.1s linear;
+}
+
+.footerLink:hover {
+  color: #fff;
+}
+
+.separator {
+  color: #8b97ad;
+  font-size: 0.9rem;
+}
+
+.footerBottom {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+
+.copyright {
+  font-size: 0.8rem;
+  color: #8b97ad;
+  direction: rtl;
+}
+
+.githubLink {
+  display: flex;
+  align-items: center;
+  opacity: 0.7;
+  transition: opacity 0.1s linear;
+}
+
+.githubLink:hover {
+  opacity: 1;
+}
+
+/* Make GitHub icon visible on dark background */
+.githubIcon {
+  filter: brightness(0) saturate(100%) invert(62%) sepia(14%) saturate(417%) hue-rotate(182deg) brightness(92%)
+    contrast(86%);
+  transition: filter 0.1s linear;
+}
+
+.githubLink:hover .githubIcon {
+  filter: brightness(0) invert(1);
+}

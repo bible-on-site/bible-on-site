@@ -1,7 +1,9 @@
 /**
- * When html-flip-book-react is a file: dependency, copy it (and its base dep)
- * into node_modules so Turbopack can resolve it (Turbopack does not follow
- * symlinks on Windows). Run after npm install.
+ * html-flip-book-react is installed from npm (CI/production). For local dev
+ * with the repo alongside, set USE_LOCAL_FLIP_BOOK=1 and run this script
+ * (or postinstall) to overwrite node_modules with the local build.
+ * When dependency was file:, this script copied from that path; now it only
+ * runs when USE_LOCAL_FLIP_BOOK=1 and the default local path exists.
  */
 import { execSync } from "node:child_process";
 import fs from "node:fs";
@@ -14,15 +16,45 @@ const pkgPath = path.join(projectRoot, "package.json");
 const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
 const dep = pkg.dependencies?.["html-flip-book-react"];
 
-if (!dep?.startsWith("file:")) {
+// Resolve source: file: dependency, or optional local path for dev (USE_LOCAL_FLIP_BOOK=1)
+let reactSrc;
+let baseSrc;
+if (dep?.startsWith("file:")) {
+	const rel = dep.slice("file:".length).replace(/^\.\//, "");
+	reactSrc = path.resolve(projectRoot, rel);
+	baseSrc = path.resolve(reactSrc, "..", "base");
+} else if (process.env.USE_LOCAL_FLIP_BOOK === "1") {
+	// Default location when bible-on-site and html-flip-book are siblings
+	reactSrc = path.resolve(
+		projectRoot,
+		"..",
+		"..",
+		"..",
+		"html-flip-book",
+		"react",
+	);
+	baseSrc = path.resolve(reactSrc, "..", "base");
+} else {
 	process.exit(0);
 }
 
-const rel = dep.slice("file:".length).replace(/^\.\//, "");
-const reactSrc = path.resolve(projectRoot, rel);
-const baseSrc = path.resolve(reactSrc, "..", "base");
-const targetReact = path.join(projectRoot, "node_modules", "html-flip-book-react");
-const targetVanilla = path.join(targetReact, "node_modules", "html-flip-book-vanilla");
+if (!fs.existsSync(path.join(reactSrc, "dist", "flip-book.js"))) {
+	console.warn(
+		"copy-local-flip-book: react dist not found; run npm run build in html-flip-book first.",
+	);
+	process.exit(0);
+}
+
+const targetReact = path.join(
+	projectRoot,
+	"node_modules",
+	"html-flip-book-react",
+);
+const targetVanilla = path.join(
+	targetReact,
+	"node_modules",
+	"html-flip-book-vanilla",
+);
 
 if (!fs.existsSync(path.join(reactSrc, "dist", "flip-book.js"))) {
 	console.warn(
@@ -72,4 +104,6 @@ execSync("npm install --omit=dev", {
 	stdio: "inherit",
 });
 
-console.log("copy-local-flip-book: copied local html-flip-book-react into node_modules");
+console.log(
+	"copy-local-flip-book: copied local html-flip-book-react into node_modules",
+);

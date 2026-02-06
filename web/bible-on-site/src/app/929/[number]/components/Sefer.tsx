@@ -1,18 +1,26 @@
 "use client";
 import { toLetters, toNumber } from "gematry";
-import type { FlipBookHandle, PageSemantics } from "html-flip-book-react";
+import type {
+	CoverConfig,
+	FlipBookHandle,
+	PageSemantics,
+} from "html-flip-book-react";
 import {
+	ActionButton,
+	BookshelfIcon,
 	FirstPageButton,
 	LastPageButton,
 	NextButton,
+	PageIndicator,
 	PrevButton,
-	SemanticPageIndicator,
 	Toolbar,
 } from "html-flip-book-react/toolbar";
 import dynamic from "next/dynamic";
-import React, { useMemo, useRef } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
+import { BookshelfModal } from "@/app/components/Bookshelf";
 import { isQriDifferentThanKtiv } from "@/data/db/tanah-view-types";
 import type { PerekObj } from "@/data/perek-dto";
+import { getSeferColor } from "@/data/sefer-colors";
 import { getSeferByName } from "@/data/sefer-dto";
 import type { Article } from "@/lib/articles";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
@@ -22,6 +30,20 @@ import { Stuma } from "./Stuma";
 import styles from "./sefer.module.css";
 import "./sefer.css";
 
+/**
+ * Converts a number to Hebrew letters with proper punctuation:
+ * - Single letter: adds geresh (א', ב')
+ * - Multiple letters: adds gershaim (י״א, כ״ג)
+ */
+function toHebrewWithPunctuation(num: number): string {
+	const letters = toLetters(num, { addQuotes: true });
+	// If no gershaim present and it's a single Hebrew letter, add geresh
+	if (!letters.includes('"') && letters.length === 1) {
+		return `${letters}'`;
+	}
+	return letters;
+}
+
 /** Props we pass to FlipBook; matches html-flip-book-react FlipBookProps for typing dynamic() */
 type FlipBookProps = {
 	className: string;
@@ -30,6 +52,8 @@ type FlipBookProps = {
 	direction?: "rtl" | "ltr";
 	/** Leaves to keep visible before/after current for performance */
 	leavesBuffer?: number;
+	/** Cover configuration */
+	coverConfig?: CoverConfig;
 };
 
 /** Dynamic FlipBook with ref forwarded (library uses forwardRef) */
@@ -47,10 +71,16 @@ const Sefer = (props: {
 	const { perekObj, articles, articlesByPerekIndex } = props;
 	const sefer = getSeferByName(perekObj.sefer);
 	const flipBookRef = useRef<FlipBookHandle>(null);
+	const bookWrapperRef = useRef<HTMLDivElement>(null);
+	const seferColor = getSeferColor(perekObj.sefer);
+	const [isBookshelfOpen, setIsBookshelfOpen] = useState(false);
 	const perakim =
 		"perakim" in sefer
 			? sefer.perakim
 			: sefer.additionals.flatMap((additional) => additional.perakim);
+
+	const openBookshelf = useCallback(() => setIsBookshelfOpen(true), []);
+	const closeBookshelf = useCallback(() => setIsBookshelfOpen(false), []);
 
 	// Pages: cover, then for each perek (content page, blank for future perushim/articles), then back cover.
 	const hePageSemantics: PageSemantics = useMemo(
@@ -59,7 +89,7 @@ const Sefer = (props: {
 				if (pageIndex <= 0 || pageIndex % 2 === 0) return "";
 				const perekNum = (pageIndex + 1) / 2;
 				if (perekNum > perakim.length) return "";
-				return toLetters(perekNum, { addQuotes: true });
+				return toHebrewWithPunctuation(perekNum);
 			},
 			semanticNameToIndex(semanticPageName: string): number | null {
 				const num = toNumber(semanticPageName);
@@ -71,27 +101,34 @@ const Sefer = (props: {
 				if (pageIndex <= 0 || pageIndex % 2 === 0) return "";
 				const perekNum = (pageIndex + 1) / 2;
 				if (perekNum > perakim.length) return "";
-				return `פרק ${toLetters(perekNum, { addQuotes: true })}`;
+				return `פרק ${toHebrewWithPunctuation(perekNum)}`;
 			},
 		}),
 		[perakim.length],
 	);
 
+	const coverStyle = { backgroundColor: seferColor };
 	const frontCover = (
-		<section className={styles.page} aria-label="עטיפה קדמית">
+		<section
+			className={styles.page}
+			aria-label="עטיפה קדמית"
+			style={coverStyle}
+		>
 			<div className={styles.coverContent}>
 				<h1 className={styles.coverTitle}>ספר {perekObj.sefer}</h1>
-				<p className={styles.coverSubtitle}>מקרא על פי המסורה</p>
-				<p className={styles.coverAuthor}>929 • bible-on-site</p>
+				<p className={styles.coverSubtitle}>
+					מקראות גדולות עם מאמרים מרבנים בני זמנינו
+				</p>
 			</div>
 		</section>
 	);
 	const backCover = (
-		<section className={styles.page} aria-label="עטיפה אחורית">
-			<div className={styles.coverContent}>
-				<h2 className={styles.coverTitle}>סוף</h2>
-				<p className={styles.coverAuthor}>929 • bible-on-site</p>
-			</div>
+		<section
+			className={styles.page}
+			aria-label="עטיפה אחורית"
+			style={coverStyle}
+		>
+			{/* Back cover intentionally left empty */}
 		</section>
 	);
 
@@ -183,29 +220,40 @@ const Sefer = (props: {
 	const pages = [frontCover, ...contentPages, backCover];
 
 	return (
-		<div className={styles.bookWrapper} dir="rtl">
-			<div className={styles.bookArea}>
-				<FlipBook
-					ref={flipBookRef}
-					className="he-book"
-					pages={pages}
-					pageSemantics={hePageSemantics}
-					direction="rtl"
-					leavesBuffer={7}
-				/>
-			</div>
+		<>
+			<div className={styles.bookWrapper} dir="rtl" ref={bookWrapperRef}>
+				<div className={styles.bookArea}>
+					<FlipBook
+						ref={flipBookRef}
+						className="he-book"
+						pages={pages}
+						pageSemantics={hePageSemantics}
+						direction="rtl"
+						leavesBuffer={7}
+						coverConfig={{
+							hardCovers: true,
+							noShadow: true,
+							coverIndices: "auto",
+						}}
+					/>
+				</div>
 			<Toolbar
 				flipBookRef={flipBookRef}
 				direction="rtl"
 				pageSemantics={hePageSemantics}
 			>
+				<ActionButton onClick={openBookshelf} ariaLabel="ספרי התנ״ך">
+					<BookshelfIcon size={18} />
+				</ActionButton>
 				<FirstPageButton />
 				<PrevButton />
-				<SemanticPageIndicator ariaLabel="עבור לפרק (מספר עברי)" />
+				<PageIndicator ariaLabel="עבור לפרק (מספר עברי)" />
 				<NextButton />
 				<LastPageButton />
 			</Toolbar>
-		</div>
+			</div>
+			<BookshelfModal isOpen={isBookshelfOpen} onClose={closeBookshelf} />
+		</>
 	);
 };
 

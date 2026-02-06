@@ -24,9 +24,10 @@ interface AuthorSummary {
 async function getAllAuthors(): Promise<AuthorSummary[]> {
 	try {
 		const rows = await query<AuthorRow>(
-			`SELECT id, name, details
-			 FROM tanah_author
-			 ORDER BY name ASC`,
+			`SELECT a.id, a.name, a.details
+			 FROM tanah_author a
+			 WHERE EXISTS (SELECT 1 FROM tanah_article art WHERE art.author_id = a.id)
+			 ORDER BY a.name ASC`,
 		);
 
 		return rows.map((row) => ({

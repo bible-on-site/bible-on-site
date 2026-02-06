@@ -1,1 +1,12 @@
-<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1366 85.0495"><defs><style>.cls-1{fill:#edf2f7;}</style></defs><title>contact-bottom-devider-xs</title><path class="cls-1" d="M1366,85s-9-14-168-28S698,69,652,79s-339,36-465,6S0,76,0,76v62H1366Z" transform="translate(0 -52.9505)"/></svg>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1366 85.0495">
+    <defs>
+        <style>
+            .cls-1 {
+                fill: #272F41;
+            }
+        </style>
+    </defs>
+    <title>contact-bottom-devider-xs</title>
+    <path class="cls-1" d="M1366,85s-9-14-168-28S698,69,652,79s-339,36-465,6S0,76,0,76v62H1366Z"
+        transform="translate(0 -52.9505)" />
+</svg>

@@ -32,9 +32,9 @@ describe("ArticlesSection", () => {
 	];
 
 	describe("when articles array is empty", () => {
-		it("returns null and renders nothing", () => {
-			const { container } = render(<ArticlesSection articles={[]} />);
-			expect(container.firstChild).toBeNull();
+		it("renders section with empty message", () => {
+			render(<ArticlesSection articles={[]} />);
+			expect(screen.getByText("אין מאמרים לפרק זה")).toBeTruthy();
 		});
 	});
 
@@ -91,7 +91,8 @@ describe("ArticlesSection", () => {
 					content: "<p>Full content</p>",
 					priority: 1,
 					authorName: "הרב משה",
-					authorImageUrl: "https://test.s3.amazonaws.com/authors/high-res/1.jpg",
+					authorImageUrl:
+						"https://test.s3.amazonaws.com/authors/high-res/1.jpg",
 				},
 			];
 

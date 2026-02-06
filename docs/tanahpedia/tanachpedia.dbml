@@ -1,0 +1,534 @@
+// ===========================================
+// TANAHPEDIA DATABASE SCHEMA
+// ===========================================
+// Design decisions:
+// - All IDs are GUID (CHAR(36))
+// - All tables prefixed tanahpedia_
+// - God = singleton table (one row, always same entity)
+// - Prophecy extends Saying (like War extends Event)
+// - Sources via source_group/tanah_source/non_tanah_source
+// - No certainty levels - "70 panim latorah"
+// - Prefer lookup tables over enums (except entity_type, sex)
+//
+// BIBLICAL DATE FORMAT (int):
+// Format: YYYYMMDD
+//   - YYYY = Hebrew year (from creation)
+//   - MM   = month (01-14, see below)
+//   - DD   = day (01-31)
+//
+// Month numbering:
+//   Non-leap year (months 1-12):
+//     01 = Tishrei (תשרי)    07 = Nissan (ניסן)
+//     02 = Cheshvan (חשון)   08 = Iyar (אייר)
+//     03 = Kislev (כסלו)     09 = Sivan (סיון)
+//     04 = Tevet (טבת)       10 = Tammuz (תמוז)
+//     05 = Shevat (שבט)      11 = Av (אב)
+//     06 = Adar (אדר)        12 = Elul (אלול)
+//
+//   Leap year (months 1-14):
+//     01-05 = same as non-leap
+//     13 = Adar I (אדר א׳)
+//     14 = Adar II (אדר ב׳)
+//     07-12 = Nissan through Elul (same as non-leap)
+//
+// Partial dates (unknown components use 00):
+//   - 24480000 = Year 2448, month & day unknown
+//   - 24480800 = Year 2448, month 8 (Iyar), day unknown
+//   - 24480815 = Year 2448, month 8, day 15 (full date)
+//
+// Special values:
+//   - NULL     = Phi (not applicable / undefined)
+//   - 0        = completely unknown
+//   - -1       = not yet happened (e.g., Eliyahu's death)
+//   - 99991229 = forever (no end date)
+//
+// Ranges: use start_date / end_date pairs
+// ===========================================
+
+// -------------------------------------------
+// EXISTING TABLES (not created by us)
+// -------------------------------------------
+
+Table tanah_sefer {
+  id int [pk, note: 'Existing']
+  name varchar(255)
+}
+
+Table tanah_perek {
+  id int [pk, note: 'Existing']
+  sefer_id int [ref: > tanah_sefer.id]
+  perek_number int
+}
+
+Table tanah_pasuk {
+  id int [pk, note: 'Existing']
+  perek_id int [ref: > tanah_perek.id]
+  pasuk_number int
+}
+
+Table tanah_perush {
+  id char(36) [pk, note: 'Existing']
+  name varchar(255)
+  author varchar(255)
+}
+
+// -------------------------------------------
+// GOD (singleton)
+// -------------------------------------------
+
+Table tanahpedia_god {
+  id char(36) [pk, note: 'Single row - the one God']
+}
+
+// -------------------------------------------
+// SOURCE TABLES
+// -------------------------------------------
+
+Table tanahpedia_source_group {
+  id char(36) [pk]
+  target_table varchar(100)
+  target_id char(36)
+}
+
+Table tanahpedia_tanah_source {
+  id char(36) [pk]
+  source_group_id char(36) [ref: > tanahpedia_source_group.id]
+  perush_id char(36) [ref: > tanah_perush.id]
+  pasuk_id int [ref: > tanah_pasuk.id]
+  perek_id int [ref: > tanah_perek.id]
+}
+
+Table tanahpedia_non_tanah_source {
+  id char(36) [pk]
+  source_group_id char(36) [ref: > tanahpedia_source_group.id]
+  source_text varchar(500)
+}
+
+// -------------------------------------------
+// ENTRY SYSTEM
+// -------------------------------------------
+
+Table tanahpedia_entry {
+  id char(36) [pk]
+  unique_name varchar(255) [unique]
+  title varchar(255)
+  content mediumtext
+  created_at datetime
+  updated_at datetime
+}
+
+Table tanahpedia_entry_synonym {
+  id char(36) [pk]
+  name varchar(255)
+  entry_id char(36) [ref: > tanahpedia_entry.id]
+}
+
+Table tanahpedia_entry_synonym_disambiguation {
+  id char(36) [pk]
+  synonym_id char(36) [ref: > tanahpedia_entry_synonym.id]
+  entry_id char(36) [ref: > tanahpedia_entry.id]
+  disambiguation_label varchar(255)
+}
+
+Table tanahpedia_entry_entity {
+  id char(36) [pk]
+  entry_id char(36) [ref: > tanahpedia_entry.id]
+  entity_type tanahpedia_entity_type_enum
+  entity_id char(36)
+}
+
+Enum tanahpedia_entity_type_enum {
+  PERSON
+  PLACE
+  EVENT
+  WAR
+  ANIMAL
+  OBJECT
+  PLANT
+  ASTRONOMICAL_OBJECT
+  SAYING
+  SEFER
+  PROPHECY
+  NATION
+}
+
+// -------------------------------------------
+// PERSON
+// -------------------------------------------
+
+Table tanahpedia_person {
+  id char(36) [pk]
+}
+
+// All names (main, additional, nickname) in one table
+Table tanahpedia_lookup_name_type {
+  id char(36) [pk]
+  name varchar(50) [note: 'MAIN, ADDITIONAL, NICKNAME']
+}
+
+Table tanahpedia_person_name {
+  id char(36) [pk]
+  person_id char(36) [ref: > tanahpedia_person.id]
+  name varchar(255)
+  name_type_id char(36) [ref: > tanahpedia_lookup_name_type.id]
+  alt_group_id char(36)
+}
+
+// Name giver - person
+Table tanahpedia_person_name_giver_person {
+  id char(36) [pk]
+  person_name_id char(36) [ref: > tanahpedia_person_name.id]
+  giver_person_id char(36) [ref: > tanahpedia_person.id]
+  alt_group_id char(36)
+}
+
+// Name giver - God
+Table tanahpedia_person_name_giver_god {
+  id char(36) [pk]
+  person_name_id char(36) [ref: > tanahpedia_person_name.id]
+  god_id char(36) [ref: > tanahpedia_god.id]
+  alt_group_id char(36)
+}
+
+Enum tanahpedia_sex_enum {
+  MALE
+  FEMALE
+  UNKNOWN
+}
+
+Table tanahpedia_person_sex {
+  id char(36) [pk]
+  person_id char(36) [ref: > tanahpedia_person.id]
+  sex tanahpedia_sex_enum
+  alt_group_id char(36)
+}
+
+Table tanahpedia_person_birth_date {
+  id char(36) [pk]
+  person_id char(36) [ref: > tanahpedia_person.id]
+  birth_date int [note: 'YYYYMMDD format, see header']
+  alt_group_id char(36)
+}
+
+Table tanahpedia_person_death_date {
+  id char(36) [pk]
+  person_id char(36) [ref: > tanahpedia_person.id]
+  death_date int [note: 'YYYYMMDD format, -1 = not yet (Eliyahu)']
+  alt_group_id char(36)
+}
+
+Table tanahpedia_person_death_cause {
+  id char(36) [pk]
+  person_id char(36) [ref: > tanahpedia_person.id]
+  death_cause varchar(255)
+  alt_group_id char(36)
+}
+
+Table tanahpedia_person_birth_place {
+  id char(36) [pk]
+  person_id char(36) [ref: > tanahpedia_person.id]
+  place_id char(36) [ref: > tanahpedia_place.id]
+  alt_group_id char(36)
+}
+
+// -------------------------------------------
+// PLACE
+// -------------------------------------------
+
+Table tanahpedia_place {
+  id char(36) [pk]
+  name varchar(255)
+}
+
+Table tanahpedia_place_identification {
+  id char(36) [pk]
+  place_id char(36) [ref: > tanahpedia_place.id]
+  modern_name varchar(255)
+  latitude decimal(10,8)
+  longitude decimal(11,8)
+  alt_group_id char(36)
+}
+
+// -------------------------------------------
+// EVENT
+// -------------------------------------------
+
+Table tanahpedia_event {
+  id char(36) [pk]
+  name varchar(255)
+}
+
+Table tanahpedia_event_place {
+  id char(36) [pk]
+  event_id char(36) [ref: > tanahpedia_event.id]
+  place_id char(36) [ref: > tanahpedia_place.id]
+  alt_group_id char(36)
+}
+
+Table tanahpedia_event_date_range {
+  id char(36) [pk]
+  event_id char(36) [ref: > tanahpedia_event.id]
+  start_date int [note: 'YYYYMMDD format']
+  end_date int [note: 'YYYYMMDD format']
+  alt_group_id char(36)
+}
+
+// -------------------------------------------
+// WAR (extends Event)
+// -------------------------------------------
+
+Table tanahpedia_war {
+  id char(36) [pk]
+  event_id char(36) [ref: - tanahpedia_event.id]
+  name varchar(255)
+}
+
+Table tanahpedia_war_side {
+  id char(36) [pk]
+  war_id char(36) [ref: > tanahpedia_war.id]
+  side_number int
+}
+
+Table tanahpedia_war_side_participant_person {
+  id char(36) [pk]
+  war_side_id char(36) [ref: > tanahpedia_war_side.id]
+  person_id char(36) [ref: > tanahpedia_person.id]
+  alt_group_id char(36)
+}
+
+Table tanahpedia_war_side_participant_nation {
+  id char(36) [pk]
+  war_side_id char(36) [ref: > tanahpedia_war_side.id]
+  nation_id char(36) [ref: > tanahpedia_nation.id]
+  alt_group_id char(36)
+}
+
+// -------------------------------------------
+// NATION
+// -------------------------------------------
+
+Table tanahpedia_nation {
+  id char(36) [pk]
+  name varchar(255)
+}
+
+Table tanahpedia_nation_source_nation {
+  id char(36) [pk]
+  nation_id char(36) [ref: > tanahpedia_nation.id]
+  source_nation_id char(36) [ref: > tanahpedia_nation.id]
+  alt_group_id char(36)
+}
+
+Table tanahpedia_nation_territory {
+  id char(36) [pk]
+  nation_id char(36) [ref: > tanahpedia_nation.id]
+  place_id char(36) [ref: > tanahpedia_place.id]
+  start_date int [note: 'YYYYMMDD format']
+  end_date int [note: 'YYYYMMDD format']
+  alt_group_id char(36)
+}
+
+// -------------------------------------------
+// ANIMAL
+// -------------------------------------------
+
+Table tanahpedia_animal {
+  id char(36) [pk]
+  name varchar(255)
+}
+
+// -------------------------------------------
+// OBJECT
+// -------------------------------------------
+
+Table tanahpedia_object {
+  id char(36) [pk]
+  name varchar(255)
+}
+
+// -------------------------------------------
+// PLANT
+// -------------------------------------------
+
+Table tanahpedia_plant {
+  id char(36) [pk]
+  name varchar(255)
+}
+
+Table tanahpedia_plant_creation_day {
+  id char(36) [pk]
+  plant_id char(36) [ref: > tanahpedia_plant.id]
+  creation_day tinyint [note: '1-6, Bereishit creation day']
+  alt_group_id char(36)
+}
+
+// -------------------------------------------
+// ASTRONOMICAL_OBJECT
+// -------------------------------------------
+
+Table tanahpedia_astronomical_object {
+  id char(36) [pk]
+  name varchar(255)
+}
+
+Table tanahpedia_astronomical_object_creation_day {
+  id char(36) [pk]
+  astronomical_object_id char(36) [ref: > tanahpedia_astronomical_object.id]
+  creation_day tinyint [note: '1-6, Bereishit creation day']
+  alt_group_id char(36)
+}
+
+// -------------------------------------------
+// SEFER
+// -------------------------------------------
+
+Table tanahpedia_sefer {
+  id char(36) [pk]
+  name varchar(255)
+}
+
+Table tanahpedia_sefer_tanah_match {
+  id char(36) [pk]
+  sefer_id char(36) [ref: > tanahpedia_sefer.id]
+  tanah_sefer_id int [ref: > tanah_sefer.id]
+  alt_group_id char(36)
+}
+
+// -------------------------------------------
+// SAYING
+// -------------------------------------------
+
+Table tanahpedia_saying {
+  id char(36) [pk]
+  name varchar(255)
+  content text
+}
+
+Table tanahpedia_saying_location {
+  id char(36) [pk]
+  saying_id char(36) [ref: > tanahpedia_saying.id]
+  place_id char(36) [ref: > tanahpedia_place.id]
+  alt_group_id char(36)
+}
+
+// Speaker: person, nation, or God
+Table tanahpedia_saying_speaker_person {
+  id char(36) [pk]
+  saying_id char(36) [ref: > tanahpedia_saying.id]
+  person_id char(36) [ref: > tanahpedia_person.id]
+  alt_group_id char(36)
+}
+
+Table tanahpedia_saying_speaker_nation {
+  id char(36) [pk]
+  saying_id char(36) [ref: > tanahpedia_saying.id]
+  nation_id char(36) [ref: > tanahpedia_nation.id]
+  alt_group_id char(36)
+}
+
+Table tanahpedia_saying_speaker_god {
+  id char(36) [pk]
+  saying_id char(36) [ref: > tanahpedia_saying.id]
+  god_id char(36) [ref: > tanahpedia_god.id]
+  alt_group_id char(36)
+}
+
+// Audience: person or nation
+Table tanahpedia_saying_audience_person {
+  id char(36) [pk]
+  saying_id char(36) [ref: > tanahpedia_saying.id]
+  person_id char(36) [ref: > tanahpedia_person.id]
+  alt_group_id char(36)
+}
+
+Table tanahpedia_saying_audience_nation {
+  id char(36) [pk]
+  saying_id char(36) [ref: > tanahpedia_saying.id]
+  nation_id char(36) [ref: > tanahpedia_nation.id]
+  alt_group_id char(36)
+}
+
+// -------------------------------------------
+// PROPHECY (extends Saying)
+// -------------------------------------------
+// God → prophet (via) → recipients
+
+Table tanahpedia_prophecy {
+  id char(36) [pk]
+  saying_id char(36) [ref: - tanahpedia_saying.id]
+}
+
+Table tanahpedia_prophecy_is_good {
+  id char(36) [pk]
+  prophecy_id char(36) [ref: > tanahpedia_prophecy.id]
+  is_good boolean
+  alt_group_id char(36)
+}
+
+// Prophet who delivers
+Table tanahpedia_prophecy_prophet {
+  id char(36) [pk]
+  prophecy_id char(36) [ref: > tanahpedia_prophecy.id]
+  person_id char(36) [ref: > tanahpedia_person.id]
+  alt_group_id char(36)
+}
+
+// Ultimate recipients
+Table tanahpedia_prophecy_recipient_person {
+  id char(36) [pk]
+  prophecy_id char(36) [ref: > tanahpedia_prophecy.id]
+  person_id char(36) [ref: > tanahpedia_person.id]
+  alt_group_id char(36)
+}
+
+Table tanahpedia_prophecy_recipient_nation {
+  id char(36) [pk]
+  prophecy_id char(36) [ref: > tanahpedia_prophecy.id]
+  nation_id char(36) [ref: > tanahpedia_nation.id]
+  alt_group_id char(36)
+}
+
+// -------------------------------------------
+// FAMILY RELATIONSHIPS
+// -------------------------------------------
+
+Table tanahpedia_lookup_union_type {
+  id char(36) [pk]
+  name varchar(50)
+}
+
+Table tanahpedia_lookup_union_end_reason {
+  id char(36) [pk]
+  name varchar(50)
+}
+
+Table tanahpedia_person_union {
+  id char(36) [pk]
+  person1_id char(36) [ref: > tanahpedia_person.id]
+  person2_id char(36) [ref: > tanahpedia_person.id]
+  union_type_id char(36) [ref: > tanahpedia_lookup_union_type.id]
+  union_order int
+  start_date int [note: 'YYYYMMDD format']
+  end_date int [note: 'YYYYMMDD format']
+  end_reason_id char(36) [ref: > tanahpedia_lookup_union_end_reason.id]
+  alt_group_id char(36)
+}
+
+Table tanahpedia_lookup_parent_child_type {
+  id char(36) [pk]
+  name varchar(50)
+}
+
+Table tanahpedia_lookup_parent_role {
+  id char(36) [pk]
+  name varchar(50)
+}
+
+Table tanahpedia_person_parent_child {
+  id char(36) [pk]
+  parent_id char(36) [ref: > tanahpedia_person.id]
+  child_id char(36) [ref: > tanahpedia_person.id]
+  relationship_type_id char(36) [ref: > tanahpedia_lookup_parent_child_type.id]
+  parent_role_id char(36) [ref: > tanahpedia_lookup_parent_role.id]
+  alt_group_id char(36)
+}

@@ -795,7 +795,7 @@ jobs:
           overwrite: true
           if-no-files-found: ignore
 
-      # ============ MySQL and LocalStack Setup for E2E Tests ============
+      # ============ MySQL and MinIO Setup for E2E Tests ============
       - name: Install and start MySQL
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
@@ -805,14 +805,29 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
-      - name: Start LocalStack
-        uses: LocalStack/setup-localstack@v0.2.3
-        with:
-          image-tag: "latest"
-          install-awslocal: "true"
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio \
+            -p 4566:9000 \
+            -e MINIO_ROOT_USER=test \
+            -e MINIO_ROOT_PASSWORD=test_1234 \
+            minio/minio:latest server /data
+          # Wait for MinIO to be ready
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:4566/minio/health/live; then break; fi
+            sleep 1
+          done
 
-      - name: Create S3 bucket in LocalStack
-        run: awslocal s3 mb s3://bible-on-site-rabbis-test
+      - name: Create S3 bucket in MinIO
+        run: |
+          docker run --rm --network host \
+            --entrypoint /bin/sh \
+            minio/mc:latest \
+            -c "
+              mc alias set ci http://localhost:4566 test test_1234 &&
+              mc mb --ignore-existing ci/bible-on-site-assets-test &&
+              mc anonymous set download ci/bible-on-site-assets-test
+            "
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -838,10 +853,10 @@ jobs:
         env:
           DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
           S3_ENDPOINT: http://localhost:4566
-          S3_BUCKET: bible-on-site-rabbis-test
+          S3_BUCKET: bible-on-site-assets-test
           S3_REGION: us-east-1
           S3_ACCESS_KEY_ID: test
-          S3_SECRET_ACCESS_KEY: test
+          S3_SECRET_ACCESS_KEY: test_1234
           S3_FORCE_PATH_STYLE: "true"
         run: npm run test:e2e
 

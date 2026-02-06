@@ -68,8 +68,8 @@ test.describe("ArticlesService", () => {
 			const responseBody = await response.json();
 			expect(responseBody.data.articlesByPerekId).toBeDefined();
 			expect(Array.isArray(responseBody.data.articlesByPerekId)).toBe(true);
-			// Test data has 3 articles for perek 1
-			expect(responseBody.data.articlesByPerekId.length).toBe(3);
+			// Test data has 4 articles for perek 1
+			expect(responseBody.data.articlesByPerekId.length).toBe(4);
 			// All should have perekId = 1
 			for (const article of responseBody.data.articlesByPerekId) {
 				expect(article.perekId).toBe(1);

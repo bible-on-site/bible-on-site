@@ -6,6 +6,9 @@ web/bible-on-site/src/data/db/*.tanah_view.json binary linguist-generated
 app/BibleOnSite/Resources/Raw/*.tanah_view.sqlite binary -delta linguist-generated
 data/mysql/*_data.sql binary linguist-generated
 
+# Shell scripts - force LF endings (required for Docker/Linux containers)
+*.sh text eol=lf
+
 # Font files - binary, no delta compression (already compressed)
 *.ttf binary -delta
 *.otf binary -delta

@@ -1,0 +1,14 @@
+---
+description: Flip book (html-flip-book) integration and local dev workflow
+globs: web/bible-on-site/**/929/**/*,**/Sefer*.tsx,**/FlipBook*,**/copy-local-flip-book*
+alwaysApply: false
+---
+
+# Flip Book Integration
+
+## Local dev with local html-flip-book repo
+
+- **Build** in `html-flip-book`: `npm run build`
+- **Copy into website** from `web/bible-on-site`: `USE_LOCAL_FLIP_BOOK=1 npm run postinstall` (or add a script that runs that) to copy the local build into node_modules.
+
+The website depends on the **published** `html-flip-book-react` package for CI/production; the copy script only runs when `USE_LOCAL_FLIP_BOOK=1` or when the dependency is `file:`.
