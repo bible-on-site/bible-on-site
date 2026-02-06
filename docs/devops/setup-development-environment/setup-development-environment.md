@@ -49,6 +49,23 @@ For website E2E/performance tests and API testing, you'll also need:
 4. From `./devops`, execute `npm i`
 5. From `./devops`, execute `npm run setup_dev_env`
 
+### Data and MySQL dev database
+
+The development MySQL database is named **tanah-dev**. Populate it with structure and test data from the `data` directory:
+
+```bash
+cd data && cargo make mysql-populate-dev
+```
+
+For production-like data on demand:
+
+```bash
+AWS_PROFILE=AdministratorAccess-250598594267 aws sso login
+AWS_PROFILE=AdministratorAccess-250598594267 npx tsx devops/setup-dev-env.mts sync-from-prod
+```
+
+This auto-fetches prod DB credentials from SSM and temporarily opens RDS access for your IP. See [Sync from production](../../../data/README.md#sync-from-production-optional) in `data/README.md` for details.
+
 ### VS Code
 
 Install recommended extensions:

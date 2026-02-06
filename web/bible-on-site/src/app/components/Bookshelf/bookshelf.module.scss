@@ -1,0 +1,296 @@
+$sqSize: 16px;
+$contW: 100%;
+$contH: 100%;
+$ySpaces: 14;
+$zSpaces: 19;
+$xAngle: 80deg;
+$zAngle: 0deg;
+$trans: 0.25s;
+
+$fFontSize: $sqSize * 0.75;
+
+.root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-color: #d8ebff;
+  font-family: inherit;
+  font-size: 20px;
+  line-height: 1;
+  direction: ltr;
+  text-align: left;
+  overflow: auto;
+}
+
+.root,
+.root *,
+.root *::before,
+.root *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+// Multi-shelf layout (stacked vertically)
+.multiShelfContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 40px;
+  padding: 20px;
+  min-height: 100%;
+}
+
+// Wrapper for each shelf (used in multi-shelf mode)
+.shelfWrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+// Helek label engraved on shelf front (multi-shelf mode)
+.shelfLabel {
+  font-family: inherit;
+  font-size: 0.65rem;
+  font-weight: bold;
+  color: #d4a574;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6), 0 -1px 0 rgba(255, 255, 255, 0.1);
+  direction: rtl;
+  position: absolute;
+  top: 50%;
+  right: 50%;
+  transform: translate(50%, -50%);
+  white-space: nowrap;
+  letter-spacing: 0.1em;
+
+  // Smaller label on narrow screens
+  @media (max-width: 540px) {
+    font-size: 0.45rem;
+    letter-spacing: 0.05em;
+  }
+}
+
+// Container for the 3D shelf
+.container {
+  animation: fadeIn $trans $trans linear forwards;
+  display: flex;
+  opacity: 0;
+  overflow: visible;
+  position: relative;
+  width: 100%;
+  height: 350px; // Fixed height for multi-shelf mode
+  perspective: 800px;
+  transform-style: preserve-3d;
+}
+
+// Single shelf mode - container fills the root
+.root > .shelfWrapper {
+  position: absolute;
+  inset: 0;
+
+  > .container {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+  }
+}
+
+.surface {
+  display: block;
+  height: $sqSize * $ySpaces;
+  margin: auto;
+  transform-style: preserve-3d;
+  transform: translateY($sqSize * $zSpaces * 0.5) rotateX($xAngle) rotateZ($zAngle);
+  transition: transform $trans;
+  will-change: transform;
+}
+
+.block {
+  display: block;
+  transform-style: preserve-3d;
+  position: absolute;
+  bottom: 0;
+  // Reset button styles
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  padding: 0;
+}
+
+// Only books (buttons) should be clickable
+button.block {
+  cursor: pointer;
+}
+
+.blockInner {
+  position: relative;
+  width: $sqSize;
+  transition: transform $trans linear;
+  transform-style: preserve-3d;
+  transform: rotateX(-90deg) translateZ($sqSize);
+}
+
+.blockInner > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  position: absolute;
+  width: $sqSize;
+  height: $sqSize;
+
+  // Shadow overlay for 3D effect
+  &::before {
+    content: "";
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    opacity: 0.2;
+    pointer-events: none;
+  }
+}
+
+.back {
+  transform: translateZ(-$sqSize) rotateY(180deg);
+
+  &::before {
+    opacity: 0;
+  }
+}
+
+.front {
+  &::before {
+    opacity: 0;
+  }
+}
+
+.left {
+  transform-origin: center left;
+  transform: rotateY(270deg) translateX(-$sqSize);
+
+  &::before {
+    opacity: 0;
+  }
+}
+
+.right {
+  transform-origin: top right;
+  transform-style: preserve-3d;
+
+  &::before {
+    opacity: 0;
+  }
+}
+
+.top,
+.bottom {
+  transform-origin: top center;
+}
+
+// Spine text - vertical, rotated 90 degrees
+.spineText {
+  font-family: inherit; // Use website font, avoid mixing font families
+  font-weight: bold;
+  -webkit-font-smoothing: antialiased;
+  position: absolute;
+  background: transparent;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  font-size: $fFontSize;
+  line-height: $fFontSize;
+  top: 50%;
+  left: 50%;
+  transform-origin: 0 50%;
+  transform: rotate(90deg) translateX(-50%);
+  white-space: nowrap;
+  width: max-content;
+}
+
+// Cover content container - positioned at 25% from top
+.coverContent {
+  position: absolute;
+  top: 25%;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  direction: rtl;
+}
+
+// Cover title - larger, horizontal
+.coverTitle {
+  font-family: inherit; // Use website font, avoid mixing font families
+  font-weight: bold;
+  -webkit-font-smoothing: antialiased;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  font-size: $fFontSize * 1.5;
+  line-height: 1.2;
+  white-space: nowrap;
+  margin: 0;
+}
+
+// Cover subtitle - smaller text below title
+.coverSubtitle {
+  font-family: inherit; // Use website font, avoid mixing font families
+  font-weight: normal;
+  -webkit-font-smoothing: antialiased;
+  color: rgba(255, 255, 255, 0.8);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  font-size: $fFontSize * 0.7;
+  line-height: 1.3;
+  white-space: nowrap;
+  margin-top: 4px;
+}
+
+// Bookmark ribbon on today's sefer — hangs from top of spine.
+// Uses two pseudo-layers: white outline (::before, slightly larger) behind
+// the red ribbon (::after), both V-notched via clip-path.
+.bookmarkRibbon {
+  position: absolute;
+  top: 0;
+  left: 25%;
+  width: 45%;
+  // height is set inline (sqSize * 3) for responsive sizing
+  pointer-events: none;
+  z-index: 2;
+
+  // White outline layer — extends 1px beyond the red to form the border
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0 -1px -1px;
+    background: rgba(255, 255, 255, 0.9);
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 70%, 0 100%);
+  }
+
+  // Red ribbon layer
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, #c0392b 85%, #a93226 100%);
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 70%, 0 100%);
+  }
+}
+
+// Book hover effect
+.book:hover .blockInner,
+.book:active .blockInner,
+.book:focus .blockInner {
+  transform: rotateX(-90deg) translateZ($sqSize * 4);
+}
+
+.book:focus {
+  outline: none;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

@@ -1,0 +1,105 @@
+.section {
+  position: relative;
+  text-align: center;
+  width: 100%;
+  z-index: 1;
+  background-color: #d8ebff;
+  padding: 2em 0 5em;
+  scroll-margin-top: 1em;
+}
+
+.header {
+  padding: 0.5em 0;
+  letter-spacing: 0.1em;
+  text-align: center;
+  color: #333;
+}
+
+.header h1 {
+  font-size: 1.6em;
+  margin: 0.3em 0;
+}
+
+.header h2 {
+  font-size: 1em;
+  margin: 0.2em 0;
+  color: #555;
+  letter-spacing: 0;
+  font-weight: normal;
+}
+
+.bookshelfContainer {
+  width: 100%;
+  height: 450px; /* Single shelf mode - explicit height needed for absolute positioning */
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #d8ebff;
+  border-top-color: #1552ac;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Bottom divider - wave transition to white (AppSection) */
+.bottomDivider {
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  right: 0;
+  height: 3em;
+  pointer-events: none;
+  position: absolute;
+  width: 100%;
+  z-index: 3;
+  background-position: bottom;
+  bottom: 0;
+}
+
+/* Responsive divider images and multi-shelf height */
+@media screen and (max-width: 899px) {
+  .bottomDivider {
+    background-image: url(/root/sefarim-bottom-devider-xs.svg);
+  }
+  .bookshelfContainer {
+    height: auto;
+    min-height: 1650px;
+  }
+}
+
+@media screen and (min-width: 960px) and (max-width: 1280px) {
+  .bottomDivider {
+    background-image: url(/root/sefarim-bottom-devider-s.svg);
+  }
+}
+
+@media screen and (min-width: 1280px) and (max-width: 1920px) {
+  .bottomDivider {
+    background-image: url(/root/sefarim-bottom-devider-m.svg);
+  }
+}
+
+@media screen and (min-width: 1920px) and (max-width: 2560px) {
+  .bottomDivider {
+    background-image: url(/root/sefarim-bottom-devider-l.svg);
+  }
+}
+
+@media screen and (min-width: 2560px) {
+  .bottomDivider {
+    background-image: url(/root/sefarim-bottom-devider-xl.svg);
+  }
+}

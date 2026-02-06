@@ -6,6 +6,10 @@ alwaysApply: false
 
 # API (web/api) Practices
 
+## Legacy Reference
+
+When asked to **inspire from legacy API** or reference the old API implementation, look at the `legacy-api/` directory in the repo root. This is an untracked directory containing the previous API codebase for reference.
+
 ## Development
 
 Use **cargo-make** (`Makefile.toml`):

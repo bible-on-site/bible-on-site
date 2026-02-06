@@ -43,8 +43,8 @@ test.describe("StarterService", () => {
 			).toBe(true);
 			expect(responseBody.data.starter.perekArticlesCounters.length).toBe(929);
 
-			// Verify first perek has 3 articles (our test data has 3 articles for perek_id=1)
-			expect(responseBody.data.starter.perekArticlesCounters[0]).toBe(3);
+			// Verify first perek has 4 articles (our test data has 4 articles for perek_id=1)
+			expect(responseBody.data.starter.perekArticlesCounters[0]).toBe(4);
 
 			// Verify other perakim have 0 articles
 			expect(responseBody.data.starter.perekArticlesCounters[1]).toBe(0);

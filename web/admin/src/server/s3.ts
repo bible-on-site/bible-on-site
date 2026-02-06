@@ -11,8 +11,8 @@ import { execute } from "./db";
 const S3_REGION =
 	process.env.S3_REGION || process.env.AWS_REGION || "us-east-1";
 const S3_BUCKET = process.env.S3_BUCKET || "bible-on-site-rabbis";
-const S3_ENDPOINT = process.env.S3_ENDPOINT; // Optional: for LocalStack/MinIO
-const S3_FORCE_PATH_STYLE = process.env.S3_FORCE_PATH_STYLE === "true"; // Required for LocalStack/MinIO
+const S3_ENDPOINT = process.env.S3_ENDPOINT; // Optional: for MinIO
+const S3_FORCE_PATH_STYLE = process.env.S3_FORCE_PATH_STYLE === "true"; // Required for MinIO
 const S3_ACCESS_KEY =
 	process.env.S3_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || "";
 const S3_SECRET_KEY =
@@ -31,7 +31,7 @@ const s3Client = new S3Client({
 // Build the public URL based on configuration
 function getPublicUrl(key: string): string {
 	if (S3_ENDPOINT) {
-		// LocalStack/MinIO style URL
+		// MinIO style URL
 		return `${S3_ENDPOINT}/${S3_BUCKET}/${key}`;
 	}
 	// Standard AWS S3 URL
@@ -61,12 +61,12 @@ export async function uploadImage(
 }
 
 export async function deleteImage(imageUrl: string): Promise<void> {
-	// Extract key from URL - handle both S3 and LocalStack/MinIO URLs
+	// Extract key from URL - handle both S3 and MinIO URLs
 	const url = new URL(imageUrl);
 	let key: string;
 
 	if (S3_ENDPOINT && imageUrl.startsWith(S3_ENDPOINT)) {
-		// LocalStack/MinIO style: endpoint/bucket/key
+		// MinIO style: endpoint/bucket/key
 		const pathParts = url.pathname.split("/").filter(Boolean);
 		key = pathParts.slice(1).join("/"); // Skip bucket name
 	} else {

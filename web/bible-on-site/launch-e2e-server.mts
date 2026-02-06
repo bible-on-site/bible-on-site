@@ -107,9 +107,10 @@ async function main() {
 	// Populate database before starting the server
 	await populateDatabase();
 
-	// Start the Next.js server
-	const command = useCoverage ? "npm" : "npm";
-	const args = useCoverage ? ["run", "dev"] : ["run", "start"];
+	// Start the Next.js server directly (bypass predev hook which switches
+	// flip-book to local and runs docker compose — both break in CI)
+	const command = "npx";
+	const args = useCoverage ? ["next", "dev", "-p", "3001"] : ["next", "start", "-p", "3001"];
 
 	log(`[Server] Starting Next.js server: ${command} ${args.join(" ")}`);
 

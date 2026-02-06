@@ -48,12 +48,14 @@ public partial class AuthorsViewModel : ObservableObject
     {
         get
         {
+            var authorsWithArticles = Authors.Where(a => a.ArticlesCount > 0);
+
             if (OptimizedSearchPhrase == SearchPhraseAll)
-                return Authors.ToList();
+                return authorsWithArticles.ToList();
 
             var searchTerm = OptimizedSearchPhrase.ToLowerInvariant();
 
-            return Authors
+            return authorsWithArticles
                 .Where(author =>
                 {
                     // Search in name (removing "הרב" prefix for matching)

@@ -1,0 +1,186 @@
+.rabbisBlessingPage {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  padding-top: 88px; /* Account for fixed header (72px) + spacing */
+}
+
+.pageTitle {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1c2c5d;
+  margin: 0 0 8px 0;
+  text-align: center;
+}
+
+.pageSubtitle {
+  font-size: 1rem;
+  color: #6b7280;
+  margin: 0 0 32px 0;
+  text-align: center;
+}
+
+/* Masonry-like grid for videos */
+.videoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 24px;
+  margin-bottom: 40px;
+}
+
+.videoCard {
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.videoCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.videoWrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+
+.video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.videoInfo {
+  padding: 16px;
+  text-align: right;
+}
+
+.rabbiName {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1c2c5d;
+  margin: 0 0 4px 0;
+}
+
+.videoTitle {
+  font-size: 0.9rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.backLinkWrapper {
+  text-align: center;
+  padding: 24px 0 48px;
+}
+
+.backLink {
+  display: inline-block;
+  padding: 12px 32px;
+  background: #1c2c5d;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+}
+
+.backLink:hover {
+  background: #2a3d7a;
+  transform: translateY(-2px);
+}
+
+/* ── Poster inside grid card ── */
+.posterButton {
+  border: none;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+}
+
+.posterImage {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* ── Lightbox Modal ── */
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.modalContent {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.modalImage {
+  max-width: 90vw;
+  max-height: 85vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.modalClose {
+  position: absolute;
+  top: -16px;
+  left: -16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: #fff;
+  color: #1c2c5d;
+  font-size: 1.2rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s ease;
+  z-index: 1;
+}
+
+.modalClose:hover {
+  transform: scale(1.1);
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .videoGrid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .pageTitle {
+    font-size: 1.5rem;
+  }
+
+  .modalClose {
+    top: -12px;
+    left: -8px;
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+  }
+}

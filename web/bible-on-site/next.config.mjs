@@ -15,14 +15,14 @@ const nextConfig = {
 		// Allow fetching images from loopback addresses in development
 		dangerouslyAllowSVG: true,
 		remotePatterns: [
-			// LocalStack/MinIO for development
+			// MinIO for development
 			{
 				protocol: "http",
 				hostname: "localhost",
 				port: "4566",
 				pathname: "/bible-on-site-rabbis/**",
 			},
-			// Also allow 127.0.0.1 for LocalStack
+			// Also allow 127.0.0.1 for MinIO
 			{
 				protocol: "http",
 				hostname: "127.0.0.1",

@@ -135,7 +135,7 @@ async function populateDatabase(): Promise<void> {
 /**
  * Populate S3 with test images.
  * Runs `cargo make s3-populate-test` from the data/ directory.
- * Only runs if S3_ENDPOINT environment variable is set (LocalStack mode).
+ * Only runs if S3_ENDPOINT environment variable is set (MinIO mode).
  */
 async function populateS3(): Promise<void> {
 	const s3Endpoint = process.env.S3_ENDPOINT;
@@ -179,9 +179,10 @@ async function main() {
 	// Populate S3 with test images
 	await populateS3();
 
-	// Start the Vite dev server
+	// Start just the Vite dev server (skip docker:up and populate steps
+	// since they are already handled by populateDatabase/populateS3 above)
 	const command = "npm";
-	const args = ["run", "dev"];
+	const args = ["run", "dev:app"];
 
 	log(`[Server] Starting Vite dev server: ${command} ${args.join(" ")}`);
 

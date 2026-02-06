@@ -3,12 +3,18 @@ using Android.Content.PM;
 using Android.OS;
 using Android.Views;
 using BibleOnSite.Behaviors;
-
 namespace BibleOnSite;
 
 [Activity(Theme = "@style/Maui.SplashTheme", MainLauncher = true, LaunchMode = LaunchMode.SingleTop, ConfigurationChanges = ConfigChanges.ScreenSize | ConfigChanges.Orientation | ConfigChanges.UiMode | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.Density)]
 public class MainActivity : MauiAppCompatActivity
 {
+    protected override void OnCreate(Bundle? savedInstanceState)
+    {
+        base.OnCreate(savedInstanceState);
+        // Firebase initialized from google-services.json (Plugin.Firebase / Xamarin.Firebase.Analytics process it at build).
+        // For explicit init use Plugin.Firebase.Core CrossFirebase.Initialize(activity, settings) when needed.
+    }
+
     private float _downX, _downY;
     private long _downTime;
     private const float TapThreshold = 30f; // Max movement for tap

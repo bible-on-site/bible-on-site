@@ -13,7 +13,7 @@ test.describe("Section pages", () => {
 		await page.goto("/contact");
 		await expect(page).toHaveTitle('תנ"ך על הפרק');
 		// Section page includes the main heading and contact/donation/tos sections
-		const heading = page.getByRole("heading", { name: 'תנ"ך על הפרק' });
+		const heading = page.getByRole("heading", { name: 'תנ"ך על הפרק' }).first();
 		await expect(heading).toBeVisible();
 		// Contact section is present on this page
 		const contactHeading = page.getByRole("heading", {
