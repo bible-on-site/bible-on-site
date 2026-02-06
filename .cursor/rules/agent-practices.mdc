@@ -10,3 +10,30 @@ alwaysApply: true
 - Run commands yourself: build, copy scripts, installs, dev server, tests. Do not instruct the user to "run this in your terminal" or "then run the copy script."
 - When working on flip book integration with the local `html-flip-book` repo: build in html-flip-book, then in the website run `USE_LOCAL_FLIP_BOOK=1 npm run postinstall` to copy the local build into node_modules (or add a script that runs that). Do not rely on the file: dependency in CI; the website uses the published npm package.
 - Apply fixes, run linters, and verify; do not leave follow-up steps for the user unless they explicitly ask.
+
+# No Suppressing Errors Without Approval
+
+**Never silence, suppress, or ignore errors/warnings to make CI pass.**
+
+- Do not add `--ignore-errors`, `continue-on-error`, `|| true`, `catch {}` (empty), or equivalent flags to work around a failing step.
+- Do not downgrade errors to warnings, skip failing tests, or disable lint rules to unblock a pipeline.
+- If a tool or CI step is failing, **find and fix the root cause**.
+- If a proper fix is genuinely infeasible in the current scope, **ask the user for approval** before introducing any suppression, and explain exactly what is being suppressed and why.
+
+```
+# BAD - suppressing to make CI green
+lcov --ignore-errors inconsistent,corrupt ...
+continue-on-error: true
+
+# GOOD - fix the root cause
+# Normalize the coverage data so it's consistent before merging
+```
+
+# Reproduce Locally Before Remote Iteration
+
+**Reproduce and iterate on issues locally instead of pushing to remote CI.**
+
+- When a CI/CD step fails, reproduce the failure locally first (run tests, builds, linters, Docker builds, coverage merges locally).
+- Iterate on the fix locally until it passes, then push once.
+- Do not use remote CI as a trial-and-error debugging loop (push → wait 10 min → read logs → push again).
+- Acceptable exceptions: failures that depend on CI-only infrastructure (secrets, cloud services, specific runner environments). Even then, minimize remote round-trips by reasoning through the issue first.
