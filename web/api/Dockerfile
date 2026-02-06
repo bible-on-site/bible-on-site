@@ -1,4 +1,5 @@
-# syntax=docker/dockerfile:1
+# Note: Using classic docker build (DOCKER_BUILDKIT=0) for network:host support
+# Do not add BuildKit-specific syntax directives (e.g. --mount)
 
 ARG RUST_VERSION=1.92.0
 ARG APP_NAME=api
@@ -13,22 +14,14 @@ WORKDIR /app
 # Install host build dependencies.
 RUN apk add --no-cache clang lld musl-dev git openssl-dev openssl-libs-static pkgconfig
 
-# Build the application.
-# Leverage a cache mount to /usr/local/cargo/registry/
-# for downloaded dependencies, a cache mount to /usr/local/cargo/git/db
-# for git repository dependencies, and a cache mount to /app/target/ for
-# compiled dependencies which will speed up subsequent builds.
-# Leverage a bind mount to the src directory to avoid having to copy the
-# source code into the container. Once built, copy the executable to an
-# output directory before the cache mounted /app/target is unmounted.
-RUN --mount=type=bind,source=api/src,target=src \
-    --mount=type=bind,source=api/Cargo.toml,target=Cargo.toml \
-    --mount=type=bind,source=api/Cargo.lock,target=Cargo.lock \
-    --mount=type=bind,source=api/entities,target=entities \
-    --mount=type=cache,target=/app/target/ \
-    --mount=type=cache,target=/usr/local/cargo/git/db \
-    --mount=type=cache,target=/usr/local/cargo/registry/ \
-    cargo build --locked --release && \
+# Copy source files (build context is web/)
+COPY api/src ./src
+COPY api/Cargo.toml ./Cargo.toml
+COPY api/Cargo.lock ./Cargo.lock
+COPY api/entities ./entities
+
+# Build the application in release mode.
+RUN cargo build --locked --release && \
     cp ./target/release/$APP_NAME /bin/server
 
 ################################################################################

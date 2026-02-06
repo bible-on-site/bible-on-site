@@ -13,8 +13,9 @@ WORKDIR /app
 # Build context is web/, so bible-on-site is a subdirectory
 COPY bible-on-site/package.json bible-on-site/package-lock.json ./
 COPY bible-on-site/.npmrc* ./
-# TODO can pass the entire npm cache
-RUN npm ci --omit=dev --prefer-offline
+# --ignore-scripts: postinstall (copy-local-flip-book.mjs) is for local dev only
+# and the scripts/ directory isn't available in this deps stage.
+RUN npm ci --omit=dev --prefer-offline --ignore-scripts
 
 # Rebuild the source code only when needed
 FROM base AS builder
