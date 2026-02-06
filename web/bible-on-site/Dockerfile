@@ -13,9 +13,11 @@ WORKDIR /app
 # Build context is web/, so bible-on-site is a subdirectory
 COPY bible-on-site/package.json bible-on-site/package-lock.json ./
 COPY bible-on-site/.npmrc* ./
+# Install ALL dependencies (including dev like sass) needed for the build step.
+# The final runner stage uses Next.js standalone output, so dev deps don't end up in production.
 # --ignore-scripts: postinstall (copy-local-flip-book.mjs) is for local dev only
 # and the scripts/ directory isn't available in this deps stage.
-RUN npm ci --omit=dev --prefer-offline --ignore-scripts
+RUN npm ci --prefer-offline --ignore-scripts
 
 # Rebuild the source code only when needed
 FROM base AS builder
