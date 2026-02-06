@@ -29,7 +29,9 @@ mergeCoverage();
 
 function mergeCoverage(): void {
 	// Both unit and e2e tests now use swc-plugin-coverage-instrument for consistent branch line mappings
-	const cmd = `docker run --rm -t -v ${COVERAGE_DIR}:/.coverage lcov-cli:0.0.2 --rc branch_coverage=1 -a /.coverage/unit/lcov.normalized.info -a /.coverage/e2e/lcov.normalized.info -o /.coverage/merged/lcov.info`;
+	// --ignore-errors inconsistent,corrupt: SWC instrumentation may produce branch data where a line is hit
+	// but no branches are evaluated (e.g. JSX ternaries in ArticlesSection.tsx), which lcov treats as corrupt.
+	const cmd = `docker run --rm -t -v ${COVERAGE_DIR}:/.coverage lcov-cli:0.0.2 --rc branch_coverage=1 --ignore-errors inconsistent,corrupt -a /.coverage/unit/lcov.normalized.info -a /.coverage/e2e/lcov.normalized.info -o /.coverage/merged/lcov.info`;
 
 	const out = runCommand(cmd);
 	if (out) console.log(formatOutput(out));
