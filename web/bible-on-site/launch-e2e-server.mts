@@ -9,7 +9,7 @@
  */
 
 import { execSync, spawn, spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -107,10 +107,29 @@ async function main() {
 	// Populate database before starting the server
 	await populateDatabase();
 
+	// Clear Next.js data cache to avoid stale unstable_cache entries from
+	// previous dev runs that may have used a different database.
+	// Dev mode (Turbopack) stores fetch cache under .next/dev/cache/fetch-cache/
+	// while production stores it under .next/cache/fetch-cache/
+	for (const cacheSubDir of [
+		".next/dev/cache/fetch-cache",
+		".next/cache/fetch-cache",
+	]) {
+		const cacheDir = path.resolve(__dirname, cacheSubDir);
+		if (existsSync(cacheDir)) {
+			log(`[Cache] Clearing stale data cache at ${cacheDir}`);
+			rmSync(cacheDir, { recursive: true, force: true });
+		}
+	}
+
 	// Start the Next.js server directly (bypass predev hook which switches
 	// flip-book to local and runs docker compose — both break in CI)
-	const command = "npx";
-	const args = useCoverage ? ["next", "dev", "-p", "3001"] : ["next", "start", "-p", "3001"];
+	// For coverage: use `next dev` (needs SWC instrumentation, compiles on the fly)
+	// For production: use standalone server (`next start` doesn't work with output: "standalone")
+	const command = useCoverage ? "npx" : "node";
+	const args = useCoverage
+		? ["next", "dev", "-p", "3001"]
+		: [".next/standalone/server.js"];
 
 	log(`[Server] Starting Next.js server: ${command} ${args.join(" ")}`);
 
@@ -118,7 +137,11 @@ async function main() {
 		cwd: __dirname,
 		stdio: "inherit",
 		shell: true,
-		env: process.env,
+		env: {
+			...process.env,
+			// Standalone server reads PORT and HOSTNAME from env (no CLI flags)
+			...(!useCoverage && { PORT: "3001", HOSTNAME: "127.0.0.1" }),
+		},
 	});
 
 	server.on("error", (err) => {

@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import { headers } from "next/headers";
 import type { ArticlePerekPair } from "../lib/articles";
 import { getAllArticlePerekIdPairs } from "../lib/articles";
-import { getAllAuthorIds } from "../lib/authors";
+import { getAllAuthorSlugs } from "../lib/authors";
 
 /**
  * Static section paths for the sitemap
@@ -104,7 +104,7 @@ export function generateAuthorsIndexEntry(
 	config: SitemapConfig,
 ): MetadataRoute.Sitemap[0] {
 	return {
-		url: `${config.baseUrl}/authors`,
+		url: `${config.baseUrl}/929/authors`,
 		lastModified: config.lastModified,
 		changeFrequency: "monthly",
 		priority: 0.7,
@@ -112,14 +112,14 @@ export function generateAuthorsIndexEntry(
 }
 
 /**
- * Generates author page URL entries
+ * Generates author page URL entries using normalised-name slugs.
  */
 export function generateAuthorEntries(
 	config: SitemapConfig,
-	authorIds: number[],
+	authorSlugs: string[],
 ): MetadataRoute.Sitemap {
-	return authorIds.map((id) => ({
-		url: `${config.baseUrl}/authors/${id}`,
+	return authorSlugs.map((slug) => ({
+		url: `${config.baseUrl}/929/authors/${encodeURIComponent(slug)}`,
 		lastModified: config.lastModified,
 		changeFrequency: "monthly" as const,
 		priority: 0.6,
@@ -131,7 +131,7 @@ export function generateAuthorEntries(
  */
 export function generateSitemapEntries(
 	config: SitemapConfig,
-	authorIds: number[] = [],
+	authorSlugs: string[] = [],
 	articles: ArticlePerekPair[] = [],
 ): MetadataRoute.Sitemap {
 	return [
@@ -141,7 +141,7 @@ export function generateSitemapEntries(
 		...generatePerekEntries(config),
 		...generateArticleEntries(config, articles),
 		generateAuthorsIndexEntry(config),
-		...generateAuthorEntries(config, authorIds),
+		...generateAuthorEntries(config, authorSlugs),
 	];
 }
 
@@ -152,8 +152,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 	const baseUrl = `https://${host}`;
 
 	// Fetch dynamic data for sitemap entries in parallel
-	const [authorIds, articles] = await Promise.all([
-		getAllAuthorIds(),
+	const [authorSlugs, articles] = await Promise.all([
+		getAllAuthorSlugs(),
 		getAllArticlePerekIdPairs(),
 	]);
 
@@ -162,7 +162,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 			baseUrl,
 			lastModified: new Date(),
 		},
-		authorIds,
+		authorSlugs,
 		articles,
 	);
 }
