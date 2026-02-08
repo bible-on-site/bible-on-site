@@ -99,7 +99,8 @@ Performance tests measure application behavior under load and track metrics over
 | Task | Command |
 | ---- | ------- |
 | Unit Tests | `npm run test:unit` |
-| E2E Tests | `npm run test:e2e` |
+| E2E Tests (Desktop only, faster) | `npm run test:e2e` |
+| E2E Tests (Desktop + Mobile) | `npm run test:e2e:all` |
 | Performance Tests | `npm run test:perf` |
 | Unit Coverage | `npm run coverage:unit` |
 | E2E Coverage | `npm run coverage:e2e` |
