@@ -1,4 +1,4 @@
-import {
+import sitemapFn, {
 	generate929IndexEntry,
 	generateArticleEntries,
 	generateAuthorEntries,
@@ -365,7 +365,6 @@ describe("sitemap", () => {
 				{ articleId: 10, perekId: 1 },
 			]);
 
-			const sitemapFn = (await import("@/app/sitemap")).default;
 			const result = await sitemapFn();
 
 			// Should contain root, sections, 929 index, perakim, 1 article, authors index, 2 authors
