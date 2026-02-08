@@ -3,30 +3,52 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-	getAllAuthorIds,
+	getAllAuthorSlugs,
 	getArticlesByAuthorId,
 	getAuthorById,
-} from "../../../lib/authors";
+	getAuthorByName,
+} from "../../../../lib/authors";
+import type { AuthorDetails } from "../../../../lib/authors";
 import styles from "./page.module.css";
 
-// Authors are pre-generated at build time. ISR handles new authors via revalidation.
-export const dynamicParams = false;
+/**
+ * Authors are pre-generated at build time using normalised-name slugs.
+ * dynamicParams is true so numeric-ID URLs (legacy / backward-compat) still
+ * resolve on-demand rather than returning 404.
+ */
+export const dynamicParams = true;
 
 /**
  * Generate static params for known authors at build time.
- * New authors will be generated on-demand.
+ * Uses normalised author names as the URL slug.
  */
 export async function generateStaticParams() {
-	const authorIds = await getAllAuthorIds();
-	return authorIds.map((id) => ({ id: String(id) }));
+	const slugs = await getAllAuthorSlugs();
+	return slugs.map((slug) => ({ authorParam: slug }));
+}
+
+/**
+ * Resolve the `authorParam` segment to an AuthorDetails.
+ * Tries numeric ID first (backward-compat), then normalised-name match.
+ */
+async function resolveAuthor(
+	authorParam: string,
+): Promise<AuthorDetails | null> {
+	const maybeId = Number.parseInt(authorParam, 10);
+	if (!Number.isNaN(maybeId) && String(maybeId) === authorParam) {
+		return getAuthorById(maybeId);
+	}
+	// Decode percent-encoded Hebrew name and resolve by normalised match
+	const decoded = decodeURIComponent(authorParam);
+	return getAuthorByName(decoded);
 }
 
 /**
  * Cache author data with on-demand revalidation support.
  */
 const getCachedAuthor = unstable_cache(
-	async (id: number) => getAuthorById(id),
-	["author"],
+	async (param: string) => resolveAuthor(param),
+	["author-by-param"],
 	{
 		tags: ["authors"],
 		revalidate: false,
@@ -48,11 +70,10 @@ const getCachedAuthorArticles = unstable_cache(
 export async function generateMetadata({
 	params,
 }: {
-	params: Promise<{ id: string }>;
+	params: Promise<{ authorParam: string }>;
 }) {
-	const { id } = await params;
-	const authorId = Number.parseInt(id, 10);
-	const author = await getCachedAuthor(authorId);
+	const { authorParam } = await params;
+	const author = await getCachedAuthor(authorParam);
 
 	if (!author) {
 		return {
@@ -71,22 +92,16 @@ export async function generateMetadata({
 export default async function AuthorPage({
 	params,
 }: {
-	params: Promise<{ id: string }>;
+	params: Promise<{ authorParam: string }>;
 }) {
-	const { id } = await params;
-	const authorId = Number.parseInt(id, 10);
-
-	if (Number.isNaN(authorId)) {
-		notFound();
-	}
-
-	const author = await getCachedAuthor(authorId);
+	const { authorParam } = await params;
+	const author = await getCachedAuthor(authorParam);
 
 	if (!author) {
 		notFound();
 	}
 
-	const articles = await getCachedAuthorArticles(authorId);
+	const articles = await getCachedAuthorArticles(author.id);
 
 	return (
 		<div className={styles.authorPage}>
@@ -117,7 +132,9 @@ export default async function AuthorPage({
 				<section className={styles.articlesSection}>
 					<header className={styles.sectionHeader}>
 						<span className={styles.sectionIcon}>📚</span>
-						<h2 className={styles.sectionTitle}>מאמרים ({articles.length})</h2>
+						<h2 className={styles.sectionTitle}>
+							מאמרים ({articles.length})
+						</h2>
 					</header>
 
 					<div className={styles.articlesList}>

@@ -14,12 +14,12 @@ jest.mock("@/lib/articles", () => ({
 }));
 
 jest.mock("@/lib/authors", () => ({
-	getAllAuthorIds: jest.fn(),
+	getAllAuthorSlugs: jest.fn(),
 }));
 
 import sitemapFn, { SITEMAP_SECTIONS, TOTAL_PERAKIM } from "@/app/sitemap";
 import { getAllArticlePerekIdPairs } from "@/lib/articles";
-import { getAllAuthorIds } from "@/lib/authors";
+import { getAllAuthorSlugs } from "@/lib/authors";
 import { headers } from "next/headers";
 
 describe("sitemap default export", () => {
@@ -31,7 +31,7 @@ describe("sitemap default export", () => {
 		(headers as jest.Mock).mockResolvedValue({
 			get: (name: string) => (name === "host" ? "example.com" : null),
 		});
-		(getAllAuthorIds as jest.Mock).mockResolvedValue([1, 2]);
+		(getAllAuthorSlugs as jest.Mock).mockResolvedValue(["הרב א", "הרב ב"]);
 		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([
 			{ articleId: 10, perekId: 1 },
 		]);
@@ -46,16 +46,20 @@ describe("sitemap default export", () => {
 
 		expect(urls[0]).toBe("https://example.com");
 		expect(urls).toContain("https://example.com/929/1/10");
-		expect(urls).toContain("https://example.com/authors");
-		expect(urls).toContain("https://example.com/authors/1");
-		expect(urls).toContain("https://example.com/authors/2");
+		expect(urls).toContain("https://example.com/929/authors");
+		expect(urls).toContain(
+			`https://example.com/929/authors/${encodeURIComponent("הרב א")}`,
+		);
+		expect(urls).toContain(
+			`https://example.com/929/authors/${encodeURIComponent("הרב ב")}`,
+		);
 	});
 
 	it("falls back to xn--febl3a.co.il when host header is absent", async () => {
 		(headers as jest.Mock).mockResolvedValue({
 			get: () => null,
 		});
-		(getAllAuthorIds as jest.Mock).mockResolvedValue([]);
+		(getAllAuthorSlugs as jest.Mock).mockResolvedValue([]);
 		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([]);
 
 		const result = await sitemapFn();
@@ -67,12 +71,12 @@ describe("sitemap default export", () => {
 		(headers as jest.Mock).mockResolvedValue({
 			get: (name: string) => (name === "host" ? "test.com" : null),
 		});
-		(getAllAuthorIds as jest.Mock).mockResolvedValue([]);
+		(getAllAuthorSlugs as jest.Mock).mockResolvedValue([]);
 		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([]);
 
 		await sitemapFn();
 
-		expect(getAllAuthorIds).toHaveBeenCalledTimes(1);
+		expect(getAllAuthorSlugs).toHaveBeenCalledTimes(1);
 		expect(getAllArticlePerekIdPairs).toHaveBeenCalledTimes(1);
 	});
 });

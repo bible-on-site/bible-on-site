@@ -179,7 +179,7 @@ describe("sitemap", () => {
 			const result = generateAuthorsIndexEntry(mockConfig);
 
 			expect(result).toEqual({
-				url: "https://example.com/authors",
+				url: "https://example.com/929/authors",
 				lastModified: mockConfig.lastModified,
 				changeFrequency: "monthly",
 				priority: 0.7,
@@ -188,23 +188,30 @@ describe("sitemap", () => {
 	});
 
 	describe("generateAuthorEntries", () => {
-		it("returns author entries for provided IDs", () => {
-			const result = generateAuthorEntries(mockConfig, [1, 5, 10]);
+		it("returns author entries for provided name slugs", () => {
+			const slugs = ["הרב לדוגמא שליטא", "הרב לדוגמא זל", "רב אחר"];
+			const result = generateAuthorEntries(mockConfig, slugs);
 
 			expect(result).toHaveLength(3);
-			expect(result[0].url).toBe("https://example.com/authors/1");
-			expect(result[1].url).toBe("https://example.com/authors/5");
-			expect(result[2].url).toBe("https://example.com/authors/10");
+			expect(result[0].url).toBe(
+				`https://example.com/929/authors/${encodeURIComponent("הרב לדוגמא שליטא")}`,
+			);
+			expect(result[1].url).toBe(
+				`https://example.com/929/authors/${encodeURIComponent("הרב לדוגמא זל")}`,
+			);
+			expect(result[2].url).toBe(
+				`https://example.com/929/authors/${encodeURIComponent("רב אחר")}`,
+			);
 		});
 
-		it("returns empty array when no author IDs provided", () => {
+		it("returns empty array when no author slugs provided", () => {
 			const result = generateAuthorEntries(mockConfig, []);
 
 			expect(result).toHaveLength(0);
 		});
 
 		it("sets monthly change frequency for authors", () => {
-			const result = generateAuthorEntries(mockConfig, [1, 2]);
+			const result = generateAuthorEntries(mockConfig, ["a", "b"]);
 
 			result.forEach((entry) => {
 				expect(entry.changeFrequency).toBe("monthly");
@@ -212,7 +219,7 @@ describe("sitemap", () => {
 		});
 
 		it("sets priority 0.6 for authors", () => {
-			const result = generateAuthorEntries(mockConfig, [1, 2]);
+			const result = generateAuthorEntries(mockConfig, ["a", "b"]);
 
 			result.forEach((entry) => {
 				expect(entry.priority).toBe(0.6);
@@ -268,7 +275,7 @@ describe("sitemap", () => {
 			const authorsIndexPosition =
 				1 + SITEMAP_SECTIONS.length + 1 + TOTAL_PERAKIM;
 			expect(result[authorsIndexPosition].url).toBe(
-				"https://example.com/authors",
+				"https://example.com/929/authors",
 			);
 		});
 
@@ -290,12 +297,13 @@ describe("sitemap", () => {
 
 			// Authors index follows articles
 			expect(result[articleStartPosition + 2].url).toBe(
-				"https://example.com/authors",
+				"https://example.com/929/authors",
 			);
 		});
 
-		it("includes author entries when authorIds provided", () => {
-			const result = generateSitemapEntries(mockConfig, [1, 2, 3]);
+		it("includes author entries when author slugs provided", () => {
+			const slugs = ["הרב א", "הרב ב", "הרב ג"];
+			const result = generateSitemapEntries(mockConfig, slugs);
 
 			// 1 root + 6 sections + 1 929 index + 929 perakim + 1 authors index + 3 authors = 941
 			const expectedLength =
@@ -304,13 +312,13 @@ describe("sitemap", () => {
 
 			// Check last 3 entries are author pages
 			expect(result[result.length - 1].url).toBe(
-				"https://example.com/authors/3",
+				`https://example.com/929/authors/${encodeURIComponent("הרב ג")}`,
 			);
 			expect(result[result.length - 2].url).toBe(
-				"https://example.com/authors/2",
+				`https://example.com/929/authors/${encodeURIComponent("הרב ב")}`,
 			);
 			expect(result[result.length - 3].url).toBe(
-				"https://example.com/authors/1",
+				`https://example.com/929/authors/${encodeURIComponent("הרב א")}`,
 			);
 		});
 
@@ -319,7 +327,8 @@ describe("sitemap", () => {
 				{ articleId: 10, perekId: 1 },
 				{ articleId: 30, perekId: 5 },
 			];
-			const result = generateSitemapEntries(mockConfig, [1, 2], mockArticles);
+			const slugs = ["הרב א", "הרב ב"];
+			const result = generateSitemapEntries(mockConfig, slugs, mockArticles);
 
 			// 1 root + 6 sections + 1 929 index + 929 perakim + 2 articles + 1 authors index + 2 authors = 942
 			const expectedLength =
@@ -332,8 +341,12 @@ describe("sitemap", () => {
 			expect(urls).toContain("https://example.com/929/5/30");
 
 			// Check authors are present
-			expect(urls).toContain("https://example.com/authors/1");
-			expect(urls).toContain("https://example.com/authors/2");
+			expect(urls).toContain(
+				`https://example.com/929/authors/${encodeURIComponent("הרב א")}`,
+			);
+			expect(urls).toContain(
+				`https://example.com/929/authors/${encodeURIComponent("הרב ב")}`,
+			);
 		});
 	});
 
