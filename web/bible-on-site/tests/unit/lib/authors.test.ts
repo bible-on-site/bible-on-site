@@ -10,8 +10,10 @@ jest.mock("../../../src/lib/api-client", () => ({
 import { query } from "../../../src/lib/api-client";
 import {
 	getAllAuthorIds,
+	getAllAuthorSlugs,
 	getArticlesByAuthorId,
 	getAuthorById,
+	getAuthorByName,
 	getAuthorImageUrl,
 } from "../../../src/lib/authors/service";
 
@@ -278,6 +280,117 @@ describe("authors service", () => {
 			expect(result).toEqual([]);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch author IDs:",
+				"string error",
+			);
+		});
+	});
+
+	describe("getAuthorByName", () => {
+		it("returns author when normalised name matches", async () => {
+			const mockRows = [
+				{ id: 1, name: 'הרב לדוגמא שליט"א', details: "תיאור" },
+				{ id: 2, name: 'הרב לדוגמא ז"ל', details: "תיאור" },
+			];
+			mockQuery.mockResolvedValue(mockRows);
+			process.env.S3_ENDPOINT = "http://localhost:4566";
+
+			// Search with stripped quotes — should match author 1
+			const result = await getAuthorByName("הרב לדוגמא שליטא");
+
+			expect(result).toEqual(
+				expect.objectContaining({ id: 1, name: 'הרב לדוגמא שליט"א' }),
+			);
+		});
+
+		it("matches even when input has quotes and DB name has quotes", async () => {
+			const mockRows = [
+				{ id: 1, name: 'הרב לדוגמא שליט"א', details: "תיאור" },
+			];
+			mockQuery.mockResolvedValue(mockRows);
+			process.env.S3_ENDPOINT = "http://localhost:4566";
+
+			const result = await getAuthorByName('הרב לדוגמא שליט"א');
+
+			expect(result).toEqual(expect.objectContaining({ id: 1 }));
+		});
+
+		it("returns null when no name matches", async () => {
+			const mockRows = [
+				{ id: 1, name: 'הרב לדוגמא שליט"א', details: "" },
+			];
+			mockQuery.mockResolvedValue(mockRows);
+
+			const result = await getAuthorByName("הרב לא קיים");
+
+			expect(result).toBeNull();
+		});
+
+		it("returns null on error", async () => {
+			mockQuery.mockRejectedValue(new Error("DB error"));
+
+			const result = await getAuthorByName("הרב לדוגמא");
+
+			expect(result).toBeNull();
+			expect(console.warn).toHaveBeenCalledWith(
+				expect.stringContaining("Failed to fetch author by name"),
+				"DB error",
+			);
+		});
+
+		it("handles non-Error rejection gracefully", async () => {
+			mockQuery.mockRejectedValue("string error");
+
+			const result = await getAuthorByName("test");
+
+			expect(result).toBeNull();
+			expect(console.warn).toHaveBeenCalledWith(
+				expect.stringContaining("Failed to fetch author by name"),
+				"string error",
+			);
+		});
+	});
+
+	describe("getAllAuthorSlugs", () => {
+		it("returns normalised name slugs", async () => {
+			const mockRows = [
+				{ id: 1, name: 'הרב לדוגמא שליט"א', details: "" },
+				{ id: 2, name: 'הרב לדוגמא ז"ל', details: "" },
+			];
+			mockQuery.mockResolvedValue(mockRows);
+
+			const result = await getAllAuthorSlugs();
+
+			expect(result).toEqual(["הרב לדוגמא שליטא", "הרב לדוגמא זל"]);
+		});
+
+		it("returns empty array when no authors", async () => {
+			mockQuery.mockResolvedValue([]);
+
+			const result = await getAllAuthorSlugs();
+
+			expect(result).toEqual([]);
+		});
+
+		it("returns empty array on error", async () => {
+			mockQuery.mockRejectedValue(new Error("DB error"));
+
+			const result = await getAllAuthorSlugs();
+
+			expect(result).toEqual([]);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch author slugs:",
+				"DB error",
+			);
+		});
+
+		it("handles non-Error rejection gracefully", async () => {
+			mockQuery.mockRejectedValue("string error");
+
+			const result = await getAllAuthorSlugs();
+
+			expect(result).toEqual([]);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch author slugs:",
 				"string error",
 			);
 		});
