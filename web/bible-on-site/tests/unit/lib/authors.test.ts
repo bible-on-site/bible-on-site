@@ -85,6 +85,16 @@ describe("authors service", () => {
 		});
 	});
 
+	describe("checkS3Availability (via getAuthorImageUrl)", () => {
+		it("skips check in production mode", () => {
+			process.env.NODE_ENV = "production";
+			process.env.S3_ENDPOINT = "http://localhost:4566";
+
+			// Should not throw or fetch — early return in production
+			expect(() => getAuthorImageUrl(1)).not.toThrow();
+		});
+	});
+
 	describe("getAuthorById", () => {
 		it("returns mapped author when found", async () => {
 			const mockRow = {
@@ -132,6 +142,18 @@ describe("authors service", () => {
 			expect(consoleWarn).toHaveBeenCalledWith(
 				"Failed to fetch author 1:",
 				"DB error",
+			);
+		});
+
+		it("handles non-Error rejection gracefully", async () => {
+			mockQuery.mockRejectedValue("string error");
+
+			const result = await getAuthorById(1);
+
+			expect(result).toBeNull();
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch author 1:",
+				"string error",
 			);
 		});
 
@@ -198,6 +220,18 @@ describe("authors service", () => {
 				"DB error",
 			);
 		});
+
+		it("handles non-Error rejection gracefully", async () => {
+			mockQuery.mockRejectedValue("string error");
+
+			const result = await getArticlesByAuthorId(5);
+
+			expect(result).toEqual([]);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch articles for author 5:",
+				"string error",
+			);
+		});
 	});
 
 	describe("getAllAuthorIds", () => {
@@ -233,6 +267,18 @@ describe("authors service", () => {
 			expect(consoleWarn).toHaveBeenCalledWith(
 				"Failed to fetch author IDs:",
 				"DB error",
+			);
+		});
+
+		it("handles non-Error rejection gracefully", async () => {
+			mockQuery.mockRejectedValue("string error");
+
+			const result = await getAllAuthorIds();
+
+			expect(result).toEqual([]);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch author IDs:",
+				"string error",
 			);
 		});
 	});

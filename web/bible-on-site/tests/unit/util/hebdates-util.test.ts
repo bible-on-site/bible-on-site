@@ -214,30 +214,68 @@ describe("HebrewDate", () => {
 	});
 
 	describe("toHebrewLocaleString", () => {
-		it("returns a Hebrew locale string", () => {
-			const hDate = HebrewDate.fromHebrewComponents(5784, HebrewMonth.SIVAN, 21);
+		it("returns Hebrew locale string with day, month and year", () => {
+			// 21 Sivan 5784
+			const hDate = HebrewDate.fromHebrewComponents(
+				5784,
+				HebrewMonth.SIVAN,
+				21,
+			);
 			const result = hDate.toHebrewLocaleString();
-			// Should contain Hebrew characters for the date
-			expect(typeof result).toBe("string");
-			expect(result.length).toBeGreaterThan(0);
+			// he-IL locale renders Sivan as "בסיוון" (with ב prefix)
+			expect(result).toContain("סיוון");
+			expect(result).toContain("21");
+		});
+
+		it("returns correct month name for Shvat", () => {
+			const hDate = HebrewDate.fromHebrewComponents(
+				5784,
+				HebrewMonth.SHVAT,
+				18,
+			);
+			const result = hDate.toHebrewLocaleString();
+			expect(result).toContain("שבט");
 		});
 	});
 
 	describe("toTraditionalHebrewString", () => {
-		it("returns traditional format for year >= 5000", () => {
-			const hDate = HebrewDate.fromHebrewComponents(5784, HebrewMonth.SHVAT, 18);
+		it("returns day (gematria), month name, and year with ה' prefix for year >= 5000", () => {
+			// 18 Shvat 5784 → י"ח שבט ה'תשפ"ד
+			const hDate = HebrewDate.fromHebrewComponents(
+				5784,
+				HebrewMonth.SHVAT,
+				18,
+			);
 			const result = hDate.toTraditionalHebrewString();
-			// Should contain day, month name, and year with ה' prefix
-			expect(typeof result).toBe("string");
+			expect(result).toContain("י\"ח");
+			expect(result).toContain("שבט");
 			expect(result).toContain("ה'");
+			expect(result).toContain("תשפ\"ד");
 		});
 
-		it("returns traditional format for year < 5000", () => {
-			const hDate = HebrewDate.fromHebrewComponents(4999, HebrewMonth.TISHREI, 1);
+		it("returns year without ה' prefix for year < 5000", () => {
+			// 1 Tishrei 4999
+			const hDate = HebrewDate.fromHebrewComponents(
+				4999,
+				HebrewMonth.TISHREI,
+				1,
+			);
 			const result = hDate.toTraditionalHebrewString();
-			// Year < 5000: no ה' prefix
-			expect(typeof result).toBe("string");
+			expect(result).toContain("תשרי");
 			expect(result).not.toContain("ה'");
+		});
+
+		it("formats multi-digit day with gershayim", () => {
+			// 18 Shvat 4999
+			const hDate = HebrewDate.fromHebrewComponents(
+				4999,
+				HebrewMonth.SHVAT,
+				18,
+			);
+			const result = hDate.toTraditionalHebrewString();
+			// Day 18 = י"ח
+			expect(result).toContain("י\"ח");
+			expect(result).toContain("שבט");
 		});
 	});
 
