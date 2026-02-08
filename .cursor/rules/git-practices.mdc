@@ -34,6 +34,30 @@ git ls-remote --heads origin <branch-name>
 
 If it exists: check if merged; if merged, use a new branch name; if not, fetch and rebase before pushing.
 
+## Pre-Push: Merge from Master
+
+**MANDATORY before every push**, the agent MUST:
+
+1. Fetch and merge the latest `master` into the current branch:
+   ```bash
+   git fetch origin master
+   git merge origin/master
+   ```
+2. If there are merge conflicts, **resolve them immediately** — inspect each conflicting file, apply the correct resolution (preserving both sides where appropriate), stage the resolved files, and complete the merge commit.
+3. Only push after the merge is clean and the working tree has no conflicts or uncommitted changes.
+
+## Post-Push: Monitor CI
+
+**MANDATORY after every push**, the agent MUST:
+
+1. Wait briefly (10–20 seconds), then check the CI status of the pushed commit/branch:
+   ```bash
+   gh run list --branch <branch-name> --limit 3
+   ```
+2. If a run is in progress, poll periodically (every 30–60 seconds) until it completes or the user intervenes.
+3. If CI fails, inspect the failure (`gh run view <run-id> --log-failed`), diagnose the root cause, fix it locally, and push again (repeating the merge-from-master step).
+4. Report the final CI status to the user.
+
 ## Pull Requests
 
 - Use a new branch per feature/fix. PR is created when publishing the branch.

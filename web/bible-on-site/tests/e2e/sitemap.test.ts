@@ -67,7 +67,7 @@ test.describe("sitemap.xml", () => {
 		const response = await request.get("/sitemap.xml");
 		const body = await response.text();
 
-		expect(body).toContain("/authors</loc>");
+		expect(body).toContain("/929/authors</loc>");
 	});
 
 	test("contains article URLs", async ({ request }) => {
@@ -97,7 +97,7 @@ test.describe("sitemap.xml", () => {
 		// Count dynamic entries from sitemap
 		// Note: Better practice would be to control test data population from setup
 		// so we know exactly how many authors/articles to expect
-		const authorEntries = (body.match(/\/authors\/\d+<\/loc>/g) || []).length;
+		const authorEntries = (body.match(/\/929\/authors\/[^<]+<\/loc>/g) || []).length;
 		const articleEntries = (body.match(/\/929\/\d+\/\d+<\/loc>/g) || []).length;
 
 		// Expected: 1 root + sections + 1 929 index + 929 perakim + N articles + 1 authors index + N authors

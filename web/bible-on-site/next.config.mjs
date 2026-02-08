@@ -61,6 +61,33 @@ const nextConfig = {
 	allowedDevOrigins: ["127.0.0.1"],
 	// Increasing this further may cause OOM kills on the 1024 MB Fargate task.
 	cacheMaxMemorySize: 256 * MB,
+
+	async rewrites() {
+		return [
+			// /929/rabbis → /929/authors alias
+			{ source: "/929/rabbis", destination: "/929/authors" },
+			{
+				source: "/929/rabbis/:authorParam*",
+				destination: "/929/authors/:authorParam*",
+			},
+		];
+	},
+
+	async redirects() {
+		return [
+			// Legacy /authors → /929/authors permanent redirect
+			{
+				source: "/authors",
+				destination: "/929/authors",
+				permanent: true,
+			},
+			{
+				source: "/authors/:authorParam*",
+				destination: "/929/authors/:authorParam*",
+				permanent: true,
+			},
+		];
+	},
 };
 
 export default nextConfig;

@@ -1,6 +1,7 @@
 import type { AdditionalsItem } from "../../../src/data/db/tanah-view-types";
 import {
 	getAllPerakim,
+	getPerekIdsForSefer,
 	getSeferByName,
 	getSeferOrAdditionalByName,
 } from "../../../src/data/sefer-dto";
@@ -142,5 +143,36 @@ describe("getAllPerakim", () => {
 			(p) => p.perekId >= 233 && p.perekId <= 294,
 		);
 		expect(shemuelPerakim).toHaveLength(62);
+	});
+});
+
+describe("getPerekIdsForSefer", () => {
+	describe("when sefer has perakim (no additionals)", () => {
+		it("returns sequential IDs from perekFrom", () => {
+			const sefer = getSeferByName("בראשית");
+			const ids = getPerekIdsForSefer(sefer);
+			expect(ids).toHaveLength(50);
+			expect(ids[0]).toBe(1);
+			expect(ids[49]).toBe(50);
+		});
+
+		it("returns contiguous sequential IDs", () => {
+			const sefer = getSeferByName("ישעיהו");
+			const ids = getPerekIdsForSefer(sefer);
+			for (let i = 1; i < ids.length; i++) {
+				expect(ids[i]).toBe(ids[i - 1] + 1);
+			}
+		});
+	});
+
+	describe("when sefer has additionals", () => {
+		it("returns IDs spanning all additionals", () => {
+			const sefer = getSeferByName("שמואל");
+			const ids = getPerekIdsForSefer(sefer);
+			// Shemuel has 55 perakim total (31 + 24)
+			expect(ids).toHaveLength(55);
+			expect(ids[0]).toBe(sefer.perekFrom);
+			expect(ids[ids.length - 1]).toBe(sefer.perekTo);
+		});
 	});
 });
