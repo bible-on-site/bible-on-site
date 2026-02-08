@@ -38,6 +38,30 @@ describe("getPerekIdByDate", () => {
 			expect(actual).toBe(929);
 		});
 	});
+	describe("Friday (weekend rounding to Thursday)", () => {
+		// 28 June 2024 is a Friday (22 Sivan 5784)
+		it("returns same perek as Thursday", () => {
+			const fridayPerek = getPerekIdByDate(
+				parseKosherChristianDate("28/June/24"),
+			);
+			const thursdayPerek = getPerekIdByDate(
+				parseKosherChristianDate("27/June/24"),
+			);
+			expect(fridayPerek).toBe(thursdayPerek);
+		});
+	});
+	describe("Saturday (weekend rounding to Thursday)", () => {
+		// 29 June 2024 is a Saturday (23 Sivan 5784)
+		it("returns same perek as Thursday", () => {
+			const saturdayPerek = getPerekIdByDate(
+				parseKosherChristianDate("29/June/24"),
+			);
+			const thursdayPerek = getPerekIdByDate(
+				parseKosherChristianDate("27/June/24"),
+			);
+			expect(saturdayPerek).toBe(thursdayPerek);
+		});
+	});
 });
 
 describe("getPerekByPerekId", () => {
@@ -83,6 +107,24 @@ describe("getPerekByPerekId", () => {
 			expect(actual.source).toBe("בראשית ב");
 		});
 	});
+	describe("Last perek in tanah (929, דברי הימים ב לו)", () => {
+		const actual = getPerekByPerekId(929);
+		it("has perekId 929", () => {
+			expect(actual.perekId).toBe(929);
+		});
+		it("has helek כתובים", () => {
+			expect(actual.helek).toBe("כתובים");
+		});
+		it("has sefer דברי הימים", () => {
+			expect(actual.sefer).toBe("דברי הימים");
+		});
+		it("has additional ב", () => {
+			expect(actual.additional).toBe("ב");
+		});
+		it("has pesukim", () => {
+			expect(actual.pesukim.length).toBeGreaterThan(0);
+		});
+	});
 	describe("perek in sefer with additionals (252, Shemuel I 20)", () => {
 		const actual = getPerekByPerekId(252);
 		it("has perekId 252", () => {
@@ -112,6 +154,11 @@ describe("getPerekByPerekId", () => {
 	describe("Negative Perek", () => {
 		it("throws an error", () => {
 			expect(() => getPerekByPerekId(-300)).toThrow("Invalid perekId: -300");
+		});
+	});
+	describe("Perek above 929", () => {
+		it("throws an error", () => {
+			expect(() => getPerekByPerekId(930)).toThrow("Invalid perekId: 930");
 		});
 	});
 	describe("Perek with qri segments (perek 25 - בראשית כה)", () => {
