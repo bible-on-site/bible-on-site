@@ -5,7 +5,7 @@
 jest.mock("next/image", () => ({
 	__esModule: true,
 	default: (props: Record<string, unknown>) => (
-		<img {...props} alt={props.alt as string} />
+		<span data-testid="mock-image" data-alt={props.alt as string} />
 	),
 }));
 
