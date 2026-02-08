@@ -34,7 +34,7 @@ export const NavBar = () => {
 				</li>
 				<li className={styles.menuItem}>
 					<Image src="/icons/rabbi.svg" alt="הרבנים" width={16} height={16} />
-					<Link href="/authors">
+					<Link href="/929/authors">
 						<span>הרבנים</span>
 					</Link>
 				</li>

@@ -43,12 +43,11 @@ test.describe("Article page", () => {
 		const articleView = page.locator("#article-view");
 		await expect(articleView).toBeVisible({ timeout: 10_000 });
 
-		const authorLink = articleView.locator('a[href^="/authors/"]');
+		const authorLink = articleView.locator('a[href*="/929/authors/"]');
 		await expect(authorLink).toBeVisible();
-		await expect(authorLink).toHaveAttribute("href", "/authors/1");
 
 		await authorLink.click();
-		await page.waitForURL(/\/authors\/1$/);
+		await page.waitForURL(/\/929\/authors\/.+$/);
 		await expect(page.locator("h1")).toContainText("הרב");
 	});
 

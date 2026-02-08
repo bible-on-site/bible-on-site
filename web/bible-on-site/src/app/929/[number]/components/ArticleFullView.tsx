@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { Article } from "@/lib/articles";
+import { authorNameToSlug } from "@/lib/authors/url-utils";
 import articleStyles from "../[articleId]/page.module.css";
 import styles from "./sefer.module.css";
 
@@ -30,7 +31,7 @@ export function ArticleFullView({
 		<div className={rootClass}>
 			<header className={articleStyles.articleHeader}>
 				<Link
-					href={`/authors/${article.authorId}`}
+					href={`/929/authors/${authorNameToSlug(article.authorName)}`}
 					className={articleStyles.authorLink}
 				>
 					<div className={articleStyles.authorImage}>

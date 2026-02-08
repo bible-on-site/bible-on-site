@@ -14,7 +14,7 @@ test.describe("Key routes load", () => {
 		await expect(page).toHaveTitle('תנ"ך על הפרק');
 		await expect(page.getByRole("heading", { name: /תנ"ך על הפרק/ }).first()).toBeVisible();
 
-		await page.goto("/authors");
+		await page.goto("/929/authors");
 		await expect(page.locator("h1")).toContainText("הרבנים");
 
 		await page.goto("/contact");

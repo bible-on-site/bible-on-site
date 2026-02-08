@@ -1,5 +1,6 @@
 import { query } from "../api-client";
 import type { AuthorArticle, AuthorDetails } from "./types";
+import { normalizeAuthorName } from "./url-utils";
 
 interface AuthorRow {
 	id: number;
@@ -146,6 +147,64 @@ export async function getAllAuthorIds(): Promise<number[]> {
 	} catch (error) {
 		console.warn(
 			"Failed to fetch author IDs:",
+			error instanceof Error ? error.message : error,
+		);
+		return [];
+	}
+}
+
+/**
+ * Fetch an author whose normalised name matches the given (normalised) name.
+ * The comparison strips problematic characters on both sides so that
+ * `שליט"א` and `שליטא` match.
+ */
+export async function getAuthorByName(
+	rawName: string,
+): Promise<AuthorDetails | null> {
+	try {
+		const rows = await query<AuthorRow>(
+			`SELECT id, name, details
+			 FROM tanah_author
+			 WHERE EXISTS (SELECT 1 FROM tanah_article art WHERE art.author_id = tanah_author.id)`,
+		);
+
+		const needle = normalizeAuthorName(rawName);
+		const match = rows.find(
+			(row) => normalizeAuthorName(row.name) === needle,
+		);
+
+		if (!match) return null;
+
+		return {
+			id: match.id,
+			name: match.name,
+			details: match.details || "",
+			imageUrl: getAuthorImageUrl(match.id),
+		};
+	} catch (error) {
+		console.warn(
+			`Failed to fetch author by name "${rawName}":`,
+			error instanceof Error ? error.message : error,
+		);
+		return null;
+	}
+}
+
+/**
+ * Get all authors (id + name) for static param generation.
+ * Returns normalised name slugs alongside IDs.
+ */
+export async function getAllAuthorSlugs(): Promise<string[]> {
+	try {
+		const rows = await query<AuthorRow>(
+			`SELECT a.id, a.name, a.details FROM tanah_author a
+			 WHERE EXISTS (SELECT 1 FROM tanah_article art WHERE art.author_id = a.id)
+			 ORDER BY a.name ASC`,
+		);
+		return rows.map((row) => normalizeAuthorName(row.name));
+	} catch (error) {
+		console.warn(
+			"Failed to fetch author slugs:",
 			error instanceof Error ? error.message : error,
 		);
 		return [];

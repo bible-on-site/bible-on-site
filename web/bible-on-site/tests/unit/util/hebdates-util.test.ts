@@ -213,6 +213,72 @@ describe("HebrewDate", () => {
 		});
 	});
 
+	describe("toHebrewLocaleString", () => {
+		it("returns Hebrew locale string with day, month and year", () => {
+			// 21 Sivan 5784
+			const hDate = HebrewDate.fromHebrewComponents(
+				5784,
+				HebrewMonth.SIVAN,
+				21,
+			);
+			const result = hDate.toHebrewLocaleString();
+			// he-IL locale renders Sivan as "בסיוון" (with ב prefix)
+			expect(result).toContain("סיוון");
+			expect(result).toContain("21");
+		});
+
+		it("returns correct month name for Shvat", () => {
+			const hDate = HebrewDate.fromHebrewComponents(
+				5784,
+				HebrewMonth.SHVAT,
+				18,
+			);
+			const result = hDate.toHebrewLocaleString();
+			expect(result).toContain("שבט");
+		});
+	});
+
+	describe("toTraditionalHebrewString", () => {
+		it("returns day (gematria), month name, and year with ה' prefix for year >= 5000", () => {
+			// 18 Shvat 5784 → י"ח שבט ה'תשפ"ד
+			const hDate = HebrewDate.fromHebrewComponents(
+				5784,
+				HebrewMonth.SHVAT,
+				18,
+			);
+			const result = hDate.toTraditionalHebrewString();
+			expect(result).toContain("י\"ח");
+			expect(result).toContain("שבט");
+			expect(result).toContain("ה'");
+			expect(result).toContain("תשפ\"ד");
+		});
+
+		it("returns year without ה' prefix for year < 5000", () => {
+			// 1 Tishrei 4999
+			const hDate = HebrewDate.fromHebrewComponents(
+				4999,
+				HebrewMonth.TISHREI,
+				1,
+			);
+			const result = hDate.toTraditionalHebrewString();
+			expect(result).toContain("תשרי");
+			expect(result).not.toContain("ה'");
+		});
+
+		it("formats multi-digit day with gershayim", () => {
+			// 18 Shvat 4999
+			const hDate = HebrewDate.fromHebrewComponents(
+				4999,
+				HebrewMonth.SHVAT,
+				18,
+			);
+			const result = hDate.toTraditionalHebrewString();
+			// Day 18 = י"ח
+			expect(result).toContain("י\"ח");
+			expect(result).toContain("שבט");
+		});
+	});
+
 	describe("nearest", () => {
 		it("returns same date when already on target day", () => {
 			const hDate = HebrewDate.fromHebrewComponents(

@@ -1,0 +1,30 @@
+---
+description: Website e2e testing prerequisites and commands
+globs: web/bible-on-site/tests/e2e/**,web/bible-on-site/playwright*.config.ts
+alwaysApply: false
+---
+
+# Website E2E Testing
+
+## Prerequisites
+
+MySQL must be running locally (Windows service, port 3306). The launcher (`launch-e2e-server.mts`) handles DB population via `cargo make mysql-populate` and starts the server automatically.
+
+**Stale server pitfall**: Playwright uses `reuseExistingServer: true`. If a previous server (dev or prod) is still running on port 3001, Playwright will silently reuse it instead of starting fresh. Before re-running e2e, check for and kill any leftover process on port 3001.
+
+**Standalone mode**: `next start` does NOT work with `output: "standalone"` in `next.config.mjs`. The launcher uses `node .next/standalone/server.js` for production and `next dev` for coverage.
+
+## Commands
+
+| Command | Server mode | Notes |
+|---|---|---|
+| `npm run test:e2e` | standalone server (production) | Requires `npm run build` first |
+| `npm run coverage:e2e` | `next dev` (dev + SWC instrumentation) | No build needed |
+| `npm run coverage:all` | unit + e2e + merge | Runs `coverage:unit`, then `coverage:e2e`, then merges LCOV |
+
+## Coverage mode
+
+- `coverage:e2e` starts the dev server; SWC coverage plugin is enabled automatically in non-production mode.
+- Global setup warms key routes (`/`, `/929`, `/929/1`, etc.) to stabilize coverage runs.
+- Coverage LCOV is written to `.coverage/e2e/lcov.info`.
+- `coverage:merge` combines unit + e2e LCOV into `.coverage/merged/lcov.info`.

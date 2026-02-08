@@ -8,6 +8,7 @@ import { isQriDifferentThanKtiv } from "../../../../data/db/tanah-view-types";
 import { getPerekByPerekId } from "../../../../data/perek-dto";
 import { getSeferByName, getPerekIdsForSefer } from "../../../../data/sefer-dto";
 import { getArticleById, getArticlesByPerekId } from "../../../../lib/articles";
+import { authorNameToSlug } from "../../../../lib/authors";
 import { ArticlesSection } from "../components/ArticlesSection";
 import Breadcrumb from "../components/Breadcrumb";
 import { Ptuah } from "../components/Ptuha";
@@ -177,7 +178,7 @@ export default async function ArticlePage({
 				<section id="article-view" className={styles.expandedArticle}>
 					<header className={styles.articleHeader}>
 						<Link
-							href={`/authors/${article.authorId}`}
+							href={`/929/authors/${authorNameToSlug(article.authorName)}`}
 							className={styles.authorLink}
 						>
 							<div className={styles.authorImage}>

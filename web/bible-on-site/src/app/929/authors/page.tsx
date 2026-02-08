@@ -1,8 +1,11 @@
 import { unstable_cache } from "next/cache";
 import Image from "next/image";
 import Link from "next/link";
-import { query } from "../../lib/api-client";
-import { getAuthorImageUrl } from "../../lib/authors";
+import { query } from "../../../lib/api-client";
+import {
+	authorNameToSlug,
+	getAuthorImageUrl,
+} from "../../../lib/authors";
 import styles from "./page.module.css";
 
 interface AuthorRow {
@@ -74,7 +77,7 @@ export default async function AuthorsPage() {
 					{authors.map((author) => (
 						<Link
 							key={author.id}
-							href={`/authors/${author.id}`}
+							href={`/929/authors/${authorNameToSlug(author.name)}`}
 							className={styles.authorCard}
 						>
 							<div className={styles.authorImageContainer}>
