@@ -9,7 +9,9 @@ jest.mock("next/cache", () => ({
 }));
 
 jest.mock("next/navigation", () => ({
-	notFound: jest.fn(),
+	notFound: jest.fn(() => {
+		throw new Error("NEXT_NOT_FOUND");
+	}),
 }));
 
 jest.mock("next/image", () => ({
@@ -29,12 +31,14 @@ jest.mock("../../../src/lib/authors", () => ({
 	getAuthorByName: jest.fn(),
 }));
 
+import { render, screen } from "@testing-library/react";
 import {
 	getAllAuthorSlugs,
+	getArticlesByAuthorId,
 	getAuthorById,
 	getAuthorByName,
 } from "../../../src/lib/authors";
-import {
+import AuthorPage, {
 	generateMetadata,
 	generateStaticParams,
 } from "../../../src/app/929/authors/[authorParam]/page";
@@ -48,6 +52,8 @@ const mockGetAuthorById = getAuthorById as jest.MockedFunction<
 const mockGetAuthorByName = getAuthorByName as jest.MockedFunction<
 	typeof getAuthorByName
 >;
+const mockGetArticlesByAuthorId =
+	getArticlesByAuthorId as jest.MockedFunction<typeof getArticlesByAuthorId>;
 
 describe("[authorParam] page", () => {
 	beforeEach(() => {
@@ -145,6 +151,69 @@ describe("[authorParam] page", () => {
 			});
 
 			expect(result.description).toHaveLength(160);
+		});
+	});
+
+	describe("AuthorPage (default export)", () => {
+		it("renders author with image, details, and articles", async () => {
+			mockGetAuthorById.mockResolvedValue({
+				id: 1,
+				name: "הרב לדוגמא",
+				details: "תיאור הרב",
+				imageUrl: "https://example.com/1.jpg",
+			});
+			mockGetArticlesByAuthorId.mockResolvedValue([
+				{
+					id: 10,
+					name: "מאמר ראשון",
+					perekId: 5,
+					abstract: "תקציר",
+				},
+			]);
+
+			const jsx = await AuthorPage({
+				params: Promise.resolve({ authorParam: "1" }),
+			});
+			render(jsx);
+
+			expect(screen.getByText("הרב לדוגמא")).toBeTruthy();
+			expect(screen.getByText("תיאור הרב")).toBeTruthy();
+			expect(screen.getByText("מאמר ראשון")).toBeTruthy();
+			expect(screen.getByText("מאמרים (1)")).toBeTruthy();
+		});
+
+		it("renders placeholder when author has no image", async () => {
+			mockGetAuthorByName.mockResolvedValue({
+				id: 2,
+				name: "הרב ללא תמונה",
+				details: "",
+				imageUrl: "",
+			});
+			mockGetArticlesByAuthorId.mockResolvedValue([]);
+
+			const jsx = await AuthorPage({
+				params: Promise.resolve({
+					authorParam: encodeURIComponent("הרב ללא תמונה"),
+				}),
+			});
+			render(jsx);
+
+			expect(screen.getByText("הרב ללא תמונה")).toBeTruthy();
+			expect(screen.getByText("👤")).toBeTruthy();
+			expect(screen.getByText("אין מאמרים עדיין")).toBeTruthy();
+		});
+
+		it("calls notFound when author is missing", async () => {
+			const { notFound } = jest.requireMock("next/navigation");
+			mockGetAuthorByName.mockResolvedValue(null);
+
+			await expect(
+				AuthorPage({
+					params: Promise.resolve({ authorParam: "nonexistent" }),
+				}),
+			).rejects.toThrow("NEXT_NOT_FOUND");
+
+			expect(notFound).toHaveBeenCalled();
 		});
 	});
 });
