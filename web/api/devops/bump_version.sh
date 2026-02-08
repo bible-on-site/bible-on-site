@@ -29,4 +29,8 @@ tomato set package.version "${bumped_version}" Cargo.toml || {
     echo "Failed to set bumped version in Cargo.toml"
     exit 1
 }
-# investigate strange behaviour of original version being just printed out post a successful flow
+echo "Updating Cargo.lock to reflect new version"
+cargo generate-lockfile || {
+    echo "Failed to update Cargo.lock"
+    exit 1
+}
