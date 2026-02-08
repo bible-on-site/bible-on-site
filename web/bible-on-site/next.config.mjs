@@ -1,6 +1,5 @@
 const KB = 1024;
 const MB = KB * KB;
-const GB = MB * KB;
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -60,7 +59,8 @@ const nextConfig = {
 				}),
 	},
 	allowedDevOrigins: ["127.0.0.1"],
-	cacheMaxMemorySize: 1 * GB,
+	// Increasing this further may cause OOM kills on the 1024 MB Fargate task.
+	cacheMaxMemorySize: 256 * MB,
 };
 
 export default nextConfig;
