@@ -19,6 +19,7 @@
 # misc
 .DS_Store
 *.pem
+.flip-book-was-local
 
 # debug
 npm-debug.log*
