@@ -4,4 +4,8 @@ set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root/web/bible-on-site"
 
-npm run flip-book:local
+# Restore local flip-book only if pre-commit had to switch it to npm
+if [ -f .flip-book-was-local ]; then
+    rm -f .flip-book-was-local
+    npm run flip-book:local
+fi
