@@ -11,3 +11,4 @@ This document describes how the agent (Cursor AI) is expected to behave. The cor
 - **Monitor:** The agent checks CI, builds, tests, **package.json** (scripts, deps, config), and any related issues. No oversight—do not skip or assume something is fine.
 - **Stabilize:** The agent fixes failures and issues until resolved (lint errors, package.json issues, CI red, etc.).
 - **Done when:** There are no remaining issues: no package.json issues, no failing checks, no unresolved problems. Do not stop until stable.
+- **Autopilot:** The agent keeps monitoring (re-checking CI, build, tests) and fixing until resolved. The agent never tells the user to "say monitor again"—it keeps going until the branch is green and stable.
