@@ -42,4 +42,12 @@ describe("api-client", () => {
 		);
 		expect(result).toEqual([{ id: 1 }]);
 	});
+
+	it("reuses existing pool on subsequent calls", async () => {
+		// Pool was already created by the previous test
+		// Another query should reuse it without calling createPool again
+		const result = await query<{ id: number }>("SELECT 1");
+		expect(mockCreatePool).not.toHaveBeenCalled(); // pool already exists
+		expect(result).toEqual([{ id: 1 }]);
+	});
 });

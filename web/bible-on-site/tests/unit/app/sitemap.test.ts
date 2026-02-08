@@ -12,6 +12,20 @@ import {
 	TOTAL_PERAKIM,
 } from "@/app/sitemap";
 
+// Mock next/headers for the default sitemap() export
+jest.mock("next/headers", () => ({
+	headers: jest.fn(),
+}));
+
+// Mock article/author services
+jest.mock("@/lib/articles", () => ({
+	getAllArticlePerekIdPairs: jest.fn(),
+}));
+
+jest.mock("@/lib/authors", () => ({
+	getAllAuthorIds: jest.fn(),
+}));
+
 describe("sitemap", () => {
 	const mockConfig: SitemapConfig = {
 		baseUrl: "https://example.com",
@@ -332,6 +346,32 @@ describe("sitemap", () => {
 			expect(urls).toContain("https://example.com/929/5/30");
 
 			// Check authors are present
+			expect(urls).toContain("https://example.com/authors/1");
+			expect(urls).toContain("https://example.com/authors/2");
+		});
+	});
+
+	describe("default sitemap() export", () => {
+		it("uses host header and fetches dynamic data", async () => {
+			const { headers } = await import("next/headers");
+			const { getAllAuthorIds } = await import("@/lib/authors");
+			const { getAllArticlePerekIdPairs } = await import("@/lib/articles");
+
+			(headers as jest.Mock).mockResolvedValue({
+				get: (name: string) => (name === "host" ? "example.com" : null),
+			});
+			(getAllAuthorIds as jest.Mock).mockResolvedValue([1, 2]);
+			(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([
+				{ articleId: 10, perekId: 1 },
+			]);
+
+			const sitemapFn = (await import("@/app/sitemap")).default;
+			const result = await sitemapFn();
+
+			// Should contain root, sections, 929 index, perakim, 1 article, authors index, 2 authors
+			const urls = result.map((e) => e.url);
+			expect(urls[0]).toBe("https://example.com");
+			expect(urls).toContain("https://example.com/929/1/10");
 			expect(urls).toContain("https://example.com/authors/1");
 			expect(urls).toContain("https://example.com/authors/2");
 		});

@@ -105,4 +105,66 @@ describe("ArticlesSection", () => {
 			expect(strongElement?.textContent).toBe("טקסט מודגש");
 		});
 	});
+
+	describe("when onArticleClick is provided (button mode)", () => {
+		it("renders buttons instead of links", () => {
+			const handleClick = jest.fn();
+			render(
+				<ArticlesSection
+					articles={mockArticles}
+					onArticleClick={handleClick}
+				/>,
+			);
+
+			const buttons = screen.getAllByRole("button");
+			expect(buttons).toHaveLength(2);
+			expect(screen.queryAllByRole("link")).toHaveLength(0);
+		});
+
+		it("calls onArticleClick when button is clicked", async () => {
+			const handleClick = jest.fn();
+			render(
+				<ArticlesSection
+					articles={mockArticles}
+					onArticleClick={handleClick}
+				/>,
+			);
+
+			const buttons = screen.getAllByRole("button");
+			buttons[0].click();
+
+			expect(handleClick).toHaveBeenCalledTimes(1);
+			expect(handleClick).toHaveBeenCalledWith(mockArticles[0]);
+		});
+
+		it("renders abstract in button mode when present", () => {
+			const handleClick = jest.fn();
+			render(
+				<ArticlesSection
+					articles={mockArticles}
+					onArticleClick={handleClick}
+				/>,
+			);
+
+			// First article has abstract, second doesn't
+			expect(screen.getByText("תקציר המאמר הראשון")).toBeTruthy();
+		});
+	});
+
+	describe("when articles is null", () => {
+		it("renders empty message", () => {
+			render(<ArticlesSection articles={null} />);
+			expect(screen.getByText("אין מאמרים לפרק זה")).toBeTruthy();
+		});
+	});
+
+	describe("when loading is true", () => {
+		it("sets aria-busy on section", () => {
+			const { container } = render(
+				<ArticlesSection articles={mockArticles} loading={true} />,
+			);
+			const section = container.querySelector("section");
+			expect(section?.getAttribute("aria-busy")).toBe("true");
+		});
+	});
 });

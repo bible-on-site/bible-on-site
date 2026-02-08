@@ -213,6 +213,34 @@ describe("HebrewDate", () => {
 		});
 	});
 
+	describe("toHebrewLocaleString", () => {
+		it("returns a Hebrew locale string", () => {
+			const hDate = HebrewDate.fromHebrewComponents(5784, HebrewMonth.SIVAN, 21);
+			const result = hDate.toHebrewLocaleString();
+			// Should contain Hebrew characters for the date
+			expect(typeof result).toBe("string");
+			expect(result.length).toBeGreaterThan(0);
+		});
+	});
+
+	describe("toTraditionalHebrewString", () => {
+		it("returns traditional format for year >= 5000", () => {
+			const hDate = HebrewDate.fromHebrewComponents(5784, HebrewMonth.SHVAT, 18);
+			const result = hDate.toTraditionalHebrewString();
+			// Should contain day, month name, and year with ה' prefix
+			expect(typeof result).toBe("string");
+			expect(result).toContain("ה'");
+		});
+
+		it("returns traditional format for year < 5000", () => {
+			const hDate = HebrewDate.fromHebrewComponents(4999, HebrewMonth.TISHREI, 1);
+			const result = hDate.toTraditionalHebrewString();
+			// Year < 5000: no ה' prefix
+			expect(typeof result).toBe("string");
+			expect(result).not.toContain("ה'");
+		});
+	});
+
 	describe("nearest", () => {
 		it("returns same date when already on target day", () => {
 			const hDate = HebrewDate.fromHebrewComponents(
