@@ -1,5 +1,6 @@
 "use client";
 
+import DOMPurify from "isomorphic-dompurify";
 import { toLetters } from "gematry";
 import { useState } from "react";
 import type { PerushDetail, PerushNote, PerushSummary } from "@/lib/perushim";
@@ -132,8 +133,10 @@ function PerushFullView({ perush, onBack }: PerushFullViewProps) {
 							<div
 								key={`${note.pasuk}-${note.noteIdx}`}
 								className={styles.noteContent}
-								// biome-ignore lint/security/noDangerouslySetInnerHtml: Content from trusted Sefaria data
-								dangerouslySetInnerHTML={{ __html: note.noteContent }}
+								// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
+								dangerouslySetInnerHTML={{
+									__html: DOMPurify.sanitize(note.noteContent),
+								}}
 							/>
 						))}
 					</div>

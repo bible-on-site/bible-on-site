@@ -1,0 +1,639 @@
+[
+  {
+    "id": 1,
+    "name": "אבן עזרא",
+    "parshanId": 1,
+    "compDate": "[1155, 1165]",
+    "pubDate": "[1524]"
+  },
+  {
+    "id": 2,
+    "name": "אבן עזרא מהדורא תניינא",
+    "parshanId": 1,
+    "compDate": "[1155, 1165]"
+  },
+  {
+    "id": 3,
+    "name": "אברבנאל",
+    "parshanId": 2,
+    "compDate": "[1483, 1513]",
+    "pubDate": "[1579]"
+  },
+  {
+    "id": 4,
+    "name": "אגרת שמואל",
+    "parshanId": 2,
+    "compDate": "[1560, 1600]",
+    "pubDate": "[1597]"
+  },
+  {
+    "id": 5,
+    "name": "אדרת אליהו",
+    "parshanId": 3,
+    "compDate": "[1740, 1800]",
+    "pubDate": "[1818]"
+  },
+  {
+    "id": 6,
+    "name": "אהבת יהונתן",
+    "parshanId": 4,
+    "pubDate": "[1766]"
+  },
+  {
+    "id": 7,
+    "name": "אהל יעקב",
+    "parshanId": 2,
+    "pubDate": "[1830]"
+  },
+  {
+    "id": 8,
+    "name": "אור החיים",
+    "parshanId": 5,
+    "compDate": "[1718, 1742]",
+    "pubDate": "[1742]"
+  },
+  {
+    "id": 9,
+    "name": "אור חדש",
+    "parshanId": 6,
+    "compDate": "[1590, 1600]",
+    "pubDate": "[1600]"
+  },
+  {
+    "id": 10,
+    "name": "אלון בכות",
+    "parshanId": 4,
+    "pubDate": "[1766]"
+  },
+  {
+    "id": 11,
+    "name": "אם למקרא",
+    "parshanId": 2,
+    "pubDate": "[1862]"
+  },
+  {
+    "id": 12,
+    "name": "ארץ חמדה",
+    "parshanId": 7
+  },
+  {
+    "id": 13,
+    "name": "ביאור יש\"ר",
+    "parshanId": 8,
+    "compDate": "[1790, 1810]",
+    "pubDate": "[1821]"
+  },
+  {
+    "id": 14,
+    "name": "ביאור שטיינזלץ",
+    "parshanId": 9,
+    "pubDate": "[2015]"
+  },
+  {
+    "id": 15,
+    "name": "ביאור שטיינזלץ, הקדמות לתנ\"ך",
+    "parshanId": 9,
+    "pubDate": "[2015]"
+  },
+  {
+    "id": 16,
+    "name": "בכור שור",
+    "parshanId": 10,
+    "compDate": "[1145, 1195]",
+    "pubDate": "[1856]"
+  },
+  {
+    "id": 17,
+    "name": "בעל הטורים",
+    "parshanId": 11,
+    "compDate": "[1280, 1340]",
+    "pubDate": "[1806]"
+  },
+  {
+    "id": 18,
+    "name": "ברכת אשר",
+    "parshanId": 12,
+    "compDate": "[1960, 2010]",
+    "pubDate": "[2009]"
+  },
+  {
+    "id": 19,
+    "name": "גביע כסף",
+    "parshanId": 2,
+    "compDate": "[1330, 1340]",
+    "pubDate": "[1982]"
+  },
+  {
+    "id": 20,
+    "name": "גור אריה",
+    "parshanId": 6,
+    "compDate": "[1548, 1578]",
+    "pubDate": "[1578]"
+  },
+  {
+    "id": 21,
+    "name": "דברים טובים",
+    "parshanId": 2,
+    "compDate": "[1542, 1592]",
+    "pubDate": "[1601]"
+  },
+  {
+    "id": 22,
+    "name": "דברים ניחומים",
+    "parshanId": 2,
+    "compDate": "[1542, 1592]",
+    "pubDate": "[1601]"
+  },
+  {
+    "id": 23,
+    "name": "דעת זקנים",
+    "parshanId": 13,
+    "compDate": "[1100, 1300]",
+    "pubDate": "[1524]"
+  },
+  {
+    "id": 24,
+    "name": "הדר זקנים",
+    "parshanId": 13,
+    "compDate": "[1250, 1300]",
+    "pubDate": "[1840]"
+  },
+  {
+    "id": 25,
+    "name": "הכתב והקבלה",
+    "parshanId": 14,
+    "compDate": "[1829, 1839]",
+    "pubDate": "[1839]"
+  },
+  {
+    "id": 26,
+    "name": "העמק דבר",
+    "parshanId": 15,
+    "compDate": "[1840, 1880]",
+    "pubDate": "[1880]"
+  },
+  {
+    "id": 27,
+    "name": "הרחב דבר",
+    "parshanId": 15,
+    "compDate": "[1840, 1880]",
+    "pubDate": "[1879]"
+  },
+  {
+    "id": 28,
+    "name": "חבצלת השרון",
+    "parshanId": 2,
+    "compDate": "[1542, 1592]",
+    "pubDate": "[1563]"
+  },
+  {
+    "id": 29,
+    "name": "חומת אנך",
+    "parshanId": 2,
+    "compDate": "[1784, 1804]",
+    "pubDate": "[1804]"
+  },
+  {
+    "id": 30,
+    "name": "חזקוני",
+    "parshanId": 2,
+    "compDate": "[1220, 1260]",
+    "pubDate": "[1524]"
+  },
+  {
+    "id": 31,
+    "name": "חלקת מחוקק",
+    "parshanId": 2,
+    "compDate": "[1542, 1592]",
+    "pubDate": "[1603]"
+  },
+  {
+    "id": 32,
+    "name": "יוסף אבן יחיא",
+    "parshanId": 16,
+    "compDate": "[1517, 1537]",
+    "pubDate": "[1538]"
+  },
+  {
+    "id": 33,
+    "name": "יריעות שלמה",
+    "parshanId": 17,
+    "compDate": "[1530, 1570]",
+    "pubDate": "[1609]"
+  },
+  {
+    "id": 34,
+    "name": "ישע אלהים",
+    "parshanId": 18,
+    "compDate": "[1555, 1585]",
+    "pubDate": "[1595]"
+  },
+  {
+    "id": 35,
+    "name": "כלי יקר",
+    "parshanId": 19,
+    "compDate": "[1598, 1602]",
+    "pubDate": "[1602]"
+  },
+  {
+    "id": 36,
+    "name": "לבוש האורה",
+    "parshanId": 2
+  },
+  {
+    "id": 37,
+    "name": "לחם דמעה",
+    "parshanId": 2,
+    "pubDate": "[1600]"
+  },
+  {
+    "id": 38,
+    "name": "מגילת סתרים",
+    "parshanId": 20,
+    "compDate": "[1790, 1800]",
+    "pubDate": "[1800, 1801]"
+  },
+  {
+    "id": 39,
+    "name": "מגלה עמוקות",
+    "parshanId": 21,
+    "pubDate": "[1795]"
+  },
+  {
+    "id": 40,
+    "name": "מזרחי",
+    "parshanId": 22,
+    "compDate": "[1475, 1525]",
+    "pubDate": "[1526]"
+  },
+  {
+    "id": 41,
+    "name": "מחיר יין",
+    "parshanId": 2,
+    "compDate": "[1555]",
+    "pubDate": "[1559]"
+  },
+  {
+    "id": 42,
+    "name": "מיני תרגומא",
+    "parshanId": 23,
+    "compDate": "[1751, 1799]",
+    "pubDate": "[1831]"
+  },
+  {
+    "id": 43,
+    "name": "מלבי\"ם",
+    "parshanId": 7,
+    "compDate": "[1845, 1875]",
+    "pubDate": "[1876]"
+  },
+  {
+    "id": 44,
+    "name": "מלבי\"ם באור המילות",
+    "parshanId": 7,
+    "compDate": "[1844, 1874]",
+    "pubDate": "[1874]"
+  },
+  {
+    "id": 45,
+    "name": "מנות הלוי",
+    "parshanId": 24
+  },
+  {
+    "id": 46,
+    "name": "מנחת שי",
+    "parshanId": 25,
+    "compDate": "[1526]",
+    "pubDate": "[1742]"
+  },
+  {
+    "id": 47,
+    "name": "מצודת דוד",
+    "parshanId": 26,
+    "compDate": "[1740, 1780]",
+    "pubDate": "[1780, 1782]"
+  },
+  {
+    "id": 48,
+    "name": "מצודת ציון",
+    "parshanId": 26,
+    "compDate": "[1740, 1780]",
+    "pubDate": "[1780, 1782]"
+  },
+  {
+    "id": 49,
+    "name": "משאת משה",
+    "parshanId": 2,
+    "compDate": "[1542, 1592]",
+    "pubDate": "[1601]"
+  },
+  {
+    "id": 50,
+    "name": "משכיל לדוד",
+    "parshanId": 27
+  },
+  {
+    "id": 51,
+    "name": "נחל אשכול",
+    "parshanId": 2,
+    "compDate": "[1768, 1792]",
+    "pubDate": "[1889]"
+  },
+  {
+    "id": 52,
+    "name": "נחל קדומים",
+    "parshanId": 2,
+    "compDate": "[1768, 1792]"
+  },
+  {
+    "id": 53,
+    "name": "נתינה לגר",
+    "parshanId": 2,
+    "pubDate": "[1875]"
+  },
+  {
+    "id": 54,
+    "name": "ספורנו",
+    "parshanId": 2,
+    "compDate": "[1500, 1550]",
+    "pubDate": "[1567]"
+  },
+  {
+    "id": 55,
+    "name": "עזרא בן שלמה",
+    "parshanId": 2,
+    "compDate": "[1175, 1235]",
+    "pubDate": "[1764]"
+  },
+  {
+    "id": 56,
+    "name": "עטרת זקנים",
+    "parshanId": 2,
+    "compDate": "[1465, 1475]",
+    "pubDate": "[1557]"
+  },
+  {
+    "id": 57,
+    "name": "עיני משה",
+    "parshanId": 2,
+    "compDate": "[1542, 1592]",
+    "pubDate": "[1601]"
+  },
+  {
+    "id": 58,
+    "name": "עמר נקא",
+    "parshanId": 2,
+    "compDate": "[1535]",
+    "pubDate": "[1810]"
+  },
+  {
+    "id": 59,
+    "name": "פירושי רד\"צ הופמן",
+    "parshanId": 28,
+    "pubDate": "[1904]"
+  },
+  {
+    "id": 60,
+    "name": "פלגי מים",
+    "parshanId": 20,
+    "compDate": "[1770, 1790]",
+    "pubDate": "[1815]"
+  },
+  {
+    "id": 61,
+    "name": "צאינה וראינה",
+    "parshanId": 2,
+    "compDate": "[1590, 1616]",
+    "pubDate": "[1590, 1622]"
+  },
+  {
+    "id": 62,
+    "name": "צפנת פענח",
+    "parshanId": 29,
+    "compDate": "[1905, 1935]",
+    "pubDate": "[1962]"
+  },
+  {
+    "id": 63,
+    "name": "צרור המור",
+    "parshanId": 30,
+    "compDate": "[1460, 1510]",
+    "pubDate": "[1502]"
+  },
+  {
+    "id": 64,
+    "name": "צרור המור (לורברבוים)",
+    "parshanId": 20,
+    "compDate": "[1770, 1790]",
+    "pubDate": "[1815]"
+  },
+  {
+    "id": 65,
+    "name": "קאסוטו",
+    "parshanId": 2,
+    "pubDate": "[1952]"
+  },
+  {
+    "id": 66,
+    "name": "קיצור בעל הטורים",
+    "parshanId": 11,
+    "compDate": "[1280, 1340]",
+    "pubDate": "[1514]"
+  },
+  {
+    "id": 67,
+    "name": "קראתי בכל לב",
+    "parshanId": 2,
+    "compDate": "[2010, 2022]",
+    "pubDate": "[2022]"
+  },
+  {
+    "id": 68,
+    "name": "ר' סעדיה גאון",
+    "parshanId": 2
+  },
+  {
+    "id": 69,
+    "name": "רא\"ש",
+    "parshanId": 31,
+    "compDate": "[1275, 1325]",
+    "pubDate": "[1840]"
+  },
+  {
+    "id": 70,
+    "name": "רב פנינים",
+    "parshanId": 2,
+    "compDate": "[1542, 1592]",
+    "pubDate": "[1601]"
+  },
+  {
+    "id": 71,
+    "name": "רבינו חננאל",
+    "parshanId": 32,
+    "compDate": "[1005, 1055]",
+    "pubDate": "[1492]"
+  },
+  {
+    "id": 72,
+    "name": "רד\"ק",
+    "parshanId": 33,
+    "compDate": "[1185, 1235]",
+    "pubDate": "[1485]"
+  },
+  {
+    "id": 73,
+    "name": "רוממות אל",
+    "parshanId": 2,
+    "compDate": "[1542, 1592]",
+    "pubDate": "[1605]"
+  },
+  {
+    "id": 74,
+    "name": "ריב\"א",
+    "parshanId": 34,
+    "compDate": "[1090, 1130]"
+  },
+  {
+    "id": 75,
+    "name": "רלב\"ג",
+    "parshanId": 35,
+    "compDate": "[1325, 1345]",
+    "pubDate": "[1475, 1476]"
+  },
+  {
+    "id": 76,
+    "name": "רלב\"ג ביאור המלות",
+    "parshanId": 35,
+    "compDate": "[1326, 1340]"
+  },
+  {
+    "id": 77,
+    "name": "רמב\"ן",
+    "parshanId": 36,
+    "compDate": "[1246, 1286]",
+    "pubDate": "[1480]"
+  },
+  {
+    "id": 78,
+    "name": "רס\"ג",
+    "parshanId": 2,
+    "compDate": "[918, 942]",
+    "pubDate": "[1882]"
+  },
+  {
+    "id": 79,
+    "name": "רש\"י",
+    "parshanId": 38,
+    "compDate": "[1075, 1105]",
+    "pubDate": "[1476]"
+  },
+  {
+    "id": 80,
+    "name": "רשב\"ם",
+    "parshanId": 39,
+    "compDate": "[1120, 1160]",
+    "pubDate": "[1705]"
+  },
+  {
+    "id": 81,
+    "name": "שד\"ל",
+    "parshanId": 2,
+    "compDate": "[1831, 1855]",
+    "pubDate": "[1867]"
+  },
+  {
+    "id": 82,
+    "name": "שושנת העמקים",
+    "parshanId": 2,
+    "compDate": "[1542, 1592]",
+    "pubDate": "[1591]"
+  },
+  {
+    "id": 83,
+    "name": "שלום אסתר",
+    "parshanId": 40,
+    "compDate": "[1560, 1580]",
+    "pubDate": "[1580]"
+  },
+  {
+    "id": 84,
+    "name": "שפתי חכמים",
+    "parshanId": 41,
+    "compDate": "[1660, 1680]",
+    "pubDate": "[1680]"
+  },
+  {
+    "id": 85,
+    "name": "תולדות יצחק",
+    "parshanId": 2,
+    "compDate": "[1475, 1535]",
+    "pubDate": "[1517]"
+  },
+  {
+    "id": 86,
+    "name": "תורה תמימה",
+    "parshanId": 42,
+    "compDate": "[1898, 1902]",
+    "pubDate": "[1902]"
+  },
+  {
+    "id": 87,
+    "name": "תורה תמימה (נבון)",
+    "parshanId": 43,
+    "compDate": "[2011]",
+    "pubDate": "[2011]"
+  },
+  {
+    "id": 88,
+    "name": "תורת משה (אלשיך)",
+    "parshanId": 2,
+    "compDate": "[1540, 1590]",
+    "pubDate": "[1594]"
+  },
+  {
+    "id": 89,
+    "name": "תעלומות חכמה",
+    "parshanId": 20,
+    "compDate": "[1770, 1790]",
+    "pubDate": "[1804]"
+  },
+  {
+    "id": 90,
+    "name": "תפסיר רס\"ג",
+    "parshanId": 37,
+    "compDate": "[918, 942]",
+    "pubDate": "[1546]"
+  },
+  {
+    "id": 91,
+    "name": "תרגום",
+    "parshanId": 44,
+    "compDate": "[0, 600]"
+  },
+  {
+    "id": 92,
+    "name": "תרגום אונקלוס",
+    "parshanId": 45,
+    "compDate": "[80, 120]",
+    "pubDate": "[1482]"
+  },
+  {
+    "id": 93,
+    "name": "תרגום יונתן",
+    "parshanId": 46,
+    "compDate": "[150, 250]",
+    "pubDate": "[1524]"
+  },
+  {
+    "id": 94,
+    "name": "תרגום ירושלמי",
+    "parshanId": 44,
+    "compDate": "[380, 1180]",
+    "pubDate": "[1552]"
+  },
+  {
+    "id": 95,
+    "name": "תרגום שני",
+    "parshanId": 2
+  }
+]

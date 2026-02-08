@@ -47,3 +47,6 @@ monocart-report/
 .swc
 
 .lighthouse-reports/
+# test artifacts
+jest-*.json
+tests/unit/components/err.txt
