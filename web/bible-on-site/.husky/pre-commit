@@ -1,7 +1,10 @@
 # Ensure html-flip-book-react is set to npm version (not local file:)
-# Auto-fix: if set to local, switch to npm and stage the changes
+# Auto-fix: if set to local, switch to npm and stage the changes.
+# Leave a marker so post-commit knows to restore the local dependency.
+rm -f .flip-book-was-local
 if ! npm run flip-book:check 2>/dev/null; then
     echo "⚙️  Auto-fixing: switching html-flip-book-react from local to npm..."
+    touch .flip-book-was-local
     npm run flip-book:npm || exit 1
     git add package.json package-lock.json
 fi
