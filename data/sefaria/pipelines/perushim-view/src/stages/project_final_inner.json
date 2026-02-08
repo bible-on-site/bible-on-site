@@ -1,0 +1,105 @@
+{
+	"enTitle": 1,
+	"additional": {
+		"$switch": {
+			"branches": [
+				{
+					"case": { "$regexMatch": { "input": "$seferHebName", "regex": "שמואל א" } },
+					"then": 1
+				},
+				{
+					"case": { "$regexMatch": { "input": "$seferHebName", "regex": "שמואל ב" } },
+					"then": 2
+				},
+				{
+					"case": { "$regexMatch": { "input": "$seferHebName", "regex": "מלכים א" } },
+					"then": 1
+				},
+				{
+					"case": { "$regexMatch": { "input": "$seferHebName", "regex": "מלכים ב" } },
+					"then": 2
+				},
+				{
+					"case": { "$eq": ["$seferHebName", "עזרא"] },
+					"then": 70
+				},
+				{
+					"case": { "$eq": ["$seferHebName", "נחמיה"] },
+					"then": 50
+				},
+				{
+					"case": { "$regexMatch": { "input": "$seferHebName", "regex": "דברי הימים א" } },
+					"then": 1
+				},
+				{
+					"case": { "$regexMatch": { "input": "$seferHebName", "regex": "דברי הימים ב" } },
+					"then": 2
+				}
+			],
+			"default": "$$REMOVE"
+		}
+	},
+	"alt_structs": 1,
+	"authors": 1,
+	"compDate": 1,
+	"name": {
+		"$switch": {
+			"branches": [
+				{
+					"case": { "$regexMatch": { "input": "$name", "regex": "ר' חננאל" } },
+					"then": "רבינו חננאל"
+				}
+			],
+			"default": "$name"
+		}
+	},
+	"pubDate": 1,
+	"firstAuthorBirthYear": 1,
+	"sefer": {
+		"$switch": {
+			"branches": [
+				{ "case": { "$eq": ["$seferHebName", "בראשית"] }, "then": 1 },
+				{ "case": { "$eq": ["$seferHebName", "שמות"] }, "then": 2 },
+				{ "case": { "$eq": ["$seferHebName", "ויקרא"] }, "then": 3 },
+				{ "case": { "$eq": ["$seferHebName", "במדבר"] }, "then": 4 },
+				{ "case": { "$eq": ["$seferHebName", "דברים"] }, "then": 5 },
+				{ "case": { "$eq": ["$seferHebName", "יהושע"] }, "then": 6 },
+				{ "case": { "$eq": ["$seferHebName", "שופטים"] }, "then": 7 },
+				{ "case": { "$regexMatch": { "input": "$seferHebName", "regex": "שמואל" } }, "then": 8 },
+				{ "case": { "$regexMatch": { "input": "$seferHebName", "regex": "מלכים" } }, "then": 9 },
+				{ "case": { "$regexMatch": { "input": "$seferHebName", "regex": "ישעי" } }, "then": 10 },
+				{ "case": { "$regexMatch": { "input": "$seferHebName", "regex": "ירמי" } }, "then": 11 },
+				{ "case": { "$eq": ["$seferHebName", "יחזקאל"] }, "then": 12 },
+				{ "case": { "$eq": ["$seferHebName", "הושע"] }, "then": 13 },
+				{ "case": { "$eq": ["$seferHebName", "יואל"] }, "then": 14 },
+				{ "case": { "$eq": ["$seferHebName", "עמוס"] }, "then": 15 },
+				{ "case": { "$eq": ["$seferHebName", "עובדיה"] }, "then": 16 },
+				{ "case": { "$eq": ["$seferHebName", "יונה"] }, "then": 17 },
+				{ "case": { "$eq": ["$seferHebName", "מיכה"] }, "then": 18 },
+				{ "case": { "$eq": ["$seferHebName", "נחום"] }, "then": 19 },
+				{ "case": { "$eq": ["$seferHebName", "חבקוק"] }, "then": 20 },
+				{ "case": { "$eq": ["$seferHebName", "צפניה"] }, "then": 21 },
+				{ "case": { "$eq": ["$seferHebName", "חגי"] }, "then": 22 },
+				{ "case": { "$eq": ["$seferHebName", "זכריה"] }, "then": 23 },
+				{ "case": { "$eq": ["$seferHebName", "מלאכי"] }, "then": 24 },
+				{ "case": { "$eq": ["$seferHebName", "תהילים"] }, "then": 25 },
+				{ "case": { "$eq": ["$seferHebName", "תהלים"] }, "then": 25 },
+				{ "case": { "$eq": ["$seferHebName", "משלי"] }, "then": 26 },
+				{ "case": { "$eq": ["$seferHebName", "איוב"] }, "then": 27 },
+				{ "case": { "$eq": ["$seferHebName", "שיר השירים"] }, "then": 28 },
+				{ "case": { "$eq": ["$seferHebName", "רות"] }, "then": 29 },
+				{ "case": { "$eq": ["$seferHebName", "איכה"] }, "then": 30 },
+				{ "case": { "$eq": ["$seferHebName", "קהלת"] }, "then": 31 },
+				{ "case": { "$eq": ["$seferHebName", "אסתר"] }, "then": 32 },
+				{ "case": { "$eq": ["$seferHebName", "דניאל"] }, "then": 33 },
+				{ "case": { "$eq": ["$seferHebName", "דנייאל"] }, "then": 33 },
+				{ "case": { "$eq": ["$seferHebName", "עזרא"] }, "then": 34 },
+				{ "case": { "$eq": ["$seferHebName", "נחמיה"] }, "then": 34 },
+				{ "case": { "$regexMatch": { "input": "$seferHebName", "regex": "דברי הימים" } }, "then": 35 }
+			],
+			"default": "$$REMOVE"
+		}
+	},
+	"schema": 1,
+	"versions": 1
+}

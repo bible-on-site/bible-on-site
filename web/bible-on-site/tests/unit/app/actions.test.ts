@@ -1,12 +1,22 @@
 jest.mock("../../../src/lib/articles", () => ({
 	getArticleById: jest.fn(),
 }));
+jest.mock("../../../src/lib/perushim", () => ({
+	getPerushNotes: jest.fn(),
+}));
 
 import { getArticleById } from "../../../src/lib/articles";
-import { getArticleForBook } from "../../../src/app/929/[number]/actions";
+import { getPerushNotes } from "../../../src/lib/perushim";
+import {
+	getArticleForBook,
+	getPerushNotesForPage,
+} from "../../../src/app/929/[number]/actions";
 
 const mockGetArticleById = getArticleById as jest.MockedFunction<
 	typeof getArticleById
+>;
+const mockGetPerushNotes = getPerushNotes as jest.MockedFunction<
+	typeof getPerushNotes
 >;
 
 describe("getArticleForBook", () => {
@@ -40,5 +50,31 @@ describe("getArticleForBook", () => {
 		const result = await getArticleForBook(999);
 
 		expect(result).toBeNull();
+	});
+});
+
+describe("getPerushNotesForPage", () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+	});
+
+	it("returns notes from getPerushNotes for given perush and perek", async () => {
+		const notes = [
+			{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" },
+		];
+		mockGetPerushNotes.mockResolvedValue(notes);
+
+		const result = await getPerushNotesForPage(14, 1);
+
+		expect(mockGetPerushNotes).toHaveBeenCalledWith(14, 1);
+		expect(result).toEqual(notes);
+	});
+
+	it("returns empty array when getPerushNotes returns empty", async () => {
+		mockGetPerushNotes.mockResolvedValue([]);
+
+		const result = await getPerushNotesForPage(1, 999);
+
+		expect(result).toEqual([]);
 	});
 });

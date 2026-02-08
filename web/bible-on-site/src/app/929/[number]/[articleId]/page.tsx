@@ -9,7 +9,9 @@ import { getPerekByPerekId } from "../../../../data/perek-dto";
 import { getSeferByName, getPerekIdsForSefer } from "../../../../data/sefer-dto";
 import { getArticleById, getArticlesByPerekId } from "../../../../lib/articles";
 import { authorNameToSlug } from "../../../../lib/authors";
+import { getPerushimByPerekId } from "../../../../lib/perushim";
 import { ArticlesSection } from "../components/ArticlesSection";
+import { PerushimSection } from "../components/PerushimSection";
 import Breadcrumb from "../components/Breadcrumb";
 import { Ptuah } from "../components/Ptuha";
 import SeferComposite from "../components/SeferComposite";
@@ -97,6 +99,7 @@ export default async function ArticlePage({
 
 	const perekObj = getPerekByPerekId(perekId);
 	const articles = await getCachedArticles(perekId);
+	const perushim = await getPerushimByPerekId(perekId);
 	const sefer = getSeferByName(perekObj.sefer);
 	const perekIds = getPerekIdsForSefer(sefer);
 	const articlesByPerekIndex = await Promise.all(
@@ -170,6 +173,9 @@ export default async function ArticlePage({
 						);
 					})}
 				</article>
+
+				{/* Perushim section - commentaries carousel */}
+				<PerushimSection perekId={perekId} perushim={perushim} />
 
 				{/* Articles carousel */}
 				<ArticlesSection articles={articles} />

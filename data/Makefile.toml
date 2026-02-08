@@ -73,8 +73,51 @@ command = "cargo"
 args = ["run", "--release", "--", "--format", "sqlite"]
 
 [tasks.generate-compass-stages]
-description = "Generate MongoDB Compass stages for debugging aggregation pipeline"
+description = "Generate MongoDB Compass stages for debugging tanah-view aggregation pipeline"
 cwd = "./sefaria/pipelines/tanah-view"
+command = "cargo"
+args = ["run", "--release", "--", "--format", "compass-stages"]
+
+# =============================================================================
+# Perusim Pipeline Tasks
+# =============================================================================
+
+[tasks.generate-perushim-view-json]
+description = "Generate perushim catalog as JSON (parshanim + perushim for web)"
+cwd = "./sefaria/pipelines/perushim-view"
+command = "cargo"
+args = ["run", "--release", "--", "--format", "json"]
+
+[tasks.generate-perushim-view-sqlite]
+description = "Generate perushim SQLite: catalog (bundled) + notes (OBB/on-demand)"
+cwd = "./sefaria/pipelines/perushim-view"
+command = "cargo"
+args = ["run", "--release", "--", "--format", "sqlite"]
+
+[tasks.generate-perushim-view-mysql]
+description = "Generate perushim notes as MySQL SQL file"
+cwd = "./sefaria/pipelines/perushim-view"
+command = "cargo"
+args = [
+    "run",
+    "--release",
+    "--",
+    "--format",
+    "mysql",
+    "--output-to-dependant-modules",
+]
+
+[tasks.generate-perushim-view-all]
+description = "Generate perushim in all formats (JSON, SQLite, MySQL) for web/app/DB; requires MongoDB"
+dependencies = [
+    "generate-perushim-view-json",
+    "generate-perushim-view-sqlite",
+    "generate-perushim-view-mysql",
+]
+
+[tasks.generate-perushim-compass-stages]
+description = "Generate MongoDB Compass stages for debugging perushim aggregation pipeline"
+cwd = "./sefaria/pipelines/perushim-view"
 command = "cargo"
 args = ["run", "--release", "--", "--format", "compass-stages"]
 

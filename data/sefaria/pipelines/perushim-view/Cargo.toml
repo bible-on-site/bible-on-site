@@ -1,0 +1,22 @@
+[package]
+name = "perushim-view"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+mongodb.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+dotenvy.workspace = true
+chrono.workspace = true
+rusqlite.workspace = true
+bson.workspace = true
+
+[features]
+# Enable integration tests that require MongoDB with Sefaria dump
+integration = []

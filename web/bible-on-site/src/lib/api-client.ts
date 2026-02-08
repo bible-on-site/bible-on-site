@@ -22,16 +22,25 @@ function parseDbUrl(url: string): mysql.PoolOptions {
 // Database configuration from environment variables
 // Supports both DB_URL (connection string) and individual env vars
 function getDbConfig(): mysql.PoolOptions {
+	let opts: mysql.PoolOptions;
 	if (process.env.DB_URL) {
-		return parseDbUrl(process.env.DB_URL);
+		opts = parseDbUrl(process.env.DB_URL);
+	} else {
+		const defaultDb =
+			process.env.NODE_ENV === "development" ? "tanah-dev" : "tanah";
+		opts = {
+			host: process.env.DB_HOST || "127.0.0.1",
+			port: Number.parseInt(process.env.DB_PORT || "3306", 10),
+			user: process.env.DB_USER || "root",
+			password: process.env.DB_PASSWORD || "",
+			database: process.env.DB_NAME || defaultDb,
+		};
 	}
-	return {
-		host: process.env.DB_HOST || "127.0.0.1",
-		port: Number.parseInt(process.env.DB_PORT || "3306", 10),
-		user: process.env.DB_USER || "root",
-		password: process.env.DB_PASSWORD || "",
-		database: process.env.DB_NAME || "tanah",
-	};
+	// In development, always use tanah-dev (where perushim are populated)
+	if (process.env.NODE_ENV === "development") {
+		opts = { ...opts, database: "tanah-dev" };
+	}
+	return opts;
 }
 
 let pool: mysql.Pool | null = null;

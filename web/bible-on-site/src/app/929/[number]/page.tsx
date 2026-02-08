@@ -7,7 +7,9 @@ import { isQriDifferentThanKtiv } from "../../../data/db/tanah-view-types";
 import { getPerekByPerekId } from "../../../data/perek-dto";
 import { getSeferByName, getPerekIdsForSefer } from "../../../data/sefer-dto";
 import { getArticlesByPerekId } from "../../../lib/articles";
+import { getPerushimByPerekId } from "../../../lib/perushim";
 import { ArticlesSection } from "./components/ArticlesSection";
+import { PerushimSection } from "./components/PerushimSection";
 import Breadcrumb from "./components/Breadcrumb";
 import { Ptuah } from "./components/Ptuha";
 import SeferComposite from "./components/SeferComposite";
@@ -46,6 +48,7 @@ const getCachedArticles = unstable_cache(
 	},
 );
 
+
 // TODO: figure out if need to use generateMetadata
 export default async function Perek({
 	params,
@@ -62,6 +65,7 @@ export default async function Perek({
 		perekIds.map((id) => getCachedArticles(id)),
 	);
 	const articles = await getCachedArticles(perekId);
+	const perushim = await getPerushimByPerekId(perekId);
 
 	return (
 		<>
@@ -126,6 +130,9 @@ export default async function Perek({
 						);
 					})}
 				</article>
+
+				{/* Perushim section - commentaries carousel */}
+				<PerushimSection perekId={perekId} perushim={perushim} />
 
 				{/* Articles section - fetched directly from database for lower latency */}
 				<ArticlesSection articles={articles} />

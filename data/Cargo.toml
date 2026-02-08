@@ -6,6 +6,7 @@ members = [
     "s3/s3-populator",
     "sefaria/setup-and-population",
     "sefaria/pipelines/tanah-view",
+    "sefaria/pipelines/perushim-view",
 ]
 
 [workspace.package]
