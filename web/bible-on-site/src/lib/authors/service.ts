@@ -1,35 +1,11 @@
 import { query } from "../api-client";
 import type { AuthorArticle, AuthorDetails } from "./types";
+import { normalizeAuthorName } from "./url-utils";
 
 interface AuthorRow {
 	id: number;
 	name: string;
 	details: string;
-}
-
-/**
- * Characters considered "problematic" in author-name URLs.
- * These are stripped when building URL slugs and when matching incoming URLs
- * so that e.g. `שליט"א` and `שליטא` resolve the same author.
- */
-const PROBLEMATIC_CHARS = /["״׳']/g;
-
-/**
- * Normalise an author name for URL matching.
- * Strips geresh / gershayim / quote characters so that URLs work
- * with and without them.
- */
-export function normalizeAuthorName(name: string): string {
-	return name.replace(PROBLEMATIC_CHARS, "").trim();
-}
-
-/**
- * Build a URL-safe slug from an author name.
- * The slug is the normalised name — Hebrew characters and spaces are fine
- * (browsers percent-encode them automatically).
- */
-export function authorNameToSlug(name: string): string {
-	return encodeURIComponent(normalizeAuthorName(name));
 }
 
 interface ArticleRow {
