@@ -150,6 +150,11 @@
                             SelectionMode="None"
                             Scrolled="OnPasukimScrolled"
                             Margin="8,0,8,0">
+                <CollectionView.GestureRecognizers>
+                    <!-- Swipe navigation: In RTL layout (Hebrew), swipe left = previous (backward in book), swipe right = next (forward in book) -->
+                    <SwipeGestureRecognizer Direction="Left" Swiped="OnSwipedLeft" Threshold="100"/>
+                    <SwipeGestureRecognizer Direction="Right" Swiped="OnSwipedRight" Threshold="100"/>
+                </CollectionView.GestureRecognizers>
                 <!-- Footer spacer so last item can scroll above bottom bar -->
                 <CollectionView.Footer>
                     <ContentView x:Name="PasukimFooterSpacer" HeightRequest="90" BackgroundColor="Transparent"/>
@@ -223,12 +228,6 @@
                     </VerticalStackLayout>
                 </CollectionView.EmptyView>
             </CollectionView>
-
-            <!-- Swipe navigation disabled - built-in SwipeGestureRecognizer causes crashes on Android.
-                 TODO: Implement using CarouselView with virtualized items (prev/current/next perek).
-                 CarouselView is the native MAUI solution for book-like swipe navigation.
-                 See: https://learn.microsoft.com/en-us/dotnet/maui/user-interface/controls/carouselview
-                 For now, users can use prev/next buttons in circular menu. -->
 
             <!-- Articles View (hidden by default, shown when articles button clicked) -->
             <!-- Uses shared ArticleCard component -->
