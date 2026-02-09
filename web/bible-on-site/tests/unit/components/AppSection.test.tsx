@@ -44,4 +44,38 @@ describe("AppSection", () => {
 		render(<AppSection />);
 		expect(document.getElementById("app")).toBeInTheDocument();
 	});
+
+	it("renders disabled platform when href is null", () => {
+		// Mock a platform with null href to test the disabled branch
+		jest.resetModules();
+		jest.doMock("@/app/components/appPlatforms", () => ({
+			appPlatforms: [
+				{
+					id: "coming-soon",
+					name: "Coming Soon",
+					description: "Coming soon platform",
+					icon: "/icons/coming-soon.svg",
+					href: null,
+				},
+				{
+					id: "active",
+					name: "Active Platform",
+					description: "Active platform",
+					icon: "/icons/active.svg",
+					href: "https://example.com",
+				},
+			],
+		}));
+
+		// eslint-disable-next-line @typescript-eslint/no-require-imports
+		const { AppSection: AppSectionMocked } = require("@/app/components/AppSection");
+		render(<AppSectionMocked />);
+		// The null-href platform should be a <span>, not a link
+		expect(screen.queryByRole("link", { name: "Coming Soon" })).toBeNull();
+		expect(screen.getByText("Coming Soon")).toBeInTheDocument();
+		// The active platform should still be a link
+		expect(
+			screen.getByRole("link", { name: "Active Platform" }),
+		).toBeInTheDocument();
+	});
 });

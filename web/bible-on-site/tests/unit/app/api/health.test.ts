@@ -26,4 +26,20 @@ describe("GET /api/health/ready", () => {
 		expect(body.status).toBe("ready");
 		expect(body.warmed).toBe(true);
 	});
+
+	it("returns 503 when warming throws an error", async () => {
+		// Re-import with fresh module to reset isWarmed
+		jest.resetModules();
+		jest.doMock("@/data/perek-dto", () => ({
+			getPerekByPerekId: () => {
+				throw new Error("Simulated failure");
+			},
+		}));
+		const { GET: readyGet } = await import("@/app/api/health/ready/route");
+		const response = readyGet();
+		expect(response.status).toBe(503);
+		const body = await response.json();
+		expect(body.status).toBe("error");
+		expect(body.message).toBe("Simulated failure");
+	});
 });
