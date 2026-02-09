@@ -49,7 +49,9 @@ jest.mock("../../../src/data/sefer-dto", () => ({
 }));
 
 jest.mock("../../../src/data/db/tanah-view-types", () => ({
-	isQriDifferentThanKtiv: jest.fn(() => false),
+	isQriDifferentThanKtiv: jest.fn(
+		(segment: { ktivOffset?: number }) => segment.ktivOffset !== undefined,
+	),
 }));
 
 jest.mock(
@@ -78,6 +80,14 @@ jest.mock(
 		ScrollToArticle: () => null,
 	}),
 );
+
+jest.mock("../../../src/app/929/[number]/components/Ptuha", () => ({
+	Ptuah: () => <span data-testid="ptuha" />,
+}));
+
+jest.mock("../../../src/app/929/[number]/components/Stuma", () => ({
+	Stuma: () => <span data-testid="stuma" />,
+}));
 
 import { render, screen } from "@testing-library/react";
 import {
@@ -201,6 +211,40 @@ describe("[articleId] page", () => {
 	});
 
 	describe("ArticlePage", () => {
+		/** A perek with all segment types for thorough branch coverage */
+		const allSegmentTypesPerek = {
+			perekId: 5,
+			perekHeb: "ה",
+			header: "בראשית ה",
+			helek: "תורה",
+			sefer: "בראשית",
+			source: "mechon-mamre",
+			pesukim: [
+				{
+					segments: [
+						{ type: "ktiv" as const, value: "כתיב", qriOffset: 1 },
+						{
+							type: "qri" as const,
+							value: "קרי",
+							ktivOffset: -1,
+						},
+						{ type: "ptuha" as const },
+						{ type: "stuma" as const },
+						{
+							type: "qri" as const,
+							value: "רגיל",
+							ktivOffset: undefined,
+						},
+						{
+							type: "ktiv" as const,
+							value: "מלה־",
+							qriOffset: 1,
+						},
+					],
+				},
+			],
+		};
+
 		const minimalPerek = {
 			perekId: 5,
 			perekHeb: "ה",
@@ -238,6 +282,28 @@ describe("[articleId] page", () => {
 			expect(screen.getByText("מאמר לדוגמא")).toBeTruthy();
 			expect(screen.getByText("הרב ישראל")).toBeTruthy();
 			expect(screen.getByText("חזרה לפרק →")).toBeTruthy();
+		});
+
+		it("renders all segment types (ktiv, qri+different, ptuha, stuma, maqaf)", async () => {
+			mockGetPerekByPerekId.mockReturnValue(allSegmentTypesPerek);
+
+			const jsx = await ArticlePage({
+				params: Promise.resolve({ number: "5", articleId: "42" }),
+			});
+			const { container } = render(jsx);
+			const html = container.innerHTML;
+
+			// ktiv text rendered directly
+			expect(screen.getByText("כתיב")).toBeTruthy();
+			// qri with different ktiv renders parenthesised with label
+			expect(html).toContain("קרי");
+			// regular qri (no ktivOffset) rendered as-is
+			expect(screen.getByText("רגיל")).toBeTruthy();
+			// ptuha and stuma mocks rendered
+			expect(screen.getByTestId("ptuha")).toBeTruthy();
+			expect(screen.getByTestId("stuma")).toBeTruthy();
+			// maqaf trailing character: "מלה־" — should not add space after it
+			expect(screen.getByText("מלה־")).toBeTruthy();
 		});
 
 		it("calls notFound when perekId is NaN", async () => {
