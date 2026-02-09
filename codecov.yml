@@ -15,7 +15,7 @@ coverage:
         flags:
           - app
       website:
-        target: 92%
+        target: 95%
         flags:
           - website
       data:
