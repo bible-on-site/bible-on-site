@@ -3,7 +3,10 @@
   z-index: 6;
   top: 72px;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   height: calc(100vh - 72px);
+  overflow-x: hidden;
   overflow-y: auto;
   background-color: white;
 }

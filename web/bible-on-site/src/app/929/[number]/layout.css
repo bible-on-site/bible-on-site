@@ -2,3 +2,10 @@
 body:has(.perek-layout) .top-nav {
   background-color: #1552ac;
 }
+
+/* Contain horizontal overflow (issue #1270) so the page does not scroll horizontally */
+.perek-layout {
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
+}

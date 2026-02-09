@@ -710,6 +710,26 @@ jobs:
         continue-on-error: true
         run: npm run coverage:merge
 
+      - name: Fix LCOV paths for Codecov website flag
+        if: always()
+        run: |
+          # Job runs with working-directory web/bible-on-site
+          LCOV=".coverage/merged/lcov.info"
+          if [ -f "$LCOV" ]; then
+            # Codecov website flag path is web/bible-on-site/src/; LCOV has SF:src/...
+            sed -i 's|^SF:src/|SF:web/bible-on-site/src/|g' "$LCOV"
+            sed -i 's|^SF:src\\|SF:web/bible-on-site/src/|g' "$LCOV" || true
+          fi
+
+      - name: Log merged coverage summary
+        if: always()
+        run: |
+          if [ -f "${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}" ]; then
+            docker run --rm -v ${{ github.workspace }}/${{ env.WEBSITE_DIRECTORY }}/.coverage:/.coverage lcov-cli:0.0.2 --summary /.coverage/merged/lcov.info || true
+          else
+            echo "Merged coverage file not found (merge may have failed)"
+          fi
+
       - name: Store Coverage Debug Snippets
         if: always()
         uses: actions/upload-artifact@v6

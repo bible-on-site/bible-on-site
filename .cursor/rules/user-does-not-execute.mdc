@@ -1,0 +1,19 @@
+---
+description: User does nothing; agent does all steps; when asked to monitor, agent monitors and stabilizes until resolved
+alwaysApply: true
+---
+
+# User Does Not Execute
+
+**The user does nothing.** The agent does everything that can be done.
+
+- The agent runs all commands (terminal, build, lint, test, git, etc.).
+- The agent performs every step that can be performed.
+- Do not instruct the user to run anything or to "do X next." Only mention user action when the agent cannot perform it (e.g. permission, secret, or explicit request to be informed).
+
+## When the user asks to monitor
+
+- **Monitor:** The agent checks CI, builds, tests, package.json, and related issues—no oversight. Do not skip or assume something is fine.
+- **Stabilize:** Fix failures and issues until resolved (e.g. lint, package.json scripts/deps, CI red).
+- **Done when:** There are no remaining issues (no package.json issues, no failing checks, no unresolved problems). Do not stop until stable.
+- **Autopilot:** Keep monitoring (re-check CI, build, tests) and fixing until resolved. Never tell the user to "say monitor again" or to ask again—the agent keeps going until the branch is green and everything is stable.
