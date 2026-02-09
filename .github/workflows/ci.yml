@@ -713,7 +713,8 @@ jobs:
       - name: Fix LCOV paths for Codecov website flag
         if: always()
         run: |
-          LCOV="${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}"
+          # Job runs with working-directory web/bible-on-site
+          LCOV=".coverage/merged/lcov.info"
           if [ -f "$LCOV" ]; then
             # Codecov website flag path is web/bible-on-site/src/; LCOV has SF:src/...
             sed -i 's|^SF:src/|SF:web/bible-on-site/src/|g' "$LCOV"
