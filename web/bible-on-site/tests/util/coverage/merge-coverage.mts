@@ -6,6 +6,7 @@ import {
 	readFileSync,
 	writeFileSync,
 } from "node:fs";
+import { relative, resolve } from "node:path";
 import { normalizeLcovFile } from "./normalize-coverage.mjs";
 
 const COVERAGE_DIR = `${process.env.npm_config_local_prefix}/.coverage`;
@@ -26,6 +27,8 @@ mkdirSync(`${COVERAGE_DIR}/merged`, { recursive: true });
 dumpTargetCoverage();
 normalizeCoverageFiles();
 mergeCoverage();
+fixLcovPathsForCodecov();
+printCoverageSummary();
 
 function mergeCoverage(): void {
 	// Both unit and e2e tests now use swc-plugin-coverage-instrument for consistent branch line mappings.
@@ -158,4 +161,112 @@ function printExecError(cmd: string, error: unknown): void {
 	} else {
 		console.error("Error    :", String(error));
 	}
+}
+
+/**
+ * Prefix LCOV source paths so Codecov can match them to the repository layout.
+ *
+ * The merged LCOV file contains paths relative to the package root (e.g.
+ * `SF:src/app/page.tsx`), but Codecov flags reference paths from the repo root
+ * (e.g. `web/bible-on-site/src/`).  This step adds the missing prefix.
+ */
+function fixLcovPathsForCodecov(): void {
+	const mergedLcov = `${COVERAGE_DIR}/merged/lcov.info`;
+	if (!existsSync(mergedLcov)) {
+		console.log("Merged LCOV not found, skipping path prefix fix");
+		return;
+	}
+
+	const prefix = getMonorepoPrefix();
+	if (!prefix) {
+		console.log(
+			"Could not determine monorepo prefix, skipping LCOV path fix",
+		);
+		return;
+	}
+
+	const original = readFileSync(mergedLcov, "utf8");
+	// Handle both forward-slash (Linux/CI) and back-slash (Windows) SF entries
+	const fixed = original
+		.replace(/^SF:src\//gm, `SF:${prefix}src/`)
+		.replace(/^SF:src\\/gm, `SF:${prefix}src/`);
+
+	if (fixed !== original) {
+		writeFileSync(mergedLcov, fixed, "utf8");
+		console.log(`Fixed LCOV paths: added prefix '${prefix}'`);
+	} else {
+		console.log("LCOV paths already prefixed or nothing to fix");
+	}
+}
+
+/** Derive the package directory relative to the git repo root (e.g. `web/bible-on-site/`). */
+function getMonorepoPrefix(): string | null {
+	try {
+		const gitRoot = execSync("git rev-parse --show-toplevel", {
+			encoding: "utf8",
+		}).trim();
+		const packageDir =
+			process.env.npm_config_local_prefix ?? process.cwd();
+		const rel = relative(resolve(gitRoot), resolve(packageDir)).replace(
+			/\\/g,
+			"/",
+		);
+		return rel ? `${rel}/` : null;
+	} catch {
+		return null;
+	}
+}
+
+/** Parse the merged LCOV and print a human-readable coverage summary. */
+function printCoverageSummary(): void {
+	const mergedLcov = `${COVERAGE_DIR}/merged/lcov.info`;
+	if (!existsSync(mergedLcov)) {
+		console.log("Merged LCOV not found, skipping summary");
+		return;
+	}
+
+	const content = readFileSync(mergedLcov, "utf8");
+	let linesFound = 0;
+	let linesHit = 0;
+	let branchesFound = 0;
+	let branchesHit = 0;
+	let functionsFound = 0;
+	let functionsHit = 0;
+
+	for (const line of content.split(/\r?\n/)) {
+		if (line.startsWith("LF:")) {
+			linesFound += Number(line.slice(3));
+		} else if (line.startsWith("LH:")) {
+			linesHit += Number(line.slice(3));
+		} else if (line.startsWith("BRF:")) {
+			branchesFound += Number(line.slice(4));
+		} else if (line.startsWith("BRH:")) {
+			branchesHit += Number(line.slice(4));
+		} else if (line.startsWith("FNF:")) {
+			functionsFound += Number(line.slice(4));
+		} else if (line.startsWith("FNH:")) {
+			functionsHit += Number(line.slice(4));
+		}
+	}
+
+	const pct = (hit: number, total: number) =>
+		total > 0 ? ((hit * 100) / total).toFixed(2) : "N/A";
+
+	const total = linesFound + branchesFound;
+	const hit = linesHit + branchesHit;
+
+	console.log("\n=== Merged Coverage Summary ===");
+	console.log(
+		`  Lines:     ${linesHit}/${linesFound} (${pct(linesHit, linesFound)}%)`,
+	);
+	console.log(
+		`  Branches:  ${branchesHit}/${branchesFound} (${pct(branchesHit, branchesFound)}%)`,
+	);
+	console.log(
+		`  Functions: ${functionsHit}/${functionsFound} (${pct(functionsHit, functionsFound)}%)`,
+	);
+	if (total > 0) {
+		console.log(`  Combined:  ${pct(hit, total)}% (Codecov metric)`);
+	}
+	console.log("===============================\n");
 }
