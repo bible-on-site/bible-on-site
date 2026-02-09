@@ -1086,39 +1086,28 @@ public partial class PerekPage : ContentPage
 #endif
 
     /// <summary>
-    /// Handles carousel item changed - slides the carousel window in-place.
-    /// Does NOT rebuild the collection - only adds/removes items at edges.
+    /// Handles carousel item changed after a swipe.
+    /// The carousel collection is NEVER modified here - all items are pre-loaded in the window.
+    /// This avoids MAUI CarouselView position/item desync bugs.
     /// </summary>
     private bool _isUpdatingFromSwipe;
-    
+
     private async void OnCarouselItemChanged(object? sender, CurrentItemChangedEventArgs e)
     {
         if (_isUpdatingFromSwipe) return;
-        
+
         if (e.CurrentItem is not Perek perek || perek.PerekId <= 0 || perek.PerekId == _viewModel.PerekId)
             return;
-        
+
         _isUpdatingFromSwipe = true;
         try
         {
-            var swipedForward = perek.PerekId > _viewModel.PerekId;
-            
-            // The swiped-to perek already has pasukim loaded (pre-loaded in carousel).
+            // The swiped-to perek already has pasukim pre-loaded in the carousel window.
             // Just update the viewmodel's current perek reference.
             _viewModel.Perek = perek;
             _viewModel.ClearSelected();
             SetAnalyticsScreenForPerek();
-            
-            // Slide the carousel window (add/remove single items, not full rebuild)
-            if (swipedForward)
-            {
-                await _viewModel.SlideCarouselForwardAsync();
-            }
-            else
-            {
-                await _viewModel.SlideCarouselBackwardAsync();
-            }
-            
+
             // Update articles badge
             await UpdateArticlesCountAsync();
 
@@ -1127,7 +1116,7 @@ public partial class PerekPage : ContentPage
             {
                 await LoadArticlesAsync();
             }
-            
+
             // Refresh nav button visuals if menu is open
             if (_isMenuOpen)
             {

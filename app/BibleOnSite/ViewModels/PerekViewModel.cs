@@ -245,101 +245,52 @@ public partial class PerekViewModel : ObservableObject
 
 #if MAUI
     /// <summary>
-    /// Initializes the carousel collection with prev/current/next perek.
-    /// Called once when first loading, or after button/picker navigation.
+    /// Half-window size for carousel pre-loading.
+    /// The carousel will have up to (2 * HalfWindow + 1) items centered on the current perek.
+    /// </summary>
+    private const int CarouselHalfWindow = 10;
+
+    /// <summary>
+    /// Initializes the carousel with a wide window of perakim centered on the current perek.
+    /// All pasukim are pre-loaded so the collection is never modified during swipes.
+    /// Called on first load and when button/picker navigation moves outside the current window.
     /// </summary>
     public async Task InitializeCarouselAsync()
     {
         if (Perek == null) return;
 
-        var perakim = new System.Collections.ObjectModel.ObservableCollection<Perek>();
+        var windowStart = Math.Max(1, PerekId - CarouselHalfWindow);
+        var windowEnd = Math.Min(929, PerekId + CarouselHalfWindow);
 
-        // Add previous perek (only if not at boundary)
-        if (CanGoToPreviousPerek && PreviousPerekId > 0)
+        var list = new List<Perek>(windowEnd - windowStart + 1);
+
+        for (var id = windowStart; id <= windowEnd; id++)
         {
-            var prevPerek = PerekDataService.Instance.GetPerek(PreviousPerekId);
-            if (prevPerek != null)
+            var p = id == PerekId ? Perek : PerekDataService.Instance.GetPerek(id);
+            if (p != null)
             {
-                prevPerek.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(PreviousPerekId);
-                perakim.Add(prevPerek);
+                // Load pasukim if not already cached on this instance
+                if (p.Pasukim == null || p.Pasukim.Count == 0)
+                {
+                    p.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(id);
+                }
+                list.Add(p);
             }
         }
 
-        // Add current perek (always)
-        perakim.Add(Perek);
-
-        // Add next perek (only if not at boundary)
-        if (CanGoToNextPerek && NextPerekId > 0 && NextPerekId <= 929)
-        {
-            var nextPerek = PerekDataService.Instance.GetPerek(NextPerekId);
-            if (nextPerek != null)
-            {
-                nextPerek.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(NextPerekId);
-                perakim.Add(nextPerek);
-            }
-        }
-
-        CarouselPerakim = perakim;
-        CarouselPosition = CanGoToPreviousPerek ? 1 : 0;
+        // Create the collection in one shot (no per-item CollectionChanged events)
+        CarouselPerakim = new System.Collections.ObjectModel.ObservableCollection<Perek>(list);
+        CarouselPosition = PerekId - windowStart;
         CurrentCarouselPerek = Perek;
     }
 
     /// <summary>
-    /// Slides the carousel window after user swiped forward (to next perek).
-    /// Modifies collection in-place: removes first item, appends new next.
-    /// This avoids rebuilding the entire CarouselView.
+    /// Checks whether the given perekId is inside the current carousel window.
+    /// If not, the carousel should be re-initialized.
     /// </summary>
-    public async Task SlideCarouselForwardAsync()
+    public bool IsInsideCarouselWindow(int perekId)
     {
-        if (CarouselPerakim.Count == 0) return;
-
-        // Remove the leftmost item (old previous)
-        if (CarouselPerakim.Count > 1)
-        {
-            CarouselPerakim.RemoveAt(0);
-        }
-
-        // Append new next perek at the end
-        if (CanGoToNextPerek && NextPerekId > 0 && NextPerekId <= 929)
-        {
-            var nextPerek = PerekDataService.Instance.GetPerek(NextPerekId);
-            if (nextPerek != null)
-            {
-                nextPerek.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(NextPerekId);
-                CarouselPerakim.Add(nextPerek);
-            }
-        }
-
-        CurrentCarouselPerek = Perek;
-    }
-
-    /// <summary>
-    /// Slides the carousel window after user swiped backward (to previous perek).
-    /// Modifies collection in-place: removes last item, inserts new prev at 0.
-    /// This avoids rebuilding the entire CarouselView.
-    /// </summary>
-    public async Task SlideCarouselBackwardAsync()
-    {
-        if (CarouselPerakim.Count == 0) return;
-
-        // Remove the rightmost item (old next)
-        if (CarouselPerakim.Count > 1)
-        {
-            CarouselPerakim.RemoveAt(CarouselPerakim.Count - 1);
-        }
-
-        // Insert new previous perek at the beginning
-        if (CanGoToPreviousPerek && PreviousPerekId > 0)
-        {
-            var prevPerek = PerekDataService.Instance.GetPerek(PreviousPerekId);
-            if (prevPerek != null)
-            {
-                prevPerek.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(PreviousPerekId);
-                CarouselPerakim.Insert(0, prevPerek);
-            }
-        }
-
-        CurrentCarouselPerek = Perek;
+        return CarouselPerakim.Any(p => p.PerekId == perekId);
     }
 #endif
 
