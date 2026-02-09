@@ -8,6 +8,7 @@ import type {
 import {
 	ActionButton,
 	BookshelfIcon,
+	DownloadDropdown,
 	FirstPageButton,
 	LastPageButton,
 	NextButton,
@@ -17,12 +18,14 @@ import {
 } from "html-flip-book-react/toolbar";
 import dynamic from "next/dynamic";
 import React, { useCallback, useMemo, useRef, useState } from "react";
+import { downloadPageRanges, downloadSefer } from "@/app/929/[number]/actions";
 import { BookshelfModal } from "@/app/components/Bookshelf";
 import { isQriDifferentThanKtiv } from "@/data/db/tanah-view-types";
 import type { PerekObj } from "@/data/perek-dto";
 import { getSeferColor } from "@/data/sefer-colors";
 import { getSeferByName } from "@/data/sefer-dto";
 import type { Article } from "@/lib/articles";
+import type { PerushSummary } from "@/lib/perushim";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import { BlankPageContent } from "./BlankPageContent";
 import { Ptuah } from "./Ptuha";
@@ -67,8 +70,10 @@ const Sefer = (props: {
 	perekObj: PerekObj;
 	articles: Article[];
 	articlesByPerekIndex?: Article[][];
+	perushimByPerekIndex?: PerushSummary[][];
+	perekIds?: number[];
 }) => {
-	const { perekObj, articles, articlesByPerekIndex } = props;
+	const { perekObj, articles, articlesByPerekIndex, perushimByPerekIndex, perekIds } = props;
 	const sefer = getSeferByName(perekObj.sefer);
 	const flipBookRef = useRef<FlipBookHandle>(null);
 	const bookWrapperRef = useRef<HTMLDivElement>(null);
@@ -212,6 +217,8 @@ const Sefer = (props: {
 		<React.Fragment key={`blank-${perekIdx + 1}`}>
 			<BlankPageContent
 				articles={articlesByPerekIndex?.[perekIdx] ?? articles}
+				perushim={perushimByPerekIndex?.[perekIdx] ?? []}
+				perekId={perekIds?.[perekIdx] ?? 0}
 				hebrewDateStr={hebrewDateStr}
 			/>
 		</React.Fragment>,
@@ -245,6 +252,20 @@ const Sefer = (props: {
 				<ActionButton onClick={openBookshelf} ariaLabel="ספרי התנ״ך">
 					<BookshelfIcon size={18} />
 				</ActionButton>
+				<DownloadDropdown
+					ariaLabel="הורדה"
+					entireBookFilename={perekObj.sefer}
+					rangeFilename={perekObj.sefer}
+					downloadContext={{ seferName: perekObj.sefer }}
+					onDownloadSefer={async () => {
+						const r = await downloadSefer();
+						return "error" in r ? null : { ext: r.ext, data: r.data };
+					}}
+					onDownloadPageRange={async (pages, semanticPages, context) => {
+						const r = await downloadPageRanges(pages, semanticPages, context);
+						return "error" in r ? null : { ext: r.ext, data: r.data };
+					}}
+				/>
 				<FirstPageButton />
 				<PrevButton />
 				<PageIndicator ariaLabel="עבור לפרק (מספר עברי)" />

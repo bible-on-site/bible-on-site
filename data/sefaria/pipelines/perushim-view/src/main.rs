@@ -30,7 +30,7 @@ enum OutputFormat {
     Json,
     /// Generate MySQL SQL for notes + catalog (web backend)
     Mysql,
-    /// Generate SQLite: catalog (bundled) + notes (OBB/on-demand)
+    /// Generate SQLite: catalog (bundled) + notes (PAD/on-demand)
     Sqlite,
     /// Generate MongoDB Compass stages for debugging
     CompassStages,

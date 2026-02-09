@@ -145,4 +145,92 @@ button.backLink {
     width: 64px;
     height: 64px;
   }
+
+  .expandedPerush {
+    padding: 16px;
+    margin: 16px 8px;
+  }
+
+  .perushTitle {
+    font-size: 1.3rem;
+  }
+
+  .parshanName {
+    font-size: 1.1rem;
+  }
+
+  .noteContent {
+    font-size: 1rem;
+  }
+}
+
+/* Perush styles */
+.expandedPerush {
+  margin: 24px 16px;
+  padding: 24px;
+  background: transparent;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.perushHeader {
+  text-align: center;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #c4c4c4;
+  margin-bottom: 24px;
+}
+
+.perushTitle {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #1c2c5d;
+  margin: 0 0 8px 0;
+}
+
+.parshanYear {
+  font-size: 1.1rem;
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.parshanName {
+  font-size: 1.3rem;
+  font-weight: 500;
+  color: #4b5563;
+  margin: 0;
+}
+
+.perushContent {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.note {
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border-right: 4px solid #1c2c5d;
+}
+
+.notePasuk {
+  display: inline-block;
+  font-weight: 700;
+  color: #1c2c5d;
+  margin-left: 8px;
+  font-size: 1.05rem;
+}
+
+.noteContent {
+  margin-top: 8px;
+  line-height: 1.8;
+  font-size: 1.1rem;
+  color: #374151;
+  text-align: justify;
+  direction: rtl;
+}
+
+.noteContent p {
+  margin: 0.5rem 0;
 }

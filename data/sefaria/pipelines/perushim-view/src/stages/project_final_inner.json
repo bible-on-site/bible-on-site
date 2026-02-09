@@ -4,19 +4,27 @@
 		"$switch": {
 			"branches": [
 				{
-					"case": { "$regexMatch": { "input": "$seferHebName", "regex": "שמואל א" } },
+					"case": {
+						"$regexMatch": { "input": "$seferHebName", "regex": "שמואל א" }
+					},
 					"then": 1
 				},
 				{
-					"case": { "$regexMatch": { "input": "$seferHebName", "regex": "שמואל ב" } },
+					"case": {
+						"$regexMatch": { "input": "$seferHebName", "regex": "שמואל ב" }
+					},
 					"then": 2
 				},
 				{
-					"case": { "$regexMatch": { "input": "$seferHebName", "regex": "מלכים א" } },
+					"case": {
+						"$regexMatch": { "input": "$seferHebName", "regex": "מלכים א" }
+					},
 					"then": 1
 				},
 				{
-					"case": { "$regexMatch": { "input": "$seferHebName", "regex": "מלכים ב" } },
+					"case": {
+						"$regexMatch": { "input": "$seferHebName", "regex": "מלכים ב" }
+					},
 					"then": 2
 				},
 				{
@@ -28,11 +36,15 @@
 					"then": 50
 				},
 				{
-					"case": { "$regexMatch": { "input": "$seferHebName", "regex": "דברי הימים א" } },
+					"case": {
+						"$regexMatch": { "input": "$seferHebName", "regex": "דברי הימים א" }
+					},
 					"then": 1
 				},
 				{
-					"case": { "$regexMatch": { "input": "$seferHebName", "regex": "דברי הימים ב" } },
+					"case": {
+						"$regexMatch": { "input": "$seferHebName", "regex": "דברי הימים ב" }
+					},
 					"then": 2
 				}
 			],
@@ -65,10 +77,30 @@
 				{ "case": { "$eq": ["$seferHebName", "דברים"] }, "then": 5 },
 				{ "case": { "$eq": ["$seferHebName", "יהושע"] }, "then": 6 },
 				{ "case": { "$eq": ["$seferHebName", "שופטים"] }, "then": 7 },
-				{ "case": { "$regexMatch": { "input": "$seferHebName", "regex": "שמואל" } }, "then": 8 },
-				{ "case": { "$regexMatch": { "input": "$seferHebName", "regex": "מלכים" } }, "then": 9 },
-				{ "case": { "$regexMatch": { "input": "$seferHebName", "regex": "ישעי" } }, "then": 10 },
-				{ "case": { "$regexMatch": { "input": "$seferHebName", "regex": "ירמי" } }, "then": 11 },
+				{
+					"case": {
+						"$regexMatch": { "input": "$seferHebName", "regex": "שמואל" }
+					},
+					"then": 8
+				},
+				{
+					"case": {
+						"$regexMatch": { "input": "$seferHebName", "regex": "מלכים" }
+					},
+					"then": 9
+				},
+				{
+					"case": {
+						"$regexMatch": { "input": "$seferHebName", "regex": "ישעי" }
+					},
+					"then": 10
+				},
+				{
+					"case": {
+						"$regexMatch": { "input": "$seferHebName", "regex": "ירמי" }
+					},
+					"then": 11
+				},
 				{ "case": { "$eq": ["$seferHebName", "יחזקאל"] }, "then": 12 },
 				{ "case": { "$eq": ["$seferHebName", "הושע"] }, "then": 13 },
 				{ "case": { "$eq": ["$seferHebName", "יואל"] }, "then": 14 },
@@ -95,7 +127,12 @@
 				{ "case": { "$eq": ["$seferHebName", "דנייאל"] }, "then": 33 },
 				{ "case": { "$eq": ["$seferHebName", "עזרא"] }, "then": 34 },
 				{ "case": { "$eq": ["$seferHebName", "נחמיה"] }, "then": 34 },
-				{ "case": { "$regexMatch": { "input": "$seferHebName", "regex": "דברי הימים" } }, "then": 35 }
+				{
+					"case": {
+						"$regexMatch": { "input": "$seferHebName", "regex": "דברי הימים" }
+					},
+					"then": 35
+				}
 			],
 			"default": "$$REMOVE"
 		}

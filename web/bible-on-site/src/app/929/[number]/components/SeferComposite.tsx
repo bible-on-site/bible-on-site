@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { PerekObj } from "@/data/perek-dto";
 import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
 import type { Article } from "@/lib/articles";
+import type { PerushSummary } from "@/lib/perushim";
 import ReadModeToggler from "./ReadModeToggler";
 import Sefer from "./Sefer";
 import styles from "./sefer-composite.module.css";
@@ -13,6 +14,8 @@ const ClientWrapper = (props: {
 	perekObj: PerekObj;
 	articles: Article[];
 	articlesByPerekIndex?: Article[][];
+	perushimByPerekIndex?: PerushSummary[][];
+	perekIds?: number[];
 }) => {
 	const isWideEnough = useIsWideEnough(TABLET_MIN_WIDTH);
 
@@ -79,6 +82,8 @@ const ClientWrapper = (props: {
 						perekObj={props.perekObj}
 						articles={props.articles}
 						articlesByPerekIndex={props.articlesByPerekIndex}
+						perushimByPerekIndex={props.perushimByPerekIndex}
+						perekIds={props.perekIds}
 					/>
 				)}
 			</div>

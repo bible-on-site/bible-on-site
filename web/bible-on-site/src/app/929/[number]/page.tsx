@@ -48,6 +48,16 @@ const getCachedArticles = unstable_cache(
 	},
 );
 
+/** Cache perushim summaries per perek (same caching strategy as articles). */
+const getCachedPerushim = unstable_cache(
+	async (perekId: number) => getPerushimByPerekId(perekId),
+	["perushim"],
+	{
+		tags: ["perushim"],
+		revalidate: false,
+	},
+);
+
 
 // TODO: figure out if need to use generateMetadata
 export default async function Perek({
@@ -60,9 +70,12 @@ export default async function Perek({
 	const perekObj = getPerekByPerekId(perekId);
 	const sefer = getSeferByName(perekObj.sefer);
 	const perekIds = getPerekIdsForSefer(sefer);
-	// Fetch articles for every perek in the sefer so each blank page shows the correct articles
+	// Fetch articles and perushim for every perek in the sefer so each blank page shows the correct data
 	const articlesByPerekIndex = await Promise.all(
 		perekIds.map((id) => getCachedArticles(id)),
+	);
+	const perushimByPerekIndex = await Promise.all(
+		perekIds.map((id) => getCachedPerushim(id)),
 	);
 	const articles = await getCachedArticles(perekId);
 	const perushim = await getPerushimByPerekId(perekId);
@@ -74,6 +87,8 @@ export default async function Perek({
 					perekObj={perekObj}
 					articles={articles}
 					articlesByPerekIndex={articlesByPerekIndex}
+					perushimByPerekIndex={perushimByPerekIndex}
+					perekIds={perekIds}
 				/>
 			</Suspense>
 			<div className={styles.perekContainer}>

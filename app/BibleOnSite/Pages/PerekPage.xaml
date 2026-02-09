@@ -19,6 +19,7 @@
             <Color x:Key="SelectedPasukBackground">#E3F2FD</Color>
             <Color x:Key="SelectedPasukBackgroundDark">#1E3A5F</Color>
             <converters:IntEqualityConverter x:Key="IntEqualityConverter"/>
+            <converters:PerushCheckedConverter x:Key="PerushCheckedConverter"/>
             <!-- DataTrigger helper for selection background -->
         </ResourceDictionary>
     </ContentPage.Resources>
@@ -195,12 +196,32 @@
                                        VerticalTextAlignment="Start"
                                        Margin="0,1.5,0,0"
                                        TextColor="{StaticResource Primary}"/>
-                                <Label Grid.Column="1"
-                                       AutomationId="PasukText"
-                                       FormattedText="{Binding FormattedText}"
-                                       FontSize="18"
-                                       LineBreakMode="WordWrap"
-                                       LineHeight="1.4"/>
+                                <VerticalStackLayout Grid.Column="1" Spacing="2">
+                                    <Label AutomationId="PasukText"
+                                           FormattedText="{Binding FormattedText}"
+                                           FontSize="18"
+                                           LineBreakMode="WordWrap"
+                                           LineHeight="1.4"/>
+                                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding PerushNotes}"
+                                                         Spacing="4"
+                                                         Margin="0,4,0,0">
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="models:PerushNoteDisplay">
+                                                <VerticalStackLayout Spacing="2">
+                                                    <Label Text="{Binding PerushName}"
+                                                           FontSize="14"
+                                                           FontAttributes="Bold"
+                                                           TextColor="{StaticResource Primary}"/>
+                                                    <controls:HtmlView HtmlContent="{Binding DisplayContent}"
+                                                                      FontSize="16"
+                                                                      TextAlignment="Justify"
+                                                                      TextDirection="Rtl"
+                                                                      LineHeight="1.4"/>
+                                                </VerticalStackLayout>
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
+                                    </VerticalStackLayout>
+                                </VerticalStackLayout>
                             </Grid>
                         </Border>
                     </DataTemplate>
@@ -322,19 +343,50 @@
                 </VerticalStackLayout>
                 <!-- Scrollable content area for perushim list -->
                 <ScrollView Grid.Row="1" Margin="0,8,0,90">
-                    <!-- Placeholder - will be replaced with actual perushim list -->
-                    <VerticalStackLayout VerticalOptions="Start"
-                                         HorizontalOptions="Center"
-                                         Spacing="8"
-                                         Padding="0,16,0,0">
-                        <Label Text="📚"
-                               FontSize="32"
-                               HorizontalTextAlignment="Center"/>
-                        <Label Text="בקרוב יחזרו הפירושים"
-                               FontSize="14"
-                               HorizontalTextAlignment="Center"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"/>
-                    </VerticalStackLayout>
+                    <CollectionView x:Name="PerushimCollection"
+                                   ItemsSource="{Binding Perushim}"
+                                   SelectionMode="None"
+                                   VerticalOptions="Start">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="models:Perush">
+                                <Grid Padding="4,2" ColumnDefinitions="Auto,*" x:Name="PerushRow">
+                                    <CheckBox Grid.Column="0"
+                                              VerticalOptions="Center"
+                                              Margin="0,0,8,0"
+                                              CheckedChanged="OnPerushCheckboxChanged">
+                                        <CheckBox.IsChecked>
+                                            <MultiBinding Converter="{StaticResource PerushCheckedConverter}">
+                                                <Binding Path="Id"/>
+                                                <Binding Path="BindingContext.CheckedPerushim" Source="{x:Reference PerekPageRoot}"/>
+                                            </MultiBinding>
+                                        </CheckBox.IsChecked>
+                                    </CheckBox>
+                                    <Label Grid.Column="1"
+                                           Text="{Binding Name}"
+                                           FontSize="16"
+                                           VerticalOptions="Center"/>
+                                </Grid>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                        <CollectionView.EmptyView>
+                            <VerticalStackLayout VerticalOptions="Center"
+                                                 HorizontalOptions="Center"
+                                                 Spacing="8"
+                                                 Padding="0,16,0,0">
+                                <Label Text="📚"
+                                       FontSize="32"
+                                       HorizontalTextAlignment="Center"/>
+                                <Label Text="{Binding PerushimEmptyMessage}"
+                                       FontSize="14"
+                                       HorizontalTextAlignment="Center"
+                                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"/>
+                                <Button x:Name="DownloadPerushimButton"
+                                        Text="להוריד פירושים"
+                                        IsVisible="{Binding ShowDownloadPerushimButton}"
+                                        Clicked="OnDownloadPerushimClicked"/>
+                            </VerticalStackLayout>
+                        </CollectionView.EmptyView>
+                    </CollectionView>
                 </ScrollView>
             </Grid>
         </Border>

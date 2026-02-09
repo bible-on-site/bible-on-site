@@ -1,18 +1,18 @@
 -- Schema for perushim (commentaries) tables
 -- For tests: USE `tanah_test`
 -- For prod: USE `tanah`
-
-/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
-/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
-/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
-/*!50503 SET NAMES utf8mb4 */;
-
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */
+;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */
+;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */
+;
+/*!50503 SET NAMES utf8mb4 */
+;
 SET FOREIGN_KEY_CHECKS = 0;
-
 --
 -- Table structure for table `parshan` (commentator)
 --
-
 DROP TABLE IF EXISTS `parshan`;
 CREATE TABLE `parshan` (
     `id` smallint NOT NULL,
@@ -20,12 +20,10 @@ CREATE TABLE `parshan` (
     `birth_year` smallint DEFAULT NULL,
     `has_pic` tinyint(1) NOT NULL DEFAULT 0,
     PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 --
 -- Table structure for table `perush` (commentary work)
 --
-
 DROP TABLE IF EXISTS `perush`;
 CREATE TABLE `perush` (
     `id` smallint NOT NULL,
@@ -34,15 +32,14 @@ CREATE TABLE `perush` (
     `comp_date` varchar(100) DEFAULT NULL,
     `pub_date` varchar(100) DEFAULT NULL,
     `priority` smallint NOT NULL DEFAULT 0,
+    -- Display order (lower = first): 0-99=Targum, 100=Rashi, 200+=Others (chronological)
     PRIMARY KEY (`id`),
     KEY `idx_perush_parshan` (`parshan_id`),
     CONSTRAINT `fk_perush_parshan` FOREIGN KEY (`parshan_id`) REFERENCES `parshan` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 --
 -- Table structure for table `note` (commentary text per pasuk)
 --
-
 DROP TABLE IF EXISTS `note`;
 CREATE TABLE `note` (
     `perush_id` smallint NOT NULL,
@@ -54,10 +51,11 @@ CREATE TABLE `note` (
     KEY `idx_note_perek` (`perek_id`),
     KEY `idx_note_perek_pasuk` (`perek_id`, `pasuk`),
     CONSTRAINT `fk_note_perush` FOREIGN KEY (`perush_id`) REFERENCES `perush` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 SET FOREIGN_KEY_CHECKS = 1;
-
-/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
-/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
-/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */
+;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */
+;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */
+;

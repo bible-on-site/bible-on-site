@@ -1,0 +1,3 @@
+# Perushim notes asset pack (Play Asset Delivery, on-demand).
+# Run: cd data && cargo make generate-perushim-view-sqlite
+# to produce sefaria-dump-5784-sivan-4.perushim_notes.sqlite here.

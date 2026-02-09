@@ -36,6 +36,7 @@ public static class MauiProgram
 		PreferencesService.Initialize(new MauiPreferencesStorage());
 
 		// Register services
+		builder.Services.AddSingleton<IPadDeliveryService>(_ => PadDeliveryService.Instance);
 		builder.Services.AddSingleton(_ => PreferencesService.Instance);
 		builder.Services.AddSingleton(_ => StarterService.Instance);
 		builder.Services.AddSingleton<IAnalyticsService, AnalyticsService>();

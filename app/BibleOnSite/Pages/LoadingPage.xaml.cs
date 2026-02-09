@@ -31,6 +31,13 @@ public partial class LoadingPage : ContentPage
             await AppConfig.Instance.InitializeAsync();
             Console.WriteLine($"API URL: {AppConfig.Instance.GetApiUrl()}");
 
+            // Load preferences (font, last perek, perek-to-load) so PerekPage can use them
+            PreferencesService.Instance.Load();
+
+            // Load PerekDataService (tanah) so GetTodaysPerekId works for startup preference
+            if (!PerekDataService.Instance.IsLoaded)
+                await PerekDataService.Instance.LoadAsync();
+
             await LoadStarterDataAsync();
             await NavigateToMainPageAsync();
         }

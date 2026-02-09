@@ -79,9 +79,12 @@ function run() {
 	}
 
 	rmSyncRecursive(targetReact);
-	fs.mkdirSync(path.join(targetReact, "node_modules", "html-flip-book-vanilla"), {
-		recursive: true,
-	});
+	fs.mkdirSync(
+		path.join(targetReact, "node_modules", "html-flip-book-vanilla"),
+		{
+			recursive: true,
+		},
+	);
 
 	fs.copyFileSync(
 		path.join(reactSrc, "package.json"),

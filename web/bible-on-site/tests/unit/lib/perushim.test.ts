@@ -9,8 +9,8 @@ jest.mock("../../../src/lib/api-client", () => ({
 
 import { query } from "../../../src/lib/api-client";
 import {
-	getPerushimByPerekId,
 	getPerushDetail,
+	getPerushimByPerekId,
 	getPerushNotes,
 } from "../../../src/lib/perushim";
 

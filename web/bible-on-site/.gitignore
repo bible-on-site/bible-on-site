@@ -49,4 +49,6 @@ monocart-report/
 .lighthouse-reports/
 # test artifacts
 jest-*.json
+jest-err.txt
+build.log
 tests/unit/components/err.txt

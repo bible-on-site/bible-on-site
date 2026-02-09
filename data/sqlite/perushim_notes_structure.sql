@@ -1,4 +1,4 @@
--- SQLite schema for perushim notes (large, delivered as OBB / on-demand download)
+-- SQLite schema for perushim notes (large, delivered via PAD or on-demand download)
 -- Contains the actual commentary text, one row per note per pasuk.
 -- Matches the legacy tanah_note schema pattern.
 

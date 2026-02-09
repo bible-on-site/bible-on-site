@@ -2,6 +2,11 @@
 
 import type { Article } from "@/lib/articles";
 import { getArticleById } from "@/lib/articles";
+import {
+	getPageRangesDownloadHandler,
+	getSeferDownloadHandler,
+} from "@/lib/download/handlers";
+import type { SemanticPageInfo } from "@/lib/download/types";
 import type { PerushNote } from "@/lib/perushim";
 import { getPerushNotes } from "@/lib/perushim";
 
@@ -23,4 +28,50 @@ export async function getPerushNotesForPage(
 	perekId: number,
 ): Promise<PerushNote[]> {
 	return getPerushNotes(perushId, perekId);
+}
+
+/** Result of a download action when a handler is implemented */
+export interface DownloadActionResult {
+	ext: string;
+	/** Base64-encoded file content */
+	data: string;
+}
+
+/** Result when no handler is set (abstract by default) */
+export interface DownloadActionError {
+	error: "not_implemented";
+}
+
+/**
+ * Sefer download action. Uses the registered SeferDownloadHandler if set.
+ * Handler receives no arguments; consumer provides implementation.
+ */
+export async function downloadSefer(): Promise<
+	DownloadActionResult | DownloadActionError
+> {
+	const handler = getSeferDownloadHandler();
+	if (!handler) {
+		return { error: "not_implemented" };
+	}
+	const [ext, bin] = await handler();
+	const data = Buffer.from(bin).toString("base64");
+	return { ext, data };
+}
+
+/**
+ * Page-ranges download action. Uses the registered PageRangesDownloadHandler if set.
+ * Pass page indices and semantic page info; optional context (e.g. seferName) for handlers.
+ */
+export async function downloadPageRanges(
+	pages: number[],
+	semanticPages: SemanticPageInfo[],
+	context?: { seferName?: string },
+): Promise<DownloadActionResult | DownloadActionError> {
+	const handler = getPageRangesDownloadHandler();
+	if (!handler) {
+		return { error: "not_implemented" };
+	}
+	const [ext, bin] = await handler(pages, semanticPages, context);
+	const data = Buffer.from(bin).toString("base64");
+	return { ext, data };
 }

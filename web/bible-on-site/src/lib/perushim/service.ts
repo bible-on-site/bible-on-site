@@ -12,6 +12,11 @@ interface PerushSummaryRow {
 /**
  * Fetch available perushim for a given perek_id.
  * Ordered by priority (lower first), then by note count (most content first).
+ *
+ * Priority order (set at data generation time):
+ * - Targum variants (תרגום): 0-99 (first, chronological among themselves)
+ * - Rashi (רש"י): 100 (second)
+ * - Other commentaries: 200+ (chronological by composition date)
  */
 export async function getPerushimByPerekId(
 	perekId: number,

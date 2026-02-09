@@ -5,12 +5,12 @@ jest.mock("../../../src/lib/perushim", () => ({
 	getPerushNotes: jest.fn(),
 }));
 
-import { getArticleById } from "../../../src/lib/articles";
-import { getPerushNotes } from "../../../src/lib/perushim";
 import {
 	getArticleForBook,
 	getPerushNotesForPage,
 } from "../../../src/app/929/[number]/actions";
+import { getArticleById } from "../../../src/lib/articles";
+import { getPerushNotes } from "../../../src/lib/perushim";
 
 const mockGetArticleById = getArticleById as jest.MockedFunction<
 	typeof getArticleById
@@ -59,9 +59,7 @@ describe("getPerushNotesForPage", () => {
 	});
 
 	it("returns notes from getPerushNotes for given perush and perek", async () => {
-		const notes = [
-			{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" },
-		];
+		const notes = [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }];
 		mockGetPerushNotes.mockResolvedValue(notes);
 
 		const result = await getPerushNotesForPage(14, 1);

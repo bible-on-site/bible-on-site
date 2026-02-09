@@ -217,14 +217,14 @@ public partial class PerekPage : ContentPage
 #if IOS
         ApplyBottomBarSafeArea();
 #endif
-        // If no perek is loaded, load perek 1
+        // If no perek is loaded, load perek based on preference (today's or last learnt)
         if (_viewModel.Perek == null && !_isLoading)
         {
             _isLoading = true;
             try
             {
-                // Load data from SQLite database
-                await _viewModel.LoadByPerekIdAsync(1);
+                var perekId = GetInitialPerekId();
+                await _viewModel.LoadByPerekIdAsync(perekId);
                 // Update articles count badge
                 await UpdateArticlesCountAsync();
             }
@@ -238,6 +238,19 @@ public partial class PerekPage : ContentPage
                 _isLoading = false;
             }
         }
+    }
+
+    private static int GetInitialPerekId()
+    {
+        var prefs = PreferencesService.Instance;
+        if (prefs.PerekToLoad == PerekToLoad.Todays)
+        {
+            if (PerekDataService.Instance.IsLoaded)
+                return PerekDataService.Instance.GetTodaysPerekId();
+            return 1; // Fallback if tanah not loaded (LoadingPage loads it, but race possible)
+        }
+        var last = prefs.LastLearntPerek;
+        return last is > 0 and <= 929 ? last.Value : 1;
     }
 
     /// <summary>
@@ -843,6 +856,42 @@ public partial class PerekPage : ContentPage
     private double _perushimPanStartHeight;
     private double _perushimLastPanY;
     private DateTime _perushimLastPanTime;
+
+    private void OnPerushCheckboxChanged(object? sender, CheckedChangedEventArgs e)
+    {
+        if (sender is not CheckBox checkBox)
+            return;
+        var grid = checkBox.Parent as Grid;
+        var perush = grid?.BindingContext as Perush;
+        if (perush != null)
+        {
+            _viewModel.ToggleCheckedPerush(perush.Id);
+        }
+    }
+
+    private async void OnDownloadPerushimClicked(object? sender, EventArgs e)
+    {
+        if (sender is Button btn)
+            btn.IsEnabled = false;
+        try
+        {
+            var ok = await PerushimNotesService.Instance.TryDownloadNotesAsync();
+            if (ok && _viewModel.PerekId > 0)
+            {
+                await _viewModel.LoadPerushimAsync(_viewModel.PerekId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Download perushim failed: {ex.Message}");
+            await DisplayAlert("שגיאה", "לא ניתן להוריד פירושים. נסו שוב מאוחר יותר.", "אישור");
+        }
+        finally
+        {
+            if (sender is Button b)
+                b.IsEnabled = true;
+        }
+    }
 
     private async void OnPerushimChevronClicked(object? sender, EventArgs e)
     {

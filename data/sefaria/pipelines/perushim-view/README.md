@@ -8,7 +8,7 @@ A Rust CLI tool that generates perushim (commentaries) data from a MongoDB Sefar
 |--------|-------------|-------------|--------------|
 | **parshan** | Commentator (person) | JSON | Bundled SQLite |
 | **perush** | Commentary work (book) | JSON | Bundled SQLite |
-| **note** | Commentary phrase per pasuk | MySQL | OBB / on-demand SQLite |
+| **note** | Commentary phrase per pasuk | MySQL | PAD / on-demand SQLite |
 
 ## Usage
 
@@ -22,7 +22,7 @@ cargo run -p perushim-view -- --help
 cargo make generate-perushim-view-json
 ```
 
-### Generate SQLite (catalog bundled + notes for OBB)
+### Generate SQLite (catalog bundled + notes for PAD)
 
 ```bash
 cargo make generate-perushim-view-sqlite
@@ -47,7 +47,7 @@ cargo make generate-perushim-compass-stages
 - **`parshan`** — Commentator metadata: id, name (Hebrew)
 - **`perush`** — Commentary work: id, name, parshan reference, dates
 
-### Notes (`perushim_notes_structure.sql`) — large, OBB / on-demand
+### Notes (`perushim_notes_structure.sql`) — large, PAD / on-demand
 
 - **`note`** — One row per commentary phrase per pasuk: `(perush_id, perek_id, pasuk, note_idx, note_content)`. Matches the legacy `tanah_note` schema pattern.
 
@@ -57,12 +57,14 @@ Since note text data is very large, it should **not** be bundled with the mobile
 
 1. **Bundle catalog only** — The `perushim_catalog.sqlite` (parshan + perush tables) is small (~50–100 KB) and bundled in `Resources/Raw/`.
 
-2. **Package notes as OBB** — The `perushim_notes.sqlite` is packaged as an Android OBB expansion file (or equivalent for iOS On-Demand Resources).
+2. **Package notes as Play Asset Delivery (PAD)** — Use on-demand asset pack. Google hosts the notes for free. Pipeline outputs to `app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/`.
 
-3. **Download on-demand** — Follow the existing `LocalDatabaseService` pattern:
-   - Check if the notes database exists in `FileSystem.AppDataDirectory`
-   - If not, download from S3 (`bible-on-site-assets.s3.il-central-1.amazonaws.com/perushim/...`)
-   - Open as read-only SQLite connection
+3. **HTTP fallback** — When PAD is not available (sideloaded APK, emulator, or non-Android), app downloads from S3 when user taps "להוריד פירושים".
+
+4. **Download on-demand** — When notes are not available (PAD not yet fetched or HTTP fallback):
+   - Show "להוריד פירושים" button in perushim panel and in Settings.
+   - If using S3: download from `bible-on-site-assets.s3.il-central-1.amazonaws.com/perushim/...`
+   - Save to `FileSystem.AppDataDirectory` and open as read-only SQLite.
 
 ## Aggregation Pipeline
 

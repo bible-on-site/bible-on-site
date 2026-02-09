@@ -28,7 +28,12 @@ describe("PerushimSection", () => {
 	it("renders carousel when perushim provided", () => {
 		const perushim: PerushSummary[] = [
 			{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 55 },
-			{ id: 14, name: "ביאור שטיינזלץ", parshanName: "עדין שטיינזלץ", noteCount: 31 },
+			{
+				id: 14,
+				name: "ביאור שטיינזלץ",
+				parshanName: "עדין שטיינזלץ",
+				noteCount: 31,
+			},
 		];
 		render(<PerushimSection perekId={1} perushim={perushim} />);
 		expect(screen.getByRole("button", { name: /רש״י/ })).toBeTruthy();
@@ -39,7 +44,12 @@ describe("PerushimSection", () => {
 	it("clicking a perush calls getPerushNotesForPage", () => {
 		mockGetPerushNotesForPage.mockResolvedValue([]);
 		const perushim: PerushSummary[] = [
-			{ id: 14, name: "ביאור שטיינזלץ", parshanName: "עדין שטיינזלץ", noteCount: 31 },
+			{
+				id: 14,
+				name: "ביאור שטיינזלץ",
+				parshanName: "עדין שטיינזלץ",
+				noteCount: 31,
+			},
 		];
 		render(<PerushimSection perekId={1} perushim={perushim} />);
 		fireEvent.click(screen.getByRole("button", { name: /ביאור שטיינזלץ/ }));

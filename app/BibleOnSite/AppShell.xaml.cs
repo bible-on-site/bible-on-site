@@ -28,6 +28,7 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute("ContactPage", typeof(ContactPage));
 		Routing.RegisterRoute("DonationsPage", typeof(DonationsPage));
 		Routing.RegisterRoute("TosPage", typeof(TosPage));
+		Routing.RegisterRoute("PreferencesPage", typeof(PreferencesPage));
 
 		Navigated += OnNavigated;
 	}
@@ -74,7 +75,7 @@ public partial class AppShell : Shell
 	private async void OnPreferencesTapped(object? sender, TappedEventArgs e)
 	{
 		FlyoutIsPresented = false;
-		await DisplayAlert("העדפות", "מסך ההעדפות יתווסף בקרוב.", "אישור");
+		await GoToAsync("PreferencesPage");
 	}
 
 	private async void OnContactTapped(object? sender, TappedEventArgs e)

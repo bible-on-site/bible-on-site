@@ -89,7 +89,7 @@ command = "cargo"
 args = ["run", "--release", "--", "--format", "json"]
 
 [tasks.generate-perushim-view-sqlite]
-description = "Generate perushim SQLite: catalog (bundled) + notes (OBB/on-demand)"
+description = "Generate perushim SQLite: catalog (bundled) + notes (PAD/on-demand)"
 cwd = "./sefaria/pipelines/perushim-view"
 command = "cargo"
 args = ["run", "--release", "--", "--format", "sqlite"]

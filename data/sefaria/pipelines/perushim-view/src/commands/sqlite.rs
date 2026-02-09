@@ -3,7 +3,7 @@
 //! Produces TWO SQLite files:
 //! 1. **Catalog** (`perushim_catalog.sqlite`) — Small, bundled with the app.
 //!    Contains parshan and perush metadata only.
-//! 2. **Notes** (`perushim_notes.sqlite`) — Large, delivered as OBB / on-demand download.
+//! 2. **Notes** (`perushim_notes.sqlite`) — Large, delivered via PAD or on-demand download.
 //!    Contains individual commentary notes per pasuk.
 
 use anyhow::{Context, Result};
@@ -23,11 +23,12 @@ pub fn generate(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../app/BibleOnSite/Resources/Raw");
         (
             app_raw.join(format!("{}.perushim_catalog.sqlite", dump_name)),
-            // Notes go to .output for OBB packaging (not bundled)
+            // Notes go to Android PAD asset pack (on-demand delivery)
             {
-                let outputs_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join(".output");
-                fs::create_dir_all(&outputs_dir)?;
-                outputs_dir.join(format!("{}.perushim_notes.sqlite", dump_name))
+                let pad_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../../../app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes");
+                fs::create_dir_all(&pad_dir)?;
+                pad_dir.join(format!("{}.perushim_notes.sqlite", dump_name))
             },
         )
     } else {

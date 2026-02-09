@@ -1,31 +1,43 @@
 "use client";
 
-import DOMPurify from "isomorphic-dompurify";
-import { toLetters } from "gematry";
 import { useState } from "react";
-import type { PerushDetail, PerushNote, PerushSummary } from "@/lib/perushim";
+import type { PerushDetail, PerushSummary } from "@/lib/perushim";
 import { getPerushNotesForPage } from "../actions";
+import { PerushFullView } from "./PerushFullView";
 import styles from "./perushim-section.module.css";
 
 interface PerushimSectionProps {
 	perekId: number;
 	perushim?: PerushSummary[] | null;
+	/** When set, clicking a perush calls this instead of expanding inline (e.g. open in-place in flipbook). */
+	onPerushClick?: (perush: PerushSummary) => void;
+	/** When true, show loading state (e.g. fetching perush for in-place view). */
+	loading?: boolean;
 }
 
 /**
  * Renders perushim (commentaries) for a perek as a horizontal carousel.
- * Clicking a perush expands to show all its notes for the perek, grouped by pasuk.
+ * When onPerushClick is not provided, clicking a perush expands to show all its notes inline.
+ * When onPerushClick is provided, clicking delegates to the callback (e.g. for flipbook in-place view).
  */
 export function PerushimSection({
 	perekId,
 	perushim = [],
+	onPerushClick,
+	loading: externalLoading = false,
 }: PerushimSectionProps) {
 	const safePerushim = perushim ?? [];
 	const [selected, setSelected] = useState<PerushDetail | null>(null);
-	const [loading, setLoading] = useState(false);
+	const [internalLoading, setInternalLoading] = useState(false);
+
+	const loading = onPerushClick ? externalLoading : internalLoading;
 
 	async function handlePerushClick(perush: PerushSummary) {
-		setLoading(true);
+		if (onPerushClick) {
+			onPerushClick(perush);
+			return;
+		}
+		setInternalLoading(true);
 		try {
 			const notes = await getPerushNotesForPage(perush.id, perekId);
 			setSelected({
@@ -37,7 +49,7 @@ export function PerushimSection({
 		} catch {
 			setSelected(null);
 		} finally {
-			setLoading(false);
+			setInternalLoading(false);
 		}
 	}
 
@@ -45,17 +57,16 @@ export function PerushimSection({
 		setSelected(null);
 	}
 
-	if (selected) {
-		return (
-			<PerushFullView
-				perush={selected}
-				onBack={handleBack}
-			/>
-		);
+	if (!onPerushClick && selected) {
+		return <PerushFullView perush={selected} onBack={handleBack} />;
 	}
 
 	return (
-		<section className={styles.perushimSection} aria-busy={loading}>
+		<section
+			className={styles.perushimSection}
+			data-flipbook-no-flip
+			aria-busy={loading}
+		>
 			<header className={styles.sectionHeader}>
 				<span className={styles.sectionIcon}>📖</span>
 				<h2 className={styles.sectionTitle}>פרשנים על הפרק</h2>
@@ -83,64 +94,6 @@ export function PerushimSection({
 						</button>
 					))
 				)}
-			</div>
-		</section>
-	);
-}
-
-// ─── Full view (inline, similar to ArticleFullView) ─────────────────────────
-
-interface PerushFullViewProps {
-	perush: PerushDetail;
-	onBack: () => void;
-}
-
-function PerushFullView({ perush, onBack }: PerushFullViewProps) {
-	// Group notes by pasuk
-	const grouped = new Map<number, PerushNote[]>();
-	for (const note of perush.notes) {
-		const arr = grouped.get(note.pasuk) ?? [];
-		arr.push(note);
-		grouped.set(note.pasuk, arr);
-	}
-
-	return (
-		<section className={styles.perushimSection}>
-			<header className={styles.fullViewHeader}>
-				<button
-					type="button"
-					className={styles.backButton}
-					onClick={onBack}
-				>
-					חזרה לפרשנים &larr;
-				</button>
-				<div className={styles.fullViewTitle}>
-					<h2 className={styles.sectionTitle}>{perush.name}</h2>
-					<span className={styles.parshanSubtitle}>
-						{perush.parshanName}
-						{perush.parshanBirthYear != null && (
-							<> ({perush.parshanBirthYear})</>
-						)}
-					</span>
-				</div>
-			</header>
-
-			<div className={styles.notesContainer}>
-				{Array.from(grouped.entries()).map(([pasuk, notes]) => (
-					<div key={pasuk} className={styles.pasukGroup}>
-						<div className={styles.pasukLabel}>פסוק {toLetters(pasuk)}</div>
-						{notes.map((note) => (
-							<div
-								key={`${note.pasuk}-${note.noteIdx}`}
-								className={styles.noteContent}
-								// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
-								dangerouslySetInnerHTML={{
-									__html: DOMPurify.sanitize(note.noteContent),
-								}}
-							/>
-						))}
-					</div>
-				))}
 			</div>
 		</section>
 	);
