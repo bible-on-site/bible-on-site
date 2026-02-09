@@ -1151,71 +1151,69 @@ public partial class PerekPage : ContentPage
     #region Swipe Navigation
 
     private bool _isNavigating;
+    private DateTime _lastSwipeTime = DateTime.MinValue;
+    private const int SwipeCooldownMs = 500; // Prevent rapid swipes during animation
 
     /// <summary>
     /// Handles swipe left gesture - navigates to previous perek.
     /// In RTL layout, swipe left = backward/previous (like turning page forward in Hebrew book).
     /// </summary>
-    private void OnSwipedLeft(object? sender, SwipedEventArgs e)
+    private async void OnSwipedLeft(object? sender, SwipedEventArgs e)
     {
+        // Ignore swipes while showing articles or already navigating
         if (_isShowingArticles || _isNavigating) return;
 
-        // Don't navigate if we're at the first perek
-        if (_viewModel.PerekId <= 1)
+        // Cooldown to prevent rapid swipes during animation
+        if ((DateTime.Now - _lastSwipeTime).TotalMilliseconds < SwipeCooldownMs)
             return;
 
-        _isNavigating = true;
-        MainThread.BeginInvokeOnMainThread(async () =>
+        // Don't navigate if we're at the first perek or can't go back
+        if (!_viewModel.CanGoToPreviousPerek)
         {
-            try
-            {
-                await _viewModel.LoadPreviousAsync();
-                await Task.Delay(50); // Small delay to let binding update
-                PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
-                _ = UpdateArticlesCountAsync();
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Swipe left error: {ex.Message}");
-            }
-            finally
-            {
-                _isNavigating = false;
-            }
-        });
+            // Optional: subtle bounce animation to indicate edge
+            await BounceAnimationAsync();
+            return;
+        }
+
+        _lastSwipeTime = DateTime.Now;
+        await NavigateWithSwipeAnimationAsync(SwipeDirection.Left, async () => await _viewModel.LoadPreviousAsync());
     }
 
     /// <summary>
     /// Handles swipe right gesture - navigates to next perek.
     /// In RTL layout, swipe right = forward/next (like turning page backward in Hebrew book).
     /// </summary>
-    private void OnSwipedRight(object? sender, SwipedEventArgs e)
+    private async void OnSwipedRight(object? sender, SwipedEventArgs e)
     {
+        // Ignore swipes while showing articles or already navigating
         if (_isShowingArticles || _isNavigating) return;
 
-        // Don't navigate if we're at the last perek
-        if (_viewModel.PerekId >= 929)
+        // Cooldown to prevent rapid swipes during animation
+        if ((DateTime.Now - _lastSwipeTime).TotalMilliseconds < SwipeCooldownMs)
             return;
 
-        _isNavigating = true;
-        MainThread.BeginInvokeOnMainThread(async () =>
+        // Don't navigate if we're at the last perek or can't go forward
+        if (!_viewModel.CanGoToNextPerek)
         {
-            try
-            {
-                await _viewModel.LoadNextAsync();
-                await Task.Delay(50); // Small delay to let binding update
-                PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
-                _ = UpdateArticlesCountAsync();
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Swipe right error: {ex.Message}");
-            }
-            finally
-            {
-                _isNavigating = false;
-            }
-        });
+            // Optional: subtle bounce animation to indicate edge
+            await BounceAnimationAsync();
+            return;
+        }
+
+        _lastSwipeTime = DateTime.Now;
+        await NavigateWithSwipeAnimationAsync(SwipeDirection.Right, async () => await _viewModel.LoadNextAsync());
+    }
+
+    /// <summary>
+    /// Shows a subtle bounce animation when swiping at collection edges.
+    /// </summary>
+    private async Task BounceAnimationAsync()
+    {
+        const uint duration = 100;
+        const double bounceDistance = 20;
+
+        await PasukimCollection.TranslateTo(bounceDistance, 0, duration, Easing.CubicOut);
+        await PasukimCollection.TranslateTo(0, 0, duration, Easing.CubicIn);
     }
 
     /// <summary>
@@ -1224,10 +1222,10 @@ public partial class PerekPage : ContentPage
     private async Task NavigateWithSwipeAnimationAsync(SwipeDirection direction, Func<Task> loadAction)
     {
         _isNavigating = true;
-        const uint duration = 150;
-        const double slideDistance = 300; // Fixed distance instead of dynamic
+        const uint duration = 200;
+        const double slideDistance = 300;
 
-        // Determine slide direction
+        // Determine slide direction (in RTL: left swipe = slide right, right swipe = slide left)
         var endX = direction == SwipeDirection.Left ? slideDistance : -slideDistance;
         var newStartX = direction == SwipeDirection.Left ? -slideDistance : slideDistance;
 
@@ -1246,7 +1244,8 @@ public partial class PerekPage : ContentPage
             PasukimCollection.TranslationX = newStartX;
             PasukimCollection.Opacity = 0.3;
 
-            // Scroll to top
+            // Scroll to top (do this before slide-in animation starts)
+            await Task.Delay(10); // Brief delay to let binding complete
             PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
 
             // Slide and fade in new content
@@ -1256,6 +1255,10 @@ public partial class PerekPage : ContentPage
 
             // Update articles badge
             _ = UpdateArticlesCountAsync();
+
+            // Refresh nav button visuals if menu is open
+            if (_isMenuOpen)
+                RefreshNavButtonVisuals();
         }
         catch (Exception ex)
         {
