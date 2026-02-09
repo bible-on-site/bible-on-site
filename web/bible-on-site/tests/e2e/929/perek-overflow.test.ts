@@ -24,7 +24,11 @@ test.describe("Perek view horizontal overflow", () => {
 	}) => {
 		await page.goto("/929/1");
 
-		await page.locator("section").filter({ hasText: "מאמרים" }).waitFor({ state: "visible" });
+		// Same section selector as articles.test.ts; articles section may load after main content
+		const articlesSection = page.locator("section").filter({
+			has: page.locator("text=מאמרים על הפרק"),
+		});
+		await articlesSection.waitFor({ state: "visible", timeout: 15000 });
 
 		const hasHorizontalOverflow = await page.evaluate(() => {
 			const { documentElement } = document;
