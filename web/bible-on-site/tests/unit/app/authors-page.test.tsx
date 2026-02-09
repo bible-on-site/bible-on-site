@@ -115,18 +115,31 @@ describe("929/authors/page", () => {
 		).toBeTruthy();
 	});
 
-	it("renders author placeholder when imageUrl is empty", async () => {
+	it("renders author image when imageUrl is set", async () => {
 		mockQuery.mockResolvedValue([
 			{ id: 1, name: "הרב ישראל", details: "" },
 		]);
 
-		// The getAuthorImageUrl mock always returns a URL, but
-		// the component checks `author.imageUrl ? ... : placeholder`
-		// Since getAllAuthors() maps to getAuthorImageUrl(id), imageUrl is always set.
-		// Let's verify the image is rendered.
 		const jsx = await AuthorsPage();
 		render(jsx);
 
 		expect(screen.getByTestId("mock-image")).toBeTruthy();
+	});
+
+	it("renders placeholder when imageUrl is empty", async () => {
+		// Override getAuthorImageUrl to return empty string for this test
+		const { getAuthorImageUrl } = jest.requireMock(
+			"../../../src/lib/authors",
+		);
+		(getAuthorImageUrl as jest.Mock).mockReturnValueOnce("");
+
+		mockQuery.mockResolvedValue([
+			{ id: 1, name: "הרב ישראל", details: "" },
+		]);
+
+		const jsx = await AuthorsPage();
+		render(jsx);
+
+		expect(screen.getByText("👤")).toBeTruthy();
 	});
 });
