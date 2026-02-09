@@ -42,8 +42,11 @@ const config = {
 	// in jest.coverage-setup.js where multiple workers write to the same file
 	...(shouldMeasureCov ? { maxWorkers: 1 } : {}),
 	setupFiles: ["./jest.setup.js"],
-	// Use setupFilesAfterEnv to collect coverage after tests complete
-	setupFilesAfterEnv: shouldMeasureCov ? ["./jest.coverage-setup.js"] : [],
+	// Use setupFilesAfterEnv for jest-dom matchers and to collect coverage after tests complete
+	setupFilesAfterEnv: [
+		"./jest-dom.setup.js",
+		...(shouldMeasureCov ? ["./jest.coverage-setup.js"] : []),
+	],
 	preset: "ts-jest",
 	// Path aliases from tsconfig.json - needed for test files to resolve @/ imports
 	moduleNameMapper: {
@@ -102,6 +105,11 @@ async function nextJestConfigPromise() {
 	nextJestConfig.transformIgnorePatterns = [
 		// ESM modules that need to be transformed: gematry, temporal-polyfill, sunrise-sunset-js
 		"/node_modules/(?!(gematry|temporal-polyfill|sunrise-sunset-js)/)",
+	];
+	// Avoid Haste module naming collision: .next/standalone/package.json vs root package.json
+	nextJestConfig.modulePathIgnorePatterns = [
+		...(nextJestConfig.modulePathIgnorePatterns ?? []),
+		"<rootDir>/\\.next/",
 	];
 
 	return nextJestConfig;

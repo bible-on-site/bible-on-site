@@ -122,7 +122,7 @@ export function JournalismGallery({ items }: { items: JournalismItem[] }) {
 								</>
 							)}
 
-							{/* biome-ignore lint/a11y/useAltText: alt provided via parent aria-label */}
+							{/* biome-ignore lint/performance/noImgElement: modal image URL is dynamic (selected at runtime), next/image requires known dimensions */}
 							<img
 								src={selected.imageUrl}
 								alt={selected.title}

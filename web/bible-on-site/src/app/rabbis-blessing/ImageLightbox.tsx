@@ -75,7 +75,7 @@ export function ImageLightbox({ src, alt, width, height }: ImageLightboxProps) {
 							>
 								✕
 							</button>
-							{/* biome-ignore lint/a11y/useAltText: alt provided via parent aria-label */}
+							{/* biome-ignore lint/performance/noImgElement: lightbox image src is dynamic, next/image requires known dimensions */}
 							<img src={src} alt={alt} className={styles.modalImage} />
 						</div>
 					</div>,

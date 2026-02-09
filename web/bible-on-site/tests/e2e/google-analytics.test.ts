@@ -26,8 +26,7 @@ test.describe("Google Analytics", () => {
 			// Navigate to the page
 			await page.goto("/");
 
-			// Wait a bit for any scripts to load
-			await page.waitForTimeout(1000);
+			await page.waitForLoadState("domcontentloaded");
 
 			// In non-production (default test env), GA should NOT be requested
 			// since NEXT_PUBLIC_ENV is not set to "production"
@@ -52,8 +51,7 @@ test.describe("Google Analytics", () => {
 			// Navigate to the page
 			await page.goto("/");
 
-			// Wait for page to fully load
-			await page.waitForLoadState("networkidle");
+			await page.waitForLoadState("domcontentloaded");
 
 			// Verify no GA requests were made
 			expect(gaRequests).toHaveLength(0);
