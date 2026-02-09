@@ -63,18 +63,10 @@ async fn main() -> Result<()> {
 
     match format {
         OutputFormat::Json => {
-            commands::json::generate(
-                &extracted,
-                &cli.dump_name,
-                cli.output_to_dependant_modules,
-            )?;
+            commands::json::generate(&extracted, &cli.dump_name, cli.output_to_dependant_modules)?;
         }
         OutputFormat::Mysql => {
-            commands::mysql::generate(
-                &extracted,
-                &cli.dump_name,
-                cli.output_to_dependant_modules,
-            )?;
+            commands::mysql::generate(&extracted, &cli.dump_name, cli.output_to_dependant_modules)?;
         }
         OutputFormat::Sqlite => {
             commands::sqlite::generate(

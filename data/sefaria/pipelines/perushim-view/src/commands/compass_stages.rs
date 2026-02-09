@@ -65,8 +65,7 @@ pub fn generate() -> Result<()> {
     let pipeline = aggregation::build_pipeline();
 
     // Clean and create output directory
-    let outputs_dir =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join(".output/mongodb-compass-stages");
+    let outputs_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join(".output/mongodb-compass-stages");
     if outputs_dir.exists() {
         fs::remove_dir_all(&outputs_dir)?;
     }

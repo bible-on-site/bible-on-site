@@ -65,7 +65,10 @@ pub fn extract(docs: &[Document]) -> Extracted {
         }
 
         let authors = extract_authors(doc);
-        let first_author = authors.first().cloned().unwrap_or_else(|| "לא ידוע".to_string());
+        let first_author = authors
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "לא ידוע".to_string());
 
         // Deduplicate parshan
         let parshan_id = if let Some(&id) = parshan_map.get(&first_author) {

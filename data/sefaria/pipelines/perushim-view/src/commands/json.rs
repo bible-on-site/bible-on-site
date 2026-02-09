@@ -16,8 +16,8 @@ pub fn generate(
     output_to_dependant_modules: bool,
 ) -> Result<()> {
     let (parshanim_path, perushim_path) = if output_to_dependant_modules {
-        let web_db = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../../web/bible-on-site/src/data/db");
+        let web_db =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../web/bible-on-site/src/data/db");
         (
             web_db.join(format!("{}.parshanim.json", dump_name)),
             web_db.join(format!("{}.perushim.json", dump_name)),

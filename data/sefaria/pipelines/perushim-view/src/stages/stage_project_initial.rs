@@ -19,8 +19,9 @@ const PROJECT_INITIAL_INNER_JSON: &str = include_str!("project_initial_inner.jso
 
 /// Returns the `$project` stage document.
 pub fn build() -> Document {
-    let inner: Document = serde_json::from_str(PROJECT_INITIAL_INNER_JSON)
-        .expect("Failed to parse project_initial_inner.json - this is a bug in the stage definition");
+    let inner: Document = serde_json::from_str(PROJECT_INITIAL_INNER_JSON).expect(
+        "Failed to parse project_initial_inner.json - this is a bug in the stage definition",
+    );
 
     doc! {
         "$project": inner

@@ -16,8 +16,9 @@ const LOOKUP_TEXTS_PIPELINE_JSON: &str = include_str!("lookup_texts_pipeline.jso
 
 /// Returns the `$lookup` stage document with correlated pipeline subquery.
 pub fn build() -> Document {
-    let pipeline: Vec<Document> = serde_json::from_str(LOOKUP_TEXTS_PIPELINE_JSON)
-        .expect("Failed to parse lookup_texts_pipeline.json - this is a bug in the stage definition");
+    let pipeline: Vec<Document> = serde_json::from_str(LOOKUP_TEXTS_PIPELINE_JSON).expect(
+        "Failed to parse lookup_texts_pipeline.json - this is a bug in the stage definition",
+    );
 
     doc! {
         "$lookup": {

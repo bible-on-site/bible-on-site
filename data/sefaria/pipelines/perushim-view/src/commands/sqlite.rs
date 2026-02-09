@@ -19,8 +19,8 @@ pub fn generate(
     output_to_dependant_modules: bool,
 ) -> Result<()> {
     let (catalog_path, notes_path) = if output_to_dependant_modules {
-        let app_raw = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../../app/BibleOnSite/Resources/Raw");
+        let app_raw =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../app/BibleOnSite/Resources/Raw");
         (
             app_raw.join(format!("{}.perushim_catalog.sqlite", dump_name)),
             // Notes go to .output for OBB packaging (not bundled)
@@ -57,8 +57,8 @@ fn create_catalog_db(path: &Path, extracted: &Extracted, dump_name: &str) -> Res
 
     let mut conn = Connection::open(path)?;
 
-    let schema_path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../sqlite/perushim_catalog_structure.sql");
+    let schema_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../sqlite/perushim_catalog_structure.sql");
     let schema_sql = fs::read_to_string(&schema_path)
         .with_context(|| format!("Failed to read schema from {}", schema_path.display()))?;
 
@@ -98,9 +98,8 @@ fn insert_catalog_metadata(tx: &rusqlite::Transaction, dump_name: &str) -> Resul
 }
 
 fn insert_parshanim(tx: &rusqlite::Transaction, parshanim: &[Parshan]) -> Result<()> {
-    let mut stmt = tx.prepare(
-        "INSERT INTO parshan (id, name, birth_year, has_pic) VALUES (?1, ?2, ?3, ?4)",
-    )?;
+    let mut stmt =
+        tx.prepare("INSERT INTO parshan (id, name, birth_year, has_pic) VALUES (?1, ?2, ?3, ?4)")?;
     for p in parshanim {
         stmt.execute(rusqlite::params![
             p.id,

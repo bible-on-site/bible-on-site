@@ -192,7 +192,10 @@ async fn execute_script_chunked(
     script_path: &Path,
     script_type: &str,
 ) -> Result<()> {
-    println!("Executing {} script (chunked) from {:?}...", script_type, script_path);
+    println!(
+        "Executing {} script (chunked) from {:?}...",
+        script_type, script_path
+    );
 
     let script = std::fs::read_to_string(script_path)
         .with_context(|| format!("Failed to read {} script: {:?}", script_type, script_path))?;
@@ -211,7 +214,13 @@ async fn execute_script_chunked(
                 sqlx::raw_sql(buf.trim())
                     .execute(&mut *conn)
                     .await
-                    .with_context(|| format!("Failed to execute {} statement #{}", script_type, stmt_count + 1))?;
+                    .with_context(|| {
+                        format!(
+                            "Failed to execute {} statement #{}",
+                            script_type,
+                            stmt_count + 1
+                        )
+                    })?;
                 stmt_count += 1;
             }
             buf.clear();
@@ -225,7 +234,13 @@ async fn execute_script_chunked(
                 sqlx::raw_sql(buf.trim())
                     .execute(&mut *conn)
                     .await
-                    .with_context(|| format!("Failed to execute {} statement #{}", script_type, stmt_count + 1))?;
+                    .with_context(|| {
+                        format!(
+                            "Failed to execute {} statement #{}",
+                            script_type,
+                            stmt_count + 1
+                        )
+                    })?;
                 stmt_count += 1;
             }
             buf.clear();
@@ -242,7 +257,10 @@ async fn execute_script_chunked(
         stmt_count += 1;
     }
 
-    println!("{} script executed successfully ({} statements)", script_type, stmt_count);
+    println!(
+        "{} script executed successfully ({} statements)",
+        script_type, stmt_count
+    );
     Ok(())
 }
 
