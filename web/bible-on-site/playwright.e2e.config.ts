@@ -20,5 +20,5 @@ export default defineConfig({
 	},
 	fullyParallel: true,
 	retries: 0,
-	workers: process.env.CI ? "100%" : "50%",
+	workers: 4,
 });

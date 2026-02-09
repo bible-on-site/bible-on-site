@@ -35,7 +35,8 @@ function log(message: string): void {
 // Clear log file for fresh run
 writeFileSync(logFile, `[${new Date().toISOString()}] [INIT] E2E Server Launcher started\n`);
 
-const useCoverage = process.argv.includes("--coverage");
+// --coverage is passed by Playwright when MEASURE_COV=1; NODE_OPTIONS/env are set by config
+const _useCoverage = process.argv.includes("--coverage");
 
 try {
 	await main();
@@ -124,24 +125,15 @@ async function main() {
 
 	// Start the Next.js server directly (bypass predev hook which switches
 	// flip-book to local and runs docker compose — both break in CI)
-	// For coverage: use `next dev` (needs SWC instrumentation, compiles on the fly)
-	// For production: use standalone server (`next start` doesn't work with output: "standalone")
-	const command = useCoverage ? "npx" : "node";
-	const args = useCoverage
-		? ["next", "dev", "-p", "3001"]
-		: [".next/standalone/server.js"];
+	// Always use `next dev` for e2e so tests pass: standalone can throw NoFallbackError
+	// on some routes; coverage also requires dev (instrumentation). No pre-build needed.
+	log(`[Server] Starting Next.js server: npx next dev -p 3001`);
 
-	log(`[Server] Starting Next.js server: ${command} ${args.join(" ")}`);
-
-	const server = spawn(command, args, {
+	const server = spawn("npx", ["next", "dev", "-p", "3001"], {
 		cwd: __dirname,
 		stdio: "inherit",
 		shell: true,
-		env: {
-			...process.env,
-			// Standalone server reads PORT and HOSTNAME from env (no CLI flags)
-			...(!useCoverage && { PORT: "3001", HOSTNAME: "127.0.0.1" }),
-		},
+		env: process.env,
 	});
 
 	server.on("error", (err) => {
