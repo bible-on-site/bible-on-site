@@ -178,6 +178,8 @@ public partial class PerekViewModel : ObservableObject
             // Load pasukim
             perek.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(perekId);
             SetPerek(perek);
+            // Initialize carousel AFTER SetPerek so Perek/PerekId are up to date
+            await InitializeCarouselAsync();
         }
     }
 
@@ -231,16 +233,12 @@ public partial class PerekViewModel : ObservableObject
     /// </summary>
     private void SetPerek(Perek perek)
     {
+        Console.WriteLine($"[Carousel] SetPerek perekId={perek.PerekId}");
         Perek = perek;
         ClearSelected();
 
         // Update last learnt perek in preferences
         _preferencesService.LastLearntPerek = perek.PerekId;
-
-#if MAUI
-        // Initialize carousel with prev/current/next (fire and forget)
-        _ = InitializeCarouselAsync();
-#endif
     }
 
 #if MAUI
@@ -259,10 +257,14 @@ public partial class PerekViewModel : ObservableObject
     {
         if (Perek == null) return;
 
+        Console.WriteLine($"[Carousel] InitializeCarouselAsync START perekId={PerekId}");
+
         var windowStart = Math.Max(1, PerekId - CarouselHalfWindow);
         var windowEnd = Math.Min(929, PerekId + CarouselHalfWindow);
 
         var list = new List<Perek>(windowEnd - windowStart + 1);
+        var loaded = 0;
+        var cached = 0;
 
         for (var id = windowStart; id <= windowEnd; id++)
         {
@@ -273,15 +275,24 @@ public partial class PerekViewModel : ObservableObject
                 if (p.Pasukim == null || p.Pasukim.Count == 0)
                 {
                     p.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(id);
+                    loaded++;
+                }
+                else
+                {
+                    cached++;
                 }
                 list.Add(p);
             }
         }
 
+        Console.WriteLine($"[Carousel] InitializeCarouselAsync built list: {list.Count} items [{windowStart}..{windowEnd}], loaded={loaded} cached={cached}");
+
         // Create the collection in one shot (no per-item CollectionChanged events)
         CarouselPerakim = new System.Collections.ObjectModel.ObservableCollection<Perek>(list);
         CarouselPosition = PerekId - windowStart;
         CurrentCarouselPerek = Perek;
+
+        Console.WriteLine($"[Carousel] InitializeCarouselAsync DONE position={CarouselPosition} currentPerek={PerekId}");
     }
 
     /// <summary>
@@ -292,6 +303,7 @@ public partial class PerekViewModel : ObservableObject
     {
         return CarouselPerakim.Any(p => p.PerekId == perekId);
     }
+
 #endif
 
     #endregion

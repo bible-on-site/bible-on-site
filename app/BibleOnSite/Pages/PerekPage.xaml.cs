@@ -1090,42 +1090,39 @@ public partial class PerekPage : ContentPage
     /// The carousel collection is NEVER modified here - all items are pre-loaded in the window.
     /// This avoids MAUI CarouselView position/item desync bugs.
     /// </summary>
-    private bool _isUpdatingFromSwipe;
-
-    private async void OnCarouselItemChanged(object? sender, CurrentItemChangedEventArgs e)
+    private void OnCarouselItemChanged(object? sender, CurrentItemChangedEventArgs e)
     {
-        if (_isUpdatingFromSwipe) return;
+        var incomingId = (e.CurrentItem as Perek)?.PerekId ?? -1;
+        var previousId = (e.PreviousItem as Perek)?.PerekId ?? -1;
 
         if (e.CurrentItem is not Perek perek || perek.PerekId <= 0 || perek.PerekId == _viewModel.PerekId)
+        {
+            Console.WriteLine($"[Carousel] OnChanged SKIPPED incoming={incomingId} vmPerek={_viewModel.PerekId}");
             return;
-
-        _isUpdatingFromSwipe = true;
-        try
-        {
-            // The swiped-to perek already has pasukim pre-loaded in the carousel window.
-            // Just update the viewmodel's current perek reference.
-            _viewModel.Perek = perek;
-            _viewModel.ClearSelected();
-            SetAnalyticsScreenForPerek();
-
-            // Update articles badge
-            await UpdateArticlesCountAsync();
-
-            // If showing articles, reload for new perek
-            if (_isShowingArticles)
-            {
-                await LoadArticlesAsync();
-            }
-
-            // Refresh nav button visuals if menu is open
-            if (_isMenuOpen)
-            {
-                RefreshNavButtonVisuals();
-            }
         }
-        finally
+
+        var hasPasukim = perek.Pasukim != null && perek.Pasukim.Count > 0;
+        Console.WriteLine($"[Carousel] OnChanged PROCESS incoming={incomingId} prev={previousId} vmPerek={_viewModel.PerekId} pos={_viewModel.CarouselPosition} collCount={_viewModel.CarouselPerakim.Count} hasPasukim={hasPasukim}");
+
+        // Synchronous state update — fast, no guard needed.
+        // The carousel collection is NEVER modified here, so no re-entrancy risk.
+        _viewModel.Perek = perek;
+        _viewModel.ClearSelected();
+        SetAnalyticsScreenForPerek();
+
+        // Refresh nav button visuals if menu is open (synchronous)
+        if (_isMenuOpen)
         {
-            _isUpdatingFromSwipe = false;
+            RefreshNavButtonVisuals();
+        }
+
+        Console.WriteLine($"[Carousel] OnChanged DONE vmPerek={_viewModel.PerekId} pos={_viewModel.CarouselPosition}");
+
+        // Fire async tasks in the background — never block the next swipe
+        _ = UpdateArticlesCountAsync();
+        if (_isShowingArticles)
+        {
+            _ = LoadArticlesAsync();
         }
     }
 
