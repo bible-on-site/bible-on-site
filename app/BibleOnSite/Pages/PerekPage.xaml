@@ -157,7 +157,7 @@
                                    HorizontalTextAlignment="Center"
                                    Padding="16,12"
                                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
-                            
+
                             <!-- Pasukim CollectionView (Row 1) -->
                             <CollectionView Grid.Row="1"
                                             ItemsSource="{Binding Pasukim}"
