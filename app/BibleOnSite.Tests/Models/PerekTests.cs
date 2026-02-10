@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using BibleOnSite.Models;
 using FluentAssertions;
 
@@ -109,5 +110,71 @@ public class PerekTests
         perek.Pasukim.Should().HaveCount(2);
         perek.Pasukim[0].PasukNum.Should().Be(1);
         perek.Pasukim[1].PasukNum.Should().Be(2);
+    }
+
+    [Fact]
+    public void Perek_ShouldImplementINotifyPropertyChanged()
+    {
+        var perek = new Perek
+        {
+            Date = "2026-01-20",
+            HebDate = "טבת",
+            SeferName = "בראשית",
+            SeferTanahUsName = "Genesis",
+            Tseit = "17:30"
+        };
+
+        perek.Should().BeAssignableTo<INotifyPropertyChanged>();
+    }
+
+    [Fact]
+    public void Perek_SettingPasukim_ShouldRaisePropertyChanged()
+    {
+        var perek = new Perek
+        {
+            Date = "2026-01-20",
+            HebDate = "טבת",
+            SeferName = "בראשית",
+            SeferTanahUsName = "Genesis",
+            Tseit = "17:30"
+        };
+
+        var raised = false;
+        string? changedProperty = null;
+        perek.PropertyChanged += (_, args) =>
+        {
+            raised = true;
+            changedProperty = args.PropertyName;
+        };
+
+        perek.Pasukim = new List<Pasuk>
+        {
+            new() { PasukNum = 1, Text = "בראשית ברא" }
+        };
+
+        raised.Should().BeTrue();
+        changedProperty.Should().Be(nameof(Perek.Pasukim));
+    }
+
+    [Fact]
+    public void Perek_SettingPasukim_ToEmptyList_ShouldStillRaisePropertyChanged()
+    {
+        var perek = new Perek
+        {
+            Date = "2026-01-20",
+            HebDate = "טבת",
+            SeferName = "בראשית",
+            SeferTanahUsName = "Genesis",
+            Tseit = "17:30",
+            Pasukim = new List<Pasuk> { new() { PasukNum = 1, Text = "test" } }
+        };
+
+        var raised = false;
+        perek.PropertyChanged += (_, _) => raised = true;
+
+        perek.Pasukim = new List<Pasuk>();
+
+        raised.Should().BeTrue();
+        perek.Pasukim.Should().BeEmpty();
     }
 }

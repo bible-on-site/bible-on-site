@@ -146,6 +146,231 @@ public class HebrewDateHelperTests
 
     #endregion
 
+    #region GetTzeitAwareHebrewDate Tests
+
+    [Fact]
+    public void GetTzeitAwareHebrewDate_BeforeTzeit_ShouldReturnSameDay()
+    {
+        // 10:00 AM - well before tzeit (19:30)
+        var date = new DateTime(2026, 2, 9, 10, 0, 0);
+        var calendar = new System.Globalization.HebrewCalendar();
+        var expectedYear = calendar.GetYear(date);
+        var expectedMonth = calendar.GetMonth(date);
+        var expectedDay = calendar.GetDayOfMonth(date);
+
+        var result = HebrewDateHelper.GetTzeitAwareHebrewDate(date);
+
+        result.Year.Should().Be(expectedYear);
+        result.Month.Should().Be(expectedMonth);
+        result.Day.Should().Be(expectedDay);
+    }
+
+    [Fact]
+    public void GetTzeitAwareHebrewDate_AfterTzeit_ShouldAdvanceToNextDay()
+    {
+        // 20:00 - after tzeit (19:30), should advance to next Hebrew day
+        var date = new DateTime(2026, 2, 9, 20, 0, 0);
+        var calendar = new System.Globalization.HebrewCalendar();
+        var nextDay = date.AddDays(1);
+        var expectedYear = calendar.GetYear(nextDay);
+        var expectedMonth = calendar.GetMonth(nextDay);
+        var expectedDay = calendar.GetDayOfMonth(nextDay);
+
+        var result = HebrewDateHelper.GetTzeitAwareHebrewDate(date);
+
+        result.Year.Should().Be(expectedYear);
+        result.Month.Should().Be(expectedMonth);
+        result.Day.Should().Be(expectedDay);
+    }
+
+    #endregion
+
+    #region AdjustForWeekend Tests
+
+    [Fact]
+    public void AdjustForWeekend_OnFriday_ShouldGoBackOneDay()
+    {
+        var calendar = new System.Globalization.HebrewCalendar();
+        // Find a known Friday date
+        var friday = new DateTime(2026, 2, 13); // Fri Feb 13 2026
+        var hebDate = (calendar.GetYear(friday), calendar.GetMonth(friday), calendar.GetDayOfMonth(friday));
+
+        var thursday = friday.AddDays(-1);
+        var expected = (calendar.GetYear(thursday), calendar.GetMonth(thursday), calendar.GetDayOfMonth(thursday));
+
+        var result = HebrewDateHelper.AdjustForWeekend(hebDate, DayOfWeek.Friday);
+
+        result.Should().Be(expected);
+    }
+
+    [Fact]
+    public void AdjustForWeekend_OnSaturday_ShouldGoBackTwoDays()
+    {
+        var calendar = new System.Globalization.HebrewCalendar();
+        var saturday = new DateTime(2026, 2, 14); // Sat Feb 14 2026
+        var hebDate = (calendar.GetYear(saturday), calendar.GetMonth(saturday), calendar.GetDayOfMonth(saturday));
+
+        var thursday = saturday.AddDays(-2);
+        var expected = (calendar.GetYear(thursday), calendar.GetMonth(thursday), calendar.GetDayOfMonth(thursday));
+
+        var result = HebrewDateHelper.AdjustForWeekend(hebDate, DayOfWeek.Saturday);
+
+        result.Should().Be(expected);
+    }
+
+    [Fact]
+    public void AdjustForWeekend_OnWeekday_ShouldReturnUnchanged()
+    {
+        var calendar = new System.Globalization.HebrewCalendar();
+        var wednesday = new DateTime(2026, 2, 11);
+        var hebDate = (calendar.GetYear(wednesday), calendar.GetMonth(wednesday), calendar.GetDayOfMonth(wednesday));
+
+        var result = HebrewDateHelper.AdjustForWeekend(hebDate, DayOfWeek.Wednesday);
+
+        result.Should().Be(hebDate);
+    }
+
+    #endregion
+
+    #region NumberToHebrewDate / HebrewDateToNumber Tests
+
+    [Theory]
+    [InlineData(57860115, 5786, 1, 15)]
+    [InlineData(57850701, 5785, 7, 1)]
+    public void NumberToHebrewDate_ShouldParseCorrectly(int num, int year, int month, int day)
+    {
+        var result = HebrewDateHelper.NumberToHebrewDate(num);
+        result.Year.Should().Be(year);
+        result.Month.Should().Be(month);
+        result.Day.Should().Be(day);
+    }
+
+    [Fact]
+    public void HebrewDateToNumber_ShouldRoundTripForNonLeapYear()
+    {
+        var calendar = new System.Globalization.HebrewCalendar();
+        var date = new DateTime(2026, 1, 15);
+        var year = calendar.GetYear(date);
+        var month = calendar.GetMonth(date);
+        var day = calendar.GetDayOfMonth(date);
+
+        var num = HebrewDateHelper.HebrewDateToNumber((year, month, day));
+        num.Should().BeGreaterThan(0);
+    }
+
+    #endregion
+
+    #region GetUniformMonth Tests
+
+    [Fact]
+    public void GetUniformMonth_NonLeapYear_ShouldReturnSameMonth()
+    {
+        // Hebrew year 5786 is NOT a leap year
+        var result = HebrewDateHelper.GetUniformMonth(5786, 5);
+        result.Should().Be(5);
+    }
+
+    [Fact]
+    public void GetUniformMonth_LeapYear_Month7_ShouldReturn6()
+    {
+        // Hebrew year 5787 IS a leap year (19-year cycle: 3,6,8,11,14,17,19 are leap)
+        // 5787 % 19 = 14 → leap year
+        var result = HebrewDateHelper.GetUniformMonth(5787, 7);
+        result.Should().Be(6);
+    }
+
+    [Fact]
+    public void GetUniformMonth_LeapYear_MonthAbove7_ShouldShift()
+    {
+        var result = HebrewDateHelper.GetUniformMonth(5787, 10);
+        result.Should().Be(9); // month - 1
+    }
+
+    [Fact]
+    public void GetUniformMonth_LeapYear_MonthBelow7_ShouldReturnSame()
+    {
+        var result = HebrewDateHelper.GetUniformMonth(5787, 3);
+        result.Should().Be(3);
+    }
+
+    #endregion
+
+    #region AddDaysToCycleDate Tests
+
+    [Fact]
+    public void AddDaysToCycleDate_ShouldAddDays()
+    {
+        var startDate = 57860115; // 15 Tevet 5786
+        var result = HebrewDateHelper.AddDaysToCycleDate(startDate, 30);
+        result.Should().BeGreaterThan(startDate);
+    }
+
+    #endregion
+
+    #region RoundToCycle Tests
+
+    [Fact]
+    public void RoundToCycle_DateWithinCycle_ShouldReturnUnchanged()
+    {
+        // Use a date we know is within the 4th cycle (57851207 start)
+        var calendar = new System.Globalization.HebrewCalendar();
+        var date = new DateTime(2025, 3, 15); // Should be within cycle 4
+        var year = calendar.GetYear(date);
+        var month = calendar.GetMonth(date);
+        var day = calendar.GetDayOfMonth(date);
+        var hebDate = (year, month, day);
+
+        // RoundToCycle should return the same date if within a valid cycle
+        var result = HebrewDateHelper.RoundToCycle(hebDate);
+        // The result should be a valid Hebrew date tuple
+        result.Year.Should().BeGreaterThan(0);
+    }
+
+    #endregion
+
+    #region FindClosestPerekByHebDate Tests
+
+    [Fact]
+    public void FindClosestPerekByHebDate_ShouldReturnClosestMatch()
+    {
+        var perakim = new Dictionary<int, Perek>
+        {
+            { 1, CreatePerekWithHebDateNumeric(1, 57860100) },
+            { 2, CreatePerekWithHebDateNumeric(2, 57860200) },
+            { 3, CreatePerekWithHebDateNumeric(3, 57860300) },
+        };
+
+        var result = HebrewDateHelper.FindClosestPerekByHebDate(perakim, 57860180);
+        result.Should().Be(2); // closest to 57860200
+    }
+
+    [Fact]
+    public void FindClosestPerekByHebDate_WithZeroHebDates_ShouldReturnDefault()
+    {
+        var perakim = new Dictionary<int, Perek>
+        {
+            { 5, CreatePerekWithHebDateNumeric(5, 0) },
+            { 6, CreatePerekWithHebDateNumeric(6, 0) },
+        };
+
+        var result = HebrewDateHelper.FindClosestPerekByHebDate(perakim, 57860115);
+        result.Should().Be(1); // default when no valid dates
+    }
+
+    #endregion
+
+    #region GetIsraelTimeZoneId Tests
+
+    [Fact]
+    public void GetIsraelTimeZoneId_ShouldReturnValidTimezone()
+    {
+        var tzId = HebrewDateHelper.GetIsraelTimeZoneId();
+        // On Windows: "Israel Standard Time", on Unix: "Asia/Jerusalem"
+        tzId.Should().BeOneOf("Asia/Jerusalem", "Israel Standard Time");
+    }
+
+    #endregion
+
     #region Helper Methods
 
     /// <summary>

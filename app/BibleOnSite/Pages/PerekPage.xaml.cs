@@ -121,80 +121,18 @@ public partial class PerekPage : ContentPage
         if (_viewModel.SelectedPasukNums.Count == 0)
             return;
 
-        // Find which pasuk was tapped by hit-testing
-        MainThread.BeginInvokeOnMainThread(() =>
-        {
-            try
-            {
-                var pasukNum = FindTappedPasuk(position.X, position.Y);
-                if (pasukNum > 0)
-                {
-                    _viewModel.ToggleSelectedPasuk(pasukNum);
-                    UpdateSelectionBar();
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Error in global tap handler: {ex.Message}");
-            }
-        });
+        // Note: With CarouselView, FindTappedPasuk is disabled as we can't directly access
+        // the inner CollectionView. Regular tap gestures on individual pasukim still work.
+        // If needed, this could be re-enabled by finding the current carousel item's CollectionView.
     }
 
     /// <summary>
     /// Finds which pasuk was tapped by checking bounds of visible items.
+    /// Note: Disabled with CarouselView - tap gestures on pasukim work directly.
     /// </summary>
     private int FindTappedPasuk(float screenX, float screenY)
     {
-        if (_viewModel.Perek?.Pasukim == null)
-            return -1;
-
-        // Get the CollectionView's native view
-        if (PasukimCollection.Handler?.PlatformView is not Android.Views.View collectionView)
-            return -1;
-
-        // Convert screen coordinates to view coordinates
-        var location = new int[2];
-        collectionView.GetLocationOnScreen(location);
-        var localX = screenX - location[0];
-        var localY = screenY - location[1];
-
-        // Check if tap is within CollectionView bounds
-        if (localX < 0 || localY < 0 || localX > collectionView.Width || localY > collectionView.Height)
-            return -1;
-
-        // Find the child view at this position
-        if (collectionView is Android.Views.ViewGroup viewGroup)
-        {
-            for (int i = 0; i < viewGroup.ChildCount; i++)
-            {
-                var child = viewGroup.GetChildAt(i);
-                if (child == null) continue;
-
-                var childLocation = new int[2];
-                child.GetLocationOnScreen(childLocation);
-
-                if (screenX >= childLocation[0] && screenX <= childLocation[0] + child.Width &&
-                    screenY >= childLocation[1] && screenY <= childLocation[1] + child.Height)
-                {
-                    // Found the child - try to get its binding context
-                    if (child.Tag is Java.Lang.Integer tagInt)
-                    {
-                        return tagInt.IntValue();
-                    }
-
-                    // Try to find the pasuk by index
-                    // The CollectionView items are in order, so child index maps to pasuk index
-                    // But we need to account for header if any
-                    var pasukIndex = i; // Adjust if there's a header
-                    if (pasukIndex >= 0 && pasukIndex < _viewModel.Perek.Pasukim.Count)
-                    {
-                        return _viewModel.Perek.Pasukim[pasukIndex].PasukNum;
-                    }
-                }
-            }
-        }
-
-        return -1;
+        return -1; // Disabled with CarouselView
     }
 #endif
 
@@ -282,7 +220,8 @@ public partial class PerekPage : ContentPage
             return;
         BottomBar.Padding = new Thickness(0, 0, 0, bottom);
         BottomBar.HeightRequest = 90 + bottom;
-        PasukimFooterSpacer.HeightRequest = 90 + bottom;
+        // Note: PasukimFooterSpacer is inside a CarouselView DataTemplate and cannot be
+        // referenced by x:Name. Its HeightRequest is set statically in XAML.
         ArticlesFooterSpacer.HeightRequest = 90 + bottom;
     }
 #endif
@@ -643,18 +582,9 @@ public partial class PerekPage : ContentPage
     {
         if (perekId >= 1 && perekId <= 929 && perekId != _viewModel.PerekId)
         {
-            await _viewModel.LoadByPerekIdAsync(perekId);
-            SetAnalyticsScreenForPerek();
-            // Scroll to top after loading new perek
-            PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
-            // Update articles badge
-            await UpdateArticlesCountAsync();
-
-            // If showing articles, reload them for the new perek
-            if (_isShowingArticles)
-            {
-                await LoadArticlesAsync();
-            }
+            // Use NavigateToPerekAsync to move position without rebuilding the carousel
+            await _viewModel.NavigateToPerekAsync(perekId);
+            // OnCarouselItemChanged handles SetAnalyticsScreenForPerek, UpdateArticlesCountAsync, etc.
         }
     }
 
@@ -671,11 +601,8 @@ public partial class PerekPage : ContentPage
         }
         else
         {
-            // Scroll to header (top)
-            if (_viewModel.Perek?.Pasukim?.Count > 0)
-            {
-                PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: true);
-            }
+            // Scroll the pasukim CollectionView to top within the current carousel item
+            PerekCarousel.ScrollTo(_viewModel.CarouselPosition, position: ScrollToPosition.Start, animate: false);
         }
     }
 
@@ -719,7 +646,7 @@ public partial class PerekPage : ContentPage
 
             // Simple visibility swap instead of animation (animation may crash on Windows)
             Console.WriteLine("[Articles] Switching visibility...");
-            PasukimCollection.IsVisible = false;
+            PerekCarousel.IsVisible = false;
             ArticlesCollection.IsVisible = true;
             Console.WriteLine("[Articles] Visibility switched");
 
@@ -748,7 +675,7 @@ public partial class PerekPage : ContentPage
 
             // Simple visibility swap instead of animation
             ArticlesCollection.IsVisible = false;
-            PasukimCollection.IsVisible = true;
+            PerekCarousel.IsVisible = true;
 
             // Reset button color
             ArticlesButton.TextColor = Microsoft.Maui.Controls.Application.Current?.RequestedTheme == AppTheme.Dark
@@ -1148,129 +1075,54 @@ public partial class PerekPage : ContentPage
     }
 #endif
 
-    #region Swipe Navigation
-
-    private bool _isNavigating;
-
     /// <summary>
-    /// Handles swipe left gesture - navigates to previous perek.
-    /// In RTL layout, swipe left = backward/previous (like turning page forward in Hebrew book).
+    /// Handles carousel item changed after a swipe.
+    /// The carousel collection is NEVER modified here - all items are pre-loaded in the window.
+    /// This avoids MAUI CarouselView position/item desync bugs.
     /// </summary>
-    private void OnSwipedLeft(object? sender, SwipedEventArgs e)
+    private async void OnCarouselItemChanged(object? sender, CurrentItemChangedEventArgs e)
     {
-        if (_isShowingArticles || _isNavigating) return;
+        var incomingId = (e.CurrentItem as Perek)?.PerekId ?? -1;
+        var previousId = (e.PreviousItem as Perek)?.PerekId ?? -1;
 
-        // Don't navigate if we're at the first perek
-        if (_viewModel.PerekId <= 1)
+        if (e.CurrentItem is not Perek perek || perek.PerekId <= 0 || perek.PerekId == _viewModel.PerekId)
+        {
+            Console.WriteLine($"[Carousel] OnChanged SKIPPED incoming={incomingId} vmPerek={_viewModel.PerekId}");
             return;
-
-        _isNavigating = true;
-        MainThread.BeginInvokeOnMainThread(async () =>
-        {
-            try
-            {
-                await _viewModel.LoadPreviousAsync();
-                await Task.Delay(50); // Small delay to let binding update
-                PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
-                _ = UpdateArticlesCountAsync();
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Swipe left error: {ex.Message}");
-            }
-            finally
-            {
-                _isNavigating = false;
-            }
-        });
-    }
-
-    /// <summary>
-    /// Handles swipe right gesture - navigates to next perek.
-    /// In RTL layout, swipe right = forward/next (like turning page backward in Hebrew book).
-    /// </summary>
-    private void OnSwipedRight(object? sender, SwipedEventArgs e)
-    {
-        if (_isShowingArticles || _isNavigating) return;
-
-        // Don't navigate if we're at the last perek
-        if (_viewModel.PerekId >= 929)
-            return;
-
-        _isNavigating = true;
-        MainThread.BeginInvokeOnMainThread(async () =>
-        {
-            try
-            {
-                await _viewModel.LoadNextAsync();
-                await Task.Delay(50); // Small delay to let binding update
-                PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
-                _ = UpdateArticlesCountAsync();
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Swipe right error: {ex.Message}");
-            }
-            finally
-            {
-                _isNavigating = false;
-            }
-        });
-    }
-
-    /// <summary>
-    /// Navigates to another perek with swipe animation.
-    /// </summary>
-    private async Task NavigateWithSwipeAnimationAsync(SwipeDirection direction, Func<Task> loadAction)
-    {
-        _isNavigating = true;
-        const uint duration = 150;
-        const double slideDistance = 300; // Fixed distance instead of dynamic
-
-        // Determine slide direction
-        var endX = direction == SwipeDirection.Left ? slideDistance : -slideDistance;
-        var newStartX = direction == SwipeDirection.Left ? -slideDistance : slideDistance;
-
-        try
-        {
-            // Fade and slide out current content
-            var slideOut = PasukimCollection.TranslateTo(endX, 0, duration, Easing.CubicIn);
-            var fadeOut = PasukimCollection.FadeTo(0.3, duration);
-            await Task.WhenAll(slideOut, fadeOut);
-
-            // Load new content
-            await loadAction();
-            SetAnalyticsScreenForPerek();
-
-            // Position for slide in
-            PasukimCollection.TranslationX = newStartX;
-            PasukimCollection.Opacity = 0.3;
-
-            // Scroll to top
-            PasukimCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
-
-            // Slide and fade in new content
-            var slideIn = PasukimCollection.TranslateTo(0, 0, duration, Easing.CubicOut);
-            var fadeIn = PasukimCollection.FadeTo(1, duration);
-            await Task.WhenAll(slideIn, fadeIn);
-
-            // Update articles badge
-            _ = UpdateArticlesCountAsync();
         }
-        catch (Exception ex)
+
+        var hasPasukim = perek.Pasukim != null && perek.Pasukim.Count > 0;
+        Console.WriteLine($"[Carousel] OnChanged PROCESS incoming={incomingId} prev={previousId} vmPerek={_viewModel.PerekId} pos={_viewModel.CarouselPosition} hasPasukim={hasPasukim}");
+
+        // Lazy-load pasukim if not yet loaded (~5ms from SQLite, non-blocking)
+        if (!hasPasukim)
         {
-            Console.Error.WriteLine($"Swipe animation error: {ex.Message}");
-            // Reset state on error
-            PasukimCollection.TranslationX = 0;
-            PasukimCollection.Opacity = 1;
+            await _viewModel.EnsurePasukimLoadedAsync(perek);
         }
-        finally
+
+        // Synchronous state update — fast, no guard needed.
+        // The carousel collection is NEVER modified here, so no re-entrancy risk.
+        _viewModel.Perek = perek;
+        _viewModel.ClearSelected();
+        UpdateSelectionBar();
+        SetAnalyticsScreenForPerek();
+
+        // Refresh nav button visuals if menu is open (synchronous)
+        if (_isMenuOpen)
         {
-            _isNavigating = false;
+            RefreshNavButtonVisuals();
+        }
+
+        Console.WriteLine($"[Carousel] OnChanged DONE vmPerek={_viewModel.PerekId} pos={_viewModel.CarouselPosition}");
+
+        // Fire async tasks in the background — never block the next swipe
+        _ = UpdateArticlesCountAsync();
+        _ = _viewModel.PreloadAdjacentPasukimAsync(perek.PerekId);
+        if (_isShowingArticles)
+        {
+            _ = LoadArticlesAsync();
         }
     }
-
-    #endregion
 
     /// <summary>
     /// Enters full screen mode - hides navigation and bottom bar.
@@ -1299,10 +1151,6 @@ public partial class PerekPage : ContentPage
         BottomBar.IsVisible = false;
         FloatingMenuContainer.IsVisible = false;
 
-        // Remove footer spacers since bottom bar is hidden
-        PasukimFooterSpacer.HeightRequest = 0;
-        ArticlesFooterSpacer.HeightRequest = 0;
-
         // Show floating exit button (reset position first)
         ExitFullScreenButton.TranslationX = 0;
         ExitFullScreenButton.TranslationY = 0;
@@ -1323,10 +1171,6 @@ public partial class PerekPage : ContentPage
         // Show bottom bar
         BottomBar.IsVisible = true;
         FloatingMenuContainer.IsVisible = true;
-
-        // Restore footer spacers for bottom bar
-        PasukimFooterSpacer.HeightRequest = 90;
-        ArticlesFooterSpacer.HeightRequest = 90;
     }
 
     #endregion

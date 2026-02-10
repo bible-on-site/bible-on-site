@@ -37,16 +37,19 @@ Integration tests use `[Trait("Category", "Integration")]`; API server must be a
 
 **When the user asks to run the emulator or run Android, execute the run yourself** (e.g. in background or foreground); do not only output the command for the user to run.
 
-### Nuke RunAndroid (recommended)
+**ALWAYS use Nuke RunAndroid** for building and deploying. Do NOT use manual `dotnet build` commands unless specifically debugging build issues.
+
+### Nuke RunAndroid (REQUIRED)
 
 From the **app** directory:
 
 ```bash
-# Default: one-shot build + install + launch (auto-detects full vs fast deploy)
+# Default: one-shot build + install + launch (uses fast deploy after first install)
 dotnet run --project devops -- RunAndroid
 
 # Options:
 #   --full-apk     Force full APK install (embed native libs)
+#                  ONLY NEEDED: First install, WiFi deploy, or after wipe
 #   --fast-deploy  Force Fast Deployment (incremental, faster)
 #   --watch        Use dotnet watch for hot reload
 #   --api-env prod Use production API instead of local
@@ -56,10 +59,12 @@ dotnet run --project devops -- RunAndroid
 1. Ensures emulator is running (starts one if needed)
 2. Ensures API server is running (starts if needed, unless `--api-env prod`)
 3. Checks if app is installed on device:
-   - **Not installed** → uses full APK (~90s first deploy)
+   - **Not installed** → uses full APK (~90s first deploy, only needed once)
    - **Already installed** → uses Fast Deployment (~18s incremental)
 4. Builds, installs, launches the app
 5. Verifies app is running (PID check, crash detection)
+
+**Note:** After the first full APK install, fast deploy is used automatically on subsequent runs. Only use `--full-apk` for first install, WiFi deploys, or after wipe.
 
 **Required: run from `app/`.** Nuke looks for `.nuke` in the current directory; from repo root it fails with "Could not locate '.nuke' directory".
 
