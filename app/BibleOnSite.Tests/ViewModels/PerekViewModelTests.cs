@@ -86,6 +86,107 @@ public class PerekViewModelTests
         viewModel.Source.Should().Be("שמואל ב ג");
     }
 
+    #region Computed Properties When No Perek
+
+    [Fact]
+    public void DayOfWeek_WithNoPerek_ShouldBeZero()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var viewModel = new PerekViewModel(preferences, _ => null);
+
+        viewModel.DayOfWeek.Should().Be(0);
+    }
+
+    [Fact]
+    public void SeferId_WithNoPerek_ShouldBeZero()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var viewModel = new PerekViewModel(preferences, _ => null);
+
+        viewModel.SeferId.Should().Be(0);
+    }
+
+    [Fact]
+    public void SeferTanahUsName_WithNoPerek_ShouldBeEmpty()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var viewModel = new PerekViewModel(preferences, _ => null);
+
+        viewModel.SeferTanahUsName.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ArticlesCount_WithNoPerek_ShouldBeZero()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var viewModel = new PerekViewModel(preferences, _ => null);
+
+        viewModel.ArticlesCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void HasArticles_WithNoPerek_ShouldBeFalse()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var viewModel = new PerekViewModel(preferences, _ => null);
+
+        viewModel.HasArticles.Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasArticles_WithArticles_ShouldBeTrue()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var perek = CreatePerek(1, 1, null, "בראשית", "Genesis", "תשרי");
+        perek.ArticlesCount = 3;
+        var viewModel = new PerekViewModel(preferences, _ => perek);
+        viewModel.LoadByPerekId(1);
+
+        viewModel.HasArticles.Should().BeTrue();
+        viewModel.ArticlesCount.Should().Be(3);
+    }
+
+    [Fact]
+    public void SeferGroup_ShouldReflectSeferId()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var perek = CreatePerek(1, 1, null, "בראשית", "Genesis", "תשרי");
+        perek.SeferId = 1;
+        var viewModel = new PerekViewModel(preferences, _ => perek);
+        viewModel.LoadByPerekId(1);
+
+        viewModel.SeferGroup.Should().Be(BibleOnSite.Data.SeferGroup.Torah);
+    }
+
+    [Fact]
+    public void DayOfWeek_ShouldReflectPerekId()
+    {
+        var viewModel = CreateViewModelAtPerek(7);
+
+        viewModel.DayOfWeek.Should().Be(7 % 5);
+    }
+
+    [Fact]
+    public void SeferTanahUsName_ShouldReflectPerek()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var perek = CreatePerek(1, 1, null, "בראשית", "Genesis", "תשרי");
+        var viewModel = new PerekViewModel(preferences, _ => perek);
+        viewModel.LoadByPerekId(1);
+
+        viewModel.SeferTanahUsName.Should().Be("Genesis");
+    }
+
+    #endregion
+
     #region Navigation Properties Tests
 
     [Fact]
