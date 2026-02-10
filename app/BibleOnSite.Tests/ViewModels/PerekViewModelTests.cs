@@ -86,6 +86,261 @@ public class PerekViewModelTests
         viewModel.Source.Should().Be("שמואל ב ג");
     }
 
+    #region Computed Properties When No Perek
+
+    [Fact]
+    public void DayOfWeek_WithNoPerek_ShouldBeZero()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var viewModel = new PerekViewModel(preferences, _ => null);
+
+        viewModel.DayOfWeek.Should().Be(0);
+    }
+
+    [Fact]
+    public void SeferId_WithNoPerek_ShouldBeZero()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var viewModel = new PerekViewModel(preferences, _ => null);
+
+        viewModel.SeferId.Should().Be(0);
+    }
+
+    [Fact]
+    public void SeferTanahUsName_WithNoPerek_ShouldBeEmpty()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var viewModel = new PerekViewModel(preferences, _ => null);
+
+        viewModel.SeferTanahUsName.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ArticlesCount_WithNoPerek_ShouldBeZero()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var viewModel = new PerekViewModel(preferences, _ => null);
+
+        viewModel.ArticlesCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void HasArticles_WithNoPerek_ShouldBeFalse()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var viewModel = new PerekViewModel(preferences, _ => null);
+
+        viewModel.HasArticles.Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasArticles_WithArticles_ShouldBeTrue()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var perek = CreatePerek(1, 1, null, "בראשית", "Genesis", "תשרי");
+        perek.ArticlesCount = 3;
+        var viewModel = new PerekViewModel(preferences, _ => perek);
+        viewModel.LoadByPerekId(1);
+
+        viewModel.HasArticles.Should().BeTrue();
+        viewModel.ArticlesCount.Should().Be(3);
+    }
+
+    [Fact]
+    public void SeferGroup_ShouldReflectSeferId()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var perek = CreatePerek(1, 1, null, "בראשית", "Genesis", "תשרי");
+        perek.SeferId = 1;
+        var viewModel = new PerekViewModel(preferences, _ => perek);
+        viewModel.LoadByPerekId(1);
+
+        viewModel.SeferGroup.Should().Be(BibleOnSite.Data.SeferGroup.Torah);
+    }
+
+    [Fact]
+    public void DayOfWeek_ShouldReflectPerekId()
+    {
+        var viewModel = CreateViewModelAtPerek(7);
+
+        viewModel.DayOfWeek.Should().Be(7 % 5);
+    }
+
+    [Fact]
+    public void SeferTanahUsName_ShouldReflectPerek()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var perek = CreatePerek(1, 1, null, "בראשית", "Genesis", "תשרי");
+        var viewModel = new PerekViewModel(preferences, _ => perek);
+        viewModel.LoadByPerekId(1);
+
+        viewModel.SeferTanahUsName.Should().Be("Genesis");
+    }
+
+    #endregion
+
+    #region Navigation Properties Tests
+
+    [Fact]
+    public void NextPerekId_ShouldReturnNextId()
+    {
+        var viewModel = CreateViewModelAtPerek(5);
+
+        viewModel.NextPerekId.Should().Be(6);
+    }
+
+    [Fact]
+    public void NextPerekId_AtPerek929_ShouldClampTo929()
+    {
+        var viewModel = CreateViewModelAtPerek(929);
+
+        viewModel.NextPerekId.Should().Be(929);
+    }
+
+    [Fact]
+    public void PreviousPerekId_ShouldReturnPreviousId()
+    {
+        var viewModel = CreateViewModelAtPerek(5);
+
+        viewModel.PreviousPerekId.Should().Be(4);
+    }
+
+    [Fact]
+    public void PreviousPerekId_AtPerek1_ShouldClampTo1()
+    {
+        var viewModel = CreateViewModelAtPerek(1);
+
+        viewModel.PreviousPerekId.Should().Be(1);
+    }
+
+    [Fact]
+    public void CanGoToNextPerek_ShouldBeTrueWhenNotAtEnd()
+    {
+        var viewModel = CreateViewModelAtPerek(100);
+
+        viewModel.CanGoToNextPerek.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CanGoToNextPerek_ShouldBeFalseAtPerek929()
+    {
+        var viewModel = CreateViewModelAtPerek(929);
+
+        viewModel.CanGoToNextPerek.Should().BeFalse();
+    }
+
+    [Fact]
+    public void CanGoToPreviousPerek_ShouldBeTrueWhenNotAtStart()
+    {
+        var viewModel = CreateViewModelAtPerek(100);
+
+        viewModel.CanGoToPreviousPerek.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CanGoToPreviousPerek_ShouldBeFalseAtPerek1()
+    {
+        var viewModel = CreateViewModelAtPerek(1);
+
+        viewModel.CanGoToPreviousPerek.Should().BeFalse();
+    }
+
+    [Fact]
+    public void NextPerekId_WithNoPerek_ShouldReturnZero()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var viewModel = new PerekViewModel(preferences, _ => null);
+
+        viewModel.NextPerekId.Should().Be(0);
+    }
+
+    [Fact]
+    public void PreviousPerekId_WithNoPerek_ShouldReturnZero()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var viewModel = new PerekViewModel(preferences, _ => null);
+
+        viewModel.PreviousPerekId.Should().Be(0);
+    }
+
+    #endregion
+
+    #region Selection Cleared on Perek Change Tests
+
+    [Fact]
+    public void LoadByPerekId_ShouldClearSelectionsFromPreviousPerek()
+    {
+        var perek1 = CreatePerekWithPasukim(1, 1, null, "בראשית", "Genesis", "תשרי");
+        var perek2 = CreatePerekWithPasukim(2, 2, null, "בראשית", "Genesis", "תשרי");
+
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var viewModel = new PerekViewModel(preferences, id => id == 1 ? perek1 : perek2);
+
+        viewModel.LoadByPerekId(1);
+        viewModel.ToggleSelectedPasuk(1);
+        viewModel.ToggleSelectedPasuk(2);
+        viewModel.SelectedPasukNums.Should().HaveCount(2);
+
+        viewModel.LoadByPerekId(2);
+
+        viewModel.SelectedPasukNums.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadByPerekId_ShouldClearPreviousPerekPasukSelections()
+    {
+        var perek1 = CreatePerekWithPasukim(1, 1, null, "בראשית", "Genesis", "תשרי");
+        var perek2 = CreatePerekWithPasukim(2, 2, null, "בראשית", "Genesis", "תשרי");
+
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var viewModel = new PerekViewModel(preferences, id => id == 1 ? perek1 : perek2);
+
+        viewModel.LoadByPerekId(1);
+        viewModel.ToggleSelectedPasuk(1);
+        viewModel.ToggleSelectedPasuk(3);
+        perek1.Pasukim[0].IsSelected.Should().BeTrue();
+        perek1.Pasukim[2].IsSelected.Should().BeTrue();
+
+        viewModel.LoadByPerekId(2);
+
+        // Old perek's pasukim should have IsSelected cleared
+        perek1.Pasukim.Should().AllSatisfy(p => p.IsSelected.Should().BeFalse());
+    }
+
+    [Fact]
+    public void LoadByPerekId_NewPerekShouldHaveNoPasukimSelected()
+    {
+        var perek1 = CreatePerekWithPasukim(1, 1, null, "בראשית", "Genesis", "תשרי");
+        var perek2 = CreatePerekWithPasukim(2, 2, null, "בראשית", "Genesis", "תשרי");
+
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var viewModel = new PerekViewModel(preferences, id => id == 1 ? perek1 : perek2);
+
+        viewModel.LoadByPerekId(1);
+        viewModel.ToggleSelectedPasuk(1);
+        perek1.Pasukim[0].IsSelected.Should().BeTrue();
+
+        viewModel.LoadByPerekId(2);
+
+        // New perek's pasukim should all be unselected
+        perek2.Pasukim.Should().AllSatisfy(p => p.IsSelected.Should().BeFalse());
+    }
+
+    #endregion
+
     #region Pasuk Selection Tests
 
     [Fact]
@@ -244,6 +499,16 @@ public class PerekViewModelTests
     }
 
     #endregion
+
+    private PerekViewModel CreateViewModelAtPerek(int perekId)
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var perek = CreatePerek(perekId, 1, null, "בראשית", "Genesis", "תשרי");
+        var viewModel = new PerekViewModel(preferences, _ => perek);
+        viewModel.LoadByPerekId(perekId);
+        return viewModel;
+    }
 
     private static Perek CreatePerek(int perekId, int perekNumber, int? additional, string seferName, string seferTanahUsName, string hebDate)
     {

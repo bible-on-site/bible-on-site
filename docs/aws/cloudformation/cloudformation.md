@@ -146,7 +146,7 @@ RDS MySQL instance for the tanah database.
 **Components:**
 - DB Subnet Group: `tanah-db-subnet-group` (spans 3 AZs)
 - Security Group: `tanah-rds-sg` (allows MySQL from ECS)
-- RDS Instance: `tanah-mysql` (MySQL 8.0, db.t3.micro, 20GB gp3)
+- RDS Instance: `tanah-mysql` (MySQL 8.4, db.t3.micro, 20GB gp3)
 - SSM Parameters: Database connection info (username, dbname, host, port)
 
 **Features:**
@@ -217,7 +217,7 @@ As of the last export (see git history for date):
 | **ECR** | `bible-on-site` (website), `bible-on-site-api` (future) |
 | **EC2** | `<INSTANCE_ID>` (t3.small, nginx, `<EC2_PUBLIC_IP>`) |
 | **Route53** | `xn--febl3a.com`, `xn--febl3a.co.il` → `<EC2_PUBLIC_IP>` |
-| **RDS** | `tanah-mysql` (MySQL 8.0, db.t3.micro, encrypted) |
+| **RDS** | `tanah-mysql` (MySQL 8.4, db.t3.micro, encrypted) |
 | **OIDC Provider** | `token.actions.githubusercontent.com` |
 | **IAM Roles** | `GitHubActionsECRDeployRole`, `ecsTaskExecutionRole` |
 | **SSO Users** | `dorad` (admin), `bible-on-site-github-ci-bot` (CI) |
