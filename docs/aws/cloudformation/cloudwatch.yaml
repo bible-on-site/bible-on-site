@@ -10,8 +10,12 @@ Description: |
 
   ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
 
-  This template documents the CloudWatch Logs configuration for ECS container logs
-  and Application Auto Scaling configuration for ECS services.
+  This template documents the CloudWatch Logs configuration for ECS container logs,
+  Application Auto Scaling, Container Insights, SNS alerting, and deployment alarms.
+
+  CONTAINER INSIGHTS:
+  Enabled on bible-on-site-cluster. Publishes ECS/ContainerInsights metrics:
+  RunningTaskCount, DesiredTaskCount, TaskSetFailedTaskCount, CPU/MemoryUtilization, etc.
 
   LOG GROUPS:
   | Log Group Name | Retention | Purpose |
@@ -28,9 +32,21 @@ Description: |
   | cpu-target-tracking | ECSServiceAverageCPUUtilization | 70% | 300s | 600s |
   | memory-target-tracking | ECSServiceAverageMemoryUtilization | 80% | 300s | 600s |
 
-  CLOUDWATCH ALARMS (auto-created by Target Tracking):
+  SNS TOPIC:
+  | Topic | ARN | Purpose |
+  |-------|-----|---------|
+  | ecs-deployment-alerts | arn:aws:sns:il-central-1:250598594267:ecs-deployment-alerts | ECS deployment/health alerts |
+  Subscriptions: doradsoft@gmail.com (email)
+
+  CLOUDWATCH ALARMS:
+  Auto-created by Target Tracking:
   - CPU: AlarmHigh (scale-out when CPU > 70%), AlarmLow (scale-in when CPU < 70%)
   - Memory: AlarmHigh (scale-out when memory > 80%), AlarmLow (scale-in when memory < 80%)
+  Custom deployment/health alarms:
+  | Alarm | Metric | Condition | Period | Eval Periods | Action |
+  |-------|--------|-----------|--------|-------------|--------|
+  | ecs-website-deployment-failures | TaskSetFailedTaskCount | > 3 | 10 min | 1 | SNS: ecs-deployment-alerts |
+  | ecs-website-no-running-tasks | RunningTaskCount | < 1 | 1 min | 3 | SNS: ecs-deployment-alerts |
 
 Resources:
   # =============================================================================
@@ -108,7 +124,93 @@ Resources:
         ScaleOutCooldown: 300
         ScaleInCooldown: 600
 
+  # =============================================================================
+  # SNS Topic: ECS Deployment Alerts
+  # =============================================================================
+  ECSDeploymentAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: ecs-deployment-alerts
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+
+  ECSDeploymentAlertsEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref ECSDeploymentAlertsTopic
+      Protocol: email
+      Endpoint: doradsoft@gmail.com
+
+  # =============================================================================
+  # CloudWatch Alarm: Deployment Failures (stuck deployment detection)
+  # =============================================================================
+  # Triggers when > 3 tasks fail within a 10-minute window, indicating a
+  # stuck or broken deployment (e.g. health check misconfiguration).
+  WebsiteDeploymentFailuresAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: ecs-website-deployment-failures
+      AlarmDescription: Alert when website ECS tasks fail repeatedly (stuck deployment)
+      Namespace: ECS/ContainerInsights
+      MetricName: TaskSetFailedTaskCount
+      Dimensions:
+        - Name: ClusterName
+          Value: bible-on-site-cluster
+        - Name: ServiceName
+          Value: bible-on-site-website
+      Statistic: Sum
+      Period: 600
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref ECSDeploymentAlertsTopic
+      OKActions:
+        - !Ref ECSDeploymentAlertsTopic
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+
+  # =============================================================================
+  # CloudWatch Alarm: No Running Tasks (website down detection)
+  # =============================================================================
+  # Triggers when RunningTaskCount < 1 for 3 consecutive 1-minute periods,
+  # meaning the website has no healthy task and is down.
+  WebsiteNoRunningTasksAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: ecs-website-no-running-tasks
+      AlarmDescription: Alert when website has no running tasks (website down)
+      Namespace: ECS/ContainerInsights
+      MetricName: RunningTaskCount
+      Dimensions:
+        - Name: ClusterName
+          Value: bible-on-site-cluster
+        - Name: ServiceName
+          Value: bible-on-site-website
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions:
+        - !Ref ECSDeploymentAlertsTopic
+      OKActions:
+        - !Ref ECSDeploymentAlertsTopic
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+
 Outputs:
+  ECSDeploymentAlertsTopicArn:
+    Description: SNS topic ARN for ECS deployment alerts
+    Value: !Ref ECSDeploymentAlertsTopic
+    Export:
+      Name: !Sub "${AWS::StackName}-ECSDeploymentAlertsTopicArn"
+
   WebsiteLogGroupName:
     Description: Log group name for ECS Website service
     Value: !Ref ECSWebsiteLogGroup
