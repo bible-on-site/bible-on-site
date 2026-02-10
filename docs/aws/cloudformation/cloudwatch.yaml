@@ -204,6 +204,7 @@ Resources:
         - Key: Project
           Value: bible-on-site
 
+
 Outputs:
   ECSDeploymentAlertsTopicArn:
     Description: SNS topic ARN for ECS deployment alerts
