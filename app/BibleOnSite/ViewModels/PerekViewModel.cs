@@ -185,25 +185,27 @@ public partial class PerekViewModel : ObservableObject
 
     /// <summary>
     /// Loads the next perek in sequence.
+    /// When the carousel is already initialized, just moves position (OnCarouselItemChanged handles the rest).
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanGoToNextPerek))]
     public async Task LoadNextAsync()
     {
         if (NextPerekId > 0 && NextPerekId != PerekId)
         {
-            await LoadByPerekIdAsync(NextPerekId);
+            await NavigateToPerekAsync(NextPerekId);
         }
     }
 
     /// <summary>
     /// Loads the previous perek in sequence.
+    /// When the carousel is already initialized, just moves position (OnCarouselItemChanged handles the rest).
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanGoToPreviousPerek))]
     public async Task LoadPreviousAsync()
     {
         if (PreviousPerekId > 0 && PreviousPerekId != PerekId)
         {
-            await LoadByPerekIdAsync(PreviousPerekId);
+            await NavigateToPerekAsync(PreviousPerekId);
         }
     }
 
@@ -222,7 +224,33 @@ public partial class PerekViewModel : ObservableObject
         var todayPerekId = PerekDataService.Instance.GetTodaysPerekId();
         if (todayPerekId != PerekId)
         {
-            await LoadByPerekIdAsync(todayPerekId);
+            await NavigateToPerekAsync(todayPerekId);
+        }
+    }
+
+    /// <summary>
+    /// Navigates to a perek by ID. If the carousel is already initialized (contains 929 items),
+    /// just moves the position — OnCarouselItemChanged handles loading pasukim and updating state.
+    /// Otherwise falls back to a full rebuild via LoadByPerekIdAsync.
+    /// </summary>
+    public async Task NavigateToPerekAsync(int perekId)
+    {
+        if (CarouselPerakim != null && CarouselPerakim.Count == 929)
+        {
+            // Ensure pasukim are loaded for the target perek
+            var targetPerek = PerekDataService.Instance.GetPerek(perekId);
+            if (targetPerek != null)
+            {
+                await EnsurePasukimLoadedAsync(targetPerek);
+                // Just move position — 0-indexed
+                CarouselPosition = perekId - 1;
+                // OnCarouselItemChanged will fire and handle the rest
+            }
+        }
+        else
+        {
+            // Carousel not yet initialized — full load
+            await LoadByPerekIdAsync(perekId);
         }
     }
 #endif

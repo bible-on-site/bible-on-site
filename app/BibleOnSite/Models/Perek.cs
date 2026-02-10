@@ -10,6 +10,10 @@ namespace BibleOnSite.Models;
 public class Perek : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    private void OnPropertyChanged(string propertyName) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
     /// <summary>
     /// Unique identifier for this perek in the 929 cycle (1-929).
     /// </summary>
@@ -87,7 +91,7 @@ public class Perek : INotifyPropertyChanged
         set
         {
             _pasukim = value;
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Pasukim)));
+            OnPropertyChanged(nameof(Pasukim));
         }
     }
 }

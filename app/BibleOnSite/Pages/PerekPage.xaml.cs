@@ -220,7 +220,8 @@ public partial class PerekPage : ContentPage
             return;
         BottomBar.Padding = new Thickness(0, 0, 0, bottom);
         BottomBar.HeightRequest = 90 + bottom;
-        PasukimFooterSpacer.HeightRequest = 90 + bottom;
+        // Note: PasukimFooterSpacer is inside a CarouselView DataTemplate and cannot be
+        // referenced by x:Name. Its HeightRequest is set statically in XAML.
         ArticlesFooterSpacer.HeightRequest = 90 + bottom;
     }
 #endif
@@ -581,16 +582,9 @@ public partial class PerekPage : ContentPage
     {
         if (perekId >= 1 && perekId <= 929 && perekId != _viewModel.PerekId)
         {
-            await _viewModel.LoadByPerekIdAsync(perekId);
-            SetAnalyticsScreenForPerek();
-            // Update articles badge
-            await UpdateArticlesCountAsync();
-
-            // If showing articles, reload them for the new perek
-            if (_isShowingArticles)
-            {
-                await LoadArticlesAsync();
-            }
+            // Use NavigateToPerekAsync to move position without rebuilding the carousel
+            await _viewModel.NavigateToPerekAsync(perekId);
+            // OnCarouselItemChanged handles SetAnalyticsScreenForPerek, UpdateArticlesCountAsync, etc.
         }
     }
 
@@ -607,12 +601,8 @@ public partial class PerekPage : ContentPage
         }
         else
         {
-            // Scroll to top of current carousel item
-            // Note: CarouselView doesn't have ScrollTo, but we can ensure we're at position 1 (center)
-            if (_viewModel.CarouselPosition != 1)
-            {
-                _viewModel.CarouselPosition = 1;
-            }
+            // Scroll the pasukim CollectionView to top within the current carousel item
+            PerekCarousel.ScrollTo(_viewModel.CarouselPosition, position: ScrollToPosition.Start, animate: false);
         }
     }
 
@@ -1114,6 +1104,7 @@ public partial class PerekPage : ContentPage
         // The carousel collection is NEVER modified here, so no re-entrancy risk.
         _viewModel.Perek = perek;
         _viewModel.ClearSelected();
+        UpdateSelectionBar();
         SetAnalyticsScreenForPerek();
 
         // Refresh nav button visuals if menu is open (synchronous)
