@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { sefarim } from "@/data/db/sefarim";
+import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
 import { getTodaysPerekId } from "@/data/perek-dto";
 import { Bookshelf } from "./Bookshelf";
 import styles from "./bookshelf-modal.module.css";
@@ -21,6 +22,7 @@ interface BookshelfModalProps {
 const BookshelfModal: React.FC<BookshelfModalProps> = ({ isOpen, onClose }) => {
 	const router = useRouter();
 	const dialogRef = useRef<HTMLDialogElement>(null);
+	const isWideEnough = useIsWideEnough(TABLET_MIN_WIDTH);
 
 	// Today's perek and its sefer — computed once per mount
 	const { todaysPerekId, todaysSeferName } = useMemo(() => {
@@ -67,15 +69,18 @@ const BookshelfModal: React.FC<BookshelfModalProps> = ({ isOpen, onClose }) => {
 	);
 
 	// Navigate to sefer and close modal.
+	// On wide screens, open sefer (book) view; otherwise just the perek route.
 	// If the clicked sefer is today's sefer, jump to today's perek; otherwise go to the first perek.
 	const handleSeferClick = useCallback(
 		(seferName: string, perekFrom: number) => {
 			onClose();
 			const targetPerek =
 				seferName === todaysSeferName ? todaysPerekId : perekFrom;
-			router.push(`/929/${targetPerek}`);
+			const path = `/929/${targetPerek}`;
+			const query = isWideEnough ? "?book" : "";
+			router.push(`${path}${query}`);
 		},
-		[router, onClose, todaysSeferName, todaysPerekId],
+		[router, onClose, todaysSeferName, todaysPerekId, isWideEnough],
 	);
 
 	const handleBackdropKeyDown = useCallback(

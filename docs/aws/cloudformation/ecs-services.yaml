@@ -185,7 +185,7 @@ Resources:
       RequiresCompatibilities:
         - FARGATE
       Cpu: "256" # 0.25 vCPU
-      Memory: "1024" # 1 GB
+      Memory: "2048" # 2 GB (reduced OOM; was 1024)
       ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
       # TaskRoleArn: # Add if tasks need to call AWS APIs
       ContainerDefinitions:

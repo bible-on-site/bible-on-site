@@ -50,7 +50,7 @@ The following diagram illustrates the high-level architecture of the Bible On Si
 
 ### 8. Database (RDS MySQL)
 
-- **Instance**: `tanah-mysql` (MySQL 8.0, db.t3.micro)
+- **Instance**: `tanah-mysql` (MySQL 8.4, db.t3.micro)
 - **Storage**: 20GB gp3, encrypted with AWS-managed KMS key
 - **Networking**: Private subnets only, accessible from ECS via security group
 - **Backups**: 7-day retention period

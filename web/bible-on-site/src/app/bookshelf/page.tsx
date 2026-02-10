@@ -4,11 +4,13 @@ import { useRouter } from "next/navigation";
 import { useCallback, useMemo } from "react";
 import { Bookshelf } from "@/app/components/Bookshelf";
 import { sefarim } from "@/data/db/sefarim";
+import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
 import { getTodaysPerekId } from "@/data/perek-dto";
 import styles from "./page.module.css";
 
 const BookshelfPage = () => {
 	const router = useRouter();
+	const isWideEnough = useIsWideEnough(TABLET_MIN_WIDTH);
 
 	const { todaysPerekId, todaysSeferName } = useMemo(() => {
 		const perekId = getTodaysPerekId();
@@ -22,9 +24,11 @@ const BookshelfPage = () => {
 		(seferName: string, perekFrom: number) => {
 			const targetPerek =
 				seferName === todaysSeferName ? todaysPerekId : perekFrom;
-			router.push(`/929/${targetPerek}`);
+			const path = `/929/${targetPerek}`;
+			const query = isWideEnough ? "?book" : "";
+			router.push(`${path}${query}`);
 		},
-		[router, todaysSeferName, todaysPerekId],
+		[router, todaysSeferName, todaysPerekId, isWideEnough],
 	);
 
 	return (
