@@ -262,8 +262,9 @@ public partial class PerekViewModel : ObservableObject
     private void SetPerek(Perek perek)
     {
         Console.WriteLine($"[Carousel] SetPerek perekId={perek.PerekId}");
-        Perek = perek;
+        // Clear selection BEFORE switching — so the old perek's pasuk IsSelected flags are reset
         ClearSelected();
+        Perek = perek;
 
         // Update last learnt perek in preferences
         _preferencesService.LastLearntPerek = perek.PerekId;

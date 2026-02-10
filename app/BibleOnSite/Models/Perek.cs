@@ -9,7 +9,10 @@ namespace BibleOnSite.Models;
 /// </summary>
 public class Perek : INotifyPropertyChanged
 {
+    // Codacy: S3264 false positive — event IS invoked via OnPropertyChanged() below.
+#pragma warning disable S3264 // Events should be invoked
     public event PropertyChangedEventHandler? PropertyChanged;
+#pragma warning restore S3264
 
     private void OnPropertyChanged(string propertyName) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
