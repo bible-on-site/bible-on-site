@@ -243,15 +243,15 @@ public partial class PerekViewModel : ObservableObject
 
 #if MAUI
     /// <summary>
-    /// Half-window size for carousel pre-loading.
-    /// The carousel will have up to (2 * HalfWindow + 1) items centered on the current perek.
+    /// Half-window size for pasukim pre-loading around the current perek.
+    /// The carousel always contains all 929 perakim, but only a buffer of pasukim is pre-loaded.
     /// </summary>
-    private const int CarouselHalfWindow = 10;
+    private const int PasukimBufferHalf = 10;
 
     /// <summary>
-    /// Initializes the carousel with a wide window of perakim centered on the current perek.
-    /// All pasukim are pre-loaded so the collection is never modified during swipes.
-    /// Called on first load and when button/picker navigation moves outside the current window.
+    /// Initializes the carousel with ALL 929 perakim (lightweight metadata).
+    /// Pasukim are pre-loaded only for a buffer around the current perek.
+    /// The collection is created once and never modified during swipes.
     /// </summary>
     public async Task InitializeCarouselAsync()
     {
@@ -259,49 +259,74 @@ public partial class PerekViewModel : ObservableObject
 
         Console.WriteLine($"[Carousel] InitializeCarouselAsync START perekId={PerekId}");
 
-        var windowStart = Math.Max(1, PerekId - CarouselHalfWindow);
-        var windowEnd = Math.Min(929, PerekId + CarouselHalfWindow);
-
-        var list = new List<Perek>(windowEnd - windowStart + 1);
-        var loaded = 0;
-        var cached = 0;
-
-        for (var id = windowStart; id <= windowEnd; id++)
+        // Build list of all 929 perakim (just dictionary lookups, instant)
+        var list = new List<Perek>(929);
+        for (var id = 1; id <= 929; id++)
         {
             var p = id == PerekId ? Perek : PerekDataService.Instance.GetPerek(id);
             if (p != null)
             {
-                // Load pasukim if not already cached on this instance
-                if (p.Pasukim == null || p.Pasukim.Count == 0)
-                {
-                    p.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(id);
-                    loaded++;
-                }
-                else
-                {
-                    cached++;
-                }
                 list.Add(p);
             }
         }
 
-        Console.WriteLine($"[Carousel] InitializeCarouselAsync built list: {list.Count} items [{windowStart}..{windowEnd}], loaded={loaded} cached={cached}");
+        // Pre-load pasukim for a buffer around the current perek
+        var bufferStart = Math.Max(1, PerekId - PasukimBufferHalf);
+        var bufferEnd = Math.Min(929, PerekId + PasukimBufferHalf);
+        var loaded = 0;
+
+        for (var id = bufferStart; id <= bufferEnd; id++)
+        {
+            var p = PerekDataService.Instance.GetPerek(id);
+            if (p != null && (p.Pasukim == null || p.Pasukim.Count == 0))
+            {
+                p.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(id);
+                loaded++;
+            }
+        }
+
+        Console.WriteLine($"[Carousel] InitializeCarouselAsync built list: {list.Count} items, buffer [{bufferStart}..{bufferEnd}], loaded={loaded}");
 
         // Create the collection in one shot (no per-item CollectionChanged events)
         CarouselPerakim = new System.Collections.ObjectModel.ObservableCollection<Perek>(list);
-        CarouselPosition = PerekId - windowStart;
+        // Position is 0-indexed, perekId is 1-indexed
+        CarouselPosition = PerekId - 1;
         CurrentCarouselPerek = Perek;
 
         Console.WriteLine($"[Carousel] InitializeCarouselAsync DONE position={CarouselPosition} currentPerek={PerekId}");
     }
 
     /// <summary>
-    /// Checks whether the given perekId is inside the current carousel window.
-    /// If not, the carousel should be re-initialized.
+    /// Ensures pasukim are loaded for the given perek.
+    /// Called from OnCarouselItemChanged to lazy-load pasukim on demand (~5ms).
     /// </summary>
-    public bool IsInsideCarouselWindow(int perekId)
+    public async Task EnsurePasukimLoadedAsync(Perek perek)
     {
-        return CarouselPerakim.Any(p => p.PerekId == perekId);
+        if (perek.Pasukim != null && perek.Pasukim.Count > 0) return;
+
+        Console.WriteLine($"[Carousel] EnsurePasukimLoaded perekId={perek.PerekId}");
+        perek.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(perek.PerekId);
+    }
+
+    /// <summary>
+    /// Pre-loads pasukim for perakim adjacent to the given center, so the next swipe is instant.
+    /// Runs in the background — never blocks the UI.
+    /// </summary>
+    public async Task PreloadAdjacentPasukimAsync(int centerPerekId)
+    {
+        var start = Math.Max(1, centerPerekId - PasukimBufferHalf);
+        var end = Math.Min(929, centerPerekId + PasukimBufferHalf);
+
+        for (var id = start; id <= end; id++)
+        {
+            var p = PerekDataService.Instance.GetPerek(id);
+            if (p != null && (p.Pasukim == null || p.Pasukim.Count == 0))
+            {
+                p.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(id);
+            }
+        }
+
+        Console.WriteLine($"[Carousel] PreloadAdjacent [{start}..{end}] center={centerPerekId}");
     }
 
 #endif

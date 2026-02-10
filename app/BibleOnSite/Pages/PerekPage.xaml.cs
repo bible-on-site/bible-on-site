@@ -1090,7 +1090,7 @@ public partial class PerekPage : ContentPage
     /// The carousel collection is NEVER modified here - all items are pre-loaded in the window.
     /// This avoids MAUI CarouselView position/item desync bugs.
     /// </summary>
-    private void OnCarouselItemChanged(object? sender, CurrentItemChangedEventArgs e)
+    private async void OnCarouselItemChanged(object? sender, CurrentItemChangedEventArgs e)
     {
         var incomingId = (e.CurrentItem as Perek)?.PerekId ?? -1;
         var previousId = (e.PreviousItem as Perek)?.PerekId ?? -1;
@@ -1102,7 +1102,13 @@ public partial class PerekPage : ContentPage
         }
 
         var hasPasukim = perek.Pasukim != null && perek.Pasukim.Count > 0;
-        Console.WriteLine($"[Carousel] OnChanged PROCESS incoming={incomingId} prev={previousId} vmPerek={_viewModel.PerekId} pos={_viewModel.CarouselPosition} collCount={_viewModel.CarouselPerakim.Count} hasPasukim={hasPasukim}");
+        Console.WriteLine($"[Carousel] OnChanged PROCESS incoming={incomingId} prev={previousId} vmPerek={_viewModel.PerekId} pos={_viewModel.CarouselPosition} hasPasukim={hasPasukim}");
+
+        // Lazy-load pasukim if not yet loaded (~5ms from SQLite, non-blocking)
+        if (!hasPasukim)
+        {
+            await _viewModel.EnsurePasukimLoadedAsync(perek);
+        }
 
         // Synchronous state update — fast, no guard needed.
         // The carousel collection is NEVER modified here, so no re-entrancy risk.
@@ -1120,6 +1126,7 @@ public partial class PerekPage : ContentPage
 
         // Fire async tasks in the background — never block the next swipe
         _ = UpdateArticlesCountAsync();
+        _ = _viewModel.PreloadAdjacentPasukimAsync(perek.PerekId);
         if (_isShowingArticles)
         {
             _ = LoadArticlesAsync();
