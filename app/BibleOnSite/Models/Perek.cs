@@ -1,10 +1,22 @@
+using System.ComponentModel;
+
 namespace BibleOnSite.Models;
 
 /// <summary>
 /// Represents a Perek (chapter) in the 929 learning cycle.
+/// Implements INotifyPropertyChanged for Pasukim so the UI updates
+/// when pasukim are lazy-loaded after the carousel view renders.
 /// </summary>
-public class Perek
+public class Perek : INotifyPropertyChanged
 {
+    // Codacy: S3264 false positive — event IS invoked via OnPropertyChanged() below.
+#pragma warning disable S3264 // Events should be invoked
+    public event PropertyChangedEventHandler? PropertyChanged;
+#pragma warning restore S3264
+
+    private void OnPropertyChanged(string propertyName) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
     /// <summary>
     /// Unique identifier for this perek in the 929 cycle (1-929).
     /// </summary>
@@ -73,6 +85,16 @@ public class Perek
 
     /// <summary>
     /// The pasukim (verses) within this perek.
+    /// Setter raises PropertyChanged so the UI rebinds when pasukim are lazy-loaded.
     /// </summary>
-    public List<Pasuk> Pasukim { get; set; } = new();
+    private List<Pasuk> _pasukim = new();
+    public List<Pasuk> Pasukim
+    {
+        get => _pasukim;
+        set
+        {
+            _pasukim = value;
+            OnPropertyChanged(nameof(Pasukim));
+        }
+    }
 }

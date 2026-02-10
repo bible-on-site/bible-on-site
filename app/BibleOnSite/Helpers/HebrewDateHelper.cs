@@ -57,7 +57,7 @@ public static class HebrewDateHelper
     /// <summary>
     /// Gets the Hebrew date, advancing to next day if after nightfall (tzeit).
     /// </summary>
-    private static (int Year, int Month, int Day) GetTzeitAwareHebrewDate(DateTime date)
+    internal static (int Year, int Month, int Day) GetTzeitAwareHebrewDate(DateTime date)
     {
         var calendar = new System.Globalization.HebrewCalendar();
         var year = calendar.GetYear(date);
@@ -84,7 +84,7 @@ public static class HebrewDateHelper
     /// <summary>
     /// Adjusts the date for weekends - Friday and Saturday use Thursday's perek.
     /// </summary>
-    private static (int Year, int Month, int Day) AdjustForWeekend(
+    internal static (int Year, int Month, int Day) AdjustForWeekend(
         (int Year, int Month, int Day) hebrewDate,
         DayOfWeek dayOfWeek)
     {
@@ -119,7 +119,7 @@ public static class HebrewDateHelper
     /// <summary>
     /// Rounds the date to be within valid cycle boundaries.
     /// </summary>
-    private static (int Year, int Month, int Day) RoundToCycle((int Year, int Month, int Day) hebrewDate)
+    internal static (int Year, int Month, int Day) RoundToCycle((int Year, int Month, int Day) hebrewDate)
     {
         var dateNum = HebrewDateToNumber(hebrewDate);
 
@@ -151,7 +151,7 @@ public static class HebrewDateHelper
     /// <summary>
     /// Converts a Hebrew date tuple to numeric format YYYYMMDD.
     /// </summary>
-    private static int HebrewDateToNumber((int Year, int Month, int Day) date)
+    internal static int HebrewDateToNumber((int Year, int Month, int Day) date)
     {
         // Get uniform month number (handles leap year month ordering)
         var uniformMonth = GetUniformMonth(date.Year, date.Month);
@@ -161,7 +161,7 @@ public static class HebrewDateHelper
     /// <summary>
     /// Converts a numeric Hebrew date to tuple format.
     /// </summary>
-    private static (int Year, int Month, int Day) NumberToHebrewDate(int dateNum)
+    internal static (int Year, int Month, int Day) NumberToHebrewDate(int dateNum)
     {
         var year = dateNum / 10000;
         var month = (dateNum / 100) % 100;
@@ -177,7 +177,7 @@ public static class HebrewDateHelper
     ///
     /// This method normalizes so Adar/Adar II is always month 6 for comparison purposes.
     /// </summary>
-    private static int GetUniformMonth(int year, int month)
+    internal static int GetUniformMonth(int year, int month)
     {
         var calendar = new System.Globalization.HebrewCalendar();
         var isLeapYear = calendar.IsLeapYear(year);
@@ -207,7 +207,7 @@ public static class HebrewDateHelper
     /// <summary>
     /// Adds days to a Hebrew date number (approximate).
     /// </summary>
-    private static int AddDaysToCycleDate(int dateNum, int days)
+    internal static int AddDaysToCycleDate(int dateNum, int days)
     {
         var (year, month, day) = NumberToHebrewDate(dateNum);
         var calendar = new System.Globalization.HebrewCalendar();
@@ -231,7 +231,7 @@ public static class HebrewDateHelper
     /// <summary>
     /// Finds the perek with the closest Hebrew date.
     /// </summary>
-    private static int FindClosestPerekByHebDate(Dictionary<int, Models.Perek> perakim, int targetHebDate)
+    internal static int FindClosestPerekByHebDate(Dictionary<int, Models.Perek> perakim, int targetHebDate)
     {
         int closestPerekId = 1;
         int closestDiff = int.MaxValue;
@@ -256,7 +256,7 @@ public static class HebrewDateHelper
     /// <summary>
     /// Gets the Israel timezone ID based on the platform.
     /// </summary>
-    private static string GetIsraelTimeZoneId()
+    internal static string GetIsraelTimeZoneId()
     {
         // Windows uses "Israel Standard Time", Unix uses "Asia/Jerusalem"
         try

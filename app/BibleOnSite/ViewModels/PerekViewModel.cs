@@ -52,6 +52,18 @@ public partial class PerekViewModel : ObservableObject
     /// <summary>Used for article list selection highlight (rounded, theme-aware).</summary>
     [ObservableProperty]
     private int? _selectedArticleId;
+
+    /// <summary>Carousel collection holding prev/current/next perek for swipe navigation.</summary>
+    [ObservableProperty]
+    private System.Collections.ObjectModel.ObservableCollection<Perek> _carouselPerakim = new();
+
+    /// <summary>Current carousel position (0=prev, 1=current, 2=next).</summary>
+    [ObservableProperty]
+    private int _carouselPosition = 1;
+
+    /// <summary>Currently displayed carousel perek.</summary>
+    [ObservableProperty]
+    private Perek? _currentCarouselPerek;
 #pragma warning restore MVVMTK0045
 
     public PerekViewModel() : this(PreferencesService.Instance, null)
@@ -166,30 +178,34 @@ public partial class PerekViewModel : ObservableObject
             // Load pasukim
             perek.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(perekId);
             SetPerek(perek);
+            // Initialize carousel AFTER SetPerek so Perek/PerekId are up to date
+            await InitializeCarouselAsync();
         }
     }
 
     /// <summary>
     /// Loads the next perek in sequence.
+    /// When the carousel is already initialized, just moves position (OnCarouselItemChanged handles the rest).
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanGoToNextPerek))]
     public async Task LoadNextAsync()
     {
         if (NextPerekId > 0 && NextPerekId != PerekId)
         {
-            await LoadByPerekIdAsync(NextPerekId);
+            await NavigateToPerekAsync(NextPerekId);
         }
     }
 
     /// <summary>
     /// Loads the previous perek in sequence.
+    /// When the carousel is already initialized, just moves position (OnCarouselItemChanged handles the rest).
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanGoToPreviousPerek))]
     public async Task LoadPreviousAsync()
     {
         if (PreviousPerekId > 0 && PreviousPerekId != PerekId)
         {
-            await LoadByPerekIdAsync(PreviousPerekId);
+            await NavigateToPerekAsync(PreviousPerekId);
         }
     }
 
@@ -208,22 +224,141 @@ public partial class PerekViewModel : ObservableObject
         var todayPerekId = PerekDataService.Instance.GetTodaysPerekId();
         if (todayPerekId != PerekId)
         {
-            await LoadByPerekIdAsync(todayPerekId);
+            await NavigateToPerekAsync(todayPerekId);
+        }
+    }
+
+    /// <summary>
+    /// Navigates to a perek by ID. If the carousel is already initialized (contains 929 items),
+    /// just moves the position — OnCarouselItemChanged handles loading pasukim and updating state.
+    /// Otherwise falls back to a full rebuild via LoadByPerekIdAsync.
+    /// </summary>
+    public async Task NavigateToPerekAsync(int perekId)
+    {
+        if (CarouselPerakim != null && CarouselPerakim.Count == 929)
+        {
+            // Ensure pasukim are loaded for the target perek
+            var targetPerek = PerekDataService.Instance.GetPerek(perekId);
+            if (targetPerek != null)
+            {
+                await EnsurePasukimLoadedAsync(targetPerek);
+                // Just move position — 0-indexed
+                CarouselPosition = perekId - 1;
+                // OnCarouselItemChanged will fire and handle the rest
+            }
+        }
+        else
+        {
+            // Carousel not yet initialized — full load
+            await LoadByPerekIdAsync(perekId);
         }
     }
 #endif
 
     /// <summary>
     /// Sets the current perek and clears selection.
+    /// Also updates the carousel for swipe navigation.
     /// </summary>
     private void SetPerek(Perek perek)
     {
-        Perek = perek;
+        Console.WriteLine($"[Carousel] SetPerek perekId={perek.PerekId}");
+        // Clear selection BEFORE switching — so the old perek's pasuk IsSelected flags are reset
         ClearSelected();
+        Perek = perek;
 
         // Update last learnt perek in preferences
         _preferencesService.LastLearntPerek = perek.PerekId;
     }
+
+#if MAUI
+    /// <summary>
+    /// Half-window size for pasukim pre-loading around the current perek.
+    /// The carousel always contains all 929 perakim, but only a buffer of pasukim is pre-loaded.
+    /// </summary>
+    private const int PasukimBufferHalf = 10;
+
+    /// <summary>
+    /// Initializes the carousel with ALL 929 perakim (lightweight metadata).
+    /// Pasukim are pre-loaded only for a buffer around the current perek.
+    /// The collection is created once and never modified during swipes.
+    /// </summary>
+    public async Task InitializeCarouselAsync()
+    {
+        if (Perek == null) return;
+
+        Console.WriteLine($"[Carousel] InitializeCarouselAsync START perekId={PerekId}");
+
+        // Build list of all 929 perakim (just dictionary lookups, instant)
+        var list = new List<Perek>(929);
+        for (var id = 1; id <= 929; id++)
+        {
+            var p = id == PerekId ? Perek : PerekDataService.Instance.GetPerek(id);
+            if (p != null)
+            {
+                list.Add(p);
+            }
+        }
+
+        // Pre-load pasukim for a buffer around the current perek
+        var bufferStart = Math.Max(1, PerekId - PasukimBufferHalf);
+        var bufferEnd = Math.Min(929, PerekId + PasukimBufferHalf);
+        var loaded = 0;
+
+        for (var id = bufferStart; id <= bufferEnd; id++)
+        {
+            var p = PerekDataService.Instance.GetPerek(id);
+            if (p != null && (p.Pasukim == null || p.Pasukim.Count == 0))
+            {
+                p.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(id);
+                loaded++;
+            }
+        }
+
+        Console.WriteLine($"[Carousel] InitializeCarouselAsync built list: {list.Count} items, buffer [{bufferStart}..{bufferEnd}], loaded={loaded}");
+
+        // Create the collection in one shot (no per-item CollectionChanged events)
+        CarouselPerakim = new System.Collections.ObjectModel.ObservableCollection<Perek>(list);
+        // Position is 0-indexed, perekId is 1-indexed
+        CarouselPosition = PerekId - 1;
+        CurrentCarouselPerek = Perek;
+
+        Console.WriteLine($"[Carousel] InitializeCarouselAsync DONE position={CarouselPosition} currentPerek={PerekId}");
+    }
+
+    /// <summary>
+    /// Ensures pasukim are loaded for the given perek.
+    /// Called from OnCarouselItemChanged to lazy-load pasukim on demand (~5ms).
+    /// </summary>
+    public async Task EnsurePasukimLoadedAsync(Perek perek)
+    {
+        if (perek.Pasukim != null && perek.Pasukim.Count > 0) return;
+
+        Console.WriteLine($"[Carousel] EnsurePasukimLoaded perekId={perek.PerekId}");
+        perek.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(perek.PerekId);
+    }
+
+    /// <summary>
+    /// Pre-loads pasukim for perakim adjacent to the given center, so the next swipe is instant.
+    /// Runs in the background — never blocks the UI.
+    /// </summary>
+    public async Task PreloadAdjacentPasukimAsync(int centerPerekId)
+    {
+        var start = Math.Max(1, centerPerekId - PasukimBufferHalf);
+        var end = Math.Min(929, centerPerekId + PasukimBufferHalf);
+
+        for (var id = start; id <= end; id++)
+        {
+            var p = PerekDataService.Instance.GetPerek(id);
+            if (p != null && (p.Pasukim == null || p.Pasukim.Count == 0))
+            {
+                p.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(id);
+            }
+        }
+
+        Console.WriteLine($"[Carousel] PreloadAdjacent [{start}..{end}] center={centerPerekId}");
+    }
+
+#endif
 
     #endregion
 

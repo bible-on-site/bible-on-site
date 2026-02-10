@@ -38,6 +38,13 @@ public class SearchFilterTests
     {
         filter.GetHebrewName().Should().Be(expected);
     }
+
+    [Fact]
+    public void GetHebrewName_WithUnknownFilter_ShouldReturnToString()
+    {
+        var unknown = (SearchFilter)999;
+        unknown.GetHebrewName().Should().Be("999");
+    }
 }
 
 public class AuthorSearchResultTests

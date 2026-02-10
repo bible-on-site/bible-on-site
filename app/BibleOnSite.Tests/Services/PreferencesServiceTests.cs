@@ -272,4 +272,35 @@ public class PreferencesServiceTests : IDisposable
         // Assert
         PreferencesService.Instance.Should().NotBeNull();
     }
+
+    #region InMemoryPreferencesStorage Tests
+
+    [Fact]
+    public void InMemoryStorage_Remove_ShouldRemoveKey()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        storage.Set("key1", "value1");
+        storage.Get("key1", "").Should().Be("value1");
+
+        storage.Remove("key1");
+
+        storage.Get("key1", "default").Should().Be("default");
+    }
+
+    [Fact]
+    public void InMemoryStorage_Clear_ShouldRemoveAllKeys()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        storage.Set("key1", "value1");
+        storage.Set("key2", 42);
+        storage.Set("key3", true);
+
+        storage.Clear();
+
+        storage.Get("key1", "gone").Should().Be("gone");
+        storage.Get("key2", -1).Should().Be(-1);
+        storage.Get("key3", false).Should().BeFalse();
+    }
+
+    #endregion
 }

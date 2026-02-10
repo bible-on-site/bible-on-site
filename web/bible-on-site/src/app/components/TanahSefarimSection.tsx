@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
+import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
 import styles from "./TanahSefarimSection.module.css";
 
 // Dynamically import Bookshelf with no SSR to avoid hydration issues
@@ -23,9 +24,12 @@ const Bookshelf = dynamic(
 
 export function TanahSefarimSection() {
 	const router = useRouter();
+	const isWideEnough = useIsWideEnough(TABLET_MIN_WIDTH);
 
 	const handleSeferClick = (_seferName: string, perekFrom: number) => {
-		router.push(`/929/${perekFrom}`);
+		const path = `/929/${perekFrom}`;
+		const query = isWideEnough ? "?book" : "";
+		router.push(`${path}${query}`);
 	};
 
 	return (

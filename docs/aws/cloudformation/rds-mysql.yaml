@@ -74,7 +74,7 @@ Resources:
       DBInstanceIdentifier: tanah-mysql
       DBInstanceClass: !Ref DBInstanceClass
       Engine: mysql
-      EngineVersion: "8.0"
+      EngineVersion: "8.4"
       MasterUsername: admin
       ManageMasterUserPassword: true # Auto-generates password in Secrets Manager
       DBName: tanah

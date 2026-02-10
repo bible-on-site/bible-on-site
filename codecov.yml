@@ -4,18 +4,22 @@ coverage:
   status:
     project:
       default:
-        target: 60%
-        threshold: 5%
+        # No coverage regression allowed: target is the base commit's coverage
+        target: auto
+        threshold: 0%
       api:
-        target: 95%
+        target: auto
+        threshold: 0%
         flags:
           - api
       app:
-        target: 60%
+        target: auto
+        threshold: 0%
         flags:
           - app
       website:
-        target: 95%
+        target: auto
+        threshold: 0%
         flags:
           - website
       data:
@@ -25,8 +29,8 @@ coverage:
           - data
     patch:
       default:
-        target: 60%
-        threshold: 5%
+        target: auto
+        threshold: 0%
 comment:
   layout: "reach, diff, flags, files, footer"
   behavior: default

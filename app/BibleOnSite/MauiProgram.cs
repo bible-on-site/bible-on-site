@@ -29,8 +29,23 @@ public static class MauiProgram
 				// Use optimized CollectionView handler for iOS/Mac (default in .NET 10)
 				handlers.AddHandler<CollectionView, Microsoft.Maui.Controls.Handlers.Items2.CollectionViewHandler2>();
 #endif
-			})
-			;
+			});
+
+#if ANDROID
+		// Increase CarouselView's internal RecyclerView cache so pre-rendered views
+		// aren't evicted after ~2 swipes. This eliminates the ~250ms lag when visiting
+		// a perek for the first time.
+		Microsoft.Maui.Controls.Handlers.Items.CarouselViewHandler.Mapper.AppendToMapping("LargerViewCache", (handler, _) =>
+		{
+			if (handler.PlatformView is AndroidX.RecyclerView.Widget.RecyclerView recyclerView)
+			{
+				// Keep up to 10 off-screen views in cache (default is ~2)
+				recyclerView.SetItemViewCacheSize(10);
+				// Also increase the recycled view pool so evicted views are reused faster
+				recyclerView.GetRecycledViewPool()?.SetMaxRecycledViews(0, 10);
+			}
+		});
+#endif
 
 		// Initialize PreferencesService with MAUI storage
 		PreferencesService.Initialize(new MauiPreferencesStorage());

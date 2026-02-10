@@ -215,6 +215,33 @@ public class GimatryHelperTests
 
     #endregion
 
+    #region Thousands Tests
+
+    [Fact]
+    public void ToLetters_WithThousands_ShouldIncludeThousandsPrefix()
+    {
+        // 5786 with thousands and separator: ה'תשפו
+        var result = GimatryHelper.ToLetters(5786, includeThousands: true, thousandsSeparator: "'");
+        result.Should().Be("ה'תשפו");
+    }
+
+    [Fact]
+    public void ToLetters_WithThousands_NoSeparator()
+    {
+        // 5786 without separator: התשפו
+        var result = GimatryHelper.ToLetters(5786, includeThousands: true);
+        result.Should().Be("התשפו");
+    }
+
+    [Fact]
+    public void ToLetters_WithThousands_ButNumberBelowThousand_ShouldReturnNormally()
+    {
+        // includeThousands=true but number <= 1000: thousands branch is skipped (>1000 check)
+        GimatryHelper.ToLetters(500, true).Should().Be("תק");
+    }
+
+    #endregion
+
     #region Extension Method Tests
 
     [Theory]

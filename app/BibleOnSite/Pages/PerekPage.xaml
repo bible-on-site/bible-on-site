@@ -133,102 +133,114 @@
                         Clicked="OnSelectionCopyClicked"/>
             </Grid>
 
-            <!-- Perek Header (Row 1 - always visible) -->
-            <Label Grid.Row="1"
-                   x:Name="PerekHeader"
-                   Text="{Binding Header}"
-                   FontSize="22"
-                   FontAttributes="Bold"
-                   HorizontalTextAlignment="Center"
-                   Padding="16,12"
-                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
+            <!-- CarouselView for page-based swipe navigation (Row 1 + Row 2) -->
+            <!-- Each carousel page contains header + full perek view (pasukim CollectionView) -->
+            <CarouselView Grid.Row="1"
+                          Grid.RowSpan="2"
+                          x:Name="PerekCarousel"
+                          ItemsSource="{Binding CarouselPerakim}"
+                          CurrentItem="{Binding CurrentCarouselPerek, Mode=TwoWay}"
+                          Position="{Binding CarouselPosition, Mode=TwoWay}"
+                          CurrentItemChanged="OnCarouselItemChanged"
+                          Loop="False"
+                          PeekAreaInsets="1"
+                          Margin="0">
+                <CarouselView.ItemTemplate>
+                    <DataTemplate x:DataType="models:Perek">
+                        <!-- Full perek page: header + CollectionView of pasukim -->
+                        <Grid RowDefinitions="Auto,*">
+                            <!-- Perek Header (Row 0) -->
+                            <Label Grid.Row="0"
+                                   Text="{Binding Header}"
+                                   FontSize="22"
+                                   FontAttributes="Bold"
+                                   HorizontalTextAlignment="Center"
+                                   Padding="16,12"
+                                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
 
-            <!-- Perek Text - Pasukim List (Row 2) -->
-            <CollectionView Grid.Row="2"
-                            x:Name="PasukimCollection"
-                            ItemsSource="{Binding Perek.Pasukim}"
-                            SelectionMode="None"
-                            Scrolled="OnPasukimScrolled"
-                            Margin="8,0,8,0">
-                <!-- Footer spacer so last item can scroll above bottom bar -->
-                <CollectionView.Footer>
-                    <ContentView x:Name="PasukimFooterSpacer" HeightRequest="90" BackgroundColor="Transparent"/>
-                </CollectionView.Footer>
-                <CollectionView.ItemTemplate>
-                    <DataTemplate x:DataType="models:Pasuk">
-                        <Border Padding="12,8"
-                                Margin="0,4"
-                                StrokeShape="RoundRectangle 8"
-                                Stroke="Transparent"
-                                x:Name="PasukBorder"
-                                BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
-                            <!-- iOS (and MacCatalyst): FlowDirection not cascading into template; set explicitly so pesukim layout RTL. -->
-                            <Border.FlowDirection>
-                                <OnPlatform x:TypeArguments="FlowDirection">
-                                    <On Platform="iOS" Value="RightToLeft"/>
-                                    <On Platform="MacCatalyst" Value="RightToLeft"/>
-                                </OnPlatform>
-                            </Border.FlowDirection>
-                            <Border.Triggers>
-                                <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
-                                    <Setter Property="BackgroundColor" Value="{StaticResource SelectedPasukBackground}"/>
-                                </DataTrigger>
-                            </Border.Triggers>
-                            <Border.GestureRecognizers>
-                                <TapGestureRecognizer Tapped="OnPasukTapped"
-                                                      CommandParameter="{Binding PasukNum}"/>
-                                <TapGestureRecognizer Tapped="OnPasukRightClicked"
-                                                      CommandParameter="{Binding PasukNum}"
-                                                      Buttons="Secondary"/>
-                                <PointerGestureRecognizer PointerPressed="OnPasukPointerPressed"
-                                                          PointerReleased="OnPasukPointerReleased"/>
-                            </Border.GestureRecognizers>
-                            <Border.Behaviors>
-                                <behaviors:LongPressBehavior LongPressDuration="600"
-                                                             LongPressed="OnPasukLongPressed"/>
-                            </Border.Behaviors>
-                            <Grid ColumnDefinitions="40,*">
-                                <Label Grid.Column="0"
-                                       Text="{Binding PasukNumHeb}"
-                                       FontSize="16"
-                                       FontAttributes="Bold"
-                                       VerticalTextAlignment="Start"
-                                       Margin="0,1.5,0,0"
-                                       TextColor="{StaticResource Primary}"/>
-                                <Label Grid.Column="1"
-                                       AutomationId="PasukText"
-                                       FormattedText="{Binding FormattedText}"
-                                       FontSize="18"
-                                       LineBreakMode="WordWrap"
-                                       LineHeight="1.4"/>
-                            </Grid>
-                        </Border>
+                            <!-- Pasukim CollectionView (Row 1) -->
+                            <CollectionView Grid.Row="1"
+                                            ItemsSource="{Binding Pasukim}"
+                                            SelectionMode="None"
+                                            Scrolled="OnPasukimScrolled"
+                                            Margin="8,0,8,0">
+                            <!-- Footer spacer so last item can scroll above bottom bar -->
+                            <CollectionView.Footer>
+                                <ContentView HeightRequest="90" BackgroundColor="Transparent"/>
+                            </CollectionView.Footer>
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate x:DataType="models:Pasuk">
+                                    <Border Padding="12,8"
+                                            Margin="0,4"
+                                            StrokeShape="RoundRectangle 8"
+                                            Stroke="Transparent"
+                                            x:Name="PasukBorder"
+                                            BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+                                        <!-- iOS (and MacCatalyst): FlowDirection not cascading into template; set explicitly so pesukim layout RTL. -->
+                                        <Border.FlowDirection>
+                                            <OnPlatform x:TypeArguments="FlowDirection">
+                                                <On Platform="iOS" Value="RightToLeft"/>
+                                                <On Platform="MacCatalyst" Value="RightToLeft"/>
+                                            </OnPlatform>
+                                        </Border.FlowDirection>
+                                        <Border.Triggers>
+                                            <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
+                                                <Setter Property="BackgroundColor" Value="{StaticResource SelectedPasukBackground}"/>
+                                            </DataTrigger>
+                                        </Border.Triggers>
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="OnPasukTapped"
+                                                                  CommandParameter="{Binding PasukNum}"/>
+                                            <TapGestureRecognizer Tapped="OnPasukRightClicked"
+                                                                  CommandParameter="{Binding PasukNum}"
+                                                                  Buttons="Secondary"/>
+                                            <PointerGestureRecognizer PointerPressed="OnPasukPointerPressed"
+                                                                      PointerReleased="OnPasukPointerReleased"/>
+                                        </Border.GestureRecognizers>
+                                        <Border.Behaviors>
+                                            <behaviors:LongPressBehavior LongPressDuration="600"
+                                                                         LongPressed="OnPasukLongPressed"/>
+                                        </Border.Behaviors>
+                                        <Grid ColumnDefinitions="40,*">
+                                            <Label Grid.Column="0"
+                                                   Text="{Binding PasukNumHeb}"
+                                                   FontSize="16"
+                                                   FontAttributes="Bold"
+                                                   VerticalTextAlignment="Start"
+                                                   Margin="0,1.5,0,0"
+                                                   TextColor="{StaticResource Primary}"/>
+                                            <Label Grid.Column="1"
+                                                   AutomationId="PasukText"
+                                                   FormattedText="{Binding FormattedText}"
+                                                   FontSize="18"
+                                                   LineBreakMode="WordWrap"
+                                                   LineHeight="1.4"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+
+                            <CollectionView.EmptyView>
+                                <VerticalStackLayout VerticalOptions="Center"
+                                                     HorizontalOptions="Center"
+                                                     Padding="20">
+                                    <Image Source="loading_book_anim.gif"
+                                           IsAnimationPlaying="True"
+                                           HeightRequest="60"
+                                           WidthRequest="60"
+                                           Aspect="AspectFit"/>
+                                    <Label Text="מתחבר לפרק..."
+                                           AutomationId="PerekLoadingLabel"
+                                           FontSize="18"
+                                           HorizontalTextAlignment="Center"
+                                           Margin="0,10,0,0"/>
+                                    </VerticalStackLayout>
+                                </CollectionView.EmptyView>
+                            </CollectionView>
+                        </Grid>
                     </DataTemplate>
-                </CollectionView.ItemTemplate>
-
-                <CollectionView.EmptyView>
-                    <VerticalStackLayout VerticalOptions="Center"
-                                         HorizontalOptions="Center"
-                                         Padding="20">
-                        <Image Source="loading_book_anim.gif"
-                               IsAnimationPlaying="True"
-                               HeightRequest="60"
-                               WidthRequest="60"
-                               Aspect="AspectFit"/>
-                        <Label Text="מתחבר לפרק..."
-                               AutomationId="PerekLoadingLabel"
-                               FontSize="18"
-                               HorizontalTextAlignment="Center"
-                               Margin="0,10,0,0"/>
-                    </VerticalStackLayout>
-                </CollectionView.EmptyView>
-            </CollectionView>
-
-            <!-- Swipe navigation disabled - built-in SwipeGestureRecognizer causes crashes on Android.
-                 TODO: Implement using CarouselView with virtualized items (prev/current/next perek).
-                 CarouselView is the native MAUI solution for book-like swipe navigation.
-                 See: https://learn.microsoft.com/en-us/dotnet/maui/user-interface/controls/carouselview
-                 For now, users can use prev/next buttons in circular menu. -->
+                </CarouselView.ItemTemplate>
+            </CarouselView>
 
             <!-- Articles View (hidden by default, shown when articles button clicked) -->
             <!-- Uses shared ArticleCard component -->
