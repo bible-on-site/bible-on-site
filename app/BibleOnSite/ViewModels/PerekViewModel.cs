@@ -448,54 +448,53 @@ public partial class PerekViewModel : ObservableObject
 
     /// <summary>
     /// Initializes the carousel with ALL 929 perakim (lightweight metadata).
-    /// Pasukim are pre-loaded only for a buffer around the current perek.
-    /// The collection is created once and never modified during swipes.
+    /// Heavy work (building the list + preloading adjacent pasukim) runs on a
+    /// background thread so the UI stays responsive.  The ObservableCollection
+    /// and CarouselView updates happen back on the main thread.
     /// </summary>
     public async Task InitializeCarouselAsync()
     {
         if (Perek == null) return;
 
-        Console.WriteLine($"[Carousel] InitializeCarouselAsync START perekId={PerekId}");
+        var perekId = PerekId;
+        var perek = Perek;
 
-        // Build list of all 929 perakim (just dictionary lookups, instant)
-        var list = new List<Perek>(929);
-        for (var id = 1; id <= 929; id++)
+        Console.WriteLine($"[Carousel] InitializeCarouselAsync START perekId={perekId}");
+
+        // Build list + preload buffer on a background thread to avoid blocking UI.
+        var list = await Task.Run(async () =>
         {
-            var p = id == PerekId ? Perek : PerekDataService.Instance.GetPerek(id);
-            if (p != null)
+            var result = new List<Perek>(929);
+            for (var id = 1; id <= 929; id++)
             {
-                list.Add(p);
+                var p = id == perekId ? perek : PerekDataService.Instance.GetPerek(id);
+                if (p != null) result.Add(p);
             }
-        }
 
-        // Pre-load pasukim for a buffer around the current perek
-        var bufferStart = Math.Max(1, PerekId - PasukimBufferHalf);
-        var bufferEnd = Math.Min(929, PerekId + PasukimBufferHalf);
-        var loaded = 0;
-
-        for (var id = bufferStart; id <= bufferEnd; id++)
-        {
-            var p = PerekDataService.Instance.GetPerek(id);
-            if (p != null && (p.Pasukim == null || p.Pasukim.Count == 0))
+            // Pre-load pasukim for a small buffer around the current perek
+            var bufferStart = Math.Max(1, perekId - PasukimBufferHalf);
+            var bufferEnd = Math.Min(929, perekId + PasukimBufferHalf);
+            for (var id = bufferStart; id <= bufferEnd; id++)
             {
-                p.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(id);
-                loaded++;
+                var p = PerekDataService.Instance.GetPerek(id);
+                if (p != null && (p.Pasukim == null || p.Pasukim.Count == 0))
+                {
+                    p.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(id);
+                }
             }
-        }
 
-        Console.WriteLine($"[Carousel] InitializeCarouselAsync built list: {list.Count} items, buffer [{bufferStart}..{bufferEnd}], loaded={loaded}");
+            return result;
+        });
 
-        // Set position BEFORE the collection so the CarouselView already knows the
-        // target index when it receives its ItemsSource.  At this point there are
-        // no items yet, so the binding update is a no-op visually (no animation).
-        CarouselPosition = PerekId - 1;
+        Console.WriteLine($"[Carousel] InitializeCarouselAsync built list: {list.Count} items");
 
-        // Create the collection in one shot (no per-item CollectionChanged events).
-        // The CarouselView initializes at the position we just set.
+        // Assign collection on the main thread.
+        // NOTE: CarouselView resets Position to 0 when ItemsSource changes — the
+        // code-behind ScrollTo(targetPos, animate:false) corrects this immediately.
         CarouselPerakim = new System.Collections.ObjectModel.ObservableCollection<Perek>(list);
-        CurrentCarouselPerek = Perek;
+        CurrentCarouselPerek = perek;
 
-        Console.WriteLine($"[Carousel] InitializeCarouselAsync DONE position={CarouselPosition} currentPerek={PerekId}");
+        Console.WriteLine($"[Carousel] InitializeCarouselAsync DONE perekId={perekId}");
     }
 
     /// <summary>
