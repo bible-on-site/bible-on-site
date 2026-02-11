@@ -5,7 +5,7 @@ jest.mock("../../../src/app/929/[number]/actions", () => ({
 	getPerushNotesForPage: jest.fn(),
 }));
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { getPerushNotesForPage } from "../../../src/app/929/[number]/actions";
 import { PerushimSection } from "../../../src/app/929/[number]/components/PerushimSection";
 import type { PerushSummary } from "../../../src/lib/perushim";
@@ -54,5 +54,37 @@ describe("PerushimSection", () => {
 		render(<PerushimSection perekId={1} perushim={perushim} />);
 		fireEvent.click(screen.getByRole("button", { name: /ביאור שטיינזלץ/ }));
 		expect(mockGetPerushNotesForPage).toHaveBeenCalledWith(14, 1);
+	});
+
+	it("delegates to onPerushClick when provided", () => {
+		const onPerushClick = jest.fn();
+		const perushim: PerushSummary[] = [
+			{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 55 },
+		];
+		render(
+			<PerushimSection
+				perekId={1}
+				perushim={perushim}
+				onPerushClick={onPerushClick}
+			/>,
+		);
+		fireEvent.click(screen.getByRole("button", { name: /רש״י/ }));
+		expect(onPerushClick).toHaveBeenCalledWith(perushim[0]);
+		expect(mockGetPerushNotesForPage).not.toHaveBeenCalled();
+	});
+
+	it("handles error in internal handlePerushClick", async () => {
+		mockGetPerushNotesForPage.mockRejectedValue(new Error("fail"));
+		const perushim: PerushSummary[] = [
+			{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 55 },
+		];
+		render(<PerushimSection perekId={1} perushim={perushim} />);
+
+		await act(async () => {
+			fireEvent.click(screen.getByRole("button", { name: /רש״י/ }));
+		});
+
+		// Should still show carousel (selected set to null on error)
+		expect(screen.getByText("פרשנים על הפרק")).toBeTruthy();
 	});
 });
