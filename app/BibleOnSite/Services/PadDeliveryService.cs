@@ -112,8 +112,8 @@ partial class PadDeliveryService
             {
                 await manager.Fetch(new[] { packName }).AsAsync<Java.Lang.Object>();
                 cancellationToken.ThrowIfCancellationRequested();
-                var location = manager.GetPackLocation(packName);
-                return location?.AssetsPath() != null;
+                var fetchedLocation = manager.GetPackLocation(packName);
+                return fetchedLocation?.AssetsPath() != null;
             }
             finally
             {

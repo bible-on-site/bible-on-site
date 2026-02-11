@@ -162,7 +162,7 @@
                             <!-- Perek Text - Pasukim List (Row 1) with perushim inline -->
                             <CollectionView Grid.Row="1"
                                             x:Name="PasukimCollection"
-                                            ItemsSource="{Binding Perek.Pasukim}"
+                                            ItemsSource="{Binding Pasukim}"
                                             SelectionMode="None"
                                             Scrolled="OnPasukimScrolled"
                                             Margin="8,0,8,0">
