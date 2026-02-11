@@ -1,4 +1,5 @@
 "use client";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { startTransition, useCallback, useEffect, useState } from "react";
 
@@ -7,8 +8,14 @@ import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
 import type { Article } from "@/lib/articles";
 import type { PerushSummary } from "@/lib/perushim";
 import ReadModeToggler from "./ReadModeToggler";
-import Sefer from "./Sefer";
 import styles from "./sefer-composite.module.css";
+
+// Lazy-load the heavy Sefer (FlipBook) component so its JS bundle is not
+// included in the initial page load.  When the user toggles book-view the
+// chunk is fetched asynchronously, which keeps the interaction-to-next-paint
+// well below 200 ms because the browser only needs to paint the light
+// overlay — not mount the entire FlipBook tree — in the same frame.
+const Sefer = dynamic(() => import("./Sefer"), { ssr: false });
 
 const ClientWrapper = (props: {
 	perekObj: PerekObj;
