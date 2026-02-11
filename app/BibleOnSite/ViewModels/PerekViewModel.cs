@@ -513,21 +513,26 @@ public partial class PerekViewModel : ObservableObject
     /// Pre-loads pasukim for perakim adjacent to the given center, so the next swipe is instant.
     /// Runs in the background — never blocks the UI.
     /// </summary>
-    public async Task PreloadAdjacentPasukimAsync(int centerPerekId)
+    public Task PreloadAdjacentPasukimAsync(int centerPerekId)
     {
         var start = Math.Max(1, centerPerekId - PasukimBufferHalf);
         var end = Math.Min(929, centerPerekId + PasukimBufferHalf);
 
-        for (var id = start; id <= end; id++)
+        // Run entirely on a background thread so the main thread stays
+        // responsive while we hit SQLite for each adjacent perek.
+        return Task.Run(async () =>
         {
-            var p = PerekDataService.Instance.GetPerek(id);
-            if (p != null && (p.Pasukim == null || p.Pasukim.Count == 0))
+            for (var id = start; id <= end; id++)
             {
-                p.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(id);
+                var p = PerekDataService.Instance.GetPerek(id);
+                if (p != null && (p.Pasukim == null || p.Pasukim.Count == 0))
+                {
+                    p.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(id);
+                }
             }
-        }
 
-        Console.WriteLine($"[Carousel] PreloadAdjacent [{start}..{end}] center={centerPerekId}");
+            Console.WriteLine($"[Carousel] PreloadAdjacent [{start}..{end}] center={centerPerekId}");
+        });
     }
 
 #endif

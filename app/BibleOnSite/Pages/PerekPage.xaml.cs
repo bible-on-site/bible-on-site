@@ -225,19 +225,30 @@ public partial class PerekPage : ContentPage
             {
                 var perekId = GetInitialPerekId();
 
+                // Show loading overlay while the carousel initialises.
+                CarouselLoadingOverlay.IsVisible = true;
+
                 // Guard: ignore OnCarouselItemChanged during initial load.
                 // The CarouselView fires spurious CurrentItemChanged events when it
                 // first receives its ItemsSource, which would reset state.
                 _carouselInitializing = true;
                 await _viewModel.LoadByPerekIdAsync(perekId);
 
-                // Safety belt: force the CarouselView to the correct position
-                // without animation.  The ViewModel already set CarouselPosition
-                // before the collection, but the view may not have honoured it.
+                // CarouselView resets Position to 0 when ItemsSource changes.
+                // Force it to the correct position without animation.
                 var targetPos = _viewModel.PerekId - 1;
                 PerekCarousel.ScrollTo(targetPos, animate: false);
 
+                // Yield so the CarouselView processes the scroll + layout pass.
+                await Task.Delay(50);
+
+                // Sync the ViewModel position (two-way binding may lag)
+                _viewModel.CarouselPosition = targetPos;
+
                 _carouselInitializing = false;
+
+                // Hide loading overlay — carousel is ready
+                CarouselLoadingOverlay.IsVisible = false;
 
                 // Update articles count badge
                 await UpdateArticlesCountAsync();

@@ -134,6 +134,26 @@
                         Clicked="OnSelectionCopyClicked"/>
             </Grid>
 
+            <!-- Loading overlay — shown while CarouselView initialises its 929-item
+                 adapter.  Uses a native ActivityIndicator which animates on the GPU
+                 even when the main thread is blocked by the CarouselView layout pass. -->
+            <Grid x:Name="CarouselLoadingOverlay"
+                  Grid.Row="1" Grid.RowSpan="2"
+                  IsVisible="True"
+                  ZIndex="10"
+                  BackgroundColor="{AppThemeBinding Light=White, Dark=#1C1C1E}">
+                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="12">
+                    <ActivityIndicator IsRunning="True"
+                                       Color="{StaticResource Primary}"
+                                       HeightRequest="48"
+                                       WidthRequest="48"/>
+                    <Label Text="טוען פרק..."
+                           FontSize="18"
+                           HorizontalTextAlignment="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray200}}"/>
+                </VerticalStackLayout>
+            </Grid>
+
             <!-- CarouselView for page-based swipe navigation (Row 1 + Row 2) -->
             <!-- Each carousel page contains header + full perek view (pasukim CollectionView) -->
             <CarouselView Grid.Row="1"
