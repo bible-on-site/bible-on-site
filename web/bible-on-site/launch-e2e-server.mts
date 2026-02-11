@@ -33,7 +33,10 @@ function log(message: string): void {
 }
 
 // Clear log file for fresh run
-writeFileSync(logFile, `[${new Date().toISOString()}] [INIT] E2E Server Launcher started\n`);
+writeFileSync(
+	logFile,
+	`[${new Date().toISOString()}] [INIT] E2E Server Launcher started\n`,
+);
 
 // --coverage is passed by Playwright when MEASURE_COV=1; NODE_OPTIONS/env are set by config
 const _useCoverage = process.argv.includes("--coverage");
@@ -73,7 +76,9 @@ async function populateDatabase(): Promise<void> {
 	});
 
 	if (cargoMakeCheck.status !== 0) {
-		log(`[DB Setup] cargo-make check failed with status: ${cargoMakeCheck.status}`);
+		log(
+			`[DB Setup] cargo-make check failed with status: ${cargoMakeCheck.status}`,
+		);
 		log(`[DB Setup] stderr: ${cargoMakeCheck.stderr?.toString()}`);
 		throw new Error(
 			"cargo-make is not installed. Install with: cargo install cargo-make",
@@ -94,14 +99,95 @@ async function populateDatabase(): Promise<void> {
 			},
 		});
 		log("[DB Setup] Database population completed successfully.");
-		log("[DB Setup] ========================================");
 	} catch (error) {
 		log(`[DB Setup] ERROR: Failed to populate database: ${error}`);
 		log("[DB Setup] ========================================");
 		throw new Error(
-			"Database population failed. Articles E2E tests require a populated database.",
+			"Database population failed. E2E tests require a populated database.",
 		);
 	}
+
+	// Health check: verify all expected tables exist and have data.
+	// This catches silent failures (missing SQL files, skipped optional steps,
+	// wrong database name, etc.) early — before tests run and produce
+	// confusing "element not found" errors.
+	await verifyTestDatabase(dbUrl);
+	log("[DB Setup] ========================================");
+}
+
+/**
+ * Verify that the test database has all required tables with data.
+ * Uses the mysql CLI client so we don't add a Node MySQL dependency here.
+ */
+async function verifyTestDatabase(dbUrl: string): Promise<void> {
+	log("[DB Health] Verifying test database tables...");
+
+	const url = new URL(dbUrl);
+	const host = url.hostname;
+	const port = url.port || "3306";
+	const user = url.username;
+	const password = url.password;
+	const database = url.pathname.slice(1).split("?")[0];
+
+	// Tables that must exist and contain at least 1 row for e2e tests to pass.
+	// When adding a new feature that queries a new table, add it here!
+	const requiredTables = [
+		"tanah_author",
+		"tanah_article",
+		"tanah_perek",
+		"tanah_sefer",
+		"parshan",
+		"perush",
+		"note",
+	];
+
+	const mysqlArgs = [
+		"-h",
+		host,
+		"-P",
+		port,
+		"-u",
+		user,
+		...(password ? [`-p${password}`] : []),
+		database,
+		"-N",
+		"-B", // no headers, tab-separated
+	];
+
+	const missing: string[] = [];
+	const empty: string[] = [];
+
+	for (const table of requiredTables) {
+		try {
+			const result = execSync(
+				`mysql ${mysqlArgs.map((a) => `"${a}"`).join(" ")} -e "SELECT COUNT(*) FROM \\\`${table}\\\`"`,
+				{ stdio: "pipe", shell: true, timeout: 10_000 },
+			);
+			const count = Number.parseInt(result.toString().trim(), 10);
+			if (count === 0) {
+				empty.push(table);
+			}
+		} catch {
+			missing.push(table);
+		}
+	}
+
+	if (missing.length > 0 || empty.length > 0) {
+		const parts: string[] = [];
+		if (missing.length > 0) parts.push(`missing tables: ${missing.join(", ")}`);
+		if (empty.length > 0) parts.push(`empty tables: ${empty.join(", ")}`);
+		const msg = `[DB Health] FAILED — ${parts.join("; ")} in database '${database}'`;
+		log(msg);
+		throw new Error(
+			`${msg}. Either the db-populator didn't populate these tables, ` +
+				`or the app is connecting to the wrong database. ` +
+				`Check DB_URL and tanah_test_data.sql.`,
+		);
+	}
+
+	log(
+		`[DB Health] All ${requiredTables.length} required tables verified in '${database}'.`,
+	);
 }
 
 async function main() {

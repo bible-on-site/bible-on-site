@@ -25,8 +25,9 @@ pub fn generate(
             app_raw.join(format!("{}.perushim_catalog.sqlite", dump_name)),
             // Notes go to Android PAD asset pack (on-demand delivery)
             {
-                let pad_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .join("../../../../app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes");
+                let pad_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join(
+                    "../../../../app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes",
+                );
                 fs::create_dir_all(&pad_dir)?;
                 pad_dir.join(format!("{}.perushim_notes.sqlite", dump_name))
             },

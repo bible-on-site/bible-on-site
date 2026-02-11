@@ -1,6 +1,6 @@
 "use client";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { startTransition, useCallback, useEffect, useState } from "react";
 
 import type { PerekObj } from "@/data/perek-dto";
 import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
@@ -30,15 +30,17 @@ const ClientWrapper = (props: {
 	const [display, setDisplay] = useState("none");
 	const handleToggle = useCallback(
 		(toggled: boolean, immediately = false) => {
-			console.log(
-				`handleToggle(toggled: ${toggled}, immediately: ${immediately})`,
-			);
-			if (!everToggled && toggled) {
-				setEverToggled(true);
-			}
 			if (toggled) {
+				// Show the overlay immediately so the toggle animation is responsive.
 				setDisplay("initial");
 				setCurrentlyToggled(true);
+				// Defer the expensive <Sefer> mount to a transition so the browser
+				// can paint the toggle visual feedback first, keeping INP < 200 ms.
+				if (!everToggled) {
+					startTransition(() => {
+						setEverToggled(true);
+					});
+				}
 			} else {
 				if (immediately) {
 					setDisplay("none");
@@ -54,7 +56,6 @@ const ClientWrapper = (props: {
 	);
 
 	useEffect(() => {
-		console.log(everToggled);
 		if (everToggled) return;
 		const IMMEDIATELY = true;
 		handleToggle(toggled, IMMEDIATELY);
@@ -76,7 +77,6 @@ const ClientWrapper = (props: {
 					currentlyToggled ? styles.visible : styles.hidden
 				}`}
 			>
-				{/* TODO: figure out how to not affecting INP when toggling (some sort of async rendering?)) */}
 				{everToggled && (
 					<Sefer
 						perekObj={props.perekObj}
