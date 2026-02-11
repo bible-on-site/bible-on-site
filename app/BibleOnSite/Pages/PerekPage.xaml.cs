@@ -28,6 +28,11 @@ public partial class PerekPage : ContentPage
     // Articles view state
     private bool _isShowingArticles;
 
+    // Guard: ignore CurrentItemChanged events fired by the CarouselView during
+    // initial collection assignment.  Without this, the handler resets the
+    // position to bereshit-1 right after we placed it at today's perek.
+    private bool _carouselInitializing;
+
     // Scroll state tracking - used to prevent long-press during scroll
     private static DateTime _lastScrollTime = DateTime.MinValue;
     private const int ScrollCooldownMs = 500; // Don't allow long-press within 500ms of scroll
@@ -49,6 +54,8 @@ public partial class PerekPage : ContentPage
         _viewModel = new PerekViewModel();
         BindingContext = _viewModel;
         ForwardSelectedArticleIdChanged();
+        SetupFontSizeResources();
+        SetupCarouselNavigation();
         SetupGlobalTouchHandler();
         SetupExitButtonDragHandler();
     }
@@ -59,8 +66,63 @@ public partial class PerekPage : ContentPage
         _viewModel = viewModel;
         BindingContext = _viewModel;
         ForwardSelectedArticleIdChanged();
+        SetupFontSizeResources();
+        SetupCarouselNavigation();
         SetupGlobalTouchHandler();
         SetupExitButtonDragHandler();
+    }
+
+    /// <summary>
+    /// Subscribes to ViewModel.NavigationRequested so that programmatic
+    /// navigation (prev/next/today/picker) jumps the CarouselView instantly
+    /// via ScrollTo(animate:false) instead of animating through every
+    /// intermediate position (which would cascade OnCarouselItemChanged).
+    /// </summary>
+    private void SetupCarouselNavigation()
+    {
+        _viewModel.NavigationRequested += (_, perekId) =>
+        {
+            var targetIndex = perekId - 1;
+            // Guard: suppress OnCarouselItemChanged while we reposition
+            _carouselInitializing = true;
+            PerekCarousel.ScrollTo(targetIndex, animate: false);
+            _carouselInitializing = false;
+
+            // Post-navigation housekeeping (ViewModel state is already set by
+            // NavigateToPerekAsync before this event fires)
+            UpdateSelectionBar();
+            SetAnalyticsScreenForPerek();
+            if (_isMenuOpen) RefreshNavButtonVisuals();
+            _ = UpdateArticlesCountAsync();
+            _ = _viewModel.PreloadAdjacentPasukimAsync(perekId);
+        };
+    }
+
+    /// <summary>
+    /// Populates page-level DynamicResource entries for font sizes and keeps them
+    /// in sync when the user changes the font-factor preference.
+    /// DynamicResource is used because x:Reference bindings inside CarouselView
+    /// DataTemplates are unreliable on Android.
+    /// </summary>
+    private void SetupFontSizeResources()
+    {
+        UpdateFontSizeResources(_viewModel.FontFactor);
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PerekViewModel.FontFactor))
+            {
+                MainThread.BeginInvokeOnMainThread(() =>
+                    UpdateFontSizeResources(_viewModel.FontFactor));
+            }
+        };
+    }
+
+    private void UpdateFontSizeResources(double factor)
+    {
+        Resources["PasukFontSize"] = factor * 18;
+        Resources["PasukNumFontSize"] = factor * 16;
+        Resources["PerushNameFontSize"] = factor * 14;
+        Resources["PerushContentFontSize"] = factor * 16;
     }
 
     private void ForwardSelectedArticleIdChanged()
@@ -162,7 +224,21 @@ public partial class PerekPage : ContentPage
             try
             {
                 var perekId = GetInitialPerekId();
+
+                // Guard: ignore OnCarouselItemChanged during initial load.
+                // The CarouselView fires spurious CurrentItemChanged events when it
+                // first receives its ItemsSource, which would reset state.
+                _carouselInitializing = true;
                 await _viewModel.LoadByPerekIdAsync(perekId);
+
+                // Safety belt: force the CarouselView to the correct position
+                // without animation.  The ViewModel already set CarouselPosition
+                // before the collection, but the view may not have honoured it.
+                var targetPos = _viewModel.PerekId - 1;
+                PerekCarousel.ScrollTo(targetPos, animate: false);
+
+                _carouselInitializing = false;
+
                 // Update articles count badge
                 await UpdateArticlesCountAsync();
             }
@@ -595,9 +671,7 @@ public partial class PerekPage : ContentPage
     {
         if (perekId >= 1 && perekId <= 929 && perekId != _viewModel.PerekId)
         {
-            // Use NavigateToPerekAsync to move position without rebuilding the carousel
             await _viewModel.NavigateToPerekAsync(perekId);
-            // OnCarouselItemChanged handles SetAnalyticsScreenForPerek, UpdateArticlesCountAsync, etc.
         }
     }
 
@@ -1131,6 +1205,15 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private async void OnCarouselItemChanged(object? sender, CurrentItemChangedEventArgs e)
     {
+        // During initial collection assignment the CarouselView fires spurious
+        // CurrentItemChanged events (e.g. for position-0 / bereshit-1).
+        // Ignore them — the ViewModel already holds the correct perek.
+        if (_carouselInitializing)
+        {
+            Console.WriteLine($"[Carousel] OnChanged IGNORED (initializing)");
+            return;
+        }
+
         var incomingId = (e.CurrentItem as Perek)?.PerekId ?? -1;
         var previousId = (e.PreviousItem as Perek)?.PerekId ?? -1;
 
@@ -1155,6 +1238,9 @@ public partial class PerekPage : ContentPage
         _viewModel.ClearSelected();
         UpdateSelectionBar();
         SetAnalyticsScreenForPerek();
+
+        // Persist the current perek as last learnt so the user can resume here
+        _viewModel.SaveLastLearntPerek();
 
         // Refresh nav button visuals if menu is open (synchronous)
         if (_isMenuOpen)

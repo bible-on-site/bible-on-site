@@ -13,10 +13,6 @@ public class PerushimNotesService
     private const string NotesDbName = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
     private const string PerushimNotesPackName = "perushim_notes";
 
-    /// <summary>HTTP fallback URL when PAD is not available (sideloaded, emulator, or non-Android).</summary>
-    private const string NotesDownloadUrl =
-        "https://bible-on-site-assets.s3.il-central-1.amazonaws.com/perushim/sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
-
     private readonly IPadDeliveryService _padService;
 
     private static readonly Lazy<PerushimNotesService> _instance =
@@ -103,7 +99,8 @@ public class PerushimNotesService
             }
         }
 
-        return await TryDownloadFromHttpAsync(dbPath, progress);
+        Console.Error.WriteLine("Perushim notes not available via PAD. Publish an AAB with the perushim_notes asset pack.");
+        return false;
     }
 
     private static async Task<bool> TryCopyFromPadAsync(string padAssetsPath, string dbPath)
@@ -119,45 +116,6 @@ public class PerushimNotesService
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Failed to copy perushim notes from PAD: {ex.Message}");
-            return false;
-        }
-    }
-
-    private async Task<bool> TryDownloadFromHttpAsync(string dbPath, IProgress<double>? progress)
-    {
-        try
-        {
-            using var client = new HttpClient();
-            client.Timeout = TimeSpan.FromMinutes(5);
-
-            using var response = await client.GetAsync(NotesDownloadUrl, HttpCompletionOption.ResponseHeadersRead);
-            response.EnsureSuccessStatusCode();
-
-            var totalBytes = response.Content.Headers.ContentLength ?? 0L;
-            await using var stream = await response.Content.ReadAsStreamAsync();
-            await using var fileStream = File.Create(dbPath);
-
-            var buffer = new byte[81920];
-            long totalRead = 0;
-            int read;
-            while ((read = await stream.ReadAsync(buffer)) > 0)
-            {
-                await fileStream.WriteAsync(buffer.AsMemory(0, read));
-                totalRead += read;
-                if (totalBytes > 0 && progress != null)
-                {
-                    progress.Report((double)totalRead / totalBytes);
-                }
-            }
-
-            _connection = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
-            _notesMissing = false;
-            _initialized = true;
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Failed to download perushim notes from HTTP: {ex.Message}");
             return false;
         }
     }

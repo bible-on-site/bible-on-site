@@ -103,7 +103,21 @@ public partial class PerekViewModel : ObservableObject
     {
         _preferencesService = preferencesService;
         _perekLoader = perekLoader ?? DefaultPerekLoader;
+
+        // Sync FontFactor from preferences and listen for changes
+        _fontFactor = _preferencesService.FontFactor;
+        _preferencesService.PreferencesChanged += (_, _) =>
+        {
+            if (Math.Abs(_fontFactor - _preferencesService.FontFactor) > 0.001)
+            {
+                FontFactor = _preferencesService.FontFactor;
+            }
+        };
     }
+
+    /// <summary>Font scaling factor from user preferences (0.5–2.0).</summary>
+    [ObservableProperty]
+    private double _fontFactor = 1.0;
 
     private static Perek? DefaultPerekLoader(int perekId)
     {
@@ -365,22 +379,29 @@ public partial class PerekViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Navigates to a perek by ID. If the carousel is already initialized (contains 929 items),
-    /// just moves the position — OnCarouselItemChanged handles loading pasukim and updating state.
-    /// Otherwise falls back to a full rebuild via LoadByPerekIdAsync.
+    /// Raised when the ViewModel needs the CarouselView to jump to a new position.
+    /// The code-behind subscribes and calls <c>ScrollTo(index, animate: false)</c>
+    /// so the CarouselView jumps instantly instead of animating through every
+    /// intermediate item (which would fire OnCarouselItemChanged hundreds of times).
+    /// </summary>
+    public event EventHandler<int>? NavigationRequested;
+
+    /// <summary>
+    /// Navigates to a perek by ID.  Prepares all ViewModel state first, then
+    /// asks the code-behind to scroll the CarouselView without animation.
     /// </summary>
     public async Task NavigateToPerekAsync(int perekId)
     {
         if (CarouselPerakim != null && CarouselPerakim.Count == 929)
         {
-            // Ensure pasukim are loaded for the target perek
             var targetPerek = PerekDataService.Instance.GetPerek(perekId);
             if (targetPerek != null)
             {
                 await EnsurePasukimLoadedAsync(targetPerek);
-                // Just move position — 0-indexed
-                CarouselPosition = perekId - 1;
-                // OnCarouselItemChanged will fire and handle the rest
+                // Update ViewModel state (Perek, PerekId, last-learnt, etc.)
+                SetPerek(targetPerek);
+                // Ask code-behind to scroll without animation
+                NavigationRequested?.Invoke(this, perekId);
             }
         }
         else
@@ -403,7 +424,19 @@ public partial class PerekViewModel : ObservableObject
         Perek = perek;
 
         // Update last learnt perek in preferences
-        _preferencesService.LastLearntPerek = perek.PerekId;
+        SaveLastLearntPerek();
+    }
+
+    /// <summary>
+    /// Persists the current perek ID as "last learnt" so the app can resume here on next launch.
+    /// Called from SetPerek (programmatic navigation) and from the code-behind on carousel swipe.
+    /// </summary>
+    public void SaveLastLearntPerek()
+    {
+        if (Perek != null && Perek.PerekId > 0)
+        {
+            _preferencesService.LastLearntPerek = Perek.PerekId;
+        }
     }
 
 #if MAUI
@@ -452,10 +485,14 @@ public partial class PerekViewModel : ObservableObject
 
         Console.WriteLine($"[Carousel] InitializeCarouselAsync built list: {list.Count} items, buffer [{bufferStart}..{bufferEnd}], loaded={loaded}");
 
-        // Create the collection in one shot (no per-item CollectionChanged events)
-        CarouselPerakim = new System.Collections.ObjectModel.ObservableCollection<Perek>(list);
-        // Position is 0-indexed, perekId is 1-indexed
+        // Set position BEFORE the collection so the CarouselView already knows the
+        // target index when it receives its ItemsSource.  At this point there are
+        // no items yet, so the binding update is a no-op visually (no animation).
         CarouselPosition = PerekId - 1;
+
+        // Create the collection in one shot (no per-item CollectionChanged events).
+        // The CarouselView initializes at the position we just set.
+        CarouselPerakim = new System.Collections.ObjectModel.ObservableCollection<Perek>(list);
         CurrentCarouselPerek = Perek;
 
         Console.WriteLine($"[Carousel] InitializeCarouselAsync DONE position={CarouselPosition} currentPerek={PerekId}");

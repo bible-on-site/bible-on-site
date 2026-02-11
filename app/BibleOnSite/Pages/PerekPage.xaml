@@ -204,7 +204,7 @@
                                             <Grid ColumnDefinitions="40,*">
                                                 <Label Grid.Column="0"
                                                        Text="{Binding PasukNumHeb}"
-                                                       FontSize="16"
+                                                       FontSize="{DynamicResource PasukNumFontSize}"
                                                        FontAttributes="Bold"
                                                        VerticalTextAlignment="Start"
                                                        Margin="0,1.5,0,0"
@@ -212,7 +212,7 @@
                                                 <VerticalStackLayout Grid.Column="1" Spacing="2">
                                                     <Label AutomationId="PasukText"
                                                            FormattedText="{Binding FormattedText}"
-                                                           FontSize="18"
+                                                           FontSize="{DynamicResource PasukFontSize}"
                                                            LineBreakMode="WordWrap"
                                                            LineHeight="1.4"/>
                                                     <VerticalStackLayout BindableLayout.ItemsSource="{Binding PerushNotes}"
@@ -222,11 +222,11 @@
                                                             <DataTemplate x:DataType="models:PerushNoteDisplay">
                                                                 <VerticalStackLayout Spacing="2">
                                                                     <Label Text="{Binding PerushName}"
-                                                                           FontSize="14"
+                                                                           FontSize="{DynamicResource PerushNameFontSize}"
                                                                            FontAttributes="Bold"
                                                                            TextColor="{StaticResource Primary}"/>
                                                                     <controls:HtmlView HtmlContent="{Binding DisplayContent}"
-                                                                                      FontSize="16"
+                                                                                      FontSize="{DynamicResource PerushContentFontSize}"
                                                                                       TextAlignment="Justify"
                                                                                       TextDirection="Rtl"
                                                                                       LineHeight="1.4"/>
