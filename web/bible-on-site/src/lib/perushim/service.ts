@@ -46,7 +46,8 @@ export async function getPerushimByPerekId(
 		}));
 	} catch (error) {
 		console.warn(
-			`Failed to fetch perushim for perek ${perekId}:`,
+			"Failed to fetch perushim for perek %d:",
+			perekId,
 			error instanceof Error ? error.message : error,
 		);
 		return [];
@@ -83,7 +84,9 @@ export async function getPerushNotes(
 		}));
 	} catch (error) {
 		console.warn(
-			`Failed to fetch notes for perush ${perushId} perek ${perekId}:`,
+			"Failed to fetch notes for perush %d perek %d:",
+			perushId,
+			perekId,
 			error instanceof Error ? error.message : error,
 		);
 		return [];
@@ -126,7 +129,8 @@ export async function getPerushDetail(
 		};
 	} catch (error) {
 		console.warn(
-			`Failed to fetch perush detail ${perushId}:`,
+			"Failed to fetch perush detail %d:",
+			perushId,
 			error instanceof Error ? error.message : error,
 		);
 		return null;

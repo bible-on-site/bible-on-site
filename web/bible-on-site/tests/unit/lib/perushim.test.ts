@@ -70,15 +70,29 @@ describe("perushim service", () => {
 			expect(sql).toContain("GROUP BY p.id, p.name, pa.name, p.priority");
 		});
 
-		it("returns empty array on error", async () => {
+		it("returns empty array on Error instance", async () => {
 			mockQuery.mockRejectedValue(new Error("DB error"));
 
 			const result = await getPerushimByPerekId(1);
 
 			expect(result).toEqual([]);
 			expect(console.warn).toHaveBeenCalledWith(
-				"Failed to fetch perushim for perek 1:",
+				"Failed to fetch perushim for perek %d:",
+				1,
 				"DB error",
+			);
+		});
+
+		it("returns empty array on non-Error rejection", async () => {
+			mockQuery.mockRejectedValue("raw string error");
+
+			const result = await getPerushimByPerekId(1);
+
+			expect(result).toEqual([]);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch perushim for perek %d:",
+				1,
+				"raw string error",
 			);
 		});
 	});
@@ -130,6 +144,32 @@ describe("perushim service", () => {
 
 			expect(result).toBeNull();
 		});
+
+		it("returns null on Error instance", async () => {
+			mockQuery.mockRejectedValue(new Error("timeout"));
+
+			const result = await getPerushDetail(7, 2);
+
+			expect(result).toBeNull();
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch perush detail %d:",
+				7,
+				"timeout",
+			);
+		});
+
+		it("returns null on non-Error rejection", async () => {
+			mockQuery.mockRejectedValue({ code: "ECONN" });
+
+			const result = await getPerushDetail(7, 2);
+
+			expect(result).toBeNull();
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch perush detail %d:",
+				7,
+				{ code: "ECONN" },
+			);
+		});
 	});
 
 	describe("getPerushNotes", () => {
@@ -149,6 +189,34 @@ describe("perushim service", () => {
 				{ pasuk: 2, noteIdx: 0, noteContent: "<p>B</p>" },
 				{ pasuk: 1, noteIdx: 0, noteContent: "<p>A</p>" },
 			]);
+		});
+
+		it("returns empty array on Error instance", async () => {
+			mockQuery.mockRejectedValue(new Error("connection lost"));
+
+			const result = await getPerushNotes(5, 3);
+
+			expect(result).toEqual([]);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch notes for perush %d perek %d:",
+				5,
+				3,
+				"connection lost",
+			);
+		});
+
+		it("returns empty array on non-Error rejection", async () => {
+			mockQuery.mockRejectedValue(42);
+
+			const result = await getPerushNotes(5, 3);
+
+			expect(result).toEqual([]);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch notes for perush %d perek %d:",
+				5,
+				3,
+				42,
+			);
 		});
 	});
 });
