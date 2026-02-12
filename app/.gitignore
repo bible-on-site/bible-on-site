@@ -6,3 +6,6 @@
 
 # Generated at build time by MSBuild (API URL override)
 BibleOnSite/Resources/Raw/api-config.txt
+
+# Large generated asset (PAD on-demand) — run: cd data && cargo make generate-perushim-view-sqlite
+BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/*.sqlite

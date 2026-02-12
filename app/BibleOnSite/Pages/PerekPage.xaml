@@ -147,7 +147,7 @@
                                        Color="{StaticResource Primary}"
                                        HeightRequest="48"
                                        WidthRequest="48"/>
-                    <Label Text="טוען פרק..."
+                    <Label Text="מתחבר לפרק..."
                            FontSize="18"
                            HorizontalTextAlignment="Center"
                            TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray200}}"/>
@@ -385,7 +385,7 @@
                                               Margin="0,0,8,0"
                                               CheckedChanged="OnPerushCheckboxChanged">
                                         <CheckBox.IsChecked>
-                                            <MultiBinding Converter="{StaticResource PerushCheckedConverter}">
+                                            <MultiBinding Converter="{StaticResource PerushCheckedConverter}" Mode="OneWay">
                                                 <Binding Path="Id"/>
                                                 <Binding Path="BindingContext.CheckedPerushim" Source="{x:Reference PerekPageRoot}"/>
                                             </MultiBinding>

@@ -112,8 +112,20 @@ partial class PadDeliveryService
             {
                 await manager.Fetch(new[] { packName }).AsAsync<Java.Lang.Object>();
                 cancellationToken.ThrowIfCancellationRequested();
-                var fetchedLocation = manager.GetPackLocation(packName);
-                return fetchedLocation?.AssetsPath() != null;
+
+                // In local-testing mode (bundletool --local-testing), the
+                // FakeAssetPackService extracts the pack asynchronously after
+                // Fetch resolves. Poll until the location becomes available.
+                for (var attempt = 0; attempt < 60; attempt++)
+                {
+                    var fetchedLocation = manager.GetPackLocation(packName);
+                    if (fetchedLocation?.AssetsPath() != null)
+                        return true;
+
+                    await Task.Delay(500, cancellationToken);
+                }
+
+                return false;
             }
             finally
             {

@@ -70,7 +70,14 @@ args = ["run", "--release", "--", "--format", "json"]
 description = "Generate tanah view as SQLite"
 cwd = "./sefaria/pipelines/tanah-view"
 command = "cargo"
-args = ["run", "--release", "--", "--format", "sqlite"]
+args = [
+    "run",
+    "--release",
+    "--",
+    "--format",
+    "sqlite",
+    "--output-to-dependant-modules",
+]
 
 [tasks.generate-compass-stages]
 description = "Generate MongoDB Compass stages for debugging tanah-view aggregation pipeline"
@@ -92,7 +99,14 @@ args = ["run", "--release", "--", "--format", "json"]
 description = "Generate perushim SQLite: catalog (bundled) + notes (PAD/on-demand)"
 cwd = "./sefaria/pipelines/perushim-view"
 command = "cargo"
-args = ["run", "--release", "--", "--format", "sqlite"]
+args = [
+    "run",
+    "--release",
+    "--",
+    "--format",
+    "sqlite",
+    "--output-to-dependant-modules",
+]
 
 [tasks.generate-perushim-view-mysql]
 description = "Generate perushim notes as MySQL SQL file"
