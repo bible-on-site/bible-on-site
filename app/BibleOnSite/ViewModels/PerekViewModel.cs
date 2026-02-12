@@ -235,6 +235,7 @@ public partial class PerekViewModel : ObservableObject
     /// <summary>
     /// Loads perushim (commentaries) for the current perek.
     /// Catalog is bundled; notes come from PAD or HTTP on-demand.
+    /// Previously checked perushim that are also available in the new perek stay checked.
     /// </summary>
     public async Task LoadPerushimAsync(int perekId)
     {
@@ -246,12 +247,15 @@ public partial class PerekViewModel : ObservableObject
         OnPropertyChanged(nameof(PerushimEmptyMessage));
         OnPropertyChanged(nameof(ShowDownloadPerushimButton));
 
+        // Remember which perushim the user had checked so we can preserve them
+        var previouslyChecked = new HashSet<int>(CheckedPerushim);
+
         Perushim = new List<Perush>();
-        CheckedPerushim = new List<int>();
         _perushNotesCache = new List<PerekPerushNote>();
 
         if (!PerushimNotesAvailable || !PerushimCatalogAvailable)
         {
+            CheckedPerushim = new List<int>();
             FillFilteredPerushContents();
             return;
         }
@@ -259,6 +263,7 @@ public partial class PerekViewModel : ObservableObject
         var perushIds = await PerushimNotesService.Instance.GetPerushIdsForPerekAsync(perekId);
         if (perushIds.Count == 0)
         {
+            CheckedPerushim = new List<int>();
             FillFilteredPerushContents();
             return;
         }
@@ -275,6 +280,10 @@ public partial class PerekViewModel : ObservableObject
             .OrderBy(p => p!.Priority)
             .Cast<Perush>()
             .ToList();
+
+        // Preserve checked perushim that are also available in the new perek
+        var availableIds = new HashSet<int>(perushIds);
+        CheckedPerushim = previouslyChecked.Where(id => availableIds.Contains(id)).ToList();
 
         FillFilteredPerushContents();
         OnPropertyChanged(nameof(PerushimEmptyMessage));

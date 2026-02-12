@@ -56,6 +56,17 @@ public partial class LoadingPage : ContentPage
     {
         LoadingLabel.Text = "טוען נתונים...";
         await StarterService.Instance.LoadWithRetryAsync();
+
+        if (!StarterService.Instance.IsLoaded)
+        {
+            // Show the classic "התעיף עיניך" message briefly before navigating
+            LoadingLabel.Text = "הֲתָעִיף עֵינֶיךָ בּוֹ וְאֵינֶנּוּ?\n(משלי כג ה)\n\nממשיכים ללא חיבור לשרת";
+            await Task.Delay(1500);
+        }
+        else if (StarterService.Instance.IsFromCache)
+        {
+            LoadingLabel.Text = "נטען ממטמון מקומי";
+        }
     }
 
     private static async Task NavigateToMainPageAsync()

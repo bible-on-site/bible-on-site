@@ -94,6 +94,7 @@ public partial class PerekPage : ContentPage
             SetAnalyticsScreenForPerek();
             if (_isMenuOpen) RefreshNavButtonVisuals();
             _ = UpdateArticlesCountAsync();
+            _ = _viewModel.LoadPerushimAsync(perekId);
             _ = _viewModel.PreloadAdjacentPasukimAsync(perekId);
         };
     }
@@ -1294,6 +1295,7 @@ public partial class PerekPage : ContentPage
 
         // Fire async tasks in the background — never block the next swipe
         _ = UpdateArticlesCountAsync();
+        _ = _viewModel.LoadPerushimAsync(perek.PerekId);
         _ = _viewModel.PreloadAdjacentPasukimAsync(perek.PerekId);
         if (_isShowingArticles)
         {
