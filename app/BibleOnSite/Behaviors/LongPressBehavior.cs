@@ -5,6 +5,8 @@ namespace BibleOnSite.Behaviors;
 
 /// <summary>
 /// A cross-platform long-press behavior using timer-based detection.
+/// On Android it also detects taps natively, because MAUI's TapGestureRecognizer
+/// fails to propagate taps through nested CarouselView > CollectionView templates.
 /// Checks scroll state to prevent triggering during scroll.
 /// </summary>
 public class LongPressBehavior : Behavior<View>
@@ -12,6 +14,7 @@ public class LongPressBehavior : Behavior<View>
     private View? _associatedView;
     private System.Timers.Timer? _longPressTimer;
     private bool _isPressed;
+    private bool _longPressFired;
 
     // Static list of all active behaviors for global cancellation
     private static readonly List<LongPressBehavior> _activeBehaviors = new();
@@ -59,6 +62,13 @@ public class LongPressBehavior : Behavior<View>
     }
 
     public event EventHandler<EventArgs>? LongPressed;
+
+    /// <summary>
+    /// Raised on Android when a short tap (Down → Up without long-press) is detected
+    /// via native touch events. Use instead of TapGestureRecognizer inside nested
+    /// CarouselView/CollectionView templates where MAUI gestures silently fail.
+    /// </summary>
+    public event EventHandler<EventArgs>? NativeTapped;
 
     /// <summary>
     /// Gets the view this behavior is attached to.
@@ -141,6 +151,16 @@ public class LongPressBehavior : Behavior<View>
                 break;
 
             case Android.Views.MotionEventActions.Up:
+                // If the finger lifted before the long-press timer fired,
+                // this is a normal tap.  Fire NativeTapped on the main thread.
+                if (_isPressed && !_longPressFired)
+                {
+                    MainThread.BeginInvokeOnMainThread(() =>
+                        NativeTapped?.Invoke(this, EventArgs.Empty));
+                }
+                CancelLongPressTimer();
+                break;
+
             case Android.Views.MotionEventActions.Cancel:
             case Android.Views.MotionEventActions.PointerUp:
                 CancelLongPressTimer();
@@ -164,6 +184,7 @@ public class LongPressBehavior : Behavior<View>
     private void StartLongPressTimer()
     {
         _isPressed = true;
+        _longPressFired = false;
         CleanupTimer();
 
         _longPressTimer = new System.Timers.Timer(LongPressDuration);
@@ -186,6 +207,8 @@ public class LongPressBehavior : Behavior<View>
         // Double-check scroll state before firing
         if (Pages.PerekPage.IsScrolling)
             return;
+
+        _longPressFired = true;
 
         MainThread.BeginInvokeOnMainThread(() =>
         {

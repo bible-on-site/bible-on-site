@@ -338,24 +338,6 @@ public partial class PerekPage : ContentPage
     /// <summary>
     /// Handles tap on pasuk - toggles selection if in selection mode.
     /// </summary>
-    /// <summary>
-    /// Resolves the pasuk number from a gesture event.
-    /// Prefers CommandParameter (fast), falls back to the sender's BindingContext
-    /// which is more reliable inside nested CarouselView > CollectionView templates
-    /// where CommandParameter binding can silently fail.
-    /// </summary>
-    private static int ResolvePasukNum(object? sender, object? commandParameter)
-    {
-        if (commandParameter is int p)
-            return p;
-
-        // Fallback: sender is the Border whose BindingContext is the Pasuk
-        if (sender is BindableObject bo && bo.BindingContext is Pasuk pasuk)
-            return pasuk.PasukNum;
-
-        return -1;
-    }
-
     private void OnPasukTapped(object? sender, TappedEventArgs e)
     {
         // Cancel any pending long-press timers (Android doesn't receive Up events in CollectionView)
@@ -365,14 +347,39 @@ public partial class PerekPage : ContentPage
         if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 300)
             return;
 
-        var pasukNum = ResolvePasukNum(sender, e.Parameter);
-        if (pasukNum <= 0) return;
-
-        // If in selection mode, tap toggles selection
-        if (_viewModel.SelectedPasukNums.Count > 0)
+        if (e.Parameter is int pasukNum)
         {
-            _viewModel.ToggleSelectedPasuk(pasukNum);
-            UpdatePasukSelection(sender, pasukNum);
+            // If in selection mode, tap toggles selection
+            if (_viewModel.SelectedPasukNums.Count > 0)
+            {
+                _viewModel.ToggleSelectedPasuk(pasukNum);
+                UpdatePasukSelection(sender, pasukNum);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Native tap handler fired by LongPressBehavior on Android.
+    /// MAUI's TapGestureRecognizer fails inside nested CarouselView > CollectionView
+    /// DataTemplates, so we detect taps via the same native Touch event that the
+    /// long-press behavior already hooks into.
+    /// </summary>
+    private void OnPasukNativeTapped(object? sender, EventArgs e)
+    {
+        // Skip tap if long press just happened
+        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 300)
+            return;
+
+        // Get the Pasuk from the behavior's associated view (the Border)
+        if (sender is LongPressBehavior behavior &&
+            behavior.AssociatedView?.BindingContext is Pasuk pasuk)
+        {
+            if (_viewModel.SelectedPasukNums.Count > 0)
+            {
+                _viewModel.ToggleSelectedPasuk(pasuk.PasukNum);
+                // Find the Border for visual update
+                UpdatePasukSelection(behavior.AssociatedView, pasuk.PasukNum);
+            }
         }
     }
 
@@ -382,17 +389,17 @@ public partial class PerekPage : ContentPage
     private void OnPasukRightClicked(object? sender, TappedEventArgs e)
     {
 #if WINDOWS
-        var pasukNum = ResolvePasukNum(sender, e.Parameter);
-        if (pasukNum <= 0) return;
-
-        // Don't set _lastLongPressTime - right-click doesn't need debounce
-        var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
-        _viewModel.ToggleSelectedPasuk(pasukNum);
-        UpdatePasukSelection(sender, pasukNum);
-        // Vibrate when entering selection mode
-        if (wasEmpty && _viewModel.SelectedPasukNums.Count > 0)
+        if (e.Parameter is int pasukNum)
         {
-            TriggerHapticFeedback();
+            // Don't set _lastLongPressTime - right-click doesn't need debounce
+            var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
+            _viewModel.ToggleSelectedPasuk(pasukNum);
+            UpdatePasukSelection(sender, pasukNum);
+            // Vibrate when entering selection mode
+            if (wasEmpty && _viewModel.SelectedPasukNums.Count > 0)
+            {
+                TriggerHapticFeedback();
+            }
         }
 #endif
     }

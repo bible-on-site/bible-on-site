@@ -219,10 +219,10 @@
                                             </Border.GestureRecognizers>
                                             <Border.Behaviors>
                                                 <behaviors:LongPressBehavior LongPressDuration="600"
-                                                                             LongPressed="OnPasukLongPressed"/>
+                                                                             LongPressed="OnPasukLongPressed"
+                                                                             NativeTapped="OnPasukNativeTapped"/>
                                             </Border.Behaviors>
-                                            <Grid ColumnDefinitions="40,*"
-                                                  InputTransparent="True">
+                                            <Grid ColumnDefinitions="40,*">
                                                 <Label Grid.Column="0"
                                                        Text="{Binding PasukNumHeb}"
                                                        FontSize="{DynamicResource PasukNumFontSize}"
