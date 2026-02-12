@@ -237,7 +237,7 @@
                                                            LineBreakMode="WordWrap"
                                                            LineHeight="1.4"/>
                                                     <VerticalStackLayout BindableLayout.ItemsSource="{Binding PerushNotes}"
-                                                                         Spacing="4"
+                                                                         Spacing="2"
                                                                          Margin="0,4,0,0">
                                                         <BindableLayout.ItemTemplate>
                                                             <DataTemplate x:DataType="models:PerushNoteDisplay">
