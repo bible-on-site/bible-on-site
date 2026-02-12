@@ -221,7 +221,8 @@
                                                 <behaviors:LongPressBehavior LongPressDuration="600"
                                                                              LongPressed="OnPasukLongPressed"/>
                                             </Border.Behaviors>
-                                            <Grid ColumnDefinitions="40,*">
+                                            <Grid ColumnDefinitions="40,*"
+                                                  InputTransparent="True">
                                                 <Label Grid.Column="0"
                                                        Text="{Binding PasukNumHeb}"
                                                        FontSize="{DynamicResource PasukNumFontSize}"

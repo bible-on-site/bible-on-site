@@ -142,45 +142,73 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
 
     private static void MapTextAlignment(HtmlViewHandler handler, HtmlView view)
     {
-        if (handler.PlatformView != null)
+        if (handler.PlatformView == null) return;
+
+        var isRtl = view.TextDirection == HtmlTextDirection.Rtl;
+
+        // For Justify + RTL we use TextAlignment.Gravity so that short/last
+        // lines fall back to the Gravity setting (right-aligned).
+        // JustificationMode.InterWord only stretches full lines.
+        if (view.TextAlignment == HtmlTextAlignment.Justify && isRtl)
+        {
+            handler.PlatformView.TextAlignment = Android.Views.TextAlignment.Gravity;
+            handler.PlatformView.Gravity = Android.Views.GravityFlags.Right | Android.Views.GravityFlags.Top;
+        }
+        else
         {
             handler.PlatformView.TextAlignment = view.TextAlignment switch
             {
                 HtmlTextAlignment.Center => Android.Views.TextAlignment.Center,
                 HtmlTextAlignment.End => Android.Views.TextAlignment.ViewEnd,
-                HtmlTextAlignment.Justify => Android.Views.TextAlignment.TextStart, // Justify is handled via HTML/CSS
+                HtmlTextAlignment.Justify => Android.Views.TextAlignment.TextStart,
                 _ => Android.Views.TextAlignment.TextStart
             };
 
-            // For justify, we need to use Justification mode on API 26+
-#pragma warning disable CA1416 // Platform compatibility (we check version above)
-            if (view.TextAlignment == HtmlTextAlignment.Justify &&
-                Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.O)
-            {
-                handler.PlatformView.JustificationMode = Android.Text.JustificationMode.InterWord;
-            }
-            else if (Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.O)
-            {
-                handler.PlatformView.JustificationMode = Android.Text.JustificationMode.None;
-            }
+            if (isRtl)
+                handler.PlatformView.Gravity = Android.Views.GravityFlags.Right | Android.Views.GravityFlags.Top;
+            else if (view.TextAlignment == HtmlTextAlignment.Center)
+                handler.PlatformView.Gravity = Android.Views.GravityFlags.CenterHorizontal | Android.Views.GravityFlags.Top;
+            else
+                handler.PlatformView.Gravity = Android.Views.GravityFlags.Left | Android.Views.GravityFlags.Top;
+        }
+
+        // For justify, use Justification mode on API 26+
+#pragma warning disable CA1416 // Platform compatibility
+        if (view.TextAlignment == HtmlTextAlignment.Justify &&
+            Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.O)
+        {
+            handler.PlatformView.JustificationMode = Android.Text.JustificationMode.InterWord;
+        }
+        else if (Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.O)
+        {
+            handler.PlatformView.JustificationMode = Android.Text.JustificationMode.None;
+        }
 #pragma warning restore CA1416
 
-            handler.UpdateContent();
-        }
+        handler.UpdateContent();
     }
 
     private static void MapTextDirection(HtmlViewHandler handler, HtmlView view)
     {
-        if (handler.PlatformView != null)
+        if (handler.PlatformView == null) return;
+
+        handler.PlatformView.TextDirection = view.TextDirection switch
         {
-            handler.PlatformView.TextDirection = view.TextDirection switch
-            {
-                HtmlTextDirection.Ltr => Android.Views.TextDirection.Ltr,
-                HtmlTextDirection.Rtl => Android.Views.TextDirection.Rtl,
-                _ => Android.Views.TextDirection.Locale
-            };
-            handler.UpdateContent();
-        }
+            HtmlTextDirection.Ltr => Android.Views.TextDirection.Ltr,
+            HtmlTextDirection.Rtl => Android.Views.TextDirection.Rtl,
+            _ => Android.Views.TextDirection.Locale
+        };
+
+        // Force native LayoutDirection so Gravity.Right/End resolves correctly
+        handler.PlatformView.LayoutDirection = view.TextDirection switch
+        {
+            HtmlTextDirection.Rtl => Android.Views.LayoutDirection.Rtl,
+            HtmlTextDirection.Ltr => Android.Views.LayoutDirection.Ltr,
+            _ => Android.Views.LayoutDirection.Locale
+        };
+
+        // Re-apply alignment (Gravity + TextAlignment depend on direction)
+        MapTextAlignment(handler, view);
     }
 
     private static void MapLineHeight(HtmlViewHandler handler, HtmlView view)

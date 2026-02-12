@@ -338,6 +338,24 @@ public partial class PerekPage : ContentPage
     /// <summary>
     /// Handles tap on pasuk - toggles selection if in selection mode.
     /// </summary>
+    /// <summary>
+    /// Resolves the pasuk number from a gesture event.
+    /// Prefers CommandParameter (fast), falls back to the sender's BindingContext
+    /// which is more reliable inside nested CarouselView > CollectionView templates
+    /// where CommandParameter binding can silently fail.
+    /// </summary>
+    private static int ResolvePasukNum(object? sender, object? commandParameter)
+    {
+        if (commandParameter is int p)
+            return p;
+
+        // Fallback: sender is the Border whose BindingContext is the Pasuk
+        if (sender is BindableObject bo && bo.BindingContext is Pasuk pasuk)
+            return pasuk.PasukNum;
+
+        return -1;
+    }
+
     private void OnPasukTapped(object? sender, TappedEventArgs e)
     {
         // Cancel any pending long-press timers (Android doesn't receive Up events in CollectionView)
@@ -347,14 +365,14 @@ public partial class PerekPage : ContentPage
         if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 300)
             return;
 
-        if (e.Parameter is int pasukNum)
+        var pasukNum = ResolvePasukNum(sender, e.Parameter);
+        if (pasukNum <= 0) return;
+
+        // If in selection mode, tap toggles selection
+        if (_viewModel.SelectedPasukNums.Count > 0)
         {
-            // If in selection mode, tap toggles selection
-            if (_viewModel.SelectedPasukNums.Count > 0)
-            {
-                _viewModel.ToggleSelectedPasuk(pasukNum);
-                UpdatePasukSelection(sender, pasukNum);
-            }
+            _viewModel.ToggleSelectedPasuk(pasukNum);
+            UpdatePasukSelection(sender, pasukNum);
         }
     }
 
@@ -364,17 +382,17 @@ public partial class PerekPage : ContentPage
     private void OnPasukRightClicked(object? sender, TappedEventArgs e)
     {
 #if WINDOWS
+        var pasukNum = ResolvePasukNum(sender, e.Parameter);
+        if (pasukNum <= 0) return;
+
         // Don't set _lastLongPressTime - right-click doesn't need debounce
-        if (e.Parameter is int pasukNum)
+        var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
+        _viewModel.ToggleSelectedPasuk(pasukNum);
+        UpdatePasukSelection(sender, pasukNum);
+        // Vibrate when entering selection mode
+        if (wasEmpty && _viewModel.SelectedPasukNums.Count > 0)
         {
-            var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
-            _viewModel.ToggleSelectedPasuk(pasukNum);
-            UpdatePasukSelection(sender, pasukNum);
-            // Vibrate when entering selection mode
-            if (wasEmpty && _viewModel.SelectedPasukNums.Count > 0)
-            {
-                TriggerHapticFeedback();
-            }
+            TriggerHapticFeedback();
         }
 #endif
     }
