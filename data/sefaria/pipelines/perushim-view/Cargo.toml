@@ -15,6 +15,7 @@ clap.workspace = true
 dotenvy.workspace = true
 chrono.workspace = true
 rusqlite.workspace = true
+flate2.workspace = true
 bson.workspace = true
 
 [features]

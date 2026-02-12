@@ -115,8 +115,22 @@ pub fn extract(docs: &[Document]) -> Extracted {
 
         if let Some(bson::Bson::Array(versions)) = doc.get("versions") {
             // Use the first version (usually only one after filtering)
-            if let Some(bson::Bson::Array(chapters)) = versions.first() {
-                flatten_chapters(&mut notes, perush_id, base_perek_id, chapters);
+            match versions.first() {
+                // Simple schema: versions[0] is a flat array of chapters
+                Some(bson::Bson::Array(chapters)) => {
+                    flatten_chapters(&mut notes, perush_id, base_perek_id, chapters);
+                }
+                // Complex schema (e.g. Ramban, Ibn Ezra on Torah): versions[0]
+                // is a Document with node keys like {"intro": [...], "default": [[...]]}
+                // The actual verse-by-verse commentary lives in the "default" node
+                // (or whichever node the schema marks as default).
+                Some(bson::Bson::Document(version_doc)) => {
+                    let default_key = find_default_node_key(doc);
+                    if let Some(bson::Bson::Array(chapters)) = version_doc.get(&default_key) {
+                        flatten_chapters(&mut notes, perush_id, base_perek_id, chapters);
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -126,6 +140,48 @@ pub fn extract(docs: &[Document]) -> Extracted {
         perushim,
         notes,
     }
+}
+
+/// Find the node key that contains the verse-by-verse commentary data
+/// in a complex-schema document.
+///
+/// Complex schemas have `schema.nodes` — an array of node descriptors.
+/// The commentary data lives in the node with `key: "default"` (Sefaria
+/// convention for the main content node). If no "default" is found,
+/// falls back to the first node with depth >= 3 (chapter/verse/comment
+/// structure), or just "default" as a last resort.
+fn find_default_node_key(doc: &Document) -> String {
+    if let Some(bson::Bson::Document(schema)) = doc.get("schema") {
+        if let Some(bson::Bson::Array(nodes)) = schema.get("nodes") {
+            // First pass: look for a node with key == "default"
+            for node in nodes {
+                if let bson::Bson::Document(node_doc) = node {
+                    if let Some(bson::Bson::String(key)) = node_doc.get("key") {
+                        if key == "default" {
+                            return key.clone();
+                        }
+                    }
+                }
+            }
+            // Second pass: look for a node with depth >= 3
+            // (chapter/verse/comment structure)
+            for node in nodes {
+                if let bson::Bson::Document(node_doc) = node {
+                    let depth = match node_doc.get("depth") {
+                        Some(bson::Bson::Int32(n)) => *n as i64,
+                        Some(bson::Bson::Int64(n)) => *n,
+                        _ => 0,
+                    };
+                    if depth >= 3 {
+                        if let Some(bson::Bson::String(key)) = node_doc.get("key") {
+                            return key.clone();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    "default".to_string()
 }
 
 /// Flatten chapter/verse/note arrays into Note rows.
@@ -273,6 +329,220 @@ fn parse_birth_year(value: Option<&bson::Bson>) -> Option<i64> {
         digits.parse().ok()
     } else {
         None
+    }
+}
+
+// ─── Tests ──────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bson::{bson, doc};
+
+    /// Helper: build a simple-schema pipeline output document.
+    /// `chapters` is a Bson::Array of chapters (each chapter = array of verses).
+    fn simple_schema_doc(name: &str, sefer: i64, chapters: bson::Bson) -> Document {
+        doc! {
+            "name": name,
+            "authors": [name],
+            "sefer": sefer,
+            "versions": [chapters],
+            "schema": {
+                "depth": 3,
+                "addressTypes": ["Perek", "Pasuk", "Integer"],
+                "sectionNames": ["Chapter", "Verse", "Comment"]
+            }
+        }
+    }
+
+    /// Helper: build a complex-schema pipeline output document.
+    /// `node_key` is the key inside versions[0] that holds the chapters (e.g. "default").
+    fn complex_schema_doc(
+        name: &str,
+        sefer: i64,
+        node_key: &str,
+        chapters: bson::Bson,
+    ) -> Document {
+        let mut version_doc = doc! {
+            "intro": [["intro text"]],
+        };
+        version_doc.insert(node_key.to_string(), chapters);
+
+        doc! {
+            "name": name,
+            "authors": [name],
+            "sefer": sefer,
+            "versions": [version_doc],
+            "schema": {
+                "nodes": [
+                    { "key": "intro", "depth": 1 },
+                    { "key": node_key, "depth": 3, "addressTypes": ["Perek", "Pasuk", "Integer"] }
+                ]
+            }
+        }
+    }
+
+    #[test]
+    fn simple_schema_extraction() {
+        // Two chapters: ch1 has 2 verses (strings), ch2 has 1 verse
+        let chapters = bson!([
+            ["note ch1 v1", "note ch1 v2"],
+            ["note ch2 v1"]
+        ]);
+        let doc = simple_schema_doc("רש\"י", 1, chapters);
+        let result = extract(&[doc]);
+
+        assert_eq!(result.parshanim.len(), 1);
+        assert_eq!(result.perushim.len(), 1);
+        assert_eq!(result.notes.len(), 3);
+
+        // sefer 1 (Bereshit) → base_perek_id = 1
+        assert_eq!(result.notes[0].perek_id, 1);
+        assert_eq!(result.notes[0].pasuk, 1);
+        assert_eq!(result.notes[0].note_content, "note ch1 v1");
+
+        assert_eq!(result.notes[1].perek_id, 1);
+        assert_eq!(result.notes[1].pasuk, 2);
+        assert_eq!(result.notes[1].note_content, "note ch1 v2");
+
+        assert_eq!(result.notes[2].perek_id, 2);
+        assert_eq!(result.notes[2].pasuk, 1);
+        assert_eq!(result.notes[2].note_content, "note ch2 v1");
+    }
+
+    #[test]
+    fn complex_schema_default_key() {
+        // Ramban-like: versions[0] is a Document with "default" holding chapters
+        let chapters = bson!([
+            ["ramban ch1 v1", "ramban ch1 v2"],
+            ["ramban ch2 v1"]
+        ]);
+        let doc = complex_schema_doc("רמב\"ן", 1, "default", chapters);
+        let result = extract(&[doc]);
+
+        assert_eq!(result.parshanim.len(), 1);
+        assert_eq!(result.perushim.len(), 1);
+        assert_eq!(result.notes.len(), 3, "complex schema notes should be extracted");
+
+        assert_eq!(result.notes[0].perek_id, 1);
+        assert_eq!(result.notes[0].pasuk, 1);
+        assert_eq!(result.notes[0].note_content, "ramban ch1 v1");
+
+        assert_eq!(result.notes[1].perek_id, 1);
+        assert_eq!(result.notes[1].pasuk, 2);
+        assert_eq!(result.notes[1].note_content, "ramban ch1 v2");
+
+        assert_eq!(result.notes[2].perek_id, 2);
+        assert_eq!(result.notes[2].pasuk, 1);
+        assert_eq!(result.notes[2].note_content, "ramban ch2 v1");
+    }
+
+    #[test]
+    fn complex_schema_fallback_to_depth() {
+        // Non-"default" key but depth >= 3 → should still find it
+        let chapters = bson!([
+            ["custom ch1 v1"]
+        ]);
+        let doc = complex_schema_doc("test perush", 1, "commentary", chapters);
+        let result = extract(&[doc]);
+
+        assert_eq!(result.notes.len(), 1, "should find node by depth >= 3 fallback");
+        assert_eq!(result.notes[0].note_content, "custom ch1 v1");
+    }
+
+    #[test]
+    fn empty_versions_produces_no_notes() {
+        let doc = doc! {
+            "name": "empty perush",
+            "authors": ["test"],
+            "sefer": 1,
+            "versions": [],
+            "schema": { "depth": 3 }
+        };
+        let result = extract(&[doc]);
+
+        assert_eq!(result.parshanim.len(), 1);
+        assert_eq!(result.perushim.len(), 1);
+        assert_eq!(result.notes.len(), 0);
+    }
+
+    #[test]
+    fn perush_deduplication_across_sefarim() {
+        // Same perush name on two different sefarim → one parshan, one perush, different perek_ids
+        let ch1 = bson!([["note sefer1"]]);
+        let ch2 = bson!([["note sefer2"]]);
+        let doc1 = simple_schema_doc("רש\"י", 1, ch1);
+        let doc2 = simple_schema_doc("רש\"י", 2, ch2);
+        let result = extract(&[doc1, doc2]);
+
+        assert_eq!(result.parshanim.len(), 1);
+        assert_eq!(result.perushim.len(), 1);
+        assert_eq!(result.notes.len(), 2);
+
+        // sefer 1 → perek_id 1, sefer 2 (Shemot) → perek_id 51
+        assert_eq!(result.notes[0].perek_id, 1);
+        assert_eq!(result.notes[1].perek_id, 51);
+    }
+
+    #[test]
+    fn nested_array_notes_flattened() {
+        // Verse with multiple notes (array of strings)
+        let chapters = bson!([
+            [
+                ["note1", "note2", "note3"]
+            ]
+        ]);
+        let doc = simple_schema_doc("test", 1, chapters);
+        let result = extract(&[doc]);
+
+        assert_eq!(result.notes.len(), 3);
+        assert_eq!(result.notes[0].note_idx, 0);
+        assert_eq!(result.notes[0].note_content, "note1");
+        assert_eq!(result.notes[1].note_idx, 1);
+        assert_eq!(result.notes[2].note_idx, 2);
+    }
+
+    #[test]
+    fn mixed_simple_and_complex_perushim() {
+        // One simple + one complex in the same batch
+        let simple_chapters = bson!([["simple note"]]);
+        let complex_chapters = bson!([["complex note"]]);
+
+        let doc1 = simple_schema_doc("רש\"י", 1, simple_chapters);
+        let doc2 = complex_schema_doc("רמב\"ן", 1, "default", complex_chapters);
+
+        let result = extract(&[doc1, doc2]);
+
+        assert_eq!(result.parshanim.len(), 2);
+        assert_eq!(result.perushim.len(), 2);
+        assert_eq!(result.notes.len(), 2);
+
+        assert_eq!(result.notes[0].note_content, "simple note");
+        assert_eq!(result.notes[1].note_content, "complex note");
+    }
+
+    #[test]
+    fn unknown_sefer_skipped() {
+        let chapters = bson!([["note"]]);
+        let doc = simple_schema_doc("test", 99, chapters); // sefer 99 doesn't exist
+        let result = extract(&[doc]);
+
+        assert_eq!(result.parshanim.len(), 1);
+        assert_eq!(result.perushim.len(), 1);
+        assert_eq!(result.notes.len(), 0, "unknown sefer should produce no notes");
+    }
+
+    #[test]
+    fn empty_and_whitespace_notes_skipped() {
+        let chapters = bson!([
+            ["", "  ", "real note", "  "]
+        ]);
+        let doc = simple_schema_doc("test", 1, chapters);
+        let result = extract(&[doc]);
+
+        assert_eq!(result.notes.len(), 1);
+        assert_eq!(result.notes[0].note_content, "real note");
+        assert_eq!(result.notes[0].pasuk, 3); // 1-indexed: the 3rd verse has content
     }
 }
 

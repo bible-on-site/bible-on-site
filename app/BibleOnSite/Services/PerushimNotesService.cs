@@ -5,8 +5,11 @@ namespace BibleOnSite.Services;
 
 /// <summary>
 /// Service for loading perushim notes (commentary text per pasuk).
-/// Notes are delivered via Play Asset Delivery (PAD) on Android or HTTP fallback — not bundled.
-/// If the notes DB is not present, returns empty; download can be triggered separately.
+/// Notes are delivered via Play Asset Delivery (PAD) as an on-demand asset pack bundled in the AAB.
+/// Data updates are coupled to app releases — updating perushim data requires a new app version
+/// and AAB upload to Google Play. On app update, the client compares build_timestamp in the
+/// local DB vs the PAD version and auto-upgrades if the PAD copy is newer.
+/// If the notes DB is not yet available, returns empty; PAD download can be triggered separately.
 /// </summary>
 public class PerushimNotesService
 {
@@ -34,7 +37,7 @@ public class PerushimNotesService
 
     /// <summary>
     /// Initializes the notes connection. Does not download — only opens if file exists.
-    /// On Android, also copies from PAD if the pack is already available.
+    /// On Android, also copies from PAD if the pack is already available or has a newer build.
     /// </summary>
     public async Task InitializeAsync()
     {
@@ -45,6 +48,7 @@ public class PerushimNotesService
 
         if (!File.Exists(dbPath))
         {
+            // No local DB → try to copy from PAD if already available
             var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName);
             if (padPath != null && await TryCopyFromPadAsync(padPath, dbPath))
             {
@@ -58,6 +62,8 @@ public class PerushimNotesService
         }
         else
         {
+            // Local DB exists → check if PAD has a newer build (e.g. after app update)
+            await TryUpgradeFromPadAsync(dbPath);
             _connection = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
             _notesMissing = false;
         }
@@ -101,6 +107,64 @@ public class PerushimNotesService
 
         Console.Error.WriteLine("Perushim notes not available via PAD. Publish an AAB with the perushim_notes asset pack.");
         return false;
+    }
+
+    /// <summary>
+    /// Compares build_timestamp in local DB vs PAD DB; overwrites local if PAD is newer.
+    /// </summary>
+    private async Task TryUpgradeFromPadAsync(string localDbPath)
+    {
+        try
+        {
+            var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName);
+            if (padPath == null) return;
+
+            var padDbPath = Path.Combine(padPath, NotesDbName);
+            if (!File.Exists(padDbPath)) return;
+
+            var localTs = await GetBuildTimestampAsync(localDbPath);
+            var padTs = await GetBuildTimestampAsync(padDbPath);
+
+            if (padTs > localTs)
+            {
+                // Close any existing connection before overwriting
+                if (_connection != null)
+                {
+                    await _connection.CloseAsync();
+                    _connection = null;
+                }
+                await Task.Run(() => File.Copy(padDbPath, localDbPath, overwrite: true));
+                Console.WriteLine($"Perushim notes upgraded from PAD (local={localTs}, pad={padTs})");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Failed to check/upgrade perushim notes from PAD: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Reads the build_timestamp (Unix epoch seconds) from a perushim notes SQLite _metadata table.
+    /// Returns 0 if unavailable or on error.
+    /// </summary>
+    private static async Task<long> GetBuildTimestampAsync(string dbPath)
+    {
+        if (!File.Exists(dbPath)) return 0;
+        SQLiteAsyncConnection? conn = null;
+        try
+        {
+            conn = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
+            var rows = await conn.QueryAsync<MetadataRow>(
+                "SELECT value AS Value FROM _metadata WHERE key = 'build_timestamp'");
+            if (rows.Count > 0 && long.TryParse(rows[0].Value, out var ts))
+                return ts;
+        }
+        catch { /* DB may not have _metadata table (legacy) */ }
+        finally
+        {
+            if (conn != null) await conn.CloseAsync();
+        }
+        return 0;
     }
 
     private static async Task<bool> TryCopyFromPadAsync(string padAssetsPath, string dbPath)
@@ -165,6 +229,12 @@ public class PerushimNotesService
                 };
             })
             .ToList();
+    }
+
+    private class MetadataRow
+    {
+        [Column("Value")]
+        public string? Value { get; set; }
     }
 
     private class IdRow

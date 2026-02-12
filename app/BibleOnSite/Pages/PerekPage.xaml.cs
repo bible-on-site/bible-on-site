@@ -89,12 +89,11 @@ public partial class PerekPage : ContentPage
             _carouselInitializing = false;
 
             // Post-navigation housekeeping (ViewModel state is already set by
-            // NavigateToPerekAsync before this event fires)
+            // NavigateToPerekAsync before this event fires, including perushim)
             UpdateSelectionBar();
             SetAnalyticsScreenForPerek();
             if (_isMenuOpen) RefreshNavButtonVisuals();
             _ = UpdateArticlesCountAsync();
-            _ = _viewModel.LoadPerushimAsync(perekId);
             _ = _viewModel.PreloadAdjacentPasukimAsync(perekId);
         };
     }

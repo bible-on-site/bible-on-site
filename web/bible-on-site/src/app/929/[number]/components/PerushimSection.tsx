@@ -76,7 +76,7 @@ export function PerushimSection({
 				{safePerushim.length === 0 ? (
 					<p className={styles.emptyMessage}>אין פרשנות לפרק זה</p>
 				) : loading ? (
-					<p className={styles.emptyMessage}>טוען פירוש...</p>
+					<p className={styles.emptyMessage}>מתחבר לפירוש...</p>
 				) : (
 					safePerushim.map((perush) => (
 						<button

@@ -82,6 +82,12 @@ public partial class PerekViewModel : ObservableObject
 
     private List<PerekPerushNote> _perushNotesCache = new();
 
+    /// <summary>
+    /// Pre-loaded perushim data keyed by perekId.
+    /// Populated by PreloadAdjacentPerushimAsync so swipe navigation is instant.
+    /// </summary>
+    private readonly Dictionary<int, PreloadedPerushimData> _perushimPreloadCache = new();
+
     /// <summary>Carousel collection holding prev/current/next perek for swipe navigation.</summary>
     [ObservableProperty]
     private System.Collections.ObjectModel.ObservableCollection<Perek> _carouselPerakim = new();
@@ -234,7 +240,7 @@ public partial class PerekViewModel : ObservableObject
 
     /// <summary>
     /// Loads perushim (commentaries) for the current perek.
-    /// Catalog is bundled; notes come from PAD or HTTP on-demand.
+    /// Uses preload cache if available (adjacent perakim), otherwise hits SQLite.
     /// Previously checked perushim that are also available in the new perek stay checked.
     /// </summary>
     public async Task LoadPerushimAsync(int perekId)
@@ -250,40 +256,73 @@ public partial class PerekViewModel : ObservableObject
         // Remember which perushim the user had checked so we can preserve them
         var previouslyChecked = new HashSet<int>(CheckedPerushim);
 
-        Perushim = new List<Perush>();
-        _perushNotesCache = new List<PerekPerushNote>();
-
         if (!PerushimNotesAvailable || !PerushimCatalogAvailable)
         {
+            _perushNotesCache = new List<PerekPerushNote>();
+            // Set CheckedPerushim BEFORE Perushim so the CollectionView sees correct state
             CheckedPerushim = new List<int>();
+            Perushim = new List<Perush>();
             FillFilteredPerushContents();
             return;
         }
 
-        var perushIds = await PerushimNotesService.Instance.GetPerushIdsForPerekAsync(perekId);
+        // Try the preload cache first (populated by PreloadAdjacentPerushimAsync)
+        PreloadedPerushimData? cached = null;
+        lock (_perushimPreloadCache)
+        {
+            _perushimPreloadCache.TryGetValue(perekId, out cached);
+        }
+
+        List<int> perushIds;
+        Dictionary<int, Perush> perushById;
+        List<PerekPerushNote> notes;
+
+        if (cached != null)
+        {
+            perushIds = cached.PerushIds;
+            perushById = cached.PerushById;
+            notes = cached.Notes;
+        }
+        else
+        {
+            perushIds = await PerushimNotesService.Instance.GetPerushIdsForPerekAsync(perekId);
+            if (perushIds.Count == 0)
+            {
+                _perushNotesCache = new List<PerekPerushNote>();
+                CheckedPerushim = new List<int>();
+                Perushim = new List<Perush>();
+                FillFilteredPerushContents();
+                return;
+            }
+            perushById = await PerushimCatalogService.Instance.GetPerushimByIdsAsync(perushIds);
+            notes = await PerushimNotesService.Instance.LoadNotesForPerekAsync(perekId, perushById);
+        }
+
         if (perushIds.Count == 0)
         {
+            _perushNotesCache = new List<PerekPerushNote>();
             CheckedPerushim = new List<int>();
+            Perushim = new List<Perush>();
             FillFilteredPerushContents();
             return;
         }
-
-        var perushById = await PerushimCatalogService.Instance.GetPerushimByIdsAsync(perushIds);
-        var notes = await PerushimNotesService.Instance.LoadNotesForPerekAsync(perekId, perushById);
 
         _perushNotesCache = notes;
 
         // Order perushim by priority (Targum first, Rashi second, etc.)
-        Perushim = perushIds
+        var orderedPerushim = perushIds
             .Select(id => perushById.GetValueOrDefault(id))
             .Where(p => p != null)
             .OrderBy(p => p!.Priority)
             .Cast<Perush>()
             .ToList();
 
-        // Preserve checked perushim that are also available in the new perek
+        // Preserve checked perushim that are also available in the new perek.
+        // Set CheckedPerushim BEFORE Perushim so the CollectionView binding
+        // sees the correct checked state when it re-renders items.
         var availableIds = new HashSet<int>(perushIds);
         CheckedPerushim = previouslyChecked.Where(id => availableIds.Contains(id)).ToList();
+        Perushim = orderedPerushim;
 
         FillFilteredPerushContents();
         OnPropertyChanged(nameof(PerushimEmptyMessage));
@@ -409,6 +448,8 @@ public partial class PerekViewModel : ObservableObject
                 await EnsurePasukimLoadedAsync(targetPerek);
                 // Update ViewModel state (Perek, PerekId, last-learnt, etc.)
                 SetPerek(targetPerek);
+                // Load perushim before scrolling so the UI doesn't flash
+                await LoadPerushimAsync(perekId);
                 // Ask code-behind to scroll without animation
                 NavigationRequested?.Invoke(this, perekId);
             }
@@ -492,6 +533,9 @@ public partial class PerekViewModel : ObservableObject
                 }
             }
 
+            // Also preload perushim notes for the buffer so swipe is instant
+            await PreloadAdjacentPerushimAsync(bufferStart, bufferEnd);
+
             return result;
         });
 
@@ -519,7 +563,8 @@ public partial class PerekViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Pre-loads pasukim for perakim adjacent to the given center, so the next swipe is instant.
+    /// Pre-loads pasukim AND perushim notes for perakim adjacent to the given center,
+    /// so the next swipe is instant (no two-step flash).
     /// Runs in the background — never blocks the UI.
     /// </summary>
     public Task PreloadAdjacentPasukimAsync(int centerPerekId)
@@ -540,8 +585,58 @@ public partial class PerekViewModel : ObservableObject
                 }
             }
 
+            // Also preload perushim notes into the cache
+            await PreloadAdjacentPerushimAsync(start, end);
+
             Console.WriteLine($"[Carousel] PreloadAdjacent [{start}..{end}] center={centerPerekId}");
         });
+    }
+
+    /// <summary>
+    /// Preloads perushim data (IDs, catalog metadata, notes) for a range of perakim
+    /// into <see cref="_perushimPreloadCache"/> so <see cref="LoadPerushimAsync"/>
+    /// can use it instantly on swipe.
+    /// </summary>
+    private async Task PreloadAdjacentPerushimAsync(int start, int end)
+    {
+        if (!PerushimNotesService.Instance.IsAvailable || !PerushimCatalogService.Instance.IsAvailable)
+            return;
+
+        for (var id = start; id <= end; id++)
+        {
+            bool alreadyCached;
+            lock (_perushimPreloadCache)
+            {
+                alreadyCached = _perushimPreloadCache.ContainsKey(id);
+            }
+            if (alreadyCached) continue;
+
+            try
+            {
+                var perushIds = await PerushimNotesService.Instance.GetPerushIdsForPerekAsync(id);
+                if (perushIds.Count == 0)
+                {
+                    lock (_perushimPreloadCache)
+                    {
+                        _perushimPreloadCache[id] = new PreloadedPerushimData(
+                            new List<int>(), new Dictionary<int, Perush>(), new List<PerekPerushNote>());
+                    }
+                    continue;
+                }
+
+                var perushById = await PerushimCatalogService.Instance.GetPerushimByIdsAsync(perushIds);
+                var notes = await PerushimNotesService.Instance.LoadNotesForPerekAsync(id, perushById);
+
+                lock (_perushimPreloadCache)
+                {
+                    _perushimPreloadCache[id] = new PreloadedPerushimData(perushIds, perushById, notes);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[Carousel] PreloadPerushim perekId={id} failed: {ex.Message}");
+            }
+        }
     }
 
 #endif
@@ -659,3 +754,11 @@ public partial class PerekViewModel : ObservableObject
 
     #endregion
 }
+
+/// <summary>
+/// Cached perushim data for a single perek, used by the preload buffer.
+/// </summary>
+internal record PreloadedPerushimData(
+    List<int> PerushIds,
+    Dictionary<int, Perush> PerushById,
+    List<PerekPerushNote> Notes);

@@ -98,10 +98,24 @@
 		<BundleResource Include="Platforms\iOS\GoogleService-Info.plist" />
 	</ItemGroup>
 
-	<!-- Play Asset Delivery for Android: on-demand perushim notes -->
+	<!-- Play Asset Delivery for Android: on-demand perushim notes.
+	     Perushim data is bundled in the AAB as a PAD on-demand asset pack.
+	     Data updates require a new app version + AAB upload to Google Play —
+	     there is no independent data push mechanism. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<PackageReference Include="Xamarin.Google.Android.Play.Asset.Delivery" Version="2.3.0.2" />
 	</ItemGroup>
+
+	<!-- Auto-decompress perushim notes .gz → .sqlite if needed (checked out from git as compressed).
+	     Calls the devops setup script which has the canonical decompress logic.
+	     WorkingDirectory must be devops/ so that tsx is resolvable from devops/node_modules. -->
+	<Target Name="DecompressPerushimNotes" BeforeTargets="Build"
+		Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND
+			!Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND
+			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')">
+		<Exec Command="node --import tsx setup-dev-env.mts decompress-perushim-notes"
+			WorkingDirectory="$(MSBuildProjectDirectory)/../../devops" />
+	</Target>
 
 	<!-- Perushim notes: PAD on-demand asset pack (Android only). Run perushim-view pipeline to generate. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')">
