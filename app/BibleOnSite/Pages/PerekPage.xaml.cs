@@ -622,7 +622,7 @@ public partial class PerekPage : ContentPage
 
         // Change back to hamburger
         CircularMenuButton.Text = "☰";
-        CircularMenuButton.BackgroundColor = Color.FromArgb("#512BD4");
+        CircularMenuButton.BackgroundColor = (Color)Application.Current!.Resources["Primary"];
 
         // Animate FAB rotation and fade out all buttons
         var animations = new List<Task>
@@ -1286,7 +1286,7 @@ public partial class PerekPage : ContentPage
                 b.InputTransparent = true;
             }
             CircularMenuButton.Text = "☰";
-            CircularMenuButton.BackgroundColor = Color.FromArgb("#512BD4");
+            CircularMenuButton.BackgroundColor = (Color)Application.Current!.Resources["Primary"];
             CircularMenuButton.Rotation = 0;
         }
 
