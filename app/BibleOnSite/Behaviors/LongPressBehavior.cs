@@ -15,6 +15,10 @@ public class LongPressBehavior : Behavior<View>
     private System.Timers.Timer? _longPressTimer;
     private bool _isPressed;
     private bool _longPressFired;
+    // Tracks whether a finger is actively down.  Unlike _isPressed (which
+    // is cleared by CancelLongPressTimer during scroll), this is only
+    // cleared on Up/Cancel so we can detect taps even after scroll-cancel.
+    private bool _touchActive;
 
     // Static list of all active behaviors for global cancellation
     private static readonly List<LongPressBehavior> _activeBehaviors = new();
@@ -143,25 +147,35 @@ public class LongPressBehavior : Behavior<View>
         switch (action)
         {
             case Android.Views.MotionEventActions.Down:
-                // Only start timer if not currently scrolling
+                _touchActive = true;
                 if (!Pages.PerekPage.IsScrolling)
                 {
                     StartLongPressTimer();
                 }
-                break;
+                // Claim the touch so we receive Up (needed for tap detection).
+                // The RecyclerView can still intercept via onInterceptTouchEvent
+                // when it detects a scroll gesture — it sends Cancel to us and
+                // takes over.
+                e.Handled = true;
+                return;
 
             case Android.Views.MotionEventActions.Up:
                 // If the finger lifted before the long-press timer fired,
-                // this is a normal tap.  Fire NativeTapped on the main thread.
-                if (_isPressed && !_longPressFired)
+                // this is a normal tap.  Use _touchActive (not _isPressed)
+                // because _isPressed may be cleared by Move-scroll cancellation.
+                if (_touchActive && !_longPressFired)
                 {
-                    MainThread.BeginInvokeOnMainThread(() =>
-                        NativeTapped?.Invoke(this, EventArgs.Empty));
+                    NativeTapped?.Invoke(this, EventArgs.Empty);
                 }
+                _touchActive = false;
                 CancelLongPressTimer();
                 break;
 
             case Android.Views.MotionEventActions.Cancel:
+                _touchActive = false;
+                CancelLongPressTimer();
+                break;
+
             case Android.Views.MotionEventActions.PointerUp:
                 CancelLongPressTimer();
                 break;
@@ -174,7 +188,7 @@ public class LongPressBehavior : Behavior<View>
                 }
                 break;
         }
-        e.Handled = false; // Allow other gestures
+        e.Handled = false;
     }
 #else
     private void AttachNativeEvents() { }

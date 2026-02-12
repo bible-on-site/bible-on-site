@@ -340,7 +340,14 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private void OnPasukTapped(object? sender, TappedEventArgs e)
     {
-        // Cancel any pending long-press timers (Android doesn't receive Up events in CollectionView)
+#if ANDROID
+        // On Android, taps are handled natively via LongPressBehavior.NativeTapped
+        // because (a) MAUI's TapGestureRecognizer fails in nested CarouselView >
+        // CollectionView and (b) with e.Handled=true on Down the MAUI gesture also
+        // fires after a long-press release, immediately undoing the selection.
+        return;
+#endif
+        // Cancel any pending long-press timers
         LongPressBehavior.CancelAllPending();
 
         // Skip tap if long press just happened (prevents tap-on-release from toggling selection off)
@@ -377,7 +384,6 @@ public partial class PerekPage : ContentPage
             if (_viewModel.SelectedPasukNums.Count > 0)
             {
                 _viewModel.ToggleSelectedPasuk(pasuk.PasukNum);
-                // Find the Border for visual update
                 UpdatePasukSelection(behavior.AssociatedView, pasuk.PasukNum);
             }
         }
