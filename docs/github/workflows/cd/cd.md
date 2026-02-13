@@ -17,6 +17,8 @@ Triggered by `shared-release.yml` after Website or API release.
 2. Push to AWS ECR with version tag + `latest`
 3. ECS auto-deploys via EventBridge (watches `latest` tag)
 
+**Deployment resilience:** With a single ECS task (`DesiredCount: 1`), rolling updates may briefly interrupt traffic. If zero-downtime deployments become necessary, consider running the service with **at least 2 tasks** so one stays up while the other is replaced. See [Deployment incident analysis 2026-02-10](../../../aws/deployment-downtime-2026-02-10.md) for background and options.
+
 ## App Deployment (`cd-app.yml`)
 
 Triggered by `release_app` job in `ci.yml` after App CI passes.

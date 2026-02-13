@@ -82,7 +82,7 @@ Resources:
       ClusterName: bible-on-site-cluster
       ClusterSettings:
         - Name: containerInsights
-          Value: disabled # Enable for production monitoring (adds cost)
+          Value: enabled # Required for deployment/health CloudWatch alarms (see cloudwatch.yaml)
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -201,11 +201,13 @@ Resources:
           HealthCheck:
             Command:
               - CMD-SHELL
-              - curl -f http://localhost:3000/api/health/ready || exit 1
+              # Use /api/health (lightweight liveness). Never curl the homepage.
+              # Use localhost (not 127.0.0.1) for clarity and consistency.
+              - curl -sf --max-time 5 http://localhost:3000/api/health > /dev/null || exit 1
             Interval: 30
             Timeout: 10
-            Retries: 3
-            StartPeriod: 60 # Give container 60s to start before health checks count
+            Retries: 5
+            StartPeriod: 120 # Grace period for container startup before health checks count
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -214,6 +216,10 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
           Environment:
+            # HOSTNAME must be 0.0.0.0 so Next.js binds to all interfaces.
+            # The Dockerfile ENV can be overridden by Fargate; set it explicitly here.
+            - Name: HOSTNAME
+              Value: "0.0.0.0"
             # NEXT_PUBLIC_ENV: Enables production features like Google Analytics
             - Name: NEXT_PUBLIC_ENV
               Value: production
@@ -239,6 +245,7 @@ Resources:
       ServiceName: bible-on-site-website
       Cluster: !Ref ECSCluster
       TaskDefinition: !Ref WebsiteTaskDefinition
+      # DesiredCount: 1 can cause ~1-3 min downtime during rolling deploy. Use 2+ for zero-downtime. See docs/aws/deployment-downtime-2026-02-10.md
       DesiredCount: 1
       LaunchType: FARGATE
       PlatformVersion: LATEST
