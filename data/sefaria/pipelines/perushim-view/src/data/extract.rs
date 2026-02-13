@@ -331,6 +331,66 @@ fn parse_birth_year(value: Option<&bson::Bson>) -> Option<i64> {
     }
 }
 
+/// Derive display priority with special ordering rules:
+/// - Targum variants (תרגום): priority 0-99 (first, ordered chronologically among themselves)
+/// - Rashi (רש"י): priority 100 (second)
+/// - All others: chronological by composition date starting from 200
+///
+/// This matches the legacy app ordering where Targum always appears first,
+/// then Rashi, then other commentaries by chronological order.
+fn derive_priority(perush_name: &str, comp_date: Option<&bson::Bson>) -> i64 {
+    // Special handling for Targum (all variants first)
+    if perush_name.contains("תרגום") {
+        // All Targumim must be < 100 to appear before Rashi
+        // Map their chronological order (0-600 CE) to 0-99 range
+        let year = extract_year_from_comp_date(comp_date);
+        return if year < 9999 {
+            // Scale ancient years (0-600) to 0-99
+            // 0 → 0, 80 → 13, 150 → 25, 380 → 63, 600 → 99
+            ((year as f64 / 600.0) * 99.0).round() as i64
+        } else {
+            50 // Default for Targum without date (middle of range)
+        };
+    }
+
+    // Special handling for Rashi (second after all Targumim)
+    if perush_name == "רש\"י" {
+        return 100;
+    }
+
+    // All others: chronological, starting from 200
+    let year = extract_year_from_comp_date(comp_date);
+    if year < 9999 {
+        200 + year
+    } else {
+        9999 // Unknown dates last
+    }
+}
+
+/// Extract the first year from a composition date field.
+/// Handles formats like "[1155, 1165]", "1040", "[0, 600]", etc.
+fn extract_year_from_comp_date(value: Option<&bson::Bson>) -> i64 {
+    let s = bson_to_optional_string(value).unwrap_or_default();
+
+    // Handle array format like "[80, 120]" or "[1155, 1165]"
+    // Extract first complete number (not just first 4 digits)
+    let mut current_number = String::new();
+    for ch in s.chars() {
+        if ch.is_ascii_digit() {
+            current_number.push(ch);
+        } else if !current_number.is_empty() {
+            // Hit non-digit after collecting digits - we have first number
+            break;
+        }
+    }
+
+    if !current_number.is_empty() {
+        current_number.parse().unwrap_or(9999)
+    } else {
+        9999
+    }
+}
+
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -542,65 +602,5 @@ mod tests {
         assert_eq!(result.notes.len(), 1);
         assert_eq!(result.notes[0].note_content, "real note");
         assert_eq!(result.notes[0].pasuk, 3); // 1-indexed: the 3rd verse has content
-    }
-}
-
-/// Derive display priority with special ordering rules:
-/// - Targum variants (תרגום): priority 0-99 (first, ordered chronologically among themselves)
-/// - Rashi (רש"י): priority 100 (second)
-/// - All others: chronological by composition date starting from 200
-///
-/// This matches the legacy app ordering where Targum always appears first,
-/// then Rashi, then other commentaries by chronological order.
-fn derive_priority(perush_name: &str, comp_date: Option<&bson::Bson>) -> i64 {
-    // Special handling for Targum (all variants first)
-    if perush_name.contains("תרגום") {
-        // All Targumim must be < 100 to appear before Rashi
-        // Map their chronological order (0-600 CE) to 0-99 range
-        let year = extract_year_from_comp_date(comp_date);
-        return if year < 9999 {
-            // Scale ancient years (0-600) to 0-99
-            // 0 → 0, 80 → 13, 150 → 25, 380 → 63, 600 → 99
-            ((year as f64 / 600.0) * 99.0).round() as i64
-        } else {
-            50 // Default for Targum without date (middle of range)
-        };
-    }
-
-    // Special handling for Rashi (second after all Targumim)
-    if perush_name == "רש\"י" {
-        return 100;
-    }
-
-    // All others: chronological, starting from 200
-    let year = extract_year_from_comp_date(comp_date);
-    if year < 9999 {
-        200 + year
-    } else {
-        9999 // Unknown dates last
-    }
-}
-
-/// Extract the first year from a composition date field.
-/// Handles formats like "[1155, 1165]", "1040", "[0, 600]", etc.
-fn extract_year_from_comp_date(value: Option<&bson::Bson>) -> i64 {
-    let s = bson_to_optional_string(value).unwrap_or_default();
-
-    // Handle array format like "[80, 120]" or "[1155, 1165]"
-    // Extract first complete number (not just first 4 digits)
-    let mut current_number = String::new();
-    for ch in s.chars() {
-        if ch.is_ascii_digit() {
-            current_number.push(ch);
-        } else if !current_number.is_empty() {
-            // Hit non-digit after collecting digits - we have first number
-            break;
-        }
-    }
-
-    if !current_number.is_empty() {
-        current_number.parse().unwrap_or(9999)
-    } else {
-        9999
     }
 }
