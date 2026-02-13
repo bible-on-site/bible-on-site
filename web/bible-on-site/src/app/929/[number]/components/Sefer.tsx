@@ -131,12 +131,16 @@ const Sefer = (props: {
 				return `/929/${id}?book`;
 			},
 			routeToPage: (route) => {
-				// Primary: parse /929/{perekId} from the pathname
-				const m = route.match(/\/929\/(\d+)/);
-				if (m) {
-					const id = Number.parseInt(m[1], 10);
-					const idx = perekIds?.indexOf(id) ?? -1;
-					if (idx >= 0) return idx * 2 + 1; // content page for that perek
+				// Only resolve perekId when the route contains ?book (sefer-view mode).
+				// Without this guard, opening sefer via the toggle button (URL has no ?book)
+				// would incorrectly compute initialTurnedLeaves and break the page layout.
+				if (route.includes("?book")) {
+					const m = route.match(/\/929\/(\d+)/);
+					if (m) {
+						const id = Number.parseInt(m[1], 10);
+						const idx = perekIds?.indexOf(id) ?? -1;
+						if (idx >= 0) return idx * 2 + 1; // content page for that perek
+					}
 				}
 				// Backward compat: handle old #page/{hebrewLetter} bookmarks
 				const hashMatch = route.match(/#page\/(.+)/);
