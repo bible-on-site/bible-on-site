@@ -14,9 +14,10 @@ jest.mock("next/link", () => ({
 	default: ({
 		children,
 		href,
-	}: { children: React.ReactNode; href: string }) => (
-		<a href={href}>{children}</a>
-	),
+	}: {
+		children: React.ReactNode;
+		href: string;
+	}) => <a href={href}>{children}</a>,
 }));
 
 jest.mock("@/lib/authors/url-utils", () => ({
@@ -35,16 +36,44 @@ jest.mock(
 // Also mock with the @/ alias path
 jest.mock("../../../src/app/929/[number]/actions", () => ({
 	getArticleForBook: jest.fn(),
+	getPerushNotesForPage: jest.fn(),
 }));
 
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+jest.mock("isomorphic-dompurify", () => ({
+	__esModule: true,
+	default: { sanitize: (html: string) => html },
+}));
+
+jest.mock(
+	"@/app/929/[number]/components/perushim-section.module.css",
+	() => ({}),
+);
+jest.mock("@/app/929/[number]/components/sefer.module.css", () => ({}));
+
+import {
+	act,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
+import {
+	getArticleForBook,
+	getPerushNotesForPage,
+} from "../../../src/app/929/[number]/actions";
 import { BlankPageContent } from "../../../src/app/929/[number]/components/BlankPageContent";
-import { getArticleForBook } from "../../../src/app/929/[number]/actions";
 import type { Article } from "../../../src/lib/articles";
 
 const mockGetArticleForBook = getArticleForBook as jest.MockedFunction<
 	typeof getArticleForBook
 >;
+const mockGetPerushNotesForPage = getPerushNotesForPage as jest.MockedFunction<
+	typeof getPerushNotesForPage
+>;
+
+const mockPerushim = [
+	{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 10 },
+];
 
 const mockArticles: Article[] = [
 	{
@@ -150,6 +179,85 @@ describe("BlankPageContent", () => {
 		// Should still show articles carousel (no full view since null returned)
 		await waitFor(() => {
 			expect(screen.getByText("הרב ישראל")).toBeTruthy();
+		});
+	});
+
+	it("shows PerushFullView after clicking a perush carousel item", async () => {
+		mockGetPerushNotesForPage.mockResolvedValue([
+			{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש ראשון</p>" },
+		]);
+
+		render(
+			<BlankPageContent
+				articles={[]}
+				perushim={mockPerushim}
+				perekId={1}
+				hebrewDateStr="י׳ בשבט"
+			/>,
+		);
+
+		const perushButton = screen.getByRole("button", { name: /רש״י/ });
+		await act(async () => {
+			fireEvent.click(perushButton);
+		});
+
+		await waitFor(() => {
+			expect(screen.getByText("חזרה לפרשנים ←")).toBeTruthy();
+		});
+	});
+
+	it("returns to carousel after clicking perush back button", async () => {
+		mockGetPerushNotesForPage.mockResolvedValue([
+			{ pasuk: 1, noteIdx: 0, noteContent: "<p>content</p>" },
+		]);
+
+		render(
+			<BlankPageContent
+				articles={[]}
+				perushim={mockPerushim}
+				perekId={1}
+				hebrewDateStr="י׳ בשבט"
+			/>,
+		);
+
+		// Click perush to open full view
+		await act(async () => {
+			fireEvent.click(screen.getByRole("button", { name: /רש״י/ }));
+		});
+
+		await waitFor(() => {
+			expect(screen.getByText("חזרה לפרשנים ←")).toBeTruthy();
+		});
+
+		// Click back
+		await act(async () => {
+			fireEvent.click(screen.getByText(/חזרה לפרשנים/));
+		});
+
+		await waitFor(() => {
+			expect(screen.getByText("פרשנים על הפרק")).toBeTruthy();
+		});
+	});
+
+	it("handles perush click error gracefully", async () => {
+		mockGetPerushNotesForPage.mockRejectedValue(new Error("fail"));
+
+		render(
+			<BlankPageContent
+				articles={[]}
+				perushim={mockPerushim}
+				perekId={1}
+				hebrewDateStr="י׳ בשבט"
+			/>,
+		);
+
+		await act(async () => {
+			fireEvent.click(screen.getByRole("button", { name: /רש״י/ }));
+		});
+
+		// Should still show carousel (selectedPerush set to null on error)
+		await waitFor(() => {
+			expect(screen.getByText("פרשנים על הפרק")).toBeTruthy();
 		});
 	});
 });

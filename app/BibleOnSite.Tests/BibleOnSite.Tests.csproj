@@ -30,6 +30,8 @@
     <PackageReference Include="GraphQL.Client" Version="6.1.0" />
     <PackageReference Include="GraphQL.Client.Serializer.Newtonsoft" Version="6.1.0" />
     <PackageReference Include="Xunit.SkippableFact" Version="1.5.23" />
+    <PackageReference Include="sqlite-net-pcl" Version="1.9.172" />
+    <PackageReference Include="SQLitePCLRaw.bundle_green" Version="2.1.11" />
   </ItemGroup>
 
   <ItemGroup>
@@ -48,6 +50,10 @@
     <Compile Include="..\BibleOnSite\Services\StarterService.cs" Link="Services\StarterService.cs" />
     <Compile Include="..\BibleOnSite\Services\IPreferencesStorage.cs" Link="Services\IPreferencesStorage.cs" />
     <Compile Include="..\BibleOnSite\Services\PreferencesService.cs" Link="Services\PreferencesService.cs" />
+    <Compile Include="..\BibleOnSite\Services\IPadDeliveryService.cs" Link="Services\IPadDeliveryService.cs" />
+    <Compile Include="..\BibleOnSite\Services\PadDeliveryService.cs" Link="Services\PadDeliveryService.cs" />
+    <Compile Include="..\BibleOnSite\Services\PerushimCatalogService.cs" Link="Services\PerushimCatalogService.cs" />
+    <Compile Include="..\BibleOnSite\Services\PerushimNotesService.cs" Link="Services\PerushimNotesService.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\PerekViewModel.cs" Link="ViewModels\PerekViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\PreferencesViewModel.cs" Link="ViewModels\PreferencesViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\AuthorsViewModel.cs" Link="ViewModels\AuthorsViewModel.cs" />

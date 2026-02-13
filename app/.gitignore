@@ -6,3 +6,10 @@
 
 # Generated at build time by MSBuild (API URL override)
 BibleOnSite/Resources/Raw/api-config.txt
+
+# Large generated asset (PAD on-demand) — run: cd data && cargo make generate-perushim-view-sqlite
+# The .sqlite is gitignored (150 MB); the .sqlite.gz is tracked (~35 MB).
+# Decompressed at dev-setup time and as an MSBuild safety net before AAB build.
+# Perushim data updates are coupled to app releases (no independent data push).
+BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/*.sqlite
+!BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/*.sqlite.gz

@@ -173,9 +173,16 @@ public partial class PerekPickerPopup : ContentView
             }
             else if (perakimData is Dictionary<int, int> additionalCounts)
             {
-                // Book with additionals - strip the suffix (א/ב/ע/נ) from the name
-                // The database stores "שמואל א" but we want just "שמואל"
-                var baseName = seferName.TrimEnd(' ', 'א', 'ב', 'ע', 'נ').Trim();
+                // Book with additionals - strip the suffix (" א"/..." נ") from the name.
+                // The database stores "שמואל א" but we want just "שמואל".
+                // We must NOT use TrimEnd with individual chars because that would
+                // also strip the trailing א from "עזרא" (which is part of the word).
+                var baseName = seferName;
+                if (baseName.Length > 2 && baseName[^2] == ' '
+                    && "אבענ".Contains(baseName[^1]))
+                {
+                    baseName = baseName[..^2];
+                }
 
                 sefarim.Add(new SeferItem
                 {

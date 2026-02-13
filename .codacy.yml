@@ -7,3 +7,11 @@
 engines:
   metric:
     enabled: false
+
+# Exclude MySQL/SQLite schema files: SQL analyzer uses T-SQL dialect and flags
+# valid MySQL backticks and SQLite PRAGMA/AUTOINCREMENT as syntax errors
+exclude_paths:
+  - "data/mysql/perushim_structure.sql"
+  - "data/mysql/perushim_data.sql"
+  - "data/sqlite/perushim_catalog_structure.sql"
+  - "data/sqlite/perushim_notes_structure.sql"

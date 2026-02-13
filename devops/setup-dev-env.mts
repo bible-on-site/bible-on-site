@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 import {
 	AuthorizeSecurityGroupIngressCommand,
@@ -23,6 +24,10 @@ async function main() {
 	const subcommand = process.argv[2];
 	if (subcommand === "sync-from-prod") {
 		await runSyncFromProd();
+		return;
+	}
+	if (subcommand === "decompress-perushim-notes") {
+		decompressPerushimNotes();
 		return;
 	}
 
@@ -68,12 +73,49 @@ async function main() {
 					throw new Error("Failed to install npm packages for API tests");
 				break;
 			case "app":
+				decompressPerushimNotes();
 				break;
 		}
 		console.info(
 			`Development environment for module "${moduleName}" is set up.`,
 		);
 	}
+}
+
+// --- decompress perushim notes (.gz → .sqlite) ---
+
+function decompressPerushimNotes(): void {
+	const assetPackDir = path.resolve(
+		appDir,
+		"Platforms",
+		"Android",
+		"AssetPacks",
+		"perushim_notes",
+	);
+	const gzPath = path.join(
+		assetPackDir,
+		"sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz",
+	);
+	const sqlitePath = gzPath.replace(".gz", "");
+
+	if (fs.existsSync(sqlitePath)) {
+		console.info("Perushim notes SQLite already exists — skipping decompress.");
+		return;
+	}
+	if (!fs.existsSync(gzPath)) {
+		console.info(
+			"Perushim notes .gz not found — skipping (run: cd data && cargo make generate-perushim-view-sqlite).",
+		);
+		return;
+	}
+
+	console.info("Decompressing perushim notes...");
+	const compressed = fs.readFileSync(gzPath);
+	const decompressed = zlib.gunzipSync(compressed);
+	fs.writeFileSync(sqlitePath, decompressed);
+	console.info(
+		`  ${(compressed.length / 1_048_576).toFixed(1)} MB → ${(decompressed.length / 1_048_576).toFixed(1)} MB`,
+	);
 }
 
 // --- sync-from-prod subcommand ---

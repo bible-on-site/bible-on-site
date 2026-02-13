@@ -1,0 +1,124 @@
+{
+	"enTitle": "$title",
+	"alt_structs": 1,
+	"authors": {
+		"$cond": {
+			"if": { "$ne": ["$authors", []] },
+			"then": {
+				"$map": {
+					"input": {
+						"$filter": {
+							"input": {
+								"$reduce": {
+									"input": "$authors.names",
+									"initialValue": [],
+									"in": { "$concatArrays": ["$$value", "$$this"] }
+								}
+							},
+							"as": "author",
+							"cond": {
+								"$and": [
+									{ "$eq": ["$$author.primary", true] },
+									{ "$eq": ["$$author.lang", "he"] }
+								]
+							}
+						}
+					},
+					"as": "author",
+					"in": "$$author.text"
+				}
+			},
+			"else": {
+				"$switch": {
+					"branches": [
+						{
+							"case": { "$eq": ["$title", "Maskil LeDavid"] },
+							"then": ["דוד פארדו"]
+						},
+						{
+							"case": {
+								"$regexMatch": {
+									"input": "$title",
+									"regex": "Targum Jonathan"
+								}
+							},
+							"then": ["יונתן בן עוזיאל"]
+						},
+						{
+							"case": {
+								"$or": [
+									{
+										"$regexMatch": {
+											"input": "$title",
+											"regex": "Aramaic Targum"
+										}
+									},
+									{
+										"$regexMatch": {
+											"input": "$title",
+											"regex": "Targum Jerusalem"
+										}
+									},
+									{
+										"$regexMatch": {
+											"input": "$title",
+											"regex": "Targum of"
+										}
+									}
+								]
+							},
+							"then": ["רבותינו זכרונם לברכה"]
+						}
+					],
+					"default": ["לא ידוע"]
+				}
+			}
+		}
+	},
+	"firstAuthorBirthYear": {
+		"$cond": {
+			"if": { "$gte": [{ "$size": { "$ifNull": ["$authors", []] } }, 1] },
+			"then": {
+				"$let": {
+					"vars": { "first": { "$arrayElemAt": ["$authors", 0] } },
+					"in": "$$first.birthDate"
+				}
+			},
+			"else": null
+		}
+	},
+	"compDate": 1,
+	"pubDate": 1,
+	"schema": {
+		"depth": 1,
+		"addressTypes": 1,
+		"sectionNames": 1,
+		"nodes": {
+			"depth": 1,
+			"addressTypes": 1,
+			"sectionNames": 1,
+			"key": 1
+		}
+	},
+	"title": {
+		"$first": {
+			"$filter": {
+				"input": "$schema.titles",
+				"as": "title",
+				"cond": {
+					"$and": [
+						{ "$eq": ["$$title.primary", true] },
+						{ "$eq": ["$$title.lang", "he"] }
+					]
+				}
+			}
+		}
+	},
+	"versions": {
+		"$map": {
+			"input": "$versions",
+			"as": "version",
+			"in": "$$version.chapter"
+		}
+	}
+}

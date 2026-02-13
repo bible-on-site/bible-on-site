@@ -1,0 +1,46 @@
+[
+	{
+		"$match": {
+			"$expr": { "$eq": ["$title", "$$idx_title"] },
+			"language": "he",
+			"versionTitle": {
+				"$nin": [
+					"Bekhor Shor, HaTzofeh LeHokhmat Yisrael VIII, Budapest, 1924",
+					"Bekhor Shor, HaTzofeh LeHokhmat Yisrael VIII, Budapest, 1928",
+					"Bekhor Shor, Leipzig, 1856",
+					"Bekhor Shor, Breslau, 1914",
+					"Bekhor Shor, Breslau, 1900",
+					"http://primo.nli.org.il/primo_library/libweb/action/dlDisplay.do?vid=NLI&docId=NNL_ALEPH002062194",
+					"Bekhor Shor, London, 1959",
+					"Sifsei Chachomim Chumash, Metsudah Publications, 2009",
+					"Rashi Chumash, Metsudah Publications, 2009",
+					"The Metsudah Five Megillot, Lakewood, N.J., 2001",
+					"The Book of Joshua, Metsudah Publications, 1997",
+					"Rabbi Mike Feuer, Jerusalem Anthology",
+					"The Targum to Canticles according to six Yemen MSS, Raphael Hai Melamed, 1921",
+					"Ha-Techiyah vol. ii, Berlin, 1857",
+					"Presburg : A. Schmid, 1842",
+					"The Psalms with Qimchi's Longer Commentary, Leipzig, 1883",
+					"Midrash Rabbeinu Bachya [ben Asher]. Warsaw, 1878",
+					"Rabbeinu Behaye, Rimini, 1524",
+					"Ralbag on Melachim II, 4:21",
+					"Pentateuch with Rashi's commentary by M. Rosenbaum and A.M. Silbermann, 1929-1934",
+					"Pentateuch with Rashi's commentary by M. Rosenbaum and A.M. Silbermann -- corrected vocalization",
+					"pending"
+				]
+			},
+			"versionSource": {
+				"$nin": [
+					"בלום ווייס",
+					"http://www.toratemetfreeware.com/online/f_01617.html#HtmpReportNum0004_L2",
+					"http://www.daat.ac.il/daat/olam_hatanah/mefaresh.asp?book=25&perek=5&mefaresh=ezra",
+					"http://en.wikisource.org/wiki/Mikraot_Gedolot/",
+					"http://he.wikisource.org/wiki/%D7%9E%22%D7%92_%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA_%D7%90_%D7%90",
+					"http://www.chabad.org/library/bible_cdo/aid/9985/jewish/Chapter-21.htm#showrashi=true"
+				]
+			}
+		}
+	},
+	{ "$project": { "chapter": 1 } },
+	{ "$limit": 1 }
+]

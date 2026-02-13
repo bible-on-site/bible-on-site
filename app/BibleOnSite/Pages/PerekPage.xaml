@@ -19,6 +19,7 @@
             <Color x:Key="SelectedPasukBackground">#E3F2FD</Color>
             <Color x:Key="SelectedPasukBackgroundDark">#1E3A5F</Color>
             <converters:IntEqualityConverter x:Key="IntEqualityConverter"/>
+            <converters:PerushCheckedConverter x:Key="PerushCheckedConverter"/>
             <!-- DataTrigger helper for selection background -->
         </ResourceDictionary>
     </ContentPage.Resources>
@@ -133,6 +134,26 @@
                         Clicked="OnSelectionCopyClicked"/>
             </Grid>
 
+            <!-- Loading overlay — shown while CarouselView initialises its 929-item
+                 adapter.  Uses a native ActivityIndicator which animates on the GPU
+                 even when the main thread is blocked by the CarouselView layout pass. -->
+            <Grid x:Name="CarouselLoadingOverlay"
+                  Grid.Row="1" Grid.RowSpan="2"
+                  IsVisible="True"
+                  ZIndex="10"
+                  BackgroundColor="{AppThemeBinding Light=White, Dark=#1C1C1E}">
+                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="12">
+                    <ActivityIndicator IsRunning="True"
+                                       Color="{StaticResource Primary}"
+                                       HeightRequest="48"
+                                       WidthRequest="48"/>
+                    <Label Text="מתחבר לפרק..."
+                           FontSize="18"
+                           HorizontalTextAlignment="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray200}}"/>
+                </VerticalStackLayout>
+            </Grid>
+
             <!-- CarouselView for page-based swipe navigation (Row 1 + Row 2) -->
             <!-- Each carousel page contains header + full perek view (pasukim CollectionView) -->
             <CarouselView Grid.Row="1"
@@ -158,82 +179,101 @@
                                    Padding="16,12"
                                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
 
-                            <!-- Pasukim CollectionView (Row 1) -->
+                            <!-- Perek Text - Pasukim List (Row 1) with perushim inline -->
                             <CollectionView Grid.Row="1"
+                                            x:Name="PasukimCollection"
                                             ItemsSource="{Binding Pasukim}"
                                             SelectionMode="None"
                                             Scrolled="OnPasukimScrolled"
                                             Margin="8,0,8,0">
-                            <!-- Footer spacer so last item can scroll above bottom bar -->
-                            <CollectionView.Footer>
-                                <ContentView HeightRequest="90" BackgroundColor="Transparent"/>
-                            </CollectionView.Footer>
-                            <CollectionView.ItemTemplate>
-                                <DataTemplate x:DataType="models:Pasuk">
-                                    <Border Padding="12,8"
-                                            Margin="0,4"
-                                            StrokeShape="RoundRectangle 8"
-                                            Stroke="Transparent"
-                                            x:Name="PasukBorder"
-                                            BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
-                                        <!-- iOS (and MacCatalyst): FlowDirection not cascading into template; set explicitly so pesukim layout RTL. -->
-                                        <Border.FlowDirection>
-                                            <OnPlatform x:TypeArguments="FlowDirection">
-                                                <On Platform="iOS" Value="RightToLeft"/>
-                                                <On Platform="MacCatalyst" Value="RightToLeft"/>
-                                            </OnPlatform>
-                                        </Border.FlowDirection>
-                                        <Border.Triggers>
-                                            <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
-                                                <Setter Property="BackgroundColor" Value="{StaticResource SelectedPasukBackground}"/>
-                                            </DataTrigger>
-                                        </Border.Triggers>
-                                        <Border.GestureRecognizers>
-                                            <TapGestureRecognizer Tapped="OnPasukTapped"
-                                                                  CommandParameter="{Binding PasukNum}"/>
-                                            <TapGestureRecognizer Tapped="OnPasukRightClicked"
-                                                                  CommandParameter="{Binding PasukNum}"
-                                                                  Buttons="Secondary"/>
-                                            <PointerGestureRecognizer PointerPressed="OnPasukPointerPressed"
-                                                                      PointerReleased="OnPasukPointerReleased"/>
-                                        </Border.GestureRecognizers>
-                                        <Border.Behaviors>
-                                            <behaviors:LongPressBehavior LongPressDuration="600"
-                                                                         LongPressed="OnPasukLongPressed"/>
-                                        </Border.Behaviors>
-                                        <Grid ColumnDefinitions="40,*">
-                                            <Label Grid.Column="0"
-                                                   Text="{Binding PasukNumHeb}"
-                                                   FontSize="16"
-                                                   FontAttributes="Bold"
-                                                   VerticalTextAlignment="Start"
-                                                   Margin="0,1.5,0,0"
-                                                   TextColor="{StaticResource Primary}"/>
-                                            <Label Grid.Column="1"
-                                                   AutomationId="PasukText"
-                                                   FormattedText="{Binding FormattedText}"
-                                                   FontSize="18"
-                                                   LineBreakMode="WordWrap"
-                                                   LineHeight="1.4"/>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </CollectionView.ItemTemplate>
-
-                            <CollectionView.EmptyView>
-                                <VerticalStackLayout VerticalOptions="Center"
-                                                     HorizontalOptions="Center"
-                                                     Padding="20">
-                                    <Image Source="loading_book_anim.gif"
-                                           IsAnimationPlaying="True"
-                                           HeightRequest="60"
-                                           WidthRequest="60"
-                                           Aspect="AspectFit"/>
-                                    <Label Text="מתחבר לפרק..."
-                                           AutomationId="PerekLoadingLabel"
-                                           FontSize="18"
-                                           HorizontalTextAlignment="Center"
-                                           Margin="0,10,0,0"/>
+                                <CollectionView.Footer>
+                                    <ContentView x:Name="PasukimFooterSpacer" HeightRequest="90" BackgroundColor="Transparent"/>
+                                </CollectionView.Footer>
+                                <CollectionView.ItemTemplate>
+                                    <DataTemplate x:DataType="models:Pasuk">
+                                        <Border Padding="12,8"
+                                                Margin="0,4"
+                                                StrokeShape="RoundRectangle 8"
+                                                Stroke="Transparent"
+                                                x:Name="PasukBorder"
+                                                BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+                                            <Border.FlowDirection>
+                                                <OnPlatform x:TypeArguments="FlowDirection">
+                                                    <On Platform="iOS" Value="RightToLeft"/>
+                                                    <On Platform="MacCatalyst" Value="RightToLeft"/>
+                                                </OnPlatform>
+                                            </Border.FlowDirection>
+                                            <Border.Triggers>
+                                                <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
+                                                    <Setter Property="BackgroundColor" Value="{StaticResource SelectedPasukBackground}"/>
+                                                </DataTrigger>
+                                            </Border.Triggers>
+                                            <Border.GestureRecognizers>
+                                                <TapGestureRecognizer Tapped="OnPasukTapped"
+                                                                      CommandParameter="{Binding PasukNum}"/>
+                                                <TapGestureRecognizer Tapped="OnPasukRightClicked"
+                                                                      CommandParameter="{Binding PasukNum}"
+                                                                      Buttons="Secondary"/>
+                                                <PointerGestureRecognizer PointerPressed="OnPasukPointerPressed"
+                                                                          PointerReleased="OnPasukPointerReleased"/>
+                                            </Border.GestureRecognizers>
+                                            <Border.Behaviors>
+                                                <behaviors:LongPressBehavior LongPressDuration="600"
+                                                                             LongPressed="OnPasukLongPressed"
+                                                                             NativeTapped="OnPasukNativeTapped"/>
+                                            </Border.Behaviors>
+                                            <Grid ColumnDefinitions="40,*">
+                                                <Label Grid.Column="0"
+                                                       Text="{Binding PasukNumHeb}"
+                                                       FontSize="{DynamicResource PasukNumFontSize}"
+                                                       FontAttributes="Bold"
+                                                       VerticalTextAlignment="Start"
+                                                       Margin="0,1.5,0,0"
+                                                       TextColor="{StaticResource Primary}"/>
+                                                <VerticalStackLayout Grid.Column="1" Spacing="2">
+                                                    <Label AutomationId="PasukText"
+                                                           FormattedText="{Binding FormattedText}"
+                                                           FontSize="{DynamicResource PasukFontSize}"
+                                                           LineBreakMode="WordWrap"
+                                                           LineHeight="1.4"/>
+                                                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding PerushNotes}"
+                                                                         Spacing="2"
+                                                                         Margin="0,4,0,0">
+                                                        <BindableLayout.ItemTemplate>
+                                                            <DataTemplate x:DataType="models:PerushNoteDisplay">
+                                                                <VerticalStackLayout Spacing="2">
+                                                                    <Label Text="{Binding PerushName}"
+                                                                           FontSize="{DynamicResource PerushNameFontSize}"
+                                                                           FontAttributes="Bold"
+                                                                           TextColor="{StaticResource Primary}"/>
+                                                                    <controls:HtmlView HtmlContent="{Binding DisplayContent}"
+                                                                                      FontSize="{DynamicResource PerushContentFontSize}"
+                                                                                      TextAlignment="Justify"
+                                                                                      TextDirection="Rtl"
+                                                                                      LineHeight="1.4"/>
+                                                                </VerticalStackLayout>
+                                                            </DataTemplate>
+                                                        </BindableLayout.ItemTemplate>
+                                                    </VerticalStackLayout>
+                                                </VerticalStackLayout>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </CollectionView.ItemTemplate>
+                                <CollectionView.EmptyView>
+                                    <VerticalStackLayout VerticalOptions="Center"
+                                                         HorizontalOptions="Center"
+                                                         Padding="20">
+                                        <Image Source="loading_book_anim.gif"
+                                               IsAnimationPlaying="True"
+                                               HeightRequest="60"
+                                               WidthRequest="60"
+                                               Aspect="AspectFit"/>
+                                        <Label Text="מתחבר לפרק..."
+                                               AutomationId="PerekLoadingLabel"
+                                               FontSize="18"
+                                               HorizontalTextAlignment="Center"
+                                               Margin="0,10,0,0"/>
                                     </VerticalStackLayout>
                                 </CollectionView.EmptyView>
                             </CollectionView>
@@ -334,19 +374,50 @@
                 </VerticalStackLayout>
                 <!-- Scrollable content area for perushim list -->
                 <ScrollView Grid.Row="1" Margin="0,8,0,90">
-                    <!-- Placeholder - will be replaced with actual perushim list -->
-                    <VerticalStackLayout VerticalOptions="Start"
-                                         HorizontalOptions="Center"
-                                         Spacing="8"
-                                         Padding="0,16,0,0">
-                        <Label Text="📚"
-                               FontSize="32"
-                               HorizontalTextAlignment="Center"/>
-                        <Label Text="בקרוב יחזרו הפירושים"
-                               FontSize="14"
-                               HorizontalTextAlignment="Center"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"/>
-                    </VerticalStackLayout>
+                    <CollectionView x:Name="PerushimCollection"
+                                   ItemsSource="{Binding Perushim}"
+                                   SelectionMode="None"
+                                   VerticalOptions="Start">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="models:Perush">
+                                <Grid Padding="4,2" ColumnDefinitions="Auto,*" x:Name="PerushRow">
+                                    <CheckBox Grid.Column="0"
+                                              VerticalOptions="Center"
+                                              Margin="0,0,8,0"
+                                              CheckedChanged="OnPerushCheckboxChanged">
+                                        <CheckBox.IsChecked>
+                                            <MultiBinding Converter="{StaticResource PerushCheckedConverter}" Mode="OneWay">
+                                                <Binding Path="Id"/>
+                                                <Binding Path="BindingContext.CheckedPerushim" Source="{x:Reference PerekPageRoot}"/>
+                                            </MultiBinding>
+                                        </CheckBox.IsChecked>
+                                    </CheckBox>
+                                    <Label Grid.Column="1"
+                                           Text="{Binding Name}"
+                                           FontSize="16"
+                                           VerticalOptions="Center"/>
+                                </Grid>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                        <CollectionView.EmptyView>
+                            <VerticalStackLayout VerticalOptions="Center"
+                                                 HorizontalOptions="Center"
+                                                 Spacing="8"
+                                                 Padding="0,16,0,0">
+                                <Label Text="📚"
+                                       FontSize="32"
+                                       HorizontalTextAlignment="Center"/>
+                                <Label Text="{Binding PerushimEmptyMessage}"
+                                       FontSize="14"
+                                       HorizontalTextAlignment="Center"
+                                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"/>
+                                <Button x:Name="DownloadPerushimButton"
+                                        Text="להוריד פירושים"
+                                        IsVisible="{Binding ShowDownloadPerushimButton}"
+                                        Clicked="OnDownloadPerushimClicked"/>
+                            </VerticalStackLayout>
+                        </CollectionView.EmptyView>
+                    </CollectionView>
                 </ScrollView>
             </Grid>
         </Border>

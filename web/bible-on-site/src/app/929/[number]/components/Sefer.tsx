@@ -3,11 +3,14 @@ import { toLetters, toNumber } from "gematry";
 import type {
 	CoverConfig,
 	FlipBookHandle,
+	HistoryMapper,
 	PageSemantics,
 } from "html-flip-book-react";
 import {
 	ActionButton,
 	BookshelfIcon,
+	type DownloadConfig,
+	DownloadDropdown,
 	FirstPageButton,
 	LastPageButton,
 	NextButton,
@@ -17,12 +20,14 @@ import {
 } from "html-flip-book-react/toolbar";
 import dynamic from "next/dynamic";
 import React, { useCallback, useMemo, useRef, useState } from "react";
+import { downloadPageRanges, downloadSefer } from "@/app/929/[number]/actions";
 import { BookshelfModal } from "@/app/components/Bookshelf";
 import { isQriDifferentThanKtiv } from "@/data/db/tanah-view-types";
 import type { PerekObj } from "@/data/perek-dto";
 import { getSeferColor } from "@/data/sefer-colors";
 import { getSeferByName } from "@/data/sefer-dto";
 import type { Article } from "@/lib/articles";
+import type { PerushSummary } from "@/lib/perushim";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import { BlankPageContent } from "./BlankPageContent";
 import { Ptuah } from "./Ptuha";
@@ -54,6 +59,12 @@ type FlipBookProps = {
 	leavesBuffer?: number;
 	/** Cover configuration */
 	coverConfig?: CoverConfig;
+	/** History integration: URL ↔ page */
+	historyMapper?: HistoryMapper;
+	/** Initial turned leaves (from URL on load) – array of leaf indices */
+	initialTurnedLeaves?: number[];
+	/** Download configuration: entire book and page-range handlers plus filename hints */
+	downloadConfig?: DownloadConfig;
 };
 
 /** Dynamic FlipBook with ref forwarded (library uses forwardRef) */
@@ -67,8 +78,10 @@ const Sefer = (props: {
 	perekObj: PerekObj;
 	articles: Article[];
 	articlesByPerekIndex?: Article[][];
+	perushimByPerekIndex?: PerushSummary[][];
+	perekIds?: number[];
 }) => {
-	const { perekObj, articles, articlesByPerekIndex } = props;
+	const { perekObj, articles, articlesByPerekIndex, perushimByPerekIndex, perekIds } = props;
 	const sefer = getSeferByName(perekObj.sefer);
 	const flipBookRef = useRef<FlipBookHandle>(null);
 	const bookWrapperRef = useRef<HTMLDivElement>(null);
@@ -106,6 +119,28 @@ const Sefer = (props: {
 		}),
 		[perakim.length],
 	);
+
+	const historyMapper: HistoryMapper | undefined = useMemo(
+		() => ({
+			pageToRoute: (pageIndex, semantic) =>
+				`#page/${semantic?.semanticName ?? pageIndex}`,
+			routeToPage: (route) => {
+				const m = route.match(/#page\/(.+)/);
+				if (!m) return null;
+				return hePageSemantics.semanticNameToIndex(m[1]);
+			},
+		}),
+		[hePageSemantics],
+	);
+
+	const initialTurnedLeavesFromUrl = useMemo(() => {
+		if (typeof window === "undefined") return undefined;
+		const route = window.location.hash || window.location.pathname + window.location.search;
+		const pageIndex = historyMapper.routeToPage(route);
+		if (pageIndex === null) return undefined;
+		const turnedCount = pageIndex === 0 ? 0 : Math.ceil(pageIndex / 2);
+		return Array.from({ length: turnedCount }, (_, i) => i);
+	}, [historyMapper]);
 
 	const coverStyle = { backgroundColor: seferColor };
 	const frontCover = (
@@ -212,6 +247,8 @@ const Sefer = (props: {
 		<React.Fragment key={`blank-${perekIdx + 1}`}>
 			<BlankPageContent
 				articles={articlesByPerekIndex?.[perekIdx] ?? articles}
+				perushim={perushimByPerekIndex?.[perekIdx] ?? []}
+				perekId={perekIds?.[perekIdx] ?? 0}
 				hebrewDateStr={hebrewDateStr}
 			/>
 		</React.Fragment>,
@@ -235,6 +272,21 @@ const Sefer = (props: {
 							noShadow: true,
 							coverIndices: "auto",
 						}}
+						historyMapper={historyMapper}
+						initialTurnedLeaves={initialTurnedLeavesFromUrl}
+						downloadConfig={{
+							entireBookFilename: perekObj.sefer,
+							rangeFilename: perekObj.sefer,
+							downloadContext: { seferName: perekObj.sefer },
+							onDownloadSefer: async () => {
+								const r = await downloadSefer();
+								return "error" in r ? null : { ext: r.ext, data: r.data };
+							},
+							onDownloadPageRange: async (pages, semanticPages, context) => {
+								const r = await downloadPageRanges(pages, semanticPages, context);
+								return "error" in r ? null : { ext: r.ext, data: r.data };
+							},
+						}}
 					/>
 				</div>
 			<Toolbar
@@ -245,6 +297,7 @@ const Sefer = (props: {
 				<ActionButton onClick={openBookshelf} ariaLabel="ספרי התנ״ך">
 					<BookshelfIcon size={18} />
 				</ActionButton>
+				<DownloadDropdown ariaLabel="הורדה" />
 				<FirstPageButton />
 				<PrevButton />
 				<PageIndicator ariaLabel="עבור לפרק (מספר עברי)" />

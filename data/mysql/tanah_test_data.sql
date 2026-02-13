@@ -1,4 +1,15 @@
 -- Database selection handled by the executing tool (db-populator, Lambda, etc.)
+--
+-- This file MUST be self-contained: every table referenced by the website's
+-- e2e tests must have representative rows here.  When you add a new DB table
+-- that the website queries, add test data here too — otherwise e2e tests will
+-- silently get empty results and fail with confusing "element not found" errors.
+--
+-- Tables covered:
+--   tanah_author, tanah_article          (articles feature)
+--   parshan, perush, note                (perushim / commentaries feature)
+-- --------------------------------------------------------------------------
+
 -- Representative test data for tanah_author
 INSERT INTO tanah_author (NAME, DETAILS)
 VALUES ('הרב לדוגמא שליט"א', 'תיאור לדוגמא'),
@@ -84,3 +95,33 @@ VALUES (
 <img src="https://bible-on-site-assets-test.s3.amazonaws.com/rabbis/test-rabbi.jpg" alt="תמונת רב לדוגמא" />
 <p>התמונה לעיל היא לצורכי בדיקה בלבד.</p>'
     );
+
+-- ---------------------------------------------------------------------------
+-- Representative test data for perushim (commentaries)
+-- parshan = commentator, perush = commentary work, note = text per pasuk
+-- ---------------------------------------------------------------------------
+
+-- Commentators
+INSERT INTO parshan (id, name, birth_year, has_pic)
+VALUES
+    (1, 'רש"י', 1040, 0),
+    (2, 'אבן עזרא', 1089, 0),
+    (3, 'תרגום אונקלוס', NULL, 0);
+
+-- Commentary works  (priority: 0-99 = Targum, 100 = Rashi, 200+ = others)
+INSERT INTO perush (id, name, parshan_id, comp_date, pub_date, priority)
+VALUES
+    (1, 'רש"י', 1, NULL, NULL, 100),
+    (2, 'אבן עזרא', 2, NULL, NULL, 200),
+    (3, 'תרגום אונקלוס', 3, NULL, NULL, 10);
+
+-- Sample notes for perek 1 (בראשית א) — enough to exercise carousel + full view
+INSERT INTO note (perush_id, perek_id, pasuk, note_idx, note_content)
+VALUES
+    (1, 1, 1, 0, 'בראשית - אמר רבי יצחק לא היה צריך להתחיל את התורה אלא מהחודש הזה לכם'),
+    (1, 1, 1, 1, 'ברא אלהים - ולא אמר ברא ה׳, שבתחילה עלה במחשבה לבראותו במידת הדין'),
+    (1, 1, 2, 0, 'והארץ היתה תהו ובהו - תהו, אדם תוהה ומשתומם על בהו שבה'),
+    (2, 1, 1, 0, 'בראשית - יש אומרים כי המילה בראשית היא סמיכות, בראש-ית, בראשית ברוא'),
+    (2, 1, 2, 0, 'תהו ובהו - תהו הוא דבר שאין בו ממש, ובהו דבר שיש בו ממש'),
+    (3, 1, 1, 0, 'בקדמין ברא ה׳ ית שמיא וית ארעא'),
+    (3, 1, 2, 0, 'וארעא הות צדיא וריקניא');

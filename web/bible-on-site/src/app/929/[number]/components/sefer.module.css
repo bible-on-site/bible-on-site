@@ -155,6 +155,28 @@
   overflow: auto;
 }
 
+/* Perush full view in book: fill container, header fixed, notes scroll */
+.perushFullViewInBook {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0 12px;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* Notes container in book mode: fill available space, scroll, no max-height */
+.perushNotesInBook {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  max-height: none;
+}
+
 .coverContent {
   height: 100%;
   display: flex;

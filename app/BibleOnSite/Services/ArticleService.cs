@@ -55,12 +55,7 @@ public class ArticleService : BaseGraphQLService
 
             var articles = response.Data?.ArticlesByPerekId ?? new List<ArticleDto>();
 
-            // Ensure StarterService is loaded for author lookup
-            if (!StarterService.Instance.IsLoaded)
-            {
-                await StarterService.Instance.LoadAsync();
-            }
-
+            // Use StarterService authors if available (may be empty offline — that's ok)
             return articles.Select(dto =>
             {
                 var author = StarterService.Instance.Authors.FirstOrDefault(a => a.Id == dto.AuthorId);
@@ -119,13 +114,7 @@ public class ArticleService : BaseGraphQLService
             if (dto == null)
                 return null;
 
-            // Ensure StarterService is loaded for author lookup
-            if (!StarterService.Instance.IsLoaded)
-            {
-                await StarterService.Instance.LoadAsync();
-            }
-
-            // Get the author info from StarterService
+            // Use StarterService authors if available (may be empty offline — that's ok)
             var author = StarterService.Instance.Authors.FirstOrDefault(a => a.Id == dto.AuthorId);
 
             return new Article
@@ -180,12 +169,7 @@ public class ArticleService : BaseGraphQLService
 
             var articles = response.Data?.ArticlesByAuthorId ?? new List<ArticleDto>();
 
-            // Ensure StarterService is loaded for author lookup
-            if (!StarterService.Instance.IsLoaded)
-            {
-                await StarterService.Instance.LoadAsync();
-            }
-
+            // Use StarterService authors if available (may be empty offline — that's ok)
             return articles.Select(dto =>
             {
                 var author = StarterService.Instance.Authors.FirstOrDefault(a => a.Id == dto.AuthorId);

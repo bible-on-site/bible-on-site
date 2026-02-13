@@ -27,3 +27,5 @@ app/BibleOnSite/Resources/Raw/*
 **/.outputs/
 app/.artifacts/
 data/mysql/tanah_full_dump.sql
+data/mysql/perushim_data.sql
+nul

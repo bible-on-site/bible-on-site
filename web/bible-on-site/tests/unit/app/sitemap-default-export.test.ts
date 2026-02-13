@@ -17,10 +17,15 @@ jest.mock("@/lib/authors", () => ({
 	getAllAuthorSlugs: jest.fn(),
 }));
 
+jest.mock("@/lib/perushim", () => ({
+	getPerushimByPerekId: jest.fn(),
+}));
+
+import { headers } from "next/headers";
 import sitemapFn, { SITEMAP_SECTIONS, TOTAL_PERAKIM } from "@/app/sitemap";
 import { getAllArticlePerekIdPairs } from "@/lib/articles";
 import { getAllAuthorSlugs } from "@/lib/authors";
-import { headers } from "next/headers";
+import { getPerushimByPerekId } from "@/lib/perushim";
 
 describe("sitemap default export", () => {
 	beforeEach(() => {
@@ -35,11 +40,13 @@ describe("sitemap default export", () => {
 		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([
 			{ articleId: 10, perekId: 1 },
 		]);
+		// Return empty perushim for all 929 perakim
+		(getPerushimByPerekId as jest.Mock).mockResolvedValue([]);
 
 		const result = await sitemapFn();
 
 		const urls = result.map((e) => e.url);
-		// root + sections + 929 index + 929 perakim + 1 article + authors index + 2 authors
+		// root + sections + 929 index + 929 perakim + 1 article + 0 perushim + authors index + 2 authors
 		const expectedLength =
 			1 + SITEMAP_SECTIONS.length + 1 + TOTAL_PERAKIM + 1 + 1 + 2;
 		expect(result).toHaveLength(expectedLength);
@@ -61,6 +68,7 @@ describe("sitemap default export", () => {
 		});
 		(getAllAuthorSlugs as jest.Mock).mockResolvedValue([]);
 		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([]);
+		(getPerushimByPerekId as jest.Mock).mockResolvedValue([]);
 
 		const result = await sitemapFn();
 
@@ -73,10 +81,38 @@ describe("sitemap default export", () => {
 		});
 		(getAllAuthorSlugs as jest.Mock).mockResolvedValue([]);
 		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([]);
+		(getPerushimByPerekId as jest.Mock).mockResolvedValue([]);
 
 		await sitemapFn();
 
 		expect(getAllAuthorSlugs).toHaveBeenCalledTimes(1);
 		expect(getAllArticlePerekIdPairs).toHaveBeenCalledTimes(1);
+	});
+
+	it("includes perushim URLs in sitemap", async () => {
+		(headers as jest.Mock).mockResolvedValue({
+			get: (name: string) => (name === "host" ? "example.com" : null),
+		});
+		(getAllAuthorSlugs as jest.Mock).mockResolvedValue([]);
+		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([]);
+		// Return a perush only for perek 1, empty for rest
+		(getPerushimByPerekId as jest.Mock).mockImplementation((perekId: number) =>
+			perekId === 1
+				? Promise.resolve([
+						{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 5 },
+					])
+				: Promise.resolve([]),
+		);
+
+		const result = await sitemapFn();
+
+		const urls = result.map((e) => e.url);
+		expect(urls).toContain(
+			`https://example.com/929/1/${encodeURIComponent("רש״י")}`,
+		);
+		// root + sections + 929 index + 929 perakim + 0 articles + 1 perush + authors index + 0 authors
+		const expectedLength =
+			1 + SITEMAP_SECTIONS.length + 1 + TOTAL_PERAKIM + 0 + 1 + 1 + 0;
+		expect(result).toHaveLength(expectedLength);
 	});
 });

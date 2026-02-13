@@ -74,7 +74,7 @@ public class PreferencesService
     private readonly IPreferencesStorage _storage;
     private double _fontFactor = 1.0;
     private int? _lastLearntPerek;
-    private PerekToLoad _perekToLoad = PerekToLoad.LastLearnt;
+    private PerekToLoad _perekToLoad = PerekToLoad.Todays;
     private HashSet<int> _bookmarkedPerakim = new();
 
     public event EventHandler? PreferencesChanged;
@@ -151,7 +151,7 @@ public class PreferencesService
         var lastLearnt = _storage.Get(LastLearntPerekKey, -1);
         _lastLearntPerek = lastLearnt >= 0 ? lastLearnt : null;
 
-        _perekToLoad = (PerekToLoad)_storage.Get(PerekToLoadKey, (int)PerekToLoad.LastLearnt);
+        _perekToLoad = (PerekToLoad)_storage.Get(PerekToLoadKey, (int)PerekToLoad.Todays);
 
         var bookmarksJson = _storage.Get(BookmarkedPerakimKey, string.Empty);
         if (!string.IsNullOrEmpty(bookmarksJson))

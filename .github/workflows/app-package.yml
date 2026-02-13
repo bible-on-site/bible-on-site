@@ -218,6 +218,20 @@ jobs:
       - name: Install MAUI workload
         run: dotnet workload install maui-android --skip-manifest-update
 
+      # Perushim notes are tracked in git as .sqlite.gz (~35 MB) and must be decompressed
+      # before the AAB build. The uncompressed .sqlite (~150 MB) is gitignored.
+      # Data updates are coupled to app releases — updating perushim requires a new AAB.
+      - name: Decompress perushim notes for AAB asset pack
+        working-directory: ${{ env.APP_DIRECTORY }}/BibleOnSite
+        run: |
+          GZ_FILE="Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz"
+          if [ -f "$GZ_FILE" ] && [ ! -f "${GZ_FILE%.gz}" ]; then
+            gunzip -k "$GZ_FILE"
+            echo "Decompressed perushim notes ($(du -h "${GZ_FILE%.gz}" | cut -f1))"
+          else
+            echo "Perushim notes already decompressed or .gz not found — skipping"
+          fi
+
       - name: Decode Android keystore
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > ${{ runner.temp }}/keystore.jks

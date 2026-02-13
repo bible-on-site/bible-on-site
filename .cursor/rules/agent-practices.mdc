@@ -37,3 +37,11 @@ continue-on-error: true
 - Iterate on the fix locally until it passes, then push once.
 - Do not use remote CI as a trial-and-error debugging loop (push → wait 10 min → read logs → push again).
 - Acceptable exceptions: failures that depend on CI-only infrastructure (secrets, cloud services, specific runner environments). Even then, minimize remote round-trips by reasoning through the issue first.
+
+# Monitor When Asked
+
+**When the user asks to monitor (e.g. a branch until CI is stable), actually monitor until the situation is resolved.**
+
+- Do not stop after one check or after reporting "CI failed." Keep monitoring: recheck status after a short wait, and repeat until the run completes (success or a clear, actionable failure).
+- Do not overlook or drop the task until there are no remaining issues—e.g. CI is green, or the failure is identified and fixed (including package.json / package-lock / install issues if that was the context).
+- Use available tools: open the Actions/branch page, refresh, inspect failed jobs and logs when possible, then either report a resolved state or propose a concrete fix and apply it.

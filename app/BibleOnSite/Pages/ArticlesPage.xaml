@@ -73,7 +73,7 @@
                                    WidthRequest="60"
                                    Aspect="AspectFit"
                                    Margin="0,10,0,0"/>
-                            <Label Text="טוען מאמרים..."
+                            <Label Text="מתחבר למאמרים..."
                                    FontSize="16"
                                    HorizontalTextAlignment="Center"
                                    Margin="0,10,0,0"/>

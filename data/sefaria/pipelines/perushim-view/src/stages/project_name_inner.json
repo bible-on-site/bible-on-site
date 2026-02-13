@@ -1,0 +1,219 @@
+{
+	"enTitle": 1,
+	"alt_structs": 1,
+	"authors": {
+		"$switch": {
+			"branches": [
+				{
+					"case": {
+						"$regexMatch": {
+							"input": "$title.text",
+							"regex": "אונקלוס"
+						}
+					},
+					"then": ["אונקלוס"]
+				},
+				{
+					"case": { "$eq": ["$title.text", "ברטנורא על התורה"] },
+					"then": ["לא ידוע"]
+				}
+			],
+			"default": "$authors"
+		}
+	},
+	"compDate": 1,
+	"pubDate": 1,
+	"firstAuthorBirthYear": 1,
+	"schema": 1,
+	"name": {
+		"$trim": {
+			"input": {
+				"$cond": [
+					{
+						"$and": [
+							{
+								"$regexMatch": {
+									"input": "$title.text",
+									"regex": "על"
+								}
+							},
+							{
+								"$not": {
+									"$in": [
+										"$title.text",
+										[
+											"ברטנורא על התורה",
+											"ר' סעדיה גאון על נחמיה",
+											"ר' סעדיה גאון על עזרא",
+											"צרור המור על שיר השירים",
+											"תורה תמימה על תהילים"
+										]
+									]
+								}
+							}
+						]
+					},
+					{
+						"$first": { "$split": ["$title.text", " על "] }
+					},
+					{
+						"$cond": [
+							{
+								"$regexMatch": {
+									"input": "$title.text",
+									"regex": "תרגום ירושלמי"
+								}
+							},
+							"תרגום ירושלמי",
+							{
+								"$cond": [
+									{
+										"$regexMatch": {
+											"input": "$title.text",
+											"regex": "תרגום"
+										}
+									},
+									"תרגום",
+									{
+										"$switch": {
+											"branches": [
+												{
+													"case": {
+														"$in": [
+															"$title.text",
+															[
+																"רלב\"ג רות",
+																"רלב\"ג אסתר",
+																"רלב\"ג שיר השירים",
+																"רלב\"ג קהלת"
+															]
+														]
+													},
+													"then": "רלב\"ג"
+												},
+												{
+													"case": {
+														"$eq": ["$title.text", "הטור הארוך"]
+													},
+													"then": "בעל הטורים"
+												},
+												{
+													"case": {
+														"$eq": ["$title.text", "ברטנורא על התורה"]
+													},
+													"then": "עמר נקא"
+												},
+												{
+													"case": {
+														"$eq": ["$title.text", "צרור המור על שיר השירים"]
+													},
+													"then": "צרור המור (לורברבוים)"
+												},
+												{
+													"case": {
+														"$eq": ["$title.text", "תורה תמימה על תהילים"]
+													},
+													"then": "תורה תמימה (נבון)"
+												},
+												{
+													"case": {
+														"$eq": ["$title.text", "תורת משה - אלשיך"]
+													},
+													"then": "תורת משה (אלשיך)"
+												},
+												{
+													"case": {
+														"$regexMatch": {
+															"input": "$title.text",
+															"regex": "סעדיה גאון"
+														}
+													},
+													"then": "רס\"ג"
+												}
+											],
+											"default": "$title.text"
+										}
+									}
+								]
+							}
+						]
+					}
+				]
+			}
+		}
+	},
+	"seferHebName": {
+		"$cond": [
+			{
+				"$regexMatch": {
+					"input": "$title.text",
+					"regex": "על"
+				}
+			},
+			{
+				"$last": { "$split": ["$title.text", " על "] }
+			},
+			{
+				"$cond": [
+					{
+						"$regexMatch": {
+							"input": "$title.text",
+							"regex": "תרגום ירושלמי"
+						}
+					},
+					"$$REMOVE",
+					{
+						"$cond": [
+							{
+								"$regexMatch": {
+									"input": "$title.text",
+									"regex": "תרגום"
+								}
+							},
+							{
+								"$last": { "$split": ["$title.text", "תרגום "] }
+							},
+							{
+								"$switch": {
+									"branches": [
+										{
+											"case": { "$eq": ["$title.text", "מחיר יין"] },
+											"then": "אסתר"
+										},
+										{
+											"case": { "$eq": ["$title.text", "אור חדש"] },
+											"then": "אסתר"
+										},
+										{
+											"case": { "$eq": ["$title.text", "שלום אסתר"] },
+											"then": "אסתר"
+										},
+										{
+											"case": { "$eq": ["$title.text", "רלב\"ג רות"] },
+											"then": "רות"
+										},
+										{
+											"case": { "$eq": ["$title.text", "רלב\"ג אסתר"] },
+											"then": "אסתר"
+										},
+										{
+											"case": { "$eq": ["$title.text", "רלב\"ג שיר השירים"] },
+											"then": "שיר השירים"
+										},
+										{
+											"case": { "$eq": ["$title.text", "רלב\"ג קהלת"] },
+											"then": "קהלת"
+										}
+									],
+									"default": "$$REMOVE"
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"versions": 1,
+	"versions_count": { "$size": "$versions" }
+}

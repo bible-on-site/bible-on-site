@@ -35,6 +35,12 @@ public partial class Pasuk : ObservableObject
     public List<PasukSegment> Segments { get; set; } = new();
 
     /// <summary>
+    /// Perushim (commentaries) for this pasuk. Populated when perushim are loaded and filtered.
+    /// </summary>
+    [ObservableProperty]
+    private List<PerushNoteDisplay> _perushNotes = new();
+
+    /// <summary>
     /// Gets the formatted text representation with qri/ktiv handling.
     /// Qri segments that differ from ktiv are displayed as "(קְרִי: value)" in a distinct color.
     /// </summary>
