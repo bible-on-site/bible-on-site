@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import type { ArticlePerekPair } from "../lib/articles";
 import { getAllArticlePerekIdPairs } from "../lib/articles";
 import { getAllAuthorSlugs } from "../lib/authors";
+import { getPerushimByPerekId } from "../lib/perushim";
 
 /**
  * Static section paths for the sitemap
@@ -20,6 +21,14 @@ export const SITEMAP_SECTIONS = [
  * Total number of perakim in the 929 cycle
  */
 export const TOTAL_PERAKIM = 929;
+
+/**
+ * Perush-Perek pair for sitemap generation
+ */
+export interface PerushPerekPair {
+	perekId: number;
+	perushName: string;
+}
 
 export interface SitemapConfig {
 	baseUrl: string;
@@ -127,12 +136,28 @@ export function generateAuthorEntries(
 }
 
 /**
+ * Generates perush URL entries for the sitemap
+ */
+export function generatePerushEntries(
+	config: SitemapConfig,
+	perushim: PerushPerekPair[],
+): MetadataRoute.Sitemap {
+	return perushim.map((perush) => ({
+		url: `${config.baseUrl}/929/${perush.perekId}/${encodeURIComponent(perush.perushName)}`,
+		lastModified: config.lastModified,
+		changeFrequency: "monthly" as const,
+		priority: 0.7,
+	}));
+}
+
+/**
  * Generates the complete sitemap entries (pure function for testing)
  */
 export function generateSitemapEntries(
 	config: SitemapConfig,
 	authorSlugs: string[] = [],
 	articles: ArticlePerekPair[] = [],
+	perushim: PerushPerekPair[] = [],
 ): MetadataRoute.Sitemap {
 	return [
 		generateRootEntry(config),
@@ -140,6 +165,7 @@ export function generateSitemapEntries(
 		generate929IndexEntry(config),
 		...generatePerekEntries(config),
 		...generateArticleEntries(config, articles),
+		...generatePerushEntries(config, perushim),
 		generateAuthorsIndexEntry(config),
 		...generateAuthorEntries(config, authorSlugs),
 	];
@@ -157,6 +183,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 		getAllArticlePerekIdPairs(),
 	]);
 
+	// Fetch all perushim for all perakim
+	const perushimPromises = Array.from({ length: TOTAL_PERAKIM }, (_, i) =>
+		getPerushimByPerekId(i + 1),
+	);
+	const allPerushim = await Promise.all(perushimPromises);
+
+	// Flatten to perush-perek pairs
+	const perushPerekPairs: PerushPerekPair[] = allPerushim.flatMap(
+		(perushim, index) =>
+			perushim.map((perush) => ({
+				perekId: index + 1,
+				perushName: perush.name,
+			})),
+	);
+
 	return generateSitemapEntries(
 		{
 			baseUrl,
@@ -164,5 +205,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 		},
 		authorSlugs,
 		articles,
+		perushPerekPairs,
 	);
 }

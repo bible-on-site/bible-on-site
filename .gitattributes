@@ -4,6 +4,8 @@
 # linguist-generated = GitHub excludes from stats & collapses diffs
 web/bible-on-site/src/data/db/*.tanah_view.json binary linguist-generated
 app/BibleOnSite/Resources/Raw/*.tanah_view.sqlite binary -delta linguist-generated
+app/BibleOnSite/Resources/Raw/*.perushim_catalog.sqlite binary -delta linguist-generated
+app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/*.sqlite.gz binary -delta linguist-generated
 data/mysql/*_data.sql binary linguist-generated
 
 # Shell scripts - force LF endings (required for Docker/Linux containers)

@@ -5,7 +5,7 @@ namespace BibleOnSite.Pages;
 
 /// <summary>
 /// Loading page shown on app startup while starter data is being loaded.
-/// Similar to the legacy Flutter app's splash/loading behavior.
+/// Handles offline mode gracefully — never blocks indefinitely.
 /// </summary>
 public partial class LoadingPage : ContentPage
 {
@@ -31,29 +31,41 @@ public partial class LoadingPage : ContentPage
             await AppConfig.Instance.InitializeAsync();
             Console.WriteLine($"API URL: {AppConfig.Instance.GetApiUrl()}");
 
+            // Load preferences (font, last perek, perek-to-load) so PerekPage can use them
+            PreferencesService.Instance.Load();
+
+            // Load PerekDataService (tanah) so GetTodaysPerekId works for startup preference
+            if (!PerekDataService.Instance.IsLoaded)
+                await PerekDataService.Instance.LoadAsync();
+
             await LoadStarterDataAsync();
-            await NavigateToMainPageAsync();
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Failed to load starter data: {ex}");
-            // Navigate anyway - pages will retry loading if needed
-            await NavigateToMainPageAsync();
+            Console.Error.WriteLine($"Startup error: {ex}");
         }
+
+        // Start monitoring connectivity changes so we can refresh when back online
+        NetworkService.Instance.StartMonitoring();
+
+        // Always navigate — the app works without articles/authors
+        await NavigateToMainPageAsync();
     }
 
     private async Task LoadStarterDataAsync()
     {
-        try
+        LoadingLabel.Text = "מתחבר לפרק...";
+        await StarterService.Instance.LoadWithRetryAsync();
+
+        if (!StarterService.Instance.IsLoaded)
         {
-            LoadingLabel.Text = "מתחבר לפרק...";
-            await StarterService.Instance.LoadWithRetryAsync();
-            Console.WriteLine($"Loaded {StarterService.Instance.Authors.Count} authors from API");
+            // Show the classic "התעיף עיניך" message briefly before navigating
+            LoadingLabel.Text = "הֲתָעִיף עֵינֶיךָ בּוֹ וְאֵינֶנּוּ?\n(משלי כג ה)\n\nממשיכים ללא חיבור לשרת";
+            await Task.Delay(1500);
         }
-        catch (Exception ex)
+        else if (StarterService.Instance.IsFromCache)
         {
-            Console.Error.WriteLine($"Starter loading failed: {ex.Message}");
-            throw;
+            LoadingLabel.Text = "נטען ממטמון מקומי";
         }
     }
 

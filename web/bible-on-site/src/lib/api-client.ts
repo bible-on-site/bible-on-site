@@ -20,17 +20,21 @@ function parseDbUrl(url: string): mysql.PoolOptions {
 }
 
 // Database configuration from environment variables
-// Supports both DB_URL (connection string) and individual env vars
+// Supports both DB_URL (connection string) and individual env vars.
+// When DB_URL is set explicitly, it is always respected as-is — no overrides.
+// When using individual env vars, the default database name depends on NODE_ENV.
 function getDbConfig(): mysql.PoolOptions {
 	if (process.env.DB_URL) {
 		return parseDbUrl(process.env.DB_URL);
 	}
+	const defaultDb =
+		process.env.NODE_ENV === "development" ? "tanah-dev" : "tanah";
 	return {
 		host: process.env.DB_HOST || "127.0.0.1",
 		port: Number.parseInt(process.env.DB_PORT || "3306", 10),
 		user: process.env.DB_USER || "root",
 		password: process.env.DB_PASSWORD || "",
-		database: process.env.DB_NAME || "tanah",
+		database: process.env.DB_NAME || defaultDb,
 	};
 }
 

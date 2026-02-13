@@ -37,7 +37,7 @@ export function ArticlesSection({
 				{safeArticles.length === 0 ? (
 					<p className={styles.emptyMessage}>אין מאמרים לפרק זה</p>
 				) : loading ? (
-					<p className={styles.emptyMessage}>טוען...</p>
+					<p className={styles.emptyMessage}>מתחבר למאמרים...</p>
 				) : (
 					safeArticles.map((article) =>
 						onArticleClick ? (

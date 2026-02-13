@@ -609,6 +609,7 @@ jobs:
       - name: Install npm Dependencies
         id: npm_ci
         run: |
+          node --version && npm --version
           npm ci --no-audit
 
       - name: Install Playwright Dependencies
@@ -718,6 +719,7 @@ jobs:
           path: ${{ env.WEBSITE_DIRECTORY }}/.coverage/debug
           retention-days: 7
           overwrite: true
+          if-no-files-found: ignore
 
       - name: Store Website Coverage Report (wf)
         uses: actions/upload-artifact@v6

@@ -35,6 +35,14 @@ struct Cli {
     #[arg(long, default_value = "../tanah_sefarim_and_perakim_data.sql")]
     tanah_view_data_script: String,
 
+    /// Path to perushim (commentaries) structure SQL file; skipped if missing
+    #[arg(long, default_value = "../perushim_structure.sql")]
+    perushim_structure_script: String,
+
+    /// Path to perushim data SQL file; skipped if missing
+    #[arg(long, default_value = "../perushim_data.sql")]
+    perushim_data_script: String,
+
     /// Skip structure script execution
     #[arg(long, default_value = "false")]
     skip_structure: bool,
@@ -126,6 +134,11 @@ async fn main() -> Result<()> {
         // Execute dynamic structure (articles, dedications, authors)
         let dynamic_structure_path = base_path.join(&cli.dynamic_structure_script);
         execute_script(&mut conn, &dynamic_structure_path, "dynamic-structure").await?;
+
+        let perushim_structure_path = base_path.join(&cli.perushim_structure_script);
+        if perushim_structure_path.exists() {
+            execute_script(&mut conn, &perushim_structure_path, "perushim-structure").await?;
+        }
     }
 
     if !cli.skip_data {
@@ -134,6 +147,11 @@ async fn main() -> Result<()> {
 
         let tanah_view_data_path = base_path.join(&cli.tanah_view_data_script);
         execute_script(&mut conn, &tanah_view_data_path, "tanah-view-data").await?;
+
+        let perushim_data_path = base_path.join(&cli.perushim_data_script);
+        if perushim_data_path.exists() {
+            execute_script_chunked(&mut conn, &perushim_data_path, "perushim-data").await?;
+        }
     }
 
     conn.close().await.context("Failed to close connection")?;
@@ -164,6 +182,85 @@ async fn execute_script(
         .with_context(|| format!("Failed to execute {} script", script_type))?;
 
     println!("{} script executed successfully", script_type);
+    Ok(())
+}
+
+/// Execute a large SQL script statement-by-statement to stay under max_allowed_packet.
+/// Splits on single-line statements (line ends with ";") and multi-line note INSERTs (block ending with ");").
+async fn execute_script_chunked(
+    conn: &mut MySqlConnection,
+    script_path: &Path,
+    script_type: &str,
+) -> Result<()> {
+    println!(
+        "Executing {} script (chunked) from {:?}...",
+        script_type, script_path
+    );
+
+    let script = std::fs::read_to_string(script_path)
+        .with_context(|| format!("Failed to read {} script: {:?}", script_type, script_path))?;
+
+    let script = filter_use_statements(&script);
+    let mut stmt_count = 0usize;
+
+    let mut buf = String::new();
+    for line in script.lines() {
+        let trimmed = line.trim();
+        if trimmed == ");" {
+            // End of multi-line INSERT INTO note ... VALUES (...), (...), ... );
+            buf.push_str(line);
+            buf.push('\n');
+            if !buf.trim().is_empty() {
+                sqlx::raw_sql(buf.trim())
+                    .execute(&mut *conn)
+                    .await
+                    .with_context(|| {
+                        format!(
+                            "Failed to execute {} statement #{}",
+                            script_type,
+                            stmt_count + 1
+                        )
+                    })?;
+                stmt_count += 1;
+            }
+            buf.clear();
+            continue;
+        }
+        if trimmed.ends_with(';') && trimmed != ");" {
+            // Single-line statement (SET, INSERT parshan, INSERT perush, etc.)
+            buf.push_str(line);
+            buf.push('\n');
+            if !buf.trim().is_empty() {
+                sqlx::raw_sql(buf.trim())
+                    .execute(&mut *conn)
+                    .await
+                    .with_context(|| {
+                        format!(
+                            "Failed to execute {} statement #{}",
+                            script_type,
+                            stmt_count + 1
+                        )
+                    })?;
+                stmt_count += 1;
+            }
+            buf.clear();
+            continue;
+        }
+        buf.push_str(line);
+        buf.push('\n');
+    }
+    if !buf.trim().is_empty() {
+        sqlx::raw_sql(buf.trim())
+            .execute(&mut *conn)
+            .await
+            .with_context(|| format!("Failed to execute {} final statement", script_type))?;
+        stmt_count += 1;
+    }
+
+    println!(
+        "{} script executed successfully ({} statements)",
+        script_type, stmt_count
+    );
     Ok(())
 }
 

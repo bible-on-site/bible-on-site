@@ -100,7 +100,7 @@
                             HeightRequest="60"
                             WidthRequest="60"
                             Aspect="AspectFit"/>
-                     <Label Text="טוען רבנים..."
+                     <Label Text="מתחבר לרבנים..."
                             FontSize="16"
                             HorizontalTextAlignment="Center"
                             IsVisible="{Binding IsLoading}"/>

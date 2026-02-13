@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 
 jest.mock("@/app/929/[number]/components/sefer-composite.module.css", () => ({
 	seferOverlay: "seferOverlay",
@@ -61,20 +61,23 @@ describe("SeferComposite (wide screen)", () => {
 		expect(screen.getByRole("checkbox")).toBeTruthy();
 	});
 
-	it("shows Sefer view when toggled via checkbox", () => {
+	it("shows Sefer view when toggled via checkbox", async () => {
 		render(<SeferComposite perekObj={minimalPerek} articles={[]} />);
 		const checkbox = screen.getByRole("checkbox");
 
-		act(() => {
+		await act(async () => {
 			fireEvent.click(checkbox);
 		});
 
-		expect(screen.getByTestId("sefer")).toBeTruthy();
+		// Sefer is loaded via next/dynamic, so wait for the async chunk to resolve.
+		expect(await screen.findByTestId("sefer")).toBeTruthy();
 	});
 
-	it("shows Sefer view immediately when ?book is in URL", () => {
+	it("shows Sefer view immediately when ?book is in URL", async () => {
 		mockGet.mockReturnValue("");
-		render(<SeferComposite perekObj={minimalPerek} articles={[]} />);
-		expect(screen.getByTestId("sefer")).toBeTruthy();
+		await act(async () => {
+			render(<SeferComposite perekObj={minimalPerek} articles={[]} />);
+		});
+		expect(await screen.findByTestId("sefer")).toBeTruthy();
 	});
 });

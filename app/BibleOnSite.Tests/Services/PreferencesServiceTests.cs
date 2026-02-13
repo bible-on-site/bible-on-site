@@ -88,11 +88,11 @@ public class PreferencesServiceTests : IDisposable
     [Fact]
     public void PerekToLoad_WhenSet_PersistsToStorage()
     {
-        // Act
-        _service.PerekToLoad = PerekToLoad.Todays;
+        // Act — use LastLearnt since the default is already Todays (setter skips equal values)
+        _service.PerekToLoad = PerekToLoad.LastLearnt;
 
         // Assert
-        _storage.Get("perekToLoad", -1).Should().Be((int)PerekToLoad.Todays);
+        _storage.Get("perekToLoad", -1).Should().Be((int)PerekToLoad.LastLearnt);
     }
 
     [Fact]

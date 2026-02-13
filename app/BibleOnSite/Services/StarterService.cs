@@ -1,10 +1,11 @@
+using System.Text.Json;
 using BibleOnSite.Models;
 
 namespace BibleOnSite.Services;
 
 /// <summary>
 /// Service for loading initial app data (authors, articles, perek article counters).
-/// Follows singleton pattern matching the legacy Flutter implementation.
+/// Supports offline mode: caches API responses locally and loads from cache when offline.
 /// </summary>
 public class StarterService : BaseGraphQLService
 {
@@ -14,6 +15,8 @@ public class StarterService : BaseGraphQLService
     /// Singleton instance of the StarterService.
     /// </summary>
     public static StarterService Instance => _instance.Value;
+
+    private const string CacheFileName = "starter_cache.json";
 
     private StarterService() { }
 
@@ -34,9 +37,14 @@ public class StarterService : BaseGraphQLService
     public List<int> PerekArticlesCounters { get; private set; } = Enumerable.Repeat(0, 929).ToList();
 
     /// <summary>
-    /// Indicates whether starter data has been successfully loaded.
+    /// Indicates whether starter data has been successfully loaded (from API or cache).
     /// </summary>
     public bool IsLoaded { get; private set; }
+
+    /// <summary>
+    /// True when data was loaded from local cache rather than from the API.
+    /// </summary>
+    public bool IsFromCache { get; private set; }
 
     private const string GetStarterQuery = """
         query GetStarter {
@@ -68,7 +76,7 @@ public class StarterService : BaseGraphQLService
         if (IsLoaded)
             return;
 
-        await LoadAsync(forceReload: false);
+        await LoadFromApiAsync();
     }
 
     /// <summary>
@@ -79,6 +87,14 @@ public class StarterService : BaseGraphQLService
         if (IsLoaded && !forceReload)
             return;
 
+        await LoadFromApiAsync();
+    }
+
+    /// <summary>
+    /// Fetches starter data from the API and caches the result locally.
+    /// </summary>
+    private async Task LoadFromApiAsync()
+    {
         var response = await QueryWithTimeoutAsync<StarterResponse>(
             GetStarterQuery,
             TimeSpan.FromSeconds(5),
@@ -87,7 +103,19 @@ public class StarterService : BaseGraphQLService
         if (response?.Starter == null)
             return;
 
-        // Build authors dictionary for article lookup
+        ApplyResponse(response);
+        IsFromCache = false;
+        IsLoaded = true;
+
+        // Persist to local cache in background (fire-and-forget)
+        _ = Task.Run(() => SaveCacheAsync(response));
+    }
+
+    /// <summary>
+    /// Applies a StarterResponse to the in-memory state (authors, articles, counters).
+    /// </summary>
+    private void ApplyResponse(StarterResponse response)
+    {
         var authorsById = new Dictionary<int, Author>();
 
         Authors = response.Starter.Authors
@@ -106,7 +134,6 @@ public class StarterService : BaseGraphQLService
             .OrderBy(a => a.Name)
             .ToList();
 
-        // Build articles with author references
         Articles = response.Starter.Articles
             .Select(a =>
             {
@@ -125,7 +152,6 @@ public class StarterService : BaseGraphQLService
             .ToList();
 
         PerekArticlesCounters = response.Starter.PerekArticlesCounters.ToList();
-        IsLoaded = true;
     }
 
     /// <summary>
@@ -151,39 +177,124 @@ public class StarterService : BaseGraphQLService
     }
 
     /// <summary>
-    /// Loads starter data with retry on failure (5-second delay between retries).
+    /// Primary startup method.  Tries the API once, falls back to local cache,
+    /// and if neither is available proceeds with empty data so the app can start.
+    /// Never blocks indefinitely.
     /// </summary>
     public async Task LoadWithRetryAsync()
     {
+        if (IsLoaded)
+            return;
+
+        // 1. Try the API (single attempt with 5-second timeout)
         try
         {
-            Console.WriteLine("Loading starter data...");
-            await LoadAsync();
+            Console.WriteLine("Loading starter data from API...");
+            await LoadFromApiAsync();
+            if (IsLoaded)
+            {
+                Console.WriteLine($"Loaded {Authors.Count} authors from API");
+                return;
+            }
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Failed to load starter, retrying in 5 seconds: {ex.Message}");
-            await Task.Delay(TimeSpan.FromSeconds(5));
-            await LoadWithRetryAsync();
+            Console.Error.WriteLine($"API unavailable: {ex.Message}");
+        }
+
+        // 2. Fall back to local cache
+        try
+        {
+            Console.WriteLine("Trying local cache...");
+            if (await LoadFromCacheAsync())
+            {
+                Console.WriteLine($"Loaded {Authors.Count} authors from cache");
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Cache load failed: {ex.Message}");
+        }
+
+        // 3. No data — proceed empty; articles/authors just won't be shown
+        Console.WriteLine("No starter data available — proceeding offline without articles");
+    }
+
+    /// <summary>
+    /// Attempts to refresh starter data from the API.  Called when the device
+    /// comes back online after starting in offline mode.
+    /// </summary>
+    public async Task TryRefreshAsync()
+    {
+        try
+        {
+            Console.WriteLine("Refreshing starter data from API...");
+            await LoadFromApiAsync();
+            if (IsLoaded)
+                Console.WriteLine($"Refreshed {Authors.Count} authors from API");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Refresh failed: {ex.Message}");
         }
     }
 
+    #region Local cache
+
+    private static string CachePath =>
+        Path.Combine(FileSystem.AppDataDirectory, CacheFileName);
+
+    private static async Task SaveCacheAsync(StarterResponse response)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(response, StarterJsonContext.Default.StarterResponse);
+            await File.WriteAllTextAsync(CachePath, json);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Failed to save starter cache: {ex.Message}");
+        }
+    }
+
+    private async Task<bool> LoadFromCacheAsync()
+    {
+        if (!File.Exists(CachePath))
+            return false;
+
+        var json = await File.ReadAllTextAsync(CachePath);
+        var response = JsonSerializer.Deserialize(json, StarterJsonContext.Default.StarterResponse);
+        if (response?.Starter == null)
+            return false;
+
+        ApplyResponse(response);
+        IsFromCache = true;
+        IsLoaded = true;
+        return true;
+    }
+
+    #endregion
+
     #region DTOs for GraphQL response
 
-    private record StarterResponse(StarterData Starter);
+    // Records used for both GraphQL deserialization and local JSON cache.
+    // The System.Text.Json source generator (StarterJsonContext) handles
+    // the local cache; Newtonsoft handles the GraphQL client.
+    internal record StarterResponse(StarterData Starter);
 
-    private record StarterData(
+    internal record StarterData(
         List<AuthorData> Authors,
         List<ArticleData> Articles,
         List<int> PerekArticlesCounters);
 
-    private record AuthorData(
+    internal record AuthorData(
         int Id,
         int ArticlesCount,
         string Details,
         string Name);
 
-    private record ArticleData(
+    internal record ArticleData(
         int Id,
         int PerekId,
         int AuthorId,
@@ -193,3 +304,10 @@ public class StarterService : BaseGraphQLService
 
     #endregion
 }
+
+/// <summary>
+/// System.Text.Json source generator for StarterService cache serialization.
+/// Avoids reflection which is problematic with IL trimming in Release builds.
+/// </summary>
+[System.Text.Json.Serialization.JsonSerializable(typeof(StarterService.StarterResponse))]
+internal partial class StarterJsonContext : System.Text.Json.Serialization.JsonSerializerContext { }

@@ -28,6 +28,11 @@ public partial class PerekPage : ContentPage
     // Articles view state
     private bool _isShowingArticles;
 
+    // Guard: ignore CurrentItemChanged events fired by the CarouselView during
+    // initial collection assignment.  Without this, the handler resets the
+    // position to bereshit-1 right after we placed it at today's perek.
+    private bool _carouselInitializing;
+
     // Scroll state tracking - used to prevent long-press during scroll
     private static DateTime _lastScrollTime = DateTime.MinValue;
     private const int ScrollCooldownMs = 500; // Don't allow long-press within 500ms of scroll
@@ -49,6 +54,8 @@ public partial class PerekPage : ContentPage
         _viewModel = new PerekViewModel();
         BindingContext = _viewModel;
         ForwardSelectedArticleIdChanged();
+        SetupFontSizeResources();
+        SetupCarouselNavigation();
         SetupGlobalTouchHandler();
         SetupExitButtonDragHandler();
     }
@@ -59,8 +66,63 @@ public partial class PerekPage : ContentPage
         _viewModel = viewModel;
         BindingContext = _viewModel;
         ForwardSelectedArticleIdChanged();
+        SetupFontSizeResources();
+        SetupCarouselNavigation();
         SetupGlobalTouchHandler();
         SetupExitButtonDragHandler();
+    }
+
+    /// <summary>
+    /// Subscribes to ViewModel.NavigationRequested so that programmatic
+    /// navigation (prev/next/today/picker) jumps the CarouselView instantly
+    /// via ScrollTo(animate:false) instead of animating through every
+    /// intermediate position (which would cascade OnCarouselItemChanged).
+    /// </summary>
+    private void SetupCarouselNavigation()
+    {
+        _viewModel.NavigationRequested += (_, perekId) =>
+        {
+            var targetIndex = perekId - 1;
+            // Guard: suppress OnCarouselItemChanged while we reposition
+            _carouselInitializing = true;
+            PerekCarousel.ScrollTo(targetIndex, animate: false);
+            _carouselInitializing = false;
+
+            // Post-navigation housekeeping (ViewModel state is already set by
+            // NavigateToPerekAsync before this event fires, including perushim)
+            UpdateSelectionBar();
+            SetAnalyticsScreenForPerek();
+            if (_isMenuOpen) RefreshNavButtonVisuals();
+            _ = UpdateArticlesCountAsync();
+            _ = _viewModel.PreloadAdjacentPasukimAsync(perekId);
+        };
+    }
+
+    /// <summary>
+    /// Populates page-level DynamicResource entries for font sizes and keeps them
+    /// in sync when the user changes the font-factor preference.
+    /// DynamicResource is used because x:Reference bindings inside CarouselView
+    /// DataTemplates are unreliable on Android.
+    /// </summary>
+    private void SetupFontSizeResources()
+    {
+        UpdateFontSizeResources(_viewModel.FontFactor);
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PerekViewModel.FontFactor))
+            {
+                MainThread.BeginInvokeOnMainThread(() =>
+                    UpdateFontSizeResources(_viewModel.FontFactor));
+            }
+        };
+    }
+
+    private void UpdateFontSizeResources(double factor)
+    {
+        Resources["PasukFontSize"] = factor * 18;
+        Resources["PasukNumFontSize"] = factor * 16;
+        Resources["PerushNameFontSize"] = factor * 14;
+        Resources["PerushContentFontSize"] = factor * 16;
     }
 
     private void ForwardSelectedArticleIdChanged()
@@ -155,14 +217,39 @@ public partial class PerekPage : ContentPage
 #if IOS
         ApplyBottomBarSafeArea();
 #endif
-        // If no perek is loaded, load perek 1
+        // If no perek is loaded, load perek based on preference (today's or last learnt)
         if (_viewModel.Perek == null && !_isLoading)
         {
             _isLoading = true;
             try
             {
-                // Load data from SQLite database
-                await _viewModel.LoadByPerekIdAsync(1);
+                var perekId = GetInitialPerekId();
+
+                // Show loading overlay while the carousel initialises.
+                CarouselLoadingOverlay.IsVisible = true;
+
+                // Guard: ignore OnCarouselItemChanged during initial load.
+                // The CarouselView fires spurious CurrentItemChanged events when it
+                // first receives its ItemsSource, which would reset state.
+                _carouselInitializing = true;
+                await _viewModel.LoadByPerekIdAsync(perekId);
+
+                // CarouselView resets Position to 0 when ItemsSource changes.
+                // Force it to the correct position without animation.
+                var targetPos = _viewModel.PerekId - 1;
+                PerekCarousel.ScrollTo(targetPos, animate: false);
+
+                // Yield so the CarouselView processes the scroll + layout pass.
+                await Task.Delay(50);
+
+                // Sync the ViewModel position (two-way binding may lag)
+                _viewModel.CarouselPosition = targetPos;
+
+                _carouselInitializing = false;
+
+                // Hide loading overlay — carousel is ready
+                CarouselLoadingOverlay.IsVisible = false;
+
                 // Update articles count badge
                 await UpdateArticlesCountAsync();
             }
@@ -176,6 +263,19 @@ public partial class PerekPage : ContentPage
                 _isLoading = false;
             }
         }
+    }
+
+    private static int GetInitialPerekId()
+    {
+        var prefs = PreferencesService.Instance;
+        if (prefs.PerekToLoad == PerekToLoad.Todays)
+        {
+            if (PerekDataService.Instance.IsLoaded)
+                return PerekDataService.Instance.GetTodaysPerekId();
+            return 1; // Fallback if tanah not loaded (LoadingPage loads it, but race possible)
+        }
+        var last = prefs.LastLearntPerek;
+        return last is > 0 and <= 929 ? last.Value : 1;
     }
 
     /// <summary>
@@ -240,7 +340,14 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private void OnPasukTapped(object? sender, TappedEventArgs e)
     {
-        // Cancel any pending long-press timers (Android doesn't receive Up events in CollectionView)
+#if ANDROID
+        // On Android, taps are handled natively via LongPressBehavior.NativeTapped
+        // because (a) MAUI's TapGestureRecognizer fails in nested CarouselView >
+        // CollectionView and (b) with e.Handled=true on Down the MAUI gesture also
+        // fires after a long-press release, immediately undoing the selection.
+        return;
+#endif
+        // Cancel any pending long-press timers
         LongPressBehavior.CancelAllPending();
 
         // Skip tap if long press just happened (prevents tap-on-release from toggling selection off)
@@ -259,14 +366,38 @@ public partial class PerekPage : ContentPage
     }
 
     /// <summary>
+    /// Native tap handler fired by LongPressBehavior on Android.
+    /// MAUI's TapGestureRecognizer fails inside nested CarouselView > CollectionView
+    /// DataTemplates, so we detect taps via the same native Touch event that the
+    /// long-press behavior already hooks into.
+    /// </summary>
+    private void OnPasukNativeTapped(object? sender, EventArgs e)
+    {
+        // Skip tap if long press just happened
+        if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 300)
+            return;
+
+        // Get the Pasuk from the behavior's associated view (the Border)
+        if (sender is LongPressBehavior behavior &&
+            behavior.AssociatedView?.BindingContext is Pasuk pasuk)
+        {
+            if (_viewModel.SelectedPasukNums.Count > 0)
+            {
+                _viewModel.ToggleSelectedPasuk(pasuk.PasukNum);
+                UpdatePasukSelection(behavior.AssociatedView, pasuk.PasukNum);
+            }
+        }
+    }
+
+    /// <summary>
     /// Handles right-click on pasuk - enters selection mode (Windows only).
     /// </summary>
     private void OnPasukRightClicked(object? sender, TappedEventArgs e)
     {
 #if WINDOWS
-        // Don't set _lastLongPressTime - right-click doesn't need debounce
         if (e.Parameter is int pasukNum)
         {
+            // Don't set _lastLongPressTime - right-click doesn't need debounce
             var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
             _viewModel.ToggleSelectedPasuk(pasukNum);
             UpdatePasukSelection(sender, pasukNum);
@@ -522,7 +653,7 @@ public partial class PerekPage : ContentPage
 
         // Change back to hamburger
         CircularMenuButton.Text = "☰";
-        CircularMenuButton.BackgroundColor = Color.FromArgb("#512BD4");
+        CircularMenuButton.BackgroundColor = (Color)Application.Current!.Resources["Primary"];
 
         // Animate FAB rotation and fade out all buttons
         var animations = new List<Task>
@@ -582,9 +713,7 @@ public partial class PerekPage : ContentPage
     {
         if (perekId >= 1 && perekId <= 929 && perekId != _viewModel.PerekId)
         {
-            // Use NavigateToPerekAsync to move position without rebuilding the carousel
             await _viewModel.NavigateToPerekAsync(perekId);
-            // OnCarouselItemChanged handles SetAnalyticsScreenForPerek, UpdateArticlesCountAsync, etc.
         }
     }
 
@@ -770,6 +899,42 @@ public partial class PerekPage : ContentPage
     private double _perushimPanStartHeight;
     private double _perushimLastPanY;
     private DateTime _perushimLastPanTime;
+
+    private void OnPerushCheckboxChanged(object? sender, CheckedChangedEventArgs e)
+    {
+        if (sender is not CheckBox checkBox)
+            return;
+        var grid = checkBox.Parent as Grid;
+        var perush = grid?.BindingContext as Perush;
+        if (perush != null)
+        {
+            _viewModel.ToggleCheckedPerush(perush.Id);
+        }
+    }
+
+    private async void OnDownloadPerushimClicked(object? sender, EventArgs e)
+    {
+        if (sender is Button btn)
+            btn.IsEnabled = false;
+        try
+        {
+            var ok = await PerushimNotesService.Instance.TryDownloadNotesAsync();
+            if (ok && _viewModel.PerekId > 0)
+            {
+                await _viewModel.LoadPerushimAsync(_viewModel.PerekId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Download perushim failed: {ex.Message}");
+            await DisplayAlert("שגיאה", "לא ניתן להוריד פירושים. נסו שוב מאוחר יותר.", "אישור");
+        }
+        finally
+        {
+            if (sender is Button b)
+                b.IsEnabled = true;
+        }
+    }
 
     private async void OnPerushimChevronClicked(object? sender, EventArgs e)
     {
@@ -1082,6 +1247,15 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private async void OnCarouselItemChanged(object? sender, CurrentItemChangedEventArgs e)
     {
+        // During initial collection assignment the CarouselView fires spurious
+        // CurrentItemChanged events (e.g. for position-0 / bereshit-1).
+        // Ignore them — the ViewModel already holds the correct perek.
+        if (_carouselInitializing)
+        {
+            Console.WriteLine($"[Carousel] OnChanged IGNORED (initializing)");
+            return;
+        }
+
         var incomingId = (e.CurrentItem as Perek)?.PerekId ?? -1;
         var previousId = (e.PreviousItem as Perek)?.PerekId ?? -1;
 
@@ -1107,6 +1281,9 @@ public partial class PerekPage : ContentPage
         UpdateSelectionBar();
         SetAnalyticsScreenForPerek();
 
+        // Persist the current perek as last learnt so the user can resume here
+        _viewModel.SaveLastLearntPerek();
+
         // Refresh nav button visuals if menu is open (synchronous)
         if (_isMenuOpen)
         {
@@ -1117,6 +1294,7 @@ public partial class PerekPage : ContentPage
 
         // Fire async tasks in the background — never block the next swipe
         _ = UpdateArticlesCountAsync();
+        _ = _viewModel.LoadPerushimAsync(perek.PerekId);
         _ = _viewModel.PreloadAdjacentPasukimAsync(perek.PerekId);
         if (_isShowingArticles)
         {
@@ -1140,7 +1318,7 @@ public partial class PerekPage : ContentPage
                 b.InputTransparent = true;
             }
             CircularMenuButton.Text = "☰";
-            CircularMenuButton.BackgroundColor = Color.FromArgb("#512BD4");
+            CircularMenuButton.BackgroundColor = (Color)Application.Current!.Resources["Primary"];
             CircularMenuButton.Rotation = 0;
         }
 

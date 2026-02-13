@@ -1,3 +1,4 @@
+import "@/lib/download/register-tanach";
 import type React from "react";
 import "./layout.css";
 

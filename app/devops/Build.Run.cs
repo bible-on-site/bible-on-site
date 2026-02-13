@@ -373,6 +373,10 @@ partial class Build
                     throw new Exception($"Android build/install failed with exit code {buildProcess?.ExitCode}");
                 }
 
+                // Ensure perushim databases are on the device.
+                // PAD doesn't work in debug/emulator, so we push via ADB if missing.
+                EnsurePerushimOnDevice();
+
                 // Launch and verify the app
                 LaunchAndVerifyApp();
             }
@@ -713,6 +717,172 @@ partial class Build
 
         throw new Exception("Timed out waiting for Android emulator to start");
     }
+
+    const string AppId = "com.tanah.daily929";
+    const string NotesDbName = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
+    const string CatalogDbName = "sefaria-dump-5784-sivan-4.perushim_catalog.sqlite";
+
+    /// <summary>
+    /// Checks whether a file exists in the app's data directory on the device.
+    /// </summary>
+    bool DeviceFileExists(string fileName)
+    {
+        try
+        {
+            var adbPath = GetAdbPath();
+            var info = new ProcessStartInfo
+            {
+                FileName = adbPath,
+                Arguments = GetAdbDeviceArgs($"shell run-as {AppId} ls files/{fileName}"),
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+            using var process = Process.Start(info);
+            process?.WaitForExit();
+            return process?.ExitCode == 0;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>
+    /// Pushes a local file to the app's data directory on the device.
+    /// Uses /data/local/tmp/ as a staging area since adb push can't write to app-private dirs.
+    /// </summary>
+    void PushFileToDevice(string localPath, string fileName)
+    {
+        var adbPath = GetAdbPath();
+        var tmpPath = $"/data/local/tmp/{fileName}";
+
+        // Step 1: push to staging area
+        Serilog.Log.Information($"Pushing {fileName} to device ({new System.IO.FileInfo(localPath).Length / (1024 * 1024)} MB)...");
+        var pushInfo = new ProcessStartInfo
+        {
+            FileName = adbPath,
+            Arguments = GetAdbDeviceArgs($"push \"{localPath}\" {tmpPath}"),
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+        using (var pushProcess = Process.Start(pushInfo))
+        {
+            pushProcess?.WaitForExit();
+            if (pushProcess?.ExitCode != 0)
+            {
+                var err = pushProcess?.StandardError.ReadToEnd();
+                Serilog.Log.Warning($"adb push failed: {err}");
+                return;
+            }
+        }
+
+        // Step 2: copy from staging into app data via run-as
+        var cpInfo = new ProcessStartInfo
+        {
+            FileName = adbPath,
+            Arguments = GetAdbDeviceArgs($"shell run-as {AppId} cp {tmpPath} /data/data/{AppId}/files/{fileName}"),
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+        using (var cpProcess = Process.Start(cpInfo))
+        {
+            cpProcess?.WaitForExit();
+            if (cpProcess?.ExitCode != 0)
+            {
+                var err = cpProcess?.StandardError.ReadToEnd();
+                Serilog.Log.Warning($"run-as cp failed: {err}");
+                return;
+            }
+        }
+
+        // Step 3: clean up staging
+        var rmInfo = new ProcessStartInfo
+        {
+            FileName = adbPath,
+            Arguments = GetAdbDeviceArgs($"shell rm -f {tmpPath}"),
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        using (var rmProcess = Process.Start(rmInfo))
+        {
+            rmProcess?.WaitForExit();
+        }
+
+        Serilog.Log.Information($"Pushed {fileName} to device");
+    }
+
+    /// <summary>
+    /// Ensures the perushim notes and catalog databases exist on the device.
+    /// PAD (Play Asset Delivery) doesn't work in debug/emulator mode, so we
+    /// push the databases directly via ADB if they're missing on the device.
+    /// </summary>
+    void EnsurePerushimOnDevice()
+    {
+        // Notes DB: lives in asset pack dir locally, push if missing from device
+        var notesLocalPath = System.IO.Path.Combine(
+            SourceDirectory, "Platforms", "Android", "AssetPacks", "perushim_notes", NotesDbName);
+
+        if (System.IO.File.Exists(notesLocalPath) && !DeviceFileExists(NotesDbName))
+        {
+            PushFileToDevice(notesLocalPath, NotesDbName);
+        }
+        else if (!System.IO.File.Exists(notesLocalPath))
+        {
+            Serilog.Log.Warning($"Perushim notes not found at {notesLocalPath} — skipping push");
+        }
+        else
+        {
+            Serilog.Log.Information("Perushim notes already on device");
+        }
+
+        // Catalog DB: bundled in Resources/Raw, the app copies it on first run.
+        // No push needed — it's in the APK itself.
+    }
+
+    /// <summary>
+    /// Clears stale perushim/catalog SQLite databases from the Android device/emulator.
+    /// Use after re-exporting data (e.g. new perushim extraction) so the app picks up
+    /// the freshly bundled databases on next launch instead of reusing a stale copy.
+    /// </summary>
+    void ClearAndroidAppDatabases()
+    {
+        var adbPath = GetAdbPath();
+        var filesToDelete = new[] { NotesDbName, CatalogDbName };
+
+        foreach (var file in filesToDelete)
+        {
+            var deleteInfo = new ProcessStartInfo
+            {
+                FileName = adbPath,
+                Arguments = GetAdbDeviceArgs($"shell run-as {AppId} rm -f /data/data/{AppId}/files/{file}"),
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+            using var process = Process.Start(deleteInfo);
+            process?.WaitForExit();
+            Serilog.Log.Information($"Deleted {file} from device (exit={process?.ExitCode})");
+        }
+    }
+
+    Target ResetAndroidData => _ => _
+        .Description("Clear stale perushim databases + re-push fresh copies to device")
+        .Executes(() =>
+        {
+            if (!IsAndroidDeviceConnected())
+            {
+                Serilog.Log.Warning("No Android device/emulator connected — nothing to clear");
+                return;
+            }
+
+            ClearAndroidAppDatabases();
+            EnsurePerushimOnDevice();
+            Serilog.Log.Information("Done. Re-run the app to use fresh databases.");
+        });
 
     Target RunIos => _ => _
         .Description("Run app on iOS simulator (starts API if needed)")

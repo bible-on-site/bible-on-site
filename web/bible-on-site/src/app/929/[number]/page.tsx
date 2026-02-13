@@ -7,7 +7,9 @@ import { isQriDifferentThanKtiv } from "../../../data/db/tanah-view-types";
 import { getPerekByPerekId } from "../../../data/perek-dto";
 import { getSeferByName, getPerekIdsForSefer } from "../../../data/sefer-dto";
 import { getArticlesByPerekId } from "../../../lib/articles";
+import { getPerushimByPerekId } from "../../../lib/perushim";
 import { ArticlesSection } from "./components/ArticlesSection";
+import { PerushimSection } from "./components/PerushimSection";
 import Breadcrumb from "./components/Breadcrumb";
 import { Ptuah } from "./components/Ptuha";
 import SeferComposite from "./components/SeferComposite";
@@ -46,6 +48,17 @@ const getCachedArticles = unstable_cache(
 	},
 );
 
+/** Cache perushim summaries per perek (same caching strategy as articles). */
+const getCachedPerushim = unstable_cache(
+	async (perekId: number) => getPerushimByPerekId(perekId),
+	["perushim"],
+	{
+		tags: ["perushim"],
+		revalidate: false,
+	},
+);
+
+
 // TODO: figure out if need to use generateMetadata
 export default async function Perek({
 	params,
@@ -57,11 +70,15 @@ export default async function Perek({
 	const perekObj = getPerekByPerekId(perekId);
 	const sefer = getSeferByName(perekObj.sefer);
 	const perekIds = getPerekIdsForSefer(sefer);
-	// Fetch articles for every perek in the sefer so each blank page shows the correct articles
+	// Fetch articles and perushim for every perek in the sefer so each blank page shows the correct data
 	const articlesByPerekIndex = await Promise.all(
 		perekIds.map((id) => getCachedArticles(id)),
 	);
+	const perushimByPerekIndex = await Promise.all(
+		perekIds.map((id) => getCachedPerushim(id)),
+	);
 	const articles = await getCachedArticles(perekId);
+	const perushim = await getPerushimByPerekId(perekId);
 
 	return (
 		<>
@@ -70,6 +87,8 @@ export default async function Perek({
 					perekObj={perekObj}
 					articles={articles}
 					articlesByPerekIndex={articlesByPerekIndex}
+					perushimByPerekIndex={perushimByPerekIndex}
+					perekIds={perekIds}
 				/>
 			</Suspense>
 			<div className={styles.perekContainer}>
@@ -126,6 +145,9 @@ export default async function Perek({
 						);
 					})}
 				</article>
+
+				{/* Perushim section - commentaries carousel */}
+				<PerushimSection perekId={perekId} perushim={perushim} />
 
 				{/* Articles section - fetched directly from database for lower latency */}
 				<ArticlesSection articles={articles} />
