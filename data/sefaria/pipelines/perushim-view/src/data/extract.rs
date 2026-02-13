@@ -444,10 +444,7 @@ mod tests {
     #[test]
     fn simple_schema_extraction() {
         // Two chapters: ch1 has 2 verses (strings), ch2 has 1 verse
-        let chapters = bson!([
-            ["note ch1 v1", "note ch1 v2"],
-            ["note ch2 v1"]
-        ]);
+        let chapters = bson!([["note ch1 v1", "note ch1 v2"], ["note ch2 v1"]]);
         let doc = simple_schema_doc("רש\"י", 1, chapters);
         let result = extract(&[doc]);
 
@@ -472,16 +469,17 @@ mod tests {
     #[test]
     fn complex_schema_default_key() {
         // Ramban-like: versions[0] is a Document with "default" holding chapters
-        let chapters = bson!([
-            ["ramban ch1 v1", "ramban ch1 v2"],
-            ["ramban ch2 v1"]
-        ]);
+        let chapters = bson!([["ramban ch1 v1", "ramban ch1 v2"], ["ramban ch2 v1"]]);
         let doc = complex_schema_doc("רמב\"ן", 1, "default", chapters);
         let result = extract(&[doc]);
 
         assert_eq!(result.parshanim.len(), 1);
         assert_eq!(result.perushim.len(), 1);
-        assert_eq!(result.notes.len(), 3, "complex schema notes should be extracted");
+        assert_eq!(
+            result.notes.len(),
+            3,
+            "complex schema notes should be extracted"
+        );
 
         assert_eq!(result.notes[0].perek_id, 1);
         assert_eq!(result.notes[0].pasuk, 1);
@@ -499,13 +497,15 @@ mod tests {
     #[test]
     fn complex_schema_fallback_to_depth() {
         // Non-"default" key but depth >= 3 → should still find it
-        let chapters = bson!([
-            ["custom ch1 v1"]
-        ]);
+        let chapters = bson!([["custom ch1 v1"]]);
         let doc = complex_schema_doc("test perush", 1, "commentary", chapters);
         let result = extract(&[doc]);
 
-        assert_eq!(result.notes.len(), 1, "should find node by depth >= 3 fallback");
+        assert_eq!(
+            result.notes.len(),
+            1,
+            "should find node by depth >= 3 fallback"
+        );
         assert_eq!(result.notes[0].note_content, "custom ch1 v1");
     }
 
@@ -546,11 +546,7 @@ mod tests {
     #[test]
     fn nested_array_notes_flattened() {
         // Verse with multiple notes (array of strings)
-        let chapters = bson!([
-            [
-                ["note1", "note2", "note3"]
-            ]
-        ]);
+        let chapters = bson!([[["note1", "note2", "note3"]]]);
         let doc = simple_schema_doc("test", 1, chapters);
         let result = extract(&[doc]);
 
@@ -588,14 +584,16 @@ mod tests {
 
         assert_eq!(result.parshanim.len(), 1);
         assert_eq!(result.perushim.len(), 1);
-        assert_eq!(result.notes.len(), 0, "unknown sefer should produce no notes");
+        assert_eq!(
+            result.notes.len(),
+            0,
+            "unknown sefer should produce no notes"
+        );
     }
 
     #[test]
     fn empty_and_whitespace_notes_skipped() {
-        let chapters = bson!([
-            ["", "  ", "real note", "  "]
-        ]);
+        let chapters = bson!([["", "  ", "real note", "  "]]);
         let doc = simple_schema_doc("test", 1, chapters);
         let result = extract(&[doc]);
 

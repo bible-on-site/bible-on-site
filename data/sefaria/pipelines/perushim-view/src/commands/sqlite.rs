@@ -7,8 +7,8 @@
 //!    Contains individual commentary notes per pasuk.
 
 use anyhow::{Context, Result};
-use flate2::write::GzEncoder;
 use flate2::Compression;
+use flate2::write::GzEncoder;
 use rusqlite::Connection;
 use std::fs;
 use std::io::Write;
@@ -25,10 +25,7 @@ pub fn generate(
     let build_timestamp = now.timestamp();
     let generated_at = now.format("%Y-%m-%d %H:%M:%S UTC").to_string();
 
-    println!(
-        "🕐 Build timestamp: {} ({})",
-        build_timestamp, generated_at
-    );
+    println!("🕐 Build timestamp: {} ({})", build_timestamp, generated_at);
 
     let (catalog_path, notes_path) = if output_to_dependant_modules {
         let app_raw =
@@ -53,10 +50,22 @@ pub fn generate(
         )
     };
 
-    create_catalog_db(&catalog_path, extracted, dump_name, build_timestamp, &generated_at)?;
+    create_catalog_db(
+        &catalog_path,
+        extracted,
+        dump_name,
+        build_timestamp,
+        &generated_at,
+    )?;
     println!("📁 Catalog written to: {}", catalog_path.display());
 
-    create_notes_db(&notes_path, extracted, dump_name, build_timestamp, &generated_at)?;
+    create_notes_db(
+        &notes_path,
+        extracted,
+        dump_name,
+        build_timestamp,
+        &generated_at,
+    )?;
     println!("📁 Notes written to: {}", notes_path.display());
 
     // Create a gzip-compressed copy for git tracking (SQLite compresses ~75%).
@@ -268,23 +277,59 @@ mod tests {
     fn sample_extracted() -> Extracted {
         Extracted {
             parshanim: vec![
-                Parshan { id: 1, name: "רש\"י".into(), birth_year: Some(1040), has_pic: true },
-                Parshan { id: 2, name: "אבן עזרא".into(), birth_year: Some(1089), has_pic: false },
+                Parshan {
+                    id: 1,
+                    name: "רש\"י".into(),
+                    birth_year: Some(1040),
+                    has_pic: true,
+                },
+                Parshan {
+                    id: 2,
+                    name: "אבן עזרא".into(),
+                    birth_year: Some(1089),
+                    has_pic: false,
+                },
             ],
             perushim: vec![
                 Perush {
-                    id: 1, name: "רש\"י על התורה".into(), parshan_id: 1,
-                    comp_date: Some("1100".into()), pub_date: None, priority: 100,
+                    id: 1,
+                    name: "רש\"י על התורה".into(),
+                    parshan_id: 1,
+                    comp_date: Some("1100".into()),
+                    pub_date: None,
+                    priority: 100,
                 },
                 Perush {
-                    id: 2, name: "אבן עזרא על התורה".into(), parshan_id: 2,
-                    comp_date: Some("1150".into()), pub_date: None, priority: 200,
+                    id: 2,
+                    name: "אבן עזרא על התורה".into(),
+                    parshan_id: 2,
+                    comp_date: Some("1150".into()),
+                    pub_date: None,
+                    priority: 200,
                 },
             ],
             notes: vec![
-                Note { perush_id: 1, perek_id: 1, pasuk: 1, note_idx: 0, note_content: "בראשית - בשביל התורה".into() },
-                Note { perush_id: 1, perek_id: 1, pasuk: 2, note_idx: 0, note_content: "והארץ היתה תהו".into() },
-                Note { perush_id: 2, perek_id: 1, pasuk: 1, note_idx: 0, note_content: "בראשית ברא - הפועל".into() },
+                Note {
+                    perush_id: 1,
+                    perek_id: 1,
+                    pasuk: 1,
+                    note_idx: 0,
+                    note_content: "בראשית - בשביל התורה".into(),
+                },
+                Note {
+                    perush_id: 1,
+                    perek_id: 1,
+                    pasuk: 2,
+                    note_idx: 0,
+                    note_content: "והארץ היתה תהו".into(),
+                },
+                Note {
+                    perush_id: 2,
+                    perek_id: 1,
+                    pasuk: 1,
+                    note_idx: 0,
+                    note_content: "בראשית ברא - הפועל".into(),
+                },
             ],
         }
     }
@@ -315,7 +360,10 @@ mod tests {
         let mut decoder = GzDecoder::new(&gz_data[..]);
         let mut decompressed = Vec::new();
         decoder.read_to_end(&mut decompressed).unwrap();
-        assert_eq!(decompressed, content, "roundtrip should produce identical content");
+        assert_eq!(
+            decompressed, content,
+            "roundtrip should produce identical content"
+        );
 
         // Compressed should be smaller for repetitive content
         assert!(
@@ -348,7 +396,10 @@ mod tests {
             .unwrap();
 
         let keys: Vec<&str> = rows.iter().map(|(k, _)| k.as_str()).collect();
-        assert_eq!(keys, vec!["build_timestamp", "generated_at", "generator", "source"]);
+        assert_eq!(
+            keys,
+            vec!["build_timestamp", "generated_at", "generator", "source"]
+        );
 
         // Verify specific values
         let get_val = |key: &str| rows.iter().find(|(k, _)| k == key).unwrap().1.clone();
@@ -365,20 +416,28 @@ mod tests {
         let path = dir.join("test.perushim_catalog.sqlite");
 
         let extracted = sample_extracted();
-        create_catalog_db(&path, &extracted, "test-dump", 1700000000, "2023-11-14 12:00:00 UTC")
-            .unwrap();
+        create_catalog_db(
+            &path,
+            &extracted,
+            "test-dump",
+            1700000000,
+            "2023-11-14 12:00:00 UTC",
+        )
+        .unwrap();
 
         // Verify the DB is readable
         let conn = Connection::open(&path).unwrap();
 
         // Check parshanim
-        let parshan_count: i64 =
-            conn.query_row("SELECT COUNT(*) FROM parshan", [], |r| r.get(0)).unwrap();
+        let parshan_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM parshan", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(parshan_count, 2);
 
         // Check perushim
-        let perush_count: i64 =
-            conn.query_row("SELECT COUNT(*) FROM perush", [], |r| r.get(0)).unwrap();
+        let perush_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM perush", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(perush_count, 2);
 
         // Check metadata has build_timestamp
@@ -411,14 +470,21 @@ mod tests {
         let path = dir.join("test.perushim_notes.sqlite");
 
         let extracted = sample_extracted();
-        create_notes_db(&path, &extracted, "test-dump", 1700000000, "2023-11-14 12:00:00 UTC")
-            .unwrap();
+        create_notes_db(
+            &path,
+            &extracted,
+            "test-dump",
+            1700000000,
+            "2023-11-14 12:00:00 UTC",
+        )
+        .unwrap();
 
         let conn = Connection::open(&path).unwrap();
 
         // Check note count
-        let note_count: i64 =
-            conn.query_row("SELECT COUNT(*) FROM note", [], |r| r.get(0)).unwrap();
+        let note_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM note", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(note_count, 3);
 
         // Check notes for perek 1, pasuk 1
@@ -429,7 +495,10 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(pasuk1_count, 2, "pasuk 1 should have notes from both Rashi and Ibn Ezra");
+        assert_eq!(
+            pasuk1_count, 2,
+            "pasuk 1 should have notes from both Rashi and Ibn Ezra"
+        );
 
         // Check indexes exist
         let idx_count: i64 = conn
@@ -466,20 +535,34 @@ mod tests {
 
         // Second generation with different data
         extracted.notes.push(Note {
-            perush_id: 2, perek_id: 2, pasuk: 1, note_idx: 0,
+            perush_id: 2,
+            perek_id: 2,
+            pasuk: 1,
+            note_idx: 0,
             note_content: "new note".into(),
         });
         create_notes_db(&path, &extracted, "dump-v2", 2000, "new").unwrap();
 
         let conn = Connection::open(&path).unwrap();
-        let note_count: i64 =
-            conn.query_row("SELECT COUNT(*) FROM note", [], |r| r.get(0)).unwrap();
-        assert_eq!(note_count, 4, "re-export should contain all notes from second run");
+        let note_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM note", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(
+            note_count, 4,
+            "re-export should contain all notes from second run"
+        );
 
         let ts: String = conn
-            .query_row("SELECT value FROM _metadata WHERE key = 'build_timestamp'", [], |r| r.get(0))
+            .query_row(
+                "SELECT value FROM _metadata WHERE key = 'build_timestamp'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
-        assert_eq!(ts, "2000", "build_timestamp should reflect the second generation");
+        assert_eq!(
+            ts, "2000",
+            "build_timestamp should reflect the second generation"
+        );
 
         fs::remove_dir_all(&dir).ok();
     }
