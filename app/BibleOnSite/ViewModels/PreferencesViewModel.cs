@@ -87,12 +87,12 @@ public partial class PreferencesViewModel : ObservableObject
         set { if (value) PerekToLoad = PerekToLoad.LastLearnt; }
     }
 
-    /// <summary>Status text for perushim notes (available / not downloaded).</summary>
-    public string PerushimNotesStatusText =>
-        _perushimNotesService.IsAvailable ? "מסד הנתונים מותקן." : "לא הותקן. הורידו להפעלת פירושים.";
+    /// <summary>Whether to show the perushim section at all (only when NOT installed).</summary>
+    public bool ShowPerushimSection => !_perushimNotesService.IsAvailable;
 
-    /// <summary>Whether to show the download perushim button.</summary>
-    public bool ShowDownloadPerushimButton => !_perushimNotesService.IsAvailable;
+    /// <summary>Status text for perushim notes when not yet installed.</summary>
+    public string PerushimNotesStatusText =>
+        "חבילת הפירושים לא הותקנה. הורידו כדי להפעיל פירושים.";
 
     /// <summary>
     /// Loads preferences from device storage.
@@ -107,8 +107,8 @@ public partial class PreferencesViewModel : ObservableObject
         OnPropertyChanged(nameof(PerekToLoad));
         OnPropertyChanged(nameof(IsPerekToLoadTodays));
         OnPropertyChanged(nameof(IsPerekToLoadLastLearnt));
+        OnPropertyChanged(nameof(ShowPerushimSection));
         OnPropertyChanged(nameof(PerushimNotesStatusText));
-        OnPropertyChanged(nameof(ShowDownloadPerushimButton));
     }
 
     /// <summary>
@@ -118,11 +118,11 @@ public partial class PreferencesViewModel : ObservableObject
     public async Task DownloadPerushimAsync()
     {
         var ok = await _perushimNotesService.TryDownloadNotesAsync();
+        OnPropertyChanged(nameof(ShowPerushimSection));
         OnPropertyChanged(nameof(PerushimNotesStatusText));
-        OnPropertyChanged(nameof(ShowDownloadPerushimButton));
         if (!ok && Application.Current?.Windows?.Count > 0 && Application.Current.Windows[0].Page is Page page)
         {
-            await page.DisplayAlert("שגיאה", "לא ניתן להוריד פירושים. נסו שוב מאוחר יותר.", "אישור");
+            await page.DisplayAlert("שגיאה", "לא ניתן להוריד את חבילת הפירושים. נסו שוב מאוחר יותר.", "אישור");
         }
     }
 

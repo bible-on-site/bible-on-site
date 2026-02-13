@@ -73,35 +73,36 @@
                 </VerticalStackLayout>
             </Border>
 
-            <!-- פירושים -->
-            <Label Text="פירושים"
-                   FontSize="18"
-                   FontAttributes="Bold"
-                   TextColor="{StaticResource Primary}"
-                   Padding="0,24,0,4"
-                   Margin="0,8,0,0"
-                   BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray800}}"/>
+            <!-- פירושים — shown only when the perushim package is NOT yet installed -->
+            <VerticalStackLayout IsVisible="{Binding ShowPerushimSection}" Spacing="0">
+                <Label Text="פירושים"
+                       FontSize="18"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource Primary}"
+                       Padding="0,24,0,4"
+                       Margin="0,8,0,0"
+                       BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray800}}"/>
 
-            <Border Padding="12,16"
-                    Margin="0,4,0,0"
-                    StrokeShape="RoundRectangle 8"
-                    Stroke="Transparent"
-                    BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
-                <VerticalStackLayout Spacing="8">
-                    <Label Text="מסד נתונים של פירושים (רש&quot;י, תרגום ועוד)"
-                           FontSize="16"
-                           LineBreakMode="WordWrap"/>
-                    <Label Text="{Binding PerushimNotesStatusText}"
-                           FontSize="14"
-                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"
-                           LineBreakMode="WordWrap"/>
-                    <Button Text="להוריד פירושים"
-                            Command="{Binding DownloadPerushimCommand}"
-                            IsVisible="{Binding ShowDownloadPerushimButton}"
-                            BackgroundColor="{StaticResource Primary}"
-                            TextColor="White"/>
-                </VerticalStackLayout>
-            </Border>
+                <Border Padding="12,16"
+                        Margin="0,4,0,0"
+                        StrokeShape="RoundRectangle 8"
+                        Stroke="Transparent"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <VerticalStackLayout Spacing="8">
+                        <Label Text="חבילת הפירושים (רש&quot;י, תרגום ועוד)"
+                               FontSize="16"
+                               LineBreakMode="WordWrap"/>
+                        <Label Text="{Binding PerushimNotesStatusText}"
+                               FontSize="14"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"
+                               LineBreakMode="WordWrap"/>
+                        <Button Text="להוריד חבילת פירושים"
+                                Command="{Binding DownloadPerushimCommand}"
+                                BackgroundColor="{StaticResource Primary}"
+                                TextColor="White"/>
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
 
         </VerticalStackLayout>
     </ScrollView>
