@@ -122,21 +122,38 @@ const Sefer = (props: {
 
 	const historyMapper: HistoryMapper | undefined = useMemo(
 		() => ({
-			pageToRoute: (pageIndex, semantic) =>
-				`#page/${semantic?.semanticName ?? pageIndex}`,
+			pageToRoute: (pageIndex) => {
+				// Map pageIndex → perekId so the URL reflects the current perek (e.g. /929/155?book)
+				const perekIdx = pageIndex <= 0 ? 0 : Math.floor((pageIndex - 1) / 2);
+				const clampedIdx = Math.min(perekIdx, (perekIds?.length ?? 1) - 1);
+				const id = perekIds?.[clampedIdx];
+				if (id == null) return `/929/${perekObj.perekId}?book`;
+				return `/929/${id}?book`;
+			},
 			routeToPage: (route) => {
-				const m = route.match(/#page\/(.+)/);
-				if (!m) return null;
-				return hePageSemantics.semanticNameToIndex(m[1]);
+				// Primary: parse /929/{perekId} from the pathname
+				const m = route.match(/\/929\/(\d+)/);
+				if (m) {
+					const id = Number.parseInt(m[1], 10);
+					const idx = perekIds?.indexOf(id) ?? -1;
+					if (idx >= 0) return idx * 2 + 1; // content page for that perek
+				}
+				// Backward compat: handle old #page/{hebrewLetter} bookmarks
+				const hashMatch = route.match(/#page\/(.+)/);
+				if (hashMatch) {
+					return hePageSemantics.semanticNameToIndex(hashMatch[1]);
+				}
+				return null;
 			},
 		}),
-		[hePageSemantics],
+		[perekIds, perekObj.perekId, hePageSemantics],
 	);
 
 	const initialTurnedLeavesFromUrl = useMemo(() => {
 		if (typeof window === "undefined") return undefined;
-		const route = window.location.hash || window.location.pathname + window.location.search;
-		const pageIndex = historyMapper.routeToPage(route);
+		// Try the full URL first (pathname contains perekId), fall back to hash for backward compat
+		const route = window.location.pathname + window.location.search + window.location.hash;
+		const pageIndex = historyMapper?.routeToPage(route) ?? null;
 		if (pageIndex === null) return undefined;
 		const turnedCount = pageIndex === 0 ? 0 : Math.ceil(pageIndex / 2);
 		return Array.from({ length: turnedCount }, (_, i) => i);
