@@ -151,32 +151,31 @@ pub fn extract(docs: &[Document]) -> Extracted {
 /// falls back to the first node with depth >= 3 (chapter/verse/comment
 /// structure), or just "default" as a last resort.
 fn find_default_node_key(doc: &Document) -> String {
-    if let Some(bson::Bson::Document(schema)) = doc.get("schema") {
-        if let Some(bson::Bson::Array(nodes)) = schema.get("nodes") {
-            // First pass: look for a node with key == "default"
-            for node in nodes {
-                if let bson::Bson::Document(node_doc) = node {
-                    if let Some(bson::Bson::String(key)) = node_doc.get("key") {
-                        if key == "default" {
-                            return key.clone();
-                        }
-                    }
-                }
+    if let Some(bson::Bson::Document(schema)) = doc.get("schema")
+        && let Some(bson::Bson::Array(nodes)) = schema.get("nodes")
+    {
+        // First pass: look for a node with key == "default"
+        for node in nodes {
+            if let bson::Bson::Document(node_doc) = node
+                && let Some(bson::Bson::String(key)) = node_doc.get("key")
+                && key == "default"
+            {
+                return key.clone();
             }
-            // Second pass: look for a node with depth >= 3
-            // (chapter/verse/comment structure)
-            for node in nodes {
-                if let bson::Bson::Document(node_doc) = node {
-                    let depth = match node_doc.get("depth") {
-                        Some(bson::Bson::Int32(n)) => *n as i64,
-                        Some(bson::Bson::Int64(n)) => *n,
-                        _ => 0,
-                    };
-                    if depth >= 3 {
-                        if let Some(bson::Bson::String(key)) = node_doc.get("key") {
-                            return key.clone();
-                        }
-                    }
+        }
+        // Second pass: look for a node with depth >= 3
+        // (chapter/verse/comment structure)
+        for node in nodes {
+            if let bson::Bson::Document(node_doc) = node {
+                let depth = match node_doc.get("depth") {
+                    Some(bson::Bson::Int32(n)) => *n as i64,
+                    Some(bson::Bson::Int64(n)) => *n,
+                    _ => 0,
+                };
+                if depth >= 3
+                    && let Some(bson::Bson::String(key)) = node_doc.get("key")
+                {
+                    return key.clone();
                 }
             }
         }
