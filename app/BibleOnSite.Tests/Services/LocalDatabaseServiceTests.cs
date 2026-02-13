@@ -82,23 +82,39 @@ public class LocalDatabaseServiceTests
         fileInfo.Length.Should().BeGreaterThan(0, "Database file should not be empty");
     }
 
-    [SkippableFact]
-    public void OnlyOneSqliteFile_ShouldExistInRawResources()
+    /// <summary>
+    /// Expected SQLite files in Resources/Raw:
+    /// - tanah_view: perek + pasukim data
+    /// - perushim_catalog: commentary metadata (parshanim, perushim)
+    /// </summary>
+    private static readonly string[] ExpectedSqliteFiles = new[]
     {
-        // Skip in CI - database file is not tracked in git
+        "sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+        "sefaria-dump-5784-sivan-4.perushim_catalog.sqlite",
+    };
+
+    [SkippableFact]
+    public void SqliteFiles_ShouldMatchExpectedSet()
+    {
+        // Skip in CI - database files may not be tracked in git
         Skip.IfNot(DatabaseFileExists(), "Database file not present (expected in CI)");
 
-        // This test catches the case where someone adds a new database file
-        // but forgets to remove the old one or update the constant
+        // This test catches the case where someone adds/removes a database file
+        // but forgets to update the expected set
         var rawPath = GetRawResourcesPath()!;
-        var sqliteFiles = Directory.GetFiles(rawPath, "*.sqlite");
+        var sqliteFiles = Directory.GetFiles(rawPath, "*.sqlite")
+            .Select(Path.GetFileName)
+            .OrderBy(f => f)
+            .ToList();
 
-        sqliteFiles.Should().HaveCount(1,
-            "Only one SQLite database file should exist in Resources/Raw. " +
-            "If you're replacing the database, remove the old file.");
+        sqliteFiles.Should().HaveCount(ExpectedSqliteFiles.Length,
+            "The set of SQLite files in Resources/Raw should match the expected databases.");
 
-        sqliteFiles[0].Should().EndWith(ExpectedDbName,
-            $"The SQLite file should be named '{ExpectedDbName}'");
+        foreach (var expected in ExpectedSqliteFiles)
+        {
+            sqliteFiles.Should().Contain(expected,
+                $"Resources/Raw should contain '{expected}'");
+        }
     }
 
     private static string? GetProjectRoot()

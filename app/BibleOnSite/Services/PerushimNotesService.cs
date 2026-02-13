@@ -17,6 +17,7 @@ public class PerushimNotesService
     private const string PerushimNotesPackName = "perushim_notes";
 
     private readonly IPadDeliveryService _padService;
+    private readonly string? _dataDirectoryOverride;
 
     private static readonly Lazy<PerushimNotesService> _instance =
         new(() => new PerushimNotesService(PadDeliveryService.Instance));
@@ -31,6 +32,22 @@ public class PerushimNotesService
     {
         _padService = padService;
     }
+
+    /// <summary>
+    /// Factory for unit testing — allows injecting the data directory instead of using FileSystem.AppDataDirectory.
+    /// </summary>
+    public static PerushimNotesService CreateForTesting(IPadDeliveryService padService, string dataDirectory)
+    {
+        return new PerushimNotesService(padService, dataDirectory);
+    }
+
+    private PerushimNotesService(IPadDeliveryService padService, string dataDirectory)
+    {
+        _padService = padService;
+        _dataDirectoryOverride = dataDirectory;
+    }
+
+    private string DataDirectory => _dataDirectoryOverride ?? FileSystem.AppDataDirectory;
 
     /// <summary>Whether the notes database is available (from PAD or HTTP download).</summary>
     public bool IsAvailable => _initialized && !_notesMissing && _connection != null;

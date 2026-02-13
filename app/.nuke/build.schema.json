@@ -42,6 +42,7 @@
         "Package",
         "PackagePrepare",
         "PrepareApiConfig",
+        "ResetAndroidData",
         "Restore",
         "RestoreAndroid",
         "RestoreTests",

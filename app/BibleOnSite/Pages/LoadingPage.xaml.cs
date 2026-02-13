@@ -54,7 +54,7 @@ public partial class LoadingPage : ContentPage
 
     private async Task LoadStarterDataAsync()
     {
-        LoadingLabel.Text = "טוען נתונים...";
+        LoadingLabel.Text = "מתחבר לפרק...";
         await StarterService.Instance.LoadWithRetryAsync();
 
         if (!StarterService.Instance.IsLoaded)

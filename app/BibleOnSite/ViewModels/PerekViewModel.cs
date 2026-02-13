@@ -330,58 +330,6 @@ public partial class PerekViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Toggles a perush in the checked list. When checked, its notes appear inline with the text.
-    /// </summary>
-    [RelayCommand]
-    public void ToggleCheckedPerush(int perushId)
-    {
-        var list = new List<int>(CheckedPerushim);
-        if (list.Contains(perushId))
-            list.Remove(perushId);
-        else
-            list.Add(perushId);
-        CheckedPerushim = list;
-        FillFilteredPerushContents();
-    }
-
-    /// <summary>
-    /// Returns whether a perush is currently checked.
-    /// </summary>
-    public bool IsPerushChecked(int perushId) => CheckedPerushim.Contains(perushId);
-
-    /// <summary>
-    /// Fills each pasuk's PerushNotes based on checked perushim.
-    /// </summary>
-    private void FillFilteredPerushContents()
-    {
-        if (Perek?.Pasukim == null)
-            return;
-
-        var checkedSet = new HashSet<int>(CheckedPerushim);
-        var byPasuk = _perushNotesCache
-            .Where(n => checkedSet.Contains(n.PerushId))
-            .GroupBy(n => n.Pasuk)
-            .ToDictionary(g => g.Key, g => g.ToList());
-
-        var priorityOrder = Perushim.Select((p, i) => (p.Id, i)).ToDictionary(x => x.Id, x => x.i);
-
-        foreach (var pasuk in Perek.Pasukim)
-        {
-            var notesForPasuk = byPasuk.GetValueOrDefault(pasuk.PasukNum) ?? new List<PerekPerushNote>();
-            var groups = notesForPasuk
-                .GroupBy(n => (n.PerushId, n.PerushName))
-                .OrderBy(g => priorityOrder.GetValueOrDefault(g.Key.PerushId, 999))
-                .Select(g => new PerushNoteDisplay
-                {
-                    PerushName = g.Key.PerushName,
-                    NoteContents = g.OrderBy(n => n.NoteIdx).Select(n => n.NoteContent).ToList()
-                })
-                .ToList();
-            pasuk.PerushNotes = groups;
-        }
-    }
-
-    /// <summary>
     /// Loads the next perek in sequence.
     /// When the carousel is already initialized, just moves position (OnCarouselItemChanged handles the rest).
     /// </summary>
@@ -461,6 +409,58 @@ public partial class PerekViewModel : ObservableObject
         }
     }
 #endif
+
+    /// <summary>
+    /// Toggles a perush in the checked list. When checked, its notes appear inline with the text.
+    /// </summary>
+    [RelayCommand]
+    public void ToggleCheckedPerush(int perushId)
+    {
+        var list = new List<int>(CheckedPerushim);
+        if (list.Contains(perushId))
+            list.Remove(perushId);
+        else
+            list.Add(perushId);
+        CheckedPerushim = list;
+        FillFilteredPerushContents();
+    }
+
+    /// <summary>
+    /// Returns whether a perush is currently checked.
+    /// </summary>
+    public bool IsPerushChecked(int perushId) => CheckedPerushim.Contains(perushId);
+
+    /// <summary>
+    /// Fills each pasuk's PerushNotes based on checked perushim.
+    /// </summary>
+    private void FillFilteredPerushContents()
+    {
+        if (Perek?.Pasukim == null)
+            return;
+
+        var checkedSet = new HashSet<int>(CheckedPerushim);
+        var byPasuk = _perushNotesCache
+            .Where(n => checkedSet.Contains(n.PerushId))
+            .GroupBy(n => n.Pasuk)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var priorityOrder = Perushim.Select((p, i) => (p.Id, i)).ToDictionary(x => x.Id, x => x.i);
+
+        foreach (var pasuk in Perek.Pasukim)
+        {
+            var notesForPasuk = byPasuk.GetValueOrDefault(pasuk.PasukNum) ?? new List<PerekPerushNote>();
+            var groups = notesForPasuk
+                .GroupBy(n => (n.PerushId, n.PerushName))
+                .OrderBy(g => priorityOrder.GetValueOrDefault(g.Key.PerushId, 999))
+                .Select(g => new PerushNoteDisplay
+                {
+                    PerushName = g.Key.PerushName,
+                    NoteContents = g.OrderBy(n => n.NoteIdx).Select(n => n.NoteContent).ToList()
+                })
+                .ToList();
+            pasuk.PerushNotes = groups;
+        }
+    }
 
     /// <summary>
     /// Sets the current perek and clears selection.
