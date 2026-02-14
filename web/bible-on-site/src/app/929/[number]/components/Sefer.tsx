@@ -57,6 +57,8 @@ type FlipBookProps = {
 	direction?: "rtl" | "ltr";
 	/** Leaves to keep visible before/after current for performance */
 	leavesBuffer?: number;
+	/** Override total-page display in toolbar (e.g. Hebrew chapter count) */
+	of?: string | number;
 	/** Cover configuration */
 	coverConfig?: CoverConfig;
 	/** History integration: URL ↔ page */
