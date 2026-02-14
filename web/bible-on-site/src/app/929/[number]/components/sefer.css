@@ -12,43 +12,12 @@
   inset: 0;
   backface-visibility: hidden;
   transform-style: preserve-3d;
-  --inner-shadow-shadow: 0;
-  --inner-shadow-highlight: 0;
-  --inner-shadow-lift: 0px;
-  --inner-shadow-edge: right;
 }
 
+/* Inner shadow/highlight pseudo-elements disabled due to flip-book flickering */
 .he-book .page::before,
 .he-book .page::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  backface-visibility: hidden;
-  transform-style: preserve-3d;
-  transition: opacity 0.12s ease, transform 0.12s ease;
-  will-change: opacity, transform;
-}
-
-.he-book .page::before {
-  background: linear-gradient(
-    to var(--inner-shadow-edge),
-    rgb(0 0 0 / calc(0.35 * var(--inner-shadow-shadow))) 0%,
-    rgb(0 0 0 / 0) 40%
-  );
-  opacity: var(--inner-shadow-shadow);
-  mix-blend-mode: multiply;
-  transform: translateZ(var(--inner-shadow-lift));
-}
-
-.he-book .page::after {
-  background: linear-gradient(
-    to var(--inner-shadow-edge),
-    rgb(255 255 255 / calc(0.4 * var(--inner-shadow-highlight))) 0%,
-    rgb(255 255 255 / 0) 45%
-  );
-  opacity: var(--inner-shadow-highlight);
-  transform: translateZ(calc(var(--inner-shadow-lift) * 0.6));
+  display: none;
 }
 
 .he-book .page > * {
@@ -59,13 +28,12 @@
   box-sizing: border-box;
 }
 
-/* Every page has a subtle frame so the next/previous page is visible before and during the turn */
+/* Page shadows disabled due to known flip-book flickering issue */
 .he-book .page {
-  box-shadow: 0 0 4px 0 rgb(0 0 0 / 0.08);
+  box-shadow: none;
 }
-/* Current spread gets a stronger frame so it stands out */
 .he-book .page.current-page {
-  box-shadow: 0 0 10px 0 rgb(0 0 0 / 0.1);
+  box-shadow: none;
 }
 
 /* Hard covers - no page curl effect */

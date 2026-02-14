@@ -177,8 +177,30 @@
   max-height: none;
 }
 
-.coverContent {
+/* Cover: genuine book cover look using the sefer spectrum color */
+.cover.cover {
+  background-color: var(--cover-color, #333);
+  padding: 0;
+}
+
+.coverInner {
   height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* Inset border to simulate a real hardcover frame */
+  border: 3px solid rgb(255 255 255 / 0.15);
+  border-radius: 2px;
+  /* Subtle texture: faint radial gradient to mimic leather/cloth */
+  background:
+    radial-gradient(ellipse at 30% 20%, rgb(255 255 255 / 0.06) 0%, transparent 60%),
+    linear-gradient(180deg, rgb(255 255 255 / 0.04) 0%, transparent 40%, rgb(0 0 0 / 0.12) 100%);
+}
+
+.coverContent {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -186,25 +208,46 @@
   text-align: center;
   padding: 2rem;
   box-sizing: border-box;
+  gap: 0.3em;
+}
+
+.coverOrnament {
+  color: rgb(255 255 255 / 0.5);
+  font-size: clamp(1rem, 2.5vw, 1.5rem);
+  letter-spacing: 0.3em;
+  margin-bottom: 0.5em;
 }
 
 .coverTitle {
   color: #fff;
   font-size: clamp(1.5rem, 4vw, 2.5rem);
   font-weight: 700;
-  margin: 0 0 0.5em;
+  margin: 0;
+  letter-spacing: 0.05em;
+  text-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
+}
+
+.coverDivider {
+  width: 40%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.5), transparent);
+  margin: 0.6em 0;
 }
 
 .coverSubtitle {
-  color: #fff;
-  font-size: 1rem;
-  margin: 0 0 1.5em;
+  color: rgb(255 255 255 / 0.85);
+  font-size: clamp(0.85rem, 2vw, 1.1rem);
+  font-weight: 400;
+  margin: 0;
+  letter-spacing: 0.08em;
 }
 
-.coverAuthor {
-  color: #90a4ae;
-  font-size: 0.875rem;
-  margin: 0;
+.coverEdition {
+  color: rgb(255 255 255 / 0.55);
+  font-size: clamp(0.7rem, 1.5vw, 0.85rem);
+  font-weight: 300;
+  margin: 0.3em 0 0;
+  letter-spacing: 0.04em;
 }
 
 .perekText {

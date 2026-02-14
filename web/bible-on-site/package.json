@@ -6,7 +6,7 @@
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
 		"update:playwright": "npx playwright install",
-		"predev": "docker compose -f ../../devops/docker-compose.yml up -d minio && node scripts/toggle-flip-book-dep.mjs local && npm install --prefer-offline",
+		"predev": "node scripts/ensure-docker-desktop.mjs && docker compose -f ../../devops/docker-compose.yml up -d minio && node scripts/toggle-flip-book-dep.mjs local && npm install --prefer-offline",
 		"dev": "dotenv -e .dev.env -- next dev -p 3001",
 		"dev-webpack": "dotenv -e .dev.env -- next dev --webpack -p 3001",
 		"build": "next build && npm run postbuild",
