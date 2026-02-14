@@ -1351,6 +1351,22 @@ jobs:
           flags: data-integration
           report_type: test_results
 
+      # ============ Generate Perushim SQL for CD ============
+      - name: Generate Perushim MySQL Data
+        env:
+          MONGO_HOST: localhost
+          MONGO_PORT: 27017
+          DUMP_NAME: sefaria
+        run: cargo run --release --manifest-path sefaria/pipelines/perushim-view/Cargo.toml -- --format mysql --output-to-dependant-modules --dump-name "$DUMP_NAME"
+
+      - name: Upload Perushim SQL Artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: perushim-data-sql
+          path: ${{ env.DATA_DIRECTORY }}/mysql/perushim_data.sql
+          retention-days: 30
+          overwrite: true
+
       - name: Stop MongoDB Container
         if: ${{ always() }}
         run: docker stop sefaria-mongo || true
@@ -1699,7 +1715,7 @@ jobs:
           repository: ${{ github.repository }}
           token: ${{ secrets.BOT_PAT }}
           event-type: deploy-data
-          client-payload: '{"ref": "${{ github.ref }}"}'
+          client-payload: '{"ref": "${{ github.ref }}", "run_id": "${{ github.run_id }}"}'
 
   # ====================================================================================
   # VERSION BUMP JOB - Consolidated version bumping to avoid race conditions
