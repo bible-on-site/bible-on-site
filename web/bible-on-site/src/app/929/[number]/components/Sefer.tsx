@@ -289,6 +289,7 @@ const Sefer = (props: {
 						pageSemantics={hePageSemantics}
 						direction="rtl"
 						leavesBuffer={7}
+						of={toHebrewWithPunctuation(perakim.length)}
 						coverConfig={{
 							hardCovers: true,
 							noShadow: true,
