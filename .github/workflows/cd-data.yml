@@ -34,6 +34,23 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: npm ci --no-audit
 
+      - name: Download Generated Perushim SQL
+        uses: actions/download-artifact@v4
+        with:
+          name: perushim-data-sql
+          path: data/mysql
+          github-token: ${{ secrets.BOT_PAT }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.client_payload.run_id }}
+
+      - name: Verify Perushim Data File
+        run: |
+          if [ ! -f data/mysql/perushim_data.sql ]; then
+            echo "❌ perushim_data.sql not found after artifact download"
+            exit 1
+          fi
+          echo "✅ perushim_data.sql downloaded successfully ($(wc -l < data/mysql/perushim_data.sql) lines)"
+
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v5
         with:

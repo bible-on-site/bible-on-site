@@ -122,25 +122,47 @@ const Sefer = (props: {
 
 	const historyMapper: HistoryMapper | undefined = useMemo(
 		() => ({
-			pageToRoute: (pageIndex, semantic) =>
-				`#page/${semantic?.semanticName ?? pageIndex}`,
+			pageToRoute: (pageIndex) => {
+				// Map pageIndex → perekId so the URL reflects the current perek (e.g. /929/155?book)
+				const perekIdx = pageIndex <= 0 ? 0 : Math.floor((pageIndex - 1) / 2);
+				const clampedIdx = Math.min(perekIdx, (perekIds?.length ?? 1) - 1);
+				const id = perekIds?.[clampedIdx];
+				if (id == null) return `/929/${perekObj.perekId}?book`;
+				return `/929/${id}?book`;
+			},
 			routeToPage: (route) => {
-				const m = route.match(/#page\/(.+)/);
-				if (!m) return null;
-				return hePageSemantics.semanticNameToIndex(m[1]);
+				// Only resolve perekId when the route contains ?book (sefer-view mode).
+				// Without this guard, opening sefer via the toggle button (URL has no ?book)
+				// would incorrectly compute initialTurnedLeaves and break the page layout.
+				if (route.includes("?book")) {
+					const m = route.match(/\/929\/(\d+)/);
+					if (m) {
+						const id = Number.parseInt(m[1], 10);
+						const idx = perekIds?.indexOf(id) ?? -1;
+						if (idx >= 0) return idx * 2 + 1; // content page for that perek
+					}
+				}
+				// Backward compat: handle old #page/{hebrewLetter} bookmarks
+				const hashMatch = route.match(/#page\/(.+)/);
+				if (hashMatch) {
+					return hePageSemantics.semanticNameToIndex(hashMatch[1]);
+				}
+				return null;
 			},
 		}),
-		[hePageSemantics],
+		[perekIds, perekObj.perekId, hePageSemantics],
 	);
 
-	const initialTurnedLeavesFromUrl = useMemo(() => {
-		if (typeof window === "undefined") return undefined;
-		const route = window.location.hash || window.location.pathname + window.location.search;
-		const pageIndex = historyMapper.routeToPage(route);
-		if (pageIndex === null) return undefined;
-		const turnedCount = pageIndex === 0 ? 0 : Math.ceil(pageIndex / 2);
+	const initialTurnedLeaves = useMemo(() => {
+		// Derive the initial position from perekObj.perekId directly.
+		// This ensures the book always opens at the correct perek, whether the
+		// user toggled from SEO view (/929/123) or navigated directly (/929/123?book).
+		const idx = perekIds?.indexOf(perekObj.perekId) ?? -1;
+		if (idx < 0) return undefined;
+		const pageIndex = idx * 2 + 1; // content page for that perek
+		const turnedCount = Math.ceil(pageIndex / 2);
 		return Array.from({ length: turnedCount }, (_, i) => i);
-	}, [historyMapper]);
+	}, [perekIds, perekObj.perekId]);
 
 	const coverStyle = { backgroundColor: seferColor };
 	const frontCover = (
@@ -273,7 +295,7 @@ const Sefer = (props: {
 							coverIndices: "auto",
 						}}
 						historyMapper={historyMapper}
-						initialTurnedLeaves={initialTurnedLeavesFromUrl}
+						initialTurnedLeaves={initialTurnedLeaves}
 						downloadConfig={{
 							entireBookFilename: perekObj.sefer,
 							rangeFilename: perekObj.sefer,
