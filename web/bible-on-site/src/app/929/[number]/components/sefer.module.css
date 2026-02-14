@@ -121,9 +121,10 @@
   margin-top: 8px;
 }
 
-/* When showing full article, container does not scroll; article body scrolls inside */
+/* When showing full article/perush, container clips; child handles scroll */
 .blankPageArticlesFullArticle {
   overflow: hidden;
+  min-height: 0;
 }
 
 /* Wrapper when showing full article on blank page: fill area and use flex column */
@@ -133,6 +134,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  height: 100%;
 }
 
 /* Article full view in book: fill container, title fixed, body scrolls */
@@ -147,16 +149,21 @@
   box-shadow: none;
   border-radius: 0;
   background: transparent;
+  height: 100%;
+  overflow: hidden;
 }
 
 .articleFullViewInBook .articleBodyWrapper {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #c4b896 transparent;
 }
 
-/* Perush full view in book: fill container, header fixed, notes scroll */
-.perushFullViewInBook {
+/* Perush full view in book: fill container, header fixed, notes scroll.
+   Doubled selector for specificity over .perushimSection from perushim-section.module.css */
+.perushFullViewInBook.perushFullViewInBook {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -167,14 +174,19 @@
   box-shadow: none;
   border-radius: 0;
   background: transparent;
+  height: 100%;
+  overflow: hidden;
 }
 
-/* Notes container in book mode: fill available space, scroll, no max-height */
-.perushNotesInBook {
+/* Notes container in book mode: fill available space, scroll, no max-height.
+   Doubled selector for specificity over .notesContainer max-height. */
+.perushNotesInBook.perushNotesInBook {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
   max-height: none;
+  scrollbar-width: thin;
+  scrollbar-color: #c4b896 transparent;
 }
 
 /* Cover: genuine book cover look using the sefer spectrum color */

@@ -12,12 +12,15 @@
   inset: 0;
   backface-visibility: hidden;
   transform-style: preserve-3d;
+  box-shadow: none; /* shadows disabled – known flip-book flickering */
+  /* GPU-promote each page so flip transforms don't trigger main-thread layout */
+  will-change: transform;
+  /* Contain layout so child reflows (scroll containers, flex) can't propagate upward during flips */
+  contain: layout style paint;
 }
 
-/* Inner shadow/highlight pseudo-elements disabled due to flip-book flickering */
-.he-book .page::before,
-.he-book .page::after {
-  display: none;
+.he-book .page.current-page {
+  box-shadow: none;
 }
 
 .he-book .page > * {
@@ -26,14 +29,6 @@
   height: 100%;
   width: 100%;
   box-sizing: border-box;
-}
-
-/* Page shadows disabled due to known flip-book flickering issue */
-.he-book .page {
-  box-shadow: none;
-}
-.he-book .page.current-page {
-  box-shadow: none;
 }
 
 /* Hard covers - no page curl effect */
