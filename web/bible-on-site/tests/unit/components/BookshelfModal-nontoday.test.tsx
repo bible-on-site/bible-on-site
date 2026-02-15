@@ -5,9 +5,10 @@ import { fireEvent, render, screen } from "@testing-library/react";
 
 /**
  * Separate test file for BookshelfModal when clicking a non-today sefer.
- * Uses a distinct jest.mock for getTodaysPerekId that returns 55 (שמות).
+ * The Bookshelf component passes perekFrom for non-today sefarim.
  */
 
+// Mock Bookshelf: clicking passes perekFrom for a non-today sefer
 jest.mock("@/app/components/Bookshelf/Bookshelf", () => ({
 	Bookshelf: ({
 		onSeferClick,
@@ -38,17 +39,7 @@ jest.mock("@/hooks/useIsWideEnough", () => ({
 	useIsWideEnough: () => false,
 }));
 
-// Today's perek is 55 (שמות), so clicking בראשית is non-today
-jest.mock("@/data/perek-dto", () => ({
-	getTodaysPerekId: () => 55,
-}));
-
-jest.mock("@/data/db/sefarim", () => ({
-	sefarim: [
-		{ name: "בראשית", perekFrom: 1, perekTo: 50 },
-		{ name: "שמות", perekFrom: 51, perekTo: 90 },
-	],
-}));
+// perek-dto and sefarim mocks no longer needed — Bookshelf handles todaysPerekId
 
 import { BookshelfModal } from "@/app/components/Bookshelf/BookshelfModal";
 
@@ -62,9 +53,9 @@ describe("BookshelfModal (non-today sefer)", () => {
 		mockPush.mockClear();
 	});
 
-	it("navigates to first perek when clicking a non-today sefer", () => {
+	it("navigates to perekFrom when clicking a non-today sefer", () => {
 		render(<BookshelfModal isOpen={true} onClose={jest.fn()} />);
-		// Mock bookshelf fires onSeferClick("בראשית", 1) but today is שמות
+		// Mock bookshelf fires onSeferClick("בראשית", 1) — Bookshelf passed perekFrom
 		fireEvent.click(screen.getByTestId("mock-bookshelf"));
 		expect(mockPush).toHaveBeenCalledWith("/929/1");
 	});

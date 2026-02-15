@@ -87,17 +87,30 @@ describe("Bookshelf", () => {
 			expect(screen.getByText("כתובים")).toBeInTheDocument();
 		});
 
-		it("calls onSeferClick with sefer name and perekFrom when a book is clicked", () => {
+		it("calls onSeferClick with sefer name and perekFrom when a non-today book is clicked", () => {
 			const onSeferClick = jest.fn();
 			render(<Bookshelf onSeferClick={onSeferClick} />);
-			const buttons = screen.getAllByRole("button");
-			fireEvent.click(buttons[0]);
-			expect(onSeferClick).toHaveBeenCalledTimes(1);
-			// The callback receives (seferName, perekFrom)
-			expect(onSeferClick).toHaveBeenCalledWith(
-				expect.any(String),
-				expect.any(Number),
+			// Find the שמות book (not today's sefer)
+			const shmotButtons = screen.getAllByRole("button").filter((btn) =>
+				btn.textContent?.includes("שמות"),
 			);
+			fireEvent.click(shmotButtons[0]);
+			expect(onSeferClick).toHaveBeenCalledTimes(1);
+			// Non-today sefer should receive perekFrom (51 for שמות)
+			expect(onSeferClick).toHaveBeenCalledWith("שמות", 51);
+		});
+
+		it("calls onSeferClick with todaysPerekId when today's sefer is clicked", () => {
+			const onSeferClick = jest.fn();
+			render(<Bookshelf onSeferClick={onSeferClick} />);
+			// Find the בראשית book (today's sefer, perekId=5)
+			const bereshitButtons = screen.getAllByRole("button").filter((btn) =>
+				btn.textContent?.includes("בראשית"),
+			);
+			fireEvent.click(bereshitButtons[0]);
+			expect(onSeferClick).toHaveBeenCalledTimes(1);
+			// Today's sefer should receive todaysPerekId (5), not perekFrom (1)
+			expect(onSeferClick).toHaveBeenCalledWith("בראשית", 5);
 		});
 
 		it("renders today's sefer with a bookmark ribbon", () => {
