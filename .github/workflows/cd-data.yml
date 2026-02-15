@@ -1,4 +1,4 @@
-name: Continuous Deployment - Data
+name: Continuous Deployment - RDS
 
 on:
   repository_dispatch:
@@ -6,7 +6,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy Data to Production Database
+    name: Deploy Data to Production RDS
     permissions:
       contents: read
       id-token: write # Required for OIDC authentication with AWS
@@ -57,6 +57,6 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Deploy Data to Production
+      - name: Deploy Data to Production RDS
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: npm run deploy:data
