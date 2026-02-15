@@ -74,6 +74,8 @@ type FlipBookProps = {
 	pageShadow?: boolean;
 	/** Aggressive containment during flip animations for reduced jank */
 	snapshotDuringFlip?: boolean;
+	/** Table of contents page index (book-level). Default: 4. */
+	tocPageIndex?: number;
 };
 
 /** Dynamic FlipBook with ref forwarded (library uses forwardRef) */
@@ -139,15 +141,18 @@ const Sefer = (props: {
 
 	const historyMapper: HistoryMapper | undefined = useMemo(
 		() => ({
-			pageToRoute: (pageIndex) => {
-				// Map pageIndex → perekId (accounts for TOC offset)
-				if (pageIndex < CONTENT_OFFSET) return `/929/${perekObj.perekId}?book`;
-				const perekIdx = Math.floor((pageIndex - CONTENT_OFFSET) / 2);
-				const clampedIdx = Math.min(perekIdx, (perekIds?.length ?? 1) - 1);
-				const id = perekIds?.[clampedIdx];
-				if (id == null) return `/929/${perekObj.perekId}?book`;
-				return `/929/${id}?book`;
-			},
+		pageToRoute: (pageIndex) => {
+			// Non-content pages (cover, cover-interior, TOC) have no
+			// meaningful URL.  Return null to tell the library to skip
+			// the pushState entirely — avoids triggering framework-level
+			// routing side-effects.
+			if (pageIndex < CONTENT_OFFSET) return null;
+			const perekIdx = Math.floor((pageIndex - CONTENT_OFFSET) / 2);
+			const clampedIdx = Math.min(perekIdx, (perekIds?.length ?? 1) - 1);
+			const id = perekIds?.[clampedIdx];
+			if (id == null) return null;
+			return `/929/${id}?book`;
+		},
 			routeToPage: (route) => {
 				// Only resolve perekId when the route contains ?book (sefer-view mode).
 				if (route.includes("?book")) {
@@ -166,7 +171,7 @@ const Sefer = (props: {
 				return null;
 			},
 		}),
-		[perekIds, perekObj.perekId, hePageSemantics],
+		[perekIds, hePageSemantics],
 	);
 
 	const initialTurnedLeaves = useMemo(() => {
