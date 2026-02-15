@@ -434,6 +434,34 @@ describe("[slug] page", () => {
 			expect(screen.getByText("חזרה לפרק →")).toBeTruthy();
 		});
 
+		it("decodes percent-encoded slug to match perush name", async () => {
+			const perush = {
+				id: 1,
+				name: "דעת זקנים",
+				parshanName: "בעלי התוספות",
+				noteCount: 5,
+			};
+			mockGetPerushimByPerekId.mockResolvedValue([perush]);
+			mockGetPerushDetail.mockResolvedValue({
+				id: 1,
+				name: "דעת זקנים",
+				parshanName: "בעלי התוספות",
+				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
+			});
+
+			const jsx = await ArticlePage({
+				params: Promise.resolve({
+					number: "5",
+					slug: "%D7%93%D7%A2%D7%AA%20%D7%96%D7%A7%D7%A0%D7%99%D7%9D",
+				}),
+			});
+			render(jsx);
+
+			expect(
+				screen.getAllByText("דעת זקנים").length,
+			).toBeGreaterThanOrEqual(1);
+		});
+
 		it("calls notFound when perush name not in perushim list", async () => {
 			const { notFound } = jest.requireMock("next/navigation");
 			mockGetPerushimByPerekId.mockResolvedValue([]);
