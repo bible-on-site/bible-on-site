@@ -17,15 +17,14 @@ The website depends on the **published** `html-flip-book-react` package for CI/p
 
 **Never run `npm publish` manually. Never create GitHub Releases manually.**
 
-The `html-flip-book` repo has a fully automated CI/CD pipeline:
-1. **CI** (`ci.yml`): On every push to master, after lint/build/tests pass, the **Release** job auto-creates a GitHub Release (tag from `base/package.json` version). It uses `BOT_PAT` so the release event triggers downstream workflows.
-2. **CD** (`cd.yml`): Triggered by the release event. Publishes both `html-flip-book-vanilla` and `html-flip-book-react` to npm via OIDC trusted publishing.
-3. **Auto Bump** (`auto-bump-version.yml`): After release, bumps the version in all `package.json` files and commits to master.
-
-**To get a new version published:** just merge to master. Everything else is automatic.
+See `html-flip-book/.cursor/rules/ci-cd.mdc` for the full CI/CD pipeline details. In short: just merge to master — CI auto-releases, CD auto-publishes to npm.
 
 ## Keeping bible-on-site CI green after library changes
 
 When `html-flip-book` types or APIs change, the **published npm package must be updated before** `bible-on-site` CI can pass. Sequence:
-1. Push & merge library changes → create a release → CD publishes to npm.
+1. Push & merge library changes → CI auto-releases → CD publishes to npm.
 2. Only then update `bible-on-site` to use the new version and push.
+
+When upgrading the dependency version, update **both**:
+- `package.json` → `html-flip-book-react` version
+- `scripts/toggle-flip-book-dep.mjs` → `NPM_VERSION` constant

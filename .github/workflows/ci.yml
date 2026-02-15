@@ -87,6 +87,8 @@ env:
   ADMIN_E2E_JUNIT_REPORT_ARTIFACT_NAME: admin-e2e-junit-report-${{ github.run_id }}
   DATA_UNIT_JUNIT_REPORT_ARTIFACT_NAME: data-unit-junit-report-${{ github.run_id }}
   DATA_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME: data-integration-junit-report-${{ github.run_id }}
+  PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER: perushim-data-sql.master
+  PERUSHIM_PIPELINE_DIRECTORY: data/sefaria/pipelines/perushim-view
   LCOV_DOCKER_IMAGE_ARTIFACT_NAME: lcov-docker-image
   SEFARIA_MONGO_IMAGE_ARTIFACT_NAME: sefaria-mongo-image
 
@@ -129,8 +131,9 @@ jobs:
       is_api_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_api_master_coverage_available }}
       is_app_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_app_master_coverage_available }}
       is_website_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_website_master_coverage_available }}
+      is_perushim_data_sql_available: ${{ steps.check_master_coverage_artifacts.outputs.is_perushim_data_sql_available }}
     steps:
-      - name: Check and restore master coverage artifacts
+      - name: Check and restore master baseline artifacts
         id: check_master_coverage_artifacts
         env:
           GH_TOKEN: ${{ github.token }}
@@ -158,14 +161,17 @@ jobs:
           IS_API_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}")
           IS_APP_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}")
           IS_WEBSITE_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}")
+          IS_PERUSHIM_DATA_SQL_AVAILABLE=$(check_and_download_artifact "${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}")
 
           echo "API master coverage available: $IS_API_MASTER_COVERAGE_AVAILABLE"
           echo "App master coverage available: $IS_APP_MASTER_COVERAGE_AVAILABLE"
           echo "Website master coverage available: $IS_WEBSITE_MASTER_COVERAGE_AVAILABLE"
+          echo "Perushim data SQL available: $IS_PERUSHIM_DATA_SQL_AVAILABLE"
 
           echo "is_api_master_coverage_available=$IS_API_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_app_master_coverage_available=$IS_APP_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_website_master_coverage_available=$IS_WEBSITE_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
+          echo "is_perushim_data_sql_available=$IS_PERUSHIM_DATA_SQL_AVAILABLE" >> $GITHUB_OUTPUT
 
       - name: Re-upload API master coverage for current workflow
         if: steps.check_master_coverage_artifacts.outputs.is_api_master_coverage_available == 'true'
@@ -191,6 +197,15 @@ jobs:
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
+          retention-days: 90
+          overwrite: true
+
+      - name: Re-upload perushim data SQL for current workflow
+        if: steps.check_master_coverage_artifacts.outputs.is_perushim_data_sql_available == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
+          path: /tmp/${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
           retention-days: 90
           overwrite: true
 
@@ -308,6 +323,16 @@ jobs:
     with:
       module_directory: ${{ needs.setup_env.outputs.data_directory }}
       module_name: ${{ needs.setup_env.outputs.data_directory }}
+      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml"
+
+  determine_perushim_pipeline_changes:
+    name: Determine Perushim Pipeline Changes
+    needs: setup_env
+    secrets: inherit
+    uses: ./.github/workflows/shared-ci.yml
+    with:
+      module_directory: data/sefaria/pipelines/perushim-view
+      module_name: data/sefaria/pipelines/perushim-view
       ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml"
 
   # Version Verification Jobs
@@ -465,12 +490,13 @@ jobs:
   website_performance:
     name: Website Performance
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_website_changes]
+    needs: [setup_env, determine_website_changes, determine_baseline_availability]
     if: ${{ needs.determine_website_changes.outputs.module_changed == 'true' || needs.determine_website_changes.outputs.ci_changed == 'true' }}
     defaults:
       run:
         working-directory: ${{ env.WEBSITE_DIRECTORY }}
     permissions:
+      actions: read # Required for downloading re-uploaded baseline artifacts
       checks: write # Required by Bencher to create GitHub Check on push to master
       pull-requests: write # Required by Bencher to add comment on PRs
 
@@ -517,8 +543,56 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nextjs-${{ hashFiles(format('{0}/package-lock.json', env.WEBSITE_DIRECTORY)) }}-
 
+      # ============ MySQL + Perushim Setup for SSG ============
+      # Populate MySQL with perushim data so `next build` can statically
+      # generate perush pages without "Access denied" errors.
+      # Only restores when master baseline artifact is available (similar to coverage baseline pattern).
+      - name: Install and start MySQL
+        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        id: mysql
+        uses: shogo82148/actions-setup-mysql@v1
+        with:
+          mysql-version: "8.4"
+          root-password: test_123
+          distribution: "mysql"
+          auto-start: true
+
+      - name: Download perushim SQL master baseline
+        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
+          path: ${{ env.DATA_DIRECTORY }}/mysql/perushim-sql-master
+
+      - name: Setup Rust
+        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-make
+        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-make
+
+      - name: Cache Cargo dependencies
+        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ env.DATA_DIRECTORY }}
+
+      - name: Populate MySQL for build
+        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        working-directory: ${{ env.DATA_DIRECTORY }}
+        env:
+          DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
+        run: |
+          cp mysql/perushim-sql-master/perushim_data.sql mysql/perushim_data.sql
+          cargo make mysql-populate
+
       - name: Build
         id: npm-build
+        env:
+          DB_URL: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' && 'mysql://root:test_123@127.0.0.1:3306/tanah_test' || '' }}
         run: npm run build
 
       - name: Perf Test
@@ -672,8 +746,29 @@ jobs:
         working-directory: ${{ env.DATA_DIRECTORY }}
         run: cargo build --release
 
+      # ============ Populate MySQL before build (for SSG / generateStaticParams) ============
+      # Restore perushim SQL from master baseline so `next build` can statically
+      # generate perush pages without DB errors (same pattern as coverage baseline).
+      - name: Download perushim SQL master baseline
+        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
+          path: ${{ env.DATA_DIRECTORY }}/mysql/perushim-sql-master
+
+      - name: Populate MySQL for build
+        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        working-directory: ${{ env.DATA_DIRECTORY }}
+        env:
+          DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
+        run: |
+          cp mysql/perushim-sql-master/perushim_data.sql mysql/perushim_data.sql
+          cargo make mysql-populate
+
       - name: Build
         id: npm-build
+        env:
+          DB_URL: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' && 'mysql://root:test_123@127.0.0.1:3306/tanah_test' || '' }}
         run: npm run build
 
       - name: E2E Test
@@ -1351,7 +1446,96 @@ jobs:
           flags: data-integration
           report_type: test_results
 
-      # ============ Generate Perushim SQL for CD ============
+      - name: Stop MongoDB Container
+        if: ${{ always() }}
+        run: docker stop sefaria-mongo || true
+
+  # ====================================================================================
+  # PERUSHIM DATA JOB - Single job for all perushim SQL concerns
+  # ====================================================================================
+  # Generates perushim SQL from Sefaria MongoDB and stores artifacts for:
+  #   1. CD deployment (per-run artifact: perushim-data-sql)
+  #   2. Website CI/Perf baseline (master artifact: perushim-data-sql.master)
+  # ====================================================================================
+  perushim_data:
+    name: Perushim Data
+    runs-on: ubuntu-latest
+    needs: [setup_env, determine_perushim_pipeline_changes, determine_docker_image_availability, build_sefaria_mongo_docker]
+    if: ${{ always() && !cancelled() && !failure() && (needs.determine_perushim_pipeline_changes.outputs.module_changed == 'true' || needs.determine_perushim_pipeline_changes.outputs.ci_changed == 'true') }}
+    defaults:
+      run:
+        working-directory: ${{ env.DATA_DIRECTORY }}
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ env.DATA_DIRECTORY }}
+          cache-on-failure: true
+          shared-key: "data-rust"
+
+      # Download sefaria mongo docker image (same pattern as data_ci)
+      - name: Download Sefaria MongoDB Docker Image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          artifact_id="${{ needs.determine_docker_image_availability.outputs.sefaria_mongo_artifact_id }}"
+          if [ -n "$artifact_id" ] && [ "$artifact_id" != "" ]; then
+            echo "Downloading cached artifact (id: $artifact_id) via gh api..."
+            gh api repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip > /tmp/sefaria-mongo-image.zip
+            unzip -o /tmp/sefaria-mongo-image.zip -d /tmp
+            rm -f /tmp/sefaria-mongo-image.zip
+          else
+            echo "No cached artifact, downloading from current workflow..."
+            gh run download ${{ github.run_id }} -n ${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }} -D /tmp
+          fi
+          echo "Disk space before docker load:"
+          df -h /
+
+      - name: Load Sefaria MongoDB Docker Image
+        run: |
+          docker load --input /tmp/sefaria-mongo-image.tar
+          rm -f /tmp/sefaria-mongo-image.tar
+
+      - name: Start MongoDB Container
+        id: setup-mongodb
+        run: |
+          docker run -d --name sefaria-mongo -p 27017:27017 sefaria-mongo:latest
+          echo "Waiting for MongoDB to be ready..."
+          for i in {1..60}; do
+            count=$(docker exec sefaria-mongo mongosh --quiet --eval "db.getSiblingDB('sefaria').texts.countDocuments({})" 2>/dev/null || echo "0")
+            if [ "$count" != "0" ] && [ -n "$count" ]; then
+              echo "MongoDB is ready with $count documents in sefaria.texts collection!"
+              exit 0
+            fi
+            echo "Attempt $i/60: Waiting for MongoDB (count: $count)..."
+            sleep 2
+          done
+          echo "MongoDB failed to be ready within timeout"
+          docker logs sefaria-mongo
+          exit 1
+
       - name: Generate Perushim MySQL Data
         env:
           MONGO_HOST: localhost
@@ -1365,6 +1549,15 @@ jobs:
           name: perushim-data-sql
           path: ${{ env.DATA_DIRECTORY }}/mysql/perushim_data.sql
           retention-days: 30
+          overwrite: true
+
+      - name: Upload Perushim SQL Artifact (master baseline)
+        if: ${{ env.IS_MASTER_BRANCH == 'true' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
+          path: ${{ env.DATA_DIRECTORY }}/mysql/perushim_data.sql
+          retention-days: 90
           overwrite: true
 
       - name: Stop MongoDB Container
@@ -1418,6 +1611,7 @@ jobs:
         determine_api_changes,
         determine_app_changes,
         determine_data_changes,
+        determine_perushim_pipeline_changes,
         verify_website_version,
         verify_api_version,
         verify_app_version,
@@ -1426,6 +1620,7 @@ jobs:
         api_e2e,
         app_ci,
         data_ci,
+        perushim_data,
         build_lcov_docker,
         determine_baseline_availability,
         determine_docker_image_availability,
@@ -1508,9 +1703,10 @@ jobs:
 
           DATA_MODULE_CHANGED=$([ "${{ needs.determine_data_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           if [ "$DATA_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ]; then
-            # Only fail if data_ci explicitly failed (not if skipped)
+            # Only fail if data_ci or perushim_data explicitly failed (not if skipped)
             DATA_STATUS=$([ "${{ needs.data_ci.result }}" = "failure" ] && echo "failure" || echo "success") # Generated
-            if [ "$DATA_STATUS" = "failure" ]; then
+            PERUSHIM_STATUS=$([ "${{ needs.perushim_data.result }}" = "failure" ] && echo "failure" || echo "success") # Generated
+            if [ "$DATA_STATUS" = "failure" ] || [ "$PERUSHIM_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
             fi
@@ -1703,8 +1899,10 @@ jobs:
 
   release_data:
     name: Release Data
-    needs: [setup_env, determine_data_changes, cross_module_ci, data_ci]
-    if: ${{ needs.data_ci.result == 'success' && (needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true') && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_data_changes, cross_module_ci, data_ci, perushim_data]
+    # Only release when perushim_data actually ran and succeeded — cd-data deploys perushim SQL,
+    # so there's nothing to deploy if the pipeline didn't change.
+    if: ${{ needs.perushim_data.result == 'success' && (needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true') && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
     runs-on: ubuntu-latest
