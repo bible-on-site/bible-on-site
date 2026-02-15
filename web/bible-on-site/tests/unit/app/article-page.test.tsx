@@ -1,5 +1,5 @@
 /**
- * Tests for [number]/[articleId]/page.tsx exported functions:
+ * Tests for [number]/[slug]/page.tsx exported functions:
  * generateStaticParams, generateMetadata, ArticlePage.
  */
 
@@ -78,7 +78,7 @@ jest.mock("../../../src/app/929/[number]/components/SeferComposite", () => ({
 	default: () => <div data-testid="sefer-composite" />,
 }));
 
-jest.mock("../../../src/app/929/[number]/[articleId]/ScrollToArticle", () => ({
+jest.mock("../../../src/app/929/[number]/[slug]/ScrollToArticle", () => ({
 	ScrollToArticle: () => null,
 }));
 
@@ -94,7 +94,7 @@ import { render, screen } from "@testing-library/react";
 import ArticlePage, {
 	generateMetadata,
 	generateStaticParams,
-} from "../../../src/app/929/[number]/[articleId]/page";
+} from "../../../src/app/929/[number]/[slug]/page";
 import { getPerekByPerekId } from "../../../src/data/perek-dto";
 import {
 	getPerekIdsForSefer,
@@ -143,7 +143,7 @@ const sampleArticle = {
 	priority: 1,
 };
 
-describe("[articleId] page", () => {
+describe("[slug] page", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 	});
@@ -160,7 +160,7 @@ describe("[articleId] page", () => {
 				params: { number: "5" },
 			});
 
-			expect(result).toEqual([{ articleId: "10" }, { articleId: "20" }]);
+			expect(result).toEqual([{ slug: "10" }, { slug: "20" }]);
 			expect(mockGetArticlesByPerekId).toHaveBeenCalledWith(5);
 		});
 
@@ -170,7 +170,7 @@ describe("[articleId] page", () => {
 				{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 10 },
 			]);
 			const result = await generateStaticParams({ params: { number: "5" } });
-			expect(result).toEqual([{ articleId: "רש״י" }]);
+			expect(result).toEqual([{ slug: "רש״י" }]);
 		});
 	});
 
@@ -179,7 +179,7 @@ describe("[articleId] page", () => {
 			mockGetArticleById.mockResolvedValue(sampleArticle);
 
 			const result = await generateMetadata({
-				params: Promise.resolve({ number: "5", articleId: "42" }),
+				params: Promise.resolve({ number: "5", slug: "42" }),
 			});
 
 			expect(result).toEqual({
@@ -195,7 +195,7 @@ describe("[articleId] page", () => {
 			});
 
 			const result = await generateMetadata({
-				params: Promise.resolve({ number: "5", articleId: "42" }),
+				params: Promise.resolve({ number: "5", slug: "42" }),
 			});
 
 			expect(result.description).toBe("תוכן המאמר");
@@ -209,7 +209,7 @@ describe("[articleId] page", () => {
 			});
 
 			const result = await generateMetadata({
-				params: Promise.resolve({ number: "5", articleId: "42" }),
+				params: Promise.resolve({ number: "5", slug: "42" }),
 			});
 
 			expect(result.description).toBe("מאמר מאת הרב ישראל");
@@ -219,7 +219,7 @@ describe("[articleId] page", () => {
 			mockGetArticleById.mockResolvedValue(null);
 
 			const result = await generateMetadata({
-				params: Promise.resolve({ number: "5", articleId: "999" }),
+				params: Promise.resolve({ number: "5", slug: "999" }),
 			});
 
 			expect(result).toEqual({
@@ -227,7 +227,7 @@ describe("[articleId] page", () => {
 			});
 		});
 
-		it("returns perush metadata when articleId is non-numeric (perush name)", async () => {
+		it("returns perush metadata when slug is non-numeric (perush name)", async () => {
 			const perek = {
 				perekId: 5,
 				perekHeb: "ה",
@@ -254,7 +254,7 @@ describe("[articleId] page", () => {
 			});
 
 			const result = await generateMetadata({
-				params: Promise.resolve({ number: "5", articleId: "רש״י" }),
+				params: Promise.resolve({ number: "5", slug: "רש״י" }),
 			});
 
 			expect(result.title).toContain("רש״י");
@@ -265,7 +265,7 @@ describe("[articleId] page", () => {
 			mockGetPerushimByPerekId.mockResolvedValue([]);
 
 			const result = await generateMetadata({
-				params: Promise.resolve({ number: "5", articleId: "unknown" }),
+				params: Promise.resolve({ number: "5", slug: "unknown" }),
 			});
 
 			expect(result).toEqual({ title: "פירוש לא נמצא | תנ״ך באתר" });
@@ -338,7 +338,7 @@ describe("[articleId] page", () => {
 
 		it("renders article with author info and content", async () => {
 			const jsx = await ArticlePage({
-				params: Promise.resolve({ number: "5", articleId: "42" }),
+				params: Promise.resolve({ number: "5", slug: "42" }),
 			});
 			render(jsx);
 
@@ -351,7 +351,7 @@ describe("[articleId] page", () => {
 			mockGetPerekByPerekId.mockReturnValue(allSegmentTypesPerek);
 
 			const jsx = await ArticlePage({
-				params: Promise.resolve({ number: "5", articleId: "42" }),
+				params: Promise.resolve({ number: "5", slug: "42" }),
 			});
 			const { container } = render(jsx);
 			const html = container.innerHTML;
@@ -374,7 +374,7 @@ describe("[articleId] page", () => {
 
 			await expect(
 				ArticlePage({
-					params: Promise.resolve({ number: "abc", articleId: "42" }),
+					params: Promise.resolve({ number: "abc", slug: "42" }),
 				}),
 			).rejects.toThrow("NEXT_NOT_FOUND");
 
@@ -387,7 +387,7 @@ describe("[articleId] page", () => {
 
 			await expect(
 				ArticlePage({
-					params: Promise.resolve({ number: "5", articleId: "999" }),
+					params: Promise.resolve({ number: "5", slug: "999" }),
 				}),
 			).rejects.toThrow("NEXT_NOT_FOUND");
 
@@ -403,14 +403,14 @@ describe("[articleId] page", () => {
 
 			await expect(
 				ArticlePage({
-					params: Promise.resolve({ number: "5", articleId: "42" }),
+					params: Promise.resolve({ number: "5", slug: "42" }),
 				}),
 			).rejects.toThrow("NEXT_NOT_FOUND");
 
 			expect(notFound).toHaveBeenCalled();
 		});
 
-		it("renders perush view when articleId is non-numeric", async () => {
+		it("renders perush view when slug is non-numeric", async () => {
 			const perush = {
 				id: 1,
 				name: "רש״י",
@@ -426,7 +426,7 @@ describe("[articleId] page", () => {
 			});
 
 			const jsx = await ArticlePage({
-				params: Promise.resolve({ number: "5", articleId: "רש״י" }),
+				params: Promise.resolve({ number: "5", slug: "רש״י" }),
 			});
 			render(jsx);
 
@@ -440,7 +440,7 @@ describe("[articleId] page", () => {
 
 			await expect(
 				ArticlePage({
-					params: Promise.resolve({ number: "5", articleId: "nonexistent" }),
+					params: Promise.resolve({ number: "5", slug: "nonexistent" }),
 				}),
 			).rejects.toThrow("NEXT_NOT_FOUND");
 
@@ -456,7 +456,7 @@ describe("[articleId] page", () => {
 
 			await expect(
 				ArticlePage({
-					params: Promise.resolve({ number: "5", articleId: "רש״י" }),
+					params: Promise.resolve({ number: "5", slug: "רש״י" }),
 				}),
 			).rejects.toThrow("NEXT_NOT_FOUND");
 
@@ -476,7 +476,7 @@ describe("[articleId] page", () => {
 			});
 
 			const jsx = await ArticlePage({
-				params: Promise.resolve({ number: "5", articleId: "רש״י" }),
+				params: Promise.resolve({ number: "5", slug: "רש״י" }),
 			});
 			const { container } = render(jsx);
 

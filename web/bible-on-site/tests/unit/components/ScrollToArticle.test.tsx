@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { render } from "@testing-library/react";
-import { ScrollToArticle } from "@/app/929/[number]/[articleId]/ScrollToArticle";
+import { ScrollToArticle } from "@/app/929/[number]/[slug]/ScrollToArticle";
 
 describe("ScrollToArticle", () => {
 	beforeEach(() => {

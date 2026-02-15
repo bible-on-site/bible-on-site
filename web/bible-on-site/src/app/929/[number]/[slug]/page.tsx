@@ -34,8 +34,8 @@ export async function generateStaticParams({
 		getPerushimByPerekId(perekId),
 	]);
 	return [
-		...articles.map((article) => ({ articleId: String(article.id) })),
-		...perushim.map((perush) => ({ articleId: perush.name })),
+		...articles.map((article) => ({ slug: String(article.id) })),
+		...perushim.map((perush) => ({ slug: perush.name })),
 	];
 }
 
@@ -82,11 +82,11 @@ const getCachedPerushDetail = unstable_cache(
 export async function generateMetadata({
 	params,
 }: {
-	params: Promise<{ number: string; articleId: string }>;
+	params: Promise<{ number: string; slug: string }>;
 }) {
-	const { number, articleId } = await params;
+	const { number, slug } = await params;
 	const perekId = Number.parseInt(number, 10);
-	const id = Number.parseInt(articleId, 10);
+	const id = Number.parseInt(slug, 10);
 
 	// Check if it's a numeric article ID
 	if (!Number.isNaN(id)) {
@@ -108,7 +108,7 @@ export async function generateMetadata({
 
 	// Otherwise it's a perush name
 	const perushim = await getCachedPerushim(perekId);
-	const perush = perushim.find((p) => p.name === articleId);
+	const perush = perushim.find((p) => p.name === slug);
 
 	if (!perush) {
 		return {
@@ -128,11 +128,11 @@ export async function generateMetadata({
 export default async function ArticlePage({
 	params,
 }: {
-	params: Promise<{ number: string; articleId: string }>;
+	params: Promise<{ number: string; slug: string }>;
 }) {
-	const { number, articleId } = await params;
+	const { number, slug } = await params;
 	const perekId = Number.parseInt(number, 10);
-	const id = Number.parseInt(articleId, 10);
+	const id = Number.parseInt(slug, 10);
 
 	if (Number.isNaN(perekId)) {
 		notFound();
@@ -274,7 +274,7 @@ export default async function ArticlePage({
 	}
 
 	// Handle perush view
-	const perush = perushim.find((p) => p.name === articleId);
+	const perush = perushim.find((p) => p.name === slug);
 
 	if (!perush) {
 		notFound();
