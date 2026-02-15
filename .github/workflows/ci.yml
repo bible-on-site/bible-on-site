@@ -1900,9 +1900,9 @@ jobs:
   release_data:
     name: Release Data
     needs: [setup_env, determine_data_changes, cross_module_ci, data_ci, perushim_data]
-    # Only release when perushim_data actually ran and succeeded — cd-data deploys perushim SQL,
-    # so there's nothing to deploy if the pipeline didn't change.
-    if: ${{ needs.perushim_data.result == 'success' && (needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true') && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    # Note: Using always() as a workaround for reusable workflow result evaluation issues (see #1065)
+    # Also verify cross_module_ci, data_ci, and perushim_data passed to ensure quality gate
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.perushim_data.result == 'success' && (needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true') && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
     runs-on: ubuntu-latest
