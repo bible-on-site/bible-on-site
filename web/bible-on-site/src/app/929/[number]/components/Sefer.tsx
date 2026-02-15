@@ -57,6 +57,8 @@ type FlipBookProps = {
 	direction?: "rtl" | "ltr";
 	/** Leaves to keep visible before/after current for performance */
 	leavesBuffer?: number;
+	/** Override total-page display in toolbar (e.g. Hebrew chapter count) */
+	of?: string | number;
 	/** Cover configuration */
 	coverConfig?: CoverConfig;
 	/** History integration: URL ↔ page */
@@ -65,6 +67,8 @@ type FlipBookProps = {
 	initialTurnedLeaves?: number[];
 	/** Download configuration: entire book and page-range handlers plus filename hints */
 	downloadConfig?: DownloadConfig;
+	/** Enable/disable page shadow effect during flip */
+	pageShadow?: boolean;
 };
 
 /** Dynamic FlipBook with ref forwarded (library uses forwardRef) */
@@ -164,28 +168,34 @@ const Sefer = (props: {
 		return Array.from({ length: turnedCount }, (_, i) => i);
 	}, [perekIds, perekObj.perekId]);
 
-	const coverStyle = { backgroundColor: seferColor };
 	const frontCover = (
 		<section
-			className={styles.page}
+			className={`${styles.page} ${styles.cover}`}
 			aria-label="עטיפה קדמית"
-			style={coverStyle}
+			style={{ "--cover-color": seferColor } as React.CSSProperties}
 		>
-			<div className={styles.coverContent}>
-				<h1 className={styles.coverTitle}>ספר {perekObj.sefer}</h1>
-				<p className={styles.coverSubtitle}>
-					מקראות גדולות עם מאמרים מרבנים בני זמנינו
-				</p>
+			<div className={styles.coverInner}>
+				<div className={styles.coverContent}>
+					<div className={styles.coverOrnament}>✦</div>
+					<h1 className={styles.coverTitle}>ספר {perekObj.sefer}</h1>
+					<div className={styles.coverDivider} />
+					<p className={styles.coverSubtitle}>
+						מקראות גדולות
+					</p>
+					<p className={styles.coverEdition}>
+						עם מאמרים מרבנים בני זמנינו
+					</p>
+				</div>
 			</div>
 		</section>
 	);
 	const backCover = (
 		<section
-			className={styles.page}
+			className={`${styles.page} ${styles.cover}`}
 			aria-label="עטיפה אחורית"
-			style={coverStyle}
+			style={{ "--cover-color": seferColor } as React.CSSProperties}
 		>
-			{/* Back cover intentionally left empty */}
+			<div className={styles.coverInner} />
 		</section>
 	);
 
@@ -289,11 +299,13 @@ const Sefer = (props: {
 						pageSemantics={hePageSemantics}
 						direction="rtl"
 						leavesBuffer={7}
+						of={toHebrewWithPunctuation(perakim.length)}
 						coverConfig={{
 							hardCovers: true,
 							noShadow: true,
 							coverIndices: "auto",
 						}}
+						pageShadow={false}
 						historyMapper={historyMapper}
 						initialTurnedLeaves={initialTurnedLeaves}
 						downloadConfig={{

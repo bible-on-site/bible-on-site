@@ -4,9 +4,13 @@ coverage:
   status:
     project:
       default:
-        # No coverage regression allowed: target is the base commit's coverage
+        # Informational only: flag-specific checks enforce coverage per module.
+        # The default (unflagged) check aggregates ALL files, including those
+        # outside any flag path (devops/, docs/, .github/, etc.) which always
+        # have 0% coverage and can cause false-positive regressions.
         target: auto
         threshold: 0%
+        informational: true
       api:
         target: auto
         threshold: 0%

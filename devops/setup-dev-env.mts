@@ -531,9 +531,12 @@ async function runSyncFromProd(): Promise<void> {
 			}
 		}
 
-		// S3 sync (optional if buckets are set)
-		if (prodS3Bucket && devS3Bucket) {
-			if (dryRun) {
+	// S3 sync (optional if buckets are set)
+	if (prodS3Bucket && devS3Bucket) {
+		if (!dryRun && s3Endpoint) {
+			ensureMinioRunning();
+		}
+		if (dryRun) {
 				console.info(
 					`[dry-run] Would ensure bucket s3://${devS3Bucket} exists`,
 				);
@@ -709,6 +712,25 @@ async function runSyncFromProd(): Promise<void> {
 	}
 
 	console.info("sync-from-prod finished.");
+}
+
+function ensureMinioRunning(): void {
+	const dockerComposePath = path.resolve(devopsDir, "docker-compose.yml");
+	console.info("Ensuring MinIO is running via docker-compose...");
+	const result = spawnSync(
+		"docker",
+		["compose", "-f", dockerComposePath, "up", "-d", "--wait"],
+		{ stdio: "inherit", shell: isWin },
+	);
+	if (result.status !== 0) {
+		console.warn(
+			"Warning: Failed to start MinIO via docker-compose. S3 asset sync may fail.",
+		);
+		console.warn(
+			"  Make sure Docker Desktop is running, then retry or run manually:",
+		);
+		console.warn(`  docker compose -f ${dockerComposePath} up -d`);
+	}
 }
 
 function setupPythonVenv(dir: string, name = ".", fullSetup = true) {

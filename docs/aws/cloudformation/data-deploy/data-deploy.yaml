@@ -145,7 +145,7 @@ Resources:
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 300 # 5 minutes
-      MemorySize: 256
+      MemorySize: 1024 # Increased from 256 to handle large perushim_data.sql (~33 MB)
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup

@@ -1704,7 +1704,7 @@ jobs:
   release_data:
     name: Release Data
     needs: [setup_env, determine_data_changes, cross_module_ci, data_ci]
-    if: ${{ needs.data_ci.result == 'success' && needs.determine_data_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ needs.data_ci.result == 'success' && (needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true') && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
     runs-on: ubuntu-latest

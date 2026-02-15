@@ -84,26 +84,30 @@ def handler(event, context):
             s3_key = f"{s3_prefix}{sql_file}"
             print(f"Processing: s3://{bucket}/{s3_key}")
 
-            # Download SQL from S3
             response = s3.get_object(Bucket=bucket, Key=s3_key)
-            sql_content = response["Body"].read().decode("utf-8")
+            content_length = response.get("ContentLength", 0)
 
-            # Preprocess SQL to handle existing tables/views
-            sql_content = preprocess_sql(sql_content)
+            # For large files (>10 MB), stream-process in chunks to reduce memory
+            if content_length > 10 * 1024 * 1024:
+                count = execute_sql_streaming(response["Body"], connection)
+            else:
+                # Small files: load into memory for preprocessing
+                sql_content = response["Body"].read().decode("utf-8")
+                sql_content = preprocess_sql(sql_content)
+                with connection.cursor() as cursor:
+                    stmts = parse_statements(sql_content)
+                    for stmt in stmts:
+                        try:
+                            cursor.execute(stmt)
+                        except Exception as e:
+                            print(f"Error executing: {stmt[:100]}...")
+                            raise
+                count = len(stmts)
 
-            # Execute SQL statements
-            with connection.cursor() as cursor:
-                statements = parse_statements(sql_content)
-                for stmt in statements:
-                    try:
-                        cursor.execute(stmt)
-                    except Exception as e:
-                        print(f"Error executing: {stmt[:100]}...")
-                        raise
-                results.append(
-                    {"file": sql_file, "statements": len(statements), "status": "success"}
-                )
-            print(f"Executed {len(statements)} statements from {sql_file}")
+            results.append(
+                {"file": sql_file, "statements": count, "status": "success"}
+            )
+            print(f"Executed {count} statements from {sql_file}")
 
         return {
             "statusCode": 200,
@@ -111,6 +115,69 @@ def handler(event, context):
         }
     finally:
         connection.close()
+
+
+def execute_sql_streaming(body, connection):
+    """
+    Stream-process a large SQL file from S3 to avoid loading it entirely
+    into memory.  Reads the S3 body in 1 MB chunks, accumulates a buffer,
+    and executes each semicolon-terminated statement as it is found.
+
+    Only INSERT/CREATE/DROP statements are executed; comments, USE, and
+    MySQL dump artifacts are skipped (same rules as parse_statements).
+    """
+    CHUNK = 1 * 1024 * 1024  # 1 MB
+    buf = ""
+    count = 0
+
+    with connection.cursor() as cursor:
+        # Disable FK checks for the duration
+        cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
+
+        for chunk in body.iter_chunks(chunk_size=CHUNK):
+            buf += chunk.decode("utf-8")
+
+            while ";" in buf:
+                idx = buf.index(";")
+                stmt = buf[:idx].strip()
+                buf = buf[idx + 1 :]
+
+                if not stmt:
+                    continue
+                if stmt.startswith("--"):
+                    continue
+                if stmt.upper().startswith("USE "):
+                    continue
+                if stmt.startswith("/*!") or stmt.startswith("/*M!"):
+                    continue
+                if re.match(r"SET\s+.*=\s*@OLD_", stmt, re.IGNORECASE):
+                    continue
+                if re.match(r"SET\s+@OLD_", stmt, re.IGNORECASE):
+                    continue
+
+                # Handle CREATE TABLE → add DROP TABLE IF EXISTS
+                table_match = re.match(
+                    r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"]?(\w+)[`"]?',
+                    stmt,
+                    re.IGNORECASE,
+                )
+                if table_match:
+                    cursor.execute(
+                        f"DROP TABLE IF EXISTS `{table_match.group(1)}`"
+                    )
+
+                cursor.execute(stmt)
+                count += 1
+
+        # Process remaining buffer
+        stmt = buf.strip()
+        if stmt and not stmt.startswith("--"):
+            cursor.execute(stmt)
+            count += 1
+
+        cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
+
+    return count
 
 
 def parse_statements(sql_content):
