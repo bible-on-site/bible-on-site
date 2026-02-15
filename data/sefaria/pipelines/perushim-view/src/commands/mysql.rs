@@ -65,8 +65,10 @@ fn generate_sql(path: &Path, extracted: &Extracted, dump_name: &str) -> Result<(
 }
 
 fn escape_sql(s: &str) -> String {
+    // Use SQL-standard doubled-quote escaping ('') instead of backslash (\')
+    // to avoid issues with NO_BACKSLASH_ESCAPES mode and Lambda SQL parsers.
     s.replace('\\', "\\\\")
-        .replace('\'', "\\'")
+        .replace('\'', "''")
         .replace('\n', "\\n")
         .replace('\r', "\\r")
         .replace('\t', "\\t")

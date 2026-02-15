@@ -15,7 +15,7 @@ import { Ptuah } from "./components/Ptuha";
 import SeferComposite from "./components/SeferComposite";
 import { Stuma } from "./components/Stuma";
 import styles from "./page.module.css";
-// perakim are a closed list.
+// perakim are a closed list — no fallback rendering for unknown IDs.
 export const dynamicParams = false;
 
 // this reserverd function is a magic for caching
