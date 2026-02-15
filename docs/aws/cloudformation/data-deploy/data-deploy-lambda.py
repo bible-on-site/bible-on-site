@@ -117,42 +117,84 @@ def handler(event, context):
         connection.close()
 
 
+def find_statement_end(buf):
+    """
+    Find the index of the first ';' that is NOT inside a SQL string literal.
+
+    Tracks single-quoted strings and skips semicolons that appear within
+    them.  Inside a string the following escape sequences are recognised
+    (MySQL default behaviour):
+
+    * ``''``  – SQL-standard doubled quote  (literal ``'``)
+    * ``\\'`` – backslash-escaped quote     (literal ``'``)
+    * ``\\\\`` – escaped backslash           (literal ``\\``)
+    * Any other ``\\X`` – skip the backslash and the next char
+
+    Returns the index of the terminating ';', or -1 if no unquoted ';'
+    exists in *buf*.
+    """
+    in_string = False
+    i = 0
+    length = len(buf)
+    while i < length:
+        ch = buf[i]
+        if in_string:
+            if ch == "\\":
+                # Backslash escape: skip the next character whatever it is
+                i += 2
+                continue
+            if ch == "'":
+                # Lookahead: '' is an escaped quote, stay in string
+                if i + 1 < length and buf[i + 1] == "'":
+                    i += 2
+                    continue
+                in_string = False
+        else:
+            if ch == "'":
+                in_string = True
+            elif ch == ";":
+                return i
+        i += 1
+    return -1
+
+
 def execute_sql_streaming(body, connection):
     """
     Stream-process a large SQL file from S3 to avoid loading it entirely
     into memory.  Reads the S3 body in 1 MB chunks, accumulates a buffer,
     and executes each semicolon-terminated statement as it is found.
 
-    Only INSERT/CREATE/DROP statements are executed; comments, USE, and
-    MySQL dump artifacts are skipped (same rules as parse_statements).
+    Uses quote-aware splitting so that semicolons inside SQL string
+    literals (e.g. in perush names or note HTML) are not mistaken for
+    statement terminators.
+
+    An incremental UTF-8 decoder is used so that multi-byte characters
+    split across chunk boundaries are handled correctly.
+
+    Only INSERT/CREATE/DROP/SET/TRUNCATE statements are executed;
+    comments, USE, and MySQL dump artifacts are skipped.
     """
+    import codecs
+
     CHUNK = 1 * 1024 * 1024  # 1 MB
+    decoder = codecs.getincrementaldecoder("utf-8")("replace")
     buf = ""
     count = 0
 
     with connection.cursor() as cursor:
-        # Disable FK checks for the duration
         cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
 
         for chunk in body.iter_chunks(chunk_size=CHUNK):
-            buf += chunk.decode("utf-8")
+            buf += decoder.decode(chunk, final=False)
 
-            while ";" in buf:
-                idx = buf.index(";")
+            while True:
+                idx = find_statement_end(buf)
+                if idx == -1:
+                    break
                 stmt = buf[:idx].strip()
                 buf = buf[idx + 1 :]
 
-                if not stmt:
-                    continue
-                if stmt.startswith("--"):
-                    continue
-                if stmt.upper().startswith("USE "):
-                    continue
-                if stmt.startswith("/*!") or stmt.startswith("/*M!"):
-                    continue
-                if re.match(r"SET\s+.*=\s*@OLD_", stmt, re.IGNORECASE):
-                    continue
-                if re.match(r"SET\s+@OLD_", stmt, re.IGNORECASE):
+                if not _should_execute(stmt):
                     continue
 
                 # Handle CREATE TABLE → add DROP TABLE IF EXISTS
@@ -169,9 +211,12 @@ def execute_sql_streaming(body, connection):
                 cursor.execute(stmt)
                 count += 1
 
+        # Flush the decoder for any remaining partial bytes
+        buf += decoder.decode(b"", final=True)
+
         # Process remaining buffer
         stmt = buf.strip()
-        if stmt and not stmt.startswith("--"):
+        if stmt and _should_execute(stmt):
             cursor.execute(stmt)
             count += 1
 
@@ -182,36 +227,51 @@ def execute_sql_streaming(body, connection):
 
 def parse_statements(sql_content):
     """
-    Parse SQL into statements, filtering out problematic ones.
+    Parse SQL into executable statements using quote-aware splitting.
 
-    Filters:
-    - Empty statements
-    - SQL comments (--)
-    - USE database statements
-    - MySQL dump artifacts (/*!40101 ... */)
-    - SET statements that restore @OLD_ variables (often NULL)
+    Handles semicolons inside string literals correctly, and filters
+    out comments, USE statements, and MySQL dump artifacts.
     """
     statements = []
-    for s in sql_content.split(";"):
-        s = s.strip()
-        if not s:
-            continue
-        # Skip comments
-        if s.startswith("--"):
-            continue
-        # Skip USE statements
-        if s.upper().startswith("USE "):
-            continue
-        # Skip MySQL dump artifacts (/*!40101 ... */)
-        if s.startswith("/*!") or s.startswith("/*M!"):
-            continue
-        # Skip SET statements that restore old values (often NULL)
-        if re.match(r"SET\s+.*=\s*@OLD_", s, re.IGNORECASE):
-            continue
-        if re.match(r"SET\s+@OLD_", s, re.IGNORECASE):
-            continue
-        statements.append(s)
+    buf = sql_content
+    while True:
+        idx = find_statement_end(buf)
+        if idx == -1:
+            # Handle trailing statement without semicolon
+            remaining = buf.strip()
+            if remaining and _should_execute(remaining):
+                statements.append(remaining)
+            break
+        stmt = buf[:idx].strip()
+        buf = buf[idx + 1 :]
+        if stmt and _should_execute(stmt):
+            statements.append(stmt)
     return statements
+
+
+def _should_execute(stmt):
+    """Return True if *stmt* is a SQL statement that should be executed."""
+    if not stmt:
+        return False
+    # Strip leading SQL line-comments so the real statement is exposed.
+    # Comments in our generated SQL are standalone lines (e.g. "-- parshan")
+    # that may be glued to the next INSERT when splitting by ";".
+    while stmt.startswith("--"):
+        newline = stmt.find("\n")
+        if newline == -1:
+            return False  # entire content is a comment
+        stmt = stmt[newline + 1 :].strip()
+        if not stmt:
+            return False
+    if stmt.upper().startswith("USE "):
+        return False
+    if stmt.startswith("/*!") or stmt.startswith("/*M!"):
+        return False
+    if re.match(r"SET\s+.*=\s*@OLD_", stmt, re.IGNORECASE):
+        return False
+    if re.match(r"SET\s+@OLD_", stmt, re.IGNORECASE):
+        return False
+    return True
 
 
 def preprocess_sql(sql_content):
