@@ -46,7 +46,7 @@ test.describe("Build Size Benchmarks", () => {
 	});
 
 	test.describe("Standalone bundle size", () => {
-		test("Remains below 750MB", () => {
+		test("Remains below 1000MB", () => {
 			expect(
 				existsSync(STANDALONE_DIR),
 				`Standalone directory should exist at ${STANDALONE_DIR}. Run 'npm run build' first.`,
@@ -60,8 +60,8 @@ test.describe("Build Size Benchmarks", () => {
 			);
 
 			// Report to Bencher - using MB as the unit for readability
-			// Upper threshold set high (750MB) - this is mainly for tracking trends
-			const MAX_SIZE_MB = 750;
+			// Increased from 750 to 1000 to accommodate SSG perushim pages (~250 MB)
+			const MAX_SIZE_MB = 1000;
 			reportBenchmark({
 				name: "build: standalone",
 				measure: "size_mb",
