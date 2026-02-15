@@ -1,7 +1,12 @@
 "use client";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
-import { startTransition, useCallback, useEffect, useState } from "react";
+import {
+	startTransition,
+	useCallback,
+	useEffect,
+	useState,
+} from "react";
 
 import type { PerekObj } from "@/data/perek-dto";
 import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
@@ -67,6 +72,21 @@ const ClientWrapper = (props: {
 		const IMMEDIATELY = true;
 		handleToggle(toggled, IMMEDIATELY);
 	}, [toggled, handleToggle, everToggled]);
+
+	// When the book view is active, mark the document so a global CSS rule
+	// can hide the heavy SEO content underneath the overlay.  This removes
+	// the SEO DOM from the rendering pipeline, eliminating the layout
+	// recalculation cost that was causing flip animation lag.
+	useEffect(() => {
+		if (currentlyToggled) {
+			document.documentElement.dataset.bookView = "";
+		} else {
+			delete document.documentElement.dataset.bookView;
+		}
+		return () => {
+			delete document.documentElement.dataset.bookView;
+		};
+	}, [currentlyToggled]);
 
 	// Don't render anything on mobile - sefer view is tablet+ only
 	// Return null during SSR/initial render to avoid hydration mismatch,

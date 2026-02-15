@@ -91,7 +91,7 @@ export default async function Perek({
 					perekIds={perekIds}
 				/>
 			</Suspense>
-			<div className={styles.perekContainer}>
+			<div className={`${styles.perekContainer} seo-content`}>
 				<Breadcrumb perekObj={perekObj} />
 
 				<article className={styles.perekText}>

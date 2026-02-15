@@ -6,16 +6,19 @@ import type {
 	HistoryMapper,
 	PageSemantics,
 } from "html-flip-book-react";
+import { TocPage } from "html-flip-book-react";
 import {
 	ActionButton,
 	BookshelfIcon,
 	type DownloadConfig,
 	DownloadDropdown,
 	FirstPageButton,
+	FullscreenButton,
 	LastPageButton,
 	NextButton,
 	PageIndicator,
 	PrevButton,
+	TocButton,
 	Toolbar,
 } from "html-flip-book-react/toolbar";
 import dynamic from "next/dynamic";
@@ -69,6 +72,10 @@ type FlipBookProps = {
 	downloadConfig?: DownloadConfig;
 	/** Enable/disable page shadow effect during flip */
 	pageShadow?: boolean;
+	/** Aggressive containment during flip animations for reduced jank */
+	snapshotDuringFlip?: boolean;
+	/** Table of contents page index (book-level). Default: 4. */
+	tocPageIndex?: number;
 };
 
 /** Dynamic FlipBook with ref forwarded (library uses forwardRef) */
@@ -99,12 +106,18 @@ const Sefer = (props: {
 	const openBookshelf = useCallback(() => setIsBookshelfOpen(true), []);
 	const closeBookshelf = useCallback(() => setIsBookshelfOpen(false), []);
 
-	// Pages: cover, then for each perek (content page, blank for future perushim/articles), then back cover.
+	// Page layout: cover(0), cover-interior(1), TOC(2), then per-perek
+	// pairs (content, blank), then back cover.  The TOC adds 2 pages
+	// before content so every perek index is offset by +2 from the old
+	// formula: contentPageIndex = perekNum * 2 + 1  (1-based perekNum)
+	const CONTENT_OFFSET = 3; // first content page index (after cover, interior, toc)
 	const hePageSemantics: PageSemantics = useMemo(
 		() => ({
 			indexToSemanticName(pageIndex: number): string {
-				if (pageIndex <= 0 || pageIndex % 2 === 0) return "";
-				const perekNum = (pageIndex + 1) / 2;
+				if (pageIndex < CONTENT_OFFSET) return "";
+				const adjusted = pageIndex - CONTENT_OFFSET;
+				if (adjusted % 2 !== 0) return ""; // blank page
+				const perekNum = adjusted / 2 + 1;
 				if (perekNum > perakim.length) return "";
 				return toHebrewWithPunctuation(perekNum);
 			},
@@ -112,11 +125,13 @@ const Sefer = (props: {
 				const num = toNumber(semanticPageName);
 				if (num === 0) return null;
 				if (num > perakim.length) return null;
-				return 2 * num - 1;
+				return (num - 1) * 2 + CONTENT_OFFSET;
 			},
 			indexToTitle(pageIndex: number): string {
-				if (pageIndex <= 0 || pageIndex % 2 === 0) return "";
-				const perekNum = (pageIndex + 1) / 2;
+				if (pageIndex < CONTENT_OFFSET) return "";
+				const adjusted = pageIndex - CONTENT_OFFSET;
+				if (adjusted % 2 !== 0) return "";
+				const perekNum = adjusted / 2 + 1;
 				if (perekNum > perakim.length) return "";
 				return `פרק ${toHebrewWithPunctuation(perekNum)}`;
 			},
@@ -126,24 +141,26 @@ const Sefer = (props: {
 
 	const historyMapper: HistoryMapper | undefined = useMemo(
 		() => ({
-			pageToRoute: (pageIndex) => {
-				// Map pageIndex → perekId so the URL reflects the current perek (e.g. /929/155?book)
-				const perekIdx = pageIndex <= 0 ? 0 : Math.floor((pageIndex - 1) / 2);
-				const clampedIdx = Math.min(perekIdx, (perekIds?.length ?? 1) - 1);
-				const id = perekIds?.[clampedIdx];
-				if (id == null) return `/929/${perekObj.perekId}?book`;
-				return `/929/${id}?book`;
-			},
+		pageToRoute: (pageIndex) => {
+			// Non-content pages (cover, cover-interior, TOC) have no
+			// meaningful URL.  Return null to tell the library to skip
+			// the pushState entirely — avoids triggering framework-level
+			// routing side-effects.
+			if (pageIndex < CONTENT_OFFSET) return null;
+			const perekIdx = Math.floor((pageIndex - CONTENT_OFFSET) / 2);
+			const clampedIdx = Math.min(perekIdx, (perekIds?.length ?? 1) - 1);
+			const id = perekIds?.[clampedIdx];
+			if (id == null) return null;
+			return `/929/${id}?book`;
+		},
 			routeToPage: (route) => {
 				// Only resolve perekId when the route contains ?book (sefer-view mode).
-				// Without this guard, opening sefer via the toggle button (URL has no ?book)
-				// would incorrectly compute initialTurnedLeaves and break the page layout.
 				if (route.includes("?book")) {
 					const m = route.match(/\/929\/(\d+)/);
 					if (m) {
 						const id = Number.parseInt(m[1], 10);
 						const idx = perekIds?.indexOf(id) ?? -1;
-						if (idx >= 0) return idx * 2 + 1; // content page for that perek
+						if (idx >= 0) return idx * 2 + CONTENT_OFFSET;
 					}
 				}
 				// Backward compat: handle old #page/{hebrewLetter} bookmarks
@@ -154,16 +171,14 @@ const Sefer = (props: {
 				return null;
 			},
 		}),
-		[perekIds, perekObj.perekId, hePageSemantics],
+		[perekIds, hePageSemantics],
 	);
 
 	const initialTurnedLeaves = useMemo(() => {
 		// Derive the initial position from perekObj.perekId directly.
-		// This ensures the book always opens at the correct perek, whether the
-		// user toggled from SEO view (/929/123) or navigated directly (/929/123?book).
 		const idx = perekIds?.indexOf(perekObj.perekId) ?? -1;
 		if (idx < 0) return undefined;
-		const pageIndex = idx * 2 + 1; // content page for that perek
+		const pageIndex = idx * 2 + CONTENT_OFFSET; // content page (accounts for TOC offset)
 		const turnedCount = Math.ceil(pageIndex / 2);
 		return Array.from({ length: turnedCount }, (_, i) => i);
 	}, [perekIds, perekObj.perekId]);
@@ -286,7 +301,28 @@ const Sefer = (props: {
 		</React.Fragment>,
 	]);
 
-	const pages = [frontCover, ...contentPages, backCover];
+	// Total pages: cover + cover-interior + TOC + (perakim * 2) + backCover
+	const totalPages = 3 + perakim.length * 2 + 1;
+
+	const tocPage = (
+		<TocPage
+			key="toc"
+			onNavigate={(pageIndex) => flipBookRef.current?.jumpToPage(pageIndex)}
+			totalPages={totalPages}
+			pageSemantics={hePageSemantics}
+			heading="תוכן העניינים"
+			direction="rtl"
+			filter={(entry) => entry.pageIndex >= CONTENT_OFFSET && entry.title.length > 0}
+		/>
+	);
+
+	const pages = [
+		frontCover,
+		<div key="cover-interior" />,
+		tocPage,
+		...contentPages,
+		backCover,
+	];
 
 	return (
 		<>
@@ -300,6 +336,7 @@ const Sefer = (props: {
 						direction="rtl"
 						leavesBuffer={7}
 						of={toHebrewWithPunctuation(perakim.length)}
+						tocPageIndex={2}
 						coverConfig={{
 							hardCovers: true,
 							noShadow: true,
@@ -327,16 +364,25 @@ const Sefer = (props: {
 				flipBookRef={flipBookRef}
 				direction="rtl"
 				pageSemantics={hePageSemantics}
+				fullscreenTargetRef={bookWrapperRef}
 			>
-				<ActionButton onClick={openBookshelf} ariaLabel="ספרי התנ״ך">
-					<BookshelfIcon size={18} />
-				</ActionButton>
-				<DownloadDropdown ariaLabel="הורדה" />
-				<FirstPageButton />
-				<PrevButton />
-				<PageIndicator ariaLabel="עבור לפרק (מספר עברי)" />
-				<NextButton />
-				<LastPageButton />
+				<div className="flipbook-toolbar-start">
+					<FullscreenButton />
+					<TocButton />
+					<ActionButton onClick={openBookshelf} ariaLabel="ספרי התנ״ך">
+						<BookshelfIcon size={18} />
+					</ActionButton>
+				</div>
+				<div className="flipbook-toolbar-nav-cluster">
+					<FirstPageButton />
+					<PrevButton />
+					<PageIndicator ariaLabel="עבור לפרק (מספר עברי)" />
+					<NextButton />
+					<LastPageButton />
+				</div>
+				<div className="flipbook-toolbar-end">
+					<DownloadDropdown ariaLabel="הורדה" />
+				</div>
 			</Toolbar>
 			</div>
 			<BookshelfModal isOpen={isBookshelfOpen} onClose={closeBookshelf} />
