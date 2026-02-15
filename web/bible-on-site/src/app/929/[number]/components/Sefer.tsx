@@ -131,12 +131,15 @@ const Sefer = (props: {
 				if (pageIndex < CONTENT_OFFSET) return "";
 				const adjusted = pageIndex - CONTENT_OFFSET;
 				if (adjusted % 2 !== 0) return "";
-				const perekNum = adjusted / 2 + 1;
-				if (perekNum > perakim.length) return "";
-				return `פרק ${toHebrewWithPunctuation(perekNum)}`;
+				const perekIdx = adjusted / 2;
+				if (perekIdx >= perakim.length) return "";
+				const perek = perakim[perekIdx];
+				// Use the perek header from the local ts-json db (e.g. "מפקד בני ישראל...")
+				// with a fallback to "פרק X" if header is missing
+				return perek.header || `פרק ${toHebrewWithPunctuation(perekIdx + 1)}`;
 			},
 		}),
-		[perakim.length],
+		[perakim],
 	);
 
 	const historyMapper: HistoryMapper | undefined = useMemo(

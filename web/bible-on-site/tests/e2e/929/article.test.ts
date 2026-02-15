@@ -1,7 +1,7 @@
 import { expect, test } from "../../util/playwright/test-fixture";
 
 /**
- * E2E tests for the article detail page (/929/[number]/[articleId]).
+ * E2E tests for the article detail page (/929/[number]/[slug]).
  *
  * Test data (tanah_test_data.sql): perek 1 has articles; first article has
  * name "בראשית ברא - עיון בפסוק הראשון", author 1 "הרב לדוגמא שליט"א", and HTML content.

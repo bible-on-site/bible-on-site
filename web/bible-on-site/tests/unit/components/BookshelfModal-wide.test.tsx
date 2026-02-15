@@ -7,6 +7,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
  * Test that BookshelfModal appends ?book on wide screens.
  */
 
+// The real Bookshelf passes todaysPerekId (5) for today's sefer
 jest.mock("@/app/components/Bookshelf/Bookshelf", () => ({
 	Bookshelf: ({
 		onSeferClick,
@@ -14,7 +15,7 @@ jest.mock("@/app/components/Bookshelf/Bookshelf", () => ({
 		<button
 			data-testid="mock-bookshelf"
 			type="button"
-			onClick={() => onSeferClick?.("בראשית", 1)}
+			onClick={() => onSeferClick?.("בראשית", 5)}
 		>
 			Bookshelf
 		</button>
@@ -38,16 +39,7 @@ jest.mock("@/hooks/useIsWideEnough", () => ({
 	useIsWideEnough: () => true,
 }));
 
-jest.mock("@/data/perek-dto", () => ({
-	getTodaysPerekId: () => 5, // today = בראשית perek 5
-}));
-
-jest.mock("@/data/db/sefarim", () => ({
-	sefarim: [
-		{ name: "בראשית", perekFrom: 1, perekTo: 50 },
-		{ name: "שמות", perekFrom: 51, perekTo: 90 },
-	],
-}));
+// perek-dto and sefarim mocks no longer needed — Bookshelf handles todaysPerekId
 
 import { BookshelfModal } from "@/app/components/Bookshelf/BookshelfModal";
 

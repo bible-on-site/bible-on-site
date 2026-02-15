@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Article } from "@/lib/articles";
 import { authorNameToSlug } from "@/lib/authors/url-utils";
-import articleStyles from "../[articleId]/page.module.css";
+import articleStyles from "../[slug]/page.module.css";
 import styles from "./sefer.module.css";
 
 interface ArticleFullViewProps {

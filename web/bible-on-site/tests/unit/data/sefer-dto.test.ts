@@ -1,4 +1,5 @@
 import type { AdditionalsItem } from "../../../src/data/db/tanah-view-types";
+import { sefarim } from "../../../src/data/db/sefarim";
 import {
 	getAllPerakim,
 	getPerekIdsForSefer,
@@ -174,5 +175,30 @@ describe("getPerekIdsForSefer", () => {
 			expect(ids[0]).toBe(sefer.perekFrom);
 			expect(ids[ids.length - 1]).toBe(sefer.perekTo);
 		});
+	});
+});
+
+describe("perek headers (used by TOC)", () => {
+	it("every perek has a header field of type string", () => {
+		for (const sefer of sefarim) {
+			const perakim =
+				"perakim" in sefer
+					? sefer.perakim
+					: [
+							...sefer.additionals[0].perakim,
+							...sefer.additionals[1].perakim,
+						];
+			for (let i = 0; i < perakim.length; i++) {
+				expect(typeof perakim[i].header).toBe("string");
+			}
+		}
+	});
+
+	it("a significant number of perakim have non-empty descriptive headers", () => {
+		const allPerakim = getAllPerakim();
+		const withHeaders = allPerakim.filter((p) => p.header.length > 0);
+		// Currently ~37% have headers; the TOC uses them when available
+		// and falls back to "פרק X" for empty headers
+		expect(withHeaders.length).toBeGreaterThan(100);
 	});
 });
