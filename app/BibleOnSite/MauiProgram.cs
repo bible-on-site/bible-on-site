@@ -1,9 +1,13 @@
 using Microsoft.Extensions.Logging;
 using CommunityToolkit.Maui;
+using Microsoft.Maui.LifecycleEvents;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 using BibleOnSite.Controls;
 using BibleOnSite.Handlers;
+#if IOS || MACCATALYST
+using Plugin.Firebase.Core;
+#endif
 
 // Force rebuild for font resource loading
 namespace BibleOnSite;
@@ -46,6 +50,20 @@ public static class MauiProgram
 			}
 		});
 #endif
+
+		// Initialize Firebase on iOS/Mac from GoogleService-Info.plist (the iOS equivalent of google-services.json).
+		// Android auto-inits from google-services.json at build time, but iOS requires an explicit init call.
+		// Without this, CrossFirebaseAnalytics.Current silently fails on iOS.
+		builder.ConfigureLifecycleEvents(events =>
+		{
+#if IOS || MACCATALYST
+			events.AddiOS(iOS => iOS.WillFinishLaunching((_, __) =>
+			{
+				CrossFirebase.Initialize();
+				return false;
+			}));
+#endif
+		});
 
 		// Initialize PreferencesService with MAUI storage
 		PreferencesService.Initialize(new MauiPreferencesStorage());
