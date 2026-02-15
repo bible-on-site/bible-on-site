@@ -24,7 +24,7 @@
 		"@aws-sdk/client-sts": "3.980.0",
 		"@aws-sdk/credential-providers": "3.980.0",
 		"dotenv": "17.2.3",
-		"semver": "7.7.3",
+		"semver": "7.7.4",
 		"yargs": "18.0.0"
 	}
 }
