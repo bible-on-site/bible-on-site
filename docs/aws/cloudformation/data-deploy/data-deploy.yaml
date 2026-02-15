@@ -303,7 +303,7 @@ Outputs:
 #         --zip-file fileb://lambda.zip \
 #         --role <LAMBDA_ROLE_ARN> \
 #         --timeout 300 \
-#         --memory-size 256 \
+#         --memory-size 1024 \
 #         --vpc-config SubnetIds=...,SecurityGroupIds=... \
 #         --region il-central-1
 #

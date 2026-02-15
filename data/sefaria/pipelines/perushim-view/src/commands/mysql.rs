@@ -47,6 +47,12 @@ fn generate_sql(path: &Path, extracted: &Extracted, dump_name: &str) -> Result<(
     sql.push_str("SET NAMES utf8mb4;\n");
     sql.push_str("SET FOREIGN_KEY_CHECKS = 0;\n\n");
 
+    // Truncate perushim tables before loading full dataset — test data
+    // (tanah_test_data.sql) may have already inserted rows with the same PKs.
+    sql.push_str("TRUNCATE TABLE note;\n");
+    sql.push_str("TRUNCATE TABLE perush;\n");
+    sql.push_str("TRUNCATE TABLE parshan;\n\n");
+
     generate_parshanim_sql(&mut sql, &extracted.parshanim);
     generate_perushim_sql(&mut sql, &extracted.perushim);
     generate_notes_sql(&mut sql, &extracted.notes);

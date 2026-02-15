@@ -3,7 +3,8 @@
  */
 import { fireEvent, render, screen, act } from "@testing-library/react";
 
-// Mock Bookshelf to avoid rendering the complex 3D component
+// Mock Bookshelf to avoid rendering the complex 3D component.
+// The real Bookshelf passes todaysPerekId (5) for today's sefer, not perekFrom (1).
 jest.mock("@/app/components/Bookshelf/Bookshelf", () => ({
 	Bookshelf: ({
 		onSeferClick,
@@ -11,7 +12,7 @@ jest.mock("@/app/components/Bookshelf/Bookshelf", () => ({
 		<button
 			data-testid="mock-bookshelf"
 			type="button"
-			onClick={() => onSeferClick?.("בראשית", 1)}
+			onClick={() => onSeferClick?.("בראשית", 5)}
 		>
 			Bookshelf
 		</button>
@@ -34,16 +35,8 @@ jest.mock("@/hooks/useIsWideEnough", () => ({
 	useIsWideEnough: () => false,
 }));
 
-jest.mock("@/data/perek-dto", () => ({
-	getTodaysPerekId: () => 5, // today = בראשית perek 5
-}));
-
-jest.mock("@/data/db/sefarim", () => ({
-	sefarim: [
-		{ name: "בראשית", perekFrom: 1, perekTo: 50 },
-		{ name: "שמות", perekFrom: 51, perekTo: 90 },
-	],
-}));
+// perek-dto and sefarim mocks no longer needed — the BookshelfModal
+// no longer computes todaysPerekId; the Bookshelf component handles it.
 
 import { BookshelfModal } from "@/app/components/Bookshelf/BookshelfModal";
 

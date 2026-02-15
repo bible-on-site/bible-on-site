@@ -150,6 +150,18 @@ async fn main() -> Result<()> {
 
         let perushim_data_path = base_path.join(&cli.perushim_data_script);
         if perushim_data_path.exists() {
+            // Truncate perushim tables before loading full dataset — test data
+            // (tanah_test_data.sql) may have already inserted rows with the same PKs.
+            let truncate_sql = "SET FOREIGN_KEY_CHECKS = 0;\
+                                TRUNCATE TABLE note;\
+                                TRUNCATE TABLE perush;\
+                                TRUNCATE TABLE parshan;\
+                                SET FOREIGN_KEY_CHECKS = 1;";
+            sqlx::raw_sql(truncate_sql)
+                .execute(&mut conn)
+                .await
+                .context("Failed to truncate perushim tables before data load")?;
+
             execute_script_chunked(&mut conn, &perushim_data_path, "perushim-data").await?;
         }
     }

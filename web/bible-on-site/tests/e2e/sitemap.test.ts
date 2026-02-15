@@ -74,13 +74,13 @@ test.describe("sitemap.xml", () => {
 		const response = await request.get("/sitemap.xml");
 		const body = await response.text();
 
-		// Count article entries dynamically (pattern: /929/{perekId}/{articleId})
+		// Count article entries dynamically (pattern: /929/{perekId}/{slug})
 		const articleEntries = body.match(/\/929\/\d+\/\d+<\/loc>/g) || [];
 
 		// If articles exist in the database, they should appear in the sitemap
 		// The exact count depends on test data, but verify the pattern is present
 		if (articleEntries.length > 0) {
-			// Each article URL should follow the /929/{perekId}/{articleId} pattern
+			// Each article URL should follow the /929/{perekId}/{slug} pattern
 			for (const entry of articleEntries) {
 				expect(entry).toMatch(/\/929\/\d+\/\d+<\/loc>/);
 			}

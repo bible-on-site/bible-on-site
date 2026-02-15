@@ -50,7 +50,7 @@ test.describe("Articles Section", () => {
 
 		await expect(articlesSection).toBeVisible();
 
-		// Check that links point to article pages (/929/perekId/articleId)
+		// Check that links point to article pages (/929/perekId/slug)
 		const articleLink = articlesSection.locator("a").first();
 		await expect(articleLink).toBeVisible();
 		const href = await articleLink.getAttribute("href");

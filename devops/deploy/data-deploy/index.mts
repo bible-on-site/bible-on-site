@@ -9,7 +9,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { InvokeCommand, LambdaClient } from "@aws-sdk/client-lambda";
+import {
+	GetFunctionConfigurationCommand,
+	InvokeCommand,
+	LambdaClient,
+	UpdateFunctionConfigurationCommand,
+	waitUntilFunctionUpdatedV2,
+} from "@aws-sdk/client-lambda";
 import {
 	DeleteObjectsCommand,
 	PutObjectCommand,
@@ -29,6 +35,7 @@ dotenv.config({
 // Configuration
 const S3_BUCKET = "bible-on-site-data-deploy";
 const LAMBDA_FUNCTION_NAME = "bible-on-site-db-populator";
+const LAMBDA_MEMORY_MB = 1024; // perushim_data.sql (~33 MB) needs more than 256 MB
 
 // SQL files to deploy (order matters: structure before data)
 const SQL_FILES = [
@@ -76,6 +83,9 @@ class DataDeployer extends DeployerBase {
 		const lambdaClient = new LambdaClient({ region: this.region });
 
 		try {
+			// Ensure Lambda has enough memory for large SQL files
+			await this.ensureLambdaMemory(lambdaClient);
+
 			// Upload SQL files to S3
 			await this.uploadSqlFiles(s3Client);
 
@@ -84,6 +94,53 @@ class DataDeployer extends DeployerBase {
 		} finally {
 			// Cleanup S3 files
 			await this.cleanupS3Files(s3Client);
+		}
+	}
+
+	/**
+	 * Ensure the Lambda has enough memory for processing large SQL files.
+	 * perushim_data.sql can be >100 MB, which exceeds 256 MB Lambda memory.
+	 *
+	 * Requires IAM permissions: lambda:GetFunctionConfiguration,
+	 * lambda:UpdateFunctionConfiguration (see github-oidc.yaml).
+	 */
+	private async ensureLambdaMemory(
+		lambdaClient: LambdaClient,
+	): Promise<void> {
+		try {
+			const config = await lambdaClient.send(
+				new GetFunctionConfigurationCommand({
+					FunctionName: LAMBDA_FUNCTION_NAME,
+				}),
+			);
+
+			if ((config.MemorySize ?? 0) >= LAMBDA_MEMORY_MB) {
+				this.info(
+					`Lambda memory is already ${config.MemorySize} MB (>= ${LAMBDA_MEMORY_MB} MB).`,
+				);
+				return;
+			}
+
+			this.info(
+				`Updating Lambda memory from ${config.MemorySize} MB to ${LAMBDA_MEMORY_MB} MB...`,
+			);
+			await lambdaClient.send(
+				new UpdateFunctionConfigurationCommand({
+					FunctionName: LAMBDA_FUNCTION_NAME,
+					MemorySize: LAMBDA_MEMORY_MB,
+				}),
+			);
+
+			// Wait for the update to complete before invoking
+			await waitUntilFunctionUpdatedV2(
+				{ client: lambdaClient, maxWaitTime: 60 },
+				{ FunctionName: LAMBDA_FUNCTION_NAME },
+			);
+			this.info(`Lambda memory updated to ${LAMBDA_MEMORY_MB} MB.`);
+		} catch (error) {
+			this.warn(
+				`Could not verify/update Lambda memory (IAM permissions may be missing): ${error instanceof Error ? error.message : error}`,
+			);
 		}
 	}
 
