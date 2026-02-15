@@ -6,13 +6,19 @@ import { notFound } from "next/navigation";
 import React, { Suspense } from "react";
 import { isQriDifferentThanKtiv } from "../../../../data/db/tanah-view-types";
 import { getPerekByPerekId } from "../../../../data/perek-dto";
-import { getSeferByName, getPerekIdsForSefer } from "../../../../data/sefer-dto";
+import {
+	getPerekIdsForSefer,
+	getSeferByName,
+} from "../../../../data/sefer-dto";
 import { getArticleById, getArticlesByPerekId } from "../../../../lib/articles";
 import { authorNameToSlug } from "../../../../lib/authors";
-import { getPerushDetail, getPerushimByPerekId } from "../../../../lib/perushim";
+import {
+	getPerushDetail,
+	getPerushimByPerekId,
+} from "../../../../lib/perushim";
 import { ArticlesSection } from "../components/ArticlesSection";
-import { PerushimSection } from "../components/PerushimSection";
 import Breadcrumb from "../components/Breadcrumb";
+import { PerushimSection } from "../components/PerushimSection";
 import { Ptuah } from "../components/Ptuha";
 import SeferComposite from "../components/SeferComposite";
 import { Stuma } from "../components/Stuma";
@@ -84,7 +90,8 @@ export async function generateMetadata({
 }: {
 	params: Promise<{ number: string; slug: string }>;
 }) {
-	const { number, slug } = await params;
+	const { number, slug: rawSlug } = await params;
+	const slug = decodeURIComponent(rawSlug);
 	const perekId = Number.parseInt(number, 10);
 	const id = Number.parseInt(slug, 10);
 
@@ -130,7 +137,8 @@ export default async function ArticlePage({
 }: {
 	params: Promise<{ number: string; slug: string }>;
 }) {
-	const { number, slug } = await params;
+	const { number, slug: rawSlug } = await params;
+	const slug = decodeURIComponent(rawSlug);
 	const perekId = Number.parseInt(number, 10);
 	const id = Number.parseInt(slug, 10);
 
@@ -144,6 +152,7 @@ export default async function ArticlePage({
 	const perekObj = getPerekByPerekId(perekId);
 	const articles = await getCachedArticles(perekId);
 	const perushim = await getCachedPerushim(perekId);
+
 	const sefer = getSeferByName(perekObj.sefer);
 	const perekIds = getPerekIdsForSefer(sefer);
 	const articlesByPerekIndex = await Promise.all(
@@ -376,7 +385,10 @@ export default async function ArticlePage({
 
 					<div className={styles.perushContent}>
 						{perushDetail.notes.map((note) => (
-							<div key={`${note.pasuk}-${note.noteIdx}`} className={styles.note}>
+							<div
+								key={`${note.pasuk}-${note.noteIdx}`}
+								className={styles.note}
+							>
 								<span className={styles.notePasuk}>
 									פסוק {toLetters(note.pasuk)}:
 								</span>
