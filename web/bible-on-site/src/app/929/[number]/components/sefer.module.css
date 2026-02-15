@@ -121,9 +121,10 @@
   margin-top: 8px;
 }
 
-/* When showing full article, container does not scroll; article body scrolls inside */
+/* When showing full article/perush, container clips; child handles scroll */
 .blankPageArticlesFullArticle {
   overflow: hidden;
+  min-height: 0;
 }
 
 /* Wrapper when showing full article on blank page: fill area and use flex column */
@@ -133,6 +134,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  height: 100%;
 }
 
 /* Article full view in book: fill container, title fixed, body scrolls */
@@ -147,16 +149,21 @@
   box-shadow: none;
   border-radius: 0;
   background: transparent;
+  height: 100%;
+  overflow: hidden;
 }
 
 .articleFullViewInBook .articleBodyWrapper {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #c4b896 transparent;
 }
 
-/* Perush full view in book: fill container, header fixed, notes scroll */
-.perushFullViewInBook {
+/* Perush full view in book: fill container, header fixed, notes scroll.
+   Doubled selector for specificity over .perushimSection from perushim-section.module.css */
+.perushFullViewInBook.perushFullViewInBook {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -167,18 +174,45 @@
   box-shadow: none;
   border-radius: 0;
   background: transparent;
+  height: 100%;
+  overflow: hidden;
 }
 
-/* Notes container in book mode: fill available space, scroll, no max-height */
-.perushNotesInBook {
+/* Notes container in book mode: fill available space, scroll, no max-height.
+   Doubled selector for specificity over .notesContainer max-height. */
+.perushNotesInBook.perushNotesInBook {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
   max-height: none;
+  scrollbar-width: thin;
+  scrollbar-color: #c4b896 transparent;
+}
+
+/* Cover: genuine book cover look using the sefer spectrum color */
+.cover.cover {
+  background-color: var(--cover-color, #333);
+  padding: 0;
+}
+
+.coverInner {
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* Inset border to simulate a real hardcover frame */
+  border: 3px solid rgb(255 255 255 / 0.15);
+  border-radius: 2px;
+  /* Subtle texture: faint radial gradient to mimic leather/cloth */
+  background:
+    radial-gradient(ellipse at 30% 20%, rgb(255 255 255 / 0.06) 0%, transparent 60%),
+    linear-gradient(180deg, rgb(255 255 255 / 0.04) 0%, transparent 40%, rgb(0 0 0 / 0.12) 100%);
 }
 
 .coverContent {
-  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -186,25 +220,46 @@
   text-align: center;
   padding: 2rem;
   box-sizing: border-box;
+  gap: 0.3em;
+}
+
+.coverOrnament {
+  color: rgb(255 255 255 / 0.5);
+  font-size: clamp(1rem, 2.5vw, 1.5rem);
+  letter-spacing: 0.3em;
+  margin-bottom: 0.5em;
 }
 
 .coverTitle {
   color: #fff;
   font-size: clamp(1.5rem, 4vw, 2.5rem);
   font-weight: 700;
-  margin: 0 0 0.5em;
+  margin: 0;
+  letter-spacing: 0.05em;
+  text-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
+}
+
+.coverDivider {
+  width: 40%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.5), transparent);
+  margin: 0.6em 0;
 }
 
 .coverSubtitle {
-  color: #fff;
-  font-size: 1rem;
-  margin: 0 0 1.5em;
+  color: rgb(255 255 255 / 0.85);
+  font-size: clamp(0.85rem, 2vw, 1.1rem);
+  font-weight: 400;
+  margin: 0;
+  letter-spacing: 0.08em;
 }
 
-.coverAuthor {
-  color: #90a4ae;
-  font-size: 0.875rem;
-  margin: 0;
+.coverEdition {
+  color: rgb(255 255 255 / 0.55);
+  font-size: clamp(0.7rem, 1.5vw, 0.85rem);
+  font-weight: 300;
+  margin: 0.3em 0 0;
+  letter-spacing: 0.04em;
 }
 
 .perekText {

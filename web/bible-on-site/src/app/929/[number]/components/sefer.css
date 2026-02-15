@@ -1,4 +1,11 @@
-/* Flipbook container: full size, overflow hidden, stacking context for .page */
+/* ===================================================================
+ * Base flipbook styles — replicated from html-flip-book-vanilla/pages.scss
+ * & flipbook.scss because the vanilla CSS is not importable from this
+ * Next.js project (transitive dep; no direct import path).
+ * IMPORTANT: keep in sync with the library version.
+ * =================================================================== */
+
+/* Container — the library adds .flipbook to this element. */
 .he-book {
   height: 100%;
   width: 100%;
@@ -6,18 +13,24 @@
   position: relative;
 }
 
-/* Pages must stack on z (flipbook library expects this); from html-flip-book base */
+/* Page base — position:absolute WITHOUT inset:0 (inset:0 overrides the
+   library's inline right/left positioning and breaks the RTL spread). */
 .he-book .page {
   position: absolute;
-  inset: 0;
   backface-visibility: hidden;
   transform-style: preserve-3d;
+  background: #fff;
+  box-shadow: none; /* shadows disabled – known flip-book flickering */
+  /* Performance: isolate each page so the browser can skip re-layout/repaint
+     of page internals during 3D flip transforms (matches library pages.scss). */
+  contain: layout style paint;
   --inner-shadow-shadow: 0;
   --inner-shadow-highlight: 0;
   --inner-shadow-lift: 0px;
   --inner-shadow-edge: right;
 }
 
+/* Inner shadow / highlight pseudo-elements (from library pages.scss) */
 .he-book .page::before,
 .he-book .page::after {
   content: "";
@@ -26,31 +39,34 @@
   pointer-events: none;
   backface-visibility: hidden;
   transform-style: preserve-3d;
-  transition: opacity 0.12s ease, transform 0.12s ease;
+  transition: opacity 120ms ease, transform 120ms ease;
   will-change: opacity, transform;
 }
-
 .he-book .page::before {
   background: linear-gradient(
     to var(--inner-shadow-edge),
-    rgb(0 0 0 / calc(0.35 * var(--inner-shadow-shadow))) 0%,
-    rgb(0 0 0 / 0) 40%
+    rgba(0, 0, 0, calc(0.35 * var(--inner-shadow-shadow))) 0%,
+    rgba(0, 0, 0, 0) 40%
   );
   opacity: var(--inner-shadow-shadow);
   mix-blend-mode: multiply;
   transform: translateZ(var(--inner-shadow-lift));
 }
-
 .he-book .page::after {
   background: linear-gradient(
     to var(--inner-shadow-edge),
-    rgb(255 255 255 / calc(0.4 * var(--inner-shadow-highlight))) 0%,
-    rgb(255 255 255 / 0) 45%
+    rgba(255, 255, 255, calc(0.4 * var(--inner-shadow-highlight))) 0%,
+    rgba(255, 255, 255, 0) 45%
   );
   opacity: var(--inner-shadow-highlight);
   transform: translateZ(calc(var(--inner-shadow-lift) * 0.6));
 }
 
+.he-book .page.current-page {
+  box-shadow: none;
+}
+
+/* Enforce page children fill page */
 .he-book .page > * {
   max-width: 100%;
   max-height: 100%;
@@ -59,18 +75,8 @@
   box-sizing: border-box;
 }
 
-/* Every page has a subtle frame so the next/previous page is visible before and during the turn */
-.he-book .page {
-  box-shadow: 0 0 4px 0 rgb(0 0 0 / 0.08);
-}
-/* Current spread gets a stronger frame so it stands out */
-.he-book .page.current-page {
-  box-shadow: 0 0 10px 0 rgb(0 0 0 / 0.1);
-}
-
 /* Hard covers - no page curl effect */
 .he-book .page--hard {
-  /* Disable the inner shadow/highlight effects for hard covers */
   --inner-shadow-shadow: 0;
   --inner-shadow-highlight: 0;
 }
@@ -83,20 +89,35 @@
   box-shadow: none;
 }
 
-/* Toolbar (html-flip-book-react/toolbar) - package does not export CSS path */
+/* Interior cover from library */
+.page--cover-interior {
+  overflow: hidden;
+}
+.page--cover-interior-inset {
+  padding-top: var(--cover-inset, 5%);
+  padding-bottom: var(--cover-inset, 5%);
+  padding-left: var(--cover-inset-left, var(--cover-inset, 5%));
+  padding-right: var(--cover-inset-right, var(--cover-inset, 5%));
+  background: #fffef8;
+  background-clip: content-box;
+}
+
+/* Toolbar (html-flip-book-react/toolbar) - package does not export CSS path.
+   NOTE: The library's Toolbar.css handles RTL via dir="rtl" on the root
+   element, which makes flex-direction:row flow right-to-left automatically.
+   Do NOT add flex-direction:row-reverse — it double-reverses and swaps
+   First/Last buttons. */
 .flipbook-toolbar {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   gap: 8px;
   padding: 8px 16px;
+  min-height: 48px;
+  box-sizing: border-box;
   background-color: rgb(0 0 0 / 0.7);
-  border-radius: 8px;
+  border-radius: 8px 8px 0 0;
   user-select: none;
-}
-
-.flipbook-toolbar--rtl {
-  flex-direction: row-reverse;
 }
 
 .flipbook-toolbar-button {
@@ -131,6 +152,35 @@
 .flipbook-toolbar-button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* Toolbar layout sections (mirrored from library Toolbar.css) */
+.flipbook-toolbar-start {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  justify-content: flex-start;
+}
+
+.flipbook-toolbar-nav-cluster {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.flipbook-toolbar-end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+/* RTL: flip every toolbar icon horizontally */
+.flipbook-toolbar--rtl .flipbook-toolbar-button > * {
+  transform: scaleX(-1);
 }
 
 .flipbook-toolbar-prev,

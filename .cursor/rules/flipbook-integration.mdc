@@ -12,3 +12,19 @@ alwaysApply: false
 - **Copy into website** from `web/bible-on-site`: `USE_LOCAL_FLIP_BOOK=1 npm run postinstall` (or add a script that runs that) to copy the local build into node_modules.
 
 The website depends on the **published** `html-flip-book-react` package for CI/production; the copy script only runs when `USE_LOCAL_FLIP_BOOK=1` or when the dependency is `file:`.
+
+## Publishing html-flip-book — fully automated, never manual
+
+**Never run `npm publish` manually. Never create GitHub Releases manually.**
+
+See `html-flip-book/.cursor/rules/ci-cd.mdc` for the full CI/CD pipeline details. In short: just merge to master — CI auto-releases, CD auto-publishes to npm.
+
+## Keeping bible-on-site CI green after library changes
+
+When `html-flip-book` types or APIs change, the **published npm package must be updated before** `bible-on-site` CI can pass. Sequence:
+1. Push & merge library changes → CI auto-releases → CD publishes to npm.
+2. Only then update `bible-on-site` to use the new version and push.
+
+When upgrading the dependency version, update **both**:
+- `package.json` → `html-flip-book-react` version
+- `scripts/toggle-flip-book-dep.mjs` → `NPM_VERSION` constant
