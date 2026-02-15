@@ -144,11 +144,13 @@ Resources:
             Resource:
               - !Sub "arn:aws:s3:::bible-on-site-data-deploy/*"
 
-          # Lambda - invoke data deploy function
+          # Lambda - invoke and configure data deploy function
           - Sid: LambdaInvoke
             Effect: Allow
             Action:
               - lambda:InvokeFunction
+              - lambda:GetFunctionConfiguration
+              - lambda:UpdateFunctionConfiguration
             Resource:
               - !Sub "arn:aws:lambda:*:${AWS::AccountId}:function:bible-on-site-db-populator"
 
