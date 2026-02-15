@@ -26,3 +26,93 @@ html[data-book-view] .seo-content {
   display: none;
   content-visibility: hidden;
 }
+
+/* ───── Table of Contents page styling ─────
+   The FlipBook library's TocPage component uses plain (non-module) class
+   names.  Next.js / Turbopack may not reliably inject CSS imported inside
+   node_modules, so we duplicate the essential rules here as global CSS.
+   These also serve as the bible-on-site-specific overrides.              */
+
+.toc-page {
+  background-color: #fffef8;
+  font-family: inherit;
+  line-height: 1.6;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 8% 6%;
+}
+
+.toc-page__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.toc-heading {
+  text-align: center;
+  margin-bottom: 24px;
+  color: #2c1810;
+  font-size: 1.4rem;
+  border-bottom: none;
+}
+
+.toc-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.toc-list li {
+  margin-bottom: 8px;
+}
+
+.toc-link {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  width: 100%;
+  padding: 8px 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  text-align: inherit;
+  color: inherit;
+  transition: background-color 0.15s ease;
+}
+
+.toc-link:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.toc-link:focus {
+  outline: 2px solid #1a3a5c;
+  outline-offset: 2px;
+}
+
+.toc-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 65%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toc-dots {
+  flex-grow: 1;
+  border-bottom: 1px dotted #999;
+  margin: 0 8px;
+  min-width: 20px;
+}
+
+.toc-page-num {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: #1a3a5c;
+}
