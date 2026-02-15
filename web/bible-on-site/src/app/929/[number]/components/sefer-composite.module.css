@@ -2,12 +2,14 @@
   /* Match the lag-free /dev/sefer wrapper exactly: position:fixed with
      full viewport coverage and high z-index.  This pulls the FlipBook
      out of the document flow entirely and creates a separate stacking
-     context that the browser can composite independently. */
+     context that the browser can composite independently.
+     top: 72px accounts for the site's top nav bar which stays visible
+     above the overlay (z-index 10000 in layout.css). */
   position: fixed;
-  top: 0;
+  top: 72px;
   left: 0;
   width: 100vw;
-  height: 100vh;
+  height: calc(100vh - 72px);
   z-index: 9999;
   background-color: white;
 }

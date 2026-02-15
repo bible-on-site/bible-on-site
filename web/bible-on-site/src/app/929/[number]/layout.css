@@ -10,6 +10,14 @@ body:has(.perek-layout) .top-nav {
   max-width: 100%;
 }
 
+/* When the book view is active, lift the top nav bar and hamburger menu
+   above the fixed overlay (z-index: 9999) so the user can still navigate
+   the site and access the sidebar menu. */
+html[data-book-view] .top-nav {
+  position: fixed;
+  z-index: 10000;
+}
+
 /* When the book (Sefer) view is active, remove the heavy SEO content
    from the rendering pipeline entirely.  The SEO markup (full perek text,
    commentaries carousel, articles carousel) stays in the static HTML for
