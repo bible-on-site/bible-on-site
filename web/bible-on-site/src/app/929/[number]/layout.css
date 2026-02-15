@@ -9,3 +9,20 @@ body:has(.perek-layout) .top-nav {
   width: 100%;
   max-width: 100%;
 }
+
+/* When the book (Sefer) view is active, remove the heavy SEO content
+   from the rendering pipeline entirely.  The SEO markup (full perek text,
+   commentaries carousel, articles carousel) stays in the static HTML for
+   crawlers but is pulled out of layout/paint so it doesn't cause jank
+   during flip animations.  The data-book-view attribute is toggled by
+   SeferComposite.tsx.
+
+   We use BOTH display:none AND content-visibility:hidden.
+   - display:none removes the element from layout and paint.
+   - content-visibility:hidden tells the browser to skip style
+     recalculation for the entire subtree, which display:none alone
+     does not always guarantee for deep DOM trees.  */
+html[data-book-view] .seo-content {
+  display: none;
+  content-visibility: hidden;
+}
