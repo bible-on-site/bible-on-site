@@ -88,7 +88,7 @@ html[data-book-view] .seo-content {
   border: none;
   cursor: pointer;
   font-family: inherit;
-  font-size: inherit;
+  font-size: 0.75em;
   text-align: inherit;
   color: inherit;
   transition: background-color 0.15s ease;
@@ -106,7 +106,7 @@ html[data-book-view] .seo-content {
 .toc-title {
   flex: 0 1 auto;
   min-width: 0;
-  max-width: 65%;
+  max-width: 85%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
