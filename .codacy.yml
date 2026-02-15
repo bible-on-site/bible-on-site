@@ -15,3 +15,6 @@ exclude_paths:
   - "data/mysql/perushim_data.sql"
   - "data/sqlite/perushim_catalog_structure.sql"
   - "data/sqlite/perushim_notes_structure.sql"
+  # CloudFormation Lambda scripts are infra reference code, not application code.
+  # Linters flag intentional patterns (e.g. time.sleep polling loops) as issues.
+  - "docs/aws/cloudformation/**"

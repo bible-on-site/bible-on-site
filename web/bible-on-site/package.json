@@ -1,12 +1,12 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.249",
+	"version": "0.2.250",
 	"private": true,
 	"license": "MIT",
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
 		"update:playwright": "npx playwright install",
-		"predev": "docker compose -f ../../devops/docker-compose.yml up -d minio && node scripts/toggle-flip-book-dep.mjs local && npm install --prefer-offline",
+		"predev": "node scripts/ensure-docker-desktop.mjs && docker compose -f ../../devops/docker-compose.yml up -d minio && node scripts/toggle-flip-book-dep.mjs local && npm install --prefer-offline",
 		"dev": "dotenv -e .dev.env -- next dev -p 3001",
 		"dev-webpack": "dotenv -e .dev.env -- next dev --webpack -p 3001",
 		"build": "next build && npm run postbuild",
@@ -40,7 +40,7 @@
 		"flowbite": "4.0.1",
 		"flowbite-react": "0.12.16",
 		"gematry": "1.0.2",
-		"html-flip-book-react": "0.0.0-alpha.27",
+		"html-flip-book-react": "0.0.0-alpha.31",
 		"isomorphic-dompurify": "3.0.0-rc.2",
 		"moment-timezone": "0.6.0",
 		"mysql2": "3.16.2",
