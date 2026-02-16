@@ -1,0 +1,60 @@
+[package]
+name = "bible-on-site-bulletin"
+description = "Bible on Site PDF Bulletin Generator"
+license-file = "../../license"
+repository = "https://github.com/bible-on-site/bible-on-site"
+publish = false
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "bulletin"
+path = "src/main.rs"
+
+[dependencies]
+# Web framework — shared with API
+actix-web = { version = "4.12.1", default-features = false, features = [
+    "macros",
+    "compress-brotli",
+] }
+
+# PDF generation
+genpdf = "0.2"
+
+# Database — shared layer from API
+sea-orm = { version = "1.1.19", default-features = false, features = [
+    "sqlx-mysql",
+    "runtime-actix-native-tls",
+] }
+entities = { path = "../api/entities" }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Async runtime
+tokio = { version = "1.48", features = ["macros", "rt-multi-thread"] }
+
+# Error handling
+anyhow = "1.0"
+
+# Logging — same stack as API
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Unicode grapheme handling for RTL
+unicode-segmentation = "1.12"
+
+# Env
+dotenvy = "0.15"
+
+[dev-dependencies]
+sea-orm = { version = "1.1.19", default-features = false, features = ["mock"] }
+
+[workspace]
+members = ["."]
+
+[profile.release]
+opt-level = "z"    # Optimize for size (Lambda)
+lto = true
+strip = true
