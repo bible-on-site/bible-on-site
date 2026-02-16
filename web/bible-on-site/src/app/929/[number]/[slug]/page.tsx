@@ -24,7 +24,7 @@ import SeferComposite from "../components/SeferComposite";
 import { Stuma } from "../components/Stuma";
 import perekStyles from "../page.module.css";
 import styles from "./page.module.css";
-import { ScrollToArticle } from "./ScrollToArticle";
+import { ScrollToSlug } from "./ScrollToArticle";
 
 /**
  * Generate static params for known articles and perushim at build time.
@@ -169,80 +169,81 @@ export default async function ArticlePage({
 
 		return (
 			<>
-				<ScrollToArticle />
-				<Suspense>
-					<SeferComposite
-						perekObj={perekObj}
-						articles={articles}
-						articlesByPerekIndex={articlesByPerekIndex}
-					/>
-				</Suspense>
-				<div className={perekStyles.perekContainer}>
-					<Breadcrumb perekObj={perekObj} />
+				<ScrollToSlug targetId="article-view" />
+			<Suspense>
+				<SeferComposite
+					perekObj={perekObj}
+					articles={articles}
+					articlesByPerekIndex={articlesByPerekIndex}
+					initialSlug={slug}
+				/>
+			</Suspense>
+			<div className={perekStyles.perekContainer}>
+				<Breadcrumb perekObj={perekObj} />
 
-					<article className={perekStyles.perekText}>
-						{perekObj.pesukim.map((pasuk, pasukIdx) => {
-							const pasukKey = pasukIdx + 1;
-							const pasukNumElement = (
-								<span className={perekStyles.pasukNum}>
-									{toLetters(pasukIdx + 1)}
-								</span>
-							);
-							const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
-								const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
-								const isQriWithDifferentKtiv =
-									segment.type === "qri" && isQriDifferentThanKtiv(segment);
-								return (
-									<React.Fragment key={segmentKey}>
-										<span
-											className={isQriWithDifferentKtiv ? perekStyles.qri : ""}
-										>
-											{segment.type === "ktiv" ? (
-												segment.value
-											) : segment.type === "qri" ? (
-												isQriWithDifferentKtiv ? (
-													<>
-														{/* biome-ignore lint/a11y/noLabelWithoutControl: It'll take some time to validate this fix altogether with css rules */}
-														(<label />
-														{segment.value})
-													</>
-												) : (
-													segment.value
-												)
-											) : segment.type === "ptuha" ? (
-												Ptuah()
-											) : (
-												Stuma()
-											)}
-										</span>
-										{segmentIdx === pasuk.segments.length - 1 ||
-										((segment.type === "ktiv" || segment.type === "qri") &&
-											segment.value.at(segment.value.length - 1) ===
-												"־") ? null : (
-											<span> </span>
-										)}
-									</React.Fragment>
-								);
-							});
+				<article className={perekStyles.perekText}>
+					{perekObj.pesukim.map((pasuk, pasukIdx) => {
+						const pasukKey = pasukIdx + 1;
+						const pasukNumElement = (
+							<span className={perekStyles.pasukNum}>
+								{toLetters(pasukIdx + 1)}
+							</span>
+						);
+						const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
+							const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
+							const isQriWithDifferentKtiv =
+								segment.type === "qri" && isQriDifferentThanKtiv(segment);
 							return (
-								<React.Fragment key={pasukKey}>
-									{pasukNumElement}
-									<span> </span>
-									{pasukElement}
-									<span> </span>
+								<React.Fragment key={segmentKey}>
+									<span
+										className={isQriWithDifferentKtiv ? perekStyles.qri : ""}
+									>
+										{segment.type === "ktiv" ? (
+											segment.value
+										) : segment.type === "qri" ? (
+											isQriWithDifferentKtiv ? (
+												<>
+													{/* biome-ignore lint/a11y/noLabelWithoutControl: It'll take some time to validate this fix altogether with css rules */}
+													(<label />
+													{segment.value})
+												</>
+											) : (
+												segment.value
+											)
+										) : segment.type === "ptuha" ? (
+											Ptuah()
+										) : (
+											Stuma()
+										)}
+									</span>
+									{segmentIdx === pasuk.segments.length - 1 ||
+									((segment.type === "ktiv" || segment.type === "qri") &&
+										segment.value.at(segment.value.length - 1) ===
+											"־") ? null : (
+										<span> </span>
+									)}
 								</React.Fragment>
 							);
-						})}
-					</article>
+						});
+						return (
+							<React.Fragment key={pasukKey}>
+								{pasukNumElement}
+								<span> </span>
+								{pasukElement}
+								<span> </span>
+							</React.Fragment>
+						);
+					})}
+				</article>
 
-					{/* Perushim section - commentaries carousel */}
-					<PerushimSection perekId={perekId} perushim={perushim} />
+				{/* Perushim section - commentaries carousel */}
+				<PerushimSection perekId={perekId} perushim={perushim} />
 
-					{/* Articles carousel */}
-					<ArticlesSection articles={articles} />
+				{/* Articles carousel */}
+				<ArticlesSection articles={articles} />
 
-					{/* Expanded article view */}
-					<section id="article-view" className={styles.expandedArticle}>
+				{/* Expanded article view */}
+				<section id="article-view" className={styles.expandedArticle}>
 						<header className={styles.articleHeader}>
 							<Link
 								href={`/929/authors/${authorNameToSlug(article.authorName)}`}
@@ -297,11 +298,13 @@ export default async function ArticlePage({
 
 	return (
 		<>
+			<ScrollToSlug targetId="perush-view" />
 			<Suspense>
 				<SeferComposite
 					perekObj={perekObj}
 					articles={articles}
 					articlesByPerekIndex={articlesByPerekIndex}
+					initialSlug={slug}
 				/>
 			</Suspense>
 			<div className={perekStyles.perekContainer}>

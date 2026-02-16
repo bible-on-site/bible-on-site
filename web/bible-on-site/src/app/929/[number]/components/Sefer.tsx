@@ -91,8 +91,9 @@ const Sefer = (props: {
 	articlesByPerekIndex?: Article[][];
 	perushimByPerekIndex?: PerushSummary[][];
 	perekIds?: number[];
+	initialSlug?: string;
 }) => {
-	const { perekObj, articles, articlesByPerekIndex, perushimByPerekIndex, perekIds } = props;
+	const { perekObj, articles, articlesByPerekIndex, perushimByPerekIndex, perekIds, initialSlug } = props;
 	const sefer = getSeferByName(perekObj.sefer);
 	const flipBookRef = useRef<FlipBookHandle>(null);
 	const bookWrapperRef = useRef<HTMLDivElement>(null);
@@ -294,14 +295,15 @@ const Sefer = (props: {
 				</div>
 			</section>
 		</React.Fragment>,
-		<React.Fragment key={`blank-${perekIdx + 1}`}>
-			<BlankPageContent
-				articles={articlesByPerekIndex?.[perekIdx] ?? articles}
-				perushim={perushimByPerekIndex?.[perekIdx] ?? []}
-				perekId={perekIds?.[perekIdx] ?? 0}
-				hebrewDateStr={hebrewDateStr}
-			/>
-		</React.Fragment>,
+	<React.Fragment key={`blank-${perekIdx + 1}`}>
+		<BlankPageContent
+			articles={articlesByPerekIndex?.[perekIdx] ?? articles}
+			perushim={perushimByPerekIndex?.[perekIdx] ?? []}
+			perekId={perekIds?.[perekIdx] ?? 0}
+			hebrewDateStr={hebrewDateStr}
+			initialSlug={perekIds?.[perekIdx] === perekObj.perekId ? initialSlug : undefined}
+		/>
+	</React.Fragment>,
 	]);
 
 	// Total pages: cover + cover-interior + TOC + (perakim * 2) + backCover
