@@ -21,7 +21,7 @@ impl Database {
         })
     }
 
-    #[cfg(test)]
+    #[allow(dead_code)]
     pub fn from_connection(connection: DatabaseConnection) -> Self {
         Self {
             connection: Arc::new(connection),

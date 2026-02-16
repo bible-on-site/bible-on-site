@@ -13,7 +13,9 @@ pub struct GeneratePdfRequest {
     pub perakim: Vec<PerekInput>,
 
     /// When true, fetch and include perushim for each perek.
+    /// (Currently unused — reserved for future perushim feature.)
     #[serde(default)]
+    #[allow(dead_code)]
     pub include_perushim: bool,
 
     /// When true, fetch and include articles for each perek.
@@ -54,6 +56,7 @@ pub struct PerekInput {
 /// Metadata returned alongside the PDF (optional, for logging/debugging).
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct GeneratePdfResponse {
     pub filename: String,
     pub page_count: usize,

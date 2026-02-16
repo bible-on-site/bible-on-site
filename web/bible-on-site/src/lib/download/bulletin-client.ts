@@ -10,8 +10,9 @@ import { getPerekByPerekId } from "@/data/perek-dto";
 import type { SemanticPageInfo } from "./types";
 import { semanticPagesToPerekIds, segmentsToText, stripTaamim } from "./tanach-pdf";
 
+/** In dev: local Actix-web server (started by predev). In prod: API Gateway → Lambda. */
 const BULLETIN_URL =
-	process.env.BULLETIN_URL ?? "http://localhost:3004";
+	process.env.BULLETIN_URL ?? "http://127.0.0.1:9000";
 
 /** Shape expected by the bulletin service. */
 interface BulletinRequest {

@@ -1,22 +1,35 @@
 [package]
 name = "bible-on-site-bulletin"
-description = "Bible on Site PDF Bulletin Generator"
+description = "Bible on Site PDF Bulletin Generator (AWS Lambda)"
 license-file = "../../license"
 repository = "https://github.com/bible-on-site/bible-on-site"
 publish = false
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "bulletin"
+path = "src/lib.rs"
+
 [[bin]]
 name = "bulletin"
 path = "src/main.rs"
 
+[features]
+default = []
+# Use "local" feature for development — adds a lightweight HTTP server
+local = ["dep:actix-web"]
+
 [dependencies]
-# Web framework — shared with API
+# AWS Lambda runtime (production)
+lambda_http = "0.13"
+lambda_runtime = "0.13"
+
+# Local dev HTTP server (only when feature "local" is enabled)
 actix-web = { version = "4.12.1", default-features = false, features = [
     "macros",
     "compress-brotli",
-] }
+], optional = true }
 
 # PDF generation
 genpdf = "0.2"
@@ -24,7 +37,7 @@ genpdf = "0.2"
 # Database — shared layer from API
 sea-orm = { version = "1.1.19", default-features = false, features = [
     "sqlx-mysql",
-    "runtime-actix-native-tls",
+    "runtime-tokio-native-tls",
 ] }
 entities = { path = "../api/entities" }
 
@@ -38,7 +51,7 @@ tokio = { version = "1.48", features = ["macros", "rt-multi-thread"] }
 # Error handling
 anyhow = "1.0"
 
-# Logging — same stack as API
+# Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

@@ -11,7 +11,20 @@ use genpdf::style::Style;
 use genpdf::{Alignment, Document, Margins, SimplePageDecorator};
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::models::{GeneratePdfRequest, PerekInput};
+/// Lightweight request types for PDF generation — decoupled from HTTP models.
+/// The binary's `models` module converts into these.
+#[derive(Debug, Clone)]
+pub struct PdfRequest {
+    pub sefer_name: String,
+    pub perakim: Vec<PdfPerekInput>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PdfPerekInput {
+    pub perek_heb: String,
+    pub header: String,
+    pub pesukim: Vec<String>,
+}
 
 /// Reverse grapheme clusters in a string so that an LTR renderer draws it
 /// as correct visual RTL. Preserves combining marks attached to their bases.
@@ -29,7 +42,7 @@ pub fn strip_taamim(text: &str) -> String {
 
 /// Build a PDF document from the request payload.
 pub fn build_pdf(
-    req: &GeneratePdfRequest,
+    req: &PdfRequest,
     articles: &[(String, String, String)], // (name, author_name, content)
     fonts_dir: &Path,
 ) -> anyhow::Result<Document> {
@@ -86,7 +99,7 @@ pub fn build_pdf(
 }
 
 /// Render a single perek into the document.
-fn push_perek(doc: &mut Document, perek: &PerekInput, sefer_name: &str) {
+fn push_perek(doc: &mut Document, perek: &PdfPerekInput, sefer_name: &str) {
     // Combined title: "סֵפֶר פרק — header"
     let title_text = if perek.header.is_empty() {
         format!("{} {}", sefer_name, perek.perek_heb)
