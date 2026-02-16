@@ -1,0 +1,21 @@
+---
+description: Always check ALL CI/CD checks and actions when monitoring a PR or push
+alwaysApply: true
+---
+
+# CI/CD Monitoring
+
+When monitoring CI, checking PR status, or verifying a push:
+
+- **Check ALL checks** — not just the "main" workflow. Use `gh run list` and `gh pr checks` to see every status check (GitHub Actions, Codecov, Codacy, CodeQL, dependency review, etc.).
+- **A PR is green only when every check passes.** Codecov patch/project, Codacy diff coverage, and third-party checks all count.
+- Report any failing or pending check with its name and failure reason.
+- If a coverage check fails, investigate what code is untested and either add tests or adjust thresholds with justification.
+
+```bash
+# List all workflow runs for a branch
+gh run list --branch <branch> --repo <owner>/<repo>
+
+# List all status checks on a PR
+gh pr checks <pr-number> --repo <owner>/<repo>
+```
