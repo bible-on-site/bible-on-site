@@ -75,9 +75,11 @@ import { getArticlesByPerekId } from "../../../src/lib/articles/service";
 import {
 	buildTanachPdfForPerekRange,
 	createTanachPageRangesHandler,
+	reverseGraphemes,
 	segmentsToText,
 	semanticPagesToPerekIds,
 	stripHtml,
+	stripTaamim,
 	wrapText,
 } from "../../../src/lib/download/tanach-pdf";
 
@@ -120,7 +122,26 @@ function makePerek(
 }
 
 describe("segmentsToText", () => {
-	it("extracts qri text and joins with spaces", () => {
+	it("separates word-segments with spaces", () => {
+		const segments = [
+			{ type: "qri" as const, value: "וַיְדַבֵּר" },
+			{ type: "qri" as const, value: "יְהוָה" },
+			{ type: "qri" as const, value: "אֶל־" },
+			{ type: "qri" as const, value: "מֹשֶׁה" },
+		];
+		expect(segmentsToText(segments)).toBe("וַיְדַבֵּר יְהוָה אֶל־מֹשֶׁה");
+	});
+
+	it("removes extra space after maqaf (U+05BE)", () => {
+		const segments = [
+			{ type: "qri" as const, value: "אֶל־" },
+			{ type: "qri" as const, value: "מֹשֶׁה" },
+		];
+		// maqaf connects words — no space between them
+		expect(segmentsToText(segments)).toBe("אֶל־מֹשֶׁה");
+	});
+
+	it("adds space from stuma/ptuha segments", () => {
 		const segments = [
 			{ type: "qri" as const, value: "בְּרֵאשִׁית" },
 			{ type: "stuma" as const, value: "" },
@@ -140,6 +161,56 @@ describe("segmentsToText", () => {
 			{ type: "ptuha" as const, value: "" },
 		];
 		expect(segmentsToText(segments)).toBe("");
+	});
+});
+
+describe("stripTaamim", () => {
+	it("removes cantillation marks (U+0591–U+05AF)", () => {
+		// pashta (U+0599) and revii (U+05A7) are taamim
+		expect(stripTaamim("וַיְדַבֵּ֨ר")).toBe("וַיְדַבֵּר");
+		expect(stripTaamim("יְהוָ֧ה")).toBe("יְהוָה");
+	});
+
+	it("keeps nikud (vowels, U+05B0–U+05BD)", () => {
+		expect(stripTaamim("בְּרֵאשִׁית")).toBe("בְּרֵאשִׁית");
+	});
+
+	it("keeps maqaf (U+05BE) and sof pasuq (U+05C3)", () => {
+		expect(stripTaamim("אֶל־מֹשֶׁה׃")).toBe("אֶל־מֹשֶׁה׃");
+	});
+
+	it("handles empty string", () => {
+		expect(stripTaamim("")).toBe("");
+	});
+});
+
+describe("reverseGraphemes", () => {
+	it("reverses simple Hebrew text", () => {
+		expect(reverseGraphemes("שלום")).toBe("םולש");
+	});
+
+	it("keeps nikud attached to base characters", () => {
+		// Each grapheme cluster (letter + nikud) stays together
+		const input = "בָּרָא";
+		const reversed = reverseGraphemes(input);
+		// reversed should read א then רָ then בָּ
+		expect(reversed).toBe("ארָבָּ");
+	});
+
+	it("reverses word order for multi-word text", () => {
+		const input = "אבג דהו";
+		expect(reverseGraphemes(input)).toBe("והד גבא");
+	});
+
+	it("handles empty string", () => {
+		expect(reverseGraphemes("")).toBe("");
+	});
+
+	it("preserves maqaf position between reversed words", () => {
+		const input = "אֶל־מֹשֶׁה";
+		const reversed = reverseGraphemes(input);
+		// reversed: ה then שֶׁ then מֹ then ־ then ל then אֶ
+		expect(reversed).toContain("־");
 	});
 });
 
@@ -330,7 +401,7 @@ describe("buildTanachPdfForPerekRange", () => {
 		expect(pdfLib.__mockDoc.addPage).toHaveBeenCalledTimes(2);
 	});
 
-	it("draws title in bold and header in regular font", async () => {
+	it("draws combined title + header in bold (like TOC)", async () => {
 		mockGetPerekByPerekId.mockReturnValue(
 			makePerek("בראשית", "א", "בריאת העולם", ["text"]) as ReturnType<
 				typeof getPerekByPerekId
@@ -341,21 +412,17 @@ describe("buildTanachPdfForPerekRange", () => {
 
 		const page = pdfLib.__mockPages[0];
 		const calls = page.drawText.mock.calls;
-		expect(calls.length).toBeGreaterThanOrEqual(2);
+		expect(calls.length).toBeGreaterThanOrEqual(1);
 
-		// First call should be the title "בראשית א" with the bold font
+		// First call: combined "בראשית א — בריאת העולם" reversed + bold
 		const titleCall = calls[0];
-		expect(titleCall[0]).toBe("בראשית א");
+		const expectedTitle = reverseGraphemes("בראשית א — בריאת העולם");
+		expect(titleCall[0]).toBe(expectedTitle);
 		expect(titleCall[1].font).toBe(pdfLib.__mockBoldFont);
 		expect(titleCall[1].size).toBe(18);
-
-		// Second call should be the header with regular font
-		const headerCall = calls[1];
-		expect(headerCall[0]).toBe("בריאת העולם");
-		expect(headerCall[1].font).toBe(pdfLib.__mockFont);
 	});
 
-	it("right-aligns text for RTL layout", async () => {
+	it("right-aligns reversed text for RTL visual layout", async () => {
 		mockGetPerekByPerekId.mockReturnValue(
 			makePerek("בראשית", "א", "פרק א", ["בראשית ברא"]) as ReturnType<
 				typeof getPerekByPerekId
@@ -370,9 +437,14 @@ describe("buildTanachPdfForPerekRange", () => {
 			const opts = call[1];
 			expect(opts.x).toBeGreaterThanOrEqual(50); // margin
 		}
+
+		// Verify text is grapheme-reversed (visual RTL)
+		const titleCall = calls[0];
+		const expectedTitle = reverseGraphemes("בראשית א — פרק א");
+		expect(titleCall[0]).toBe(expectedTitle);
 	});
 
-	it("handles perek with empty header gracefully", async () => {
+	it("handles perek with empty header (title only, no dash)", async () => {
 		mockGetPerekByPerekId.mockReturnValue(
 			makePerek("בראשית", "א", "", ["בראשית ברא"]) as ReturnType<
 				typeof getPerekByPerekId
@@ -384,9 +456,10 @@ describe("buildTanachPdfForPerekRange", () => {
 
 		const page = pdfLib.__mockPages[0];
 		const calls = page.drawText.mock.calls;
-		// Should not have a header line — just title + pasuk + page number
-		const texts = calls.map((c: [string]) => c[0]);
-		expect(texts).not.toContain("");
+		// Title should be just "בראשית א" reversed, without " — "
+		const titleCall = calls[0];
+		expect(titleCall[0]).toBe(reverseGraphemes("בראשית א"));
+		expect(titleCall[0]).not.toContain("—");
 	});
 
 	it("includes perushim section when available", async () => {
@@ -407,9 +480,14 @@ describe("buildTanachPdfForPerekRange", () => {
 			(c: [string]) => c[0],
 		);
 
-		expect(allText).toContain("פירושים זמינים");
-		expect(allText.some((t: string) => t.includes("רש\"י"))).toBe(true);
-		expect(allText.some((t: string) => t.includes("אבן עזרא"))).toBe(true);
+		// Text is reversed for visual RTL — check for reversed versions
+		expect(allText).toContain(reverseGraphemes("פירושים זמינים"));
+		expect(
+			allText.some((t: string) => t.includes(reverseGraphemes("רש\"י"))),
+		).toBe(true);
+		expect(
+			allText.some((t: string) => t.includes(reverseGraphemes("אבן עזרא"))),
+		).toBe(true);
 	});
 
 	it("includes articles section when available", async () => {
@@ -439,13 +517,16 @@ describe("buildTanachPdfForPerekRange", () => {
 			(c: [string]) => c[0],
 		);
 
-		expect(allText).toContain("מאמרים");
-		expect(allText).toContain("• מאמר על בריאת העולם");
-		expect(allText).toContain("מאת: הרב כהן");
-		// HTML should be stripped from abstract
-		expect(allText.some((t: string) => t.includes("This is an abstract"))).toBe(
-			true,
-		);
+		// Text is reversed for visual RTL
+		expect(allText).toContain(reverseGraphemes("מאמרים"));
+		expect(allText).toContain(reverseGraphemes("• מאמר על בריאת העולם"));
+		expect(allText).toContain(reverseGraphemes("מאת: הרב כהן"));
+		// HTML should be stripped from abstract, then reversed
+		expect(
+			allText.some((t: string) =>
+				t.includes(reverseGraphemes("This is an abstract")),
+			),
+		).toBe(true);
 	});
 
 	it("gracefully handles DB errors for perushim/articles", async () => {

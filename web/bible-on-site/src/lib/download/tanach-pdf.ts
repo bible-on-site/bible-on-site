@@ -61,16 +61,46 @@ export function getBoldFontBytes(): Uint8Array {
 
 /* ──────────────────────────── Text helpers ─────────────────────────── */
 
-/** Get plain text from segments (qri/ktiv only; stuma/ptuha as space). */
+/**
+ * Get plain text from segments (qri/ktiv only; stuma/ptuha as space).
+ * Each segment is a single word — join with " " to separate them.
+ * Maqaf (U+05BE ־) already connects words; remove extra space after it.
+ */
 export function segmentsToText(segments: Segment[]): string {
 	return segments
 		.map((s) => {
 			if (s.type === "qri" || s.type === "ktiv") return s.value;
 			return " ";
 		})
-		.join("")
+		.join(" ")
+		.replace(/־\s+/g, "־")
 		.replace(/\s+/g, " ")
 		.trim();
+}
+
+/**
+ * Strip cantillation marks (taamim, U+0591–U+05AF) from Hebrew text.
+ * Keeps nikud (vowels, U+05B0–U+05BD), shin/sin dots, letters, maqaf.
+ * Taamim have zero advance-width in many fonts and confuse pdf-lib's
+ * width measurement, causing garbled layout.
+ */
+export function stripTaamim(text: string): string {
+	return text.replace(/[\u0591-\u05AF]/g, "");
+}
+
+/**
+ * Reverse grapheme clusters so pdf-lib (which draws LTR) renders
+ * Hebrew text in the correct visual RTL order.
+ *
+ * Uses Intl.Segmenter to keep combining marks (nikud) attached to
+ * their base character during reversal.
+ */
+export function reverseGraphemes(text: string): string {
+	const segmenter = new Intl.Segmenter("he", { granularity: "grapheme" });
+	return [...segmenter.segment(text)]
+		.map((s) => s.segment)
+		.reverse()
+		.join("");
 }
 
 /** Strip HTML tags from a string, decode common entities. */
@@ -196,9 +226,10 @@ function drawRtlLine(
 	color = rgb(0, 0, 0),
 ): void {
 	const page = currentPage(ctx);
-	const textWidth = font.widthOfTextAtSize(text, size);
+	const visual = reverseGraphemes(text);
+	const textWidth = font.widthOfTextAtSize(visual, size);
 	const x = PAGE_WIDTH - MARGIN - textWidth;
-	page.drawText(text, {
+	page.drawText(visual, {
 		x: Math.max(MARGIN, x),
 		y: ctx.y,
 		size,
@@ -267,23 +298,18 @@ export async function buildTanachPdfForPerekRange(
 		ctx.pageNum++;
 
 		const perek = getPerekByPerekId(perekId);
-		const title = `${perek.sefer} ${perek.perekHeb}`;
 
-		// ── Title (bold, large) ──
-		drawRtlLine(ctx, title, boldFont, TITLE_SIZE);
-		ctx.y -= TITLE_LINE_HEIGHT;
-
-		// ── Header (subtitle) ──
-		if (perek.header) {
-			drawRtlLine(ctx, perek.header, font, HEADER_SIZE, rgb(0.3, 0.3, 0.3));
-			ctx.y -= HEADER_LINE_HEIGHT;
-		}
+		// ── Combined title + header (like TOC: "במדבר א — header") ──
+		const titleText = perek.header
+			? `${perek.sefer} ${perek.perekHeb} — ${perek.header}`
+			: `${perek.sefer} ${perek.perekHeb}`;
+		drawRtlWrapped(ctx, titleText, boldFont, TITLE_SIZE, TITLE_LINE_HEIGHT);
 
 		ctx.y -= BODY_LINE_HEIGHT * 0.5; // spacing
 
 		// ── Pesukim ──
 		for (const pasuk of perek.pesukim) {
-			const text = segmentsToText(pasuk.segments);
+			const text = stripTaamim(segmentsToText(pasuk.segments));
 			if (!text) continue;
 			drawRtlWrapped(ctx, text, font, BODY_SIZE, BODY_LINE_HEIGHT);
 			ctx.y -= 2; // tiny inter-pasuk gap
