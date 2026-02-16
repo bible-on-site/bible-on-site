@@ -10,7 +10,10 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { PDFDocument, rgb } from "pdf-lib";
-import * as fontkit from "@pdf-lib/fontkit";
+// @ts-expect-error — @pdf-lib/fontkit is CJS; namespace import may wrap the real instance in .default
+import * as _fontkit from "@pdf-lib/fontkit";
+// biome-ignore lint/suspicious/noExplicitAny: CJS/ESM interop — unwrap .default when bundler wraps it
+const fontkit: any = (_fontkit as any).default ?? _fontkit;
 import type { Segment } from "@/data/db/tanah-view-types";
 import { getPerekByPerekId } from "@/data/perek-dto";
 import { getPerekIdsForSefer, getSeferByName } from "@/data/sefer-dto";
