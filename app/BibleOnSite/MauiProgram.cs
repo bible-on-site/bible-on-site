@@ -5,8 +5,8 @@ using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 using BibleOnSite.Controls;
 using BibleOnSite.Handlers;
-#if IOS || MACCATALYST
-using Plugin.Firebase.Core;
+#if IOS
+using Plugin.Firebase.Core.Platforms.iOS;
 #endif
 
 // Force rebuild for font resource loading
@@ -51,12 +51,13 @@ public static class MauiProgram
 		});
 #endif
 
-		// Initialize Firebase on iOS/Mac from GoogleService-Info.plist (the iOS equivalent of google-services.json).
+		// Initialize Firebase on iOS from GoogleService-Info.plist (the iOS equivalent of google-services.json).
 		// Android auto-inits from google-services.json at build time, but iOS requires an explicit init call.
 		// Without this, CrossFirebaseAnalytics.Current silently fails on iOS.
+		// Note: Plugin.Firebase 4.0.0 does NOT support MacCatalyst — only iOS and Android.
 		builder.ConfigureLifecycleEvents(events =>
 		{
-#if IOS || MACCATALYST
+#if IOS
 			events.AddiOS(iOS => iOS.WillFinishLaunching((_, __) =>
 			{
 				CrossFirebase.Initialize();

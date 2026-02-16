@@ -1,6 +1,6 @@
 namespace BibleOnSite.Services;
 
-#if ANDROID || IOS || MACCATALYST
+#if ANDROID || IOS
 using Plugin.Firebase.Analytics;
 #endif
 
@@ -12,7 +12,7 @@ public sealed class AnalyticsService : IAnalyticsService
 {
 	public void SetScreen(string screenName, string? screenClassOverride = null)
 	{
-#if ANDROID || IOS || MACCATALYST
+#if ANDROID || IOS
 		try
 		{
 			var analytics = CrossFirebaseAnalytics.Current;
@@ -32,7 +32,7 @@ public sealed class AnalyticsService : IAnalyticsService
 
 	public void LogSearch(string searchTerm)
 	{
-#if ANDROID || IOS || MACCATALYST
+#if ANDROID || IOS
 		try
 		{
 			CrossFirebaseAnalytics.Current.LogEvent("search", new Dictionary<string, object>
@@ -47,3 +47,4 @@ public sealed class AnalyticsService : IAnalyticsService
 #endif
 	}
 }
+
