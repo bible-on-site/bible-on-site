@@ -116,7 +116,7 @@ describe("bulletin-client", () => {
 			expect(callInit.method).toBe("POST");
 			expect(callInit.headers["Content-Type"]).toBe("application/json");
 
-			const body = JSON.parse(capturedBody!);
+			const body = JSON.parse(capturedBody as string);
 			expect(body.seferName).toBe("בראשית");
 			expect(body.perakim).toHaveLength(1);
 			expect(body.perakim[0].perekId).toBe(1);
@@ -193,7 +193,7 @@ describe("bulletin-client", () => {
 
 			await generatePdfViaBulletin([1, 2, 3], "במדבר");
 
-			const body = JSON.parse(capturedBody!);
+			const body = JSON.parse(capturedBody as string);
 			expect(body.perakim).toHaveLength(3);
 			expect(body.perakim[0].perekId).toBe(1);
 			expect(body.perakim[1].perekId).toBe(2);

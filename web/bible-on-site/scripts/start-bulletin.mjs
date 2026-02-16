@@ -84,7 +84,7 @@ async function waitForHealth(maxWaitMs = 120_000) {
 async function main() {
 	// Already running?
 	if (isPortInUse()) {
-		console.info("  start-bulletin: already running on port " + port);
+		console.info(`  start-bulletin: already running on port ${port}`);
 		return;
 	}
 
