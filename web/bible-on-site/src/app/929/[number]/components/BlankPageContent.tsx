@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Article } from "@/lib/articles";
 import type { PerushDetail, PerushSummary } from "@/lib/perushim";
 import { getArticleForBook, getPerushNotesForPage } from "../actions";
@@ -15,6 +15,8 @@ interface BlankPageContentProps {
 	perushim?: PerushSummary[];
 	perekId?: number;
 	hebrewDateStr: string;
+	/** When set, auto-expand the article (numeric) or perush (name) on mount */
+	initialSlug?: string;
 }
 
 /**
@@ -26,6 +28,7 @@ export function BlankPageContent({
 	perushim = [],
 	perekId = 0,
 	hebrewDateStr,
+	initialSlug,
 }: BlankPageContentProps) {
 	const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
 	const [articleLoading, setArticleLoading] = useState(false);
@@ -33,6 +36,7 @@ export function BlankPageContent({
 		null,
 	);
 	const [perushLoading, setPerushLoading] = useState(false);
+	const initialSlugHandled = useRef(false);
 
 	const handleArticleClick = useCallback(async (article: Article) => {
 		setArticleLoading(true);
@@ -63,6 +67,25 @@ export function BlankPageContent({
 		},
 		[perekId],
 	);
+
+	// Auto-expand article or perush when initialSlug is provided (e.g. /929/5/42?book)
+	useEffect(() => {
+		if (!initialSlug || initialSlugHandled.current) return;
+		initialSlugHandled.current = true;
+
+		const numericId = Number.parseInt(initialSlug, 10);
+		if (!Number.isNaN(numericId)) {
+			const article = articles.find((a) => a.id === numericId);
+			if (article) {
+				handleArticleClick(article);
+			}
+		} else {
+			const perush = perushim.find((p) => p.name === initialSlug);
+			if (perush) {
+				handlePerushClick(perush);
+			}
+		}
+	}, [initialSlug, articles, perushim, handleArticleClick, handlePerushClick]);
 
 	const handleArticleBack = useCallback(() => {
 		setSelectedArticle(null);

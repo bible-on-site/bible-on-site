@@ -75,10 +75,13 @@ jest.mock("../../../src/app/929/[number]/components/Breadcrumb", () => ({
 
 jest.mock("../../../src/app/929/[number]/components/SeferComposite", () => ({
 	__esModule: true,
-	default: () => <div data-testid="sefer-composite" />,
+	default: (props: Record<string, unknown>) => (
+		<div data-testid="sefer-composite" data-initial-slug={props.initialSlug as string || ""} />
+	),
 }));
 
 jest.mock("../../../src/app/929/[number]/[slug]/ScrollToArticle", () => ({
+	ScrollToSlug: () => null,
 	ScrollToArticle: () => null,
 }));
 
@@ -510,6 +513,66 @@ describe("[slug] page", () => {
 
 			expect(container.innerHTML).toContain("כתיב");
 			expect(container.innerHTML).toContain("קרי");
+		});
+
+		it("passes initialSlug to SeferComposite for article view", async () => {
+			const jsx = await ArticlePage({
+				params: Promise.resolve({ number: "5", slug: "42" }),
+			});
+			const { container } = render(jsx);
+
+			const seferComposite = container.querySelector("[data-testid='sefer-composite']");
+			expect(seferComposite?.getAttribute("data-initial-slug")).toBe("42");
+		});
+
+		it("passes initialSlug to SeferComposite for perush view", async () => {
+			mockGetPerushimByPerekId.mockResolvedValue([
+				{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 10 },
+			]);
+			mockGetPerushDetail.mockResolvedValue({
+				id: 1,
+				name: "רש״י",
+				parshanName: "רש״י",
+				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
+			});
+
+			const jsx = await ArticlePage({
+				params: Promise.resolve({ number: "5", slug: "רש״י" }),
+			});
+			const { container } = render(jsx);
+
+			const seferComposite = container.querySelector("[data-testid='sefer-composite']");
+			expect(seferComposite?.getAttribute("data-initial-slug")).toBe("רש״י");
+		});
+
+		it("renders article-view section with correct id for scroll target", async () => {
+			const jsx = await ArticlePage({
+				params: Promise.resolve({ number: "5", slug: "42" }),
+			});
+			const { container } = render(jsx);
+
+			const articleView = container.querySelector("#article-view");
+			expect(articleView).not.toBeNull();
+		});
+
+		it("renders perush-view section with correct id for scroll target", async () => {
+			mockGetPerushimByPerekId.mockResolvedValue([
+				{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 10 },
+			]);
+			mockGetPerushDetail.mockResolvedValue({
+				id: 1,
+				name: "רש״י",
+				parshanName: "רש״י",
+				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
+			});
+
+			const jsx = await ArticlePage({
+				params: Promise.resolve({ number: "5", slug: "רש״י" }),
+			});
+			const { container } = render(jsx);
+
+			const perushView = container.querySelector("#perush-view");
+			expect(perushView).not.toBeNull();
 		});
 	});
 });
