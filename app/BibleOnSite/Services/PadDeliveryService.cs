@@ -110,7 +110,7 @@ partial class PadDeliveryService
 
             try
             {
-                await manager.Fetch(new[] { packName }).AsAsync<Java.Lang.Object>()!;
+                await manager.Fetch(new[] { packName })!.AsAsync<Java.Lang.Object>();
                 cancellationToken.ThrowIfCancellationRequested();
 
                 // In local-testing mode (bundletool --local-testing), the
