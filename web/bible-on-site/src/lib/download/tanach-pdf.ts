@@ -1,45 +1,68 @@
 /**
- * Basic Tanach PDF extraction per perek range.
- * Builds a PDF from perek text (vocalized) for the given perek IDs.
+ * Tanach PDF generator — beautiful, structured output.
  *
- * Uses the embedded Heebo variable font so Hebrew characters render correctly.
+ * Produces a well-formatted PDF with:
+ * - Each perek starts on a fresh page
+ * - Proper Hebrew text with nikud (Frank Ruhl Libre static font)
+ * - Perek title + descriptive header
+ * - Available perushim listed per perek
+ * - Related article titles per perek
+ * - Right-aligned RTL text with page numbers
+ *
+ * Uses a static-weight font (not variable) so fontkit metrics are accurate.
  * pdf-lib's StandardFonts only support WinAnsi (Latin-1) encoding — any
  * non-Latin text (Hebrew, Arabic, etc.) requires an embedded custom font.
  */
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { PDFDocument, rgb } from "pdf-lib";
-// @ts-expect-error — @pdf-lib/fontkit is CJS; namespace import may wrap the real instance in .default
+import { type PDFFont, PDFDocument, rgb } from "pdf-lib";
+// biome-ignore lint/suspicious/noTsIgnore: @ts-expect-error fails in production build (unused directive) so we must use @ts-ignore
+// @ts-ignore — @pdf-lib/fontkit is CJS; namespace import may wrap the real instance in .default
 import * as _fontkit from "@pdf-lib/fontkit";
 // biome-ignore lint/suspicious/noExplicitAny: CJS/ESM interop — unwrap .default when bundler wraps it
 const fontkit: any = (_fontkit as any).default ?? _fontkit;
+
+import { toNumber } from "gematry";
 import type { Segment } from "@/data/db/tanah-view-types";
 import { getPerekByPerekId } from "@/data/perek-dto";
 import { getPerekIdsForSefer, getSeferByName } from "@/data/sefer-dto";
+import { getArticlesByPerekId } from "@/lib/articles/service";
+import { getPerushimByPerekId } from "@/lib/perushim";
+import type { SemanticPageInfo } from "./types";
 
-/** Lazily loaded font bytes (singleton). */
-let hebrewFontBytes: Uint8Array | null = null;
+/* ──────────────────────────── Font loading ─────────────────────────── */
 
-function getHebrewFontBytes(): Uint8Array {
-	if (!hebrewFontBytes) {
-		// In Next.js, __dirname may point to .next/server/ at runtime.
-		// Use process.cwd() which is always the project root.
-		const fontPath = resolve(
-			process.cwd(),
-			"src",
-			"lib",
-			"download",
-			"fonts",
-			"Heebo-Regular.ttf",
-		);
-		hebrewFontBytes = readFileSync(fontPath);
-	}
-	return hebrewFontBytes;
+let regularFontCache: Uint8Array | null = null;
+let boldFontCache: Uint8Array | null = null;
+
+function loadFont(filename: string): Uint8Array {
+	const fontPath = resolve(
+		process.cwd(),
+		"src",
+		"lib",
+		"download",
+		"fonts",
+		filename,
+	);
+	return readFileSync(fontPath);
 }
 
+export function getRegularFontBytes(): Uint8Array {
+	if (!regularFontCache)
+		regularFontCache = loadFont("FrankRuhlLibre-Regular.ttf");
+	return regularFontCache;
+}
+
+export function getBoldFontBytes(): Uint8Array {
+	if (!boldFontCache) boldFontCache = loadFont("FrankRuhlLibre-Bold.ttf");
+	return boldFontCache;
+}
+
+/* ──────────────────────────── Text helpers ─────────────────────────── */
+
 /** Get plain text from segments (qri/ktiv only; stuma/ptuha as space). */
-function segmentsToText(segments: Segment[]): string {
+export function segmentsToText(segments: Segment[]): string {
 	return segments
 		.map((s) => {
 			if (s.type === "qri" || s.type === "ktiv") return s.value;
@@ -50,12 +73,27 @@ function segmentsToText(segments: Segment[]): string {
 		.trim();
 }
 
+/** Strip HTML tags from a string, decode common entities. */
+export function stripHtml(html: string): string {
+	return html
+		.replace(/<br\s*\/?>/gi, "\n")
+		.replace(/<[^>]+>/g, "")
+		.replace(/&nbsp;/g, " ")
+		.replace(/&amp;/g, "&")
+		.replace(/&lt;/g, "<")
+		.replace(/&gt;/g, ">")
+		.replace(/&quot;/g, '"')
+		.replace(/&#39;/g, "'")
+		.replace(/\s+/g, " ")
+		.trim();
+}
+
 /**
  * Naive word-wrap: split text into lines that fit within maxWidth.
  * pdf-lib's `maxWidth` option on drawText doesn't work reliably with
  * custom embedded fonts, so we measure and break manually.
  */
-function wrapText(
+export function wrapText(
 	text: string,
 	font: { widthOfTextAtSize: (t: string, s: number) => number },
 	fontSize: number,
@@ -79,138 +117,310 @@ function wrapText(
 	return lines.length ? lines : [""];
 }
 
-/** Build PDF bytes for the given perek IDs. */
+/* ─────────────────────── Mapping helpers ───────────────────────────── */
+
+/**
+ * Convert semantic page info to perek IDs using the sefer's perek range.
+ *
+ * semanticPages contains entries like { semanticName: "א'", pageIndex: 3 }.
+ * We parse the Hebrew number and map to the sefer's perek ID array.
+ */
+export function semanticPagesToPerekIds(
+	semanticPages: SemanticPageInfo[],
+	seferName: string,
+): number[] {
+	const sefer = getSeferByName(seferName);
+	const allPerekIds = getPerekIdsForSefer(sefer);
+
+	const perekIds: number[] = [];
+	const seen = new Set<number>();
+
+	for (const sp of semanticPages) {
+		const perekNum = toNumber(sp.semanticName);
+		if (perekNum <= 0 || perekNum > allPerekIds.length) continue;
+		const perekId = allPerekIds[perekNum - 1];
+		if (perekId !== undefined && !seen.has(perekId)) {
+			seen.add(perekId);
+			perekIds.push(perekId);
+		}
+	}
+
+	return perekIds;
+}
+
+/* ─────────────────── PDF layout constants ──────────────────────────── */
+
+const PAGE_WIDTH = 595;
+const PAGE_HEIGHT = 842;
+const MARGIN = 50;
+const MAX_WIDTH = PAGE_WIDTH - 2 * MARGIN;
+
+const TITLE_SIZE = 18;
+const HEADER_SIZE = 12;
+const BODY_SIZE = 12;
+const SMALL_SIZE = 10;
+
+const TITLE_LINE_HEIGHT = TITLE_SIZE * 2.0;
+const HEADER_LINE_HEIGHT = HEADER_SIZE * 1.6;
+const BODY_LINE_HEIGHT = BODY_SIZE * 1.6;
+const SMALL_LINE_HEIGHT = SMALL_SIZE * 1.5;
+
+/* ──────────────────── Low-level drawing helpers ───────────────────── */
+
+interface DrawContext {
+	doc: Awaited<ReturnType<typeof PDFDocument.create>>;
+	font: PDFFont;
+	boldFont: PDFFont;
+	y: number;
+	pageNum: number;
+}
+
+function ensureSpace(ctx: DrawContext, needed: number): void {
+	if (ctx.y < MARGIN + needed) {
+		ctx.doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+		ctx.y = PAGE_HEIGHT - MARGIN;
+		ctx.pageNum++;
+	}
+}
+
+function currentPage(ctx: DrawContext) {
+	const pages = ctx.doc.getPages();
+	return pages[pages.length - 1];
+}
+
+function drawRtlLine(
+	ctx: DrawContext,
+	text: string,
+	font: PDFFont,
+	size: number,
+	color = rgb(0, 0, 0),
+): void {
+	const page = currentPage(ctx);
+	const textWidth = font.widthOfTextAtSize(text, size);
+	const x = PAGE_WIDTH - MARGIN - textWidth;
+	page.drawText(text, {
+		x: Math.max(MARGIN, x),
+		y: ctx.y,
+		size,
+		font,
+		color,
+	});
+}
+
+function drawRtlWrapped(
+	ctx: DrawContext,
+	text: string,
+	font: PDFFont,
+	size: number,
+	lineHeight: number,
+	color = rgb(0, 0, 0),
+): void {
+	const lines = wrapText(text, font, size, MAX_WIDTH);
+	for (const line of lines) {
+		ensureSpace(ctx, lineHeight);
+		drawRtlLine(ctx, line, font, size, color);
+		ctx.y -= lineHeight;
+	}
+}
+
+/* ──────────────────── Separator line ───────────────────────────────── */
+
+function drawSeparator(ctx: DrawContext): void {
+	ensureSpace(ctx, 10);
+	const page = currentPage(ctx);
+	page.drawLine({
+		start: { x: PAGE_WIDTH - MARGIN, y: ctx.y },
+		end: { x: MARGIN, y: ctx.y },
+		thickness: 0.5,
+		color: rgb(0.7, 0.7, 0.7),
+	});
+	ctx.y -= 10;
+}
+
+/* ─────────────────────── Main PDF builder ──────────────────────────── */
+
+/**
+ * Build PDF bytes for the given perek IDs.
+ * Each perek starts on a new page with title, header, pesukim,
+ * and appended perushim/articles section.
+ */
 export async function buildTanachPdfForPerekRange(
 	perekIds: number[],
 ): Promise<Uint8Array> {
 	const doc = await PDFDocument.create();
 
-	// Register fontkit so pdf-lib can embed OpenType/TrueType fonts
 	doc.registerFontkit(fontkit);
 
-	const fontBytes = getHebrewFontBytes();
-	const font = await doc.embedFont(fontBytes, { subset: true });
+	const regularBytes = getRegularFontBytes();
+	const boldBytes = getBoldFontBytes();
+	const font = await doc.embedFont(regularBytes, { subset: true });
+	const boldFont = await doc.embedFont(boldBytes, { subset: true });
 
-	const fontSize = 12;
-	const titleSize = 16;
-	const lineHeight = fontSize * 1.6;
-	const titleLineHeight = titleSize * 1.8;
-	const margin = 50;
-	const pageWidth = 595;
-	const pageHeight = 842;
-	const maxWidth = pageWidth - 2 * margin;
-	doc.addPage([pageWidth, pageHeight]);
-	let y = pageHeight - margin;
+	const ctx: DrawContext = { doc, font, boldFont, y: 0, pageNum: 0 };
 
-	for (const perekId of perekIds) {
+	for (let i = 0; i < perekIds.length; i++) {
+		const perekId = perekIds[i];
+
+		// ── New page for each perek ──
+		doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+		ctx.y = PAGE_HEIGHT - MARGIN;
+		ctx.pageNum++;
+
 		const perek = getPerekByPerekId(perekId);
 		const title = `${perek.sefer} ${perek.perekHeb}`;
-		const header = perek.header;
 
-		// ── Title ──
-		{
-			if (y < margin + titleLineHeight * 3) {
-				doc.addPage([pageWidth, pageHeight]);
-				y = pageHeight - margin;
-			}
-			const titleWidth = font.widthOfTextAtSize(title, titleSize);
-			const titleX = pageWidth - margin - titleWidth; // RTL: right-align
-			const pages = doc.getPages();
-			const page = pages[pages.length - 1];
-			page.drawText(title, {
-				x: Math.max(margin, titleX),
-				y,
-				size: titleSize,
-				font,
-				color: rgb(0, 0, 0),
-			});
-			y -= titleLineHeight;
+		// ── Title (bold, large) ──
+		drawRtlLine(ctx, title, boldFont, TITLE_SIZE);
+		ctx.y -= TITLE_LINE_HEIGHT;
 
-			if (header) {
-				const hdrWidth = font.widthOfTextAtSize(header, fontSize);
-				const hdrX = pageWidth - margin - hdrWidth;
-				page.drawText(header, {
-					x: Math.max(margin, hdrX),
-					y,
-					size: fontSize,
-					font,
-					color: rgb(0.3, 0.3, 0.3),
-				});
-				y -= lineHeight;
-			}
-			y -= lineHeight * 0.5; // spacing after header
+		// ── Header (subtitle) ──
+		if (perek.header) {
+			drawRtlLine(ctx, perek.header, font, HEADER_SIZE, rgb(0.3, 0.3, 0.3));
+			ctx.y -= HEADER_LINE_HEIGHT;
 		}
+
+		ctx.y -= BODY_LINE_HEIGHT * 0.5; // spacing
 
 		// ── Pesukim ──
 		for (const pasuk of perek.pesukim) {
 			const text = segmentsToText(pasuk.segments);
 			if (!text) continue;
-			const wrapped = wrapText(text, font, fontSize, maxWidth);
-			for (const line of wrapped) {
-				if (y < margin + lineHeight) {
-					doc.addPage([pageWidth, pageHeight]);
-					y = pageHeight - margin;
-				}
-				const pages = doc.getPages();
-				const page = pages[pages.length - 1];
-				const lineWidth = font.widthOfTextAtSize(line, fontSize);
-				const lineX = pageWidth - margin - lineWidth; // RTL: right-align
-				page.drawText(line, {
-					x: Math.max(margin, lineX),
-					y,
-					size: fontSize,
-					font,
-					color: rgb(0, 0, 0),
-				});
-				y -= lineHeight;
-			}
+			drawRtlWrapped(ctx, text, font, BODY_SIZE, BODY_LINE_HEIGHT);
+			ctx.y -= 2; // tiny inter-pasuk gap
 		}
-		y -= lineHeight; // spacing between perakim
+
+		// ── Perushim section ──
+		try {
+			const perushim = await getPerushimByPerekId(perekId);
+			if (perushim.length > 0) {
+				ctx.y -= BODY_LINE_HEIGHT;
+				drawSeparator(ctx);
+
+				ensureSpace(ctx, HEADER_LINE_HEIGHT);
+				drawRtlLine(
+					ctx,
+					"פירושים זמינים",
+					boldFont,
+					HEADER_SIZE,
+					rgb(0.15, 0.15, 0.5),
+				);
+				ctx.y -= HEADER_LINE_HEIGHT;
+
+				for (const p of perushim) {
+					ensureSpace(ctx, SMALL_LINE_HEIGHT);
+					const label = `• ${p.name} (${p.parshanName}) — ${p.noteCount} הערות`;
+					drawRtlLine(
+						ctx,
+						label,
+						font,
+						SMALL_SIZE,
+						rgb(0.2, 0.2, 0.2),
+					);
+					ctx.y -= SMALL_LINE_HEIGHT;
+				}
+			}
+		} catch {
+			// Perushim are optional; silently skip on DB error
+		}
+
+		// ── Articles section ──
+		try {
+			const articles = await getArticlesByPerekId(perekId);
+			if (articles.length > 0) {
+				ctx.y -= BODY_LINE_HEIGHT * 0.5;
+				drawSeparator(ctx);
+
+				ensureSpace(ctx, HEADER_LINE_HEIGHT);
+				drawRtlLine(
+					ctx,
+					"מאמרים",
+					boldFont,
+					HEADER_SIZE,
+					rgb(0.15, 0.5, 0.15),
+				);
+				ctx.y -= HEADER_LINE_HEIGHT;
+
+				for (const article of articles) {
+					ensureSpace(ctx, SMALL_LINE_HEIGHT * 2);
+					const titleLine = `• ${article.name}`;
+					drawRtlLine(
+						ctx,
+						titleLine,
+						boldFont,
+						SMALL_SIZE,
+						rgb(0.1, 0.1, 0.1),
+					);
+					ctx.y -= SMALL_LINE_HEIGHT;
+
+					const byLine = `מאת: ${article.authorName}`;
+					drawRtlLine(
+						ctx,
+						byLine,
+						font,
+						SMALL_SIZE,
+						rgb(0.3, 0.3, 0.3),
+					);
+					ctx.y -= SMALL_LINE_HEIGHT;
+
+					if (article.abstract) {
+						const plain = stripHtml(article.abstract);
+						if (plain) {
+							drawRtlWrapped(
+								ctx,
+								plain,
+								font,
+								SMALL_SIZE,
+								SMALL_LINE_HEIGHT,
+								rgb(0.25, 0.25, 0.25),
+							);
+						}
+					}
+					ctx.y -= 4; // gap between articles
+				}
+			}
+		} catch {
+			// Articles are optional; silently skip on DB error
+		}
+	}
+
+	// ── Page numbers ──
+	const allPages = doc.getPages();
+	for (let i = 0; i < allPages.length; i++) {
+		const page = allPages[i];
+		const num = `${i + 1}`;
+		const numWidth = font.widthOfTextAtSize(num, 9);
+		page.drawText(num, {
+			x: (PAGE_WIDTH - numWidth) / 2,
+			y: 25,
+			size: 9,
+			font,
+			color: rgb(0.5, 0.5, 0.5),
+		});
 	}
 
 	return doc.save();
 }
 
 /**
- * Map flipbook page indices to perek IDs for a sefer.
- * Assumes layout: page 0 = cover, 1 = perek 1, 2 = blank, 3 = perek 2, ...
- */
-function pageIndicesToPerekIds(
-	pageIndices: number[],
-	seferName: string,
-): number[] {
-	const sefer = getSeferByName(seferName);
-	const perekIds = getPerekIdsForSefer(sefer);
-	const result: number[] = [];
-	for (const p of pageIndices) {
-		if (p <= 0 || p % 2 === 0) continue; // cover or blank
-		const perekIdx = (p - 1) / 2;
-		const id = perekIds[perekIdx];
-		if (perekIdx >= 0 && id !== undefined) {
-			result.push(id);
-		}
-	}
-	return result;
-}
-
-/**
- * Create a page-ranges download handler that produces a Tanach PDF for the selected pages.
- * Requires context.seferName to resolve page indices to perakim.
+ * Create a page-ranges download handler that produces a Tanach PDF.
+ * Uses semanticPages to map page indices → perek IDs via Hebrew gematria.
  */
 export function createTanachPageRangesHandler(): (
 	pages: number[],
-	_semanticPages: { pageIndex: number }[],
+	semanticPages: SemanticPageInfo[],
 	context?: { seferName?: string },
 ) => Promise<[ext: string, bin: Uint8Array]> {
-	return async (pages, _semanticPages, context) => {
+	return async (_pages, semanticPages, context) => {
 		const seferName = context?.seferName;
 		if (!seferName) {
 			throw new Error("Tanach PDF requires context.seferName");
 		}
-		const perekIds = pageIndicesToPerekIds(pages, seferName);
+
+		const perekIds = semanticPagesToPerekIds(semanticPages, seferName);
 		if (perekIds.length === 0) {
 			throw new Error("No content pages in selected range");
 		}
+
 		const bin = await buildTanachPdfForPerekRange(perekIds);
 		return ["pdf", bin];
 	};
