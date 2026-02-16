@@ -106,11 +106,11 @@ partial class PadDeliveryService
 
             var activity = Platform.CurrentActivity;
             if (activity != null)
-                manager.RegisterListener(listener.Listener);
+                manager.RegisterListener(listener.Listener!);
 
             try
             {
-                await manager.Fetch(new[] { packName }).AsAsync<Java.Lang.Object>();
+                await manager.Fetch(new[] { packName }).AsAsync<Java.Lang.Object>()!;
                 cancellationToken.ThrowIfCancellationRequested();
 
                 // In local-testing mode (bundletool --local-testing), the
@@ -130,7 +130,7 @@ partial class PadDeliveryService
             finally
             {
                 if (activity != null)
-                    manager.UnregisterListener(listener.Listener);
+                    manager.UnregisterListener(listener.Listener!);
             }
         }
         catch (Exception ex)
