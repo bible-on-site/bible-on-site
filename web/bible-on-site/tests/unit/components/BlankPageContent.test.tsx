@@ -260,4 +260,102 @@ describe("BlankPageContent", () => {
 			expect(screen.getByText("פרשנים על הפרק")).toBeTruthy();
 		});
 	});
+
+	describe("initialSlug", () => {
+		it("auto-expands article when initialSlug is numeric (article ID)", async () => {
+			const fullArticle: Article = {
+				...mockArticles[0],
+				content: "<div>תוכן אוטומטי</div>",
+			};
+			mockGetArticleForBook.mockResolvedValue(fullArticle);
+
+			await act(async () => {
+				render(
+					<BlankPageContent
+						articles={mockArticles}
+						hebrewDateStr="י׳ בשבט"
+						initialSlug="1"
+					/>,
+				);
+			});
+
+			await waitFor(() => {
+				expect(mockGetArticleForBook).toHaveBeenCalledWith(1);
+				expect(screen.getByText("חזרה למאמרים →")).toBeTruthy();
+			});
+		});
+
+		it("auto-expands perush when initialSlug is a perush name", async () => {
+			mockGetPerushNotesForPage.mockResolvedValue([
+				{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש אוטומטי</p>" },
+			]);
+
+			await act(async () => {
+				render(
+					<BlankPageContent
+						articles={[]}
+						perushim={mockPerushim}
+						perekId={1}
+						hebrewDateStr="י׳ בשבט"
+						initialSlug="רש״י"
+					/>,
+				);
+			});
+
+			await waitFor(() => {
+				expect(mockGetPerushNotesForPage).toHaveBeenCalledWith(1, 1);
+				expect(screen.getByText("חזרה לפרשנים ←")).toBeTruthy();
+			});
+		});
+
+		it("does nothing when initialSlug matches no article or perush", async () => {
+			render(
+				<BlankPageContent
+					articles={mockArticles}
+					perushim={mockPerushim}
+					perekId={1}
+					hebrewDateStr="י׳ בשבט"
+					initialSlug="999"
+				/>,
+			);
+
+			// Should still show carousels (no auto-expand)
+			expect(screen.getByText("הרב ישראל")).toBeTruthy();
+			expect(mockGetArticleForBook).not.toHaveBeenCalled();
+		});
+
+		it("does not re-trigger on re-render", async () => {
+			const fullArticle: Article = {
+				...mockArticles[0],
+				content: "<div>content</div>",
+			};
+			mockGetArticleForBook.mockResolvedValue(fullArticle);
+
+			const { rerender } = render(
+				<BlankPageContent
+					articles={mockArticles}
+					hebrewDateStr="י׳ בשבט"
+					initialSlug="1"
+				/>,
+			);
+
+			await waitFor(() => {
+				expect(mockGetArticleForBook).toHaveBeenCalledTimes(1);
+			});
+
+			// Re-render with same props
+			await act(async () => {
+				rerender(
+					<BlankPageContent
+						articles={mockArticles}
+						hebrewDateStr="י׳ בשבט"
+						initialSlug="1"
+					/>,
+				);
+			});
+
+			// Should not have been called again
+			expect(mockGetArticleForBook).toHaveBeenCalledTimes(1);
+		});
+	});
 });

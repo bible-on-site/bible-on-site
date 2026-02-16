@@ -28,6 +28,8 @@ const ClientWrapper = (props: {
 	articlesByPerekIndex?: Article[][];
 	perushimByPerekIndex?: PerushSummary[][];
 	perekIds?: number[];
+	/** When set, the book view will auto-expand this article/perush on the current perek page */
+	initialSlug?: string;
 }) => {
 	const isWideEnough = useIsWideEnough(TABLET_MIN_WIDTH);
 
@@ -104,15 +106,16 @@ const ClientWrapper = (props: {
 					currentlyToggled ? styles.visible : styles.hidden
 				}`}
 			>
-				{everToggled && (
-					<Sefer
-						perekObj={props.perekObj}
-						articles={props.articles}
-						articlesByPerekIndex={props.articlesByPerekIndex}
-						perushimByPerekIndex={props.perushimByPerekIndex}
-						perekIds={props.perekIds}
-					/>
-				)}
+			{everToggled && (
+				<Sefer
+					perekObj={props.perekObj}
+					articles={props.articles}
+					articlesByPerekIndex={props.articlesByPerekIndex}
+					perushimByPerekIndex={props.perushimByPerekIndex}
+					perekIds={props.perekIds}
+					initialSlug={props.initialSlug}
+				/>
+			)}
 			</div>
 		</>
 	);
