@@ -1,9 +1,22 @@
+jest.mock("node:fs", () => ({
+	readFileSync: jest.fn().mockReturnValue(new Uint8Array([0, 1, 2, 3])),
+}));
+
+jest.mock("@pdf-lib/fontkit", () => ({
+	create: jest.fn(),
+}));
+
 jest.mock("pdf-lib", () => {
 	const drawText = jest.fn();
 	const mockPage = { drawText };
 	const pages: (typeof mockPage)[] = [];
+	const mockFont = {
+		name: "Heebo",
+		widthOfTextAtSize: jest.fn().mockReturnValue(50),
+	};
 	const mockDoc = {
-		embedFont: jest.fn().mockResolvedValue({ name: "Helvetica" }),
+		registerFontkit: jest.fn(),
+		embedFont: jest.fn().mockResolvedValue(mockFont),
 		addPage: jest.fn(() => {
 			const p = { drawText: jest.fn() };
 			pages.push(p);
@@ -17,9 +30,9 @@ jest.mock("pdf-lib", () => {
 			create: jest.fn().mockResolvedValue(mockDoc),
 		},
 		rgb: jest.fn().mockReturnValue({ r: 0, g: 0, b: 0 }),
-		StandardFonts: { Helvetica: "Helvetica" },
 		__mockDoc: mockDoc,
 		__mockPages: pages,
+		__mockFont: mockFont,
 	};
 });
 
@@ -93,12 +106,51 @@ describe("buildTanachPdfForPerekRange", () => {
 		expect(pdfLib.__mockDoc.addPage).toHaveBeenCalled();
 	});
 
+	it("registers fontkit and embeds a custom font (not StandardFonts)", async () => {
+		mockGetPerekByPerekId.mockReturnValue(
+			makePerek("בראשית", "א", "פרק א", ["בראשית ברא"]) as ReturnType<
+				typeof getPerekByPerekId
+			>,
+		);
+
+		await buildTanachPdfForPerekRange([1]);
+
+		expect(pdfLib.__mockDoc.registerFontkit).toHaveBeenCalled();
+		expect(pdfLib.__mockDoc.embedFont).toHaveBeenCalledWith(
+			expect.any(Uint8Array),
+			{ subset: true },
+		);
+	});
+
+	it("right-aligns text for RTL layout", async () => {
+		mockGetPerekByPerekId.mockReturnValue(
+			makePerek("בראשית", "א", "פרק א", ["בראשית ברא"]) as ReturnType<
+				typeof getPerekByPerekId
+			>,
+		);
+
+		await buildTanachPdfForPerekRange([1]);
+
+		const pages = pdfLib.__mockPages;
+		expect(pages.length).toBeGreaterThan(0);
+		const page = pages[0];
+		// drawText should be called with x > margin (right-aligned)
+		const calls = page.drawText.mock.calls;
+		expect(calls.length).toBeGreaterThan(0);
+		// All x positions should place text toward the right side of the page
+		for (const call of calls) {
+			const opts = call[1];
+			// x should be >= margin (50)
+			expect(opts.x).toBeGreaterThanOrEqual(50);
+		}
+	});
+
 	it("handles page overflow by adding new pages", async () => {
 		// Create a perek with many pasukim to trigger page overflow.
-		// pageHeight=842, margin=50, lineHeight=11*1.4=15.4
-		// Available lines per page ~ (842 - 2*50) / 15.4 ~ 48 lines
-		// With header + empty line + 50 pasukim we should exceed one page.
-		const manyPasukim = Array.from({ length: 55 }, (_, i) => `פסוק ${i + 1}`);
+		// pageHeight=842, margin=50, lineHeight=12*1.6=19.2
+		// Available lines per page ~ (842 - 2*50) / 19.2 ~ 38 lines
+		// With title + header + 45 pasukim we should exceed one page.
+		const manyPasukim = Array.from({ length: 45 }, (_, i) => `פסוק ${i + 1}`);
 		mockGetPerekByPerekId.mockReturnValue(
 			makePerek("בראשית", "א", "פרק א", manyPasukim) as ReturnType<
 				typeof getPerekByPerekId
@@ -109,6 +161,17 @@ describe("buildTanachPdfForPerekRange", () => {
 
 		// Initial page + at least one overflow page
 		expect(pdfLib.__mockDoc.addPage.mock.calls.length).toBeGreaterThan(1);
+	});
+
+	it("handles perek with empty header gracefully", async () => {
+		mockGetPerekByPerekId.mockReturnValue(
+			makePerek("בראשית", "א", "", ["בראשית ברא"]) as ReturnType<
+				typeof getPerekByPerekId
+			>,
+		);
+
+		const result = await buildTanachPdfForPerekRange([1]);
+		expect(result).toBeInstanceOf(Uint8Array);
 	});
 });
 
