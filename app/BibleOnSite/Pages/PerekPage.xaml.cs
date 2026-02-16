@@ -346,7 +346,7 @@ public partial class PerekPage : ContentPage
         // CollectionView and (b) with e.Handled=true on Down the MAUI gesture also
         // fires after a long-press release, immediately undoing the selection.
         return;
-#endif
+#else
         // Cancel any pending long-press timers
         LongPressBehavior.CancelAllPending();
 
@@ -363,6 +363,7 @@ public partial class PerekPage : ContentPage
                 UpdatePasukSelection(sender, pasukNum);
             }
         }
+#endif
     }
 
     /// <summary>

@@ -26,7 +26,9 @@
 		<!-- Treat C# compiler warnings as errors so iOS/Android-only issues are caught early -->
 		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 		<!-- Suppress XamlC warnings: XC0022 bindings without x:DataType; XC0045 Path in MultiBinding with Source=page validated against template DataType (Article) -->
-		<NoWarn>$(NoWarn);XC0022;XC0045</NoWarn>
+		<!-- Suppress MVVMTK0045: [ObservableProperty] field-based code gen is not WinRT AOT-compatible;
+		     migration to partial properties requires CommunityToolkit.Mvvm 9.x — tracked separately -->
+		<NoWarn>$(NoWarn);XC0022;XC0045;MVVMTK0045</NoWarn>
 
 		<!-- Enable compiled bindings with Source property -->
 		<MauiEnableXamlCBindingWithSourceCompilation>true</MauiEnableXamlCBindingWithSourceCompilation>
