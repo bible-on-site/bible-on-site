@@ -14,11 +14,13 @@ public class LongPressBehavior : Behavior<View>
     private View? _associatedView;
     private System.Timers.Timer? _longPressTimer;
     private bool _isPressed;
+#if ANDROID
     private bool _longPressFired;
     // Tracks whether a finger is actively down.  Unlike _isPressed (which
     // is cleared by CancelLongPressTimer during scroll), this is only
     // cleared on Up/Cancel so we can detect taps even after scroll-cancel.
     private bool _touchActive;
+#endif
 
     // Static list of all active behaviors for global cancellation
     private static readonly List<LongPressBehavior> _activeBehaviors = new();
@@ -71,8 +73,11 @@ public class LongPressBehavior : Behavior<View>
     /// Raised on Android when a short tap (Down → Up without long-press) is detected
     /// via native touch events. Use instead of TapGestureRecognizer inside nested
     /// CarouselView/CollectionView templates where MAUI gestures silently fail.
+    /// Kept public on all platforms for XAML binding compatibility; only raised on Android.
     /// </summary>
+#pragma warning disable CS0067 // Event is never used (raised only on Android via native touch)
     public event EventHandler<EventArgs>? NativeTapped;
+#pragma warning restore CS0067
 
     /// <summary>
     /// Gets the view this behavior is attached to.
@@ -198,7 +203,9 @@ public class LongPressBehavior : Behavior<View>
     private void StartLongPressTimer()
     {
         _isPressed = true;
+#if ANDROID
         _longPressFired = false;
+#endif
         CleanupTimer();
 
         _longPressTimer = new System.Timers.Timer(LongPressDuration);
@@ -222,7 +229,9 @@ public class LongPressBehavior : Behavior<View>
         if (Pages.PerekPage.IsScrolling)
             return;
 
+#if ANDROID
         _longPressFired = true;
+#endif
 
         MainThread.BeginInvokeOnMainThread(() =>
         {

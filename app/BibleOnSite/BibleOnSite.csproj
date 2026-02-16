@@ -23,6 +23,8 @@
 		<!-- Define MAUI symbol for conditional compilation -->
 		<DefineConstants>$(DefineConstants);MAUI</DefineConstants>
 
+		<!-- Treat C# compiler warnings as errors so iOS/Android-only issues are caught early -->
+		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 		<!-- Suppress XamlC warnings: XC0022 bindings without x:DataType; XC0045 Path in MultiBinding with Source=page validated against template DataType (Article) -->
 		<NoWarn>$(NoWarn);XC0022;XC0045</NoWarn>
 
@@ -136,6 +138,10 @@
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.11" />
 		<PackageReference Include="sqlite-net-pcl" Version="1.9.172" />
 		<PackageReference Include="SQLitePCLRaw.bundle_green" Version="2.1.11" />
+	</ItemGroup>
+
+	<!-- Plugin.Firebase supports iOS and Android only (not MacCatalyst or Windows) -->
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<PackageReference Include="Plugin.Firebase.Analytics" Version="4.0.0" />
 		<PackageReference Include="Plugin.Firebase.Core" Version="4.0.0" />
 	</ItemGroup>
