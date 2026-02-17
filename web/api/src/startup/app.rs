@@ -9,8 +9,9 @@ use std::{
 
 use actix_web::guard;
 use actix_web::middleware::Compress;
-use actix_web::{App, HttpServer, dev::Server, web};
+use actix_web::{App, HttpResponse, HttpServer, dev::Server, web};
 use anyhow::Error;
+use serde::Serialize;
 use tracing_actix_web::TracingLogger;
 
 use crate::providers::Database;
@@ -91,6 +92,11 @@ impl ActixApp {
                     web::resource("/")
                         .guard(guard::Get())
                         .to(graphql_playground),
+                )
+                .service(
+                    web::resource("/health")
+                        .guard(guard::Get())
+                        .to(health_check),
                 );
 
             if env::var("PROFILE").unwrap_or_default() != "prod" {
@@ -111,4 +117,19 @@ impl ActixApp {
             }
         }
     }
+}
+
+#[derive(Serialize)]
+struct HealthResponse {
+    status: &'static str,
+    version: &'static str,
+}
+
+/// GET /health — returns API status and version (embedded at compile time).
+/// Used by ECS health checks and for version introspection.
+async fn health_check() -> HttpResponse {
+    HttpResponse::Ok().json(HealthResponse {
+        status: "ok",
+        version: env!("CARGO_PKG_VERSION"),
+    })
 }

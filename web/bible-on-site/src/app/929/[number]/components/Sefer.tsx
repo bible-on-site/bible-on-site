@@ -36,6 +36,7 @@ import { BlankPageContent } from "./BlankPageContent";
 import { Ptuah } from "./Ptuha";
 import { Stuma } from "./Stuma";
 import styles from "./sefer.module.css";
+import "html-flip-book-react/styles.css";
 import "./sefer.css";
 
 /**

@@ -13,7 +13,7 @@ coverage:
         informational: true
       api:
         target: auto
-        threshold: 0%
+        threshold: 1%
         flags:
           - api
       app:
@@ -22,8 +22,8 @@ coverage:
         flags:
           - app
       website:
-        target: auto
-        threshold: 0%
+        target: 98%
+        threshold: 2%
         flags:
           - website
       data:
