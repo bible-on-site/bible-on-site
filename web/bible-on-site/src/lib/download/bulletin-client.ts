@@ -6,24 +6,20 @@
  *
  * The binary reads JSON from stdin and writes PDF bytes to stdout.
  * Each invocation is independent — no persistent server.
+ *
+ * Request is just perek IDs — the Lambda resolves all data
+ * (text, headers, sefer name) from its embedded Tanach data.
  */
 
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
-import { getPerekByPerekId } from "@/data/perek-dto";
 import type { SemanticPageInfo } from "./types";
-import { semanticPagesToPerekIds, segmentsToText, stripTaamim } from "./tanach-pdf";
+import { semanticPagesToPerekIds } from "./tanach-pdf";
 
 /** Shape expected by the bulletin service. */
 interface BulletinRequest {
-	seferName: string;
-	perakim: {
-		perekId: number;
-		perekHeb: string;
-		header: string;
-		pesukim: string[];
-	}[];
+	perakimIds: number[];
 	includePerushim: boolean;
 	includeArticles: boolean;
 	articleIds: number[];
@@ -94,25 +90,9 @@ function invokeBulletinBinary(request: BulletinRequest): Uint8Array {
  * Generate a PDF for the given perek IDs.
  * Returns raw PDF bytes.
  */
-export function generatePdfViaBulletin(
-	perekIds: number[],
-	seferName: string,
-): Uint8Array {
-	const perakim = perekIds.map((id) => {
-		const perek = getPerekByPerekId(id);
-		return {
-			perekId: id,
-			perekHeb: perek.perekHeb,
-			header: perek.header ?? "",
-			pesukim: perek.pesukim.map((p) =>
-				stripTaamim(segmentsToText(p.segments)),
-			),
-		};
-	});
-
+export function generatePdfViaBulletin(perekIds: number[]): Uint8Array {
 	const request: BulletinRequest = {
-		seferName,
-		perakim,
+		perakimIds: perekIds,
 		includePerushim: false,
 		includeArticles: true,
 		articleIds: [],
@@ -142,7 +122,7 @@ export function createBulletinPageRangesHandler(): (
 			throw new Error("No content pages in selected range");
 		}
 
-		const bin = generatePdfViaBulletin(perekIds, seferName);
+		const bin = generatePdfViaBulletin(perekIds);
 		return ["pdf", bin];
 	};
 }

@@ -2,7 +2,7 @@
  * Integration tests for the bulletin PDF service client.
  *
  * Tests validate:
- * - Request payload construction (perek data, sefer name)
+ * - Request payload construction (just perek IDs — no text data)
  * - Binary invocation via subprocess (mocked execFileSync)
  * - Error handling (binary not found, crash, empty output)
  * - Handler factory pattern
@@ -19,48 +19,24 @@ jest.mock("node:fs", () => ({
 	readFileSync: jest.fn().mockReturnValue(new Uint8Array([0, 1, 2, 3])),
 }));
 
-// Mock data access module
-jest.mock("@/data/perek-dto", () => ({
-	getPerekByPerekId: jest.fn((id: number) => ({
-		perekId: id,
-		perekHeb: id === 1 ? "א" : id === 2 ? "ב" : "ג",
-		header: id === 1 ? "בריאת העולם" : "",
-		pesukim: [
-			{
-				segments: [
-					{ t: "בראשית ברא אלהים" },
-					{ t: "את השמים ואת הארץ" },
-				],
-			},
-			{
-				segments: [{ t: "ויאמר אלהים יהי אור" }],
-			},
-		],
-	})),
-}));
-
 // Mock tanach-pdf utility functions
 jest.mock("@/lib/download/tanach-pdf", () => ({
 	semanticPagesToPerekIds: jest.fn(
 		(semanticPages: Array<{ title: string }>, _seferName: string) =>
 			semanticPages.map((_sp, i) => i + 1),
 	),
-	segmentsToText: jest.fn(
-		(segments: Array<{ t: string }>) =>
-			segments.map((s) => s.t).join(" "),
-	),
-	stripTaamim: jest.fn((text: string) => text),
 }));
 
 import {
 	generatePdfViaBulletin,
 	createBulletinPageRangesHandler,
 } from "@/lib/download/bulletin-client";
-import { getPerekByPerekId } from "@/data/perek-dto";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 
-const mockExecFileSync = execFileSync as jest.MockedFunction<typeof execFileSync>;
+const mockExecFileSync = execFileSync as jest.MockedFunction<
+	typeof execFileSync
+>;
 const mockExistsSync = existsSync as jest.MockedFunction<typeof existsSync>;
 
 // PDF header bytes (%PDF-)
@@ -76,41 +52,40 @@ describe("bulletin-client", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		// Default: binary exists at debug path
-		mockExistsSync.mockImplementation((path: string) =>
-			path.includes("target/debug/bulletin") ||
-			path.includes("target\\debug\\bulletin"),
+		mockExistsSync.mockImplementation(
+			(path: string) =>
+				path.includes("target/debug/bulletin") ||
+				path.includes("target\\debug\\bulletin"),
 		);
 	});
 
 	describe("generatePdfViaBulletin", () => {
-		it("spawns the binary with correct JSON on stdin", () => {
+		it("sends just perek IDs on stdin — no text data", () => {
 			const fakePdf = makeFakePdf();
 			mockExecFileSync.mockReturnValue(fakePdf);
 
-			generatePdfViaBulletin([1], "בראשית");
+			generatePdfViaBulletin([1, 2, 3]);
 
 			expect(mockExecFileSync).toHaveBeenCalledTimes(1);
 			const [_binary, _args, opts] = mockExecFileSync.mock.calls[0];
 
-			// Verify JSON payload sent via stdin
+			// Verify JSON payload is IDs-only
 			const body = JSON.parse(opts.input);
-			expect(body.seferName).toBe("בראשית");
-			expect(body.perakim).toHaveLength(1);
-			expect(body.perakim[0].perekId).toBe(1);
-			expect(body.perakim[0].perekHeb).toBe("א");
-			expect(body.perakim[0].header).toBe("בריאת העולם");
-			expect(body.perakim[0].pesukim).toBeInstanceOf(Array);
-			expect(body.perakim[0].pesukim.length).toBeGreaterThan(0);
+			expect(body.perakimIds).toEqual([1, 2, 3]);
 			expect(body.includeArticles).toBe(true);
 			expect(body.articleIds).toEqual([]);
 			expect(body.authorIds).toEqual([]);
+			// Should NOT contain any text fields
+			expect(body.pesukim).toBeUndefined();
+			expect(body.perakim).toBeUndefined();
+			expect(body.seferName).toBeUndefined();
 		});
 
 		it("returns PDF bytes on success", () => {
 			const fakePdf = makeFakePdf(4096);
 			mockExecFileSync.mockReturnValue(fakePdf);
 
-			const result = generatePdfViaBulletin([1, 2], "בראשית");
+			const result = generatePdfViaBulletin([1, 2]);
 
 			expect(result).toBeInstanceOf(Uint8Array);
 			expect(result.length).toBe(4096);
@@ -123,9 +98,9 @@ describe("bulletin-client", () => {
 		it("throws when binary is not found", () => {
 			mockExistsSync.mockReturnValue(false);
 
-			expect(() =>
-				generatePdfViaBulletin([1], "בראשית"),
-			).toThrow(/Bulletin binary not found/);
+			expect(() => generatePdfViaBulletin([1])).toThrow(
+				/Bulletin binary not found/,
+			);
 		});
 
 		it("throws when binary crashes", () => {
@@ -133,47 +108,29 @@ describe("bulletin-client", () => {
 				throw new Error("Command failed: exit code 1");
 			});
 
-			expect(() =>
-				generatePdfViaBulletin([1], "בראשית"),
-			).toThrow(/Command failed/);
+			expect(() => generatePdfViaBulletin([1])).toThrow(/Command failed/);
 		});
 
 		it("throws when binary returns too few bytes", () => {
 			mockExecFileSync.mockReturnValue(Buffer.from([0, 1]));
 
-			expect(() =>
-				generatePdfViaBulletin([1], "בראשית"),
-			).toThrow(/expected a PDF/);
+			expect(() => generatePdfViaBulletin([1])).toThrow(/expected a PDF/);
 		});
 
-		it("fetches perek data from bundled JSON for each perekId", () => {
+		it("sends multiple perak IDs in a single invocation", () => {
 			mockExecFileSync.mockReturnValue(makeFakePdf());
 
-			generatePdfViaBulletin([1, 2, 3], "שמות");
-
-			expect(getPerekByPerekId).toHaveBeenCalledTimes(3);
-			expect(getPerekByPerekId).toHaveBeenCalledWith(1);
-			expect(getPerekByPerekId).toHaveBeenCalledWith(2);
-			expect(getPerekByPerekId).toHaveBeenCalledWith(3);
-		});
-
-		it("sends multiple perakim in a single invocation", () => {
-			mockExecFileSync.mockReturnValue(makeFakePdf());
-
-			generatePdfViaBulletin([1, 2, 3], "במדבר");
+			generatePdfViaBulletin([100, 200, 300]);
 
 			const [_binary, _args, opts] = mockExecFileSync.mock.calls[0];
 			const body = JSON.parse(opts.input);
-			expect(body.perakim).toHaveLength(3);
-			expect(body.perakim[0].perekId).toBe(1);
-			expect(body.perakim[1].perekId).toBe(2);
-			expect(body.perakim[2].perekId).toBe(3);
+			expect(body.perakimIds).toEqual([100, 200, 300]);
 		});
 
 		it("sets a 30s timeout on the subprocess", () => {
 			mockExecFileSync.mockReturnValue(makeFakePdf());
 
-			generatePdfViaBulletin([1], "בראשית");
+			generatePdfViaBulletin([1]);
 
 			const [_binary, _args, opts] = mockExecFileSync.mock.calls[0];
 			expect(opts.timeout).toBe(30_000);

@@ -7,14 +7,42 @@ use std::path::PathBuf;
 
 use bulletin::pdf;
 
+use bulletin::tanach;
+
 use crate::db::Database;
 use crate::models::GeneratePdfRequest;
 use crate::services;
 
 // ──────────────────── Shared core logic ────────────────────────
 
-/// Core PDF generation: parse request → fetch articles → build PDF → return bytes.
+/// Core PDF generation: resolve perek data → fetch articles → build PDF → return bytes.
 async fn generate_pdf_core(req: GeneratePdfRequest) -> Result<(Vec<u8>, String), String> {
+    if req.perakim_ids.is_empty() {
+        return Err("perakimIds must not be empty".into());
+    }
+
+    // Resolve perek data from embedded Tanach text
+    let perakim: Vec<pdf::PdfPerekInput> = req
+        .perakim_ids
+        .iter()
+        .map(|&id| {
+            let data = tanach::get_perek(id)
+                .ok_or_else(|| format!("Unknown perekId: {}", id))?;
+            Ok(pdf::PdfPerekInput {
+                perek_heb: tanach::perek_to_hebrew(data.perek_in_sefer),
+                header: data.header.clone(),
+                pesukim: data.pesukim.clone(),
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    // Derive sefer name from request or first perek's embedded data
+    let sefer_name = req.sefer_name.clone().unwrap_or_else(|| {
+        tanach::get_perek(req.perakim_ids[0])
+            .map(|d| d.sefer_name.clone())
+            .unwrap_or_default()
+    });
+
     // Only connect to DB if we need articles
     let articles = if req.include_articles {
         let db = Database::new()
@@ -32,16 +60,8 @@ async fn generate_pdf_core(req: GeneratePdfRequest) -> Result<(Vec<u8>, String),
         .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fonts"));
 
     let pdf_req = pdf::PdfRequest {
-        sefer_name: req.sefer_name.clone(),
-        perakim: req
-            .perakim
-            .iter()
-            .map(|p| pdf::PdfPerekInput {
-                perek_heb: p.perek_heb.clone(),
-                header: p.header.clone(),
-                pesukim: p.pesukim.clone(),
-            })
-            .collect(),
+        sefer_name: sefer_name.clone(),
+        perakim,
     };
 
     let doc = pdf::build_pdf(&pdf_req, &articles, &fonts_dir)
@@ -51,12 +71,12 @@ async fn generate_pdf_core(req: GeneratePdfRequest) -> Result<(Vec<u8>, String),
     doc.render(&mut buf)
         .map_err(|e| format!("PDF render failed: {}", e))?;
 
-    let filename = build_filename(&req);
+    let filename = build_filename(&sefer_name, &req.perakim_ids);
 
     tracing::info!(
         "Generated PDF: {} bytes, {} perakim",
         buf.len(),
-        req.perakim.len()
+        req.perakim_ids.len()
     );
 
     Ok((buf, filename))
@@ -68,12 +88,8 @@ async fn fetch_articles(
 ) -> anyhow::Result<Vec<(String, String, String)>> {
     let mut articles: Vec<(String, String, String)> = Vec::new();
 
-    if !req.include_articles {
-        return Ok(articles);
-    }
-
-    for perek_input in &req.perakim {
-        let mut perek_articles = services::get_articles_by_perek(db, perek_input.perek_id).await?;
+    for &perek_id in &req.perakim_ids {
+        let mut perek_articles = services::get_articles_by_perek(db, perek_id).await?;
 
         if !req.article_ids.is_empty() {
             perek_articles.retain(|a| req.article_ids.contains(&a.id));
@@ -95,16 +111,26 @@ async fn fetch_articles(
     Ok(articles)
 }
 
-fn build_filename(req: &GeneratePdfRequest) -> String {
-    if req.perakim.is_empty() {
-        return format!("{}.pdf", req.sefer_name);
+fn build_filename(sefer_name: &str, perakim_ids: &[i32]) -> String {
+    if perakim_ids.is_empty() {
+        return format!("{}.pdf", sefer_name);
     }
-    let first = &req.perakim[0].perek_heb;
-    let last = &req.perakim[req.perakim.len() - 1].perek_heb;
-    if req.perakim.len() == 1 {
-        format!("{}-{}׳.pdf", req.sefer_name, first)
+
+    let first_heb = perakim_ids
+        .first()
+        .and_then(|&id| tanach::get_perek(id))
+        .map(|d| tanach::perek_to_hebrew(d.perek_in_sefer))
+        .unwrap_or_default();
+    let last_heb = perakim_ids
+        .last()
+        .and_then(|&id| tanach::get_perek(id))
+        .map(|d| tanach::perek_to_hebrew(d.perek_in_sefer))
+        .unwrap_or_default();
+
+    if perakim_ids.len() == 1 {
+        format!("{}-{}׳.pdf", sefer_name, first_heb)
     } else {
-        format!("{}-{}׳-{}׳.pdf", req.sefer_name, first, last)
+        format!("{}-{}׳-{}׳.pdf", sefer_name, first_heb, last_heb)
     }
 }
 

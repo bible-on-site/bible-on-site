@@ -3,14 +3,16 @@
 use serde::{Deserialize, Serialize};
 
 /// Top-level request for PDF generation.
+/// The service resolves all perek data (text, headers) from embedded Tanach data.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GeneratePdfRequest {
-    /// e.g. "במדבר"
-    pub sefer_name: String,
+    /// e.g. "במדבר". Optional — derived from the first perek if omitted.
+    #[serde(default)]
+    pub sefer_name: Option<String>,
 
-    /// Ordered list of perakim to include.
-    pub perakim: Vec<PerekInput>,
+    /// Ordered list of perek IDs (1-929) to include.
+    pub perakim_ids: Vec<i32>,
 
     /// When true, fetch and include perushim for each perek.
     /// (Currently unused — reserved for future perushim feature.)
@@ -33,24 +35,6 @@ pub struct GeneratePdfRequest {
 
 fn default_true() -> bool {
     true
-}
-
-/// A single perek's content as sent by the website.
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PerekInput {
-    /// 1-929
-    pub perek_id: i32,
-
-    /// Hebrew letter for perek number, e.g. "א"
-    pub perek_heb: String,
-
-    /// Perek header/title, e.g. "מפקד בני ישראל"
-    #[serde(default)]
-    pub header: String,
-
-    /// Pesukim text — plain extracted text per pasuk.
-    pub pesukim: Vec<String>,
 }
 
 /// Metadata returned alongside the PDF (optional, for logging/debugging).
