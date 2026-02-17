@@ -14,6 +14,13 @@ namespace BibleOnSite;
 
 public static class MauiProgram
 {
+	/// <summary>
+	/// Indicates whether Firebase was successfully initialized on iOS.
+	/// Always false on non-iOS platforms (Android auto-inits, others don't use Firebase).
+	/// When false on iOS, analytics calls are skipped to avoid repeated exceptions.
+	/// </summary>
+	internal static bool IsFirebaseInitialized { get; private set; }
+
 	public static MauiApp CreateMauiApp()
 	{
 		var builder = MauiApp.CreateBuilder();
@@ -55,12 +62,25 @@ public static class MauiProgram
 		// Android auto-inits from google-services.json at build time, but iOS requires an explicit init call.
 		// Without this, CrossFirebaseAnalytics.Current silently fails on iOS.
 		// Note: Plugin.Firebase 4.0.0 does NOT support MacCatalyst — only iOS and Android.
+		//
+		// Wrapped in try-catch because the underlying Firebase iOS SDK (currently 12.5 via AdamE bindings)
+		// crashes on iOS 26 due to a known issue (firebase/firebase-ios-sdk#15020, fixed in SDK 12.9.0).
+		// Until the .NET bindings are updated, we gracefully degrade: the app works without analytics.
 		builder.ConfigureLifecycleEvents(events =>
 		{
 #if IOS
 			events.AddiOS(iOS => iOS.WillFinishLaunching((_, __) =>
 			{
-				CrossFirebase.Initialize();
+				try
+				{
+					CrossFirebase.Initialize();
+					IsFirebaseInitialized = true;
+				}
+				catch (Exception ex)
+				{
+					System.Diagnostics.Debug.WriteLine($"[Firebase] Initialization failed (analytics disabled): {ex.Message}");
+					Console.Error.WriteLine($"[Firebase] Initialization failed (analytics disabled): {ex.Message}");
+				}
 				return false;
 			}));
 #endif

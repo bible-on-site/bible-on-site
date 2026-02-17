@@ -6,13 +6,24 @@ using Plugin.Firebase.Analytics;
 
 /// <summary>
 /// Firebase Analytics on Android and iOS (same project as legacy app: tanah-al-haperek).
-/// No-op on other platforms.
+/// No-op on other platforms. Gracefully degrades when Firebase isn't initialized (e.g. iOS 26
+/// where the SDK crashes during init — see MauiProgram.IsFirebaseInitialized).
 /// </summary>
 public sealed class AnalyticsService : IAnalyticsService
 {
+	private static bool IsAvailable =>
+#if ANDROID
+		true;
+#elif IOS
+		MauiProgram.IsFirebaseInitialized;
+#else
+		false;
+#endif
+
 	public void SetScreen(string screenName, string? screenClassOverride = null)
 	{
 #if ANDROID || IOS
+		if (!IsAvailable) return;
 		try
 		{
 			var analytics = CrossFirebaseAnalytics.Current;
@@ -33,6 +44,7 @@ public sealed class AnalyticsService : IAnalyticsService
 	public void LogSearch(string searchTerm)
 	{
 #if ANDROID || IOS
+		if (!IsAvailable) return;
 		try
 		{
 			CrossFirebaseAnalytics.Current.LogEvent("search", new Dictionary<string, object>
