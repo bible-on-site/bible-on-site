@@ -15,10 +15,34 @@ import { fileURLToPath } from "node:url";
 import { writeFileSync, existsSync, readFileSync, unlinkSync } from "node:fs";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
+const webDir = resolve(__dirname, "..");
 const bulletinDir = resolve(__dirname, "../../bulletin");
 const pidFile = resolve(bulletinDir, ".dev-pid");
 const port = process.env.BULLETIN_PORT ?? "9000";
 const healthUrl = `http://127.0.0.1:${port}/health`;
+
+/**
+ * Load key env vars from .dev.env — needed because predev runs before
+ * dotenv-cli loads .dev.env for the dev script.
+ */
+function loadDevEnv() {
+	const devEnvPath = resolve(webDir, ".dev.env");
+	const env = {};
+	try {
+		const content = readFileSync(devEnvPath, "utf8");
+		for (const line of content.split("\n")) {
+			const trimmed = line.trim();
+			if (!trimmed || trimmed.startsWith("#")) continue;
+			const eqIdx = trimmed.indexOf("=");
+			if (eqIdx > 0) {
+				env[trimmed.slice(0, eqIdx).trim()] = trimmed.slice(eqIdx + 1).trim();
+			}
+		}
+	} catch {
+		// .dev.env missing — not fatal
+	}
+	return env;
+}
 
 if (process.env.SKIP_BULLETIN === "1") {
 	console.info("  start-bulletin: SKIP_BULLETIN=1, skipping");
@@ -100,6 +124,9 @@ async function main() {
 
 	console.info("  start-bulletin: building & starting bulletin service...");
 
+	// Load .dev.env so bulletin gets DB_URL and other config
+	const devEnv = loadDevEnv();
+
 	// Use cargo run with --features local — it builds and runs in one step
 	const child = spawn(
 		"cargo",
@@ -111,6 +138,7 @@ async function main() {
 			detached: false,
 			env: {
 				...process.env,
+				...devEnv,
 				RUST_LOG: "info",
 				BULLETIN_PORT: port,
 				FONTS_DIR: resolve(bulletinDir, "fonts"),
