@@ -15,21 +15,10 @@ path = "src/lib.rs"
 name = "bulletin"
 path = "src/main.rs"
 
-[features]
-default = []
-# Use "local" feature for development — adds a lightweight HTTP server
-local = ["dep:actix-web"]
-
 [dependencies]
 # AWS Lambda runtime (production)
 lambda_http = "0.13"
 lambda_runtime = "0.13"
-
-# Local dev HTTP server (only when feature "local" is enabled)
-actix-web = { version = "4.12.1", default-features = false, features = [
-    "macros",
-    "compress-brotli",
-], optional = true }
 
 # PDF generation
 genpdf = "0.2"

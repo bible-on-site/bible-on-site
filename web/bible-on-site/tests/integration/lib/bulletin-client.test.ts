@@ -1,17 +1,25 @@
 /**
  * Integration tests for the bulletin PDF service client.
  *
- * These tests validate:
+ * Tests validate:
  * - Request payload construction (perek data, sefer name)
- * - Bulletin service communication (mocked HTTP)
- * - Error handling (service down, bad response, empty payload)
+ * - Binary invocation via subprocess (mocked execFileSync)
+ * - Error handling (binary not found, crash, empty output)
  * - Handler factory pattern
- *
- * The bulletin service (web/bulletin) is mocked via fetch — the Rust service
- * does not need to be running for these tests.
  */
 
-// Mock data access module that bulletin-client imports
+// Mock child_process — the client spawns the bulletin binary
+jest.mock("node:child_process", () => ({
+	execFileSync: jest.fn(),
+}));
+
+// Mock fs — used to find the binary
+jest.mock("node:fs", () => ({
+	existsSync: jest.fn(),
+	readFileSync: jest.fn().mockReturnValue(new Uint8Array([0, 1, 2, 3])),
+}));
+
+// Mock data access module
 jest.mock("@/data/perek-dto", () => ({
 	getPerekByPerekId: jest.fn((id: number) => ({
 		perekId: id,
@@ -31,7 +39,7 @@ jest.mock("@/data/perek-dto", () => ({
 	})),
 }));
 
-// Mock tanach-pdf utility functions (bulletin-client depends on these)
+// Mock tanach-pdf utility functions
 jest.mock("@/lib/download/tanach-pdf", () => ({
 	semanticPagesToPerekIds: jest.fn(
 		(semanticPages: Array<{ title: string }>, _seferName: string) =>
@@ -49,74 +57,43 @@ import {
 	createBulletinPageRangesHandler,
 } from "@/lib/download/bulletin-client";
 import { getPerekByPerekId } from "@/data/perek-dto";
+import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 
-// ─────── Helpers ─────────────────────────────────────────────────
-// jsdom doesn't provide the Fetch API's Response class, so we build
-// a minimal duck-typed stand-in that matches what bulletin-client uses.
+const mockExecFileSync = execFileSync as jest.MockedFunction<typeof execFileSync>;
+const mockExistsSync = existsSync as jest.MockedFunction<typeof existsSync>;
 
-function makeFakeResponse(
-	body: Uint8Array | string,
-	init: { status: number; statusText?: string; headers?: Record<string, string> },
-) {
-	const isString = typeof body === "string";
-	return {
-		ok: init.status >= 200 && init.status < 300,
-		status: init.status,
-		statusText: init.statusText ?? "",
-		headers: new Map(Object.entries(init.headers ?? {})),
-		text: () => Promise.resolve(isString ? body : new TextDecoder().decode(body)),
-		arrayBuffer: () =>
-			Promise.resolve(
-				isString
-					? new TextEncoder().encode(body).buffer
-					: (body as Uint8Array).buffer,
-			),
-	};
-}
+// PDF header bytes (%PDF-)
+const PDF_HEADER = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d]);
 
-const PDF_HEADER = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]);
-
-function makeFakePdf(sizeBytes = 2048): Uint8Array {
-	const buf = new Uint8Array(sizeBytes);
-	buf.set(PDF_HEADER);
+function makeFakePdf(sizeBytes = 2048): Buffer {
+	const buf = Buffer.alloc(sizeBytes);
+	PDF_HEADER.copy(buf);
 	return buf;
 }
 
-// ─────── Tests ───────────────────────────────────────────────────
-
 describe("bulletin-client", () => {
-	const originalFetch = global.fetch;
-
 	beforeEach(() => {
 		jest.clearAllMocks();
-	});
-
-	afterEach(() => {
-		global.fetch = originalFetch;
+		// Default: binary exists at debug path
+		mockExistsSync.mockImplementation((path: string) =>
+			path.includes("target/debug/bulletin") ||
+			path.includes("target\\debug\\bulletin"),
+		);
 	});
 
 	describe("generatePdfViaBulletin", () => {
-		it("sends correctly shaped request to the bulletin service", async () => {
+		it("spawns the binary with correct JSON on stdin", () => {
 			const fakePdf = makeFakePdf();
-			let capturedBody: string | undefined;
+			mockExecFileSync.mockReturnValue(fakePdf);
 
-			global.fetch = jest.fn().mockImplementation(async (_url: string, init: RequestInit) => {
-				capturedBody = init.body as string;
-				return makeFakeResponse(fakePdf, {
-					status: 200,
-					headers: { "content-type": "application/pdf" },
-				});
-			}) as typeof fetch;
+			generatePdfViaBulletin([1], "בראשית");
 
-			await generatePdfViaBulletin([1], "בראשית");
+			expect(mockExecFileSync).toHaveBeenCalledTimes(1);
+			const [_binary, _args, opts] = mockExecFileSync.mock.calls[0];
 
-			expect(global.fetch).toHaveBeenCalledTimes(1);
-			const [callUrl, callInit] = (global.fetch as jest.Mock).mock.calls[0];
-			expect(callUrl).toContain("/api/generate-pdf");
-			expect(callInit.method).toBe("POST");
-			expect(callInit.headers["Content-Type"]).toBe("application/json");
-
-			const body = JSON.parse(capturedBody as string);
+			// Verify JSON payload sent via stdin
+			const body = JSON.parse(opts.input);
 			expect(body.seferName).toBe("בראשית");
 			expect(body.perakim).toHaveLength(1);
 			expect(body.perakim[0].perekId).toBe(1);
@@ -129,16 +106,11 @@ describe("bulletin-client", () => {
 			expect(body.authorIds).toEqual([]);
 		});
 
-		it("returns PDF bytes on success", async () => {
+		it("returns PDF bytes on success", () => {
 			const fakePdf = makeFakePdf(4096);
-			global.fetch = jest.fn().mockResolvedValue(
-				makeFakeResponse(fakePdf, {
-					status: 200,
-					headers: { "content-type": "application/pdf" },
-				}),
-			) as typeof fetch;
+			mockExecFileSync.mockReturnValue(fakePdf);
 
-			const result = await generatePdfViaBulletin([1, 2], "בראשית");
+			const result = generatePdfViaBulletin([1, 2], "בראשית");
 
 			expect(result).toBeInstanceOf(Uint8Array);
 			expect(result.length).toBe(4096);
@@ -148,35 +120,36 @@ describe("bulletin-client", () => {
 			expect(result[3]).toBe(0x46); // F
 		});
 
-		it("throws on non-OK response from bulletin service", async () => {
-			global.fetch = jest.fn().mockResolvedValue(
-				makeFakeResponse('{"error":"DB connection failed"}', {
-					status: 500,
-					statusText: "Internal Server Error",
-				}),
-			) as typeof fetch;
+		it("throws when binary is not found", () => {
+			mockExistsSync.mockReturnValue(false);
 
-			await expect(
+			expect(() =>
 				generatePdfViaBulletin([1], "בראשית"),
-			).rejects.toThrow(/Bulletin service error 500/);
+			).toThrow(/Bulletin binary not found/);
 		});
 
-		it("throws on network failure", async () => {
-			global.fetch = jest.fn().mockRejectedValue(
-				new TypeError("fetch failed"),
-			) as typeof fetch;
+		it("throws when binary crashes", () => {
+			mockExecFileSync.mockImplementation(() => {
+				throw new Error("Command failed: exit code 1");
+			});
 
-			await expect(
+			expect(() =>
 				generatePdfViaBulletin([1], "בראשית"),
-			).rejects.toThrow("fetch failed");
+			).toThrow(/Command failed/);
 		});
 
-		it("fetches perek data from bundled JSON for each perekId", async () => {
-			global.fetch = jest.fn().mockResolvedValue(
-				makeFakeResponse(makeFakePdf(), { status: 200 }),
-			) as typeof fetch;
+		it("throws when binary returns too few bytes", () => {
+			mockExecFileSync.mockReturnValue(Buffer.from([0, 1]));
 
-			await generatePdfViaBulletin([1, 2, 3], "שמות");
+			expect(() =>
+				generatePdfViaBulletin([1], "בראשית"),
+			).toThrow(/expected a PDF/);
+		});
+
+		it("fetches perek data from bundled JSON for each perekId", () => {
+			mockExecFileSync.mockReturnValue(makeFakePdf());
+
+			generatePdfViaBulletin([1, 2, 3], "שמות");
 
 			expect(getPerekByPerekId).toHaveBeenCalledTimes(3);
 			expect(getPerekByPerekId).toHaveBeenCalledWith(1);
@@ -184,20 +157,26 @@ describe("bulletin-client", () => {
 			expect(getPerekByPerekId).toHaveBeenCalledWith(3);
 		});
 
-		it("sends multiple perakim in a single request", async () => {
-			let capturedBody: string | undefined;
-			global.fetch = jest.fn().mockImplementation(async (_url: string, init: RequestInit) => {
-				capturedBody = init.body as string;
-				return makeFakeResponse(makeFakePdf(), { status: 200 });
-			}) as typeof fetch;
+		it("sends multiple perakim in a single invocation", () => {
+			mockExecFileSync.mockReturnValue(makeFakePdf());
 
-			await generatePdfViaBulletin([1, 2, 3], "במדבר");
+			generatePdfViaBulletin([1, 2, 3], "במדבר");
 
-			const body = JSON.parse(capturedBody as string);
+			const [_binary, _args, opts] = mockExecFileSync.mock.calls[0];
+			const body = JSON.parse(opts.input);
 			expect(body.perakim).toHaveLength(3);
 			expect(body.perakim[0].perekId).toBe(1);
 			expect(body.perakim[1].perekId).toBe(2);
 			expect(body.perakim[2].perekId).toBe(3);
+		});
+
+		it("sets a 30s timeout on the subprocess", () => {
+			mockExecFileSync.mockReturnValue(makeFakePdf());
+
+			generatePdfViaBulletin([1], "בראשית");
+
+			const [_binary, _args, opts] = mockExecFileSync.mock.calls[0];
+			expect(opts.timeout).toBe(30_000);
 		});
 	});
 
@@ -239,10 +218,7 @@ describe("bulletin-client", () => {
 		});
 
 		it("returns ['pdf', Uint8Array] tuple on success", async () => {
-			const fakePdf = makeFakePdf();
-			global.fetch = jest.fn().mockResolvedValue(
-				makeFakeResponse(fakePdf, { status: 200 }),
-			) as typeof fetch;
+			mockExecFileSync.mockReturnValue(makeFakePdf());
 
 			const handler = createBulletinPageRangesHandler();
 			const [ext, bin] = await handler(

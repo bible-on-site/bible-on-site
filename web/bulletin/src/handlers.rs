@@ -1,7 +1,8 @@
-//! Request handlers — Lambda (production) and Actix-web (local dev).
+//! Request handlers — Lambda (production) and CLI stdin/stdout (dev).
 //! Both share the same core logic via `generate_pdf_core`.
 
 use std::env;
+use std::io::{self, Read, Write};
 use std::path::PathBuf;
 
 use bulletin::pdf;
@@ -14,19 +15,22 @@ use crate::services;
 
 /// Core PDF generation: parse request → fetch articles → build PDF → return bytes.
 async fn generate_pdf_core(req: GeneratePdfRequest) -> Result<(Vec<u8>, String), String> {
-    let db = Database::new()
-        .await
-        .map_err(|e| format!("DB connection failed: {}", e))?;
-
-    let articles = fetch_articles(&db, &req)
-        .await
-        .map_err(|e| format!("Failed to fetch articles: {}", e))?;
+    // Only connect to DB if we need articles
+    let articles = if req.include_articles {
+        let db = Database::new()
+            .await
+            .map_err(|e| format!("DB connection failed: {}", e))?;
+        fetch_articles(&db, &req)
+            .await
+            .map_err(|e| format!("Failed to fetch articles: {}", e))?
+    } else {
+        vec![]
+    };
 
     let fonts_dir: PathBuf = env::var("FONTS_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fonts"));
 
-    // Convert HTTP model to PDF model
     let pdf_req = pdf::PdfRequest {
         sefer_name: req.sefer_name.clone(),
         perakim: req
@@ -104,7 +108,31 @@ fn build_filename(req: &GeneratePdfRequest) -> String {
     }
 }
 
-// ──────────────────── Lambda handler ───────────────────────────
+// ──────────────────── CLI handler (dev) ────────────────────────
+
+/// Read JSON request from stdin, generate PDF, write bytes to stdout.
+/// This is the on-demand equivalent of a Lambda invocation.
+pub async fn cli_handler() -> anyhow::Result<()> {
+    let mut input = String::new();
+    io::stdin().read_to_string(&mut input)?;
+
+    let req: GeneratePdfRequest = serde_json::from_str(&input)
+        .map_err(|e| anyhow::anyhow!("Invalid request JSON: {}", e))?;
+
+    match generate_pdf_core(req).await {
+        Ok((buf, filename)) => {
+            tracing::info!("Generated: {}", filename);
+            io::stdout().write_all(&buf)?;
+            io::stdout().flush()?;
+            Ok(())
+        }
+        Err(e) => {
+            anyhow::bail!("PDF generation failed: {}", e);
+        }
+    }
+}
+
+// ──────────────────── Lambda handler (production) ──────────────
 
 use lambda_http::{Body, Request as LambdaRequest, Response as LambdaResponse};
 
@@ -170,34 +198,4 @@ async fn lambda_generate_pdf(
             .body(Body::Text(format!(r#"{{"error":"{}"}}"#, e)))
             .unwrap()),
     }
-}
-
-// ──────────────────── Actix-web handlers (local dev) ───────────
-
-#[cfg(feature = "local")]
-pub async fn actix_generate_pdf(
-    body: actix_web::web::Json<GeneratePdfRequest>,
-) -> actix_web::HttpResponse {
-    let req = body.into_inner();
-
-    match generate_pdf_core(req).await {
-        Ok((buf, filename)) => actix_web::HttpResponse::Ok()
-            .content_type("application/pdf")
-            .insert_header((
-                "Content-Disposition",
-                format!("attachment; filename=\"{}\"", filename),
-            ))
-            .body(buf),
-        Err(e) => actix_web::HttpResponse::InternalServerError()
-            .json(serde_json::json!({"error": e})),
-    }
-}
-
-#[cfg(feature = "local")]
-pub async fn actix_health() -> actix_web::HttpResponse {
-    actix_web::HttpResponse::Ok().json(serde_json::json!({
-        "status": "ok",
-        "service": "bulletin",
-        "mode": "local"
-    }))
 }
