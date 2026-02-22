@@ -29,7 +29,7 @@ function loadDevEnv() {
 }
 
 function parseDbUrl(url) {
-	const u = new URL(url.replace(/^mysql:\/\//, "mysql://"));
+	const u = new URL(url.replace(/^mysql:\/\//, "http://"));
 	return {
 		host: u.hostname || "localhost",
 		port: Number.parseInt(u.port || "3306", 10),

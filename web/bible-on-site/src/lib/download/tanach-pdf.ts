@@ -105,15 +105,21 @@ export function reverseGraphemes(text: string): string {
 
 /** Strip HTML tags from a string, decode common entities. */
 export function stripHtml(html: string): string {
-	return html
-		.replace(/<br\s*\/?>/gi, "\n")
-		.replace(/<[^>]+>/g, "")
+	let text = html.replace(/<br\s*\/?>/gi, "\n");
+	// Iteratively strip tags to handle fragments like "<scr" + "ipt>"
+	let prev: string;
+	do {
+		prev = text;
+		text = text.replace(/<[^>]+>/g, "");
+	} while (text !== prev);
+	// Decode entities (amp last so &amp;lt; doesn't become <)
+	return text
 		.replace(/&nbsp;/g, " ")
-		.replace(/&amp;/g, "&")
 		.replace(/&lt;/g, "<")
 		.replace(/&gt;/g, ">")
 		.replace(/&quot;/g, '"')
 		.replace(/&#39;/g, "'")
+		.replace(/&amp;/g, "&")
 		.replace(/\s+/g, " ")
 		.trim();
 }
