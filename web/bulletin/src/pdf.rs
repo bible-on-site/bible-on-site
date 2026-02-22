@@ -40,10 +40,62 @@ fn collapse_maqaf_spaces(text: &str) -> String {
     text.replace("־ ", "־")
 }
 
-/// Strip HTML tags and decode basic HTML entities to plain text.
-fn html_to_plain_text(html: &str) -> String {
-    let mut result = String::with_capacity(html.len());
+/// Decode an HTML entity (the part between `&` and `;`) to a character or string.
+fn decode_html_entity(entity: &str) -> String {
+    match entity {
+        "amp" => "&".into(),
+        "lt" => "<".into(),
+        "gt" => ">".into(),
+        "quot" => "\"".into(),
+        "apos" => "'".into(),
+        "nbsp" => " ".into(),
+        "lrm" | "rlm" => String::new(),
+        _ if entity.starts_with('#') => {
+            let num_str = entity.trim_start_matches('#').trim_start_matches('x');
+            let radix = if entity.contains('x') { 16 } else { 10 };
+            u32::from_str_radix(num_str, radix)
+                .ok()
+                .and_then(char::from_u32)
+                .map_or_else(String::new, |c| c.to_string())
+        }
+        _ => format!("&{};", entity),
+    }
+}
+
+/// Read an HTML entity from the char iterator (after the `&`),
+/// consuming up to and including the `;`.
+fn consume_html_entity(chars: &mut impl Iterator<Item = char>) -> String {
+    let mut entity = String::new();
+    for ec in chars {
+        if ec == ';' {
+            break;
+        }
+        entity.push(ec);
+        if entity.len() > 10 {
+            break;
+        }
+    }
+    decode_html_entity(&entity)
+}
+
+/// Convert article HTML to Typst markup, preserving semantic structure.
+///
+/// Supported tags:
+///   h2–h5  → Typst headings (=== / ==== levels, since article is nested content)
+///   p      → paragraph break
+///   b/strong → *bold*
+///   i/em     → _italic_
+///   u        → #underline[…]
+///   br       → line break
+///   blockquote → indented block
+///   li       → bullet item
+///   Other tags are silently consumed (content preserved).
+fn html_to_typst(html: &str) -> String {
+    let mut out = String::with_capacity(html.len());
     let mut chars = html.chars().peekable();
+    let mut bold_open = false;
+    let mut italic_open = false;
+    let mut underline_open = false;
 
     while let Some(c) = chars.next() {
         if c == '<' {
@@ -55,66 +107,128 @@ fn html_to_plain_text(html: &str) -> String {
                 tag_content.push(tc);
             }
             let tag_lower = tag_content.to_lowercase();
+            let is_closing = tag_lower.starts_with('/');
             let tag_name = tag_lower
                 .trim_start_matches('/')
                 .split_whitespace()
                 .next()
                 .unwrap_or("");
-            if tag_name == "br" || tag_name == "br/" || tag_name == "br /" {
-                result.push('\n');
-            } else if tag_lower.starts_with('/') {
-                match tag_name {
-                    "p" | "div" | "li" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "tr"
-                    | "blockquote" => {
-                        result.push('\n');
-                    }
-                    _ => {}
+
+            match tag_name {
+                "br" | "br/" | "br /" => {
+                    out.push_str(" \\\n");
                 }
+                "p" | "div" => {
+                    if is_closing {
+                        out.push_str("\n\n");
+                    }
+                }
+                "h2" => {
+                    if !is_closing {
+                        out.push_str("\n=== ");
+                    } else {
+                        out.push('\n');
+                    }
+                }
+                "h3" => {
+                    if !is_closing {
+                        out.push_str("\n==== ");
+                    } else {
+                        out.push('\n');
+                    }
+                }
+                "h4" | "h5" | "h6" => {
+                    if !is_closing {
+                        out.push_str("\n#text(weight: \"bold\")[");
+                    } else {
+                        out.push_str("]\n");
+                    }
+                }
+                "b" | "strong" => {
+                    if !is_closing && !bold_open {
+                        out.push_str("#strong[");
+                        bold_open = true;
+                    } else if is_closing && bold_open {
+                        out.push(']');
+                        bold_open = false;
+                    }
+                }
+                "i" | "em" => {
+                    if !is_closing && !italic_open {
+                        out.push_str("#emph[");
+                        italic_open = true;
+                    } else if is_closing && italic_open {
+                        out.push(']');
+                        italic_open = false;
+                    }
+                }
+                "u" => {
+                    if !is_closing && !underline_open {
+                        out.push_str("#underline[");
+                        underline_open = true;
+                    } else if is_closing && underline_open {
+                        out.push(']');
+                        underline_open = false;
+                    }
+                }
+                "blockquote" => {
+                    if !is_closing {
+                        out.push_str("\n#pad(right: 2em)[");
+                    } else {
+                        out.push_str("]\n");
+                    }
+                }
+                "li" => {
+                    if !is_closing {
+                        out.push_str("\n- ");
+                    } else {
+                        out.push('\n');
+                    }
+                }
+                "tr" => {
+                    if is_closing {
+                        out.push('\n');
+                    }
+                }
+                "h1" => {
+                    if !is_closing {
+                        out.push_str("\n== ");
+                    } else {
+                        out.push('\n');
+                    }
+                }
+                _ => {}
             }
             continue;
         }
         if c == '&' {
-            let mut entity = String::new();
-            for ec in chars.by_ref() {
-                if ec == ';' {
-                    break;
-                }
-                entity.push(ec);
-                if entity.len() > 10 {
-                    break;
-                }
-            }
-            match entity.as_str() {
-                "amp" => result.push('&'),
-                "lt" => result.push('<'),
-                "gt" => result.push('>'),
-                "quot" => result.push('"'),
-                "apos" => result.push('\''),
-                "nbsp" => result.push(' '),
-                "lrm" | "rlm" => {}
-                _ if entity.starts_with('#') => {
-                    let num_str = entity.trim_start_matches('#').trim_start_matches('x');
-                    let radix = if entity.contains('x') { 16 } else { 10 };
-                    if let Ok(code) = u32::from_str_radix(num_str, radix) {
-                        if let Some(ch) = char::from_u32(code) {
-                            result.push(ch);
-                        }
-                    }
-                }
-                _ => {
-                    result.push('&');
-                    result.push_str(&entity);
-                    result.push(';');
-                }
-            }
+            let decoded = consume_html_entity(&mut chars);
+            out.push_str(&typst_escape(&decoded));
             continue;
         }
-        result.push(c);
+        match c {
+            '#' | '*' | '_' | '`' | '<' | '>' | '@' | '$' | '\\' | '~' | '/' | '[' | ']' => {
+                out.push('\\');
+                out.push(c);
+            }
+            _ => out.push(c),
+        }
     }
 
-    let mut cleaned = String::with_capacity(result.len());
+    if bold_open {
+        out.push(']');
+    }
+    if italic_open {
+        out.push(']');
+    }
+    if underline_open {
+        out.push(']');
+    }
+
+    // Collapse excessive blank lines
+    let mut cleaned = String::with_capacity(out.len());
     let mut newline_count = 0;
-    for c in result.chars() {
+    for c in out.chars() {
         if c == '\n' || c == '\r' {
             newline_count += 1;
             if newline_count <= 2 {
@@ -240,17 +354,12 @@ fn generate_typst_markup(req: &PdfRequest) -> String {
                     typst_escape(author_name)
                 ));
 
-                let plain_text = html_to_plain_text(content_html);
-                for para_text in plain_text.split("\n\n") {
-                    let trimmed = para_text.trim();
-                    if trimmed.is_empty() {
-                        continue;
-                    }
-                    let flowing = trimmed.replace('\n', " ");
-                    markup.push_str(&format!(
-                        "#text(size: 10pt)[{}]\n\n",
-                        typst_escape(&flowing)
-                    ));
+                let typst_content = html_to_typst(content_html);
+                let trimmed = typst_content.trim();
+                if !trimmed.is_empty() {
+                    markup.push_str("#{\nset text(size: 10pt)\n[\n");
+                    markup.push_str(trimmed);
+                    markup.push_str("\n]\n}\n\n");
                 }
             }
         }
@@ -311,32 +420,57 @@ mod tests {
     }
 
     #[test]
-    fn test_html_to_plain_text_basic() {
+    fn test_html_to_typst_paragraphs() {
         let html = "<p>שלום</p><p>עולם</p>";
-        let plain = html_to_plain_text(html);
-        assert!(plain.contains("שלום"));
-        assert!(plain.contains("עולם"));
+        let typst = html_to_typst(html);
+        assert!(typst.contains("שלום"));
+        assert!(typst.contains("עולם"));
+        assert!(typst.contains("\n\n"), "paragraphs should produce blank line");
     }
 
     #[test]
-    fn test_html_to_plain_text_br() {
+    fn test_html_to_typst_br() {
         let html = "שורה ראשונה<br>שורה שנייה";
-        let plain = html_to_plain_text(html);
-        assert!(plain.contains("שורה ראשונה\nשורה שנייה"));
+        let typst = html_to_typst(html);
+        assert!(typst.contains("שורה ראשונה \\\n"));
     }
 
     #[test]
-    fn test_html_to_plain_text_entities() {
+    fn test_html_to_typst_entities() {
         let html = "a &amp; b &lt; c &gt; d";
-        let plain = html_to_plain_text(html);
-        assert_eq!(plain, "a & b < c > d");
+        let typst = html_to_typst(html);
+        assert!(typst.contains("\\<"), "< should be escaped");
+        assert!(typst.contains("\\>"), "> should be escaped");
+        assert!(typst.contains("& b"), "& decoded from &amp;");
     }
 
     #[test]
-    fn test_html_to_plain_text_strips_tags() {
+    fn test_html_to_typst_bold_italic() {
         let html = "<b>bold</b> and <i>italic</i> text";
-        let plain = html_to_plain_text(html);
-        assert_eq!(plain, "bold and italic text");
+        let typst = html_to_typst(html);
+        assert!(typst.contains("#strong[bold]"));
+        assert!(typst.contains("#emph[italic]"));
+    }
+
+    #[test]
+    fn test_html_to_typst_headings() {
+        let html = "<h2>כותרת</h2><p>תוכן</p>";
+        let typst = html_to_typst(html);
+        assert!(typst.contains("=== כותרת"));
+    }
+
+    #[test]
+    fn test_html_to_typst_nested_bold_in_p() {
+        let html = "<p>regular <strong>bold text</strong> regular</p>";
+        let typst = html_to_typst(html);
+        assert!(typst.contains("#strong[bold text]"));
+    }
+
+    #[test]
+    fn test_html_to_typst_adjacent_to_hebrew() {
+        let html = "ו<i>טקסט נטוי</i> בתוכה";
+        let typst = html_to_typst(html);
+        assert!(typst.contains("ו#emph[טקסט נטוי]"), "emph works adjacent to Hebrew: {}", typst);
     }
 
     #[test]
