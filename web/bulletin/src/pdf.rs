@@ -1,15 +1,13 @@
-//! PDF generation using genpdf.
+//! PDF generation using the Typst typesetting engine.
 //!
-//! Handles Hebrew RTL text by reversing grapheme clusters so the
-//! LTR-only PDF renderer produces the correct visual result.
+//! Generates Typst markup from the request data, compiles it in-process
+//! via `typst-as-lib`, and exports to PDF via `typst-pdf`.
+//! Typst uses rustybuzz (HarfBuzz port) for text shaping, so Hebrew
+//! taamim and nikud are positioned correctly via OpenType GPOS tables.
 
 use std::path::Path;
 
-use genpdf::elements::{Break, PageBreak, Paragraph};
-use genpdf::fonts;
-use genpdf::style::Style;
-use genpdf::{Alignment, Document, Margins, SimplePageDecorator};
-use unicode_segmentation::UnicodeSegmentation;
+use typst_as_lib::TypstEngine;
 
 /// Lightweight request types for PDF generation — decoupled from HTTP models.
 /// The binary's `models` module converts into these.
@@ -24,12 +22,8 @@ pub struct PdfPerekInput {
     pub perek_heb: String,
     pub header: String,
     pub pesukim: Vec<String>,
-}
-
-/// Reverse grapheme clusters in a string so that an LTR renderer draws it
-/// as correct visual RTL. Preserves combining marks attached to their bases.
-pub fn reverse_graphemes(text: &str) -> String {
-    text.graphemes(true).rev().collect()
+    /// Articles that belong to this perek: (name, author_name, content_html)
+    pub articles: Vec<(String, String, String)>,
 }
 
 /// Strip Hebrew cantillation marks (taamim, U+0591–U+05AF) while keeping
@@ -40,146 +34,99 @@ pub fn strip_taamim(text: &str) -> String {
         .collect()
 }
 
-/// Build a PDF document from the request payload.
-pub fn build_pdf(
-    req: &PdfRequest,
-    articles: &[(String, String, String)], // (name, author_name, content)
-    fonts_dir: &Path,
-) -> anyhow::Result<Document> {
-    // Load font family from files.
-    // genpdf::fonts::from_files expects files named FrankRuhlLibre-{Regular,Bold,Italic,BoldItalic}.ttf
-    let font_family = fonts::from_files(fonts_dir, "FrankRuhlLibre", None)
-        .map_err(|e| anyhow::anyhow!("Failed to load fonts: {}", e))?;
-
-    let mut doc = Document::new(font_family);
-    doc.set_title(req.sefer_name.clone());
-    doc.set_paper_size(genpdf::PaperSize::A4);
-
-    // Page decorator with margins
-    let mut decorator = SimplePageDecorator::new();
-    decorator.set_margins(Margins::trbl(20, 15, 20, 15));
-    doc.set_page_decorator(decorator);
-
-    // ── Title ──
-    let title_text = reverse_graphemes(&strip_taamim(&req.sefer_name));
-    doc.push(
-        Paragraph::new("")
-            .aligned(Alignment::Center)
-            .styled_string(title_text, Style::new().bold().with_font_size(22)),
-    );
-    doc.push(Break::new(1));
-
-    // ── Perakim ──
-    for (idx, perek) in req.perakim.iter().enumerate() {
-        if idx > 0 {
-            doc.push(PageBreak::new());
-        }
-        push_perek(&mut doc, perek, &req.sefer_name);
-    }
-
-    // ── Articles ──
-    if !articles.is_empty() {
-        doc.push(Break::new(1.5));
-        doc.push(
-            Paragraph::new("")
-                .aligned(Alignment::Center)
-                .styled_string(
-                    reverse_graphemes("מאמרים"),
-                    Style::new().bold().with_font_size(16),
-                ),
-        );
-        doc.push(Break::new(0.5));
-
-        for (name, author_name, content) in articles {
-            push_article(&mut doc, name, author_name, content);
-        }
-    }
-
-    Ok(doc)
+/// Remove spaces immediately after a Hebrew maqaf (U+05BE ־) so that
+/// hyphenated pairs stay visually connected.
+fn collapse_maqaf_spaces(text: &str) -> String {
+    text.replace("־ ", "־")
 }
 
-/// Render a single perek into the document.
-fn push_perek(doc: &mut Document, perek: &PdfPerekInput, sefer_name: &str) {
-    // Combined title: "סֵפֶר פרק — header"
-    let title_text = if perek.header.is_empty() {
-        format!("{} {}", sefer_name, perek.perek_heb)
-    } else {
-        format!("{} {} — {}", sefer_name, perek.perek_heb, perek.header)
-    };
-    doc.push(
-        Paragraph::new("")
-            .aligned(Alignment::Right)
-            .styled_string(
-                reverse_graphemes(&strip_taamim(&title_text)),
-                Style::new().bold().with_font_size(14),
-            ),
-    );
-    doc.push(Break::new(0.5));
+/// Strip HTML tags and decode basic HTML entities to plain text.
+fn html_to_plain_text(html: &str) -> String {
+    let mut result = String::with_capacity(html.len());
+    let mut chars = html.chars().peekable();
 
-    // Section label
-    doc.push(
-        Paragraph::new("")
-            .aligned(Alignment::Right)
-            .styled_string(
-                reverse_graphemes("הפרק"),
-                Style::new().bold().with_font_size(12),
-            ),
-    );
-    doc.push(Break::new(0.3));
-
-    // Pesukim
-    for (i, pasuk_text) in perek.pesukim.iter().enumerate() {
-        let cleaned = strip_taamim(pasuk_text);
-        if cleaned.trim().is_empty() {
+    while let Some(c) = chars.next() {
+        if c == '<' {
+            let mut tag_content = String::new();
+            for tc in chars.by_ref() {
+                if tc == '>' {
+                    break;
+                }
+                tag_content.push(tc);
+            }
+            let tag_lower = tag_content.to_lowercase();
+            let tag_name = tag_lower
+                .trim_start_matches('/')
+                .split_whitespace()
+                .next()
+                .unwrap_or("");
+            if tag_name == "br" || tag_name == "br/" || tag_name == "br /" {
+                result.push('\n');
+            } else if tag_lower.starts_with('/') {
+                match tag_name {
+                    "p" | "div" | "li" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "tr"
+                    | "blockquote" => {
+                        result.push('\n');
+                    }
+                    _ => {}
+                }
+            }
             continue;
         }
-
-        let prefix = to_hebrew_letter(i + 1);
-        let full_text = format!("{} {}", prefix, cleaned);
-
-        doc.push(
-            Paragraph::new("")
-                .aligned(Alignment::Right)
-                .styled_string(
-                    reverse_graphemes(&full_text),
-                    Style::new().with_font_size(11),
-                ),
-        );
-    }
-}
-
-/// Render an article section.
-fn push_article(doc: &mut Document, name: &str, author_name: &str, content: &str) {
-    doc.push(Break::new(0.8));
-
-    // Article title with author
-    let header = format!("{} / {}", name, author_name);
-    doc.push(
-        Paragraph::new("")
-            .aligned(Alignment::Right)
-            .styled_string(
-                reverse_graphemes(&header),
-                Style::new().bold().with_font_size(12),
-            ),
-    );
-    doc.push(Break::new(0.3));
-
-    // Article content — split into paragraphs on double-newline
-    for para_text in content.split("\n\n") {
-        let trimmed = para_text.trim();
-        if trimmed.is_empty() {
+        if c == '&' {
+            let mut entity = String::new();
+            for ec in chars.by_ref() {
+                if ec == ';' {
+                    break;
+                }
+                entity.push(ec);
+                if entity.len() > 10 {
+                    break;
+                }
+            }
+            match entity.as_str() {
+                "amp" => result.push('&'),
+                "lt" => result.push('<'),
+                "gt" => result.push('>'),
+                "quot" => result.push('"'),
+                "apos" => result.push('\''),
+                "nbsp" => result.push(' '),
+                "lrm" | "rlm" => {}
+                _ if entity.starts_with('#') => {
+                    let num_str = entity.trim_start_matches('#').trim_start_matches('x');
+                    let radix = if entity.contains('x') { 16 } else { 10 };
+                    if let Ok(code) = u32::from_str_radix(num_str, radix) {
+                        if let Some(ch) = char::from_u32(code) {
+                            result.push(ch);
+                        }
+                    }
+                }
+                _ => {
+                    result.push('&');
+                    result.push_str(&entity);
+                    result.push(';');
+                }
+            }
             continue;
         }
-        doc.push(
-            Paragraph::new("")
-                .aligned(Alignment::Right)
-                .styled_string(
-                    reverse_graphemes(trimmed),
-                    Style::new().with_font_size(10),
-                ),
-        );
-        doc.push(Break::new(0.2));
+        result.push(c);
     }
+
+    let mut cleaned = String::with_capacity(result.len());
+    let mut newline_count = 0;
+    for c in result.chars() {
+        if c == '\n' || c == '\r' {
+            newline_count += 1;
+            if newline_count <= 2 {
+                cleaned.push('\n');
+            }
+        } else {
+            newline_count = 0;
+            cleaned.push(c);
+        }
+    }
+
+    cleaned
 }
 
 /// Convert a number (1-based) to its Hebrew letter representation.
@@ -203,7 +150,6 @@ fn to_hebrew_letter(n: usize) -> String {
         remaining %= 100;
     }
 
-    // Special cases: 15 = ט"ו, 16 = ט"ז
     if remaining == 15 {
         result.push_str("טו");
     } else if remaining == 16 {
@@ -221,30 +167,135 @@ fn to_hebrew_letter(n: usize) -> String {
     result
 }
 
+/// Escape special Typst markup characters so literal text is safe to embed.
+fn typst_escape(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        match c {
+            '#' | '*' | '_' | '`' | '<' | '>' | '@' | '$' | '\\' | '~' | '/' => {
+                out.push('\\');
+                out.push(c);
+            }
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+/// Generate Typst markup string from the request data.
+fn generate_typst_markup(req: &PdfRequest) -> String {
+    let mut markup = String::with_capacity(16 * 1024);
+
+    // Page and text settings
+    markup.push_str(
+        r#"#set page(paper: "a4", margin: (top: 20mm, bottom: 20mm, left: 15mm, right: 15mm))
+#set text(font: "Taamey D", size: 11pt, dir: rtl, lang: "he")
+#set par(justify: true)
+"#,
+    );
+
+    for (idx, perek) in req.perakim.iter().enumerate() {
+        if idx > 0 {
+            markup.push_str("#pagebreak()\n");
+        }
+
+        // Title
+        let title_text = if perek.header.is_empty() {
+            format!("{} {}", req.sefer_name, perek.perek_heb)
+        } else {
+            format!("{} {} - {}", req.sefer_name, perek.perek_heb, perek.header)
+        };
+        markup.push_str(&format!(
+            "#align(center, text(size: 16pt, weight: \"bold\")[{}])\n",
+            typst_escape(&strip_taamim(&title_text))
+        ));
+        markup.push_str("#v(0.5em)\n");
+
+        // Section header
+        markup.push_str("#align(right, text(size: 12pt, weight: \"bold\")[הפרק])\n");
+        markup.push_str("#v(0.3em)\n");
+
+        // Pesukim
+        for (i, pasuk_text) in perek.pesukim.iter().enumerate() {
+            if pasuk_text.trim().is_empty() {
+                continue;
+            }
+            let prefix = to_hebrew_letter(i + 1);
+            let cleaned = collapse_maqaf_spaces(pasuk_text);
+            markup.push_str(&format!(
+                "*{}* {}\n\n",
+                typst_escape(&prefix),
+                typst_escape(&cleaned)
+            ));
+        }
+
+        // Articles
+        if !perek.articles.is_empty() {
+            markup.push_str("#v(1em)\n");
+            for (name, author_name, content_html) in &perek.articles {
+                markup.push_str("#v(0.6em)\n");
+                markup.push_str(&format!(
+                    "#text(weight: \"bold\")[{} \\/ {}]\n\n",
+                    typst_escape(name),
+                    typst_escape(author_name)
+                ));
+
+                let plain_text = html_to_plain_text(content_html);
+                for para_text in plain_text.split("\n\n") {
+                    let trimmed = para_text.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    let flowing = trimmed.replace('\n', " ");
+                    markup.push_str(&format!(
+                        "#text(size: 10pt)[{}]\n\n",
+                        typst_escape(&flowing)
+                    ));
+                }
+            }
+        }
+    }
+
+    markup
+}
+
+/// Build a PDF document from the request payload.
+/// Uses Typst for proper Hebrew text shaping (taamim, nikud via GPOS).
+pub fn build_pdf(req: &PdfRequest, fonts_dir: &Path) -> anyhow::Result<Vec<u8>> {
+    let markup = generate_typst_markup(req);
+
+    let font_path = fonts_dir.join("TaameyD-Regular.ttf");
+    let font_bytes = std::fs::read(&font_path)
+        .map_err(|e| anyhow::anyhow!("Failed to read font {}: {}", font_path.display(), e))?;
+
+    let font_refs: [&[u8]; 1] = [font_bytes.as_slice()];
+    let engine = TypstEngine::builder()
+        .main_file(markup)
+        .fonts(font_refs)
+        .build();
+
+    let compiled = engine.compile();
+    let doc = compiled
+        .output
+        .map_err(|e| anyhow::anyhow!("Typst compilation failed: {}", e))?;
+
+    let options = typst_pdf::PdfOptions::default();
+    let pdf_bytes = typst_pdf::pdf(&doc, &options)
+        .map_err(|e| anyhow::anyhow!("PDF export failed: {:?}", e))?;
+
+    Ok(pdf_bytes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_reverse_graphemes_simple() {
-        assert_eq!(reverse_graphemes("אבג"), "גבא");
-    }
-
-    #[test]
-    fn test_reverse_graphemes_with_nikud() {
-        let input = "שָׁלוֹם";
-        let reversed = reverse_graphemes(input);
-        let clusters: Vec<&str> = input.graphemes(true).collect();
-        let expected: String = clusters.iter().rev().copied().collect();
-        assert_eq!(reversed, expected);
-    }
 
     #[test]
     fn test_strip_taamim() {
         let input = "בְּ\u{0591}רֵאשִׁית";
         let stripped = strip_taamim(input);
         assert!(!stripped.contains('\u{0591}'));
-        assert!(stripped.contains('ְ')); // nikud kept
+        assert!(stripped.contains('ְ'));
     }
 
     #[test]
@@ -257,5 +308,65 @@ mod tests {
         assert_eq!(to_hebrew_letter(20), "כ");
         assert_eq!(to_hebrew_letter(100), "ק");
         assert_eq!(to_hebrew_letter(119), "קיט");
+    }
+
+    #[test]
+    fn test_html_to_plain_text_basic() {
+        let html = "<p>שלום</p><p>עולם</p>";
+        let plain = html_to_plain_text(html);
+        assert!(plain.contains("שלום"));
+        assert!(plain.contains("עולם"));
+    }
+
+    #[test]
+    fn test_html_to_plain_text_br() {
+        let html = "שורה ראשונה<br>שורה שנייה";
+        let plain = html_to_plain_text(html);
+        assert!(plain.contains("שורה ראשונה\nשורה שנייה"));
+    }
+
+    #[test]
+    fn test_html_to_plain_text_entities() {
+        let html = "a &amp; b &lt; c &gt; d";
+        let plain = html_to_plain_text(html);
+        assert_eq!(plain, "a & b < c > d");
+    }
+
+    #[test]
+    fn test_html_to_plain_text_strips_tags() {
+        let html = "<b>bold</b> and <i>italic</i> text";
+        let plain = html_to_plain_text(html);
+        assert_eq!(plain, "bold and italic text");
+    }
+
+    #[test]
+    fn test_collapse_maqaf_spaces() {
+        assert_eq!(collapse_maqaf_spaces("עַל־ פְּנֵי"), "עַל־פְּנֵי");
+        assert_eq!(collapse_maqaf_spaces("no maqaf here"), "no maqaf here");
+    }
+
+    #[test]
+    fn test_typst_escape() {
+        assert_eq!(typst_escape("plain text"), "plain text");
+        assert_eq!(typst_escape("a #b *c"), "a \\#b \\*c");
+        assert_eq!(typst_escape("a/b"), "a\\/b");
+    }
+
+    #[test]
+    fn test_generate_typst_markup_structure() {
+        let req = PdfRequest {
+            sefer_name: "בראשית".to_string(),
+            perakim: vec![PdfPerekInput {
+                perek_heb: "א".to_string(),
+                header: "בריאת העולם".to_string(),
+                pesukim: vec!["בְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים".to_string()],
+                articles: vec![],
+            }],
+        };
+        let markup = generate_typst_markup(&req);
+        assert!(markup.contains("Taamey D"));
+        assert!(markup.contains("rtl"));
+        assert!(markup.contains("בראשית א - בריאת העולם"));
+        assert!(markup.contains("בְּרֵאשִׁ֖ית")); // taamim preserved in pesukim
     }
 }

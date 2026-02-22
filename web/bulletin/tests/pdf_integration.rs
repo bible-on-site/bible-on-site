@@ -25,12 +25,8 @@ mod pdf_generation {
     fn generates_valid_pdf_for_single_perek() {
         let fonts = fonts_dir();
         assert!(
-            fonts.join("FrankRuhlLibre-Regular.ttf").exists(),
-            "Regular font must exist"
-        );
-        assert!(
-            fonts.join("FrankRuhlLibre-Bold.ttf").exists(),
-            "Bold font must exist"
+            fonts.join("TaameyD-Regular.ttf").exists(),
+            "TaameyD-Regular.ttf font must exist"
         );
 
         // Look up perek 1 (בראשית א') from embedded data
@@ -44,12 +40,11 @@ mod pdf_generation {
                 perek_heb: tanach::perek_to_hebrew(perek_data.perek_in_sefer),
                 header: perek_data.header.clone(),
                 pesukim: perek_data.pesukim.clone(),
+                articles: vec![],
             }],
         };
 
-        let doc = pdf::build_pdf(&req, &[], &fonts_dir()).unwrap();
-        let mut buf = Vec::new();
-        doc.render(&mut buf).unwrap();
+        let buf = pdf::build_pdf(&req, &fonts_dir()).unwrap();
 
         assert!(
             buf.len() > 1000,
@@ -69,12 +64,24 @@ mod pdf_generation {
         let perek_ids = [118, 119, 120];
         let perakim: Vec<pdf::PdfPerekInput> = perek_ids
             .iter()
-            .map(|&id| {
+            .enumerate()
+            .map(|(i, &id)| {
                 let data = tanach::get_perek(id).unwrap_or_else(|| panic!("perek {} must exist", id));
+                let articles = if i == 0 {
+                    // Attach a sample article to the first perek
+                    vec![(
+                        "מאמר לדוגמה".to_string(),
+                        "הרב ישראל".to_string(),
+                        "<p>תוכן המאמר כאן</p><p>פסקה שנייה של המאמר</p>".to_string(),
+                    )]
+                } else {
+                    vec![]
+                };
                 pdf::PdfPerekInput {
                     perek_heb: tanach::perek_to_hebrew(data.perek_in_sefer),
                     header: data.header.clone(),
                     pesukim: data.pesukim.clone(),
+                    articles,
                 }
             })
             .collect();
@@ -87,15 +94,7 @@ mod pdf_generation {
             perakim,
         };
 
-        let articles = vec![(
-            "מאמר לדוגמה".to_string(),
-            "הרב ישראל".to_string(),
-            "תוכן המאמר כאן\n\nפסקה שנייה של המאמר".to_string(),
-        )];
-
-        let doc = pdf::build_pdf(&req, &articles, &fonts_dir()).unwrap();
-        let mut buf = Vec::new();
-        doc.render(&mut buf).unwrap();
+        let buf = pdf::build_pdf(&req, &fonts_dir()).unwrap();
 
         assert!(buf.len() > 1000, "Multi-perek PDF should be > 1KB");
         assert_eq!(&buf[0..5], b"%PDF-", "Output should start with PDF header");

@@ -20,8 +20,9 @@ path = "src/main.rs"
 lambda_http = "0.13"
 lambda_runtime = "0.13"
 
-# PDF generation
-genpdf = "0.2"
+# PDF generation via Typst engine (proper Hebrew text shaping via rustybuzz)
+typst-as-lib = { version = "0.15", default-features = false }
+typst-pdf = "0.14"
 
 # Database — shared layer from API
 sea-orm = { version = "1.1.19", default-features = false, features = [
@@ -44,8 +45,6 @@ anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Unicode grapheme handling for RTL
-unicode-segmentation = "1.12"
 
 # Env
 dotenvy = "0.15"

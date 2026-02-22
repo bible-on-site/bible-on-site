@@ -15,26 +15,43 @@ use crate::services;
 
 // ──────────────────── Shared core logic ────────────────────────
 
-/// Core PDF generation: resolve perek data → fetch articles → build PDF → return bytes.
+/// Core PDF generation: resolve perek data → fetch articles per perek → build PDF → return bytes.
 async fn generate_pdf_core(req: GeneratePdfRequest) -> Result<(Vec<u8>, String), String> {
     if req.perakim_ids.is_empty() {
         return Err("perakimIds must not be empty".into());
     }
 
-    // Resolve perek data from embedded Tanach text
-    let perakim: Vec<pdf::PdfPerekInput> = req
-        .perakim_ids
-        .iter()
-        .map(|&id| {
-            let data = tanach::get_perek(id)
-                .ok_or_else(|| format!("Unknown perekId: {}", id))?;
-            Ok(pdf::PdfPerekInput {
-                perek_heb: tanach::perek_to_hebrew(data.perek_in_sefer),
-                header: data.header.clone(),
-                pesukim: data.pesukim.clone(),
-            })
-        })
-        .collect::<Result<Vec<_>, String>>()?;
+    // Optionally connect to DB for articles
+    let db = if req.include_articles {
+        Some(
+            Database::new()
+                .await
+                .map_err(|e| format!("DB connection failed: {}", e))?,
+        )
+    } else {
+        None
+    };
+
+    // Resolve perek data from embedded Tanach text and attach articles per-perek
+    let mut perakim: Vec<pdf::PdfPerekInput> = Vec::with_capacity(req.perakim_ids.len());
+    for &id in &req.perakim_ids {
+        let data = tanach::get_perek(id).ok_or_else(|| format!("Unknown perekId: {}", id))?;
+
+        let articles = if let Some(ref db) = db {
+            fetch_articles_for_perek(db, id, &req)
+                .await
+                .map_err(|e| format!("Failed to fetch articles: {}", e))?
+        } else {
+            vec![]
+        };
+
+        perakim.push(pdf::PdfPerekInput {
+            perek_heb: tanach::perek_to_hebrew(data.perek_in_sefer),
+            header: data.header.clone(),
+            pesukim: data.pesukim.clone(),
+            articles,
+        });
+    }
 
     // Derive sefer name from request or first perek's embedded data
     let sefer_name = req.sefer_name.clone().unwrap_or_else(|| {
@@ -42,18 +59,6 @@ async fn generate_pdf_core(req: GeneratePdfRequest) -> Result<(Vec<u8>, String),
             .map(|d| d.sefer_name.clone())
             .unwrap_or_default()
     });
-
-    // Only connect to DB if we need articles
-    let articles = if req.include_articles {
-        let db = Database::new()
-            .await
-            .map_err(|e| format!("DB connection failed: {}", e))?;
-        fetch_articles(&db, &req)
-            .await
-            .map_err(|e| format!("Failed to fetch articles: {}", e))?
-    } else {
-        vec![]
-    };
 
     let fonts_dir: PathBuf = env::var("FONTS_DIR")
         .map(PathBuf::from)
@@ -64,12 +69,8 @@ async fn generate_pdf_core(req: GeneratePdfRequest) -> Result<(Vec<u8>, String),
         perakim,
     };
 
-    let doc = pdf::build_pdf(&pdf_req, &articles, &fonts_dir)
+    let buf = pdf::build_pdf(&pdf_req, &fonts_dir)
         .map_err(|e| format!("PDF generation failed: {}", e))?;
-
-    let mut buf = Vec::new();
-    doc.render(&mut buf)
-        .map_err(|e| format!("PDF render failed: {}", e))?;
 
     let filename = build_filename(&sefer_name, &req.perakim_ids);
 
@@ -82,30 +83,29 @@ async fn generate_pdf_core(req: GeneratePdfRequest) -> Result<(Vec<u8>, String),
     Ok((buf, filename))
 }
 
-async fn fetch_articles(
+/// Fetch articles for a single perek, applying optional filters.
+async fn fetch_articles_for_perek(
     db: &Database,
+    perek_id: i32,
     req: &GeneratePdfRequest,
 ) -> anyhow::Result<Vec<(String, String, String)>> {
-    let mut articles: Vec<(String, String, String)> = Vec::new();
+    let mut perek_articles = services::get_articles_by_perek(db, perek_id).await?;
 
-    for &perek_id in &req.perakim_ids {
-        let mut perek_articles = services::get_articles_by_perek(db, perek_id).await?;
+    if !req.article_ids.is_empty() {
+        perek_articles.retain(|a| req.article_ids.contains(&a.id));
+    }
+    if !req.author_ids.is_empty() {
+        perek_articles.retain(|a| req.author_ids.contains(&(a.author_id as i32)));
+    }
 
-        if !req.article_ids.is_empty() {
-            perek_articles.retain(|a| req.article_ids.contains(&a.id));
-        }
-        if !req.author_ids.is_empty() {
-            perek_articles.retain(|a| req.author_ids.contains(&(a.author_id as i32)));
-        }
-
-        for article in perek_articles {
-            let author = services::get_author(db, article.author_id as i32).await?;
-            articles.push((
-                article.name.clone(),
-                author.name.clone(),
-                article.content.clone().unwrap_or_default(),
-            ));
-        }
+    let mut articles = Vec::new();
+    for article in perek_articles {
+        let author = services::get_author(db, article.author_id as i32).await?;
+        articles.push((
+            article.name.clone(),
+            author.name.clone(),
+            article.content.clone().unwrap_or_default(),
+        ));
     }
 
     Ok(articles)
@@ -128,9 +128,9 @@ fn build_filename(sefer_name: &str, perakim_ids: &[i32]) -> String {
         .unwrap_or_default();
 
     if perakim_ids.len() == 1 {
-        format!("{}-{}׳.pdf", sefer_name, first_heb)
+        format!("{}-{}.pdf", sefer_name, first_heb)
     } else {
-        format!("{}-{}׳-{}׳.pdf", sefer_name, first_heb, last_heb)
+        format!("{}-{}-{}.pdf", sefer_name, first_heb, last_heb)
     }
 }
 

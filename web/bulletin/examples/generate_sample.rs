@@ -19,13 +19,18 @@ fn main() {
             perek_heb: tanach::perek_to_hebrew(perek_data.perek_in_sefer),
             header: perek_data.header.clone(),
             pesukim: perek_data.pesukim.clone(),
+            articles: vec![(
+                "מאמר לדוגמה".to_string(),
+                "הרב ישראל".to_string(),
+                "<p>תוכן המאמר כאן.</p><p>פסקה שנייה של <b>המאמר</b>.</p>".to_string(),
+            )],
         }],
     };
 
-    let doc = pdf::build_pdf(&req, &[], &fonts_dir).unwrap();
+    let pdf_bytes = pdf::build_pdf(&req, &fonts_dir).unwrap();
 
     let output_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("sample_output.pdf");
-    doc.render_to_file(&output_path).unwrap();
+    fs::write(&output_path, &pdf_bytes).unwrap();
 
     println!("Sample PDF generated: {}", output_path.display());
     println!(
