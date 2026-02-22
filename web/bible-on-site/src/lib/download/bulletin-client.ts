@@ -74,7 +74,6 @@ function invokeBulletinBinary(request: BulletinRequest): Uint8Array {
 			RUST_LOG: process.env.RUST_LOG ?? "warn",
 		},
 		timeout: 30_000, // 30s — matches Lambda timeout
-		encoding: "buffer",
 	});
 
 	if (result.length < 5) {

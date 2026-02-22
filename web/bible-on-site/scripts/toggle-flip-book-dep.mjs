@@ -13,7 +13,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkgPath = path.resolve(__dirname, "..", "package.json");
 
 const LOCAL_REF = "file:../../../html-flip-book/react";
-const NPM_VERSION = "0.0.0-alpha.33"; // Update this when upgrading
+const NPM_VERSION = "0.0.0-alpha.36"; // Update this when upgrading
 
 const mode = process.argv[2];
 

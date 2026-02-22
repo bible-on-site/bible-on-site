@@ -20,17 +20,16 @@ const sourceJson = resolve(
 );
 const outputJson = resolve(bulletinDir, "data", "tanach-text.json");
 
-const TAAMIM_REGEX = /[\u0591-\u05AF]/g;
-
-function stripTaamim(text) {
-	return text.replace(TAAMIM_REGEX, "");
-}
-
 function segmentsToText(segments) {
-	return segments
-		.filter((s) => s.type === "qri" || s.type === "ktiv")
-		.map((s) => s.value)
-		.join(" ");
+	const filtered = segments.filter((s) => s.type === "qri" || s.type === "ktiv");
+	let result = "";
+	for (let i = 0; i < filtered.length; i++) {
+		if (i > 0 && !result.endsWith("\u05BE")) {
+			result += " ";
+		}
+		result += filtered[i].value;
+	}
+	return result;
 }
 
 const sefarim = JSON.parse(readFileSync(sourceJson, "utf-8"));
@@ -50,7 +49,7 @@ for (const sefer of sefarim) {
 			const perekInSefer = i + 1;
 
 			const pesukim = (perek.pesukim || []).map((pasuk) =>
-				stripTaamim(segmentsToText(pasuk.segments)),
+				segmentsToText(pasuk.segments),
 			);
 
 			result[perekId] = {
