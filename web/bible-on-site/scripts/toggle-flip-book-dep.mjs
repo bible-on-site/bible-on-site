@@ -45,6 +45,38 @@ if (current === target) {
 
 pkg.dependencies["html-flip-book-react"] = target;
 fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, "\t")}\n`);
+
+if (mode === "npm") {
+	const nodeModulesLink = path.resolve(__dirname, "..", "node_modules", "html-flip-book-react");
+	try {
+		const stat = fs.lstatSync(nodeModulesLink);
+		if (stat.isSymbolicLink()) {
+			fs.unlinkSync(nodeModulesLink);
+		}
+	} catch {
+		// doesn't exist — fine
+	}
+
+	const lockPath = path.resolve(__dirname, "..", "package-lock.json");
+	try {
+		const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+		const packages = lock.packages ?? {};
+		let cleaned = false;
+		for (const key of Object.keys(packages)) {
+			if (key.includes("html-flip-book") && (packages[key].link || key.startsWith("../"))) {
+				delete packages[key];
+				cleaned = true;
+			}
+		}
+		if (cleaned) {
+			fs.writeFileSync(lockPath, `${JSON.stringify(lock, null, "\t")}\n`);
+			console.log("Cleaned stale file: link entries from package-lock.json");
+		}
+	} catch {
+		// lock file missing or invalid — npm install will regenerate it
+	}
+}
+
 console.log(`html-flip-book-react switched to ${mode}: ${target}`);
 
 if (mode === "local") {
