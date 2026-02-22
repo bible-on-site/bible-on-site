@@ -37,9 +37,9 @@ export interface DownloadActionResult {
 	data: string;
 }
 
-/** Result when no handler is set (abstract by default) */
+/** Result when download cannot be performed */
 export interface DownloadActionError {
-	error: "not_implemented";
+	error: "not_implemented" | "service_unavailable";
 }
 
 /**
@@ -53,9 +53,14 @@ export async function downloadSefer(): Promise<
 	if (!handler) {
 		return { error: "not_implemented" };
 	}
-	const [ext, bin] = await handler();
-	const data = Buffer.from(bin).toString("base64");
-	return { ext, data };
+	try {
+		const [ext, bin] = await handler();
+		const data = Buffer.from(bin).toString("base64");
+		return { ext, data };
+	} catch (e) {
+		console.error("Sefer download failed:", e);
+		return { error: "service_unavailable" };
+	}
 }
 
 /**
@@ -71,7 +76,12 @@ export async function downloadPageRanges(
 	if (!handler) {
 		return { error: "not_implemented" };
 	}
-	const [ext, bin] = await handler(pages, semanticPages, context);
-	const data = Buffer.from(bin).toString("base64");
-	return { ext, data };
+	try {
+		const [ext, bin] = await handler(pages, semanticPages, context);
+		const data = Buffer.from(bin).toString("base64");
+		return { ext, data };
+	} catch (e) {
+		console.error("Page-ranges download failed:", e);
+		return { error: "service_unavailable" };
+	}
 }

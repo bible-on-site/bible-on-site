@@ -9,6 +9,7 @@ import {
 	getAuthorByName,
 } from "../../../../lib/authors";
 import type { AuthorDetails } from "../../../../lib/authors";
+import { getPerekByPerekId } from "../../../../data/perek-dto";
 import styles from "./page.module.css";
 
 /**
@@ -146,9 +147,9 @@ export default async function AuthorPage({
 							>
 								<h3 className={styles.articleName}>{article.name}</h3>
 								<div className={styles.articleMeta}>
-									<span className={styles.perekLink}>
-										פרק {article.perekId}
-									</span>
+								<span className={styles.perekLink}>
+									{getPerekByPerekId(article.perekId).source}
+								</span>
 								</div>
 							</Link>
 						))}
