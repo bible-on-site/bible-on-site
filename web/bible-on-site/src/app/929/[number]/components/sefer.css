@@ -102,100 +102,15 @@
   background-clip: content-box;
 }
 
-/* Toolbar (html-flip-book-react/toolbar) - package does not export CSS path.
-   NOTE: The library's Toolbar.css handles RTL via dir="rtl" on the root
-   element, which makes flex-direction:row flow right-to-left automatically.
-   Do NOT add flex-direction:row-reverse — it double-reverses and swaps
-   First/Last buttons. */
+/* Toolbar: base styles now come from html-flip-book-react/styles.css.
+   Only site-specific overrides below. */
+
+/* Override border-radius: flat bottom to sit flush against book edge */
 .flipbook-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 16px;
-  min-height: 48px;
-  box-sizing: border-box;
-  background-color: rgb(0 0 0 / 0.7);
   border-radius: 8px 8px 0 0;
-  user-select: none;
-}
-
-.flipbook-toolbar-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  background-color: transparent;
-  color: #fff;
-  font-size: 20px;
-  cursor: pointer;
-  transition: background-color 0.2s ease, opacity 0.2s ease;
-}
-
-.flipbook-toolbar-button:hover:not(:disabled) {
-  background-color: rgb(255 255 255 / 0.15);
-}
-
-.flipbook-toolbar-button:active:not(:disabled) {
-  background-color: rgb(255 255 255 / 0.25);
-}
-
-.flipbook-toolbar-button:focus-visible {
-  outline: 2px solid #fff;
-  outline-offset: 2px;
-}
-
-.flipbook-toolbar-button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* Toolbar layout sections (mirrored from library Toolbar.css) */
-.flipbook-toolbar-start {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  justify-content: flex-start;
-}
-
-.flipbook-toolbar-nav-cluster {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.flipbook-toolbar-end {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  justify-content: flex-end;
-}
-
-/* RTL: flip every toolbar icon horizontally */
-.flipbook-toolbar--rtl .flipbook-toolbar-button > * {
-  transform: scaleX(-1);
-}
-
-.flipbook-toolbar-prev,
-.flipbook-toolbar-next {
-  font-size: 28px;
-  font-weight: bold;
-}
-
-.flipbook-toolbar-first,
-.flipbook-toolbar-last {
-  font-size: 16px;
 }
 
 /* Page indicator - bible-on-site customizations */
-/* Input: dark bg when not editing */
 .flipbook-toolbar input.flipbook-toolbar-indicator {
   background: rgb(30 30 30 / 0.8);
   border-color: rgb(255 255 255 / 0.2);
@@ -205,7 +120,6 @@
   text-align: center;
 }
 
-/* Input: light bg when editing for Hebrew text visibility */
 .flipbook-toolbar input.flipbook-toolbar-indicator--editing {
   background: #fff;
   border-color: rgb(0 0 0 / 0.2);
