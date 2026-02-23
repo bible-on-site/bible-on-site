@@ -22,8 +22,8 @@ coverage:
         flags:
           - app
       website:
-        target: 98%
-        threshold: 2%
+        target: 99%
+        threshold: 1%
         flags:
           - website
       data:

@@ -1,5 +1,5 @@
 "use client";
-import { toLetters, toNumber } from "gematry";
+import { toLetters } from "gematry";
 import type {
 	CoverConfig,
 	FlipBookHandle,
@@ -35,23 +35,17 @@ import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import { BlankPageContent } from "./BlankPageContent";
 import { Ptuah } from "./Ptuha";
 import { Stuma } from "./Stuma";
+import {
+	CONTENT_OFFSET,
+	buildHistoryMapper,
+	buildPageSemantics,
+	computeInitialTurnedLeaves,
+	toHebrewWithPunctuation,
+	wrapDownloadResult,
+} from "./sefer-page-utils";
 import styles from "./sefer.module.css";
 import "html-flip-book-react/styles.css";
 import "./sefer.css";
-
-/**
- * Converts a number to Hebrew letters with proper punctuation:
- * - Single letter: adds geresh (א', ב')
- * - Multiple letters: adds gershaim (י״א, כ״ג)
- */
-function toHebrewWithPunctuation(num: number): string {
-	const letters = toLetters(num, { addQuotes: true });
-	// If no gershaim present and it's a single Hebrew letter, add geresh
-	if (!letters.includes('"') && letters.length === 1) {
-		return `${letters}'`;
-	}
-	return letters;
-}
 
 /** Props we pass to FlipBook; matches html-flip-book-react FlipBookProps for typing dynamic() */
 type FlipBookProps = {
@@ -108,85 +102,24 @@ const Sefer = (props: {
 	const openBookshelf = useCallback(() => setIsBookshelfOpen(true), []);
 	const closeBookshelf = useCallback(() => setIsBookshelfOpen(false), []);
 
-	// Page layout: cover(0), cover-interior(1), TOC(2), then per-perek
-	// pairs (content, blank), then back cover.  The TOC adds 2 pages
-	// before content so every perek index is offset by +2 from the old
-	// formula: contentPageIndex = perekNum * 2 + 1  (1-based perekNum)
-	const CONTENT_OFFSET = 3; // first content page index (after cover, interior, toc)
-	const hePageSemantics: PageSemantics = useMemo(
-		() => ({
-			indexToSemanticName(pageIndex: number): string {
-				if (pageIndex < CONTENT_OFFSET) return "";
-				const adjusted = pageIndex - CONTENT_OFFSET;
-				if (adjusted % 2 !== 0) return ""; // blank page
-				const perekNum = adjusted / 2 + 1;
-				if (perekNum > perakim.length) return "";
-				return toHebrewWithPunctuation(perekNum);
-			},
-			semanticNameToIndex(semanticPageName: string): number | null {
-				const num = toNumber(semanticPageName);
-				if (num === 0) return null;
-				if (num > perakim.length) return null;
-				return (num - 1) * 2 + CONTENT_OFFSET;
-			},
-			indexToTitle(pageIndex: number): string {
-				if (pageIndex < CONTENT_OFFSET) return "";
-				const adjusted = pageIndex - CONTENT_OFFSET;
-				if (adjusted % 2 !== 0) return "";
-				const perekIdx = adjusted / 2;
-				if (perekIdx >= perakim.length) return "";
-				const perek = perakim[perekIdx];
-				// Use the perek header from the local ts-json db (e.g. "מפקד בני ישראל...")
-				// with a fallback to "פרק X" if header is missing
-				return perek.header || `פרק ${toHebrewWithPunctuation(perekIdx + 1)}`;
-			},
-		}),
+	const perekHeaders = useMemo(
+		() => perakim.map((p) => p.header),
 		[perakim],
+	);
+	const hePageSemantics: PageSemantics = useMemo(
+		() => buildPageSemantics(perakim.length, perekHeaders),
+		[perakim.length, perekHeaders],
 	);
 
 	const historyMapper: HistoryMapper | undefined = useMemo(
-		() => ({
-		pageToRoute: (pageIndex) => {
-			// Non-content pages (cover, cover-interior, TOC) have no
-			// meaningful URL.  Return null to tell the library to skip
-			// the pushState entirely — avoids triggering framework-level
-			// routing side-effects.
-			if (pageIndex < CONTENT_OFFSET) return null;
-			const perekIdx = Math.floor((pageIndex - CONTENT_OFFSET) / 2);
-			const clampedIdx = Math.min(perekIdx, (perekIds?.length ?? 1) - 1);
-			const id = perekIds?.[clampedIdx];
-			if (id == null) return null;
-			return `/929/${id}?book`;
-		},
-			routeToPage: (route) => {
-				// Only resolve perekId when the route contains ?book (sefer-view mode).
-				if (route.includes("?book")) {
-					const m = route.match(/\/929\/(\d+)/);
-					if (m) {
-						const id = Number.parseInt(m[1], 10);
-						const idx = perekIds?.indexOf(id) ?? -1;
-						if (idx >= 0) return idx * 2 + CONTENT_OFFSET;
-					}
-				}
-				// Backward compat: handle old #page/{hebrewLetter} bookmarks
-				const hashMatch = route.match(/#page\/(.+)/);
-				if (hashMatch) {
-					return hePageSemantics.semanticNameToIndex(hashMatch[1]);
-				}
-				return null;
-			},
-		}),
+		() => buildHistoryMapper(perekIds, hePageSemantics),
 		[perekIds, hePageSemantics],
 	);
 
-	const initialTurnedLeaves = useMemo(() => {
-		// Derive the initial position from perekObj.perekId directly.
-		const idx = perekIds?.indexOf(perekObj.perekId) ?? -1;
-		if (idx < 0) return undefined;
-		const pageIndex = idx * 2 + CONTENT_OFFSET; // content page (accounts for TOC offset)
-		const turnedCount = Math.ceil(pageIndex / 2);
-		return Array.from({ length: turnedCount }, (_, i) => i);
-	}, [perekIds, perekObj.perekId]);
+	const initialTurnedLeaves = useMemo(
+		() => computeInitialTurnedLeaves(perekIds, perekObj.perekId),
+		[perekIds, perekObj.perekId],
+	);
 
 	const frontCover = (
 		<section
@@ -355,14 +288,12 @@ const Sefer = (props: {
 							entireBookFilename: perekObj.sefer,
 							rangeFilename: perekObj.sefer,
 							downloadContext: { seferName: perekObj.sefer },
-							onDownloadSefer: async () => {
-								const r = await downloadSefer();
-								return "error" in r ? null : { ext: r.ext, data: r.data };
-							},
-							onDownloadPageRange: async (pages, semanticPages, context) => {
-								const r = await downloadPageRanges(pages, semanticPages, context);
-								return "error" in r ? null : { ext: r.ext, data: r.data };
-							},
+							onDownloadSefer: async () =>
+								wrapDownloadResult(await downloadSefer()),
+							onDownloadPageRange: async (pages, semanticPages, context) =>
+								wrapDownloadResult(
+									await downloadPageRanges(pages, semanticPages, context),
+								),
 						}}
 					/>
 				</div>

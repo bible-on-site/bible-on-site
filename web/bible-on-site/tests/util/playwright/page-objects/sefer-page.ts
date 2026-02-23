@@ -34,13 +34,9 @@ export class SeferPage {
 	 * Note: This assumes the test is running on tablet+ viewport where the toggle is visible
 	 */
 	async openSeferView(): Promise<void> {
-		const seferViewButton = this.page.getByTestId(
-			"read-mode-toggler-sefer-view-button",
-		);
-		await seferViewButton.scrollIntoViewIfNeeded();
-		await seferViewButton.click({ timeout: 10_000 });
-		// Wait for the overlay to become visible instead of using a fixed timeout,
-		// which can be flaky in CI environments
+		const toggler = this.page.getByTestId("read-mode-toggler");
+		await toggler.scrollIntoViewIfNeeded();
+		await toggler.click({ timeout: 10_000 });
 		await this.verifySeferViewIsOpen();
 	}
 
