@@ -2,8 +2,8 @@
  * Bump the patch version of a Cargo-based module.
  * Replaces the bash `bump_version.sh` scripts with a TypeScript implementation.
  *
- * Usage: node --import tsx ./bump-cargo-version.mts --module <module-name-or-path>
- * Example: node --import tsx ./bump-cargo-version.mts --module bulletin
+ * Usage: node --import tsx ./bump-cargo-version.ts --module <module-name-or-path>
+ * Example: node --import tsx ./bump-cargo-version.ts --module bulletin
  */
 
 import { execSync } from "node:child_process";
