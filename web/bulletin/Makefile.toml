@@ -1,3 +1,4 @@
+# Bulletin module task definitions (cargo-make)
 [config]
 skip_core_tasks = true
 default_to_workspace = false

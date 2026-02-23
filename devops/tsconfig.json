@@ -28,6 +28,6 @@
 		"jsx": "preserve"
 	},
 
-	"include": ["./**/*.mts"],
+	"include": ["./**/*.mts", "./**/*.ts"],
 	"exclude": ["node_modules/*"]
 }
