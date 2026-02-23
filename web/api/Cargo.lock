@@ -575,7 +575,7 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "bible-on-site-api"
-version = "0.1.23"
+version = "0.1.24"
 dependencies = [
  "actix-web",
  "anyhow",
@@ -729,9 +729,9 @@ dependencies = [
 
 [[package]]
 name = "cargo-llvm-cov"
-version = "0.6.24"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e7b0ac0ba19c67fe7d8c999c82a00a93f852f53c3f05f76f96ebb09827de3c5"
+checksum = "3df082077af932cde39d8434e1ab147f80bda1f9fc4da64a699b109f897fcd63"
 dependencies = [
  "anyhow",
  "camino",
