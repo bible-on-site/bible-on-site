@@ -20,7 +20,8 @@ export const pool = mysql.createPool({
 });
 
 export async function query<T>(sql: string, params?: unknown[]): Promise<T[]> {
-	const [rows] = await pool.execute(sql, params ?? []);
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- mysql2 v3.17 narrowed QueryValues
+	const [rows] = await pool.execute(sql, (params ?? []) as any);
 	return rows as T[];
 }
 
@@ -36,6 +37,7 @@ export async function execute(
 	sql: string,
 	params?: unknown[],
 ): Promise<mysql.ResultSetHeader> {
-	const [result] = await pool.execute(sql, params ?? []);
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- mysql2 v3.17 narrowed QueryValues
+	const [result] = await pool.execute(sql, (params ?? []) as any);
 	return result as mysql.ResultSetHeader;
 }
