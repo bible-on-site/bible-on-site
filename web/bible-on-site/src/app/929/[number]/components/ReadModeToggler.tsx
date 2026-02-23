@@ -24,7 +24,11 @@ const ReadModeToggler = forwardRef<
 	}, [props.toggled]);
 
 	return (
-		<label ref={ref ?? toggleRef} className={styles.label}>
+		<label
+			ref={ref ?? toggleRef}
+			className={styles.label}
+			data-testid="read-mode-toggler"
+		>
 			<input
 				className={styles.input}
 				id="toggle"
