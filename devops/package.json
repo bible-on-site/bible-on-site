@@ -16,7 +16,7 @@
 		"deploy:ecr": "node --import tsx ./deploy/ecr-deploy/index.mts",
 		"deploy:data": "node --import tsx ./deploy/data-deploy/index.mts",
 		"deploy:bulletin": "node --import tsx ./deploy/bulletin-deploy/index.mts",
-		"bump:cargo": "node --import tsx ./bump-cargo-version.mts"
+		"bump:cargo": "node --import tsx ./bump-cargo-version.ts"
 	},
 	"dependencies": {
 		"@aws-sdk/client-ec2": "3.996.0",
