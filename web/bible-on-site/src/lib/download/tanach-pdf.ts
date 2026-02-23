@@ -229,6 +229,7 @@ function drawRtlLine(
 	text: string,
 	font: PDFFont,
 	size: number,
+	/* istanbul ignore next -- default never reached; all callers pass color */
 	color = rgb(0, 0, 0),
 ): void {
 	const page = currentPage(ctx);

@@ -542,6 +542,21 @@ describe("buildTanachPdfForPerekRange", () => {
 		expect(result).toBeInstanceOf(Uint8Array);
 	});
 
+	it("triggers page overflow (ensureSpace) with many pesukim", async () => {
+		const manyPesukim = Array.from({ length: 50 }, (_, i) => `פסוק ${i + 1}`);
+		mockGetPerekByPerekId.mockReturnValue(
+			makePerek("בראשית", "א", "פרק א", manyPesukim) as ReturnType<
+				typeof getPerekByPerekId
+			>,
+		);
+
+		await buildTanachPdfForPerekRange([1]);
+
+		// 50 pesukim should overflow a single page (842pt - margins),
+		// causing ensureSpace to call addPage at least twice (initial + overflow)
+		expect(pdfLib.__mockDoc.addPage.mock.calls.length).toBeGreaterThanOrEqual(2);
+	});
+
 	it("adds page numbers to all pages", async () => {
 		mockGetPerekByPerekId.mockReturnValue(
 			makePerek("בראשית", "א", "פרק א", ["text"]) as ReturnType<
