@@ -5,11 +5,12 @@ namespace BibleOnSite.Services;
 
 /// <summary>
 /// Service for loading perushim notes (commentary text per pasuk).
-/// Notes are delivered via Play Asset Delivery (PAD) as an on-demand asset pack bundled in the AAB.
-/// Data updates are coupled to app releases — updating perushim data requires a new app version
-/// and AAB upload to Google Play. On app update, the client compares build_timestamp in the
-/// local DB vs the PAD version and auto-upgrades if the PAD copy is newer.
-/// If the notes DB is not yet available, returns empty; PAD download can be triggered separately.
+/// Android: delivered via Play Asset Delivery (PAD) as an on-demand asset pack in the AAB.
+/// iOS: delivered via Apple On-Demand Resources (ODR) tagged in an asset catalog.
+/// Data updates are coupled to app releases — updating perushim data requires a new app version.
+/// On app update the client compares build_timestamp in the local DB vs the store-delivered
+/// version and auto-upgrades if the store copy is newer.
+/// If the notes DB is not yet available, returns empty; download can be triggered separately.
 /// </summary>
 public class PerushimNotesService
 {
@@ -54,7 +55,8 @@ public class PerushimNotesService
 
     /// <summary>
     /// Initializes the notes connection. Does not download — only opens if file exists.
-    /// On Android, also copies from PAD if the pack is already available or has a newer build.
+    /// Also copies from the on-demand delivery cache (PAD on Android, ODR on iOS) if
+    /// the pack is already available or has a newer build.
     /// </summary>
     public async Task InitializeAsync()
     {
@@ -89,8 +91,8 @@ public class PerushimNotesService
     }
 
     /// <summary>
-    /// Attempts to download the notes database. On Android, tries PAD first, then HTTP fallback.
-    /// Call when IsAvailable is false.
+    /// Attempts to download the notes database via the platform's on-demand delivery
+    /// mechanism (PAD on Android, ODR on iOS). Call when IsAvailable is false.
     /// </summary>
     public async Task<bool> TryDownloadNotesAsync(IProgress<double>? progress = null)
     {
@@ -122,7 +124,7 @@ public class PerushimNotesService
             }
         }
 
-        Console.Error.WriteLine("Perushim notes not available via PAD. Publish an AAB with the perushim_notes asset pack.");
+        Console.Error.WriteLine("Perushim notes not available via on-demand delivery. Ensure the perushim_notes asset pack (Android) or ODR tag (iOS) is included in the build.");
         return false;
     }
 

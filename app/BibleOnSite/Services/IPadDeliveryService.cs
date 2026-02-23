@@ -1,20 +1,22 @@
 namespace BibleOnSite.Services;
 
 /// <summary>
-/// Service for Play Asset Delivery (PAD) on Android.
-/// On other platforms, this is a no-op (always returns false/null).
+/// On-demand asset delivery abstraction.
+/// Android: Play Asset Delivery (PAD) via AssetPackManager.
+/// iOS / Mac Catalyst: Apple On-Demand Resources (ODR) via NSBundleResourceRequest.
+/// Other platforms: no-op (always returns false/null).
 /// </summary>
 public interface IPadDeliveryService
 {
     /// <summary>
-    /// Attempts to get the path to an asset pack's assets folder.
-    /// Returns null if the pack is not yet downloaded/installed.
+    /// Returns a directory path containing the asset pack's files if already
+    /// available locally, or null when a download is still required.
     /// </summary>
     Task<string?> TryGetAssetPathAsync(string packName, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Requests download of an on-demand asset pack.
-    /// Returns true if the pack was downloaded and is available at the assets path.
+    /// Downloads the on-demand asset pack from the store.
+    /// Returns true once the pack is downloaded and ready at the assets path.
     /// </summary>
     Task<bool> FetchAsync(
         string packName,
