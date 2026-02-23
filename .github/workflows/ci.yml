@@ -2017,34 +2017,39 @@ jobs:
             MAX_RETRIES=12
             RETRY_COUNT=0
             SLEEP_SECONDS=10
+            OWNER_REPO=(${GITHUB_REPOSITORY/\// })
+            if [ "$GITHUB_EVENT_NAME" == "pull_request" ]; then
+              COMMIT_SHA=$(cat $GITHUB_EVENT_PATH | jq -r .pull_request.head.sha)
+            else
+              COMMIT_SHA=${{ github.sha }}
+            fi
+            echo "Checking Codecov for commit: $COMMIT_SHA"
+            CODECOV_URL="https://api.codecov.io/api/v2/github/${OWNER_REPO[0]}/repos/${OWNER_REPO[1]}/commits/$COMMIT_SHA"
             while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-              OWNER_REPO=(${GITHUB_REPOSITORY/\// })
-              if [ "$GITHUB_EVENT_NAME" == "pull_request" ]; then
-                GITHUB_SHA=$(cat $GITHUB_EVENT_PATH | jq -r .pull_request.head.sha)
-              else
-                GITHUB_SHA=${{ github.sha }} # Generated
-              fi
-              CODECOV_JSON=$(curl -s -H "Authorization: token ${{ secrets.CODECOV_API_TOKEN }}" "https://api.codecov.io/api/v2/github/${OWNER_REPO[0]}/repos/${OWNER_REPO[1]}/commits/$GITHUB_SHA") # Generated
-              if [ "$(echo "$CODECOV_JSON" | jq -r 'has("error") and (.error != null) and (.error != "")')" = "true" ]; then
-                echo "Codecov API returned error: $(echo "$CODECOV_JSON" | jq -r '.error')"
-                echo "Failed to get Codecov status"
-                echo "status=failure" >> $GITHUB_OUTPUT
-                exit 1
-              fi
-              CODECOV_STATUS=$(echo "$CODECOV_JSON" | jq -r '.state')
-              echo "Codecov state: $CODECOV_STATUS (attempt $((RETRY_COUNT+1))/$MAX_RETRIES, next wait ${SLEEP_SECONDS}s)"
-              if [ "$CODECOV_STATUS" = "complete" ]; then
-                CODECOV_RESULT=$(echo "$CODECOV_JSON" | jq -r '.ci_passed')
-                if [ "$CODECOV_RESULT" = "false" ]; then
-                  echo "Codecov check failed (ci_passed=false)"
-                  echo "status=failure" >> $GITHUB_OUTPUT
-                  exit 1
+              HTTP_CODE=$(curl -s -o /tmp/codecov_response.json -w "%{http_code}" -H "Authorization: token ${{ secrets.CODECOV_API_TOKEN }}" "$CODECOV_URL")
+              CODECOV_JSON=$(cat /tmp/codecov_response.json)
+              if [ "$HTTP_CODE" != "200" ]; then
+                echo "Codecov API returned HTTP $HTTP_CODE (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
+                if [ $RETRY_COUNT -eq 0 ]; then
+                  echo "Response: $CODECOV_JSON"
                 fi
-                echo "Codecov check passed"
-                break
+              else
+                CODECOV_STATUS=$(echo "$CODECOV_JSON" | jq -r '.state // "null"')
+                echo "Codecov state: $CODECOV_STATUS (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
+                if [ "$CODECOV_STATUS" = "complete" ]; then
+                  CODECOV_RESULT=$(echo "$CODECOV_JSON" | jq -r '.ci_passed')
+                  if [ "$CODECOV_RESULT" = "false" ]; then
+                    echo "Codecov check failed (ci_passed=false)"
+                    echo "status=failure" >> $GITHUB_OUTPUT
+                    exit 1
+                  fi
+                  echo "Codecov check passed"
+                  break
+                fi
               fi
               if [ $RETRY_COUNT -eq $((MAX_RETRIES-1)) ]; then
                 echo "Timeout waiting for Codecov status after $MAX_RETRIES attempts"
+                echo "Last response (HTTP $HTTP_CODE): $CODECOV_JSON"
                 echo "status=failure" >> $GITHUB_OUTPUT
                 exit 1
               fi
