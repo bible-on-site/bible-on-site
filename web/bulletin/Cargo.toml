@@ -18,7 +18,7 @@ path = "src/main.rs"
 [dependencies]
 # AWS Lambda runtime (production)
 lambda_http = "1.0"
-lambda_runtime = "0.13"
+lambda_runtime = "1.0"
 
 # PDF generation via Typst engine (proper Hebrew text shaping via rustybuzz)
 typst-as-lib = { version = "0.15", default-features = false }
