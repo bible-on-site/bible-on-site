@@ -1,7 +1,7 @@
 # Note: Using classic docker build (DOCKER_BUILDKIT=0) for network:host support
 # Do not add BuildKit-specific syntax directives (e.g. --mount)
 
-ARG RUST_VERSION=1.92.0
+ARG RUST_VERSION=1.93.1
 ARG APP_NAME=api
 
 ################################################################################

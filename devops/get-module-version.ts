@@ -9,10 +9,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** Full module paths as used in the repository */
-export type ModulePath = "web/bible-on-site" | "web/api" | "app";
+export type ModulePath = "web/bible-on-site" | "web/api" | "web/bulletin" | "app";
 
 /** Short module names for CLI and tags */
-export type ModuleName = "website" | "api" | "app";
+export type ModuleName = "website" | "api" | "bulletin" | "app";
 
 export interface ModuleConfig {
 	/** Full path in the repository */
@@ -57,6 +57,18 @@ export const MODULES: Record<ModulePath, ModuleConfig> = {
 			return match?.[1] ?? null;
 		},
 	},
+	"web/bulletin": {
+		path: "web/bulletin",
+		name: "bulletin",
+		tagPrefix: "bulletin-v",
+		versionFile: "web/bulletin/Cargo.toml",
+		nativeCommand: "cargo make version",
+		workingDir: "web/bulletin",
+		extractFromFile: (content: string) => {
+			const match = content.match(/^version\s*=\s*"([^"]+)"/m);
+			return match?.[1] ?? null;
+		},
+	},
 	app: {
 		path: "app",
 		name: "app",
@@ -77,6 +89,7 @@ export const MODULES: Record<ModulePath, ModuleConfig> = {
 const NAME_TO_PATH: Record<ModuleName, ModulePath> = {
 	website: "web/bible-on-site",
 	api: "web/api",
+	bulletin: "web/bulletin",
 	app: "app",
 };
 

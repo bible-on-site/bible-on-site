@@ -26,6 +26,12 @@ coverage:
         threshold: 1%
         flags:
           - website
+      bulletin:
+        target: auto
+        threshold: 1%
+        informational: true
+        flags:
+          - bulletin
       data:
         # TODO: Increase target once data is covered by CI
         target: 0%
@@ -52,6 +58,9 @@ flags:
   website:
     paths:
       - web/bible-on-site/src/
+  bulletin:
+    paths:
+      - web/bulletin/src/
   data:
     paths:
       - data/

@@ -1,13 +1,13 @@
 #!/bin/bash
 # Shared pre-commit checks for a module
 # Usage: shared-checks.sh <module_path>
-# where module_path is one of: app, web/api, web/bible-on-site
+# where module_path is one of: app, web/api, web/bible-on-site, web/bulletin
 
 module_path="$1"
 
 if [ -z "$module_path" ]; then
     echo "Usage: shared-checks.sh <module_path>"
-    echo "  module_path: app, web/api, or web/bible-on-site"
+    echo "  module_path: app, web/api, web/bible-on-site, or web/bulletin"
     exit 1
 fi
 
@@ -15,6 +15,7 @@ fi
 case "$module_path" in
     "web/bible-on-site") module_name="website" ;;
     "web/api") module_name="api" ;;
+    "web/bulletin") module_name="bulletin" ;;
     "app") module_name="app" ;;
     *)
         echo "Unknown module: $module_path"

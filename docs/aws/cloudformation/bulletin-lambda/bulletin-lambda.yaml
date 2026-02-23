@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Bible on Site - Bulletin PDF Generator Lambda
+  Rust-based Lambda function that generates PDF bulletins from Tanach perakim.
+  Deployed via ZIP package (not container image) for optimal cold start performance.
+
+Parameters:
+  FunctionName:
+    Type: String
+    Default: bible-on-site-bulletin
+  MemorySizeMB:
+    Type: Number
+    Default: 512
+    Description: Lambda memory in MB. PDF generation with Typst + Hebrew shaping needs adequate memory.
+  TimeoutSeconds:
+    Type: Number
+    Default: 30
+    Description: Must match the timeout in bulletin-client.ts on the website side.
+  DatabaseUrl:
+    Type: String
+    Default: ""
+    Description: Optional RDS connection string. Only needed when include_articles is enabled.
+
+Resources:
+  BulletinLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: bible-on-site-bulletin-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: bulletin-lambda-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${FunctionName}:*"
+
+  BulletinLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Ref FunctionName
+      Runtime: provided.al2023
+      Architectures:
+        - x86_64
+      Handler: bootstrap
+      Role: !GetAtt BulletinLambdaRole.Arn
+      MemorySize: !Ref MemorySizeMB
+      Timeout: !Ref TimeoutSeconds
+      Environment:
+        Variables:
+          RUST_LOG: info
+          DATABASE_URL: !Ref DatabaseUrl
+      Code:
+        ZipFile: |
+          # Placeholder - actual code deployed via CI/CD pipeline
+          # The binary is built from web/bulletin/ and deployed as a ZIP containing 'bootstrap'
+
+  BulletinLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${FunctionName}"
+      RetentionInDays: 30
+
+Outputs:
+  BulletinLambdaArn:
+    Description: ARN of the Bulletin Lambda function
+    Value: !GetAtt BulletinLambdaFunction.Arn
+    Export:
+      Name: BulletinLambdaArn
+
+  BulletinLambdaRoleArn:
+    Description: ARN of the Bulletin Lambda execution role
+    Value: !GetAtt BulletinLambdaRole.Arn

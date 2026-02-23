@@ -1,0 +1,79 @@
+name: Continuous Deployment - Bulletin
+
+on:
+  repository_dispatch:
+    types: [deploy-bulletin]
+
+jobs:
+  deploy:
+    permissions:
+      contents: read
+      id-token: write # Required for OIDC authentication with AWS
+    runs-on: ubuntu-latest
+
+    env:
+      DEVOPS_DIRECTORY: devops
+      DEVOPS_NODE_CACHE_PATH: devops/package-lock.json
+      DEVOPS_NODE_VERSION_FILE: devops/package.json
+      MODULE_NAME: ${{ github.event.client_payload.module_name }}
+      MODULE_DIRECTORY: ${{ github.event.client_payload.module_directory }}
+      MODULE_VERSION: ${{ github.event.client_payload.module_version }}
+      RELEASED_ARTIFACT_NAME: ${{ github.event.client_payload.released_artifact_name }}
+      LAMBDA_ZIP_OUTPUT_DIR: ${{ github.event.client_payload.module_directory }}/.release
+      CI_RUN_ID: ${{ github.event.client_payload.ci_run_id }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.client_payload.ref }}
+
+      - name: Setup Node.js
+        id: setup-node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
+          cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
+          cache: npm
+
+      - name: Install npm Dependencies
+        id: npm_ci
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        run: |
+          npm ci --no-audit
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Prepare Lambda ZIP Restore
+        id: prepare_restore
+        run: |
+          mkdir -p "$LAMBDA_ZIP_OUTPUT_DIR"
+
+      - name: Restore Lambda ZIP
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ env.RELEASED_ARTIFACT_NAME }}
+          path: ${{ env.LAMBDA_ZIP_OUTPUT_DIR }}
+          run-id: ${{ env.CI_RUN_ID }}
+          github-token: ${{ secrets.BOT_PAT }}
+
+      - name: Find Lambda ZIP
+        id: find_zip
+        run: |
+          LAMBDA_ZIP=$(find "${{ env.LAMBDA_ZIP_OUTPUT_DIR }}" -name "*.zip" | head -1)
+          echo "LAMBDA_ZIP=${LAMBDA_ZIP}" >> $GITHUB_OUTPUT
+          echo "Found Lambda ZIP: ${LAMBDA_ZIP}"
+
+      - name: Deploy to Lambda
+        id: deploy
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        run: |
+          npm run deploy:bulletin -- \
+            --module-version "${{ env.MODULE_VERSION }}" \
+            --lambda-zip "${{ github.workspace }}/${{ steps.find_zip.outputs.LAMBDA_ZIP }}"
