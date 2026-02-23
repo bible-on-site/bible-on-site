@@ -11,4 +11,5 @@ tokio.workspace = true
 anyhow.workspace = true
 clap = { version = "4", features = ["derive", "env"] }
 dotenvy.workspace = true
-sqlx = { version = "0.8", features = ["runtime-tokio", "mysql"] }
+sqlx-core = { version = "0.8", features = ["_rt-tokio"] }
+sqlx-mysql = "0.8"

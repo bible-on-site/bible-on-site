@@ -5,8 +5,9 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use sqlx::mysql::MySqlConnectOptions;
-use sqlx::{ConnectOptions, Connection, MySqlConnection};
+use sqlx_core::connection::{ConnectOptions, Connection};
+use sqlx_core::raw_sql::raw_sql;
+use sqlx_mysql::{MySqlConnectOptions, MySqlConnection};
 use std::path::Path;
 use std::str::FromStr;
 
@@ -93,7 +94,7 @@ async fn main() -> Result<()> {
     // Handle --drop-only mode
     if cli.drop_only {
         let drop_db_sql = format!("DROP DATABASE IF EXISTS `{}`", database_name);
-        sqlx::raw_sql(&drop_db_sql)
+        raw_sql(&drop_db_sql)
             .execute(&mut conn)
             .await
             .with_context(|| format!("Failed to drop database '{}'", database_name))?;
@@ -107,7 +108,7 @@ async fn main() -> Result<()> {
         "CREATE DATABASE IF NOT EXISTS `{}` CHARACTER SET utf8mb3",
         database_name
     );
-    sqlx::raw_sql(&create_db_sql)
+    raw_sql(&create_db_sql)
         .execute(&mut conn)
         .await
         .with_context(|| format!("Failed to create database '{}'", database_name))?;
@@ -157,7 +158,7 @@ async fn main() -> Result<()> {
                                 TRUNCATE TABLE perush;\
                                 TRUNCATE TABLE parshan;\
                                 SET FOREIGN_KEY_CHECKS = 1;";
-            sqlx::raw_sql(truncate_sql)
+            raw_sql(truncate_sql)
                 .execute(&mut conn)
                 .await
                 .context("Failed to truncate perushim tables before data load")?;
@@ -188,7 +189,7 @@ async fn execute_script(
 
     // Use raw_sql to execute the entire script at once
     // This handles MySQL comments and other DDL that prepared statements don't support
-    sqlx::raw_sql(&script)
+    raw_sql(&script)
         .execute(&mut *conn)
         .await
         .with_context(|| format!("Failed to execute {} script", script_type))?;
@@ -223,7 +224,7 @@ async fn execute_script_chunked(
             buf.push_str(line);
             buf.push('\n');
             if !buf.trim().is_empty() {
-                sqlx::raw_sql(buf.trim())
+                raw_sql(buf.trim())
                     .execute(&mut *conn)
                     .await
                     .with_context(|| {
@@ -243,7 +244,7 @@ async fn execute_script_chunked(
             buf.push_str(line);
             buf.push('\n');
             if !buf.trim().is_empty() {
-                sqlx::raw_sql(buf.trim())
+                raw_sql(buf.trim())
                     .execute(&mut *conn)
                     .await
                     .with_context(|| {
@@ -262,7 +263,7 @@ async fn execute_script_chunked(
         buf.push('\n');
     }
     if !buf.trim().is_empty() {
-        sqlx::raw_sql(buf.trim())
+        raw_sql(buf.trim())
             .execute(&mut *conn)
             .await
             .with_context(|| format!("Failed to execute {} final statement", script_type))?;

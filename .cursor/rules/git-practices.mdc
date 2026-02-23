@@ -11,6 +11,17 @@ alwaysApply: true
 - Husky runs pre-commit via `.husky/pre-commit`.
 - Adding a hook: add to `.pre-commit-config.yaml`, then update `docs/devops/pre-commit.md`.
 
+## Clean Working Directory Before Commit
+
+**MANDATORY**: Before every commit, the agent MUST ensure the working directory is clean of unrelated changes:
+
+1. Run `git status` and `git diff` to inspect **all** modified, staged, and untracked files.
+2. For each change, decide: **is this change correct and acceptable?** (regardless of who wrote it or when it appeared).
+   - **If yes** — stage it and include it in the commit (or a separate commit if it's unrelated to the current task).
+   - **If no** — discard it (`git checkout -- <file>` for tracked files, `rm` for untracked artifacts).
+3. Never leave stray changes in the working directory. Every file must be either committed or discarded before proceeding to the next task.
+4. Untracked build artifacts, test outputs, and temporary files (e.g. `test_stdout.txt`, `*.zip`, extracted directories) should be removed unless they are intentional project assets.
+
 ## Commit Process
 
 1. **Before commit**: Review staged changes for PII (AWS IDs, API keys, passwords, emails). Use `git diff --cached`.
