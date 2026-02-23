@@ -85,6 +85,13 @@ env:
   ADMIN_NODE_VERSION_FILE: web/admin/package.json
   ADMIN_UNIT_JUNIT_REPORT_ARTIFACT_NAME: admin-unit-junit-report-${{ github.run_id }}
   ADMIN_E2E_JUNIT_REPORT_ARTIFACT_NAME: admin-e2e-junit-report-${{ github.run_id }}
+  BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER: bulletin-coverage.master
+  BULLETIN_COVERAGE_ARTIFACT_NAME_WF: bulletin-coverage.${{ github.run_id }}
+  BULLETIN_COVERAGE_DIRECTORY: web/bulletin/.coverage
+  BULLETIN_COVERAGE_REPORT: web/bulletin/.coverage/unit/lcov.info
+  BULLETIN_DIRECTORY: web/bulletin
+  BULLETIN_UNIT_JUNIT_REPORT_ARTIFACT_NAME: bulletin-unit-junit-report-${{ github.run_id }}
+  BULLETIN_LAMBDA_ZIP_ARTIFACT_NAME: bulletin-lambda-${{ github.run_id }}
   DATA_UNIT_JUNIT_REPORT_ARTIFACT_NAME: data-unit-junit-report-${{ github.run_id }}
   DATA_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME: data-integration-junit-report-${{ github.run_id }}
   PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER: perushim-data-sql.master
@@ -101,6 +108,7 @@ jobs:
       api_playwright_version: ${{ steps.get_api_playwright_version.outputs.PLAYWRIGHT_VERSION }}
       app_directory: ${{ env.APP_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       admin_directory: ${{ env.ADMIN_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
+      bulletin_directory: ${{ env.BULLETIN_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       data_directory: ${{ env.DATA_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       is_master_branch: ${{ env.IS_MASTER_BRANCH }} # a workaround for places where only needs.<job_id>.<output> is allowed
       website_directory: ${{ env.WEBSITE_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
@@ -130,6 +138,7 @@ jobs:
     outputs:
       is_api_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_api_master_coverage_available }}
       is_app_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_app_master_coverage_available }}
+      is_bulletin_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_bulletin_master_coverage_available }}
       is_website_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_website_master_coverage_available }}
       is_perushim_data_sql_available: ${{ steps.check_master_coverage_artifacts.outputs.is_perushim_data_sql_available }}
     steps:
@@ -160,16 +169,19 @@ jobs:
 
           IS_API_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}")
           IS_APP_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}")
+          IS_BULLETIN_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}")
           IS_WEBSITE_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}")
           IS_PERUSHIM_DATA_SQL_AVAILABLE=$(check_and_download_artifact "${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}")
 
           echo "API master coverage available: $IS_API_MASTER_COVERAGE_AVAILABLE"
           echo "App master coverage available: $IS_APP_MASTER_COVERAGE_AVAILABLE"
+          echo "Bulletin master coverage available: $IS_BULLETIN_MASTER_COVERAGE_AVAILABLE"
           echo "Website master coverage available: $IS_WEBSITE_MASTER_COVERAGE_AVAILABLE"
           echo "Perushim data SQL available: $IS_PERUSHIM_DATA_SQL_AVAILABLE"
 
           echo "is_api_master_coverage_available=$IS_API_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_app_master_coverage_available=$IS_APP_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
+          echo "is_bulletin_master_coverage_available=$IS_BULLETIN_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_website_master_coverage_available=$IS_WEBSITE_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_perushim_data_sql_available=$IS_PERUSHIM_DATA_SQL_AVAILABLE" >> $GITHUB_OUTPUT
 
@@ -188,6 +200,15 @@ jobs:
         with:
           name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
+          retention-days: 90
+          overwrite: true
+
+      - name: Re-upload Bulletin master coverage for current workflow
+        if: steps.check_master_coverage_artifacts.outputs.is_bulletin_master_coverage_available == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}
+          path: /tmp/${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}
           retention-days: 90
           overwrite: true
 
@@ -315,6 +336,16 @@ jobs:
       module_name: ${{ needs.setup_env.outputs.admin_directory }}
       ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml"
 
+  determine_bulletin_changes:
+    name: Determine Bulletin Changes
+    needs: setup_env
+    secrets: inherit
+    uses: ./.github/workflows/shared-ci.yml
+    with:
+      module_directory: ${{ needs.setup_env.outputs.bulletin_directory }}
+      module_name: ${{ needs.setup_env.outputs.bulletin_directory }}
+      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
+
   determine_data_changes:
     name: Determine Data Changes
     needs: setup_env
@@ -365,6 +396,15 @@ jobs:
       module_name: app
       ref: ${{ github.head_ref || github.ref }}
 
+  verify_bulletin_version:
+    name: Verify Bulletin Version
+    needs: [setup_env, determine_bulletin_changes]
+    if: ${{ needs.determine_bulletin_changes.outputs.module_changed == 'true' }}
+    uses: ./.github/workflows/shared-verify-version.yml
+    with:
+      module_name: bulletin
+      ref: ${{ github.head_ref || github.ref }}
+
   package_website:
     name: Package Website
     needs: [setup_env, determine_website_changes]
@@ -402,6 +442,61 @@ jobs:
     uses: ./.github/workflows/app-package.yml
     with:
       platform: All
+
+  package_bulletin:
+    name: Package Bulletin
+    needs: [setup_env, determine_bulletin_changes]
+    if: ${{ needs.determine_bulletin_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-latest
+    outputs:
+      module_version: ${{ steps.get_version.outputs.MODULE_VERSION }}
+      lambda_zip_artifact_name: ${{ env.BULLETIN_LAMBDA_ZIP_ARTIFACT_NAME }}
+    env:
+      SHARED_ROOT_DIR: web
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-make
+
+      - name: Get Module Version
+        id: get_version
+        working-directory: ${{ env.BULLETIN_DIRECTORY }}
+        run: |
+          MODULE_VERSION=$(cargo make version | grep -v 'INFO')
+          echo "MODULE_VERSION=${MODULE_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Build Bulletin Binary (Docker)
+        run: |
+          DOCKER_BUILDKIT=0 docker build \
+            -f ${{ env.BULLETIN_DIRECTORY }}/Dockerfile \
+            -t bulletin-build:latest \
+            ${{ env.SHARED_ROOT_DIR }}
+
+      - name: Extract Binary and Create Lambda ZIP
+        run: |
+          mkdir -p ${{ env.BULLETIN_DIRECTORY }}/.release
+          CONTAINER_ID=$(docker create bulletin-build:latest)
+          docker cp "${CONTAINER_ID}:/app/bulletin/target/release/bulletin" ./bootstrap
+          docker rm "${CONTAINER_ID}"
+          chmod +x ./bootstrap
+          zip -j "${{ env.BULLETIN_DIRECTORY }}/.release/bulletin-lambda-v${{ steps.get_version.outputs.MODULE_VERSION }}.zip" ./bootstrap
+          rm ./bootstrap
+
+      - name: Store Lambda ZIP
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.BULLETIN_LAMBDA_ZIP_ARTIFACT_NAME }}
+          path: ${{ env.BULLETIN_DIRECTORY }}/.release/bulletin-lambda-v${{ steps.get_version.outputs.MODULE_VERSION }}.zip
+          retention-days: 1
 
   build_lcov_docker:
     name: Build LCOV Docker Image
@@ -1295,6 +1390,87 @@ jobs:
           retention-days: 400
           overwrite: true
 
+  bulletin_ci:
+    name: Bulletin CI
+    runs-on: ubuntu-latest
+    needs: [setup_env, determine_bulletin_changes, determine_baseline_availability]
+    if: ${{ needs.determine_bulletin_changes.outputs.module_changed == 'true' || needs.determine_bulletin_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_bulletin_master_coverage_available == 'false' }}
+    defaults:
+      run:
+        working-directory: ${{ env.BULLETIN_DIRECTORY }}
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-make, cargo-llvm-cov, cargo-nextest
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ env.BULLETIN_DIRECTORY }}
+          cache-on-failure: true
+          shared-key: "bulletin-rust"
+
+      - name: Lint
+        id: lint
+        run: cargo make lint
+
+      - name: Format Check
+        id: fmt-check
+        run: cargo make fmt-check
+
+      - name: Unit Test with Coverage
+        id: unit-test
+        run: cargo make coverage-unit
+
+      - name: Store Bulletin Unit JUnit Report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.BULLETIN_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
+          path: ${{ env.BULLETIN_DIRECTORY }}/.junit-report/unit/results.xml
+          retention-days: 1
+          overwrite: true
+
+      - name: Publish Bulletin Unit Report To Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.BULLETIN_DIRECTORY }}/.junit-report/unit/results.xml
+          flags: bulletin
+          report_type: test_results
+
+      - name: Store Bulletin Coverage Report (workflow)
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_WF }}
+          path: ${{ env.BULLETIN_COVERAGE_REPORT }}
+          retention-days: 1
+          overwrite: true
+
+      - name: Store Bulletin Coverage Report (master baseline)
+        if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}
+          path: ${{ env.BULLETIN_COVERAGE_REPORT }}
+          retention-days: 400
+          overwrite: true
+
   data_ci:
     name: Data CI
     runs-on: ubuntu-latest
@@ -1610,15 +1786,18 @@ jobs:
         determine_website_changes,
         determine_api_changes,
         determine_app_changes,
+        determine_bulletin_changes,
         determine_data_changes,
         determine_perushim_pipeline_changes,
         verify_website_version,
         verify_api_version,
         verify_app_version,
+        verify_bulletin_version,
         website_performance,
         website_e2e,
         api_e2e,
         app_ci,
+        bulletin_ci,
         data_ci,
         perushim_data,
         build_lcov_docker,
@@ -1633,12 +1812,14 @@ jobs:
           WEBSITE_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_website_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
           API_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_api_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
           APP_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_app_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+          BULLETIN_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_bulletin_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
           DATA_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_data_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-          if [ "$WEBSITE_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$API_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$APP_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$DATA_CHANGES_DETERMINATION_STATUS" = "failure" ]; then
+          if [ "$WEBSITE_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$API_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$APP_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$BULLETIN_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$DATA_CHANGES_DETERMINATION_STATUS" = "failure" ]; then
             echo "Could not determine module changes."
             [ "$WEBSITE_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine website changes."
             [ "$API_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine API changes."
             [ "$APP_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine app changes."
+            [ "$BULLETIN_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine bulletin changes."
             [ "$DATA_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine data changes."
             echo "Overall status: failure"
             exit 1
@@ -1662,6 +1843,13 @@ jobs:
           APP_MODULE_CHANGED=$([ "${{ needs.determine_app_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           if [ "$APP_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_app_version.result }}" = "failure" ]; then
             echo "App version verification failed."
+            echo "Overall status: failure"
+            exit 1
+          fi
+
+          BULLETIN_MODULE_CHANGED=$([ "${{ needs.determine_bulletin_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$BULLETIN_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_bulletin_version.result }}" = "failure" ]; then
+            echo "Bulletin version verification failed."
             echo "Overall status: failure"
             exit 1
           fi
@@ -1696,6 +1884,16 @@ jobs:
           if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$APP_MASTER_COVERAGE_AVAILABLE" = "true" ]; then
             APP_STATUS=$([ "${{ needs.app_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$APP_STATUS" = "failure" ]; then
+              echo "Overall status: failure"
+              exit 1
+            fi
+          fi
+
+          BULLETIN_MODULE_CHANGED=$([ "${{ needs.determine_bulletin_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          BULLETIN_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_bulletin_master_coverage_available }}" = "false" ] && echo "true" || echo "false") # Generated
+          if [ "$BULLETIN_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$BULLETIN_MASTER_COVERAGE_AVAILABLE" = "true" ]; then
+            BULLETIN_STATUS=$([ "${{ needs.bulletin_ci.result }}" = "failure" ] && echo "failure" || echo "success") # Generated
+            if [ "$BULLETIN_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
             fi
@@ -1763,6 +1961,21 @@ jobs:
           files: ${{ env.APP_COVERAGE_REPORT }}
           disable_search: true
           flags: app
+          fail_ci_if_error: true
+
+      - name: Restore Bulletin Coverage Report
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.bulletin_ci.result != 'skipped' && env.BULLETIN_COVERAGE_ARTIFACT_NAME_WF || env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}
+          path: ${{ env.BULLETIN_COVERAGE_DIRECTORY }}
+
+      - name: Publish Bulletin Coverage To Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.BULLETIN_COVERAGE_REPORT }}
+          disable_search: true
+          flags: bulletin
           fail_ci_if_error: true
 
       - name: Restore lcov Docker image
@@ -1897,6 +2110,24 @@ jobs:
         ]
       cd_event_type: deploy-app
 
+  release_bulletin:
+    name: Release Bulletin
+    needs: [setup_env, determine_bulletin_changes, cross_module_ci, package_bulletin]
+    # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
+    # Also verify cross_module_ci and package_bulletin passed to ensure quality gate
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_bulletin.result == 'success' && needs.package_bulletin.outputs.module_version != '' && needs.determine_bulletin_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    permissions:
+      contents: write
+      actions: read
+    secrets: inherit
+    uses: ./.github/workflows/shared-release.yml
+    with:
+      module_name: bulletin
+      module_directory: web/bulletin
+      module_version: ${{ needs.package_bulletin.outputs.module_version }}
+      artifacts_json: '[{"name": "${{ needs.package_bulletin.outputs.lambda_zip_artifact_name }}", "path": "web/bulletin/.release", "glob": "*.zip"}]'
+      cd_event_type: deploy-bulletin
+
   release_data:
     name: Release Data
     needs: [setup_env, determine_data_changes, cross_module_ci, data_ci, perushim_data]
@@ -1924,7 +2155,7 @@ jobs:
   # ====================================================================================
   bump_versions:
     name: Bump Versions
-    needs: [setup_env, release_website, release_api, release_app]
+    needs: [setup_env, release_website, release_api, release_app, release_bulletin]
     # Run if at least one module was released
     # Note: Using always() + result check as a workaround for reusable workflow result evaluation issues (see #1065)
     # For each release job, we check both result == 'success' AND outputs.released == 'true'
@@ -1932,7 +2163,8 @@ jobs:
       ${{ always() && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' &&
       ((needs.release_website.result == 'success' && needs.release_website.outputs.released == 'true') ||
        (needs.release_api.result == 'success' && needs.release_api.outputs.released == 'true') ||
-       (needs.release_app.result == 'success' && needs.release_app.outputs.released == 'true')) }}
+       (needs.release_app.result == 'success' && needs.release_app.outputs.released == 'true') ||
+       (needs.release_bulletin.result == 'success' && needs.release_bulletin.outputs.released == 'true')) }}
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -1965,12 +2197,12 @@ jobs:
           cache-dependency-path: ${{ needs.setup_env.outputs.website_directory }}/package-lock.json
           cache: npm
 
-      - name: Setup Rust (for API)
-        if: ${{ needs.release_api.outputs.released == 'true' }}
+      - name: Setup Rust (for API/Bulletin)
+        if: ${{ needs.release_api.outputs.released == 'true' || needs.release_bulletin.outputs.released == 'true' }}
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Rust tools (for API)
-        if: ${{ needs.release_api.outputs.released == 'true' }}
+      - name: Install Rust tools (for API/Bulletin)
+        if: ${{ needs.release_api.outputs.released == 'true' || needs.release_bulletin.outputs.released == 'true' }}
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-make, tomato-toml, semver-bump
@@ -1999,6 +2231,11 @@ jobs:
         working-directory: ${{ needs.setup_env.outputs.api_directory }}
         run: cargo make bump-version
 
+      - name: Bump Bulletin Version
+        if: ${{ needs.release_bulletin.outputs.released == 'true' }}
+        working-directory: ${{ needs.setup_env.outputs.bulletin_directory }}
+        run: cargo make bump-version
+
       - name: Bump App Version
         if: ${{ needs.release_app.outputs.released == 'true' }}
         working-directory: app
@@ -2022,6 +2259,12 @@ jobs:
             FILES_TO_ADD="$FILES_TO_ADD ${{ needs.setup_env.outputs.api_directory }}/Cargo.toml ${{ needs.setup_env.outputs.api_directory }}/Cargo.lock"
             API_VERSION=$(grep -m1 '^version' ${{ needs.setup_env.outputs.api_directory }}/Cargo.toml | sed 's/.*"\(.*\)"/\1/')
             MODULES_BUMPED="${MODULES_BUMPED}api to ${API_VERSION}, "
+          fi
+
+          if [ "${{ needs.release_bulletin.outputs.released }}" = "true" ]; then
+            FILES_TO_ADD="$FILES_TO_ADD ${{ needs.setup_env.outputs.bulletin_directory }}/Cargo.toml ${{ needs.setup_env.outputs.bulletin_directory }}/Cargo.lock"
+            BULLETIN_VERSION=$(grep -m1 '^version' ${{ needs.setup_env.outputs.bulletin_directory }}/Cargo.toml | sed 's/.*"\(.*\)"/\1/')
+            MODULES_BUMPED="${MODULES_BUMPED}bulletin to ${BULLETIN_VERSION}, "
           fi
 
           if [ "${{ needs.release_app.outputs.released }}" = "true" ]; then

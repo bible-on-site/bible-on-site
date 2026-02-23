@@ -12,9 +12,10 @@
 		"coverage:merge": "node --import tsx ./merge-coverage.mts",
 		"setup_dev_env": "node --import tsx ./setup-dev-env.mts",
 		"verify-version": "node --import tsx ./github/ci/is-version-newer-than-baseline.ts",
-		"deploy": "echo 'Use deploy:ecr or deploy:data' && exit 1",
+		"deploy": "echo 'Use deploy:ecr, deploy:data, or deploy:bulletin' && exit 1",
 		"deploy:ecr": "node --import tsx ./deploy/ecr-deploy/index.mts",
-		"deploy:data": "node --import tsx ./deploy/data-deploy/index.mts"
+		"deploy:data": "node --import tsx ./deploy/data-deploy/index.mts",
+		"deploy:bulletin": "node --import tsx ./deploy/bulletin-deploy/index.mts"
 	},
 	"dependencies": {
 		"@aws-sdk/client-ec2": "3.995.0",

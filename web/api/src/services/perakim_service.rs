@@ -102,7 +102,9 @@ mod tests {
     async fn find_one_by_perek_id_returns_not_found_when_perek_does_not_exist() {
         // Return empty result (no perek found)
         let mock_db = MockDatabase::new(DatabaseBackend::MySql)
-            .append_query_results::<entities::perek::Model, Vec<entities::perek::Model>, _>([vec![]])
+            .append_query_results::<entities::perek::Model, Vec<entities::perek::Model>, _>([
+                vec![],
+            ])
             .into_connection();
         let db = Database::from_connection(mock_db);
 

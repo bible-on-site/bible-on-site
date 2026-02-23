@@ -1,0 +1,57 @@
+[config]
+skip_core_tasks = true
+default_to_workspace = false
+
+[env]
+BASH_BIN = { source = "${CARGO_MAKE_RUST_TARGET_OS}", default_value = "bash", mapping = { "windows" = "C:\\Program Files\\Git\\bin\\bash.exe" } }
+BUMP_VERSION_SCRIPT_PATH = { source = "${CARGO_MAKE_RUST_TARGET_OS}", default_value = "/devops/bump_version.sh", mapping = { "windows" = "\\devops\\bump_version.sh" } }
+
+[tasks.lint]
+command = "cargo"
+args = ["clippy", "--", "-D", "warnings"]
+
+[tasks.fmt-check]
+command = "cargo"
+args = ["fmt", "--", "--check"]
+
+[tasks.test-unit]
+command = "cargo"
+args = ["test"]
+
+[tasks.test-unit-junit]
+command = "cargo"
+args = ["nextest", "run", "--profile", "ci"]
+
+[tasks.coverage-unit-dir-create]
+command = "mkdir"
+args = ["-p", ".coverage/unit"]
+
+[tasks.coverage-unit-lcov]
+dependencies = ["coverage-unit-dir-create"]
+command = "cargo"
+args = [
+  "llvm-cov",
+  "test",
+  "--lcov",
+  "--output-path",
+  ".coverage/unit/lcov.info",
+]
+
+[tasks.coverage-unit-junit]
+command = "cargo"
+args = ["nextest", "run", "--profile", "ci"]
+
+[tasks.coverage-unit]
+dependencies = ["coverage-unit-lcov", "coverage-unit-junit"]
+
+[tasks.version]
+command = "echo"
+args = ["${CARGO_MAKE_CRATE_VERSION}"]
+
+[tasks.bump-version]
+command = "${BASH_BIN}"
+args = [
+  "${CARGO_MAKE_WORKING_DIRECTORY}${BUMP_VERSION_SCRIPT_PATH}",
+  "-v",
+  "${CARGO_MAKE_CRATE_VERSION}",
+]

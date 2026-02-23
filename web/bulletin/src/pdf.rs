@@ -250,9 +250,7 @@ fn to_hebrew_letter(n: usize) -> String {
         return String::new();
     }
 
-    let hundreds = [
-        "", "ק", "ר", "ש", "ת", "תק", "תר", "תש", "תת", "תתק",
-    ];
+    let hundreds = ["", "ק", "ר", "ש", "ת", "תק", "תר", "תש", "תת", "תתק"];
     let tens = ["", "י", "כ", "ל", "מ", "נ", "ס", "ע", "פ", "צ"];
     let ones = ["", "א", "ב", "ג", "ד", "ה", "ו", "ז", "ח", "ט"];
 
@@ -425,7 +423,10 @@ mod tests {
         let typst = html_to_typst(html);
         assert!(typst.contains("שלום"));
         assert!(typst.contains("עולם"));
-        assert!(typst.contains("\n\n"), "paragraphs should produce blank line");
+        assert!(
+            typst.contains("\n\n"),
+            "paragraphs should produce blank line"
+        );
     }
 
     #[test]
@@ -470,7 +471,11 @@ mod tests {
     fn test_html_to_typst_adjacent_to_hebrew() {
         let html = "ו<i>טקסט נטוי</i> בתוכה";
         let typst = html_to_typst(html);
-        assert!(typst.contains("ו#emph[טקסט נטוי]"), "emph works adjacent to Hebrew: {}", typst);
+        assert!(
+            typst.contains("ו#emph[טקסט נטוי]"),
+            "emph works adjacent to Hebrew: {}",
+            typst
+        );
     }
 
     #[test]
