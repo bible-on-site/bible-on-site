@@ -18,12 +18,12 @@
 		"deploy:bulletin": "node --import tsx ./deploy/bulletin-deploy/index.mts"
 	},
 	"dependencies": {
-		"@aws-sdk/client-ec2": "3.995.0",
-		"@aws-sdk/client-ecr": "3.995.0",
-		"@aws-sdk/client-lambda": "3.995.0",
-		"@aws-sdk/client-s3": "3.995.0",
-		"@aws-sdk/client-sts": "3.995.0",
-		"@aws-sdk/credential-providers": "3.995.0",
+		"@aws-sdk/client-ec2": "3.996.0",
+		"@aws-sdk/client-ecr": "3.996.0",
+		"@aws-sdk/client-lambda": "3.996.0",
+		"@aws-sdk/client-s3": "3.996.0",
+		"@aws-sdk/client-sts": "3.996.0",
+		"@aws-sdk/credential-providers": "3.996.0",
 		"dotenv": "17.3.1",
 		"semver": "7.7.4",
 		"yargs": "18.0.0"
