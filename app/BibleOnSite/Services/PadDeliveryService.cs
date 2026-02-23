@@ -52,21 +52,21 @@ partial class PadDeliveryService
         return activity != null ? AssetPackManagerFactory.GetInstance(activity) : null;
     }
 
-    private static async Task<string?> TryGetAssetPathAndroidAsync(string packName, CancellationToken cancellationToken)
+    private static Task<string?> TryGetAssetPathAndroidAsync(string packName, CancellationToken cancellationToken)
     {
         var manager = GetAssetPackManager();
         if (manager == null)
-            return null;
+            return Task.FromResult<string?>(null);
 
         try
         {
             var location = manager.GetPackLocation(packName);
-            return location?.AssetsPath();
+            return Task.FromResult(location?.AssetsPath());
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"PAD GetPackLocation failed: {ex.Message}");
-            return null;
+            return Task.FromResult<string?>(null);
         }
     }
 

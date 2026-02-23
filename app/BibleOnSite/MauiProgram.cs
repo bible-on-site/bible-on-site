@@ -56,6 +56,34 @@ public static class MauiProgram
 				recyclerView.GetRecycledViewPool()?.SetMaxRecycledViews(0, 10);
 			}
 		});
+
+		// Prevent the outer CarouselView from intercepting primarily-vertical gestures.
+		// Each inner CollectionView (pasukim list) claims the gesture on ACTION_DOWN
+		// and only releases it when horizontal movement clearly dominates — the same
+		// pattern Flutter's gesture arena uses in the legacy app.
+		Microsoft.Maui.Controls.Handlers.Items.CollectionViewHandler.Mapper.AppendToMapping("SwipeSensitivity", (handler, _) =>
+		{
+			if (handler.PlatformView is AndroidX.RecyclerView.Widget.RecyclerView recyclerView)
+			{
+				recyclerView.AddOnItemTouchListener(
+					new BibleOnSite.Platforms.Android.Listeners.VerticalScrollPriorityListener());
+			}
+		});
+#endif
+
+#if IOS || MACCATALYST
+		// Lock the CarouselView's scroll direction so that a primarily vertical gesture
+		// (scrolling through pasukim) doesn't accidentally trigger a horizontal perek
+		// switch. Once iOS determines the dominant scroll axis, movement on the other
+		// axis is suppressed for that gesture — matching the legacy Flutter app's
+		// PageView + ListView gesture-arena behavior.
+		Microsoft.Maui.Controls.Handlers.Items.CarouselViewHandler.Mapper.AppendToMapping("SwipeSensitivity", (handler, _) =>
+		{
+			if (handler.PlatformView is UIKit.UICollectionView collectionView)
+			{
+				collectionView.DirectionalLockEnabled = true;
+			}
+		});
 #endif
 
 		// Initialize Firebase on iOS from GoogleService-Info.plist (the iOS equivalent of google-services.json).
