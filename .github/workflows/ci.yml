@@ -87,7 +87,7 @@ env:
   ADMIN_E2E_JUNIT_REPORT_ARTIFACT_NAME: admin-e2e-junit-report-${{ github.run_id }}
   BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER: bulletin-coverage.master
   BULLETIN_COVERAGE_ARTIFACT_NAME_WF: bulletin-coverage.${{ github.run_id }}
-  BULLETIN_COVERAGE_DIRECTORY: web/bulletin/.coverage
+  BULLETIN_COVERAGE_DIRECTORY: web/bulletin/.coverage/unit
   BULLETIN_COVERAGE_REPORT: web/bulletin/.coverage/unit/lcov.info
   BULLETIN_DIRECTORY: web/bulletin
   BULLETIN_UNIT_JUNIT_REPORT_ARTIFACT_NAME: bulletin-unit-junit-report-${{ github.run_id }}
