@@ -42,6 +42,7 @@ const BookshelfModal: React.FC<BookshelfModalProps> = ({ isOpen, onClose }) => {
 		if (isOpen) {
 			dialog.showModal();
 		} else {
+			/* istanbul ignore next -- when !isOpen the component returns null, unmounting the dialog before this effect runs */
 			dialog.close();
 		}
 	}, [isOpen]);
