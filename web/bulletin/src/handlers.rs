@@ -142,8 +142,8 @@ pub async fn cli_handler() -> anyhow::Result<()> {
     let mut input = String::new();
     io::stdin().read_to_string(&mut input)?;
 
-    let req: GeneratePdfRequest = serde_json::from_str(&input)
-        .map_err(|e| anyhow::anyhow!("Invalid request JSON: {}", e))?;
+    let req: GeneratePdfRequest =
+        serde_json::from_str(&input).map_err(|e| anyhow::anyhow!("Invalid request JSON: {}", e))?;
 
     match generate_pdf_core(req).await {
         Ok((buf, filename)) => {
@@ -173,9 +173,7 @@ pub async fn lambda_handler(
         "/health" => Ok(LambdaResponse::builder()
             .status(200)
             .header("content-type", "application/json")
-            .body(Body::Text(
-                r#"{"status":"ok","service":"bulletin"}"#.into(),
-            ))
+            .body(Body::Text(r#"{"status":"ok","service":"bulletin"}"#.into()))
             .unwrap()),
         _ => Ok(LambdaResponse::builder()
             .status(404)
@@ -191,7 +189,7 @@ async fn lambda_generate_pdf(
     let body_str = match event.body() {
         Body::Text(s) => s.clone(),
         Body::Binary(b) => String::from_utf8_lossy(b).into_owned(),
-        Body::Empty => {
+        Body::Empty | _ => {
             return Ok(LambdaResponse::builder()
                 .status(400)
                 .body(Body::Text(r#"{"error":"Missing request body"}"#.into()))

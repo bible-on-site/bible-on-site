@@ -43,6 +43,14 @@ test("Hides overlay after animation when toggling sefer view OFF", async ({
 	const seferOverlay = page.locator('[class*="seferOverlay"]');
 	await expect(seferOverlay).toBeVisible({ timeout: 10_000 });
 
+	// Wait for the lazy-loaded Sefer component to mount inside the overlay,
+	// confirming the React startTransition has committed. Without this the
+	// second click can land during the concurrent render and the toggle
+	// state change may be dropped.
+	await expect(
+		seferOverlay.locator('[class*="bookWrapper"]'),
+	).toBeVisible({ timeout: 15_000 });
+
 	// Toggle OFF
 	await toggleSefer(page);
 

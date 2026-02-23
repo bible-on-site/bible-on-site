@@ -55,7 +55,11 @@ mod pdf_generation {
 
         let fixture_path = fixtures_dir().join("bereshit-aleph.pdf");
         fs::write(&fixture_path, &buf).unwrap();
-        println!("Saved fixture: {} ({} bytes)", fixture_path.display(), buf.len());
+        println!(
+            "Saved fixture: {} ({} bytes)",
+            fixture_path.display(),
+            buf.len()
+        );
     }
 
     #[test]
@@ -66,7 +70,8 @@ mod pdf_generation {
             .iter()
             .enumerate()
             .map(|(i, &id)| {
-                let data = tanach::get_perek(id).unwrap_or_else(|| panic!("perek {} must exist", id));
+                let data =
+                    tanach::get_perek(id).unwrap_or_else(|| panic!("perek {} must exist", id));
                 let articles = if i == 0 {
                     // Attach a sample article to the first perek
                     vec![(
@@ -101,7 +106,11 @@ mod pdf_generation {
 
         let fixture_path = fixtures_dir().join("bamidbar-aleph-gimel.pdf");
         fs::write(&fixture_path, &buf).unwrap();
-        println!("Saved fixture: {} ({} bytes)", fixture_path.display(), buf.len());
+        println!(
+            "Saved fixture: {} ({} bytes)",
+            fixture_path.display(),
+            buf.len()
+        );
     }
 
     #[test]

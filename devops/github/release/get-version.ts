@@ -55,8 +55,10 @@ async function main() {
 				"app",
 				"web/api",
 				"web/bible-on-site",
+				"web/bulletin",
 				"api",
 				"website",
+				"bulletin",
 			] as const,
 			demandOption: true,
 		})
