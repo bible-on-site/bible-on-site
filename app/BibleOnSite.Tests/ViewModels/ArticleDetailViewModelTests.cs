@@ -139,8 +139,7 @@ public class ArticleDetailViewModelTests
         {
             Id = 1,
             Name = "מאמר מעניין",
-            ShortAbstract = "תקציר קצר",
-            Abstract = "Test",
+            Abstract = "<H1>תקציר קצר</H1><p>body</p>",
             AuthorId = 1,
             PerekId = 123
         };
