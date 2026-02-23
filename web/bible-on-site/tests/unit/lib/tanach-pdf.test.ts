@@ -256,6 +256,11 @@ describe("wrapText", () => {
 		const result = wrapText("superlongword", mockFont, 12, 50);
 		expect(result).toEqual(["superlongword"]);
 	});
+
+	it("returns empty line for whitespace-only text", () => {
+		const result = wrapText("   ", mockFont, 12, 200);
+		expect(result).toEqual([""]);
+	});
 });
 
 describe("semanticPagesToPerekIds", () => {
@@ -527,6 +532,91 @@ describe("buildTanachPdfForPerekRange", () => {
 				t.includes(reverseGraphemes("This is an abstract")),
 			),
 		).toBe(true);
+	});
+
+	it("skips pesukim with empty segments (stuma/ptuha only)", async () => {
+		const perek = {
+			perekId: 1,
+			sefer: "בראשית",
+			perekHeb: "א",
+			header: "פרק א",
+			helek: "תורה",
+			source: "בראשית א",
+			pesukim: [
+				{ segments: [{ type: "stuma" as const, value: "" }, { type: "ptuha" as const, value: "" }] },
+				{ segments: [{ type: "qri" as const, value: "בראשית" }] },
+			],
+		};
+		mockGetPerekByPerekId.mockReturnValue(
+			perek as ReturnType<typeof getPerekByPerekId>,
+		);
+
+		await buildTanachPdfForPerekRange([1]);
+
+		const page = pdfLib.__mockPages[0];
+		const allText = page.drawText.mock.calls.map(
+			(c: [string]) => c[0],
+		);
+		expect(allText).toContain(reverseGraphemes("בראשית"));
+	});
+
+	it("renders articles without abstract", async () => {
+		mockGetPerekByPerekId.mockReturnValue(
+			makePerek("בראשית", "א", "פרק א", ["text"]) as ReturnType<
+				typeof getPerekByPerekId
+			>,
+		);
+		mockGetArticlesByPerekId.mockResolvedValue([
+			{
+				id: 1,
+				perekId: 1,
+				authorId: 1,
+				abstract: null,
+				content: null,
+				name: "מאמר ללא תקציר",
+				priority: 1,
+				authorName: "הרב כהן",
+				authorImageUrl: "",
+			},
+		]);
+
+		await buildTanachPdfForPerekRange([1]);
+
+		const page = pdfLib.__mockPages[0];
+		const allText = page.drawText.mock.calls.map(
+			(c: [string]) => c[0],
+		);
+		expect(allText).toContain(reverseGraphemes("• מאמר ללא תקציר"));
+		expect(allText).toContain(reverseGraphemes("מאת: הרב כהן"));
+	});
+
+	it("renders articles with HTML-only abstract that strips to empty", async () => {
+		mockGetPerekByPerekId.mockReturnValue(
+			makePerek("בראשית", "א", "פרק א", ["text"]) as ReturnType<
+				typeof getPerekByPerekId
+			>,
+		);
+		mockGetArticlesByPerekId.mockResolvedValue([
+			{
+				id: 1,
+				perekId: 1,
+				authorId: 1,
+				abstract: "<p>  </p>",
+				content: null,
+				name: "מאמר עם HTML ריק",
+				priority: 1,
+				authorName: "הרב לוי",
+				authorImageUrl: "",
+			},
+		]);
+
+		await buildTanachPdfForPerekRange([1]);
+
+		const page = pdfLib.__mockPages[0];
+		const allText = page.drawText.mock.calls.map(
+			(c: [string]) => c[0],
+		);
+		expect(allText).toContain(reverseGraphemes("• מאמר עם HTML ריק"));
 	});
 
 	it("gracefully handles DB errors for perushim/articles", async () => {

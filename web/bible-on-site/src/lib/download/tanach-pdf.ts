@@ -20,6 +20,7 @@ import { type PDFFont, PDFDocument, rgb } from "pdf-lib";
 // biome-ignore lint/suspicious/noTsIgnore: @ts-expect-error fails in production build (unused directive) so we must use @ts-ignore
 // @ts-ignore — @pdf-lib/fontkit is CJS; namespace import may wrap the real instance in .default
 import * as _fontkit from "@pdf-lib/fontkit";
+/* istanbul ignore next -- branch depends on bundler environment at runtime */
 // biome-ignore lint/suspicious/noExplicitAny: CJS/ESM interop — unwrap .default when bundler wraps it
 const fontkit: any = (_fontkit as any).default ?? _fontkit;
 
