@@ -30,5 +30,4 @@ dotenvy = "0.15"
 rusqlite = { version = "0.38", features = ["bundled"] }
 flate2 = "1"
 bson = "2"
-sqlx = { version = "0.8", features = ["runtime-tokio", "mysql"] }
 sunrise = "3"
