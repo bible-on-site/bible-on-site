@@ -30,7 +30,9 @@ export type BookshelfProps = {
 
 // Color spectrum generation using HSL for natural gradients
 // Wider hue ranges for more differentiation between sibling books
-const HELEK_HUE_RANGES: Record<string, { start: number; end: number }> = {
+type Helek = "תורה" | "נביאים" | "תרי עשר" | "כתובים";
+
+const HELEK_HUE_RANGES: Record<Helek, { start: number; end: number }> = {
 	תורה: { start: 0, end: 45 }, // Reds to oranges
 	נביאים: { start: 185, end: 240 }, // Cyans to blues (for ראשונים)
 	"תרי עשר": { start: 240, end: 270 }, // Blues to purples (for תרי עשר)
@@ -38,22 +40,20 @@ const HELEK_HUE_RANGES: Record<string, { start: number; end: number }> = {
 };
 
 function generateSpectrumColor(
-	helek: string,
+	helek: Helek,
 	index: number,
 	total: number,
 ): string {
-	/* istanbul ignore next -- all callers pass known helek keys; fallback is defensive */
-	const range = HELEK_HUE_RANGES[helek] || { start: 0, end: 360 };
+	const range = HELEK_HUE_RANGES[helek];
 	const hue =
 		range.start + ((range.end - range.start) * index) / (total - 1 || 1);
 	return `hsl(${hue}, 70%, 35%)`;
 }
 
 function lightenColor(hslColor: string, amount: number): string {
-	const match = hslColor.match(/hsl\(([^,]+),\s*([^,]+)%,\s*([^)]+)%\)/);
-	/* istanbul ignore next -- regex always matches our hsl() output; defensive guard */
-	if (!match) return hslColor;
-	const [, h, s, l] = match;
+	const [, h, s, l] = hslColor.match(
+		/hsl\(([^,]+),\s*([^,]+)%,\s*([^)]+)%\)/,
+	)!;
 	const newL = Math.min(100, Number.parseFloat(l) + amount);
 	return `hsl(${h}, ${s}%, ${newL}%)`;
 }
@@ -232,8 +232,7 @@ type BookBlockProps = {
 };
 
 function BookBlock({ sefer, x, sqSize, onClick, isToday }: BookBlockProps) {
-	/* istanbul ignore next -- all sefer names populated at module init; fallback is defensive */
-	const baseColor = seferColors.get(sefer.name) || "hsl(0, 0%, 50%)";
+	const baseColor = seferColors.get(sefer.name)!;
 	const spineColor = darkenColor(baseColor, 8);
 
 	const blockStyle = {
