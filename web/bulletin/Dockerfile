@@ -1,5 +1,5 @@
 # Build stage for Lambda-compatible binary (musl target).
-# Build context must be web/ to access shared api/entities/ dependency.
+# Build context must be web/ — ensure bulletin/ is included in web/.dockerignore.
 
 ARG RUST_VERSION=1.93.1
 
