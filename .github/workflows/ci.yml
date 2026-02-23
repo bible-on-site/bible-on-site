@@ -2014,7 +2014,7 @@ jobs:
       - name: Verify Coverage 3rd Party Reporting
         run: |
           # Check Codecov status using the Codecov API
-            MAX_RETRIES=10
+            MAX_RETRIES=20
             RETRY_COUNT=0
             while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
               OWNER_REPO=(${GITHUB_REPOSITORY/\// })
