@@ -60,6 +60,7 @@ function getPool(): mysql.Pool {
  */
 export async function query<T>(sql: string, params?: unknown[]): Promise<T[]> {
 	const connection = getPool();
-	const [rows] = await connection.execute(sql, params);
+	// biome-ignore lint/suspicious/noExplicitAny: mysql2 v3.17 narrowed QueryValues; safe cast from caller-provided params
+	const [rows] = await connection.execute(sql, (params ?? []) as any);
 	return rows as T[];
 }

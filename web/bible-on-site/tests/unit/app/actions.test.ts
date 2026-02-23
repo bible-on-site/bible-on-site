@@ -122,6 +122,24 @@ describe("downloadSefer", () => {
 			data: Buffer.from(bin).toString("base64"),
 		});
 	});
+
+	it('returns { error: "service_unavailable" } when handler throws', async () => {
+		const consoleSpy = jest
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		mockGetSeferDownloadHandler.mockReturnValue((() => {
+			throw new Error("binary not found");
+		}) as unknown as ReturnType<typeof getSeferDownloadHandler>);
+
+		const result = await downloadSefer();
+
+		expect(result).toEqual({ error: "service_unavailable" });
+		expect(consoleSpy).toHaveBeenCalledWith(
+			"Sefer download failed:",
+			expect.any(Error),
+		);
+		consoleSpy.mockRestore();
+	});
 });
 
 describe("downloadPageRanges", () => {
@@ -157,5 +175,27 @@ describe("downloadPageRanges", () => {
 			ext: "pdf",
 			data: Buffer.from(bin).toString("base64"),
 		});
+	});
+
+	it('returns { error: "service_unavailable" } when handler throws', async () => {
+		const consoleSpy = jest
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		mockGetPageRangesDownloadHandler.mockReturnValue((() => {
+			throw new Error("binary crashed");
+		}) as unknown as ReturnType<typeof getPageRangesDownloadHandler>);
+
+		const result = await downloadPageRanges(
+			[1],
+			[{ pageIndex: 0, semanticName: "א", title: "פרק א" }],
+			{ seferName: "בראשית" },
+		);
+
+		expect(result).toEqual({ error: "service_unavailable" });
+		expect(consoleSpy).toHaveBeenCalledWith(
+			"Page-ranges download failed:",
+			expect.any(Error),
+		);
+		consoleSpy.mockRestore();
 	});
 });
