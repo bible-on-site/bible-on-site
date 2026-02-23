@@ -34,17 +34,12 @@ const BookshelfModal: React.FC<BookshelfModalProps> = ({ isOpen, onClose }) => {
 		return () => document.removeEventListener("keydown", handleKeyDown);
 	}, [isOpen, onClose]);
 
-	// Handle open/close state
+	// When isOpen becomes true, show the native dialog. When isOpen is false
+	// the component returns null (below), unmounting the dialog before this
+	// effect can run, so dialogRef.current is null and the early return fires.
 	useEffect(() => {
-		const dialog = dialogRef.current;
-		if (!dialog) return;
-
-		if (isOpen) {
-			dialog.showModal();
-		} else {
-			/* istanbul ignore next -- when !isOpen the component returns null, unmounting the dialog before this effect runs */
-			dialog.close();
-		}
+		if (!isOpen) return;
+		dialogRef.current?.showModal();
 	}, [isOpen]);
 
 	// Handle backdrop click
