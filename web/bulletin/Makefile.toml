@@ -3,8 +3,7 @@ skip_core_tasks = true
 default_to_workspace = false
 
 [env]
-BASH_BIN = { source = "${CARGO_MAKE_RUST_TARGET_OS}", default_value = "bash", mapping = { "windows" = "C:\\Program Files\\Git\\bin\\bash.exe" } }
-BUMP_VERSION_SCRIPT_PATH = { source = "${CARGO_MAKE_RUST_TARGET_OS}", default_value = "/devops/bump_version.sh", mapping = { "windows" = "\\devops\\bump_version.sh" } }
+NPM_BIN = { source = "${CARGO_MAKE_RUST_TARGET_OS}", default_value = "npm", mapping = { "windows" = "C:\\Program Files\\nodejs\\npm.cmd" } }
 
 [tasks.lint]
 command = "cargo"
@@ -49,9 +48,5 @@ command = "echo"
 args = ["${CARGO_MAKE_CRATE_VERSION}"]
 
 [tasks.bump-version]
-command = "${BASH_BIN}"
-args = [
-  "${CARGO_MAKE_WORKING_DIRECTORY}${BUMP_VERSION_SCRIPT_PATH}",
-  "-v",
-  "${CARGO_MAKE_CRATE_VERSION}",
-]
+command = "${NPM_BIN}"
+args = ["run", "--prefix", "../../devops", "bump:cargo", "--", "--module", "bulletin"]
