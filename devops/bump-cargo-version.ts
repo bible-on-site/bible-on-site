@@ -18,7 +18,7 @@ import { resolveModule, type ModulePath, type ModuleName } from "./get-module-ve
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
 
-const argv = await yargs(hideBin(process.argv))
+const argv = yargs(hideBin(process.argv))
 	.option("module", {
 		type: "string",
 		demandOption: true,
@@ -26,7 +26,7 @@ const argv = await yargs(hideBin(process.argv))
 		choices: ["api", "bulletin", "web/api", "web/bulletin"],
 	})
 	.strict()
-	.parse();
+	.parseSync();
 
 const moduleConfig = resolveModule(argv.module as ModulePath | ModuleName);
 const cargoTomlPath = join(REPO_ROOT, moduleConfig.versionFile);
