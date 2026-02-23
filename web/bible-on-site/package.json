@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.264",
+	"version": "0.2.265",
 	"private": true,
 	"license": "MIT",
 	"scripts": {
@@ -44,7 +44,7 @@
 		"html-flip-book-react": "0.0.0-alpha.36",
 		"isomorphic-dompurify": "3.0.0",
 		"moment-timezone": "0.6.0",
-		"mysql2": "3.17.5",
+		"mysql2": "3.18.0",
 		"next": "16.1.6",
 		"nuqs": "2.8.8",
 		"pdf-lib": "1.17.1",
