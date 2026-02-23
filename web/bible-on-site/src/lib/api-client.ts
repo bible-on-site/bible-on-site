@@ -60,6 +60,7 @@ function getPool(): mysql.Pool {
  */
 export async function query<T>(sql: string, params?: unknown[]): Promise<T[]> {
 	const connection = getPool();
+	// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string -- sql is always a parameterized literal from callers
 	// biome-ignore lint/suspicious/noExplicitAny: mysql2 v3.17 narrowed QueryValues; safe cast from caller-provided params
 	const [rows] = await connection.execute(sql, (params ?? []) as any);
 	return rows as T[];

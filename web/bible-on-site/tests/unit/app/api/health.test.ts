@@ -27,6 +27,15 @@ describe("GET /api/health/ready", () => {
 		expect(body.warmed).toBe(true);
 	});
 
+	it("uses cached warmed state on subsequent calls", async () => {
+		const { GET: readyGet } = await import("@/app/api/health/ready/route");
+		readyGet();
+		const response = readyGet();
+		expect(response.status).toBe(200);
+		const body = await response.json();
+		expect(body.warmed).toBe(true);
+	});
+
 	it("returns 503 when warming throws an error", async () => {
 		// Re-import with fresh module to reset isWarmed
 		jest.resetModules();

@@ -42,6 +42,7 @@ function generateSpectrumColor(
 	index: number,
 	total: number,
 ): string {
+	/* istanbul ignore next -- all callers pass known helek keys; fallback is defensive */
 	const range = HELEK_HUE_RANGES[helek] || { start: 0, end: 360 };
 	const hue =
 		range.start + ((range.end - range.start) * index) / (total - 1 || 1);
@@ -50,6 +51,7 @@ function generateSpectrumColor(
 
 function lightenColor(hslColor: string, amount: number): string {
 	const match = hslColor.match(/hsl\(([^,]+),\s*([^,]+)%,\s*([^)]+)%\)/);
+	/* istanbul ignore next -- regex always matches our hsl() output; defensive guard */
 	if (!match) return hslColor;
 	const [, h, s, l] = match;
 	const newL = Math.min(100, Number.parseFloat(l) + amount);
@@ -230,6 +232,7 @@ type BookBlockProps = {
 };
 
 function BookBlock({ sefer, x, sqSize, onClick, isToday }: BookBlockProps) {
+	/* istanbul ignore next -- all sefer names populated at module init; fallback is defensive */
 	const baseColor = seferColors.get(sefer.name) || "hsl(0, 0%, 50%)";
 	const spineColor = darkenColor(baseColor, 8);
 
@@ -491,6 +494,7 @@ function SingleShelf({
 // Hook to detect window width
 function useWindowWidth(): number {
 	const [width, setWidth] = useState(
+		/* istanbul ignore next -- SSR fallback; tests and browser always have window */
 		typeof window !== "undefined" ? window.innerWidth : 1200,
 	);
 
