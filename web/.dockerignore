@@ -1,11 +1,12 @@
 # Combined .dockerignore for web/ context
-# Used by both api/Dockerfile and bible-on-site/Dockerfile
+# Used by api/Dockerfile, bible-on-site/Dockerfile, and bulletin/Dockerfile
 # Exclude everything first, then include only what's needed
 *
 
 # Include directories needed for builds
 !api/
 !bible-on-site/
+!bulletin/
 !shared/
 
 # Exclude from api/
@@ -32,6 +33,12 @@ bible-on-site/coverage
 bible-on-site/test-results
 bible-on-site/tests
 bible-on-site/playwright.*.ts
+
+# Exclude from bulletin/
+bulletin/.coverage
+bulletin/.release
+bulletin/target
+bulletin/tests
 
 # Common exclusions
 **/.DS_Store

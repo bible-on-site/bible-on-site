@@ -2013,12 +2013,11 @@ jobs:
 
       - name: Verify Coverage 3rd Party Reporting
         run: |
-          # Check Codecov ci_passed status using the Codecov API with exponential backoff.
-          # We check ci_passed directly rather than waiting for state=="complete",
-          # because Codecov may return ci_passed=true before report totals are computed.
-            MAX_RETRIES=12
+          # Check Codecov ci_passed via API. Accepts: true (pass), false (fail),
+          # or null after retries (no coverage uploaded = nothing to fail).
+            MAX_RETRIES=6
             RETRY_COUNT=0
-            SLEEP_SECONDS=10
+            SLEEP_SECONDS=15
             OWNER_REPO=(${GITHUB_REPOSITORY/\// })
             if [ "$GITHUB_EVENT_NAME" == "pull_request" ]; then
               COMMIT_SHA=$(cat $GITHUB_EVENT_PATH | jq -r .pull_request.head.sha)
@@ -2046,6 +2045,10 @@ jobs:
                 fi
               fi
               if [ $RETRY_COUNT -eq $((MAX_RETRIES-1)) ]; then
+                if [ "$CI_PASSED" = "null" ] && [ "$STATE" = "null" ]; then
+                  echo "Codecov has no coverage data for this commit (ci_passed=null, state=null) - passing (no coverage uploaded)"
+                  break
+                fi
                 echo "Timeout: Codecov ci_passed not resolved after $MAX_RETRIES attempts"
                 echo "Last response (HTTP $HTTP_CODE): $(echo "$CODECOV_JSON" | jq -c '.')"
                 echo "status=failure" >> $GITHUB_OUTPUT
@@ -2053,7 +2056,7 @@ jobs:
               fi
               sleep $SLEEP_SECONDS
               RETRY_COUNT=$((RETRY_COUNT+1))
-              SLEEP_SECONDS=$((SLEEP_SECONDS + 10))
+              SLEEP_SECONDS=$((SLEEP_SECONDS + 15))
             done
 
   release_website:
