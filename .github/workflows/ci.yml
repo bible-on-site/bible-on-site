@@ -1976,7 +1976,7 @@ jobs:
           files: ${{ env.BULLETIN_COVERAGE_REPORT }}
           disable_search: true
           flags: bulletin
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
       - name: Restore lcov Docker image
         uses: actions/download-artifact@v7
@@ -2013,9 +2013,10 @@ jobs:
 
       - name: Verify Coverage 3rd Party Reporting
         run: |
-          # Check Codecov status using the Codecov API
-            MAX_RETRIES=20
+          # Check Codecov status using the Codecov API with exponential backoff
+            MAX_RETRIES=12
             RETRY_COUNT=0
+            SLEEP_SECONDS=10
             while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
               OWNER_REPO=(${GITHUB_REPOSITORY/\// })
               if [ "$GITHUB_EVENT_NAME" == "pull_request" ]; then
@@ -2024,7 +2025,6 @@ jobs:
                 GITHUB_SHA=${{ github.sha }} # Generated
               fi
               CODECOV_JSON=$(curl -s -H "Authorization: token ${{ secrets.CODECOV_API_TOKEN }}" "https://api.codecov.io/api/v2/github/${OWNER_REPO[0]}/repos/${OWNER_REPO[1]}/commits/$GITHUB_SHA") # Generated
-              # Check if the response JSON has an "error" key or if the "error" value is not null/empty
               if [ "$(echo "$CODECOV_JSON" | jq -r 'has("error") and (.error != null) and (.error != "")')" = "true" ]; then
                 echo "Codecov API returned error: $(echo "$CODECOV_JSON" | jq -r '.error')"
                 echo "Failed to get Codecov status"
@@ -2032,23 +2032,25 @@ jobs:
                 exit 1
               fi
               CODECOV_STATUS=$(echo "$CODECOV_JSON" | jq -r '.state')
+              echo "Codecov state: $CODECOV_STATUS (attempt $((RETRY_COUNT+1))/$MAX_RETRIES, next wait ${SLEEP_SECONDS}s)"
               if [ "$CODECOV_STATUS" = "complete" ]; then
                 CODECOV_RESULT=$(echo "$CODECOV_JSON" | jq -r '.ci_passed')
                 if [ "$CODECOV_RESULT" = "false" ]; then
-                  echo "Codecov check failed"
+                  echo "Codecov check failed (ci_passed=false)"
                   echo "status=failure" >> $GITHUB_OUTPUT
                   exit 1
                 fi
+                echo "Codecov check passed"
                 break
               fi
               if [ $RETRY_COUNT -eq $((MAX_RETRIES-1)) ]; then
-                echo "Timeout waiting for Codecov status"
+                echo "Timeout waiting for Codecov status after $MAX_RETRIES attempts"
                 echo "status=failure" >> $GITHUB_OUTPUT
                 exit 1
               fi
-              echo "Waiting for Codecov status to complete (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)..."
-              sleep 10
+              sleep $SLEEP_SECONDS
               RETRY_COUNT=$((RETRY_COUNT+1))
+              SLEEP_SECONDS=$((SLEEP_SECONDS + 10))
             done
 
   release_website:

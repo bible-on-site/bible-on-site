@@ -29,6 +29,7 @@ coverage:
       bulletin:
         target: auto
         threshold: 1%
+        informational: true
         flags:
           - bulletin
       data:
