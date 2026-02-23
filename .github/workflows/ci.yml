@@ -2197,23 +2197,34 @@ jobs:
           ssh-private-key: ${{ secrets.DEPLOY_KEY }}
 
       # Setup toolchains for modules that need version bumps
-      - name: Setup Node.js (for Website)
-        if: ${{ needs.release_website.outputs.released == 'true' }}
+      - name: Setup Node.js (for Website/Bulletin)
+        if: ${{ needs.release_website.outputs.released == 'true' || needs.release_bulletin.outputs.released == 'true' }}
         uses: actions/setup-node@v6
         with:
-          node-version-file: ${{ needs.setup_env.outputs.website_directory }}/package.json
-          cache-dependency-path: ${{ needs.setup_env.outputs.website_directory }}/package-lock.json
+          node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
+          cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
           cache: npm
+
+      - name: Install devops dependencies (for Bulletin)
+        if: ${{ needs.release_bulletin.outputs.released == 'true' }}
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        run: npm ci
 
       - name: Setup Rust (for API/Bulletin)
         if: ${{ needs.release_api.outputs.released == 'true' || needs.release_bulletin.outputs.released == 'true' }}
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Rust tools (for API/Bulletin)
+      - name: Install cargo-make (for API/Bulletin)
         if: ${{ needs.release_api.outputs.released == 'true' || needs.release_bulletin.outputs.released == 'true' }}
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make, tomato-toml, semver-bump
+          tool: cargo-make
+
+      - name: Install Rust bump tools (for API)
+        if: ${{ needs.release_api.outputs.released == 'true' }}
+        uses: taiki-e/install-action@v2
+        with:
+          tool: tomato-toml, semver-bump
 
       - name: Setup .NET (for App)
         if: ${{ needs.release_app.outputs.released == 'true' }}
