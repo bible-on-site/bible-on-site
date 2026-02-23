@@ -130,4 +130,23 @@ describe("BookshelfModal", () => {
 		fireEvent.keyDown(dialog, { key: "Escape" });
 		expect(onClose).toHaveBeenCalled();
 	});
+
+	it("ignores non-Escape document keydown", () => {
+		const onClose = jest.fn();
+		render(<BookshelfModal isOpen={true} onClose={onClose} />);
+		act(() => {
+			document.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "Enter" }),
+			);
+		});
+		expect(onClose).not.toHaveBeenCalled();
+	});
+
+	it("ignores non-Escape keydown on dialog element", () => {
+		const onClose = jest.fn();
+		render(<BookshelfModal isOpen={true} onClose={onClose} />);
+		const dialog = screen.getByRole("dialog", { hidden: true });
+		fireEvent.keyDown(dialog, { key: "Tab" });
+		expect(onClose).not.toHaveBeenCalled();
+	});
 });

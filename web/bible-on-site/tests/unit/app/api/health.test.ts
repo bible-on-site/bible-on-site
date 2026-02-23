@@ -37,7 +37,6 @@ describe("GET /api/health/ready", () => {
 	});
 
 	it("returns 503 when warming throws an error", async () => {
-		// Re-import with fresh module to reset isWarmed
 		jest.resetModules();
 		jest.doMock("@/data/perek-dto", () => ({
 			getPerekByPerekId: () => {
@@ -50,5 +49,19 @@ describe("GET /api/health/ready", () => {
 		const body = await response.json();
 		expect(body.status).toBe("error");
 		expect(body.message).toBe("Simulated failure");
+	});
+
+	it("returns 503 with 'Unknown error' for non-Error throws", async () => {
+		jest.resetModules();
+		jest.doMock("@/data/perek-dto", () => ({
+			getPerekByPerekId: () => {
+				throw "string error";
+			},
+		}));
+		const { GET: readyGet } = await import("@/app/api/health/ready/route");
+		const response = readyGet();
+		expect(response.status).toBe(503);
+		const body = await response.json();
+		expect(body.message).toBe("Unknown error");
 	});
 });
