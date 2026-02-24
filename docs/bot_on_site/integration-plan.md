@@ -179,7 +179,7 @@ POST /ask
 
 ## 3. The Full Pipeline: Ingest -> Retrieve -> Reason -> Validate -> Surface -> Learn
 
-(Full sections 3a–3f: INGEST, RETRIEVE, REASON, VALIDATE, SURFACE, LEARN — see [cursor plan](.cursor/plans) or repo copy for full mermaid diagrams and details.)
+(Full sections 3a–3f: INGEST, RETRIEVE, REASON, VALIDATE, SURFACE, LEARN)
 
 - **INGEST:** Articles from MySQL → chunks → embeddings → MongoDB Atlas `qa_chunks`. Perushim (after merge) same flow.
 - **RETRIEVE:** Query embedding → `$vectorSearch` top-K, optional `perekId` filter.
