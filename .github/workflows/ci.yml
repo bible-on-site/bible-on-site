@@ -1294,12 +1294,17 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/BibleOnSite.Tests.csproj') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/BibleOnSite.Tests.csproj', '**/BibleOnSite.csproj') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 
       - name: Restore dotnet tools
         run: dotnet tool restore
+
+      - name: Verify Android NuGet restore
+        run: |
+          dotnet workload install android --skip-sign-check
+          dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net9.0-android
 
       - name: Run Unit Tests with Coverage
         run: dotnet run --project devops -- CoverageUnit --configuration Release
