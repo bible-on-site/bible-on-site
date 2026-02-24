@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.268",
+	"version": "0.2.269",
 	"private": true,
 	"license": "MIT",
 	"scripts": {
@@ -36,7 +36,7 @@
 		"node": ">=24.11.1 <24.12.0"
 	},
 	"dependencies": {
-		"@aws-sdk/client-lambda": "3.996.0",
+		"@aws-sdk/client-lambda": "3.997.0",
 		"@pdf-lib/fontkit": "1.1.1",
 		"autoprefixer": "10.4.24",
 		"flowbite": "4.0.1",
