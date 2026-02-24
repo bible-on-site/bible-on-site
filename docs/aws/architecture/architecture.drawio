@@ -177,6 +177,14 @@
                         <mxPoint as="offset"/>
                     </mxGeometry>
                 </mxCell>
+                <mxCell id="arrow19" value="Read (articles)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeWidth=1;strokeColor=#3334B9;fontColor=#3334B9;exitX=0.5;exitY=1;entryX=1;entryY=0.5;" edge="1" parent="vpc" source="bulletin-lambda" target="rds">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="455" y="950"/>
+                            <mxPoint x="100" y="950"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
                 <mxCell id="arrow18" value="Deploy ZIP (OIDC)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeWidth=2;strokeColor=#D05C17;fontColor=#D05C17;exitX=0;exitY=0.75;" edge="1" parent="1" source="cd" target="bulletin-lambda">
                     <mxGeometry x="0.4757" relative="1" as="geometry">
                         <Array as="points">
