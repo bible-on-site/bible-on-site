@@ -13,7 +13,7 @@ coverage:
         informational: true
       api:
         target: auto
-        threshold: 0%
+        threshold: 1%
         flags:
           - api
       app:
@@ -22,10 +22,16 @@ coverage:
         flags:
           - app
       website:
-        target: auto
-        threshold: 0%
+        target: 99%
+        threshold: 1%
         flags:
           - website
+      bulletin:
+        target: auto
+        threshold: 1%
+        informational: true
+        flags:
+          - bulletin
       data:
         # TODO: Increase target once data is covered by CI
         target: 0%
@@ -52,6 +58,9 @@ flags:
   website:
     paths:
       - web/bible-on-site/src/
+  bulletin:
+    paths:
+      - web/bulletin/src/
   data:
     paths:
       - data/

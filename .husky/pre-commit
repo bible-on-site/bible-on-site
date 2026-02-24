@@ -20,7 +20,7 @@ else
     echo "Skipping pre-commit for cross-module; devops venv not found."
 fi
 
-modules=$(echo "$changed_files" | sed -E 's|^web/bible-on-site/|web/bible-on-site |; s|^web/api/|web/api |; s|^app/|app |' | tr ' ' '\n' | grep -E '^(app|web/api|web/bible-on-site)$' | sort -u)
+modules=$(echo "$changed_files" | sed -E 's|^web/bible-on-site/|web/bible-on-site |; s|^web/api/|web/api |; s|^web/admin/|web/admin |; s|^web/bulletin/|web/bulletin |; s|^app/|app |' | tr ' ' '\n' | grep -E '^(app|web/api|web/bible-on-site|web/admin|web/bulletin)$' | sort -u)
 echo "Detected changes in modules: $modules"
 
 if echo "$changed_files" | grep -q '^web/bible-on-site/'; then
@@ -32,12 +32,29 @@ if echo "$changed_files" | grep -q '^web/bible-on-site/'; then
     cd - >/dev/null
 fi
 
+if echo "$changed_files" | grep -q '^web/admin/'; then
+    echo "Running pre-commit tasks for web/admin..."
+    cd ./web/admin
+    npm run lint || exit 1
+    cd - >/dev/null
+fi
+
 if echo "$changed_files" | grep -q '^web/api/'; then
     echo "Running shared checks for web/api..."
     .husky/shared-checks.sh web/api || exit 1
     echo "Running pre-commit tasks for web/api..."
     cd ./web/api
     .husky/pre-commit
+    cd - >/dev/null
+fi
+
+if echo "$changed_files" | grep -q '^web/bulletin/'; then
+    echo "Running shared checks for web/bulletin..."
+    .husky/shared-checks.sh web/bulletin || exit 1
+    echo "Running pre-commit tasks for web/bulletin..."
+    cd ./web/bulletin
+    cargo make lint || exit 1
+    cargo make fmt-check || exit 1
     cd - >/dev/null
 fi
 

@@ -3,7 +3,7 @@
 		"node": ">=24.11.1 <24.12.0"
 	},
 	"devDependencies": {
-		"@types/node": "25.2.0",
+		"@types/node": "25.3.0",
 		"@types/semver": "7.7.1",
 		"@types/yargs": "17.0.35",
 		"tsx": "4.21.0"
@@ -12,19 +12,21 @@
 		"coverage:merge": "node --import tsx ./merge-coverage.mts",
 		"setup_dev_env": "node --import tsx ./setup-dev-env.mts",
 		"verify-version": "node --import tsx ./github/ci/is-version-newer-than-baseline.ts",
-		"deploy": "echo 'Use deploy:ecr or deploy:data' && exit 1",
+		"deploy": "echo 'Use deploy:ecr, deploy:data, or deploy:bulletin' && exit 1",
 		"deploy:ecr": "node --import tsx ./deploy/ecr-deploy/index.mts",
-		"deploy:data": "node --import tsx ./deploy/data-deploy/index.mts"
+		"deploy:data": "node --import tsx ./deploy/data-deploy/index.mts",
+		"deploy:bulletin": "node --import tsx ./deploy/bulletin-deploy/index.mts",
+		"bump:cargo": "node --import tsx ./bump-cargo-version.ts"
 	},
 	"dependencies": {
-		"@aws-sdk/client-ec2": "3.980.0",
-		"@aws-sdk/client-ecr": "3.980.0",
-		"@aws-sdk/client-lambda": "3.980.0",
-		"@aws-sdk/client-s3": "3.980.0",
-		"@aws-sdk/client-sts": "3.980.0",
-		"@aws-sdk/credential-providers": "3.980.0",
-		"dotenv": "17.2.3",
-		"semver": "7.7.3",
+		"@aws-sdk/client-ec2": "3.996.0",
+		"@aws-sdk/client-ecr": "3.996.0",
+		"@aws-sdk/client-lambda": "3.996.0",
+		"@aws-sdk/client-s3": "3.996.0",
+		"@aws-sdk/client-sts": "3.996.0",
+		"@aws-sdk/credential-providers": "3.996.0",
+		"dotenv": "17.3.1",
+		"semver": "7.7.4",
 		"yargs": "18.0.0"
 	}
 }

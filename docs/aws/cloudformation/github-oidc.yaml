@@ -152,6 +152,15 @@ Resources:
             Resource:
               - !Sub "arn:aws:lambda:*:${AWS::AccountId}:function:bible-on-site-db-populator"
 
+          # Lambda - deploy bulletin function code
+          - Sid: LambdaBulletinDeploy
+            Effect: Allow
+            Action:
+              - lambda:UpdateFunctionCode
+              - lambda:GetFunction
+            Resource:
+              - !Sub "arn:aws:lambda:*:${AWS::AccountId}:function:bible-on-site-bulletin"
+
           # EC2 Security Groups - dynamically whitelist GitHub runner IP for RDS access during SSG build
           # Note: Both security-group and security-group-rule resources are required
           - Sid: EC2SecurityGroupSSGBuild

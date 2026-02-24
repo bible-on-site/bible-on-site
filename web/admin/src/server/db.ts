@@ -20,7 +20,9 @@ export const pool = mysql.createPool({
 });
 
 export async function query<T>(sql: string, params?: unknown[]): Promise<T[]> {
-	const [rows] = await pool.execute(sql, params);
+	// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string -- sql is always a parameterized literal from callers
+	// biome-ignore lint/suspicious/noExplicitAny: mysql2 v3.17 narrowed QueryValues; unknown[] is not assignable to QueryValues
+	const [rows] = await pool.execute(sql, (params ?? []) as any);
 	return rows as T[];
 }
 
@@ -36,6 +38,8 @@ export async function execute(
 	sql: string,
 	params?: unknown[],
 ): Promise<mysql.ResultSetHeader> {
-	const [result] = await pool.execute(sql, params);
+	// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string -- sql is always a parameterized literal from callers
+	// biome-ignore lint/suspicious/noExplicitAny: mysql2 v3.17 narrowed QueryValues; unknown[] is not assignable to QueryValues
+	const [result] = await pool.execute(sql, (params ?? []) as any);
 	return result as mysql.ResultSetHeader;
 }

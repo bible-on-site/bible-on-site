@@ -11,7 +11,7 @@ repos:
         exclude: ^docs/aws/cloudformation/
       - id: check-ast
       - id: check-added-large-files
-        exclude: ^(data/mysql/.*_data\.sql|app/BibleOnSite/Resources/Raw/.*\.sqlite|app/BibleOnSite/Resources/Fonts/.*\.ttf|app/BibleOnSite/Platforms/Android/AssetPacks/.*\.sqlite\.gz)$
+        exclude: ^(data/mysql/.*_data\.sql|app/BibleOnSite/Resources/Raw/.*\.sqlite|app/BibleOnSite/Resources/Fonts/.*\.ttf|app/BibleOnSite/Platforms/Android/AssetPacks/.*\.sqlite\.gz|web/bulletin/data/.*\.json)$
       - id: check-xml
       - id: check-case-conflict
       - id: check-symlinks
@@ -24,7 +24,7 @@ repos:
     hooks:
       - id: check-json5
   - repo: "https://github.com/rhysd/actionlint"
-    rev: v1.7.10
+    rev: v1.7.11
     hooks:
       - id: actionlint
   - repo: local

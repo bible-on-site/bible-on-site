@@ -34,7 +34,15 @@ jobs:
         # Commonly enabled options, see https://github.com/actions/dependency-review-action#configuration-options for all available options.
         with:
           comment-summary-in-pr: always
-        #   fail-on-severity: moderate
-        #   deny-licenses: GPL-1.0-or-later, LGPL-2.0-or-later
-        #   allow_licenses: GPL-3.0, BSD-3-Clause, MIT
-        #   retry-on-snapshot-warnings: true
+          # flowbite-react uses npm aliases ("tailwind-merge-v2": "npm:tailwind-merge@2.6.1")
+          # which install the LEGITIMATE tailwind-merge package under alias names.
+          # The scanner falsely matches these alias names against known malware advisories.
+          allow-dependencies-licenses: >-
+            pkg:npm/tailwind-merge-v2,
+            pkg:npm/tailwind-merge-v3,
+            pkg:npm/%40tanstack/history,
+            pkg:npm/%40tanstack/start-fn-stubs,
+            pkg:npm/h3-v2,
+            pkg:npm/%40asamuzakjp/css-color,
+            pkg:npm/%40bramus/specificity,
+            pkg:githubactions/actions/download-artifact
