@@ -1303,7 +1303,7 @@ jobs:
 
       - name: Verify Android NuGet restore
         run: |
-          dotnet workload install android --skip-sign-check
+          dotnet workload install maui-android --skip-sign-check
           dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net9.0-android
 
       - name: Run Unit Tests with Coverage
