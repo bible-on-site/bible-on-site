@@ -4,7 +4,7 @@ description = "Bible on Site PDF Bulletin Generator (AWS Lambda)"
 license-file = "../../license"
 repository = "https://github.com/bible-on-site/bible-on-site"
 publish = false
-version = "0.1.4"
+version = "0.1.5"
 edition = "2024"
 
 [lib]
