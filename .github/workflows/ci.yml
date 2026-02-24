@@ -488,8 +488,10 @@ jobs:
           docker cp "${CONTAINER_ID}:/app/bulletin/target/release/bulletin" ./bootstrap
           docker rm "${CONTAINER_ID}"
           chmod +x ./bootstrap
-          zip -j "${{ env.BULLETIN_DIRECTORY }}/.release/bulletin-lambda-v${{ steps.get_version.outputs.MODULE_VERSION }}.zip" ./bootstrap
-          rm ./bootstrap
+          mkdir -p fonts
+          cp ${{ env.BULLETIN_DIRECTORY }}/fonts/*.ttf fonts/
+          zip -r "${{ env.BULLETIN_DIRECTORY }}/.release/bulletin-lambda-v${{ steps.get_version.outputs.MODULE_VERSION }}.zip" ./bootstrap fonts/
+          rm -rf ./bootstrap fonts/
 
       - name: Store Lambda ZIP
         uses: actions/upload-artifact@v6
