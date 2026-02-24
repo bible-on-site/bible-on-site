@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="aws-architecture" name="AWS Architecture">
-        <mxGraphModel dx="1768" dy="2682" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1400" background="#ffffff" math="0" shadow="0">
+        <mxGraphModel dx="1127" dy="2682" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1400" background="#ffffff" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -58,16 +58,25 @@
                 <mxCell id="ssm" value="SSM&lt;br&gt;DB Credentials" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=#F34482;gradientDirection=north;fillColor=#BC1356;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.systems_manager;" parent="db-group" vertex="1">
                     <mxGeometry x="200" y="70" width="50" height="50" as="geometry"/>
                 </mxCell>
-                <mxCell id="bulletin-lambda" value="Lambda&lt;br&gt;bible-on-site-bulletin&lt;br&gt;(Rust PDF Gen)" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=#F78E04;gradientDirection=north;fillColor=#D05C17;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.lambda;" vertex="1" parent="vpc">
-                    <mxGeometry x="430" y="760" width="50" height="50" as="geometry"/>
+                <mxCell id="bulletin-lambda" value="Lambda&lt;br&gt;bible-on-site-bulletin&lt;br&gt;(Rust PDF Gen)" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=#F78E04;gradientDirection=north;fillColor=#D05C17;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.lambda;" parent="vpc" vertex="1">
+                    <mxGeometry x="472" y="760" width="50" height="50" as="geometry"/>
                 </mxCell>
-                <mxCell id="arrow17" value="AWS SDK Invoke" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeWidth=2;strokeColor=#D05C17;fontColor=#D05C17;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="vpc" source="website" target="bulletin-lambda">
+                <mxCell id="arrow17" value="AWS SDK Invoke" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeWidth=2;strokeColor=#D05C17;fontColor=#D05C17;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" parent="vpc" source="website" target="bulletin-lambda" edge="1">
                     <mxGeometry x="-0.0545" y="45" relative="1" as="geometry">
                         <Array as="points">
                             <mxPoint x="305" y="375"/>
                             <mxPoint x="305" y="785"/>
                         </Array>
                         <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="arrow19" value="Read" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeWidth=2;strokeColor=#3334B9;fontColor=#3334B9;entryX=1;entryY=0.25;entryDx=0;entryDy=0;startArrow=none;startFill=0;" parent="vpc" source="bulletin-lambda" target="db-group" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="400" y="800"/>
+                            <mxPoint x="400" y="930"/>
+                        </Array>
+                        <mxPoint x="470" y="800" as="sourcePoint"/>
                     </mxGeometry>
                 </mxCell>
                 <mxCell id="registry-group" value="Container Registry" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=11;fontStyle=0;container=1;pointerEvents=0;collapsible=0;recursiveResize=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_aws_cloud_alt;strokeColor=#7AA116;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#3B8727;dashed=0;" parent="aws-cloud" vertex="1">
@@ -177,15 +186,7 @@
                         <mxPoint as="offset"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="arrow19" value="Read (articles)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeWidth=1;strokeColor=#3334B9;fontColor=#3334B9;exitX=0.5;exitY=1;entryX=1;entryY=0.5;" edge="1" parent="vpc" source="bulletin-lambda" target="rds">
-                    <mxGeometry relative="1" as="geometry">
-                        <Array as="points">
-                            <mxPoint x="455" y="950"/>
-                            <mxPoint x="100" y="950"/>
-                        </Array>
-                    </mxGeometry>
-                </mxCell>
-                <mxCell id="arrow18" value="Deploy ZIP (OIDC)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeWidth=2;strokeColor=#D05C17;fontColor=#D05C17;exitX=0;exitY=0.75;" edge="1" parent="1" source="cd" target="bulletin-lambda">
+                <mxCell id="arrow18" value="Deploy ZIP (OIDC)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeWidth=2;strokeColor=#D05C17;fontColor=#D05C17;exitX=0;exitY=0.75;" parent="1" source="cd" target="bulletin-lambda" edge="1">
                     <mxGeometry x="0.4757" relative="1" as="geometry">
                         <Array as="points">
                             <mxPoint x="1579" y="1030"/>
