@@ -62,10 +62,11 @@ Resources:
         Variables:
           RUST_LOG: info
           DATABASE_URL: !Ref DatabaseUrl
+          FONTS_DIR: /var/task/fonts
       Code:
         ZipFile: |
           # Placeholder - actual code deployed via CI/CD pipeline
-          # The binary is built from web/bulletin/ and deployed as a ZIP containing 'bootstrap'
+          # The ZIP contains 'bootstrap' (Rust binary) and 'fonts/' directory (TaameyD + FrankRuhl TTFs)
 
   # NOTE: Lambda Function URLs are not available in il-central-1.
   # The website invokes this Lambda directly via AWS SDK (lambda:InvokeFunction)

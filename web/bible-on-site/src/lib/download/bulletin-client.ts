@@ -46,11 +46,17 @@ async function invokeBulletinLambda(
 	const client = new LambdaClient({});
 
 	const lambdaEvent = {
-		httpMethod: "POST",
+		resource: "/api/generate-pdf",
 		path: "/api/generate-pdf",
+		httpMethod: "POST",
 		headers: { "content-type": "application/json" },
 		body: JSON.stringify(request),
 		isBase64Encoded: false,
+		requestContext: {
+			resourcePath: "/api/generate-pdf",
+			httpMethod: "POST",
+			path: "/api/generate-pdf",
+		},
 	};
 
 	const command = new InvokeCommand({
