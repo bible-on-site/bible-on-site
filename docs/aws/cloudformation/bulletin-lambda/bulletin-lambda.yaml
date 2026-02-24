@@ -16,10 +16,12 @@ Parameters:
     Type: Number
     Default: 30
     Description: Must match the timeout in bulletin-client.ts on the website side.
-  DatabaseUrl:
-    Type: String
-    Default: ""
-    Description: Optional RDS connection string. Only needed when include_articles is enabled.
+  VpcSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets for Lambda VPC access (same as ECS website subnets to reach RDS).
+  VpcSecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Security groups for Lambda VPC access (same as ECS website SG, allowed by RDS SG inbound).
 
 Resources:
   BulletinLambdaRole:
@@ -35,6 +37,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
       Policies:
         - PolicyName: bulletin-lambda-policy
           PolicyDocument:
@@ -58,11 +61,14 @@ Resources:
       Role: !GetAtt BulletinLambdaRole.Arn
       MemorySize: !Ref MemorySizeMB
       Timeout: !Ref TimeoutSeconds
+      VpcConfig:
+        SubnetIds: !Ref VpcSubnetIds
+        SecurityGroupIds: !Ref VpcSecurityGroupIds
       Environment:
         Variables:
           RUST_LOG: info
-          DATABASE_URL: !Ref DatabaseUrl
           FONTS_DIR: /var/task/fonts
+          # DB_URL is set automatically by the CD deploy script (fetched from SSM: /bible-on-site-tanah-db-url)
       Code:
         ZipFile: |
           # Placeholder - actual code deployed via CI/CD pipeline
