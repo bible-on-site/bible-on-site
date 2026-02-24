@@ -56,6 +56,7 @@ ECS cluster, task definitions, services, and Cloud Map service discovery.
 - Cloud Map Namespace: `bible-on-site.local` (private DNS)
 - Service: `bible-on-site-website` → `website.bible-on-site.local:3000`
 - Task Execution Role: `ecsTaskExecutionRole`
+- Website Task Role: `bible-on-site-website-task-role` (allows `lambda:InvokeFunction` on bulletin Lambda)
 
 **Deploy:**
 ```bash
@@ -176,7 +177,19 @@ aws ssm get-parameter --name bible-on-site-tanah-db-password \
   --with-decryption --query "Parameter.Value" --output text --region il-central-1
 ```
 
-### 12. `data-deploy-lambda.yaml`
+### 12. `bulletin-lambda/bulletin-lambda.yaml`
+Bulletin PDF Generator Lambda function.
+
+**Components:**
+- Lambda Function: `bible-on-site-bulletin` (Rust, `provided.al2023`)
+- IAM Role: `bible-on-site-bulletin-role` (CloudWatch logs)
+- CloudWatch Log Group: `/aws/lambda/bible-on-site-bulletin`
+
+**Notes:**
+- Lambda Function URLs are not available in `il-central-1`. The website invokes this Lambda directly via AWS SDK.
+- Deployed via ZIP package containing the `bootstrap` Rust binary.
+
+### 13. `data-deploy-lambda.yaml`
 Lambda function for deploying SQL data to RDS MySQL.
 
 **Components:**
