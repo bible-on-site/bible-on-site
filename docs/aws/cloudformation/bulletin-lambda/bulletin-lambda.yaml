@@ -67,6 +67,10 @@ Resources:
           # Placeholder - actual code deployed via CI/CD pipeline
           # The binary is built from web/bulletin/ and deployed as a ZIP containing 'bootstrap'
 
+  # NOTE: Lambda Function URLs are not available in il-central-1.
+  # The website invokes this Lambda directly via AWS SDK (lambda:InvokeFunction)
+  # using the ECS task role (bible-on-site-website-task-role).
+
   BulletinLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
