@@ -14,10 +14,12 @@ bible-on-site/
 │   ├── aws/ <-- AWS IaC and Architecture Docs
 │   │   ├── architecture/ <-- Architecture Docs
 │   │   └── cloudformation/ <-- CloudFormation IaC Docs
+│   ├── daily-bulletin/ <-- Daily Bulletin Service Docs
 │   ├── github/ <-- GitHub related Docs
 │   ├── repo-structure/ <-- This Documentation
 │   └── website/ <-- Website Architecture Docs
 └── web/ <-- Services
+    ├── admin/ <-- Admin Panel (React + Vite)
     ├── api/ <-- Backend API (Mostly for mobile app) Service
     │   ├── .husky/ <-- pre-commit hooks for git
     │   ├── devops/ <-- DevOps related scripts
@@ -48,8 +50,9 @@ bible-on-site/
     │   │   │   └── fonts/ <-- font files
     │   │   ├── data/ <-- data as code and DAL
     │   │   │   └── db/ <-- data as code
-    │   │   ├── lib/ <-- shared libraries (DB client, services)
-    │   │   │   └── articles/ <-- articles data service
+│   │   ├── lib/ <-- shared libraries (DB client, services)
+│   │   │   ├── articles/ <-- articles data service
+│   │   │   └── download/ <-- bulletin client (PDF generation via Lambda/binary)
     │   │   └── util/ <-- utilities / BL
     │   └── tests/ <-- Tests
     │       ├── e2e/ <-- End to End Tests per Page
@@ -59,6 +62,9 @@ bible-on-site/
     │           ├── coverage/ <-- Coverage Related Utilities
     │           ├── jest/ <-- Jest (Unit) Related Utilities
     │           └── playwright/ <-- Playwright (E2E & Performance) Related Utilities
+    ├── bulletin/ <-- Bulletin PDF Generator (Rust, deployed as AWS Lambda)
+    │   ├── src/ <-- Source code
+    │   └── tests/ <-- Tests
     └── shared/ <-- Shared Code Between web/api and web/bible-on-site
         └── tests-util/ <-- Shared Test Utilities Between web/api and web/bible-on-site
 ```

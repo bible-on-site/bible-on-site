@@ -24,6 +24,15 @@ The following diagram illustrates the high-level architecture of the Bible On Si
 - **Cluster**: `bible-on-site-cluster`
 - **Services**: Website, API
 - **Networking**: Tasks run in VPC with Cloud Map service discovery
+- **Website Task Role**: `bible-on-site-website-task-role` — allows the website container to invoke the bulletin Lambda for PDF generation
+
+### 3b. Compute (Lambda)
+
+- **Bulletin PDF Generator**: `bible-on-site-bulletin` — Rust-based Lambda that generates PDF bulletins from Tanach perakim on demand
+  - **Runtime**: `provided.al2023` (custom Rust binary)
+  - **Invoked by**: Website ECS task via AWS SDK (`lambda:InvokeFunction`)
+  - **Data**: Embedded Tanach text + articles from RDS MySQL
+  - **Deployed via**: CI/CD ZIP package (not container image)
 
 ### 4. Service Discovery (Cloud Map)
 
@@ -32,7 +41,7 @@ The following diagram illustrates the high-level architecture of the Bible On Si
 
 ### 5. Container Registry (ECR)
 
-- **Repositories**: `bible-on-site`, `bible-on-site-api`
+- **Repositories**: `bible-on-site` (website), `bible-on-site-api` (API)
 - Images are tagged with version numbers and `latest`
 - **Lifecycle Policy**: Keeps last 15 images, automatically expires older images to control storage costs
 
@@ -52,6 +61,21 @@ The following diagram illustrates the high-level architecture of the Bible On Si
 
 - **Instance**: `tanah-mysql` (MySQL 8.4, db.t3.micro)
 - **Storage**: 20GB gp3, encrypted with AWS-managed KMS key
-- **Networking**: Private subnets only, accessible from ECS via security group
+- **Networking**: Private subnets only, accessible from ECS and Lambda via security group
 - **Backups**: 7-day retention period
 - **Credentials**: Stored in SSM Parameter Store (SecureString)
+
+### Service Communication
+
+```
+User → nginx → ECS Website (Next.js)
+                     │
+                     ├─ Direct MySQL → RDS (articles, dedications)
+                     │
+                     └─ AWS SDK invoke → Lambda: bible-on-site-bulletin
+                                              │
+                                              ├─ Embedded Tanach data (pesukim, headers)
+                                              └─ MySQL → RDS (articles for PDF)
+```
+
+The website invokes the bulletin Lambda directly via the AWS SDK (`@aws-sdk/client-lambda`) rather than through an HTTP endpoint. Lambda Function URLs are not available in `il-central-1`, so the ECS task role grants `lambda:InvokeFunction` permission instead.
