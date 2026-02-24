@@ -223,6 +223,9 @@ Resources:
             # NEXT_PUBLIC_ENV: Enables production features like Google Analytics
             - Name: NEXT_PUBLIC_ENV
               Value: production
+            # Bulletin Lambda Function URL for PDF generation
+            - Name: BULLETIN_SERVICE_URL
+              Value: !Sub "https://<BULLETIN_LAMBDA_URL_ID>.lambda-url.${AWS::Region}.on.aws"
           # Database credentials injected from SSM Parameter Store
           # Required for runtime database queries (dynamic pages, ISR, etc.)
           Secrets:

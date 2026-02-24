@@ -67,6 +67,26 @@ Resources:
           # Placeholder - actual code deployed via CI/CD pipeline
           # The binary is built from web/bulletin/ and deployed as a ZIP containing 'bootstrap'
 
+  # Function URL — public HTTPS endpoint for the website to call.
+  # The website ECS task calls this URL (BULLETIN_SERVICE_URL env var).
+  BulletinFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !Ref BulletinLambdaFunction
+      AuthType: NONE
+      Cors:
+        AllowOrigins:
+          - "*"
+
+  # Permission for public invocation via Function URL
+  BulletinFunctionUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref BulletinLambdaFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: "*"
+      FunctionUrlAuthType: NONE
+
   BulletinLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -83,3 +103,9 @@ Outputs:
   BulletinLambdaRoleArn:
     Description: ARN of the Bulletin Lambda execution role
     Value: !GetAtt BulletinLambdaRole.Arn
+
+  BulletinFunctionUrl:
+    Description: Function URL for the Bulletin Lambda
+    Value: !GetAtt BulletinFunctionUrl.FunctionUrl
+    Export:
+      Name: BulletinFunctionUrl
