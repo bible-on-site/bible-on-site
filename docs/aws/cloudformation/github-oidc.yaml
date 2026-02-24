@@ -152,11 +152,12 @@ Resources:
             Resource:
               - !Sub "arn:aws:lambda:*:${AWS::AccountId}:function:bible-on-site-db-populator"
 
-          # Lambda - deploy bulletin function code
+          # Lambda - deploy bulletin function code and configure env vars
           - Sid: LambdaBulletinDeploy
             Effect: Allow
             Action:
               - lambda:UpdateFunctionCode
+              - lambda:UpdateFunctionConfiguration
               - lambda:GetFunction
             Resource:
               - !Sub "arn:aws:lambda:*:${AWS::AccountId}:function:bible-on-site-bulletin"
