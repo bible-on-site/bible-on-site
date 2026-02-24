@@ -623,11 +623,13 @@ jobs:
         run: |
           npm ci --no-audit
 
-      - name: Install Playwright Dependencies
+      - name: Install Playwright Browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: |
-          npx playwright install --with-deps
-          npx playwright install-deps
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright System Dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
 
       - name: Build cache
         uses: actions/cache@v5
@@ -781,11 +783,13 @@ jobs:
           node --version && npm --version
           npm ci --no-audit
 
-      - name: Install Playwright Dependencies
+      - name: Install Playwright Browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: |
-          npx playwright install --with-deps
-          npx playwright install-deps
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright System Dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
 
       - name: Lint
         id: npm-lint
@@ -1154,12 +1158,15 @@ jobs:
         run: |
           npm ci --no-audit
 
-      - name: Install Playwright Dependencies
+      - name: Install Playwright Browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         working-directory: ${{ env.API_TESTS_DIRECTORY }}
-        run: |
-          npx playwright install --with-deps
-          npx playwright install-deps
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright System Dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        working-directory: ${{ env.API_TESTS_DIRECTORY }}
+        run: npx playwright install-deps chromium
 
       - name: E2E Test
         id: api-e2e

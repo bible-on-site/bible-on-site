@@ -5,35 +5,35 @@ This document describes the architecture of the Bible on Site website (`web/bibl
 ## Architecture Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        Client Browser                        │
-└─────────────────────────┬───────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                          Client Browser                          │
+└─────────────────────────┬───────────────────────────────────────┘
                           │ HTTP/HTTPS
                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Next.js Server (SSG)                      │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │                   App Router                         │    │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  │    │
-│  │  │   /929/*    │  │     /       │  │   /api/*    │  │    │
-│  │  │  Perek Page │  │  Home Page  │  │  Dev APIs   │  │    │
-│  │  └──────┬──────┘  └─────────────┘  └─────────────┘  │    │
-│  └─────────┼───────────────────────────────────────────┘    │
-│            │                                                 │
-│  ┌─────────▼───────────────────────────────────────────┐    │
-│  │              Data Access Layer (DAL)                 │    │
-│  │  ┌─────────────────┐  ┌─────────────────────────┐   │    │
-│  │  │  Static JSON    │  │  Direct MySQL Client    │   │    │
-│  │  │  (tanah_view)   │  │  (mysql2 - articles)    │   │    │
-│  │  └─────────────────┘  └───────────┬─────────────┘   │    │
-│  └───────────────────────────────────┼─────────────────┘    │
-└──────────────────────────────────────┼──────────────────────┘
-                                       │ TCP/3306
-                                       ▼
-                          ┌─────────────────────────┐
-                          │         MySQL           │
-                          │    (tanah database)     │
-                          └─────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                      Next.js Server (SSG)                        │
+│  ┌───────────────────────────────────────────────────────┐      │
+│  │                     App Router                         │      │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │      │
+│  │  │   /929/*    │  │     /       │  │   /api/*    │    │      │
+│  │  │  Perek Page │  │  Home Page  │  │  Dev APIs   │    │      │
+│  │  └──────┬──────┘  └─────────────┘  └─────────────┘    │      │
+│  └─────────┼─────────────────────────────────────────────┘      │
+│            │                                                     │
+│  ┌─────────▼─────────────────────────────────────────────┐      │
+│  │                Data Access Layer (DAL)                  │      │
+│  │  ┌───────────────┐  ┌───────────────┐  ┌────────────┐  │      │
+│  │  │  Static JSON  │  │ MySQL Client  │  │  Bulletin  │  │      │
+│  │  │  (tanah_view) │  │ (mysql2)      │  │  Client    │  │      │
+│  │  └───────────────┘  └───────┬───────┘  └──────┬─────┘  │      │
+│  └─────────────────────────────┼─────────────────┼────────┘      │
+└────────────────────────────────┼─────────────────┼───────────────┘
+                                 │ TCP/3306        │ AWS SDK
+                                 ▼                 ▼
+                    ┌──────────────────┐  ┌────────────────────┐
+                    │      MySQL       │  │  Lambda: bulletin  │
+                    │ (tanah database) │  │  (Rust PDF gen)    │
+                    └──────────────────┘  └────────────────────┘
 ```
 
 ## Design Decisions
@@ -55,6 +55,7 @@ The website communicates **directly** with the MySQL database rather than going 
 | Tanah Text (sefarim, perakim, pesukim) | Static JSON (`tanah_view.json`) | Read-only, changes infrequently, optimal for SSG |
 | Articles | Direct MySQL query | Dynamic content, needs real-time updates |
 | Dedications | Direct MySQL query | Dynamic content, frequently updated |
+| PDF Bulletins | AWS Lambda (`bible-on-site-bulletin`) | On-demand generation, offloaded to Lambda for compute isolation |
 
 ### SSG Compatibility
 
@@ -86,6 +87,20 @@ Environment variables for database connection (supports both formats):
 
 For local development, copy `web/api/.dev.env` to `web/bible-on-site/.env.local`.
 
+## PDF Generation (Bulletin Integration)
+
+The website offers a "Download" feature on each Perek page that generates a printable PDF bulletin. In development, the Rust `web/bulletin` binary is invoked as a subprocess. In production (ECS), the website invokes the `bible-on-site-bulletin` Lambda directly via the AWS SDK (`@aws-sdk/client-lambda`).
+
+```
+User clicks "Download" → Server Action (actions.ts)
+  → bulletin-client.ts
+    ├─ Dev:  spawn local Rust binary (execFileSync)
+    └─ Prod: AWS SDK InvokeCommand → bible-on-site-bulletin Lambda
+                                        → returns base64-encoded PDF
+```
+
+**Why AWS SDK instead of HTTP?** Lambda Function URLs are not supported in `il-central-1`. The ECS task role (`bible-on-site-website-task-role`) grants `lambda:InvokeFunction` permission, and the `BULLETIN_LAMBDA_NAME` environment variable tells the website which Lambda to invoke.
+
 ## Layers
 
 ### Presentation Layer
@@ -97,6 +112,7 @@ For local development, copy `web/api/.dev.env` to `web/bible-on-site/.env.local`
 - **Static Data**: JSON files imported at build time (sefarim, cycles)
 - **MySQL Client**: `mysql2` library for direct database queries
 - **Services**: Type-safe data fetching functions (`getArticlesByPerekId`)
+- **Bulletin Client**: Invokes bulletin Lambda via AWS SDK for PDF generation
 
 ## Related Documentation
 
