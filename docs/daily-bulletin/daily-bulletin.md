@@ -121,6 +121,16 @@ The service implements idempotency to handle multiple scheduled runs:
 - External service failures (Smoove, Telegram, WhatsApp) are logged
 - Partial failures (e.g., email sent but PDF distribution failed) are tracked for manual intervention
 
+## Related: On-Demand PDF Bulletin (`web/bulletin`)
+
+The `web/bulletin` module is a **separate** Rust-based service that generates PDF bulletins on demand for the website's download feature. It is deployed as an AWS Lambda (`bible-on-site-bulletin`) and invoked directly by the website via the AWS SDK. See [Website Architecture](../website/website.md#pdf-generation-bulletin-integration) for details.
+
+| Aspect | Daily Bulletin (this doc) | On-Demand Bulletin (`web/bulletin`) |
+|--------|--------------------------|-------------------------------------|
+| Trigger | Scheduled (EventBridge cron) | User-initiated (website download) |
+| Distribution | Email, Telegram, WhatsApp | Direct PDF download |
+| Runtime | Lambda + EventBridge | Lambda (invoked by website ECS task) |
+
 ## Future Enhancements
 
 - [ ] Migrate from cron-based scheduling to AWS EventBridge Scheduler

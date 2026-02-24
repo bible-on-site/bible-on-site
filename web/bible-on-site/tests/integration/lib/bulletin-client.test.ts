@@ -178,6 +178,13 @@ describe("bulletin-client", () => {
 			);
 			expect(event.httpMethod).toBe("POST");
 			expect(event.path).toBe("/api/generate-pdf");
+			expect(event.resource).toBe("/api/generate-pdf");
+			expect(event.requestContext).toEqual(
+				expect.objectContaining({
+					resourcePath: "/api/generate-pdf",
+					httpMethod: "POST",
+				}),
+			);
 			const body = JSON.parse(event.body);
 			expect(body.perakimIds).toEqual([1, 2, 3]);
 			expect(body.includeArticles).toBe(true);

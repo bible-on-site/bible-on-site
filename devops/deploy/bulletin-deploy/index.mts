@@ -3,6 +3,7 @@ import {
 	GetFunctionCommand,
 	LambdaClient,
 	UpdateFunctionCodeCommand,
+	UpdateFunctionConfigurationCommand,
 	waitUntilFunctionUpdatedV2,
 } from "@aws-sdk/client-lambda";
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers";
@@ -15,6 +16,9 @@ dotenv.config({
 });
 
 const LAMBDA_FUNCTION_NAME = "bible-on-site-bulletin";
+const REQUIRED_ENV_VARS: Record<string, string> = {
+	FONTS_DIR: "/var/task/fonts",
+};
 
 class BulletinDeployer extends DeployerBase {
 	private readonly region: string;
@@ -83,13 +87,54 @@ class BulletinDeployer extends DeployerBase {
 			this.info(`Deployed version: ${this.moduleVersion}`);
 		}
 
-		this.info("Waiting for function to become active...");
+		this.info("Waiting for code update to complete...");
 		await waitUntilFunctionUpdatedV2(
 			{ client, maxWaitTime: 120 },
 			{ FunctionName: LAMBDA_FUNCTION_NAME },
 		);
 
+		await this.ensureEnvironmentVariables(client);
+
 		this.info("Function is active.");
+	}
+
+	private async ensureEnvironmentVariables(
+		client: LambdaClient,
+	): Promise<void> {
+		const current = await client.send(
+			new GetFunctionCommand({ FunctionName: LAMBDA_FUNCTION_NAME }),
+		);
+		const existingVars =
+			current.Configuration?.Environment?.Variables ?? {};
+
+		const missing = Object.entries(REQUIRED_ENV_VARS).filter(
+			([key, value]) => existingVars[key] !== value,
+		);
+
+		if (missing.length === 0) {
+			this.info("Environment variables already up to date.");
+			return;
+		}
+
+		const merged = { ...existingVars };
+		for (const [key, value] of missing) {
+			merged[key] = value;
+			this.info(`Setting env var: ${key}=${value}`);
+		}
+
+		await client.send(
+			new UpdateFunctionConfigurationCommand({
+				FunctionName: LAMBDA_FUNCTION_NAME,
+				Environment: { Variables: merged },
+			}),
+		);
+
+		this.info("Waiting for configuration update to complete...");
+		await waitUntilFunctionUpdatedV2(
+			{ client, maxWaitTime: 120 },
+			{ FunctionName: LAMBDA_FUNCTION_NAME },
+		);
+		this.info("Environment variables updated.");
 	}
 
 	protected override async deployPostConditions(): Promise<void> {
