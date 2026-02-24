@@ -6,6 +6,10 @@ import {
 	UpdateFunctionConfigurationCommand,
 	waitUntilFunctionUpdatedV2,
 } from "@aws-sdk/client-lambda";
+import {
+	GetParameterCommand,
+	SSMClient,
+} from "@aws-sdk/client-ssm";
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers";
 import * as dotenv from "dotenv";
 import yargs from "yargs";
@@ -16,8 +20,10 @@ dotenv.config({
 });
 
 const LAMBDA_FUNCTION_NAME = "bible-on-site-bulletin";
-const REQUIRED_ENV_VARS: Record<string, string> = {
+const SSM_DB_URL_PARAM = "/bible-on-site-tanah-db-url";
+const STATIC_ENV_VARS: Record<string, string> = {
 	FONTS_DIR: "/var/task/fonts",
+	RUST_LOG: "info",
 };
 
 class BulletinDeployer extends DeployerBase {
@@ -101,13 +107,33 @@ class BulletinDeployer extends DeployerBase {
 	private async ensureEnvironmentVariables(
 		client: LambdaClient,
 	): Promise<void> {
+		const requiredVars = { ...STATIC_ENV_VARS };
+
+		const ssmClient = new SSMClient({
+			region: this.region,
+			credentials: fromNodeProviderChain(),
+		});
+		const dbUrlParam = await ssmClient.send(
+			new GetParameterCommand({
+				Name: SSM_DB_URL_PARAM,
+				WithDecryption: true,
+			}),
+		);
+		const dbUrl = dbUrlParam.Parameter?.Value;
+		if (!dbUrl) {
+			throw new Error(
+				`SSM parameter ${SSM_DB_URL_PARAM} not found or empty`,
+			);
+		}
+		requiredVars.DB_URL = dbUrl;
+
 		const current = await client.send(
 			new GetFunctionCommand({ FunctionName: LAMBDA_FUNCTION_NAME }),
 		);
 		const existingVars =
 			current.Configuration?.Environment?.Variables ?? {};
 
-		const missing = Object.entries(REQUIRED_ENV_VARS).filter(
+		const missing = Object.entries(requiredVars).filter(
 			([key, value]) => existingVars[key] !== value,
 		);
 
@@ -118,8 +144,9 @@ class BulletinDeployer extends DeployerBase {
 
 		const merged = { ...existingVars };
 		for (const [key, value] of missing) {
+			const display = key === "DB_URL" ? "***" : value;
 			merged[key] = value;
-			this.info(`Setting env var: ${key}=${value}`);
+			this.info(`Setting env var: ${key}=${display}`);
 		}
 
 		await client.send(

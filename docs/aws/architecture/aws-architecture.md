@@ -32,6 +32,9 @@ The following diagram illustrates the high-level architecture of the Bible On Si
   - **Runtime**: `provided.al2023` (custom Rust binary)
   - **Invoked by**: Website ECS task via AWS SDK (`lambda:InvokeFunction`)
   - **Data**: Embedded Tanach text + articles from RDS MySQL
+  - **VPC**: Same subnets and security group as ECS website — required for RDS access
+  - **IAM**: `AWSLambdaBasicExecutionRole` + `AWSLambdaVPCAccessExecutionRole`
+  - **Env vars**: `FONTS_DIR`, `RUST_LOG` (static), `DB_URL` (fetched from SSM by CD deploy script)
   - **Deployed via**: CI/CD ZIP package (not container image)
 
 ### 4. Service Discovery (Cloud Map)
