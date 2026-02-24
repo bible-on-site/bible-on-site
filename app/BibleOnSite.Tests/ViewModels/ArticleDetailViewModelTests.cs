@@ -132,21 +132,21 @@ public class ArticleDetailViewModelTests
     #region ArticleName Tests
 
     [Fact]
-    public void ArticleName_ShouldReturnArticleName()
+    public void ArticleName_ShouldReturnShortAbstract()
     {
         var viewModel = new ArticleDetailViewModel();
         var article = new Article
         {
             Id = 1,
             Name = "מאמר מעניין",
-            Abstract = "Test",
+            Abstract = "<H1>תקציר קצר</H1><p>body</p>",
             AuthorId = 1,
             PerekId = 123
         };
 
         viewModel.SetArticle(article);
 
-        viewModel.ArticleName.Should().Be("מאמר מעניין");
+        viewModel.ArticleName.Should().Be("תקציר קצר");
     }
 
     [Fact]

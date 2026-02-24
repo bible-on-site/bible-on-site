@@ -2,14 +2,17 @@
 using Android.Gms.Extensions;
 using Xamarin.Google.Android.Play.Core.AssetPacks;
 using Xamarin.Google.Android.Play.Core.AssetPacks.Model;
+#elif IOS || MACCATALYST
+using Foundation;
 #endif
 
 namespace BibleOnSite.Services;
 
 /// <summary>
-/// Play Asset Delivery (PAD) service.
-/// On Android: uses AssetPackManager to request and access on-demand asset packs.
-/// On other platforms: no-op (PAD is Android-only).
+/// On-demand asset delivery service.
+/// Android: Play Asset Delivery via AssetPackManager.
+/// iOS: Apple On-Demand Resources via NSBundleResourceRequest.
+/// Other platforms: no-op.
 /// </summary>
 public sealed partial class PadDeliveryService : IPadDeliveryService
 {
@@ -24,6 +27,8 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
     {
 #if ANDROID
         return TryGetAssetPathAndroidAsync(packName, cancellationToken);
+#elif IOS || MACCATALYST
+        return TryGetAssetPathIosAsync(packName, cancellationToken);
 #else
         return Task.FromResult<string?>(null);
 #endif
@@ -37,6 +42,8 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
     {
 #if ANDROID
         return FetchAndroidAsync(packName, progress, cancellationToken);
+#elif IOS || MACCATALYST
+        return FetchIosAsync(packName, progress, cancellationToken);
 #else
         return Task.FromResult(false);
 #endif
@@ -52,21 +59,21 @@ partial class PadDeliveryService
         return activity != null ? AssetPackManagerFactory.GetInstance(activity) : null;
     }
 
-    private static async Task<string?> TryGetAssetPathAndroidAsync(string packName, CancellationToken cancellationToken)
+    private static Task<string?> TryGetAssetPathAndroidAsync(string packName, CancellationToken cancellationToken)
     {
         var manager = GetAssetPackManager();
         if (manager == null)
-            return null;
+            return Task.FromResult<string?>(null);
 
         try
         {
             var location = manager.GetPackLocation(packName);
-            return location?.AssetsPath();
+            return Task.FromResult(location?.AssetsPath());
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"PAD GetPackLocation failed: {ex.Message}");
-            return null;
+            return Task.FromResult<string?>(null);
         }
     }
 
@@ -138,6 +145,107 @@ partial class PadDeliveryService
             System.Diagnostics.Debug.WriteLine($"PAD Fetch failed: {ex.Message}");
             return false;
         }
+    }
+}
+#endif
+
+#if IOS || MACCATALYST
+partial class PadDeliveryService
+{
+    private const string NotesDbName = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
+
+    private static string OdrCacheDir(string packName)
+    {
+        var dir = Path.Combine(FileSystem.CacheDirectory, "odr_assets", packName);
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    private static async Task<string?> TryGetAssetPathIosAsync(string packName, CancellationToken ct)
+    {
+        var cacheDir = OdrCacheDir(packName);
+        if (File.Exists(Path.Combine(cacheDir, NotesDbName)))
+            return cacheDir;
+
+        try
+        {
+            using var request = new NSBundleResourceRequest(new NSSet<NSString>(new NSString(packName)));
+            var available = await request.ConditionallyBeginAccessingResourcesAsync();
+            if (!available)
+                return null;
+
+            try
+            {
+                return SaveOdrAsset(packName, cacheDir);
+            }
+            finally
+            {
+                request.EndAccessingResources();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"ODR TryGetAssetPath failed: {ex.Message}");
+            return null;
+        }
+    }
+
+    private static async Task<bool> FetchIosAsync(
+        string packName,
+        IProgress<double>? progress,
+        CancellationToken ct)
+    {
+        using var request = new NSBundleResourceRequest(new NSSet<NSString>(new NSString(packName)));
+
+        IDisposable? observer = null;
+        if (progress != null)
+        {
+            observer = request.Progress.AddObserver(
+                "fractionCompleted",
+                NSKeyValueObservingOptions.New,
+                _ => progress.Report(request.Progress.FractionCompleted));
+        }
+
+        try
+        {
+            await request.BeginAccessingResourcesAsync();
+            ct.ThrowIfCancellationRequested();
+
+            var cacheDir = OdrCacheDir(packName);
+            return SaveOdrAsset(packName, cacheDir) != null;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"ODR Fetch failed: {ex.Message}");
+            return false;
+        }
+        finally
+        {
+            observer?.Dispose();
+            request.EndAccessingResources();
+        }
+    }
+
+    /// <summary>
+    /// Extracts the ODR data asset to disk so PerushimNotesService can copy it
+    /// to AppDataDirectory via its normal TryCopyFromPad flow.
+    /// </summary>
+    private static string? SaveOdrAsset(string assetName, string cacheDir)
+    {
+        using var dataAsset = new NSDataAsset(assetName);
+        if (dataAsset?.Data == null)
+            return null;
+
+        var destPath = Path.Combine(cacheDir, NotesDbName);
+        if (dataAsset.Data.Save(destPath, true))
+            return cacheDir;
+
+        System.Diagnostics.Debug.WriteLine("ODR: NSData.Save failed");
+        return null;
     }
 }
 #endif

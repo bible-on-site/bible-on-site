@@ -397,6 +397,22 @@ jobs:
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
           echo "PROFILE_UUID=$PROFILE_UUID" >> $GITHUB_ENV
 
+      # Perushim notes are tracked in git as .sqlite.gz (~35 MB) and must be decompressed
+      # into the ODR asset catalog before the iOS build. The uncompressed .sqlite (~150 MB) is gitignored.
+      - name: Decompress perushim notes for iOS ODR asset catalog
+        working-directory: ${{ env.APP_DIRECTORY }}/BibleOnSite
+        run: |
+          GZ_FILE="Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz"
+          DEST_DIR="Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset"
+          DEST_FILE="$DEST_DIR/sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
+          if [ -f "$GZ_FILE" ] && [ ! -f "$DEST_FILE" ]; then
+            mkdir -p "$DEST_DIR"
+            gunzip -c "$GZ_FILE" > "$DEST_FILE"
+            echo "Decompressed perushim notes for iOS ODR ($(du -h "$DEST_FILE" | cut -f1))"
+          else
+            echo "Perushim notes already decompressed or .gz not found — skipping"
+          fi
+
       - name: Restore dotnet tools
         working-directory: ${{ env.APP_DIRECTORY }}
         run: dotnet tool restore

@@ -102,10 +102,11 @@
 		<BundleResource Include="Platforms\iOS\GoogleService-Info.plist" />
 	</ItemGroup>
 
-	<!-- Play Asset Delivery for Android: on-demand perushim notes.
-	     Perushim data is bundled in the AAB as a PAD on-demand asset pack.
-	     Data updates require a new app version + AAB upload to Google Play —
-	     there is no independent data push mechanism. -->
+	<!-- ============================================================
+	     Perushim Notes — on-demand delivery (Android PAD + iOS ODR)
+	     ============================================================ -->
+
+	<!-- Android: Play Asset Delivery SDK -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<PackageReference Include="Xamarin.Google.Android.Play.Asset.Delivery" Version="2.3.0.5" />
 	</ItemGroup>
@@ -121,13 +122,29 @@
 			WorkingDirectory="$(MSBuildProjectDirectory)/../../devops" />
 	</Target>
 
-	<!-- Perushim notes: PAD on-demand asset pack (Android only). Run perushim-view pipeline to generate. -->
+	<!-- Android: PAD on-demand asset pack. Run perushim-view pipeline to generate. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')">
 		<AndroidAsset
 			Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
 			Link="sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
 			AssetPack="perushim_notes"
 			DeliveryType="OnDemand" />
+	</ItemGroup>
+
+	<!-- iOS: decompress .gz → .sqlite into the ODR dataset folder (macOS only; gunzip is always available). -->
+	<Target Name="DecompressPerushimNotesIos" BeforeTargets="Build"
+		Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND
+			!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND
+			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')">
+		<MakeDir Directories="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset" />
+		<Exec Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz' > '$(MSBuildProjectDirectory)/Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset/sefaria-dump-5784-sivan-4.perushim_notes.sqlite'" />
+	</Target>
+
+	<!-- iOS: On-Demand Resources asset catalog with the perushim notes data set. -->
+	<ItemGroup Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')">
+		<ImageAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\Contents.json" />
+		<ImageAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\Contents.json" />
+		<ImageAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
 	</ItemGroup>
 
 	<ItemGroup>
