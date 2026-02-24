@@ -1,0 +1,17 @@
+{
+  "data" : [
+    {
+      "filename" : "sefaria-dump-5784-sivan-4.perushim_notes.sqlite",
+      "universal-type-identifier" : "public.data"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "on-demand-resource-tags" : [
+      "perushim_notes"
+    ]
+  }
+}

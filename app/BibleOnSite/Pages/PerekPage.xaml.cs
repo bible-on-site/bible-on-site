@@ -310,7 +310,11 @@ public partial class PerekPage : ContentPage
 
 #if IOS
     /// <summary>
-    /// Extends the bottom bar to the physical bottom on iOS (safe area) so there is no gap.
+    /// Extends the bottom bar past the safe area to the physical screen edge on iOS.
+    /// The negative margin pushes the bar into the home-indicator region;
+    /// internal bottom padding keeps interactive content above the indicator.
+    /// The floating menu container gets the same treatment so the FAB stays
+    /// aligned with the bar's notch.
     /// </summary>
     private void ApplyBottomBarSafeArea()
     {
@@ -318,10 +322,13 @@ public partial class PerekPage : ContentPage
         var bottom = insets.Bottom;
         if (bottom <= 0)
             return;
+
+        BottomBar.Margin = new Thickness(0, 0, 0, -bottom);
         BottomBar.Padding = new Thickness(0, 0, 0, bottom);
         BottomBar.HeightRequest = 90 + bottom;
-        // Note: PasukimFooterSpacer is inside a CarouselView DataTemplate and cannot be
-        // referenced by x:Name. Its HeightRequest is set statically in XAML.
+
+        FloatingMenuContainer.Margin = new Thickness(0, 0, 0, -bottom);
+
         ArticlesFooterSpacer.HeightRequest = 90 + bottom;
     }
 #endif

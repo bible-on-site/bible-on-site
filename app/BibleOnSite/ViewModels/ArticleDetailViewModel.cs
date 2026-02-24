@@ -95,9 +95,9 @@ public partial class ArticleDetailViewModel : ObservableObject
         : null;
 
     /// <summary>
-    /// Gets the article name.
+    /// Gets the article display title (uses ShortAbstract, consistent with ArticleCard).
     /// </summary>
-    public string ArticleName => Article?.Name ?? string.Empty;
+    public string ArticleName => Article?.ShortAbstract ?? string.Empty;
 
     /// <summary>
     /// Gets the author name.

@@ -222,18 +222,21 @@
                                                                              LongPressed="OnPasukLongPressed"
                                                                              NativeTapped="OnPasukNativeTapped"/>
                                             </Border.Behaviors>
-                                            <Grid ColumnDefinitions="40,*">
+                                            <Grid ColumnDefinitions="40,*"
+                                                  FlowDirection="RightToLeft">
                                                 <Label Grid.Column="0"
                                                        Text="{Binding PasukNumHeb}"
                                                        FontSize="{DynamicResource PasukNumFontSize}"
                                                        FontAttributes="Bold"
                                                        VerticalTextAlignment="Start"
+                                                       HorizontalTextAlignment="Center"
                                                        Margin="0,1.5,0,0"
                                                        TextColor="{StaticResource Primary}"/>
                                                 <VerticalStackLayout Grid.Column="1" Spacing="2">
                                                     <Label AutomationId="PasukText"
                                                            FormattedText="{Binding FormattedText}"
                                                            FontSize="{DynamicResource PasukFontSize}"
+                                                           FlowDirection="RightToLeft"
                                                            LineBreakMode="WordWrap"
                                                            LineHeight="1.4"/>
                                                     <VerticalStackLayout BindableLayout.ItemsSource="{Binding PerushNotes}"
@@ -305,8 +308,9 @@
                         <Border Padding="0"
                                 StrokeShape="RoundRectangle 12"
                                 Stroke="Transparent"
+                                StrokeThickness="2.5"
                                 BackgroundColor="Transparent">
-                                <Border.Triggers>
+                            <Border.Triggers>
                                 <DataTrigger TargetType="Border" Value="True">
                                     <DataTrigger.Binding>
                                         <MultiBinding Converter="{StaticResource IntEqualityConverter}">
@@ -314,8 +318,8 @@
                                             <Binding Source="{x:Reference PerekPageRoot}" Path="SelectedArticleId"/>
                                         </MultiBinding>
                                     </DataTrigger.Binding>
-                                    <Setter Property="BackgroundColor"
-                                            Value="{AppThemeBinding Light={StaticResource SelectedPasukBackground}, Dark={StaticResource SelectedPasukBackgroundDark}}"/>
+                                    <Setter Property="Stroke"
+                                            Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
                                 </DataTrigger>
                             </Border.Triggers>
                             <controls:ArticleCard Article="{Binding .}"/>
