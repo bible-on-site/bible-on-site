@@ -1,7 +1,7 @@
 /**
  * Client for the bulletin PDF generation service (web/bulletin).
  *
- * In production: calls the bulletin Lambda via its Function URL (BULLETIN_SERVICE_URL).
+ * In production: invokes the Lambda directly via AWS SDK (BULLETIN_LAMBDA_NAME).
  * In dev: spawns the Rust binary as a subprocess (on-demand, like Lambda).
  *
  * The binary reads JSON from stdin and writes PDF bytes to stdout.
@@ -17,7 +17,7 @@ import { existsSync } from "node:fs";
 import type { SemanticPageInfo } from "./types";
 import { semanticPagesToPerekIds } from "./tanach-pdf";
 
-/** Shape expected by the bulletin service. */
+/** Shape expected by the bulletin service (camelCase — matches Rust serde config). */
 interface BulletinRequest {
 	perakimIds: number[];
 	includePerushim: boolean;
@@ -26,50 +26,81 @@ interface BulletinRequest {
 	authorIds: number[];
 }
 
-function getBulletinServiceUrl(): string | undefined {
-	return process.env.BULLETIN_SERVICE_URL;
+function getBulletinLambdaName(): string | undefined {
+	return process.env.BULLETIN_LAMBDA_NAME;
 }
 
 /**
- * Invoke the bulletin service via its HTTP endpoint (Lambda Function URL).
- * POST /api/generate-pdf with JSON body → PDF binary response.
+ * Invoke the bulletin Lambda via AWS SDK.
+ * The ECS task role must have lambda:InvokeFunction permission.
+ * The Lambda receives an API Gateway-style event (POST /api/generate-pdf)
+ * and returns a response with base64-encoded PDF in the body.
  */
 async function invokeBulletinLambda(
-	serviceUrl: string,
+	functionName: string,
 	request: BulletinRequest,
 ): Promise<Uint8Array> {
-	const url = `${serviceUrl}/api/generate-pdf`;
-	const response = await fetch(url, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
+	const { LambdaClient, InvokeCommand } = await import(
+		"@aws-sdk/client-lambda"
+	);
+	const client = new LambdaClient({});
+
+	const lambdaEvent = {
+		httpMethod: "POST",
+		path: "/api/generate-pdf",
+		headers: { "content-type": "application/json" },
 		body: JSON.stringify(request),
+		isBase64Encoded: false,
+	};
+
+	const command = new InvokeCommand({
+		FunctionName: functionName,
+		Payload: Buffer.from(JSON.stringify(lambdaEvent)),
 	});
 
-	if (!response.ok) {
-		const text = await response.text().catch(() => "");
+	const result = await client.send(command);
+
+	if (result.FunctionError) {
+		const errMsg = result.Payload
+			? Buffer.from(result.Payload).toString("utf-8")
+			: "unknown";
+		throw new Error(`Bulletin Lambda error: ${errMsg}`);
+	}
+
+	if (!result.Payload) {
+		throw new Error("Bulletin Lambda returned empty payload");
+	}
+
+	const response = JSON.parse(
+		Buffer.from(result.Payload).toString("utf-8"),
+	);
+
+	if (response.statusCode !== 200) {
 		throw new Error(
-			`Bulletin service returned ${response.status}: ${text}`,
+			`Bulletin Lambda returned status ${response.statusCode}: ${response.body ?? ""}`,
 		);
 	}
 
-	const buf = await response.arrayBuffer();
-	if (buf.byteLength < 5) {
+	const pdfBytes = response.isBase64Encoded
+		? Buffer.from(response.body, "base64")
+		: Buffer.from(response.body, "binary");
+
+	if (pdfBytes.length < 5) {
 		throw new Error(
-			`Bulletin service returned ${buf.byteLength} bytes — expected a PDF`,
+			`Bulletin Lambda returned ${pdfBytes.length} bytes — expected a PDF`,
 		);
 	}
 
-	return new Uint8Array(buf);
+	return new Uint8Array(pdfBytes);
 }
 
 /**
  * Resolve the path to the bulletin binary.
- * Only used in dev mode (BULLETIN_SERVICE_URL is not set).
+ * Only used in dev mode (BULLETIN_LAMBDA_NAME is not set).
  */
 function getBulletinBinaryPath(): string {
 	const bulletinDir = resolve(
 		process.cwd(),
-		// From web/bible-on-site → web/bulletin
 		"../bulletin",
 	);
 
@@ -119,7 +150,7 @@ function invokeBulletinBinary(request: BulletinRequest): Uint8Array {
 
 /**
  * Generate a PDF for the given perek IDs.
- * Routes to Lambda (production) or local binary (dev) based on BULLETIN_SERVICE_URL.
+ * Routes to Lambda (production) or local binary (dev) based on BULLETIN_LAMBDA_NAME.
  */
 export async function generatePdfViaBulletin(
 	perekIds: number[],
@@ -132,9 +163,9 @@ export async function generatePdfViaBulletin(
 		authorIds: [],
 	};
 
-	const serviceUrl = getBulletinServiceUrl();
-	if (serviceUrl) {
-		return invokeBulletinLambda(serviceUrl, request);
+	const lambdaName = getBulletinLambdaName();
+	if (lambdaName) {
+		return invokeBulletinLambda(lambdaName, request);
 	}
 	return invokeBulletinBinary(request);
 }

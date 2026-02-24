@@ -4,23 +4,26 @@
  * Tests validate:
  * - Request payload construction (just perek IDs — no text data)
  * - Binary invocation via subprocess (mocked execFileSync) — dev mode
- * - Lambda invocation via fetch (mocked global.fetch) — production mode
- * - Error handling (binary not found, crash, empty output, HTTP errors)
+ * - Lambda invocation via AWS SDK (mocked @aws-sdk/client-lambda) — production mode
+ * - Error handling (binary not found, crash, empty output, Lambda errors)
  * - Handler factory pattern
  */
 
-// Mock child_process — the client spawns the bulletin binary
+const mockSend = jest.fn();
+jest.mock("@aws-sdk/client-lambda", () => ({
+	LambdaClient: jest.fn().mockImplementation(() => ({ send: mockSend })),
+	InvokeCommand: jest.fn().mockImplementation((input: unknown) => input),
+}));
+
 jest.mock("node:child_process", () => ({
 	execFileSync: jest.fn(),
 }));
 
-// Mock fs — used to find the binary
 jest.mock("node:fs", () => ({
 	existsSync: jest.fn(),
 	readFileSync: jest.fn().mockReturnValue(new Uint8Array([0, 1, 2, 3])),
 }));
 
-// Mock tanach-pdf utility functions
 jest.mock("@/lib/download/tanach-pdf", () => ({
 	semanticPagesToPerekIds: jest.fn(
 		(semanticPages: Array<{ title: string }>, _seferName: string) =>
@@ -48,6 +51,19 @@ function makeFakePdf(sizeBytes = 2048): Buffer {
 	return buf;
 }
 
+function makeLambdaResponse(pdfBuf: Buffer) {
+	return {
+		Payload: Buffer.from(
+			JSON.stringify({
+				statusCode: 200,
+				body: pdfBuf.toString("base64"),
+				isBase64Encoded: true,
+				headers: { "content-type": "application/pdf" },
+			}),
+		),
+	};
+}
+
 describe("bulletin-client", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
@@ -58,7 +74,7 @@ describe("bulletin-client", () => {
 		);
 	});
 
-	describe("generatePdfViaBulletin (dev mode — no BULLETIN_SERVICE_URL)", () => {
+	describe("generatePdfViaBulletin (dev mode — no BULLETIN_LAMBDA_NAME)", () => {
 		it("sends just perek IDs on stdin — no text data", async () => {
 			const fakePdf = makeFakePdf();
 			mockExecFileSync.mockReturnValue(fakePdf);
@@ -138,49 +154,38 @@ describe("bulletin-client", () => {
 		});
 	});
 
-	describe("generatePdfViaBulletin (production mode — BULLETIN_SERVICE_URL set)", () => {
-		const mockFetch = jest.fn();
-		const originalFetch = global.fetch;
-
+	describe("generatePdfViaBulletin (production mode — BULLETIN_LAMBDA_NAME set)", () => {
 		beforeEach(() => {
-			process.env.BULLETIN_SERVICE_URL = "https://test-lambda.example.com";
-			global.fetch = mockFetch;
-			mockFetch.mockReset();
+			process.env.BULLETIN_LAMBDA_NAME = "bible-on-site-bulletin";
+			mockSend.mockReset();
 		});
 
 		afterEach(() => {
-			delete process.env.BULLETIN_SERVICE_URL;
-			global.fetch = originalFetch;
+			delete process.env.BULLETIN_LAMBDA_NAME;
 		});
 
-		it("calls fetch with the correct URL and payload", async () => {
-			const fakePdf = makeFakePdf();
-			mockFetch.mockResolvedValue({
-				ok: true,
-				arrayBuffer: () => Promise.resolve(fakePdf.buffer),
-			});
+		it("invokes the Lambda with correct function name and payload", async () => {
+			mockSend.mockResolvedValue(makeLambdaResponse(makeFakePdf()));
 
 			await generatePdfViaBulletin([1, 2, 3]);
 
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-			const [url, opts] = mockFetch.mock.calls[0];
-			expect(url).toBe(
-				"https://test-lambda.example.com/api/generate-pdf",
-			);
-			expect(opts.method).toBe("POST");
-			expect(opts.headers["Content-Type"]).toBe("application/json");
+			expect(mockSend).toHaveBeenCalledTimes(1);
+			const invokeInput = mockSend.mock.calls[0][0];
+			expect(invokeInput.FunctionName).toBe("bible-on-site-bulletin");
 
-			const body = JSON.parse(opts.body);
+			const event = JSON.parse(
+				Buffer.from(invokeInput.Payload).toString("utf-8"),
+			);
+			expect(event.httpMethod).toBe("POST");
+			expect(event.path).toBe("/api/generate-pdf");
+			const body = JSON.parse(event.body);
 			expect(body.perakimIds).toEqual([1, 2, 3]);
 			expect(body.includeArticles).toBe(true);
 		});
 
 		it("returns PDF bytes from Lambda response", async () => {
 			const fakePdf = makeFakePdf(4096);
-			mockFetch.mockResolvedValue({
-				ok: true,
-				arrayBuffer: () => Promise.resolve(fakePdf.buffer),
-			});
+			mockSend.mockResolvedValue(makeLambdaResponse(fakePdf));
 
 			const result = await generatePdfViaBulletin([1]);
 
@@ -188,23 +193,46 @@ describe("bulletin-client", () => {
 			expect(result.length).toBe(4096);
 		});
 
-		it("throws when Lambda returns non-OK status", async () => {
-			mockFetch.mockResolvedValue({
-				ok: false,
-				status: 500,
-				text: () => Promise.resolve('{"error":"internal"}'),
+		it("throws when Lambda returns FunctionError", async () => {
+			mockSend.mockResolvedValue({
+				FunctionError: "Unhandled",
+				Payload: Buffer.from("stack trace here"),
 			});
 
 			await expect(generatePdfViaBulletin([1])).rejects.toThrow(
-				/Bulletin service returned 500/,
+				/Bulletin Lambda error/,
+			);
+		});
+
+		it("throws when Lambda returns empty payload", async () => {
+			mockSend.mockResolvedValue({ Payload: undefined });
+
+			await expect(generatePdfViaBulletin([1])).rejects.toThrow(
+				/empty payload/,
+			);
+		});
+
+		it("throws when Lambda returns non-200 status", async () => {
+			mockSend.mockResolvedValue({
+				Payload: Buffer.from(
+					JSON.stringify({ statusCode: 500, body: '{"error":"oops"}' }),
+				),
+			});
+
+			await expect(generatePdfViaBulletin([1])).rejects.toThrow(
+				/Bulletin Lambda returned status 500/,
 			);
 		});
 
 		it("throws when Lambda returns too few bytes", async () => {
-			mockFetch.mockResolvedValue({
-				ok: true,
-				arrayBuffer: () =>
-					Promise.resolve(new ArrayBuffer(2)),
+			mockSend.mockResolvedValue({
+				Payload: Buffer.from(
+					JSON.stringify({
+						statusCode: 200,
+						body: Buffer.from([0, 1]).toString("base64"),
+						isBase64Encoded: true,
+					}),
+				),
 			});
 
 			await expect(generatePdfViaBulletin([1])).rejects.toThrow(
@@ -213,11 +241,7 @@ describe("bulletin-client", () => {
 		});
 
 		it("does not invoke the local binary", async () => {
-			const fakePdf = makeFakePdf();
-			mockFetch.mockResolvedValue({
-				ok: true,
-				arrayBuffer: () => Promise.resolve(fakePdf.buffer),
-			});
+			mockSend.mockResolvedValue(makeLambdaResponse(makeFakePdf()));
 
 			await generatePdfViaBulletin([1]);
 
@@ -225,11 +249,7 @@ describe("bulletin-client", () => {
 		});
 
 		it("handler works with Lambda path", async () => {
-			const fakePdf = makeFakePdf();
-			mockFetch.mockResolvedValue({
-				ok: true,
-				arrayBuffer: () => Promise.resolve(fakePdf.buffer),
-			});
+			mockSend.mockResolvedValue(makeLambdaResponse(makeFakePdf()));
 
 			const handler = createBulletinPageRangesHandler();
 			const [ext, bin] = await handler(
