@@ -164,7 +164,7 @@ export async function generatePdfViaBulletin(
 	const request: BulletinRequest = {
 		perakimIds: perekIds,
 		includePerushim: false,
-		includeArticles: true,
+		includeArticles: false,
 		articleIds: [],
 		authorIds: [],
 	};

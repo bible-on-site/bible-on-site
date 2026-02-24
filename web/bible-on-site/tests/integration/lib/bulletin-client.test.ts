@@ -86,7 +86,7 @@ describe("bulletin-client", () => {
 
 			const body = JSON.parse(opts.input);
 			expect(body.perakimIds).toEqual([1, 2, 3]);
-			expect(body.includeArticles).toBe(true);
+			expect(body.includeArticles).toBe(false);
 			expect(body.articleIds).toEqual([]);
 			expect(body.authorIds).toEqual([]);
 			expect(body.pesukim).toBeUndefined();
@@ -187,7 +187,7 @@ describe("bulletin-client", () => {
 			);
 			const body = JSON.parse(event.body);
 			expect(body.perakimIds).toEqual([1, 2, 3]);
-			expect(body.includeArticles).toBe(true);
+			expect(body.includeArticles).toBe(false);
 		});
 
 		it("returns PDF bytes from Lambda response", async () => {
