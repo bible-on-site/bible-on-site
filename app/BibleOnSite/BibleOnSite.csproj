@@ -111,7 +111,9 @@
 
 	<!-- Android: Play Asset Delivery SDK -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
-		<PackageReference Include="Xamarin.Google.Android.Play.Asset.Delivery" Version="2.3.0.5" />
+		<!-- TODO(#1018): upgrade to 2.3.0.5+ when migrating to .NET 10 — 2.3.0.5 causes
+		     XAAMM0000 manifest collisions with Plugin.Firebase on the current .NET 9 toolchain. -->
+		<PackageReference Include="Xamarin.Google.Android.Play.Asset.Delivery" Version="2.3.0.2" />
 	</ItemGroup>
 
 	<!-- Auto-decompress perushim notes .gz → .sqlite if needed (checked out from git as compressed).
@@ -143,12 +145,9 @@
 		<Exec Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz' > '$(MSBuildProjectDirectory)/Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset/sefaria-dump-5784-sivan-4.perushim_notes.sqlite'" />
 	</Target>
 
-	<!-- iOS: On-Demand Resources asset catalog with the perushim notes data set. -->
-	<ItemGroup Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')">
-		<ImageAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\Contents.json" />
-		<ImageAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\Contents.json" />
-		<ImageAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
-	</ItemGroup>
+	<!-- iOS ODR: the PerushimNotes.xcassets catalog (Contents.json + dataset) is auto-globbed
+	     by MAUI's SDK from Platforms/iOS/ — no explicit <ImageAsset Include> needed.
+	     ODR tagging is declared in the dataset's Contents.json (on-demand-resource-tags). -->
 
 	<ItemGroup>
 		<PackageReference Include="CommunityToolkit.Maui" Version="9.1.1" />
