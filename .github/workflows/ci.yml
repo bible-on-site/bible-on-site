@@ -433,8 +433,10 @@ jobs:
 
   package_app:
     name: Package App
-    needs: [setup_env, determine_app_changes]
-    if: ${{ needs.determine_app_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    # Wait for perushim_data so the app is packaged with up-to-date perushim notes
+    # when both app and perushim pipeline change in the same commit.
+    needs: [setup_env, determine_app_changes, perushim_data]
+    if: ${{ always() && !cancelled() && !failure() && needs.determine_app_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
       actions: read
