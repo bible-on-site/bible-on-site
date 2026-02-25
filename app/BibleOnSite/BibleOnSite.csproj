@@ -113,7 +113,7 @@
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<!-- TODO(#1018): upgrade to 2.3.0.5+ when migrating to .NET 10 — 2.3.0.5 causes
 		     XAAMM0000 manifest collisions with Plugin.Firebase on the current .NET 9 toolchain. -->
-		<PackageReference Include="Xamarin.Google.Android.Play.Asset.Delivery" Version="2.3.0.5" />
+		<PackageReference Include="Xamarin.Google.Android.Play.Asset.Delivery" Version="2.3.0.2" />
 	</ItemGroup>
 
 	<!-- Auto-decompress perushim notes .gz → .sqlite if needed (checked out from git as compressed).

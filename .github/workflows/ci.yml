@@ -1303,8 +1303,10 @@ jobs:
 
       - name: Verify Android NuGet restore
         run: |
-          dotnet workload install maui-android --skip-sign-check
+          echo '{"sdk":{"version":"9.0.0","rollForward":"latestFeature"}}' > $GITHUB_WORKSPACE/global.json
+          dotnet workload install maui-android --skip-manifest-update
           dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net9.0-android
+          rm -f $GITHUB_WORKSPACE/global.json
 
       - name: Run Unit Tests with Coverage
         run: dotnet run --project devops -- CoverageUnit --configuration Release
@@ -1403,6 +1405,75 @@ jobs:
           path: ${{ env.APP_COVERAGE_REPORT }}
           retention-days: 400
           overwrite: true
+
+  app_ios_ci:
+    name: App iOS CI
+    runs-on: macos-15
+    needs: [setup_env, determine_app_changes]
+    if: ${{ always() && !cancelled() && !failure() && (needs.determine_app_changes.outputs.module_changed == 'true' || needs.determine_app_changes.outputs.ci_changed == 'true') }}
+    defaults:
+      run:
+        working-directory: ${{ env.APP_DIRECTORY }}
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-maui-ios-${{ hashFiles('app/**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-maui-ios-
+            ${{ runner.os }}-nuget-
+
+      - name: Pin .NET 9 SDK
+        run: |
+          echo '{"sdk":{"version":"9.0.0","rollForward":"latestFeature"}}' > $GITHUB_WORKSPACE/global.json
+          echo "Pinned SDK: $(dotnet --version)"
+
+      - name: Install MAUI workload
+        run: dotnet workload install maui-ios
+
+      - name: Decompress perushim notes for iOS ODR asset catalog
+        working-directory: ${{ env.APP_DIRECTORY }}/BibleOnSite
+        run: |
+          GZ_FILE="Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz"
+          DEST_DIR="Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset"
+          DEST_FILE="$DEST_DIR/sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
+          if [ -f "$GZ_FILE" ] && [ ! -f "$DEST_FILE" ]; then
+            mkdir -p "$DEST_DIR"
+            gunzip -c "$GZ_FILE" > "$DEST_FILE"
+            echo "Decompressed perushim notes for iOS ODR ($(du -h "$DEST_FILE" | cut -f1))"
+          else
+            echo "Perushim notes already decompressed or .gz not found — skipping"
+          fi
+
+      - name: Select Xcode version
+        run: |
+          XCODE_PATH=$(ls -d /Applications/Xcode_26.0*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE_PATH" ]; then
+            XCODE_PATH=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | head -1)
+          fi
+          if [ -z "$XCODE_PATH" ]; then
+            XCODE_PATH=$(xcode-select -p | sed 's|/Contents/Developer||')
+          fi
+          echo "Selecting Xcode: $XCODE_PATH"
+          sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
+
+      - name: Build iOS target
+        run: dotnet build BibleOnSite/BibleOnSite.csproj -c Release --no-incremental -p:TargetFrameworks=net9.0-ios -p:ErrorOnDuplicatePublishOutputFiles=false
 
   bulletin_ci:
     name: Bulletin CI
@@ -1811,6 +1882,7 @@ jobs:
         website_e2e,
         api_e2e,
         app_ci,
+        app_ios_ci,
         bulletin_ci,
         data_ci,
         perushim_data,
@@ -1898,6 +1970,15 @@ jobs:
           if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$APP_MASTER_COVERAGE_AVAILABLE" = "true" ]; then
             APP_STATUS=$([ "${{ needs.app_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$APP_STATUS" = "failure" ]; then
+              echo "Overall status: failure"
+              exit 1
+            fi
+          fi
+
+          if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ]; then
+            APP_IOS_STATUS=$([ "${{ needs.app_ios_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "$APP_IOS_STATUS" = "failure" ]; then
+              echo "App iOS CI failed"
               echo "Overall status: failure"
               exit 1
             fi
