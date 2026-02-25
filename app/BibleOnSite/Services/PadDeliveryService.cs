@@ -242,7 +242,7 @@ partial class PadDeliveryService
             return null;
 
         var destPath = Path.Combine(cacheDir, NotesDbName);
-        if (dataAsset.Data.Save(destPath, true))
+        if (dataAsset.Data.Save(NSUrl.FromFilename(destPath), true))
             return cacheDir;
 
         System.Diagnostics.Debug.WriteLine("ODR: NSData.Save failed");
