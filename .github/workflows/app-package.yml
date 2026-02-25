@@ -12,6 +12,11 @@ on:
           - Android
           - iOS
         default: "All"
+      perushim_notes_sqlite_artifact:
+        description: "Artifact name for perushim notes SQLite (leave empty for .gz fallback)"
+        required: false
+        type: string
+        default: ""
   workflow_call:
     inputs:
       platform:
@@ -19,6 +24,11 @@ on:
         required: false
         type: string
         default: "All"
+      perushim_notes_sqlite_artifact:
+        description: "Artifact name for perushim notes SQLite (leave empty for .gz fallback)"
+        required: false
+        type: string
+        default: ""
     secrets:
       WINDOWS_SIGNING_CERT_BASE64:
         required: false
@@ -61,6 +71,9 @@ permissions:
 
 env:
   APP_DIRECTORY: app
+  PERUSHIM_NOTES_SQLITE_FILENAME: sefaria-dump-5784-sivan-4.perushim_notes.sqlite
+  PERUSHIM_NOTES_ANDROID_ASSET_RELDIR: Platforms/Android/AssetPacks/perushim_notes
+  PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR: Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset
 
 jobs:
   package_windows:
@@ -218,15 +231,23 @@ jobs:
       - name: Install MAUI workload
         run: dotnet workload install maui-android --skip-manifest-update
 
-      # Perushim notes are tracked in git as .sqlite.gz (~35 MB) and must be decompressed
-      # before the AAB build. The uncompressed .sqlite (~150 MB) is gitignored.
-      # Data updates are coupled to app releases — updating perushim requires a new AAB.
-      - name: Decompress perushim notes for AAB asset pack
+      - name: Restore perushim notes SQLite for AAB asset pack
+        if: ${{ inputs.perushim_notes_sqlite_artifact != '' }}
+        id: restore_perushim_android
+        continue-on-error: true
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ inputs.perushim_notes_sqlite_artifact }}
+          path: ${{ env.APP_DIRECTORY }}/BibleOnSite/${{ env.PERUSHIM_NOTES_ANDROID_ASSET_RELDIR }}
+
+      - name: Decompress perushim notes for AAB asset pack (fallback)
+        if: ${{ inputs.perushim_notes_sqlite_artifact == '' || steps.restore_perushim_android.outcome == 'failure' }}
         working-directory: ${{ env.APP_DIRECTORY }}/BibleOnSite
         run: |
-          GZ_FILE="Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz"
+          GZ_FILE="${{ env.PERUSHIM_NOTES_ANDROID_ASSET_RELDIR }}/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}.gz"
           if [ -f "$GZ_FILE" ] && [ ! -f "${GZ_FILE%.gz}" ]; then
             gunzip -k "$GZ_FILE"
+            echo "::warning::Using .gz fallback — SQLite artifact not available"
             echo "Decompressed perushim notes ($(du -h "${GZ_FILE%.gz}" | cut -f1))"
           else
             echo "Perushim notes already decompressed or .gz not found — skipping"
@@ -397,17 +418,26 @@ jobs:
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
           echo "PROFILE_UUID=$PROFILE_UUID" >> $GITHUB_ENV
 
-      # Perushim notes are tracked in git as .sqlite.gz (~35 MB) and must be decompressed
-      # into the ODR asset catalog before the iOS build. The uncompressed .sqlite (~150 MB) is gitignored.
-      - name: Decompress perushim notes for iOS ODR asset catalog
+      - name: Restore perushim notes SQLite for iOS ODR asset catalog
+        if: ${{ inputs.perushim_notes_sqlite_artifact != '' }}
+        id: restore_perushim_ios
+        continue-on-error: true
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ inputs.perushim_notes_sqlite_artifact }}
+          path: ${{ env.APP_DIRECTORY }}/BibleOnSite/${{ env.PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR }}
+
+      - name: Decompress perushim notes for iOS ODR (fallback)
+        if: ${{ inputs.perushim_notes_sqlite_artifact == '' || steps.restore_perushim_ios.outcome == 'failure' }}
         working-directory: ${{ env.APP_DIRECTORY }}/BibleOnSite
         run: |
-          GZ_FILE="Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz"
-          DEST_DIR="Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset"
-          DEST_FILE="$DEST_DIR/sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
+          GZ_FILE="${{ env.PERUSHIM_NOTES_ANDROID_ASSET_RELDIR }}/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}.gz"
+          DEST_DIR="${{ env.PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR }}"
+          DEST_FILE="$DEST_DIR/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}"
           if [ -f "$GZ_FILE" ] && [ ! -f "$DEST_FILE" ]; then
             mkdir -p "$DEST_DIR"
             gunzip -c "$GZ_FILE" > "$DEST_FILE"
+            echo "::warning::Using .gz fallback — SQLite artifact not available"
             echo "Decompressed perushim notes for iOS ODR ($(du -h "$DEST_FILE" | cut -f1))"
           else
             echo "Perushim notes already decompressed or .gz not found — skipping"

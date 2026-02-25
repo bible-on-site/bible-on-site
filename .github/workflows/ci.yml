@@ -95,6 +95,11 @@ env:
   DATA_UNIT_JUNIT_REPORT_ARTIFACT_NAME: data-unit-junit-report-${{ github.run_id }}
   DATA_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME: data-integration-junit-report-${{ github.run_id }}
   PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER: perushim-data-sql.master
+  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-notes-sqlite.master
+  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_WF: perushim-notes-sqlite.${{ github.run_id }}
+  PERUSHIM_NOTES_SQLITE_FILENAME: sefaria-dump-5784-sivan-4.perushim_notes.sqlite
+  PERUSHIM_NOTES_ANDROID_ASSET_RELDIR: Platforms/Android/AssetPacks/perushim_notes
+  PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR: Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset
   PERUSHIM_PIPELINE_DIRECTORY: data/sefaria/pipelines/perushim-view
   LCOV_DOCKER_IMAGE_ARTIFACT_NAME: lcov-docker-image
   SEFARIA_MONGO_IMAGE_ARTIFACT_NAME: sefaria-mongo-image
@@ -141,6 +146,7 @@ jobs:
       is_bulletin_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_bulletin_master_coverage_available }}
       is_website_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_website_master_coverage_available }}
       is_perushim_data_sql_available: ${{ steps.check_master_coverage_artifacts.outputs.is_perushim_data_sql_available }}
+      is_perushim_notes_sqlite_available: ${{ steps.check_master_coverage_artifacts.outputs.is_perushim_notes_sqlite_available }}
     steps:
       - name: Check and restore master baseline artifacts
         id: check_master_coverage_artifacts
@@ -172,18 +178,21 @@ jobs:
           IS_BULLETIN_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}")
           IS_WEBSITE_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}")
           IS_PERUSHIM_DATA_SQL_AVAILABLE=$(check_and_download_artifact "${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}")
+          IS_PERUSHIM_NOTES_SQLITE_AVAILABLE=$(check_and_download_artifact "${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}")
 
           echo "API master coverage available: $IS_API_MASTER_COVERAGE_AVAILABLE"
           echo "App master coverage available: $IS_APP_MASTER_COVERAGE_AVAILABLE"
           echo "Bulletin master coverage available: $IS_BULLETIN_MASTER_COVERAGE_AVAILABLE"
           echo "Website master coverage available: $IS_WEBSITE_MASTER_COVERAGE_AVAILABLE"
           echo "Perushim data SQL available: $IS_PERUSHIM_DATA_SQL_AVAILABLE"
+          echo "Perushim notes SQLite available: $IS_PERUSHIM_NOTES_SQLITE_AVAILABLE"
 
           echo "is_api_master_coverage_available=$IS_API_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_app_master_coverage_available=$IS_APP_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_bulletin_master_coverage_available=$IS_BULLETIN_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_website_master_coverage_available=$IS_WEBSITE_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_perushim_data_sql_available=$IS_PERUSHIM_DATA_SQL_AVAILABLE" >> $GITHUB_OUTPUT
+          echo "is_perushim_notes_sqlite_available=$IS_PERUSHIM_NOTES_SQLITE_AVAILABLE" >> $GITHUB_OUTPUT
 
       - name: Re-upload API master coverage for current workflow
         if: steps.check_master_coverage_artifacts.outputs.is_api_master_coverage_available == 'true'
@@ -227,6 +236,15 @@ jobs:
         with:
           name: ${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
+          retention-days: 90
+          overwrite: true
+
+      - name: Re-upload perushim notes SQLite for current workflow
+        if: steps.check_master_coverage_artifacts.outputs.is_perushim_notes_sqlite_available == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+          path: /tmp/${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
           retention-days: 90
           overwrite: true
 
@@ -444,6 +462,7 @@ jobs:
     uses: ./.github/workflows/app-package.yml
     with:
       platform: All
+      perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-notes-sqlite.{0}', github.run_id) || 'perushim-notes-sqlite.master' }}
 
   package_bulletin:
     name: Package Bulletin
@@ -1444,15 +1463,25 @@ jobs:
       - name: Install MAUI workload
         run: dotnet workload install maui-ios --skip-manifest-update
 
-      - name: Decompress perushim notes for iOS ODR asset catalog
+      - name: Restore perushim notes SQLite (master baseline)
+        id: restore_perushim_sqlite
+        continue-on-error: true
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+          path: ${{ env.APP_DIRECTORY }}/BibleOnSite/${{ env.PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR }}
+
+      - name: Decompress perushim notes for iOS ODR (fallback)
+        if: ${{ steps.restore_perushim_sqlite.outcome == 'failure' }}
         working-directory: ${{ env.APP_DIRECTORY }}/BibleOnSite
         run: |
-          GZ_FILE="Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz"
-          DEST_DIR="Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset"
-          DEST_FILE="$DEST_DIR/sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
+          GZ_FILE="${{ env.PERUSHIM_NOTES_ANDROID_ASSET_RELDIR }}/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}.gz"
+          DEST_DIR="${{ env.PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR }}"
+          DEST_FILE="$DEST_DIR/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}"
           if [ -f "$GZ_FILE" ] && [ ! -f "$DEST_FILE" ]; then
             mkdir -p "$DEST_DIR"
             gunzip -c "$GZ_FILE" > "$DEST_FILE"
+            echo "::warning::Using .gz fallback — master SQLite artifact not yet available"
             echo "Decompressed perushim notes for iOS ODR ($(du -h "$DEST_FILE" | cut -f1))"
           else
             echo "Perushim notes already decompressed or .gz not found — skipping"
@@ -1838,6 +1867,34 @@ jobs:
         with:
           name: ${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
           path: ${{ env.DATA_DIRECTORY }}/mysql/perushim_data.sql
+          retention-days: 90
+          overwrite: true
+
+      - name: Generate Perushim SQLite Data
+        env:
+          MONGO_HOST: localhost
+          MONGO_PORT: 27017
+          DUMP_NAME: sefaria
+        run: |
+          cargo run --release --manifest-path sefaria/pipelines/perushim-view/Cargo.toml -- --format sqlite --dump-name "$DUMP_NAME"
+          SQLITE_DIR="${GITHUB_WORKSPACE}/${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output"
+          mv "$SQLITE_DIR/${DUMP_NAME}.perushim_notes.sqlite" \
+             "$SQLITE_DIR/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}"
+
+      - name: Upload Perushim Notes SQLite Artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_WF }}
+          path: ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}
+          retention-days: 30
+          overwrite: true
+
+      - name: Upload Perushim Notes SQLite Artifact (master baseline)
+        if: ${{ env.IS_MASTER_BRANCH == 'true' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+          path: ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}
           retention-days: 90
           overwrite: true
 
