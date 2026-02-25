@@ -14,19 +14,16 @@ const nextConfig = {
 		// Allow fetching images from loopback addresses in development
 		dangerouslyAllowSVG: true,
 		remotePatterns: [
-			// MinIO for development
+			// MinIO for development (all buckets)
 			{
 				protocol: "http",
 				hostname: "localhost",
 				port: "4566",
-				pathname: "/bible-on-site-rabbis/**",
 			},
-			// Also allow 127.0.0.1 for MinIO
 			{
 				protocol: "http",
 				hostname: "127.0.0.1",
 				port: "4566",
-				pathname: "/bible-on-site-rabbis/**",
 			},
 			// AWS S3 for production
 			{
