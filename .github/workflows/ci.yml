@@ -1470,15 +1470,7 @@ jobs:
           xcodebuild -version
 
       - name: Build iOS target
-        run: |
-          dotnet build BibleOnSite/BibleOnSite.csproj -c Release \
-            -p:TargetFrameworks=net9.0-ios \
-            -r ios-arm64 \
-            -p:EnableCodeSigning=false \
-            -p:CodesignKey=- \
-            -p:_ExcludeSimulatorArchitectures=true \
-            -p:SupportedOSPlatformVersion=17.0 \
-            -p:ErrorOnDuplicatePublishOutputFiles=false
+        run: dotnet build BibleOnSite/BibleOnSite.csproj -c Release -p:TargetFrameworks=net9.0-ios -p:ErrorOnDuplicatePublishOutputFiles=false
 
   bulletin_ci:
     name: Bulletin CI
