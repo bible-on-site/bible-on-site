@@ -143,12 +143,9 @@
 		<Exec Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz' > '$(MSBuildProjectDirectory)/Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset/sefaria-dump-5784-sivan-4.perushim_notes.sqlite'" />
 	</Target>
 
-	<!-- iOS: On-Demand Resources asset catalog with the perushim notes data set. -->
-	<ItemGroup Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')">
-		<ImageAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\Contents.json" />
-		<ImageAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\Contents.json" />
-		<ImageAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
-	</ItemGroup>
+	<!-- iOS ODR: the PerushimNotes.xcassets catalog (Contents.json + dataset) is auto-globbed
+	     by MAUI's SDK from Platforms/iOS/ — no explicit <ImageAsset Include> needed.
+	     ODR tagging is declared in the dataset's Contents.json (on-demand-resource-tags). -->
 
 	<ItemGroup>
 		<PackageReference Include="CommunityToolkit.Maui" Version="9.1.1" />
