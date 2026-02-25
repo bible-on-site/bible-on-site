@@ -1459,7 +1459,7 @@ jobs:
           xcodebuild -version
 
       - name: Build iOS target
-        run: dotnet build BibleOnSite/BibleOnSite.csproj -f net9.0-ios -c Release --no-incremental -p:ErrorOnDuplicatePublishOutputFiles=false
+        run: dotnet build BibleOnSite/BibleOnSite.csproj -c Release --no-incremental -p:TargetFrameworks=net9.0-ios -p:ErrorOnDuplicatePublishOutputFiles=false
 
   bulletin_ci:
     name: Bulletin CI
