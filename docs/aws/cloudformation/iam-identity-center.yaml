@@ -150,6 +150,37 @@ Metadata:
       AssignedTo:
         - bible-on-site-github-ci-bot
 
+  # =========================================================================
+  # CUSTOMER MANAGED APPLICATIONS
+  # =========================================================================
+  # SAML 2.0 applications must be created via the AWS Console.
+  # CloudFormation and CLI do NOT support creating SAML customer managed apps.
+  #
+  # Current Applications:
+  #
+  # 1. Bible On Site Admin (SAML 2.0)
+  #    - Application ARN: arn:aws:sso::250598594267:application/ssoins-8316f518b8ce067d/apl-8316552e8e2d8f7c
+  #    - Type: Custom SAML 2.0
+  #    - Purpose: Federated SSO login for admin web app via Cognito
+  #    - SAML Metadata URL: https://portal.sso.il-central-1.amazonaws.com/saml/metadata/MjUwNTk4NTk0MjY3X2lucy04MzE2NTUyZThlMmQ4Zjdj
+  #    - Sign-in URL: https://portal.sso.il-central-1.amazonaws.com/saml/assertion/MjUwNTk4NTk0MjY3X2lucy04MzE2NTUyZThlMmQ4Zjdj
+  #    - Sign-out URL: https://portal.sso.il-central-1.amazonaws.com/saml/logout/MjUwNTk4NTk0MjY3X2lucy04MzE2NTUyZThlMmQ4Zjdj
+  #    - Application ACS URL: https://bible-on-site-admin.auth.il-central-1.amazoncognito.com/saml2/idpresponse
+  #    - Application SAML Audience: urn:amazon:cognito:sp:il-central-1_1jyMEBzqm
+  #    - Attribute Mappings:
+  #        Subject → ${user:email} (emailAddress)
+  #        email   → ${user:email} (basic)
+  #    - Assigned Users: dorad
+  #
+  #    Authentication Flow:
+  #    User → Admin App → Cognito (OIDC) → IAM Identity Center (SAML) → SSO Login
+  #    SSO Login → SAML Assertion → Cognito → OIDC Tokens → Admin App
+  #
+  #    See also: docs/aws/cloudformation/cognito-admin.yaml
+  #
+  # To list applications:
+  #   aws sso-admin list-applications --instance-arn <SSO_INSTANCE_ARN> --region il-central-1
+
 # =============================================================================
 # CLI COMMANDS TO RECREATE CONFIGURATION
 # =============================================================================

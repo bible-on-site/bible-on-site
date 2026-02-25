@@ -22,6 +22,7 @@ export function getLoginUrl(origin: string): string {
 		client_id: COGNITO_CLIENT_ID,
 		redirect_uri: `${origin}/auth/callback`,
 		scope: "openid email profile",
+		identity_provider: "AWSSSO",
 	});
 	return `https://${COGNITO_DOMAIN}/oauth2/authorize?${params}`;
 }
