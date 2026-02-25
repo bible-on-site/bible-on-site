@@ -4,6 +4,7 @@ using Xamarin.Google.Android.Play.Core.AssetPacks;
 using Xamarin.Google.Android.Play.Core.AssetPacks.Model;
 #elif IOS || MACCATALYST
 using Foundation;
+using UIKit;
 #endif
 
 namespace BibleOnSite.Services;
