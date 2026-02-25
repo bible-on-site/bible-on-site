@@ -1430,7 +1430,7 @@ jobs:
   app_ios_ci:
     name: App iOS CI
     runs-on: macos-15
-    needs: [setup_env, determine_app_changes, determine_baseline_availability]
+    needs: [setup_env, determine_app_changes, determine_baseline_availability, perushim_data]
     # Only on PRs — on master, Package iOS (IPA) already validates the full iOS build.
     # TODO(#1018): when upgrading to .NET 10, verify workload install flags still work.
     if: ${{ github.event_name == 'pull_request' && always() && !cancelled() && !failure() && (needs.determine_app_changes.outputs.module_changed == 'true' || needs.determine_app_changes.outputs.ci_changed == 'true') }}
@@ -1463,10 +1463,10 @@ jobs:
       - name: Install MAUI workload
         run: dotnet workload install maui-ios --skip-manifest-update
 
-      - name: Restore perushim notes SQLite (master baseline)
+      - name: Restore perushim notes SQLite
         uses: actions/download-artifact@v7
         with:
-          name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+          name: ${{ needs.perushim_data.result != 'skipped' && env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_WF || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.APP_DIRECTORY }}/BibleOnSite/${{ env.PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR }}
 
       - name: Select Xcode version
