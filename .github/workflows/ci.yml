@@ -1472,7 +1472,7 @@ jobs:
       - name: Publish iOS target (no signing, no IPA, no IL trim)
         run: |
           dotnet publish BibleOnSite/BibleOnSite.csproj -c Release \
-            -f net9.0-ios \
+            -p:TargetFrameworks=net9.0-ios \
             -r ios-arm64 \
             -p:ArchiveOnBuild=false \
             -p:BuildIpa=false \
