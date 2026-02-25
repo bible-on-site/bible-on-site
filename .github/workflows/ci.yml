@@ -1446,6 +1446,7 @@ jobs:
         run: dotnet workload install maui-ios
 
       - name: Decompress perushim notes for iOS ODR asset catalog
+        working-directory: ${{ env.APP_DIRECTORY }}/BibleOnSite
         run: |
           GZ_FILE="Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz"
           DEST_DIR="Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset"
