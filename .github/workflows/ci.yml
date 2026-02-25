@@ -1303,8 +1303,10 @@ jobs:
 
       - name: Verify Android NuGet restore
         run: |
+          echo '{"sdk":{"version":"9.0.0","rollForward":"latestFeature"}}' > $GITHUB_WORKSPACE/global.json
           dotnet workload install maui-android --skip-manifest-update
           dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net9.0-android
+          rm -f $GITHUB_WORKSPACE/global.json
 
       - name: Run Unit Tests with Coverage
         run: dotnet run --project devops -- CoverageUnit --configuration Release
@@ -1434,6 +1436,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-maui-ios-
             ${{ runner.os }}-nuget-
+
+      - name: Pin .NET 9 SDK
+        run: |
+          echo '{"sdk":{"version":"9.0.0","rollForward":"latestFeature"}}' > $GITHUB_WORKSPACE/global.json
+          echo "Pinned SDK: $(dotnet --version)"
 
       - name: Install MAUI workload
         run: dotnet workload install maui-ios --skip-manifest-update
