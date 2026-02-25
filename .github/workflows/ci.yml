@@ -1469,23 +1469,11 @@ jobs:
           sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
           xcodebuild -version
 
-      - name: Restore iOS target
+      - name: Build iOS target
         run: |
-          dotnet restore BibleOnSite/BibleOnSite.csproj \
-            -p:TargetFramework=net9.0-ios \
-            -p:RuntimeIdentifier=ios-arm64
-
-      - name: Publish iOS target (no signing, no IPA, no IL trim)
-        run: |
-          dotnet publish BibleOnSite/BibleOnSite.csproj -c Release --no-restore \
-            -f net9.0-ios \
+          dotnet build BibleOnSite/BibleOnSite.csproj -c Release \
+            -p:TargetFrameworks=net9.0-ios \
             -r ios-arm64 \
-            -p:ArchiveOnBuild=false \
-            -p:BuildIpa=false \
-            -p:MtouchLink=None \
-            -p:TrimMode=copy \
-            -p:EnableCodeSigning=false \
-            -p:CodesignKey=- \
             -p:_ExcludeSimulatorArchitectures=true \
             -p:SupportedOSPlatformVersion=17.0 \
             -p:ErrorOnDuplicatePublishOutputFiles=false
