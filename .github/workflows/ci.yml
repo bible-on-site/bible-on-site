@@ -1445,6 +1445,19 @@ jobs:
       - name: Install MAUI workload
         run: dotnet workload install maui-ios
 
+      - name: Decompress perushim notes for iOS ODR asset catalog
+        run: |
+          GZ_FILE="Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz"
+          DEST_DIR="Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset"
+          DEST_FILE="$DEST_DIR/sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
+          if [ -f "$GZ_FILE" ] && [ ! -f "$DEST_FILE" ]; then
+            mkdir -p "$DEST_DIR"
+            gunzip -c "$GZ_FILE" > "$DEST_FILE"
+            echo "Decompressed perushim notes for iOS ODR ($(du -h "$DEST_FILE" | cut -f1))"
+          else
+            echo "Perushim notes already decompressed or .gz not found — skipping"
+          fi
+
       - name: Select Xcode version
         run: |
           XCODE_PATH=$(ls -d /Applications/Xcode_26.0*.app 2>/dev/null | sort -V | tail -1)
