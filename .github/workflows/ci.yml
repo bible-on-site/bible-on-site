@@ -1469,8 +1469,17 @@ jobs:
           sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
           xcodebuild -version
 
-      - name: Build iOS target
-        run: dotnet build BibleOnSite/BibleOnSite.csproj -c Release --no-incremental -p:TargetFrameworks=net9.0-ios -p:ErrorOnDuplicatePublishOutputFiles=false
+      - name: Publish iOS target (no signing, no IPA, no IL trim)
+        run: |
+          dotnet publish BibleOnSite/BibleOnSite.csproj -c Release \
+            -f net9.0-ios \
+            -r ios-arm64 \
+            -p:ArchiveOnBuild=false \
+            -p:BuildIpa=false \
+            -p:PublishTrimmed=false \
+            -p:_ExcludeSimulatorArchitectures=true \
+            -p:SupportedOSPlatformVersion=17.0 \
+            -p:ErrorOnDuplicatePublishOutputFiles=false
 
   bulletin_ci:
     name: Bulletin CI
