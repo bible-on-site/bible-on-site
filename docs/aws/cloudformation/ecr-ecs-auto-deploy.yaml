@@ -52,6 +52,16 @@ Parameters:
     Default: bible-on-site-api
     Description: Name of the API ECR repository
 
+  AdminServiceName:
+    Type: String
+    Default: bible-on-site-admin
+    Description: Name of the admin ECS service
+
+  AdminECRRepoName:
+    Type: String
+    Default: bible-on-site-admin
+    Description: Name of the admin ECR repository
+
 Resources:
   # =============================================================================
   # IAM Role: Lambda Execution Role
@@ -81,6 +91,7 @@ Resources:
                 Resource:
                   - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:service/${ECSClusterName}/${WebsiteServiceName}"
                   - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:service/${ECSClusterName}/${ApiServiceName}"
+                  - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:service/${ECSClusterName}/${AdminServiceName}"
               # CloudWatch Logs permissions
               - Effect: Allow
                 Action:
@@ -119,6 +130,7 @@ Resources:
                 Resource:
                   - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:service/${ECSClusterName}/${WebsiteServiceName}"
                   - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:service/${ECSClusterName}/${ApiServiceName}"
+                  - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:service/${ECSClusterName}/${AdminServiceName}"
               - Effect: Allow
                 Action: iam:PassRole
                 Resource: "*"
@@ -170,7 +182,8 @@ Resources:
               # Map ECR repo to ECS service
               repo_to_service = {
                   'bible-on-site': 'bible-on-site-website',
-                  'bible-on-site-api': 'bible-on-site-api'
+                  'bible-on-site-api': 'bible-on-site-api',
+                  'bible-on-site-admin': 'bible-on-site-admin'
               }
 
               service_name = repo_to_service.get(repo_name)
@@ -215,6 +228,14 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt ECRPushRuleApi.Arn
+
+  LambdaInvokePermissionAdmin:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ECRToECSDeployFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ECRPushRuleAdmin.Arn
 
   # =============================================================================
   # EventBridge Rule: ECR Push for Website Repository
@@ -270,6 +291,33 @@ Resources:
         - Id: ecr-ecs-deploy-lambda
           Arn: !GetAtt ECRToECSDeployFunction.Arn
 
+  # =============================================================================
+  # EventBridge Rule: ECR Push for Admin Repository
+  # =============================================================================
+  ECRPushRuleAdmin:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: ecr-push-bible-on-site-admin
+      Description: Trigger ECS deployment when bible-on-site-admin image is pushed to ECR
+      State: ENABLED
+      EventPattern:
+        source:
+          - aws.ecr
+        detail-type:
+          - "ECR Image Action"
+        detail:
+          action-type:
+            - PUSH
+          result:
+            - SUCCESS
+          repository-name:
+            - !Ref AdminECRRepoName
+          image-tag:
+            - latest
+      Targets:
+        - Id: ecr-ecs-deploy-lambda
+          Arn: !GetAtt ECRToECSDeployFunction.Arn
+
 Outputs:
   LambdaFunctionArn:
     Description: ARN of the ECR to ECS deploy Lambda function
@@ -294,3 +342,9 @@ Outputs:
     Value: !GetAtt ECRPushRuleApi.Arn
     Export:
       Name: !Sub "${AWS::StackName}-EventBridgeRuleApiArn"
+
+  EventBridgeRuleAdminArn:
+    Description: ARN of the EventBridge rule for admin ECR pushes
+    Value: !GetAtt ECRPushRuleAdmin.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-EventBridgeRuleAdminArn"
