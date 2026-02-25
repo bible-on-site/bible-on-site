@@ -1404,6 +1404,43 @@ jobs:
           retention-days: 400
           overwrite: true
 
+  app_ios_ci:
+    name: App iOS CI
+    runs-on: macos-15
+    needs: [setup_env, determine_app_changes]
+    if: ${{ always() && !cancelled() && !failure() && (needs.determine_app_changes.outputs.module_changed == 'true' || needs.determine_app_changes.outputs.ci_changed == 'true') }}
+    defaults:
+      run:
+        working-directory: ${{ env.APP_DIRECTORY }}
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-maui-ios-${{ hashFiles('app/**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-maui-ios-
+            ${{ runner.os }}-nuget-
+
+      - name: Install MAUI workload
+        run: dotnet workload install maui --skip-sign-check
+
+      - name: Build iOS target
+        run: dotnet build BibleOnSite/BibleOnSite.csproj -f net9.0-ios -c Release --no-incremental -p:ErrorOnDuplicatePublishOutputFiles=false
+
   bulletin_ci:
     name: Bulletin CI
     runs-on: ubuntu-latest
@@ -1811,6 +1848,7 @@ jobs:
         website_e2e,
         api_e2e,
         app_ci,
+        app_ios_ci,
         bulletin_ci,
         data_ci,
         perushim_data,
@@ -1898,6 +1936,15 @@ jobs:
           if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$APP_MASTER_COVERAGE_AVAILABLE" = "true" ]; then
             APP_STATUS=$([ "${{ needs.app_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$APP_STATUS" = "failure" ]; then
+              echo "Overall status: failure"
+              exit 1
+            fi
+          fi
+
+          if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ]; then
+            APP_IOS_STATUS=$([ "${{ needs.app_ios_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "$APP_IOS_STATUS" = "failure" ]; then
+              echo "App iOS CI failed"
               echo "Overall status: failure"
               exit 1
             fi
