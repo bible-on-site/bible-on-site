@@ -28,10 +28,7 @@
 		<!-- Suppress XamlC warnings: XC0022 bindings without x:DataType; XC0045 Path in MultiBinding with Source=page validated against template DataType (Article) -->
 		<!-- Suppress MVVMTK0045: [ObservableProperty] field-based code gen is not WinRT AOT-compatible;
 		     migration to partial properties requires CommunityToolkit.Mvvm 9.x — tracked separately -->
-		<!-- NU1608: transitive AndroidX .Ktx packages have tight upper-bound constraints that
-		     conflict with newer non-Ktx versions pulled by Play Asset Delivery 2.3.0.5;
-		     the newer versions are backward-compatible so the warning is safe to suppress. -->
-		<NoWarn>$(NoWarn);XC0022;XC0045;MVVMTK0045;NU1608</NoWarn>
+		<NoWarn>$(NoWarn);XC0022;XC0045;MVVMTK0045</NoWarn>
 
 		<!-- Enable compiled bindings with Source property -->
 		<MauiEnableXamlCBindingWithSourceCompilation>true</MauiEnableXamlCBindingWithSourceCompilation>
@@ -111,7 +108,7 @@
 
 	<!-- Android: Play Asset Delivery SDK -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
-		<PackageReference Include="Xamarin.Google.Android.Play.Asset.Delivery" Version="2.3.0.5" />
+		<PackageReference Include="Xamarin.Google.Android.Play.Asset.Delivery" Version="2.3.0.2" />
 	</ItemGroup>
 
 	<!-- Auto-decompress perushim notes .gz → .sqlite if needed (checked out from git as compressed).
