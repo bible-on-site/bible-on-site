@@ -19,7 +19,7 @@ jobs:
       MODULE_DIRECTORY: ${{ github.event.client_payload.module_directory }}
       MODULE_VERSION: ${{ github.event.client_payload.module_version }}
       RELEASED_ARTIFACT_NAME: ${{ github.event.client_payload.released_artifact_name }}
-      DOCKER_IMAGE_NAME: ${{ github.event.client_payload.module_directory == 'web/bible-on-site' && 'bible-on-site' || 'bible-on-site-api' }}
+      DOCKER_IMAGE_NAME: ${{ github.event.client_payload.module_directory == 'web/bible-on-site' && 'bible-on-site' || (github.event.client_payload.module_directory == 'web/admin' && 'bible-on-site-admin' || 'bible-on-site-api') }}
       DOCKER_IMAGE_OUTPUT_DIR: ${{ github.event.client_payload.module_directory }}/.release
       CI_RUN_ID: ${{ github.event.client_payload.ci_run_id }}
       # AWS Configuration

@@ -1,9 +1,10 @@
 # Combined .dockerignore for web/ context
-# Used by api/Dockerfile, bible-on-site/Dockerfile, and bulletin/Dockerfile
+# Used by api/Dockerfile, bible-on-site/Dockerfile, bulletin/Dockerfile, and admin/Dockerfile
 # Exclude everything first, then include only what's needed
 *
 
 # Include directories needed for builds
+!admin/
 !api/
 !bible-on-site/
 !bulletin/
@@ -33,6 +34,14 @@ bible-on-site/coverage
 bible-on-site/test-results
 bible-on-site/tests
 bible-on-site/playwright.*.ts
+
+# Exclude from admin/
+admin/.coverage
+admin/.output
+admin/.playwright-report
+admin/.release
+admin/node_modules
+admin/tests
 
 # Exclude from bulletin/
 bulletin/.coverage

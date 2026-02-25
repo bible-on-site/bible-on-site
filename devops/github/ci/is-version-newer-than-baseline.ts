@@ -73,15 +73,17 @@ async function main() {
 			alias: "m",
 			type: "string",
 			description: "Module path or name. If not specified, verifies all.",
-			choices: [
-				"app",
-				"web/api",
-				"web/bible-on-site",
-				"web/bulletin",
-				"api",
-				"website",
-				"bulletin",
-			] as const,
+		choices: [
+			"app",
+			"web/admin",
+			"web/api",
+			"web/bible-on-site",
+			"web/bulletin",
+			"admin",
+			"api",
+			"website",
+			"bulletin",
+		] as const,
 		})
 		.help().argv;
 
