@@ -1483,6 +1483,8 @@ jobs:
             -p:ArchiveOnBuild=false \
             -p:BuildIpa=false \
             -p:MtouchLink=None \
+            -p:EnableCodeSigning=false \
+            -p:CodesignKey=- \
             -p:_ExcludeSimulatorArchitectures=true \
             -p:SupportedOSPlatformVersion=17.0 \
             -p:ErrorOnDuplicatePublishOutputFiles=false
