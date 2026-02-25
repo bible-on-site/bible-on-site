@@ -171,13 +171,13 @@ Metadata:
         Port: 3000
         Status: Active (ECS Fargate)
       api:
-        DNS: api.bible-on-site.local (future)
+        DNS: api.bible-on-site.local
         Port: 3003
-        Status: Currently using external server (<EXTERNAL_API_IP>:3003)
+        Status: Active (ECS Fargate)
       admin:
         DNS: admin.bible-on-site.local
         Port: 3101
-        Status: Pending deployment (nginx config ready, awaiting ECS service)
+        Status: Active (ECS Fargate)
 
 Resources:
   # =============================================================================
