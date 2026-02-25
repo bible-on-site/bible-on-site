@@ -100,6 +100,7 @@ Resources:
             Resource:
               - !Sub "arn:aws:ecr:*:${AWS::AccountId}:repository/bible-on-site"
               - !Sub "arn:aws:ecr:*:${AWS::AccountId}:repository/bible-on-site-api"
+              - !Sub "arn:aws:ecr:*:${AWS::AccountId}:repository/bible-on-site-admin"
 
           # ECS Service Update - force new deployment after ECR push
           - Sid: ECSServiceUpdate
