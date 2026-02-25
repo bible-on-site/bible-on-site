@@ -9,10 +9,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** Full module paths as used in the repository */
-export type ModulePath = "web/bible-on-site" | "web/api" | "web/bulletin" | "app";
+export type ModulePath = "web/bible-on-site" | "web/api" | "web/admin" | "web/bulletin" | "app";
 
 /** Short module names for CLI and tags */
-export type ModuleName = "website" | "api" | "bulletin" | "app";
+export type ModuleName = "website" | "api" | "admin" | "bulletin" | "app";
 
 export interface ModuleConfig {
 	/** Full path in the repository */
@@ -57,6 +57,18 @@ export const MODULES: Record<ModulePath, ModuleConfig> = {
 			return match?.[1] ?? null;
 		},
 	},
+	"web/admin": {
+		path: "web/admin",
+		name: "admin",
+		tagPrefix: "admin-v",
+		versionFile: "web/admin/package.json",
+		nativeCommand: "npm run version --silent",
+		workingDir: "web/admin",
+		extractFromFile: (content: string) => {
+			const parsed = JSON.parse(content);
+			return parsed.version ?? null;
+		},
+	},
 	"web/bulletin": {
 		path: "web/bulletin",
 		name: "bulletin",
@@ -89,6 +101,7 @@ export const MODULES: Record<ModulePath, ModuleConfig> = {
 const NAME_TO_PATH: Record<ModuleName, ModulePath> = {
 	website: "web/bible-on-site",
 	api: "web/api",
+	admin: "web/admin",
 	bulletin: "web/bulletin",
 	app: "app",
 };
