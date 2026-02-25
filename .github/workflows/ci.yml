@@ -1443,7 +1443,7 @@ jobs:
           echo "Pinned SDK: $(dotnet --version)"
 
       - name: Install MAUI workload
-        run: dotnet workload install maui-ios --skip-manifest-update
+        run: dotnet workload install maui-ios
 
       - name: Select Xcode version
         run: |
