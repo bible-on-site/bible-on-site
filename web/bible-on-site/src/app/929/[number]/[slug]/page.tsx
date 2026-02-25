@@ -256,7 +256,6 @@ export default async function ArticlePage({
 										width={80}
 										height={80}
 										className={styles.authorImg}
-										unoptimized
 									/>
 								</div>
 								<span className={styles.authorName}>{article.authorName}</span>
