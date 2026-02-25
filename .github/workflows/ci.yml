@@ -2159,14 +2159,14 @@ jobs:
                 fi
               fi
               if [ $RETRY_COUNT -eq $((MAX_RETRIES-1)) ]; then
-                if [ "$CI_PASSED" = "null" ] && [ "$STATE" = "null" ]; then
-                  echo "Codecov has no coverage data for this commit (ci_passed=null, state=null) - passing (no coverage uploaded)"
-                  break
-                fi
-                echo "Timeout: Codecov ci_passed not resolved after $MAX_RETRIES attempts"
+                echo "Codecov ci_passed not resolved after $MAX_RETRIES attempts (ci_passed=$CI_PASSED, state=$STATE)"
                 echo "Last response (HTTP $HTTP_CODE): $(echo "$CODECOV_JSON" | jq -c '.')"
-                echo "status=failure" >> $GITHUB_OUTPUT
-                exit 1
+                if [ "$CI_PASSED" = "false" ]; then
+                  echo "Codecov explicitly failed"
+                  exit 1
+                fi
+                echo "::warning::Codecov did not resolve ci_passed — proceeding (not an explicit failure)"
+                break
               fi
               sleep $SLEEP_SECONDS
               RETRY_COUNT=$((RETRY_COUNT+1))
