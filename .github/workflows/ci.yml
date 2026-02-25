@@ -1469,6 +1469,8 @@ jobs:
           sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
           xcodebuild -version
 
+      # TODO(#1401): iOS SDK forces IL stripping even for simulator builds — explore
+      # ways to skip it and bring this closer to Package iOS's ~9 min.
       - name: Build iOS target
         run: dotnet build BibleOnSite/BibleOnSite.csproj -c Release -p:TargetFrameworks=net9.0-ios -p:ErrorOnDuplicatePublishOutputFiles=false
 
