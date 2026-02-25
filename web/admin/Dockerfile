@@ -23,7 +23,7 @@ RUN apk add --no-cache curl
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 adminjs
 
-COPY --from=builder --chown=adminjs:nodejs /app/admin/dist ./dist
+COPY --from=builder --chown=adminjs:nodejs /app/admin/.output ./.output
 
 USER adminjs
 
@@ -32,4 +32,4 @@ EXPOSE 3101
 ENV PORT=3101
 ENV HOST="0.0.0.0"
 
-CMD ["node", "dist/server/server.js"]
+CMD ["node", ".output/server/index.mjs"]
