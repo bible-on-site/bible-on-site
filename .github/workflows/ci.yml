@@ -1482,7 +1482,7 @@ jobs:
             -r ios-arm64 \
             -p:ArchiveOnBuild=false \
             -p:BuildIpa=false \
-            -p:PublishTrimmed=false \
+            -p:MtouchLink=None \
             -p:_ExcludeSimulatorArchitectures=true \
             -p:SupportedOSPlatformVersion=17.0 \
             -p:ErrorOnDuplicatePublishOutputFiles=false
