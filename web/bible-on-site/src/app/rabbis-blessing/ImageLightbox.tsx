@@ -45,7 +45,6 @@ export function ImageLightbox({ src, alt, width, height }: ImageLightboxProps) {
 					width={width}
 					height={height}
 					className={styles.posterImage}
-					unoptimized
 				/>
 			</button>
 

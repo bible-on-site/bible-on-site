@@ -9,23 +9,26 @@ import { execute } from "./db";
 
 // S3 configuration from environment
 const S3_REGION =
-	process.env.S3_REGION || process.env.AWS_REGION || "us-east-1";
+	process.env.S3_REGION || process.env.AWS_REGION || "il-central-1";
 const S3_BUCKET = process.env.S3_BUCKET || "bible-on-site-rabbis";
 const S3_ENDPOINT = process.env.S3_ENDPOINT; // Optional: for MinIO
 const S3_FORCE_PATH_STYLE = process.env.S3_FORCE_PATH_STYLE === "true"; // Required for MinIO
 const S3_ACCESS_KEY =
-	process.env.S3_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || "";
+	process.env.S3_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;
 const S3_SECRET_KEY =
-	process.env.S3_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || "";
+	process.env.S3_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY;
 
 const s3Client = new S3Client({
 	region: S3_REGION,
 	...(S3_ENDPOINT && { endpoint: S3_ENDPOINT }),
 	...(S3_FORCE_PATH_STYLE && { forcePathStyle: true }),
-	credentials: {
-		accessKeyId: S3_ACCESS_KEY,
-		secretAccessKey: S3_SECRET_KEY,
-	},
+	...(S3_ACCESS_KEY &&
+		S3_SECRET_KEY && {
+			credentials: {
+				accessKeyId: S3_ACCESS_KEY,
+				secretAccessKey: S3_SECRET_KEY,
+			},
+		}),
 });
 
 // Build the public URL based on configuration

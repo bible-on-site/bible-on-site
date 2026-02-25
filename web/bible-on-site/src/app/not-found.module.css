@@ -1,0 +1,66 @@
+.notFoundPage {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  padding-top: 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 70vh;
+  text-align: center;
+}
+
+.errorCode {
+  font-size: 6rem;
+  font-weight: 800;
+  color: #1552ac;
+  margin: 0;
+  line-height: 1;
+  opacity: 0.15;
+}
+
+.pasuk {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1c2c5d;
+  margin: 0 0 12px 0;
+  line-height: 1.6;
+}
+
+.source {
+  font-size: 1rem;
+  color: #6b7280;
+  margin: 0 0 40px 0;
+}
+
+.backLinkWrapper {
+  text-align: center;
+  padding: 24px 0 48px;
+}
+
+.backLink {
+  display: inline-block;
+  padding: 12px 32px;
+  background: #1c2c5d;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+}
+
+.backLink:hover {
+  background: #2a3d7a;
+  transform: translateY(-2px);
+}
+
+@media (max-width: 768px) {
+  .errorCode {
+    font-size: 4rem;
+  }
+
+  .pasuk {
+    font-size: 1.35rem;
+  }
+}

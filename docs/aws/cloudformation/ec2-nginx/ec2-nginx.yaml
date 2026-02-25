@@ -19,7 +19,7 @@ Description: |
   Architecture:
   ┌─────────────────────────────────────────────────────────────────────────┐
   │                              Internet                                    │
-  │                    תנך.co.il / תנך.com                                   │
+  │           תנך.co.il / תנך.com / admin.תנך.co.il / admin.תנך.com         │
   └───────────────────────────────┬─────────────────────────────────────────┘
                                   │
                                   ▼
@@ -35,10 +35,12 @@ Description: |
   │                                                                         │
   │  nginx config: /etc/nginx/conf.d/router.conf                            │
   │  SSL certs: /etc/letsencrypt/live/xn--febl3a.{co.il,com}/               │
+  │    (includes admin.xn--febl3a.co.il and admin.xn--febl3a.com)          │
   │                                                                         │
   │  Uses VPC DNS (172.31.0.2) to resolve:                                  │
   │  - website.bible-on-site.local → ECS task IPs                           │
   │  - api.bible-on-site.local → (future) ECS API task IPs                  │
+  │  - admin.bible-on-site.local → (future) ECS admin task IPs              │
   └───────────────────────────────┬─────────────────────────────────────────┘
                                   │
                     VPC Private Network (172.31.0.0/16)
@@ -150,13 +152,16 @@ Metadata:
   NginxConfig:
     ConfigPath: /etc/nginx/conf.d/router.conf
     ConfigSource: See appendix/ec2-nginx/router/router.conf
+    DefaultSite: /etc/nginx/sites-available/default
+    DefaultSiteSource: Catch-all for unknown subdomains → redirects to root domain /404
     Features:
-      - SSL termination for תנך.co.il and תנך.com (punycode: xn--febl3a)
+      - SSL termination for תנך.co.il, תנך.com, and admin subdomains (punycode: xn--febl3a)
       - HTTP to HTTPS redirect
       - Reverse proxy to ECS services via Cloud Map DNS
       - VPC DNS resolver (172.31.0.2) for service discovery
       - Static file serving from /var/www/html/
       - GeoIP support for geographic routing
+      - Catch-all default_server for unknown subdomains → 301 to root domain /404
     SSLCertificates:
       - /etc/letsencrypt/live/xn--febl3a.co.il/fullchain.pem
       - /etc/letsencrypt/live/xn--febl3a.com/fullchain.pem
@@ -169,6 +174,10 @@ Metadata:
         DNS: api.bible-on-site.local (future)
         Port: 3003
         Status: Currently using external server (<EXTERNAL_API_IP>:3003)
+      admin:
+        DNS: admin.bible-on-site.local
+        Port: 3101
+        Status: Pending deployment (nginx config ready, awaiting ECS service)
 
 Resources:
   # =============================================================================
@@ -311,9 +320,11 @@ Outputs:
 #      -d xn--febl3a.co.il \
 #      -d www.xn--febl3a.co.il \
 #      -d api.xn--febl3a.co.il \
+#      -d admin.xn--febl3a.co.il \
 #      -d xn--febl3a.com \
 #      -d www.xn--febl3a.com \
-#      -d api.xn--febl3a.com
+#      -d api.xn--febl3a.com \
+#      -d admin.xn--febl3a.com
 #
 # 7. Deploy nginx configuration:
 #    # Copy appendix/ec2-nginx/router/router.conf to /etc/nginx/conf.d/
@@ -344,9 +355,11 @@ Outputs:
 #      -d xn--febl3a.co.il \
 #      -d www.xn--febl3a.co.il \
 #      -d api.xn--febl3a.co.il \
+#      -d admin.xn--febl3a.co.il \
 #      -d xn--febl3a.com \
 #      -d www.xn--febl3a.com \
-#      -d api.xn--febl3a.com
+#      -d api.xn--febl3a.com \
+#      -d admin.xn--febl3a.com
 #
 # 4. Test and reload nginx:
 #    sudo nginx -t
