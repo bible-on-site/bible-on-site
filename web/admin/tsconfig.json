@@ -28,5 +28,5 @@
 		},
 		"types": ["vinxi/types/client"]
 	},
-	"include": ["src", "vite.config.ts", "app.config.ts"]
+	"include": ["src", "vite.config.ts"]
 }
