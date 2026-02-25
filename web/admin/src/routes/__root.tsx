@@ -95,6 +95,12 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 									</Link>
 								</div>
 							</div>
+							<a
+								href="/auth/logout"
+								className="text-gray-500 hover:text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+							>
+								התנתק
+							</a>
 						</div>
 					</div>
 				</nav>
