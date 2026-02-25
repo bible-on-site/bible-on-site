@@ -12,8 +12,14 @@ import {
 	verifyIdToken,
 } from "./server/auth";
 
+const SKIP_AUTH = process.env.SKIP_AUTH === "true";
+
 export default createServerEntry({
 	async fetch(request) {
+		if (SKIP_AUTH) {
+			return handler.fetch(request);
+		}
+
 		const url = new URL(request.url);
 		const origin = `${url.protocol}//${url.host}`;
 		const isSecure = url.protocol === "https:";
