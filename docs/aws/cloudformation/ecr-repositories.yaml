@@ -20,6 +20,7 @@ Description: |
   ECR REPOSITORIES:
   - bible-on-site (Next.js website): v<version>, latest
   - bible-on-site-api (Rust API): v<version>, latest
+  - bible-on-site-admin (TanStack Start admin): v<version>, latest
 
   Full URI: <AWS_ACCOUNT_ID>.dkr.ecr.il-central-1.amazonaws.com/<repository>
 
@@ -109,6 +110,44 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # =============================================================================
+  # ECR Repository: bible-on-site-admin (TanStack Start Admin)
+  # =============================================================================
+  AdminRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: bible-on-site-admin
+      ImageTagMutability: MUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 15 images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 15
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Component
+          Value: admin
+        - Key: Environment
+          Value: !Ref Environment
+
 Outputs:
   WebsiteRepositoryUri:
     Description: URI of the website ECR repository
@@ -133,3 +172,15 @@ Outputs:
     Value: !GetAtt ApiRepository.Arn
     Export:
       Name: !Sub "${AWS::StackName}-ApiRepositoryArn"
+
+  AdminRepositoryUri:
+    Description: URI of the admin ECR repository
+    Value: !GetAtt AdminRepository.RepositoryUri
+    Export:
+      Name: !Sub "${AWS::StackName}-AdminRepositoryUri"
+
+  AdminRepositoryArn:
+    Description: ARN of the admin ECR repository
+    Value: !GetAtt AdminRepository.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-AdminRepositoryArn"

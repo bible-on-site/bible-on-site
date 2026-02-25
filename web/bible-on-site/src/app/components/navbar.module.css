@@ -58,13 +58,21 @@
   height: 100%;
   margin: 0;
   padding: 8px;
-  list-style: none;
   background-color: white;
   box-shadow:
     0 4px 6px -1px rgba(0, 0, 0, 0.1),
     0 2px 4px -1px rgba(0, 0, 0, 0.06);
   transition: right 1s;
   z-index: 10;
+}
+
+.menuList {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .hamburgerMenu .menuToggle:checked ~ .menuBox {
@@ -194,14 +202,14 @@
   margin-right: 2.5rem;
 }
 
-.menuBox > li:not(.versionItem)::before {
+.menuList > li:not(.versionItem)::before {
   content: " ";
   display: block;
   width: 100%;
   border-bottom: 1px solid #888bef4a;
 }
 
-.menuBox > li:not(.versionItem):last-of-type::after {
+.menuList > li:not(.versionItem):last-of-type::after {
   content: " ";
   display: block;
   width: 100%;

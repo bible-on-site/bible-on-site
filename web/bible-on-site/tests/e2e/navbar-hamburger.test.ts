@@ -18,7 +18,7 @@ test.describe("NavBar hamburger menu", () => {
 		// Click the hamburger and check menu state
 		await menuBtn.click();
 		// Example: check that menu is open (adjust selector as needed)
-		const menuBox = page.locator("ul[class*=menuBox]");
+		const menuBox = page.locator("nav[class*=menuBox]");
 		await expect(menuBox).toBeVisible();
 	});
 });

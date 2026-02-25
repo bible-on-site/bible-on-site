@@ -1,5 +1,6 @@
 import * as dotenv from "dotenv";
 import yargs from "yargs";
+import { AdminECRDeployer } from "./admin-deployer.mjs";
 import { APIECRDeployer } from "./api-deployer.mjs";
 import { createECRClient, getECRConfig } from "./ecr-client.mjs";
 import type { ECRDeployerBase } from "./ecr-deployer-base.mjs";
@@ -11,6 +12,7 @@ dotenv.config({
 });
 
 const deployers = {
+	admin: AdminECRDeployer,
 	website: WebsiteECRDeployer,
 	api: APIECRDeployer,
 };
@@ -24,7 +26,7 @@ async function main() {
 		.option("module-name", {
 			alias: "m",
 			describe: "The module to deploy",
-			choices: ["website", "api"] as const,
+			choices: ["admin", "website", "api"] as const,
 			demandOption: true,
 			type: "string",
 		})

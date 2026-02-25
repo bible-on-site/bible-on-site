@@ -3,6 +3,14 @@
 	"version": "0.2.270",
 	"private": true,
 	"license": "MIT",
+	"browserslist": [
+		"chrome >= 109",
+		"edge >= 109",
+		"firefox >= 115",
+		"safari >= 16",
+		"ios_saf >= 16",
+		"not dead"
+	],
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
 		"update:playwright": "npx playwright install",

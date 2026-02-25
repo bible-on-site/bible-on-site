@@ -64,7 +64,6 @@ export function JournalismGallery({ items }: { items: JournalismItem[] }) {
 							width={600}
 							height={800}
 							className={styles.itemImage}
-							unoptimized
 						/>
 						<div className={styles.itemOverlay}>
 							<h2 className={styles.itemTitle}>{item.title}</h2>

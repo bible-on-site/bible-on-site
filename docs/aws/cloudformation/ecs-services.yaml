@@ -36,11 +36,17 @@ Description: |
   │  on-site.local  │      │  └─────────────────────────────────────┘    │
   │  via Cloud Map  │      │                                             │
   └─────────────────┘      │  ┌─────────────────────────────────────┐    │
-                           │  │  bible-on-site-api (future)         │    │
-                           │  │  api.bible-on-site.local:3003       │    │
-                           │  │  Image: ECR/bible-on-site-api       │    │
-                           │  └─────────────────────────────────────┘    │
-                           └─────────────────────────────────────────────┘
+                          │  │  bible-on-site-api (future)         │    │
+                          │  │  api.bible-on-site.local:3003       │    │
+                          │  │  Image: ECR/bible-on-site-api       │    │
+                          │  └─────────────────────────────────────┘    │
+                          │                                             │
+                          │  ┌─────────────────────────────────────┐    │
+                          │  │  bible-on-site-admin                │    │
+                          │  │  admin.bible-on-site.local:3101     │    │
+                          │  │  Image: ECR/bible-on-site-admin     │    │
+                          │  └─────────────────────────────────────┘    │
+                          └─────────────────────────────────────────────┘
 
 Parameters:
   Environment:
@@ -64,6 +70,11 @@ Parameters:
     Type: AWS::EC2::SecurityGroup::Id
     Default: <ECS_SECURITY_GROUP_ID>
     Description: Security group for ECS tasks
+
+  AdminServiceName:
+    Type: String
+    Default: bible-on-site-admin
+    Description: Name of the admin ECS service
 
   WebsiteImageUri:
     Type: String
@@ -204,6 +215,41 @@ Resources:
           Value: website
 
   # =============================================================================
+  # Admin Task Role (for application-level AWS API calls)
+  # =============================================================================
+  AdminTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: bible-on-site-admin-task-role
+      Description: Task role for admin container — allows S3 access for rabbis bucket
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AdminS3Access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - arn:aws:s3:::bible-on-site-rabbis
+                  - arn:aws:s3:::bible-on-site-rabbis/*
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Component
+          Value: admin
+
+  # =============================================================================
   # Task Definition: Website (Next.js)
   # =============================================================================
   WebsiteTaskDefinition:
@@ -323,6 +369,25 @@ Resources:
         FailureThreshold: 1
 
   # =============================================================================
+  # Cloud Map Service: Admin
+  # =============================================================================
+  # Registers as: admin.bible-on-site.local
+  # nginx resolves this DNS name to get the ECS task IPs
+  AdminServiceDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: admin
+      NamespaceId: !Ref ServiceDiscoveryNamespace
+      Description: Service discovery for bible-on-site admin
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  # =============================================================================
   # Task Definition: API (Rust)
   # =============================================================================
   ApiTaskDefinition:
@@ -375,6 +440,53 @@ Resources:
           Value: api
 
   # =============================================================================
+  # Task Definition: Admin (TanStack Start)
+  # =============================================================================
+  AdminTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: bible-on-site-admin
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: "256" # 0.25 vCPU
+      Memory: "512" # 512 MB
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt AdminTaskRole.Arn
+      ContainerDefinitions:
+        - Name: admin
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/bible-on-site-admin:latest"
+          Essential: true
+          PortMappings:
+            - ContainerPort: 3101
+              HostPort: 3101
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: /ecs/bible-on-site-admin
+              awslogs-create-group: "true"
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Environment:
+            - Name: HOST
+              Value: "0.0.0.0"
+            - Name: PORT
+              Value: "3101"
+            - Name: S3_REGION
+              Value: il-central-1
+            - Name: S3_BUCKET
+              Value: bible-on-site-rabbis
+          Secrets:
+            - Name: DB_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-url"
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Component
+          Value: admin
+
+  # =============================================================================
   # ECS Service: API
   # =============================================================================
   ApiService:
@@ -410,6 +522,41 @@ Resources:
         - Key: Component
           Value: api
 
+  # =============================================================================
+  # ECS Service: Admin
+  # =============================================================================
+  AdminService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - AdminServiceDiscovery
+    Properties:
+      ServiceName: bible-on-site-admin
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref AdminTaskDefinition
+      DesiredCount: 0 # Initially 0 until first deployment
+      LaunchType: FARGATE
+      PlatformVersion: LATEST
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets: !Ref SubnetIds
+          SecurityGroups:
+            - !Ref ECSSecurityGroupId
+          AssignPublicIp: ENABLED # Required for pulling from ECR without NAT Gateway
+      ServiceRegistries:
+        - RegistryArn: !GetAtt AdminServiceDiscovery.Arn
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+        DeploymentCircuitBreaker:
+          Enable: false
+          Rollback: false
+      EnableExecuteCommand: false
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Component
+          Value: admin
+
 Outputs:
   ClusterArn:
     Description: ECS Cluster ARN
@@ -442,6 +589,16 @@ Outputs:
   WebsiteServiceDiscoveryDNS:
     Description: DNS name for website service discovery
     Value: website.bible-on-site.local
+
+  AdminServiceArn:
+    Description: ECS Admin Service ARN
+    Value: !Ref AdminService
+    Export:
+      Name: !Sub "${AWS::StackName}-AdminServiceArn"
+
+  AdminServiceDiscoveryDNS:
+    Description: DNS name for admin service discovery
+    Value: admin.bible-on-site.local
 
   TaskExecutionRoleArn:
     Description: ECS Task Execution Role ARN

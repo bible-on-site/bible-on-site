@@ -115,7 +115,6 @@ export default async function AuthorPage({
 							width={180}
 							height={180}
 							className={styles.authorImage}
-							unoptimized
 						/>
 					) : (
 						<div className={styles.authorPlaceholder}>👤</div>

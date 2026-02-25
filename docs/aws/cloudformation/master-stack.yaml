@@ -19,6 +19,7 @@ Description: |
 
   Note:
   - IAM Identity Center is NOT included (not fully supported by CloudFormation)
+  - Cognito for admin auth is NOT included (SAML IdP requires console setup)
   - EC2 nginx requires manual setup (key pair, SSL certificates)
   See individual yaml files for documentation.
 

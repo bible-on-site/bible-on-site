@@ -81,6 +81,8 @@ env:
   APP_UNIT_JUNIT_REPORT_ARTIFACT_NAME: app-unit-junit-report-${{ github.run_id }}
   APP_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME: app-integration-junit-report-${{ github.run_id }}
   ADMIN_DIRECTORY: web/admin
+  ADMIN_DOCKER_ARTIFACT_NAME: bible-on-site-admin-docker-${{ github.run_id }}
+  ADMIN_DOCKER_IMAGE_NAME: bible-on-site-admin
   ADMIN_NODE_CACHE_PATH: web/admin/package-lock.json
   ADMIN_NODE_VERSION_FILE: web/admin/package.json
   ADMIN_UNIT_JUNIT_REPORT_ARTIFACT_NAME: admin-unit-junit-report-${{ github.run_id }}
@@ -423,6 +425,15 @@ jobs:
       module_name: bulletin
       ref: ${{ github.head_ref || github.ref }}
 
+  verify_admin_version:
+    name: Verify Admin Version
+    needs: [setup_env, determine_admin_changes]
+    if: ${{ needs.determine_admin_changes.outputs.module_changed == 'true' }}
+    uses: ./.github/workflows/shared-verify-version.yml
+    with:
+      module_name: admin
+      ref: ${{ github.head_ref || github.ref }}
+
   package_website:
     name: Package Website
     needs: [setup_env, determine_website_changes]
@@ -519,6 +530,62 @@ jobs:
         with:
           name: ${{ env.BULLETIN_LAMBDA_ZIP_ARTIFACT_NAME }}
           path: ${{ env.BULLETIN_DIRECTORY }}/.release/bulletin-lambda-v${{ steps.get_version.outputs.MODULE_VERSION }}.zip
+          retention-days: 1
+
+  package_admin:
+    name: Package Admin
+    needs: [setup_env, determine_admin_changes]
+    if: ${{ needs.determine_admin_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-latest
+    outputs:
+      module_version: ${{ steps.get_version.outputs.MODULE_VERSION }}
+      docker_artifact_name: ${{ env.ADMIN_DOCKER_ARTIFACT_NAME }}
+    env:
+      SHARED_ROOT_DIR: web
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get Module Version
+        id: get_version
+        working-directory: ${{ env.ADMIN_DIRECTORY }}
+        run: |
+          MODULE_VERSION=$(node -e "console.log(require('./package.json').version)")
+          echo "MODULE_VERSION=${MODULE_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Prepare Dockerizing
+        id: prepare
+        run: |
+          mkdir -p ${{ env.ADMIN_DIRECTORY }}/.release
+          DOCKER_IMAGE_TAR_NAME="${{ env.ADMIN_DOCKER_IMAGE_NAME }}-v${{ steps.get_version.outputs.MODULE_VERSION }}.tar"
+          DOCKER_IMAGE_TAR_GZ_PATH="${{ env.ADMIN_DIRECTORY }}/.release/${DOCKER_IMAGE_TAR_NAME}.gz"
+          echo "DOCKER_IMAGE_TAR_NAME=${DOCKER_IMAGE_TAR_NAME}" >> $GITHUB_OUTPUT
+          echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
+
+      - name: Dockerize Admin
+        run: |
+          DOCKER_BUILDKIT=0 docker build \
+            -f ${{ env.ADMIN_DIRECTORY }}/Dockerfile \
+            -t ${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }} \
+            ${{ env.SHARED_ROOT_DIR }}
+
+      - name: Export Docker Image
+        run: |
+          docker save ${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }} \
+            -o ${{ env.ADMIN_DIRECTORY }}/.release/${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }}
+
+      - name: GZip Docker Image
+        working-directory: ${{ env.ADMIN_DIRECTORY }}/.release
+        run: gzip -c -f ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }} > ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }}.gz
+
+      - name: Store Docker Image
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.ADMIN_DOCKER_ARTIFACT_NAME }}
+          path: ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
           retention-days: 1
 
   build_lcov_docker:
@@ -1935,17 +2002,20 @@ jobs:
         determine_website_changes,
         determine_api_changes,
         determine_app_changes,
+        determine_admin_changes,
         determine_bulletin_changes,
         determine_data_changes,
         determine_perushim_pipeline_changes,
         verify_website_version,
         verify_api_version,
         verify_app_version,
+        verify_admin_version,
         verify_bulletin_version,
         website_performance,
         website_e2e,
         api_e2e,
         app_ci,
+        admin_ci,
         app_ios_ci,
         bulletin_ci,
         data_ci,
@@ -1962,13 +2032,15 @@ jobs:
           WEBSITE_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_website_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
           API_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_api_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
           APP_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_app_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+          ADMIN_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_admin_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
           BULLETIN_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_bulletin_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
           DATA_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_data_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-          if [ "$WEBSITE_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$API_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$APP_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$BULLETIN_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$DATA_CHANGES_DETERMINATION_STATUS" = "failure" ]; then
+          if [ "$WEBSITE_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$API_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$APP_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$ADMIN_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$BULLETIN_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$DATA_CHANGES_DETERMINATION_STATUS" = "failure" ]; then
             echo "Could not determine module changes."
             [ "$WEBSITE_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine website changes."
             [ "$API_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine API changes."
             [ "$APP_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine app changes."
+            [ "$ADMIN_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine admin changes."
             [ "$BULLETIN_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine bulletin changes."
             [ "$DATA_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine data changes."
             echo "Overall status: failure"
@@ -2000,6 +2072,13 @@ jobs:
           BULLETIN_MODULE_CHANGED=$([ "${{ needs.determine_bulletin_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           if [ "$BULLETIN_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_bulletin_version.result }}" = "failure" ]; then
             echo "Bulletin version verification failed."
+            echo "Overall status: failure"
+            exit 1
+          fi
+
+          ADMIN_MODULE_CHANGED=$([ "${{ needs.determine_admin_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$ADMIN_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_admin_version.result }}" = "failure" ]; then
+            echo "Admin version verification failed."
             echo "Overall status: failure"
             exit 1
           fi
@@ -2054,6 +2133,15 @@ jobs:
           if [ "$BULLETIN_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$BULLETIN_MASTER_COVERAGE_AVAILABLE" = "true" ]; then
             BULLETIN_STATUS=$([ "${{ needs.bulletin_ci.result }}" = "failure" ] && echo "failure" || echo "success") # Generated
             if [ "$BULLETIN_STATUS" = "failure" ]; then
+              echo "Overall status: failure"
+              exit 1
+            fi
+          fi
+
+          ADMIN_MODULE_CHANGED=$([ "${{ needs.determine_admin_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$ADMIN_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ]; then
+            ADMIN_STATUS=$([ "${{ needs.admin_ci.result }}" = "failure" ] && echo "failure" || echo "success") # Generated
+            if [ "$ADMIN_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
             fi
@@ -2296,6 +2384,22 @@ jobs:
       artifacts_json: '[{"name": "${{ needs.package_bulletin.outputs.lambda_zip_artifact_name }}", "path": "web/bulletin/.release", "glob": "*.zip"}]'
       cd_event_type: deploy-bulletin
 
+  release_admin:
+    name: Release Admin
+    needs: [setup_env, determine_admin_changes, cross_module_ci, package_admin]
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_admin.result == 'success' && needs.package_admin.outputs.module_version != '' && needs.determine_admin_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    permissions:
+      contents: write
+      actions: read
+    secrets: inherit
+    uses: ./.github/workflows/shared-release.yml
+    with:
+      module_name: admin
+      module_directory: web/admin
+      module_version: ${{ needs.package_admin.outputs.module_version }}
+      artifacts_json: '[{"name": "${{ needs.package_admin.outputs.docker_artifact_name }}", "path": "web/admin/.release", "glob": "*.tar.gz"}]'
+      cd_event_type: deploy-aws
+
   release_data:
     name: Release Data
     needs: [setup_env, determine_data_changes, cross_module_ci, data_ci, perushim_data]
@@ -2323,7 +2427,7 @@ jobs:
   # ====================================================================================
   bump_versions:
     name: Bump Versions
-    needs: [setup_env, release_website, release_api, release_app, release_bulletin]
+    needs: [setup_env, release_website, release_api, release_app, release_admin, release_bulletin]
     # Run if at least one module was released
     # Note: Using always() + result check as a workaround for reusable workflow result evaluation issues (see #1065)
     # For each release job, we check both result == 'success' AND outputs.released == 'true'
@@ -2332,6 +2436,7 @@ jobs:
       ((needs.release_website.result == 'success' && needs.release_website.outputs.released == 'true') ||
        (needs.release_api.result == 'success' && needs.release_api.outputs.released == 'true') ||
        (needs.release_app.result == 'success' && needs.release_app.outputs.released == 'true') ||
+       (needs.release_admin.result == 'success' && needs.release_admin.outputs.released == 'true') ||
        (needs.release_bulletin.result == 'success' && needs.release_bulletin.outputs.released == 'true')) }}
     permissions:
       contents: write
@@ -2357,8 +2462,8 @@ jobs:
           ssh-private-key: ${{ secrets.DEPLOY_KEY }}
 
       # Setup toolchains for modules that need version bumps
-      - name: Setup Node.js (for Website/Bulletin)
-        if: ${{ needs.release_website.outputs.released == 'true' || needs.release_bulletin.outputs.released == 'true' }}
+      - name: Setup Node.js (for Website/Admin/Bulletin)
+        if: ${{ needs.release_website.outputs.released == 'true' || needs.release_admin.outputs.released == 'true' || needs.release_bulletin.outputs.released == 'true' }}
         uses: actions/setup-node@v6
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
@@ -2405,6 +2510,11 @@ jobs:
         # The version script just echoes the version and isn't needed during the bump
         run: npm version patch --no-git-tag-version --ignore-scripts
 
+      - name: Bump Admin Version
+        if: ${{ needs.release_admin.outputs.released == 'true' }}
+        working-directory: ${{ needs.setup_env.outputs.admin_directory }}
+        run: npm version patch --no-git-tag-version --ignore-scripts
+
       - name: Bump API Version
         if: ${{ needs.release_api.outputs.released == 'true' }}
         working-directory: ${{ needs.setup_env.outputs.api_directory }}
@@ -2432,6 +2542,12 @@ jobs:
             FILES_TO_ADD="$FILES_TO_ADD ${{ needs.setup_env.outputs.website_directory }}/package.json ${{ needs.setup_env.outputs.website_directory }}/package-lock.json"
             WEBSITE_VERSION=$(node -e "const pkg = require('./${{ needs.setup_env.outputs.website_directory }}/package.json'); console.log(pkg.version)")
             MODULES_BUMPED="${MODULES_BUMPED}website to ${WEBSITE_VERSION}, "
+          fi
+
+          if [ "${{ needs.release_admin.outputs.released }}" = "true" ]; then
+            FILES_TO_ADD="$FILES_TO_ADD ${{ needs.setup_env.outputs.admin_directory }}/package.json ${{ needs.setup_env.outputs.admin_directory }}/package-lock.json"
+            ADMIN_VERSION=$(node -e "const pkg = require('./${{ needs.setup_env.outputs.admin_directory }}/package.json'); console.log(pkg.version)")
+            MODULES_BUMPED="${MODULES_BUMPED}admin to ${ADMIN_VERSION}, "
           fi
 
           if [ "${{ needs.release_api.outputs.released }}" = "true" ]; then

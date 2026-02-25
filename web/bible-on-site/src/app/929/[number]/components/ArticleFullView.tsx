@@ -41,7 +41,6 @@ export function ArticleFullView({
 							width={80}
 							height={80}
 							className={articleStyles.authorImg}
-							unoptimized
 						/>
 					</div>
 					<span className={articleStyles.authorName}>{article.authorName}</span>
