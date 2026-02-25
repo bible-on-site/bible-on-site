@@ -11,7 +11,7 @@ const nextConfig = {
 		root: import.meta.dirname,
 	},
 	images: {
-		// Allow fetching images from loopback addresses in development
+		unoptimized: !isProduction,
 		dangerouslyAllowSVG: true,
 		remotePatterns: [
 			// MinIO for development (all buckets)
