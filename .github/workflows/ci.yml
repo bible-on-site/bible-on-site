@@ -1430,7 +1430,7 @@ jobs:
   app_ios_ci:
     name: App iOS CI
     runs-on: macos-15
-    needs: [setup_env, determine_app_changes]
+    needs: [setup_env, determine_app_changes, determine_baseline_availability]
     # Only on PRs — on master, Package iOS (IPA) already validates the full iOS build.
     # TODO(#1018): when upgrading to .NET 10, verify workload install flags still work.
     if: ${{ github.event_name == 'pull_request' && always() && !cancelled() && !failure() && (needs.determine_app_changes.outputs.module_changed == 'true' || needs.determine_app_changes.outputs.ci_changed == 'true') }}
@@ -1464,28 +1464,10 @@ jobs:
         run: dotnet workload install maui-ios --skip-manifest-update
 
       - name: Restore perushim notes SQLite (master baseline)
-        id: restore_perushim_sqlite
-        continue-on-error: true
         uses: actions/download-artifact@v7
         with:
           name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.APP_DIRECTORY }}/BibleOnSite/${{ env.PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR }}
-
-      - name: Decompress perushim notes for iOS ODR (fallback)
-        if: ${{ steps.restore_perushim_sqlite.outcome == 'failure' }}
-        working-directory: ${{ env.APP_DIRECTORY }}/BibleOnSite
-        run: |
-          GZ_FILE="${{ env.PERUSHIM_NOTES_ANDROID_ASSET_RELDIR }}/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}.gz"
-          DEST_DIR="${{ env.PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR }}"
-          DEST_FILE="$DEST_DIR/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}"
-          if [ -f "$GZ_FILE" ] && [ ! -f "$DEST_FILE" ]; then
-            mkdir -p "$DEST_DIR"
-            gunzip -c "$GZ_FILE" > "$DEST_FILE"
-            echo "::warning::Using .gz fallback — master SQLite artifact not yet available"
-            echo "Decompressed perushim notes for iOS ODR ($(du -h "$DEST_FILE" | cut -f1))"
-          else
-            echo "Perushim notes already decompressed or .gz not found — skipping"
-          fi
 
       - name: Select Xcode version
         run: |
@@ -1770,8 +1752,13 @@ jobs:
   perushim_data:
     name: Perushim Data
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_perushim_pipeline_changes, determine_docker_image_availability, build_sefaria_mongo_docker]
-    if: ${{ always() && !cancelled() && !failure() && (needs.determine_perushim_pipeline_changes.outputs.module_changed == 'true' || needs.determine_perushim_pipeline_changes.outputs.ci_changed == 'true') }}
+    needs: [setup_env, determine_perushim_pipeline_changes, determine_baseline_availability, determine_docker_image_availability, build_sefaria_mongo_docker]
+    if: >-
+      ${{ always() && !cancelled() && !failure() && (
+        needs.determine_perushim_pipeline_changes.outputs.module_changed == 'true' ||
+        needs.determine_baseline_availability.outputs.is_perushim_data_sql_available != 'true' ||
+        needs.determine_baseline_availability.outputs.is_perushim_notes_sqlite_available != 'true'
+      ) }}
     defaults:
       run:
         working-directory: ${{ env.DATA_DIRECTORY }}

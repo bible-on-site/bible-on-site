@@ -13,7 +13,7 @@ on:
           - iOS
         default: "All"
       perushim_notes_sqlite_artifact:
-        description: "Artifact name for perushim notes SQLite (leave empty for .gz fallback)"
+        description: "Artifact name for perushim notes SQLite (empty = use master baseline)"
         required: false
         type: string
         default: ""
@@ -25,7 +25,7 @@ on:
         type: string
         default: "All"
       perushim_notes_sqlite_artifact:
-        description: "Artifact name for perushim notes SQLite (leave empty for .gz fallback)"
+        description: "Artifact name for perushim notes SQLite (empty = use master baseline)"
         required: false
         type: string
         default: ""
@@ -71,11 +71,45 @@ permissions:
 
 env:
   APP_DIRECTORY: app
-  PERUSHIM_NOTES_SQLITE_FILENAME: sefaria-dump-5784-sivan-4.perushim_notes.sqlite
+  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-notes-sqlite.master
   PERUSHIM_NOTES_ANDROID_ASSET_RELDIR: Platforms/Android/AssetPacks/perushim_notes
   PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR: Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset
 
 jobs:
+  # When triggered via workflow_dispatch (no caller providing the artifact name),
+  # fetch the master baseline artifact from a previous run and re-upload it
+  # so that download-artifact can find it in the current run.
+  resolve_perushim_artifact:
+    name: Resolve Perushim Notes Artifact
+    if: ${{ inputs.perushim_notes_sqlite_artifact == '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Download master baseline artifact via API
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          if [ -z "$ARTIFACT_ID" ] || [ "$ARTIFACT_ID" = "null" ]; then
+            echo "::error::No master baseline artifact '$ARTIFACT_NAME' found. Run perushim_data on master first."
+            exit 1
+          fi
+          mkdir -p /tmp/$ARTIFACT_NAME
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > /tmp/$ARTIFACT_NAME.zip
+          unzip -o /tmp/$ARTIFACT_NAME.zip -d /tmp/$ARTIFACT_NAME
+
+      - name: Re-upload for current workflow
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+          path: /tmp/${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+          retention-days: 1
+          overwrite: true
+
   package_windows:
     name: Package Windows (MSIX)
     if: ${{ inputs.platform == 'Windows' || inputs.platform == 'All' }}
@@ -186,7 +220,8 @@ jobs:
 
   package_android:
     name: Package Android (AAB)
-    if: ${{ inputs.platform == 'Android' || inputs.platform == 'All' }}
+    needs: [resolve_perushim_artifact]
+    if: ${{ always() && !cancelled() && !failure() && (inputs.platform == 'Android' || inputs.platform == 'All') }}
     runs-on: ubuntu-latest
     outputs:
       artifact_name: ${{ steps.set_artifact_name.outputs.artifact_name }}
@@ -232,26 +267,10 @@ jobs:
         run: dotnet workload install maui-android --skip-manifest-update
 
       - name: Restore perushim notes SQLite for AAB asset pack
-        if: ${{ inputs.perushim_notes_sqlite_artifact != '' }}
-        id: restore_perushim_android
-        continue-on-error: true
         uses: actions/download-artifact@v7
         with:
-          name: ${{ inputs.perushim_notes_sqlite_artifact }}
+          name: ${{ inputs.perushim_notes_sqlite_artifact || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.APP_DIRECTORY }}/BibleOnSite/${{ env.PERUSHIM_NOTES_ANDROID_ASSET_RELDIR }}
-
-      - name: Decompress perushim notes for AAB asset pack (fallback)
-        if: ${{ inputs.perushim_notes_sqlite_artifact == '' || steps.restore_perushim_android.outcome == 'failure' }}
-        working-directory: ${{ env.APP_DIRECTORY }}/BibleOnSite
-        run: |
-          GZ_FILE="${{ env.PERUSHIM_NOTES_ANDROID_ASSET_RELDIR }}/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}.gz"
-          if [ -f "$GZ_FILE" ] && [ ! -f "${GZ_FILE%.gz}" ]; then
-            gunzip -k "$GZ_FILE"
-            echo "::warning::Using .gz fallback — SQLite artifact not available"
-            echo "Decompressed perushim notes ($(du -h "${GZ_FILE%.gz}" | cut -f1))"
-          else
-            echo "Perushim notes already decompressed or .gz not found — skipping"
-          fi
 
       - name: Decode Android keystore
         run: |
@@ -297,7 +316,8 @@ jobs:
 
   package_ios:
     name: Package iOS (IPA)
-    if: ${{ inputs.platform == 'iOS' || inputs.platform == 'All' }}
+    needs: [resolve_perushim_artifact]
+    if: ${{ always() && !cancelled() && !failure() && (inputs.platform == 'iOS' || inputs.platform == 'All') }}
     runs-on: macos-15
     outputs:
       artifact_name: ${{ steps.set_artifact_name.outputs.artifact_name }}
@@ -419,29 +439,10 @@ jobs:
           echo "PROFILE_UUID=$PROFILE_UUID" >> $GITHUB_ENV
 
       - name: Restore perushim notes SQLite for iOS ODR asset catalog
-        if: ${{ inputs.perushim_notes_sqlite_artifact != '' }}
-        id: restore_perushim_ios
-        continue-on-error: true
         uses: actions/download-artifact@v7
         with:
-          name: ${{ inputs.perushim_notes_sqlite_artifact }}
+          name: ${{ inputs.perushim_notes_sqlite_artifact || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.APP_DIRECTORY }}/BibleOnSite/${{ env.PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR }}
-
-      - name: Decompress perushim notes for iOS ODR (fallback)
-        if: ${{ inputs.perushim_notes_sqlite_artifact == '' || steps.restore_perushim_ios.outcome == 'failure' }}
-        working-directory: ${{ env.APP_DIRECTORY }}/BibleOnSite
-        run: |
-          GZ_FILE="${{ env.PERUSHIM_NOTES_ANDROID_ASSET_RELDIR }}/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}.gz"
-          DEST_DIR="${{ env.PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR }}"
-          DEST_FILE="$DEST_DIR/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}"
-          if [ -f "$GZ_FILE" ] && [ ! -f "$DEST_FILE" ]; then
-            mkdir -p "$DEST_DIR"
-            gunzip -c "$GZ_FILE" > "$DEST_FILE"
-            echo "::warning::Using .gz fallback — SQLite artifact not available"
-            echo "Decompressed perushim notes for iOS ODR ($(du -h "$DEST_FILE" | cut -f1))"
-          else
-            echo "Perushim notes already decompressed or .gz not found — skipping"
-          fi
 
       - name: Restore dotnet tools
         working-directory: ${{ env.APP_DIRECTORY }}
