@@ -1303,7 +1303,7 @@ jobs:
 
       - name: Verify Android NuGet restore
         run: |
-          dotnet workload install maui-android --skip-sign-check
+          dotnet workload install maui-android --skip-sign-check --version 9.0.100
           dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net9.0-android
 
       - name: Run Unit Tests with Coverage
@@ -1436,7 +1436,7 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Install MAUI workload
-        run: dotnet workload install maui --skip-sign-check
+        run: dotnet workload install maui --skip-sign-check --version 9.0.100
 
       - name: Build iOS target
         run: dotnet build BibleOnSite/BibleOnSite.csproj -f net9.0-ios -c Release --no-incremental -p:ErrorOnDuplicatePublishOutputFiles=false
