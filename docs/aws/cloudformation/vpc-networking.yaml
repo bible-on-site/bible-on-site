@@ -124,6 +124,12 @@ Resources:
           ToPort: 3003
           CidrIp: 172.31.0.0/16
           Description: API from within VPC (nginx proxy)
+        # Admin service on port 3101
+        - IpProtocol: tcp
+          FromPort: 3101
+          ToPort: 3101
+          CidrIp: 172.31.0.0/16
+          Description: Admin from within VPC (nginx proxy)
       SecurityGroupEgress:
         - IpProtocol: "-1"
           CidrIp: 0.0.0.0/0
