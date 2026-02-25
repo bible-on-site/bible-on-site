@@ -9,7 +9,7 @@
 		"dev:with-env": "npm run docker:up && npm run db:populate:dev && npm run s3:populate:dev && npm run dev:app",
 		"dev:full": "npm run docker:up && npm run dev",
 		"build": "vite build",
-		"start": "node .output/server/index.mjs",
+		"start": "node dist/server/server.js",
 		"lint": "biome lint",
 		"format": "biome format --write",
 		"check": "biome check --write",
