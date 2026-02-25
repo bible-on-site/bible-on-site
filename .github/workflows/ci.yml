@@ -1303,7 +1303,7 @@ jobs:
 
       - name: Verify Android NuGet restore
         run: |
-          dotnet workload install maui-android --skip-sign-check --version 9.0.100
+          dotnet workload install maui-android --skip-manifest-update
           dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net9.0-android
 
       - name: Run Unit Tests with Coverage
@@ -1436,7 +1436,20 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Install MAUI workload
-        run: dotnet workload install maui --skip-sign-check --version 9.0.100
+        run: dotnet workload install maui-ios --skip-manifest-update
+
+      - name: Select Xcode version
+        run: |
+          XCODE_PATH=$(ls -d /Applications/Xcode_26.0*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE_PATH" ]; then
+            XCODE_PATH=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | head -1)
+          fi
+          if [ -z "$XCODE_PATH" ]; then
+            XCODE_PATH=$(xcode-select -p | sed 's|/Contents/Developer||')
+          fi
+          echo "Selecting Xcode: $XCODE_PATH"
+          sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
 
       - name: Build iOS target
         run: dotnet build BibleOnSite/BibleOnSite.csproj -f net9.0-ios -c Release --no-incremental -p:ErrorOnDuplicatePublishOutputFiles=false
