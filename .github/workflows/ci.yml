@@ -1483,6 +1483,7 @@ jobs:
             -p:ArchiveOnBuild=false \
             -p:BuildIpa=false \
             -p:MtouchLink=None \
+            -p:TrimMode=copy \
             -p:EnableCodeSigning=false \
             -p:CodesignKey=- \
             -p:_ExcludeSimulatorArchitectures=true \
