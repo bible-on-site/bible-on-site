@@ -1,0 +1,162 @@
+# ============================================================================
+# ⚠️ DISCLAIMER: This CloudFormation template has NEVER been tested or deployed.
+# It is maintained as Infrastructure as Code DOCUMENTATION ONLY to reflect the
+# de-facto AWS configuration. Do not assume it will work without thorough testing.
+# ============================================================================
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: |
+  Amazon Cognito User Pool for Admin Web App Authentication.
+
+  ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
+
+  This template documents:
+  - Cognito User Pool for the admin web application
+  - SAML identity provider (federated with IAM Identity Center)
+  - App client configuration for OIDC authorization code flow
+
+  Authentication Flow:
+  ┌──────────┐    ┌──────────────┐    ┌────────────────────┐    ┌──────────────┐
+  │  Admin   │───▶│   Cognito    │───▶│  IAM Identity      │───▶│  AWS SSO     │
+  │  Web App │    │  (OIDC SP)   │    │  Center (SAML IdP) │    │  Login Page  │
+  │          │◀───│              │◀───│                    │◀───│              │
+  └──────────┘    └──────────────┘    └────────────────────┘    └──────────────┘
+       │                │                                              │
+       │  1. Redirect   │  2. SAML AuthnRequest                       │
+       │◀───────────────│─────────────────────────────────────────────▶│
+       │                │                                              │
+       │                │  3. SAML Assertion (after SSO login)         │
+       │                │◀─────────────────────────────────────────────│
+       │                │                                              │
+       │  4. OIDC tokens│                                              │
+       │◀───────────────│                                              │
+       │  (id_token,    │                                              │
+       │   access_token)│                                              │
+       └────────────────┘                                              │
+
+  The admin app never handles SAML directly. Cognito bridges SAML ↔ OIDC:
+  - Cognito is the SAML Service Provider (SP)
+  - IAM Identity Center is the SAML Identity Provider (IdP)
+  - Cognito issues OIDC tokens to the admin app
+
+  Sensitive Information Restoration:
+  | Placeholder | Description | Restoration Command |
+  |---|---|---|
+  | `<COGNITO_CLIENT_SECRET>` | App client secret | `aws cognito-idp describe-user-pool-client --user-pool-id il-central-1_1jyMEBzqm --client-id 3g2r20jej1u6kfao6hhvt1882k --region il-central-1 --query 'UserPoolClient.ClientSecret' --output text` |
+
+Parameters:
+  UserPoolName:
+    Type: String
+    Default: bible-on-site-admin
+    Description: Name of the Cognito User Pool
+
+Resources:
+  # ===========================================================================
+  # Cognito User Pool
+  # ===========================================================================
+  AdminUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Ref UserPoolName
+      # User Pool ID: il-central-1_1jyMEBzqm
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+      UserPoolTags:
+        Project: bible-on-site
+        Component: admin-auth
+
+  # ===========================================================================
+  # Cognito Domain (Hosted UI)
+  # ===========================================================================
+  AdminUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: bible-on-site-admin
+      UserPoolId: !Ref AdminUserPool
+      # Full domain: bible-on-site-admin.auth.il-central-1.amazoncognito.com
+
+  # ===========================================================================
+  # SAML Identity Provider (IAM Identity Center)
+  # ===========================================================================
+  AWSSSOIdentityProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Properties:
+      UserPoolId: !Ref AdminUserPool
+      ProviderName: AWSSSO
+      ProviderType: SAML
+      ProviderDetails:
+        MetadataURL: https://portal.sso.il-central-1.amazonaws.com/saml/metadata/MjUwNTk4NTk0MjY3X2lucy04MzE2NTUyZThlMmQ4Zjdj
+      AttributeMapping:
+        email: email
+      # The corresponding SAML app in IAM Identity Center:
+      #   Application ARN: arn:aws:sso::250598594267:application/ssoins-8316f518b8ce067d/apl-8316552e8e2d8f7c
+      #   See: docs/aws/cloudformation/iam-identity-center.yaml
+
+  # ===========================================================================
+  # App Client
+  # ===========================================================================
+  AdminAppClient:
+    Type: AWS::Cognito::UserPoolClient
+    DependsOn: AWSSSOIdentityProvider
+    Properties:
+      ClientName: admin-web-app
+      # Client ID: 3g2r20jej1u6kfao6hhvt1882k
+      # Client Secret: stored in SSM Parameter Store
+      #   Name: bible-on-site-admin-cognito-client-secret
+      UserPoolId: !Ref AdminUserPool
+      GenerateSecret: true
+      SupportedIdentityProviders:
+        - AWSSSO
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - email
+        - openid
+        - profile
+      AllowedOAuthFlowsUserPoolClient: true
+      CallbackURLs:
+        - http://localhost:3101/auth/callback
+        - https://admin.xn--febl3a.co.il/auth/callback
+        - https://admin.xn--febl3a.com/auth/callback
+      LogoutURLs:
+        - http://localhost:3101
+        - https://admin.xn--febl3a.co.il
+        - https://admin.xn--febl3a.com
+      ExplicitAuthFlows:
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+
+Outputs:
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref AdminUserPool
+
+  UserPoolArn:
+    Description: Cognito User Pool ARN
+    Value: !GetAtt AdminUserPool.Arn
+
+  AppClientId:
+    Description: App Client ID
+    Value: !Ref AdminAppClient
+
+  HostedUIDomain:
+    Description: Cognito Hosted UI domain
+    Value: !Sub "${AdminUserPoolDomain}.auth.il-central-1.amazoncognito.com"
+
+  SAMLIdPName:
+    Description: SAML Identity Provider name in Cognito
+    Value: AWSSSO
