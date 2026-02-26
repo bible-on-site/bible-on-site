@@ -42,7 +42,9 @@ Description: |
   Sensitive Information Restoration:
   | Placeholder | Description | Restoration Command |
   |---|---|---|
-  | `<COGNITO_CLIENT_SECRET>` | App client secret | `aws cognito-idp describe-user-pool-client --user-pool-id il-central-1_1jyMEBzqm --client-id 3g2r20jej1u6kfao6hhvt1882k --region il-central-1 --query 'UserPoolClient.ClientSecret' --output text` |
+  | `<USER_POOL_ID>` | Cognito User Pool ID | `aws cognito-idp list-user-pools --max-results 10 --region il-central-1 --query "UserPools[?Name=='bible-on-site-admin'].Id" --output text` |
+  | `<CLIENT_ID>` | App client ID | `aws cognito-idp list-user-pool-clients --user-pool-id <USER_POOL_ID> --region il-central-1 --query "UserPoolClients[?ClientName=='admin-web-app'].ClientId" --output text` |
+  | `<CLIENT_SECRET>` | App client secret | `aws cognito-idp describe-user-pool-client --user-pool-id <USER_POOL_ID> --client-id <CLIENT_ID> --region il-central-1 --query 'UserPoolClient.ClientSecret' --output text` |
 
 Parameters:
   UserPoolName:
@@ -58,7 +60,7 @@ Resources:
     Type: AWS::Cognito::UserPool
     Properties:
       UserPoolName: !Ref UserPoolName
-      # User Pool ID: il-central-1_1jyMEBzqm
+      # User Pool ID: <USER_POOL_ID> (see restoration table above)
       AutoVerifiedAttributes:
         - email
       UsernameAttributes:
@@ -114,7 +116,7 @@ Resources:
     DependsOn: AWSSSOIdentityProvider
     Properties:
       ClientName: admin-web-app
-      # Client ID: 3g2r20jej1u6kfao6hhvt1882k
+      # Client ID: <CLIENT_ID> (see restoration table above)
       # Client Secret: stored in SSM Parameter Store
       #   Name: bible-on-site-admin-cognito-client-secret
       UserPoolId: !Ref AdminUserPool

@@ -1,14 +1,18 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
 const COGNITO_REGION = "il-central-1";
-const COGNITO_USER_POOL_ID =
-	process.env.COGNITO_USER_POOL_ID || "il-central-1_1jyMEBzqm";
-const COGNITO_CLIENT_ID =
-	process.env.COGNITO_CLIENT_ID || "3g2r20jej1u6kfao6hhvt1882k";
-const COGNITO_CLIENT_SECRET = process.env.COGNITO_CLIENT_SECRET || "";
-const COGNITO_DOMAIN =
-	process.env.COGNITO_DOMAIN ||
-	"bible-on-site-admin.auth.il-central-1.amazoncognito.com";
+const COGNITO_USER_POOL_ID = requireEnv("COGNITO_USER_POOL_ID");
+const COGNITO_CLIENT_ID = requireEnv("COGNITO_CLIENT_ID");
+const COGNITO_CLIENT_SECRET = requireEnv("COGNITO_CLIENT_SECRET");
+const COGNITO_DOMAIN = requireEnv("COGNITO_DOMAIN");
+
+function requireEnv(name: string): string {
+	const value = process.env[name];
+	if (!value && process.env.SKIP_AUTH !== "true") {
+		throw new Error(`Missing required environment variable: ${name}`);
+	}
+	return value ?? "";
+}
 
 const ISSUER = `https://cognito-idp.${COGNITO_REGION}.amazonaws.com/${COGNITO_USER_POOL_ID}`;
 
