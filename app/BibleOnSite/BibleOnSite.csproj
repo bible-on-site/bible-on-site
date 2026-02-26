@@ -31,7 +31,8 @@
 		<!-- NU1608: transitive AndroidX .Ktx packages have tight upper-bound constraints that
 		     conflict with newer non-Ktx versions pulled by Play Asset Delivery 2.3.0.5;
 		     the newer versions are backward-compatible so the warning is safe to suppress. -->
-		<NoWarn>$(NoWarn);XC0022;XC0045;MVVMTK0045;NU1608</NoWarn>
+		<!-- XAAMM0000: manifest merger namespace-collision warnings from Firebase + PAD on .NET 9 (TODO(#1018)) -->
+		<NoWarn>$(NoWarn);XC0022;XC0045;MVVMTK0045;NU1608;XAAMM0000</NoWarn>
 
 		<!-- Enable compiled bindings with Source property -->
 		<MauiEnableXamlCBindingWithSourceCompilation>true</MauiEnableXamlCBindingWithSourceCompilation>
@@ -58,7 +59,7 @@
 
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">23.0</SupportedOSPlatformVersion>
 		<!-- For Release: embed assemblies in APK. For Debug: use Fast Deployment (much faster iteration) -->
 		<EmbedAssembliesIntoApk Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release'">true</EmbedAssembliesIntoApk>
 		<!-- Optional: Build AAB in Debug for local PAD testing (asset packs require AAB). Uncomment to test on-demand downloads. -->
@@ -111,8 +112,8 @@
 
 	<!-- Android: Play Asset Delivery SDK -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
-		<!-- TODO(#1018): upgrade to 2.3.0.5+ when migrating to .NET 10 — 2.3.0.5 causes
-		     XAAMM0000 manifest collisions with Plugin.Firebase on the current .NET 9 toolchain. -->
+		<!-- TODO(#1018): PAD 2.3.0.5 + Plugin.Firebase cause XAAMM0000 manifest collisions on .NET 9;
+		     XAAMM0000 is suppressed in NoWarn. Re-evaluate when migrating to .NET 10. -->
 		<PackageReference Include="Xamarin.Google.Android.Play.Asset.Delivery" Version="2.3.0.5" />
 	</ItemGroup>
 
