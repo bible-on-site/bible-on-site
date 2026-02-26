@@ -166,7 +166,7 @@ Metadata:
   #    - Sign-in URL: https://portal.sso.il-central-1.amazonaws.com/saml/assertion/MjUwNTk4NTk0MjY3X2lucy04MzE2NTUyZThlMmQ4Zjdj
   #    - Sign-out URL: https://portal.sso.il-central-1.amazonaws.com/saml/logout/MjUwNTk4NTk0MjY3X2lucy04MzE2NTUyZThlMmQ4Zjdj
   #    - Application ACS URL: https://bible-on-site-admin.auth.il-central-1.amazoncognito.com/saml2/idpresponse
-  #    - Application SAML Audience: urn:amazon:cognito:sp:il-central-1_1jyMEBzqm
+  #    - Application SAML Audience: urn:amazon:cognito:sp:<USER_POOL_ID>  (see cognito-admin.yaml restoration table)
   #    - Attribute Mappings:
   #        Subject → ${user:email} (emailAddress)
   #        email   → ${user:email} (basic)
