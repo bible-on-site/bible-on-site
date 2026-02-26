@@ -41,12 +41,17 @@ export class SeferPage {
 	}
 
 	/**
-	 * Verify that the sefer overlay is visible
-	 * Uses a longer timeout to account for animation and CI slowness
+	 * Verify that the sefer overlay is visible and the FlipBook has mounted.
+	 * The overlay displays immediately but the FlipBook is lazy-loaded inside
+	 * a React startTransition, so we must wait for bookWrapper before checking
+	 * any nested content (articles, qri spans, etc.).
 	 */
 	async verifySeferViewIsOpen(): Promise<void> {
 		const seferOverlay = this.page.locator('[class*="seferOverlay"]');
 		await expect(seferOverlay).toBeVisible({ timeout: 10_000 });
+		await expect(
+			seferOverlay.locator('[class*="bookWrapper"]'),
+		).toBeVisible({ timeout: 15_000 });
 	}
 
 	/**
