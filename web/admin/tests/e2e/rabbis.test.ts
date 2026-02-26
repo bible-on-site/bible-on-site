@@ -1,15 +1,18 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("Rabbis Management", () => {
-	test("displays rabbis list", async ({ page }) => {
+	test("displays rabbis list with authors", async ({ page }) => {
 		await page.goto("/rabbis");
 
 		await expect(page.locator("h1")).toContainText("ניהול רבנים", {
 			timeout: 10000,
 		});
-		// Should have at least one rabbi card or empty state
-		const content = await page.textContent("main");
-		expect(content).toBeTruthy();
+		// Test data has 4 authors
+		await expect(page.getByText("4 רבנים במערכת")).toBeVisible();
+		// At least one edit link should be visible
+		await expect(
+			page.getByRole("link", { name: "עריכה" }).first(),
+		).toBeVisible();
 	});
 
 	test("can navigate to new rabbi form", async ({ page }) => {

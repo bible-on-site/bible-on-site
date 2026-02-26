@@ -34,6 +34,7 @@ CREATE TABLE `tanah_author` (
     `id` smallint NOT NULL AUTO_INCREMENT,
     `name` tinytext NOT NULL,
     `details` text NOT NULL,
+    `image_url` varchar(512) DEFAULT NULL,
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 DEFAULT CHARSET = utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */
