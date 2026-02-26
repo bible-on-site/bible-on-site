@@ -1,11 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { execute, query, queryOne } from "./db";
+import { getAuthorImageUrl } from "./s3";
 
+// imageUrl is computed at runtime from the author ID (S3 key: authors/high-res/{id}.jpg).
+// There is NO image_url column in tanah_author — do not add one.
 export interface Author {
 	id: number;
 	name: string;
 	details: string;
-	imageUrl: string | null;
+	imageUrl: string;
 }
 
 export interface AuthorFormData {
@@ -17,7 +20,6 @@ interface AuthorRow {
 	id: number;
 	name: string;
 	details: string;
-	image_url: string | null;
 }
 
 function toAuthor(row: AuthorRow): Author {
@@ -25,7 +27,7 @@ function toAuthor(row: AuthorRow): Author {
 		id: row.id,
 		name: row.name,
 		details: row.details,
-		imageUrl: row.image_url ?? null,
+		imageUrl: getAuthorImageUrl(row.id),
 	};
 }
 
@@ -33,7 +35,7 @@ function toAuthor(row: AuthorRow): Author {
 export const getAuthors = createServerFn({ method: "GET" }).handler(
 	async () => {
 		const rows = await query<AuthorRow>(
-			"SELECT id, name, details, image_url FROM tanah_author ORDER BY name",
+			"SELECT id, name, details FROM tanah_author ORDER BY name",
 		);
 		return rows.map(toAuthor);
 	},
@@ -44,7 +46,7 @@ export const getAuthor = createServerFn({ method: "GET" })
 	.inputValidator((data: number) => data)
 	.handler(async ({ data: id }) => {
 		const row = await queryOne<AuthorRow>(
-			"SELECT id, name, details, image_url FROM tanah_author WHERE id = ?",
+			"SELECT id, name, details FROM tanah_author WHERE id = ?",
 			[id],
 		);
 
@@ -69,7 +71,7 @@ export const createAuthor = createServerFn({ method: "POST" })
 		);
 
 		const row = await queryOne<AuthorRow>(
-			"SELECT id, name, details, image_url FROM tanah_author WHERE id = ?",
+			"SELECT id, name, details FROM tanah_author WHERE id = ?",
 			[result.insertId],
 		);
 
@@ -94,7 +96,7 @@ export const updateAuthor = createServerFn({ method: "POST" })
 		);
 
 		const row = await queryOne<AuthorRow>(
-			"SELECT id, name, details, image_url FROM tanah_author WHERE id = ?",
+			"SELECT id, name, details FROM tanah_author WHERE id = ?",
 			[data.id],
 		);
 
