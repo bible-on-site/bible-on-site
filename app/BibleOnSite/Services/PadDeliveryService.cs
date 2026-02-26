@@ -237,7 +237,7 @@ partial class PadDeliveryService
     /// </summary>
     private static string? SaveOdrAsset(string assetName, string cacheDir)
     {
-        using var dataAsset = new NSDataAsset(assetName);
+        using var dataAsset = new NSDataAsset(assetName, NSBundle.MainBundle);
         if (dataAsset?.Data == null)
             return null;
 

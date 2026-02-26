@@ -699,6 +699,31 @@ public partial class PerekViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Exports perushim diagnostics to a file and opens the share sheet for support.
+    /// </summary>
+    [RelayCommand]
+    public async Task ExportPerushimLogsAsync()
+    {
+        try
+        {
+            var report = await PerushimNotesService.Instance.GetDiagnosticsAsync();
+            var fileName = $"perushim_diagnostics_{DateTime.UtcNow:yyyyMMdd_HHmmss}.txt";
+            var path = Path.Combine(FileSystem.CacheDirectory, fileName);
+            await File.WriteAllTextAsync(path, report);
+            await Share.Default.RequestAsync(new ShareFileRequest
+            {
+                Title = "ייצוא לוגים — פירושים",
+                File = new ShareFile(path),
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Export perushim logs failed: {ex.Message}");
+            await Shell.Current.DisplayAlert("שגיאה", $"לא ניתן לייצא לוגים: {ex.Message}", "אישור");
+        }
+    }
+
     #endregion
 #endif
 

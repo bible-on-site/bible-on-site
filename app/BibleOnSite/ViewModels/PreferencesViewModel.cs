@@ -127,6 +127,32 @@ public partial class PreferencesViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Exports perushim diagnostics to a file and opens the share sheet so the user can save or send for support.
+    /// </summary>
+    [RelayCommand]
+    public async Task ExportPerushimLogsAsync()
+    {
+        try
+        {
+            var report = await _perushimNotesService.GetDiagnosticsAsync();
+            var fileName = $"perushim_diagnostics_{DateTime.UtcNow:yyyyMMdd_HHmmss}.txt";
+            var path = Path.Combine(FileSystem.CacheDirectory, fileName);
+            await File.WriteAllTextAsync(path, report);
+            await Share.Default.RequestAsync(new ShareFileRequest
+            {
+                Title = "ייצוא לוגים — פירושים",
+                File = new ShareFile(path),
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Export perushim logs failed: {ex.Message}");
+            if (Application.Current?.Windows?.Count > 0 && Application.Current.Windows[0].Page is Page page)
+                await page.DisplayAlert("שגיאה", $"לא ניתן לייצא לוגים: {ex.Message}", "אישור");
+        }
+    }
+
+    /// <summary>
     /// Increases font size.
     /// </summary>
     [RelayCommand]
