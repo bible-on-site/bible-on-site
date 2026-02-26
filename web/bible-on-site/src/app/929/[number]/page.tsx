@@ -10,6 +10,7 @@ import { getArticlesByPerekId } from "../../../lib/articles";
 import { getPerushimByPerekId } from "../../../lib/perushim";
 import { ArticlesSection } from "./components/ArticlesSection";
 import { PerushimSection } from "./components/PerushimSection";
+import { QaWidget } from "./components/QaWidget";
 import Breadcrumb from "./components/Breadcrumb";
 import { Ptuah } from "./components/Ptuha";
 import SeferComposite from "./components/SeferComposite";
@@ -145,6 +146,9 @@ export default async function Perek({
 						);
 					})}
 				</article>
+
+				{/* QA widget - edge-to-edge RAG over Ralbag + articles */}
+				<QaWidget perekId={perekId} seferPerekIds={perekIds} />
 
 				{/* Perushim section - commentaries carousel */}
 				<PerushimSection perekId={perekId} perushim={perushim} />

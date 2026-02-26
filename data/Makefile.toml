@@ -189,11 +189,11 @@ command = "cargo"
 args = ["run", "--release"]
 
 [tasks.mysql-populate-dev]
-description = "Populate MySQL dev database (tanah-dev)"
+description = "Populate MySQL dev database (tanah-dev) with prod-like data"
 env_files = [".dev.env"]
 cwd = "./mysql/db-populator"
 command = "cargo"
-args = ["run", "--release"]
+args = ["run", "--release", "--", "--data-script", "../tanah_dev_data.sql"]
 
 [tasks.mysql-populate-test]
 description = "Populate MySQL test database (tanah_test)"
