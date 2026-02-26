@@ -30,13 +30,25 @@ export class SeferPage {
 	}
 
 	/**
-	 * Click the sefer view toggle button to open sefer view
-	 * Note: This assumes the test is running on tablet+ viewport where the toggle is visible
+	 * Click the sefer view toggle button to open sefer view.
+	 * Uses a retry loop because on SSG pages the click can land before
+	 * React has hydrated the controlled checkbox, in which case the
+	 * onChange handler never fires and the overlay stays hidden.
 	 */
 	async openSeferView(): Promise<void> {
 		const toggler = this.page.getByTestId("read-mode-toggler");
+		const checkbox = toggler.locator("input");
+		const overlay = this.page.locator('[class*="seferOverlay"]');
+
 		await toggler.scrollIntoViewIfNeeded();
-		await toggler.click({ timeout: 10_000 });
+
+		await expect(async () => {
+			if (!(await checkbox.isChecked())) {
+				await toggler.click();
+			}
+			await expect(overlay).toBeVisible();
+		}).toPass({ timeout: 15_000 });
+
 		await this.verifySeferViewIsOpen();
 	}
 
