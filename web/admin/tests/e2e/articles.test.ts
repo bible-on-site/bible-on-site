@@ -47,15 +47,29 @@ test.describe("Articles Management", () => {
 		]);
 	});
 
-	test("sefarim accordion expands", async ({ page }) => {
+	test("sefarim accordion shows Hebrew perek labels", async ({ page }) => {
 		await page.goto("/articles");
 
-		// Find and click first sefer
-		const firstSefer = page.locator("button").filter({ hasText: /▼/ }).first();
-		if (await firstSefer.isVisible()) {
-			await firstSefer.click();
-			// Should show perek links
-			await expect(page.getByRole("link", { name: "1" }).first()).toBeVisible();
-		}
+		// Expand בראשית (first sefer, no additionals)
+		await page.getByRole("button", { name: /בראשית/ }).click();
+		await expect(page.getByRole("link", { name: "א'" }).first()).toBeVisible();
+		await expect(page.getByRole("link", { name: "נ'" })).toBeVisible();
+	});
+
+	test("sefarim with additionals show additional letter prefix", async ({
+		page,
+	}) => {
+		await page.goto("/articles");
+
+		// Expand שמואל (has additionals א and ב)
+		await page.getByRole("button", { name: /שמואל/ }).click();
+		// First perek of שמואל א
+		await expect(
+			page.getByRole("link", { name: "א א'" }).first(),
+		).toBeVisible();
+		// First perek of שמואל ב
+		await expect(
+			page.getByRole("link", { name: "ב א'" }).first(),
+		).toBeVisible();
 	});
 });
