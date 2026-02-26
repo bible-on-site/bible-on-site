@@ -104,11 +104,11 @@ jobs:
     name: Release
     outputs:
       released: ${{ steps.mark_released.outputs.released }}
-    # Ensures only one release job runs at a time for this module.
-    # This prevents potential race conditions which has been proven to occur.
+    # Queue (don't cancel) concurrent releases for the same module so that an
+    # in-flight tag push is never orphaned without its version bump.
     concurrency:
       group: ${{ github.repository }}-release-${{ inputs.module_name }}
-      cancel-in-progress: true
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
@@ -123,24 +123,36 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-      - name: Create Tag
-        id: create_tag
+      - name: Check Tag
+        id: check_tag
         run: |
           TAG_NAME="${{ inputs.module_name }}-v${{ inputs.module_version }}"
-          git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
           echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_OUTPUT
+          if git ls-remote --tags origin "refs/tags/${TAG_NAME}" | grep -q "${TAG_NAME}"; then
+            echo "::notice::Tag ${TAG_NAME} already exists on remote — skipping tag/release creation"
+            echo "TAG_EXISTS=true" >> $GITHUB_OUTPUT
+          else
+            echo "TAG_EXISTS=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Tag
+        if: steps.check_tag.outputs.TAG_EXISTS != 'true'
+        run: git tag -a "${{ steps.check_tag.outputs.TAG_NAME }}" -m "Release ${{ steps.check_tag.outputs.TAG_NAME }}"
 
       - name: Add Deploy Key
+        if: steps.check_tag.outputs.TAG_EXISTS != 'true'
         uses: webfactory/ssh-agent@72c0bfd31ab22a2e11716951e3f107a9647dc97e
         with:
           ssh-private-key: ${{ secrets.DEPLOY_KEY }}
 
       - name: Push Tag
+        if: steps.check_tag.outputs.TAG_EXISTS != 'true'
         run: |
           git remote set-url origin git@github.com:${{ github.repository }}
-          git push origin ${{ steps.create_tag.outputs.TAG_NAME }}
+          git push origin ${{ steps.check_tag.outputs.TAG_NAME }}
 
       - name: Download Artifacts
+        if: steps.check_tag.outputs.TAG_EXISTS != 'true'
         run: |
           set -e
 
@@ -171,6 +183,7 @@ jobs:
           done
 
       - name: Prepare Release
+        if: steps.check_tag.outputs.TAG_EXISTS != 'true'
         id: prepare_release
         run: |
           set -e
@@ -220,9 +233,10 @@ jobs:
           echo "$BODY"
 
       - name: Create GitHub Release
+        if: steps.check_tag.outputs.TAG_EXISTS != 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.create_tag.outputs.TAG_NAME }}
+          tag_name: ${{ steps.check_tag.outputs.TAG_NAME }}
           name: Release ${{ steps.prepare_release.outputs.MODULE_NAME_CAP }} v${{ inputs.module_version }}
           body: ${{ steps.prepare_release.outputs.BODY }}
           token: ${{ secrets.GITHUB_TOKEN }}
