@@ -311,22 +311,30 @@ async function runSyncFromProd(): Promise<void> {
 		} else {
 			console.info("Dumping production database...");
 			console.info(`Running: mysqldump ${mysqldumpArgs.join(" ")}`);
-			const dumpResult = spawnSync("mysqldump", mysqldumpArgs, {
-				env: { ...process.env, MYSQL_PWD: prodDb.password },
-				stdio: ["ignore", "pipe", "pipe"],
-				maxBuffer: 100 * 1024 * 1024, // 100MB buffer for large dumps
-			});
-			if (dumpResult.error) {
-				throw new Error(`mysqldump spawn error: ${dumpResult.error.message}`);
+			const dumpFd = fs.openSync(dumpPath, "w");
+			try {
+				const dumpResult = spawnSync("mysqldump", mysqldumpArgs, {
+					env: { ...process.env, MYSQL_PWD: prodDb.password },
+					stdio: ["ignore", dumpFd, "pipe"],
+				});
+				if (dumpResult.error) {
+					throw new Error(
+						`mysqldump spawn error: ${dumpResult.error.message}`,
+					);
+				}
+				if (dumpResult.status !== 0) {
+					const stderr = dumpResult.stderr?.toString() || "";
+					throw new Error(
+						`mysqldump failed (exit ${dumpResult.status}): stderr=${stderr}`,
+					);
+				}
+			} finally {
+				fs.closeSync(dumpFd);
 			}
-			if (dumpResult.status !== 0) {
-				const stderr = dumpResult.stderr?.toString() || "";
-				const stdout = dumpResult.stdout?.toString().slice(0, 500) || "";
-				throw new Error(
-					`mysqldump failed (exit ${dumpResult.status}): stderr=${stderr} stdout_start=${stdout}`,
-				);
-			}
-			fs.writeFileSync(dumpPath, dumpResult.stdout);
+			const dumpSize = fs.statSync(dumpPath).size;
+			console.info(
+				`Dump written to ${dumpPath} (${(dumpSize / 1024 / 1024).toFixed(1)} MB)`,
+			);
 		}
 
 		if (dryRun) {
