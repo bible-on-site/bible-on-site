@@ -5,7 +5,6 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createServerFn } from "@tanstack/react-start";
-import { execute } from "./db";
 
 // S3 configuration from environment
 const S3_REGION =
@@ -39,6 +38,15 @@ function getPublicUrl(key: string): string {
 	}
 	// Standard AWS S3 URL
 	return `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${key}`;
+}
+
+/**
+ * Build the public URL for an author image based on their ID.
+ * Images live in S3 at: authors/high-res/{id}.jpg
+ * There is NO image_url column in tanah_author — URLs are always derived from the ID.
+ */
+export function getAuthorImageUrl(authorId: number): string {
+	return getPublicUrl(`authors/high-res/${authorId}.jpg`);
 }
 
 export async function uploadImage(
@@ -120,14 +128,8 @@ export const uploadAuthorImage = createServerFn({ method: "POST" })
 		// Convert base64 to buffer
 		const buffer = Buffer.from(base64Data, "base64");
 
-		// Upload to S3
-		const imageUrl = await uploadImage(buffer, contentType, authorId);
+		// Upload to S3 — no DB update needed, URL is derived from the author ID
+		await uploadImage(buffer, contentType, authorId);
 
-		// Update author record with new image URL
-		await execute("UPDATE tanah_author SET image_url = ? WHERE id = ?", [
-			imageUrl,
-			authorId,
-		]);
-
-		return { imageUrl };
+		return { imageUrl: getAuthorImageUrl(authorId) };
 	});
