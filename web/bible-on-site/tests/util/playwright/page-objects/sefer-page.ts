@@ -30,23 +30,40 @@ export class SeferPage {
 	}
 
 	/**
-	 * Click the sefer view toggle button to open sefer view
-	 * Note: This assumes the test is running on tablet+ viewport where the toggle is visible
+	 * Click the sefer view toggle button to open sefer view.
+	 * Uses a retry loop because on SSG pages the click can land before
+	 * React has hydrated the controlled checkbox, in which case the
+	 * onChange handler never fires and the overlay stays hidden.
 	 */
 	async openSeferView(): Promise<void> {
 		const toggler = this.page.getByTestId("read-mode-toggler");
+		const checkbox = toggler.locator("input");
+		const overlay = this.page.locator('[class*="seferOverlay"]');
+
 		await toggler.scrollIntoViewIfNeeded();
-		await toggler.click({ timeout: 10_000 });
+
+		await expect(async () => {
+			if (!(await checkbox.isChecked())) {
+				await toggler.click();
+			}
+			await expect(overlay).toBeVisible();
+		}).toPass({ timeout: 15_000 });
+
 		await this.verifySeferViewIsOpen();
 	}
 
 	/**
-	 * Verify that the sefer overlay is visible
-	 * Uses a longer timeout to account for animation and CI slowness
+	 * Verify that the sefer overlay is visible and the FlipBook has mounted.
+	 * The overlay displays immediately but the FlipBook is lazy-loaded inside
+	 * a React startTransition, so we must wait for bookWrapper before checking
+	 * any nested content (articles, qri spans, etc.).
 	 */
 	async verifySeferViewIsOpen(): Promise<void> {
 		const seferOverlay = this.page.locator('[class*="seferOverlay"]');
 		await expect(seferOverlay).toBeVisible({ timeout: 10_000 });
+		await expect(
+			seferOverlay.locator('[class*="bookWrapper"]'),
+		).toBeVisible({ timeout: 15_000 });
 	}
 
 	/**

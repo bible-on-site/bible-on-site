@@ -7,7 +7,22 @@ test.beforeEach(({ skipOnNotWideEnough }) => {
 	void skipOnNotWideEnough;
 });
 
-async function toggleSefer(page: import("@playwright/test").Page) {
+async function toggleSeferOn(page: import("@playwright/test").Page) {
+	const toggler = page.getByTestId("read-mode-toggler");
+	const checkbox = toggler.locator("input");
+	const overlay = page.locator('[class*="seferOverlay"]');
+
+	await toggler.scrollIntoViewIfNeeded();
+
+	await expect(async () => {
+		if (!(await checkbox.isChecked())) {
+			await toggler.click();
+		}
+		await expect(overlay).toBeVisible();
+	}).toPass({ timeout: 15_000 });
+}
+
+async function toggleSeferOff(page: import("@playwright/test").Page) {
 	const toggler = page.getByTestId("read-mode-toggler");
 	await toggler.scrollIntoViewIfNeeded();
 	await toggler.click({ timeout: 10_000 });
@@ -21,7 +36,7 @@ test("Hides perek breadcrumbs when toggling to sefer view", async ({
 	const perekBreadCrumbs = page.getByTestId(`perek-breadcrumb-${perekId}`);
 	await expect(perekBreadCrumbs).toBeVisible();
 
-	await toggleSefer(page);
+	await toggleSeferOn(page);
 
 	const seferOverlay = page.locator('[class*="seferOverlay"]');
 	await expect(seferOverlay).toBeVisible({ timeout: 10_000 });
@@ -38,21 +53,18 @@ test("Hides overlay after animation when toggling sefer view OFF", async ({
 	await page.goto(`${BASE_URL}/${perekId}`);
 
 	// Toggle ON
-	await toggleSefer(page);
+	await toggleSeferOn(page);
 
 	const seferOverlay = page.locator('[class*="seferOverlay"]');
-	await expect(seferOverlay).toBeVisible({ timeout: 10_000 });
 
 	// Wait for the lazy-loaded Sefer component to mount inside the overlay,
-	// confirming the React startTransition has committed. Without this the
-	// second click can land during the concurrent render and the toggle
-	// state change may be dropped.
+	// confirming the React startTransition has committed.
 	await expect(
 		seferOverlay.locator('[class*="bookWrapper"]'),
 	).toBeVisible({ timeout: 15_000 });
 
 	// Toggle OFF
-	await toggleSefer(page);
+	await toggleSeferOff(page);
 
 	// Auto-retry until the overlay animation completes and display becomes none
 	await expect(seferOverlay).toBeHidden({ timeout: 10_000 });
