@@ -3,6 +3,7 @@ import { createFileRoute, Link, Outlet, useMatch } from "@tanstack/react-router"
 import { useState } from "react";
 import { getPerakim, type Perek } from "~/server/perakim";
 import { getSefarim, type Sefer } from "~/server/sefarim";
+import { formatPerekLabel } from "~/utils/hebrew";
 
 export const Route = createFileRoute("/articles")({
 	component: ArticlesLayout,
@@ -164,7 +165,10 @@ function ArticlesNavPage() {
 												params={{ perekId: String(perek.perek_id) }}
 												className="px-4 py-2 bg-white hover:bg-blue-100 hover:text-blue-700 border border-gray-200 hover:border-blue-300 rounded-lg text-sm transition-all font-medium shadow-sm"
 											>
-												{perek.perek}
+												{formatPerekLabel(
+													perek.perek_in_context ?? perek.perek ?? 0,
+													perek.additional_letter,
+												)}
 											</Link>
 										))}
 									</div>
