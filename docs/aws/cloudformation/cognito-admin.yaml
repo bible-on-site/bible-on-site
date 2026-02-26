@@ -42,7 +42,7 @@ Description: |
   Sensitive Information Restoration:
   | Placeholder | Description | Restoration Command |
   |---|---|---|
-  | `<COGNITO_CLIENT_SECRET>` | App client secret | `aws cognito-idp describe-user-pool-client --user-pool-id il-central-1_1jyMEBzqm --client-id 3g2r20jej1u6kfao6hhvt1882k --region il-central-1 --query 'UserPoolClient.ClientSecret' --output text` |
+  | `<COGNITO_CLIENT_SECRET>` | App client secret | `aws cognito-idp describe-user-pool-client --user-pool-id il-central-1_1jyMEBzqm --client-id 2ts119p8t3bukenu56ui6faife --region il-central-1 --query 'UserPoolClient.ClientSecret' --output text` |
 
 Parameters:
   UserPoolName:
