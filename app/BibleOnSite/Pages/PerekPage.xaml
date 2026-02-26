@@ -419,6 +419,12 @@
                                         Text="להוריד פירושים"
                                         IsVisible="{Binding ShowDownloadPerushimButton}"
                                         Clicked="OnDownloadPerushimClicked"/>
+                                <Button Text="ייצוא לוגים לתמיכה"
+                                        Command="{Binding ExportPerushimLogsCommand}"
+                                        AutomationId="ExportPerushimLogsButton"
+                                        IsVisible="{Binding ShowDownloadPerushimButton}"
+                                        BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                                        TextColor="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray200}}"/>
                             </VerticalStackLayout>
                         </CollectionView.EmptyView>
                     </CollectionView>

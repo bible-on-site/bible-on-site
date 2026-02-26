@@ -100,6 +100,11 @@
                                 Command="{Binding DownloadPerushimCommand}"
                                 BackgroundColor="{StaticResource Primary}"
                                 TextColor="White"/>
+                        <Button Text="ייצוא לוגים לתמיכה"
+                                Command="{Binding ExportPerushimLogsCommand}"
+                                AutomationId="ExportPerushimLogsButton"
+                                BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                                TextColor="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray200}}"/>
                     </VerticalStackLayout>
                 </Border>
             </VerticalStackLayout>
