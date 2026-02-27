@@ -118,18 +118,19 @@
 	</ItemGroup>
 
 	<!-- D8 duplicate-class workaround: PAD + Firebase transitively pull in AndroidX
-	     packages whose .Ktx/.Jvm variants duplicate classes from the base .Android variant.
-	     For version-compatible packages: ExcludeAssets prevents their JARs from entering D8.
-	     For packages with NuGet version conflicts: an MSBuild target strips their JARs
-	     from @(AndroidJavaLibrary) before D8 picks them up. -->
+	     .Ktx/.Jvm packages that duplicate Java classes from the base .Android variant,
+	     causing D8 JAVA0000 "defined multiple times" errors.
+	     ExcludeAssets="all" prevents JARs from version-compatible packages entering D8.
+	     For packages with NuGet version conflicts (where ExcludeAssets triggers NU1107),
+	     a target strips the duplicate .aar from @(AndroidAarLibrary) before extraction. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<PackageReference Include="Xamarin.AndroidX.Compose.Runtime.Annotation.Jvm" Version="1.10.0.1" ExcludeAssets="all" />
 	</ItemGroup>
-	<Target Name="_RemoveDuplicateAndroidXJars"
-		BeforeTargets="_DetermineJavaLibrariesToCompile"
+	<Target Name="_RemoveDuplicateAndroidXAars"
+		BeforeTargets="_ResolveAars;_ExtractAar;_GetLibraryImports"
 		Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<ItemGroup>
-			<AndroidJavaLibrary Remove="@(AndroidJavaLibrary)"
+			<AndroidAarLibrary Remove="@(AndroidAarLibrary)"
 				Condition="%(Filename) == 'savedstate-ktx'" />
 		</ItemGroup>
 	</Target>
