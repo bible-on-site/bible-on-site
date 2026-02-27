@@ -110,18 +110,29 @@
 	     Perushim Notes — on-demand delivery (Android PAD + iOS ODR)
 	     ============================================================ -->
 
-	<!-- Android: Play Asset Delivery SDK + D8 duplicate-class workaround.
-	     PAD 2.3.0.5 + Plugin.Firebase pull in AndroidX packages whose .Android/.Jvm/.Ktx
-	     variants contain identical Java classes, causing D8 JAVA0000 "defined multiple times"
-	     errors. allow-duplicate-classes lets D8 pick one copy (they're identical).
-	     XAAMM0000 manifest collisions are suppressed in NoWarn above.
-	     TODO(#1018): re-evaluate both workarounds when migrating to .NET 10. -->
-	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
-		<AndroidD8ExtraArguments>$(AndroidD8ExtraArguments) --allow-duplicate-classes</AndroidD8ExtraArguments>
-	</PropertyGroup>
+	<!-- Android: Play Asset Delivery SDK.
+	     XAAMM0000 manifest collisions with Plugin.Firebase are suppressed in NoWarn above.
+	     TODO(#1018): re-evaluate workarounds when migrating to .NET 10. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<PackageReference Include="Xamarin.Google.Android.Play.Asset.Delivery" Version="2.3.0.5" />
 	</ItemGroup>
+
+	<!-- D8 duplicate-class workaround: PAD + Firebase transitively pull in AndroidX
+	     packages whose .Ktx/.Jvm variants duplicate classes from the base .Android variant.
+	     For version-compatible packages: ExcludeAssets prevents their JARs from entering D8.
+	     For packages with NuGet version conflicts: an MSBuild target strips their JARs
+	     from @(AndroidJavaLibrary) before D8 picks them up. -->
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+		<PackageReference Include="Xamarin.AndroidX.Compose.Runtime.Annotation.Jvm" Version="1.10.0.1" ExcludeAssets="all" />
+	</ItemGroup>
+	<Target Name="_RemoveDuplicateAndroidXJars"
+		BeforeTargets="_DetermineJavaLibrariesToCompile"
+		Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+		<ItemGroup>
+			<AndroidJavaLibrary Remove="@(AndroidJavaLibrary)"
+				Condition="%(Filename) == 'savedstate-ktx'" />
+		</ItemGroup>
+	</Target>
 
 	<!-- Auto-decompress perushim notes .gz → .sqlite if needed (checked out from git as compressed).
 	     Calls the devops setup script which has the canonical decompress logic.
