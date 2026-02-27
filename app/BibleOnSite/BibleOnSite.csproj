@@ -131,7 +131,7 @@
 		Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<ItemGroup>
 			<AndroidAarLibrary Remove="@(AndroidAarLibrary)"
-				Condition="%(Filename) == 'savedstate-ktx'" />
+				Condition="$([System.String]::new('%(Filename)').EndsWith('savedstate-ktx'))" />
 		</ItemGroup>
 	</Target>
 
