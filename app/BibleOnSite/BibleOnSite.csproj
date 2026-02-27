@@ -110,14 +110,17 @@
 	     Perushim Notes — on-demand delivery (Android PAD + iOS ODR)
 	     ============================================================ -->
 
-	<!-- Android: Play Asset Delivery SDK -->
+	<!-- Android: Play Asset Delivery SDK + D8 duplicate-class workaround.
+	     PAD 2.3.0.5 + Plugin.Firebase pull in AndroidX packages whose .Android/.Jvm/.Ktx
+	     variants contain identical Java classes, causing D8 JAVA0000 "defined multiple times"
+	     errors. allow-duplicate-classes lets D8 pick one copy (they're identical).
+	     XAAMM0000 manifest collisions are suppressed in NoWarn above.
+	     TODO(#1018): re-evaluate both workarounds when migrating to .NET 10. -->
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+		<AndroidD8ExtraArguments>$(AndroidD8ExtraArguments) --allow-duplicate-classes</AndroidD8ExtraArguments>
+	</PropertyGroup>
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
-		<!-- TODO(#1018): PAD 2.3.0.5 + Plugin.Firebase cause XAAMM0000 manifest collisions on .NET 9;
-		     XAAMM0000 is suppressed in NoWarn. Re-evaluate when migrating to .NET 10. -->
 		<PackageReference Include="Xamarin.Google.Android.Play.Asset.Delivery" Version="2.3.0.5" />
-		<!-- Exclude the JVM variant to prevent D8 "defined multiple times" error (JAVA0000):
-		     both .Android and .Jvm annotation packages contain the same classes. -->
-		<PackageReference Include="Xamarin.AndroidX.Compose.Runtime.Annotation.Jvm" Version="1.10.0.1" ExcludeAssets="all" />
 	</ItemGroup>
 
 	<!-- Auto-decompress perushim notes .gz → .sqlite if needed (checked out from git as compressed).
