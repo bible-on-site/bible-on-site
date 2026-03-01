@@ -123,7 +123,33 @@ public partial class PerekPage : ContentPage
         Resources["PasukNumFontSize"] = factor * 16;
         Resources["PerushNameFontSize"] = factor * 14;
         Resources["PerushContentFontSize"] = factor * 16;
+#if IOS
+        InvalidateDescendantLayouts(PerekCarousel);
+#endif
     }
+
+#if IOS
+    private static void InvalidateDescendantLayouts(IView root)
+    {
+        if (root is Microsoft.Maui.Controls.VisualElement ve)
+        {
+            ve.InvalidateMeasure();
+        }
+
+        if (root is not IVisualTreeElement treeElement)
+        {
+            return;
+        }
+
+        foreach (var child in treeElement.GetVisualChildren())
+        {
+            if (child is IView view)
+            {
+                InvalidateDescendantLayouts(view);
+            }
+        }
+    }
+#endif
 
     private void ForwardSelectedArticleIdChanged()
     {
