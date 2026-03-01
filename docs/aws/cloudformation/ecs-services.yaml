@@ -241,8 +241,8 @@ Resources:
                   - s3:DeleteObject
                   - s3:ListBucket
                 Resource:
-                  - arn:aws:s3:::bible-on-site-rabbis
-                  - arn:aws:s3:::bible-on-site-rabbis/*
+                  - arn:aws:s3:::bible-on-site-assets
+                  - arn:aws:s3:::bible-on-site-assets/*
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -476,7 +476,7 @@ Resources:
             - Name: S3_REGION
               Value: il-central-1
             - Name: S3_BUCKET
-              Value: bible-on-site-rabbis
+              Value: bible-on-site-assets
           Secrets:
             - Name: DB_URL
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-url"

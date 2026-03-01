@@ -1,8 +1,8 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
+import zlib from "node:zlib";
 import {
 	AuthorizeSecurityGroupIngressCommand,
 	EC2Client,
@@ -531,12 +531,12 @@ async function runSyncFromProd(): Promise<void> {
 			}
 		}
 
-	// S3 sync (optional if buckets are set)
-	if (prodS3Bucket && devS3Bucket) {
-		if (!dryRun && s3Endpoint) {
-			ensureMinioRunning();
-		}
-		if (dryRun) {
+		// S3 sync (optional if buckets are set)
+		if (prodS3Bucket && devS3Bucket) {
+			if (!dryRun && s3Endpoint) {
+				ensureMinioRunning();
+			}
+			if (dryRun) {
 				console.info(
 					`[dry-run] Would ensure bucket s3://${devS3Bucket} exists`,
 				);
@@ -630,8 +630,7 @@ async function runSyncFromProd(): Promise<void> {
 								encoding: "utf-8",
 								env: {
 									...process.env,
-									AWS_ACCESS_KEY_ID:
-										process.env.S3_ACCESS_KEY_ID || "test",
+								AWS_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID || "test",
 									AWS_SECRET_ACCESS_KEY:
 										process.env.S3_SECRET_ACCESS_KEY || "test_1234",
 								},
