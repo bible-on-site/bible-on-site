@@ -103,7 +103,7 @@ jobs:
           unzip -o /tmp/$ARTIFACT_NAME.zip -d /tmp/$ARTIFACT_NAME
 
       - name: Re-upload for current workflow
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
@@ -202,7 +202,7 @@ jobs:
         shell: bash
 
       - name: Upload MSIX artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.set_artifact_name.outputs.artifact_name }}
           path: ${{ env.APP_DIRECTORY }}/.artifacts/*
@@ -299,7 +299,7 @@ jobs:
         run: echo "artifact_name=app-android-v${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
 
       - name: Upload AAB artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.set_artifact_name.outputs.artifact_name }}
           path: ${{ env.APP_DIRECTORY }}/.artifacts/*.aab
@@ -459,7 +459,7 @@ jobs:
         run: echo "artifact_name=app-ios-v${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
 
       - name: Upload IPA artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.set_artifact_name.outputs.artifact_name }}
           path: ${{ env.APP_DIRECTORY }}/.artifacts/*.ipa

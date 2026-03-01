@@ -198,7 +198,7 @@ jobs:
 
       - name: Re-upload API master coverage for current workflow
         if: steps.check_master_coverage_artifacts.outputs.is_api_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
@@ -207,7 +207,7 @@ jobs:
 
       - name: Re-upload App master coverage for current workflow
         if: steps.check_master_coverage_artifacts.outputs.is_app_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
@@ -216,7 +216,7 @@ jobs:
 
       - name: Re-upload Bulletin master coverage for current workflow
         if: steps.check_master_coverage_artifacts.outputs.is_bulletin_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}
@@ -225,7 +225,7 @@ jobs:
 
       - name: Re-upload Website master coverage for current workflow
         if: steps.check_master_coverage_artifacts.outputs.is_website_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
@@ -234,7 +234,7 @@ jobs:
 
       - name: Re-upload perushim data SQL for current workflow
         if: steps.check_master_coverage_artifacts.outputs.is_perushim_data_sql_available == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
@@ -243,7 +243,7 @@ jobs:
 
       - name: Re-upload perushim notes SQLite for current workflow
         if: steps.check_master_coverage_artifacts.outputs.is_perushim_notes_sqlite_available == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
@@ -287,7 +287,7 @@ jobs:
 
       - name: Re-upload LCOV Docker image for current workflow
         if: steps.check_docker_images.outputs.is_lcov_docker_available == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp/${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
@@ -526,7 +526,7 @@ jobs:
           rm -rf ./bootstrap fonts/
 
       - name: Store Lambda ZIP
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BULLETIN_LAMBDA_ZIP_ARTIFACT_NAME }}
           path: ${{ env.BULLETIN_DIRECTORY }}/.release/bulletin-lambda-v${{ steps.get_version.outputs.MODULE_VERSION }}.zip
@@ -582,7 +582,7 @@ jobs:
         run: gzip -c -f ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }} > ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }}.gz
 
       - name: Store Docker Image
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_DOCKER_ARTIFACT_NAME }}
           path: ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
@@ -617,7 +617,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Store Docker Image
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp/lcov-docker-image.tar
@@ -665,7 +665,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Store Docker Image
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }}
           path: /tmp/sefaria-mongo-image.tar
@@ -811,7 +811,7 @@ jobs:
             --threshold-measure count --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 10.00 --threshold-lower-boundary _ \
 
       - name: Store Website Perf HTML Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: website-perf-html-report-${{ github.run_id }}
           path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/perf/html
@@ -819,7 +819,7 @@ jobs:
           overwrite: true
 
       - name: Store Website Perf JUnit Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_PERF_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/perf/junit/perf-results.xml
@@ -890,7 +890,7 @@ jobs:
         run: npm run coverage:unit
 
       - name: Store Website Unit JUnit Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.WEBSITE_DIRECTORY }}/.jest-report/unit-results.xml
@@ -967,7 +967,7 @@ jobs:
         run: npm run coverage:e2e
 
       - name: Store Website E2E HTML Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: website-e2e-html-report-${{ github.run_id }}
           path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/e2e/html
@@ -975,7 +975,7 @@ jobs:
           overwrite: true
 
       - name: Store Website E2E JUnit Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_E2E_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/e2e/junit/e2e-results.xml
@@ -997,7 +997,7 @@ jobs:
 
       - name: Store Coverage Debug Snippets
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: website-coverage-debug-${{ github.run_id }}
           path: ${{ env.WEBSITE_DIRECTORY }}/.coverage/debug
@@ -1006,7 +1006,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Store Website Coverage Report (wf)
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
@@ -1016,7 +1016,7 @@ jobs:
 
       - name: Store Website Coverage Report (master)
         if: ${{ env.IS_MASTER_BRANCH == 'true' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
@@ -1073,7 +1073,7 @@ jobs:
         run: npm run build
 
       - name: Store Admin Unit JUnit Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.ADMIN_DIRECTORY }}/.junit-report/unit-results.xml
@@ -1147,7 +1147,7 @@ jobs:
         run: npm run test:e2e
 
       - name: Store Admin E2E HTML Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: admin-e2e-html-report-${{ github.run_id }}
@@ -1293,7 +1293,7 @@ jobs:
         run: cargo make coverage-merge
 
       - name: Store API Unit JUnit Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.API_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.API_DIRECTORY }}/.junit-report/unit/results.xml
@@ -1301,7 +1301,7 @@ jobs:
           overwrite: true
 
       - name: Store API E2E JUnit Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.API_E2E_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/junit/results.xml
@@ -1324,7 +1324,7 @@ jobs:
           report_type: test_results
 
       - name: Store API E2E HTML Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: api-e2e-html-report-${{ github.run_id }}
           path: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/html
@@ -1332,7 +1332,7 @@ jobs:
           overwrite: true
 
       - name: Store API Coverage Report (wf)
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.API_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.API_COVERAGE_REPORT }}
@@ -1341,7 +1341,7 @@ jobs:
 
       - name: Store API Coverage Report (master)
         if: ${{ env.IS_MASTER_BRANCH == 'true' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.API_COVERAGE_REPORT }}
@@ -1400,7 +1400,7 @@ jobs:
         run: dotnet run --project devops -- CoverageUnit --configuration Release
 
       - name: Store App Unit JUnit Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.APP_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
@@ -1447,7 +1447,7 @@ jobs:
         run: dotnet run --project devops -- CoverageIntegration --configuration Release
 
       - name: Store App Integration JUnit Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.APP_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
@@ -1477,7 +1477,7 @@ jobs:
         run: dotnet run --project devops -- CoverageMerge --configuration Release
 
       - name: Store App Coverage Report (wf)
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.APP_COVERAGE_REPORT }}
@@ -1487,7 +1487,7 @@ jobs:
 
       - name: Store App Coverage Report (master)
         if: ${{ env.IS_MASTER_BRANCH == 'true' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.APP_COVERAGE_REPORT }}
@@ -1621,7 +1621,7 @@ jobs:
 
       - name: Store Bulletin Unit JUnit Report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BULLETIN_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.BULLETIN_DIRECTORY }}/.junit-report/unit/results.xml
@@ -1638,7 +1638,7 @@ jobs:
           report_type: test_results
 
       - name: Store Bulletin Coverage Report (workflow)
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.BULLETIN_COVERAGE_REPORT }}
@@ -1647,7 +1647,7 @@ jobs:
 
       - name: Store Bulletin Coverage Report (master baseline)
         if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.BULLETIN_COVERAGE_REPORT }}
@@ -1715,7 +1715,7 @@ jobs:
         run: cargo make test-unit-junit
 
       - name: Store Data Unit JUnit Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.DATA_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.DATA_DIRECTORY }}/.junit-report/unit/results.xml
@@ -1789,7 +1789,7 @@ jobs:
 
       - name: Store Data Integration JUnit Report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.DATA_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.DATA_DIRECTORY }}/.junit-report/integration/results.xml
@@ -1908,7 +1908,7 @@ jobs:
         run: cargo run --release --manifest-path sefaria/pipelines/perushim-view/Cargo.toml -- --format mysql --output-to-dependant-modules --dump-name "$DUMP_NAME"
 
       - name: Upload Perushim SQL Artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: perushim-data-sql
           path: ${{ env.DATA_DIRECTORY }}/mysql/perushim_data.sql
@@ -1917,7 +1917,7 @@ jobs:
 
       - name: Upload Perushim SQL Artifact (master baseline)
         if: ${{ env.IS_MASTER_BRANCH == 'true' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
           path: ${{ env.DATA_DIRECTORY }}/mysql/perushim_data.sql
@@ -1936,7 +1936,7 @@ jobs:
              "$SQLITE_DIR/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}"
 
       - name: Upload Perushim Notes SQLite Artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_WF }}
           path: ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}
@@ -1945,7 +1945,7 @@ jobs:
 
       - name: Upload Perushim Notes SQLite Artifact (master baseline)
         if: ${{ env.IS_MASTER_BRANCH == 'true' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}
