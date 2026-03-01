@@ -7,104 +7,110 @@
              x:DataType="viewmodels:PreferencesViewModel"
              Title="העדפות"
              FlowDirection="RightToLeft"
-             BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+             BackgroundColor="{AppThemeBinding Light={StaticResource Gray50}, Dark={StaticResource SurfaceDark}}">
 
-    <ScrollView Padding="16">
-        <VerticalStackLayout Spacing="0">
+    <ScrollView Padding="16,12">
+        <VerticalStackLayout Spacing="24">
 
-            <!-- תצוגה -->
-            <Label Text="תצוגה"
-                   FontSize="18"
-                   FontAttributes="Bold"
-                   TextColor="{StaticResource Primary}"
-                   Padding="0,8,0,4"
-                   BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray800}}"/>
-
-            <!-- גודל גופן -->
-            <Border Padding="12,16"
-                    Margin="0,4,0,0"
-                    StrokeShape="RoundRectangle 8"
-                    Stroke="Transparent"
-                    BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
-                <VerticalStackLayout Spacing="12">
-                    <Label Text="גודל גופן"
-                           FontSize="16"/>
-                    <Label Text="וּמָתוֹק הָאוֹר וְטוֹב לַעֵינַיִם לִרְאוֹת אֶת־הַשָּׁמֶשׁ׃"
-                           FontSize="{Binding FontFactor, Converter={StaticResource FontFactorToSizeConverter}}"
-                           LineBreakMode="WordWrap"/>
-                    <Slider Minimum="0.5"
-                            Maximum="2.0"
-                            Value="{Binding FontFactor}"
-                            MinimumTrackColor="{StaticResource Primary}"
-                            MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"/>
-                </VerticalStackLayout>
-            </Border>
-
-            <!-- על הפרק -->
-            <Label Text="על הפרק"
-                   FontSize="18"
-                   FontAttributes="Bold"
-                   TextColor="{StaticResource Primary}"
-                   Padding="0,24,0,4"
-                   Margin="0,8,0,0"
-                   BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray800}}"/>
-
-            <!-- הפרק שיוצג בעת הפעלת היישומון -->
-            <Border Padding="12,16"
-                    Margin="0,4,0,0"
-                    StrokeShape="RoundRectangle 8"
-                    Stroke="Transparent"
-                    BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
-                <VerticalStackLayout Spacing="8">
-                    <Label Text="הפרק שיוצג בעת הפעלת היישומון"
-                           FontSize="16"/>
-                    <HorizontalStackLayout Spacing="8">
-                        <RadioButton x:Name="PerekTodaysRadio"
-                                     Content="הפרק של היום"
-                                     GroupName="PerekToLoad"
-                                     IsChecked="{Binding IsPerekToLoadTodays}"
-                                     CheckedChanged="OnPerekToLoadRadioChanged"/>
-                        <RadioButton x:Name="PerekLastRadio"
-                                     Content="האחרון שלמדתי"
-                                     GroupName="PerekToLoad"
-                                     IsChecked="{Binding IsPerekToLoadLastLearnt}"
-                                     CheckedChanged="OnPerekToLoadRadioChanged"/>
-                    </HorizontalStackLayout>
-                </VerticalStackLayout>
-            </Border>
-
-            <!-- פירושים — shown only when the perushim package is NOT yet installed -->
-            <VerticalStackLayout IsVisible="{Binding ShowPerushimSection}" Spacing="0">
-                <Label Text="פירושים"
-                       FontSize="18"
+            <!-- ═══ תצוגה ═══ -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="תצוגה"
+                       FontSize="14"
                        FontAttributes="Bold"
                        TextColor="{StaticResource Primary}"
-                       Padding="0,24,0,4"
-                       Margin="0,8,0,0"
-                       BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray800}}"/>
+                       Padding="4,0,0,0"/>
 
-                <Border Padding="12,16"
-                        Margin="0,4,0,0"
-                        StrokeShape="RoundRectangle 8"
-                        Stroke="Transparent"
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <VerticalStackLayout Spacing="12">
+                        <Label Text="גודל גופן"
+                               FontSize="16"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                        <Label Text="וּמָתוֹק הָאוֹר וְטוֹב לַעֵינַיִם לִרְאוֹת אֶת־הַשָּׁמֶשׁ׃"
+                               FontSize="{Binding FontFactor, Converter={StaticResource FontFactorToSizeConverter}}"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"
+                               LineBreakMode="WordWrap"/>
+                        <Slider Minimum="0.5"
+                                Maximum="2.0"
+                                Value="{Binding FontFactor}"
+                                MinimumTrackColor="{StaticResource Primary}"
+                                MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+
+            <!-- ═══ על הפרק ═══ -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="על הפרק"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource Primary}"
+                       Padding="4,0,0,0"/>
+
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
                         BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
                     <VerticalStackLayout Spacing="8">
+                        <Label Text="הפרק שיוצג בעת הפעלת היישומון"
+                               FontSize="15"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                        <HorizontalStackLayout Spacing="8">
+                            <RadioButton x:Name="PerekTodaysRadio"
+                                         Content="הפרק של היום"
+                                         GroupName="PerekToLoad"
+                                         IsChecked="{Binding IsPerekToLoadTodays}"
+                                         CheckedChanged="OnPerekToLoadRadioChanged"/>
+                            <RadioButton x:Name="PerekLastRadio"
+                                         Content="האחרון שלמדתי"
+                                         GroupName="PerekToLoad"
+                                         IsChecked="{Binding IsPerekToLoadLastLearnt}"
+                                         CheckedChanged="OnPerekToLoadRadioChanged"/>
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+
+            <!-- ═══ פירושים ═══ -->
+            <VerticalStackLayout IsVisible="{Binding ShowPerushimSection}" Spacing="8">
+                <Label Text="פירושים"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource Primary}"
+                       Padding="4,0,0,0"/>
+
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <VerticalStackLayout Spacing="12">
                         <Label Text="חבילת הפירושים (רש&quot;י, תרגום ועוד)"
-                               FontSize="16"
+                               FontSize="15"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
                                LineBreakMode="WordWrap"/>
                         <Label Text="{Binding PerushimNotesStatusText}"
-                               FontSize="14"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"
+                               FontSize="13"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
                                LineBreakMode="WordWrap"/>
                         <Button Text="להוריד חבילת פירושים"
                                 Command="{Binding DownloadPerushimCommand}"
                                 BackgroundColor="{StaticResource Primary}"
-                                TextColor="White"/>
+                                TextColor="White"
+                                CornerRadius="8"/>
                         <Button Text="ייצוא לוגים לתמיכה"
                                 Command="{Binding ExportPerushimLogsCommand}"
                                 AutomationId="ExportPerushimLogsButton"
-                                BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
-                                TextColor="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray200}}"/>
+                                BackgroundColor="Transparent"
+                                BorderColor="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"
+                                BorderWidth="1"
+                                CornerRadius="8"
+                                TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
+                                FontSize="13"/>
                     </VerticalStackLayout>
                 </Border>
             </VerticalStackLayout>
