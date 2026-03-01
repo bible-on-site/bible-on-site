@@ -9,7 +9,7 @@ import { createServerFn } from "@tanstack/react-start";
 // S3 configuration from environment
 const S3_REGION =
 	process.env.S3_REGION || process.env.AWS_REGION || "il-central-1";
-const S3_BUCKET = process.env.S3_BUCKET || "bible-on-site-rabbis";
+const S3_BUCKET = process.env.S3_BUCKET || "bible-on-site-assets";
 const S3_ENDPOINT = process.env.S3_ENDPOINT; // Optional: for MinIO
 const S3_FORCE_PATH_STYLE = process.env.S3_FORCE_PATH_STYLE === "true"; // Required for MinIO
 const S3_ACCESS_KEY =
