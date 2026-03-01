@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.277",
+	"version": "0.2.278",
 	"private": true,
 	"license": "MIT",
 	"browserslist": [
@@ -44,7 +44,7 @@
 		"node": ">=24.11.1 <24.12.0"
 	},
 	"dependencies": {
-		"@aws-sdk/client-lambda": "3.998.0",
+		"@aws-sdk/client-lambda": "3.1000.0",
 		"@pdf-lib/fontkit": "1.1.1",
 		"autoprefixer": "10.4.27",
 		"flowbite": "4.0.1",
@@ -53,9 +53,9 @@
 		"html-flip-book-react": "0.0.0-alpha.36",
 		"isomorphic-dompurify": "3.0.0",
 		"moment-timezone": "0.6.0",
-		"mysql2": "3.18.1",
+		"mysql2": "3.18.2",
 		"next": "16.1.6",
-		"nuqs": "2.8.8",
+		"nuqs": "2.8.9",
 		"pdf-lib": "1.17.1",
 		"react": "19.2.4",
 		"react-dom": "19.2.4",
@@ -67,13 +67,13 @@
 	"devDependencies": {
 		"@biomejs/biome": "2.4.4",
 		"@playwright/test": "1.58.2",
-		"@swc/core": "1.15.17",
+		"@swc/core": "1.15.18",
 		"@swc/jest": "0.2.39",
 		"@testing-library/dom": "10.4.1",
 		"@testing-library/jest-dom": "6.9.1",
 		"@testing-library/react": "16.3.2",
 		"@types/jest": "30.0.0",
-		"@types/node": "25.3.2",
+		"@types/node": "25.3.3",
 		"@types/react": "19.2.14",
 		"@types/react-dom": "19.2.3",
 		"cross-env": "10.1.0",
