@@ -192,7 +192,7 @@
 	<!-- Plugin.Firebase supports iOS and Android only (not MacCatalyst or Windows) -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<PackageReference Include="Plugin.Firebase.Analytics" Version="4.0.0" />
-		<PackageReference Include="Plugin.Firebase.Core" Version="4.0.0" />
+		<PackageReference Include="Plugin.Firebase.Core" Version="4.1.0" />
 	</ItemGroup>
 
 </Project>
