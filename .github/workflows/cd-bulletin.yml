@@ -56,7 +56,7 @@ jobs:
           mkdir -p "$LAMBDA_ZIP_OUTPUT_DIR"
 
       - name: Restore Lambda ZIP
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.RELEASED_ARTIFACT_NAME }}
           path: ${{ env.LAMBDA_ZIP_OUTPUT_DIR }}

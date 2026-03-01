@@ -35,7 +35,7 @@ jobs:
           ref: ${{ github.event.client_payload.ref }}
 
       - name: Restore Android AAB
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.ANDROID_ARTIFACT_NAME }}
           path: ${{ env.APP_DIRECTORY }}/.artifacts
@@ -107,7 +107,7 @@ jobs:
           ref: ${{ github.event.client_payload.ref }}
 
       - name: Restore Windows MSIX
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.WINDOWS_ARTIFACT_NAME }}
           path: ${{ env.APP_DIRECTORY }}/.artifacts
@@ -192,7 +192,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Restore iOS IPA
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.IOS_ARTIFACT_NAME }}
           path: ${{ env.APP_DIRECTORY }}/.artifacts

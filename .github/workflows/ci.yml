@@ -746,7 +746,7 @@ jobs:
 
       - name: Download perushim SQL master baseline
         if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
           path: ${{ env.DATA_DIRECTORY }}/mysql/perushim-sql-master
@@ -940,7 +940,7 @@ jobs:
       # generate perush pages without DB errors (same pattern as coverage baseline).
       - name: Download perushim SQL master baseline
         if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
           path: ${{ env.DATA_DIRECTORY }}/mysql/perushim-sql-master
@@ -983,7 +983,7 @@ jobs:
           overwrite: true
 
       - name: Restore lcov Docker image
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp
@@ -1280,7 +1280,7 @@ jobs:
           echo "========================="
 
       - name: Restore lcov Docker image
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp
@@ -1465,7 +1465,7 @@ jobs:
 
       # ============ Coverage Merge ============
       - name: Restore lcov Docker image
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp
@@ -1531,7 +1531,7 @@ jobs:
         run: dotnet workload install maui-ios --skip-manifest-update
 
       - name: Restore perushim notes SQLite
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.perushim_data.result != 'skipped' && env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_WF || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.APP_DIRECTORY }}/BibleOnSite/${{ env.PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR }}
@@ -1971,7 +1971,7 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
 
       - name: Restore Website JUnit Reports
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: website-*-junit-report-${{ github.run_id }}
           path: ${{ env.TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY }}
@@ -2167,7 +2167,7 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
 
       - name: Restore Website Coverage Report
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.website_e2e.result != 'skipped' && env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF || env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_DIRECTORY }}
@@ -2182,7 +2182,7 @@ jobs:
           fail_ci_if_error: true
 
       - name: Restore API Coverage Report
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.api_e2e.result != 'skipped' && env.API_COVERAGE_ARTIFACT_NAME_WF || env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.API_MERGED_COVERAGE_DIRECTORY }}
@@ -2197,7 +2197,7 @@ jobs:
           fail_ci_if_error: true
 
       - name: Restore App Coverage Report
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.app_ci.result != 'skipped' && env.APP_COVERAGE_ARTIFACT_NAME_WF || env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.APP_MERGED_COVERAGE_DIRECTORY }}
@@ -2212,7 +2212,7 @@ jobs:
           fail_ci_if_error: true
 
       - name: Restore Bulletin Coverage Report
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.bulletin_ci.result != 'skipped' && env.BULLETIN_COVERAGE_ARTIFACT_NAME_WF || env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.BULLETIN_COVERAGE_DIRECTORY }}
@@ -2227,7 +2227,7 @@ jobs:
           fail_ci_if_error: false
 
       - name: Restore lcov Docker image
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp

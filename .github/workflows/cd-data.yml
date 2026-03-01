@@ -35,7 +35,7 @@ jobs:
         run: npm ci --no-audit
 
       - name: Download Generated Perushim SQL
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: perushim-data-sql
           path: data/mysql
