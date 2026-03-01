@@ -3,9 +3,11 @@ using System.Xml.Linq;
 
 namespace BibleOnSite.Tests.Resources;
 
-public partial class XamlStaticResourceTests
+public class XamlStaticResourceTests
 {
     private static readonly string AppRoot = FindAppRoot();
+
+    private static readonly Regex ResourceRegex = new(@"StaticResource\s+(\w+)\s*\}");
 
     private static string FindAppRoot()
     {
@@ -14,11 +16,15 @@ public partial class XamlStaticResourceTests
         {
             var candidate = Path.Combine(dir, "BibleOnSite");
             if (Directory.Exists(candidate) && File.Exists(Path.Combine(candidate, "BibleOnSite.csproj")))
+            {
                 return candidate;
+            }
 
             var siblingCandidate = Path.Combine(Path.GetDirectoryName(dir)!, "BibleOnSite");
             if (Directory.Exists(siblingCandidate) && File.Exists(Path.Combine(siblingCandidate, "BibleOnSite.csproj")))
+            {
                 return siblingCandidate;
+            }
 
             dir = Path.GetDirectoryName(dir);
         }
@@ -42,13 +48,19 @@ public partial class XamlStaticResourceTests
 
         foreach (var file in resourceFiles)
         {
-            if (!File.Exists(file)) continue;
+            if (!File.Exists(file))
+            {
+                continue;
+            }
+
             var doc = XDocument.Load(file);
             foreach (var el in doc.Descendants())
             {
                 var keyAttr = el.Attribute(xNs + "Key");
                 if (keyAttr != null)
+                {
                     keys.Add(keyAttr.Value);
+                }
             }
         }
 
@@ -60,9 +72,6 @@ public partial class XamlStaticResourceTests
         return Directory.EnumerateFiles(AppRoot, "*.xaml", SearchOption.AllDirectories);
     }
 
-    [GeneratedRegex(@"StaticResource\s+(\w+)\s*\}")]
-    private static partial Regex StaticResourceRegex();
-
     private static HashSet<string> CollectLocalKeys(string filePath)
     {
         var keys = new HashSet<string>(StringComparer.Ordinal);
@@ -72,7 +81,9 @@ public partial class XamlStaticResourceTests
         {
             var keyAttr = el.Attribute(xNs + "Key");
             if (keyAttr != null)
+            {
                 keys.Add(keyAttr.Value);
+            }
         }
         return keys;
     }
@@ -80,7 +91,6 @@ public partial class XamlStaticResourceTests
     private static List<(string File, int Line, string Key)> FindUnresolvedReferences()
     {
         var globalKeys = CollectDefinedKeys();
-        var regex = StaticResourceRegex();
         var unresolved = new List<(string File, int Line, string Key)>();
 
         foreach (var file in GetAllXamlFiles())
@@ -89,11 +99,13 @@ public partial class XamlStaticResourceTests
             var lines = File.ReadAllLines(file);
             for (var i = 0; i < lines.Length; i++)
             {
-                foreach (System.Text.RegularExpressions.Match match in regex.Matches(lines[i]))
+                foreach (System.Text.RegularExpressions.Match match in ResourceRegex.Matches(lines[i]))
                 {
                     var key = match.Groups[1].Value;
                     if (!globalKeys.Contains(key) && !localKeys.Contains(key))
+                    {
                         unresolved.Add((File: Path.GetRelativePath(AppRoot, file), Line: i + 1, Key: key));
+                    }
                 }
             }
         }
@@ -122,7 +134,9 @@ public partial class XamlStaticResourceTests
         {
             var key = $"Gray{n}";
             if (!definedKeys.Contains(key))
+            {
                 missingGrays.Add(key);
+            }
         }
 
         missingGrays.Should().BeEmpty(
