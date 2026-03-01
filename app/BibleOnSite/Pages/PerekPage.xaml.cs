@@ -131,9 +131,9 @@ public partial class PerekPage : ContentPage
 #if IOS
     private static void InvalidateDescendantLayouts(IView root)
     {
-        if (root is Label or Controls.HtmlView)
+        if (root is Microsoft.Maui.Controls.VisualElement ve)
         {
-            ((VisualElement)root).InvalidateMeasure();
+            ve.InvalidateMeasure();
         }
 
         if (root is not IVisualTreeElement treeElement)
