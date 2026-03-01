@@ -69,7 +69,7 @@ jobs:
           echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
 
       - name: Restore Docker Image
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.RELEASED_ARTIFACT_NAME }}
           path: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
