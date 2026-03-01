@@ -267,7 +267,7 @@ jobs:
         run: dotnet workload install maui-android --skip-manifest-update
 
       - name: Restore perushim notes SQLite for AAB asset pack
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.perushim_notes_sqlite_artifact || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.APP_DIRECTORY }}/BibleOnSite/${{ env.PERUSHIM_NOTES_ANDROID_ASSET_RELDIR }}
@@ -439,7 +439,7 @@ jobs:
           echo "PROFILE_UUID=$PROFILE_UUID" >> $GITHUB_ENV
 
       - name: Restore perushim notes SQLite for iOS ODR asset catalog
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.perushim_notes_sqlite_artifact || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.APP_DIRECTORY }}/BibleOnSite/${{ env.PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR }}
