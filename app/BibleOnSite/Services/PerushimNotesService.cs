@@ -98,6 +98,41 @@ public class PerushimNotesService
                 lines.Add($"Local DB build_timestamp error: {ex.Message}");
             }
         }
+
+#if IOS || MACCATALYST
+        try
+        {
+            var nameNoExt = Path.GetFileNameWithoutExtension(NotesDbName);
+            var ext = Path.GetExtension(NotesDbName).TrimStart('.');
+            var bundleRes = Foundation.NSBundle.MainBundle.PathForResource(nameNoExt, ext);
+            lines.Add($"NSBundle.PathForResource: {(bundleRes ?? "(null)")}");
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"NSBundle.PathForResource error: {ex.Message}");
+        }
+
+        try
+        {
+            using var odrReq = new Foundation.NSBundleResourceRequest(
+                new Foundation.NSSet<Foundation.NSString>(new Foundation.NSString(PerushimNotesPackName)));
+            var available = await odrReq.ConditionallyBeginAccessingResourcesAsync();
+            lines.Add($"ODR ConditionallyBeginAccessing: {available}");
+            if (available)
+            {
+                var nameNoExt2 = Path.GetFileNameWithoutExtension(NotesDbName);
+                var ext2 = Path.GetExtension(NotesDbName).TrimStart('.');
+                var odrPath = odrReq.Bundle.PathForResource(nameNoExt2, ext2);
+                lines.Add($"ODR Bundle.PathForResource: {(odrPath ?? "(null)")}");
+                odrReq.EndAccessingResources();
+            }
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"ODR probe error: {ex.Message}");
+        }
+#endif
+
         return string.Join(Environment.NewLine, lines);
     }
 

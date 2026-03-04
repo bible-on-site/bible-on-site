@@ -47,11 +47,11 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.0.44</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>5.0.46</ApplicationDisplayVersion>
 		<!-- Windows MSIX requires each version component ≤65535, so we use a separate incrementing value -->
 		<!-- Android versionCode can be large, continuing from Play Store's 40000017 -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000044</ApplicationVersion>
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">44</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000046</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">46</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<!-- WindowsPackageType None = unpackaged (fixes "Class not registered" when running from CLI). MSIX for Store: /p:WindowsPackageType=MSIX -->
@@ -164,12 +164,16 @@
 		<Exec Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz' > '$(MSBuildProjectDirectory)/Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset/sefaria-dump-5784-sivan-4.perushim_notes.sqlite'" />
 	</Target>
 
-	<!-- iOS ODR: include PerushimNotes.xcassets so actool compiles the catalog with ODR tags.
-	     Using ImageAsset (not BundleResource) ensures the dataset is processed through actool
-	     and the on-demand-resource-tags from Contents.json are honoured — BundleResource copies
-	     files raw, embedding the ~100 MB SQLite in the main bundle and causing OOM on launch. -->
-	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
-		<ImageAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\**\*" />
+	<!-- iOS ODR: include the perushim notes SQLite as a BundleResource with ResourceTags.
+	     The SDK's CreateAssetPackManifest task reads ResourceTags, moves the file from the main
+	     bundle into an ODR asset pack, and packages it alongside the IPA for App Store/TestFlight.
+	     At runtime, NSBundleResourceRequest downloads the tag and the file becomes accessible
+	     via NSBundle.MainBundle.PathForResource(). -->
+	<ItemGroup Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')">
+		<BundleResource
+			Include="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
+			LogicalName="sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
+			ResourceTags="perushim_notes" />
 	</ItemGroup>
 
 	<!-- Android Debug fallback: bundle perushim notes in app package so they work without PAD (APK installs). -->
