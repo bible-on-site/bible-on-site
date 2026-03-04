@@ -3,7 +3,7 @@
   position: fixed;
   bottom: 24px;
   right: 24px;
-  z-index: 1100;
+  z-index: 10100;
   width: 52px;
   height: 52px;
   border-radius: 50%;
@@ -29,7 +29,7 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  z-index: 1200;
+  z-index: 10200;
   background: rgba(0, 0, 0, 0.3);
   animation: fadeIn 0.15s ease-out;
 }
@@ -39,7 +39,7 @@
   position: fixed;
   bottom: 0;
   right: 0;
-  z-index: 1300;
+  z-index: 10300;
   width: 380px;
   max-width: 100vw;
   height: 100dvh;
@@ -253,6 +253,12 @@
   align-items: center;
   gap: 4px;
   transition: color 0.15s;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: inherit;
+  font-family: inherit;
 }
 
 .citation::before {

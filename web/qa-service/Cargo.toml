@@ -1,6 +1,6 @@
 [package]
 name = "bible-on-site-qa-service"
-description = "Tanah RAG QA service (Ralbag + articles MVP)"
+description = "Tanah RAG QA service — embedding retrieval + extractive QA"
 license-file = "../../license"
 repository = "https://github.com/bible-on-site/bible-on-site"
 publish = false
@@ -17,6 +17,9 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dotenvy = "0.15"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-native-tls", "mysql", "derive"] }
+ort = "2.0.0-rc.11"
+tokenizers = { version = "0.21", default-features = false, features = ["fancy-regex"] }
+ndarray = "0.17"
 
 [[bin]]
 name = "qa-service"

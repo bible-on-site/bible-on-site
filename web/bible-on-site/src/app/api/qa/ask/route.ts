@@ -4,7 +4,7 @@ const QA_SERVICE_URL =
 	process.env.QA_SERVICE_URL ?? "http://127.0.0.1:3004";
 
 /**
- * POST /api/qa/ask — proxy to QA service (Malbim + Or HaChaim + articles RAG).
+ * POST /api/qa/ask — proxy to QA service (all perushim + articles RAG).
  * Gracefully returns noAnswer when QA service is unavailable.
  */
 export async function POST(request: Request): Promise<NextResponse> {

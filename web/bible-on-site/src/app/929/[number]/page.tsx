@@ -147,15 +147,16 @@ export default async function Perek({
 					})}
 				</article>
 
-				{/* QA widget - edge-to-edge RAG over Ralbag + articles */}
-				<QaWidget perekId={perekId} seferPerekIds={perekIds} />
-
 				{/* Perushim section - commentaries carousel */}
 				<PerushimSection perekId={perekId} perushim={perushim} />
 
 				{/* Articles section - fetched directly from database for lower latency */}
 				<ArticlesSection articles={articles} />
 			</div>
+
+			{/* QaWidget must be outside perekContainer (z-index:6 stacking context)
+			    so its fixed-position elements can layer above the navbar (z-index:10000). */}
+			<QaWidget perekId={perekId} seferPerekIds={perekIds} />
 		</>
 	);
 }
