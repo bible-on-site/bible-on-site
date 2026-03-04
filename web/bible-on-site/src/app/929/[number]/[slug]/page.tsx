@@ -389,6 +389,7 @@ export default async function ArticlePage({
 						{perushDetail.notes.map((note) => (
 							<div
 								key={`${note.pasuk}-${note.noteIdx}`}
+								id={`note-${toLetters(note.pasuk)}-${note.noteIdx + 1}`}
 								className={styles.note}
 							>
 								<span className={styles.notePasuk}>

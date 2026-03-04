@@ -1,4 +1,4 @@
-//! INGEST: Load perushim (Malbim + Or HaChaim) and articles from MySQL into unified chunks.
+//! INGEST: Load all perushim and articles from MySQL into unified chunks.
 
 use anyhow::Result;
 use serde::Serialize;
@@ -19,17 +19,10 @@ pub struct Chunk {
     pub article_name: Option<String>,
 }
 
-// ─── Perushim (Malbim + Or HaChaim) ────────────────────────────────────────
-
-const PERUSH_PARSHAN_NAMES: &[&str] = &["מלבי\"ם", "חיים בן עטר"];
+// ─── Perushim (all parshanim) ───────────────────────────────────────────────
 
 pub async fn load_perush_chunks(pool: &MySqlPool) -> Result<Vec<Chunk>> {
-    let placeholders = PERUSH_PARSHAN_NAMES
-        .iter()
-        .map(|_| "?")
-        .collect::<Vec<_>>()
-        .join(",");
-    let sql = format!(
+    let rows: Vec<PerushRow> = sqlx::query_as::<_, PerushRow>(
         r#"
         SELECT
             n.perush_id, p.name AS perush_name, a.name AS author,
@@ -37,16 +30,11 @@ pub async fn load_perush_chunks(pool: &MySqlPool) -> Result<Vec<Chunk>> {
         FROM note n
         JOIN perush p ON p.id = n.perush_id
         JOIN parshan a ON a.id = p.parshan_id
-        WHERE a.name IN ({placeholders})
         ORDER BY n.perek_id, n.pasuk, n.note_idx
-        "#
-    );
-
-    let mut q = sqlx::query_as::<_, PerushRow>(&sql);
-    for name in PERUSH_PARSHAN_NAMES {
-        q = q.bind(*name);
-    }
-    let rows: Vec<PerushRow> = q.fetch_all(pool).await?;
+        "#,
+    )
+    .fetch_all(pool)
+    .await?;
 
     Ok(rows
         .into_iter()

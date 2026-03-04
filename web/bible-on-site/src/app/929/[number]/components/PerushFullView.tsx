@@ -59,16 +59,17 @@ export function PerushFullView({
 				{Array.from(grouped.entries()).map(([pasuk, notes]) => (
 					<div key={pasuk} className={styles.pasukGroup}>
 						<div className={styles.pasukLabel}>פסוק {toLetters(pasuk)}</div>
-						{notes.map((note) => (
-							<div
-								key={`${note.pasuk}-${note.noteIdx}`}
-								className={styles.noteContent}
-								// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
-								dangerouslySetInnerHTML={{
-									__html: DOMPurify.sanitize(note.noteContent),
-								}}
-							/>
-						))}
+					{notes.map((note) => (
+						<div
+							key={`${note.pasuk}-${note.noteIdx}`}
+							id={`book-note-${toLetters(note.pasuk)}-${note.noteIdx + 1}`}
+							className={styles.noteContent}
+							// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
+							dangerouslySetInnerHTML={{
+								__html: DOMPurify.sanitize(note.noteContent),
+							}}
+						/>
+					))}
 					</div>
 				))}
 			</div>

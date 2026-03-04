@@ -1,12 +1,14 @@
-//! POST /ask — RAG over perushim + articles (keyword retrieval, Phase 0).
+//! POST /ask — full RAG pipeline: Embed → Retrieve → Reason → Validate → Surface.
 
 use actix_web::web::{Data, Json};
+use ndarray::Array2;
 use serde::Deserialize;
 use tracing::{debug, info};
 
+use crate::models::embedder::Embedder;
+use crate::models::qa_model::QaModel;
 use crate::pipeline::ingest::Chunk;
-use crate::pipeline::retrieve;
-use crate::pipeline::surface::{chunk_to_answer, AskResponse};
+use crate::pipeline::{reason, retrieve, surface, validate};
 
 #[derive(Debug, Deserialize)]
 pub struct AskBody {
@@ -15,36 +17,67 @@ pub struct AskBody {
     pub perek_ids: Option<Vec<i32>>,
 }
 
+const MAX_RETRIEVE: usize = 16;
 const MAX_ANSWERS: usize = 8;
+const MIN_RETRIEVAL_SCORE: f32 = 0.3;
 
-pub async fn ask(chunks: Data<Vec<Chunk>>, body: Json<AskBody>) -> actix_web::HttpResponse {
+pub async fn ask(
+    chunks: Data<Vec<Chunk>>,
+    embeddings: Data<Array2<f32>>,
+    embedder: Data<Embedder>,
+    qa_model: Data<QaModel>,
+    body: Json<AskBody>,
+) -> actix_web::HttpResponse {
     let q = body.question.trim();
-    info!(
-        question = q,
-        perek_ids = ?body.perek_ids,
-        total_chunks = chunks.len(),
-        "ASK"
-    );
+    info!(question = q, perek_ids = ?body.perek_ids, total_chunks = chunks.len(), "ASK");
 
-    let ids = body.perek_ids.as_deref();
-    let perek_chunks = match ids {
-        Some(ids) => chunks.iter().filter(|c| ids.contains(&c.perek_id)).count(),
-        None => chunks.len(),
+    // 1. Embed the query
+    let query_vec = match embedder.embed_query(q) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to embed query");
+            return actix_web::HttpResponse::InternalServerError()
+                .json(serde_json::json!({"error": "embedding failed"}));
+        }
     };
-    debug!(perek_chunks, "chunks after perekIds filter");
 
-    let results = retrieve::retrieve(chunks.get_ref(), ids, q, MAX_ANSWERS);
-    debug!(matched = results.len(), "retrieve results");
-
-    let answers: Vec<_> = results
-        .iter()
-        .map(|sc| chunk_to_answer(&sc.chunk, sc.score))
-        .collect();
-    let no_answer = answers.is_empty();
-    info!(
-        answers = answers.len(),
-        no_answer,
-        "ASK response"
+    // 2. RETRIEVE: cosine similarity
+    let ids = body.perek_ids.as_deref();
+    let retrieved = retrieve::retrieve(
+        chunks.get_ref(),
+        embeddings.get_ref(),
+        &query_vec,
+        ids,
+        MAX_RETRIEVE,
+        MIN_RETRIEVAL_SCORE,
     );
-    actix_web::HttpResponse::Ok().json(AskResponse { answers, no_answer })
+    if !retrieved.is_empty() {
+        let top_scores: Vec<f64> = retrieved.iter().take(5).map(|sc| sc.score).collect();
+        info!(count = retrieved.len(), ?top_scores, "RETRIEVE results");
+    } else {
+        info!("RETRIEVE: 0 results");
+    }
+
+    if retrieved.is_empty() {
+        return actix_web::HttpResponse::Ok()
+            .json(surface::AskResponse { answers: vec![], no_answer: true });
+    }
+
+    // 3. REASON: extractive QA on each retrieved chunk
+    let chunk_scores: Vec<(Chunk, f64)> = retrieved
+        .iter()
+        .map(|sc| (sc.chunk.clone(), sc.score))
+        .collect();
+    let reasoned = reason::reason(qa_model.get_ref(), q, &chunk_scores);
+    info!(reasoned = reasoned.len(), "REASON results");
+
+    // 4. VALIDATE: confidence threshold + dedup
+    let validated = validate::validate(reasoned, MAX_ANSWERS);
+    debug!(validated = validated.len(), "VALIDATE results");
+
+    // 5. SURFACE: format response
+    let response = surface::surface(&validated);
+    info!(answers = response.answers.len(), no_answer = response.no_answer, "ASK response");
+
+    actix_web::HttpResponse::Ok().json(response)
 }

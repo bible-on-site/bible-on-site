@@ -1,5 +1,6 @@
 "use client";
 
+import { toLetters } from "gematry";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Article } from "@/lib/articles";
 import type { PerushDetail, PerushSummary } from "@/lib/perushim";
@@ -17,6 +18,14 @@ interface BlankPageContentProps {
 	hebrewDateStr: string;
 	/** When set, auto-expand the article (numeric) or perush (name) on mount */
 	initialSlug?: string;
+	/** Dynamically expand a perush (by name) or article (by numeric id string) — set by QA navigation */
+	expandSlug?: string;
+	/** Change token to re-trigger expansion even with the same slug */
+	expandToken?: number;
+	/** Target note pasuk for scrolling after perush expansion */
+	expandNotePasuk?: number;
+	/** Target note index for scrolling after perush expansion */
+	expandNoteIdx?: number;
 }
 
 /**
@@ -29,6 +38,10 @@ export function BlankPageContent({
 	perekId = 0,
 	hebrewDateStr,
 	initialSlug,
+	expandSlug,
+	expandToken,
+	expandNotePasuk,
+	expandNoteIdx,
 }: BlankPageContentProps) {
 	const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
 	const [articleLoading, setArticleLoading] = useState(false);
@@ -86,6 +99,42 @@ export function BlankPageContent({
 			}
 		}
 	}, [initialSlug, articles, perushim, handleArticleClick, handlePerushClick]);
+
+	// Dynamically expand a perush or article when QA navigation sets expandSlug
+	const lastExpandToken = useRef<number>(0);
+	const pendingScrollNote = useRef<string | null>(null);
+
+	useEffect(() => {
+		if (!expandSlug || expandToken == null || expandToken === lastExpandToken.current) return;
+		lastExpandToken.current = expandToken;
+
+		// Compute the scroll target id before triggering expansion
+		if (expandNotePasuk != null && expandNoteIdx != null) {
+			pendingScrollNote.current = `book-note-${toLetters(expandNotePasuk)}-${expandNoteIdx + 1}`;
+		} else {
+			pendingScrollNote.current = null;
+		}
+
+		const numericId = Number.parseInt(expandSlug, 10);
+		if (!Number.isNaN(numericId)) {
+			const article = articles.find((a) => a.id === numericId);
+			if (article) handleArticleClick(article);
+		} else {
+			const perush = perushim.find((p) => p.name === expandSlug);
+			if (perush) handlePerushClick(perush);
+		}
+	}, [expandSlug, expandToken, expandNotePasuk, expandNoteIdx, articles, perushim, handleArticleClick, handlePerushClick]);
+
+	// After a perush expands, scroll to the target note if one is pending
+	useEffect(() => {
+		if (!selectedPerush || !pendingScrollNote.current) return;
+		const noteId = pendingScrollNote.current;
+		pendingScrollNote.current = null;
+		requestAnimationFrame(() => {
+			const el = document.getElementById(noteId);
+			el?.scrollIntoView({ behavior: "smooth", block: "center" });
+		});
+	}, [selectedPerush]);
 
 	const handleArticleBack = useCallback(() => {
 		setSelectedArticle(null);

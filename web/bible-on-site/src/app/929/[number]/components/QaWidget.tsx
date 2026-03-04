@@ -1,7 +1,9 @@
 "use client";
 
+import { toLetters } from "gematry";
 import Link from "next/link";
 import { useState, useCallback, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import styles from "./qa-widget.module.css";
 
 type SearchScope = "perek" | "sefer" | "all";
@@ -13,6 +15,8 @@ interface QaAnswerSource {
 	perekId: number;
 	articleId?: number;
 	perushSlug?: string;
+	pasuk?: number;
+	noteIdx?: number;
 }
 
 interface QaAnswer {
@@ -36,27 +40,39 @@ interface QaWidgetProps {
 	seferPerekIds: number[];
 }
 
+function isBookView(): boolean {
+	return document.documentElement.dataset.bookView != null;
+}
+
 function buildCitationHref(source: QaAnswerSource): string {
 	if (source.type === "article" && source.articleId != null) {
 		return `/929/${source.perekId}/${source.articleId}`;
 	}
 	if (source.type === "perush" && source.perushSlug) {
-		return `/929/${source.perekId}/${encodeURIComponent(source.perushSlug)}`;
+		const base = `/929/${source.perekId}/${encodeURIComponent(source.perushSlug)}`;
+		if (source.pasuk != null && source.noteIdx != null) {
+			return `${base}#note-${toLetters(source.pasuk)}-${source.noteIdx + 1}`;
+		}
+		return base;
 	}
 	return `/929/${source.perekId}`;
 }
 
 function citationLabel(source: QaAnswerSource): string {
 	const kind = SOURCE_LABELS[source.type] ?? source.type;
+	if (source.type === "perush" && source.pasuk != null) {
+		return `${kind}: ${source.name} — פסוק ${toLetters(source.pasuk)}`;
+	}
 	return `${kind}: ${source.name} — ${source.author}`;
 }
 
-export function QaWidget({ perekId, seferPerekIds }: QaWidgetProps) {
+function QaWidgetContent({ perekId, seferPerekIds }: QaWidgetProps) {
 	const [open, setOpen] = useState(false);
 	const [question, setQuestion] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [response, setResponse] = useState<QaAskResponse | null>(null);
 	const [scope, setScope] = useState<SearchScope>("perek");
+	const [inBookView, setInBookView] = useState(false);
 	const panelRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
@@ -67,6 +83,24 @@ export function QaWidget({ perekId, seferPerekIds }: QaWidgetProps) {
 		document.addEventListener("keydown", onKey);
 		return () => document.removeEventListener("keydown", onKey);
 	}, [open]);
+
+	useEffect(() => {
+		const check = () => setInBookView(isBookView());
+		check();
+		const obs = new MutationObserver(check);
+		obs.observe(document.documentElement, {
+			attributes: true,
+			attributeFilter: ["data-book-view"],
+		});
+		return () => obs.disconnect();
+	}, []);
+
+	// Listen for toolbar toggle event from the Sefer toolbar button
+	useEffect(() => {
+		const handler = () => setOpen((v) => !v);
+		document.addEventListener("qa-widget-toggle", handler);
+		return () => document.removeEventListener("qa-widget-toggle", handler);
+	}, []);
 
 	const handleAsk = useCallback(async () => {
 		const q = question.trim();
@@ -96,21 +130,35 @@ export function QaWidget({ perekId, seferPerekIds }: QaWidgetProps) {
 		}
 	}, [question, perekId, seferPerekIds, scope]);
 
+	const handleCitationClick = useCallback(
+		(source: QaAnswerSource) => {
+			if (inBookView) {
+				document.dispatchEvent(
+					new CustomEvent("qa-navigate-sefer", { detail: source }),
+				);
+				setOpen(false);
+			}
+		},
+		[inBookView],
+	);
+
 	const hasResults =
 		response && !response.noAnswer && response.answers.length > 0;
 
 	return (
 		<>
-			{/* Floating action button */}
-			<button
-				type="button"
-				className={styles.fab}
-				onClick={() => setOpen((v) => !v)}
-				aria-label={open ? "סגור חיפוש" : "שאלה על הפרק"}
-				data-flipbook-no-flip
-			>
-				{open ? "✕" : "?"}
-			</button>
+			{/* Floating action button — hidden in sefer view (toolbar button used instead) */}
+			{!inBookView && (
+				<button
+					type="button"
+					className={styles.fab}
+					onClick={() => setOpen((v) => !v)}
+					aria-label={open ? "סגור חיפוש" : "שאלה על הפרק"}
+					data-flipbook-no-flip
+				>
+					{open ? "✕" : "?"}
+				</button>
+			)}
 
 			{/* Backdrop */}
 			{open && (
@@ -133,7 +181,7 @@ export function QaWidget({ perekId, seferPerekIds }: QaWidgetProps) {
 					<header className={styles.panelHeader}>
 						<h2 className={styles.panelTitle}>שאלה על הפרק</h2>
 						<p className={styles.panelSubtitle}>
-							חיפוש במפרשים (מלבי&quot;ם, אור החיים) ובמאמרים
+							חיפוש במפרשים ובמאמרים
 						</p>
 					</header>
 
@@ -201,20 +249,40 @@ export function QaWidget({ perekId, seferPerekIds }: QaWidgetProps) {
 											<p className={styles.text}>
 												{a.text}
 											</p>
-											<footer className={styles.cardFooter}>
-												<Link
-													href={buildCitationHref(
-														a.source,
-													)}
-													className={
-														styles.citation
-													}
-													onClick={() =>
-														setOpen(false)
-													}
-												>
-													{citationLabel(a.source)}
-												</Link>
+											<footer
+												className={styles.cardFooter}
+											>
+												{inBookView ? (
+													<button
+														type="button"
+														className={
+															styles.citation
+														}
+														onClick={() =>
+															handleCitationClick(
+																a.source,
+															)
+														}
+													>
+														{citationLabel(
+															a.source,
+														)}
+													</button>
+												) : (
+													<Link
+														href={buildCitationHref(
+															a.source,
+														)}
+														target="_blank"
+														className={
+															styles.citation
+														}
+													>
+														{citationLabel(
+															a.source,
+														)}
+													</Link>
+												)}
 												<span
 													className={
 														styles.confidence
@@ -233,4 +301,15 @@ export function QaWidget({ perekId, seferPerekIds }: QaWidgetProps) {
 			)}
 		</>
 	);
+}
+
+/**
+ * Renders the QA widget via a React portal on document.body so that
+ * fixed-position elements escape all ancestor stacking contexts.
+ */
+export function QaWidget(props: QaWidgetProps) {
+	const [mounted, setMounted] = useState(false);
+	useEffect(() => setMounted(true), []);
+	if (!mounted) return null;
+	return createPortal(<QaWidgetContent {...props} />, document.body);
 }

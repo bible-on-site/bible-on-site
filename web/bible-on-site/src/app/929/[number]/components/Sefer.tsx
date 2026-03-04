@@ -22,7 +22,7 @@ import {
 	Toolbar,
 } from "html-flip-book-react/toolbar";
 import dynamic from "next/dynamic";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { downloadPageRanges, downloadSefer } from "@/app/929/[number]/actions";
 import { BookshelfModal } from "@/app/components/Bookshelf";
 import { isQriDifferentThanKtiv } from "@/data/db/tanah-view-types";
@@ -101,6 +101,49 @@ const Sefer = (props: {
 
 	const openBookshelf = useCallback(() => setIsBookshelfOpen(true), []);
 	const closeBookshelf = useCallback(() => setIsBookshelfOpen(false), []);
+
+	const toggleQa = useCallback(() => {
+		document.dispatchEvent(new Event("qa-widget-toggle"));
+	}, []);
+
+	const [qaExpandTarget, setQaExpandTarget] = useState<{
+		perekId: number;
+		slug: string;
+		pasuk?: number;
+		noteIdx?: number;
+		token: number;
+	} | null>(null);
+
+	useEffect(() => {
+		const handler = (e: Event) => {
+			const source = (e as CustomEvent).detail;
+			if (!source?.perekId || !perekIds) return;
+			const idx = perekIds.indexOf(source.perekId);
+			if (idx < 0) return;
+			const blankPageIndex = idx * 2 + CONTENT_OFFSET + 1;
+			flipBookRef.current?.jumpToPage(blankPageIndex);
+
+			const slug =
+				source.type === "article" && source.articleId != null
+					? String(source.articleId)
+					: source.perushSlug ?? "";
+			setQaExpandTarget({
+				perekId: source.perekId,
+				slug,
+				pasuk: source.pasuk,
+				noteIdx: source.noteIdx,
+				token: Date.now(),
+			});
+
+			// Update URL to reflect the navigated perek
+			const targetId = perekIds[idx];
+			if (targetId != null) {
+				window.history.pushState(null, "", `/929/${targetId}?book`);
+			}
+		};
+		document.addEventListener("qa-navigate-sefer", handler);
+		return () => document.removeEventListener("qa-navigate-sefer", handler);
+	}, [perekIds]);
 
 	const perekHeaders = useMemo(
 		() => perakim.map((p) => p.header),
@@ -236,6 +279,26 @@ const Sefer = (props: {
 			perekId={perekIds?.[perekIdx] ?? 0}
 			hebrewDateStr={hebrewDateStr}
 			initialSlug={perekIds?.[perekIdx] === perekObj.perekId ? initialSlug : undefined}
+			expandSlug={
+				qaExpandTarget && qaExpandTarget.perekId === (perekIds?.[perekIdx] ?? 0)
+					? qaExpandTarget.slug
+					: undefined
+			}
+			expandToken={
+				qaExpandTarget && qaExpandTarget.perekId === (perekIds?.[perekIdx] ?? 0)
+					? qaExpandTarget.token
+					: undefined
+			}
+			expandNotePasuk={
+				qaExpandTarget && qaExpandTarget.perekId === (perekIds?.[perekIdx] ?? 0)
+					? qaExpandTarget.pasuk
+					: undefined
+			}
+			expandNoteIdx={
+				qaExpandTarget && qaExpandTarget.perekId === (perekIds?.[perekIdx] ?? 0)
+					? qaExpandTarget.noteIdx
+					: undefined
+			}
 		/>
 	</React.Fragment>,
 	]);
@@ -319,6 +382,9 @@ const Sefer = (props: {
 				</div>
 				<div className="flipbook-toolbar-end">
 					<DownloadDropdown ariaLabel="הורדה" />
+					<ActionButton onClick={toggleQa} ariaLabel="שאלה על הפרק">
+						<span style={{ fontSize: 16, fontWeight: 700, lineHeight: 1 }}>?</span>
+					</ActionButton>
 				</div>
 			</Toolbar>
 			</div>
