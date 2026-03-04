@@ -28,51 +28,156 @@
 					"in": "$$author.text"
 				}
 			},
-			"else": {
-				"$switch": {
-					"branches": [
-						{
-							"case": { "$eq": ["$title", "Maskil LeDavid"] },
-							"then": ["דוד פארדו"]
+		"else": {
+			"$switch": {
+				"branches": [
+					{
+						"case": { "$eq": ["$title", "Maskil LeDavid"] },
+						"then": ["דוד פארדו"]
+					},
+					{
+						"case": {
+							"$regexMatch": {
+								"input": "$title",
+								"regex": "Targum Jonathan"
+							}
 						},
-						{
-							"case": {
-								"$regexMatch": {
-									"input": "$title",
-									"regex": "Targum Jonathan"
-								}
-							},
-							"then": ["יונתן בן עוזיאל"]
-						},
-						{
-							"case": {
-								"$or": [
-									{
-										"$regexMatch": {
-											"input": "$title",
-											"regex": "Aramaic Targum"
-										}
-									},
-									{
-										"$regexMatch": {
-											"input": "$title",
-											"regex": "Targum Jerusalem"
-										}
-									},
-									{
-										"$regexMatch": {
-											"input": "$title",
-											"regex": "Targum of"
-										}
+						"then": ["יונתן בן עוזיאל"]
+					},
+					{
+						"case": {
+							"$or": [
+								{
+									"$regexMatch": {
+										"input": "$title",
+										"regex": "Aramaic Targum"
 									}
-								]
-							},
-							"then": ["רבותינו זכרונם לברכה"]
-						}
-					],
-					"default": ["לא ידוע"]
-				}
+								},
+								{
+									"$regexMatch": {
+										"input": "$title",
+										"regex": "Targum Jerusalem"
+									}
+								},
+								{
+									"$regexMatch": {
+										"input": "$title",
+										"regex": "Targum of"
+									}
+								}
+							]
+						},
+						"then": ["רבותינו זכרונם לברכה"]
+					},
+					{
+						"case": {
+							"$or": [
+								{
+									"$regexMatch": {
+										"input": "$title",
+										"regex": "Chomat Anakh"
+									}
+								},
+								{
+									"$regexMatch": {
+										"input": "$title",
+										"regex": "Nachal Kedumim"
+									}
+								},
+								{
+									"$regexMatch": {
+										"input": "$title",
+										"regex": "Nachal Eshkol"
+									}
+								}
+							]
+						},
+						"then": ["ר' חיים יוסף דוד אזולאי"]
+					},
+					{
+						"case": { "$eq": ["$title", "Tze'enah Ure'enah"] },
+						"then": ["ר' יעקב בן יצחק אשכנזי"]
+					},
+					{
+						"case": { "$eq": ["$title", "Levush HaOrah"] },
+						"then": ["ר' מרדכי יפה"]
+					},
+					{
+						"case": { "$eq": ["$title", "Netinah LaGer"] },
+						"then": ["הרב נתן מרקוס אדלר"]
+					},
+					{
+						"case": {
+							"$regexMatch": {
+								"input": "$title",
+								"regex": "Ohel Ya'akov"
+							}
+						},
+						"then": ["ר' יעקב קרנץ"]
+					},
+					{
+						"case": { "$eq": ["$title", "Gevia Kesef"] },
+						"then": ["ר' יוסף אבן כספי"]
+					},
+					{
+						"case": {
+							"$or": [
+								{
+									"$regexMatch": {
+										"input": "$title",
+										"regex": "Iggeret Shmuel"
+									}
+								},
+								{
+									"$regexMatch": {
+										"input": "$title",
+										"regex": "Lechem Dim"
+									}
+								}
+							]
+						},
+						"then": ["ר' שמואל די אוזידה"]
+					},
+					{
+						"case": {
+							"$regexMatch": {
+								"input": "$title",
+								"regex": "Ezra ben Solomon"
+							}
+						},
+						"then": ["ר' עזרא בן שלמה מגירונה"]
+					},
+					{
+						"case": {
+							"$regexMatch": {
+								"input": "$title",
+								"regex": "Targum Sheni"
+							}
+						},
+						"then": ["רבותינו זכרונם לברכה"]
+					},
+					{
+						"case": {
+							"$regexMatch": {
+								"input": "$title",
+								"regex": "Saadia Gaon"
+							}
+						},
+						"then": ["סעדיה גאון"]
+					},
+					{
+						"case": {
+							"$regexMatch": {
+								"input": "$title",
+								"regex": "Toledot Yitzchak"
+							}
+						},
+						"then": ["ר' יצחק קארו"]
+					}
+				],
+				"default": ["לא ידוע"]
 			}
+		}
 		}
 	},
 	"firstAuthorBirthYear": {

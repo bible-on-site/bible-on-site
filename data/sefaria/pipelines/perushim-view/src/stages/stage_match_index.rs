@@ -67,6 +67,14 @@ const HASKALAH_EXCLUDED: &[&str] = &[
     "Shadal on Leviticus",
     "Shadal on Numbers",
     "Shadal on Deuteronomy",
+    // Shadal on Isaiah was missed in the original exclusion
+    "Shadal on Isaiah",
+    // Yashar (Isaac Samuel Reggio, 1784–1855) — Italian Haskalah figure
+    "Reggio on Torah",
+    // Em LaMikra (Elijah Benamozegh, 1823–1900) — Italian rabbi with non-traditional methodology
+    "Em LaMikra",
+    // Ohev Ger — Shadal's commentary on Targum Onkelos
+    "Ohev Ger",
 ];
 
 /// Modern English-language works — not traditional Hebrew perushim.
@@ -80,12 +88,41 @@ const MODERN_ENGLISH_EXCLUDED: &[&str] = &[
     "Redeeming Relevance; Exodus",
     "Redeeming Relevance; Numbers",
     "Redeeming Relevance; Deuteronomy",
+    // The Five Books of Moses / The Early Prophets (Everett Fox) — modern English translation
+    "The Five Books of Moses, by Everett Fox",
+    "The Early Prophets, by Everett Fox",
+    // Covenant and Conversation series (Rabbi Jonathan Sacks) — modern English essays
+    "Covenant and Conversation; Genesis; The Book of the Beginnings",
+    "Covenant and Conversation; Exodus; The Book of Redemption",
+    "Covenant and Conversation; Leviticus; The Book of Holiness",
+    "Covenant and Conversation; Numbers; The Wilderness Years",
+    "Covenant and Conversation; Deuteronomy; Renewal of the Sinai Covenant",
+    "Judaism's Life Changing Ideas; A Weekly Reading of the Jewish Bible",
+    "Essays in Ethics; A Weekly Reading of the Jewish Bible",
+    "I Believe; A Weekly Reading of the Jewish Bible",
+    "Studies in Spirituality; A Weekly Reading of the Jewish Bible",
+    "Lessons in Leadership; A Weekly Reading of the Jewish Bible",
+    // Tribal Lands (Tamar Weissman) — modern academic work
+    "Tribal Lands",
 ];
 
 /// Works that are not verse-by-verse commentaries on Tanakh text.
 const NOT_PERUSIM: &[&str] = &[
     "Sefer Yesodei HaTorah", // Rambam's halachic work (Mishneh Torah), not a Tanakh commentary
     "Malbim Ayelet HaShachar", // Methodological introduction to Malbim's commentary, not a perush
+];
+
+/// Academic / non-traditional works — not from the Orthodox tradition.
+const ACADEMIC_EXCLUDED: &[&str] = &[
+    // Cassuto (Umberto Cassuto, 1883–1951) — academic Bible scholar
+    "Cassuto on Genesis",
+    "Cassuto on Exodus",
+    // Karati Bekhol Lev (Michal Tikochinsky) — modern non-rabbinic work
+    "Karati Bekhol Lev",
+    // Sefer Daniel; Opportunity in Exile / Megillat Ruth; From Chaos to Kingship (Chaim Jachter) —
+    // modern English works
+    "Sefer Daniel; Opportunity in Exile",
+    "Megillat Ruth; From Chaos to Kingship",
 ];
 
 // TODO: Clarify exclusion reason for each of these titles
@@ -102,7 +139,6 @@ const UNCLEAR_EXCLUSIONS: &[&str] = &[
     "Aderet Eliyahu (Rabbi Yosef Chaim)",
     "Nachal Sorek",
     "Mashmia Yeshuah",
-    "Ohev Ger",
     "Paaneach Raza",
     "Chanukat HaTorah",
     "Beit HaLevi on Torah",
@@ -133,6 +169,7 @@ pub fn build() -> Document {
         .chain(HASKALAH_EXCLUDED.iter())
         .chain(MODERN_ENGLISH_EXCLUDED.iter())
         .chain(NOT_PERUSIM.iter())
+        .chain(ACADEMIC_EXCLUDED.iter())
         .chain(UNCLEAR_EXCLUSIONS.iter())
         .copied()
         .collect();

@@ -29,3 +29,6 @@ app/.artifacts/
 data/mysql/tanah_full_dump.sql
 data/mysql/perushim_data.sql
 nul
+
+# QA service (present on qa-bot branch; ignore when untracked on other branches)
+web/qa-service/
