@@ -4,6 +4,7 @@ using Xamarin.Google.Android.Play.Core.AssetPacks;
 using Xamarin.Google.Android.Play.Core.AssetPacks.Model;
 #elif IOS || MACCATALYST
 using Foundation;
+using UIKit;
 #endif
 
 namespace BibleOnSite.Services;
@@ -153,6 +154,7 @@ partial class PadDeliveryService
 partial class PadDeliveryService
 {
     private const string NotesDbName = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
+    private const string DatasetAssetName = "perushim_notes";
 
     private static string OdrCacheDir(string packName)
     {
@@ -161,18 +163,11 @@ partial class PadDeliveryService
         return dir;
     }
 
-    private static readonly string NotesDbNameNoExt =
-        Path.GetFileNameWithoutExtension(NotesDbName);
-    private static readonly string NotesDbExt =
-        Path.GetExtension(NotesDbName).TrimStart('.');
-
     private static async Task<string?> TryGetAssetPathIosAsync(string packName, CancellationToken ct)
     {
         var cacheDir = OdrCacheDir(packName);
         if (File.Exists(Path.Combine(cacheDir, NotesDbName)))
-        {
             return cacheDir;
-        }
 
         try
         {
@@ -186,7 +181,7 @@ partial class PadDeliveryService
 
             try
             {
-                return CopyOdrBundleResource(request.Bundle, cacheDir);
+                return SaveOdrDataAsset(cacheDir);
             }
             finally
             {
@@ -223,7 +218,7 @@ partial class PadDeliveryService
             ct.ThrowIfCancellationRequested();
 
             var cacheDir = OdrCacheDir(packName);
-            var result = CopyOdrBundleResource(request.Bundle, cacheDir);
+            var result = SaveOdrDataAsset(cacheDir);
             return result != null;
         }
         catch (OperationCanceledException)
@@ -243,31 +238,32 @@ partial class PadDeliveryService
     }
 
     /// <summary>
-    /// After BeginAccessingResources, the ODR file appears in the bundle.
-    /// Locate it via PathForResource and copy to cache so PerushimNotesService
-    /// can use its normal TryCopyFromPad flow.
+    /// After BeginAccessingResources, the asset catalog data is available via NSDataAsset.
+    /// actool compiles the .dataset into Assets.car, so we read it via NSDataAsset and
+    /// write to disk for SQLite file-based access.
     /// </summary>
-    private static string? CopyOdrBundleResource(NSBundle bundle, string cacheDir)
+    private static string? SaveOdrDataAsset(string cacheDir)
     {
-        var bundlePath = bundle.PathForResource(NotesDbNameNoExt, NotesDbExt);
-        if (string.IsNullOrEmpty(bundlePath))
+        using var asset = new NSDataAsset(DatasetAssetName);
+        if (asset?.Data == null)
         {
-            System.Diagnostics.Debug.WriteLine(
-                $"ODR: PathForResource('{NotesDbNameNoExt}', '{NotesDbExt}') returned null. " +
-                $"Bundle path: {bundle.BundlePath}");
+            System.Diagnostics.Debug.WriteLine($"ODR: NSDataAsset('{DatasetAssetName}') returned null");
             return null;
         }
 
-        System.Diagnostics.Debug.WriteLine($"ODR: Found resource at {bundlePath}");
+        System.Diagnostics.Debug.WriteLine($"ODR: NSDataAsset loaded, length={asset.Data.Length}");
         var destPath = Path.Combine(cacheDir, NotesDbName);
         try
         {
-            File.Copy(bundlePath, destPath, overwrite: true);
+            using var stream = asset.Data.AsStream();
+            using var fileStream = File.Create(destPath);
+            stream.CopyTo(fileStream);
+            System.Diagnostics.Debug.WriteLine($"ODR: Saved to {destPath}");
             return cacheDir;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"ODR: File.Copy failed: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"ODR: Save failed: {ex.Message}");
             return null;
         }
     }

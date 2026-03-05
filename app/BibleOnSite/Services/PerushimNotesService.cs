@@ -114,16 +114,31 @@ public class PerushimNotesService
 
         try
         {
+            using var dataAsset = new UIKit.NSDataAsset("perushim_notes");
+            lines.Add($"NSDataAsset('perushim_notes'): {(dataAsset?.Data != null ? $"length={dataAsset.Data.Length}" : "(null)")}");
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"NSDataAsset probe error: {ex.Message}");
+        }
+
+        try
+        {
             using var odrReq = new Foundation.NSBundleResourceRequest(
                 new Foundation.NSSet<Foundation.NSString>(new Foundation.NSString(PerushimNotesPackName)));
             var available = await odrReq.ConditionallyBeginAccessingResourcesAsync();
             lines.Add($"ODR ConditionallyBeginAccessing: {available}");
             if (available)
             {
-                var nameNoExt2 = Path.GetFileNameWithoutExtension(NotesDbName);
-                var ext2 = Path.GetExtension(NotesDbName).TrimStart('.');
-                var odrPath = odrReq.Bundle.PathForResource(nameNoExt2, ext2);
-                lines.Add($"ODR Bundle.PathForResource: {(odrPath ?? "(null)")}");
+                try
+                {
+                    using var odrDataAsset = new UIKit.NSDataAsset("perushim_notes");
+                    lines.Add($"ODR NSDataAsset: {(odrDataAsset?.Data != null ? $"length={odrDataAsset.Data.Length}" : "(null)")}");
+                }
+                catch (Exception ex2)
+                {
+                    lines.Add($"ODR NSDataAsset error: {ex2.Message}");
+                }
                 odrReq.EndAccessingResources();
             }
         }
