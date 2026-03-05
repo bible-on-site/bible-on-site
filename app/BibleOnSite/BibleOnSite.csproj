@@ -164,17 +164,29 @@
 		<Exec Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz' > '$(MSBuildProjectDirectory)/Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset/sefaria-dump-5784-sivan-4.perushim_notes.sqlite'" />
 	</Target>
 
-	<!-- iOS ODR: include the perushim notes SQLite as a BundleResource with ResourceTags.
-	     The SDK's CreateAssetPackManifest task reads ResourceTags, moves the file from the main
-	     bundle into an ODR asset pack, and packages it alongside the IPA for App Store/TestFlight.
-	     At runtime, NSBundleResourceRequest downloads the tag and the file becomes accessible
-	     via NSBundle.MainBundle.PathForResource(). -->
-	<ItemGroup Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')">
-		<BundleResource
-			Include="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
-			LogicalName="sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
-			ResourceTags="perushim_notes" />
-	</ItemGroup>
+	<!-- iOS ODR: perushim notes are delivered via On-Demand Resources.
+	     The xcassets/Contents.json has on-demand-resource-tags which actool reads to create
+	     an ODR asset pack. At runtime, NSBundleResourceRequest downloads the tag and
+	     the compiled data becomes accessible via NSDataAsset. -->
+
+	<!-- ODR build diagnostics (temporary): log what the SDK computed for ODR asset packs. -->
+	<Target Name="_LogOdrDiagnostics"
+		AfterTargets="_ComputeBundleResourceOutputPaths"
+		Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+		<Message Importance="high" Text="=== ODR Build Diagnostics ===" />
+		<Message Importance="high" Text="EnableOnDemandResources = $(EnableOnDemandResources)" />
+		<Message Importance="high" Text="_DistributionType = $(_DistributionType)" />
+		<Message Importance="high" Text="BuildIpa = $(BuildIpa)" />
+		<Message Importance="high" Text="_BundleResourceWithOutputPath ODR items:" />
+		<Message Importance="high" Text="  %(_BundleResourceWithOutputPath.Identity) → %(_BundleResourceWithOutputPath.OutputPath)"
+			Condition="'%(_BundleResourceWithOutputPath.OutputPath)' != '' AND $([System.String]::new('%(_BundleResourceWithOutputPath.OutputPath)').Contains('OnDemandResources'))" />
+	</Target>
+
+	<Target Name="_LogOdrPackaging"
+		AfterTargets="_PackageOnDemandResources"
+		Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+		<Message Importance="high" Text="=== ODR Packaging: _PackageOnDemandResources executed ===" />
+	</Target>
 
 	<!-- Android Debug fallback: bundle perushim notes in app package so they work without PAD (APK installs). -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Debug' AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')">
