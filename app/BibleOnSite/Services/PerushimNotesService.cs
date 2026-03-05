@@ -99,39 +99,16 @@ public class PerushimNotesService
             }
         }
 
-#if IOS || MACCATALYST
+        // Platform-specific delivery diagnostics (ODR on iOS, PAD on Android)
         try
         {
-            var nameNoExt = Path.GetFileNameWithoutExtension(NotesDbName);
-            var ext = Path.GetExtension(NotesDbName).TrimStart('.');
-            var bundleRes = Foundation.NSBundle.MainBundle.PathForResource(nameNoExt, ext);
-            lines.Add($"NSBundle.PathForResource: {(bundleRes ?? "(null)")}");
+            var deliveryDiag = await _padService.GetDeliveryDiagnosticsAsync(PerushimNotesPackName);
+            lines.AddRange(deliveryDiag);
         }
         catch (Exception ex)
         {
-            lines.Add($"NSBundle.PathForResource error: {ex.Message}");
+            lines.Add($"Delivery diagnostics error: {ex.GetType().Name}: {ex.Message}");
         }
-
-        try
-        {
-            using var odrReq = new Foundation.NSBundleResourceRequest(
-                new Foundation.NSSet<Foundation.NSString>(new Foundation.NSString(PerushimNotesPackName)));
-            var available = await odrReq.ConditionallyBeginAccessingResourcesAsync();
-            lines.Add($"ODR ConditionallyBeginAccessing: {available}");
-            if (available)
-            {
-                var nameNoExt2 = Path.GetFileNameWithoutExtension(NotesDbName);
-                var ext2 = Path.GetExtension(NotesDbName).TrimStart('.');
-                var odrPath = odrReq.Bundle.PathForResource(nameNoExt2, ext2);
-                lines.Add($"ODR Bundle.PathForResource: {(odrPath ?? "(null)")}");
-                odrReq.EndAccessingResources();
-            }
-        }
-        catch (Exception ex)
-        {
-            lines.Add($"ODR probe error: {ex.Message}");
-        }
-#endif
 
         return string.Join(Environment.NewLine, lines);
     }

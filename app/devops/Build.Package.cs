@@ -207,7 +207,10 @@ partial class Build
             // Skip simulator runtime validation - the .NET iOS SDK bundles iphonesimulator SDK 23A339 (iOS 17)
             // but CI runners only have iOS 18.x/26.x runtimes installed, causing actool to fail
             ["SupportedOSPlatformVersion"] = "17.0",
-            ["_ExcludeSimulatorArchitectures"] = "true"
+            ["_ExcludeSimulatorArchitectures"] = "true",
+            // DetectSigningIdentity sets _DistributionType=Any when CodesignProvision is empty.
+            // _PackageOnDemandResources only runs for AppStore/AdHoc, so we set it explicitly.
+            ["_DistributionType"] = "AppStore"
         };
 
         // Add code signing configuration

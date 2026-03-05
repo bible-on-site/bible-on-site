@@ -22,4 +22,10 @@ public interface IPadDeliveryService
         string packName,
         IProgress<double>? progress = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Platform-specific delivery diagnostics (ODR on iOS, PAD on Android).
+    /// Returns lines to append to the user-exportable diagnostic report.
+    /// </summary>
+    Task<List<string>> GetDeliveryDiagnosticsAsync(string packName);
 }
