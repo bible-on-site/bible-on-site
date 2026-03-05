@@ -49,6 +49,18 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
         return Task.FromResult(false);
 #endif
     }
+
+    /// <inheritdoc />
+    public Task<List<string>> GetDeliveryDiagnosticsAsync(string packName)
+    {
+#if ANDROID
+        return GetDeliveryDiagnosticsAndroidAsync(packName);
+#elif IOS || MACCATALYST
+        return GetDeliveryDiagnosticsIosAsync(packName);
+#else
+        return Task.FromResult(new List<string> { "Platform: no on-demand delivery support" });
+#endif
+    }
 }
 
 #if ANDROID
@@ -146,6 +158,29 @@ partial class PadDeliveryService
             System.Diagnostics.Debug.WriteLine($"PAD Fetch failed: {ex.Message}");
             return false;
         }
+    }
+
+    private static Task<List<string>> GetDeliveryDiagnosticsAndroidAsync(string packName)
+    {
+        var lines = new List<string> { "--- PAD (Android) delivery diagnostics ---" };
+        var manager = GetAssetPackManager();
+        if (manager == null)
+        {
+            lines.Add("AssetPackManager: null (no activity)");
+            return Task.FromResult(lines);
+        }
+
+        try
+        {
+            var location = manager.GetPackLocation(packName);
+            lines.Add($"GetPackLocation('{packName}'): {(location != null ? $"path={location.AssetsPath()}" : "(null)")}");
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"GetPackLocation error: {ex.Message}");
+        }
+
+        return Task.FromResult(lines);
     }
 }
 #endif
@@ -266,6 +301,133 @@ partial class PadDeliveryService
             System.Diagnostics.Debug.WriteLine($"ODR: Save failed: {ex.Message}");
             return null;
         }
+    }
+
+    private static async Task<List<string>> GetDeliveryDiagnosticsIosAsync(string packName)
+    {
+        var lines = new List<string> { "--- ODR (iOS) delivery diagnostics ---" };
+
+        var cacheDir = OdrCacheDir(packName);
+        var cachedFile = Path.Combine(cacheDir, NotesDbName);
+        lines.Add($"Cache dir: {cacheDir}");
+        lines.Add($"Cached file exists: {File.Exists(cachedFile)}");
+        if (File.Exists(cachedFile))
+        {
+            try
+            {
+                var fi = new FileInfo(cachedFile);
+                lines.Add($"Cached file size: {fi.Length} bytes");
+            }
+            catch (Exception ex)
+            {
+                lines.Add($"Cached file info error: {ex.Message}");
+            }
+        }
+
+        // Probe NSDataAsset directly (without ODR request) — should be null for true ODR
+        try
+        {
+            using var directAsset = new NSDataAsset(DatasetAssetName);
+            lines.Add($"Direct NSDataAsset('{DatasetAssetName}'): {(directAsset?.Data != null ? $"length={directAsset.Data.Length}" : "(null)")}");
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"Direct NSDataAsset error: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        // Probe ODR conditionally
+        try
+        {
+            using var request = new NSBundleResourceRequest(new NSSet<NSString>(new NSString(packName)));
+            lines.Add($"NSBundleResourceRequest created for tag '{packName}'");
+            var conditionalOk = await request.ConditionallyBeginAccessingResourcesAsync();
+            lines.Add($"ConditionallyBeginAccessing: {conditionalOk}");
+
+            if (conditionalOk)
+            {
+                try
+                {
+                    using var odrAsset = new NSDataAsset(DatasetAssetName);
+                    lines.Add($"ODR NSDataAsset('{DatasetAssetName}'): {(odrAsset?.Data != null ? $"length={odrAsset.Data.Length}" : "(null)")}");
+
+                    if (odrAsset?.Data != null)
+                    {
+                        // Try the full SaveOdrDataAsset path to validate write
+                        var testDir = Path.Combine(FileSystem.CacheDirectory, "odr_diag_test");
+                        Directory.CreateDirectory(testDir);
+                        var testPath = Path.Combine(testDir, "diag_test.sqlite");
+                        try
+                        {
+                            using var stream = odrAsset.Data.AsStream();
+                            using var fs = File.Create(testPath);
+                            stream.CopyTo(fs);
+                            var written = new FileInfo(testPath).Length;
+                            lines.Add($"Test write: {written} bytes to {testPath}");
+                            File.Delete(testPath);
+                        }
+                        catch (Exception writeEx)
+                        {
+                            lines.Add($"Test write FAILED: {writeEx.GetType().Name}: {writeEx.Message}");
+                        }
+                        finally
+                        {
+                            try { Directory.Delete(testDir, true); } catch { /* best-effort cleanup */ }
+                        }
+                    }
+                }
+                catch (Exception assetEx)
+                {
+                    lines.Add($"ODR NSDataAsset error: {assetEx.GetType().Name}: {assetEx.Message}");
+                }
+
+                request.EndAccessingResources();
+            }
+            else
+            {
+                // Try full fetch to see the error
+                lines.Add("Attempting BeginAccessingResources...");
+                try
+                {
+                    using var fetchReq = new NSBundleResourceRequest(new NSSet<NSString>(new NSString(packName)));
+                    await fetchReq.BeginAccessingResourcesAsync();
+                    lines.Add("BeginAccessingResources: succeeded");
+
+                    try
+                    {
+                        using var fetchedAsset = new NSDataAsset(DatasetAssetName);
+                        lines.Add($"Post-fetch NSDataAsset: {(fetchedAsset?.Data != null ? $"length={fetchedAsset.Data.Length}" : "(null)")}");
+                    }
+                    catch (Exception fetchAssetEx)
+                    {
+                        lines.Add($"Post-fetch NSDataAsset error: {fetchAssetEx.GetType().Name}: {fetchAssetEx.Message}");
+                    }
+
+                    fetchReq.EndAccessingResources();
+                }
+                catch (Exception fetchEx)
+                {
+                    lines.Add($"BeginAccessingResources FAILED: {fetchEx.GetType().Name}: {fetchEx.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"ODR request error: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        // Check available disk space
+        try
+        {
+            var cacheRoot = FileSystem.CacheDirectory;
+            var driveInfo = new DriveInfo(Path.GetPathRoot(cacheRoot) ?? "/");
+            lines.Add($"Available disk space: {driveInfo.AvailableFreeSpace / (1024 * 1024)} MB");
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"Disk space check error: {ex.Message}");
+        }
+
+        return lines;
     }
 }
 #endif

@@ -99,54 +99,16 @@ public class PerushimNotesService
             }
         }
 
-#if IOS || MACCATALYST
+        // Platform-specific delivery diagnostics (ODR on iOS, PAD on Android)
         try
         {
-            var nameNoExt = Path.GetFileNameWithoutExtension(NotesDbName);
-            var ext = Path.GetExtension(NotesDbName).TrimStart('.');
-            var bundleRes = Foundation.NSBundle.MainBundle.PathForResource(nameNoExt, ext);
-            lines.Add($"NSBundle.PathForResource: {(bundleRes ?? "(null)")}");
+            var deliveryDiag = await _padService.GetDeliveryDiagnosticsAsync(PerushimNotesPackName);
+            lines.AddRange(deliveryDiag);
         }
         catch (Exception ex)
         {
-            lines.Add($"NSBundle.PathForResource error: {ex.Message}");
+            lines.Add($"Delivery diagnostics error: {ex.GetType().Name}: {ex.Message}");
         }
-
-        try
-        {
-            using var dataAsset = new UIKit.NSDataAsset("perushim_notes");
-            lines.Add($"NSDataAsset('perushim_notes'): {(dataAsset?.Data != null ? $"length={dataAsset.Data.Length}" : "(null)")}");
-        }
-        catch (Exception ex)
-        {
-            lines.Add($"NSDataAsset probe error: {ex.Message}");
-        }
-
-        try
-        {
-            using var odrReq = new Foundation.NSBundleResourceRequest(
-                new Foundation.NSSet<Foundation.NSString>(new Foundation.NSString(PerushimNotesPackName)));
-            var available = await odrReq.ConditionallyBeginAccessingResourcesAsync();
-            lines.Add($"ODR ConditionallyBeginAccessing: {available}");
-            if (available)
-            {
-                try
-                {
-                    using var odrDataAsset = new UIKit.NSDataAsset("perushim_notes");
-                    lines.Add($"ODR NSDataAsset: {(odrDataAsset?.Data != null ? $"length={odrDataAsset.Data.Length}" : "(null)")}");
-                }
-                catch (Exception ex2)
-                {
-                    lines.Add($"ODR NSDataAsset error: {ex2.Message}");
-                }
-                odrReq.EndAccessingResources();
-            }
-        }
-        catch (Exception ex)
-        {
-            lines.Add($"ODR probe error: {ex.Message}");
-        }
-#endif
 
         return string.Join(Environment.NewLine, lines);
     }
