@@ -47,11 +47,11 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.0.47</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>5.0.48</ApplicationDisplayVersion>
 		<!-- Windows MSIX requires each version component ≤65535, so we use a separate incrementing value -->
 		<!-- Android versionCode can be large, continuing from Play Store's 40000017 -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000047</ApplicationVersion>
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">47</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000048</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">48</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<!-- WindowsPackageType None = unpackaged (fixes "Class not registered" when running from CLI). MSIX for Store: /p:WindowsPackageType=MSIX -->
@@ -165,8 +165,8 @@
 	</Target>
 
 	<!-- iOS ODR: include the perushim notes SQLite as a BundleResource with ResourceTags.
-	     The SDK's CreateAssetPackManifest task reads ResourceTags, moves the file from the main
-	     bundle into an ODR asset pack, and packages it alongside the IPA for App Store/TestFlight.
+	     ComputeBundleResourceOutputPaths reads ResourceTags, routes the file into an ODR asset pack
+	     under OnDemandResources/. CreateAssetPackManifest then produces the plists that iOS reads.
 	     At runtime, NSBundleResourceRequest downloads the tag and the file becomes accessible
 	     via NSBundle.MainBundle.PathForResource(). -->
 	<ItemGroup Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')">
@@ -175,6 +175,30 @@
 			LogicalName="sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
 			ResourceTags="perushim_notes" />
 	</ItemGroup>
+
+	<!-- ODR build diagnostics (temporary): log what the SDK computed for our BundleResource+ResourceTags item. -->
+	<Target Name="_LogOdrDiagnostics"
+		AfterTargets="_ComputeBundleResourceOutputPaths"
+		Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+		<Message Importance="high" Text="=== ODR Build Diagnostics ===" />
+		<Message Importance="high" Text="EnableOnDemandResources = $(EnableOnDemandResources)" />
+		<Message Importance="high" Text="DeviceSpecificOutputPath = $(DeviceSpecificOutputPath)" />
+		<Message Importance="high" Text="DeviceSpecificIntermediateOutputPath = $(DeviceSpecificIntermediateOutputPath)" />
+		<Message Importance="high" Text="BundleIdentifier = $(_BundleIdentifier)" />
+		<Message Importance="high" Text="_DistributionType = $(_DistributionType)" />
+		<Message Importance="high" Text="_BundleResourceWithOutputPath items:" />
+		<Message Importance="high" Text="  Item: %(_BundleResourceWithOutputPath.Identity) → OutputPath=%(_BundleResourceWithOutputPath.OutputPath) LogicalName=%(_BundleResourceWithOutputPath.LogicalName) ResourceTags=%(_BundleResourceWithOutputPath.ResourceTags)"
+			Condition="'@(_BundleResourceWithOutputPath)' != ''" />
+	</Target>
+
+	<Target Name="_LogOdrPackaging"
+		AfterTargets="_PackageOnDemandResources"
+		Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+		<Message Importance="high" Text="=== ODR Packaging Diagnostics ===" />
+		<Message Importance="high" Text="_PackageOnDemandResources target executed" />
+		<Message Importance="high" Text="BuildIpa = $(BuildIpa)" />
+		<Message Importance="high" Text="_DistributionType = $(_DistributionType)" />
+	</Target>
 
 	<!-- Android Debug fallback: bundle perushim notes in app package so they work without PAD (APK installs). -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Debug' AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')">
