@@ -21,6 +21,24 @@ public partial class ArticleDetailPage : ContentPage
         InitializeComponent();
         _viewModel = new ArticleDetailViewModel();
         BindingContext = _viewModel;
+        SetupFontSizeResources();
+    }
+
+    private void SetupFontSizeResources()
+    {
+        var prefs = PreferencesService.Instance;
+        UpdateFontSizeResources(prefs.FontFactor);
+        prefs.PreferencesChanged += (_, _) =>
+            MainThread.BeginInvokeOnMainThread(() =>
+                UpdateFontSizeResources(prefs.FontFactor));
+    }
+
+    private void UpdateFontSizeResources(double factor)
+    {
+        Resources["ArticleFontSize"] = factor * 16;
+#if IOS
+        ArticleContentView?.InvalidateMeasure();
+#endif
     }
 
     protected override async void OnAppearing()
