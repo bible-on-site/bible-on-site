@@ -96,7 +96,7 @@
                 <controls:HtmlView x:Name="ArticleContentView"
                                    IsVisible="{Binding HasContent}"
                                    HtmlContent="{Binding Article.ArticleContent}"
-                                   FontSize="16"
+                                   FontSize="{DynamicResource ArticleFontSize}"
                                    LineHeight="1.5"
                                    TextAlignment="Justify"
                                    TextDirection="Rtl"

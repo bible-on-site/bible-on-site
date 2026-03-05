@@ -124,28 +124,37 @@ public partial class PerekPage : ContentPage
         Resources["PerushNameFontSize"] = factor * 14;
         Resources["PerushContentFontSize"] = factor * 16;
 #if IOS
-        InvalidateDescendantLayouts(PerekCarousel);
+        RefreshDescendantViews(PerekCarousel);
 #endif
     }
 
 #if IOS
-    private static void InvalidateDescendantLayouts(IView root)
+    /// <summary>
+    /// Walks the visual tree and forces re-measurement. For HtmlView controls,
+    /// also nudges the FontSize property to ensure the handler re-renders
+    /// (DynamicResource in deeply nested templates can fail to propagate on iOS).
+    /// </summary>
+    private static void RefreshDescendantViews(IView root)
     {
-        if (root is Microsoft.Maui.Controls.VisualElement ve)
+        if (root is Controls.HtmlView htmlView)
+        {
+            var current = htmlView.FontSize;
+            htmlView.FontSize = current + 0.001;
+            htmlView.FontSize = current;
+        }
+        else if (root is Microsoft.Maui.Controls.VisualElement ve)
         {
             ve.InvalidateMeasure();
         }
 
-        if (root is not IVisualTreeElement treeElement)
+        if (root is IVisualTreeElement treeElement)
         {
-            return;
-        }
-
-        foreach (var child in treeElement.GetVisualChildren())
-        {
-            if (child is IView view)
+            foreach (var child in treeElement.GetVisualChildren())
             {
-                InvalidateDescendantLayouts(view);
+                if (child is IView view)
+                {
+                    RefreshDescendantViews(view);
+                }
             }
         }
     }
@@ -242,6 +251,8 @@ public partial class PerekPage : ContentPage
         base.OnAppearing();
 #if IOS
         ApplyBottomBarSafeArea();
+        SizeChanged -= OnPageSizeChanged;
+        SizeChanged += OnPageSizeChanged;
 #endif
         // If no perek is loaded, load perek based on preference (today's or last learnt)
         if (_viewModel.Perek == null && !_isLoading)
@@ -335,6 +346,8 @@ public partial class PerekPage : ContentPage
     }
 
 #if IOS
+    private void OnPageSizeChanged(object? sender, EventArgs e) => ApplyBottomBarSafeArea();
+
     /// <summary>
     /// Extends the bottom bar past the safe area to the physical screen edge on iOS.
     /// The negative margin pushes the bar into the home-indicator region;
@@ -346,6 +359,17 @@ public partial class PerekPage : ContentPage
     {
         var insets = Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific.Page.GetSafeAreaInsets(this);
         var bottom = insets.Bottom;
+
+        // Fallback: read native safe area when MAUI reports 0 (layout not ready yet)
+        if (bottom <= 0)
+        {
+            var window = UIKit.UIApplication.SharedApplication?.ConnectedScenes
+                .OfType<UIKit.UIWindowScene>()
+                .FirstOrDefault()?.Windows
+                .FirstOrDefault(w => w.IsKeyWindow);
+            bottom = (double)(window?.SafeAreaInsets.Bottom ?? 0);
+        }
+
         if (bottom <= 0)
             return;
 
@@ -1330,6 +1354,11 @@ public partial class PerekPage : ContentPage
         _ = UpdateArticlesCountAsync();
         _ = _viewModel.LoadPerushimAsync(perek.PerekId);
         _ = _viewModel.PreloadAdjacentPasukimAsync(perek.PerekId);
+#if IOS
+        // Newly created views in the carousel may not pick up DynamicResource values;
+        // defer the refresh so the visual tree is populated after the layout pass.
+        Dispatcher.Dispatch(() => RefreshDescendantViews(PerekCarousel));
+#endif
         if (_isShowingArticles)
         {
             _ = LoadArticlesAsync();
