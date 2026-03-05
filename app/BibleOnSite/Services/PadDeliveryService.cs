@@ -4,6 +4,7 @@ using Xamarin.Google.Android.Play.Core.AssetPacks;
 using Xamarin.Google.Android.Play.Core.AssetPacks.Model;
 #elif IOS || MACCATALYST
 using Foundation;
+using UIKit;
 #endif
 
 namespace BibleOnSite.Services;
@@ -46,6 +47,18 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
         return FetchIosAsync(packName, progress, cancellationToken);
 #else
         return Task.FromResult(false);
+#endif
+    }
+
+    /// <inheritdoc />
+    public Task<List<string>> GetDeliveryDiagnosticsAsync(string packName)
+    {
+#if ANDROID
+        return GetDeliveryDiagnosticsAndroidAsync(packName);
+#elif IOS || MACCATALYST
+        return GetDeliveryDiagnosticsIosAsync(packName);
+#else
+        return Task.FromResult(new List<string> { "Platform: no on-demand delivery support" });
 #endif
     }
 }
@@ -146,6 +159,29 @@ partial class PadDeliveryService
             return false;
         }
     }
+
+    private static Task<List<string>> GetDeliveryDiagnosticsAndroidAsync(string packName)
+    {
+        var lines = new List<string> { "--- PAD (Android) delivery diagnostics ---" };
+        var manager = GetAssetPackManager();
+        if (manager == null)
+        {
+            lines.Add("AssetPackManager: null (no activity)");
+            return Task.FromResult(lines);
+        }
+
+        try
+        {
+            var location = manager.GetPackLocation(packName);
+            lines.Add($"GetPackLocation('{packName}'): {(location != null ? $"path={location.AssetsPath()}" : "(null)")}");
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"GetPackLocation error: {ex.Message}");
+        }
+
+        return Task.FromResult(lines);
+    }
 }
 #endif
 
@@ -153,6 +189,7 @@ partial class PadDeliveryService
 partial class PadDeliveryService
 {
     private const string NotesDbName = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
+    private const string DatasetAssetName = "perushim_notes";
 
     private static string OdrCacheDir(string packName)
     {
@@ -161,18 +198,11 @@ partial class PadDeliveryService
         return dir;
     }
 
-    private static readonly string NotesDbNameNoExt =
-        Path.GetFileNameWithoutExtension(NotesDbName);
-    private static readonly string NotesDbExt =
-        Path.GetExtension(NotesDbName).TrimStart('.');
-
     private static async Task<string?> TryGetAssetPathIosAsync(string packName, CancellationToken ct)
     {
         var cacheDir = OdrCacheDir(packName);
         if (File.Exists(Path.Combine(cacheDir, NotesDbName)))
-        {
             return cacheDir;
-        }
 
         try
         {
@@ -186,7 +216,7 @@ partial class PadDeliveryService
 
             try
             {
-                return CopyOdrBundleResource(request.Bundle, cacheDir);
+                return SaveOdrDataAsset(cacheDir);
             }
             finally
             {
@@ -223,7 +253,7 @@ partial class PadDeliveryService
             ct.ThrowIfCancellationRequested();
 
             var cacheDir = OdrCacheDir(packName);
-            var result = CopyOdrBundleResource(request.Bundle, cacheDir);
+            var result = SaveOdrDataAsset(cacheDir);
             return result != null;
         }
         catch (OperationCanceledException)
@@ -243,33 +273,161 @@ partial class PadDeliveryService
     }
 
     /// <summary>
-    /// After BeginAccessingResources, the ODR file appears in the bundle.
-    /// Locate it via PathForResource and copy to cache so PerushimNotesService
-    /// can use its normal TryCopyFromPad flow.
+    /// After BeginAccessingResources, the asset catalog data is available via NSDataAsset.
+    /// actool compiles the .dataset into Assets.car, so we read it via NSDataAsset and
+    /// write to disk for SQLite file-based access.
     /// </summary>
-    private static string? CopyOdrBundleResource(NSBundle bundle, string cacheDir)
+    private static string? SaveOdrDataAsset(string cacheDir)
     {
-        var bundlePath = bundle.PathForResource(NotesDbNameNoExt, NotesDbExt);
-        if (string.IsNullOrEmpty(bundlePath))
+        using var asset = new NSDataAsset(DatasetAssetName);
+        if (asset?.Data == null)
         {
-            System.Diagnostics.Debug.WriteLine(
-                $"ODR: PathForResource('{NotesDbNameNoExt}', '{NotesDbExt}') returned null. " +
-                $"Bundle path: {bundle.BundlePath}");
+            System.Diagnostics.Debug.WriteLine($"ODR: NSDataAsset('{DatasetAssetName}') returned null");
             return null;
         }
 
-        System.Diagnostics.Debug.WriteLine($"ODR: Found resource at {bundlePath}");
+        System.Diagnostics.Debug.WriteLine($"ODR: NSDataAsset loaded, length={asset.Data.Length}");
         var destPath = Path.Combine(cacheDir, NotesDbName);
         try
         {
-            File.Copy(bundlePath, destPath, overwrite: true);
+            using var stream = asset.Data.AsStream();
+            using var fileStream = File.Create(destPath);
+            stream.CopyTo(fileStream);
+            System.Diagnostics.Debug.WriteLine($"ODR: Saved to {destPath}");
             return cacheDir;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"ODR: File.Copy failed: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"ODR: Save failed: {ex.Message}");
             return null;
         }
+    }
+
+    private static async Task<List<string>> GetDeliveryDiagnosticsIosAsync(string packName)
+    {
+        var lines = new List<string> { "--- ODR (iOS) delivery diagnostics ---" };
+
+        var cacheDir = OdrCacheDir(packName);
+        var cachedFile = Path.Combine(cacheDir, NotesDbName);
+        lines.Add($"Cache dir: {cacheDir}");
+        lines.Add($"Cached file exists: {File.Exists(cachedFile)}");
+        if (File.Exists(cachedFile))
+        {
+            try
+            {
+                var fi = new FileInfo(cachedFile);
+                lines.Add($"Cached file size: {fi.Length} bytes");
+            }
+            catch (Exception ex)
+            {
+                lines.Add($"Cached file info error: {ex.Message}");
+            }
+        }
+
+        // Probe NSDataAsset directly (without ODR request) — should be null for true ODR
+        try
+        {
+            using var directAsset = new NSDataAsset(DatasetAssetName);
+            lines.Add($"Direct NSDataAsset('{DatasetAssetName}'): {(directAsset?.Data != null ? $"length={directAsset.Data.Length}" : "(null)")}");
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"Direct NSDataAsset error: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        // Probe ODR conditionally
+        try
+        {
+            using var request = new NSBundleResourceRequest(new NSSet<NSString>(new NSString(packName)));
+            lines.Add($"NSBundleResourceRequest created for tag '{packName}'");
+            var conditionalOk = await request.ConditionallyBeginAccessingResourcesAsync();
+            lines.Add($"ConditionallyBeginAccessing: {conditionalOk}");
+
+            if (conditionalOk)
+            {
+                try
+                {
+                    using var odrAsset = new NSDataAsset(DatasetAssetName);
+                    lines.Add($"ODR NSDataAsset('{DatasetAssetName}'): {(odrAsset?.Data != null ? $"length={odrAsset.Data.Length}" : "(null)")}");
+
+                    if (odrAsset?.Data != null)
+                    {
+                        // Try the full SaveOdrDataAsset path to validate write
+                        var testDir = Path.Combine(FileSystem.CacheDirectory, "odr_diag_test");
+                        Directory.CreateDirectory(testDir);
+                        var testPath = Path.Combine(testDir, "diag_test.sqlite");
+                        try
+                        {
+                            using var stream = odrAsset.Data.AsStream();
+                            using var fs = File.Create(testPath);
+                            stream.CopyTo(fs);
+                            var written = new FileInfo(testPath).Length;
+                            lines.Add($"Test write: {written} bytes to {testPath}");
+                            File.Delete(testPath);
+                        }
+                        catch (Exception writeEx)
+                        {
+                            lines.Add($"Test write FAILED: {writeEx.GetType().Name}: {writeEx.Message}");
+                        }
+                        finally
+                        {
+                            try { Directory.Delete(testDir, true); } catch { /* best-effort cleanup */ }
+                        }
+                    }
+                }
+                catch (Exception assetEx)
+                {
+                    lines.Add($"ODR NSDataAsset error: {assetEx.GetType().Name}: {assetEx.Message}");
+                }
+
+                request.EndAccessingResources();
+            }
+            else
+            {
+                // Try full fetch to see the error
+                lines.Add("Attempting BeginAccessingResources...");
+                try
+                {
+                    using var fetchReq = new NSBundleResourceRequest(new NSSet<NSString>(new NSString(packName)));
+                    await fetchReq.BeginAccessingResourcesAsync();
+                    lines.Add("BeginAccessingResources: succeeded");
+
+                    try
+                    {
+                        using var fetchedAsset = new NSDataAsset(DatasetAssetName);
+                        lines.Add($"Post-fetch NSDataAsset: {(fetchedAsset?.Data != null ? $"length={fetchedAsset.Data.Length}" : "(null)")}");
+                    }
+                    catch (Exception fetchAssetEx)
+                    {
+                        lines.Add($"Post-fetch NSDataAsset error: {fetchAssetEx.GetType().Name}: {fetchAssetEx.Message}");
+                    }
+
+                    fetchReq.EndAccessingResources();
+                }
+                catch (Exception fetchEx)
+                {
+                    lines.Add($"BeginAccessingResources FAILED: {fetchEx.GetType().Name}: {fetchEx.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"ODR request error: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        // Check available disk space
+        try
+        {
+            var cacheRoot = FileSystem.CacheDirectory;
+            var driveInfo = new DriveInfo(Path.GetPathRoot(cacheRoot) ?? "/");
+            lines.Add($"Available disk space: {driveInfo.AvailableFreeSpace / (1024 * 1024)} MB");
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"Disk space check error: {ex.Message}");
+        }
+
+        return lines;
     }
 }
 #endif
