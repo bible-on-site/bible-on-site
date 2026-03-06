@@ -65,7 +65,7 @@
 		"temporal-polyfill": "0.3.0"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.4.4",
+		"@biomejs/biome": "2.4.6",
 		"@playwright/test": "1.58.2",
 		"@swc/core": "1.15.18",
 		"@swc/jest": "0.2.39",
@@ -73,7 +73,7 @@
 		"@testing-library/jest-dom": "6.9.1",
 		"@testing-library/react": "16.3.2",
 		"@types/jest": "30.0.0",
-		"@types/node": "25.3.3",
+		"@types/node": "25.3.5",
 		"@types/react": "19.2.14",
 		"@types/react-dom": "19.2.3",
 		"cross-env": "10.1.0",
@@ -85,7 +85,7 @@
 		"lighthouse": "13.0.3",
 		"monocart-reporter": "2.10.0",
 		"picomatch": "4.0.3",
-		"postcss": "8.5.6",
+		"postcss": "8.5.8",
 		"sass": "1.97.3",
 		"shx": "0.4.0",
 		"swc-plugin-coverage-instrument": "0.0.32",
