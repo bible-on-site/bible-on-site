@@ -69,6 +69,12 @@ export function buildHistoryMapper(
 					if (idx >= 0) return idx * 2 + CONTENT_OFFSET;
 				}
 			}
+			const perekOnlyMatch = route.match(/^\/929\/(\d+)$/);
+			if (perekOnlyMatch) {
+				const id = Number.parseInt(perekOnlyMatch[1], 10);
+				const idx = perekIds?.indexOf(id) ?? -1;
+				if (idx >= 0) return idx * 2 + CONTENT_OFFSET;
+			}
 			const hashMatch = route.match(/#page\/(.+)/);
 			if (hashMatch) {
 				return pageSemantics.semanticNameToIndex(hashMatch[1]);
