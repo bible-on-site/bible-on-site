@@ -18,6 +18,7 @@ jest.mock("@/app/929/[number]/components/perushim-section.module.css", () => ({
 	pasukGroup: "pasukGroup",
 	pasukLabel: "pasukLabel",
 	noteContent: "noteContent",
+	shareButton: "shareButton",
 }));
 
 jest.mock("@/app/929/[number]/components/sefer.module.css", () => ({
@@ -80,5 +81,21 @@ describe("PerushFullView", () => {
 		// Hebrew letters for pasuk 1 and 2
 		expect(screen.getByText(/פסוק א/)).toBeTruthy();
 		expect(screen.getByText(/פסוק ב/)).toBeTruthy();
+	});
+
+	it("renders share button when perekId is provided", () => {
+		render(
+			<PerushFullView perush={samplePerush} onBack={jest.fn()} perekId={5} />,
+		);
+		const shareLink = screen.getByLabelText("שיתוף");
+		expect(shareLink).toBeTruthy();
+		expect(shareLink.getAttribute("href")).toBe(
+			`/929/5/${encodeURIComponent("רש״י")}`,
+		);
+	});
+
+	it("does not render share button when perekId is not provided", () => {
+		render(<PerushFullView perush={samplePerush} onBack={jest.fn()} />);
+		expect(screen.queryByLabelText("שיתוף")).toBeNull();
 	});
 });

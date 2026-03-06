@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { Article } from "@/lib/articles";
 import { authorNameToSlug } from "@/lib/authors/url-utils";
 import articleStyles from "../[slug]/page.module.css";
+import { ShareButton } from "./ShareButton";
 import styles from "./sefer.module.css";
 
 interface ArticleFullViewProps {
@@ -27,6 +28,8 @@ export function ArticleFullView({
 		? `${articleStyles.expandedArticle} ${styles.articleFullViewInBook}`
 		: articleStyles.expandedArticle;
 
+	const canonicalPath = `/929/${article.perekId}/${article.id}`;
+
 	return (
 		<div className={rootClass}>
 			<header className={articleStyles.articleHeader}>
@@ -46,6 +49,10 @@ export function ArticleFullView({
 					<span className={articleStyles.authorName}>{article.authorName}</span>
 				</Link>
 				<h2 className={articleStyles.articleTitle}>{article.name}</h2>
+				<ShareButton
+					canonicalPath={canonicalPath}
+					title={`${article.name} — ${article.authorName}`}
+				/>
 			</header>
 
 			{article.content && (
