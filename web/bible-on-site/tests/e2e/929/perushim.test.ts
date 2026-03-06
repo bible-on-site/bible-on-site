@@ -6,7 +6,7 @@ import { expect, test } from "../../util/playwright/test-fixture";
  * - Section heading "פרשנים על הפרק" is always present.
  * - When no perushim for the perek: empty message "אין פרשנות לפרק זה".
  * - When perushim exist: carousel has clickable items; opening one shows full view
- *   with back button, perush name, and parshan name (birth year when available).
+ *   with back button, perush name, and parshan name.
  */
 
 test.describe("Perushim Section", () => {
