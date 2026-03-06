@@ -158,6 +158,9 @@ export default async function ArticlePage({
 	const articlesByPerekIndex = await Promise.all(
 		perekIds.map((pid) => getCachedArticles(pid)),
 	);
+	const perushimByPerekIndex = await Promise.all(
+		perekIds.map((pid) => getCachedPerushim(pid)),
+	);
 
 	if (isArticle) {
 		// Handle article view
@@ -175,6 +178,8 @@ export default async function ArticlePage({
 						perekObj={perekObj}
 						articles={articles}
 						articlesByPerekIndex={articlesByPerekIndex}
+						perushimByPerekIndex={perushimByPerekIndex}
+						perekIds={perekIds}
 						initialSlug={slug}
 					/>
 				</Suspense>

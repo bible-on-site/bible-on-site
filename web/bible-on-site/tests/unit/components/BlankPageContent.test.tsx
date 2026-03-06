@@ -165,6 +165,67 @@ describe("BlankPageContent", () => {
 		});
 	});
 
+	it("pushes correct history URL when clicking article (includes perekId)", async () => {
+		const fullArticle: Article = {
+			...mockArticles[0],
+			content: "<div>content</div>",
+		};
+		mockGetArticleForBook.mockResolvedValue(fullArticle);
+		const pushSpy = jest.spyOn(history, "pushState");
+
+		render(
+			<BlankPageContent
+				articles={mockArticles}
+				perekId={615}
+				hebrewDateStr="י׳ בשבט"
+			/>,
+		);
+
+		await act(async () => {
+			fireEvent.click(screen.getByRole("button"));
+		});
+
+		await waitFor(() => {
+			expect(pushSpy).toHaveBeenCalledWith(
+				{ articleId: 1 },
+				"",
+				"/929/615/1?book",
+			);
+		});
+
+		pushSpy.mockRestore();
+	});
+
+	it("pushes correct history URL when clicking perush (includes perekId)", async () => {
+		mockGetPerushNotesForPage.mockResolvedValue([
+			{ pasuk: 1, noteIdx: 0, noteContent: "<p>content</p>" },
+		]);
+		const pushSpy = jest.spyOn(history, "pushState");
+
+		render(
+			<BlankPageContent
+				articles={[]}
+				perushim={mockPerushim}
+				perekId={615}
+				hebrewDateStr="י׳ בשבט"
+			/>,
+		);
+
+		await act(async () => {
+			fireEvent.click(screen.getByRole("button", { name: /רש״י/ }));
+		});
+
+		await waitFor(() => {
+			expect(pushSpy).toHaveBeenCalledWith(
+				{ perushId: 1 },
+				"",
+				"/929/615/%D7%A8%D7%A9%D7%B4%D7%99?book",
+			);
+		});
+
+		pushSpy.mockRestore();
+	});
+
 	it("handles null from getArticleForBook gracefully", async () => {
 		mockGetArticleForBook.mockResolvedValue(null);
 
