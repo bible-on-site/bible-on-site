@@ -14,16 +14,17 @@ jest.mock("next/link", () => ({
 	default: ({
 		children,
 		href,
-	}: { children: React.ReactNode; href: string }) => (
-		<a href={href}>{children}</a>
-	),
+	}: {
+		children: React.ReactNode;
+		href: string;
+	}) => <a href={href}>{children}</a>,
 }));
 
 jest.mock("@/lib/authors/url-utils", () => ({
 	authorNameToSlug: (name: string) => encodeURIComponent(name),
 }));
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { ArticleFullView } from "../../../src/app/929/[number]/components/ArticleFullView";
 import type { Article } from "../../../src/lib/articles";
 
@@ -77,8 +78,19 @@ describe("ArticleFullView", () => {
 	it("renders author link pointing to /929/authors/{slug}", () => {
 		render(<ArticleFullView article={baseArticle} onBack={jest.fn()} />);
 
-		const link = screen.getByRole("link");
-		expect(link.getAttribute("href")).toContain("/929/authors/");
+		const authorLink = screen
+			.getAllByRole("link")
+			.find((el) => el.getAttribute("href")?.includes("/929/authors/"));
+		expect(authorLink).toBeTruthy();
+		expect(authorLink?.getAttribute("href")).toContain("/929/authors/");
+	});
+
+	it("renders share button with canonical href", () => {
+		render(<ArticleFullView article={baseArticle} onBack={jest.fn()} />);
+
+		const shareLink = screen.getByLabelText("שיתוף");
+		expect(shareLink).toBeTruthy();
+		expect(shareLink.getAttribute("href")).toBe("/929/1/1");
 	});
 
 	it("applies fullPage class when fullPage prop is true", () => {

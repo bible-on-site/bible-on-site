@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import type { PerushDetail, PerushSummary } from "@/lib/perushim";
 import { getPerushNotesForPage } from "../actions";
@@ -17,7 +18,8 @@ interface PerushimSectionProps {
 
 /**
  * Renders perushim (commentaries) for a perek as a horizontal carousel.
- * When onPerushClick is not provided, clicking a perush expands to show all its notes inline.
+ * When onPerushClick is not provided, clicking a perush expands to show all its notes inline
+ * while pushing a history entry so back-button and sharing work.
  * When onPerushClick is provided, clicking delegates to the callback (e.g. for flipbook in-place view).
  */
 export function PerushimSection({
@@ -40,6 +42,8 @@ export function PerushimSection({
 		setInternalLoading(true);
 		try {
 			const notes = await getPerushNotesForPage(perush.id, perekId);
+			const url = `/929/${perekId}/${encodeURIComponent(perush.name)}`;
+			history.pushState({ perushId: perush.id }, "", url);
 			setSelected({
 				id: perush.id,
 				name: perush.name,
@@ -55,10 +59,13 @@ export function PerushimSection({
 
 	function handleBack() {
 		setSelected(null);
+		history.pushState(null, "", `/929/${perekId}`);
 	}
 
 	if (!onPerushClick && selected) {
-		return <PerushFullView perush={selected} onBack={handleBack} />;
+		return (
+			<PerushFullView perush={selected} onBack={handleBack} perekId={perekId} />
+		);
 	}
 
 	return (
@@ -78,21 +85,40 @@ export function PerushimSection({
 				) : loading ? (
 					<p className={styles.emptyMessage}>מתחבר לפירוש...</p>
 				) : (
-					safePerushim.map((perush) => (
-						<button
-							key={perush.id}
-							type="button"
-							className={styles.carouselItem}
-							onClick={() => handlePerushClick(perush)}
-						>
-							<div className={styles.perushIcon}>📜</div>
-							<span className={styles.perushName}>{perush.name}</span>
-							<span className={styles.parshanName}>{perush.parshanName}</span>
-							<span className={styles.noteCount}>
-								{perush.noteCount} פסוקים
-							</span>
-						</button>
-					))
+					safePerushim.map((perush) =>
+						onPerushClick ? (
+							<button
+								key={perush.id}
+								type="button"
+								className={styles.carouselItem}
+								onClick={() => handlePerushClick(perush)}
+							>
+								<div className={styles.perushIcon}>📜</div>
+								<span className={styles.perushName}>{perush.name}</span>
+								<span className={styles.parshanName}>{perush.parshanName}</span>
+								<span className={styles.noteCount}>
+									{perush.noteCount} פסוקים
+								</span>
+							</button>
+						) : (
+							<Link
+								key={perush.id}
+								href={`/929/${perekId}/${encodeURIComponent(perush.name)}`}
+								className={styles.carouselItem}
+								onClick={(e) => {
+									e.preventDefault();
+									handlePerushClick(perush);
+								}}
+							>
+								<div className={styles.perushIcon}>📜</div>
+								<span className={styles.perushName}>{perush.name}</span>
+								<span className={styles.parshanName}>{perush.parshanName}</span>
+								<span className={styles.noteCount}>
+									{perush.noteCount} פסוקים
+								</span>
+							</Link>
+						),
+					)
 				)}
 			</div>
 		</section>

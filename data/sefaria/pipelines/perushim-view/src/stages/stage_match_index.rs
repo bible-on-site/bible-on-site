@@ -125,6 +125,20 @@ const ACADEMIC_EXCLUDED: &[&str] = &[
     "Megillat Ruth; From Chaos to Kingship",
 ];
 
+/// Works by contradictory / problematic authors — not suitable for an Orthodox project.
+const CONTRADICTORY_AUTHORS_EXCLUDED: &[&str] = &[
+    // Zerachiah ben Shealtiel Chen — contradictory figure
+    "Imrei Da'at on Proverbs",
+    "Tikvat Enosh on Job",
+];
+
+/// Meta-commentaries on other perushim (not direct Tanakh commentaries).
+const META_COMMENTARIES_EXCLUDED: &[&str] = &[
+    // Mechokekei Yehudah — commentaries on Ibn Ezra's commentary, not on Tanakh directly
+    "Mechokekei Yehudah; Karnei Ohr",
+    "Mechokekei Yehudah; Yahel Ohr",
+];
+
 // TODO: Clarify exclusion reason for each of these titles
 const UNCLEAR_EXCLUSIONS: &[&str] = &[
     "Baal HaTurim on Genesis",
@@ -170,6 +184,8 @@ pub fn build() -> Document {
         .chain(MODERN_ENGLISH_EXCLUDED.iter())
         .chain(NOT_PERUSIM.iter())
         .chain(ACADEMIC_EXCLUDED.iter())
+        .chain(CONTRADICTORY_AUTHORS_EXCLUDED.iter())
+        .chain(META_COMMENTARIES_EXCLUDED.iter())
         .chain(UNCLEAR_EXCLUSIONS.iter())
         .copied()
         .collect();

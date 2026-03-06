@@ -4,6 +4,7 @@ import { toLetters } from "gematry";
 import DOMPurify from "isomorphic-dompurify";
 import type { PerushDetail, PerushNote } from "@/lib/perushim";
 import styles from "./perushim-section.module.css";
+import { ShareButton } from "./ShareButton";
 import seferStyles from "./sefer.module.css";
 
 interface PerushFullViewProps {
@@ -11,6 +12,8 @@ interface PerushFullViewProps {
 	onBack: () => void;
 	/** When true, layout fills container: header fixed, notes scroll (flipbook blank page). */
 	fullPage?: boolean;
+	/** Perek ID for constructing canonical sharing URL. */
+	perekId?: number;
 }
 
 /**
@@ -21,6 +24,7 @@ export function PerushFullView({
 	perush,
 	onBack,
 	fullPage = false,
+	perekId,
 }: PerushFullViewProps) {
 	// Group notes by pasuk
 	const grouped = new Map<number, PerushNote[]>();
@@ -38,6 +42,10 @@ export function PerushFullView({
 		? `${styles.notesContainer} ${seferStyles.perushNotesInBook}`
 		: styles.notesContainer;
 
+	const canonicalPath = perekId
+		? `/929/${perekId}/${encodeURIComponent(perush.name)}`
+		: null;
+
 	return (
 		<section className={rootClass}>
 			<header className={styles.fullViewHeader}>
@@ -53,6 +61,12 @@ export function PerushFullView({
 						)}
 					</span>
 				</div>
+				{canonicalPath && (
+					<ShareButton
+						canonicalPath={canonicalPath}
+						title={`${perush.name} — ${perush.parshanName}`}
+					/>
+				)}
 			</header>
 
 			<div className={notesClass}>

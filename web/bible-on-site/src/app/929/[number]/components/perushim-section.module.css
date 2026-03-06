@@ -205,3 +205,25 @@
     font-size: 0.9rem;
   }
 }
+
+/* ─── Share button ────────────────────────────── */
+
+.shareButton {
+  appearance: none;
+  font: inherit;
+  background: #f0ead8;
+  border: 1px solid #d4c9a8;
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  color: #5a4a2e;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  transition: background 0.15s;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.shareButton:hover {
+  background: #e8e0cc;
+}

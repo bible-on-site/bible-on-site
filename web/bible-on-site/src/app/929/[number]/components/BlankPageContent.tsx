@@ -22,6 +22,7 @@ interface BlankPageContentProps {
 /**
  * Blank page content in the flipbook: date, perushim carousel, articles carousel, or full view.
  * Clicking a perush/article in the carousel shows it in place (whole left page); back returns to carousels.
+ * History state is pushed so the browser back button works.
  */
 export function BlankPageContent({
 	articles,
@@ -38,21 +39,30 @@ export function BlankPageContent({
 	const [perushLoading, setPerushLoading] = useState(false);
 	const initialSlugHandled = useRef(false);
 
-	const handleArticleClick = useCallback(async (article: Article) => {
-		setArticleLoading(true);
-		try {
-			const full = await getArticleForBook(article.id);
-			if (full) setSelectedArticle(full);
-		} finally {
-			setArticleLoading(false);
-		}
-	}, []);
+	const handleArticleClick = useCallback(
+		async (article: Article) => {
+			setArticleLoading(true);
+			try {
+				const full = await getArticleForBook(article.id);
+				if (full) {
+					const url = `/929/${perekId}/${article.id}?book`;
+					history.pushState({ articleId: article.id }, "", url);
+					setSelectedArticle(full);
+				}
+			} finally {
+				setArticleLoading(false);
+			}
+		},
+		[perekId],
+	);
 
 	const handlePerushClick = useCallback(
 		async (perush: PerushSummary) => {
 			setPerushLoading(true);
 			try {
 				const notes = await getPerushNotesForPage(perush.id, perekId);
+				const url = `/929/${perekId}/${encodeURIComponent(perush.name)}?book`;
+				history.pushState({ perushId: perush.id }, "", url);
 				setSelectedPerush({
 					id: perush.id,
 					name: perush.name,
@@ -89,11 +99,17 @@ export function BlankPageContent({
 
 	const handleArticleBack = useCallback(() => {
 		setSelectedArticle(null);
-	}, []);
+		if (perekId) {
+			history.pushState(null, "", `/929/${perekId}?book`);
+		}
+	}, [perekId]);
 
 	const handlePerushBack = useCallback(() => {
 		setSelectedPerush(null);
-	}, []);
+		if (perekId) {
+			history.pushState(null, "", `/929/${perekId}?book`);
+		}
+	}, [perekId]);
 
 	const hasFullView = selectedPerush || selectedArticle;
 
@@ -115,6 +131,7 @@ export function BlankPageContent({
 						<PerushFullView
 							perush={selectedPerush}
 							onBack={handlePerushBack}
+							perekId={perekId}
 							fullPage
 						/>
 					</div>

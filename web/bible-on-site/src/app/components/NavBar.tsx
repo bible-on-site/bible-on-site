@@ -17,7 +17,7 @@ export const NavBar = () => {
 
 			<nav className={styles.menuBox}>
 				<header className={styles.sidebarTopBar}>
-					<Link href="./">
+					<Link href="/">
 						<Image
 							src="/images/logos/logo192.webp"
 							alt="עמוד ראשי"

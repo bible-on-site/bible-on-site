@@ -75,7 +75,12 @@ pub fn extract(docs: &[Document]) -> Extracted {
             id
         } else {
             let id = (parshanim.len() + 1) as i64;
-            let birth_year = parse_birth_year(doc.get("firstAuthorBirthYear"));
+            let birth_year = parse_birth_year(doc.get("firstAuthorBirthYear")).or_else(|| {
+                BIRTH_YEAR_FALLBACKS
+                    .iter()
+                    .find(|(name, _)| *name == first_author)
+                    .map(|(_, year)| *year)
+            });
             parshanim.push(Parshan {
                 id,
                 name: first_author.clone(),
@@ -91,7 +96,16 @@ pub fn extract(docs: &[Document]) -> Extracted {
             id
         } else {
             let id = (perushim.len() + 1) as i64;
-            let priority = derive_priority(&perush_name, doc.get("compDate"));
+            let parshan_birth_year = parshanim
+                .iter()
+                .find(|p| p.id == parshan_id)
+                .and_then(|p| p.birth_year);
+            let priority = derive_priority(
+                &perush_name,
+                doc.get("compDate"),
+                doc.get("firstAuthorBirthYear"),
+                parshan_birth_year,
+            );
             perushim.push(Perush {
                 id,
                 name: perush_name.clone(),
@@ -268,14 +282,47 @@ fn flatten_verse_entry(
     }
 }
 
-/// Extract author names from a BSON document's `authors` field.
+/// Corrections for author display names where the Sefaria person record
+/// has an incorrect or non-standard Hebrew spelling.
+const AUTHOR_NAME_CORRECTIONS: &[(&str, &str)] = &[("אברהם סבה", "אברהם סבע")];
+
+/// Fallback birth years for parshanim whose person records are either
+/// missing from Sefaria or have empty `authors` arrays in the index
+/// (so the pipeline's person lookup can't find them).
+/// Sources: Sefaria person collection, Jewish Encyclopedia, Wikipedia.
+const BIRTH_YEAR_FALLBACKS: &[(&str, i64)] = &[
+    ("ר' שמואל די אוזידה", 1545),      // Samuel de Uceda
+    ("ר' יעקב קרנץ", 1741),            // Jacob Kranz, Maggid of Dubno
+    ("ר' יוסף אבן כספי", 1280),        // Joseph ibn Caspi
+    ("ר' חיים יוסף דוד אזולאי", 1724), // Chida
+    ("חזקוני", 1210),                  // Hezekiah ben Manoah, est. early 13th c.
+    ("אברהם בן יצחק צהלון", 1560),     // Abraham ben Isaac Zahalon, est. late 16th c.
+    ("ר' מרדכי יפה", 1530),            // Mordecai Jaffe (the Levush)
+    ("דוד פארדו", 1719),               // David Pardo
+    ("הרב נתן מרקוס אדלר", 1803),      // Nathan Marcus Adler
+    ("ר' עזרא בן שלמה מגירונה", 1160), // Ezra ben Solomon of Gerona
+    ("ר' יעקב בן יצחק אשכנזי", 1550),  // Jacob ben Isaac Ashkenazi (Tze'enah Ure'enah)
+    ("סעדיה גאון", 882),               // Saadia Gaon
+    ("יצחק בן מרדכי גרשון", 1560),     // Isaac ben Mordecai Gershon, est. late 16th c.
+    ("אונקלוס", 35),                   // Onkelos, ~35-120 CE
+    ("יונתן בן עוזיאל", 60),           // Yonatan ben Uziel, ~1st c. BCE - 1st c. CE
+    ("תוספות", 1150),                  // Tosafists, collective: ~12th-13th c.
+    ("רבותינו זכרונם לברכה", 0),       // Chazal — Targum Yerushalmi and anonymous works
+];
+
+/// Extract author names from a BSON document's `authors` field,
+/// applying display-name corrections from [`AUTHOR_NAME_CORRECTIONS`].
 fn extract_authors(doc: &Document) -> Vec<String> {
     match doc.get("authors") {
         Some(bson::Bson::Array(arr)) => arr
             .iter()
             .filter_map(|v| {
                 if let bson::Bson::String(s) = v {
-                    Some(s.clone())
+                    let corrected = AUTHOR_NAME_CORRECTIONS
+                        .iter()
+                        .find(|(from, _)| *from == s.as_str())
+                        .map_or_else(|| s.clone(), |(_, to)| (*to).to_string());
+                    Some(corrected)
                 } else {
                     None
                 }
@@ -314,7 +361,7 @@ fn bson_to_optional_string(value: Option<&bson::Bson>) -> Option<String> {
     }
 }
 
-/// Parse Sefaria birthDate (e.g. "1040", "1040-1105") to a single year.
+/// Parse Sefaria birthDate (e.g. "1040", "1040-1105", "882") to a single year.
 fn parse_birth_year(value: Option<&bson::Bson>) -> Option<i64> {
     let s = match value {
         Some(bson::Bson::String(s)) => s.as_str(),
@@ -322,10 +369,16 @@ fn parse_birth_year(value: Option<&bson::Bson>) -> Option<i64> {
         Some(bson::Bson::Int64(n)) => return Some(*n),
         _ => return None,
     };
-    // Take first 4 consecutive digits (handles "1040", "1040-1105", "c. 1040").
-    let digits: String = s.chars().filter(|c| c.is_ascii_digit()).take(4).collect();
-    if digits.len() == 4 {
-        digits.parse().ok()
+    let mut current_number = String::new();
+    for ch in s.chars() {
+        if ch.is_ascii_digit() {
+            current_number.push(ch);
+        } else if !current_number.is_empty() {
+            break;
+        }
+    }
+    if current_number.len() >= 3 {
+        current_number.parse().ok()
     } else {
         None
     }
@@ -335,10 +388,16 @@ fn parse_birth_year(value: Option<&bson::Bson>) -> Option<i64> {
 /// - Targum variants (תרגום): priority 0-99 (first, ordered chronologically among themselves)
 /// - Rashi (רש"י): priority 100 (second)
 /// - All others: chronological by composition date starting from 200
+///   Falls back to author birth year + 200 when composition date is missing.
 ///
 /// This matches the legacy app ordering where Targum always appears first,
 /// then Rashi, then other commentaries by chronological order.
-fn derive_priority(perush_name: &str, comp_date: Option<&bson::Bson>) -> i64 {
+fn derive_priority(
+    perush_name: &str,
+    comp_date: Option<&bson::Bson>,
+    author_birth_year: Option<&bson::Bson>,
+    static_birth_year: Option<i64>,
+) -> i64 {
     // Special handling for Targum (all variants first)
     if perush_name.contains("תרגום") {
         // All Targumim must be < 100 to appear before Rashi
@@ -361,10 +420,20 @@ fn derive_priority(perush_name: &str, comp_date: Option<&bson::Bson>) -> i64 {
     // All others: chronological, starting from 200
     let year = extract_year_from_comp_date(comp_date);
     if year < 9999 {
-        200 + year
-    } else {
-        9999 // Unknown dates last
+        return 200 + year;
     }
+
+    // Fallback 1: use author birth year from person collection
+    if let Some(birth_year) = parse_birth_year(author_birth_year) {
+        return 200 + birth_year;
+    }
+
+    // Fallback 2: use statically resolved birth year
+    if let Some(birth_year) = static_birth_year {
+        return 200 + birth_year;
+    }
+
+    9999 // Truly unknown dates last
 }
 
 /// Extract the first year from a composition date field.
@@ -600,5 +669,87 @@ mod tests {
         assert_eq!(result.notes.len(), 1);
         assert_eq!(result.notes[0].note_content, "real note");
         assert_eq!(result.notes[0].pasuk, 3); // 1-indexed: the 3rd verse has content
+    }
+
+    // ─── derive_priority tests ───────────────────────────────────────────────
+
+    #[test]
+    fn priority_targum_with_date() {
+        let comp = bson!("[80, 120]");
+        assert_eq!(
+            derive_priority("תרגום אונקלוס", Some(&comp), None, None),
+            13
+        );
+    }
+
+    #[test]
+    fn priority_targum_without_date() {
+        assert_eq!(derive_priority("תרגום יונתן", None, None, None), 50);
+    }
+
+    #[test]
+    fn priority_rashi() {
+        let comp = bson!("[1075, 1105]");
+        assert_eq!(derive_priority("רש\"י", Some(&comp), None, None), 100);
+    }
+
+    #[test]
+    fn priority_other_with_comp_date() {
+        let comp = bson!("[1040, 1105]");
+        assert_eq!(derive_priority("אבן עזרא", Some(&comp), None, None), 1240);
+    }
+
+    #[test]
+    fn priority_other_without_comp_date_uses_birth_year() {
+        let birth = bson!("882");
+        assert_eq!(
+            derive_priority("ר' סעדיה גאון", None, Some(&birth), None),
+            1082, // 200 + 882
+        );
+    }
+
+    #[test]
+    fn priority_other_without_any_date() {
+        assert_eq!(derive_priority("unknown perush", None, None, None), 9999);
+    }
+
+    #[test]
+    fn priority_comp_date_takes_precedence_over_birth_year() {
+        let comp = bson!("[1845, 1875]");
+        let birth = bson!("1809");
+        assert_eq!(
+            derive_priority("מלבי\"ם", Some(&comp), Some(&birth), None),
+            2045
+        );
+    }
+
+    #[test]
+    fn priority_static_birth_year_fallback() {
+        assert_eq!(
+            derive_priority("test perush", None, None, Some(1724)),
+            1924, // 200 + 1724
+        );
+    }
+
+    #[test]
+    fn priority_bson_birth_year_before_static() {
+        let birth = bson!("1500");
+        assert_eq!(
+            derive_priority("test perush", None, Some(&birth), Some(1724)),
+            1700, // 200 + 1500 (BSON takes precedence)
+        );
+    }
+
+    #[test]
+    fn author_name_correction_applied() {
+        let doc = doc! {
+            "name": "צרור המור",
+            "authors": ["אברהם סבה"],
+            "sefer": 1,
+            "versions": [],
+            "schema": { "depth": 3 }
+        };
+        let result = extract(&[doc]);
+        assert_eq!(result.parshanim[0].name, "אברהם סבע");
     }
 }
