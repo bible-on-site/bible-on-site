@@ -75,13 +75,12 @@ pub fn extract(docs: &[Document]) -> Extracted {
             id
         } else {
             let id = (parshanim.len() + 1) as i64;
-            let birth_year = parse_birth_year(doc.get("firstAuthorBirthYear"))
-                .or_else(|| {
-                    BIRTH_YEAR_FALLBACKS
-                        .iter()
-                        .find(|(name, _)| *name == first_author)
-                        .map(|(_, year)| *year)
-                });
+            let birth_year = parse_birth_year(doc.get("firstAuthorBirthYear")).or_else(|| {
+                BIRTH_YEAR_FALLBACKS
+                    .iter()
+                    .find(|(name, _)| *name == first_author)
+                    .map(|(_, year)| *year)
+            });
             parshanim.push(Parshan {
                 id,
                 name: first_author.clone(),
@@ -285,28 +284,26 @@ fn flatten_verse_entry(
 
 /// Corrections for author display names where the Sefaria person record
 /// has an incorrect or non-standard Hebrew spelling.
-const AUTHOR_NAME_CORRECTIONS: &[(&str, &str)] = &[
-    ("אברהם סבה", "אברהם סבע"),
-];
+const AUTHOR_NAME_CORRECTIONS: &[(&str, &str)] = &[("אברהם סבה", "אברהם סבע")];
 
 /// Fallback birth years for parshanim whose person records are either
 /// missing from Sefaria or have empty `authors` arrays in the index
 /// (so the pipeline's person lookup can't find them).
 /// Sources: Sefaria person collection, Jewish Encyclopedia, Wikipedia.
 const BIRTH_YEAR_FALLBACKS: &[(&str, i64)] = &[
-    ("ר' שמואל די אוזידה", 1545),     // Samuel de Uceda
-    ("ר' יעקב קרנץ", 1741),           // Jacob Kranz, Maggid of Dubno
-    ("ר' יוסף אבן כספי", 1280),       // Joseph ibn Caspi
+    ("ר' שמואל די אוזידה", 1545),      // Samuel de Uceda
+    ("ר' יעקב קרנץ", 1741),            // Jacob Kranz, Maggid of Dubno
+    ("ר' יוסף אבן כספי", 1280),        // Joseph ibn Caspi
     ("ר' חיים יוסף דוד אזולאי", 1724), // Chida
     ("חזקוני", 1210),                  // Hezekiah ben Manoah, est. early 13th c.
-    ("אברהם בן יצחק צהלון", 1560),    // Abraham ben Isaac Zahalon, est. late 16th c.
-    ("ר' מרדכי יפה", 1530),           // Mordecai Jaffe (the Levush)
-    ("דוד פארדו", 1719),              // David Pardo
-    ("הרב נתן מרקוס אדלר", 1803),     // Nathan Marcus Adler
+    ("אברהם בן יצחק צהלון", 1560),     // Abraham ben Isaac Zahalon, est. late 16th c.
+    ("ר' מרדכי יפה", 1530),            // Mordecai Jaffe (the Levush)
+    ("דוד פארדו", 1719),               // David Pardo
+    ("הרב נתן מרקוס אדלר", 1803),      // Nathan Marcus Adler
     ("ר' עזרא בן שלמה מגירונה", 1160), // Ezra ben Solomon of Gerona
-    ("ר' יעקב בן יצחק אשכנזי", 1550), // Jacob ben Isaac Ashkenazi (Tze'enah Ure'enah)
+    ("ר' יעקב בן יצחק אשכנזי", 1550),  // Jacob ben Isaac Ashkenazi (Tze'enah Ure'enah)
     ("סעדיה גאון", 882),               // Saadia Gaon
-    ("יצחק בן מרדכי גרשון", 1560),    // Isaac ben Mordecai Gershon, est. late 16th c.
+    ("יצחק בן מרדכי גרשון", 1560),     // Isaac ben Mordecai Gershon, est. late 16th c.
     ("אונקלוס", 35),                   // Onkelos, ~35-120 CE
     ("יונתן בן עוזיאל", 60),           // Yonatan ben Uziel, ~1st c. BCE - 1st c. CE
     ("תוספות", 1150),                  // Tosafists, collective: ~12th-13th c.
@@ -699,10 +696,7 @@ mod tests {
     #[test]
     fn priority_other_with_comp_date() {
         let comp = bson!("[1040, 1105]");
-        assert_eq!(
-            derive_priority("אבן עזרא", Some(&comp), None, None),
-            1240
-        );
+        assert_eq!(derive_priority("אבן עזרא", Some(&comp), None, None), 1240);
     }
 
     #[test]
