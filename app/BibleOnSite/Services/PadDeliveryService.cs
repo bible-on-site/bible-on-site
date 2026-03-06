@@ -216,7 +216,7 @@ partial class PadDeliveryService
 
             try
             {
-                return SaveOdrDataAsset(cacheDir);
+                return SaveOdrDataAsset(cacheDir, request.Bundle);
             }
             finally
             {
@@ -253,7 +253,7 @@ partial class PadDeliveryService
             ct.ThrowIfCancellationRequested();
 
             var cacheDir = OdrCacheDir(packName);
-            var result = SaveOdrDataAsset(cacheDir);
+            var result = SaveOdrDataAsset(cacheDir, request.Bundle);
             return result != null;
         }
         catch (OperationCanceledException)
@@ -276,10 +276,11 @@ partial class PadDeliveryService
     /// After BeginAccessingResources, the asset catalog data is available via NSDataAsset.
     /// actool compiles the .dataset into Assets.car, so we read it via NSDataAsset and
     /// write to disk for SQLite file-based access.
+    /// ODR assets live in the request's bundle, not the main bundle.
     /// </summary>
-    private static string? SaveOdrDataAsset(string cacheDir)
+    private static string? SaveOdrDataAsset(string cacheDir, NSBundle bundle)
     {
-        using var asset = new NSDataAsset(DatasetAssetName);
+        using var asset = new NSDataAsset(DatasetAssetName, bundle);
         if (asset?.Data == null)
         {
             System.Diagnostics.Debug.WriteLine($"ODR: NSDataAsset('{DatasetAssetName}') returned null");
@@ -347,8 +348,8 @@ partial class PadDeliveryService
             {
                 try
                 {
-                    using var odrAsset = new NSDataAsset(DatasetAssetName);
-                    lines.Add($"ODR NSDataAsset('{DatasetAssetName}'): {(odrAsset?.Data != null ? $"length={odrAsset.Data.Length}" : "(null)")}");
+                    using var odrAsset = new NSDataAsset(DatasetAssetName, request.Bundle);
+                    lines.Add($"ODR NSDataAsset('{DatasetAssetName}', request.Bundle): {(odrAsset?.Data != null ? $"length={odrAsset.Data.Length}" : "(null)")}");
 
                     if (odrAsset?.Data != null)
                     {
@@ -394,8 +395,8 @@ partial class PadDeliveryService
 
                     try
                     {
-                        using var fetchedAsset = new NSDataAsset(DatasetAssetName);
-                        lines.Add($"Post-fetch NSDataAsset: {(fetchedAsset?.Data != null ? $"length={fetchedAsset.Data.Length}" : "(null)")}");
+                        using var fetchedAsset = new NSDataAsset(DatasetAssetName, fetchReq.Bundle);
+                        lines.Add($"Post-fetch NSDataAsset(request.Bundle): {(fetchedAsset?.Data != null ? $"length={fetchedAsset.Data.Length}" : "(null)")}");
                     }
                     catch (Exception fetchAssetEx)
                     {

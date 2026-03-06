@@ -8,11 +8,13 @@
              xmlns:behaviors="clr-namespace:BibleOnSite.Behaviors"
              xmlns:converters="clr-namespace:BibleOnSite.Converters"
              xmlns:fonts="clr-namespace:Fonts"
+             xmlns:ios="clr-namespace:Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific;assembly=Microsoft.Maui.Controls"
              x:Class="BibleOnSite.Pages.PerekPage"
              x:Name="PerekPageRoot"
              x:DataType="viewmodels:PerekViewModel"
              Title="{Binding Source}"
-             FlowDirection="RightToLeft">
+             FlowDirection="RightToLeft"
+             ios:Page.UseSafeArea="False">
 
     <ContentPage.Resources>
         <ResourceDictionary>
@@ -20,7 +22,7 @@
             <Color x:Key="SelectedPasukBackgroundDark">#1E3A5F</Color>
             <converters:IntEqualityConverter x:Key="IntEqualityConverter"/>
             <converters:PerushCheckedConverter x:Key="PerushCheckedConverter"/>
-            <!-- DataTrigger helper for selection background -->
+            <x:Double x:Key="BottomBarTotalHeight">90</x:Double>
         </ResourceDictionary>
     </ContentPage.Resources>
 
@@ -187,7 +189,7 @@
                                             Scrolled="OnPasukimScrolled"
                                             Margin="8,0,8,0">
                                 <CollectionView.Footer>
-                                    <ContentView x:Name="PasukimFooterSpacer" HeightRequest="90" BackgroundColor="Transparent"/>
+                                    <ContentView HeightRequest="{DynamicResource BottomBarTotalHeight}" BackgroundColor="Transparent"/>
                                 </CollectionView.Footer>
                                 <CollectionView.ItemTemplate>
                                     <DataTemplate x:DataType="models:Pasuk">
@@ -295,7 +297,7 @@
                             Margin="8,8,8,0">
                 <!-- Footer spacer so last item can scroll above bottom bar -->
                 <CollectionView.Footer>
-                    <ContentView x:Name="ArticlesFooterSpacer" HeightRequest="90" BackgroundColor="Transparent"/>
+                    <ContentView x:Name="ArticlesFooterSpacer" HeightRequest="{DynamicResource BottomBarTotalHeight}" BackgroundColor="Transparent"/>
                 </CollectionView.Footer>
                 <CollectionView.ItemsLayout>
                     <GridItemsLayout Orientation="Vertical"
