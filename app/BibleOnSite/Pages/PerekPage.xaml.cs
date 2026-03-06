@@ -37,6 +37,10 @@ public partial class PerekPage : ContentPage
     private static DateTime _lastScrollTime = DateTime.MinValue;
     private const int ScrollCooldownMs = 500; // Don't allow long-press within 500ms of scroll
 
+#if IOS
+    private CancellationTokenSource? _scrollRefreshCts;
+#endif
+
     /// <summary>
     /// Returns true if the user is currently scrolling or just finished scrolling.
     /// Used by LongPressBehavior to prevent false triggers during scroll.
@@ -239,12 +243,31 @@ public partial class PerekPage : ContentPage
     private void OnPasukimScrolled(object? sender, ItemsViewScrolledEventArgs e)
     {
         _lastScrollTime = DateTime.Now;
-        // Cancel any pending long-press (pointer-based for Windows)
         _longPressTokenSource?.Cancel();
         _pressedPasukNum = -1;
-        // Cancel any pending long-press (behavior-based for Android)
         LongPressBehavior.CancelAllPending();
+#if IOS
+        _scrollRefreshCts?.Cancel();
+        _scrollRefreshCts = new CancellationTokenSource();
+        var token = _scrollRefreshCts.Token;
+        _ = DeferredScrollRefreshAsync(token);
+#endif
     }
+
+#if IOS
+    private async Task DeferredScrollRefreshAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(200, token);
+            if (!token.IsCancellationRequested)
+                Dispatcher.Dispatch(() => RefreshDescendantViews(PerekCarousel));
+        }
+        catch (TaskCanceledException)
+        {
+        }
+    }
+#endif
 
     protected override async void OnAppearing()
     {
@@ -349,18 +372,15 @@ public partial class PerekPage : ContentPage
     private void OnPageSizeChanged(object? sender, EventArgs e) => ApplyBottomBarSafeArea();
 
     /// <summary>
-    /// Extends the bottom bar past the safe area to the physical screen edge on iOS.
-    /// The negative margin pushes the bar into the home-indicator region;
-    /// internal bottom padding keeps interactive content above the indicator.
-    /// The floating menu container gets the same treatment so the FAB stays
-    /// aligned with the bar's notch.
+    /// With UseSafeArea="False" the page extends edge-to-edge.
+    /// The bottom bar sits at the physical screen bottom — we only need
+    /// internal padding so interactive content stays above the home indicator.
     /// </summary>
     private void ApplyBottomBarSafeArea()
     {
         var insets = Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific.Page.GetSafeAreaInsets(this);
         var bottom = insets.Bottom;
 
-        // Fallback: read native safe area when MAUI reports 0 (layout not ready yet)
         if (bottom <= 0)
         {
             var window = UIKit.UIApplication.SharedApplication?.ConnectedScenes
@@ -373,13 +393,13 @@ public partial class PerekPage : ContentPage
         if (bottom <= 0)
             return;
 
-        BottomBar.Margin = new Thickness(0, 0, 0, -bottom);
+        var totalHeight = 90 + bottom;
         BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-        BottomBar.HeightRequest = 90 + bottom;
+        BottomBar.HeightRequest = totalHeight;
 
-        FloatingMenuContainer.Margin = new Thickness(0, 0, 0, -bottom);
+        FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
 
-        ArticlesFooterSpacer.HeightRequest = 90 + bottom;
+        Resources["BottomBarTotalHeight"] = totalHeight;
     }
 #endif
 
