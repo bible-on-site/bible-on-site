@@ -50,9 +50,9 @@ describe("NavBar", () => {
 	it("renders home link with correct href", () => {
 		render(<NavBar />);
 		// Home link has no accessible name (only mock image with alt); get by href
-		const homeLink = document.querySelector('a[href="./"]');
+		const homeLink = document.querySelector('a[href="/"]');
 		expect(homeLink).toBeInTheDocument();
-		expect(homeLink).toHaveAttribute("href", "./");
+		expect(homeLink).toHaveAttribute("href", "/");
 	});
 
 	it("renders app and daily bulletin links", () => {

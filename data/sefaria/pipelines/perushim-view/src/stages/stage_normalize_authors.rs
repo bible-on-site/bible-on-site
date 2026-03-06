@@ -61,6 +61,7 @@ fn author_mapping_branches() -> Vec<Document> {
         ("isaac-abarbanel", "abarbanel"),
         ("ovadiah-seforno", "sforno"),
         ("moses-alshikh", "alshikh"),
+        ("menachem-meiri", "hameiri"),
         // Index key has different structure than person key
         ("moses-isserles-(rema)", "moses isserles"),
         ("moses-kimchi", "joseph kimchi"),

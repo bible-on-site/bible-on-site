@@ -51,9 +51,11 @@ function generateSpectrumColor(
 }
 
 function lightenColor(hslColor: string, amount: number): string {
-	const [, h, s, l] = hslColor.match(
+	const match = hslColor.match(
 		/hsl\(([^,]+),\s*([^,]+)%,\s*([^)]+)%\)/,
-	)!;
+	);
+	if (!match) return hslColor;
+	const [, h, s, l] = match;
 	const newL = Math.min(100, Number.parseFloat(l) + amount);
 	return `hsl(${h}, ${s}%, ${newL}%)`;
 }
@@ -232,7 +234,7 @@ type BookBlockProps = {
 };
 
 function BookBlock({ sefer, x, sqSize, onClick, isToday }: BookBlockProps) {
-	const baseColor = seferColors.get(sefer.name)!;
+	const baseColor = seferColors.get(sefer.name) ?? "hsl(0, 0%, 50%)";
 	const spineColor = darkenColor(baseColor, 8);
 
 	const blockStyle = {

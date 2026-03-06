@@ -31,13 +31,13 @@ test.describe("Perushim Section", () => {
 		});
 		await expect(section).toBeVisible();
 
-		// Either empty message or at least one carousel button (depends on test DB)
+		// Either empty message or at least one carousel item (link in SEO mode)
 		const emptyMsg = section.getByText("אין פרשנות לפרק זה");
-		const anyButton = section.locator("button").first();
-		await expect(emptyMsg.or(anyButton)).toBeVisible();
+		const anyCarouselItem = section.locator("a").first();
+		await expect(emptyMsg.or(anyCarouselItem)).toBeVisible();
 	});
 
-	test("carousel items are buttons that open full view", async ({ page }) => {
+	test("carousel items are links that open full view", async ({ page }) => {
 		await page.goto("/929/1");
 
 		const section = page.locator("section").filter({
@@ -45,7 +45,7 @@ test.describe("Perushim Section", () => {
 		});
 		await expect(section).toBeVisible();
 
-		const firstCarouselButton = section.locator("button").first();
+		const firstCarouselLink = section.locator("a").first();
 		const emptyMessage = section.getByText("אין פרשנות לפרק זה");
 
 		if (await emptyMessage.isVisible()) {
@@ -53,8 +53,8 @@ test.describe("Perushim Section", () => {
 			return;
 		}
 
-		await expect(firstCarouselButton).toBeVisible();
-		await firstCarouselButton.click();
+		await expect(firstCarouselLink).toBeVisible();
+		await firstCarouselLink.click();
 
 		// Full view: back button and title area (perush name + parshan)
 		await expect(
@@ -70,13 +70,13 @@ test.describe("Perushim Section", () => {
 		const section = page.locator("section").filter({
 			has: page.locator("text=פרשנים על הפרק"),
 		});
-		const firstButton = section.locator("button").first();
-		if (!(await firstButton.isVisible())) {
+		const firstLink = section.locator("a").first();
+		if (!(await firstLink.isVisible())) {
 			test.skip();
 			return;
 		}
 
-		await firstButton.click();
+		await firstLink.click();
 		await expect(
 			page.getByRole("button", { name: /חזרה לפרשנים/ }),
 		).toBeVisible({ timeout: 5000 });

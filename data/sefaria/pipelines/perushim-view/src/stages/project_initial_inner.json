@@ -165,15 +165,33 @@
 						},
 						"then": ["סעדיה גאון"]
 					},
-					{
-						"case": {
-							"$regexMatch": {
-								"input": "$title",
-								"regex": "Toledot Yitzchak"
-							}
-						},
-						"then": ["ר' יצחק קארו"]
-					}
+				{
+					"case": {
+						"$regexMatch": {
+							"input": "$title",
+							"regex": "Toledot Yitzchak"
+						}
+					},
+					"then": ["ר' יצחק קארו"]
+				},
+				{
+					"case": {
+						"$regexMatch": {
+							"input": "$title",
+							"regex": "Marot HaTzoveot"
+						}
+					},
+					"then": ["אלשיך"]
+				},
+				{
+					"case": {
+						"$regexMatch": {
+							"input": "$title",
+							"regex": "Romemot El"
+						}
+					},
+					"then": ["אלשיך"]
+				}
 				],
 				"default": ["לא ידוע"]
 			}
@@ -186,7 +204,7 @@
 			"then": {
 				"$let": {
 					"vars": { "first": { "$arrayElemAt": ["$authors", 0] } },
-					"in": "$$first.birthDate"
+					"in": "$$first.birthYear"
 				}
 			},
 			"else": null
