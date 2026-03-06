@@ -68,12 +68,12 @@ describe("PerushFullView", () => {
 		expect(container.innerHTML).not.toContain("perushNotesInBook");
 	});
 
-	it("shows parshanBirthYear when present", () => {
+	it("does not show parshanBirthYear in display", () => {
 		const perush = { ...samplePerush, parshanBirthYear: 1040 };
 		const { container } = render(
 			<PerushFullView perush={perush} onBack={jest.fn()} />,
 		);
-		expect(container.innerHTML).toContain("1040");
+		expect(container.innerHTML).not.toContain("1040");
 	});
 
 	it("groups notes by pasuk", () => {

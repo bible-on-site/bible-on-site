@@ -54,12 +54,7 @@ export function PerushFullView({
 				</button>
 				<div className={styles.fullViewTitle}>
 					<h2 className={styles.sectionTitle}>{perush.name}</h2>
-					<span className={styles.parshanSubtitle}>
-						{perush.parshanName}
-						{perush.parshanBirthYear != null && (
-							<> ({perush.parshanBirthYear})</>
-						)}
-					</span>
+					<span className={styles.parshanSubtitle}>{perush.parshanName}</span>
 				</div>
 				{canonicalPath && (
 					<ShareButton
