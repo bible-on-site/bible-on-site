@@ -1,236 +1,230 @@
 /* Expanded article section within perek page */
 .expandedArticle {
-  margin: 24px 16px;
-  padding: 24px;
-  background: transparent;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+	margin: 24px 16px;
+	padding: 24px;
+	background: transparent;
+	border-radius: 12px;
+	border: 1px solid #e5e7eb;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .articleHeader {
-  text-align: center;
-  margin-bottom: 24px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid #c4c4c4;
+	text-align: center;
+	margin-bottom: 24px;
+	padding-bottom: 20px;
+	border-bottom: 1px solid #c4c4c4;
 }
 
 .authorLink {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  text-decoration: none;
-  color: inherit;
-  margin-bottom: 16px;
+	display: inline-flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	text-decoration: none;
+	color: inherit;
+	margin-bottom: 16px;
 }
 
 .authorLink:hover .authorName {
-  color: #1552ac;
+	color: #1552ac;
 }
 
 .authorImage {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  overflow: hidden;
-  background: #f3f4f6;
-  border: 2px solid #1c2c5d;
+	width: 80px;
+	height: 80px;
+	border-radius: 50%;
+	overflow: hidden;
+	background: #f3f4f6;
+	border: 2px solid #1c2c5d;
 }
 
 .authorImg {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
 }
 
 .authorName {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1c2c5d;
-  transition: color 0.2s;
+	font-size: 1rem;
+	font-weight: 600;
+	color: #1c2c5d;
+	transition: color 0.2s;
 }
 
 .articleTitle {
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: #1c2c5d;
-  margin: 0;
-  line-height: 1.4;
+	font-size: 1.4rem;
+	font-weight: 700;
+	color: #1c2c5d;
+	margin: 0;
+	line-height: 1.4;
 }
 
 .articleBody {
-  font-size: 1.1rem;
-  line-height: 1.8;
-  color: #374151;
-  text-align: justify;
-  direction: rtl;
+	font-size: 1.1rem;
+	line-height: 1.8;
+	color: #374151;
+	text-align: justify;
+	direction: rtl;
 }
 
 .articleBody h1,
 .articleBody h2,
 .articleBody h3 {
-  color: #1c2c5d;
-  margin: 1.5em 0 0.5em;
+	color: #1c2c5d;
+	margin: 1.5em 0 0.5em;
 }
 
 .articleBody h1 {
-  font-size: 1.3rem;
+	font-size: 1.3rem;
 }
 
 .articleBody h2 {
-  font-size: 1.2rem;
+	font-size: 1.2rem;
 }
 
 .articleBody h3 {
-  font-size: 1.1rem;
+	font-size: 1.1rem;
 }
 
 .articleBody p {
-  margin: 1em 0;
+	margin: 1em 0;
 }
 
 .articleBody a {
-  color: #1552ac;
+	color: #1552ac;
 }
 
 .backToPerek {
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid #e5e7eb;
-  text-align: center;
+	margin-top: 24px;
+	padding-top: 16px;
+	border-top: 1px solid #e5e7eb;
+	text-align: center;
 }
 
 .backLink {
-  color: #1c2c5d;
-  text-decoration: none;
-  font-size: 0.95rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 10px 16px;
-  border-radius: 6px;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  transition: all 0.2s;
+	color: #1c2c5d;
+	text-decoration: none;
+	font-size: 0.95rem;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 10px 16px;
+	border-radius: 6px;
+	background: #ffffff;
+	border: 1px solid #e5e7eb;
+	transition: all 0.2s;
 }
 
 .backLink:hover {
-  background: #f3f4f6;
-  border-color: #1c2c5d;
+	background: #f3f4f6;
+	border-color: #1c2c5d;
 }
 
 /* When .backLink is used as a button (e.g. in flipbook article view) */
 button.backLink {
-  cursor: pointer;
-  font: inherit;
-  font-family: inherit;
+	cursor: pointer;
+	font: inherit;
+	font-family: inherit;
 }
 
 @media (max-width: 640px) {
-  .expandedArticle {
-    margin: 16px 8px;
-    padding: 16px;
-  }
+	.expandedArticle {
+		margin: 16px 8px;
+		padding: 16px;
+	}
 
-  .articleTitle {
-    font-size: 1.2rem;
-  }
+	.articleTitle {
+		font-size: 1.2rem;
+	}
 
-  .articleBody {
-    font-size: 1rem;
-  }
+	.articleBody {
+		font-size: 1rem;
+	}
 
-  .authorImage {
-    width: 64px;
-    height: 64px;
-  }
+	.authorImage {
+		width: 64px;
+		height: 64px;
+	}
 
-  .expandedPerush {
-    padding: 16px;
-    margin: 16px 8px;
-  }
+	.expandedPerush {
+		padding: 16px;
+		margin: 16px 8px;
+	}
 
-  .perushTitle {
-    font-size: 1.3rem;
-  }
+	.perushTitle {
+		font-size: 1.3rem;
+	}
 
-  .parshanName {
-    font-size: 1.1rem;
-  }
+	.parshanName {
+		font-size: 1.1rem;
+	}
 
-  .noteContent {
-    font-size: 1rem;
-  }
+	.noteContent {
+		font-size: 1rem;
+	}
 }
 
 /* Perush styles */
 .expandedPerush {
-  margin: 24px 16px;
-  padding: 24px;
-  background: transparent;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+	margin: 24px 16px;
+	padding: 24px;
+	background: transparent;
+	border-radius: 12px;
+	border: 1px solid #e5e7eb;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .perushHeader {
-  text-align: center;
-  padding-bottom: 24px;
-  border-bottom: 1px solid #c4c4c4;
-  margin-bottom: 24px;
+	text-align: center;
+	padding-bottom: 24px;
+	border-bottom: 1px solid #c4c4c4;
+	margin-bottom: 24px;
 }
 
 .perushTitle {
-  font-size: 1.6rem;
-  font-weight: 700;
-  color: #1c2c5d;
-  margin: 0 0 8px 0;
-}
-
-.parshanYear {
-  font-size: 1.1rem;
-  color: #6b7280;
-  font-weight: 400;
+	font-size: 1.6rem;
+	font-weight: 700;
+	color: #1c2c5d;
+	margin: 0 0 8px 0;
 }
 
 .parshanName {
-  font-size: 1.3rem;
-  font-weight: 500;
-  color: #4b5563;
-  margin: 0;
+	font-size: 1.3rem;
+	font-weight: 500;
+	color: #4b5563;
+	margin: 0;
 }
 
 .perushContent {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
 }
 
 .note {
-  padding: 16px;
-  background: #f9fafb;
-  border-radius: 8px;
-  border-right: 4px solid #1c2c5d;
+	padding: 16px;
+	background: #f9fafb;
+	border-radius: 8px;
+	border-right: 4px solid #1c2c5d;
 }
 
 .notePasuk {
-  display: inline-block;
-  font-weight: 700;
-  color: #1c2c5d;
-  margin-left: 8px;
-  font-size: 1.05rem;
+	display: inline-block;
+	font-weight: 700;
+	color: #1c2c5d;
+	margin-left: 8px;
+	font-size: 1.05rem;
 }
 
 .noteContent {
-  margin-top: 8px;
-  line-height: 1.8;
-  font-size: 1.1rem;
-  color: #374151;
-  text-align: justify;
-  direction: rtl;
+	margin-top: 8px;
+	line-height: 1.8;
+	font-size: 1.1rem;
+	color: #374151;
+	text-align: justify;
+	direction: rtl;
 }
 
 .noteContent p {
-  margin: 0.5rem 0;
+	margin: 0.5rem 0;
 }
