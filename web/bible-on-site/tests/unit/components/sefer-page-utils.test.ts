@@ -119,8 +119,20 @@ describe("sefer-page-utils", () => {
 				expect(mapper.routeToPage("/929/101?book")).toBe(CONTENT_OFFSET + 2);
 			});
 
-			it("returns null for routes without ?book", () => {
-				expect(mapper.routeToPage("/929/101")).toBeNull();
+			it("returns null for routes without ?book and without /929/ pattern", () => {
+				expect(mapper.routeToPage("/other/101")).toBeNull();
+			});
+
+			it("resolves /929/{id}/{slug}?book routes (perush/article deep link)", () => {
+				expect(mapper.routeToPage("/929/101/%D7%A8%D7%A9%22%D7%99?book")).toBe(
+					CONTENT_OFFSET + 2,
+				);
+				expect(mapper.routeToPage("/929/100/42?book")).toBe(CONTENT_OFFSET);
+			});
+
+			it("resolves bare /929/{id} routes (no ?book)", () => {
+				expect(mapper.routeToPage("/929/100")).toBe(CONTENT_OFFSET);
+				expect(mapper.routeToPage("/929/102")).toBe(CONTENT_OFFSET + 4);
 			});
 
 			it("returns null for unknown perekId", () => {
