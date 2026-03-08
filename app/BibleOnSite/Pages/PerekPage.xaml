@@ -8,13 +8,11 @@
              xmlns:behaviors="clr-namespace:BibleOnSite.Behaviors"
              xmlns:converters="clr-namespace:BibleOnSite.Converters"
              xmlns:fonts="clr-namespace:Fonts"
-             xmlns:ios="clr-namespace:Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific;assembly=Microsoft.Maui.Controls"
              x:Class="BibleOnSite.Pages.PerekPage"
              x:Name="PerekPageRoot"
              x:DataType="viewmodels:PerekViewModel"
              Title="{Binding Source}"
-             FlowDirection="RightToLeft"
-             ios:Page.UseSafeArea="False">
+             FlowDirection="RightToLeft">
 
     <ContentPage.Resources>
         <ResourceDictionary>

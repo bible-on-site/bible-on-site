@@ -47,11 +47,11 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.0.56</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>5.0.57</ApplicationDisplayVersion>
 		<!-- Windows MSIX requires each version component ≤65535, so we use a separate incrementing value -->
 		<!-- Android versionCode can be large, continuing from Play Store's 40000017 -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000056</ApplicationVersion>
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">56</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000057</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">57</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<!-- WindowsPackageType None = unpackaged (fixes "Class not registered" when running from CLI). MSIX for Store: /p:WindowsPackageType=MSIX -->
@@ -155,13 +155,31 @@
 			DeliveryType="OnDemand" />
 	</ItemGroup>
 
-	<!-- iOS: decompress .gz → .sqlite into the ODR dataset folder (macOS only; gunzip is always available). -->
-	<Target Name="DecompressPerushimNotesIos" BeforeTargets="Build"
+	<!-- iOS: decompress .gz → .sqlite into the ODR dataset folder (macOS only; gunzip is always available).
+	     After decompression, explicitly add the .sqlite as an ImageAsset so actool compiles it
+	     into Assets.car. MSBuild globs evaluate at project load — before the file exists —
+	     so auto-discovery misses it. -->
+	<Target Name="DecompressPerushimNotesIos" BeforeTargets="Build;_CompileImageAssets"
 		Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND
 			!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND
 			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')">
 		<MakeDir Directories="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset" />
 		<Exec Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz' > '$(MSBuildProjectDirectory)/Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset/sefaria-dump-5784-sivan-4.perushim_notes.sqlite'" />
+	</Target>
+
+	<!-- Unconditionally ensure the .sqlite is in the ImageAsset list for actool.
+	     Runs before _CompileImageAssets regardless of whether decompression was needed this build.
+	     The Condition on the item (Exists) prevents errors if the file is absent (e.g. Windows dev). -->
+	<Target Name="_IncludePerushimNotesImageAsset" BeforeTargets="_CompileImageAssets"
+		DependsOnTargets="DecompressPerushimNotesIos"
+		Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+		<ItemGroup>
+			<ImageAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
+				Condition="Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')"
+				Link="Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
+		</ItemGroup>
+		<Message Importance="high" Text="=== _IncludePerushimNotesImageAsset: added .sqlite to ImageAsset list ==="
+			Condition="Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')" />
 	</Target>
 
 	<!-- iOS ODR: perushim notes are delivered via On-Demand Resources.
