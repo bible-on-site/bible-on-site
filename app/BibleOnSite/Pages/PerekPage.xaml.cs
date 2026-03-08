@@ -99,6 +99,9 @@ public partial class PerekPage : ContentPage
             if (_isMenuOpen) RefreshNavButtonVisuals();
             _ = UpdateArticlesCountAsync();
             _ = _viewModel.PreloadAdjacentPasukimAsync(perekId);
+#if IOS
+            Dispatcher.Dispatch(() => RefreshDescendantViews(PerekCarousel));
+#endif
         };
     }
 
@@ -372,9 +375,10 @@ public partial class PerekPage : ContentPage
     private void OnPageSizeChanged(object? sender, EventArgs e) => ApplyBottomBarSafeArea();
 
     /// <summary>
-    /// With UseSafeArea="False" the page extends edge-to-edge.
-    /// The bottom bar sits at the physical screen bottom — we only need
-    /// internal padding so interactive content stays above the home indicator.
+    /// Shell keeps the page within the safe area. We use a negative bottom margin
+    /// on MainGrid to push content past the home-indicator region, then add
+    /// internal padding to BottomBar so interactive content stays above the
+    /// indicator while the bar background fills to the screen edge.
     /// </summary>
     private void ApplyBottomBarSafeArea()
     {
@@ -393,11 +397,13 @@ public partial class PerekPage : ContentPage
         if (bottom <= 0)
             return;
 
+        MainGrid.Margin = new Thickness(0, 0, 0, -bottom);
+
         var totalHeight = 90 + bottom;
         BottomBar.Padding = new Thickness(0, 0, 0, bottom);
         BottomBar.HeightRequest = totalHeight;
 
-        FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
+        FloatingMenuContainer.Margin = new Thickness(0, 0, 0, -bottom);
 
         Resources["BottomBarTotalHeight"] = totalHeight;
     }
