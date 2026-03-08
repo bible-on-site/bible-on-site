@@ -325,82 +325,82 @@ partial class PadDeliveryService
             }
         }
 
-        // Probe NSDataAsset directly (without ODR request) — should be null for true ODR
+        // Main bundle info
         try
         {
-            using var directAsset = new NSDataAsset(DatasetAssetName);
-            lines.Add($"Direct NSDataAsset('{DatasetAssetName}'): {(directAsset?.Data != null ? $"length={directAsset.Data.Length}" : "(null)")}");
+            var mainBundle = NSBundle.MainBundle;
+            lines.Add($"Main bundle path: {mainBundle.BundlePath}");
+            var assetsCar = Path.Combine(mainBundle.BundlePath, "Assets.car");
+            lines.Add($"Main Assets.car exists: {File.Exists(assetsCar)}");
+            if (File.Exists(assetsCar))
+                lines.Add($"Main Assets.car size: {new FileInfo(assetsCar).Length} bytes");
         }
         catch (Exception ex)
         {
-            lines.Add($"Direct NSDataAsset error: {ex.GetType().Name}: {ex.Message}");
+            lines.Add($"Main bundle info error: {ex.Message}");
         }
 
-        // Probe ODR conditionally
+        // Probe NSDataAsset with main bundle
+        try
+        {
+            using var directAsset = new NSDataAsset(DatasetAssetName);
+            lines.Add($"NSDataAsset(main): {(directAsset?.Data != null ? $"length={directAsset.Data.Length}" : "(null)")}");
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"NSDataAsset(main) error: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        // ODR request
         try
         {
             using var request = new NSBundleResourceRequest(new NSSet<NSString>(new NSString(packName)));
             lines.Add($"NSBundleResourceRequest created for tag '{packName}'");
+            lines.Add($"Request bundle path (before access): {request.Bundle?.BundlePath ?? "(null)"}");
+
             var conditionalOk = await request.ConditionallyBeginAccessingResourcesAsync();
             lines.Add($"ConditionallyBeginAccessing: {conditionalOk}");
 
             if (conditionalOk)
             {
-                try
-                {
-                    using var odrAsset = new NSDataAsset(DatasetAssetName, request.Bundle);
-                    lines.Add($"ODR NSDataAsset('{DatasetAssetName}', request.Bundle): {(odrAsset?.Data != null ? $"length={odrAsset.Data.Length}" : "(null)")}");
-
-                    if (odrAsset?.Data != null)
-                    {
-                        // Try the full SaveOdrDataAsset path to validate write
-                        var testDir = Path.Combine(FileSystem.CacheDirectory, "odr_diag_test");
-                        Directory.CreateDirectory(testDir);
-                        var testPath = Path.Combine(testDir, "diag_test.sqlite");
-                        try
-                        {
-                            using var stream = odrAsset.Data.AsStream();
-                            using var fs = File.Create(testPath);
-                            stream.CopyTo(fs);
-                            var written = new FileInfo(testPath).Length;
-                            lines.Add($"Test write: {written} bytes to {testPath}");
-                            File.Delete(testPath);
-                        }
-                        catch (Exception writeEx)
-                        {
-                            lines.Add($"Test write FAILED: {writeEx.GetType().Name}: {writeEx.Message}");
-                        }
-                        finally
-                        {
-                            try { Directory.Delete(testDir, true); } catch { /* best-effort cleanup */ }
-                        }
-                    }
-                }
-                catch (Exception assetEx)
-                {
-                    lines.Add($"ODR NSDataAsset error: {assetEx.GetType().Name}: {assetEx.Message}");
-                }
-
+                lines.Add($"Request bundle path (after conditional): {request.Bundle?.BundlePath ?? "(null)"}");
+                ProbeNSDataAsset(lines, "ODR(conditional,request.Bundle)", DatasetAssetName, request.Bundle);
                 request.EndAccessingResources();
             }
             else
             {
-                // Try full fetch to see the error
                 lines.Add("Attempting BeginAccessingResources...");
                 try
                 {
                     using var fetchReq = new NSBundleResourceRequest(new NSSet<NSString>(new NSString(packName)));
                     await fetchReq.BeginAccessingResourcesAsync();
                     lines.Add("BeginAccessingResources: succeeded");
+                    lines.Add($"Request bundle path (after fetch): {fetchReq.Bundle?.BundlePath ?? "(null)"}");
 
+                    // Check if ODR asset pack was downloaded
+                    var odrDir = Path.Combine(fetchReq.Bundle?.BundlePath ?? "", "OnDemandResources");
+                    lines.Add($"ODR dir in bundle exists: {Directory.Exists(odrDir)}");
+
+                    ProbeNSDataAsset(lines, "ODR(fetched,request.Bundle)", DatasetAssetName, fetchReq.Bundle);
+                    ProbeNSDataAsset(lines, "ODR(fetched,mainBundle)", DatasetAssetName, NSBundle.MainBundle);
+
+                    // Enumerate files in request bundle to see what's there
                     try
                     {
-                        using var fetchedAsset = new NSDataAsset(DatasetAssetName, fetchReq.Bundle);
-                        lines.Add($"Post-fetch NSDataAsset(request.Bundle): {(fetchedAsset?.Data != null ? $"length={fetchedAsset.Data.Length}" : "(null)")}");
+                        var bundlePath = fetchReq.Bundle?.BundlePath;
+                        if (bundlePath != null && Directory.Exists(bundlePath))
+                        {
+                            var files = Directory.GetFiles(bundlePath, "*", SearchOption.AllDirectories);
+                            lines.Add($"Request bundle file count: {files.Length}");
+                            foreach (var f in files.Take(20))
+                                lines.Add($"  {f.Replace(bundlePath, "~")}");
+                            if (files.Length > 20)
+                                lines.Add($"  ... and {files.Length - 20} more");
+                        }
                     }
-                    catch (Exception fetchAssetEx)
+                    catch (Exception enumEx)
                     {
-                        lines.Add($"Post-fetch NSDataAsset error: {fetchAssetEx.GetType().Name}: {fetchAssetEx.Message}");
+                        lines.Add($"Bundle enumeration error: {enumEx.Message}");
                     }
 
                     fetchReq.EndAccessingResources();
@@ -416,7 +416,7 @@ partial class PadDeliveryService
             lines.Add($"ODR request error: {ex.GetType().Name}: {ex.Message}");
         }
 
-        // Check available disk space
+        // Disk space
         try
         {
             var cacheRoot = FileSystem.CacheDirectory;
@@ -429,6 +429,19 @@ partial class PadDeliveryService
         }
 
         return lines;
+    }
+
+    private static void ProbeNSDataAsset(List<string> lines, string label, string assetName, NSBundle? bundle)
+    {
+        try
+        {
+            using var asset = bundle != null ? new NSDataAsset(assetName, bundle) : new NSDataAsset(assetName);
+            lines.Add($"{label}: {(asset?.Data != null ? $"length={asset.Data.Length}" : "(null)")}");
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"{label} error: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 }
 #endif
