@@ -200,6 +200,21 @@
 			Condition="'%(_BundleResourceWithOutputPath.OutputPath)' != '' AND $([System.String]::new('%(_BundleResourceWithOutputPath.OutputPath)').Contains('OnDemandResources'))" />
 	</Target>
 
+	<!-- _DetectSigningIdentity overrides _DistributionType based on the provisioning
+	     profile. With automatic signing and an empty CodesignProvision, it sets "Any",
+	     which prevents _PackageOnDemandResources from running (it requires AppStore|AdHoc).
+	     Force AppStore after detection so the ODR asset packs are packaged into the IPA. -->
+	<Target Name="_ForceDistributionTypeForOdr"
+		AfterTargets="_DetectSigningIdentity"
+		Condition="('$(_DistributionType)' == '' OR '$(_DistributionType)' == 'Any') AND
+			'$(BuildIpa)' == 'true' AND '$(EnableOnDemandResources)' == 'true' AND
+			($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst')">
+		<Message Importance="high" Text="=== _ForceDistributionTypeForOdr: overriding _DistributionType from '$(_DistributionType)' to 'AppStore' ===" />
+		<PropertyGroup>
+			<_DistributionType>AppStore</_DistributionType>
+		</PropertyGroup>
+	</Target>
+
 	<Target Name="_LogOdrPackaging"
 		AfterTargets="_PackageOnDemandResources"
 		Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">

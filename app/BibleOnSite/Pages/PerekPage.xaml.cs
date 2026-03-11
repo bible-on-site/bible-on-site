@@ -6,6 +6,7 @@ using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 #if IOS
 using Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific;
+using ObjCRuntime;
 #endif
 
 /// <summary>
@@ -375,35 +376,35 @@ public partial class PerekPage : ContentPage
     private void OnPageSizeChanged(object? sender, EventArgs e) => ApplyBottomBarSafeArea();
 
     /// <summary>
-    /// Shell keeps the page within the safe area. We use a negative bottom margin
-    /// on MainGrid to push content past the home-indicator region, then add
-    /// internal padding to BottomBar so interactive content stays above the
-    /// indicator while the bar background fills to the screen edge.
+    /// Negates the bottom safe area inset on the native iOS view controller so the
+    /// page extends to the physical screen edge. Then adds internal padding to the
+    /// BottomBar so interactive content stays above the home indicator while the bar
+    /// background fills to the screen edge.
     /// </summary>
     private void ApplyBottomBarSafeArea()
     {
-        var insets = Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific.Page.GetSafeAreaInsets(this);
-        var bottom = insets.Bottom;
-
-        if (bottom <= 0)
-        {
-            var window = UIKit.UIApplication.SharedApplication?.ConnectedScenes
-                .OfType<UIKit.UIWindowScene>()
-                .FirstOrDefault()?.Windows
-                .FirstOrDefault(w => w.IsKeyWindow);
-            bottom = (double)(window?.SafeAreaInsets.Bottom ?? 0);
-        }
+        double bottom = 0;
+        var window = UIKit.UIApplication.SharedApplication?.ConnectedScenes
+            .OfType<UIKit.UIWindowScene>()
+            .FirstOrDefault()?.Windows
+            .FirstOrDefault(w => w.IsKeyWindow);
+        if (window != null)
+            bottom = window.SafeAreaInsets.Bottom;
 
         if (bottom <= 0)
             return;
 
-        MainGrid.Margin = new Thickness(0, 0, 0, -bottom);
+        // Negate the bottom safe area so MAUI lays out content edge-to-edge
+        var vc = (Handler as IPlatformViewHandler)?.ViewController
+            ?? Microsoft.Maui.ApplicationModel.Platform.GetCurrentUIViewController();
+        if (vc != null)
+            vc.AdditionalSafeAreaInsets = new UIKit.UIEdgeInsets(0, 0, -(nfloat)bottom, 0);
 
         var totalHeight = 90 + bottom;
         BottomBar.Padding = new Thickness(0, 0, 0, bottom);
         BottomBar.HeightRequest = totalHeight;
 
-        FloatingMenuContainer.Margin = new Thickness(0, 0, 0, -bottom);
+        FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
 
         Resources["BottomBarTotalHeight"] = totalHeight;
     }
