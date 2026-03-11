@@ -47,11 +47,11 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.0.57</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>5.0.58</ApplicationDisplayVersion>
 		<!-- Windows MSIX requires each version component ≤65535, so we use a separate incrementing value -->
 		<!-- Android versionCode can be large, continuing from Play Store's 40000017 -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000057</ApplicationVersion>
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">57</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000058</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">58</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<!-- WindowsPackageType None = unpackaged (fixes "Class not registered" when running from CLI). MSIX for Store: /p:WindowsPackageType=MSIX -->
@@ -198,6 +198,21 @@
 		<Message Importance="high" Text="_BundleResourceWithOutputPath ODR items:" />
 		<Message Importance="high" Text="  %(_BundleResourceWithOutputPath.Identity) → %(_BundleResourceWithOutputPath.OutputPath)"
 			Condition="'%(_BundleResourceWithOutputPath.OutputPath)' != '' AND $([System.String]::new('%(_BundleResourceWithOutputPath.OutputPath)').Contains('OnDemandResources'))" />
+	</Target>
+
+	<!-- _DetectSigningIdentity overrides _DistributionType based on the provisioning
+	     profile. With automatic signing and an empty CodesignProvision, it sets "Any",
+	     which prevents _PackageOnDemandResources from running (it requires AppStore|AdHoc).
+	     Force AppStore after detection so the ODR asset packs are packaged into the IPA. -->
+	<Target Name="_ForceDistributionTypeForOdr"
+		AfterTargets="_DetectSigningIdentity"
+		Condition="('$(_DistributionType)' == '' OR '$(_DistributionType)' == 'Any') AND
+			'$(BuildIpa)' == 'true' AND '$(EnableOnDemandResources)' == 'true' AND
+			($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst')">
+		<Message Importance="high" Text="=== _ForceDistributionTypeForOdr: overriding _DistributionType from '$(_DistributionType)' to 'AppStore' ===" />
+		<PropertyGroup>
+			<_DistributionType>AppStore</_DistributionType>
+		</PropertyGroup>
 	</Target>
 
 	<Target Name="_LogOdrPackaging"
