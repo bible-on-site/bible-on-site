@@ -101,7 +101,8 @@
                                 Command="{Binding DownloadPerushimCommand}"
                                 BackgroundColor="{StaticResource Primary}"
                                 TextColor="White"
-                                CornerRadius="8"/>
+                                CornerRadius="8"
+                                IsVisible="{Binding ShowPerushimDownload}"/>
                         <Button Text="ייצוא לוגים לתמיכה"
                                 Command="{Binding ExportPerushimLogsCommand}"
                                 AutomationId="ExportPerushimLogsButton"
