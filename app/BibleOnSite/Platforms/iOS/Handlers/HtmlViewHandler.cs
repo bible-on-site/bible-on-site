@@ -80,28 +80,55 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
             return;
         }
 
-        // Wrap content with styling
         var styledHtml = WrapWithStyles(html);
 
         try
         {
-            // Parse HTML using NSAttributedString via import
             var htmlData = NSData.FromString(styledHtml, NSStringEncoding.Unicode);
+            if (htmlData == null || htmlData.Length == 0)
+            {
+                PlatformView.Text = html;
+                PlatformView.TextColor = GetTextColor();
+                return;
+            }
 
             var importParams = new NSDictionary(
                 new NSString("DocumentType"), new NSString("NSHTML"),
                 new NSString("CharacterEncoding"), NSNumber.FromInt32((int)NSStringEncoding.Unicode));
 
-            NSError? error = null;
-#pragma warning disable CS0618 // Type or member is obsolete - this constructor still works and is simpler
-            var attributedString = new NSAttributedString(htmlData, importParams, out _, ref error!);
-#pragma warning restore CS0618
+            NSAttributedString? attributedString = null;
 
-            if (error == null && attributedString != null)
+            // NSAttributedString HTML import uses WebKit internally and can throw
+            // unhandled ObjC exceptions (SIGABRT) that bypass C# try-catch.
+            // Temporarily disable ThrowOnInitFailure to convert these into null returns.
+            var previousThrowSetting = ObjCRuntime.Class.ThrowOnInitFailure;
+            ObjCRuntime.Class.ThrowOnInitFailure = false;
+            try
+            {
+                NSError? error = null;
+#pragma warning disable CS0618
+                attributedString = new NSAttributedString(htmlData, importParams, out _, ref error!);
+#pragma warning restore CS0618
+                if (error != null)
+                {
+                    System.Diagnostics.Debug.WriteLine($"HtmlView NSAttributedString error: {error.LocalizedDescription}");
+                    attributedString = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"HtmlView NSAttributedString init exception: {ex.Message}");
+                attributedString = null;
+            }
+            finally
+            {
+                ObjCRuntime.Class.ThrowOnInitFailure = previousThrowSetting;
+            }
+
+            if (attributedString != null)
             {
                 var mutableString = new NSMutableAttributedString(attributedString);
 
-                // Apply text alignment
                 var paragraphStyle = new NSMutableParagraphStyle
                 {
                     Alignment = VirtualView.TextAlignment switch
@@ -124,7 +151,6 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
             }
             else
             {
-                // Fallback to plain text
                 PlatformView.Text = html;
                 PlatformView.TextColor = GetTextColor();
             }
@@ -136,7 +162,6 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
             PlatformView.TextColor = GetTextColor();
         }
 
-        // Set text direction
         if (VirtualView.TextDirection == HtmlTextDirection.Rtl)
         {
             PlatformView.TextAlignment = UITextAlignment.Right;

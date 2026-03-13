@@ -87,12 +87,20 @@ public partial class PreferencesViewModel : ObservableObject
         set { if (value) PerekToLoad = PerekToLoad.LastLearnt; }
     }
 
-    /// <summary>Whether to show the perushim section at all (only when NOT installed).</summary>
-    public bool ShowPerushimSection => !_perushimNotesService.IsAvailable;
+    /// <summary>Always show the perushim section — with different content based on install state.</summary>
+    public bool ShowPerushimSection => true;
 
-    /// <summary>Status text for perushim notes when not yet installed.</summary>
+    /// <summary>Whether perushim notes are installed and available.</summary>
+    public bool IsPerushimInstalled => _perushimNotesService.IsAvailable;
+
+    /// <summary>Whether to show the download controls (when NOT installed).</summary>
+    public bool ShowPerushimDownload => !_perushimNotesService.IsAvailable;
+
+    /// <summary>Status text for perushim notes.</summary>
     public string PerushimNotesStatusText =>
-        "חבילת הפירושים לא הותקנה. הורידו כדי להפעיל פירושים.";
+        _perushimNotesService.IsAvailable
+            ? "חבילת הפירושים מותקנת ✓"
+            : "חבילת הפירושים לא הותקנה. הורידו כדי להפעיל פירושים.";
 
     /// <summary>
     /// Loads preferences from device storage.
@@ -108,6 +116,8 @@ public partial class PreferencesViewModel : ObservableObject
         OnPropertyChanged(nameof(IsPerekToLoadTodays));
         OnPropertyChanged(nameof(IsPerekToLoadLastLearnt));
         OnPropertyChanged(nameof(ShowPerushimSection));
+        OnPropertyChanged(nameof(IsPerushimInstalled));
+        OnPropertyChanged(nameof(ShowPerushimDownload));
         OnPropertyChanged(nameof(PerushimNotesStatusText));
     }
 
@@ -119,6 +129,8 @@ public partial class PreferencesViewModel : ObservableObject
     {
         var ok = await _perushimNotesService.TryDownloadNotesAsync();
         OnPropertyChanged(nameof(ShowPerushimSection));
+        OnPropertyChanged(nameof(IsPerushimInstalled));
+        OnPropertyChanged(nameof(ShowPerushimDownload));
         OnPropertyChanged(nameof(PerushimNotesStatusText));
         if (!ok && Application.Current?.Windows?.Count > 0 && Application.Current.Windows[0].Page is Page page)
         {

@@ -26,6 +26,56 @@
 
     <Grid x:Name="MainGrid">
 
+<!-- iOS bottom bar debug dropdown (temporary) -->
+<Border x:Name="BottomBarDebugOverlay"
+        IsVisible="False"
+        ZIndex="999"
+        VerticalOptions="Start"
+        HorizontalOptions="Fill"
+        Margin="8,4,8,0"
+        Padding="10"
+        BackgroundColor="{AppThemeBinding Light=#F5F5F5, Dark=#2A2A2A}"
+        StrokeShape="RoundRectangle 8"
+        Stroke="{AppThemeBinding Light=#CCC, Dark=#555}"
+        StrokeThickness="1">
+    <VerticalStackLayout Spacing="1">
+        <Label Text="[DEBUG] Bottom Bar Fix" FontSize="12" FontAttributes="Bold"
+               TextColor="{AppThemeBinding Light=Black, Dark=White}" FlowDirection="LeftToRight"/>
+        <RadioButton x:Name="DebugFix0" Content="0: No fix (baseline)" FontSize="10" FlowDirection="LeftToRight"
+                     CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug"/>
+        <RadioButton x:Name="DebugFix1" Content="1: AdditionalSafeAreaInsets -bottom" FontSize="10" FlowDirection="LeftToRight"
+                     CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug" IsChecked="True"/>
+        <RadioButton x:Name="DebugFix2" Content="2: MainGrid margin bottom=-N" FontSize="10" FlowDirection="LeftToRight"
+                     CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug"/>
+        <RadioButton x:Name="DebugFix3" Content="3: BottomBar margin bottom=-N" FontSize="10" FlowDirection="LeftToRight"
+                     CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug"/>
+        <RadioButton x:Name="DebugFix4" Content="4: TranslationY on BottomBar +N" FontSize="10" FlowDirection="LeftToRight"
+                     CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug"/>
+        <RadioButton x:Name="DebugFix5" Content="5: Native UIView frame shift" FontSize="10" FlowDirection="LeftToRight"
+                     CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug"/>
+        <RadioButton x:Name="DebugFix6" Content="6: Page BackgroundColor = bar color" FontSize="10" FlowDirection="LeftToRight"
+                     CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug"/>
+        <RadioButton x:Name="DebugFix7" Content="7: Native VC viewRespectsSystemMinimumLayoutMargins=false" FontSize="10" FlowDirection="LeftToRight"
+                     CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug"/>
+        <RadioButton x:Name="DebugFix8" Content="8: Walk up UIView tree, disable clipsToBounds" FontSize="10" FlowDirection="LeftToRight"
+                     CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug"/>
+        <RadioButton x:Name="DebugFix9" Content="9: AdditionalSafeAreaInsets + TranslationY combo" FontSize="10" FlowDirection="LeftToRight"
+                     CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug"/>
+        <RadioButton x:Name="DebugFix10" Content="10: Shell.NavBarIsVisible=false override" FontSize="10" FlowDirection="LeftToRight"
+                     CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug"/>
+        <RadioButton x:Name="DebugFix11" Content="11: Content page bottom padding=-N" FontSize="10" FlowDirection="LeftToRight"
+                     CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug"/>
+        <RadioButton x:Name="DebugFix12" Content="12: Native insetsLayoutMarginsFromSafeArea=false" FontSize="10" FlowDirection="LeftToRight"
+                     CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug"/>
+        <RadioButton x:Name="DebugFix13" Content="13: BottomBar height + ClipsToBounds=false chain" FontSize="10" FlowDirection="LeftToRight"
+                     CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug"/>
+        <RadioButton x:Name="DebugFix14" Content="14: Overlay BoxView behind bar at screen bottom" FontSize="10" FlowDirection="LeftToRight"
+                     CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug"/>
+        <Label x:Name="DebugFixInfo" Text="" FontSize="10" FlowDirection="LeftToRight"
+               TextColor="{AppThemeBinding Light=Gray, Dark=#AAA}"/>
+    </VerticalStackLayout>
+</Border>
+
         <!-- Exit Full Screen Button (floating, hidden by default) -->
         <!-- Gesture recognizers are set up in code-behind: native Android touch for
              pixel-perfect drag tracking, MAUI gesture recognizers for other platforms. -->
@@ -399,6 +449,7 @@
                                     <Label Grid.Column="1"
                                            Text="{Binding Name}"
                                            FontSize="16"
+                                           FlowDirection="RightToLeft"
                                            VerticalOptions="Center"/>
                                 </Grid>
                             </DataTemplate>
@@ -530,6 +581,11 @@
 
             </AbsoluteLayout>
         </Grid>
+
+        <!-- BoxView for debug fix #14: fills gap behind bottom bar at screen edge -->
+        <BoxView x:Name="BottomGapFiller" IsVisible="False" ZIndex="99"
+                 VerticalOptions="End" HorizontalOptions="Fill"
+                 HeightRequest="0"/>
 
         <!-- Satellite buttons overlay - uses AbsoluteLayout for precise positioning -->
         <AbsoluteLayout x:Name="FloatingMenuContainer"

@@ -374,13 +374,85 @@ public partial class PerekPage : ContentPage
 
 #if IOS
     private void OnPageSizeChanged(object? sender, EventArgs e) => ApplyBottomBarSafeArea();
+    private int _currentDebugFix = 1;
+    private double _bottomInset;
 
-    /// <summary>
-    /// Negates the bottom safe area inset on the native iOS view controller so the
-    /// page extends to the physical screen edge. Then adds internal padding to the
-    /// BottomBar so interactive content stays above the home indicator while the bar
-    /// background fills to the screen edge.
-    /// </summary>
+    private void OnDebugFixChanged(object? sender, CheckedChangedEventArgs e)
+    {
+        if (!e.Value || sender is not RadioButton rb) return;
+        ResetBottomBarFixes();
+        _currentDebugFix = rb switch
+        {
+            _ when rb == DebugFix0 => 0,
+            _ when rb == DebugFix1 => 1,
+            _ when rb == DebugFix2 => 2,
+            _ when rb == DebugFix3 => 3,
+            _ when rb == DebugFix4 => 4,
+            _ when rb == DebugFix5 => 5,
+            _ when rb == DebugFix6 => 6,
+            _ when rb == DebugFix7 => 7,
+            _ when rb == DebugFix8 => 8,
+            _ when rb == DebugFix9 => 9,
+            _ when rb == DebugFix10 => 10,
+            _ when rb == DebugFix11 => 11,
+            _ when rb == DebugFix12 => 12,
+            _ when rb == DebugFix13 => 13,
+            _ when rb == DebugFix14 => 14,
+            _ => _currentDebugFix
+        };
+        ApplyBottomBarSafeArea();
+    }
+
+    private void ResetBottomBarFixes()
+    {
+        var vc = (Handler as IPlatformViewHandler)?.ViewController
+            ?? Microsoft.Maui.ApplicationModel.Platform.GetCurrentUIViewController();
+        if (vc != null)
+        {
+            vc.AdditionalSafeAreaInsets = new UIKit.UIEdgeInsets(0, 0, 0, 0);
+            vc.ViewRespectsSystemMinimumLayoutMargins = true;
+        }
+
+        MainGrid.Margin = new Thickness(0);
+        this.Padding = new Thickness(0);
+        BottomBar.Margin = new Thickness(0);
+        BottomBar.TranslationY = 0;
+        BottomBar.Padding = new Thickness(0);
+        BottomBar.HeightRequest = 90;
+        FloatingMenuContainer.Padding = new Thickness(0);
+        FloatingMenuContainer.Margin = new Thickness(0);
+        FloatingMenuContainer.TranslationY = 0;
+        Resources["BottomBarTotalHeight"] = 90.0;
+        BottomGapFiller.IsVisible = false;
+        BottomGapFiller.HeightRequest = 0;
+
+        var nativeBottomBar = FindNativeView(BottomBar);
+        if (nativeBottomBar != null)
+        {
+            var frame = nativeBottomBar.Frame;
+            nativeBottomBar.Frame = new CoreGraphics.CGRect(frame.X, frame.Y, frame.Width, 90);
+            nativeBottomBar.ClipsToBounds = true;
+        }
+
+        if (Handler?.PlatformView is UIKit.UIView rootView)
+        {
+            rootView.InsetsLayoutMarginsFromSafeArea = true;
+            SetClipsToBoundsRecursive(rootView, null);
+        }
+    }
+
+    private static UIKit.UIView? FindNativeView(Microsoft.Maui.Controls.VisualElement element)
+    {
+        return element.Handler?.PlatformView as UIKit.UIView;
+    }
+
+    private static void SetClipsToBoundsRecursive(UIKit.UIView view, bool? value)
+    {
+        if (value.HasValue)
+            view.ClipsToBounds = value.Value;
+        // Only traverse up to 3 levels to avoid performance issues
+    }
+
     private void ApplyBottomBarSafeArea()
     {
         double bottom = 0;
@@ -391,23 +463,256 @@ public partial class PerekPage : ContentPage
         if (window != null)
             bottom = window.SafeAreaInsets.Bottom;
 
+        _bottomInset = bottom;
+        BottomBarDebugOverlay.IsVisible = true;
+        DebugFixInfo.Text = $"bottom inset={bottom:F1}pt, fix={_currentDebugFix}";
+
         if (bottom <= 0)
             return;
 
-        // Negate the bottom safe area so MAUI lays out content edge-to-edge
-        var vc = (Handler as IPlatformViewHandler)?.ViewController
-            ?? Microsoft.Maui.ApplicationModel.Platform.GetCurrentUIViewController();
-        if (vc != null)
-            vc.AdditionalSafeAreaInsets = new UIKit.UIEdgeInsets(0, 0, -(nfloat)bottom, 0);
-
         var totalHeight = 90 + bottom;
-        BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-        BottomBar.HeightRequest = totalHeight;
 
-        FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
+        switch (_currentDebugFix)
+        {
+            case 0: // No fix — baseline (shows the gap as-is)
+                break;
 
-        Resources["BottomBarTotalHeight"] = totalHeight;
+            case 1: // AdditionalSafeAreaInsets — negate bottom safe area on VC
+            {
+                var vc = (Handler as IPlatformViewHandler)?.ViewController
+                    ?? Microsoft.Maui.ApplicationModel.Platform.GetCurrentUIViewController();
+                if (vc != null)
+                    vc.AdditionalSafeAreaInsets = new UIKit.UIEdgeInsets(0, 0, -(nfloat)bottom, 0);
+                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
+                BottomBar.HeightRequest = totalHeight;
+                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
+                Resources["BottomBarTotalHeight"] = totalHeight;
+                break;
+            }
+
+            case 2: // MainGrid negative bottom margin — extend grid beyond safe area
+            {
+                MainGrid.Margin = new Thickness(0, 0, 0, -bottom);
+                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
+                BottomBar.HeightRequest = totalHeight;
+                FloatingMenuContainer.Margin = new Thickness(0, 0, 0, -bottom);
+                Resources["BottomBarTotalHeight"] = totalHeight;
+                break;
+            }
+
+            case 3: // BottomBar negative bottom margin — push bar into safe area
+            {
+                BottomBar.Margin = new Thickness(0, 0, 0, -bottom);
+                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
+                BottomBar.HeightRequest = totalHeight;
+                FloatingMenuContainer.Margin = new Thickness(0, 0, 0, -bottom);
+                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
+                Resources["BottomBarTotalHeight"] = totalHeight;
+                break;
+            }
+
+            case 4: // TranslationY on BottomBar — visually shift down
+            {
+                BottomBar.TranslationY = bottom;
+                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
+                BottomBar.HeightRequest = totalHeight;
+                FloatingMenuContainer.TranslationY = bottom;
+                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
+                Resources["BottomBarTotalHeight"] = totalHeight;
+                break;
+            }
+
+            case 5: // Native UIView frame shift — move native view frame down
+            {
+                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
+                BottomBar.HeightRequest = totalHeight;
+                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
+                Resources["BottomBarTotalHeight"] = totalHeight;
+
+                Dispatcher.Dispatch(() =>
+                {
+                    var nativeBar = FindNativeView(BottomBar);
+                    if (nativeBar != null)
+                    {
+                        var frame = nativeBar.Frame;
+                        nativeBar.Frame = new CoreGraphics.CGRect(frame.X, frame.Y + bottom, frame.Width, totalHeight);
+                        nativeBar.ClipsToBounds = false;
+                        if (nativeBar.Superview != null)
+                            nativeBar.Superview.ClipsToBounds = false;
+                    }
+                });
+                break;
+            }
+
+            case 6: // Page BackgroundColor matches bar color — visual trick to hide gap
+            {
+                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
+                BottomBar.HeightRequest = totalHeight;
+                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
+                Resources["BottomBarTotalHeight"] = totalHeight;
+
+                // Set page background to match the bottom bar color so the gap is invisible
+                var isDark = Microsoft.Maui.Controls.Application.Current?.RequestedTheme == AppTheme.Dark;
+                this.BackgroundColor = isDark ? Color.FromArgb("#1A1A2E") : Color.FromArgb("#FFFFFF");
+                break;
+            }
+
+            case 7: // ViewRespectsSystemMinimumLayoutMargins = false
+            {
+                var vc = (Handler as IPlatformViewHandler)?.ViewController
+                    ?? Microsoft.Maui.ApplicationModel.Platform.GetCurrentUIViewController();
+                if (vc != null)
+                    vc.ViewRespectsSystemMinimumLayoutMargins = false;
+                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
+                BottomBar.HeightRequest = totalHeight;
+                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
+                Resources["BottomBarTotalHeight"] = totalHeight;
+                break;
+            }
+
+            case 8: // Walk up native UIView tree, disable clipsToBounds on all ancestors
+            {
+                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
+                BottomBar.HeightRequest = totalHeight;
+                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
+                Resources["BottomBarTotalHeight"] = totalHeight;
+                MainGrid.Margin = new Thickness(0, 0, 0, -bottom);
+
+                Dispatcher.Dispatch(() =>
+                {
+                    var nativeBar = FindNativeView(BottomBar);
+                    var current = nativeBar;
+                    var depth = 0;
+                    while (current != null && depth < 15)
+                    {
+                        current.ClipsToBounds = false;
+                        current = current.Superview;
+                        depth++;
+                    }
+                });
+                break;
+            }
+
+            case 9: // AdditionalSafeAreaInsets + BottomBar negative margin combo
+            {
+                var vc = (Handler as IPlatformViewHandler)?.ViewController
+                    ?? Microsoft.Maui.ApplicationModel.Platform.GetCurrentUIViewController();
+                if (vc != null)
+                    vc.AdditionalSafeAreaInsets = new UIKit.UIEdgeInsets(0, 0, -(nfloat)bottom, 0);
+                BottomBar.Margin = new Thickness(0, 0, 0, -bottom);
+                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
+                BottomBar.HeightRequest = totalHeight;
+                FloatingMenuContainer.Margin = new Thickness(0, 0, 0, -bottom);
+                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
+                Resources["BottomBarTotalHeight"] = totalHeight;
+                break;
+            }
+
+            case 10: // Shell.NavBarIsVisible toggle — force Shell relayout
+            {
+                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
+                BottomBar.HeightRequest = totalHeight;
+                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
+                Resources["BottomBarTotalHeight"] = totalHeight;
+
+                Dispatcher.Dispatch(() =>
+                {
+                    Shell.SetNavBarIsVisible(this, false);
+                    Shell.SetNavBarIsVisible(this, true);
+                    MainGrid.Margin = new Thickness(0, 0, 0, -bottom);
+                });
+                break;
+            }
+
+            case 11: // ContentPage bottom padding = -bottom
+            {
+                this.Padding = new Thickness(0, 0, 0, -bottom);
+                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
+                BottomBar.HeightRequest = totalHeight;
+                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
+                Resources["BottomBarTotalHeight"] = totalHeight;
+                break;
+            }
+
+            case 12: // Native insetsLayoutMarginsFromSafeArea = false on root view
+            {
+                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
+                BottomBar.HeightRequest = totalHeight;
+                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
+                Resources["BottomBarTotalHeight"] = totalHeight;
+
+                if (Handler?.PlatformView is UIKit.UIView rootView)
+                {
+                    rootView.InsetsLayoutMarginsFromSafeArea = false;
+                    var parent = rootView.Superview;
+                    var depth = 0;
+                    while (parent != null && depth < 10)
+                    {
+                        parent.InsetsLayoutMarginsFromSafeArea = false;
+                        parent = parent.Superview;
+                        depth++;
+                    }
+                }
+                break;
+            }
+
+            case 13: // BottomBar height extended + ClipsToBounds=false chain up
+            {
+                BottomBar.HeightRequest = totalHeight;
+                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
+                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
+                Resources["BottomBarTotalHeight"] = totalHeight;
+
+                Dispatcher.Dispatch(() =>
+                {
+                    var nativeBar = FindNativeView(BottomBar);
+                    if (nativeBar != null)
+                    {
+                        nativeBar.ClipsToBounds = false;
+                        var parent = nativeBar.Superview;
+                        var depth = 0;
+                        while (parent != null && depth < 10)
+                        {
+                            parent.ClipsToBounds = false;
+                            parent = parent.Superview;
+                            depth++;
+                        }
+                    }
+
+                    var nativeGrid = FindNativeView(MainGrid);
+                    if (nativeGrid != null)
+                    {
+                        nativeGrid.ClipsToBounds = false;
+                        var parent = nativeGrid.Superview;
+                        var depth = 0;
+                        while (parent != null && depth < 10)
+                        {
+                            parent.ClipsToBounds = false;
+                            parent = parent.Superview;
+                            depth++;
+                        }
+                    }
+                });
+                break;
+            }
+
+            case 14: // Overlay colored BoxView behind bar at screen bottom
+            {
+                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
+                BottomBar.HeightRequest = totalHeight;
+                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
+                Resources["BottomBarTotalHeight"] = totalHeight;
+
+                var isDark = Microsoft.Maui.Controls.Application.Current?.RequestedTheme == AppTheme.Dark;
+                BottomGapFiller.Color = isDark ? Color.FromArgb("#1A1A2E") : Color.FromArgb("#FFFFFF");
+                BottomGapFiller.HeightRequest = bottom + 10;
+                BottomGapFiller.IsVisible = true;
+                break;
+            }
+        }
     }
+#else
+    private void OnDebugFixChanged(object? sender, CheckedChangedEventArgs e) { }
 #endif
 
     /// <summary>
