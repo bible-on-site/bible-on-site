@@ -4,7 +4,6 @@ import { isProduction } from "@/util/environment";
 const GA_MEASUREMENT_ID = "G-2CHER7MM85";
 
 export function GoogleAnalytics() {
-	// Only enable Google Analytics in production
 	if (!isProduction()) {
 		return null;
 	}
@@ -17,10 +16,16 @@ export function GoogleAnalytics() {
 			/>
 			<Script id="google-analytics" strategy="afterInteractive">
 				{`
-					window.dataLayer = window.dataLayer || [];
-					function gtag(){dataLayer.push(arguments);}
-					gtag('js', new Date());
-					gtag('config', '${GA_MEASUREMENT_ID}');
+					(function() {
+						var ua = navigator.userAgent || '';
+						if (/bot|crawl|spider|slurp|Bytespider|GPTBot|ClaudeBot|CCBot|Amazonbot|Diffbot|PetalBot|AhrefsBot|SemrushBot|DotBot|MJ12bot|BLEXBot|YandexBot|Sogou|Applebot|Googlebot|bingbot|PerplexityBot|FacebookBot|anthropic/i.test(ua)) {
+							return;
+						}
+						window.dataLayer = window.dataLayer || [];
+						function gtag(){dataLayer.push(arguments);}
+						gtag('js', new Date());
+						gtag('config', '${GA_MEASUREMENT_ID}');
+					})();
 				`}
 			</Script>
 		</>
