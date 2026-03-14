@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-// Subpath import required for Next.js Edge runtime compatibility
-import RateLimiterMemory from "rate-limiter-flexible/lib/RateLimiterMemory.js";
+import { RateLimiterMemory } from "rate-limiter-flexible";
 
 const BLOCKED_BOTS =
 	/Bytespider|MJ12bot|AhrefsBot|SemrushBot|DotBot|PetalBot|BLEXBot|MegaIndex|Sogou/i;
@@ -18,7 +17,7 @@ function getClientIp(request: NextRequest): string {
 	);
 }
 
-export async function middleware(
+export async function proxy(
 	request: NextRequest,
 ): Promise<NextResponse | undefined> {
 	const { pathname } = request.nextUrl;
