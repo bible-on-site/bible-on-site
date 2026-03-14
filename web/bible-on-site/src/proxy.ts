@@ -39,6 +39,10 @@ export async function proxy(
 
 	const ip = getClientIp(request);
 
+	if (ip === "unknown" || ip === "127.0.0.1" || ip === "::1") {
+		return NextResponse.next();
+	}
+
 	try {
 		const res = await limiter.consume(ip);
 		const response = NextResponse.next();
