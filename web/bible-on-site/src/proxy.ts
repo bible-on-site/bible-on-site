@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { RateLimiterMemory } from "rate-limiter-flexible";
+import { isProduction } from "@/util/environment";
 
 const BLOCKED_BOTS =
 	/Bytespider|MJ12bot|AhrefsBot|SemrushBot|DotBot|PetalBot|BLEXBot|MegaIndex|Sogou/i;
@@ -40,6 +41,10 @@ export async function proxy(
 
 	if (BLOCKED_BOTS.test(ua)) {
 		return new NextResponse("Forbidden", { status: 403 });
+	}
+
+	if (!isProduction()) {
+		return NextResponse.next();
 	}
 
 	const ip = getClientIp(request);
