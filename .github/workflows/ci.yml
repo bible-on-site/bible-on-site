@@ -607,7 +607,7 @@ jobs:
             image=moby/buildkit:v0.22.0
 
       - name: Build And Cache lcov Docker Image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: devops/coverage/lcov-docker/
           file: devops/coverage/lcov-docker/Dockerfile
@@ -655,7 +655,7 @@ jobs:
             image=moby/buildkit:v0.22.0
 
       - name: Build And Cache Sefaria MongoDB Docker Image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: data/sefaria/mongodb-docker/
           file: data/sefaria/mongodb-docker/Dockerfile
