@@ -19,9 +19,14 @@ jest.mock("rate-limiter-flexible", () => {
 	};
 });
 
+jest.mock("@/util/environment", () => ({
+	isProduction: jest.fn(),
+}));
+
 import { NextRequest } from "next/server";
 import { RateLimiterMemory } from "rate-limiter-flexible";
 import { config, proxy } from "@/proxy";
+import { isProduction } from "@/util/environment";
 
 function makeRequest(
 	pathname: string,
@@ -39,9 +44,14 @@ function resetLimiter() {
 	instance?._resetForTest();
 }
 
+const mockIsProduction = isProduction as jest.MockedFunction<
+	typeof isProduction
+>;
+
 describe("proxy", () => {
 	beforeEach(() => {
 		resetLimiter();
+		mockIsProduction.mockReturnValue(true);
 	});
 
 	describe("bypassed paths", () => {
@@ -77,6 +87,14 @@ describe("proxy", () => {
 			expect(result?.status).toBe(403);
 		});
 
+		it("blocks bots even in non-production", async () => {
+			mockIsProduction.mockReturnValue(false);
+			const result = await proxy(
+				makeRequest("/929/1", { ua: "Bytespider", ip: "1.2.3.4" }),
+			);
+			expect(result?.status).toBe(403);
+		});
+
 		it("does not block legitimate crawlers like Googlebot", async () => {
 			const result = await proxy(
 				makeRequest("/929/1", { ua: "Googlebot/2.1", ip: "66.249.66.1" }),
@@ -92,6 +110,18 @@ describe("proxy", () => {
 				}),
 			);
 			expect(result?.status).not.toBe(403);
+		});
+	});
+
+	describe("non-production bypass", () => {
+		beforeEach(() => {
+			mockIsProduction.mockReturnValue(false);
+		});
+
+		it("skips rate limiting in non-production environment", async () => {
+			const result = await proxy(makeRequest("/929/1", { ip: "10.0.0.1" }));
+			expect(result?.status).toBe(200);
+			expect(result?.headers.get("X-RateLimit-Remaining")).toBeNull();
 		});
 	});
 
