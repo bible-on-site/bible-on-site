@@ -9,12 +9,17 @@ const limiter = new RateLimiterMemory({
 	duration: 60,
 });
 
-function getClientIp(request: NextRequest): string {
-	return (
-		request.headers.get("x-real-ip") ??
-		request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-		"unknown"
-	);
+function getClientIp(request: NextRequest): string | null {
+	const realIp = request.headers.get("x-real-ip");
+	if (realIp) return realIp;
+
+	const forwarded = request.headers.get("x-forwarded-for");
+	if (forwarded) {
+		const first = forwarded.split(",")[0]?.trim();
+		if (first) return first;
+	}
+
+	return null;
 }
 
 export async function proxy(
@@ -39,7 +44,7 @@ export async function proxy(
 
 	const ip = getClientIp(request);
 
-	if (ip === "unknown" || ip === "127.0.0.1" || ip === "::1") {
+	if (!ip) {
 		return NextResponse.next();
 	}
 

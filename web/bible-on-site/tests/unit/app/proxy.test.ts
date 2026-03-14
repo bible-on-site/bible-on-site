@@ -95,19 +95,17 @@ describe("proxy", () => {
 		});
 	});
 
-	describe("loopback bypass", () => {
-		it("skips rate limiting for unknown IP (no headers)", async () => {
+	describe("direct access bypass (no reverse proxy)", () => {
+		it("skips rate limiting when no IP headers are present", async () => {
 			const result = await proxy(makeRequest("/929/1"));
 			expect(result?.status).toBe(200);
 		});
 
-		it("skips rate limiting for 127.0.0.1", async () => {
-			const result = await proxy(makeRequest("/929/1", { ip: "127.0.0.1" }));
-			expect(result?.status).toBe(200);
-		});
-
-		it("skips rate limiting for ::1", async () => {
-			const result = await proxy(makeRequest("/929/1", { ip: "::1" }));
+		it("skips rate limiting when x-forwarded-for is empty", async () => {
+			const req = new NextRequest(new URL("/929/1", "https://localhost"), {
+				headers: { "x-forwarded-for": "" },
+			});
+			const result = await proxy(req);
 			expect(result?.status).toBe(200);
 		});
 	});
