@@ -162,6 +162,9 @@ Metadata:
       - Static file serving from /var/www/html/
       - GeoIP support for geographic routing
       - Catch-all default_server for unknown subdomains → 301 to root domain /404
+      - Rate limiting: per-IP general (60 req/min), per-IP crawler (10 req/min), global crawler (30 req/min total)
+      - Bot blocking: aggressive bots (Bytespider, MJ12bot, AhrefsBot, SemrushBot, DotBot, PetalBot, BLEXBot, MegaIndex, Sogou) blocked with 403
+      - Bot classification via User-Agent map (blocked, crawler, regular); X-Bot-Class header passed to backend
     SSLCertificates:
       - /etc/letsencrypt/live/xn--febl3a.co.il/fullchain.pem
       - /etc/letsencrypt/live/xn--febl3a.com/fullchain.pem

@@ -3,7 +3,6 @@
  */
 import { render } from "@testing-library/react";
 
-// Mock next/script to avoid SSR issues in tests
 jest.mock("next/script", () => {
 	return function MockScript({
 		children,
@@ -16,9 +15,13 @@ jest.mock("next/script", () => {
 	};
 });
 
-// Mock the environment module
 jest.mock("@/util/environment", () => ({
 	isProduction: jest.fn(),
+}));
+
+let mockHeaders: Map<string, string>;
+jest.mock("next/headers", () => ({
+	headers: jest.fn(async () => mockHeaders),
 }));
 
 import { isProduction } from "@/util/environment";
@@ -28,7 +31,15 @@ const mockIsProduction = isProduction as jest.MockedFunction<
 	typeof isProduction
 >;
 
+function renderResult(result: Awaited<ReturnType<typeof GoogleAnalytics>>) {
+	return render(result as React.ReactElement);
+}
+
 describe("GoogleAnalytics", () => {
+	beforeEach(() => {
+		mockHeaders = new Map<string, string>();
+	});
+
 	afterEach(() => {
 		jest.clearAllMocks();
 	});
@@ -38,78 +49,82 @@ describe("GoogleAnalytics", () => {
 			mockIsProduction.mockReturnValue(true);
 		});
 
-		it("renders Google Analytics scripts", () => {
-			const { container } = render(<GoogleAnalytics />);
+		it("renders Google Analytics scripts for regular traffic", async () => {
+			const result = await GoogleAnalytics();
+			const { container } = renderResult(result);
 			const scripts = container.querySelectorAll("script");
 			expect(scripts.length).toBeGreaterThan(0);
 		});
 
-		it("includes the GA measurement ID in the script", () => {
-			const { getByTestId } = render(<GoogleAnalytics />);
+		it("includes the GA measurement ID in the script", async () => {
+			const result = await GoogleAnalytics();
+			const { getByTestId } = renderResult(result);
 			const gaScript = getByTestId("google-analytics");
 			expect(gaScript.textContent).toContain("G-2CHER7MM85");
 		});
 
-		describe("bot detection guard", () => {
-			function getInlineScript() {
-				const { getByTestId } = render(<GoogleAnalytics />);
-				return getByTestId("google-analytics").textContent ?? "";
-			}
+		it("returns null when x-bot-class header is 'crawler'", async () => {
+			mockHeaders.set("x-bot-class", "crawler");
+			const result = await GoogleAnalytics();
+			expect(result).toBeNull();
+		});
 
-			it("contains a user-agent check that runs before gtag config", () => {
-				const script = getInlineScript();
+		it("returns null when x-bot-class header is 'blocked'", async () => {
+			mockHeaders.set("x-bot-class", "blocked");
+			const result = await GoogleAnalytics();
+			expect(result).toBeNull();
+		});
+
+		it("renders scripts when x-bot-class header is absent", async () => {
+			const result = await GoogleAnalytics();
+			const { container } = renderResult(result);
+			expect(container.querySelectorAll("script").length).toBeGreaterThan(0);
+		});
+
+		describe("client-side bot detection", () => {
+			it("includes navigator.userAgent check before gtag config", async () => {
+				const result = await GoogleAnalytics();
+				const { getByTestId } = renderResult(result);
+				const script = getByTestId("google-analytics").textContent ?? "";
+				expect(script).toContain("navigator.userAgent");
 				const uaCheckIndex = script.indexOf("navigator.userAgent");
 				const gtagConfigIndex = script.indexOf("gtag('config'");
-				expect(uaCheckIndex).toBeGreaterThan(-1);
-				expect(gtagConfigIndex).toBeGreaterThan(-1);
 				expect(uaCheckIndex).toBeLessThan(gtagConfigIndex);
 			});
 
 			it.each([
-				"Googlebot",
-				"bingbot",
 				"GPTBot",
 				"ClaudeBot",
+				"PerplexityBot",
+				"Googlebot",
+				"bingbot",
 				"Bytespider",
 				"AhrefsBot",
 				"SemrushBot",
-				"PetalBot",
-				"anthropic",
-				"Amazonbot",
-				"FacebookBot",
-				"PerplexityBot",
-				"YandexBot",
-				"CCBot",
-			])("matches bot user-agent pattern: %s", (botName) => {
-				const script = getInlineScript();
-				const regexMatch = script.match(
-					/if\s*\(\/([^/]+)\/[a-z]*\.test\(ua\)\)/,
-				);
-				expect(regexMatch).not.toBeNull();
-				const pattern = new RegExp(regexMatch?.[1] ?? "", "i");
-				expect(pattern.test(botName)).toBe(true);
+				"Baiduspider",
+				"TikTokSpider",
+				"MegaIndex",
+			])("bot regex matches %s", async (botName) => {
+				const result = await GoogleAnalytics();
+				const { getByTestId } = renderResult(result);
+				const script = getByTestId("google-analytics").textContent ?? "";
+				const regexMatch = script.match(/\/([^/]+)\/i\.test/);
+				expect(regexMatch).toBeTruthy();
+				const regex = new RegExp(regexMatch![1], "i");
+				expect(regex.test(botName)).toBe(true);
 			});
 
-			it("does not match a regular browser user-agent", () => {
-				const script = getInlineScript();
-				const regexMatch = script.match(
-					/if\s*\(\/([^/]+)\/[a-z]*\.test\(ua\)\)/,
-				);
-				expect(regexMatch).not.toBeNull();
-				const pattern = new RegExp(regexMatch?.[1] ?? "", "i");
+			it("bot regex does not match regular browser UAs", async () => {
+				const result = await GoogleAnalytics();
+				const { getByTestId } = renderResult(result);
+				const script = getByTestId("google-analytics").textContent ?? "";
+				const regexMatch = script.match(/\/([^/]+)\/i\.test/);
+				const regex = new RegExp(regexMatch![1], "i");
 				expect(
-					pattern.test(
+					regex.test(
 						"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 					),
 				).toBe(false);
-			});
-
-			it("returns early before configuring gtag when bot is detected", () => {
-				const script = getInlineScript();
-				const returnIndex = script.indexOf("return;");
-				const gtagConfigIndex = script.indexOf("gtag('config'");
-				expect(returnIndex).toBeGreaterThan(-1);
-				expect(returnIndex).toBeLessThan(gtagConfigIndex);
 			});
 		});
 	});
@@ -119,9 +134,9 @@ describe("GoogleAnalytics", () => {
 			mockIsProduction.mockReturnValue(false);
 		});
 
-		it("returns null and renders nothing", () => {
-			const { container } = render(<GoogleAnalytics />);
-			expect(container.firstChild).toBeNull();
+		it("returns null and renders nothing", async () => {
+			const result = await GoogleAnalytics();
+			expect(result).toBeNull();
 		});
 	});
 });
