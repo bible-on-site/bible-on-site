@@ -5,7 +5,9 @@
 // - All IDs are GUID (CHAR(36))
 // - All tables prefixed tanahpedia_
 // - God = singleton table (one row, always same entity)
-// - Prophecy extends Saying (like War extends Event)
+// - Prophecy extends Saying; War extends Event; Temple Tool extends Object
+// - 3D models supported for Object, Temple Tool, Animal, Plant (blob storage)
+// - Category homepages with configurable layouts (list, map/GIS, gallery, timeline)
 // - Sources via source_group/tanah_source/non_tanah_source
 // - No certainty levels - "70 panim latorah"
 // - Prefer lookup tables over enums (except entity_type, sex)
@@ -144,6 +146,7 @@ Enum tanahpedia_entity_type_enum {
   WAR
   ANIMAL
   OBJECT
+  TEMPLE_TOOL
   PLANT
   ASTRONOMICAL_OBJECT
   SAYING
@@ -344,6 +347,44 @@ Table tanahpedia_animal {
 Table tanahpedia_object {
   id char(36) [pk]
   name varchar(255)
+}
+
+// -------------------------------------------
+// TEMPLE_TOOL (extends Object)
+// -------------------------------------------
+
+Table tanahpedia_temple_tool {
+  id char(36) [pk]
+  object_id char(36) [ref: - tanahpedia_object.id]
+  name varchar(255)
+}
+
+// -------------------------------------------
+// 3D MODEL (for Object, Temple Tool, Animal, Plant)
+// -------------------------------------------
+
+Table tanahpedia_3d_model {
+  id char(36) [pk]
+  entity_type tanahpedia_entity_type_enum [note: 'OBJECT, TEMPLE_TOOL, ANIMAL, PLANT']
+  entity_id char(36)
+  blob_key varchar(500) [note: 'S3/blob storage key for the 3D model file']
+  format varchar(50) [note: 'glTF, GLB, OBJ, etc.']
+  label varchar(255) [note: 'Optional display label']
+  alt_group_id char(36)
+}
+
+// -------------------------------------------
+// CATEGORY HOMEPAGE
+// -------------------------------------------
+// Each entity type can have a custom homepage (e.g. places → GIS map, objects → gallery)
+
+Table tanahpedia_category_homepage {
+  id char(36) [pk]
+  entity_type tanahpedia_entity_type_enum [unique, note: 'One homepage per entity type']
+  layout_type varchar(50) [note: 'LIST, MAP, GALLERY, TIMELINE, etc.']
+  config json [note: 'Layout-specific config (map center/zoom, gallery columns, etc.)']
+  content mediumtext [note: 'Optional rich-text intro/description']
+  updated_at datetime
 }
 
 // -------------------------------------------
