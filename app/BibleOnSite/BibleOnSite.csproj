@@ -114,7 +114,7 @@
 	     XAAMM0000 manifest collisions with Plugin.Firebase are suppressed in NoWarn above.
 	     TODO(#1018): re-evaluate workarounds when migrating to .NET 10. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
-		<PackageReference Include="Xamarin.Google.Android.Play.Asset.Delivery" Version="2.3.0.5" />
+		<PackageReference Include="Xamarin.Google.Android.Play.Asset.Delivery" Version="2.3.0.6" />
 	</ItemGroup>
 
 	<!-- D8 duplicate-class workaround: PAD + Firebase transitively pull in AndroidX
@@ -124,7 +124,7 @@
 	     For packages with NuGet version conflicts (where ExcludeAssets triggers NU1107),
 	     a target strips the duplicate .aar from @(AndroidAarLibrary) before extraction. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
-		<PackageReference Include="Xamarin.AndroidX.Compose.Runtime.Annotation.Jvm" Version="1.10.0.1" ExcludeAssets="all" />
+		<PackageReference Include="Xamarin.AndroidX.Compose.Runtime.Annotation.Jvm" Version="1.10.4.1" ExcludeAssets="all" />
 	</ItemGroup>
 	<Target Name="_RemoveDuplicateAndroidXAars"
 		BeforeTargets="_ResolveAars;_ExtractAar;_GetLibraryImports"
@@ -234,7 +234,7 @@
 		<PackageReference Include="GraphQL.Client.Serializer.Newtonsoft" Version="6.1.0" />
 		<PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.13" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.14" />
 		<PackageReference Include="sqlite-net-pcl" Version="1.9.172" />
 		<PackageReference Include="SQLitePCLRaw.bundle_green" Version="2.1.11" />
 	</ItemGroup>
@@ -242,7 +242,7 @@
 	<!-- Plugin.Firebase supports iOS and Android only (not MacCatalyst or Windows) -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<PackageReference Include="Plugin.Firebase.Analytics" Version="4.0.0" />
-		<PackageReference Include="Plugin.Firebase.Core" Version="4.1.0" />
+		<PackageReference Include="Plugin.Firebase.Core" Version="4.2.0" />
 	</ItemGroup>
 
 </Project>
