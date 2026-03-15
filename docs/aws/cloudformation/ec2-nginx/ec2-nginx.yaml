@@ -162,7 +162,7 @@ Metadata:
       - Static file serving from /var/www/html/
       - GeoIP support for geographic routing
       - Catch-all default_server for unknown subdomains → 301 to root domain /404
-      - Rate limiting: per-IP general (60 req/min), per-IP crawler (10 req/min), global crawler (30 req/min total)
+      - Rate limiting: per-IP crawler (10 req/min), global crawler (30 req/min total); no general per-IP limit (Next.js RSC prefetch fires 20-30 requests per page load)
       - Bot blocking: aggressive bots (Bytespider, MJ12bot, AhrefsBot, SemrushBot, DotBot, PetalBot, BLEXBot, MegaIndex, Sogou) blocked with 403
       - Bot classification via User-Agent map (blocked, crawler, regular); X-Bot-Class header passed to backend
     SSLCertificates:
