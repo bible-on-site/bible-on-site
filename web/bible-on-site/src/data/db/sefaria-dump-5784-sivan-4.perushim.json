@@ -89,52 +89,38 @@
   },
   {
     "id": 13,
-    "name": "ביאור שטיינזלץ",
-    "parshanId": 11,
-    "priority": 2137,
-    "pubDate": "[2015]"
-  },
-  {
-    "id": 14,
-    "name": "ביאור שטיינזלץ, הקדמות לתנ\"ך",
-    "parshanId": 11,
-    "priority": 2137,
-    "pubDate": "[2015]"
-  },
-  {
-    "id": 15,
     "name": "בכור שור",
-    "parshanId": 12,
+    "parshanId": 11,
     "priority": 1345,
     "compDate": "[1145, 1195]",
     "pubDate": "[1856]"
   },
   {
-    "id": 16,
+    "id": 14,
     "name": "בעל הטורים",
-    "parshanId": 13,
+    "parshanId": 12,
     "priority": 1480,
     "compDate": "[1280, 1340]",
     "pubDate": "[1806]"
   },
   {
-    "id": 17,
+    "id": 15,
     "name": "ברכת אשר",
-    "parshanId": 14,
+    "parshanId": 13,
     "priority": 2160,
     "compDate": "[1960, 2010]",
     "pubDate": "[2009]"
   },
   {
-    "id": 18,
+    "id": 16,
     "name": "גביע כסף",
-    "parshanId": 15,
+    "parshanId": 14,
     "priority": 1530,
     "compDate": "[1330, 1340]",
     "pubDate": "[1982]"
   },
   {
-    "id": 19,
+    "id": 17,
     "name": "גור אריה",
     "parshanId": 8,
     "priority": 1748,
@@ -142,201 +128,201 @@
     "pubDate": "[1578]"
   },
   {
-    "id": 20,
+    "id": 18,
     "name": "דברי דוד",
-    "parshanId": 16,
+    "parshanId": 15,
     "priority": 1786,
     "pubDate": "[1689]"
   },
   {
-    "id": 21,
+    "id": 19,
     "name": "דברים טובים",
-    "parshanId": 17,
+    "parshanId": 16,
     "priority": 1742,
     "compDate": "[1542, 1592]",
     "pubDate": "[1601]"
   },
   {
-    "id": 22,
+    "id": 20,
     "name": "דברים ניחומים",
-    "parshanId": 17,
+    "parshanId": 16,
     "priority": 1742,
     "compDate": "[1542, 1592]",
     "pubDate": "[1601]"
   },
   {
-    "id": 23,
+    "id": 21,
     "name": "דעת זקנים",
-    "parshanId": 18,
+    "parshanId": 17,
     "priority": 1300,
     "compDate": "[1100, 1300]",
     "pubDate": "[1524]"
   },
   {
-    "id": 24,
+    "id": 22,
     "name": "הדר זקנים",
-    "parshanId": 18,
+    "parshanId": 17,
     "priority": 1450,
     "compDate": "[1250, 1300]",
     "pubDate": "[1840]"
   },
   {
-    "id": 25,
+    "id": 23,
     "name": "הכתב והקבלה",
-    "parshanId": 19,
+    "parshanId": 18,
     "priority": 2029,
     "compDate": "[1829, 1839]",
     "pubDate": "[1839]"
   },
   {
-    "id": 26,
+    "id": 24,
     "name": "העמק דבר",
-    "parshanId": 20,
+    "parshanId": 19,
     "priority": 2040,
     "compDate": "[1840, 1880]",
     "pubDate": "[1880]"
   },
   {
-    "id": 27,
+    "id": 25,
     "name": "הרחב דבר",
-    "parshanId": 20,
+    "parshanId": 19,
     "priority": 2040,
     "compDate": "[1840, 1880]",
     "pubDate": "[1879]"
   },
   {
-    "id": 28,
+    "id": 26,
     "name": "חבצלת השרון",
-    "parshanId": 17,
+    "parshanId": 16,
     "priority": 1742,
     "compDate": "[1542, 1592]",
     "pubDate": "[1563]"
   },
   {
-    "id": 29,
+    "id": 27,
     "name": "חומת אנך",
-    "parshanId": 21,
+    "parshanId": 20,
     "priority": 1984,
     "compDate": "[1784, 1804]",
     "pubDate": "[1804]"
   },
   {
-    "id": 30,
+    "id": 28,
     "name": "חזקוני",
-    "parshanId": 22,
+    "parshanId": 21,
     "priority": 1420,
     "compDate": "[1220, 1260]",
     "pubDate": "[1524]"
   },
   {
-    "id": 31,
+    "id": 29,
     "name": "חלקת מחוקק",
-    "parshanId": 17,
+    "parshanId": 16,
     "priority": 1742,
     "compDate": "[1542, 1592]",
     "pubDate": "[1603]"
   },
   {
-    "id": 32,
+    "id": 30,
     "name": "יוסף אבן יחיא",
-    "parshanId": 23,
+    "parshanId": 22,
     "priority": 1717,
     "compDate": "[1517, 1537]",
     "pubDate": "[1538]"
   },
   {
-    "id": 33,
+    "id": 31,
     "name": "יריעות שלמה",
-    "parshanId": 24,
+    "parshanId": 23,
     "priority": 1730,
     "compDate": "[1530, 1570]",
     "pubDate": "[1609]"
   },
   {
-    "id": 34,
+    "id": 32,
     "name": "ישע אלהים",
-    "parshanId": 25,
+    "parshanId": 24,
     "priority": 1755,
     "compDate": "[1555, 1585]",
     "pubDate": "[1595]"
   },
   {
-    "id": 35,
+    "id": 33,
     "name": "כלי חמדה",
-    "parshanId": 26,
+    "parshanId": 25,
     "priority": 2106,
     "compDate": "[1906]"
   },
   {
-    "id": 36,
+    "id": 34,
     "name": "כלי יקר",
-    "parshanId": 27,
+    "parshanId": 26,
     "priority": 1798,
     "compDate": "[1598, 1602]",
     "pubDate": "[1602]"
   },
   {
-    "id": 37,
+    "id": 35,
     "name": "לבוש האורה",
-    "parshanId": 28,
+    "parshanId": 27,
     "priority": 1730
   },
   {
-    "id": 38,
+    "id": 36,
     "name": "לחם דמעה",
     "parshanId": 3,
     "priority": 1745,
     "pubDate": "[1600]"
   },
   {
-    "id": 39,
+    "id": 37,
     "name": "מאירי",
-    "parshanId": 29,
+    "parshanId": 28,
     "priority": 1470,
     "compDate": "[1270, 1315]",
     "pubDate": "[1936]"
   },
   {
-    "id": 40,
+    "id": 38,
     "name": "מגילת סתרים",
-    "parshanId": 30,
+    "parshanId": 29,
     "priority": 1990,
     "compDate": "[1790, 1800]",
     "pubDate": "[1800, 1801]"
   },
   {
-    "id": 41,
+    "id": 39,
     "name": "מגלה עמוקות",
-    "parshanId": 31,
+    "parshanId": 30,
     "priority": 1785,
     "pubDate": "[1795]"
   },
   {
-    "id": 42,
+    "id": 40,
     "name": "מזרחי",
-    "parshanId": 32,
+    "parshanId": 31,
     "priority": 1675,
     "compDate": "[1475, 1525]",
     "pubDate": "[1526]"
   },
   {
-    "id": 43,
+    "id": 41,
     "name": "מחיר יין",
-    "parshanId": 33,
+    "parshanId": 32,
     "priority": 1755,
     "compDate": "[1555]",
     "pubDate": "[1559]"
   },
   {
-    "id": 44,
+    "id": 42,
     "name": "מיני תרגומא",
-    "parshanId": 34,
+    "parshanId": 33,
     "priority": 1951,
     "compDate": "[1751, 1799]",
     "pubDate": "[1831]"
   },
   {
-    "id": 45,
+    "id": 43,
     "name": "מלבי\"ם",
     "parshanId": 9,
     "priority": 2045,
@@ -344,7 +330,7 @@
     "pubDate": "[1876]"
   },
   {
-    "id": 46,
+    "id": 44,
     "name": "מלבי\"ם באור המילות",
     "parshanId": 9,
     "priority": 2044,
@@ -352,13 +338,20 @@
     "pubDate": "[1874]"
   },
   {
-    "id": 47,
+    "id": 45,
     "name": "מנות הלוי",
-    "parshanId": 35,
+    "parshanId": 34,
     "priority": 1705
   },
   {
-    "id": 48,
+    "id": 46,
+    "name": "מנחת עני",
+    "parshanId": 35,
+    "priority": 1998,
+    "pubDate": "[1874]"
+  },
+  {
+    "id": 47,
     "name": "מנחת שי",
     "parshanId": 36,
     "priority": 1726,
@@ -366,7 +359,7 @@
     "pubDate": "[1742]"
   },
   {
-    "id": 49,
+    "id": 48,
     "name": "מצודת דוד",
     "parshanId": 37,
     "priority": 1940,
@@ -374,7 +367,7 @@
     "pubDate": "[1780, 1782]"
   },
   {
-    "id": 50,
+    "id": 49,
     "name": "מצודת ציון",
     "parshanId": 37,
     "priority": 1940,
@@ -382,56 +375,56 @@
     "pubDate": "[1780, 1782]"
   },
   {
-    "id": 51,
+    "id": 50,
     "name": "מראות הצובאות",
-    "parshanId": 17,
+    "parshanId": 16,
     "priority": 1707
   },
   {
-    "id": 52,
+    "id": 51,
     "name": "משאת משה",
-    "parshanId": 17,
+    "parshanId": 16,
     "priority": 1742,
     "compDate": "[1542, 1592]",
     "pubDate": "[1601]"
   },
   {
-    "id": 53,
+    "id": 52,
     "name": "משכיל לדוד",
     "parshanId": 38,
     "priority": 1919
   },
   {
-    "id": 54,
+    "id": 53,
     "name": "נחל אשכול",
-    "parshanId": 21,
+    "parshanId": 20,
     "priority": 1968,
     "compDate": "[1768, 1792]",
     "pubDate": "[1889]"
   },
   {
-    "id": 55,
+    "id": 54,
     "name": "נחל קדומים",
-    "parshanId": 21,
+    "parshanId": 20,
     "priority": 1968,
     "compDate": "[1768, 1792]"
   },
   {
-    "id": 56,
+    "id": 55,
     "name": "נחלת יעקב",
-    "parshanId": 30,
+    "parshanId": 29,
     "priority": 1960,
     "pubDate": "[1849]"
   },
   {
-    "id": 57,
+    "id": 56,
     "name": "נתינה לגר",
     "parshanId": 39,
     "priority": 2003,
     "pubDate": "[1875]"
   },
   {
-    "id": 58,
+    "id": 57,
     "name": "ספורנו",
     "parshanId": 40,
     "priority": 1700,
@@ -439,14 +432,14 @@
     "pubDate": "[1567]"
   },
   {
-    "id": 59,
+    "id": 58,
     "name": "עוד יוסף חי; דרשות",
     "parshanId": 41,
     "priority": 2035,
     "pubDate": "[1910]"
   },
   {
-    "id": 60,
+    "id": 59,
     "name": "עזרא בן שלמה",
     "parshanId": 42,
     "priority": 1375,
@@ -454,7 +447,7 @@
     "pubDate": "[1764]"
   },
   {
-    "id": 61,
+    "id": 60,
     "name": "עטרת זקנים",
     "parshanId": 2,
     "priority": 1665,
@@ -462,22 +455,22 @@
     "pubDate": "[1557]"
   },
   {
-    "id": 62,
+    "id": 61,
     "name": "עיני משה",
-    "parshanId": 17,
+    "parshanId": 16,
     "priority": 1742,
     "compDate": "[1542, 1592]",
     "pubDate": "[1601]"
   },
   {
-    "id": 63,
+    "id": 62,
     "name": "עמנואל הרומי",
     "parshanId": 43,
     "priority": 1465,
     "pubDate": "[1487]"
   },
   {
-    "id": 64,
+    "id": 63,
     "name": "עמר נקא",
     "parshanId": 44,
     "priority": 1735,
@@ -485,28 +478,28 @@
     "pubDate": "[1810]"
   },
   {
-    "id": 65,
+    "id": 64,
     "name": "פירושי רד\"צ הופמן",
     "parshanId": 45,
     "priority": 2043
   },
   {
-    "id": 66,
+    "id": 65,
     "name": "פלגי מים",
-    "parshanId": 30,
+    "parshanId": 29,
     "priority": 1970,
     "compDate": "[1770, 1790]",
     "pubDate": "[1815]"
   },
   {
-    "id": 67,
+    "id": 66,
     "name": "פרדס יוסף",
     "parshanId": 44,
     "priority": 1645,
     "pubDate": "[1930]"
   },
   {
-    "id": 68,
+    "id": 67,
     "name": "צאינה וראינה",
     "parshanId": 46,
     "priority": 1790,
@@ -514,7 +507,7 @@
     "pubDate": "[1590, 1622]"
   },
   {
-    "id": 69,
+    "id": 68,
     "name": "צפנת פענח",
     "parshanId": 47,
     "priority": 2105,
@@ -522,7 +515,7 @@
     "pubDate": "[1962]"
   },
   {
-    "id": 70,
+    "id": 69,
     "name": "צרור המור",
     "parshanId": 10,
     "priority": 1660,
@@ -530,29 +523,29 @@
     "pubDate": "[1502]"
   },
   {
-    "id": 71,
+    "id": 70,
     "name": "צרור המור (לורברבוים)",
-    "parshanId": 30,
+    "parshanId": 29,
     "priority": 1970,
     "compDate": "[1770, 1790]",
     "pubDate": "[1815]"
   },
   {
-    "id": 72,
+    "id": 71,
     "name": "קיצור בעל הטורים",
-    "parshanId": 13,
+    "parshanId": 12,
     "priority": 1480,
     "compDate": "[1280, 1340]",
     "pubDate": "[1514]"
   },
   {
-    "id": 73,
+    "id": 72,
     "name": "ר' סעדיה גאון",
     "parshanId": 48,
     "priority": 1082
   },
   {
-    "id": 74,
+    "id": 73,
     "name": "רא\"ש",
     "parshanId": 49,
     "priority": 1475,
@@ -560,22 +553,22 @@
     "pubDate": "[1840]"
   },
   {
-    "id": 75,
+    "id": 74,
     "name": "ראשון לציון",
     "parshanId": 7,
     "priority": 1896,
     "pubDate": "[1750]"
   },
   {
-    "id": 76,
+    "id": 75,
     "name": "רב פנינים",
-    "parshanId": 17,
+    "parshanId": 16,
     "priority": 1742,
     "compDate": "[1542, 1592]",
     "pubDate": "[1601]"
   },
   {
-    "id": 77,
+    "id": 76,
     "name": "רבינו חננאל",
     "parshanId": 50,
     "priority": 1205,
@@ -583,7 +576,7 @@
     "pubDate": "[1492]"
   },
   {
-    "id": 78,
+    "id": 77,
     "name": "רד\"ק",
     "parshanId": 51,
     "priority": 1385,
@@ -591,22 +584,22 @@
     "pubDate": "[1485]"
   },
   {
-    "id": 79,
+    "id": 78,
     "name": "רוממות אל",
-    "parshanId": 17,
+    "parshanId": 16,
     "priority": 1742,
     "compDate": "[1542, 1592]",
     "pubDate": "[1605]"
   },
   {
-    "id": 80,
+    "id": 79,
     "name": "ריב\"א",
     "parshanId": 52,
     "priority": 1290,
     "compDate": "[1090, 1130]"
   },
   {
-    "id": 81,
+    "id": 80,
     "name": "רלב\"ג",
     "parshanId": 53,
     "priority": 1525,
@@ -614,14 +607,14 @@
     "pubDate": "[1475, 1476]"
   },
   {
-    "id": 82,
+    "id": 81,
     "name": "רלב\"ג ביאור המלות",
     "parshanId": 53,
     "priority": 1526,
     "compDate": "[1326, 1340]"
   },
   {
-    "id": 83,
+    "id": 82,
     "name": "רמב\"ן",
     "parshanId": 54,
     "priority": 1446,
@@ -629,7 +622,7 @@
     "pubDate": "[1480]"
   },
   {
-    "id": 84,
+    "id": 83,
     "name": "רס\"ג",
     "parshanId": 48,
     "priority": 1118,
@@ -637,7 +630,7 @@
     "pubDate": "[1882]"
   },
   {
-    "id": 85,
+    "id": 84,
     "name": "רש\"י",
     "parshanId": 55,
     "priority": 100,
@@ -645,7 +638,7 @@
     "pubDate": "[1476]"
   },
   {
-    "id": 86,
+    "id": 85,
     "name": "רשב\"ם",
     "parshanId": 56,
     "priority": 1320,
@@ -653,28 +646,28 @@
     "pubDate": "[1705]"
   },
   {
-    "id": 87,
+    "id": 86,
     "name": "שושנת העמקים",
-    "parshanId": 17,
+    "parshanId": 16,
     "priority": 1742,
     "compDate": "[1542, 1592]",
     "pubDate": "[1591]"
   },
   {
-    "id": 88,
+    "id": 87,
     "name": "שיג ושיח; מהדורה עברית",
     "parshanId": 44,
     "priority": 1645,
     "pubDate": "[2018]"
   },
   {
-    "id": 89,
+    "id": 88,
     "name": "שיעורים במנהיגות; מהדורה עברית",
     "parshanId": 44,
     "priority": 1645
   },
   {
-    "id": 90,
+    "id": 89,
     "name": "שלום אסתר",
     "parshanId": 57,
     "priority": 1760,
@@ -682,7 +675,7 @@
     "pubDate": "[1580]"
   },
   {
-    "id": 91,
+    "id": 90,
     "name": "שפתי חכמים",
     "parshanId": 58,
     "priority": 1860,
@@ -690,14 +683,14 @@
     "pubDate": "[1680]"
   },
   {
-    "id": 92,
+    "id": 91,
     "name": "שפתי כהן",
     "parshanId": 44,
     "priority": 1645,
     "pubDate": "[1605]"
   },
   {
-    "id": 93,
+    "id": 92,
     "name": "תולדות יצחק",
     "parshanId": 59,
     "priority": 1675,
@@ -705,7 +698,7 @@
     "pubDate": "[1517]"
   },
   {
-    "id": 94,
+    "id": 93,
     "name": "תורה תמימה",
     "parshanId": 60,
     "priority": 2098,
@@ -713,7 +706,7 @@
     "pubDate": "[1902]"
   },
   {
-    "id": 95,
+    "id": 94,
     "name": "תורה תמימה (נבון)",
     "parshanId": 61,
     "priority": 2211,
@@ -721,30 +714,30 @@
     "pubDate": "[2011]"
   },
   {
-    "id": 96,
+    "id": 95,
     "name": "תורת משה (אלשיך)",
-    "parshanId": 17,
+    "parshanId": 16,
     "priority": 1740,
     "compDate": "[1540, 1590]",
     "pubDate": "[1594]"
   },
   {
-    "id": 97,
+    "id": 96,
     "name": "תעלומות חכמה",
-    "parshanId": 30,
+    "parshanId": 29,
     "priority": 1970,
     "compDate": "[1770, 1790]",
     "pubDate": "[1804]"
   },
   {
-    "id": 98,
+    "id": 97,
     "name": "תפארת יהונתן",
     "parshanId": 5,
     "priority": 1890,
     "pubDate": "[1819]"
   },
   {
-    "id": 99,
+    "id": 98,
     "name": "תפסיר רס\"ג",
     "parshanId": 48,
     "priority": 1118,
@@ -752,14 +745,14 @@
     "pubDate": "[1546]"
   },
   {
-    "id": 100,
+    "id": 99,
     "name": "תרגום",
     "parshanId": 62,
     "priority": 0,
     "compDate": "[0, 600]"
   },
   {
-    "id": 101,
+    "id": 100,
     "name": "תרגום אונקלוס",
     "parshanId": 63,
     "priority": 13,
@@ -767,7 +760,7 @@
     "pubDate": "[1482]"
   },
   {
-    "id": 102,
+    "id": 101,
     "name": "תרגום יונתן",
     "parshanId": 64,
     "priority": 25,
@@ -775,7 +768,7 @@
     "pubDate": "[1524]"
   },
   {
-    "id": 103,
+    "id": 102,
     "name": "תרגום ירושלמי",
     "parshanId": 62,
     "priority": 63,
@@ -783,7 +776,7 @@
     "pubDate": "[1552]"
   },
   {
-    "id": 104,
+    "id": 103,
     "name": "תרגום שני",
     "parshanId": 62,
     "priority": 50
