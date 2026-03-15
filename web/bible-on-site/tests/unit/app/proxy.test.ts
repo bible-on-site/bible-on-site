@@ -4,7 +4,10 @@
 import { NextRequest } from "next/server";
 import { config, proxy } from "@/proxy";
 
-function makeRequest(pathname: string, opts?: { ua?: string }): NextRequest {
+function makeRequest(
+	pathname: string,
+	opts?: { ua?: string },
+): NextRequest {
 	const headers: Record<string, string> = {};
 	if (opts?.ua) headers["user-agent"] = opts.ua;
 	return new NextRequest(new URL(pathname, "https://localhost"), { headers });
