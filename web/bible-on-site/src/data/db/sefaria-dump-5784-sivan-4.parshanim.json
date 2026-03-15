@@ -61,153 +61,153 @@
   },
   {
     "id": 11,
-    "name": "עדין שטיינזלץ",
-    "hasPic": false,
-    "birthYear": 1937
-  },
-  {
-    "id": 12,
     "name": "יוסף בכור שור",
     "hasPic": false,
     "birthYear": 1140
   },
   {
-    "id": 13,
+    "id": 12,
     "name": "יעקב בן אשר",
     "hasPic": false,
     "birthYear": 1250
   },
   {
-    "id": 14,
+    "id": 13,
     "name": "אשר וסרטיל",
     "hasPic": false,
     "birthYear": 1921
   },
   {
-    "id": 15,
+    "id": 14,
     "name": "ר' יוסף אבן כספי",
     "hasPic": false,
     "birthYear": 1280
   },
   {
-    "id": 16,
+    "id": 15,
     "name": "דוד הלוי סגל",
     "hasPic": false,
     "birthYear": 1586
   },
   {
-    "id": 17,
+    "id": 16,
     "name": "אלשיך",
     "hasPic": false,
     "birthYear": 1507
   },
   {
-    "id": 18,
+    "id": 17,
     "name": "תוספות",
     "hasPic": false,
     "birthYear": 1150
   },
   {
-    "id": 19,
+    "id": 18,
     "name": "יעקב צבי מקלנבורג",
     "hasPic": false,
     "birthYear": 1785
   },
   {
-    "id": 20,
+    "id": 19,
     "name": "נפתלי צבי יהודה ברלין",
     "hasPic": false,
     "birthYear": 1816
   },
   {
-    "id": 21,
+    "id": 20,
     "name": "ר' חיים יוסף דוד אזולאי",
     "hasPic": false,
     "birthYear": 1724
   },
   {
-    "id": 22,
+    "id": 21,
     "name": "חזקוני",
     "hasPic": false,
     "birthYear": 1210
   },
   {
-    "id": 23,
+    "id": 22,
     "name": "יוסף אבן יחייא",
     "hasPic": false,
     "birthYear": 1494
   },
   {
-    "id": 24,
+    "id": 23,
     "name": "מהרש\"ל",
     "hasPic": false,
     "birthYear": 1510
   },
   {
-    "id": 25,
+    "id": 24,
     "name": "אברהם בן יצחק צהלון",
     "hasPic": false,
     "birthYear": 1560
   },
   {
-    "id": 26,
+    "id": 25,
     "name": "מאיר דן רפאל פְּלוֹצְקִי",
     "hasPic": false,
     "birthYear": 1866
   },
   {
-    "id": 27,
+    "id": 26,
     "name": "שלמה אפרים מלונטשיץ",
     "hasPic": false,
     "birthYear": 1550
   },
   {
-    "id": 28,
+    "id": 27,
     "name": "ר' מרדכי יפה",
     "hasPic": false,
     "birthYear": 1530
   },
   {
-    "id": 29,
+    "id": 28,
     "name": "המאירי",
     "hasPic": false,
     "birthYear": 1249
   },
   {
-    "id": 30,
+    "id": 29,
     "name": "יעקב בן יעקב משה מליסא",
     "hasPic": false,
     "birthYear": 1760
   },
   {
-    "id": 31,
+    "id": 30,
     "name": "נתן נטע שפירא",
     "hasPic": false,
     "birthYear": 1585
   },
   {
-    "id": 32,
+    "id": 31,
     "name": "אליהו בן אברהם מזרחי",
     "hasPic": false,
     "birthYear": 1445
   },
   {
-    "id": 33,
+    "id": 32,
     "name": "משה בן ישראל איסרלישׂ",
     "hasPic": false,
     "birthYear": 1520
   },
   {
-    "id": 34,
+    "id": 33,
     "name": "ישעיה פיק ברלין",
     "hasPic": false,
     "birthYear": 1725
   },
   {
-    "id": 35,
+    "id": 34,
     "name": "שלמה הלוי אלקבץ",
     "hasPic": false,
     "birthYear": 1505
+  },
+  {
+    "id": 35,
+    "name": "יעקב אטלינגר",
+    "hasPic": false,
+    "birthYear": 1798
   },
   {
     "id": 36,
