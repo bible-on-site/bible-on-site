@@ -1102,15 +1102,32 @@ public partial class PerekPage : ContentPage
     private double _perushimLastPanY;
     private DateTime _perushimLastPanTime;
 
+    private bool _isTogglingPerush;
+
     private void OnPerushCheckboxChanged(object? sender, CheckedChangedEventArgs e)
     {
+        if (_isTogglingPerush)
+            return;
         if (sender is not CheckBox checkBox)
             return;
         var grid = checkBox.Parent as Grid;
         var perush = grid?.BindingContext as Perush;
-        if (perush != null)
+        if (perush == null)
+            return;
+
+        bool wantChecked = e.Value;
+        bool alreadyChecked = _viewModel.IsPerushChecked(perush.Id);
+        if (wantChecked == alreadyChecked)
+            return;
+
+        _isTogglingPerush = true;
+        try
         {
             _viewModel.ToggleCheckedPerush(perush.Id);
+        }
+        finally
+        {
+            _isTogglingPerush = false;
         }
     }
 
