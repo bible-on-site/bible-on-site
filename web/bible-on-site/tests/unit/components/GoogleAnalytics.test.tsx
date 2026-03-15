@@ -80,6 +80,53 @@ describe("GoogleAnalytics", () => {
 			const { container } = renderResult(result);
 			expect(container.querySelectorAll("script").length).toBeGreaterThan(0);
 		});
+
+		describe("client-side bot detection", () => {
+			it("includes navigator.userAgent check before gtag config", async () => {
+				const result = await GoogleAnalytics();
+				const { getByTestId } = renderResult(result);
+				const script = getByTestId("google-analytics").textContent ?? "";
+				expect(script).toContain("navigator.userAgent");
+				const uaCheckIndex = script.indexOf("navigator.userAgent");
+				const gtagConfigIndex = script.indexOf("gtag('config'");
+				expect(uaCheckIndex).toBeLessThan(gtagConfigIndex);
+			});
+
+			it.each([
+				"GPTBot",
+				"ClaudeBot",
+				"PerplexityBot",
+				"Googlebot",
+				"bingbot",
+				"Bytespider",
+				"AhrefsBot",
+				"SemrushBot",
+				"Baiduspider",
+				"TikTokSpider",
+				"MegaIndex",
+			])("bot regex matches %s", async (botName) => {
+				const result = await GoogleAnalytics();
+				const { getByTestId } = renderResult(result);
+				const script = getByTestId("google-analytics").textContent ?? "";
+				const regexMatch = script.match(/\/([^/]+)\/i\.test/);
+				expect(regexMatch).toBeTruthy();
+				const regex = new RegExp(regexMatch![1], "i");
+				expect(regex.test(botName)).toBe(true);
+			});
+
+			it("bot regex does not match regular browser UAs", async () => {
+				const result = await GoogleAnalytics();
+				const { getByTestId } = renderResult(result);
+				const script = getByTestId("google-analytics").textContent ?? "";
+				const regexMatch = script.match(/\/([^/]+)\/i\.test/);
+				const regex = new RegExp(regexMatch![1], "i");
+				expect(
+					regex.test(
+						"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+					),
+				).toBe(false);
+			});
+		});
 	});
 
 	describe("when not in production", () => {
