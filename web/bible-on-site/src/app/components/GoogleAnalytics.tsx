@@ -1,10 +1,17 @@
+import { headers } from "next/headers";
 import Script from "next/script";
 import { isProduction } from "@/util/environment";
 
 const GA_MEASUREMENT_ID = "G-2CHER7MM85";
 
-export function GoogleAnalytics() {
+export async function GoogleAnalytics() {
 	if (!isProduction()) {
+		return null;
+	}
+
+	const headersList = await headers();
+	const botClass = headersList.get("x-bot-class");
+	if (botClass) {
 		return null;
 	}
 
@@ -18,7 +25,7 @@ export function GoogleAnalytics() {
 				{`
 					(function() {
 						var ua = navigator.userAgent || '';
-						if (/bot|crawl|spider|slurp|Bytespider|GPTBot|ClaudeBot|CCBot|Amazonbot|Diffbot|PetalBot|AhrefsBot|SemrushBot|DotBot|MJ12bot|BLEXBot|YandexBot|Sogou|Applebot|Googlebot|bingbot|PerplexityBot|FacebookBot|anthropic/i.test(ua)) {
+						if (/bot|crawl|spider|slurp|Bytespider|GPTBot|ClaudeBot|CCBot|Amazonbot|Diffbot|PetalBot|AhrefsBot|SemrushBot|DotBot|MJ12bot|BLEXBot|YandexBot|Sogou|Applebot|Googlebot|bingbot|PerplexityBot|FacebookBot|anthropic|TikTokSpider|Baiduspider|MegaIndex/i.test(ua)) {
 							return;
 						}
 						window.dataLayer = window.dataLayer || [];
