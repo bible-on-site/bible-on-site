@@ -66,8 +66,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 										to="/"
 										className="text-gray-600 hover:text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
 										activeProps={{
-											className:
-												"!text-blue-600 !bg-blue-50 font-semibold",
+											className: "!text-blue-600 !bg-blue-50 font-semibold",
 										}}
 										activeOptions={{ exact: true }}
 									>
@@ -77,8 +76,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 										to="/articles"
 										className="text-gray-600 hover:text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
 										activeProps={{
-											className:
-												"!text-blue-600 !bg-blue-50 font-semibold",
+											className: "!text-blue-600 !bg-blue-50 font-semibold",
 										}}
 									>
 										מאמרים
@@ -87,11 +85,19 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 										to="/rabbis"
 										className="text-gray-600 hover:text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
 										activeProps={{
-											className:
-												"!text-blue-600 !bg-blue-50 font-semibold",
+											className: "!text-blue-600 !bg-blue-50 font-semibold",
 										}}
 									>
 										רבנים
+									</Link>
+									<Link
+										to="/tanahpedia"
+										className="text-gray-600 hover:text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+										activeProps={{
+											className: "!text-blue-600 !bg-blue-50 font-semibold",
+										}}
+									>
+										תנ&quot;ךפדיה
 									</Link>
 								</div>
 							</div>
