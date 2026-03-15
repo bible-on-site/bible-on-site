@@ -1107,18 +1107,26 @@ public partial class PerekPage : ContentPage
     private void OnPerushCheckboxChanged(object? sender, CheckedChangedEventArgs e)
     {
         if (_isTogglingPerush)
+        {
             return;
+        }
         if (sender is not CheckBox checkBox)
+        {
             return;
+        }
         var grid = checkBox.Parent as Grid;
         var perush = grid?.BindingContext as Perush;
         if (perush == null)
+        {
             return;
+        }
 
         bool wantChecked = e.Value;
         bool alreadyChecked = _viewModel.IsPerushChecked(perush.Id);
         if (wantChecked == alreadyChecked)
+        {
             return;
+        }
 
         _isTogglingPerush = true;
         try
