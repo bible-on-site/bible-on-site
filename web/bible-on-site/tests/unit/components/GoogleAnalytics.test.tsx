@@ -19,11 +19,6 @@ jest.mock("@/util/environment", () => ({
 	isProduction: jest.fn(),
 }));
 
-let mockHeaders: Map<string, string>;
-jest.mock("next/headers", () => ({
-	headers: jest.fn(async () => mockHeaders),
-}));
-
 import { isProduction } from "@/util/environment";
 import { GoogleAnalytics } from "../../../src/app/components/GoogleAnalytics";
 
@@ -31,15 +26,11 @@ const mockIsProduction = isProduction as jest.MockedFunction<
 	typeof isProduction
 >;
 
-function renderResult(result: Awaited<ReturnType<typeof GoogleAnalytics>>) {
+function renderResult(result: ReturnType<typeof GoogleAnalytics>) {
 	return render(result as React.ReactElement);
 }
 
 describe("GoogleAnalytics", () => {
-	beforeEach(() => {
-		mockHeaders = new Map<string, string>();
-	});
-
 	afterEach(() => {
 		jest.clearAllMocks();
 	});
@@ -49,41 +40,23 @@ describe("GoogleAnalytics", () => {
 			mockIsProduction.mockReturnValue(true);
 		});
 
-		it("renders Google Analytics scripts for regular traffic", async () => {
-			const result = await GoogleAnalytics();
+		it("renders Google Analytics scripts for regular traffic", () => {
+			const result = GoogleAnalytics();
 			const { container } = renderResult(result);
 			const scripts = container.querySelectorAll("script");
 			expect(scripts.length).toBeGreaterThan(0);
 		});
 
-		it("includes the GA measurement ID in the script", async () => {
-			const result = await GoogleAnalytics();
+		it("includes the GA measurement ID in the script", () => {
+			const result = GoogleAnalytics();
 			const { getByTestId } = renderResult(result);
 			const gaScript = getByTestId("google-analytics");
 			expect(gaScript.textContent).toContain("G-2CHER7MM85");
 		});
 
-		it("returns null when x-bot-class header is 'crawler'", async () => {
-			mockHeaders.set("x-bot-class", "crawler");
-			const result = await GoogleAnalytics();
-			expect(result).toBeNull();
-		});
-
-		it("returns null when x-bot-class header is 'blocked'", async () => {
-			mockHeaders.set("x-bot-class", "blocked");
-			const result = await GoogleAnalytics();
-			expect(result).toBeNull();
-		});
-
-		it("renders scripts when x-bot-class header is absent", async () => {
-			const result = await GoogleAnalytics();
-			const { container } = renderResult(result);
-			expect(container.querySelectorAll("script").length).toBeGreaterThan(0);
-		});
-
 		describe("client-side bot detection", () => {
-			it("includes navigator.userAgent check before gtag config", async () => {
-				const result = await GoogleAnalytics();
+			it("includes navigator.userAgent check before gtag config", () => {
+				const result = GoogleAnalytics();
 				const { getByTestId } = renderResult(result);
 				const script = getByTestId("google-analytics").textContent ?? "";
 				expect(script).toContain("navigator.userAgent");
@@ -104,8 +77,8 @@ describe("GoogleAnalytics", () => {
 				"Baiduspider",
 				"TikTokSpider",
 				"MegaIndex",
-			])("bot regex matches %s", async (botName) => {
-				const result = await GoogleAnalytics();
+			])("bot regex matches %s", (botName) => {
+				const result = GoogleAnalytics();
 				const { getByTestId } = renderResult(result);
 				const script = getByTestId("google-analytics").textContent ?? "";
 				const regexMatch = script.match(/\/([^/]+)\/i\.test/);
@@ -114,8 +87,8 @@ describe("GoogleAnalytics", () => {
 				expect(regex.test(botName)).toBe(true);
 			});
 
-			it("bot regex does not match regular browser UAs", async () => {
-				const result = await GoogleAnalytics();
+			it("bot regex does not match regular browser UAs", () => {
+				const result = GoogleAnalytics();
 				const { getByTestId } = renderResult(result);
 				const script = getByTestId("google-analytics").textContent ?? "";
 				const regexMatch = script.match(/\/([^/]+)\/i\.test/);
@@ -134,8 +107,8 @@ describe("GoogleAnalytics", () => {
 			mockIsProduction.mockReturnValue(false);
 		});
 
-		it("returns null and renders nothing", async () => {
-			const result = await GoogleAnalytics();
+		it("returns null and renders nothing", () => {
+			const result = GoogleAnalytics();
 			expect(result).toBeNull();
 		});
 	});
