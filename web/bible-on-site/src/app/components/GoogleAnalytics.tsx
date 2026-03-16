@@ -21,10 +21,21 @@ export function GoogleAnalytics() {
 						if (/bot|crawl|spider|slurp|Bytespider|GPTBot|ClaudeBot|CCBot|Amazonbot|Diffbot|PetalBot|AhrefsBot|SemrushBot|DotBot|MJ12bot|BLEXBot|YandexBot|Sogou|Applebot|Googlebot|bingbot|PerplexityBot|FacebookBot|anthropic|TikTokSpider|Baiduspider|MegaIndex/i.test(ua)) {
 							return;
 						}
-						window.dataLayer = window.dataLayer || [];
-						function gtag(){dataLayer.push(arguments);}
-						gtag('js', new Date());
-						gtag('config', '${GA_MEASUREMENT_ID}');
+						function initGA() {
+							window.dataLayer = window.dataLayer || [];
+							function gtag(){dataLayer.push(arguments);}
+							gtag('js', new Date());
+							gtag('config', '${GA_MEASUREMENT_ID}');
+						}
+						import('https://openfpcdn.io/botd/v2').then(function(Botd) {
+							return Botd.load();
+						}).then(function(botd) {
+							return botd.detect();
+						}).then(function(result) {
+							if (!result.bot) { initGA(); }
+						}).catch(function() {
+							initGA();
+						});
 					})();
 				`}
 			</Script>
