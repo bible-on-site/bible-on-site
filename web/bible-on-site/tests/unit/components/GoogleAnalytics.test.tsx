@@ -55,7 +55,7 @@ describe("GoogleAnalytics", () => {
 		});
 
 		describe("client-side bot detection", () => {
-			it("includes navigator.userAgent check before gtag config", () => {
+			it("includes navigator.userAgent check before BotD detection", () => {
 				const result = GoogleAnalytics();
 				const { getByTestId } = renderResult(result);
 				const script = getByTestId("google-analytics").textContent ?? "";
@@ -98,6 +98,33 @@ describe("GoogleAnalytics", () => {
 						"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 					),
 				).toBe(false);
+			});
+		});
+
+		describe("BotD headless browser detection", () => {
+			it("loads BotD from CDN before initializing GA", () => {
+				const result = GoogleAnalytics();
+				const { getByTestId } = renderResult(result);
+				const script = getByTestId("google-analytics").textContent ?? "";
+				expect(script).toContain("openfpcdn.io/botd/v2");
+			});
+
+			it("only calls initGA when BotD reports not a bot", () => {
+				const result = GoogleAnalytics();
+				const { getByTestId } = renderResult(result);
+				const script = getByTestId("google-analytics").textContent ?? "";
+				expect(script).toContain("!result.bot");
+				expect(script).toContain("initGA()");
+			});
+
+			it("falls back to initializing GA if BotD fails", () => {
+				const result = GoogleAnalytics();
+				const { getByTestId } = renderResult(result);
+				const script = getByTestId("google-analytics").textContent ?? "";
+				expect(script).toContain(".catch(");
+				const catchIndex = script.indexOf(".catch(");
+				const catchBlock = script.slice(catchIndex, catchIndex + 60);
+				expect(catchBlock).toContain("initGA");
 			});
 		});
 	});
