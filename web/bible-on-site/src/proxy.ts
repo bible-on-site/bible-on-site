@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 const BLOCKED_BOTS =
-	/Bytespider|MJ12bot|AhrefsBot|SemrushBot|DotBot|PetalBot|BLEXBot|MegaIndex|Sogou/i;
+	/Bytespider|MJ12bot|AhrefsBot|SemrushBot|DotBot|PetalBot|BLEXBot|MegaIndex|Sogou|DataForSeoBot/i;
 
 export async function proxy(
 	request: NextRequest,
