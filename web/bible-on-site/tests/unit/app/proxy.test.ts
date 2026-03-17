@@ -42,6 +42,7 @@ describe("proxy", () => {
 			"BLEXBot/1.0",
 			"MegaIndex.ru/2.0",
 			"Sogou web spider/4.0",
+			"DataForSeoBot/1.0",
 		])("returns 403 for blocked bot: %s", async (ua) => {
 			const result = await proxy(makeRequest("/929/1", { ua }));
 			expect(result?.status).toBe(403);
@@ -50,6 +51,15 @@ describe("proxy", () => {
 		it("does not block legitimate crawlers like Googlebot", async () => {
 			const result = await proxy(
 				makeRequest("/929/1", { ua: "Googlebot/2.1" }),
+			);
+			expect(result).toBeUndefined();
+		});
+
+		it("does not block AI training crawlers like meta-externalagent", async () => {
+			const result = await proxy(
+				makeRequest("/929/1", {
+					ua: "meta-externalagent/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)",
+				}),
 			);
 			expect(result).toBeUndefined();
 		});
