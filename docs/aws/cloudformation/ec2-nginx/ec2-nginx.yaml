@@ -163,7 +163,7 @@ Metadata:
       - GeoIP support for geographic routing
       - Catch-all default_server for unknown subdomains → 301 to root domain /404
       - Rate limiting: per-IP crawler (10 req/min), global crawler (30 req/min total), global backend (300 req/min hard ceiling); no general per-IP limit (Next.js RSC prefetch fires 20-30 requests per page load)
-      - Bot blocking: aggressive bots (Bytespider, MJ12bot, AhrefsBot, SemrushBot, DotBot, PetalBot, BLEXBot, MegaIndex, Sogou) blocked with 403
+      - Bot blocking: parasitic SEO bots (Bytespider, MJ12bot, AhrefsBot, SemrushBot, DotBot, PetalBot, BLEXBot, MegaIndex, Sogou, DataForSeoBot) blocked with 403; AI training bots (GPTBot, ClaudeBot, meta-externalagent, etc.) are welcome and rate-limited as crawlers
       - Sitemap referer blocking: requests with sitemap.xml as referer are blocked (distributed botnet pattern from March 16 2026 — 450+ IPs, ~300 req/min)
       - Bot classification via User-Agent map (blocked, crawler, regular); X-Bot-Class header passed to backend
       - Connection limit: 80 concurrent connections per server block to prevent exhaustion
