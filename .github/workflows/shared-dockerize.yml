@@ -80,6 +80,11 @@ jobs:
           sudo rm -rf /opt/pipx || true
           sudo rm -rf /opt/google || true
           sudo rm -rf /imagegeneration || true
+          # Remove non-website workspace content
+          rm -rf .git app data docs devops || true
+          # Stop Docker and clean its storage (~2 GB); will restart before docker build
+          sudo systemctl stop docker
+          sudo rm -rf /var/lib/docker/*
           echo "Disk after additional cleanup:"
           df -h /
 
@@ -97,6 +102,10 @@ jobs:
         id: npm_ci
         run: |
           npm ci --include=dev --no-audit
+          # Clear npm cache to free ~300 MB for the disk-constrained SSG build
+          npm cache clean --force
+          echo "Disk after npm install + cache clean:"
+          df -h /
 
       - name: Setup Rust
         if: ${{ env.IS_CARGO == 'true' }}
@@ -202,17 +211,15 @@ jobs:
       # --- End RDS Access Setup ---
 
       # ============ Website: Host Build + Slim Docker Image ============
-      # Build without standalone mode to avoid the ~50 GB disk duplication that
-      # occurs when Next.js copies .next/server/ into .next/standalone/.
-      # The 15K SSG pages generate ~77 GB of intermediate build output; with
-      # standalone that peaks at ~150 GB, exceeding the 145 GB runner disk.
-      # Instead, we build normally and assemble the production image manually.
+      # Build with standalone mode: Next.js generates ~76 GB of intermediate SSG
+      # HTML, then traces and optimizes it into a ~8 GB .next/standalone/ bundle.
+      # After the build completes, we delete the raw output to free ~70 GB, then
+      # package only the optimized standalone output into a Docker image.
       - name: Build Website on Host
         if: ${{ env.IS_NPM == 'true' }}
         working-directory: ${{ inputs.module_directory }}
         env:
           DB_URL: ${{ steps.rds_creds.outputs.db_url || '' }}
-          NEXT_OUTPUT_STANDALONE: "false"
         run: |
           (
             while true; do
@@ -223,46 +230,39 @@ jobs:
             done
           ) &
           MONITOR_PID=$!
-          npx next build
+          npm run build
           BUILD_EXIT=$?
           kill $MONITOR_PID 2>/dev/null || true
-          echo "Disk after next build:"
+          echo "Disk after build:"
           df -h /
-          du -sh .next/ .next/*/ 2>/dev/null || true
           if [ $BUILD_EXIT -ne 0 ]; then exit $BUILD_EXIT; fi
-          # postbuild copies into .next/standalone/ which doesn't exist without
-          # standalone mode; the Docker context assembly handles these copies instead
+
+          # Free raw build artifacts, keep only the optimized standalone output
+          du -sh .next/standalone/ .next/static/ 2>/dev/null || true
+          rm -rf .next/server .next/cache .next/types .next/trace
+          echo "Disk after cleanup:"
+          df -h /
 
       - name: Prepare Docker Build Context (Website)
         if: ${{ env.IS_NPM == 'true' }}
         working-directory: ${{ inputs.module_directory }}
         run: |
-          echo "Disk before context prep:"
-          df -h /
-
-          # Prune dev dependencies to reduce image size
-          npm prune --omit=dev
-          echo "node_modules after prune:"
-          du -sh node_modules/
-
-          # Use mv instead of cp to avoid duplicating the ~8 GB server output
-          mkdir -p .docker-context/.next
-          mv public .docker-context/
-          mv .next/server .docker-context/.next/
-          mv .next/static .docker-context/.next/
-          # Copy required .next root files (small)
-          cp .next/*.json .docker-context/.next/ 2>/dev/null || true
-          cp .next/*.js .docker-context/.next/ 2>/dev/null || true
-          mv node_modules .docker-context/
-          cp package.json .docker-context/
+          mkdir -p .docker-context
+          mv .next/standalone .docker-context/standalone
+          mv .next/static .docker-context/static
+          mv public .docker-context/public
           cp Dockerfile.prebuilt .docker-context/Dockerfile
-          echo "Docker context prepared:"
-          du -sh .docker-context/
+
+          # Delete the remaining raw build output (~70 GB) to make room for Docker
+          rm -rf .next node_modules
+          echo "Docker context:"
+          du -sh .docker-context/ .docker-context/*/
           df -h /
 
       - name: Dockerize Website
         if: ${{ env.IS_NPM == 'true' }}
         run: |
+          sudo systemctl start docker
           docker build \
             -t ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }} \
             ${{ inputs.module_directory }}/.docker-context

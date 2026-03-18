@@ -2,11 +2,10 @@ const KB = 1024;
 const MB = KB * KB;
 
 const isProduction = process.env.NODE_ENV === "production";
-const skipStandalone = process.env.NEXT_OUTPUT_STANDALONE === "false";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-	...(skipStandalone ? {} : { output: "standalone" }),
+	output: "standalone",
 	transpilePackages: ["html-flip-book-react"],
 	turbopack: {
 		root: import.meta.dirname,
