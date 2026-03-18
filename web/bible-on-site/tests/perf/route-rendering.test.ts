@@ -83,7 +83,6 @@ function getExpectedSSGRoutes(): string[] {
 const EXPECTED_DYNAMIC_ROUTE_PATTERNS = [
 	"/[section]",
 	"/929/[number]",
-	"/929/[number]/[slug]",
 	"/929/authors/[authorParam]",
 ];
 

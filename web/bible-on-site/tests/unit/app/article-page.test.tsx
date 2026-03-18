@@ -96,7 +96,6 @@ jest.mock("../../../src/app/929/[number]/components/Stuma", () => ({
 import { render, screen } from "@testing-library/react";
 import ArticlePage, {
 	generateMetadata,
-	generateStaticParams,
 } from "../../../src/app/929/[number]/[slug]/page";
 import { getPerekByPerekId } from "../../../src/data/perek-dto";
 import {
@@ -149,13 +148,6 @@ const sampleArticle = {
 describe("[slug] page", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
-	});
-
-	describe("generateStaticParams", () => {
-		it("returns empty array (pages use ISR instead of build-time SSG)", async () => {
-			const result = await generateStaticParams();
-			expect(result).toEqual([]);
-		});
 	});
 
 	describe("generateMetadata", () => {
