@@ -202,14 +202,17 @@ jobs:
       # --- End RDS Access Setup ---
 
       # ============ Website: Host Build + Slim Docker Image ============
-      # Build Next.js on the host (not inside Docker) for full CPU access and
-      # no Docker overlay filesystem overhead. Then package only the standalone
-      # output into a slim production image.
+      # Build without standalone mode to avoid the ~50 GB disk duplication that
+      # occurs when Next.js copies .next/server/ into .next/standalone/.
+      # The 15K SSG pages generate ~77 GB of intermediate build output; with
+      # standalone that peaks at ~150 GB, exceeding the 145 GB runner disk.
+      # Instead, we build normally and assemble the production image manually.
       - name: Build Website on Host
         if: ${{ env.IS_NPM == 'true' }}
         working-directory: ${{ inputs.module_directory }}
         env:
           DB_URL: ${{ steps.rds_creds.outputs.db_url || '' }}
+          NEXT_OUTPUT_STANDALONE: "false"
         run: |
           (
             while true; do
@@ -227,19 +230,35 @@ jobs:
           df -h /
           du -sh .next/ .next/*/ 2>/dev/null || true
           if [ $BUILD_EXIT -ne 0 ]; then exit $BUILD_EXIT; fi
-          npm run postbuild
+          # postbuild copies into .next/standalone/ which doesn't exist without
+          # standalone mode; the Docker context assembly handles these copies instead
 
       - name: Prepare Docker Build Context (Website)
         if: ${{ env.IS_NPM == 'true' }}
         working-directory: ${{ inputs.module_directory }}
         run: |
-          mkdir -p .docker-context
-          cp -r public .docker-context/
-          cp -r .next/standalone .docker-context/
-          cp -r .next/static .docker-context/
+          echo "Disk before context prep:"
+          df -h /
+
+          # Prune dev dependencies to reduce image size
+          npm prune --omit=dev
+          echo "node_modules after prune:"
+          du -sh node_modules/
+
+          # Use mv instead of cp to avoid duplicating the ~8 GB server output
+          mkdir -p .docker-context/.next
+          mv public .docker-context/
+          mv .next/server .docker-context/.next/
+          mv .next/static .docker-context/.next/
+          # Copy required .next root files (small)
+          cp .next/*.json .docker-context/.next/ 2>/dev/null || true
+          cp .next/*.js .docker-context/.next/ 2>/dev/null || true
+          mv node_modules .docker-context/
+          cp package.json .docker-context/
           cp Dockerfile.prebuilt .docker-context/Dockerfile
           echo "Docker context prepared:"
-          du -sh .docker-context/*
+          du -sh .docker-context/
+          df -h /
 
       - name: Dockerize Website
         if: ${{ env.IS_NPM == 'true' }}
