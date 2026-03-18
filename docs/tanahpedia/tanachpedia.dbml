@@ -5,8 +5,16 @@
 // - All IDs are GUID (CHAR(36))
 // - All tables prefixed tanahpedia_
 // - God = singleton table (one row, always same entity)
-// - Prophecy extends Saying (like War extends Event)
-// - Sources via source_group/tanah_source/non_tanah_source
+// - Central tanahpedia_entity base table: every concrete entity (person, place, etc.)
+//   joins 1:1 with tanahpedia_entity. This provides:
+//   (a) shared fields across all entity types
+//   (b) a clean FK target for entry_entity (no more polymorphic entity_type+entity_id)
+//   (c) a place to attach Tanah sources (pesukim where the entity appears)
+// - Inheritance chain: War extends Event; Prophecy extends Saying; Temple Tool extends Object
+// - 3D models supported for Object, Temple Tool, Animal, Plant (blob storage)
+// - Category homepages with configurable layouts (list, map/GIS, gallery, timeline)
+// - Sources via source_group/tanah_source/non_tanah_source (for property-level sources)
+// - Entity-level Tanah sources via entity_tanah_source (pesukim where entity appears)
 // - No certainty levels - "70 panim latorah"
 // - Prefer lookup tables over enums (except entity_type, sex)
 //
@@ -55,21 +63,27 @@ Table tanah_sefer {
 }
 
 Table tanah_perek {
-  id int [pk, note: 'Existing']
+  id int [pk, note: 'Existing, 1-929 sequential across all sefarim']
+  perek int [note: 'Perek number within sefer']
+  header varchar(180)
+}
+
+// Note: No tanah_pasuk table exists. Pesukim are stored in static JSON
+// (sefaria-dump), identified by 1-based index within a perek.
+// Segments within a pasuk are indexed in tanah_pasuk_segment (SQLite/JSON).
+// The API resolves the full hierarchy: helek → sefer → perek → pasuk → segment.
+
+Table tanah_pasuk_segment {
+  id int [pk, note: 'Existing (SQLite + JSON). Types: ktiv, qri, ptuha, stuma']
   sefer_id int [ref: > tanah_sefer.id]
-  perek_number int
-}
-
-Table tanah_pasuk {
-  id int [pk, note: 'Existing']
   perek_id int [ref: > tanah_perek.id]
-  pasuk_number int
+  pasuk_id int [note: '1-based pasuk index within perek']
+  segment_type varchar(10) [note: 'ktiv | qri | ptuha | stuma']
 }
 
-Table tanah_perush {
-  id char(36) [pk, note: 'Existing']
+Table perush {
+  id smallint [pk, note: 'Existing']
   name varchar(255)
-  author varchar(255)
 }
 
 // -------------------------------------------
@@ -81,7 +95,7 @@ Table tanahpedia_god {
 }
 
 // -------------------------------------------
-// SOURCE TABLES
+// SOURCE TABLES (property-level)
 // -------------------------------------------
 
 Table tanahpedia_source_group {
@@ -93,15 +107,71 @@ Table tanahpedia_source_group {
 Table tanahpedia_tanah_source {
   id char(36) [pk]
   source_group_id char(36) [ref: > tanahpedia_source_group.id]
-  perush_id char(36) [ref: > tanah_perush.id]
-  pasuk_id int [ref: > tanah_pasuk.id]
+  perush_id smallint [ref: > perush.id]
   perek_id int [ref: > tanah_perek.id]
+  pasuk_number int [note: '1-based pasuk index within perek; NULL = perek-level']
 }
 
 Table tanahpedia_non_tanah_source {
   id char(36) [pk]
   source_group_id char(36) [ref: > tanahpedia_source_group.id]
   source_text varchar(500)
+}
+
+// -------------------------------------------
+// GENERIC ENTITY BASE TABLE
+// -------------------------------------------
+// Every concrete entity (person, place, event, etc.) has a 1:1 row here.
+// Shared fields live here; type-specific fields live in the concrete table.
+// This also serves as the clean FK target for entry_entity and entity_tanah_source.
+
+Enum tanahpedia_entity_type_enum {
+  PERSON
+  PLACE
+  EVENT
+  WAR
+  ANIMAL
+  OBJECT
+  TEMPLE_TOOL
+  PLANT
+  ASTRONOMICAL_OBJECT
+  SAYING
+  SEFER
+  TANAH_SEFER
+  PROPHECY
+  NATION
+}
+
+Table tanahpedia_entity {
+  id char(36) [pk]
+  entity_type tanahpedia_entity_type_enum [not null]
+  name varchar(255) [note: 'Primary display name (for person: set from person_name MAIN)']
+  created_at datetime
+  updated_at datetime
+}
+
+// -------------------------------------------
+// ENTITY-LEVEL TANAH SOURCES
+// -------------------------------------------
+// Pesukim (or segments within) where this entity appears in the Tanah text.
+// These are direct Tanah text references only (no perush).
+// Property-level sources (source_group) still support perush references.
+// segment_start/segment_end allow sub-pasuk resolution (0-based segment index
+// from tanah_pasuk_segment / static JSON). The range is inclusive: segments
+// [segment_start..segment_end] are wrapped in a single link.
+//
+// Full resolution chain (API returns all components):
+//   tanah_helek → tanah_sefer → tanah_perek → pasuk_number → segment_start..end
+// The tanah_perek.id determines helek and sefer via tanah_sefer.perek_id_from/to.
+// Website resolves pasuk text from static JSON; API resolves from DB/JSON.
+
+Table tanahpedia_entity_tanah_source {
+  id char(36) [pk]
+  entity_id char(36) [ref: > tanahpedia_entity.id]
+  perek_id int [ref: > tanah_perek.id]
+  pasuk_number int [note: '1-based pasuk index within perek']
+  segment_start int [note: '0-based segment index; NULL = entire pasuk']
+  segment_end int [note: '0-based segment index (inclusive); NULL = entire pasuk']
 }
 
 // -------------------------------------------
@@ -130,26 +200,11 @@ Table tanahpedia_entry_synonym_disambiguation {
   disambiguation_label varchar(255)
 }
 
+// Links entries to entities via the base entity table (no polymorphic columns)
 Table tanahpedia_entry_entity {
   id char(36) [pk]
   entry_id char(36) [ref: > tanahpedia_entry.id]
-  entity_type tanahpedia_entity_type_enum
-  entity_id char(36)
-}
-
-Enum tanahpedia_entity_type_enum {
-  PERSON
-  PLACE
-  EVENT
-  WAR
-  ANIMAL
-  OBJECT
-  PLANT
-  ASTRONOMICAL_OBJECT
-  SAYING
-  SEFER
-  PROPHECY
-  NATION
+  entity_id char(36) [ref: > tanahpedia_entity.id]
 }
 
 // -------------------------------------------
@@ -158,6 +213,7 @@ Enum tanahpedia_entity_type_enum {
 
 Table tanahpedia_person {
   id char(36) [pk]
+  entity_id char(36) [ref: - tanahpedia_entity.id, note: '1:1 with entity base']
 }
 
 // All names (main, additional, nickname) in one table
@@ -232,12 +288,39 @@ Table tanahpedia_person_birth_place {
 }
 
 // -------------------------------------------
+// PERSON ROLES (non-exclusive: a person can hold multiple roles)
+// -------------------------------------------
+// Unlike entity_type subtypes (WAR, TEMPLE_TOOL, etc.) which are exclusive,
+// person roles are additive — e.g. Moshe is both a PROPHET and a KING.
+// These are role/tag tables on tanahpedia_person, not separate entity types.
+
+Table tanahpedia_person_role_prophet {
+  id char(36) [pk]
+  person_id char(36) [unique, ref: > tanahpedia_person.id, note: '1:1 flag — person is a prophet']
+}
+
+Table tanahpedia_person_role_king {
+  id char(36) [pk]
+  person_id char(36) [unique, ref: > tanahpedia_person.id, note: '1:1 flag — person is a king']
+}
+
+// A king may reign over one or more nations across different time periods
+Table tanahpedia_king_reign {
+  id char(36) [pk]
+  king_role_id char(36) [ref: > tanahpedia_person_role_king.id]
+  nation_id char(36) [ref: > tanahpedia_nation.id]
+  start_date int [note: 'YYYYMMDD Hebrew, reign start']
+  end_date int [note: 'YYYYMMDD Hebrew, reign end']
+  alt_group_id char(36)
+}
+
+// -------------------------------------------
 // PLACE
 // -------------------------------------------
 
 Table tanahpedia_place {
   id char(36) [pk]
-  name varchar(255)
+  entity_id char(36) [ref: - tanahpedia_entity.id, note: '1:1 with entity base']
 }
 
 Table tanahpedia_place_identification {
@@ -255,7 +338,7 @@ Table tanahpedia_place_identification {
 
 Table tanahpedia_event {
   id char(36) [pk]
-  name varchar(255)
+  entity_id char(36) [ref: - tanahpedia_entity.id, note: '1:1 with entity base']
 }
 
 Table tanahpedia_event_place {
@@ -280,7 +363,7 @@ Table tanahpedia_event_date_range {
 Table tanahpedia_war {
   id char(36) [pk]
   event_id char(36) [ref: - tanahpedia_event.id]
-  name varchar(255)
+  entity_id char(36) [ref: - tanahpedia_entity.id, note: '1:1 with entity base (WAR type)']
 }
 
 Table tanahpedia_war_side {
@@ -309,7 +392,7 @@ Table tanahpedia_war_side_participant_nation {
 
 Table tanahpedia_nation {
   id char(36) [pk]
-  name varchar(255)
+  entity_id char(36) [ref: - tanahpedia_entity.id, note: '1:1 with entity base']
 }
 
 Table tanahpedia_nation_source_nation {
@@ -334,7 +417,37 @@ Table tanahpedia_nation_territory {
 
 Table tanahpedia_animal {
   id char(36) [pk]
-  name varchar(255)
+  entity_id char(36) [ref: - tanahpedia_entity.id, note: '1:1 with entity base']
+}
+
+// Two orthogonal classification axes for animals:
+// 1. Kind (exactly one): BEHEMA, CHAYA, OF, SHERETZ
+// 2. Purity (exactly one): TAHOR, TAMEH
+
+Enum tanahpedia_animal_kind_enum {
+  BEHEMA    [note: 'בהמה']
+  CHAYA     [note: 'חיה']
+  OF        [note: 'עוף']
+  SHERETZ   [note: 'שרץ']
+}
+
+Enum tanahpedia_animal_purity_enum {
+  TAHOR     [note: 'טהור']
+  TAMEH     [note: 'טמא']
+}
+
+Table tanahpedia_animal_kind {
+  id char(36) [pk]
+  animal_id char(36) [unique, ref: > tanahpedia_animal.id, note: 'Exactly one kind per animal']
+  kind tanahpedia_animal_kind_enum [not null]
+  alt_group_id char(36)
+}
+
+Table tanahpedia_animal_purity {
+  id char(36) [pk]
+  animal_id char(36) [unique, ref: > tanahpedia_animal.id, note: 'Exactly one purity per animal']
+  purity tanahpedia_animal_purity_enum [not null]
+  alt_group_id char(36)
 }
 
 // -------------------------------------------
@@ -343,7 +456,45 @@ Table tanahpedia_animal {
 
 Table tanahpedia_object {
   id char(36) [pk]
-  name varchar(255)
+  entity_id char(36) [ref: - tanahpedia_entity.id, note: '1:1 with entity base']
+}
+
+// -------------------------------------------
+// TEMPLE_TOOL (extends Object)
+// -------------------------------------------
+
+Table tanahpedia_temple_tool {
+  id char(36) [pk]
+  object_id char(36) [ref: - tanahpedia_object.id]
+  entity_id char(36) [ref: - tanahpedia_entity.id, note: '1:1 with entity base (TEMPLE_TOOL type)']
+}
+
+// -------------------------------------------
+// 3D MODEL (for Object, Temple Tool, Animal, Plant)
+// -------------------------------------------
+// Points to tanahpedia_entity.id — only valid for entity_types that support 3D models
+
+Table tanahpedia_3d_model {
+  id char(36) [pk]
+  entity_id char(36) [ref: > tanahpedia_entity.id]
+  blob_key varchar(500) [note: 'S3/blob storage key for the 3D model file']
+  format varchar(50) [note: 'glTF, GLB, OBJ, etc.']
+  label varchar(255) [note: 'Optional display label']
+  alt_group_id char(36)
+}
+
+// -------------------------------------------
+// CATEGORY HOMEPAGE
+// -------------------------------------------
+// Each entity type can have a custom homepage (e.g. places → GIS map, objects → gallery)
+
+Table tanahpedia_category_homepage {
+  id char(36) [pk]
+  entity_type tanahpedia_entity_type_enum [unique, note: 'One homepage per entity type']
+  layout_type varchar(50) [note: 'LIST, MAP, GALLERY, TIMELINE, etc.']
+  config json [note: 'Layout-specific config (map center/zoom, gallery columns, etc.)']
+  content mediumtext [note: 'Optional rich-text intro/description']
+  updated_at datetime
 }
 
 // -------------------------------------------
@@ -352,7 +503,7 @@ Table tanahpedia_object {
 
 Table tanahpedia_plant {
   id char(36) [pk]
-  name varchar(255)
+  entity_id char(36) [ref: - tanahpedia_entity.id, note: '1:1 with entity base']
 }
 
 Table tanahpedia_plant_creation_day {
@@ -368,7 +519,7 @@ Table tanahpedia_plant_creation_day {
 
 Table tanahpedia_astronomical_object {
   id char(36) [pk]
-  name varchar(255)
+  entity_id char(36) [ref: - tanahpedia_entity.id, note: '1:1 with entity base']
 }
 
 Table tanahpedia_astronomical_object_creation_day {
@@ -384,7 +535,7 @@ Table tanahpedia_astronomical_object_creation_day {
 
 Table tanahpedia_sefer {
   id char(36) [pk]
-  name varchar(255)
+  entity_id char(36) [ref: - tanahpedia_entity.id, note: '1:1 with entity base']
 }
 
 Table tanahpedia_sefer_tanah_match {
@@ -395,12 +546,24 @@ Table tanahpedia_sefer_tanah_match {
 }
 
 // -------------------------------------------
+// TANAH_SEFER  (sub-type of SEFER – a Sefer that is part of the Tanah canon)
+// -------------------------------------------
+// Direct 1:1 link to tanah_sefer. Every TANAH_SEFER entity has exactly one
+// corresponding tanah_sefer row; generic SEFERs (e.g. Sefer HaYashar) do not.
+
+Table tanahpedia_tanah_sefer {
+  id char(36) [pk]
+  entity_id char(36) [ref: - tanahpedia_entity.id, note: '1:1 with entity base']
+  tanah_sefer_id int [unique, ref: - tanah_sefer.id, note: '1:1 with Tanah sefer']
+}
+
+// -------------------------------------------
 // SAYING
 // -------------------------------------------
 
 Table tanahpedia_saying {
   id char(36) [pk]
-  name varchar(255)
+  entity_id char(36) [ref: - tanahpedia_entity.id, note: '1:1 with entity base']
   content text
 }
 
@@ -456,6 +619,7 @@ Table tanahpedia_saying_audience_nation {
 Table tanahpedia_prophecy {
   id char(36) [pk]
   saying_id char(36) [ref: - tanahpedia_saying.id]
+  entity_id char(36) [ref: - tanahpedia_entity.id, note: '1:1 with entity base (PROPHECY type)']
 }
 
 Table tanahpedia_prophecy_is_good {
