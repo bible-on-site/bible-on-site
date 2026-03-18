@@ -54,16 +54,16 @@
 		"isomorphic-dompurify": "3.0.0",
 		"moment-timezone": "0.6.0",
 		"mysql2": "3.18.2",
-		"next": "16.1.6",
+		"next": "16.1.7",
 		"nuqs": "2.8.9",
 		"pdf-lib": "1.17.1",
-		"rate-limiter-flexible": "10.0.0",
+		"rate-limiter-flexible": "10.0.1",
 		"react": "19.2.4",
 		"react-dom": "19.2.4",
 		"react-phone-number-input": "3.4.16",
 		"sharp": "0.34.5",
 		"sunrise-sunset-js": "3.2.0",
-		"temporal-polyfill": "0.3.0"
+		"temporal-polyfill": "0.3.2"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.4",
