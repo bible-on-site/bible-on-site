@@ -11,13 +11,11 @@ import {
 	getSeferByName,
 } from "../../../../data/sefer-dto";
 import { getArticleById, getArticlesByPerekId } from "../../../../lib/articles";
-import { getAllArticleIdsByPerek } from "../../../../lib/articles";
 import { authorNameToSlug } from "../../../../lib/authors";
 import {
 	getPerushDetail,
 	getPerushimByPerekId,
 } from "../../../../lib/perushim";
-import { getAllPerushNamesByPerek } from "../../../../lib/perushim";
 import { ArticlesSection } from "../components/ArticlesSection";
 import Breadcrumb from "../components/Breadcrumb";
 import { PerushimSection } from "../components/PerushimSection";
@@ -33,30 +31,18 @@ import { ScrollToSlug } from "./ScrollToArticle";
  * Next.js calls generateStaticParams once per parent param, but multiple
  * workers can run in parallel. Using a module-level promise ensures
  * exactly one bulk query per process and avoids "Too many connections".
+ *
+ * Returns an empty array so pages are not pre-rendered at build time
+ * but are generated on first request (ISR). This avoids ~15GB build output
+ * and 60-second page-render timeouts inside the Docker builder.
+ * Once a page is requested, Next.js caches it as static HTML for
+ * subsequent visitors — effectively "lazy SSG."
  */
-let articlesBulk: Promise<Map<number, number[]>> | null = null;
-let perushimBulk: Promise<Map<number, string[]>> | null = null;
-
 /* istanbul ignore next: only runs during next build */
-export async function generateStaticParams({
-	params,
-}: {
-	params: { number: string };
-}) {
-	if (!articlesBulk) articlesBulk = getAllArticleIdsByPerek();
-	if (!perushimBulk) perushimBulk = getAllPerushNamesByPerek();
-	const [articlesMap, perushimMap] = await Promise.all([
-		articlesBulk,
-		perushimBulk,
-	]);
-	const perekId = Number.parseInt(params.number, 10);
-	const articleSlugs = (articlesMap.get(perekId) ?? []).map((id) => ({
-		slug: String(id),
-	}));
-	const perushSlugs = (perushimMap.get(perekId) ?? []).map((name) => ({
-		slug: name,
-	}));
-	return [...articleSlugs, ...perushSlugs];
+export async function generateStaticParams(
+	_params: { params: { number: string } },
+) {
+	return [];
 }
 
 /**

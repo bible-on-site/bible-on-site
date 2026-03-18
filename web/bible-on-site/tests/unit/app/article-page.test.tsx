@@ -6,7 +6,6 @@
 jest.mock("../../../src/lib/perushim", () => ({
 	getPerushimByPerekId: jest.fn(),
 	getPerushDetail: jest.fn(),
-	getAllPerushNamesByPerek: jest.fn(),
 }));
 
 jest.mock("../../../src/app/929/[number]/components/PerushimSection", () => ({
@@ -44,7 +43,6 @@ jest.mock("next/link", () => ({
 jest.mock("../../../src/lib/articles", () => ({
 	getArticleById: jest.fn(),
 	getArticlesByPerekId: jest.fn(),
-	getAllArticleIdsByPerek: jest.fn(),
 }));
 
 jest.mock("../../../src/lib/authors", () => ({
@@ -108,12 +106,10 @@ import {
 import {
 	getArticleById,
 	getArticlesByPerekId,
-	getAllArticleIdsByPerek,
 } from "../../../src/lib/articles";
 import {
 	getPerushDetail,
 	getPerushimByPerekId,
-	getAllPerushNamesByPerek,
 } from "../../../src/lib/perushim";
 
 const mockGetArticleById = getArticleById as jest.MockedFunction<
@@ -137,14 +133,6 @@ const mockGetPerushimByPerekId = getPerushimByPerekId as jest.MockedFunction<
 const mockGetPerushDetail = getPerushDetail as jest.MockedFunction<
 	typeof getPerushDetail
 >;
-const mockGetAllArticleIdsByPerek =
-	getAllArticleIdsByPerek as jest.MockedFunction<
-		typeof getAllArticleIdsByPerek
-	>;
-const mockGetAllPerushNamesByPerek =
-	getAllPerushNamesByPerek as jest.MockedFunction<
-		typeof getAllPerushNamesByPerek
-	>;
 
 const sampleArticle = {
 	id: 42,
@@ -164,25 +152,12 @@ describe("[slug] page", () => {
 	});
 
 	describe("generateStaticParams", () => {
-		it("maps articles and perushim for a perek to static params", async () => {
-			mockGetAllArticleIdsByPerek.mockResolvedValue(
-				new Map([[5, [10, 20]]]),
-			);
-			mockGetAllPerushNamesByPerek.mockResolvedValue(
-				new Map([[5, ["רש״י"]]]),
-			);
-
+		it("returns empty array for ISR (lazy SSG)", async () => {
 			const result = await generateStaticParams({
 				params: { number: "5" },
 			});
 
-			expect(result).toEqual([
-				{ slug: "10" },
-				{ slug: "20" },
-				{ slug: "רש״י" },
-			]);
-			expect(mockGetAllArticleIdsByPerek).toHaveBeenCalled();
-			expect(mockGetAllPerushNamesByPerek).toHaveBeenCalled();
+			expect(result).toEqual([]);
 		});
 	});
 
