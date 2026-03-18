@@ -83,6 +83,7 @@ function getExpectedSSGRoutes(): string[] {
 const EXPECTED_DYNAMIC_ROUTE_PATTERNS = [
 	"/[section]",
 	"/929/[number]",
+	"/929/[number]/[slug]",
 	"/929/authors/[authorParam]",
 ];
 
@@ -157,6 +158,25 @@ test.describe("Route Rendering Modes", () => {
 				upperValue: 929,
 			});
 		});
+
+		test("commentary pages (slug routes) are prerendered", () => {
+			const commentaryRoutes = Object.keys(manifest.routes).filter(
+				(route) => /^\/929\/\d+\/[^/]+$/.test(route),
+			);
+
+			expect(
+				commentaryRoutes.length,
+				"Commentary pages (/929/[number]/[slug]) should be SSG. " +
+					"If zero, generateStaticParams is likely broken — check that " +
+					"parent params are passed (generateStaticParams must be in layout.tsx, not page.tsx).",
+			).toBeGreaterThan(0);
+
+			reportBenchmark({
+				name: "routes: SSG commentary",
+				measure: "count",
+				value: commentaryRoutes.length,
+			});
+		});
 	});
 
 	test.describe("Dynamic route patterns exist", () => {
@@ -213,8 +233,8 @@ test.describe("Route Rendering Modes", () => {
 				value: totalDynamic,
 			});
 
-			// Sanity: we should have at least 929 perakim + 7 sections + a few more
-			expect(totalRoutes).toBeGreaterThan(936);
+			// Sanity: 929 perakim + 7 sections + commentary pages + a few more
+			expect(totalRoutes).toBeGreaterThan(1000);
 		});
 	});
 });
