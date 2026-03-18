@@ -159,17 +159,17 @@ test.describe("Route Rendering Modes", () => {
 			});
 		});
 
-		test("commentary pages (slug routes) use ISR (not prerendered at build)", () => {
+		test("commentary pages (slug routes) are prerendered at build", () => {
 			const commentaryRoutes = Object.keys(manifest.routes).filter(
 				(route) => /^\/929\/\d+\/[^/]+$/.test(route),
 			);
 
 			expect(
 				commentaryRoutes.length,
-				"Commentary pages (/929/[number]/[slug]) should use ISR (lazy SSG). " +
-					"If prerendered routes appear here, generateStaticParams is returning actual slugs " +
-					"again — this will cause 15GB+ build output and Docker build timeouts.",
-			).toBe(0);
+				"Commentary pages (/929/[number]/[slug]) should be fully SSG. " +
+					"If zero routes appear here, generateStaticParams may have been changed to " +
+					"return an empty array, reverting commentary pages to ISR.",
+			).toBeGreaterThan(0);
 
 			reportBenchmark({
 				name: "routes: SSG commentary",
@@ -233,8 +233,8 @@ test.describe("Route Rendering Modes", () => {
 				value: totalDynamic,
 			});
 
-			// Sanity: 929 perakim + 7 sections + a few more
-			expect(totalRoutes).toBeGreaterThan(936);
+			// Sanity: 929 perakim + ~11,000 commentary pages + a few more
+			expect(totalRoutes).toBeGreaterThan(1000);
 		});
 	});
 });

@@ -1,0 +1,27 @@
+FROM node:24-alpine
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN apk add --no-cache curl
+
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+COPY public ./public
+
+# standalone/ contains server.js, traced node_modules, and .next/server (pre-rendered pages)
+COPY --chown=nextjs:nodejs standalone ./
+# static/ contains client-side JS/CSS chunks
+COPY --chown=nextjs:nodejs static ./.next/static
+
+USER nextjs
+
+EXPOSE 3000
+
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+CMD ["node", "server.js"]

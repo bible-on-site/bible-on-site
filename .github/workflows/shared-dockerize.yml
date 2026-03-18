@@ -54,8 +54,8 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Free disk space before build - the Website SSG build generates 1000+ static pages
-      # and the classic Docker build (non-BuildKit) keeps all intermediate layers on disk
+      # Free disk space before build - the Website SSG build generates 15,000+ static pages
+      # producing ~15 GB of .next/ output
       - name: Free Disk Space
         uses: jlumbroso/free-disk-space@v1.3.1
         with:
@@ -124,6 +124,7 @@ jobs:
           tree -L 5
 
       - name: Set up Docker Buildx
+        if: ${{ env.IS_CARGO == 'true' }}
         uses: docker/setup-buildx-action@v3
         with:
           driver-opts: |
@@ -183,16 +184,44 @@ jobs:
           timeout 30 bash -c "until nc -z $DB_HOST 3306; do echo 'Waiting for RDS...'; sleep 2; done" || echo "Warning: Could not verify RDS connectivity"
           echo "✓ RDS connectivity verified"
       # --- End RDS Access Setup ---
-      - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
+
+      # ============ Website: Host Build + Slim Docker Image ============
+      # Build Next.js on the host (not inside Docker) for full CPU access and
+      # no Docker overlay filesystem overhead. Then package only the standalone
+      # output into a slim production image.
+      - name: Build Website on Host
+        if: ${{ env.IS_NPM == 'true' }}
+        working-directory: ${{ inputs.module_directory }}
         env:
           DB_URL: ${{ steps.rds_creds.outputs.db_url || '' }}
+        run: npm run build
+
+      - name: Prepare Docker Build Context (Website)
+        if: ${{ env.IS_NPM == 'true' }}
+        working-directory: ${{ inputs.module_directory }}
         run: |
-          # Use raw docker build with --network=host to ensure RDS connectivity
-          # Buildx with docker-container driver doesn't properly support network: host
+          mkdir -p .docker-context
+          cp -r public .docker-context/
+          cp -r .next/standalone .docker-context/
+          cp -r .next/static .docker-context/
+          cp Dockerfile.prebuilt .docker-context/Dockerfile
+          echo "Docker context prepared:"
+          du -sh .docker-context/*
+
+      - name: Dockerize Website
+        if: ${{ env.IS_NPM == 'true' }}
+        run: |
+          docker build \
+            -t ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }} \
+            ${{ inputs.module_directory }}/.docker-context
+
+      # ============ API: Full Docker Build (unchanged) ============
+      - name: Dockerize API
+        if: ${{ env.IS_CARGO == 'true' }}
+        run: |
           DOCKER_BUILDKIT=0 docker build \
             --network=host \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
-            --build-arg DB_URL="${DB_URL}" \
             -f ${{ inputs.module_directory }}/Dockerfile \
             -t ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }} \
             ${{ env.SHARED_ROOT_DIR }}
