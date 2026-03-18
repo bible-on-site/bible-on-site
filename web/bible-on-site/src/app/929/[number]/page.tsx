@@ -18,11 +18,6 @@ import styles from "./page.module.css";
 // perakim are a closed list — no fallback rendering for unknown IDs.
 export const dynamicParams = false;
 
-/* istanbul ignore next: only runs during next build */
-export function generateStaticParams() {
-	return Array.from({ length: 929 }, (_, i) => ({ number: String(i + 1) }));
-}
-
 /**
  * Cache articles with on-demand revalidation support.
  *
