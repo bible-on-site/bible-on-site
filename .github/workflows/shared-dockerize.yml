@@ -194,7 +194,33 @@ jobs:
         working-directory: ${{ inputs.module_directory }}
         env:
           DB_URL: ${{ steps.rds_creds.outputs.db_url || '' }}
-        run: npm run build
+        run: |
+          # Monitor and periodically clean the build cache to prevent disk exhaustion.
+          # The Turbopack/webpack compilation cache for 15K+ SSG pages can grow to
+          # 70+ GB if unchecked, which combined with .next/server/ (~7 GB) and
+          # .next/standalone/ (~7 GB) would exceed the runner's 115 GB of free space.
+          (
+            while true; do
+              sleep 60
+              USED=$(df / --output=used | tail -1)
+              AVAIL=$(df / --output=avail | tail -1)
+              CACHE_SIZE=$(du -s .next/cache 2>/dev/null | cut -f1 || echo 0)
+              echo "[disk-monitor] used=$((USED/1024))MB avail=$((AVAIL/1024))MB cache=$((CACHE_SIZE/1024))MB"
+              # If less than 25 GB free and cache is significant, prune it
+              if [ "$AVAIL" -lt 26214400 ] && [ "$CACHE_SIZE" -gt 1048576 ]; then
+                echo "[disk-monitor] Low disk, pruning .next/cache (${CACHE_SIZE}KB)..."
+                rm -rf .next/cache/*
+              fi
+            done
+          ) &
+          MONITOR_PID=$!
+          npm run build
+          BUILD_EXIT=$?
+          kill $MONITOR_PID 2>/dev/null || true
+          echo "Final disk usage:"
+          df -h /
+          du -sh .next/ .next/*/ 2>/dev/null || true
+          exit $BUILD_EXIT
 
       - name: Prepare Docker Build Context (Website)
         if: ${{ env.IS_NPM == 'true' }}
