@@ -6,6 +6,7 @@
 jest.mock("../../../src/lib/perushim", () => ({
 	getPerushimByPerekId: jest.fn(),
 	getPerushDetail: jest.fn(),
+	getAllPerushNamesByPerek: jest.fn(),
 }));
 
 jest.mock("../../../src/app/929/[number]/components/PerushimSection", () => ({
@@ -43,6 +44,7 @@ jest.mock("next/link", () => ({
 jest.mock("../../../src/lib/articles", () => ({
 	getArticleById: jest.fn(),
 	getArticlesByPerekId: jest.fn(),
+	getAllArticleIdsByPerek: jest.fn(),
 }));
 
 jest.mock("../../../src/lib/authors", () => ({
@@ -106,10 +108,12 @@ import {
 import {
 	getArticleById,
 	getArticlesByPerekId,
+	getAllArticleIdsByPerek,
 } from "../../../src/lib/articles";
 import {
 	getPerushDetail,
 	getPerushimByPerekId,
+	getAllPerushNamesByPerek,
 } from "../../../src/lib/perushim";
 
 const mockGetArticleById = getArticleById as jest.MockedFunction<
@@ -133,6 +137,14 @@ const mockGetPerushimByPerekId = getPerushimByPerekId as jest.MockedFunction<
 const mockGetPerushDetail = getPerushDetail as jest.MockedFunction<
 	typeof getPerushDetail
 >;
+const mockGetAllArticleIdsByPerek =
+	getAllArticleIdsByPerek as jest.MockedFunction<
+		typeof getAllArticleIdsByPerek
+	>;
+const mockGetAllPerushNamesByPerek =
+	getAllPerushNamesByPerek as jest.MockedFunction<
+		typeof getAllPerushNamesByPerek
+	>;
 
 const sampleArticle = {
 	id: 42,
@@ -152,12 +164,33 @@ describe("[slug] page", () => {
 	});
 
 	describe("generateStaticParams", () => {
-		it("returns empty array for ISR (lazy SSG)", async () => {
+		it("returns article and perush slugs for the given perek", async () => {
+			const articlesMap = new Map([
+				[5, [42, 99]],
+				[999, []],
+			]);
+			const perushimMap = new Map([
+				[5, ["רש״י", "מלבי״ם"]],
+			]);
+			mockGetAllArticleIdsByPerek.mockResolvedValue(articlesMap);
+			mockGetAllPerushNamesByPerek.mockResolvedValue(perushimMap);
+
 			const result = await generateStaticParams({
 				params: { number: "5" },
 			});
 
-			expect(result).toEqual([]);
+			expect(result).toEqual([
+				{ slug: "42" },
+				{ slug: "99" },
+				{ slug: "רש״י" },
+				{ slug: "מלבי״ם" },
+			]);
+
+			// Module-level cache means the same bulk data is reused for a different perek
+			const emptyResult = await generateStaticParams({
+				params: { number: "999" },
+			});
+			expect(emptyResult).toEqual([]);
 		});
 	});
 

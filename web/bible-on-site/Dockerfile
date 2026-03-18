@@ -1,4 +1,6 @@
-# Note: Using classic docker build (DOCKER_BUILDKIT=0) for network:host support
+# Full multi-stage Dockerfile for local Docker builds.
+# CI uses Dockerfile.prebuilt with host-built .next output for better performance.
+# Using classic docker build (DOCKER_BUILDKIT=0) for network:host support
 # Do not add BuildKit-specific syntax directives
 
 FROM node:24-alpine AS base
