@@ -12,6 +12,7 @@ import type { PerekObj } from "@/data/perek-dto";
 import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
 import type { Article } from "@/lib/articles";
 import type { PerushSummary } from "@/lib/perushim";
+import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import ReadModeToggler from "./ReadModeToggler";
 import styles from "./sefer-composite.module.css";
 
@@ -28,6 +29,7 @@ const ClientWrapper = (props: {
 	articlesByPerekIndex?: Article[][];
 	perushimByPerekIndex?: PerushSummary[][];
 	perekIds?: number[];
+	entityRefsByPerek?: Record<number, PerekEntityReference[]>;
 	/** When set, the book view will auto-expand this article/perush on the current perek page */
 	initialSlug?: string;
 }) => {
@@ -113,6 +115,7 @@ const ClientWrapper = (props: {
 					articlesByPerekIndex={props.articlesByPerekIndex}
 					perushimByPerekIndex={props.perushimByPerekIndex}
 					perekIds={props.perekIds}
+					entityRefsByPerek={props.entityRefsByPerek}
 					initialSlug={props.initialSlug}
 				/>
 			)}

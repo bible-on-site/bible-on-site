@@ -4,7 +4,13 @@ Reference: [tanachpedia.dbml](./tanachpedia.dbml) for complete schema.
 
 **Execution order:** Data (DDL) → Website → Admin → Legacy migration
 
-**Inheritance chain:** War extends Event; Prophecy extends Saying; Temple Tool extends Object.
+**Architecture:**
+- Central `tanahpedia_entity` base table: every concrete entity (person, place, etc.) has a 1:1 row. Shared fields (name, type) live here; type-specific fields live in the concrete table.
+- `tanahpedia_entity` serves as the clean FK target for `entry_entity` and `entity_tanah_source` (no polymorphic columns).
+- **Inheritance chain:** War extends Event; Prophecy extends Saying; Temple Tool extends Object.
+- **Entity-level Tanah sources** (`entity_tanah_source`): direct Tanah text references (no perush), with sub-pasuk segment resolution. Property-level sources (`source_group`) still support perush references.
+- **Full resolution chain** (API returns all components): `tanah_helek` → `tanah_sefer` → `tanah_perek` → `pasuk_number` → `segment_start..end`. The `tanah_perek.id` determines helek and sefer via `tanah_sefer.perek_id_from/to`.
+- `tanah_pasuk_segment` (SQLite/JSON) provides segment metadata (ktiv, qri, ptuha, stuma) for sub-pasuk resolution.
 
 ## 1. Data Layer
 
@@ -13,8 +19,10 @@ Reference: [tanachpedia.dbml](./tanachpedia.dbml) for complete schema.
 - Create migration file in `data/mysql/` alongside existing `tanah_*` migrations
 - Include lookup table seed data (name types, union types, parent-child types, etc.)
 - Tables include:
+  - `tanahpedia_entity` (base table for all entity types)
+  - `tanahpedia_entity_tanah_source` (entity-level Tanah references with segment resolution)
   - `tanahpedia_temple_tool` (extends `tanahpedia_object` via 1:1 FK)
-  - `tanahpedia_3d_model` (polymorphic: OBJECT, TEMPLE_TOOL, ANIMAL, PLANT)
+  - `tanahpedia_3d_model` (points to `tanahpedia_entity.id`)
   - `tanahpedia_category_homepage` (one per entity type; layout_type + JSON config)
 
 ### 1.2 Sea-ORM Entities (API) (#1243)
@@ -58,7 +66,7 @@ Reference: [tanachpedia.dbml](./tanachpedia.dbml) for complete schema.
 ## 3. Website Implementation (#1245)
 
 ### 3.1 Navigation
-- Add "תנ"ךפדיה" item to `web/bible-on-site/src/app/components/NavBar.tsx`
+- Add "תנכפדיה" item to `web/bible-on-site/src/app/components/NavBar.tsx`
 - Link to `/tanahpedia`
 
 ### 3.2 Routes (Next.js App Router)
@@ -118,12 +126,13 @@ On `/tanahpedia/person` (and similar entity pages), list all entities with entry
 ### 3.6 Database Access
 - Create `web/bible-on-site/src/lib/tanahpedia/service.ts` with:
   - `getEntries()` - List entries with pagination
-  - `getEntryByUniqueName(name)` - Single entry with related entities
-  - `getEntriesByEntityType(type)` - Entries for entity type page
+  - `getEntryByUniqueName(name)` - Single entry with related entities (joins through `tanahpedia_entity` base)
+  - `getEntriesByEntityType(type)` - Entries for entity type page (joins through `tanahpedia_entity`)
   - `getEntitiesWithEntries(type)` - All entities of type with their linked entries
   - `getEntity<T>(type, id)` - Get specific entity with all props
   - `getCategoryHomepage(entityType)` - Get homepage config for entity type
-  - `get3DModels(entityType, entityId)` - Get 3D models for an entity
+  - `get3DModels(entityId)` - Get 3D models for an entity (via `tanahpedia_entity.id`)
+  - `getEntityReferencesForPerek(perekId)` - Entity references for tanah al haperek integration
 - Direct MySQL via existing `query()` in `api-client.ts`
 
 ### 3.7 Components
@@ -168,6 +177,35 @@ Create in `web/bible-on-site/src/app/tanahpedia/components/`:
 - Search box for entries
 - Entity type cards (Person, Place, Event, Object, Temple Tool, etc.) with counts
 - Recent/featured entries
+
+### 3.9 Tanah al Haperek Integration
+
+**Goal:** When an entity appears in a pasuk (via `entity_tanah_source`), the corresponding text segment in "Tanah al Haperek" becomes a clickable `<a>` linking to the Tanahpedia entry.
+
+**Data flow:**
+1. `getEntityReferencesForPerek(perekId)` queries `entity_tanah_source` → `entity` → `entry_entity` → `entry`
+2. Returns: `{ entityName, entityType, entryUniqueName, pasukNumber, segmentStart, segmentEnd }`
+3. Website resolves pasuk text from static JSON, identifies the matching text range, and wraps it in `<a href="/tanahpedia/entry/{uniqueName}">`.
+4. If `segmentStart`/`segmentEnd` are NULL, the entire pasuk text is linked.
+5. If segments are specified, only the matching sub-pasuk range is wrapped.
+
+**Full resolution chain (for API / future app):**
+- `tanah_perek.id` → join `tanah_sefer` (via `perek_id_from`/`perek_id_to`) → join `tanah_helek` (via `sefer_id_from`/`sefer_id_to`)
+- `pasuk_number` = 1-based index within perek
+- `segment_start`/`segment_end` = 0-based indexes into `tanah_pasuk_segment` / static JSON segments
+
+**Rendering approach:**
+- Segments within a pasuk are partitioned into contiguous "runs" — each run is either plain or linked to a single entity reference.
+- A linked run wraps **all** its segments in a single `<a>` tag (e.g. "יהושע בן נון" = 3 segments, 1 link).
+- Utility: `getSegmentRuns()` in `entity-ref-lookup.ts` partitions segments; `renderSegmentRange()` in `page.tsx` renders a run.
+
+**Components:**
+- `entity-ref-lookup.ts` - Builds lookup + partitions segments into runs
+- Integration into existing perek page rendering pipeline (`929/[number]/page.tsx`)
+
+**Planned for:**
+- Website: current milestone
+- App: future milestone (via GraphQL API returning the same data)
 
 ## 4. Mobile App Implementation (#1246)
 
@@ -253,6 +291,31 @@ Single admin flow for **reference linking** (articles → entries) and **entry/e
 - **Output:** AI-generated draft (entry + entity and/or article→entry links) for human review/triage
 - **Use cases:** Suggest entries for articles, suggest new entry/entity from name+type, backlinks when creating an entry
 
+#### 6.0.1 AI-Assisted Entity Tanah Source Generation
+
+When creating or editing a tanahpedia entity, the AI automatically suggests `entity_tanah_source` references — pesukim (with segment-level precision) where the entity appears in the Tanah text.
+
+**Two matching strategies:**
+
+1. **Phrase matching** — Scan the Tanah text for literal occurrences of the entity name and known synonyms (from `person_name`, `entry_synonym`, etc.). Match against segments to produce exact `(perek_id, pasuk_number, segment_start, segment_end)` tuples.
+   - Handles morphological variants (e.g. "יְהוֹשֻׁעַ" vs "יהושע", with/without nikud)
+   - Handles multi-segment names (e.g. "יהושע בן נון" → 3 segments)
+   - Handles partial names when unambiguous in context (e.g. "יהושע" alone in Sefer Yehoshua)
+
+2. **Semantic/contextual matching** — Use LLM analysis to identify pesukim that refer to the entity without naming it explicitly:
+   - Pronouns and implicit references (e.g. "וַיֹּאמֶר אֲלֵיהֶם" where "אֲלֵיהֶם" refers to a specific nation)
+   - Titles and roles (e.g. "עֶבֶד יְהוָה" referring to Moshe in context)
+   - Contextual inference from surrounding pesukim (e.g. subject continuation across pesukim)
+   - Perush-informed identification (using commentary to resolve ambiguous references)
+
+**Output:** A ranked list of suggested references, each with:
+- `perek_id`, `pasuk_number`, `segment_start`, `segment_end`
+- Confidence level (high/medium/low)
+- Match type (phrase / semantic)
+- Reasoning (for semantic matches: why the AI believes this refers to the entity)
+
+**Human review:** All suggestions go through admin triage — the human approves, edits, or rejects each suggestion before it becomes an `entity_tanah_source` row. Phrase matches with high confidence can be auto-approved in bulk.
+
 ### 6.1 Database Functions
 
 Create in `web/admin/src/server/tanahpedia/`:
@@ -316,7 +379,7 @@ Create in `web/admin/src/components/tanahpedia/`:
 - `EntityPicker.tsx` - Search and select entities
 
 ### 6.4 Navigation
-- Add "תנ"ךפדיה" section to `web/admin/src/routes/__root.tsx` sidebar
+- Add "תנכפדיה" section to `web/admin/src/routes/__root.tsx` sidebar
 
 ## Architecture Diagram
 
@@ -324,11 +387,14 @@ Create in `web/admin/src/components/tanahpedia/`:
 graph TB
     subgraph DataLayer[Data Layer]
         MySQL[(MySQL tanahpedia_*)]
+        EntityBase[tanahpedia_entity base]
+        EntitySources[entity_tanah_source]
         S3[(S3 - 3D Models)]
         Migration[SQL Migration]
         SeaORM[Sea-ORM Entities]
         TSTypes[TypeScript Types]
         CSModels[C# Models]
+        EntityBase --> EntitySources
     end
 
     subgraph Website[Website - Next.js]
@@ -338,6 +404,7 @@ graph TB
         WebComponents[Entity Components]
         WebCatHome[Category Homepages]
         Web3D[3D Model Viewer]
+        WebPerek[Tanah al Haperek]
         WebNav --> WebRoutes
         WebRoutes --> WebService
         WebService --> MySQL
@@ -346,6 +413,8 @@ graph TB
         WebComponents --> Web3D
         WebCatHome --> Web3D
         Web3D --> S3
+        WebPerek -->|entity refs| WebService
+        WebPerek -->|links to| WebRoutes
     end
 
     subgraph API[API - Rust/Actix]
@@ -391,18 +460,21 @@ graph TB
 
 ## Key Design Decisions
 
-1. **Website**: Direct MySQL (like articles) - faster, simpler for read-heavy pages
-2. **App**: GraphQL API (like tanah) - offline-friendly, typed queries
-3. **Admin**: Server functions (like existing) - direct DB, no API overhead
-4. **Alternatives**: All property editors support alt_group_id for multiple interpretations
-5. **Sources**: Every property can have source_group attached via polymorphic reference
-6. **Inheritance**: Temple Tool extends Object (like War extends Event, Prophecy extends Saying)
-7. **3D Models**: Blob storage (S3) with DB metadata; rendered via Three.js/model-viewer on web, WebView on app
-8. **Category Homepages**: DB-driven layout config per entity type; supports MAP (GIS), GALLERY, TIMELINE, LIST
+1. **Entity base table**: Central `tanahpedia_entity` with 1:1 join to concrete entity tables. Eliminates polymorphic `entity_type`+`entity_id` columns; provides clean FK target.
+2. **Two-tier source system**: Entity-level (`entity_tanah_source`) for direct Tanah text references with segment resolution; property-level (`source_group`) for Tanah+perush and non-Tanah sources.
+3. **Website**: Direct MySQL (like articles) - faster, simpler for read-heavy pages
+4. **App**: GraphQL API (like tanah) - offline-friendly, typed queries
+5. **Admin**: Server functions (like existing) - direct DB, no API overhead
+6. **Alternatives**: All property editors support alt_group_id for multiple interpretations
+7. **Inheritance**: Temple Tool extends Object (like War extends Event, Prophecy extends Saying)
+8. **3D Models**: Blob storage (S3) with DB metadata; rendered via Three.js/model-viewer on web, WebView on app
+9. **Category Homepages**: DB-driven layout config per entity type; supports MAP (GIS), GALLERY, TIMELINE, LIST
+10. **Tanah al haperek**: Entity references in pasuk text become clickable `<a>` links to tanahpedia entries
 
 ## Future Plans
 
 1. **Centralized AI-assisted edits** – Implement §6.0
-2. **AI-assisted entry identification in articles**
-3. **Auto-trigger backlinks on entry creation**
-4. **Articles edit page: AI suggestions + human triage**
+2. **AI-assisted entity Tanah source generation** – Implement §6.0.1 (phrase + semantic matching for auto-populating `entity_tanah_source`)
+3. **AI-assisted entry identification in articles**
+4. **Auto-trigger backlinks on entry creation**
+5. **Articles edit page: AI suggestions + human triage**

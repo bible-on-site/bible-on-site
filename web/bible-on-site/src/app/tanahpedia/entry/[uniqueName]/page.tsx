@@ -6,6 +6,7 @@ import {
 	getEntryByUniqueName,
 } from "@/lib/tanahpedia/service";
 import type { EntityType } from "@/lib/tanahpedia/types";
+import styles from "../../page.module.css";
 
 export async function generateMetadata({
 	params,
@@ -13,12 +14,16 @@ export async function generateMetadata({
 	params: Promise<{ uniqueName: string }>;
 }): Promise<Metadata> {
 	const { uniqueName } = await params;
-	const entry = await getEntryByUniqueName(decodeURIComponent(uniqueName));
-	if (!entry) return { title: "לא נמצא" };
-	return {
-		title: `${entry.title} | תנ"ךפדיה`,
-		description: entry.content?.slice(0, 200) ?? entry.title,
-	};
+	try {
+		const entry = await getEntryByUniqueName(decodeURIComponent(uniqueName));
+		if (!entry) return { title: "לא נמצא" };
+		return {
+			title: `${entry.title} | תנכפדיה`,
+			description: entry.content?.slice(0, 200) ?? entry.title,
+		};
+	} catch {
+		return { title: "לא נמצא" };
+	}
 }
 
 export default async function EntryPage({
@@ -27,49 +32,32 @@ export default async function EntryPage({
 	params: Promise<{ uniqueName: string }>;
 }) {
 	const { uniqueName } = await params;
-	const entry = await getEntryByUniqueName(decodeURIComponent(uniqueName));
+	let entry: Awaited<ReturnType<typeof getEntryByUniqueName>>;
+	try {
+		entry = await getEntryByUniqueName(decodeURIComponent(uniqueName));
+	} catch {
+		notFound();
+	}
 	if (!entry) notFound();
 
 	return (
-		<main
-			dir="rtl"
-			style={{ padding: "2rem", maxWidth: "900px", margin: "0 auto" }}
-		>
-			<nav style={{ marginBottom: "1rem", fontSize: "0.9rem", color: "#666" }}>
-				<Link
-					href="/tanahpedia"
-					style={{ color: "#0066cc", textDecoration: "none" }}
-				>
-					תנ&quot;ךפדיה
+		<div className={styles.tanahpediaPage}>
+			<nav className={styles.breadcrumb}>
+				<Link href="/tanahpedia" className={styles.breadcrumbLink}>
+					תנכפדיה
 				</Link>
 				{" > "}
 				<span>{entry.title}</span>
 			</nav>
-
-			<h1 style={{ fontSize: "2rem", marginBottom: "1rem" }}>{entry.title}</h1>
+			<h1 className={styles.pageTitle}>{entry.title}</h1>
 
 			{entry.entities.length > 0 && (
-				<div
-					style={{
-						display: "flex",
-						gap: "0.5rem",
-						marginBottom: "1.5rem",
-						flexWrap: "wrap",
-					}}
-				>
+				<div className={styles.entityBadges}>
 					{entry.entities.map((ee) => (
 						<Link
 							key={ee.id}
 							href={`/tanahpedia/${ee.entityType.toLowerCase()}`}
-							style={{
-								display: "inline-block",
-								padding: "0.25rem 0.75rem",
-								background: "#e8f0fe",
-								borderRadius: "12px",
-								fontSize: "0.85rem",
-								textDecoration: "none",
-								color: "#1a73e8",
-							}}
+							className={styles.entityBadge}
 						>
 							{ENTITY_TYPE_LABELS[ee.entityType as EntityType] ?? ee.entityType}
 						</Link>
@@ -81,11 +69,17 @@ export default async function EntryPage({
 				<article
 					// biome-ignore lint/security/noDangerouslySetInnerHtml: admin-authored content
 					dangerouslySetInnerHTML={{ __html: entry.content }}
-					style={{ lineHeight: "1.8", fontSize: "1.1rem" }}
+					className={styles.entryContent}
 				/>
 			) : (
-				<p style={{ color: "#888" }}>אין תוכן עדיין לערך זה.</p>
+				<p className={styles.emptyContent}>אין תוכן עדיין לערך זה.</p>
 			)}
-		</main>
+
+			<div className={styles.backLinkWrapper}>
+				<Link href="/tanahpedia" className={styles.backLink}>
+					חזרה לתנכפדיה
+				</Link>
+			</div>
+		</div>
 	);
 }

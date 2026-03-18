@@ -10,8 +10,17 @@ export type EntityType =
 	| "ASTRONOMICAL_OBJECT"
 	| "SAYING"
 	| "SEFER"
+	| "TANAH_SEFER"
 	| "PROPHECY"
 	| "NATION";
+
+export type PersonRole = "PROPHET" | "KING";
+
+export type AnimalKind = "BEHEMA" | "CHAYA" | "OF" | "SHERETZ";
+export type AnimalPurity = "TAHOR" | "TAMEH";
+export type AnimalClassification = AnimalKind | AnimalPurity;
+
+export type CategoryKey = EntityType | PersonRole | AnimalClassification;
 
 export type Sex = "MALE" | "FEMALE" | "UNKNOWN";
 
@@ -44,7 +53,6 @@ export interface EntrySynonymDisambiguation {
 export interface EntryEntity {
 	id: string;
 	entryId: string;
-	entityType: EntityType;
 	entityId: string;
 }
 
@@ -60,8 +68,8 @@ export interface TanahSource {
 	id: string;
 	sourceGroupId: string;
 	perushId: number | null;
-	pasukId: number | null;
 	perekId: number | null;
+	pasukNumber: number | null;
 }
 
 export interface NonTanahSource {
@@ -70,10 +78,33 @@ export interface NonTanahSource {
 	sourceText: string;
 }
 
+// ─── Entity Base ──────────────────────────────────────────
+
+export interface TanahpediaEntity {
+	id: string;
+	entityType: EntityType;
+	name: string;
+	createdAt: string;
+	updatedAt: string;
+}
+
+// ─── Entity-Level Tanah Source ────────────────────────────
+// Direct Tanah text references (no perush). Sub-pasuk resolution via segments.
+
+export interface EntityTanahSource {
+	id: string;
+	entityId: string;
+	perekId: number;
+	pasukNumber: number;
+	segmentStart: number | null;
+	segmentEnd: number | null;
+}
+
 // ─── Person ────────────────────────────────────────────────
 
 export interface Person {
 	id: string;
+	entityId: string;
 }
 
 export interface PersonName {
@@ -137,7 +168,7 @@ export interface PersonBirthPlace {
 
 export interface Place {
 	id: string;
-	name: string;
+	entityId: string;
 }
 
 export interface PlaceIdentification {
@@ -153,7 +184,7 @@ export interface PlaceIdentification {
 
 export interface TanahpediaEvent {
 	id: string;
-	name: string;
+	entityId: string;
 }
 
 export interface EventPlace {
@@ -176,7 +207,7 @@ export interface EventDateRange {
 export interface War {
 	id: string;
 	eventId: string;
-	name: string;
+	entityId: string;
 }
 
 export interface WarSide {
@@ -203,7 +234,7 @@ export interface WarSideParticipantNation {
 
 export interface Nation {
 	id: string;
-	name: string;
+	entityId: string;
 }
 
 export interface NationSourceNation {
@@ -226,14 +257,14 @@ export interface NationTerritory {
 
 export interface Animal {
 	id: string;
-	name: string;
+	entityId: string;
 }
 
 // ─── Object ────────────────────────────────────────────────
 
 export interface TanahpediaObject {
 	id: string;
-	name: string;
+	entityId: string;
 }
 
 // ─── Temple Tool (extends Object) ─────────────────────────
@@ -241,7 +272,7 @@ export interface TanahpediaObject {
 export interface TempleTool {
 	id: string;
 	objectId: string;
-	name: string;
+	entityId: string;
 }
 
 // ─── 3D Model ──────────────────────────────────────────────
@@ -254,7 +285,6 @@ export type ThreeDModelEntityType =
 
 export interface ThreeDModel {
 	id: string;
-	entityType: ThreeDModelEntityType;
 	entityId: string;
 	blobKey: string;
 	format: string;
@@ -277,7 +307,7 @@ export interface CategoryHomepage {
 
 export interface Plant {
 	id: string;
-	name: string;
+	entityId: string;
 }
 
 export interface PlantCreationDay {
@@ -291,7 +321,7 @@ export interface PlantCreationDay {
 
 export interface AstronomicalObject {
 	id: string;
-	name: string;
+	entityId: string;
 }
 
 export interface AstronomicalObjectCreationDay {
@@ -305,7 +335,7 @@ export interface AstronomicalObjectCreationDay {
 
 export interface TanahpediaSefer {
 	id: string;
-	name: string;
+	entityId: string;
 }
 
 export interface SeferTanahMatch {
@@ -319,7 +349,7 @@ export interface SeferTanahMatch {
 
 export interface Saying {
 	id: string;
-	name: string;
+	entityId: string;
 	content: string | null;
 }
 
@@ -370,6 +400,7 @@ export interface SayingAudienceNation {
 export interface Prophecy {
 	id: string;
 	sayingId: string;
+	entityId: string;
 }
 
 export interface ProphecyIsGood {
@@ -472,5 +503,5 @@ export interface EntryStub {
 }
 
 export interface EntryWithEntities extends Entry {
-	entities: EntryEntity[];
+	entities: (EntryEntity & { entityType: EntityType; entityName: string })[];
 }

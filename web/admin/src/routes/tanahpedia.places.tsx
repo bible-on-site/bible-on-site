@@ -21,7 +21,7 @@ function PlacesListPage() {
 						className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
 					>
 						<span>→</span>
-						<span>חזרה לתנ&quot;ךפדיה</span>
+						<span>חזרה לתנכפדיה</span>
 					</Link>
 					<h1 className="text-3xl font-bold text-gray-900 mt-2">מקומות</h1>
 				</div>

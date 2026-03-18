@@ -3,17 +3,21 @@
 import { toLetters } from "gematry";
 import { unstable_cache } from "next/cache";
 import React, { Suspense } from "react";
-import { isQriDifferentThanKtiv } from "../../../data/db/tanah-view-types";
 import { getPerekByPerekId } from "../../../data/perek-dto";
 import { getSeferByName, getPerekIdsForSefer } from "../../../data/sefer-dto";
 import { getArticlesByPerekId } from "../../../lib/articles";
 import { getPerushimByPerekId } from "../../../lib/perushim";
+import { buildEntityRefLookup } from "../../../lib/tanahpedia/entity-ref-lookup";
+import type { PerekEntityReference } from "../../../lib/tanahpedia/service";
+import { getEntityReferencesForPerek } from "../../../lib/tanahpedia/service";
 import { ArticlesSection } from "./components/ArticlesSection";
 import { PerushimSection } from "./components/PerushimSection";
 import Breadcrumb from "./components/Breadcrumb";
 import { Ptuah } from "./components/Ptuha";
 import SeferComposite from "./components/SeferComposite";
 import { Stuma } from "./components/Stuma";
+import { TanahpediaLink } from "./components/TanahpediaLink";
+import { renderPasukWithEntityRefs } from "./components/pasuk-renderer";
 import styles from "./page.module.css";
 // perakim are a closed list — no fallback rendering for unknown IDs.
 export const dynamicParams = false;
@@ -57,7 +61,34 @@ const getCachedPerushim = unstable_cache(
 		revalidate: false,
 	},
 );
+/** Cache entity references for tanahpedia links in pasuk text. */
+const getCachedEntityRefs = unstable_cache(
+	async (perekId: number) => getEntityReferencesForPerek(perekId),
+	["tanahpedia-entity-refs"],
+	{
+		tags: ["tanahpedia-entity-refs"],
+		revalidate: false,
+	},
+);
 
+/**
+ * Fetch entity references for all perekIds in a sefer.
+ * Returns a serializable record (perekId → refs[]) for passing to client components.
+ */
+async function fetchAllEntityRefs(
+	perekIds: number[],
+): Promise<Record<number, PerekEntityReference[]>> {
+	const allRefs = await Promise.all(
+		perekIds.map((id) => getCachedEntityRefs(id)),
+	);
+	const result: Record<number, PerekEntityReference[]> = {};
+	for (let i = 0; i < perekIds.length; i++) {
+		if (allRefs[i].length > 0) {
+			result[perekIds[i]] = allRefs[i];
+		}
+	}
+	return result;
+}
 
 // TODO: figure out if need to use generateMetadata
 export default async function Perek({
@@ -79,6 +110,8 @@ export default async function Perek({
 	);
 	const articles = await getCachedArticles(perekId);
 	const perushim = await getPerushimByPerekId(perekId);
+	const entityRefsByPerek = await fetchAllEntityRefs(perekIds);
+	const entityRefLookup = buildEntityRefLookup(entityRefsByPerek[perekId] ?? []);
 
 	return (
 		<>
@@ -89,6 +122,7 @@ export default async function Perek({
 					articlesByPerekIndex={articlesByPerekIndex}
 					perushimByPerekIndex={perushimByPerekIndex}
 					perekIds={perekIds}
+					entityRefsByPerek={entityRefsByPerek}
 				/>
 			</Suspense>
 			<div className={`${styles.perekContainer} seo-content`}>
@@ -100,41 +134,23 @@ export default async function Perek({
 						const pasukNumElement = (
 							<span className={styles.pasukNum}>{toLetters(pasukIdx + 1)}</span>
 						);
-						const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
-							const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
-							const isQriWithDifferentKtiv =
-								segment.type === "qri" && isQriDifferentThanKtiv(segment);
-							// TODO: merge qris sequnce like in 929/406
-							return (
-								<React.Fragment key={segmentKey}>
-									<span className={isQriWithDifferentKtiv ? styles.qri : ""}>
-										{segment.type === "ktiv" ? (
-											segment.value
-										) : segment.type === "qri" ? (
-											isQriWithDifferentKtiv ? (
-												<>
-													{/* biome-ignore lint/a11y/noLabelWithoutControl: It'll take some time to validate this fix altogether with css rules */}
-													(<label />
-													{segment.value})
-												</>
-											) : (
-												segment.value
-											)
-										) : segment.type === "ptuha" ? (
-											Ptuah()
-										) : (
-											Stuma()
-										)}
-									</span>
-									{segmentIdx === pasuk.segments.length - 1 ||
-									((segment.type === "ktiv" || segment.type === "qri") &&
-										segment.value.at(segment.value.length - 1) ===
-											"־") ? null : (
-										<span> </span>
-									)}
-								</React.Fragment>
-							);
-						});
+						const pasukElement = renderPasukWithEntityRefs(
+							pasuk.segments,
+							pasukIdx,
+							entityRefLookup,
+							Ptuah,
+							Stuma,
+							styles.qri,
+							(entryUniqueName, children, key) => (
+								<TanahpediaLink
+									key={key}
+									entryUniqueName={entryUniqueName}
+									className={styles.tanahpediaLink}
+								>
+									{children}
+								</TanahpediaLink>
+							),
+						);
 						return (
 							<React.Fragment key={pasukKey}>
 								{pasukNumElement}

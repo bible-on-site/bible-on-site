@@ -25,16 +25,19 @@ import dynamic from "next/dynamic";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { downloadPageRanges, downloadSefer } from "@/app/929/[number]/actions";
 import { BookshelfModal } from "@/app/components/Bookshelf";
-import { isQriDifferentThanKtiv } from "@/data/db/tanah-view-types";
 import type { PerekObj } from "@/data/perek-dto";
 import { getSeferColor } from "@/data/sefer-colors";
 import { getSeferByName } from "@/data/sefer-dto";
 import type { Article } from "@/lib/articles";
 import type { PerushSummary } from "@/lib/perushim";
+import { buildEntityRefLookup } from "@/lib/tanahpedia/entity-ref-lookup";
+import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import { BlankPageContent } from "./BlankPageContent";
 import { Ptuah } from "./Ptuha";
 import { Stuma } from "./Stuma";
+import { TanahpediaLink } from "./TanahpediaLink";
+import { renderPasukWithEntityRefs } from "./pasuk-renderer";
 import {
 	CONTENT_OFFSET,
 	buildHistoryMapper,
@@ -86,9 +89,10 @@ const Sefer = (props: {
 	articlesByPerekIndex?: Article[][];
 	perushimByPerekIndex?: PerushSummary[][];
 	perekIds?: number[];
+	entityRefsByPerek?: Record<number, PerekEntityReference[]>;
 	initialSlug?: string;
 }) => {
-	const { perekObj, articles, articlesByPerekIndex, perushimByPerekIndex, perekIds, initialSlug } = props;
+	const { perekObj, articles, articlesByPerekIndex, perushimByPerekIndex, perekIds, entityRefsByPerek, initialSlug } = props;
 	const sefer = getSeferByName(perekObj.sefer);
 	const flipBookRef = useRef<FlipBookHandle>(null);
 	const bookWrapperRef = useRef<HTMLDivElement>(null);
@@ -101,6 +105,18 @@ const Sefer = (props: {
 
 	const openBookshelf = useCallback(() => setIsBookshelfOpen(true), []);
 	const closeBookshelf = useCallback(() => setIsBookshelfOpen(false), []);
+
+	const entityRefLookupsByPerekIdx = useMemo(() => {
+		if (!entityRefsByPerek || !perekIds) return {};
+		const result: Record<number, ReturnType<typeof buildEntityRefLookup>> = {};
+		for (let i = 0; i < perekIds.length; i++) {
+			const refs = entityRefsByPerek[perekIds[i]];
+			if (refs && refs.length > 0) {
+				result[i] = buildEntityRefLookup(refs);
+			}
+		}
+		return result;
+	}, [entityRefsByPerek, perekIds]);
 
 	const perekHeaders = useMemo(
 		() => perakim.map((p) => p.header),
@@ -180,42 +196,25 @@ const Sefer = (props: {
 									{toLetters(pasukIdx + 1)}
 								</span>
 							);
-							const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
-								const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
-								const isQriWithDifferentKtiv =
-									segment.type === "qri" && isQriDifferentThanKtiv(segment);
-								// TODO: merge qris sequnce like in 929/406
-								return (
-									<React.Fragment key={segmentKey}>
-										<span className={isQriWithDifferentKtiv ? styles.qri : ""}>
-											{segment.type === "ktiv" ? (
-												segment.value
-											) : segment.type === "qri" ? (
-												isQriWithDifferentKtiv ? (
-													<>
-														(
-														{/* biome-ignore lint/a11y/noLabelWithoutControl: It'll take some time to validate this fix altogether with css rules */}
-														<label />
-														{segment.value})
-													</>
-												) : (
-													segment.value
-												)
-											) : segment.type === "ptuha" ? (
-												Ptuah()
-											) : (
-												Stuma()
-											)}
-										</span>
-										{segmentIdx === pasuk.segments.length - 1 ||
-										((segment.type === "ktiv" || segment.type === "qri") &&
-											segment.value.at(segment.value.length - 1) ===
-												"־") ? null : (
-											<span> </span>
-										)}
-									</React.Fragment>
-								);
-							});
+							const perekLookup = entityRefLookupsByPerekIdx[perekIdx]
+								?? buildEntityRefLookup([]);
+							const pasukElement = renderPasukWithEntityRefs(
+								pasuk.segments,
+								pasukIdx,
+								perekLookup,
+								Ptuah,
+								Stuma,
+								styles.qri,
+								(entryUniqueName, children, key) => (
+									<TanahpediaLink
+										key={key}
+										entryUniqueName={entryUniqueName}
+										className={styles.tanahpediaLink}
+									>
+										{children}
+									</TanahpediaLink>
+								),
+							);
 							return (
 								<React.Fragment key={pasukKey}>
 									{pasukNumElement}

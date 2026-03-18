@@ -15,7 +15,7 @@ function TanahpediaIndexPage() {
 	return (
 		<div className="space-y-8">
 			<div className="flex justify-between items-center">
-				<h1 className="text-3xl font-bold text-gray-900">תנ&quot;ךפדיה</h1>
+				<h1 className="text-3xl font-bold text-gray-900">תנכפדיה</h1>
 				<div className="flex gap-3">
 					<Link
 						to="/tanahpedia/entries/$id"

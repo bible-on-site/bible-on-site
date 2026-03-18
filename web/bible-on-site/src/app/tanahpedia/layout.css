@@ -1,0 +1,4 @@
+/* Set the nav background color for tanahpedia pages */
+body:has(.tanahpedia-layout) .top-nav {
+  background-color: #1552ac;
+}
