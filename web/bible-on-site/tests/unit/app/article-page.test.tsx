@@ -96,6 +96,7 @@ jest.mock("../../../src/app/929/[number]/components/Stuma", () => ({
 import { render, screen } from "@testing-library/react";
 import ArticlePage, {
 	generateMetadata,
+	generateStaticParams,
 } from "../../../src/app/929/[number]/[slug]/page";
 import { getPerekByPerekId } from "../../../src/data/perek-dto";
 import {
@@ -148,6 +149,30 @@ const sampleArticle = {
 describe("[slug] page", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+	});
+
+	describe("generateStaticParams", () => {
+		it("maps articles and perushim for a perek to static params", async () => {
+			mockGetArticlesByPerekId.mockResolvedValue([
+				{ ...sampleArticle, id: 10 },
+				{ ...sampleArticle, id: 20 },
+			]);
+			mockGetPerushimByPerekId.mockResolvedValue([
+				{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 10 },
+			]);
+
+			const result = await generateStaticParams({
+				params: { number: "5" },
+			});
+
+			expect(result).toEqual([
+				{ slug: "10" },
+				{ slug: "20" },
+				{ slug: "רש״י" },
+			]);
+			expect(mockGetArticlesByPerekId).toHaveBeenCalledWith(5);
+			expect(mockGetPerushimByPerekId).toHaveBeenCalledWith(5);
+		});
 	});
 
 	describe("generateMetadata", () => {

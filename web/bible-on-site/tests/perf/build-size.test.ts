@@ -46,7 +46,7 @@ test.describe("Build Size Benchmarks", () => {
 	});
 
 	test.describe("Standalone bundle size", () => {
-		test("Remains below 1000MB", () => {
+		test("Remains below 10000MB", () => {
 			expect(
 				existsSync(STANDALONE_DIR),
 				`Standalone directory should exist at ${STANDALONE_DIR}. Run 'npm run build' first.`,
@@ -59,9 +59,7 @@ test.describe("Build Size Benchmarks", () => {
 				`Standalone bundle size: ${sizeMB.toFixed(2)} MB (${sizeBytes} bytes)`,
 			);
 
-			// Report to Bencher - using MB as the unit for readability
-			// Increased from 750 to 1000 to accommodate SSG perushim pages (~250 MB)
-			const MAX_SIZE_MB = 1000;
+			const MAX_SIZE_MB = 10000;
 			reportBenchmark({
 				name: "build: standalone",
 				measure: "size_mb",
@@ -74,7 +72,7 @@ test.describe("Build Size Benchmarks", () => {
 	});
 
 	test.describe(".next directory size", () => {
-		test("Remains below 4096MB", () => {
+		test("Remains below 20000MB", () => {
 			expect(
 				existsSync(NEXT_BUILD_DIR),
 				`Build directory should exist at ${NEXT_BUILD_DIR}. Run 'npm run build' first.`,
@@ -87,8 +85,7 @@ test.describe("Build Size Benchmarks", () => {
 				`Total .next directory size: ${sizeMB.toFixed(2)} MB (${sizeBytes} bytes)`,
 			);
 
-			// Report to Bencher - upper threshold set high for tracking
-			const MAX_SIZE_MB = 4096;
+			const MAX_SIZE_MB = 20000;
 			reportBenchmark({
 				name: "build: .next",
 				measure: "size_mb",

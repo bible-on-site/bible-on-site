@@ -27,6 +27,28 @@ import styles from "./page.module.css";
 import { ScrollToSlug } from "./ScrollToArticle";
 
 /**
+ * Generate static params for known articles and perushim at build time.
+ * Parent params ({ number }) are passed by Next.js because the parent
+ * generateStaticParams lives in [number]/layout.tsx (not page.tsx).
+ */
+/* istanbul ignore next: only runs during next build */
+export async function generateStaticParams({
+	params,
+}: {
+	params: { number: string };
+}) {
+	const perekId = Number.parseInt(params.number, 10);
+	const [articles, perushim] = await Promise.all([
+		getArticlesByPerekId(perekId),
+		getPerushimByPerekId(perekId),
+	]);
+	return [
+		...articles.map((article) => ({ slug: String(article.id) })),
+		...perushim.map((perush) => ({ slug: perush.name })),
+	];
+}
+
+/**
  * Cache article data with on-demand revalidation support.
  */
 const getCachedArticle = unstable_cache(
