@@ -11,11 +11,13 @@ import {
 	getSeferByName,
 } from "../../../../data/sefer-dto";
 import { getArticleById, getArticlesByPerekId } from "../../../../lib/articles";
+import { getAllArticleIdsByPerek } from "../../../../lib/articles";
 import { authorNameToSlug } from "../../../../lib/authors";
 import {
 	getPerushDetail,
 	getPerushimByPerekId,
 } from "../../../../lib/perushim";
+import { getAllPerushNamesByPerek } from "../../../../lib/perushim";
 import { ArticlesSection } from "../components/ArticlesSection";
 import Breadcrumb from "../components/Breadcrumb";
 import { PerushimSection } from "../components/PerushimSection";
@@ -27,25 +29,34 @@ import styles from "./page.module.css";
 import { ScrollToSlug } from "./ScrollToArticle";
 
 /**
- * Generate static params for known articles and perushim at build time.
- * Parent params ({ number }) are passed by Next.js because the parent
- * generateStaticParams lives in [number]/layout.tsx (not page.tsx).
+ * Bulk caches, populated once and shared across all 929 invocations.
+ * Next.js calls generateStaticParams once per parent param, but multiple
+ * workers can run in parallel. Using a module-level promise ensures
+ * exactly one bulk query per process and avoids "Too many connections".
  */
+let articlesBulk: Promise<Map<number, number[]>> | null = null;
+let perushimBulk: Promise<Map<number, string[]>> | null = null;
+
 /* istanbul ignore next: only runs during next build */
 export async function generateStaticParams({
 	params,
 }: {
 	params: { number: string };
 }) {
-	const perekId = Number.parseInt(params.number, 10);
-	const [articles, perushim] = await Promise.all([
-		getArticlesByPerekId(perekId),
-		getPerushimByPerekId(perekId),
+	if (!articlesBulk) articlesBulk = getAllArticleIdsByPerek();
+	if (!perushimBulk) perushimBulk = getAllPerushNamesByPerek();
+	const [articlesMap, perushimMap] = await Promise.all([
+		articlesBulk,
+		perushimBulk,
 	]);
-	return [
-		...articles.map((article) => ({ slug: String(article.id) })),
-		...perushim.map((perush) => ({ slug: perush.name })),
-	];
+	const perekId = Number.parseInt(params.number, 10);
+	const articleSlugs = (articlesMap.get(perekId) ?? []).map((id) => ({
+		slug: String(id),
+	}));
+	const perushSlugs = (perushimMap.get(perekId) ?? []).map((name) => ({
+		slug: name,
+	}));
+	return [...articleSlugs, ...perushSlugs];
 }
 
 /**
