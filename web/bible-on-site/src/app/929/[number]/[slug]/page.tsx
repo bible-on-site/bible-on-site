@@ -27,16 +27,6 @@ import styles from "./page.module.css";
 import { ScrollToSlug } from "./ScrollToArticle";
 
 /**
- * Return empty — pages are generated on-demand and cached via the full
- * route cache (ISR). Pre-generating all ~12,000 commentary pages would
- * produce a 7+ GB standalone bundle. On-demand generation with caching
- * gives the same performance for hot pages with a small build.
- */
-export async function generateStaticParams() {
-	return [];
-}
-
-/**
  * Cache article data with on-demand revalidation support.
  */
 const getCachedArticle = unstable_cache(
