@@ -152,28 +152,9 @@ describe("[slug] page", () => {
 	});
 
 	describe("generateStaticParams", () => {
-		it("maps articles for a perek to static params", async () => {
-			mockGetArticlesByPerekId.mockResolvedValue([
-				{ ...sampleArticle, id: 10 },
-				{ ...sampleArticle, id: 20 },
-			]);
-			mockGetPerushimByPerekId.mockResolvedValue([]);
-
-			const result = await generateStaticParams({
-				params: { number: "5" },
-			});
-
-			expect(result).toEqual([{ slug: "10" }, { slug: "20" }]);
-			expect(mockGetArticlesByPerekId).toHaveBeenCalledWith(5);
-		});
-
-		it("includes perush names from perushim as static params", async () => {
-			mockGetArticlesByPerekId.mockResolvedValue([]);
-			mockGetPerushimByPerekId.mockResolvedValue([
-				{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 10 },
-			]);
-			const result = await generateStaticParams({ params: { number: "5" } });
-			expect(result).toEqual([{ slug: "רש״י" }]);
+		it("returns empty array (pages use ISR instead of build-time SSG)", async () => {
+			const result = await generateStaticParams();
+			expect(result).toEqual([]);
 		});
 	});
 
