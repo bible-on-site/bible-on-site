@@ -437,7 +437,7 @@ jobs:
   package_website:
     name: Package Website
     needs: [setup_env, determine_website_changes]
-    if: ${{ needs.determine_website_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ needs.determine_website_changes.outputs.module_changed == 'true' }}
     permissions:
       contents: write
       actions: read
