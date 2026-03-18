@@ -97,7 +97,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 											className: "!text-blue-600 !bg-blue-50 font-semibold",
 										}}
 									>
-										תנ&quot;ךפדיה
+										תנכפדיה
 									</Link>
 								</div>
 							</div>

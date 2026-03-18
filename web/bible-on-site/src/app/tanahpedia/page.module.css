@@ -1,0 +1,389 @@
+.tanahpediaPage {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  padding-top: 88px;
+  direction: rtl;
+}
+
+.pageTitle {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1c2c5d;
+  margin: 0 0 8px 0;
+  text-align: center;
+}
+
+.pageSubtitle {
+  font-size: 1rem;
+  color: #6b7280;
+  margin: 0 0 32px 0;
+  text-align: center;
+}
+
+.breadcrumb {
+  font-size: 0.9rem;
+  color: #6b7280;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.breadcrumbLink {
+  color: #1a73e8;
+  text-decoration: none;
+}
+
+.breadcrumbLink:hover {
+  text-decoration: underline;
+}
+
+.sectionTitle {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #1c2c5d;
+  margin: 0 0 16px 0;
+}
+
+.categoryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 48px;
+}
+
+.categoryGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.categoryCard {
+  display: block;
+  padding: 24px 16px;
+  background: #fff;
+  border-radius: 12px;
+  text-align: center;
+  text-decoration: none;
+  color: inherit;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.categoryCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.subcategoryList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 0 4px;
+}
+
+.subcategoryCard {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  background: #f0f4ff;
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  border-right: 3px solid #1a73e8;
+  transition: background 0.15s ease;
+}
+
+.subcategoryCard:hover {
+  background: #dce6fa;
+}
+
+.subcategoryName {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #1c2c5d;
+}
+
+.subcategoryCount {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.categoryName {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #1c2c5d;
+  margin: 0 0 6px 0;
+}
+
+.categoryCount {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.recentList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.recentItem {
+  margin-bottom: 8px;
+}
+
+.recentLink {
+  display: inline-block;
+  padding: 8px 16px;
+  text-decoration: none;
+  color: #1a73e8;
+  font-size: 1rem;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+}
+
+.recentLink:hover {
+  background: #e8f0fe;
+}
+
+.backLinkWrapper {
+  text-align: center;
+  padding: 24px 0 48px;
+}
+
+.backLink {
+  display: inline-block;
+  padding: 12px 32px;
+  background: #1c2c5d;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+}
+
+.backLink:hover {
+  background: #2a3d7a;
+  transform: translateY(-2px);
+}
+
+/* Entity type page */
+.entityList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.entityItem {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.entityItem:last-child {
+  border-bottom: none;
+}
+
+.entityName {
+  font-weight: 600;
+  color: #1c2c5d;
+}
+
+.entityEntryLink {
+  color: #1a73e8;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.entityEntryLink:hover {
+  text-decoration: underline;
+}
+
+.entityEntryList {
+  display: inline;
+  margin-right: 8px;
+  font-size: 0.9rem;
+}
+
+.noEntryBadge {
+  display: inline-block;
+  font-size: 0.8rem;
+  color: #9ca3af;
+  margin-right: 8px;
+}
+
+.mapPlaceholder {
+  background: #f0f0f0;
+  padding: 48px;
+  text-align: center;
+  border-radius: 12px;
+  margin-bottom: 32px;
+  color: #6b7280;
+  font-size: 1rem;
+}
+
+/* Entry page */
+.entryContent {
+  line-height: 1.8;
+  font-size: 1.1rem;
+}
+
+.entryContent sup {
+  font-size: 11px;
+  vertical-align: super;
+  line-height: 0;
+  color: #1a73e8;
+  font-weight: normal;
+}
+
+.entryContent sup a {
+  color: inherit;
+  text-decoration: none;
+  padding: 0 1px;
+}
+
+.entryContent sup a:hover {
+  text-decoration: underline;
+}
+
+.entityBadges {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.entityBadge {
+  display: inline-block;
+  padding: 4px 12px;
+  background: #e8f0fe;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  text-decoration: none;
+  color: #1a73e8;
+  transition: background 0.15s ease;
+}
+
+.entityBadge:hover {
+  background: #d2e3fc;
+}
+
+.emptyContent {
+  color: #9ca3af;
+  font-size: 1rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .categoryGrid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+  }
+
+  .pageTitle {
+    font-size: 1.5rem;
+  }
+
+  .mapPlaceholder {
+    padding: 24px;
+  }
+
+  .todaySection {
+    padding: 20px 16px;
+  }
+
+  .todaySectionTitle {
+    font-size: 1.15rem;
+  }
+}
+
+/* Today in Tanah */
+.todaySection {
+  background: linear-gradient(135deg, #f8f9ff 0%, #eef2ff 100%);
+  border: 1px solid #c7d2fe;
+  border-radius: 14px;
+  padding: 24px 28px;
+  margin-bottom: 40px;
+  position: relative;
+  overflow: hidden;
+}
+
+.todaySection::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, #4f46e5, #818cf8);
+  border-radius: 0 14px 14px 0;
+}
+
+.todayHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.todaySectionTitle {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #312e81;
+  margin: 0;
+}
+
+.todayDate {
+  font-size: 0.9rem;
+  color: #6366f1;
+  font-weight: 500;
+  background: rgba(99, 102, 241, 0.1);
+  padding: 2px 10px;
+  border-radius: 12px;
+}
+
+.todayList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.todayItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+  line-height: 1.7;
+  border-bottom: 1px solid rgba(99, 102, 241, 0.1);
+}
+
+.todayItem:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.todayBullet {
+  color: #6366f1;
+  font-size: 0.5rem;
+  margin-top: 8px;
+  flex-shrink: 0;
+}
+
+.todayText {
+  font-size: 1rem;
+  color: #1e1b4b;
+}
+
+.todayLink {
+  color: #4338ca;
+  text-decoration: none;
+  font-weight: 600;
+  border-bottom: 1px dashed rgba(67, 56, 202, 0.3);
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.todayLink:hover {
+  color: #3730a3;
+  border-bottom-style: solid;
+  border-bottom-color: #3730a3;
+}

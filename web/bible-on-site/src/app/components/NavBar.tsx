@@ -42,7 +42,7 @@ export const NavBar = () => {
 					<li className={`${styles.menuItem} ${styles.ribbonComingSoon}`}>
 						<Image src="/icons/book.svg" alt="" width={16} height={16} />
 						<Link href="/tanahpedia">
-							<span>תנ&quot;ךפדיה</span>
+							<span>תנכפדיה</span>
 						</Link>
 					</li>
 					<li className={`${styles.menuItem} ${styles.ribbonComingSoon}`}>

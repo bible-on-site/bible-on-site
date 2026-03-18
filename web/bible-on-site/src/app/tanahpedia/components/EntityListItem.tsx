@@ -1,13 +1,15 @@
 import Link from "next/link";
 import type { EntityWithEntries } from "@/lib/tanahpedia/types";
+import styles from "../page.module.css";
 
 export function EntityListItem({ entity }: { entity: EntityWithEntries }) {
 	const { entityName, linkedEntries } = entity;
 
 	if (linkedEntries.length === 0) {
 		return (
-			<li style={{ padding: "0.4rem 0", borderBottom: "1px solid #eee" }}>
-				<span style={{ color: "#999" }}>{entityName}</span>
+			<li className={styles.entityItem}>
+				<span className={styles.entityName}>{entityName}</span>
+				<span className={styles.noEntryBadge}> (אין ערך)</span>
 			</li>
 		);
 	}
@@ -15,10 +17,10 @@ export function EntityListItem({ entity }: { entity: EntityWithEntries }) {
 	if (linkedEntries.length === 1) {
 		const entry = linkedEntries[0];
 		return (
-			<li style={{ padding: "0.4rem 0", borderBottom: "1px solid #eee" }}>
+			<li className={styles.entityItem}>
 				<Link
 					href={`/tanahpedia/entry/${encodeURIComponent(entry.uniqueName)}`}
-					style={{ textDecoration: "none", color: "#0066cc" }}
+					className={styles.entityEntryLink}
 				>
 					{entityName}
 				</Link>
@@ -27,21 +29,23 @@ export function EntityListItem({ entity }: { entity: EntityWithEntries }) {
 	}
 
 	return (
-		<li style={{ padding: "0.4rem 0", borderBottom: "1px solid #eee" }}>
-			<span>{entityName}</span>
-			{" ["}
-			{linkedEntries.map((entry, i) => (
-				<span key={entry.id}>
-					{i > 0 && ", "}
-					<Link
-						href={`/tanahpedia/entry/${encodeURIComponent(entry.uniqueName)}`}
-						style={{ textDecoration: "none", color: "#0066cc" }}
-					>
-						{entry.title}
-					</Link>
-				</span>
-			))}
-			{"]"}
+		<li className={styles.entityItem}>
+			<span className={styles.entityName}>{entityName}</span>
+			<span className={styles.entityEntryList}>
+				{" ["}
+				{linkedEntries.map((entry, i) => (
+					<span key={entry.id}>
+						{i > 0 && ", "}
+						<Link
+							href={`/tanahpedia/entry/${encodeURIComponent(entry.uniqueName)}`}
+							className={styles.entityEntryLink}
+						>
+							{entry.title}
+						</Link>
+					</span>
+				))}
+				{"]"}
+			</span>
 		</li>
 	);
 }
