@@ -54,6 +54,39 @@ export async function getPerushimByPerekId(
 	}
 }
 
+/**
+ * Fetch all distinct perush names grouped by perek ID.
+ * Used by generateStaticParams for bulk fetching in a single query.
+ */
+export async function getAllPerushNamesByPerek(): Promise<
+	Map<number, string[]>
+> {
+	try {
+		const rows = await query<{ perek_id: number; perush_name: string }>(
+			`SELECT DISTINCT n.perek_id, p.name AS perush_name
+			 FROM note n
+			 JOIN perush p ON n.perush_id = p.id
+			 ORDER BY n.perek_id ASC`,
+		);
+		const map = new Map<number, string[]>();
+		for (const row of rows) {
+			const list = map.get(row.perek_id);
+			if (list) {
+				list.push(row.perush_name);
+			} else {
+				map.set(row.perek_id, [row.perush_name]);
+			}
+		}
+		return map;
+	} catch (error) {
+		console.warn(
+			"Failed to fetch all perush names by perek:",
+			error instanceof Error ? error.message : error,
+		);
+		return new Map();
+	}
+}
+
 interface NoteRow {
 	pasuk: number;
 	note_idx: number;

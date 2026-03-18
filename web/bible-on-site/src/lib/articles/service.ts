@@ -84,6 +84,36 @@ export async function getAllArticlePerekIdPairs(): Promise<ArticlePerekPair[]> {
 }
 
 /**
+ * Fetch all article IDs grouped by perek ID.
+ * Used by generateStaticParams for bulk fetching in a single query.
+ */
+export async function getAllArticleIdsByPerek(): Promise<
+	Map<number, number[]>
+> {
+	try {
+		const rows = await query<{ id: number; perek_id: number }>(
+			`SELECT id, perek_id FROM tanah_article ORDER BY perek_id ASC, id ASC`,
+		);
+		const map = new Map<number, number[]>();
+		for (const row of rows) {
+			const list = map.get(row.perek_id);
+			if (list) {
+				list.push(row.id);
+			} else {
+				map.set(row.perek_id, [row.id]);
+			}
+		}
+		return map;
+	} catch (error) {
+		console.warn(
+			"Failed to fetch all article IDs by perek:",
+			error instanceof Error ? error.message : error,
+		);
+		return new Map();
+	}
+}
+
+/**
  * Fetch a single article by ID with author information.
  * Returns null if not found or database unavailable.
  */
