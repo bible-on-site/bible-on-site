@@ -55,17 +55,33 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       # Free disk space before build - the Website SSG build generates 15,000+ static pages
-      # producing ~15 GB of .next/ output
+      # producing ~15 GB of .next/ output. Peak disk usage during build reaches ~150 GB
+      # due to intermediate SSG HTML before optimization and standalone output trace.
       - name: Free Disk Space
         uses: jlumbroso/free-disk-space@v1.3.1
         with:
-          tool-cache: false
+          tool-cache: true
           android: true
           dotnet: true
           haskell: true
           large-packages: true
           docker-images: true
           swap-storage: true
+
+      - name: Free Additional Disk Space (Website)
+        if: ${{ env.IS_NPM == 'true' }}
+        run: |
+          sudo rm -rf /usr/local/lib/heroku || true
+          sudo rm -rf /usr/local/share/powershell || true
+          sudo rm -rf /usr/local/share/chromium || true
+          sudo rm -rf /usr/local/share/vcpkg || true
+          sudo rm -rf /opt/az || true
+          sudo rm -rf /opt/microsoft || true
+          sudo rm -rf /opt/pipx || true
+          sudo rm -rf /opt/google || true
+          sudo rm -rf /imagegeneration || true
+          echo "Disk after additional cleanup:"
+          df -h /
 
       - name: Setup Node.js
         if: ${{ env.IS_NPM == 'true' }}
@@ -195,32 +211,23 @@ jobs:
         env:
           DB_URL: ${{ steps.rds_creds.outputs.db_url || '' }}
         run: |
-          # Monitor and periodically clean the build cache to prevent disk exhaustion.
-          # The Turbopack/webpack compilation cache for 15K+ SSG pages can grow to
-          # 70+ GB if unchecked, which combined with .next/server/ (~7 GB) and
-          # .next/standalone/ (~7 GB) would exceed the runner's 115 GB of free space.
           (
             while true; do
               sleep 60
               USED=$(df / --output=used | tail -1)
               AVAIL=$(df / --output=avail | tail -1)
-              CACHE_SIZE=$(du -s .next/cache 2>/dev/null | cut -f1 || echo 0)
-              echo "[disk-monitor] used=$((USED/1024))MB avail=$((AVAIL/1024))MB cache=$((CACHE_SIZE/1024))MB"
-              # If less than 25 GB free and cache is significant, prune it
-              if [ "$AVAIL" -lt 26214400 ] && [ "$CACHE_SIZE" -gt 1048576 ]; then
-                echo "[disk-monitor] Low disk, pruning .next/cache (${CACHE_SIZE}KB)..."
-                rm -rf .next/cache/*
-              fi
+              echo "[disk-monitor] used=$((USED/1024))MB avail=$((AVAIL/1024))MB"
             done
           ) &
           MONITOR_PID=$!
-          npm run build
+          npx next build
           BUILD_EXIT=$?
           kill $MONITOR_PID 2>/dev/null || true
-          echo "Final disk usage:"
+          echo "Disk after next build:"
           df -h /
           du -sh .next/ .next/*/ 2>/dev/null || true
-          exit $BUILD_EXIT
+          if [ $BUILD_EXIT -ne 0 ]; then exit $BUILD_EXIT; fi
+          npm run postbuild
 
       - name: Prepare Docker Build Context (Website)
         if: ${{ env.IS_NPM == 'true' }}
