@@ -1,6 +1,6 @@
 import { query } from "../api-client";
 import { getAuthorImageUrl } from "../authors/service";
-import type { Article } from "./types";
+import type { Article, ArticleSummary } from "./types";
 
 interface ArticleWithAuthorRow {
 	id: number;
@@ -8,6 +8,16 @@ interface ArticleWithAuthorRow {
 	author_id: number;
 	abstract: string | null;
 	content: string | null;
+	name: string;
+	priority: number;
+	author_name: string;
+}
+
+interface ArticleSummaryRow {
+	id: number;
+	perek_id: number;
+	author_id: number;
+	abstract: string | null;
 	name: string;
 	priority: number;
 	author_name: string;
@@ -55,6 +65,45 @@ export async function getArticlesByPerekId(
 	}
 }
 
+/**
+ * Fetch article summaries for a specific perek (no full content).
+ * Used for carousel display and book view where only metadata is needed.
+ */
+export async function getArticleSummariesByPerekId(
+	perekId: number,
+): Promise<ArticleSummary[]> {
+	try {
+		const rows = await query<ArticleSummaryRow>(
+			`SELECT
+				a.id, a.perek_id, a.author_id, a.abstract, a.name, a.priority,
+				au.name AS author_name
+			 FROM tanah_article a
+			 JOIN tanah_author au ON a.author_id = au.id
+			 WHERE a.perek_id = ?
+			 ORDER BY a.priority ASC`,
+			[perekId],
+		);
+
+		return rows.map((row) => ({
+			id: row.id,
+			perekId: row.perek_id,
+			authorId: row.author_id,
+			abstract: row.abstract,
+			name: row.name,
+			priority: row.priority,
+			authorName: row.author_name,
+			authorImageUrl: getAuthorImageUrl(row.author_id),
+		}));
+	} catch (error) {
+		console.warn(
+			"Failed to fetch article summaries for perek %d:",
+			perekId,
+			error instanceof Error ? error.message : error,
+		);
+		return [];
+	}
+}
+
 export interface ArticlePerekPair {
 	articleId: number;
 	perekId: number;
@@ -87,9 +136,8 @@ export async function getAllArticlePerekIdPairs(): Promise<ArticlePerekPair[]> {
  * Fetch all article IDs grouped by perek ID.
  * Used by generateStaticParams for bulk fetching in a single query.
  */
-export async function getAllArticleIdsByPerek(): Promise<
-	Map<number, number[]>
-> {
+/* istanbul ignore next -- bulk query kept for future SSG use */
+export async function getAllArticleIdsByPerek(): Promise<Map<number, number[]>> {
 	try {
 		const rows = await query<{ id: number; perek_id: number }>(
 			`SELECT id, perek_id FROM tanah_article ORDER BY perek_id ASC, id ASC`,

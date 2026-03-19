@@ -6,7 +6,7 @@ import React, { Suspense } from "react";
 import { isQriDifferentThanKtiv } from "../../../data/db/tanah-view-types";
 import { getPerekByPerekId } from "../../../data/perek-dto";
 import { getSeferByName, getPerekIdsForSefer } from "../../../data/sefer-dto";
-import { getArticlesByPerekId } from "../../../lib/articles";
+import { getArticleSummariesByPerekId } from "../../../lib/articles";
 import { getPerushimByPerekId } from "../../../lib/perushim";
 import { ArticlesSection } from "./components/ArticlesSection";
 import { PerushimSection } from "./components/PerushimSection";
@@ -19,7 +19,7 @@ import styles from "./page.module.css";
 export const dynamicParams = false;
 
 /**
- * Cache articles with on-demand revalidation support.
+ * Cache article summaries (no full content) with on-demand revalidation support.
  *
  * IMPORTANT: We use on-demand revalidation only (no periodic/time-based revalidation).
  * Periodic revalidation should be avoided because:
@@ -32,12 +32,12 @@ export const dynamicParams = false;
  * - Single page: revalidatePath('/929/{perekId}')
  * - All articles: revalidateTag('articles')
  */
-const getCachedArticles = unstable_cache(
-	async (perekId: number) => getArticlesByPerekId(perekId),
-	["articles"],
+const getCachedArticleSummaries = unstable_cache(
+	async (perekId: number) => getArticleSummariesByPerekId(perekId),
+	["article-summaries"],
 	{
 		tags: ["articles"],
-		revalidate: false, // No periodic revalidation - on-demand only
+		revalidate: false,
 	},
 );
 
@@ -63,15 +63,8 @@ export default async function Perek({
 	const perekObj = getPerekByPerekId(perekId);
 	const sefer = getSeferByName(perekObj.sefer);
 	const perekIds = getPerekIdsForSefer(sefer);
-	// Fetch articles and perushim for every perek in the sefer so each blank page shows the correct data
-	const articlesByPerekIndex = await Promise.all(
-		perekIds.map((id) => getCachedArticles(id)),
-	);
-	const perushimByPerekIndex = await Promise.all(
-		perekIds.map((id) => getCachedPerushim(id)),
-	);
-	const articles = await getCachedArticles(perekId);
-	const perushim = await getPerushimByPerekId(perekId);
+	const articles = await getCachedArticleSummaries(perekId);
+	const perushim = await getCachedPerushim(perekId);
 
 	return (
 		<>
@@ -79,8 +72,6 @@ export default async function Perek({
 				<SeferComposite
 					perekObj={perekObj}
 					articles={articles}
-					articlesByPerekIndex={articlesByPerekIndex}
-					perushimByPerekIndex={perushimByPerekIndex}
 					perekIds={perekIds}
 				/>
 			</Suspense>

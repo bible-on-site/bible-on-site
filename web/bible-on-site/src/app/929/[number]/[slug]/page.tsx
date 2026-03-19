@@ -10,7 +10,7 @@ import {
 	getPerekIdsForSefer,
 	getSeferByName,
 } from "../../../../data/sefer-dto";
-import { getArticleById, getArticlesByPerekId } from "../../../../lib/articles";
+import { getArticleById, getArticleSummariesByPerekId } from "../../../../lib/articles";
 import { authorNameToSlug } from "../../../../lib/authors";
 import {
 	getPerushDetail,
@@ -58,8 +58,8 @@ const getCachedArticle = unstable_cache(
 );
 
 const getCachedArticles = unstable_cache(
-	async (perekId: number) => getArticlesByPerekId(perekId),
-	["articles"],
+	async (perekId: number) => getArticleSummariesByPerekId(perekId),
+	["article-summaries"],
 	{
 		tags: ["articles"],
 		revalidate: false,
@@ -105,10 +105,16 @@ export async function generateMetadata({
 		}
 
 		const descriptionSource = article.abstract || article.content;
+		let plainText = descriptionSource ?? "";
+		let prev: string;
+		do {
+			prev = plainText;
+			plainText = plainText.replace(/<[^>]*>/g, "");
+		} while (plainText !== prev);
 		return {
 			title: `${article.name} | ${article.authorName} | תנ״ך באתר`,
-			description: descriptionSource
-				? descriptionSource.replace(/<[^>]*>/g, "").slice(0, 160)
+			description: plainText
+				? plainText.slice(0, 160)
 				: `מאמר מאת ${article.authorName}`,
 		};
 	}
@@ -155,12 +161,6 @@ export default async function ArticlePage({
 
 	const sefer = getSeferByName(perekObj.sefer);
 	const perekIds = getPerekIdsForSefer(sefer);
-	const articlesByPerekIndex = await Promise.all(
-		perekIds.map((pid) => getCachedArticles(pid)),
-	);
-	const perushimByPerekIndex = await Promise.all(
-		perekIds.map((pid) => getCachedPerushim(pid)),
-	);
 
 	if (isArticle) {
 		// Handle article view
@@ -177,8 +177,6 @@ export default async function ArticlePage({
 					<SeferComposite
 						perekObj={perekObj}
 						articles={articles}
-						articlesByPerekIndex={articlesByPerekIndex}
-						perushimByPerekIndex={perushimByPerekIndex}
 						perekIds={perekIds}
 						initialSlug={slug}
 					/>
@@ -307,7 +305,7 @@ export default async function ArticlePage({
 				<SeferComposite
 					perekObj={perekObj}
 					articles={articles}
-					articlesByPerekIndex={articlesByPerekIndex}
+					perekIds={perekIds}
 					initialSlug={slug}
 				/>
 			</Suspense>

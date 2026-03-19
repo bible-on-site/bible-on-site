@@ -66,9 +66,13 @@ jest.mock("@/app/929/[number]/components/sefer.module.css", () =>
 
 const mockDownloadSefer = jest.fn();
 const mockDownloadPageRanges = jest.fn();
+const mockGetArticleSummariesForPerek = jest.fn();
+const mockGetPerushimSummariesForPerek = jest.fn();
 jest.mock("@/app/929/[number]/actions", () => ({
 	downloadSefer: (...args: unknown[]) => mockDownloadSefer(...args),
 	downloadPageRanges: (...args: unknown[]) => mockDownloadPageRanges(...args),
+	getArticleSummariesForPerek: (...args: unknown[]) => mockGetArticleSummariesForPerek(...args),
+	getPerushimSummariesForPerek: (...args: unknown[]) => mockGetPerushimSummariesForPerek(...args),
 }));
 
 jest.mock("@/app/components/Bookshelf", () => ({
@@ -86,7 +90,7 @@ jest.mock("@/app/components/Bookshelf", () => ({
 }));
 
 jest.mock("@/data/db/tanah-view-types", () => ({
-	isQriDifferentThanKtiv: () => false,
+	isQriDifferentThanKtiv: (segment: { value: string }) => segment.value === "בְּרֵאשִׁית",
 }));
 
 jest.mock("@/data/sefer-colors", () => ({
@@ -94,9 +98,21 @@ jest.mock("@/data/sefer-colors", () => ({
 }));
 
 jest.mock("@/data/sefer-dto", () => ({
-	getSeferByName: () => ({
-		perakim: [{ header: "בראשית א", pesukim: [] }],
+	getSeferByName: jest.fn().mockReturnValue({
+		perakim: [{
+			header: "בראשית א",
+			pesukim: [{
+				segments: [
+					{ type: "qri" as const, value: "בְּרֵאשִׁית", recordingTimeFrame: { start: 0, end: 1 } },
+					{ type: "ktiv" as const, value: "בראשית" },
+					{ type: "ptuha" as const },
+					{ type: "stuma" as const },
+					{ type: "qri" as const, value: "הָאָ֖רֶץ", recordingTimeFrame: { start: 2, end: 3 } },
+				],
+			}],
+		}],
 	}),
+	getPerekIdsForSefer: jest.fn().mockReturnValue([1]),
 }));
 
 jest.mock("@/util/hebdates-util", () => ({
@@ -127,7 +143,15 @@ const minimalPerek: PerekObj = {
 	helek: "תורה",
 	sefer: "בראשית",
 	source: "mechon-mamre" as const,
-	pesukim: [{ segments: [{ type: "qri" as const, value: "בְּרֵאשִׁית", recordingTimeFrame: { start: 0, end: 1 } }] }],
+	pesukim: [{
+		segments: [
+			{ type: "qri" as const, value: "בְּרֵאשִׁית", recordingTimeFrame: { start: 0, end: 1 } },
+			{ type: "ktiv" as const, value: "בראשית" },
+			{ type: "ptuha" as const },
+			{ type: "stuma" as const },
+			{ type: "qri" as const, value: "הָאָ֖רֶץ", recordingTimeFrame: { start: 2, end: 3 } },
+		],
+	}],
 };
 
 describe("Sefer component", () => {
@@ -136,6 +160,10 @@ describe("Sefer component", () => {
 		capturedTocProps = {};
 		mockDownloadSefer.mockReset();
 		mockDownloadPageRanges.mockReset();
+		mockGetArticleSummariesForPerek.mockReset();
+		mockGetPerushimSummariesForPerek.mockReset();
+		mockGetArticleSummariesForPerek.mockResolvedValue([]);
+		mockGetPerushimSummariesForPerek.mockResolvedValue([]);
 	});
 
 	it("renders FlipBook and toolbar", () => {
@@ -161,6 +189,15 @@ describe("Sefer component", () => {
 		expect(onNavigate).toBeDefined();
 		// flipBookRef.current is null in test, so optional chaining means no-op
 		expect(() => onNavigate(5)).not.toThrow();
+	});
+
+	it("TocPage filter excludes cover pages and empty titles", () => {
+		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		const filter = capturedTocProps.filter as (entry: { pageIndex: number; title: string }) => boolean;
+		expect(filter).toBeDefined();
+		expect(filter({ pageIndex: 0, title: "cover" })).toBe(false);
+		expect(filter({ pageIndex: 5, title: "" })).toBe(false);
+		expect(filter({ pageIndex: 5, title: "פרק א" })).toBe(true);
 	});
 
 	it("onDownloadSefer wraps result from server action", async () => {
@@ -202,16 +239,66 @@ describe("Sefer component", () => {
 		expect(screen.getByTestId("blank-page")).toBeInTheDocument();
 	});
 
-	it("renders with per-perek index maps", () => {
-		render(
-			<Sefer
-				perekObj={minimalPerek}
-				articles={[]}
-				articlesByPerekIndex={[[]]}
-				perushimByPerekIndex={[[]]}
-				perekIds={[1]}
-			/>,
+	it("renders with perekIds and fetches data on demand", async () => {
+		const { act } = await import("react");
+		mockGetArticleSummariesForPerek.mockResolvedValue([{ id: 10, perekId: 1, authorId: 1, abstract: "a", name: "art", priority: 1, authorName: "rav", authorImageUrl: "url" }]);
+		mockGetPerushimSummariesForPerek.mockResolvedValue([{ id: 1, name: "rashi", parshanName: "rashi", noteCount: 5 }]);
+
+		await act(async () => {
+			render(
+				<Sefer
+					perekObj={minimalPerek}
+					articles={[]}
+					perekIds={[1]}
+				/>,
+			);
+		});
+		expect(mockGetArticleSummariesForPerek).toHaveBeenCalledWith(1);
+		expect(mockGetPerushimSummariesForPerek).toHaveBeenCalledWith(1);
+	});
+
+	it("does not re-fetch the same perek index", async () => {
+		const { act } = await import("react");
+		mockGetArticleSummariesForPerek.mockResolvedValue([]);
+		mockGetPerushimSummariesForPerek.mockResolvedValue([]);
+
+		const { unmount } = await act(async () =>
+			render(
+				<Sefer
+					perekObj={minimalPerek}
+					articles={[]}
+					perekIds={[1]}
+				/>,
+			),
 		);
-		expect(screen.getByTestId("blank-page")).toBeInTheDocument();
+		expect(mockGetArticleSummariesForPerek).toHaveBeenCalledTimes(1);
+
+		unmount();
+	});
+
+	it("renders maqaf-ending segments without trailing space", () => {
+		const perekWithMaqaf: PerekObj = {
+			...minimalPerek,
+			pesukim: [{
+				segments: [
+					{ type: "qri" as const, value: "מִן־", recordingTimeFrame: { start: 0, end: 1 } },
+					{ type: "qri" as const, value: "הָאָ֖רֶץ", recordingTimeFrame: { start: 1, end: 2 } },
+				],
+			}],
+		};
+		render(<Sefer perekObj={perekWithMaqaf} articles={[]} />);
+		expect(screen.getByTestId("mock-flipbook")).toBeInTheDocument();
+	});
+
+	it("renders sefer with additionals (uses flatMap branch)", () => {
+		const { getSeferByName } = jest.requireMock("@/data/sefer-dto") as { getSeferByName: jest.Mock };
+		getSeferByName.mockReturnValueOnce({
+			additionals: [
+				{ perakim: [{ header: "שמואל א א", pesukim: [{ segments: [{ type: "qri" as const, value: "word", recordingTimeFrame: { start: 0, end: 1 } }] }] }] },
+			],
+		});
+
+		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		expect(screen.getByTestId("mock-flipbook")).toBeInTheDocument();
 	});
 });

@@ -42,7 +42,7 @@ jest.mock("next/link", () => ({
 
 jest.mock("../../../src/lib/articles", () => ({
 	getArticleById: jest.fn(),
-	getArticlesByPerekId: jest.fn(),
+	getArticleSummariesByPerekId: jest.fn(),
 }));
 
 jest.mock("../../../src/lib/authors", () => ({
@@ -105,7 +105,7 @@ import {
 } from "../../../src/data/sefer-dto";
 import {
 	getArticleById,
-	getArticlesByPerekId,
+	getArticleSummariesByPerekId,
 } from "../../../src/lib/articles";
 import {
 	getPerushDetail,
@@ -115,8 +115,8 @@ import {
 const mockGetArticleById = getArticleById as jest.MockedFunction<
 	typeof getArticleById
 >;
-const mockGetArticlesByPerekId = getArticlesByPerekId as jest.MockedFunction<
-	typeof getArticlesByPerekId
+const mockGetArticlesByPerekId = getArticleSummariesByPerekId as jest.MockedFunction<
+	typeof getArticleSummariesByPerekId
 >;
 const mockGetPerekByPerekId = getPerekByPerekId as jest.MockedFunction<
 	typeof getPerekByPerekId
@@ -143,6 +143,17 @@ const sampleArticle = {
 	authorImageUrl: "https://example.com/1.jpg",
 	abstract: "תקציר המאמר",
 	content: "<p>תוכן המאמר</p>",
+	priority: 1,
+};
+
+const sampleArticleSummary = {
+	id: 42,
+	perekId: 5,
+	authorId: 1,
+	name: "מאמר לדוגמא",
+	authorName: "הרב ישראל",
+	authorImageUrl: "https://example.com/1.jpg",
+	abstract: "תקציר המאמר",
 	priority: 1,
 };
 
@@ -186,6 +197,21 @@ describe("[slug] page", () => {
 			});
 
 			expect(result.description).toBe("תוכן המאמר");
+		});
+
+		it("strips nested/incomplete HTML tags safely", async () => {
+			mockGetArticleById.mockResolvedValue({
+				...sampleArticle,
+				abstract: null,
+				content: "<p>before<scr<script>ipt>alert(1)</script>after</p>",
+			});
+
+			const result = await generateMetadata({
+				params: Promise.resolve({ number: "5", slug: "42" }),
+			});
+
+			expect(result.description).not.toContain("<");
+			expect(result.description).not.toContain("script");
 		});
 
 		it("falls back to author name when no abstract or content", async () => {
@@ -312,7 +338,7 @@ describe("[slug] page", () => {
 
 		beforeEach(() => {
 			mockGetArticleById.mockResolvedValue(sampleArticle);
-			mockGetArticlesByPerekId.mockResolvedValue([sampleArticle]);
+			mockGetArticlesByPerekId.mockResolvedValue([sampleArticleSummary]);
 			mockGetPerekByPerekId.mockReturnValue(minimalPerek);
 			mockGetSeferByName.mockReturnValue({
 				name: "בראשית",
