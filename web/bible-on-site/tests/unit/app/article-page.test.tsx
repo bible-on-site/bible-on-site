@@ -199,6 +199,21 @@ describe("[slug] page", () => {
 			expect(result.description).toBe("תוכן המאמר");
 		});
 
+		it("strips nested/incomplete HTML tags safely", async () => {
+			mockGetArticleById.mockResolvedValue({
+				...sampleArticle,
+				abstract: null,
+				content: "<p>before<scr<script>ipt>alert(1)</script>after</p>",
+			});
+
+			const result = await generateMetadata({
+				params: Promise.resolve({ number: "5", slug: "42" }),
+			});
+
+			expect(result.description).not.toContain("<");
+			expect(result.description).not.toContain("script");
+		});
+
 		it("falls back to author name when no abstract or content", async () => {
 			mockGetArticleById.mockResolvedValue({
 				...sampleArticle,

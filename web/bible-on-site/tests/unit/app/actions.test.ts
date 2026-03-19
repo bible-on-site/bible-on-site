@@ -1,8 +1,10 @@
 jest.mock("../../../src/lib/articles", () => ({
 	getArticleById: jest.fn(),
+	getArticleSummariesByPerekId: jest.fn(),
 }));
 jest.mock("../../../src/lib/perushim", () => ({
 	getPerushNotes: jest.fn(),
+	getPerushimByPerekId: jest.fn(),
 }));
 jest.mock("../../../src/lib/download/handlers", () => ({
 	getSeferDownloadHandler: jest.fn(),
@@ -13,20 +15,28 @@ import {
 	downloadPageRanges,
 	downloadSefer,
 	getArticleForBook,
+	getArticleSummariesForPerek,
 	getPerushNotesForPage,
+	getPerushimSummariesForPerek,
 } from "../../../src/app/929/[number]/actions";
-import { getArticleById } from "../../../src/lib/articles";
+import { getArticleById, getArticleSummariesByPerekId } from "../../../src/lib/articles";
 import {
 	getPageRangesDownloadHandler,
 	getSeferDownloadHandler,
 } from "../../../src/lib/download/handlers";
-import { getPerushNotes } from "../../../src/lib/perushim";
+import { getPerushNotes, getPerushimByPerekId } from "../../../src/lib/perushim";
 
 const mockGetArticleById = getArticleById as jest.MockedFunction<
 	typeof getArticleById
 >;
 const mockGetPerushNotes = getPerushNotes as jest.MockedFunction<
 	typeof getPerushNotes
+>;
+const mockGetPerushimByPerekId = getPerushimByPerekId as jest.MockedFunction<
+	typeof getPerushimByPerekId
+>;
+const mockGetArticleSummariesByPerekId = getArticleSummariesByPerekId as jest.MockedFunction<
+	typeof getArticleSummariesByPerekId
 >;
 const mockGetSeferDownloadHandler =
 	getSeferDownloadHandler as jest.MockedFunction<
@@ -92,6 +102,42 @@ describe("getPerushNotesForPage", () => {
 		const result = await getPerushNotesForPage(1, 999);
 
 		expect(result).toEqual([]);
+	});
+});
+
+describe("getArticleSummariesForPerek", () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+	});
+
+	it("delegates to getArticleSummariesByPerekId", async () => {
+		const summaries = [
+			{ id: 1, perekId: 5, authorId: 1, abstract: "abs", name: "art", priority: 1, authorName: "rav", authorImageUrl: "url" },
+		];
+		mockGetArticleSummariesByPerekId.mockResolvedValue(summaries);
+
+		const result = await getArticleSummariesForPerek(5);
+
+		expect(mockGetArticleSummariesByPerekId).toHaveBeenCalledWith(5);
+		expect(result).toEqual(summaries);
+	});
+});
+
+describe("getPerushimSummariesForPerek", () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+	});
+
+	it("delegates to getPerushimByPerekId", async () => {
+		const perushim = [
+			{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 10 },
+		];
+		mockGetPerushimByPerekId.mockResolvedValue(perushim);
+
+		const result = await getPerushimSummariesForPerek(5);
+
+		expect(mockGetPerushimByPerekId).toHaveBeenCalledWith(5);
+		expect(result).toEqual(perushim);
 	});
 });
 
