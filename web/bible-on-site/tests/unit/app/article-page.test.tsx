@@ -6,6 +6,7 @@
 jest.mock("../../../src/lib/perushim", () => ({
 	getPerushimByPerekId: jest.fn(),
 	getPerushDetail: jest.fn(),
+	getAllPerushPerekNamePairs: jest.fn(),
 }));
 
 jest.mock("../../../src/app/929/[number]/components/PerushimSection", () => ({
@@ -43,6 +44,7 @@ jest.mock("next/link", () => ({
 jest.mock("../../../src/lib/articles", () => ({
 	getArticleById: jest.fn(),
 	getArticleSummariesByPerekId: jest.fn(),
+	getAllArticlePerekIdPairs: jest.fn(),
 }));
 
 jest.mock("../../../src/lib/authors", () => ({
@@ -106,10 +108,12 @@ import {
 import {
 	getArticleById,
 	getArticleSummariesByPerekId,
+	getAllArticlePerekIdPairs,
 } from "../../../src/lib/articles";
 import {
 	getPerushDetail,
 	getPerushimByPerekId,
+	getAllPerushPerekNamePairs,
 } from "../../../src/lib/perushim";
 
 const mockGetArticleById = getArticleById as jest.MockedFunction<
@@ -132,6 +136,12 @@ const mockGetPerushimByPerekId = getPerushimByPerekId as jest.MockedFunction<
 >;
 const mockGetPerushDetail = getPerushDetail as jest.MockedFunction<
 	typeof getPerushDetail
+>;
+const mockGetAllArticlePerekIdPairs = getAllArticlePerekIdPairs as jest.MockedFunction<
+	typeof getAllArticlePerekIdPairs
+>;
+const mockGetAllPerushPerekNamePairs = getAllPerushPerekNamePairs as jest.MockedFunction<
+	typeof getAllPerushPerekNamePairs
 >;
 
 const sampleArticle = {
@@ -163,12 +173,26 @@ describe("[slug] page", () => {
 	});
 
 	describe("generateStaticParams", () => {
-		it("returns empty array for ISR (lazy SSG)", async () => {
+		it("returns article and perush slugs for the given perek", async () => {
+			mockGetAllArticlePerekIdPairs.mockResolvedValue([
+				{ articleId: 42, perekId: 5 },
+				{ articleId: 43, perekId: 5 },
+				{ articleId: 100, perekId: 6 },
+			]);
+			mockGetAllPerushPerekNamePairs.mockResolvedValue([
+				{ perekId: 5, perushName: "רש״י" },
+				{ perekId: 6, perushName: "רמב״ן" },
+			]);
+
 			const result = await generateStaticParams({
 				params: { number: "5" },
 			});
 
-			expect(result).toEqual([]);
+			expect(result).toEqual([
+				{ slug: "42" },
+				{ slug: "43" },
+				{ slug: "רש״י" },
+			]);
 		});
 	});
 

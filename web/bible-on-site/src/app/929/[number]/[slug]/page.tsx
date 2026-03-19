@@ -10,11 +10,12 @@ import {
 	getPerekIdsForSefer,
 	getSeferByName,
 } from "../../../../data/sefer-dto";
-import { getArticleById, getArticleSummariesByPerekId } from "../../../../lib/articles";
+import { getArticleById, getArticleSummariesByPerekId, getAllArticlePerekIdPairs } from "../../../../lib/articles";
 import { authorNameToSlug } from "../../../../lib/authors";
 import {
 	getPerushDetail,
 	getPerushimByPerekId,
+	getAllPerushPerekNamePairs,
 } from "../../../../lib/perushim";
 import { ArticlesSection } from "../components/ArticlesSection";
 import Breadcrumb from "../components/Breadcrumb";
@@ -27,22 +28,44 @@ import styles from "./page.module.css";
 import { ScrollToSlug } from "./ScrollToArticle";
 
 /**
- * Bulk caches, populated once and shared across all 929 invocations.
- * Next.js calls generateStaticParams once per parent param, but multiple
- * workers can run in parallel. Using a module-level promise ensures
- * exactly one bulk query per process and avoids "Too many connections".
- *
- * Returns an empty array so pages are not pre-rendered at build time
- * but are generated on first request (ISR). This avoids ~15GB build output
- * and 60-second page-render timeouts inside the Docker builder.
- * Once a page is requested, Next.js caches it as static HTML for
- * subsequent visitors — effectively "lazy SSG."
+ * Module-level caches for bulk queries, shared across all 929 parent
+ * invocations within the same build worker. Ensures exactly one DB
+ * round-trip per query type regardless of parallelism.
  */
+let articlePairsPromise: Promise<{ articleId: number; perekId: number }[]> | null = null;
+let perushPairsPromise: Promise<{ perekId: number; perushName: string }[]> | null = null;
+
 /* istanbul ignore next: only runs during next build */
-export async function generateStaticParams(
-	_params: { params: { number: string } },
-) {
-	return [];
+export async function generateStaticParams({
+	params,
+}: { params: { number: string } }) {
+	const perekId = Number.parseInt(params.number, 10);
+
+	if (!articlePairsPromise) {
+		articlePairsPromise = getAllArticlePerekIdPairs();
+	}
+	if (!perushPairsPromise) {
+		perushPairsPromise = getAllPerushPerekNamePairs();
+	}
+
+	const [articlePairs, perushPairs] = await Promise.all([
+		articlePairsPromise,
+		perushPairsPromise,
+	]);
+
+	const slugs: { slug: string }[] = [];
+	for (const pair of articlePairs) {
+		if (pair.perekId === perekId) {
+			slugs.push({ slug: String(pair.articleId) });
+		}
+	}
+	for (const pair of perushPairs) {
+		if (pair.perekId === perekId) {
+			slugs.push({ slug: pair.perushName });
+		}
+	}
+
+	return slugs;
 }
 
 /**

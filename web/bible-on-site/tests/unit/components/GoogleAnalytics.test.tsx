@@ -83,7 +83,7 @@ describe("GoogleAnalytics", () => {
 				const script = getByTestId("google-analytics").textContent ?? "";
 				const regexMatch = script.match(/\/([^/]+)\/i\.test/);
 				expect(regexMatch).toBeTruthy();
-				const regex = new RegExp(regexMatch![1], "i");
+				const regex = new RegExp(regexMatch?.[1], "i");
 				expect(regex.test(botName)).toBe(true);
 			});
 
@@ -92,7 +92,7 @@ describe("GoogleAnalytics", () => {
 				const { getByTestId } = renderResult(result);
 				const script = getByTestId("google-analytics").textContent ?? "";
 				const regexMatch = script.match(/\/([^/]+)\/i\.test/);
-				const regex = new RegExp(regexMatch![1], "i");
+				const regex = new RegExp(regexMatch?.[1], "i");
 				expect(
 					regex.test(
 						"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
