@@ -187,7 +187,8 @@ describe("articles service", () => {
 
 			expect(result).toEqual([]);
 			expect(console.warn).toHaveBeenCalledWith(
-				"Failed to fetch article summaries for perek 1:",
+				"Failed to fetch article summaries for perek %d:",
+				1,
 				"DB error",
 			);
 		});

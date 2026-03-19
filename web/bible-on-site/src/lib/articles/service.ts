@@ -96,7 +96,8 @@ export async function getArticleSummariesByPerekId(
 		}));
 	} catch (error) {
 		console.warn(
-			`Failed to fetch article summaries for perek ${perekId}:`,
+			"Failed to fetch article summaries for perek %d:",
+			perekId,
 			error instanceof Error ? error.message : error,
 		);
 		return [];
