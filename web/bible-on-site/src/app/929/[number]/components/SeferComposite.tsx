@@ -10,8 +10,7 @@ import {
 
 import type { PerekObj } from "@/data/perek-dto";
 import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
-import type { Article } from "@/lib/articles";
-import type { PerushSummary } from "@/lib/perushim";
+import type { ArticleSummary } from "@/lib/articles";
 import ReadModeToggler from "./ReadModeToggler";
 import styles from "./sefer-composite.module.css";
 
@@ -24,11 +23,8 @@ const Sefer = dynamic(() => import("./Sefer"), { ssr: false });
 
 const ClientWrapper = (props: {
 	perekObj: PerekObj;
-	articles: Article[];
-	articlesByPerekIndex?: Article[][];
-	perushimByPerekIndex?: PerushSummary[][];
+	articles: ArticleSummary[];
 	perekIds?: number[];
-	/** When set, the book view will auto-expand this article/perush on the current perek page */
 	initialSlug?: string;
 }) => {
 	const isWideEnough = useIsWideEnough(TABLET_MIN_WIDTH);
@@ -110,8 +106,6 @@ const ClientWrapper = (props: {
 				<Sefer
 					perekObj={props.perekObj}
 					articles={props.articles}
-					articlesByPerekIndex={props.articlesByPerekIndex}
-					perushimByPerekIndex={props.perushimByPerekIndex}
 					perekIds={props.perekIds}
 					initialSlug={props.initialSlug}
 				/>

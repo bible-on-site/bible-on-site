@@ -18,6 +18,20 @@ export interface Article {
 }
 
 /**
+ * Lightweight article summary for carousel display (no full content).
+ */
+export interface ArticleSummary {
+	id: number;
+	perekId: number;
+	authorId: number;
+	abstract: string | null;
+	name: string;
+	priority: number;
+	authorName: string;
+	authorImageUrl: string;
+}
+
+/**
  * Author type for article attribution
  */
 export interface Author {
