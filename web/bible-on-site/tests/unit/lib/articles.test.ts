@@ -13,7 +13,7 @@ jest.mock("../../../src/lib/authors/service", () => ({
 }));
 
 import { query } from "../../../src/lib/api-client";
-import { getAllArticlePerekIdPairs, getArticleById, getArticlesByPerekId } from "../../../src/lib/articles";
+import { getAllArticlePerekIdPairs, getArticleById, getArticlesByPerekId, getArticleSummariesByPerekId } from "../../../src/lib/articles";
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
 
@@ -133,6 +133,71 @@ describe("articles service", () => {
 			expect(sqlCall).toContain("WHERE a.perek_id = ?");
 			expect(sqlCall).toContain("ORDER BY a.priority ASC");
 			expect(sqlCall).toContain("au.name AS author_name");
+		});
+	});
+
+	describe("getArticleSummariesByPerekId", () => {
+		it("returns summaries without content field", async () => {
+			const mockRows = [
+				{
+					id: 1,
+					perek_id: 42,
+					author_id: 10,
+					abstract: "<p>Test abstract</p>",
+					name: "Test Article",
+					priority: 1,
+					author_name: "הרב ישראל",
+				},
+			];
+
+			mockQuery.mockResolvedValue(mockRows);
+
+			const result = await getArticleSummariesByPerekId(42);
+
+			expect(result).toEqual([
+				{
+					id: 1,
+					perekId: 42,
+					authorId: 10,
+					abstract: "<p>Test abstract</p>",
+					name: "Test Article",
+					priority: 1,
+					authorName: "הרב ישראל",
+					authorImageUrl: "https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/10.jpg",
+				},
+			]);
+			expect(result[0]).not.toHaveProperty("content");
+		});
+
+		it("does not select content column in SQL", async () => {
+			mockQuery.mockResolvedValue([]);
+
+			await getArticleSummariesByPerekId(1);
+
+			const sqlCall = mockQuery.mock.calls[0][0];
+			expect(sqlCall).not.toContain("a.content");
+			expect(sqlCall).toContain("a.abstract");
+			expect(sqlCall).toContain("a.name");
+		});
+
+		it("returns empty array on error", async () => {
+			mockQuery.mockRejectedValue(new Error("DB error"));
+
+			const result = await getArticleSummariesByPerekId(1);
+
+			expect(result).toEqual([]);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch article summaries for perek 1:",
+				"DB error",
+			);
+		});
+
+		it("handles non-Error rejection gracefully", async () => {
+			mockQuery.mockRejectedValue("string error");
+
+			const result = await getArticleSummariesByPerekId(1);
+
+			expect(result).toEqual([]);
 		});
 	});
 

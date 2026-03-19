@@ -105,10 +105,16 @@ export async function generateMetadata({
 		}
 
 		const descriptionSource = article.abstract || article.content;
+		let plainText = descriptionSource ?? "";
+		let prev: string;
+		do {
+			prev = plainText;
+			plainText = plainText.replace(/<[^>]*>/g, "");
+		} while (plainText !== prev);
 		return {
 			title: `${article.name} | ${article.authorName} | תנ״ך באתר`,
-			description: descriptionSource
-				? descriptionSource.replace(/<[^>]*>/g, "").slice(0, 160)
+			description: plainText
+				? plainText.slice(0, 160)
 				: `מאמר מאת ${article.authorName}`,
 		};
 	}
