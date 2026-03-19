@@ -66,9 +66,13 @@ jest.mock("@/app/929/[number]/components/sefer.module.css", () =>
 
 const mockDownloadSefer = jest.fn();
 const mockDownloadPageRanges = jest.fn();
+const mockGetArticleSummariesForPerek = jest.fn();
+const mockGetPerushimSummariesForPerek = jest.fn();
 jest.mock("@/app/929/[number]/actions", () => ({
 	downloadSefer: (...args: unknown[]) => mockDownloadSefer(...args),
 	downloadPageRanges: (...args: unknown[]) => mockDownloadPageRanges(...args),
+	getArticleSummariesForPerek: (...args: unknown[]) => mockGetArticleSummariesForPerek(...args),
+	getPerushimSummariesForPerek: (...args: unknown[]) => mockGetPerushimSummariesForPerek(...args),
 }));
 
 jest.mock("@/app/components/Bookshelf", () => ({
@@ -136,6 +140,10 @@ describe("Sefer component", () => {
 		capturedTocProps = {};
 		mockDownloadSefer.mockReset();
 		mockDownloadPageRanges.mockReset();
+		mockGetArticleSummariesForPerek.mockReset();
+		mockGetPerushimSummariesForPerek.mockReset();
+		mockGetArticleSummariesForPerek.mockResolvedValue([]);
+		mockGetPerushimSummariesForPerek.mockResolvedValue([]);
 	});
 
 	it("renders FlipBook and toolbar", () => {
@@ -202,13 +210,11 @@ describe("Sefer component", () => {
 		expect(screen.getByTestId("blank-page")).toBeInTheDocument();
 	});
 
-	it("renders with per-perek index maps", () => {
+	it("renders with perekIds and fetches data on demand", () => {
 		render(
 			<Sefer
 				perekObj={minimalPerek}
 				articles={[]}
-				articlesByPerekIndex={[[]]}
-				perushimByPerekIndex={[[]]}
 				perekIds={[1]}
 			/>,
 		);

@@ -1,12 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
-import type { Article } from "@/lib/articles";
+import type { ArticleSummary } from "@/lib/articles";
 import styles from "./articles-section.module.css";
 
 interface ArticlesSectionProps {
-	articles?: Article[] | null;
+	articles?: ArticleSummary[] | null;
 	/** When set, clicking an article calls this instead of navigating (e.g. open in-place in flipbook). */
-	onArticleClick?: (article: Article) => void;
+	onArticleClick?: (article: ArticleSummary) => void;
 	/** When true, show loading state (e.g. fetching article for in-place view). */
 	loading?: boolean;
 }
