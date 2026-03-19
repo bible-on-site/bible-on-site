@@ -137,9 +137,7 @@ export async function getAllArticlePerekIdPairs(): Promise<ArticlePerekPair[]> {
  * Used by generateStaticParams for bulk fetching in a single query.
  */
 /* istanbul ignore next -- bulk query kept for future SSG use */
-export async function getAllArticleIdsByPerek(): Promise<
-	Map<number, number[]>
-> {
+export async function getAllArticleIdsByPerek(): Promise<Map<number, number[]>> {
 	try {
 		const rows = await query<{ id: number; perek_id: number }>(
 			`SELECT id, perek_id FROM tanah_article ORDER BY perek_id ASC, id ASC`,

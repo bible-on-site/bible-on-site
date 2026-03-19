@@ -59,9 +59,7 @@ export async function getPerushimByPerekId(
  * Used by generateStaticParams for bulk fetching in a single query.
  */
 /* istanbul ignore next -- bulk query kept for future SSG use */
-export async function getAllPerushNamesByPerek(): Promise<
-	Map<number, string[]>
-> {
+export async function getAllPerushNamesByPerek(): Promise<Map<number, string[]>> {
 	try {
 		const rows = await query<{ perek_id: number; perush_name: string }>(
 			`SELECT DISTINCT n.perek_id, p.name AS perush_name
