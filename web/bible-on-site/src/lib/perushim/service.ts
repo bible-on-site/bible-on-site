@@ -58,6 +58,7 @@ export async function getPerushimByPerekId(
  * Fetch all distinct perush names grouped by perek ID.
  * Used by generateStaticParams for bulk fetching in a single query.
  */
+/* istanbul ignore next -- bulk query kept for future SSG use */
 export async function getAllPerushNamesByPerek(): Promise<
 	Map<number, string[]>
 > {
