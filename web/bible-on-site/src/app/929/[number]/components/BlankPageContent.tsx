@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Article } from "@/lib/articles";
+import type { Article, ArticleSummary } from "@/lib/articles";
 import type { PerushDetail, PerushSummary } from "@/lib/perushim";
 import { getArticleForBook, getPerushNotesForPage } from "../actions";
 import { ArticleFullView } from "./ArticleFullView";
@@ -11,7 +11,7 @@ import { PerushimSection } from "./PerushimSection";
 import styles from "./sefer.module.css";
 
 interface BlankPageContentProps {
-	articles: Article[];
+	articles: ArticleSummary[];
 	perushim?: PerushSummary[];
 	perekId?: number;
 	hebrewDateStr: string;
@@ -40,7 +40,7 @@ export function BlankPageContent({
 	const initialSlugHandled = useRef(false);
 
 	const handleArticleClick = useCallback(
-		async (article: Article) => {
+		async (article: ArticleSummary) => {
 			setArticleLoading(true);
 			try {
 				const full = await getArticleForBook(article.id);

@@ -1,14 +1,14 @@
 "use server";
 
-import type { Article } from "@/lib/articles";
-import { getArticleById } from "@/lib/articles";
+import type { Article, ArticleSummary } from "@/lib/articles";
+import { getArticleById, getArticleSummariesByPerekId } from "@/lib/articles";
 import {
 	getPageRangesDownloadHandler,
 	getSeferDownloadHandler,
 } from "@/lib/download/handlers";
 import type { SemanticPageInfo } from "@/lib/download/types";
-import type { PerushNote } from "@/lib/perushim";
-import { getPerushNotes } from "@/lib/perushim";
+import type { PerushNote, PerushSummary } from "@/lib/perushim";
+import { getPerushNotes, getPerushimByPerekId } from "@/lib/perushim";
 
 /**
  * Fetch a single article by ID for in-book display (e.g. flipbook blank page).
@@ -28,6 +28,24 @@ export async function getPerushNotesForPage(
 	perekId: number,
 ): Promise<PerushNote[]> {
 	return getPerushNotes(perushId, perekId);
+}
+
+/**
+ * Fetch article summaries for a perek (no full content) for book view carousel.
+ */
+export async function getArticleSummariesForPerek(
+	perekId: number,
+): Promise<ArticleSummary[]> {
+	return getArticleSummariesByPerekId(perekId);
+}
+
+/**
+ * Fetch perushim summaries for a perek for book view carousel.
+ */
+export async function getPerushimSummariesForPerek(
+	perekId: number,
+): Promise<PerushSummary[]> {
+	return getPerushimByPerekId(perekId);
 }
 
 /** Result of a download action when a handler is implemented */
