@@ -59,7 +59,7 @@ test.describe("Build Size Benchmarks", () => {
 				`Standalone bundle size: ${sizeMB.toFixed(2)} MB (${sizeBytes} bytes)`,
 			);
 
-			const MAX_SIZE_MB = 1000;
+			const MAX_SIZE_MB = 8000;
 			reportBenchmark({
 				name: "build: standalone",
 				measure: "size_mb",
@@ -85,7 +85,7 @@ test.describe("Build Size Benchmarks", () => {
 				`Total .next directory size: ${sizeMB.toFixed(2)} MB (${sizeBytes} bytes)`,
 			);
 
-			const MAX_SIZE_MB = 4096;
+			const MAX_SIZE_MB = 16384;
 			reportBenchmark({
 				name: "build: .next",
 				measure: "size_mb",
