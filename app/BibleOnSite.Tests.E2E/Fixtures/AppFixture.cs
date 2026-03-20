@@ -33,7 +33,8 @@ public class AppFixture : IAsyncLifetime
     /// <summary>
     /// Gets the main window of the application.
     /// </summary>
-    public Window MainWindow => App.GetMainWindow(Automation, TimeSpan.FromSeconds(10));
+    public Window MainWindow => App.GetMainWindow(Automation, TimeSpan.FromSeconds(10))
+        ?? throw new InvalidOperationException("Main window not found within timeout.");
 
     /// <summary>
     /// Gets the condition factory for building element queries.
