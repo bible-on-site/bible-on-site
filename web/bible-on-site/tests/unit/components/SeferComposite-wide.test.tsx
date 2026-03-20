@@ -92,8 +92,8 @@ describe("SeferComposite (wide screen)", () => {
 	it("provides a loading indicator for the dynamic Sefer import", () => {
 		render(<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		const loadingFn = (globalThis as Record<string, unknown>).__capturedDynamicLoading as (() => React.ReactElement) | null;
-		expect(loadingFn).toBeTruthy();
-		const { container } = render(loadingFn!());
+		if (!loadingFn) throw new Error("expected loadingFn to be defined");
+		const { container } = render(loadingFn());
 		expect(
 			container.querySelector('[aria-label="טוען תצוגת ספר..."]'),
 		).toBeTruthy();
