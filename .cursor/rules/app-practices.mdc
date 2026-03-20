@@ -16,7 +16,7 @@ When the user asks to run the app (e.g. "run the emulator", "run Android"), **ru
 
 **Always check the terminal output.** After running any command (build, deploy, run, tests), **read the full terminal output**. If it shows errors (e.g. "Build FAILED", "error XA…", "error CS…", non-zero exit code, "Exception", "FATAL") then **do not report success**. Report that it failed, quote or summarize the error, and fix or investigate. For background processes, read the terminal file (e.g. under `.cursor/projects/…/terminals/`) to see the actual output and exit state.
 
-**After fixing or editing app code (XAML or C#):** Run `dotnet build` from `app/BibleOnSite` (e.g. `-f net9.0-android` or `-f net9.0-windows10.0.19041.0`) and fix all errors and warnings so the build finishes with 0 errors and 0 warnings.
+**After fixing or editing app code (XAML or C#):** Run `dotnet build` from `app/BibleOnSite` (e.g. `-f net10.0-android` or `-f net10.0-windows10.0.19041.0`) and fix all errors and warnings so the build finishes with 0 errors and 0 warnings.
 
 ## Testing
 
@@ -75,10 +75,10 @@ dotnet run --project devops -- RunAndroid
 cmd //c "taskkill /F /IM dotnet.exe"
 
 # Build + Fast Deploy (from app/BibleOnSite) - ~10s for incremental changes
-dotnet build -t:Install -f net9.0-android -c Debug
+dotnet build -t:Install -f net10.0-android -c Debug
 
 # Full APK (first deploy or after wipe) - ~90s
-dotnet build -t:Install -f net9.0-android -c Debug --property:EmbedAssembliesIntoApk=true
+dotnet build -t:Install -f net10.0-android -c Debug --property:EmbedAssembliesIntoApk=true
 
 # Force stop + Launch app (ensures new code runs)
 "$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe" shell am force-stop com.tanah.daily929
@@ -142,7 +142,7 @@ Nuke RunAndroid does this automatically. For manual runs, always verify and repo
 dotnet run --project devops -- RunAndroid --full-apk
 
 # Then manually install to WiFi device (Nuke targets emulator by default)
-adb -s <device-ip:port> install -r --no-incremental bin/Debug/net9.0-android/com.tanah.daily929-Signed.apk
+adb -s <device-ip:port> install -r --no-incremental bin/Debug/net10.0-android/com.tanah.daily929-Signed.apk
 adb -s <device-ip:port> shell am force-stop com.tanah.daily929
 adb -s <device-ip:port> shell am start -n com.tanah.daily929/crc640368fd9db13d8734.MainActivity
 ```

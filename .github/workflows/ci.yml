@@ -1376,7 +1376,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "9.0.x"
+          dotnet-version: "10.0.x"
 
       - name: Cache NuGet packages
         uses: actions/cache@v5
@@ -1391,9 +1391,9 @@ jobs:
 
       - name: Verify Android NuGet restore
         run: |
-          echo '{"sdk":{"version":"9.0.0","rollForward":"latestFeature"}}' > $GITHUB_WORKSPACE/global.json
+          echo '{"sdk":{"version":"10.0.0","rollForward":"latestFeature"}}' > $GITHUB_WORKSPACE/global.json
           dotnet workload install maui-android --skip-manifest-update
-          dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net9.0-android
+          dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android
           rm -f $GITHUB_WORKSPACE/global.json
 
       - name: Run Unit Tests with Coverage
@@ -1516,7 +1516,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "9.0.x"
+          dotnet-version: "10.0.x"
 
       - name: Cache NuGet packages
         uses: actions/cache@v5
@@ -1554,7 +1554,7 @@ jobs:
       - name: Build iOS target
         run: |
           dotnet build BibleOnSite/BibleOnSite.csproj -c Release \
-            -p:TargetFrameworks=net9.0-ios \
+            -p:TargetFrameworks=net10.0-ios \
             -p:ErrorOnDuplicatePublishOutputFiles=false > build.log 2>&1 &
           PID=$!
           while kill -0 $PID 2>/dev/null; do
@@ -2495,7 +2495,7 @@ jobs:
         if: ${{ needs.release_app.outputs.released == 'true' }}
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "9.0.x"
+          dotnet-version: "10.0.x"
 
       - name: Restore dotnet tools (for App)
         if: ${{ needs.release_app.outputs.released == 'true' }}

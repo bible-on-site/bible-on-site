@@ -25,7 +25,7 @@ partial class Build
         {
             DotNetRestore(s => s
                 .SetProjectFile(MainProject)
-                .SetProperty("TargetFramework", "net9.0-android"));
+                .SetProperty("TargetFramework", "net10.0-android"));
         });
 
     Target RestoreWindows => _ => _
@@ -34,7 +34,7 @@ partial class Build
         {
             DotNetRestore(s => s
                 .SetProjectFile(MainProject)
-                .SetProperty("TargetFramework", "net9.0-windows10.0.19041.0"));
+                .SetProperty("TargetFramework", "net10.0-windows10.0.19041.0"));
         });
 
     Target Compile => _ => _
@@ -60,7 +60,7 @@ partial class Build
             DotNetBuild(s => s
                 .SetProjectFile(MainProject)
                 .SetConfiguration(Configuration)
-                .SetFramework("net9.0-android")
+                .SetFramework("net10.0-android")
                 .EnableNoRestore());
         });
 
@@ -72,7 +72,7 @@ partial class Build
             DotNetBuild(s => s
                 .SetProjectFile(MainProject)
                 .SetConfiguration(Configuration)
-                .SetFramework("net9.0-windows10.0.19041.0")
+                .SetFramework("net10.0-windows10.0.19041.0")
                 .SetProperty("WindowsPackageType", "None")
                 .SetProperty("WindowsAppSDKSelfContained", "true")
                 .EnableNoRestore());

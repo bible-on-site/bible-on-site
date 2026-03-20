@@ -678,7 +678,7 @@ public partial class PerekViewModel : ObservableObject
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Navigation to ArticlesPage failed: {ex}");
-            await Shell.Current.DisplayAlert("שגיאה", $"לא ניתן לטעון מאמרים: {ex.Message}", "אישור");
+            await Shell.Current.DisplayAlertAsync("שגיאה", $"לא ניתן לטעון מאמרים: {ex.Message}", "אישור");
         }
     }
 
@@ -695,7 +695,7 @@ public partial class PerekViewModel : ObservableObject
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Navigation to AuthorsPage failed: {ex}");
-            await Shell.Current.DisplayAlert("שגיאה", $"לא ניתן לטעון רבנים: {ex.Message}", "אישור");
+            await Shell.Current.DisplayAlertAsync("שגיאה", $"לא ניתן לטעון רבנים: {ex.Message}", "אישור");
         }
     }
 
@@ -720,7 +720,7 @@ public partial class PerekViewModel : ObservableObject
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Export perushim logs failed: {ex.Message}");
-            await Shell.Current.DisplayAlert("שגיאה", $"לא ניתן לייצא לוגים: {ex.Message}", "אישור");
+            await Shell.Current.DisplayAlertAsync("שגיאה", $"לא ניתן לייצא לוגים: {ex.Message}", "אישור");
         }
     }
 
