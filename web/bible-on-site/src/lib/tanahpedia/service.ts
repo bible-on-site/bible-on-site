@@ -350,6 +350,34 @@ export async function getRecentEntries(limit = 10): Promise<Entry[]> {
 	);
 }
 
+/**
+ * Get all entry unique names for SSG.
+ * This function is used by generateStaticParams to pre-render all entry pages.
+ */
+export async function getAllEntryUniqueNames(): Promise<string[]> {
+	const rows = await query<{ uniqueName: string }>(
+		"SELECT unique_name AS uniqueName FROM tanahpedia_entry ORDER BY unique_name",
+	);
+	return rows.map((row) => row.uniqueName);
+}
+
+/**
+ * Get all entity type params for SSG.
+ * Note: Next.js generateStaticParams only supports path params, not search params.
+ * Subcategories (role, kind, purity) are handled via search params at runtime,
+ * so we only generate static params for base entity types here.
+ */
+export async function getAllEntityTypeParams(): Promise<
+	Array<{ entityType: string }>
+> {
+	// Return all base entity types
+	// Subcategories (person?role=prophet, animal?kind=behema, etc.) are handled
+	// via search params at runtime, not in generateStaticParams
+	return ENTITY_TYPES.map((entityType) => ({
+		entityType: entityType.toLowerCase(),
+	}));
+}
+
 // ─── Today in Tanah ─────────────────────────────────────────
 // Returns events whose start_date Hebrew month+day matches the given month+day.
 

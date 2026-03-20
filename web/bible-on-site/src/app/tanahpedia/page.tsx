@@ -15,6 +15,7 @@ export const metadata: Metadata = {
 	description: 'אנציקלופדיה לתנ"ך - אישים, מקומות, אירועים ועוד',
 };
 
+// SSG: This page is statically generated at build time
 export const revalidate = 3600;
 
 interface CategoryItem {

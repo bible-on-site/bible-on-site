@@ -5,6 +5,7 @@ import {
 	CATEGORY_LABELS,
 	ENTITY_TYPE_LABELS,
 	ENTITY_TYPES,
+	getAllEntityTypeParams,
 	getAnimalsByClassification,
 	getCategoryHomepage,
 	getEntitiesWithEntries,
@@ -17,8 +18,21 @@ import type {
 	EntityType,
 	PersonRole,
 } from "@/lib/tanahpedia/types";
+import { TanahpediaBreadcrumb } from "../components/TanahpediaBreadcrumb";
 import { EntityListItem } from "../components/EntityListItem";
 import styles from "../page.module.css";
+
+// this reserverd function is a magic for caching
+/* istanbul ignore next: only runs during next build */
+export async function generateStaticParams() {
+	try {
+		const params = await getAllEntityTypeParams();
+		return params;
+	} catch {
+		// If database is unavailable during build, return base entity types only
+		return ENTITY_TYPES.map((et) => ({ entityType: et.toLowerCase() }));
+	}
+}
 
 const VALID_ROLES: PersonRole[] = ["PROPHET", "KING"];
 const VALID_ANIMAL_KINDS: AnimalKind[] = ["BEHEMA", "CHAYA", "OF", "SHERETZ"];
@@ -138,29 +152,11 @@ export default async function EntityTypePage({
 	}
 
 	const label = sub ? sub.label : ENTITY_TYPE_LABELS[entityType];
+	const currentCategory = sub ? sub.key : (entityType as CategoryKey);
 
 	return (
 		<div className={styles.tanahpediaPage}>
-			<nav className={styles.breadcrumb}>
-				<Link href="/tanahpedia" className={styles.breadcrumbLink}>
-					תנכפדיה
-				</Link>
-				{" > "}
-				{sub ? (
-					<>
-						<Link
-							href={`/tanahpedia/${entityType.toLowerCase()}`}
-							className={styles.breadcrumbLink}
-						>
-							{ENTITY_TYPE_LABELS[entityType]}
-						</Link>
-						{" > "}
-						<span>{label}</span>
-					</>
-				) : (
-					<span>{label}</span>
-				)}
-			</nav>
+			<TanahpediaBreadcrumb currentCategory={currentCategory} />
 			<h1 className={styles.pageTitle}>{label}</h1>
 
 			{homepage?.content && !sub && (

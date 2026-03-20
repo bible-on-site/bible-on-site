@@ -3,10 +3,27 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
 	ENTITY_TYPE_LABELS,
+	getAllEntryUniqueNames,
 	getEntryByUniqueName,
 } from "@/lib/tanahpedia/service";
-import type { EntityType } from "@/lib/tanahpedia/types";
+import type { EntityType, CategoryKey } from "@/lib/tanahpedia/types";
+import { TanahpediaBreadcrumb } from "../../components/TanahpediaBreadcrumb";
 import styles from "../../page.module.css";
+
+// this reserverd function is a magic for caching
+/* istanbul ignore next: only runs during next build */
+export async function generateStaticParams() {
+	try {
+		const uniqueNames = await getAllEntryUniqueNames();
+		return uniqueNames.map((uniqueName) => ({
+			uniqueName: encodeURIComponent(uniqueName),
+		}));
+	} catch {
+		// If database is unavailable during build, return empty array
+		// Pages will be generated on-demand
+		return [];
+	}
+}
 
 export async function generateMetadata({
 	params,
@@ -40,15 +57,17 @@ export default async function EntryPage({
 	}
 	if (!entry) notFound();
 
+	// Get the primary entity type for breadcrumb (use first entity if available)
+	const primaryEntityType = entry.entities.length > 0
+		? (entry.entities[0].entityType as CategoryKey)
+		: null;
+
 	return (
 		<div className={styles.tanahpediaPage}>
-			<nav className={styles.breadcrumb}>
-				<Link href="/tanahpedia" className={styles.breadcrumbLink}>
-					תנכפדיה
-				</Link>
-				{" > "}
-				<span>{entry.title}</span>
-			</nav>
+			<TanahpediaBreadcrumb
+				currentCategory={primaryEntityType}
+				currentEntryTitle={entry.title}
+			/>
 			<h1 className={styles.pageTitle}>{entry.title}</h1>
 
 			{entry.entities.length > 0 && (
