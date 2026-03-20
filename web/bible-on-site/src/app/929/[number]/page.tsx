@@ -72,6 +72,7 @@ export default async function Perek({
 				<SeferComposite
 					perekObj={perekObj}
 					articles={articles}
+					perushim={perushim}
 					perekIds={perekIds}
 				/>
 			</Suspense>

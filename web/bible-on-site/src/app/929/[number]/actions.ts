@@ -48,6 +48,31 @@ export async function getPerushimSummariesForPerek(
 	return getPerushimByPerekId(perekId);
 }
 
+/** Summaries for a single perek (articles + perushim metadata). */
+export interface PerekSummaries {
+	articles: ArticleSummary[];
+	perushim: PerushSummary[];
+}
+
+/**
+ * Batch-fetch article and perushim summaries for multiple perakim in one call.
+ * Returns a record keyed by perekId (as string, for serialization).
+ */
+export async function getPerekSummariesBatch(
+	perekIds: number[],
+): Promise<Record<string, PerekSummaries>> {
+	const entries = await Promise.all(
+		perekIds.map(async (id) => {
+			const [articles, perushim] = await Promise.all([
+				getArticleSummariesByPerekId(id),
+				getPerushimByPerekId(id),
+			]);
+			return [String(id), { articles, perushim }] as const;
+		}),
+	);
+	return Object.fromEntries(entries);
+}
+
 /** Result of a download action when a handler is implemented */
 export interface DownloadActionResult {
 	ext: string;

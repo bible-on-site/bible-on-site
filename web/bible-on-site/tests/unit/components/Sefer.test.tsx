@@ -66,13 +66,9 @@ jest.mock("@/app/929/[number]/components/sefer.module.css", () =>
 
 const mockDownloadSefer = jest.fn();
 const mockDownloadPageRanges = jest.fn();
-const mockGetArticleSummariesForPerek = jest.fn();
-const mockGetPerushimSummariesForPerek = jest.fn();
 jest.mock("@/app/929/[number]/actions", () => ({
 	downloadSefer: (...args: unknown[]) => mockDownloadSefer(...args),
 	downloadPageRanges: (...args: unknown[]) => mockDownloadPageRanges(...args),
-	getArticleSummariesForPerek: (...args: unknown[]) => mockGetArticleSummariesForPerek(...args),
-	getPerushimSummariesForPerek: (...args: unknown[]) => mockGetPerushimSummariesForPerek(...args),
 }));
 
 jest.mock("@/app/components/Bookshelf", () => ({
@@ -160,20 +156,16 @@ describe("Sefer component", () => {
 		capturedTocProps = {};
 		mockDownloadSefer.mockReset();
 		mockDownloadPageRanges.mockReset();
-		mockGetArticleSummariesForPerek.mockReset();
-		mockGetPerushimSummariesForPerek.mockReset();
-		mockGetArticleSummariesForPerek.mockResolvedValue([]);
-		mockGetPerushimSummariesForPerek.mockResolvedValue([]);
 	});
 
 	it("renders FlipBook and toolbar", () => {
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		expect(screen.getByTestId("mock-flipbook")).toBeInTheDocument();
 		expect(screen.getByTestId("mock-toc")).toBeInTheDocument();
 	});
 
 	it("opens and closes bookshelf modal via toolbar button", () => {
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		expect(screen.queryByTestId("mock-modal")).toBeNull();
 
 		fireEvent.click(screen.getByLabelText("ספרי התנ״ך"));
@@ -184,7 +176,7 @@ describe("Sefer component", () => {
 	});
 
 	it("onNavigate calls jumpToPage on flipBookRef", () => {
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		const onNavigate = capturedTocProps.onNavigate as (idx: number) => void;
 		expect(onNavigate).toBeDefined();
 		// flipBookRef.current is null in test, so optional chaining means no-op
@@ -192,7 +184,7 @@ describe("Sefer component", () => {
 	});
 
 	it("TocPage filter excludes cover pages and empty titles", () => {
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		const filter = capturedTocProps.filter as (entry: { pageIndex: number; title: string }) => boolean;
 		expect(filter).toBeDefined();
 		expect(filter({ pageIndex: 0, title: "cover" })).toBe(false);
@@ -202,7 +194,7 @@ describe("Sefer component", () => {
 
 	it("onDownloadSefer wraps result from server action", async () => {
 		mockDownloadSefer.mockResolvedValue({ ext: "pdf", data: "base64data" });
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		const config = capturedFlipBookProps.downloadConfig as {
 			onDownloadSefer: () => Promise<unknown>;
 			onDownloadPageRange: (...args: unknown[]) => Promise<unknown>;
@@ -213,7 +205,7 @@ describe("Sefer component", () => {
 
 	it("onDownloadSefer returns null on error", async () => {
 		mockDownloadSefer.mockResolvedValue({ error: "not_implemented" });
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		const config = capturedFlipBookProps.downloadConfig as {
 			onDownloadSefer: () => Promise<unknown>;
 		};
@@ -222,7 +214,7 @@ describe("Sefer component", () => {
 
 	it("onDownloadPageRange wraps result from server action", async () => {
 		mockDownloadPageRanges.mockResolvedValue({ ext: "zip", data: "zipdata" });
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		const config = capturedFlipBookProps.downloadConfig as {
 			onDownloadPageRange: (...args: unknown[]) => Promise<unknown>;
 		};
@@ -235,45 +227,20 @@ describe("Sefer component", () => {
 	});
 
 	it("renders without optional per-perek props (covers ?? fallbacks)", () => {
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		expect(screen.getByTestId("blank-page")).toBeInTheDocument();
 	});
 
-	it("renders with perekIds and fetches data on demand", async () => {
-		const { act } = await import("react");
-		mockGetArticleSummariesForPerek.mockResolvedValue([{ id: 10, perekId: 1, authorId: 1, abstract: "a", name: "art", priority: 1, authorName: "rav", authorImageUrl: "url" }]);
-		mockGetPerushimSummariesForPerek.mockResolvedValue([{ id: 1, name: "rashi", parshanName: "rashi", noteCount: 5 }]);
-
-		await act(async () => {
-			render(
-				<Sefer
-					perekObj={minimalPerek}
-					articles={[]}
-					perekIds={[1]}
-				/>,
-			);
-		});
-		expect(mockGetArticleSummariesForPerek).toHaveBeenCalledWith(1);
-		expect(mockGetPerushimSummariesForPerek).toHaveBeenCalledWith(1);
-	});
-
-	it("does not re-fetch the same perek index", async () => {
-		const { act } = await import("react");
-		mockGetArticleSummariesForPerek.mockResolvedValue([]);
-		mockGetPerushimSummariesForPerek.mockResolvedValue([]);
-
-		const { unmount } = await act(async () =>
-			render(
-				<Sefer
-					perekObj={minimalPerek}
-					articles={[]}
-					perekIds={[1]}
-				/>,
-			),
+	it("renders with perekIds and passes SSG data for current perek only", async () => {
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1]}
+			/>,
 		);
-		expect(mockGetArticleSummariesForPerek).toHaveBeenCalledTimes(1);
-
-		unmount();
+		expect(screen.getByTestId("blank-page")).toBeInTheDocument();
 	});
 
 	it("renders maqaf-ending segments without trailing space", () => {
@@ -286,7 +253,7 @@ describe("Sefer component", () => {
 				],
 			}],
 		};
-		render(<Sefer perekObj={perekWithMaqaf} articles={[]} />);
+		render(<Sefer perekObj={perekWithMaqaf} articles={[]} perushim={[]} />);
 		expect(screen.getByTestId("mock-flipbook")).toBeInTheDocument();
 	});
 
@@ -298,7 +265,7 @@ describe("Sefer component", () => {
 			],
 		});
 
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		expect(screen.getByTestId("mock-flipbook")).toBeInTheDocument();
 	});
 });
