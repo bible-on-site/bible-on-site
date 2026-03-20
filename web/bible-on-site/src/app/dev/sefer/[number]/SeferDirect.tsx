@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import type { PerekObj } from "@/data/perek-dto";
 import type { ArticleSummary } from "@/lib/articles";
+import type { PerushSummary } from "@/lib/perushim";
 
 const Sefer = dynamic(() => import("@/app/929/[number]/components/Sefer"), {
 	ssr: false,
@@ -15,6 +16,7 @@ const Sefer = dynamic(() => import("@/app/929/[number]/components/Sefer"), {
 export default function SeferDirect(props: {
 	perekObj: PerekObj;
 	articles: ArticleSummary[];
+	perushim: PerushSummary[];
 	perekIds?: number[];
 }) {
 	return (
@@ -32,6 +34,7 @@ export default function SeferDirect(props: {
 			<Sefer
 				perekObj={props.perekObj}
 				articles={props.articles}
+				perushim={props.perushim}
 				perekIds={props.perekIds}
 			/>
 		</div>
