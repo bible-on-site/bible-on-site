@@ -22,13 +22,13 @@ import {
 	Toolbar,
 } from "html-flip-book-react/toolbar";
 import dynamic from "next/dynamic";
-import React, { useCallback, useMemo, useRef, useState } from "react";
-import { downloadPageRanges, downloadSefer } from "@/app/929/[number]/actions";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type PerekSummaries, downloadPageRanges, downloadSefer, getPerekSummariesBatch } from "@/app/929/[number]/actions";
 import { BookshelfModal } from "@/app/components/Bookshelf";
 import type { PerekObj } from "@/data/perek-dto";
 import { getSeferColor } from "@/data/sefer-colors";
 import { getSeferByName } from "@/data/sefer-dto";
-import type { Article } from "@/lib/articles";
+import type { ArticleSummary } from "@/lib/articles";
 import type { PerushSummary } from "@/lib/perushim";
 import { buildEntityRefLookup } from "@/lib/tanahpedia/entity-ref-lookup";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
@@ -85,14 +85,13 @@ const FlipBook = dynamic<
 
 const Sefer = (props: {
 	perekObj: PerekObj;
-	articles: Article[];
-	articlesByPerekIndex?: Article[][];
-	perushimByPerekIndex?: PerushSummary[][];
+	articles: ArticleSummary[];
+	perushim: PerushSummary[];
 	perekIds?: number[];
 	entityRefsByPerek?: Record<number, PerekEntityReference[]>;
 	initialSlug?: string;
 }) => {
-	const { perekObj, articles, articlesByPerekIndex, perushimByPerekIndex, perekIds, entityRefsByPerek, initialSlug } = props;
+	const { perekObj, articles, perushim, perekIds, entityRefsByPerek, initialSlug } = props;
 	const sefer = getSeferByName(perekObj.sefer);
 	const flipBookRef = useRef<FlipBookHandle>(null);
 	const bookWrapperRef = useRef<HTMLDivElement>(null);
@@ -173,6 +172,21 @@ const Sefer = (props: {
 		[],
 	);
 
+	// Index of the current perek within the sefer, used to map SSG-provided data
+	const currentPerekIdx = useMemo(
+		() => perekIds?.indexOf(perekObj.perekId) ?? -1,
+		[perekIds, perekObj.perekId],
+	);
+
+	// One-time batch fetch of article/perushim summaries for all perakim
+	// except the current one (which has SSG data). Keyed by perekId string.
+	const [batchSummaries, setBatchSummaries] = useState<Record<string, PerekSummaries>>({});
+	useEffect(() => {
+		const idsToFetch = perekIds?.filter((id) => id !== perekObj.perekId) ?? [];
+		if (idsToFetch.length === 0) return;
+		getPerekSummariesBatch(idsToFetch).then(setBatchSummaries).catch(() => {});
+	}, [perekIds, perekObj.perekId]);
+
 	const contentPages = perakim.flatMap((perek, perekIdx) => [
 		<React.Fragment key={`perek-${perekIdx + 1}`}>
 			<section className={styles.pageContentPage}>
@@ -230,8 +244,8 @@ const Sefer = (props: {
 		</React.Fragment>,
 	<React.Fragment key={`blank-${perekIdx + 1}`}>
 		<BlankPageContent
-			articles={articlesByPerekIndex?.[perekIdx] ?? articles}
-			perushim={perushimByPerekIndex?.[perekIdx] ?? []}
+			articles={perekIdx === currentPerekIdx ? articles : batchSummaries[String(perekIds?.[perekIdx] ?? 0)]?.articles}
+			perushim={perekIdx === currentPerekIdx ? perushim : batchSummaries[String(perekIds?.[perekIdx] ?? 0)]?.perushim}
 			perekId={perekIds?.[perekIdx] ?? 0}
 			hebrewDateStr={hebrewDateStr}
 			initialSlug={perekIds?.[perekIdx] === perekObj.perekId ? initialSlug : undefined}

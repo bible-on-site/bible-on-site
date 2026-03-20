@@ -5,7 +5,7 @@ import { unstable_cache } from "next/cache";
 import React, { Suspense } from "react";
 import { getPerekByPerekId } from "../../../data/perek-dto";
 import { getSeferByName, getPerekIdsForSefer } from "../../../data/sefer-dto";
-import { getArticlesByPerekId } from "../../../lib/articles";
+import { getArticleSummariesByPerekId } from "../../../lib/articles";
 import { getPerushimByPerekId } from "../../../lib/perushim";
 import { buildEntityRefLookup } from "../../../lib/tanahpedia/entity-ref-lookup";
 import type { PerekEntityReference } from "../../../lib/tanahpedia/service";
@@ -22,15 +22,8 @@ import styles from "./page.module.css";
 // perakim are a closed list — no fallback rendering for unknown IDs.
 export const dynamicParams = false;
 
-// this reserverd function is a magic for caching
-/* istanbul ignore next: only runs during next build */
-export function generateStaticParams() {
-	// Return an array of objects with the key "number" as a string
-	return Array.from({ length: 929 }, (_, i) => ({ number: String(i + 1) }));
-}
-
 /**
- * Cache articles with on-demand revalidation support.
+ * Cache article summaries (no full content) with on-demand revalidation support.
  *
  * IMPORTANT: We use on-demand revalidation only (no periodic/time-based revalidation).
  * Periodic revalidation should be avoided because:
@@ -43,12 +36,12 @@ export function generateStaticParams() {
  * - Single page: revalidatePath('/929/{perekId}')
  * - All articles: revalidateTag('articles')
  */
-const getCachedArticles = unstable_cache(
-	async (perekId: number) => getArticlesByPerekId(perekId),
-	["articles"],
+const getCachedArticleSummaries = unstable_cache(
+	async (perekId: number) => getArticleSummariesByPerekId(perekId),
+	["article-summaries"],
 	{
 		tags: ["articles"],
-		revalidate: false, // No periodic revalidation - on-demand only
+		revalidate: false,
 	},
 );
 
@@ -101,15 +94,8 @@ export default async function Perek({
 	const perekObj = getPerekByPerekId(perekId);
 	const sefer = getSeferByName(perekObj.sefer);
 	const perekIds = getPerekIdsForSefer(sefer);
-	// Fetch articles and perushim for every perek in the sefer so each blank page shows the correct data
-	const articlesByPerekIndex = await Promise.all(
-		perekIds.map((id) => getCachedArticles(id)),
-	);
-	const perushimByPerekIndex = await Promise.all(
-		perekIds.map((id) => getCachedPerushim(id)),
-	);
-	const articles = await getCachedArticles(perekId);
-	const perushim = await getPerushimByPerekId(perekId);
+	const articles = await getCachedArticleSummaries(perekId);
+	const perushim = await getCachedPerushim(perekId);
 	const entityRefsByPerek = await fetchAllEntityRefs(perekIds);
 	const entityRefLookup = buildEntityRefLookup(entityRefsByPerek[perekId] ?? []);
 
@@ -119,8 +105,7 @@ export default async function Perek({
 				<SeferComposite
 					perekObj={perekObj}
 					articles={articles}
-					articlesByPerekIndex={articlesByPerekIndex}
-					perushimByPerekIndex={perushimByPerekIndex}
+					perushim={perushim}
 					perekIds={perekIds}
 					entityRefsByPerek={entityRefsByPerek}
 				/>

@@ -158,6 +158,24 @@ test.describe("Route Rendering Modes", () => {
 				upperValue: 929,
 			});
 		});
+
+		test("commentary pages (slug routes) are prerendered at build (SSG)", () => {
+			const commentaryRoutes = Object.keys(manifest.routes).filter(
+				(route) => /^\/929\/\d+\/[^/]+$/.test(route),
+			);
+
+			expect(
+				commentaryRoutes.length,
+				"Commentary pages (/929/[number]/[slug]) should be fully SSG. " +
+					"If zero routes appear here, generateStaticParams may have been reverted to return [].",
+			).toBeGreaterThan(0);
+
+			reportBenchmark({
+				name: "routes: SSG commentary",
+				measure: "count",
+				value: commentaryRoutes.length,
+			});
+		});
 	});
 
 	test.describe("Dynamic route patterns exist", () => {
@@ -214,8 +232,8 @@ test.describe("Route Rendering Modes", () => {
 				value: totalDynamic,
 			});
 
-			// Sanity: we should have at least 929 perakim + 7 sections + a few more
-			expect(totalRoutes).toBeGreaterThan(936);
+			// Sanity: 929 perakim + 7 sections + commentary pages + a few more
+			expect(totalRoutes).toBeGreaterThan(2000);
 		});
 	});
 });

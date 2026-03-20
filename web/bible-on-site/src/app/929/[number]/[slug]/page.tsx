@@ -10,11 +10,12 @@ import {
 	getPerekIdsForSefer,
 	getSeferByName,
 } from "../../../../data/sefer-dto";
-import { getArticleById, getArticlesByPerekId } from "../../../../lib/articles";
+import { getArticleById, getArticleSummariesByPerekId, getAllArticlePerekIdPairs } from "../../../../lib/articles";
 import { authorNameToSlug } from "../../../../lib/authors";
 import {
 	getPerushDetail,
 	getPerushimByPerekId,
+	getAllPerushPerekNamePairs,
 } from "../../../../lib/perushim";
 import { ArticlesSection } from "../components/ArticlesSection";
 import Breadcrumb from "../components/Breadcrumb";
@@ -27,22 +28,44 @@ import styles from "./page.module.css";
 import { ScrollToSlug } from "./ScrollToArticle";
 
 /**
- * Generate static params for known articles and perushim at build time.
+ * Module-level caches for bulk queries, shared across all 929 parent
+ * invocations within the same build worker. Ensures exactly one DB
+ * round-trip per query type regardless of parallelism.
  */
+let articlePairsPromise: Promise<{ articleId: number; perekId: number }[]> | null = null;
+let perushPairsPromise: Promise<{ perekId: number; perushName: string }[]> | null = null;
+
+/* istanbul ignore next: only runs during next build */
 export async function generateStaticParams({
 	params,
-}: {
-	params: { number: string };
-}) {
+}: { params: { number: string } }) {
 	const perekId = Number.parseInt(params.number, 10);
-	const [articles, perushim] = await Promise.all([
-		getArticlesByPerekId(perekId),
-		getPerushimByPerekId(perekId),
+
+	if (!articlePairsPromise) {
+		articlePairsPromise = getAllArticlePerekIdPairs();
+	}
+	if (!perushPairsPromise) {
+		perushPairsPromise = getAllPerushPerekNamePairs();
+	}
+
+	const [articlePairs, perushPairs] = await Promise.all([
+		articlePairsPromise,
+		perushPairsPromise,
 	]);
-	return [
-		...articles.map((article) => ({ slug: String(article.id) })),
-		...perushim.map((perush) => ({ slug: perush.name })),
-	];
+
+	const slugs: { slug: string }[] = [];
+	for (const pair of articlePairs) {
+		if (pair.perekId === perekId) {
+			slugs.push({ slug: String(pair.articleId) });
+		}
+	}
+	for (const pair of perushPairs) {
+		if (pair.perekId === perekId) {
+			slugs.push({ slug: pair.perushName });
+		}
+	}
+
+	return slugs;
 }
 
 /**
@@ -58,8 +81,8 @@ const getCachedArticle = unstable_cache(
 );
 
 const getCachedArticles = unstable_cache(
-	async (perekId: number) => getArticlesByPerekId(perekId),
-	["articles"],
+	async (perekId: number) => getArticleSummariesByPerekId(perekId),
+	["article-summaries"],
 	{
 		tags: ["articles"],
 		revalidate: false,
@@ -105,10 +128,16 @@ export async function generateMetadata({
 		}
 
 		const descriptionSource = article.abstract || article.content;
+		let plainText = descriptionSource ?? "";
+		let prev: string;
+		do {
+			prev = plainText;
+			plainText = plainText.replace(/<[^>]*>/g, "");
+		} while (plainText !== prev);
 		return {
 			title: `${article.name} | ${article.authorName} | תנ״ך באתר`,
-			description: descriptionSource
-				? descriptionSource.replace(/<[^>]*>/g, "").slice(0, 160)
+			description: plainText
+				? plainText.slice(0, 160)
 				: `מאמר מאת ${article.authorName}`,
 		};
 	}
@@ -155,12 +184,6 @@ export default async function ArticlePage({
 
 	const sefer = getSeferByName(perekObj.sefer);
 	const perekIds = getPerekIdsForSefer(sefer);
-	const articlesByPerekIndex = await Promise.all(
-		perekIds.map((pid) => getCachedArticles(pid)),
-	);
-	const perushimByPerekIndex = await Promise.all(
-		perekIds.map((pid) => getCachedPerushim(pid)),
-	);
 
 	if (isArticle) {
 		// Handle article view
@@ -177,8 +200,7 @@ export default async function ArticlePage({
 					<SeferComposite
 						perekObj={perekObj}
 						articles={articles}
-						articlesByPerekIndex={articlesByPerekIndex}
-						perushimByPerekIndex={perushimByPerekIndex}
+						perushim={perushim}
 						perekIds={perekIds}
 						initialSlug={slug}
 					/>
@@ -307,7 +329,8 @@ export default async function ArticlePage({
 				<SeferComposite
 					perekObj={perekObj}
 					articles={articles}
-					articlesByPerekIndex={articlesByPerekIndex}
+					perushim={perushim}
+					perekIds={perekIds}
 					initialSlug={slug}
 				/>
 			</Suspense>

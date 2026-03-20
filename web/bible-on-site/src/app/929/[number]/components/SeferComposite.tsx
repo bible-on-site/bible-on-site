@@ -10,7 +10,7 @@ import {
 
 import type { PerekObj } from "@/data/perek-dto";
 import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
-import type { Article } from "@/lib/articles";
+import type { ArticleSummary } from "@/lib/articles";
 import type { PerushSummary } from "@/lib/perushim";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import ReadModeToggler from "./ReadModeToggler";
@@ -21,13 +21,27 @@ import styles from "./sefer-composite.module.css";
 // chunk is fetched asynchronously, which keeps the interaction-to-next-paint
 // well below 200 ms because the browser only needs to paint the light
 // overlay — not mount the entire FlipBook tree — in the same frame.
-const Sefer = dynamic(() => import("./Sefer"), { ssr: false });
+const Sefer = dynamic(() => import("./Sefer"), {
+	ssr: false,
+	loading: () => (
+		<output className={styles.loadingContainer} aria-label="טוען תצוגת ספר...">
+			<div className={styles.loadingSpinner} />
+		</output>
+	),
+});
+
+function SeferLoadingIndicator() {
+	return (
+		<output className={styles.loadingContainer} aria-label="טוען תצוגת ספר...">
+			<div className={styles.loadingSpinner} />
+		</output>
+	);
+}
 
 const ClientWrapper = (props: {
 	perekObj: PerekObj;
-	articles: Article[];
-	articlesByPerekIndex?: Article[][];
-	perushimByPerekIndex?: PerushSummary[][];
+	articles: ArticleSummary[];
+	perushim: PerushSummary[];
 	perekIds?: number[];
 	entityRefsByPerek?: Record<number, PerekEntityReference[]>;
 	/** When set, the book view will auto-expand this article/perush on the current perek page */
@@ -108,17 +122,18 @@ const ClientWrapper = (props: {
 					currentlyToggled ? styles.visible : styles.hidden
 				}`}
 			>
-			{everToggled && (
+			{everToggled ? (
 				<Sefer
 					perekObj={props.perekObj}
 					articles={props.articles}
-					articlesByPerekIndex={props.articlesByPerekIndex}
-					perushimByPerekIndex={props.perushimByPerekIndex}
+					perushim={props.perushim}
 					perekIds={props.perekIds}
 					entityRefsByPerek={props.entityRefsByPerek}
 					initialSlug={props.initialSlug}
 				/>
-			)}
+			) : currentlyToggled ? (
+				<SeferLoadingIndicator />
+			) : null}
 			</div>
 		</>
 	);

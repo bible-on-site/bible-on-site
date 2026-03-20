@@ -12,6 +12,7 @@ import {
 	getPerushDetail,
 	getPerushimByPerekId,
 	getPerushNotes,
+	getAllPerushPerekNamePairs,
 } from "../../../src/lib/perushim";
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
@@ -216,6 +217,51 @@ describe("perushim service", () => {
 				5,
 				3,
 				42,
+			);
+		});
+	});
+
+	describe("getAllPerushPerekNamePairs", () => {
+		it("returns mapped pairs from query results", async () => {
+			mockQuery.mockResolvedValue([
+				{ perek_id: 1, perush_name: "רש״י" },
+				{ perek_id: 1, perush_name: "רמב״ן" },
+				{ perek_id: 2, perush_name: "רש״י" },
+			]);
+
+			const result = await getAllPerushPerekNamePairs();
+
+			expect(result).toEqual([
+				{ perekId: 1, perushName: "רש״י" },
+				{ perekId: 1, perushName: "רמב״ן" },
+				{ perekId: 2, perushName: "רש״י" },
+			]);
+			expect(mockQuery).toHaveBeenCalledWith(
+				expect.stringContaining("SELECT DISTINCT n.perek_id"),
+			);
+		});
+
+		it("returns empty array on Error instance", async () => {
+			mockQuery.mockRejectedValue(new Error("DB error"));
+
+			const result = await getAllPerushPerekNamePairs();
+
+			expect(result).toEqual([]);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch perush-perek name pairs:",
+				"DB error",
+			);
+		});
+
+		it("returns empty array on non-Error rejection", async () => {
+			mockQuery.mockRejectedValue("raw error");
+
+			const result = await getAllPerushPerekNamePairs();
+
+			expect(result).toEqual([]);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch perush-perek name pairs:",
+				"raw error",
 			);
 		});
 	});

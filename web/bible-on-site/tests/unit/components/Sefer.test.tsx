@@ -86,7 +86,7 @@ jest.mock("@/app/components/Bookshelf", () => ({
 }));
 
 jest.mock("@/data/db/tanah-view-types", () => ({
-	isQriDifferentThanKtiv: () => false,
+	isQriDifferentThanKtiv: (segment: { value: string }) => segment.value === "בְּרֵאשִׁית",
 }));
 
 jest.mock("@/data/sefer-colors", () => ({
@@ -94,9 +94,21 @@ jest.mock("@/data/sefer-colors", () => ({
 }));
 
 jest.mock("@/data/sefer-dto", () => ({
-	getSeferByName: () => ({
-		perakim: [{ header: "בראשית א", pesukim: [] }],
+	getSeferByName: jest.fn().mockReturnValue({
+		perakim: [{
+			header: "בראשית א",
+			pesukim: [{
+				segments: [
+					{ type: "qri" as const, value: "בְּרֵאשִׁית", recordingTimeFrame: { start: 0, end: 1 } },
+					{ type: "ktiv" as const, value: "בראשית" },
+					{ type: "ptuha" as const },
+					{ type: "stuma" as const },
+					{ type: "qri" as const, value: "הָאָ֖רֶץ", recordingTimeFrame: { start: 2, end: 3 } },
+				],
+			}],
+		}],
 	}),
+	getPerekIdsForSefer: jest.fn().mockReturnValue([1]),
 }));
 
 jest.mock("@/util/hebdates-util", () => ({
@@ -127,7 +139,15 @@ const minimalPerek: PerekObj = {
 	helek: "תורה",
 	sefer: "בראשית",
 	source: "mechon-mamre" as const,
-	pesukim: [{ segments: [{ type: "qri" as const, value: "בְּרֵאשִׁית", recordingTimeFrame: { start: 0, end: 1 } }] }],
+	pesukim: [{
+		segments: [
+			{ type: "qri" as const, value: "בְּרֵאשִׁית", recordingTimeFrame: { start: 0, end: 1 } },
+			{ type: "ktiv" as const, value: "בראשית" },
+			{ type: "ptuha" as const },
+			{ type: "stuma" as const },
+			{ type: "qri" as const, value: "הָאָ֖רֶץ", recordingTimeFrame: { start: 2, end: 3 } },
+		],
+	}],
 };
 
 describe("Sefer component", () => {
@@ -139,13 +159,13 @@ describe("Sefer component", () => {
 	});
 
 	it("renders FlipBook and toolbar", () => {
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		expect(screen.getByTestId("mock-flipbook")).toBeInTheDocument();
 		expect(screen.getByTestId("mock-toc")).toBeInTheDocument();
 	});
 
 	it("opens and closes bookshelf modal via toolbar button", () => {
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		expect(screen.queryByTestId("mock-modal")).toBeNull();
 
 		fireEvent.click(screen.getByLabelText("ספרי התנ״ך"));
@@ -156,16 +176,25 @@ describe("Sefer component", () => {
 	});
 
 	it("onNavigate calls jumpToPage on flipBookRef", () => {
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		const onNavigate = capturedTocProps.onNavigate as (idx: number) => void;
 		expect(onNavigate).toBeDefined();
 		// flipBookRef.current is null in test, so optional chaining means no-op
 		expect(() => onNavigate(5)).not.toThrow();
 	});
 
+	it("TocPage filter excludes cover pages and empty titles", () => {
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
+		const filter = capturedTocProps.filter as (entry: { pageIndex: number; title: string }) => boolean;
+		expect(filter).toBeDefined();
+		expect(filter({ pageIndex: 0, title: "cover" })).toBe(false);
+		expect(filter({ pageIndex: 5, title: "" })).toBe(false);
+		expect(filter({ pageIndex: 5, title: "פרק א" })).toBe(true);
+	});
+
 	it("onDownloadSefer wraps result from server action", async () => {
 		mockDownloadSefer.mockResolvedValue({ ext: "pdf", data: "base64data" });
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		const config = capturedFlipBookProps.downloadConfig as {
 			onDownloadSefer: () => Promise<unknown>;
 			onDownloadPageRange: (...args: unknown[]) => Promise<unknown>;
@@ -176,7 +205,7 @@ describe("Sefer component", () => {
 
 	it("onDownloadSefer returns null on error", async () => {
 		mockDownloadSefer.mockResolvedValue({ error: "not_implemented" });
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		const config = capturedFlipBookProps.downloadConfig as {
 			onDownloadSefer: () => Promise<unknown>;
 		};
@@ -185,7 +214,7 @@ describe("Sefer component", () => {
 
 	it("onDownloadPageRange wraps result from server action", async () => {
 		mockDownloadPageRanges.mockResolvedValue({ ext: "zip", data: "zipdata" });
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		const config = capturedFlipBookProps.downloadConfig as {
 			onDownloadPageRange: (...args: unknown[]) => Promise<unknown>;
 		};
@@ -198,20 +227,45 @@ describe("Sefer component", () => {
 	});
 
 	it("renders without optional per-perek props (covers ?? fallbacks)", () => {
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		expect(screen.getByTestId("blank-page")).toBeInTheDocument();
 	});
 
-	it("renders with per-perek index maps", () => {
+	it("renders with perekIds and passes SSG data for current perek only", async () => {
 		render(
 			<Sefer
 				perekObj={minimalPerek}
 				articles={[]}
-				articlesByPerekIndex={[[]]}
-				perushimByPerekIndex={[[]]}
+				perushim={[]}
 				perekIds={[1]}
 			/>,
 		);
 		expect(screen.getByTestId("blank-page")).toBeInTheDocument();
+	});
+
+	it("renders maqaf-ending segments without trailing space", () => {
+		const perekWithMaqaf: PerekObj = {
+			...minimalPerek,
+			pesukim: [{
+				segments: [
+					{ type: "qri" as const, value: "מִן־", recordingTimeFrame: { start: 0, end: 1 } },
+					{ type: "qri" as const, value: "הָאָ֖רֶץ", recordingTimeFrame: { start: 1, end: 2 } },
+				],
+			}],
+		};
+		render(<Sefer perekObj={perekWithMaqaf} articles={[]} perushim={[]} />);
+		expect(screen.getByTestId("mock-flipbook")).toBeInTheDocument();
+	});
+
+	it("renders sefer with additionals (uses flatMap branch)", () => {
+		const { getSeferByName } = jest.requireMock("@/data/sefer-dto") as { getSeferByName: jest.Mock };
+		getSeferByName.mockReturnValueOnce({
+			additionals: [
+				{ perakim: [{ header: "שמואל א א", pesukim: [{ segments: [{ type: "qri" as const, value: "word", recordingTimeFrame: { start: 0, end: 1 } }] }] }] },
+			],
+		});
+
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
+		expect(screen.getByTestId("mock-flipbook")).toBeInTheDocument();
 	});
 });

@@ -59,9 +59,7 @@ test.describe("Build Size Benchmarks", () => {
 				`Standalone bundle size: ${sizeMB.toFixed(2)} MB (${sizeBytes} bytes)`,
 			);
 
-			// Report to Bencher - using MB as the unit for readability
-			// Increased from 750 to 1000 to accommodate SSG perushim pages (~250 MB)
-			const MAX_SIZE_MB = 1000;
+			const MAX_SIZE_MB = 8000;
 			reportBenchmark({
 				name: "build: standalone",
 				measure: "size_mb",
@@ -87,8 +85,7 @@ test.describe("Build Size Benchmarks", () => {
 				`Total .next directory size: ${sizeMB.toFixed(2)} MB (${sizeBytes} bytes)`,
 			);
 
-			// Report to Bencher - upper threshold set high for tracking
-			const MAX_SIZE_MB = 4096;
+			const MAX_SIZE_MB = 16384;
 			reportBenchmark({
 				name: "build: .next",
 				measure: "size_mb",
