@@ -97,4 +97,11 @@ describe("proxy", () => {
 			]);
 		});
 	});
+
+	describe("BOT_BLOCKING_ENABLED", () => {
+		it("blocks bots by default (env var not set)", async () => {
+			const result = await proxy(makeRequest("/929/1", { ua: "Bytespider" }));
+			expect(result?.status).toBe(403);
+		});
+	});
 });

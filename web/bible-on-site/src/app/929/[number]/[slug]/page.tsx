@@ -200,6 +200,7 @@ export default async function ArticlePage({
 					<SeferComposite
 						perekObj={perekObj}
 						articles={articles}
+						perushim={perushim}
 						perekIds={perekIds}
 						initialSlug={slug}
 					/>
@@ -328,6 +329,7 @@ export default async function ArticlePage({
 				<SeferComposite
 					perekObj={perekObj}
 					articles={articles}
+					perushim={perushim}
 					perekIds={perekIds}
 					initialSlug={slug}
 				/>
