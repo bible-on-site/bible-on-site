@@ -23,7 +23,7 @@ import {
 } from "html-flip-book-react/toolbar";
 import dynamic from "next/dynamic";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { downloadPageRanges, downloadSefer, getArticleSummariesForPerek, getPerushimSummariesForPerek } from "@/app/929/[number]/actions";
+import { type PerekSummaries, downloadPageRanges, downloadSefer, getPerekSummariesBatch } from "@/app/929/[number]/actions";
 import { BookshelfModal } from "@/app/components/Bookshelf";
 import { isQriDifferentThanKtiv } from "@/data/db/tanah-view-types";
 import type { PerekObj } from "@/data/perek-dto";
@@ -83,10 +83,11 @@ const FlipBook = dynamic<
 const Sefer = (props: {
 	perekObj: PerekObj;
 	articles: ArticleSummary[];
+	perushim: PerushSummary[];
 	perekIds?: number[];
 	initialSlug?: string;
 }) => {
-	const { perekObj, articles, perekIds, initialSlug } = props;
+	const { perekObj, articles, perushim, perekIds, initialSlug } = props;
 	const sefer = getSeferByName(perekObj.sefer);
 	const flipBookRef = useRef<FlipBookHandle>(null);
 	const bookWrapperRef = useRef<HTMLDivElement>(null);
@@ -96,44 +97,6 @@ const Sefer = (props: {
 		"perakim" in sefer
 			? sefer.perakim
 			: sefer.additionals.flatMap((additional) => additional.perakim);
-
-	// Lazy-loaded per-perek data for book view blank pages.
-	// Keyed by perekIdx. Fetched on demand when the book view is opened.
-	const [articlesByPerekIdx, setArticlesByPerekIdx] = useState<
-		Map<number, ArticleSummary[]>
-	>(new Map());
-	const [perushimByPerekIdx, setPerushimByPerekIdx] = useState<
-		Map<number, PerushSummary[]>
-	>(new Map());
-	const fetchingRef = useRef<Set<number>>(new Set());
-
-	const fetchPerekData = useCallback(
-		async (perekIdx: number) => {
-			if (fetchingRef.current.has(perekIdx)) return;
-			const pid = perekIds?.[perekIdx];
-			if (pid == null) return;
-			fetchingRef.current.add(perekIdx);
-			try {
-				const [arts, perushim] = await Promise.all([
-					getArticleSummariesForPerek(pid),
-					getPerushimSummariesForPerek(pid),
-				]);
-				setArticlesByPerekIdx((prev) => new Map(prev).set(perekIdx, arts));
-				setPerushimByPerekIdx((prev) => new Map(prev).set(perekIdx, perushim));
-			} finally {
-				fetchingRef.current.delete(perekIdx);
-			}
-		},
-		[perekIds],
-	);
-
-	// Fetch data for all perakim when the book view mounts
-	useEffect(() => {
-		if (!perekIds?.length) return;
-		for (let i = 0; i < perakim.length; i++) {
-			fetchPerekData(i);
-		}
-	}, [perekIds, perakim.length, fetchPerekData]);
 
 	const openBookshelf = useCallback(() => setIsBookshelfOpen(true), []);
 	const closeBookshelf = useCallback(() => setIsBookshelfOpen(false), []);
@@ -198,6 +161,15 @@ const Sefer = (props: {
 		() => perekIds?.indexOf(perekObj.perekId) ?? -1,
 		[perekIds, perekObj.perekId],
 	);
+
+	// One-time batch fetch of article/perushim summaries for all perakim
+	// except the current one (which has SSG data). Keyed by perekId string.
+	const [batchSummaries, setBatchSummaries] = useState<Record<string, PerekSummaries>>({});
+	useEffect(() => {
+		const idsToFetch = perekIds?.filter((id) => id !== perekObj.perekId) ?? [];
+		if (idsToFetch.length === 0) return;
+		getPerekSummariesBatch(idsToFetch).then(setBatchSummaries).catch(() => {});
+	}, [perekIds, perekObj.perekId]);
 
 	const contentPages = perakim.flatMap((perek, perekIdx) => [
 		<React.Fragment key={`perek-${perekIdx + 1}`}>
@@ -273,8 +245,8 @@ const Sefer = (props: {
 		</React.Fragment>,
 	<React.Fragment key={`blank-${perekIdx + 1}`}>
 		<BlankPageContent
-			articles={articlesByPerekIdx.get(perekIdx) ?? (perekIdx === currentPerekIdx ? articles : [])}
-			perushim={perushimByPerekIdx.get(perekIdx) ?? []}
+			articles={perekIdx === currentPerekIdx ? articles : batchSummaries[String(perekIds?.[perekIdx] ?? 0)]?.articles}
+			perushim={perekIdx === currentPerekIdx ? perushim : batchSummaries[String(perekIds?.[perekIdx] ?? 0)]?.perushim}
 			perekId={perekIds?.[perekIdx] ?? 0}
 			hebrewDateStr={hebrewDateStr}
 			initialSlug={perekIds?.[perekIdx] === perekObj.perekId ? initialSlug : undefined}

@@ -3,6 +3,8 @@ import { type NextRequest, NextResponse } from "next/server";
 const BLOCKED_BOTS =
 	/Bytespider|MJ12bot|AhrefsBot|SemrushBot|DotBot|PetalBot|BLEXBot|MegaIndex|Sogou|DataForSeoBot/i;
 
+const BOT_BLOCKING_ENABLED = process.env.BOT_BLOCKING_ENABLED !== "false";
+
 export async function proxy(
 	request: NextRequest,
 ): Promise<NextResponse | undefined> {
@@ -17,10 +19,11 @@ export async function proxy(
 		return undefined;
 	}
 
-	const ua = request.headers.get("user-agent") ?? "";
-
-	if (BLOCKED_BOTS.test(ua)) {
-		return new NextResponse("Forbidden", { status: 403 });
+	if (BOT_BLOCKING_ENABLED) {
+		const ua = request.headers.get("user-agent") ?? "";
+		if (BLOCKED_BOTS.test(ua)) {
+			return new NextResponse("Forbidden", { status: 403 });
+		}
 	}
 
 	return undefined;

@@ -11,7 +11,7 @@ import { PerushimSection } from "./PerushimSection";
 import styles from "./sefer.module.css";
 
 interface BlankPageContentProps {
-	articles: ArticleSummary[];
+	articles?: ArticleSummary[];
 	perushim?: PerushSummary[];
 	perekId?: number;
 	hebrewDateStr: string;
@@ -25,7 +25,7 @@ interface BlankPageContentProps {
  * History state is pushed so the browser back button works.
  */
 export function BlankPageContent({
-	articles,
+	articles = [],
 	perushim = [],
 	perekId = 0,
 	hebrewDateStr,

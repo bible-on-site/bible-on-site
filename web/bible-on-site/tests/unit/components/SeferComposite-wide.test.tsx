@@ -7,6 +7,8 @@ jest.mock("@/app/929/[number]/components/sefer-composite.module.css", () => ({
 	seferOverlay: "seferOverlay",
 	visible: "visible",
 	hidden: "hidden",
+	loadingContainer: "loadingContainer",
+	loadingSpinner: "loadingSpinner",
 }));
 
 jest.mock("@/hooks/useIsWideEnough", () => ({
@@ -34,10 +36,17 @@ jest.mock("@/app/929/[number]/components/read-mode-toggler.module.css", () => ({
 	noteIcon: "noteIcon",
 }));
 
-jest.mock("@/app/929/[number]/components/Sefer", () => ({
-	__esModule: true,
-	default: () => <div data-testid="sefer" />,
-}));
+jest.mock("next/dynamic", () => {
+	return (
+		_loader: () => Promise<unknown>,
+		opts?: { ssr?: boolean; loading?: () => React.ReactElement },
+	) => {
+		(globalThis as Record<string, unknown>).__capturedDynamicLoading = opts?.loading ?? null;
+		return function MockSefer() {
+			return <div data-testid="sefer" />;
+		};
+	};
+});
 
 import SeferComposite from "@/app/929/[number]/components/SeferComposite";
 
@@ -57,27 +66,36 @@ describe("SeferComposite (wide screen)", () => {
 	});
 
 	it("renders ReadModeToggler when wide enough", () => {
-		render(<SeferComposite perekObj={minimalPerek} articles={[]} />);
+		render(<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		expect(screen.getByRole("checkbox")).toBeTruthy();
 	});
 
 	it("shows Sefer view when toggled via checkbox", async () => {
-		render(<SeferComposite perekObj={minimalPerek} articles={[]} />);
+		render(<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		const checkbox = screen.getByRole("checkbox");
 
 		await act(async () => {
 			fireEvent.click(checkbox);
 		});
 
-		// Sefer is loaded via next/dynamic, so wait for the async chunk to resolve.
 		expect(await screen.findByTestId("sefer")).toBeTruthy();
 	});
 
 	it("shows Sefer view immediately when ?book is in URL", async () => {
 		mockGet.mockReturnValue("");
 		await act(async () => {
-			render(<SeferComposite perekObj={minimalPerek} articles={[]} />);
+			render(<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		});
 		expect(await screen.findByTestId("sefer")).toBeTruthy();
+	});
+
+	it("provides a loading indicator for the dynamic Sefer import", () => {
+		render(<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />);
+		const loadingFn = (globalThis as Record<string, unknown>).__capturedDynamicLoading as (() => React.ReactElement) | null;
+		if (!loadingFn) throw new Error("expected loadingFn to be defined");
+		const { container } = render(loadingFn());
+		expect(
+			container.querySelector('[aria-label="טוען תצוגת ספר..."]'),
+		).toBeTruthy();
 	});
 });

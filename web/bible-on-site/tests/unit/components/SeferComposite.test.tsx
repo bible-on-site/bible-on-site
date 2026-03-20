@@ -44,7 +44,7 @@ describe("SeferComposite", () => {
 
 	it("returns null when viewport is not wide enough", () => {
 		const { container } = render(
-			<SeferComposite perekObj={minimalPerek} articles={[]} />,
+			<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
 		);
 		// isWideEnough is false → component returns null
 		expect(container.firstChild).toBeNull();
