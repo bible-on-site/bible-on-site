@@ -92,16 +92,11 @@
                        Aspect="AspectFit"
                        HorizontalOptions="Center"/>
 
-                <!-- Article Content (HTML) -->
-                <controls:HtmlView x:Name="ArticleContentView"
-                                   IsVisible="{Binding HasContent}"
-                                   HtmlContent="{Binding Article.ArticleContent}"
-                                   FontSize="{DynamicResource ArticleFontSize}"
-                                   LineHeight="1.5"
-                                   TextAlignment="Justify"
-                                   TextDirection="Rtl"
-                                   HorizontalOptions="Fill"
-                                   Margin="0,0,0,32"/>
+                <!-- Article Content (dynamic: HtmlView + MediaElement segments) -->
+                <VerticalStackLayout x:Name="ArticleContentContainer"
+                                     IsVisible="{Binding HasContent}"
+                                     Spacing="8"
+                                     Margin="0,0,0,32"/>
 
                 <!-- No content message -->
                 <Label Text="אין תוכן זמין"

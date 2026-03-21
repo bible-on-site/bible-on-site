@@ -326,6 +326,39 @@ public class HebrewDateHelperTests
         result.Year.Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public void RoundToCycle_BeforeAllCycles_ReturnsFirstCycleStart()
+    {
+        var input = HebrewDateHelper.NumberToHebrewDate(57700101);
+        var expected = HebrewDateHelper.NumberToHebrewDate(57750329);
+
+        var result = HebrewDateHelper.RoundToCycle(input);
+
+        result.Should().Be(expected);
+    }
+
+    [Fact]
+    public void RoundToCycle_AfterAllCycles_ReturnsLastCycleEnd()
+    {
+        var input = HebrewDateHelper.NumberToHebrewDate(59000101);
+        var lastCycleEnd = HebrewDateHelper.AddDaysToCycleDate(57851207, 1298);
+
+        var result = HebrewDateHelper.RoundToCycle(input);
+
+        result.Should().Be(HebrewDateHelper.NumberToHebrewDate(lastCycleEnd));
+    }
+
+    [Fact]
+    public void AddDaysToCycleDate_WithInvalidDate_ReturnsFallback()
+    {
+        const int invalidHebrewDateNum = 99990101;
+        const int days = 7;
+
+        var result = HebrewDateHelper.AddDaysToCycleDate(invalidHebrewDateNum, days);
+
+        result.Should().Be(invalidHebrewDateNum + days);
+    }
+
     #endregion
 
     #region FindClosestPerekByHebDate Tests

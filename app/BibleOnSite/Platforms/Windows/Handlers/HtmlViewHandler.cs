@@ -243,17 +243,8 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
                         break;
 
                     case "VIDEO":
-                        // Show placeholder for video
-                        if (inlines.Count > 0) inlines.Add(new LineBreak());
-                        inlines.Add(new Run { Text = "[🎬 וידאו]" });
-                        inlines.Add(new LineBreak());
-                        break;
-
                     case "AUDIO":
-                        // Show placeholder for audio
-                        if (inlines.Count > 0) inlines.Add(new LineBreak());
-                        inlines.Add(new Run { Text = "[🔊 אודיו]" });
-                        inlines.Add(new LineBreak());
+                    case "SOURCE":
                         break;
 
                     case "IMG":
@@ -263,8 +254,6 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
 
                     case "SCRIPT":
                     case "STYLE":
-                    case "SOURCE":
-                        // Skip these entirely
                         break;
 
                     default:
