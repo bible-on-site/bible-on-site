@@ -217,10 +217,10 @@ public static class HebrewDateHelper
     {
         var (year, legacyMonth, day) = NumberToHebrewDate(dateNum);
         var calendar = new System.Globalization.HebrewCalendar();
-        var calendarMonth = LegacyMonthToCalendar(year, legacyMonth);
 
         try
         {
+            var calendarMonth = LegacyMonthToCalendar(year, legacyMonth);
             var gregDate = calendar.ToDateTime(year, calendarMonth, day, 12, 0, 0, 0);
             gregDate = gregDate.AddDays(days);
             var newYear = calendar.GetYear(gregDate);

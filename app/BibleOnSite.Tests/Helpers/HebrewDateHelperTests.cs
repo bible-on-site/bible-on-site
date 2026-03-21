@@ -401,7 +401,7 @@ public class HebrewDateHelperTests
     public void RoundToCycle_AfterAllCycles_ReturnsLastCycleEnd()
     {
         var input = HebrewDateHelper.NumberToHebrewDate(59000101);
-        var lastCycleEnd = HebrewDateHelper.AddDaysToCycleDate(57851207, 1298);
+        var lastCycleEnd = HebrewDateHelper.AddDaysToCycleDate(58070422, 1298);
 
         var result = HebrewDateHelper.RoundToCycle(input);
 
