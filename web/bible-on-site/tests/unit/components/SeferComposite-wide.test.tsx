@@ -17,8 +17,14 @@ jest.mock("@/hooks/useIsWideEnough", () => ({
 }));
 
 const mockGet = jest.fn().mockReturnValue(null);
+const mockReplace = jest.fn();
 jest.mock("next/navigation", () => ({
-	useSearchParams: () => ({ get: mockGet }),
+	useSearchParams: () => ({
+		get: mockGet,
+		toString: () => "",
+	}),
+	useRouter: () => ({ replace: mockReplace }),
+	usePathname: () => "/929/5",
 }));
 
 jest.mock("next/image", () => ({
@@ -63,6 +69,8 @@ describe("SeferComposite (wide screen)", () => {
 
 	beforeEach(() => {
 		mockGet.mockReturnValue(null);
+		mockReplace.mockClear();
+		localStorage.clear();
 	});
 
 	it("renders ReadModeToggler when wide enough", () => {
@@ -78,6 +86,7 @@ describe("SeferComposite (wide screen)", () => {
 			fireEvent.click(checkbox);
 		});
 
+		expect(mockReplace).toHaveBeenCalledWith("/929/5?book=", { scroll: false });
 		expect(await screen.findByTestId("sefer")).toBeTruthy();
 	});
 

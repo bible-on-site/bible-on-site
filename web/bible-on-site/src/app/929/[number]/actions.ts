@@ -6,7 +6,10 @@ import {
 	getPageRangesDownloadHandler,
 	getSeferDownloadHandler,
 } from "@/lib/download/handlers";
-import type { SemanticPageInfo } from "@/lib/download/types";
+import type {
+	SeferDownloadContext,
+	SemanticPageInfo,
+} from "@/lib/download/types";
 import type { PerushNote, PerushSummary } from "@/lib/perushim";
 import { getPerushNotes, getPerushimByPerekId } from "@/lib/perushim";
 
@@ -87,17 +90,16 @@ export interface DownloadActionError {
 
 /**
  * Sefer download action. Uses the registered SeferDownloadHandler if set.
- * Handler receives no arguments; consumer provides implementation.
  */
-export async function downloadSefer(): Promise<
-	DownloadActionResult | DownloadActionError
-> {
+export async function downloadSefer(
+	ctx: SeferDownloadContext,
+): Promise<DownloadActionResult | DownloadActionError> {
 	const handler = getSeferDownloadHandler();
 	if (!handler) {
 		return { error: "not_implemented" };
 	}
 	try {
-		const [ext, bin] = await handler();
+		const [ext, bin] = await handler(ctx);
 		const data = Buffer.from(bin).toString("base64");
 		return { ext, data };
 	} catch (e) {

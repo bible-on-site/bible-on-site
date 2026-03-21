@@ -15,8 +15,14 @@ jest.mock("@/hooks/useIsWideEnough", () => ({
 }));
 
 const mockGet = jest.fn().mockReturnValue(null);
+const mockReplace = jest.fn();
 jest.mock("next/navigation", () => ({
-	useSearchParams: () => ({ get: mockGet }),
+	useSearchParams: () => ({
+		get: mockGet,
+		toString: () => "",
+	}),
+	useRouter: () => ({ replace: mockReplace }),
+	usePathname: () => "/929/5",
 }));
 
 jest.mock("@/app/929/[number]/components/ReadModeToggler", () => ({

@@ -509,6 +509,7 @@ export async function getPersonFamilySummary(
 		unionType: r.unionType,
 		unionOrder: r.unionOrder,
 		altGroupId: r.altGroupId,
+		sourceCitation: r.sourceCitation,
 	}));
 
 	const sibDedupe = new Map<string, PersonFamilyRelatedPerson>();

@@ -302,7 +302,15 @@ const Sefer = (props: {
 							rangeFilename: perekObj.sefer,
 							downloadContext: { seferName: perekObj.sefer },
 							onDownloadSefer: async () =>
-								wrapDownloadResult(await downloadSefer()),
+								wrapDownloadResult(
+									await downloadSefer({
+										seferName: perekObj.sefer,
+										perekIds:
+											perekIds && perekIds.length > 0
+												? perekIds
+												: [perekObj.perekId],
+									}),
+								),
 							onDownloadPageRange: async (pages, semanticPages, context) =>
 								wrapDownloadResult(
 									await downloadPageRanges(pages, semanticPages, context),

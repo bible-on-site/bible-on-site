@@ -8,7 +8,7 @@
   height: calc(100vh - 72px);
   overflow-x: hidden;
   overflow-y: auto;
-  background-color: white;
+  background-color: var(--surface-elevated, #fff);
 }
 
 .perekText {
@@ -21,7 +21,7 @@
   text-align-last: right;
 }
 .pasukNum {
-  color: #1c2c5d;
+  color: var(--pasuk-num-color, #1c2c5d);
   cursor: pointer;
   font-weight: 700;
   text-decoration: underline;
@@ -52,5 +52,11 @@
 }
 .tanahpediaLink:hover {
   border-bottom-style: solid;
-  border-bottom-color: #1552ac;
+  border-bottom-color: var(--link-accent, #1552ac);
+}
+
+@media (prefers-color-scheme: dark) {
+  .tanahpediaLink {
+    border-bottom-color: var(--link-accent, #7eb0ff);
+  }
 }
