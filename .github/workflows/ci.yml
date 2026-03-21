@@ -2456,7 +2456,7 @@ jobs:
           git config --global user.name "GitHub Actions"
 
       - name: Add Deploy Key
-        uses: webfactory/ssh-agent@72c0bfd31ab22a2e11716951e3f107a9647dc97e
+        uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555
         with:
           ssh-private-key: ${{ secrets.DEPLOY_KEY }}
 
