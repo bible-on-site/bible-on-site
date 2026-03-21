@@ -1,21 +1,106 @@
 import { Extension } from "@tiptap/core";
 import type { Editor } from "@tiptap/core";
+import { buildLinkHref, inferLinkType, type AdminLinkType } from "./adminLinkExtension";
 
 export const ADMIN_EDITOR_SHORTCUT_EXTRAS_KEY = "admin-editor-shortcut-extras";
+
+export interface ShortcutRow {
+	keys: string;
+	action: string;
+	tags?: string;
+}
+
+export interface ShortcutSection {
+	title: string;
+	rows: ShortcutRow[];
+}
+
+export const SHORTCUT_SECTIONS: ShortcutSection[] = [
+	{
+		title: "כותרות",
+		rows: [
+			{
+				keys: "Ctrl+1 … Ctrl+6",
+				action: "כותרות H1–H6",
+				tags: "heading כותרת",
+			},
+		],
+	},
+	{
+		title: "קישורים וטקסט",
+		rows: [
+			{
+				keys: "Ctrl+I",
+				action: "עריכת קישור (או הוספה אם יש סימון)",
+				tags: "link קישור",
+			},
+			{ keys: "Ctrl+B", action: "מודגש", tags: "bold" },
+			{
+				keys: "—",
+				action: "הטייה — מכפתור סרגל בלבד",
+				tags: "italic",
+			},
+		],
+	},
+	{
+		title: "רשימות",
+		rows: [
+			{
+				keys: "Ctrl+Shift+7",
+				action: "רשימת תבליטים",
+				tags: "bullet list",
+			},
+			{
+				keys: "Ctrl+Shift+8",
+				action: "רשימה ממוספרת (1 2 3)",
+				tags: "ordered decimal",
+			},
+			{
+				keys: "סרגל הכלים",
+				action: "רשימה א׳ ב׳ ג׳ (עברית) — כפתור נפרד",
+				tags: "hebrew alpha",
+			},
+		],
+	},
+];
+
+/** @deprecated use SHORTCUT_SECTIONS */
+export const DEFAULT_SHORTCUT_HELP_ROWS: { keys: string; action: string }[] =
+	SHORTCUT_SECTIONS.flatMap((s) => s.rows);
 
 function runHeading(editor: Editor, level: 1 | 2 | 3 | 4 | 5 | 6): boolean {
 	return editor.chain().focus().toggleHeading({ level }).run();
 }
 
 function promptLink(editor: Editor): boolean {
-	const prev = editor.getAttributes("link").href as string | undefined;
-	const url = window.prompt("הכנס URL", prev || "https://");
+	const prevHref = editor.getAttributes("link").href as string | undefined;
+	const prevType = (editor.getAttributes("link").linkType as AdminLinkType | null) ?? inferLinkType(prevHref);
+	const url = window.prompt(
+		prevType === "comment"
+			? "מספר הערה או #note-1"
+			: "כתובת (חיצונית, פנימית או #note-1)",
+		prevHref || "https://",
+	);
 	if (url === null) return false;
 	if (url === "") {
 		editor.chain().focus().extendMarkRange("link").unsetLink().run();
 		return true;
 	}
-	editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+	const type: AdminLinkType =
+		url.trim().startsWith("#") || /^note-?\d/i.test(url.trim())
+			? "comment"
+			: inferLinkType(url.trim());
+	const { href, linkType } = buildLinkHref(type, url.trim());
+	const attrs: Record<string, unknown> = { href, linkType };
+	if (type === "external") {
+		attrs.target = "_blank";
+		attrs.rel = "noopener noreferrer nofollow";
+	}
+	if (editor.isActive("link")) {
+		editor.chain().focus().extendMarkRange("link").setLink(attrs).run();
+	} else {
+		editor.chain().focus().setLink(attrs).run();
+	}
 	return true;
 }
 
@@ -39,10 +124,6 @@ function parseExtraCommand(
 	return null;
 }
 
-/**
- * Loads optional JSON map from localStorage: { "Mod-Shift-l": "link", "Mod-Alt-2": "heading:2" }
- * Keys use TipTap format (Mod = Ctrl/Cmd).
- */
 export function parseStoredShortcutExtras(editor: Editor): Record<
 	string,
 	() => boolean
@@ -78,19 +159,14 @@ export const adminEditorShortcutsExtension = Extension.create({
 			"Mod-5": () => runHeading(editor, 5),
 			"Mod-6": () => runHeading(editor, 6),
 			"Mod-i": () => promptLink(editor),
+			"Mod-Shift-7": () => editor.chain().focus().toggleBulletList().run(),
+			"Mod-Shift-8": () => editor.chain().focus().toggleOrderedList().run(),
 		};
 
 		const extras = parseStoredShortcutExtras(editor);
 		return { ...base, ...extras };
 	},
 });
-
-export const DEFAULT_SHORTCUT_HELP_ROWS: { keys: string; action: string }[] = [
-	{ keys: "Ctrl+1 … Ctrl+6 (⌘ במק)", action: "כותרות H1–H6" },
-	{ keys: "Ctrl+I (⌘I במק)", action: "הוספת/עריכת קישור" },
-	{ keys: "Ctrl+B", action: "מודגש" },
-	{ keys: "(ללא קיצור ברירת מחדל)", action: "הטייה — מכפתור סרגל" },
-];
 
 export const SHORTCUT_EXTRAS_JSON_EXAMPLE = `{
   "Mod-Shift-l": "link",

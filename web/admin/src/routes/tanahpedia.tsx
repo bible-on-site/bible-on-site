@@ -146,7 +146,7 @@ function TanahpediaIndexPage() {
 						<span>חיפוש ערכים</span>
 					</h2>
 				</div>
-				<div className="p-6 flex flex-col sm:flex-row gap-3 sm:items-center">
+				<div className="p-6 flex flex-col sm:flex-row gap-3 sm:items-center border-b border-gray-100">
 					<input
 						type="search"
 						value={qInput}
@@ -170,7 +170,7 @@ function TanahpediaIndexPage() {
 					</button>
 				</div>
 				{category && (
-					<div className="px-6 pb-4 flex flex-wrap gap-2 items-center text-sm">
+					<div className="px-6 py-3 flex flex-wrap gap-2 items-center text-sm border-b border-gray-100 bg-gray-50/50">
 						<span className="text-gray-500">מסנן פעיל:</span>
 						<span className="font-medium text-blue-800 bg-blue-50 px-2 py-1 rounded">
 							{labelForCategoryKey(category)}
@@ -184,6 +184,49 @@ function TanahpediaIndexPage() {
 						</button>
 					</div>
 				)}
+
+				<div className="p-0">
+					<div className="px-6 py-3 flex justify-between items-center flex-wrap gap-2 border-b border-gray-100 bg-white">
+						<h3 className="text-base font-semibold text-gray-900">תוצאות</h3>
+						<span className="text-sm text-gray-500">
+							{listLoading ? "טוען…" : `${entries?.length ?? 0} ערכים`}
+						</span>
+					</div>
+					{listLoading ? (
+						<div className="flex items-center justify-center h-28">
+							<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+						</div>
+					) : (
+						<div className="divide-y divide-gray-100 max-h-[min(420px,50vh)] overflow-y-auto">
+							{entries?.map((entry) => (
+								<Link
+									key={entry.id}
+									to="/tanahpedia/entries/$id"
+									params={{ id: entry.id }}
+									search={{}}
+									className="flex justify-between items-center px-6 py-3 hover:bg-gray-50 transition-colors gap-4"
+								>
+									<div className="min-w-0">
+										<span className="font-medium text-gray-900 block truncate">
+											{entry.title}
+										</span>
+										<span className="text-sm text-gray-500 truncate block">
+											{entry.unique_name}
+										</span>
+									</div>
+									<span className="text-xs text-gray-400 shrink-0">
+										{new Date(entry.updated_at).toLocaleDateString("he-IL")}
+									</span>
+								</Link>
+							))}
+							{entries?.length === 0 && (
+								<div className="px-6 py-8 text-center text-gray-500">
+									אין ערכים התואמים לסינון
+								</div>
+							)}
+						</div>
+					)}
+				</div>
 			</div>
 
 			<section>
@@ -277,49 +320,6 @@ function TanahpediaIndexPage() {
 				>
 					ניהול מקומות (ישויות)
 				</Link>
-			</div>
-
-			<div className="bg-white rounded-xl shadow-sm border border-gray-200">
-				<div className="p-6 border-b border-gray-200 flex justify-between items-center flex-wrap gap-2">
-					<h2 className="text-xl font-semibold text-gray-900">ערכים</h2>
-					<span className="text-sm text-gray-500">
-						{listLoading ? "טוען…" : `${entries?.length ?? 0} תוצאות`}
-					</span>
-				</div>
-				{listLoading ? (
-					<div className="flex items-center justify-center h-32">
-						<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-					</div>
-				) : (
-					<div className="divide-y divide-gray-100">
-						{entries?.map((entry) => (
-							<Link
-								key={entry.id}
-								to="/tanahpedia/entries/$id"
-								params={{ id: entry.id }}
-								search={{}}
-								className="flex justify-between items-center p-4 hover:bg-gray-50 transition-colors gap-4"
-							>
-								<div className="min-w-0">
-									<span className="font-medium text-gray-900 block truncate">
-										{entry.title}
-									</span>
-									<span className="text-sm text-gray-500 truncate block">
-										{entry.unique_name}
-									</span>
-								</div>
-								<span className="text-xs text-gray-400 shrink-0">
-									{new Date(entry.updated_at).toLocaleDateString("he-IL")}
-								</span>
-							</Link>
-						))}
-						{entries?.length === 0 && (
-							<div className="p-8 text-center text-gray-500">
-								אין ערכים התואמים לסינון
-							</div>
-						)}
-					</div>
-				)}
 			</div>
 		</div>
 	);

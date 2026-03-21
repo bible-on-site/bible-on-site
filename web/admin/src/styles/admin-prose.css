@@ -56,6 +56,18 @@
   padding-left: 0;
 }
 
+/* מספור עברי א-ב (כמו ברשימות במאמרים) — data-ordered-type מגיע מ-TipTap */
+@counter-style admin-hebrew-alpha {
+  system: fixed;
+  symbols: "\5D0" "\5D1" "\5D2" "\5D3" "\5D4" "\5D5" "\5D6" "\5D7" "\5D8" "\5D9" "\5DB" "\5DC" "\5DD" "\5DE" "\5DF" "\5E0" "\5E1" "\5E2" "\5E4" "\5E6" "\5E7" "\5E8" "\5E9" "\5EA";
+  suffix: ". ";
+}
+
+.admin-prose ol[data-ordered-type="hebrew-alpha"] {
+  list-style: admin-hebrew-alpha;
+  padding-right: 2rem;
+}
+
 .admin-prose li {
   margin: 0.25em 0;
 }
