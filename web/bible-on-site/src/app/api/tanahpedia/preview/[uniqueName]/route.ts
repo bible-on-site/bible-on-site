@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { normalizedUniqueNameFromParam } from "@/lib/tanahpedia/unique-name-param";
 import { getEntryByUniqueName } from "@/lib/tanahpedia/service";
 
 /**
@@ -46,8 +47,9 @@ export async function GET(
 	{ params }: { params: Promise<{ uniqueName: string }> },
 ) {
 	const { uniqueName } = await params;
-	const decoded = decodeURIComponent(uniqueName);
-	const entry = await getEntryByUniqueName(decoded);
+	const entry = await getEntryByUniqueName(
+		normalizedUniqueNameFromParam(uniqueName),
+	);
 	if (!entry) {
 		return NextResponse.json(null, { status: 404 });
 	}

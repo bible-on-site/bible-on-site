@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { normalizedUniqueNameFromParam } from "@/lib/tanahpedia/unique-name-param";
 import {
 	ENTITY_TYPE_LABELS,
 	getAllEntryUniqueNames,
@@ -28,9 +29,8 @@ function metaDescriptionFromContent(html: string, maxLen: number): string {
 export async function generateStaticParams() {
 	try {
 		const uniqueNames = await getAllEntryUniqueNames();
-		return uniqueNames.map((uniqueName) => ({
-			uniqueName: encodeURIComponent(uniqueName),
-		}));
+		// Decoded segment values — Next encodes URLs; runtime `params` match this shape.
+		return uniqueNames.map((uniqueName) => ({ uniqueName }));
 	} catch {
 		// If database is unavailable during build, return empty array
 		// Pages will be generated on-demand
@@ -45,7 +45,9 @@ export async function generateMetadata({
 }): Promise<Metadata> {
 	const { uniqueName } = await params;
 	try {
-		const entry = await getEntryByUniqueName(decodeURIComponent(uniqueName));
+		const entry = await getEntryByUniqueName(
+			normalizedUniqueNameFromParam(uniqueName),
+		);
 		if (!entry) return { title: "לא נמצא" };
 		const fromContent = entry.content
 			? metaDescriptionFromContent(entry.content, 200)
@@ -65,12 +67,9 @@ export default async function EntryPage({
 	params: Promise<{ uniqueName: string }>;
 }) {
 	const { uniqueName } = await params;
-	let entry: Awaited<ReturnType<typeof getEntryByUniqueName>>;
-	try {
-		entry = await getEntryByUniqueName(decodeURIComponent(uniqueName));
-	} catch {
-		notFound();
-	}
+	const entry = await getEntryByUniqueName(
+		normalizedUniqueNameFromParam(uniqueName),
+	);
 	if (!entry) notFound();
 
 	// Get the primary entity type for breadcrumb (use first entity if available)

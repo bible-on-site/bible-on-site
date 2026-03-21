@@ -62,9 +62,9 @@ describe("tanahpedia/entry/[uniqueName] page", () => {
 			const result = await generateStaticParams();
 
 			expect(result).toEqual([
-				{ uniqueName: encodeURIComponent("משה-רבנו") },
-				{ uniqueName: encodeURIComponent("יהושע-בן-נון") },
-				{ uniqueName: encodeURIComponent("דוד-המלך") },
+				{ uniqueName: "משה-רבנו" },
+				{ uniqueName: "יהושע-בן-נון" },
+				{ uniqueName: "דוד-המלך" },
 			]);
 		});
 
@@ -142,6 +142,29 @@ describe("tanahpedia/entry/[uniqueName] page", () => {
 			});
 		});
 
+		it("resolves percent-encoded uniqueName param like the browser sends", async () => {
+			mockGetEntryByUniqueName.mockResolvedValue({
+				id: "entry-s",
+				uniqueName: "שמשון",
+				title: "שמשון",
+				content: "<p>נזיר</p>",
+				createdAt: "2024-01-01T00:00:00Z",
+				updatedAt: "2024-01-01T00:00:00Z",
+				entities: [],
+			});
+
+			const encoded = encodeURIComponent("שמשון");
+			const result = await generateMetadata({
+				params: Promise.resolve({ uniqueName: encoded }),
+			});
+
+			expect(mockGetEntryByUniqueName).toHaveBeenCalledWith("שמשון");
+			expect(result).toEqual({
+				title: "שמשון | תנכפדיה",
+				description: "נזיר",
+			});
+		});
+
 		it("returns not found when database query fails", async () => {
 			mockGetEntryByUniqueName.mockRejectedValue(
 				new Error("Database error"),
@@ -178,7 +201,7 @@ describe("tanahpedia/entry/[uniqueName] page", () => {
 			});
 
 			const result = await EntryPage({
-				params: Promise.resolve({ uniqueName: encodeURIComponent("משה-רבנו") }),
+				params: Promise.resolve({ uniqueName: "משה-רבנו" }),
 			});
 
 			expect(result).toBeDefined();
