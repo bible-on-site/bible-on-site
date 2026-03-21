@@ -14,7 +14,7 @@ use sunrise::{Coordinates, SolarDay, SolarEvent};
 const NUM_PERAKIM: usize = 929;
 
 /// Number of study cycles
-const NUM_CYCLES: usize = 4;
+const NUM_CYCLES: usize = 10;
 
 /// Jerusalem coordinates (for star rise calculation)
 const JERUSALEM_LAT: f64 = 31.7683;
@@ -27,13 +27,19 @@ const CYCLE_BEGIN_DATES: [(i32, u32, u32); NUM_CYCLES] = [
     (2018, 7, 15),  // Cycle 2: 3 Av 5778
     (2022, 2, 6),   // Cycle 3: 5 Adar I 5782
     (2025, 8, 31),  // Cycle 4: 7 Elul 5785
+    (2029, 3, 25),  // Cycle 5: 9 Nisan 5789
+    (2032, 10, 17), // Cycle 6: 12 Heshvan 5793
+    (2036, 5, 11),  // Cycle 7: 14 Iyar 5796
+    (2039, 12, 4),  // Cycle 8: 17 Kislev 5800
+    (2043, 6, 28),  // Cycle 9: 20 Sivan 5803
+    (2047, 1, 20),  // Cycle 10: 22 Tevet 5807
 ];
 
-/// Cycle dates: 929 perakim × 4 cycles each.
+/// Cycle dates: 929 perakim × NUM_CYCLES cycles each.
 /// Each inner Vec contains 4 date integers (YYYYMMDD format in Hebrew calendar).
 pub type CycleDates = Vec<Vec<i64>>;
 
-/// Star rise times: 929 perakim × 4 cycles each.
+/// Star rise times: 929 perakim × NUM_CYCLES cycles each.
 /// Each inner Vec contains 4 time strings (HH:MM format).
 pub type StarRiseTimes = Vec<Vec<String>>;
 
@@ -319,17 +325,21 @@ mod tests {
         assert_eq!(
             data.dates[0].len(),
             NUM_CYCLES,
-            "Each perek should have 4 cycle dates"
+            "Each perek should have 10 cycle dates"
         );
         assert_eq!(
             data.star_rise[0].len(),
             NUM_CYCLES,
-            "Each perek should have 4 star rise times"
+            "Each perek should have 10 star rise times"
         );
 
         // Verify first perek dates match cycle begin dates
         assert_eq!(data.dates[0][0], 57750329); // Cycle 1: 29 Kislev 5775
         assert_eq!(data.dates[0][1], 57781103); // Cycle 2: 3 Av 5778
+
+        // Verify future cycle dates are present
+        assert_eq!(data.dates[0][4], 57890709); // Cycle 5: 9 Nisan 5789
+        assert_eq!(data.dates[0][9], 58070422); // Cycle 10: 22 Tevet 5807
     }
 
     #[test]

@@ -6,9 +6,11 @@ namespace BibleOnSite.Helpers;
 /// </summary>
 public static class HebrewDateHelper
 {
-    // Cycle start dates in Hebrew calendar format YYYYMMDD
-    // From web/bible-on-site/src/data/db/cycles.json: [57750329, 57781103, 57821305, 57851207]
-    private static readonly int[] CycleStartDates = { 57750329, 57781103, 57821305, 57851207 };
+    private static readonly int[] CycleStartDates =
+    {
+        57750329, 57781103, 57821305, 57851207, // Cycles 1-4 (historical)
+        57890709, 57930212, 57960814, 58000317, 58030920, 58070422 // Cycles 5-10 (pre-populated)
+    };
     private const int CycleLength = 1299; // Days in a 929 cycle
 
     /// <summary>
@@ -153,9 +155,8 @@ public static class HebrewDateHelper
     /// </summary>
     internal static int HebrewDateToNumber((int Year, int Month, int Day) date)
     {
-        // Get uniform month number (handles leap year month ordering)
-        var uniformMonth = GetUniformMonth(date.Year, date.Month);
-        return date.Year * 10000 + uniformMonth * 100 + date.Day;
+        var legacyMonth = CalendarMonthToLegacy(date.Year, date.Month);
+        return date.Year * 10000 + legacyMonth * 100 + date.Day;
     }
 
     /// <summary>
@@ -170,38 +171,43 @@ public static class HebrewDateHelper
     }
 
     /// <summary>
-    /// Gets a uniform month number that's consistent across leap/non-leap years.
-    /// In the Hebrew calendar:
-    /// - Non-leap year: months 1-12
-    /// - Leap year: months 1-6, then Adar I (7), Adar II (8), then 9-13
-    ///
-    /// This method normalizes so Adar/Adar II is always month 6 for comparison purposes.
+    /// Converts a HebrewCalendar month number to the legacy format used in cycle dates.
+    /// In HebrewCalendar leap year: 1=Tishrei..5=Shevat, 6=Adar I, 7=Adar II, 8=Nisan..13=Elul
+    /// Legacy format: 1=Tishrei..5=Shevat, 6=Adar/Adar II, 7=Nisan..12=Elul, 13=Adar I
     /// </summary>
-    internal static int GetUniformMonth(int year, int month)
+    internal static int CalendarMonthToLegacy(int year, int calendarMonth)
     {
         var calendar = new System.Globalization.HebrewCalendar();
-        var isLeapYear = calendar.IsLeapYear(year);
+        if (!calendar.IsLeapYear(year))
+            return calendarMonth;
 
-        if (!isLeapYear)
+        return calendarMonth switch
         {
-            return month;
-        }
+            <= 5 => calendarMonth,
+            6 => 13,                // Adar I → legacy 13
+            7 => 6,                 // Adar II → legacy 6 (Adar position)
+            _ => calendarMonth - 1, // Nisan(8)→7, ..., Elul(13)→12
+        };
+    }
 
-        // In leap year, HebrewCalendar has 13 months
-        // Month 7 is Adar I, month 13 is the extra month
-        // For uniform comparison, we use:
-        // 1-6: same
-        // 7 (Adar I in leap): 6
-        // 8-13: shift by 1 to align with non-leap months
-        if (month == 7)
+    /// <summary>
+    /// Converts a legacy format month number back to HebrewCalendar month number.
+    /// Reverse of <see cref="CalendarMonthToLegacy"/>.
+    /// </summary>
+    internal static int LegacyMonthToCalendar(int year, int legacyMonth)
+    {
+        var calendar = new System.Globalization.HebrewCalendar();
+        if (!calendar.IsLeapYear(year))
+            return legacyMonth;
+
+        return legacyMonth switch
         {
-            return 6; // Adar I -> Adar
-        }
-        if (month > 7)
-        {
-            return month - 1;
-        }
-        return month;
+            <= 5 => legacyMonth,
+            6 => 7,                              // Adar (legacy) → HC Adar II (7)
+            >= 7 and <= 12 => legacyMonth + 1,   // Nisan(7)→8, ..., Elul(12)→13
+            13 => 6,                              // Adar I (legacy) → HC Adar I (6)
+            _ => legacyMonth,
+        };
     }
 
     /// <summary>
@@ -209,12 +215,13 @@ public static class HebrewDateHelper
     /// </summary>
     internal static int AddDaysToCycleDate(int dateNum, int days)
     {
-        var (year, month, day) = NumberToHebrewDate(dateNum);
+        var (year, legacyMonth, day) = NumberToHebrewDate(dateNum);
         var calendar = new System.Globalization.HebrewCalendar();
+        var calendarMonth = LegacyMonthToCalendar(year, legacyMonth);
 
         try
         {
-            var gregDate = calendar.ToDateTime(year, month, day, 12, 0, 0, 0);
+            var gregDate = calendar.ToDateTime(year, calendarMonth, day, 12, 0, 0, 0);
             gregDate = gregDate.AddDays(days);
             var newYear = calendar.GetYear(gregDate);
             var newMonth = calendar.GetMonth(gregDate);
@@ -223,7 +230,6 @@ public static class HebrewDateHelper
         }
         catch
         {
-            // Fallback: rough estimate
             return dateNum + days;
         }
     }
