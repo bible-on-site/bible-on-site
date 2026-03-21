@@ -189,7 +189,7 @@ class Build : NukeBuild
 
             DotNetRun(s => s
                 .SetProjectFile(SourceDirectory / "BibleOnSite.csproj")
-                .SetFramework("net9.0-windows10.0.19041.0")
+                .SetFramework("net10.0-windows10.0.19041.0")
                 .SetConfiguration(Configuration)
                 .EnableNoRestore()
                 .EnableNoBuild());
@@ -204,7 +204,7 @@ class Build : NukeBuild
 
             DotNetRun(s => s
                 .SetProjectFile(SourceDirectory / "BibleOnSite.csproj")
-                .SetFramework("net9.0-android")
+                .SetFramework("net10.0-android")
                 .SetConfiguration(Configuration)
                 .EnableNoRestore()
                 .EnableNoBuild());
@@ -219,7 +219,7 @@ class Build : NukeBuild
 
             DotNetRun(s => s
                 .SetProjectFile(SourceDirectory / "BibleOnSite.csproj")
-                .SetFramework("net9.0-ios")
+                .SetFramework("net10.0-ios")
                 .SetConfiguration(Configuration)
                 .EnableNoRestore()
                 .EnableNoBuild());
@@ -234,7 +234,7 @@ class Build : NukeBuild
 
             DotNetRun(s => s
                 .SetProjectFile(SourceDirectory / "BibleOnSite.csproj")
-                .SetFramework("net9.0-maccatalyst")
+                .SetFramework("net10.0-maccatalyst")
                 .SetConfiguration(Configuration)
                 .EnableNoRestore()
                 .EnableNoBuild());

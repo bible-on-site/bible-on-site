@@ -84,7 +84,7 @@ partial class Build
                     // Restore with RuntimeIdentifier to get RID-specific packages for PublishReadyToRun
                     DotNetRestore(s => s
                         .SetProjectFile(MainProject)
-                        .SetProperty("TargetFramework", "net9.0-windows10.0.19041.0")
+                        .SetProperty("TargetFramework", "net10.0-windows10.0.19041.0")
                         .SetProperty("RuntimeIdentifier", "win-x64")
                         .SetProperty("PublishReadyToRun", "true"));
                 }
@@ -93,13 +93,13 @@ partial class Build
             {
                 DotNetRestore(s => s
                     .SetProjectFile(MainProject)
-                    .SetProperty("TargetFramework", "net9.0-android"));
+                    .SetProperty("TargetFramework", "net10.0-android"));
             }
             else if (Platform.Equals("iOS", StringComparison.OrdinalIgnoreCase))
             {
                 DotNetRestore(s => s
                     .SetProjectFile(MainProject)
-                    .SetProperty("TargetFramework", "net9.0-ios")
+                    .SetProperty("TargetFramework", "net10.0-ios")
                     .SetProperty("RuntimeIdentifier", "ios-arm64"));
             }
             else
@@ -119,7 +119,7 @@ partial class Build
             ["GenerateAppxPackageOnBuild"] = "true",
             ["AppxPackageDir"] = $"{ArtifactsDirectory}/",
             ["AppxPackageSigningEnabled"] = "true",
-            ["TargetFramework"] = "net9.0-windows10.0.19041.0",
+            ["TargetFramework"] = "net10.0-windows10.0.19041.0",
             // Microsoft Store requires revision (4th component) to be 0
             // Override ApplicationVersion to 0 to produce X.Y.Z.0 version format
             ["ApplicationVersion"] = "0"
@@ -134,7 +134,7 @@ partial class Build
         DotNetPublish(s => s
             .SetProject(MainProject)
             .SetConfiguration(Configuration)
-            .SetFramework("net9.0-windows10.0.19041.0")
+            .SetFramework("net10.0-windows10.0.19041.0")
             .SetRuntime("win-x64")
             .SetProperties(msbuildProperties)
             .EnableNoRestore());
@@ -149,7 +149,7 @@ partial class Build
         var msbuildProperties = new Dictionary<string, object>
         {
             ["AndroidPackageFormat"] = "aab",
-            ["TargetFramework"] = "net9.0-android"
+            ["TargetFramework"] = "net10.0-android"
         };
 
         // Add signing configuration if provided
@@ -170,12 +170,12 @@ partial class Build
         DotNetPublish(s => s
             .SetProject(MainProject)
             .SetConfiguration(Configuration)
-            .SetFramework("net9.0-android")
+            .SetFramework("net10.0-android")
             .SetProperties(msbuildProperties)
             .EnableNoRestore());
 
         // Find and copy AAB to artifacts directory (MAUI doesn't respect --output for AAB)
-        var binDir = MainProject.Parent / "bin" / Configuration / "net9.0-android";
+        var binDir = MainProject.Parent / "bin" / Configuration / "net10.0-android";
         var aabFiles = binDir.GlobFiles("**/*-Signed.aab");  // Only get signed AABs
 
         if (aabFiles.Count > 0)
@@ -200,7 +200,7 @@ partial class Build
 
         var msbuildProperties = new Dictionary<string, object>
         {
-            ["TargetFramework"] = "net9.0-ios",
+            ["TargetFramework"] = "net10.0-ios",
             ["ArchiveOnBuild"] = "true",
             ["BuildIpa"] = "true",
             ["IpaPackageDir"] = $"{ArtifactsDirectory}/",
@@ -224,13 +224,13 @@ partial class Build
         DotNetPublish(s => s
             .SetProject(MainProject)
             .SetConfiguration(Configuration)
-            .SetFramework("net9.0-ios")
+            .SetFramework("net10.0-ios")
             .SetRuntime("ios-arm64")
             .SetProperties(msbuildProperties)
             .EnableNoRestore());
 
         // Find and copy IPA to artifacts directory
-        var binDir = MainProject.Parent / "bin" / Configuration / "net9.0-ios" / "ios-arm64";
+        var binDir = MainProject.Parent / "bin" / Configuration / "net10.0-ios" / "ios-arm64";
         var ipaFiles = binDir.GlobFiles("**/*.ipa");
 
         if (ipaFiles.Count > 0)
