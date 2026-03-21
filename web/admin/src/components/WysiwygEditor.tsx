@@ -12,6 +12,12 @@ import {
 	ADMIN_EDITOR_SHORTCUT_EXTRAS_KEY,
 	adminEditorShortcutsExtension,
 } from "./editor/adminEditorShortcuts";
+import {
+	FOOTNOTE_INSERT_MARKER,
+	listFootnoteIndices,
+	maxFootnoteIndex,
+	prepareHtmlForNewFootnoteAtSlot,
+} from "./editor/adminFootnoteHtml";
 import { hebrewOrdinalLetter } from "./editor/adminHebrew";
 import {
 	AdminLink,
@@ -34,15 +40,6 @@ interface WysiwygEditorProps {
 	onChange: (content: string) => void;
 	placeholder?: string;
 	autoSaveDelay?: number;
-}
-
-function maxFootnoteIndex(html: string): number {
-	let max = 0;
-	for (const m of html.matchAll(/#note-(\d+)|id="note-(\d+)"|id="noteref-(\d+)"/g)) {
-		const n = Number(m[1] || m[2] || m[3]);
-		if (Number.isFinite(n) && n > max) max = n;
-	}
-	return max;
 }
 
 export function WysiwygEditor({
@@ -68,6 +65,10 @@ export function WysiwygEditor({
 	const [footnoteOpen, setFootnoteOpen] = useState(false);
 	const [footnoteNum, setFootnoteNum] = useState(1);
 	const [footnoteMode, setFootnoteMode] = useState<"ref" | "body">("ref");
+	const [footnotePlacement, setFootnotePlacement] = useState<"end" | "slot">(
+		"end",
+	);
+	const [footnoteSlotN, setFootnoteSlotN] = useState(1);
 
 	useEffect(() => {
 		setPreviewHtml(content);
@@ -261,13 +262,15 @@ export function WysiwygEditor({
 
 	const openFootnoteDialog = useCallback(() => {
 		if (!editor) return;
-		const next = maxFootnoteIndex(editor.getHTML()) + 1;
-		setFootnoteNum(next);
+		const max = maxFootnoteIndex(editor.getHTML());
+		setFootnotePlacement("end");
+		setFootnoteNum(max + 1);
+		setFootnoteSlotN(max >= 1 ? 2 : 1);
 		setFootnoteMode("ref");
 		setFootnoteOpen(true);
 	}, [editor]);
 
-	const insertFootnoteSnippet = useCallback(() => {
+	const insertFootnoteAtEnd = useCallback(() => {
 		if (!editor) return;
 		const n = footnoteNum;
 		const letter = hebrewOrdinalLetter(n);
@@ -278,6 +281,58 @@ export function WysiwygEditor({
 		editor.chain().focus().insertContent(html).run();
 		setFootnoteOpen(false);
 	}, [editor, footnoteMode, footnoteNum]);
+
+	const insertFootnoteAtSlot = useCallback(() => {
+		if (!editor) return;
+		const slotN = footnoteSlotN;
+		const max = maxFootnoteIndex(editor.getHTML());
+		if (slotN < 1 || slotN > max + 1) {
+			window.alert(`מספר הערה חייב להיות בין 1 ל-${max + 1}`);
+			return;
+		}
+		editor.chain().focus().insertContent(FOOTNOTE_INSERT_MARKER).run();
+		const htmlWithMarker = editor.getHTML();
+		let prepared: string;
+		try {
+			prepared = prepareHtmlForNewFootnoteAtSlot(htmlWithMarker, slotN);
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			window.alert(msg);
+			editor.commands.setContent(
+				htmlWithMarker.replaceAll(FOOTNOTE_INSERT_MARKER, ""),
+			);
+			return;
+		}
+		editor.commands.setContent(prepared);
+
+		let from = -1;
+		const markerLen = FOOTNOTE_INSERT_MARKER.length;
+		editor.state.doc.descendants((node, pos) => {
+			if (node.isText && node.text.includes(FOOTNOTE_INSERT_MARKER)) {
+				const idx = node.text.indexOf(FOOTNOTE_INSERT_MARKER);
+				from = pos + idx;
+				return false;
+			}
+		});
+		if (from < 0) {
+			window.alert(
+				"לא נמצא סמן ההוספה במסמך. נסה שוב או השתמש במצב «בסוף הרשימה».",
+			);
+			return;
+		}
+		const letter = hebrewOrdinalLetter(slotN);
+		const snippet =
+			footnoteMode === "ref"
+				? `<sup><a href="#note-${slotN}" id="noteref-${slotN}">${letter}</a></sup>&nbsp;`
+				: `<p id="note-${slotN}"><strong>${letter}.</strong> </p>`;
+		editor
+			.chain()
+			.focus()
+			.setTextSelection({ from, to: from + markerLen })
+			.insertContent(snippet)
+			.run();
+		setFootnoteOpen(false);
+	}, [editor, footnoteMode, footnoteSlotN]);
 
 	const handleProseLinkClick = useCallback(
 		(e: ReactMouseEvent) => {
@@ -351,7 +406,7 @@ export function WysiwygEditor({
 	);
 
 	return (
-		<div className="border border-gray-300 rounded-lg overflow-hidden">
+		<div className="border border-gray-300 rounded-lg">
 			<EditorShortcutModal
 				open={helpOpen}
 				onClose={() => setHelpOpen(false)}
@@ -372,23 +427,76 @@ export function WysiwygEditor({
 							הערות (כמו בתנכפדיה)
 						</h2>
 						<p className="text-sm text-gray-600 leading-relaxed">
-							בתוכן קיים משתמשים ב־
-							<code className="text-xs bg-gray-100 px-1">#note-N</code> ואזכור{" "}
-							<code className="text-xs bg-gray-100 px-1">א ב ג</code> ב־sup. לשינוי
-							סדר פסקאות הערות — גרור בעריכה או ערוך במצב מקור.
+							<strong>בין שתי הערות:</strong> מקם את הסמן, בחר «במקום מספר», בחר את
+							מספר ההערה החדשה (למשל 2 בין 1 ל־3 הקודמות), ואשר — המערכת תדחוף את
+							מספרי ההערות מהמספר הזה ומעלה ותעדכן אותיות אזכור.{" "}
+							<code className="text-xs bg-gray-100 px-1">#note-N</code> /{" "}
+							<code className="text-xs bg-gray-100 px-1">id=&quot;note-N&quot;</code>
 						</p>
-						<label className="block text-sm font-medium text-gray-700">
-							מספר הערה
-							<input
-								type="number"
-								min={1}
-								value={footnoteNum}
-								onChange={(e) =>
-									setFootnoteNum(Number.parseInt(e.target.value, 10) || 1)
-								}
-								className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"
-							/>
-						</label>
+						<p className="text-xs text-gray-500">
+							הערות במסמך:{" "}
+							{editor
+								? listFootnoteIndices(editor.getHTML()).join(", ") || "אין"
+								: "—"}
+						</p>
+						<div className="flex flex-col gap-2 text-sm">
+							<label className="flex items-center gap-2 cursor-pointer">
+								<input
+									type="radio"
+									name="fnplace"
+									checked={footnotePlacement === "end"}
+									onChange={() => {
+										setFootnotePlacement("end");
+										setFootnoteNum(
+											maxFootnoteIndex(editor?.getHTML() ?? "") + 1,
+										);
+									}}
+								/>
+								בסוף הרשימה (מספר חדש)
+							</label>
+							<label className="flex items-center gap-2 cursor-pointer">
+								<input
+									type="radio"
+									name="fnplace"
+									checked={footnotePlacement === "slot"}
+									onChange={() => {
+										setFootnotePlacement("slot");
+										const max = maxFootnoteIndex(editor?.getHTML() ?? "");
+										setFootnoteSlotN(max >= 1 ? 2 : 1);
+									}}
+								/>
+								במקום מספר — דוחף הערות באותו מספר ומעלה (סמן קודם את מיקום
+								האזכור)
+							</label>
+						</div>
+						{footnotePlacement === "end" ? (
+							<label className="block text-sm font-medium text-gray-700">
+								מספר הערה חדש
+								<input
+									type="number"
+									min={1}
+									value={footnoteNum}
+									onChange={(e) =>
+										setFootnoteNum(Number.parseInt(e.target.value, 10) || 1)
+									}
+									className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"
+								/>
+							</label>
+						) : (
+							<label className="block text-sm font-medium text-gray-700">
+								מספר ההערה החדשה (יישב במקום זה; קיימות ≥ מספר יוזזו +1)
+								<input
+									type="number"
+									min={1}
+									max={maxFootnoteIndex(editor?.getHTML() ?? "") + 1}
+									value={footnoteSlotN}
+									onChange={(e) =>
+										setFootnoteSlotN(Number.parseInt(e.target.value, 10) || 1)
+									}
+									className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"
+								/>
+							</label>
+						)}
 						<div className="flex flex-col gap-2 text-sm">
 							<label className="flex items-center gap-2 cursor-pointer">
 								<input
@@ -420,7 +528,11 @@ export function WysiwygEditor({
 							</button>
 							<button
 								type="button"
-								onClick={insertFootnoteSnippet}
+								onClick={() =>
+									footnotePlacement === "end"
+										? insertFootnoteAtEnd()
+										: insertFootnoteAtSlot()
+								}
 								className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm"
 							>
 								הוסף
@@ -430,7 +542,8 @@ export function WysiwygEditor({
 				</div>
 			)}
 
-			<div className="bg-gray-50 border-b border-gray-300 p-2 flex flex-wrap gap-2 items-center">
+			<div className="sticky top-16 z-40 bg-white/95 backdrop-blur-sm border-b border-gray-300 shadow-sm">
+			<div className="bg-gray-50 border-b border-gray-200 p-2 flex flex-wrap gap-2 items-center">
 				<div className="flex gap-1 flex-wrap items-center">
 					{modeBtn("visual", "עריכה")}
 					{modeBtn("preview", "תצוגה מקדימה")}
@@ -631,6 +744,7 @@ export function WysiwygEditor({
 					</div>
 				</div>
 			)}
+			</div>
 
 			{mode === "visual" && (
 				<div

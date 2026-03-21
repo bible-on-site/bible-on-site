@@ -59,6 +59,8 @@ cd data && cargo make mysql-populate-dev
 
 For bundled demo articles only (optional): `cargo make mysql-populate-dev-with-test-articles`.
 
+The **admin** app (`web/admin`) uses **`tanah-dev`** when `DB_URL` is unset and `NODE_ENV` is not `production` (`src/server/db-config.ts`). Use `.dev.env` from `npm run dev` so `DB_URL` points at `tanah-dev`; avoid pointing dev admin at **`tanah`** unless you intend to edit the non-dev database.
+
 For production-like data on demand:
 
 ```bash
