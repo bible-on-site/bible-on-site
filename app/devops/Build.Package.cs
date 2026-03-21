@@ -149,7 +149,8 @@ partial class Build
         var msbuildProperties = new Dictionary<string, object>
         {
             ["AndroidPackageFormat"] = "aab",
-            ["TargetFramework"] = "net10.0-android"
+            ["TargetFramework"] = "net10.0-android",
+            ["UseCurrentRuntimeIdentifier"] = "false"
         };
 
         // Add signing configuration if provided
