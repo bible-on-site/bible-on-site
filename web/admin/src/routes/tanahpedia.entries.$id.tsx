@@ -73,7 +73,7 @@ function EntryEditPage() {
 			});
 		},
 		onSuccess: (savedEntry) => {
-			queryClient.invalidateQueries({ queryKey: ["tanahpedia-entries"] });
+			queryClient.invalidateQueries({ queryKey: ["tanahpedia-admin-entries"] });
 			setLastSaved(new Date());
 			setHasChanges(false);
 			if (isNew && savedEntry?.id) {
@@ -89,7 +89,7 @@ function EntryEditPage() {
 	const deleteMutation = useMutation({
 		mutationFn: () => deleteEntry({ data: id }),
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["tanahpedia-entries"] });
+			queryClient.invalidateQueries({ queryKey: ["tanahpedia-admin-entries"] });
 			navigate({ to: "/tanahpedia" });
 		},
 	});
@@ -157,6 +157,16 @@ function EntryEditPage() {
 						</button>
 					)}
 				</div>
+			</div>
+
+			<div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/60 p-5 text-amber-950">
+				<h2 className="text-sm font-bold text-amber-900 mb-1">
+					GenAI (בקרוב)
+				</h2>
+				<p className="text-sm text-amber-900/85 leading-relaxed">
+					כאן יתווספו הצעות ניסוח, סיכום מקורות וכלים חכמים לעריכה. כרגע אין חיבור
+					למודל — עריכת התוכן היא ידנית בעורך למטה.
+				</p>
 			</div>
 
 			<form className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">

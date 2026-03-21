@@ -49,6 +49,8 @@ npm run dev
 
 This will start the Vite dev server at http://localhost:3101
 
+**מסד נתונים לפיתוח:** לפני `npm run dev`, הסקריפט `ensure-dev-db.mjs` בודק אם יש כבר נתונים ב־`parshan`. אם כן — לא מריצים `mysql-populate-dev`, כדי שלא יידרסו נתונים שהועתקו מפרוד (`devops/setup-dev-env.mts sync-from-prod`). אם המסד ריק — מתבצעת טעינת נתוני בדיקה כרגיל.
+
 ### Building
 
 ```bash
