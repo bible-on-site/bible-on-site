@@ -2,3 +2,10 @@
 body:has(.tanahpedia-layout) .top-nav {
   background-color: #1552ac;
 }
+
+/* Full page width like perek layout */
+.tanahpedia-layout {
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
+}

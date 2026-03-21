@@ -4,11 +4,22 @@ import { notFound } from "next/navigation";
 import {
 	ENTITY_TYPE_LABELS,
 	getAllEntryUniqueNames,
+	getEntries,
+	getEntriesByEntityType,
 	getEntryByUniqueName,
 } from "@/lib/tanahpedia/service";
 import type { EntityType, CategoryKey } from "@/lib/tanahpedia/types";
 import { TanahpediaBreadcrumb } from "../../components/TanahpediaBreadcrumb";
 import styles from "../../page.module.css";
+
+/** Plain-text snippet for meta description (entry content may be HTML). */
+function metaDescriptionFromContent(html: string, maxLen: number): string {
+	const plain = html
+		.replace(/<[^>]*>/g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
+	return plain.slice(0, maxLen);
+}
 
 // this reserverd function is a magic for caching
 /* istanbul ignore next: only runs during next build */
@@ -34,9 +45,12 @@ export async function generateMetadata({
 	try {
 		const entry = await getEntryByUniqueName(decodeURIComponent(uniqueName));
 		if (!entry) return { title: "לא נמצא" };
+		const fromContent = entry.content
+			? metaDescriptionFromContent(entry.content, 200)
+			: "";
 		return {
 			title: `${entry.title} | תנכפדיה`,
-			description: entry.content?.slice(0, 200) ?? entry.title,
+			description: fromContent.length > 0 ? fromContent : entry.title,
 		};
 	} catch {
 		return { title: "לא נמצא" };
@@ -62,11 +76,34 @@ export default async function EntryPage({
 		? (entry.entities[0].entityType as CategoryKey)
 		: null;
 
+	let siblingEntries: { uniqueName: string; title: string }[] = [];
+	try {
+		if (primaryEntityType) {
+			const list = await getEntriesByEntityType(
+				primaryEntityType as EntityType,
+			);
+			siblingEntries = list.map((e) => ({
+				uniqueName: e.uniqueName,
+				title: e.title,
+			}));
+		} else {
+			const list = await getEntries(500, 0);
+			siblingEntries = list.map((e) => ({
+				uniqueName: e.uniqueName,
+				title: e.title,
+			}));
+		}
+	} catch {
+		siblingEntries = [];
+	}
+
 	return (
 		<div className={styles.tanahpediaPage}>
 			<TanahpediaBreadcrumb
 				currentCategory={primaryEntityType}
 				currentEntryTitle={entry.title}
+				currentEntryUniqueName={entry.uniqueName}
+				siblingEntries={siblingEntries}
 			/>
 			<h1 className={styles.pageTitle}>{entry.title}</h1>
 

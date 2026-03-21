@@ -243,3 +243,74 @@
 .sefer-grid ul li {
   white-space: nowrap;
 }
+
+/* Tanahpedia: full-width breadcrumb row (like perek layout) */
+.tanahpedia-nav {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.tanahpedia-inner {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.tanahpedia-inner .breadcrumb {
+  margin: 0 12px 0 0;
+}
+
+/* Wider scrollable category menu with two-level hierarchy */
+.tanahpedia-category-drop {
+  min-width: 220px;
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+}
+
+.tanahpedia-category-group {
+  border-bottom: 1px solid #eee;
+}
+
+.tanahpedia-category-group:last-child {
+  border-bottom: none;
+}
+
+.drop .tanahpedia-category-parent {
+  display: block;
+  font-weight: 600;
+  padding: 8px 16px 4px;
+  text-decoration: none;
+  color: #222;
+}
+
+.drop .tanahpedia-category-parent:hover,
+.drop .tanahpedia-category-parent:focus {
+  background-color: #f5f5f5;
+  color: #0066cc;
+}
+
+.drop .tanahpedia-nested {
+  list-style: none;
+  padding: 0 0 8px 0;
+  margin: 0;
+}
+
+.drop .tanahpedia-nested li {
+  display: block;
+}
+
+.drop .tanahpedia-nested li a {
+  display: block;
+  padding: 4px 28px 4px 16px;
+  font-size: 13px;
+  font-weight: normal;
+  text-decoration: none;
+  color: #444;
+}
+
+.drop .tanahpedia-nested li a:hover,
+.drop .tanahpedia-nested li a:focus {
+  background-color: #f0f6ff;
+  color: #0066cc;
+}

@@ -6,7 +6,11 @@ import {
 	getRecentEntries,
 	getTodayInTanahEvents,
 } from "@/lib/tanahpedia/service";
-import type { CategoryKey, EntityType } from "@/lib/tanahpedia/types";
+import type { CategoryKey } from "@/lib/tanahpedia/types";
+import {
+	CATEGORY_HIERARCHY,
+	subcategoryHref,
+} from "@/lib/tanahpedia/category-hierarchy";
 import { HebrewDate } from "@/util/hebdates-util";
 import styles from "./page.module.css";
 
@@ -17,42 +21,6 @@ export const metadata: Metadata = {
 
 // SSG: This page is statically generated at build time
 export const revalidate = 3600;
-
-interface CategoryItem {
-	type: EntityType;
-	children?: CategoryKey[];
-}
-
-const CATEGORY_HIERARCHY: CategoryItem[] = [
-	{ type: "PERSON", children: ["PROPHET", "KING"] },
-	{ type: "PLACE" },
-	{ type: "EVENT", children: ["WAR"] },
-	{ type: "SAYING", children: ["PROPHECY"] },
-	{ type: "OBJECT", children: ["TEMPLE_TOOL", "ASTRONOMICAL_OBJECT"] },
-	{
-		type: "ANIMAL",
-		children: ["BEHEMA", "CHAYA", "OF", "SHERETZ", "TAHOR", "TAMEH"],
-	},
-	{ type: "PLANT" },
-	{ type: "SEFER", children: ["TANAH_SEFER"] },
-	{ type: "NATION" },
-];
-
-const ANIMAL_KINDS: CategoryKey[] = ["BEHEMA", "CHAYA", "OF", "SHERETZ"];
-const ANIMAL_PURITIES: CategoryKey[] = ["TAHOR", "TAMEH"];
-
-function subcategoryHref(key: CategoryKey): string {
-	if (key === "PROPHET" || key === "KING") {
-		return `/tanahpedia/person?role=${key.toLowerCase()}`;
-	}
-	if (ANIMAL_KINDS.includes(key)) {
-		return `/tanahpedia/animal?kind=${key.toLowerCase()}`;
-	}
-	if (ANIMAL_PURITIES.includes(key)) {
-		return `/tanahpedia/animal?purity=${key.toLowerCase()}`;
-	}
-	return `/tanahpedia/${key.toLowerCase()}`;
-}
 
 export default async function TanahpediaLandingPage() {
 	const today = HebrewDate.fromGregorian(new Date());

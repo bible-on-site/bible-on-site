@@ -160,7 +160,12 @@ async fn main() -> Result<()> {
 
         let tanahpedia_structure_path = base_path.join(&cli.tanahpedia_structure_script);
         if tanahpedia_structure_path.exists() {
-            execute_script(&mut conn, &tanahpedia_structure_path, "tanahpedia-structure").await?;
+            execute_script(
+                &mut conn,
+                &tanahpedia_structure_path,
+                "tanahpedia-structure",
+            )
+            .await?;
         }
     }
 
@@ -190,21 +195,37 @@ async fn main() -> Result<()> {
 
         let tanahpedia_seed_data_path = base_path.join(&cli.tanahpedia_seed_data_script);
         if tanahpedia_seed_data_path.exists() {
-            execute_script(&mut conn, &tanahpedia_seed_data_path, "tanahpedia-seed-data").await?;
+            execute_script(
+                &mut conn,
+                &tanahpedia_seed_data_path,
+                "tanahpedia-seed-data",
+            )
+            .await?;
         }
 
         // Check if production has tanahpedia data; if not, run legacy migration
-        let should_run_legacy_migration = check_if_should_run_legacy_migration(&cli.prod_db_url).await;
+        let should_run_legacy_migration =
+            check_if_should_run_legacy_migration(&cli.prod_db_url).await;
         if should_run_legacy_migration {
-            let tanahpedia_legacy_migration_path = base_path.join(&cli.tanahpedia_legacy_migration_script);
+            let tanahpedia_legacy_migration_path =
+                base_path.join(&cli.tanahpedia_legacy_migration_script);
             if tanahpedia_legacy_migration_path.exists() {
                 println!("Production database has no tanahpedia data; running legacy migration...");
-                execute_script(&mut conn, &tanahpedia_legacy_migration_path, "tanahpedia-legacy-migration").await?;
+                execute_script(
+                    &mut conn,
+                    &tanahpedia_legacy_migration_path,
+                    "tanahpedia-legacy-migration",
+                )
+                .await?;
             } else {
-                println!("Warning: tanahpedia_legacy_migration.sql not found, but production has no data");
+                println!(
+                    "Warning: tanahpedia_legacy_migration.sql not found, but production has no data"
+                );
             }
         } else {
-            println!("Production database has tanahpedia data; skipping legacy migration (data will come from sync-from-prod)");
+            println!(
+                "Production database has tanahpedia data; skipping legacy migration (data will come from sync-from-prod)"
+            );
         }
     }
 
@@ -331,7 +352,10 @@ async fn check_if_should_run_legacy_migration(prod_db_url: &Option<String>) -> b
     let prod_options = match MySqlConnectOptions::from_str(prod_db_url) {
         Ok(opts) => opts.disable_statement_logging(),
         Err(e) => {
-            println!("Warning: Failed to parse PROD_DB_URL: {}. Will run legacy migration.", e);
+            println!(
+                "Warning: Failed to parse PROD_DB_URL: {}. Will run legacy migration.",
+                e
+            );
             return true;
         }
     };
@@ -345,20 +369,28 @@ async fn check_if_should_run_legacy_migration(prod_db_url: &Option<String>) -> b
             match raw_sql(check_query).execute(&mut conn).await {
                 Ok(_) => {
                     // Table exists - assume it has data (will be populated by sync-from-prod)
-                    println!("tanahpedia_entry table exists in production; skipping legacy migration (data will come from sync-from-prod)");
+                    println!(
+                        "tanahpedia_entry table exists in production; skipping legacy migration (data will come from sync-from-prod)"
+                    );
                     conn.close().await.ok();
                     false
                 }
                 Err(e) => {
                     // Table doesn't exist or query failed - run legacy migration
-                    println!("tanahpedia_entry table does not exist or is inaccessible in production: {}. Will run legacy migration.", e);
+                    println!(
+                        "tanahpedia_entry table does not exist or is inaccessible in production: {}. Will run legacy migration.",
+                        e
+                    );
                     conn.close().await.ok();
                     true
                 }
             }
         }
         Err(e) => {
-            println!("Warning: Failed to connect to production database: {}. Will run legacy migration.", e);
+            println!(
+                "Warning: Failed to connect to production database: {}. Will run legacy migration.",
+                e
+            );
             true
         }
     }
