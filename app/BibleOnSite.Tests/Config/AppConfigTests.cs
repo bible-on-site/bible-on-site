@@ -103,7 +103,11 @@ public class AppConfigTests
         {
             WithApiUrl(null, () =>
             {
+#if DEBUG
                 AppConfig.Instance.GetApiUrl().Should().Be(AppConfig.Instance.DevApiUrl);
+#else
+                AppConfig.Instance.GetApiUrl().Should().Be(AppConfig.Instance.ApiUrl);
+#endif
             });
         }
 
@@ -112,7 +116,11 @@ public class AppConfigTests
         {
             WithApiUrl("", () =>
             {
+#if DEBUG
                 AppConfig.Instance.GetApiUrl().Should().Be(AppConfig.Instance.DevApiUrl);
+#else
+                AppConfig.Instance.GetApiUrl().Should().Be(AppConfig.Instance.ApiUrl);
+#endif
             });
         }
     }
