@@ -2,6 +2,14 @@ import Link from "@tiptap/extension-link";
 
 export type AdminLinkType = "external" | "internal" | "comment";
 
+/** TipTap's `setLink` typings omit custom `linkType` from `AdminLink`; cast at call sites — `linkType` is still applied at runtime. */
+export type TipTapLinkMarkAttrs = {
+	href: string;
+	target?: string | null;
+	rel?: string | null;
+	class?: string | null;
+};
+
 function inferLinkType(href: string | null | undefined): AdminLinkType {
 	if (!href) return "external";
 	const h = href.trim();

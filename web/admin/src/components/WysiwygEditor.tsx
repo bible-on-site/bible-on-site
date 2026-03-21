@@ -24,6 +24,7 @@ import {
 	buildLinkHref,
 	inferLinkType,
 	type AdminLinkType,
+	type TipTapLinkMarkAttrs,
 } from "./editor/adminLinkExtension";
 import { AdminOrderedList } from "./editor/adminOrderedListExtension";
 
@@ -188,20 +189,24 @@ export function WysiwygEditor({
 	const applyLinkFromPanel = useCallback(() => {
 		if (!editor) return;
 		const { href, linkType } = buildLinkHref(linkPanelType, linkPanelHref);
-		const attrs: Record<string, unknown> = { href, linkType };
+		const attrs: TipTapLinkMarkAttrs & { linkType: AdminLinkType } = {
+			href,
+			linkType,
+		};
 		if (linkType === "external" && linkPanelBlank) {
 			attrs.target = "_blank";
 			attrs.rel = "noopener noreferrer nofollow";
 		}
+		const forTipTap = attrs as TipTapLinkMarkAttrs;
 		if (editor.isActive("link")) {
-			editor.chain().focus().extendMarkRange("link").setLink(attrs).run();
+			editor.chain().focus().extendMarkRange("link").setLink(forTipTap).run();
 		} else {
 			const { empty } = editor.state.selection;
 			if (empty) {
 				window.alert("סמן טקסט לפני הוספת קישור, או לחץ על קישור קיים.");
 				return;
 			}
-			editor.chain().focus().setLink(attrs).run();
+			editor.chain().focus().setLink(forTipTap).run();
 		}
 		syncLinkPanelFromEditor();
 	}, [
@@ -229,7 +234,11 @@ export function WysiwygEditor({
 		setLinkPanelType("external");
 		setLinkPanelBlank(true);
 		setLinkPanelActive(true);
-		editor.chain().focus().setLink({ href: "https://", linkType: "external" }).run();
+		editor
+			.chain()
+			.focus()
+			.setLink({ href: "https://", linkType: "external" } as TipTapLinkMarkAttrs)
+			.run();
 	}, [editor]);
 
 	const addImage = useCallback(() => {
@@ -308,11 +317,12 @@ export function WysiwygEditor({
 		let from = -1;
 		const markerLen = FOOTNOTE_INSERT_MARKER.length;
 		editor.state.doc.descendants((node, pos) => {
-			if (node.isText && node.text.includes(FOOTNOTE_INSERT_MARKER)) {
-				const idx = node.text.indexOf(FOOTNOTE_INSERT_MARKER);
-				from = pos + idx;
-				return false;
-			}
+			if (!node.isText) return;
+			const t = node.text;
+			if (!t?.includes(FOOTNOTE_INSERT_MARKER)) return;
+			const idx = t.indexOf(FOOTNOTE_INSERT_MARKER);
+			from = pos + idx;
+			return false;
 		});
 		if (from < 0) {
 			window.alert(

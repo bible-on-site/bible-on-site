@@ -1,6 +1,11 @@
 import { Extension } from "@tiptap/core";
 import type { Editor } from "@tiptap/core";
-import { buildLinkHref, inferLinkType, type AdminLinkType } from "./adminLinkExtension";
+import {
+	buildLinkHref,
+	inferLinkType,
+	type AdminLinkType,
+	type TipTapLinkMarkAttrs,
+} from "./adminLinkExtension";
 
 export const ADMIN_EDITOR_SHORTCUT_EXTRAS_KEY = "admin-editor-shortcut-extras";
 
@@ -91,15 +96,19 @@ function promptLink(editor: Editor): boolean {
 			? "comment"
 			: inferLinkType(url.trim());
 	const { href, linkType } = buildLinkHref(type, url.trim());
-	const attrs: Record<string, unknown> = { href, linkType };
+	const attrs: TipTapLinkMarkAttrs & { linkType: AdminLinkType } = {
+		href,
+		linkType,
+	};
 	if (type === "external") {
 		attrs.target = "_blank";
 		attrs.rel = "noopener noreferrer nofollow";
 	}
+	const forTipTap = attrs as TipTapLinkMarkAttrs;
 	if (editor.isActive("link")) {
-		editor.chain().focus().extendMarkRange("link").setLink(attrs).run();
+		editor.chain().focus().extendMarkRange("link").setLink(forTipTap).run();
 	} else {
-		editor.chain().focus().setLink(attrs).run();
+		editor.chain().focus().setLink(forTipTap).run();
 	}
 	return true;
 }
