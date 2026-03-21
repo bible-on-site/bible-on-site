@@ -91,9 +91,10 @@ partial class Build
             }
             else if (Platform.Equals("Android", StringComparison.OrdinalIgnoreCase))
             {
-                // Android restore is handled by publish itself — .NET 10 infers a host RID
-                // during publish that doesn't match a RID-less restore, so a separate restore
-                // here would produce unusable assets.
+                DotNetRestore(s => s
+                    .SetProjectFile(MainProject)
+                    .SetProperty("TargetFramework", "net10.0-android")
+                    .SetProperty("UseCurrentRuntimeIdentifier", "false"));
             }
             else if (Platform.Equals("iOS", StringComparison.OrdinalIgnoreCase))
             {
@@ -172,6 +173,7 @@ partial class Build
             .SetProject(MainProject)
             .SetConfiguration(Configuration)
             .SetFramework("net10.0-android")
+            .EnableNoRestore()
             .SetProperties(msbuildProperties));
 
         // Find and copy AAB to artifacts directory (MAUI doesn't respect --output for AAB)
