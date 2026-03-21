@@ -205,5 +205,44 @@ public class HtmlMediaExtractorTests
 
             segments.Should().BeEmpty();
         }
+
+        [Fact]
+        public void extracts_media_nested_inside_div()
+        {
+            const string url = "https://example.com/nested.mp4";
+            var html = $"""<p>Before</p><div class="player"><video src="{url}" controls></video></div><p>After</p>""";
+
+            var segments = HtmlMediaExtractor.ExtractSegments(html);
+
+            segments.Should().HaveCount(3);
+            segments[0].Kind.Should().Be(SegmentKind.Html);
+            segments[0].Html.Should().Contain("Before");
+
+            segments[1].Should().BeEquivalentTo(
+                new ContentSegment(SegmentKind.Media, null, url, MediaType.Video));
+
+            segments[2].Kind.Should().Be(SegmentKind.Html);
+            segments[2].Html.Should().Contain("After");
+        }
+
+        [Fact]
+        public void extracts_multiple_nested_media_elements()
+        {
+            const string videoUrl = "https://example.com/vid.mp4";
+            const string audioUrl = "https://example.com/aud.mp3";
+            var html = $"""<div><p>Intro</p><div><video src="{videoUrl}"></video></div><span><audio src="{audioUrl}"></audio></span><p>End</p></div>""";
+
+            var segments = HtmlMediaExtractor.ExtractSegments(html);
+
+            segments.Should().HaveCount(4);
+            segments[0].Kind.Should().Be(SegmentKind.Html);
+            segments[0].Html.Should().Contain("Intro");
+            segments[1].Should().BeEquivalentTo(
+                new ContentSegment(SegmentKind.Media, null, videoUrl, MediaType.Video));
+            segments[2].Should().BeEquivalentTo(
+                new ContentSegment(SegmentKind.Media, null, audioUrl, MediaType.Audio));
+            segments[3].Kind.Should().Be(SegmentKind.Html);
+            segments[3].Html.Should().Contain("End");
+        }
     }
 }
