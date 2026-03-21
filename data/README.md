@@ -71,7 +71,7 @@ Each perek includes:
 
 The `mysql/db-populator` crate populates a MySQL database with Tanah structure and test data.
 
-When the legacy Tanahpedia migration runs (no prod data), it is followed by `tanahpedia_family_shimshon_data.sql` — demo parents and unions for שמשון (needs `source_citation` columns on `tanahpedia_person_union` / `tanahpedia_person_parent_child`). For an **existing** DB created from an older `tanahpedia_structure.sql`, run `tanahpedia_alter_source_citation.sql` once before that family script.
+The db-populator runs `tanahpedia_family_shimshon_data.sql` after Tanahpedia seeds whenever the **target** database has a `tanahpedia_person` row for entity name **שמשון** (from `tanahpedia_legacy_migration.sql` or from prod sync). This is **independent** of whether the legacy migration ran (e.g. when `PROD_DB_URL` is set and prod already has Tanahpedia). The script is idempotent (fixed UUIDs). It needs `source_citation` columns on `tanahpedia_person_union` / `tanahpedia_person_parent_child`. For an **existing** DB created from an older `tanahpedia_structure.sql`, run `tanahpedia_alter_source_citation.sql` once before populate.
 
 ### Development database (tanah-dev)
 

@@ -228,15 +228,6 @@ async fn main() -> Result<()> {
                     "tanahpedia-legacy-migration",
                 )
                 .await?;
-                let tanahpedia_family_path = base_path.join(&cli.tanahpedia_family_shimshon_script);
-                if tanahpedia_family_path.exists() {
-                    execute_script(
-                        &mut conn,
-                        &tanahpedia_family_path,
-                        "tanahpedia-family-shimshon",
-                    )
-                    .await?;
-                }
             } else {
                 println!(
                     "Warning: tanahpedia_legacy_migration.sql not found, but production has no data"
@@ -246,6 +237,30 @@ async fn main() -> Result<()> {
             println!(
                 "Production database has tanahpedia data; skipping legacy migration (data will come from sync-from-prod)"
             );
+        }
+
+        // Idempotent demo family for שמשון — must run even when legacy migration is skipped
+        // (e.g. PROD_DB_URL points at prod with Tanahpedia; local DB still needs graph rows).
+        let tanahpedia_family_path = base_path.join(&cli.tanahpedia_family_shimshon_script);
+        if tanahpedia_family_path.exists() {
+            match tanahpedia_shimshon_person_exists(&mut conn).await {
+                Ok(true) => {
+                    println!("Applying tanahpedia family demo (שמשון)...");
+                    execute_script(
+                        &mut conn,
+                        &tanahpedia_family_path,
+                        "tanahpedia-family-shimshon",
+                    )
+                    .await?;
+                }
+                Ok(false) => println!(
+                    "Skipping tanahpedia family demo: no tanahpedia_person row for entity name «שמשון»"
+                ),
+                Err(e) => println!(
+                    "Skipping tanahpedia family demo (could not check for שמשון): {}",
+                    e
+                ),
+            }
         }
     }
 
@@ -357,6 +372,19 @@ async fn execute_script_chunked(
         script_type, stmt_count
     );
     Ok(())
+}
+
+/// True when the target DB has a Tanahpedia person linked to entity name שמשון (legacy or prod sync).
+async fn tanahpedia_shimshon_person_exists(conn: &mut MySqlConnection) -> Result<bool> {
+	let n: i64 = sqlx::query_scalar(
+		"SELECT COUNT(*) FROM tanahpedia_person p \
+		 INNER JOIN tanahpedia_entity e ON e.id = p.entity_id \
+		 WHERE e.name = 'שמשון'",
+	)
+	.fetch_one(&mut *conn)
+	.await
+	.context("Failed to check for שמשון in tanahpedia_person")?;
+	Ok(n > 0)
 }
 
 /// Checks if legacy migration should be run.
