@@ -186,8 +186,8 @@ public class ApiServerFixture : IAsyncLifetime
                 return apiPath;
             }
 
-            // Also check if we're in the repo root (has bible-on-site.sln)
-            var slnPath = Path.Combine(dir.FullName, "bible-on-site.sln");
+            // Also check if we're in the repo root (has bible-on-site.slnx)
+            var slnPath = Path.Combine(dir.FullName, "bible-on-site.slnx");
             if (File.Exists(slnPath))
             {
                 apiPath = Path.Combine(dir.FullName, "web", "api");

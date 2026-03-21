@@ -214,6 +214,10 @@
           "type": "boolean",
           "description": "Deploy to production instead of flight/internal (requires store review)"
         },
+        "Solution": {
+          "type": "string",
+          "description": "Path to a solution file that is automatically loaded. Default is bible-on-site.slnx"
+        },
         "Watch": {
           "type": "boolean",
           "description": "Use dotnet watch for hot reload. Default: false (one-shot build)"

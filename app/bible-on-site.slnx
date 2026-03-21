@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/devops/">
+    <Project Path="devops/_build.csproj" />
+  </Folder>
+  <Project Path="BibleOnSite.Core/BibleOnSite.Core.csproj" />
+  <Project Path="BibleOnSite.Tests.E2E/BibleOnSite.Tests.E2E.csproj" />
+  <Project Path="BibleOnSite.Tests/BibleOnSite.Tests.csproj" />
+  <Project Path="BibleOnSite/BibleOnSite.csproj" />
+</Solution>

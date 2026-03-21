@@ -134,7 +134,7 @@ public partial class PreferencesViewModel : ObservableObject
         OnPropertyChanged(nameof(PerushimNotesStatusText));
         if (!ok && Application.Current?.Windows?.Count > 0 && Application.Current.Windows[0].Page is Page page)
         {
-            await page.DisplayAlert("שגיאה", "לא ניתן להוריד את חבילת הפירושים. נסו שוב מאוחר יותר.", "אישור");
+            await page.DisplayAlertAsync("שגיאה", "לא ניתן להוריד את חבילת הפירושים. נסו שוב מאוחר יותר.", "אישור");
         }
     }
 
@@ -160,7 +160,7 @@ public partial class PreferencesViewModel : ObservableObject
         {
             System.Diagnostics.Debug.WriteLine($"Export perushim logs failed: {ex.Message}");
             if (Application.Current?.Windows?.Count > 0 && Application.Current.Windows[0].Page is Page page)
-                await page.DisplayAlert("שגיאה", $"לא ניתן לייצא לוגים: {ex.Message}", "אישור");
+                await page.DisplayAlertAsync("שגיאה", $"לא ניתן לייצא לוגים: {ex.Message}", "אישור");
         }
     }
 

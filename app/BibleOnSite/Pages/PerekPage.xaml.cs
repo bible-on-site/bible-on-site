@@ -319,7 +319,7 @@ public partial class PerekPage : ContentPage
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"Failed to load perek: {ex.Message}");
-                await DisplayAlert("Error", $"Failed to load perek: {ex.Message}", "OK");
+                await DisplayAlertAsync("Error", $"Failed to load perek: {ex.Message}", "OK");
             }
             finally
             {
@@ -834,13 +834,13 @@ public partial class PerekPage : ContentPage
         // Animate FAB rotation and fade in all buttons (disabled = 0.4, enabled = 1)
         var animations = new List<Task>
         {
-            CircularMenuButton.RotateTo(180, 250, Easing.SpringOut)
+            CircularMenuButton.RotateToAsync(180, 250, Easing.SpringOut)
         };
 
         foreach (var button in buttons)
         {
             var targetOpacity = button.IsEnabled ? 1.0 : 0.4;
-            animations.Add(button.FadeTo(targetOpacity, 200));
+            animations.Add(button.FadeToAsync(targetOpacity, 200));
         }
 
         await Task.WhenAll(animations);
@@ -860,12 +860,12 @@ public partial class PerekPage : ContentPage
         // Animate FAB rotation and fade out all buttons
         var animations = new List<Task>
         {
-            CircularMenuButton.RotateTo(0, 200, Easing.SpringOut)
+            CircularMenuButton.RotateToAsync(0, 200, Easing.SpringOut)
         };
 
         foreach (var button in buttons)
         {
-            animations.Add(button.FadeTo(0, 150));
+            animations.Add(button.FadeToAsync(0, 150));
         }
 
         await Task.WhenAll(animations);
@@ -1031,7 +1031,7 @@ public partial class PerekPage : ContentPage
             const uint duration = 200;
 
             // First half - rotate out (scale X to simulate flip)
-            await fromView.ScaleXTo(0, duration, Easing.CubicIn);
+            await fromView.ScaleXToAsync(0, duration, Easing.CubicIn);
 
             // Switch visibility at midpoint
             fromView.IsVisible = false;
@@ -1039,7 +1039,7 @@ public partial class PerekPage : ContentPage
             toView.ScaleX = 0;
 
             // Second half - rotate in
-            await toView.ScaleXTo(1, duration, Easing.CubicOut);
+            await toView.ScaleXToAsync(1, duration, Easing.CubicOut);
         }
         catch (Exception ex)
         {
@@ -1154,7 +1154,7 @@ public partial class PerekPage : ContentPage
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Download perushim failed: {ex.Message}");
-            await DisplayAlert("שגיאה", "לא ניתן להוריד פירושים. נסו שוב מאוחר יותר.", "אישור");
+            await DisplayAlertAsync("שגיאה", "לא ניתן להוריד פירושים. נסו שוב מאוחר יותר.", "אישור");
         }
         finally
         {
@@ -1186,12 +1186,12 @@ public partial class PerekPage : ContentPage
             PerushimPanel.IsVisible = true;
 
             // Slide up
-            await PerushimPanel.TranslateTo(0, 0, 250, Easing.CubicOut);
+            await PerushimPanel.TranslateToAsync(0, 0, 250, Easing.CubicOut);
         }
         else
         {
             // Slide down then hide
-            await PerushimPanel.TranslateTo(0, _perushimPanelHeight, 250, Easing.CubicIn);
+            await PerushimPanel.TranslateToAsync(0, _perushimPanelHeight, 250, Easing.CubicIn);
             PerushimPanel.IsVisible = false;
         }
     }
@@ -1292,7 +1292,7 @@ public partial class PerekPage : ContentPage
                         if (shouldDismiss)
                         {
                             // Dismiss: complete the slide down
-                            await PerushimPanel.TranslateTo(0, _perushimPanelHeight, 200, Easing.CubicIn);
+                            await PerushimPanel.TranslateToAsync(0, _perushimPanelHeight, 200, Easing.CubicIn);
                             PerushimPanel.IsVisible = false;
                             _isPerushimOpen = false;
                             _isPerushimExpanded = false;
@@ -1301,7 +1301,7 @@ public partial class PerekPage : ContentPage
                         else
                         {
                             // Snap back to open position
-                            await PerushimPanel.TranslateTo(0, 0, 200, Easing.CubicOut);
+                            await PerushimPanel.TranslateToAsync(0, 0, 200, Easing.CubicOut);
                         }
                     }
                 }

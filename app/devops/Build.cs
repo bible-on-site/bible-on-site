@@ -7,6 +7,7 @@ using Nuke.Common;
 using Nuke.Common.CI;
 using Nuke.Common.Execution;
 using Nuke.Common.IO;
+using Nuke.Common.ProjectModel;
 using Nuke.Common.Tools.DotNet;
 using Nuke.Common.Utilities.Collections;
 using static Nuke.Common.Tools.DotNet.DotNetTasks;
@@ -30,15 +31,17 @@ partial class Build : NukeBuild
     [Parameter("Configuration to build - Default is 'Debug' (local) or 'Release' (server)")]
     readonly string Configuration = IsLocalBuild ? "Debug" : "Release";
 
-    // ============ Project Paths ============
-    AbsolutePath SourceDirectory => RootDirectory / "BibleOnSite";
-    AbsolutePath TestsDirectory => RootDirectory / "BibleOnSite.Tests";
-    AbsolutePath E2ETestsDirectory => RootDirectory / "BibleOnSite.Tests.E2E";
-    AbsolutePath CoreDirectory => RootDirectory / "BibleOnSite.Core";
-    AbsolutePath ApiDirectory => RootDirectory.Parent / "web" / "api";
+    [Solution("bible-on-site.slnx")] readonly Solution Solution = null!;
 
-    AbsolutePath MainProject => SourceDirectory / "BibleOnSite.csproj";
-    AbsolutePath TestProject => TestsDirectory / "BibleOnSite.Tests.csproj";
-    AbsolutePath E2ETestProject => E2ETestsDirectory / "BibleOnSite.Tests.E2E.csproj";
-    AbsolutePath CoreProject => CoreDirectory / "BibleOnSite.Core.csproj";
+    // ============ Project Paths (derived from solution) ============
+    AbsolutePath MainProject => Solution.GetProject("BibleOnSite").Path;
+    AbsolutePath TestProject => Solution.GetProject("BibleOnSite.Tests").Path;
+    AbsolutePath E2ETestProject => Solution.GetProject("BibleOnSite.Tests.E2E").Path;
+    AbsolutePath CoreProject => Solution.GetProject("BibleOnSite.Core").Path;
+
+    AbsolutePath SourceDirectory => MainProject.Parent;
+    AbsolutePath TestsDirectory => TestProject.Parent;
+    AbsolutePath E2ETestsDirectory => E2ETestProject.Parent;
+    AbsolutePath CoreDirectory => CoreProject.Parent;
+    AbsolutePath ApiDirectory => RootDirectory.Parent / "web" / "api";
 }

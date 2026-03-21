@@ -1376,7 +1376,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "9.0.x"
+          dotnet-version: "10.0.x"
 
       - name: Cache NuGet packages
         uses: actions/cache@v5
@@ -1391,9 +1391,9 @@ jobs:
 
       - name: Verify Android NuGet restore
         run: |
-          echo '{"sdk":{"version":"9.0.0","rollForward":"latestFeature"}}' > $GITHUB_WORKSPACE/global.json
+          echo '{"sdk":{"version":"10.0.0","rollForward":"latestFeature"}}' > $GITHUB_WORKSPACE/global.json
           dotnet workload install maui-android --skip-manifest-update
-          dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net9.0-android
+          dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android
           rm -f $GITHUB_WORKSPACE/global.json
 
       - name: Run Unit Tests with Coverage
@@ -1499,7 +1499,6 @@ jobs:
     runs-on: macos-15
     needs: [setup_env, determine_app_changes, determine_baseline_availability, perushim_data]
     # Only on PRs — on master, Package iOS (IPA) already validates the full iOS build.
-    # TODO(#1018): when upgrading to .NET 10, verify workload install flags still work.
     if: ${{ github.event_name == 'pull_request' && always() && !cancelled() && !failure() && (needs.determine_app_changes.outputs.module_changed == 'true' || needs.determine_app_changes.outputs.ci_changed == 'true') }}
     defaults:
       run:
@@ -1516,7 +1515,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "9.0.x"
+          dotnet-version: "10.0.x"
 
       - name: Cache NuGet packages
         uses: actions/cache@v5
@@ -1554,7 +1553,7 @@ jobs:
       - name: Build iOS target
         run: |
           dotnet build BibleOnSite/BibleOnSite.csproj -c Release \
-            -p:TargetFrameworks=net9.0-ios \
+            -p:TargetFrameworks=net10.0-ios \
             -p:ErrorOnDuplicatePublishOutputFiles=false > build.log 2>&1 &
           PID=$!
           while kill -0 $PID 2>/dev/null; do
@@ -2495,7 +2494,7 @@ jobs:
         if: ${{ needs.release_app.outputs.released == 'true' }}
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "9.0.x"
+          dotnet-version: "10.0.x"
 
       - name: Restore dotnet tools (for App)
         if: ${{ needs.release_app.outputs.released == 'true' }}
