@@ -223,6 +223,42 @@
   font-size: 1rem;
 }
 
+.mapSection {
+  margin-bottom: 32px;
+}
+
+.mapLoading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 280px;
+  margin: 0;
+  padding: 0;
+  background: #f8fafc;
+  border: 1px dashed #c7d2fe;
+  border-radius: 12px;
+  color: #64748b;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.mapFootnote {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: #64748b;
+  margin: 0 0 12px 0;
+  text-align: center;
+}
+
+.mapCode {
+  font-size: 0.78rem;
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  unicode-bidi: embed;
+}
+
 /* Entry page */
 .entryContent {
   line-height: 1.8;

@@ -26,6 +26,7 @@ jest.mock("../../../src/lib/tanahpedia/service", () => ({
 	getEntitiesWithEntriesByRole: jest.fn(),
 	getAnimalsByClassification: jest.fn(),
 	getCategoryHomepage: jest.fn(),
+	getPlaceMapMarkers: jest.fn().mockResolvedValue([]),
 	ENTITY_TYPES: ["PERSON", "PLACE", "EVENT"],
 	ENTITY_TYPE_LABELS: {
 		PERSON: "אישים",

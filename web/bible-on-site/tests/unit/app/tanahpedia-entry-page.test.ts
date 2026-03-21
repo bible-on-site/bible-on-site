@@ -23,6 +23,7 @@ jest.mock("../../../src/lib/tanahpedia/service", () => ({
 	...jest.requireActual("../../../src/lib/tanahpedia/service"),
 	getAllEntryUniqueNames: jest.fn(),
 	getEntryByUniqueName: jest.fn(),
+	getPersonFamilySummary: jest.fn().mockResolvedValue(null),
 	ENTITY_TYPE_LABELS: {
 		PERSON: "אישים",
 		PLACE: "מקומות",

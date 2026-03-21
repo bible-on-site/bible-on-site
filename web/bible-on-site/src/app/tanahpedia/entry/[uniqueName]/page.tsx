@@ -7,8 +7,10 @@ import {
 	getEntries,
 	getEntriesByEntityType,
 	getEntryByUniqueName,
+	getPersonFamilySummary,
 } from "@/lib/tanahpedia/service";
 import type { EntityType, CategoryKey } from "@/lib/tanahpedia/types";
+import { PersonFamilyTree } from "../../components/PersonFamilyTree";
 import { TanahpediaBreadcrumb } from "../../components/TanahpediaBreadcrumb";
 import styles from "../../page.module.css";
 
@@ -97,6 +99,19 @@ export default async function EntryPage({
 		siblingEntries = [];
 	}
 
+	let personFamily = null;
+	try {
+		const personEntity = entry.entities.find((e) => e.entityType === "PERSON");
+		if (personEntity) {
+			personFamily = await getPersonFamilySummary(
+				personEntity.entityId,
+				personEntity.entityName,
+			);
+		}
+	} catch {
+		personFamily = null;
+	}
+
 	return (
 		<div className={styles.tanahpediaPage}>
 			<TanahpediaBreadcrumb
@@ -120,6 +135,8 @@ export default async function EntryPage({
 					))}
 				</div>
 			)}
+
+			{personFamily ? <PersonFamilyTree summary={personFamily} /> : null}
 
 			{entry.content ? (
 				<article

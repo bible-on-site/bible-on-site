@@ -505,3 +505,54 @@ export interface EntryStub {
 export interface EntryWithEntities extends Entry {
 	entities: (EntryEntity & { entityType: EntityType; entityName: string })[];
 }
+
+// ─── Person family (non-entry entity data on website) ─────
+
+export interface PersonFamilyRelatedPerson {
+	personId: string;
+	entityId: string;
+	displayName: string;
+	entryUniqueName: string | null;
+	entryTitle: string | null;
+}
+
+export interface PersonFamilyParentEdge {
+	related: PersonFamilyRelatedPerson;
+	parentRole: string;
+	relationshipType: string;
+	altGroupId: string | null;
+}
+
+export interface PersonFamilyChildEdge {
+	related: PersonFamilyRelatedPerson;
+	parentRole: string;
+	relationshipType: string;
+	altGroupId: string | null;
+}
+
+export interface PersonFamilySpouseEdge {
+	related: PersonFamilyRelatedPerson;
+	unionType: string;
+	unionOrder: number | null;
+	altGroupId: string | null;
+}
+
+export interface PersonFamilySummary {
+	focalPersonId: string;
+	focalEntityId: string;
+	focalDisplayName: string;
+	parents: PersonFamilyParentEdge[];
+	children: PersonFamilyChildEdge[];
+	spouses: PersonFamilySpouseEdge[];
+	siblings: PersonFamilyRelatedPerson[];
+}
+
+/** Marker for Tanahpedia places map (OpenStreetMap; no API key). */
+export interface PlaceMapMarker {
+	placeId: string;
+	placeName: string;
+	modernName: string | null;
+	lat: number;
+	lng: number;
+	entryUniqueName: string | null;
+}

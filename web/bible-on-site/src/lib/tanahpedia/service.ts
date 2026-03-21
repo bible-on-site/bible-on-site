@@ -7,7 +7,13 @@ import type {
 	Entry,
 	EntryStub,
 	EntryWithEntities,
+	PersonFamilyChildEdge,
+	PersonFamilyParentEdge,
+	PersonFamilyRelatedPerson,
+	PersonFamilySpouseEdge,
+	PersonFamilySummary,
 	PlaceIdentification,
+	PlaceMapMarker,
 	ThreeDModel,
 } from "./types";
 
@@ -288,6 +294,234 @@ export async function getPlaceIdentifications(): Promise<
 		 JOIN tanahpedia_entity e ON e.id = p.entity_id
 		 WHERE pi.latitude IS NOT NULL AND pi.longitude IS NOT NULL`,
 	);
+}
+
+function sqlFirstEntryUniqueNameForEntity(alias: string): string {
+	return `(SELECT ent.unique_name FROM tanahpedia_entry_entity ee2
+	         INNER JOIN tanahpedia_entry ent ON ent.id = ee2.entry_id
+	         WHERE ee2.entity_id = ${alias}.id
+	         ORDER BY ent.title LIMIT 1)`;
+}
+
+function sqlFirstEntryTitleForEntity(alias: string): string {
+	return `(SELECT ent.title FROM tanahpedia_entry_entity ee2
+	         INNER JOIN tanahpedia_entry ent ON ent.id = ee2.entry_id
+	         WHERE ee2.entity_id = ${alias}.id
+	         ORDER BY ent.title LIMIT 1)`;
+}
+
+function parseCoordinate(value: unknown): number {
+	if (typeof value === "number" && Number.isFinite(value)) return value;
+	if (typeof value === "string") {
+		const n = Number.parseFloat(value);
+		return Number.isFinite(n) ? n : Number.NaN;
+	}
+	return Number.NaN;
+}
+
+/**
+ * Places with coordinates for the public map (OpenStreetMap tiles — no API key).
+ */
+export async function getPlaceMapMarkers(): Promise<PlaceMapMarker[]> {
+	const uq = sqlFirstEntryUniqueNameForEntity("e");
+	const rows = await query<{
+		placeId: string;
+		placeName: string;
+		modernName: string | null;
+		latitude: unknown;
+		longitude: unknown;
+		entryUniqueName: string | null;
+	}>(
+		`SELECT pi.id AS placeId, e.name AS placeName, pi.modern_name AS modernName,
+		        pi.latitude AS latitude, pi.longitude AS longitude,
+		        ${uq} AS entryUniqueName
+		 FROM tanahpedia_place_identification pi
+		 INNER JOIN tanahpedia_place p ON p.id = pi.place_id
+		 INNER JOIN tanahpedia_entity e ON e.id = p.entity_id
+		 WHERE pi.latitude IS NOT NULL AND pi.longitude IS NOT NULL`,
+	);
+	const out: PlaceMapMarker[] = [];
+	for (const r of rows) {
+		const lat = parseCoordinate(r.latitude);
+		const lng = parseCoordinate(r.longitude);
+		if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+		out.push({
+			placeId: r.placeId,
+			placeName: r.placeName,
+			modernName: r.modernName,
+			lat,
+			lng,
+			entryUniqueName: r.entryUniqueName,
+		});
+	}
+	return out;
+}
+
+type RelatedRow = {
+	relatedPersonId: string;
+	relatedEntityId: string;
+	displayName: string;
+	entryUniqueName: string | null;
+	entryTitle: string | null;
+};
+
+function mapRelated(r: RelatedRow): PersonFamilyRelatedPerson {
+	return {
+		personId: r.relatedPersonId,
+		entityId: r.relatedEntityId,
+		displayName: r.displayName,
+		entryUniqueName: r.entryUniqueName,
+		entryTitle: r.entryTitle,
+	};
+}
+
+/**
+ * Parents, children, unions and siblings for a person entity (tanahpedia_person / parent_child / union).
+ */
+export async function getPersonFamilySummary(
+	entityId: string,
+	focalDisplayName: string,
+): Promise<PersonFamilySummary | null> {
+	const personRows = await query<{ personId: string }>(
+		"SELECT id AS personId FROM tanahpedia_person WHERE entity_id = ? LIMIT 1",
+		[entityId],
+	);
+	if (personRows.length === 0) return null;
+	const personId = personRows[0].personId;
+
+	const pe = "parent_e";
+	const ce = "child_e";
+	const oe = "other_e";
+	const uqP = sqlFirstEntryUniqueNameForEntity(pe);
+	const tqP = sqlFirstEntryTitleForEntity(pe);
+	const uqC = sqlFirstEntryUniqueNameForEntity(ce);
+	const tqC = sqlFirstEntryTitleForEntity(ce);
+	const uqO = sqlFirstEntryUniqueNameForEntity(oe);
+	const tqO = sqlFirstEntryTitleForEntity(oe);
+
+	const parentSql = `SELECT ppc.alt_group_id AS altGroupId,
+			pr.name AS parentRole, pct.name AS relationshipType,
+			parent_p.id AS relatedPersonId, ${pe}.id AS relatedEntityId,
+			${pe}.name AS displayName,
+			${uqP} AS entryUniqueName, ${tqP} AS entryTitle
+		FROM tanahpedia_person_parent_child ppc
+		INNER JOIN tanahpedia_person parent_p ON parent_p.id = ppc.parent_id
+		INNER JOIN tanahpedia_entity ${pe} ON ${pe}.id = parent_p.entity_id
+		INNER JOIN tanahpedia_lookup_parent_role pr ON pr.id = ppc.parent_role_id
+		INNER JOIN tanahpedia_lookup_parent_child_type pct ON pct.id = ppc.relationship_type_id
+		WHERE ppc.child_id = ?`;
+
+	const childSql = `SELECT ppc.alt_group_id AS altGroupId,
+			pr.name AS parentRole, pct.name AS relationshipType,
+			child_p.id AS relatedPersonId, ${ce}.id AS relatedEntityId,
+			${ce}.name AS displayName,
+			${uqC} AS entryUniqueName, ${tqC} AS entryTitle
+		FROM tanahpedia_person_parent_child ppc
+		INNER JOIN tanahpedia_person child_p ON child_p.id = ppc.child_id
+		INNER JOIN tanahpedia_entity ${ce} ON ${ce}.id = child_p.entity_id
+		INNER JOIN tanahpedia_lookup_parent_role pr ON pr.id = ppc.parent_role_id
+		INNER JOIN tanahpedia_lookup_parent_child_type pct ON pct.id = ppc.relationship_type_id
+		WHERE ppc.parent_id = ?`;
+
+	const spouseSql = `SELECT u.alt_group_id AS altGroupId, ut.name AS unionType,
+			u.union_order AS unionOrder,
+			op.id AS relatedPersonId, ${oe}.id AS relatedEntityId,
+			${oe}.name AS displayName,
+			${uqO} AS entryUniqueName, ${tqO} AS entryTitle
+		FROM tanahpedia_person_union u
+		INNER JOIN tanahpedia_lookup_union_type ut ON ut.id = u.union_type_id
+		INNER JOIN tanahpedia_person op ON op.id = IF(u.person1_id = ?, u.person2_id, u.person1_id)
+		INNER JOIN tanahpedia_entity ${oe} ON ${oe}.id = op.entity_id
+		WHERE u.person1_id = ? OR u.person2_id = ?`;
+
+	const siblingSql = `SELECT DISTINCT
+			other_p.id AS relatedPersonId, other_e.id AS relatedEntityId,
+			other_e.name AS displayName,
+			(SELECT ent.unique_name FROM tanahpedia_entry_entity ee2
+			 INNER JOIN tanahpedia_entry ent ON ent.id = ee2.entry_id
+			 WHERE ee2.entity_id = other_e.id ORDER BY ent.title LIMIT 1) AS entryUniqueName,
+			(SELECT ent.title FROM tanahpedia_entry_entity ee2
+			 INNER JOIN tanahpedia_entry ent ON ent.id = ee2.entry_id
+			 WHERE ee2.entity_id = other_e.id ORDER BY ent.title LIMIT 1) AS entryTitle
+		FROM tanahpedia_person_parent_child my_edge
+		INNER JOIN tanahpedia_person_parent_child other_edge
+		  ON other_edge.parent_id = my_edge.parent_id
+		 AND other_edge.child_id <> my_edge.child_id
+		INNER JOIN tanahpedia_person other_p ON other_p.id = other_edge.child_id
+		INNER JOIN tanahpedia_entity other_e ON other_e.id = other_p.entity_id
+		WHERE my_edge.child_id = ? AND other_p.id <> ?`;
+
+	const [parentRows, childRows, spouseRows, siblingRows] = await Promise.all([
+		query<
+			RelatedRow & {
+				altGroupId: string | null;
+				parentRole: string;
+				relationshipType: string;
+			}
+		>(parentSql, [personId]),
+		query<
+			RelatedRow & {
+				altGroupId: string | null;
+				parentRole: string;
+				relationshipType: string;
+			}
+		>(childSql, [personId]),
+		query<
+			RelatedRow & {
+				altGroupId: string | null;
+				unionType: string;
+				unionOrder: number | null;
+			}
+		>(spouseSql, [personId, personId, personId]),
+		query<RelatedRow>(siblingSql, [personId, personId]),
+	]);
+
+	const parents: PersonFamilyParentEdge[] = parentRows.map((r) => ({
+		related: mapRelated(r),
+		parentRole: r.parentRole,
+		relationshipType: r.relationshipType,
+		altGroupId: r.altGroupId,
+	}));
+
+	const childDedupe = new Map<string, PersonFamilyChildEdge>();
+	for (const r of childRows) {
+		const edge: PersonFamilyChildEdge = {
+			related: mapRelated(r),
+			parentRole: r.parentRole,
+			relationshipType: r.relationshipType,
+			altGroupId: r.altGroupId,
+		};
+		if (!childDedupe.has(edge.related.entityId)) {
+			childDedupe.set(edge.related.entityId, edge);
+		}
+	}
+	const children = [...childDedupe.values()];
+
+	const spouses: PersonFamilySpouseEdge[] = spouseRows.map((r) => ({
+		related: mapRelated(r),
+		unionType: r.unionType,
+		unionOrder: r.unionOrder,
+		altGroupId: r.altGroupId,
+	}));
+
+	const sibDedupe = new Map<string, PersonFamilyRelatedPerson>();
+	for (const r of siblingRows) {
+		const rel = mapRelated(r);
+		if (!sibDedupe.has(rel.entityId)) sibDedupe.set(rel.entityId, rel);
+	}
+	const siblings = [...sibDedupe.values()].sort((a, b) =>
+		a.displayName.localeCompare(b.displayName, "he"),
+	);
+
+	return {
+		focalPersonId: personId,
+		focalEntityId: entityId,
+		focalDisplayName,
+		parents,
+		children,
+		spouses,
+		siblings,
+	};
 }
 
 export async function getCategoryCounts(): Promise<

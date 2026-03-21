@@ -1,0 +1,120 @@
+.section {
+  margin: 28px 0 32px;
+  padding: 20px 18px 24px;
+  background: linear-gradient(160deg, #f8fafc 0%, #eef2ff 100%);
+  border: 1px solid #c7d2fe;
+  border-radius: 14px;
+  border-right: 4px solid #6366f1;
+}
+
+.title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #312e81;
+  margin: 0 0 6px 0;
+  text-align: center;
+}
+
+.subtitle {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin: 0 0 20px 0;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.tierLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6366f1;
+  margin: 0 0 8px 0;
+  text-align: center;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: stretch;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.altGroupBlock {
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.altGroupLabel {
+  font-size: 0.8rem;
+  color: #7c3aed;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.card {
+  min-width: 140px;
+  max-width: 220px;
+  padding: 12px 14px;
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+  text-align: center;
+}
+
+.cardFocal {
+  min-width: 140px;
+  max-width: 280px;
+  padding: 12px 14px;
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #818cf8;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.2);
+  text-align: center;
+}
+
+.personLink {
+  color: #4338ca;
+  font-weight: 700;
+  text-decoration: none;
+  font-size: 1rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.personLink:hover {
+  text-decoration: underline;
+}
+
+.personUnlinked {
+  color: #1e293b;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.meta {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.72rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.connector {
+  width: 2px;
+  height: 14px;
+  background: #c7d2fe;
+  margin: 0 auto 8px;
+  border-radius: 1px;
+}
+
+.empty {
+  text-align: center;
+  font-size: 0.95rem;
+  color: #64748b;
+  margin: 8px 0 0;
+}

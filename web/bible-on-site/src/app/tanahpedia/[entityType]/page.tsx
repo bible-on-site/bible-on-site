@@ -10,6 +10,7 @@ import {
 	getCategoryHomepage,
 	getEntitiesWithEntries,
 	getEntitiesWithEntriesByRole,
+	getPlaceMapMarkers,
 } from "@/lib/tanahpedia/service";
 import type {
 	AnimalKind,
@@ -20,6 +21,7 @@ import type {
 } from "@/lib/tanahpedia/types";
 import { TanahpediaBreadcrumb } from "../components/TanahpediaBreadcrumb";
 import { EntityListItem } from "../components/EntityListItem";
+import { TanahpediaPlacesMap } from "../components/TanahpediaPlacesMap";
 import styles from "../page.module.css";
 
 // this reserverd function is a magic for caching
@@ -123,6 +125,7 @@ export default async function EntityTypePage({
 
 	let entities: Awaited<ReturnType<typeof getEntitiesWithEntries>>;
 	let homepage: Awaited<ReturnType<typeof getCategoryHomepage>>;
+	let placeMapMarkers: Awaited<ReturnType<typeof getPlaceMapMarkers>> = [];
 	try {
 		let entitiesPromise: Promise<typeof entities>;
 		if (sub && entityType === "PERSON") {
@@ -142,13 +145,19 @@ export default async function EntityTypePage({
 		} else {
 			entitiesPromise = getEntitiesWithEntries(entityType);
 		}
-		[entities, homepage] = await Promise.all([
+		const mapPromise =
+			entityType === "PLACE"
+				? getPlaceMapMarkers().catch(() => [])
+				: Promise.resolve([]);
+		[entities, homepage, placeMapMarkers] = await Promise.all([
 			entitiesPromise,
 			getCategoryHomepage(entityType),
+			mapPromise,
 		]);
 	} catch {
 		entities = [];
 		homepage = null;
+		placeMapMarkers = [];
 	}
 
 	const label = sub ? sub.label : ENTITY_TYPE_LABELS[entityType];
@@ -167,9 +176,7 @@ export default async function EntityTypePage({
 			)}
 
 			{homepage?.layoutType === "MAP" && entityType === "PLACE" && (
-				<div className={styles.mapPlaceholder}>
-					מפת מקומות (OpenGIS) - תתווסף בקרוב
-				</div>
+				<TanahpediaPlacesMap markers={placeMapMarkers} />
 			)}
 
 			<section>
