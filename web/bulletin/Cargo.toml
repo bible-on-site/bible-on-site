@@ -4,7 +4,7 @@ description = "Bible on Site PDF Bulletin Generator (AWS Lambda)"
 license-file = "../../license"
 repository = "https://github.com/bible-on-site/bible-on-site"
 publish = false
-version = "0.1.5"
+version = "0.1.6"
 edition = "2024"
 
 [lib]
@@ -29,6 +29,8 @@ sea-orm = { version = "1.1.19", default-features = false, features = [
     "sqlx-mysql",
     "runtime-tokio-native-tls",
 ] }
+# Keep in sync with Cargo.lock: rust_decimal 1.40 can pull rkyv ^0.7 resolution that fails on some cargo/index states; 1.39 is compatible with sea-orm ^1.
+rust_decimal = { version = "=1.39.0", default-features = false }
 entities = { path = "../api/entities" }
 
 # Serialization

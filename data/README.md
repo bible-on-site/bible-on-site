@@ -71,19 +71,25 @@ Each perek includes:
 
 The `mysql/db-populator` crate populates a MySQL database with Tanah structure and test data.
 
+The db-populator runs `tanahpedia_family_shimshon_data.sql` after Tanahpedia seeds whenever the **target** database has a `tanahpedia_person` row for entity name **שמשון** (from `tanahpedia_legacy_migration.sql` or from prod sync). This is **independent** of whether the legacy migration ran (e.g. when `PROD_DB_URL` is set and prod already has Tanahpedia). The script is idempotent (fixed UUIDs). It needs `source_citation` columns on `tanahpedia_person_union` / `tanahpedia_person_parent_child`. For an **existing** DB created from an older `tanahpedia_structure.sql`, run `tanahpedia_alter_source_citation.sql` once before populate.
+
 ### Development database (tanah-dev)
 
 The development database is named **tanah-dev**. It is used by the website, admin, and data tooling when running locally. `DB_URL` in `data/.dev.env` (and in `web/bible-on-site/.dev.env`, `web/admin/.dev.env`) points to `tanah-dev`.
 
 ### Default populate flow (dev)
 
-To create and populate the dev database from structure and test data:
+To create and populate the **tanah-dev** database (structure, sefarim/perakim, perushim, tanahpedia seeds — **without** bundled demo authors/articles from `tanah_test_data.sql`):
 
 ```bash
 cargo make mysql-populate-dev
 ```
 
-This uses `DB_URL` from `data/.dev.env` and targets the `tanah-dev` database.
+This uses `DB_URL` from `data/.dev.env`. Use real articles via [sync from production](#sync-from-production-optional), or load the full SQL demo seed when needed:
+
+```bash
+cargo make mysql-populate-dev-with-test-articles
+```
 
 ### Populate Database (generic)
 

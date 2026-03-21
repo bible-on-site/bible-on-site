@@ -189,7 +189,14 @@ command = "cargo"
 args = ["run", "--release"]
 
 [tasks.mysql-populate-dev]
-description = "Populate MySQL dev database (tanah-dev)"
+description = "Populate MySQL dev database (tanah-dev); skips bundled demo articles/authors (use mysql-populate-dev-with-test-articles for CI-style seed)"
+env_files = [".dev.env"]
+cwd = "./mysql/db-populator"
+command = "cargo"
+args = ["run", "--release", "--", "--skip-tanah-test-data"]
+
+[tasks.mysql-populate-dev-with-test-articles]
+description = "Populate tanah-dev including tanah_test_data.sql (demo rabbis/articles for local E2E-style debugging)"
 env_files = [".dev.env"]
 cwd = "./mysql/db-populator"
 command = "cargo"

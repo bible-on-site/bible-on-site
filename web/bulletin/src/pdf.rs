@@ -15,6 +15,9 @@ use typst_as_lib::TypstEngine;
 pub struct PdfRequest {
     pub sefer_name: String,
     pub perakim: Vec<PdfPerekInput>,
+    pub include_cover: bool,
+    pub include_toc: bool,
+    pub cover_accent_hex: String,
 }
 
 #[derive(Debug, Clone)]
@@ -294,6 +297,50 @@ fn typst_escape(text: &str) -> String {
     out
 }
 
+fn accent_hex_clean(raw: &str) -> String {
+    raw.trim()
+        .trim_start_matches('#')
+        .chars()
+        .filter(|c| c.is_ascii_hexdigit())
+        .collect()
+}
+
+fn append_cover_page(markup: &mut String, req: &PdfRequest) {
+    let hex = accent_hex_clean(&req.cover_accent_hex);
+    let hex = if hex.is_empty() {
+        "475569".to_string()
+    } else {
+        hex
+    };
+    let title = typst_escape(&strip_taamim(&req.sefer_name));
+    markup.push_str(&format!(
+        r#"#align(center + horizon)[
+  #v(1fr)
+  #text(26pt, weight: "bold")[{title}]
+  #v(0.6em)
+  #line(length: 55%, stroke: 2.5pt + rgb("{hex}"))
+  #v(0.4em)
+  #text(11pt)[תנ״ך]
+  #v(1fr)
+]
+"#,
+    ));
+}
+
+fn append_toc_page(markup: &mut String, req: &PdfRequest) {
+    markup.push_str("#align(center)[#text(17pt, weight: \"bold\")[תוכן העניינים]]\n#v(1.2em)\n");
+    for p in &req.perakim {
+        let mut line = format!("{} {}", req.sefer_name, p.perek_heb);
+        if !p.header.is_empty() {
+            line.push_str(" – ");
+            line.push_str(&p.header);
+        }
+        markup.push_str("#block(inset: (right: 0.2em))[#align(right)[");
+        markup.push_str(&typst_escape(&strip_taamim(&line)));
+        markup.push_str("]]\n#v(0.28em)\n");
+    }
+}
+
 /// Generate Typst markup string from the request data.
 fn generate_typst_markup(req: &PdfRequest) -> String {
     let mut markup = String::with_capacity(16 * 1024);
@@ -305,6 +352,16 @@ fn generate_typst_markup(req: &PdfRequest) -> String {
 #set par(justify: true)
 "#,
     );
+
+    if req.include_cover {
+        append_cover_page(&mut markup, req);
+        markup.push_str("#pagebreak()\n");
+    }
+
+    if req.include_toc {
+        append_toc_page(&mut markup, req);
+        markup.push_str("#pagebreak()\n");
+    }
 
     for (idx, perek) in req.perakim.iter().enumerate() {
         if idx > 0 {
@@ -501,11 +558,41 @@ mod tests {
                 pesukim: vec!["בְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים".to_string()],
                 articles: vec![],
             }],
+            include_cover: false,
+            include_toc: false,
+            cover_accent_hex: "333333".to_string(),
         };
         let markup = generate_typst_markup(&req);
         assert!(markup.contains("Taamey D"));
         assert!(markup.contains("rtl"));
         assert!(markup.contains("בראשית א - בריאת העולם"));
         assert!(markup.contains("בְּרֵאשִׁ֖ית")); // taamim preserved in pesukim
+    }
+
+    #[test]
+    fn test_generate_typst_markup_includes_cover_and_toc_when_requested() {
+        let req = PdfRequest {
+            sefer_name: "בראשית".to_string(),
+            perakim: vec![PdfPerekInput {
+                perek_heb: "א".to_string(),
+                header: "כותרת".to_string(),
+                pesukim: vec!["פסוק".to_string()],
+                articles: vec![],
+            }],
+            include_cover: true,
+            include_toc: true,
+            cover_accent_hex: "#8B0000".to_string(),
+        };
+        let markup = generate_typst_markup(&req);
+        assert!(markup.contains("תוכן העניינים"));
+        assert!(markup.contains("תנ״ך"));
+        assert!(markup.contains("rgb(\"8B0000\")"));
+        assert!(markup.contains("בראשית א – כותרת"));
+    }
+
+    #[test]
+    fn test_accent_hex_clean() {
+        assert_eq!(accent_hex_clean("#8B0000"), "8B0000");
+        assert_eq!(accent_hex_clean("  abcZZ  "), "abc");
     }
 }

@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.300",
+	"version": "0.2.303",
 	"private": true,
 	"license": "MIT",
 	"browserslist": [
@@ -45,6 +45,7 @@
 	},
 	"dependencies": {
 		"@aws-sdk/client-lambda": "3.1000.0",
+		"@hebcal/core": "6.0.8",
 		"@pdf-lib/fontkit": "1.1.1",
 		"autoprefixer": "10.4.27",
 		"flowbite": "4.0.1",
@@ -52,6 +53,7 @@
 		"gematry": "1.0.2",
 		"html-flip-book-react": "0.0.0-alpha.36",
 		"isomorphic-dompurify": "3.0.0",
+		"leaflet": "1.9.4",
 		"moment-timezone": "0.6.0",
 		"mysql2": "3.18.2",
 		"next": "16.1.6",
@@ -74,6 +76,7 @@
 		"@testing-library/jest-dom": "6.9.1",
 		"@testing-library/react": "16.3.2",
 		"@types/jest": "30.0.0",
+		"@types/leaflet": "1.9.21",
 		"@types/node": "25.3.3",
 		"@types/react": "19.2.14",
 		"@types/react-dom": "19.2.3",
