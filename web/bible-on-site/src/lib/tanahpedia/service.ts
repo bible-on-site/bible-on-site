@@ -401,6 +401,7 @@ export async function getPersonFamilySummary(
 
 	const parentSql = `SELECT ppc.alt_group_id AS altGroupId,
 			pr.name AS parentRole, pct.name AS relationshipType,
+			ppc.source_citation AS sourceCitation,
 			parent_p.id AS relatedPersonId, ${pe}.id AS relatedEntityId,
 			${pe}.name AS displayName,
 			${uqP} AS entryUniqueName, ${tqP} AS entryTitle
@@ -425,6 +426,7 @@ export async function getPersonFamilySummary(
 
 	const spouseSql = `SELECT u.alt_group_id AS altGroupId, ut.name AS unionType,
 			u.union_order AS unionOrder,
+			u.source_citation AS sourceCitation,
 			op.id AS relatedPersonId, ${oe}.id AS relatedEntityId,
 			${oe}.name AS displayName,
 			${uqO} AS entryUniqueName, ${tqO} AS entryTitle
@@ -457,6 +459,7 @@ export async function getPersonFamilySummary(
 				altGroupId: string | null;
 				parentRole: string;
 				relationshipType: string;
+				sourceCitation: string | null;
 			}
 		>(parentSql, [personId]),
 		query<
@@ -464,6 +467,7 @@ export async function getPersonFamilySummary(
 				altGroupId: string | null;
 				parentRole: string;
 				relationshipType: string;
+				sourceCitation: string | null;
 			}
 		>(childSql, [personId]),
 		query<
@@ -471,6 +475,7 @@ export async function getPersonFamilySummary(
 				altGroupId: string | null;
 				unionType: string;
 				unionOrder: number | null;
+				sourceCitation: string | null;
 			}
 		>(spouseSql, [personId, personId, personId]),
 		query<RelatedRow>(siblingSql, [personId, personId]),
@@ -481,6 +486,7 @@ export async function getPersonFamilySummary(
 		parentRole: r.parentRole,
 		relationshipType: r.relationshipType,
 		altGroupId: r.altGroupId,
+		sourceCitation: r.sourceCitation,
 	}));
 
 	const childDedupe = new Map<string, PersonFamilyChildEdge>();
@@ -490,6 +496,7 @@ export async function getPersonFamilySummary(
 			parentRole: r.parentRole,
 			relationshipType: r.relationshipType,
 			altGroupId: r.altGroupId,
+			sourceCitation: r.sourceCitation,
 		};
 		if (!childDedupe.has(edge.related.entityId)) {
 			childDedupe.set(edge.related.entityId, edge);
@@ -512,6 +519,13 @@ export async function getPersonFamilySummary(
 	const siblings = [...sibDedupe.values()].sort((a, b) =>
 		a.displayName.localeCompare(b.displayName, "he"),
 	);
+
+	const hasAny =
+		parents.length > 0 ||
+		children.length > 0 ||
+		spouses.length > 0 ||
+		siblings.length > 0;
+	if (!hasAny) return null;
 
 	return {
 		focalPersonId: personId,

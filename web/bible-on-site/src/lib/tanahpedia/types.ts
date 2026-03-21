@@ -521,6 +521,7 @@ export interface PersonFamilyParentEdge {
 	parentRole: string;
 	relationshipType: string;
 	altGroupId: string | null;
+	sourceCitation: string | null;
 }
 
 export interface PersonFamilyChildEdge {
@@ -528,6 +529,7 @@ export interface PersonFamilyChildEdge {
 	parentRole: string;
 	relationshipType: string;
 	altGroupId: string | null;
+	sourceCitation: string | null;
 }
 
 export interface PersonFamilySpouseEdge {
@@ -535,6 +537,7 @@ export interface PersonFamilySpouseEdge {
 	unionType: string;
 	unionOrder: number | null;
 	altGroupId: string | null;
+	sourceCitation: string | null;
 }
 
 export interface PersonFamilySummary {

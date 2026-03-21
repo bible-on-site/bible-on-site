@@ -10,6 +10,7 @@ pub struct Model {
     pub relationship_type_id: String,
     pub parent_role_id: String,
     pub alt_group_id: Option<String>,
+    pub source_citation: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

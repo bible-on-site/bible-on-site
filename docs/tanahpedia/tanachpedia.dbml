@@ -676,6 +676,7 @@ Table tanahpedia_person_union {
   end_date int [note: 'YYYYMMDD format']
   end_reason_id char(36) [ref: > tanahpedia_lookup_union_end_reason.id]
   alt_group_id char(36)
+  source_citation varchar(400)
 }
 
 Table tanahpedia_lookup_parent_child_type {
@@ -695,4 +696,5 @@ Table tanahpedia_person_parent_child {
   relationship_type_id char(36) [ref: > tanahpedia_lookup_parent_child_type.id]
   parent_role_id char(36) [ref: > tanahpedia_lookup_parent_role.id]
   alt_group_id char(36)
+  source_citation varchar(400)
 }

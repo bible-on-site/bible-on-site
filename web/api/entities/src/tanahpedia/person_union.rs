@@ -13,6 +13,7 @@ pub struct Model {
     pub end_date: Option<i32>,
     pub end_reason_id: Option<String>,
     pub alt_group_id: Option<String>,
+    pub source_citation: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

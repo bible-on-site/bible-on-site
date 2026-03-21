@@ -71,6 +71,8 @@ Each perek includes:
 
 The `mysql/db-populator` crate populates a MySQL database with Tanah structure and test data.
 
+When the legacy Tanahpedia migration runs (no prod data), it is followed by `tanahpedia_family_shimshon_data.sql` — demo parents and unions for שמשון (needs `source_citation` columns on `tanahpedia_person_union` / `tanahpedia_person_parent_child`). For an **existing** DB created from an older `tanahpedia_structure.sql`, run `tanahpedia_alter_source_citation.sql` once before that family script.
+
 ### Development database (tanah-dev)
 
 The development database is named **tanah-dev**. It is used by the website, admin, and data tooling when running locally. `DB_URL` in `data/.dev.env` (and in `web/bible-on-site/.dev.env`, `web/admin/.dev.env`) points to `tanah-dev`.

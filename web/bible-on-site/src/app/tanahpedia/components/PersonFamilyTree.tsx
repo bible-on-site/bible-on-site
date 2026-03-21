@@ -14,11 +14,6 @@ import {
 } from "@/lib/tanahpedia/person-family-labels";
 import styles from "./PersonFamilyTree.module.css";
 
-function shortAltId(altGroupId: string): string {
-	const t = altGroupId.replace(/-/g, "");
-	return t.length <= 8 ? altGroupId : `…${t.slice(-8)}`;
-}
-
 function groupByAltGroupId<T extends { altGroupId: string | null }>(
 	rows: T[],
 ): Map<string | null, T[]> {
@@ -47,6 +42,11 @@ function PersonNameLink({ related }: { related: PersonFamilyRelatedPerson }) {
 	return <span className={styles.personUnlinked}>{related.displayName}</span>;
 }
 
+function citationLine(text: string | null) {
+	if (!text) return null;
+	return <span className={styles.citation}>{text}</span>;
+}
+
 function ParentCard({ edge }: { edge: PersonFamilyParentEdge }) {
 	const role = parentRoleLabel(edge.parentRole);
 	const rel = relationshipTypeLabel(edge.relationshipType);
@@ -59,6 +59,7 @@ function ParentCard({ edge }: { edge: PersonFamilyParentEdge }) {
 				{role}
 				{extra}
 			</span>
+			{citationLine(edge.sourceCitation)}
 		</div>
 	);
 }
@@ -75,6 +76,7 @@ function ChildCard({ edge }: { edge: PersonFamilyChildEdge }) {
 				{role}
 				{extra}
 			</span>
+			{citationLine(edge.sourceCitation)}
 		</div>
 	);
 }
@@ -90,6 +92,7 @@ function SpouseCard({ edge }: { edge: PersonFamilySpouseEdge }) {
 				{u}
 				{order}
 			</span>
+			{citationLine(edge.sourceCitation)}
 		</div>
 	);
 }
@@ -117,6 +120,8 @@ export function PersonFamilyTree({ summary }: { summary: PersonFamilySummary }) 
 		spouses.length > 0 ||
 		siblings.length > 0;
 
+	if (!hasAny) return null;
+
 	const parentGroups = groupByAltGroupId(parents);
 	const parentKeys = [...parentGroups.keys()].sort((a, b) => {
 		if (a === b) return 0;
@@ -135,7 +140,15 @@ export function PersonFamilyTree({ summary }: { summary: PersonFamilySummary }) 
 		a.related.displayName.localeCompare(b.related.displayName, "he"),
 	);
 
-	const sortedSpouses = [...spouses].sort((a, b) => {
+	const spouseGroups = groupByAltGroupId(spouses);
+	const spouseKeys = [...spouseGroups.keys()].sort((a, b) => {
+		if (a === b) return 0;
+		if (a === null) return -1;
+		if (b === null) return 1;
+		return a.localeCompare(b);
+	});
+
+	const sortedSpousesGlobal = [...spouses].sort((a, b) => {
 		const ao = a.unionOrder ?? 999;
 		const bo = b.unionOrder ?? 999;
 		if (ao !== bo) return ao - bo;
@@ -147,14 +160,6 @@ export function PersonFamilyTree({ summary }: { summary: PersonFamilySummary }) 
 			<h2 id="person-family-heading" className={styles.title}>
 				משפחה
 			</h2>
-			<p className={styles.subtitle}>
-				קשרי הורים, ילדים, בני זוג ואחים מתוך נתוני הישות (לא מתוך גוף הערך).
-				חלופות מסומנות כשקיימת קבוצת alt נפרדת במסד.
-			</p>
-
-			{!hasAny ? (
-				<p className={styles.empty}>אין קשרי משפחה מתועדים במסד לישות זו.</p>
-			) : null}
 
 			{parents.length > 0 ? (
 				<>
@@ -181,9 +186,7 @@ export function PersonFamilyTree({ summary }: { summary: PersonFamilySummary }) 
 							return (
 								<div key={key ?? "default"} className={styles.altGroupBlock}>
 									{key !== null ? (
-										<div className={styles.altGroupLabel}>
-											מסורת חלופית · {shortAltId(key)}
-										</div>
+										<div className={styles.altGroupLabel}>חלופי</div>
 									) : null}
 									<div className={styles.row}>
 										{sorted.map((edge) => (
@@ -204,21 +207,50 @@ export function PersonFamilyTree({ summary }: { summary: PersonFamilySummary }) 
 			<div className={styles.row}>
 				<div className={styles.cardFocal}>
 					<span className={styles.personUnlinked}>{focalDisplayName}</span>
-					<span className={styles.meta}>נושא הערך</span>
 				</div>
 			</div>
 
-			{sortedSpouses.length > 0 ? (
+			{sortedSpousesGlobal.length > 0 ? (
 				<>
 					<p className={styles.tierLabel}>בני זוג</p>
-					<div className={styles.row}>
-						{sortedSpouses.map((edge) => (
-							<SpouseCard
-								key={`${edge.related.entityId}-${edge.unionType}-${edge.unionOrder ?? "x"}`}
-								edge={edge}
-							/>
-						))}
-					</div>
+					{spouseKeys.length <= 1 && spouseKeys[0] === null ? (
+						<div className={styles.row}>
+							{sortedSpousesGlobal.map((edge) => (
+								<SpouseCard
+									key={`${edge.related.entityId}-${edge.unionType}-${edge.unionOrder ?? "x"}`}
+									edge={edge}
+								/>
+							))}
+						</div>
+					) : (
+						spouseKeys.map((key) => {
+							const group = spouseGroups.get(key) ?? [];
+							const sorted = [...group].sort((a, b) => {
+								const ao = a.unionOrder ?? 999;
+								const bo = b.unionOrder ?? 999;
+								if (ao !== bo) return ao - bo;
+								return a.related.displayName.localeCompare(
+									b.related.displayName,
+									"he",
+								);
+							});
+							return (
+								<div key={key ?? "default"} className={styles.altGroupBlock}>
+									{key !== null ? (
+										<div className={styles.altGroupLabel}>חלופי</div>
+									) : null}
+									<div className={styles.row}>
+										{sorted.map((edge) => (
+											<SpouseCard
+												key={`${edge.related.entityId}-${edge.unionType}-${edge.unionOrder ?? "x"}-${key ?? "d"}`}
+												edge={edge}
+											/>
+										))}
+									</div>
+								</div>
+							);
+						})
+					)}
 				</>
 			) : null}
 
@@ -238,7 +270,7 @@ export function PersonFamilyTree({ summary }: { summary: PersonFamilySummary }) 
 
 			{siblings.length > 0 ? (
 				<>
-					<p className={styles.tierLabel}>אחים (הורים משותפים במסד)</p>
+					<p className={styles.tierLabel}>אחים</p>
 					<div className={styles.row}>
 						{siblings.map((s) => (
 							<SiblingCard key={s.entityId} related={s} />

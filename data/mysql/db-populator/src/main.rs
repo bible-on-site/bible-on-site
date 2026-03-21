@@ -56,6 +56,10 @@ struct Cli {
     #[arg(long, default_value = "../tanahpedia_legacy_migration.sql")]
     tanahpedia_legacy_migration_script: String,
 
+    /// Optional demo family SQL (שמשון parents & wives); runs after legacy migration
+    #[arg(long, default_value = "../tanahpedia_family_shimshon_data.sql")]
+    tanahpedia_family_shimshon_script: String,
+
     /// Production database URL (for checking if tanahpedia data exists in prod)
     /// Can also be set via PROD_DB_URL environment variable
     #[arg(long, env = "PROD_DB_URL")]
@@ -224,6 +228,15 @@ async fn main() -> Result<()> {
                     "tanahpedia-legacy-migration",
                 )
                 .await?;
+                let tanahpedia_family_path = base_path.join(&cli.tanahpedia_family_shimshon_script);
+                if tanahpedia_family_path.exists() {
+                    execute_script(
+                        &mut conn,
+                        &tanahpedia_family_path,
+                        "tanahpedia-family-shimshon",
+                    )
+                    .await?;
+                }
             } else {
                 println!(
                     "Warning: tanahpedia_legacy_migration.sql not found, but production has no data"
