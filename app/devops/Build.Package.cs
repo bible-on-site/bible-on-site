@@ -171,8 +171,7 @@ partial class Build
             .SetProject(MainProject)
             .SetConfiguration(Configuration)
             .SetFramework("net10.0-android")
-            .SetProperties(msbuildProperties)
-            .EnableNoRestore());
+            .SetProperties(msbuildProperties));
 
         // Find and copy AAB to artifacts directory (MAUI doesn't respect --output for AAB)
         var binDir = MainProject.Parent / "bin" / Configuration / "net10.0-android";
