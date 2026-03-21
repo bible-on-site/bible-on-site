@@ -126,60 +126,41 @@
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<PackageReference Include="Xamarin.AndroidX.Compose.Runtime.Annotation.Jvm" Version="1.10.4.1" ExcludeAssets="all" />
 	</ItemGroup>
-	<Target Name="_RemoveDuplicateAndroidXAars"
-		BeforeTargets="_ResolveAars;_ExtractAar;_GetLibraryImports"
-		Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+	<Target Name="_RemoveDuplicateAndroidXAars" BeforeTargets="_ResolveAars;_ExtractAar;_GetLibraryImports" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<ItemGroup>
-			<AndroidAarLibrary Remove="@(AndroidAarLibrary)"
-				Condition="$([System.String]::new('%(Filename)').EndsWith('savedstate-ktx'))" />
+			<AndroidAarLibrary Remove="@(AndroidAarLibrary)" Condition="$([System.String]::new('%(Filename)').EndsWith('savedstate-ktx'))" />
 		</ItemGroup>
 	</Target>
 
 	<!-- Auto-decompress perushim notes .gz → .sqlite if needed (checked out from git as compressed).
 	     Calls the devops setup script which has the canonical decompress logic.
 	     WorkingDirectory must be devops/ so that tsx is resolvable from devops/node_modules. -->
-	<Target Name="DecompressPerushimNotes" BeforeTargets="Build"
-		Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND
-			!Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND
-			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')">
-		<Exec Command="node --import tsx setup-dev-env.mts decompress-perushim-notes"
-			WorkingDirectory="$(MSBuildProjectDirectory)/../../devops" />
+	<Target Name="DecompressPerushimNotes" BeforeTargets="Build" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND&#xD;&#xA;			!Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')">
+		<Exec Command="node --import tsx setup-dev-env.mts decompress-perushim-notes" WorkingDirectory="$(MSBuildProjectDirectory)/../../devops" />
 	</Target>
 
 	<!-- Android: PAD on-demand asset pack. Run perushim-view pipeline to generate. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')">
-		<AndroidAsset
-			Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
-			Link="sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
-			AssetPack="perushim_notes"
-			DeliveryType="OnDemand" />
+		<AndroidAsset Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" Link="sefaria-dump-5784-sivan-4.perushim_notes.sqlite" AssetPack="perushim_notes" DeliveryType="OnDemand" />
 	</ItemGroup>
 
 	<!-- iOS: decompress .gz → .sqlite into the ODR dataset folder (macOS only; gunzip is always available).
 	     After decompression, explicitly add the .sqlite as an ImageAsset so actool compiles it
 	     into Assets.car. MSBuild globs evaluate at project load — before the file exists —
 	     so auto-discovery misses it. -->
-	<Target Name="DecompressPerushimNotesIos" BeforeTargets="Build;_CompileImageAssets"
-		Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND
-			!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND
-			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')">
+	<Target Name="DecompressPerushimNotesIos" BeforeTargets="Build;_CompileImageAssets" Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND&#xD;&#xA;			!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')">
 		<MakeDir Directories="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset" />
-		<Exec Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz' > '$(MSBuildProjectDirectory)/Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset/sefaria-dump-5784-sivan-4.perushim_notes.sqlite'" />
+		<Exec Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz' &gt; '$(MSBuildProjectDirectory)/Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset/sefaria-dump-5784-sivan-4.perushim_notes.sqlite'" />
 	</Target>
 
 	<!-- Unconditionally ensure the .sqlite is in the ImageAsset list for actool.
 	     Runs before _CompileImageAssets regardless of whether decompression was needed this build.
 	     The Condition on the item (Exists) prevents errors if the file is absent (e.g. Windows dev). -->
-	<Target Name="_IncludePerushimNotesImageAsset" BeforeTargets="_CompileImageAssets"
-		DependsOnTargets="DecompressPerushimNotesIos"
-		Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+	<Target Name="_IncludePerushimNotesImageAsset" BeforeTargets="_CompileImageAssets" DependsOnTargets="DecompressPerushimNotesIos" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
 		<ItemGroup>
-			<ImageAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
-				Condition="Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')"
-				Link="Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
+			<ImageAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" Condition="Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')" Link="Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
 		</ItemGroup>
-		<Message Importance="high" Text="=== _IncludePerushimNotesImageAsset: added .sqlite to ImageAsset list ==="
-			Condition="Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')" />
+		<Message Importance="high" Text="=== _IncludePerushimNotesImageAsset: added .sqlite to ImageAsset list ===" Condition="Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')" />
 	</Target>
 
 	<!-- iOS ODR: perushim notes are delivered via On-Demand Resources.
@@ -188,47 +169,38 @@
 	     the compiled data becomes accessible via NSDataAsset. -->
 
 	<!-- ODR build diagnostics (temporary): log what the SDK computed for ODR asset packs. -->
-	<Target Name="_LogOdrDiagnostics"
-		AfterTargets="_ComputeBundleResourceOutputPaths"
-		Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+	<Target Name="_LogOdrDiagnostics" AfterTargets="_ComputeBundleResourceOutputPaths" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
 		<Message Importance="high" Text="=== ODR Build Diagnostics ===" />
 		<Message Importance="high" Text="EnableOnDemandResources = $(EnableOnDemandResources)" />
 		<Message Importance="high" Text="_DistributionType = $(_DistributionType)" />
 		<Message Importance="high" Text="BuildIpa = $(BuildIpa)" />
 		<Message Importance="high" Text="_BundleResourceWithOutputPath ODR items:" />
-		<Message Importance="high" Text="  %(_BundleResourceWithOutputPath.Identity) → %(_BundleResourceWithOutputPath.OutputPath)"
-			Condition="'%(_BundleResourceWithOutputPath.OutputPath)' != '' AND $([System.String]::new('%(_BundleResourceWithOutputPath.OutputPath)').Contains('OnDemandResources'))" />
+		<Message Importance="high" Text="  %(_BundleResourceWithOutputPath.Identity) → %(_BundleResourceWithOutputPath.OutputPath)" Condition="'%(_BundleResourceWithOutputPath.OutputPath)' != '' AND $([System.String]::new('%(_BundleResourceWithOutputPath.OutputPath)').Contains('OnDemandResources'))" />
 	</Target>
 
 	<!-- _DetectSigningIdentity overrides _DistributionType based on the provisioning
 	     profile. With automatic signing and an empty CodesignProvision, it sets "Any",
 	     which prevents _PackageOnDemandResources from running (it requires AppStore|AdHoc).
 	     Force AppStore after detection so the ODR asset packs are packaged into the IPA. -->
-	<Target Name="_ForceDistributionTypeForOdr"
-		AfterTargets="_DetectSigningIdentity"
-		Condition="('$(_DistributionType)' == '' OR '$(_DistributionType)' == 'Any') AND
-			'$(BuildIpa)' == 'true' AND '$(EnableOnDemandResources)' == 'true' AND
-			($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst')">
+	<Target Name="_ForceDistributionTypeForOdr" AfterTargets="_DetectSigningIdentity" Condition="('$(_DistributionType)' == '' OR '$(_DistributionType)' == 'Any') AND&#xD;&#xA;			'$(BuildIpa)' == 'true' AND '$(EnableOnDemandResources)' == 'true' AND&#xD;&#xA;			($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst')">
 		<Message Importance="high" Text="=== _ForceDistributionTypeForOdr: overriding _DistributionType from '$(_DistributionType)' to 'AppStore' ===" />
 		<PropertyGroup>
 			<_DistributionType>AppStore</_DistributionType>
 		</PropertyGroup>
 	</Target>
 
-	<Target Name="_LogOdrPackaging"
-		AfterTargets="_PackageOnDemandResources"
-		Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+	<Target Name="_LogOdrPackaging" AfterTargets="_PackageOnDemandResources" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
 		<Message Importance="high" Text="=== ODR Packaging: _PackageOnDemandResources executed ===" />
 	</Target>
 
 	<!-- Android Debug fallback: bundle perushim notes in app package so they work without PAD (APK installs). -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Debug' AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')">
-		<MauiAsset Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
-			LogicalName="sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
+		<MauiAsset Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" LogicalName="sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<PackageReference Include="CommunityToolkit.Maui" Version="14.0.1" />
+		<PackageReference Include="CommunityToolkit.Maui.MediaElement" Version="8.0.1" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.1" />
 		<PackageReference Include="GraphQL.Client" Version="6.1.0" />
 		<PackageReference Include="GraphQL.Client.Serializer.Newtonsoft" Version="6.1.0" />
