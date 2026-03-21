@@ -77,13 +77,17 @@ The development database is named **tanah-dev**. It is used by the website, admi
 
 ### Default populate flow (dev)
 
-To create and populate the dev database from structure and test data:
+To create and populate the **tanah-dev** database (structure, sefarim/perakim, perushim, tanahpedia seeds — **without** bundled demo authors/articles from `tanah_test_data.sql`):
 
 ```bash
 cargo make mysql-populate-dev
 ```
 
-This uses `DB_URL` from `data/.dev.env` and targets the `tanah-dev` database.
+This uses `DB_URL` from `data/.dev.env`. Use real articles via [sync from production](#sync-from-production-optional), or load the full SQL demo seed when needed:
+
+```bash
+cargo make mysql-populate-dev-with-test-articles
+```
 
 ### Populate Database (generic)
 

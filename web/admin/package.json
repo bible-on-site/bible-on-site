@@ -24,6 +24,7 @@
 		"docker:up": "docker compose -f ../../devops/docker-compose.yml up -d",
 		"docker:down": "docker compose -f ../../devops/docker-compose.yml down",
 		"db:populate:dev": "cd ../../data && cargo make mysql-populate-dev",
+		"db:populate:dev:test-articles": "cd ../../data && cargo make mysql-populate-dev-with-test-articles",
 		"db:populate:test": "cd ../../data && cargo make mysql-populate-test",
 		"s3:populate:dev": "cd ../../data && cargo make s3-populate-dev",
 		"s3:populate:test": "cd ../../data && cargo make s3-populate-test"

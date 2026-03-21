@@ -69,6 +69,11 @@ struct Cli {
     #[arg(long, default_value = "false")]
     skip_data: bool,
 
+    /// Skip tanah_test_data.sql (bundled demo authors/articles). Static sefarim/perakim,
+    /// perushim, and tanahpedia seeds still run when applicable.
+    #[arg(long, default_value_t = false)]
+    skip_tanah_test_data: bool,
+
     /// Only drop the database (do not create or populate)
     #[arg(long, default_value = "false")]
     drop_only: bool,
@@ -170,8 +175,10 @@ async fn main() -> Result<()> {
     }
 
     if !cli.skip_data {
-        let data_path = base_path.join(&cli.data_script);
-        execute_script(&mut conn, &data_path, "data").await?;
+        if !cli.skip_tanah_test_data {
+            let data_path = base_path.join(&cli.data_script);
+            execute_script(&mut conn, &data_path, "data").await?;
+        }
 
         let tanah_view_data_path = base_path.join(&cli.tanah_view_data_script);
         execute_script(&mut conn, &tanah_view_data_path, "tanah-view-data").await?;
