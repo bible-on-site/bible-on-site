@@ -36,11 +36,11 @@ const CYCLE_BEGIN_DATES: [(i32, u32, u32); NUM_CYCLES] = [
 ];
 
 /// Cycle dates: 929 perakim × NUM_CYCLES cycles each.
-/// Each inner Vec contains 4 date integers (YYYYMMDD format in Hebrew calendar).
+/// Each inner Vec contains NUM_CYCLES date integers (YYYYMMDD format in Hebrew calendar).
 pub type CycleDates = Vec<Vec<i64>>;
 
 /// Star rise times: 929 perakim × NUM_CYCLES cycles each.
-/// Each inner Vec contains 4 time strings (HH:MM format).
+/// Each inner Vec contains NUM_CYCLES time strings (HH:MM format).
 pub type StarRiseTimes = Vec<Vec<String>>;
 
 /// Generated cycle data including dates and star rise times.

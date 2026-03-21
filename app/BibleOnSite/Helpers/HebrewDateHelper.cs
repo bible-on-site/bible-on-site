@@ -173,7 +173,7 @@ public static class HebrewDateHelper
     /// <summary>
     /// Converts a HebrewCalendar month number to the legacy format used in cycle dates.
     /// In HebrewCalendar leap year: 1=Tishrei..5=Shevat, 6=Adar I, 7=Adar II, 8=Nisan..13=Elul
-    /// Legacy format: 1=Tishrei..5=Shevat, 6=Adar/Adar II, 7=Nisan..12=Elul, 13=Adar I
+    /// Legacy format: 1=Tishrei..5=Shevat, 6=Adar(non-leap), 7=Nisan..12=Elul, 13=Adar I, 14=Adar II
     /// </summary>
     internal static int CalendarMonthToLegacy(int year, int calendarMonth)
     {
@@ -185,7 +185,7 @@ public static class HebrewDateHelper
         {
             <= 5 => calendarMonth,
             6 => 13,                // Adar I → legacy 13
-            7 => 6,                 // Adar II → legacy 6 (Adar position)
+            7 => 14,                // Adar II → legacy 14
             _ => calendarMonth - 1, // Nisan(8)→7, ..., Elul(13)→12
         };
     }
@@ -203,9 +203,10 @@ public static class HebrewDateHelper
         return legacyMonth switch
         {
             <= 5 => legacyMonth,
-            6 => 7,                              // Adar (legacy) → HC Adar II (7)
+            6 => 7,                              // Adar (non-leap legacy 6) → HC Adar II (7) for comparison
             >= 7 and <= 12 => legacyMonth + 1,   // Nisan(7)→8, ..., Elul(12)→13
             13 => 6,                              // Adar I (legacy) → HC Adar I (6)
+            14 => 7,                              // Adar II (legacy) → HC Adar II (7)
             _ => legacyMonth,
         };
     }

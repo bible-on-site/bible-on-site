@@ -280,11 +280,11 @@ public class HebrewDateHelperTests
     }
 
     [Fact]
-    public void CalendarMonthToLegacy_LeapYear_AdarII_ShouldReturn6()
+    public void CalendarMonthToLegacy_LeapYear_AdarII_ShouldReturn14()
     {
-        // HC month 7 = Adar II → legacy 6
+        // HC month 7 = Adar II → legacy 14
         var result = HebrewDateHelper.CalendarMonthToLegacy(5787, 7);
-        result.Should().Be(6);
+        result.Should().Be(14);
     }
 
     [Fact]
@@ -328,8 +328,16 @@ public class HebrewDateHelperTests
     [Fact]
     public void LegacyMonthToCalendar_LeapYear_Legacy6_ShouldReturn7()
     {
-        // legacy 6 = Adar II → HC month 7
+        // legacy 6 = Adar (non-leap position) → HC Adar II (7)
         var result = HebrewDateHelper.LegacyMonthToCalendar(5787, 6);
+        result.Should().Be(7);
+    }
+
+    [Fact]
+    public void LegacyMonthToCalendar_LeapYear_Legacy14_ShouldReturn7()
+    {
+        // legacy 14 = Adar II → HC Adar II (7)
+        var result = HebrewDateHelper.LegacyMonthToCalendar(5787, 14);
         result.Should().Be(7);
     }
 
@@ -344,7 +352,7 @@ public class HebrewDateHelperTests
     [Fact]
     public void CalendarMonthToLegacy_RoundTrip_PreservesMonth()
     {
-        // For each month in a leap year, converting to legacy and back should be identity
+        // For each HC month in a leap year, converting to legacy and back should be identity
         for (int hcMonth = 1; hcMonth <= 13; hcMonth++)
         {
             var legacy = HebrewDateHelper.CalendarMonthToLegacy(5787, hcMonth);
