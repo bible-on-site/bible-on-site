@@ -169,7 +169,7 @@ partial class Build
         }
 
         var propsArgs = string.Join(" ", properties.Select(kv => $"/p:{kv.Key}=\"{kv.Value}\""));
-        var msbuildArgs = $"msbuild \"{MainProject}\" /t:Publish /restore:false {propsArgs}";
+        var msbuildArgs = $"msbuild \"{MainProject}\" /t:SignAndroidPackage /restore:false {propsArgs}";
         Serilog.Log.Information($"Running: dotnet {msbuildArgs}");
         ProcessTasks.StartProcess("dotnet", msbuildArgs, workingDirectory: RootDirectory)
             .AssertZeroExitCode();
