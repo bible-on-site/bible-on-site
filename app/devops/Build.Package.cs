@@ -167,8 +167,8 @@ partial class Build
             Serilog.Log.Warning("No Android keystore provided - building unsigned AAB");
         }
 
-        DotNetPublish(s => s
-            .SetProject(MainProject)
+        DotNetBuild(s => s
+            .SetProjectFile(MainProject)
             .SetConfiguration(Configuration)
             .SetFramework("net10.0-android")
             .SetProperties(msbuildProperties));
