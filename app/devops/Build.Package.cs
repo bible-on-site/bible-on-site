@@ -149,8 +149,7 @@ partial class Build
         {
             ["AndroidPackageFormat"] = "aab",
             ["TargetFrameworks"] = "net10.0-android",
-            ["UseMonoRuntime"] = "false",
-            ["RuntimeIdentifiers"] = "android-arm64;android-arm;android-x64;android-x86"
+            ["UseMonoRuntime"] = "false"
         };
 
         // Add signing configuration if provided
@@ -168,8 +167,8 @@ partial class Build
             Serilog.Log.Warning("No Android keystore provided - building unsigned AAB");
         }
 
-        DotNetPublish(s => s
-            .SetProject(MainProject)
+        DotNetBuild(s => s
+            .SetProjectFile(MainProject)
             .SetConfiguration(Configuration)
             .SetFramework("net10.0-android")
             .SetProperties(msbuildProperties));
