@@ -242,7 +242,7 @@ public class HtmlMediaExtractorTests
                 new ContentSegment(SegmentKind.Media, null, audioUrl, MediaType.Audio));
 
             var htmlSegments = segments.Where(s => s.Kind == SegmentKind.Html).ToList();
-            htmlSegments.Should().HaveCountGreaterOrEqualTo(2);
+            htmlSegments.Should().HaveCountGreaterThanOrEqualTo(2);
             htmlSegments.First().Html.Should().Contain("Intro");
             htmlSegments.Last().Html.Should().Contain("End");
         }
