@@ -64,9 +64,9 @@
 		<!-- For Release: embed assemblies in APK. For Debug: use Fast Deployment (much faster iteration) -->
 		<EmbedAssembliesIntoApk Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release'">true</EmbedAssembliesIntoApk>
 		<!-- .NET 10 MAUI on Linux: dotnet publish injects host RID into RuntimeIdentifiers,
-		     causing XA0035 (can't map linux-x64 to Android ABI). Fix: override to Android ABIs
-		     only. The Nuke restore uses UseMonoRuntime=false + --runtime to create assets with
-		     the host RID using CoreCLR (not Mono), then publish uses --no-restore. -->
+		     causing XA0035 (cannot map linux x64 to Android ABI). Override to Android ABIs only.
+		     Nuke restore uses UseMonoRuntime=false plus runtime flag to create assets with the
+		     host RID using CoreCLR (not Mono), then publish uses no restore. -->
 		<RuntimeIdentifiers Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">android-arm64;android-arm;android-x64;android-x86</RuntimeIdentifiers>
 		<!-- Optional: Build AAB in Debug for local PAD testing (asset packs require AAB). Uncomment to test on-demand downloads. -->
 		<!-- <AndroidPackageFormat Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Debug'">aab</AndroidPackageFormat> -->
