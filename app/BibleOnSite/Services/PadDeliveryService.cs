@@ -66,10 +66,15 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
 #if ANDROID
 partial class PadDeliveryService
 {
+    /// <summary>Last PAD fetch error or reason (for support diagnostics).</summary>
+    internal static string? LastAndroidPadError { get; private set; }
+
     private static IAssetPackManager? GetAssetPackManager()
     {
-        var activity = Platform.CurrentActivity;
-        return activity != null ? AssetPackManagerFactory.GetInstance(activity) : null;
+        // Prefer Activity; fall back to Application context so Fetch/diagnostics work when
+        // CurrentActivity is briefly null (e.g. background callbacks).
+        var ctx = Platform.CurrentActivity ?? Android.App.Application.Context;
+        return ctx != null ? AssetPackManagerFactory.GetInstance(ctx) : null;
     }
 
     private static Task<string?> TryGetAssetPathAndroidAsync(string packName, CancellationToken cancellationToken)
@@ -95,9 +100,13 @@ partial class PadDeliveryService
         IProgress<double>? progress,
         CancellationToken cancellationToken)
     {
+        LastAndroidPadError = null;
         var manager = GetAssetPackManager();
         if (manager == null)
+        {
+            LastAndroidPadError = "AssetPackManager unavailable (no Activity/Application context).";
             return false;
+        }
 
         try
         {
@@ -145,6 +154,8 @@ partial class PadDeliveryService
                     await Task.Delay(500, cancellationToken);
                 }
 
+                LastAndroidPadError =
+                    "Fetch finished but GetPackLocation still null after 30s — pack may be missing from the Play-delivered bundle, or install was not from Play Store.";
                 return false;
             }
             finally
@@ -155,6 +166,7 @@ partial class PadDeliveryService
         }
         catch (Exception ex)
         {
+            LastAndroidPadError = $"{ex.GetType().Name}: {ex.Message}";
             System.Diagnostics.Debug.WriteLine($"PAD Fetch failed: {ex.Message}");
             return false;
         }
@@ -163,10 +175,18 @@ partial class PadDeliveryService
     private static Task<List<string>> GetDeliveryDiagnosticsAndroidAsync(string packName)
     {
         var lines = new List<string> { "--- PAD (Android) delivery diagnostics ---" };
+        lines.Add($"CurrentActivity: {(Platform.CurrentActivity != null ? "present" : "null")}");
+        AppendInstallSourceLines(lines);
+
+        if (!string.IsNullOrEmpty(LastAndroidPadError))
+            lines.Add($"Last PAD fetch error: {LastAndroidPadError}");
+
         var manager = GetAssetPackManager();
         if (manager == null)
         {
-            lines.Add("AssetPackManager: null (no activity)");
+            lines.Add("AssetPackManager: null (no Context)");
+            lines.Add(
+                "Hint: On-demand asset packs require an install from Google Play. Sideloaded APKs/AAB splits do not expose PAD.");
             return Task.FromResult(lines);
         }
 
@@ -174,6 +194,11 @@ partial class PadDeliveryService
         {
             var location = manager.GetPackLocation(packName);
             lines.Add($"GetPackLocation('{packName}'): {(location != null ? $"path={location.AssetsPath()}" : "(null)")}");
+            if (location == null)
+            {
+                lines.Add(
+                    "If (null) after install from Play: the AAB may have been built without the perushim_notes asset pack (missing .sqlite at CI package time), or the app was not installed from Play.");
+            }
         }
         catch (Exception ex)
         {
@@ -181,6 +206,41 @@ partial class PadDeliveryService
         }
 
         return Task.FromResult(lines);
+    }
+
+    private static void AppendInstallSourceLines(List<string> lines)
+    {
+        try
+        {
+            var ctx = Android.App.Application.Context;
+            var pm = ctx.PackageManager;
+            var pn = ctx.PackageName;
+            if (pm == null || pn == null)
+            {
+                lines.Add("Install source: (unavailable)");
+                return;
+            }
+
+            if ((int)Android.OS.Build.VERSION.SdkInt >= (int)Android.OS.BuildVersionCodes.R)
+            {
+                var info = pm.GetInstallSourceInfo(pn);
+                var installing = info?.InstallingPackageName;
+                lines.Add($"Install source (API {(int)Android.OS.BuildVersionCodes.R}+): {installing ?? "(null — not from a package installer, e.g. adb/sideload)"}");
+                if (installing != "com.android.vending")
+                    lines.Add("PAD: On-demand packs are served for installs from Google Play (installer com.android.vending). Other sources often cannot download PAD.");
+            }
+            else
+            {
+#pragma warning disable CA1422 // GetInstallerPackageName deprecated — used only below API R (30)
+                var legacy = pm.GetInstallerPackageName(pn);
+#pragma warning restore CA1422
+                lines.Add($"Installer package: {legacy ?? "(null)"}");
+            }
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"Install source error: {ex.Message}");
+        }
     }
 }
 #endif
