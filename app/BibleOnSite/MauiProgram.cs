@@ -24,10 +24,10 @@ public static class MauiProgram
 	public static MauiApp CreateMauiApp()
 	{
 		var builder = MauiApp.CreateBuilder();
+#pragma warning disable CA1416 // MediaElement requires Android 26+; harmless on older devices
 		builder
 			.UseMauiApp<App>()
 			.UseMauiCommunityToolkit()
-#pragma warning disable CA1416 // MediaElement requires Android 26+; harmless on older devices (handler simply not used)
 			.UseMauiCommunityToolkitMediaElement(false)
 #pragma warning restore CA1416
 			.ConfigureFonts(fonts =>
