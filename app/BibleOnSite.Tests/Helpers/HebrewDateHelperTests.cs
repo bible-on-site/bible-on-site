@@ -260,37 +260,105 @@ public class HebrewDateHelperTests
 
     #endregion
 
-    #region GetUniformMonth Tests
+    #region CalendarMonthToLegacy / LegacyMonthToCalendar Tests
 
     [Fact]
-    public void GetUniformMonth_NonLeapYear_ShouldReturnSameMonth()
+    public void CalendarMonthToLegacy_NonLeapYear_ShouldReturnSameMonth()
     {
         // Hebrew year 5786 is NOT a leap year
-        var result = HebrewDateHelper.GetUniformMonth(5786, 5);
+        var result = HebrewDateHelper.CalendarMonthToLegacy(5786, 5);
         result.Should().Be(5);
     }
 
     [Fact]
-    public void GetUniformMonth_LeapYear_Month7_ShouldReturn6()
+    public void CalendarMonthToLegacy_LeapYear_AdarI_ShouldReturn13()
     {
-        // Hebrew year 5787 IS a leap year (19-year cycle: 3,6,8,11,14,17,19 are leap)
-        // 5787 % 19 = 14 → leap year
-        var result = HebrewDateHelper.GetUniformMonth(5787, 7);
+        // 5787 IS a leap year (5787 % 19 = 14 → leap)
+        // HC month 6 = Adar I → legacy 13
+        var result = HebrewDateHelper.CalendarMonthToLegacy(5787, 6);
+        result.Should().Be(13);
+    }
+
+    [Fact]
+    public void CalendarMonthToLegacy_LeapYear_AdarII_ShouldReturn14()
+    {
+        // HC month 7 = Adar II → legacy 14
+        var result = HebrewDateHelper.CalendarMonthToLegacy(5787, 7);
+        result.Should().Be(14);
+    }
+
+    [Fact]
+    public void CalendarMonthToLegacy_LeapYear_Nisan_ShouldReturn7()
+    {
+        // HC month 8 = Nisan → legacy 7
+        var result = HebrewDateHelper.CalendarMonthToLegacy(5787, 8);
+        result.Should().Be(7);
+    }
+
+    [Fact]
+    public void CalendarMonthToLegacy_LeapYear_Elul_ShouldReturn12()
+    {
+        // HC month 13 = Elul → legacy 12
+        var result = HebrewDateHelper.CalendarMonthToLegacy(5787, 13);
+        result.Should().Be(12);
+    }
+
+    [Fact]
+    public void CalendarMonthToLegacy_LeapYear_MonthBelow6_ShouldReturnSame()
+    {
+        var result = HebrewDateHelper.CalendarMonthToLegacy(5787, 3);
+        result.Should().Be(3);
+    }
+
+    [Fact]
+    public void LegacyMonthToCalendar_NonLeapYear_ShouldReturnSameMonth()
+    {
+        var result = HebrewDateHelper.LegacyMonthToCalendar(5786, 9);
+        result.Should().Be(9);
+    }
+
+    [Fact]
+    public void LegacyMonthToCalendar_LeapYear_Legacy13_ShouldReturn6()
+    {
+        // legacy 13 = Adar I → HC month 6
+        var result = HebrewDateHelper.LegacyMonthToCalendar(5787, 13);
         result.Should().Be(6);
     }
 
     [Fact]
-    public void GetUniformMonth_LeapYear_MonthAbove7_ShouldShift()
+    public void LegacyMonthToCalendar_LeapYear_Legacy6_ShouldReturn7()
     {
-        var result = HebrewDateHelper.GetUniformMonth(5787, 10);
-        result.Should().Be(9); // month - 1
+        // legacy 6 = Adar (non-leap position) → HC Adar II (7)
+        var result = HebrewDateHelper.LegacyMonthToCalendar(5787, 6);
+        result.Should().Be(7);
     }
 
     [Fact]
-    public void GetUniformMonth_LeapYear_MonthBelow7_ShouldReturnSame()
+    public void LegacyMonthToCalendar_LeapYear_Legacy14_ShouldReturn7()
     {
-        var result = HebrewDateHelper.GetUniformMonth(5787, 3);
-        result.Should().Be(3);
+        // legacy 14 = Adar II → HC Adar II (7)
+        var result = HebrewDateHelper.LegacyMonthToCalendar(5787, 14);
+        result.Should().Be(7);
+    }
+
+    [Fact]
+    public void LegacyMonthToCalendar_LeapYear_Legacy7_ShouldReturn8()
+    {
+        // legacy 7 = Nisan → HC month 8
+        var result = HebrewDateHelper.LegacyMonthToCalendar(5787, 7);
+        result.Should().Be(8);
+    }
+
+    [Fact]
+    public void CalendarMonthToLegacy_RoundTrip_PreservesMonth()
+    {
+        // For each HC month in a leap year, converting to legacy and back should be identity
+        for (int hcMonth = 1; hcMonth <= 13; hcMonth++)
+        {
+            var legacy = HebrewDateHelper.CalendarMonthToLegacy(5787, hcMonth);
+            var roundTrip = HebrewDateHelper.LegacyMonthToCalendar(5787, legacy);
+            roundTrip.Should().Be(hcMonth, $"HC month {hcMonth} → legacy {legacy} → HC {roundTrip}");
+        }
     }
 
     #endregion
@@ -341,7 +409,7 @@ public class HebrewDateHelperTests
     public void RoundToCycle_AfterAllCycles_ReturnsLastCycleEnd()
     {
         var input = HebrewDateHelper.NumberToHebrewDate(59000101);
-        var lastCycleEnd = HebrewDateHelper.AddDaysToCycleDate(57851207, 1298);
+        var lastCycleEnd = HebrewDateHelper.AddDaysToCycleDate(58070422, 1298);
 
         var result = HebrewDateHelper.RoundToCycle(input);
 

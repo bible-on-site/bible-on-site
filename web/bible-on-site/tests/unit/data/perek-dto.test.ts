@@ -30,12 +30,21 @@ describe("getPerekIdByDate", () => {
 			expect(actual).toBe(1);
 		});
 	});
-	describe("after last cycle (I.E. 29 Elul 5938)", () => {
+	describe("after last cycle (I.E. year 5811)", () => {
 		it("returns last perek (929)", () => {
 			const actual = getPerekIdByDate(
-				parseKosherChristianDate("29/September/38"),
+				parseKosherChristianDate("15/March/51"),
 			);
 			expect(actual).toBe(929);
+		});
+	});
+	describe("inside future cycle 5 (Mar 2030)", () => {
+		it("returns a valid perek", () => {
+			const actual = getPerekIdByDate(
+				parseKosherChristianDate("15/March/30"),
+			);
+			expect(actual).toBeGreaterThanOrEqual(1);
+			expect(actual).toBeLessThanOrEqual(929);
 		});
 	});
 	describe("Friday (weekend rounding to Thursday)", () => {
