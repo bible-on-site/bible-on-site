@@ -47,6 +47,8 @@ INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (UUID(), (S
 INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (UUID(), (SELECT id FROM tanahpedia_entry WHERE unique_name = 'שמשון'), (SELECT id FROM tanahpedia_entity WHERE name = 'שמשון'));
 INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (UUID(), (SELECT id FROM tanahpedia_entry WHERE unique_name = 'משה-רבנו'), (SELECT id FROM tanahpedia_entity WHERE name = 'משה רבנו'));
 
+-- יעקב: ראו tanahpedia_family_jacob_data.sql (db-populator מריץ אותו תמיד אחרי זרעי תנכפדיה).
+
 -- Entity Tanah sources
 INSERT INTO tanahpedia_entity_tanah_source (id, entity_id, perek_id, pasuk_number, segment_start, segment_end) VALUES (UUID(), (SELECT id FROM tanahpedia_entity WHERE name = 'משה רבנו'), 188, 1, 3, 3);
 INSERT INTO tanahpedia_entity_tanah_source (id, entity_id, perek_id, pasuk_number, segment_start, segment_end) VALUES (UUID(), (SELECT id FROM tanahpedia_entity WHERE name = 'יהושע בן נון'), 188, 1, 9, 11);
