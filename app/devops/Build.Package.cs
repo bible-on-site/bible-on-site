@@ -94,7 +94,7 @@ partial class Build
                 DotNetRestore(s => s
                     .SetProjectFile(MainProject)
                     .SetProperty("TargetFramework", "net10.0-android")
-                    .SetProperty("UseCurrentRuntimeIdentifier", "false"));
+                    .SetProperty("UseCurrentRuntime", "false"));
             }
             else if (Platform.Equals("iOS", StringComparison.OrdinalIgnoreCase))
             {
@@ -150,10 +150,9 @@ partial class Build
         var msbuildProperties = new Dictionary<string, object>
         {
             ["AndroidPackageFormat"] = "aab",
-            ["UseCurrentRuntimeIdentifier"] = "false"
+            ["UseCurrentRuntime"] = "false"
         };
 
-        // Add signing configuration if provided
         if (!string.IsNullOrEmpty(AndroidKeystore))
         {
             msbuildProperties["AndroidKeyStore"] = "true";
