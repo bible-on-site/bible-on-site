@@ -63,10 +63,11 @@
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">23.0</SupportedOSPlatformVersion>
 		<!-- For Release: embed assemblies in APK. For Debug: use Fast Deployment (much faster iteration) -->
 		<EmbedAssembliesIntoApk Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release'">true</EmbedAssembliesIntoApk>
-		<!-- .NET 10 MAUI on Linux: the SDK infers RuntimeIdentifier=linux-x64 for self-contained
-		     apps, appending it to RuntimeIdentifiers. The Android SDK then fails with XA0035.
-		     UseCurrentRuntimeIdentifier=false prevents this inference; RuntimeIdentifiers limits
-		     builds to valid Android ABIs. -->
+		<!-- .NET 10 MAUI on Linux CI: the SDK infers RuntimeIdentifier=linux-x64 for
+		     self-contained apps, appending it to RuntimeIdentifiers. The Android SDK then
+		     fails with XA0035. The Nuke build script pins RuntimeIdentifier=android-arm64
+		     on the command line (immutable global property). UseCurrentRuntimeIdentifier=false
+		     provides defense-in-depth for local dev builds. -->
 		<UseCurrentRuntimeIdentifier Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">false</UseCurrentRuntimeIdentifier>
 		<RuntimeIdentifiers Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">android-arm64;android-arm;android-x64;android-x86</RuntimeIdentifiers>
 		<!-- Optional: Build AAB in Debug for local PAD testing (asset packs require AAB). Uncomment to test on-demand downloads. -->
