@@ -151,7 +151,8 @@ partial class Build
 
         var msbuildProperties = new Dictionary<string, object>
         {
-            ["AndroidPackageFormat"] = "aab"
+            ["AndroidPackageFormat"] = "aab",
+            ["UseCurrentRuntimeIdentifier"] = "false"
         };
 
         // Add signing configuration if provided
