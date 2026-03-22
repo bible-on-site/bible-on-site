@@ -94,7 +94,7 @@ partial class Build
                 DotNetRestore(s => s
                     .SetProjectFile(MainProject)
                     .SetProperty("TargetFramework", "net10.0-android")
-                    .SetProperty("UseCurrentRuntimeIdentifier", "false"));
+                    .SetProperty("UseCurrentRuntime", "false"));
             }
             else if (Platform.Equals("iOS", StringComparison.OrdinalIgnoreCase))
             {
@@ -149,7 +149,8 @@ partial class Build
 
         var msbuildProperties = new Dictionary<string, object>
         {
-            ["AndroidPackageFormat"] = "aab"
+            ["AndroidPackageFormat"] = "aab",
+            ["UseCurrentRuntime"] = "false"
         };
 
         if (!string.IsNullOrEmpty(AndroidKeystore))
@@ -171,8 +172,7 @@ partial class Build
             .SetConfiguration(Configuration)
             .SetFramework("net10.0-android")
             .EnableNoRestore()
-            .SetProperties(msbuildProperties)
-            .SetProcessArgumentConfigurator(a => a.Add("--ucr").Add("false")));
+            .SetProperties(msbuildProperties));
 
         // Find and copy AAB to artifacts directory (MAUI doesn't respect --output for AAB)
         var binDir = MainProject.Parent / "bin" / Configuration / "net10.0-android";
