@@ -91,10 +91,12 @@ partial class Build
             }
             else if (Platform.Equals("Android", StringComparison.OrdinalIgnoreCase))
             {
+                var hostRid = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier;
                 DotNetRestore(s => s
                     .SetProjectFile(MainProject)
                     .SetProperty("TargetFramework", "net10.0-android")
-                    .SetProperty("UseMonoRuntime", "false"));
+                    .SetProperty("UseMonoRuntime", "false")
+                    .SetRuntime(hostRid));
             }
             else if (Platform.Equals("iOS", StringComparison.OrdinalIgnoreCase))
             {
