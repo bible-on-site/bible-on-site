@@ -221,17 +221,17 @@ partial class PadDeliveryService
                 return;
             }
 
-            if ((int)Android.OS.Build.VERSION.SdkInt >= 30)
+            if ((int)Android.OS.Build.VERSION.SdkInt >= (int)Android.OS.BuildVersionCodes.R)
             {
                 var info = pm.GetInstallSourceInfo(pn);
                 var installing = info?.InstallingPackageName;
-                lines.Add($"Install source (API 30+): {installing ?? "(null — not from a package installer, e.g. adb/sideload)"}");
+                lines.Add($"Install source (API {(int)Android.OS.BuildVersionCodes.R}+): {installing ?? "(null — not from a package installer, e.g. adb/sideload)"}");
                 if (installing != "com.android.vending")
                     lines.Add("PAD: On-demand packs are served for installs from Google Play (installer com.android.vending). Other sources often cannot download PAD.");
             }
             else
             {
-#pragma warning disable CA1422 // GetInstallerPackageName deprecated — used only below API 30
+#pragma warning disable CA1422 // GetInstallerPackageName deprecated — used only below API R (30)
                 var legacy = pm.GetInstallerPackageName(pn);
 #pragma warning restore CA1422
                 lines.Add($"Installer package: {legacy ?? "(null)"}");

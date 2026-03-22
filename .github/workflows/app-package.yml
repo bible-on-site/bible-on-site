@@ -310,11 +310,13 @@ jobs:
         working-directory: ${{ env.APP_DIRECTORY }}
         run: |
           set -euo pipefail
-          AAB=$(ls -1 .artifacts/*.aab 2>/dev/null | head -1)
-          if [ -z "$AAB" ]; then
+          shopt -s nullglob
+          aabs=(.artifacts/*.aab)
+          if [ ${#aabs[@]} -eq 0 ]; then
             echo "::error::No AAB in .artifacts"
             exit 1
           fi
+          AAB="${aabs[0]}"
           echo "Checking $AAB for perushim / asset pack entries..."
           if unzip -l "$AAB" | grep -qiE 'perushim|asset.pack|assetpack|split'; then
             unzip -l "$AAB" | grep -iE 'perushim|asset.pack|assetpack|split' | head -40
