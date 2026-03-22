@@ -234,6 +234,19 @@ args = [
     "--tanahpedia-families-only",
 ]
 
+[tasks.mysql-apply-tanahpedia-edge-lab]
+description = "Apply Tanahpedia family edge-case lab SQL (38 demo entries, fixed UUIDs); incremental lookups first; uses data/.dev.env"
+env_files = [".dev.env"]
+cwd = "./mysql/db-populator"
+command = "cargo"
+args = [
+    "run",
+    "--release",
+    "--",
+    "--skip-structure",
+    "--tanahpedia-edge-lab-only",
+]
+
 [tasks.dev]
 description = "Dev target: populate dev DB"
 dependencies = ["mysql-populate-dev"]

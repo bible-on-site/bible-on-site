@@ -57,6 +57,7 @@ Outputs will be written to `sefaria/.outputs/`.
 | `mysql-populate` | Populate MySQL database with structure and test data |
 | `mysql-populate-data-only` | Populate MySQL database with test data only |
 | `mysql-apply-tanahpedia-families` | תנכפדיה בלבד: שמשון (אם קיים) + יעקב — בלי populate מלא |
+| `mysql-apply-tanahpedia-edge-lab` | 38 ערכי דמו למקרי קצה בעץ משפחה (מעבדה; UUIDs קבועים) |
 
 ## 929 Study Program Cycles
 
@@ -112,6 +113,9 @@ cargo make mysql-populate-data-only
 
 # תנכפדיה — רק דמו משפחות (שמשון אם יש איש, אז יעקב); לא דורס ישויות אחרות
 cargo make mysql-apply-tanahpedia-families
+
+# מעבדת מקרי קצה לעץ משפחה (אחרי populate/seed); ראו docs/plans/tanahpedia-family-edge-lab.md
+cargo make mysql-apply-tanahpedia-edge-lab
 ```
 
 The `DB_URL` environment variable should be in the format: `mysql://user:pass@host:port/database`

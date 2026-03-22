@@ -389,6 +389,12 @@ export async function getPersonFamilySummary(
 	if (personRows.length === 0) return null;
 	const personId = personRows[0].personId;
 
+	const sexRows = await query<{ sex: string }>(
+		"SELECT sex FROM tanahpedia_person_sex WHERE person_id = ? LIMIT 1",
+		[personId],
+	);
+	const focalSex = sexRows[0]?.sex ?? null;
+
 	const pe = "parent_e";
 	const ce = "child_e";
 	const oe = "other_e";
@@ -427,11 +433,15 @@ export async function getPersonFamilySummary(
 	const spouseSql = `SELECT u.alt_group_id AS altGroupId, ut.name AS unionType,
 			u.union_order AS unionOrder,
 			u.source_citation AS sourceCitation,
+			uer.name AS unionEndReason,
+			u.start_date AS unionStartDate,
+			u.end_date AS unionEndDate,
 			op.id AS relatedPersonId, ${oe}.id AS relatedEntityId,
 			${oe}.name AS displayName,
 			${uqO} AS entryUniqueName, ${tqO} AS entryTitle
 		FROM tanahpedia_person_union u
 		INNER JOIN tanahpedia_lookup_union_type ut ON ut.id = u.union_type_id
+		LEFT JOIN tanahpedia_lookup_union_end_reason uer ON uer.id = u.end_reason_id
 		INNER JOIN tanahpedia_person op ON op.id = IF(u.person1_id = ?, u.person2_id, u.person1_id)
 		INNER JOIN tanahpedia_entity ${oe} ON ${oe}.id = op.entity_id
 		WHERE u.person1_id = ? OR u.person2_id = ?`;
@@ -476,6 +486,9 @@ export async function getPersonFamilySummary(
 				unionType: string;
 				unionOrder: number | null;
 				sourceCitation: string | null;
+				unionEndReason: string | null;
+				unionStartDate: number | null;
+				unionEndDate: number | null;
 			}
 		>(spouseSql, [personId, personId, personId]),
 		query<RelatedRow>(siblingSql, [personId, personId]),
@@ -498,8 +511,9 @@ export async function getPersonFamilySummary(
 			altGroupId: r.altGroupId,
 			sourceCitation: r.sourceCitation,
 		};
-		if (!childDedupe.has(edge.related.entityId)) {
-			childDedupe.set(edge.related.entityId, edge);
+		const dedupeKey = `${edge.related.entityId}|${edge.relationshipType}|${edge.parentRole}|${edge.altGroupId ?? ""}`;
+		if (!childDedupe.has(dedupeKey)) {
+			childDedupe.set(dedupeKey, edge);
 		}
 	}
 	const children = [...childDedupe.values()];
@@ -510,6 +524,9 @@ export async function getPersonFamilySummary(
 		unionOrder: r.unionOrder,
 		altGroupId: r.altGroupId,
 		sourceCitation: r.sourceCitation,
+		unionEndReason: r.unionEndReason,
+		unionStartDate: r.unionStartDate,
+		unionEndDate: r.unionEndDate,
 	}));
 
 	const sibDedupe = new Map<string, PersonFamilyRelatedPerson>();
@@ -532,6 +549,7 @@ export async function getPersonFamilySummary(
 		focalPersonId: personId,
 		focalEntityId: entityId,
 		focalDisplayName,
+		focalSex,
 		parents,
 		children,
 		spouses,

@@ -68,6 +68,10 @@ struct Cli {
     #[arg(long, default_value = "../tanahpedia_incremental_lookups.sql")]
     tanahpedia_incremental_lookups_script: String,
 
+    /// Generated edge-case lab (fixed UUIDs e300…); review UI — not for production content
+    #[arg(long, default_value = "../tanahpedia_family_edge_lab_data.sql")]
+    tanahpedia_family_edge_lab_script: String,
+
     /// Production database URL (for checking if tanahpedia data exists in prod)
     /// Can also be set via PROD_DB_URL environment variable
     #[arg(long, env = "PROD_DB_URL")]
@@ -95,6 +99,10 @@ struct Cli {
     /// Fails if seed rows already exist — use only on a DB missing Tanahpedia seed.
     #[arg(long, default_value_t = false)]
     ensure_tanahpedia_seed: bool,
+
+    /// Only run `tanahpedia_family_edge_lab_data.sql` (after incremental lookups).
+    #[arg(long, default_value_t = false)]
+    tanahpedia_edge_lab_only: bool,
 
     /// Only drop the database (do not create or populate)
     #[arg(long, default_value = "false")]
@@ -194,6 +202,20 @@ async fn main() -> Result<()> {
             )
             .await?;
         }
+    }
+
+    if cli.tanahpedia_edge_lab_only {
+        apply_tanahpedia_incremental_lookups_only(&mut conn, base_path, &cli).await?;
+        let edge_path = base_path.join(&cli.tanahpedia_family_edge_lab_script);
+        if edge_path.exists() {
+            println!("Applying tanahpedia family edge lab...");
+            execute_script(&mut conn, &edge_path, "tanahpedia-edge-lab").await?;
+        } else {
+            println!("Skipping tanahpedia edge lab: file missing");
+        }
+        conn.close().await.context("Failed to close connection")?;
+        println!("Tanahpedia edge lab finished");
+        return Ok(());
     }
 
     if cli.tanahpedia_families_only {
@@ -383,12 +405,10 @@ async fn execute_script_chunked(
     Ok(())
 }
 
-/// שמשון (אם קיים) ואז יעקב — סקריפטים קבועים; לא נוגעים בישויות אחרות.
-async fn apply_tanahpedia_family_demonstrations(
+async fn apply_tanahpedia_incremental_lookups_only(
     conn: &mut MySqlConnection,
     base_path: &Path,
     cli: &Cli,
-    include_tanahpedia_seed: bool,
 ) -> Result<()> {
     let incremental_path = base_path.join(&cli.tanahpedia_incremental_lookups_script);
     if incremental_path.exists() {
@@ -400,6 +420,17 @@ async fn apply_tanahpedia_family_demonstrations(
         )
         .await?;
     }
+    Ok(())
+}
+
+/// שמשון (אם קיים) ואז יעקב — סקריפטים קבועים; לא נוגעים בישויות אחרות.
+async fn apply_tanahpedia_family_demonstrations(
+    conn: &mut MySqlConnection,
+    base_path: &Path,
+    cli: &Cli,
+    include_tanahpedia_seed: bool,
+) -> Result<()> {
+    apply_tanahpedia_incremental_lookups_only(conn, base_path, cli).await?;
 
     if include_tanahpedia_seed {
         let tanahpedia_seed_data_path = base_path.join(&cli.tanahpedia_seed_data_script);

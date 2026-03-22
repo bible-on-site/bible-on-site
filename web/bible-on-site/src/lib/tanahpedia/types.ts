@@ -538,12 +538,19 @@ export interface PersonFamilySpouseEdge {
 	unionOrder: number | null;
 	altGroupId: string | null;
 	sourceCitation: string | null;
+	/** Lookup code e.g. DEATH, DIVORCE when union ended */
+	unionEndReason: string | null;
+	/** YYYYMMDD when modeled (MySQL may return string) */
+	unionStartDate: number | string | null;
+	unionEndDate: number | string | null;
 }
 
 export interface PersonFamilySummary {
 	focalPersonId: string;
 	focalEntityId: string;
 	focalDisplayName: string;
+	/** From tanahpedia_person_sex when present (MALE / FEMALE). */
+	focalSex: string | null;
 	parents: PersonFamilyParentEdge[];
 	children: PersonFamilyChildEdge[];
 	spouses: PersonFamilySpouseEdge[];
