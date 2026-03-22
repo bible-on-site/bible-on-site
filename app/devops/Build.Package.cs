@@ -94,6 +94,7 @@ partial class Build
                 DotNetRestore(s => s
                     .SetProjectFile(MainProject)
                     .SetProperty("TargetFramework", "net10.0-android")
+                    .SetProperty("RuntimeIdentifiers", "android-arm64")
                     .SetRuntime("android-arm64"));
             }
             else if (Platform.Equals("iOS", StringComparison.OrdinalIgnoreCase))
@@ -149,7 +150,8 @@ partial class Build
 
         var msbuildProperties = new Dictionary<string, object>
         {
-            ["AndroidPackageFormat"] = "aab"
+            ["AndroidPackageFormat"] = "aab",
+            ["RuntimeIdentifiers"] = "android-arm64"
         };
 
         if (!string.IsNullOrEmpty(AndroidKeystore))
