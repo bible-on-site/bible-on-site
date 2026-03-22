@@ -91,11 +91,8 @@ partial class Build
             }
             else if (Platform.Equals("Android", StringComparison.OrdinalIgnoreCase))
             {
-                var hostRid = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier;
-                DotNetRestore(s => s
-                    .SetProjectFile(MainProject)
-                    .SetProperty("TargetFramework", "net10.0-android")
-                    .SetRuntime(hostRid));
+                // No separate restore — publish handles its own restore with
+                // TargetFrameworks overridden to prevent iOS evaluation (NETSDK1178).
             }
             else if (Platform.Equals("iOS", StringComparison.OrdinalIgnoreCase))
             {
@@ -151,7 +148,7 @@ partial class Build
         var msbuildProperties = new Dictionary<string, object>
         {
             ["AndroidPackageFormat"] = "aab",
-            ["TargetFramework"] = "net10.0-android"
+            ["TargetFrameworks"] = "net10.0-android"
         };
 
         // Add signing configuration if provided
@@ -173,7 +170,6 @@ partial class Build
             .SetProject(MainProject)
             .SetConfiguration(Configuration)
             .SetFramework("net10.0-android")
-            .EnableNoRestore()
             .SetProperties(msbuildProperties));
 
         // Find and copy AAB to artifacts directory (MAUI doesn't respect --output for AAB)
