@@ -221,6 +221,19 @@ cwd = "./mysql/db-populator"
 command = "cargo"
 args = ["run", "--release", "--", "--skip-structure"]
 
+[tasks.mysql-apply-tanahpedia-families]
+description = "Apply Tanahpedia family demo SQL only (שמשון if person exists, then יעקב); uses data/.dev.env DB_URL; skip full populate"
+env_files = [".dev.env"]
+cwd = "./mysql/db-populator"
+command = "cargo"
+args = [
+    "run",
+    "--release",
+    "--",
+    "--skip-structure",
+    "--tanahpedia-families-only",
+]
+
 [tasks.dev]
 description = "Dev target: populate dev DB"
 dependencies = ["mysql-populate-dev"]

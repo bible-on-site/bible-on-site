@@ -60,6 +60,14 @@ struct Cli {
     #[arg(long, default_value = "../tanahpedia_family_shimshon_data.sql")]
     tanahpedia_family_shimshon_script: String,
 
+    /// Optional demo family SQL (יעקב entry + full household); runs after שמשון script when present
+    #[arg(long, default_value = "../tanahpedia_family_jacob_data.sql")]
+    tanahpedia_family_jacob_script: String,
+
+    /// INSERT IGNORE lookup patches (e.g. new union types); runs before family demo scripts
+    #[arg(long, default_value = "../tanahpedia_incremental_lookups.sql")]
+    tanahpedia_incremental_lookups_script: String,
+
     /// Production database URL (for checking if tanahpedia data exists in prod)
     /// Can also be set via PROD_DB_URL environment variable
     #[arg(long, env = "PROD_DB_URL")]
@@ -77,6 +85,16 @@ struct Cli {
     /// perushim, and tanahpedia seeds still run when applicable.
     #[arg(long, default_value_t = false)]
     skip_tanah_test_data: bool,
+
+    /// Only run תנכפדיה family demo SQL (שמשון if person exists, then יעקב).
+    /// Use with existing DB and `--skip-structure` to refresh demo rows without full populate.
+    #[arg(long, default_value_t = false)]
+    tanahpedia_families_only: bool,
+
+    /// With `--tanahpedia-families-only`, run `tanahpedia_seed_data.sql` first (lookup tables).
+    /// Fails if seed rows already exist — use only on a DB missing Tanahpedia seed.
+    #[arg(long, default_value_t = false)]
+    ensure_tanahpedia_seed: bool,
 
     /// Only drop the database (do not create or populate)
     #[arg(long, default_value = "false")]
@@ -178,6 +196,19 @@ async fn main() -> Result<()> {
         }
     }
 
+    if cli.tanahpedia_families_only {
+        apply_tanahpedia_family_demonstrations(
+            &mut conn,
+            base_path,
+            &cli,
+            cli.ensure_tanahpedia_seed,
+        )
+        .await?;
+        conn.close().await.context("Failed to close connection")?;
+        println!("Tanahpedia family demo scripts finished");
+        return Ok(());
+    }
+
     if !cli.skip_data {
         if !cli.skip_tanah_test_data {
             let data_path = base_path.join(&cli.data_script);
@@ -239,29 +270,7 @@ async fn main() -> Result<()> {
             );
         }
 
-        // Idempotent demo family for שמשון — must run even when legacy migration is skipped
-        // (e.g. PROD_DB_URL points at prod with Tanahpedia; local DB still needs graph rows).
-        let tanahpedia_family_path = base_path.join(&cli.tanahpedia_family_shimshon_script);
-        if tanahpedia_family_path.exists() {
-            match tanahpedia_shimshon_person_exists(&mut conn).await {
-                Ok(true) => {
-                    println!("Applying tanahpedia family demo (שמשון)...");
-                    execute_script(
-                        &mut conn,
-                        &tanahpedia_family_path,
-                        "tanahpedia-family-shimshon",
-                    )
-                    .await?;
-                }
-                Ok(false) => println!(
-                    "Skipping tanahpedia family demo: no tanahpedia_person row for entity name «שמשון»"
-                ),
-                Err(e) => println!(
-                    "Skipping tanahpedia family demo (could not check for שמשון): {}",
-                    e
-                ),
-            }
-        }
+        apply_tanahpedia_family_demonstrations(&mut conn, base_path, &cli, false).await?;
     }
 
     conn.close().await.context("Failed to close connection")?;
@@ -371,6 +380,73 @@ async fn execute_script_chunked(
         "{} script executed successfully ({} statements)",
         script_type, stmt_count
     );
+    Ok(())
+}
+
+/// שמשון (אם קיים) ואז יעקב — סקריפטים קבועים; לא נוגעים בישויות אחרות.
+async fn apply_tanahpedia_family_demonstrations(
+    conn: &mut MySqlConnection,
+    base_path: &Path,
+    cli: &Cli,
+    include_tanahpedia_seed: bool,
+) -> Result<()> {
+    let incremental_path = base_path.join(&cli.tanahpedia_incremental_lookups_script);
+    if incremental_path.exists() {
+        println!("Applying tanahpedia incremental lookups (idempotent)...");
+        execute_script(
+            conn,
+            &incremental_path,
+            "tanahpedia-incremental-lookups",
+        )
+        .await?;
+    }
+
+    if include_tanahpedia_seed {
+        let tanahpedia_seed_data_path = base_path.join(&cli.tanahpedia_seed_data_script);
+        if tanahpedia_seed_data_path.exists() {
+            println!("Applying tanahpedia seed data (ensure)...");
+            execute_script(
+                conn,
+                &tanahpedia_seed_data_path,
+                "tanahpedia-seed-data",
+            )
+            .await?;
+        }
+    }
+
+    let tanahpedia_family_path = base_path.join(&cli.tanahpedia_family_shimshon_script);
+    if tanahpedia_family_path.exists() {
+        match tanahpedia_shimshon_person_exists(conn).await {
+            Ok(true) => {
+                println!("Applying tanahpedia family demo (שמשון)...");
+                execute_script(
+                    conn,
+                    &tanahpedia_family_path,
+                    "tanahpedia-family-shimshon",
+                )
+                .await?;
+            }
+            Ok(false) => println!(
+                "Skipping tanahpedia family demo: no tanahpedia_person row for entity name «שמשון»"
+            ),
+            Err(e) => println!(
+                "Skipping tanahpedia family demo (could not check for שמשון): {}",
+                e
+            ),
+        }
+    }
+
+    let tanahpedia_family_jacob_path = base_path.join(&cli.tanahpedia_family_jacob_script);
+    if tanahpedia_family_jacob_path.exists() {
+        println!("Applying tanahpedia family demo (יעקב)...");
+        execute_script(
+            conn,
+            &tanahpedia_family_jacob_path,
+            "tanahpedia-family-jacob",
+        )
+        .await?;
+    }
+
     Ok(())
 }
 
