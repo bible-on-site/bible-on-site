@@ -149,7 +149,8 @@ partial class Build
         {
             ["AndroidPackageFormat"] = "aab",
             ["TargetFrameworks"] = "net10.0-android",
-            ["UseMonoRuntime"] = "false"
+            ["UseMonoRuntime"] = "false",
+            ["UseCurrentRuntimeIdentifier"] = "false"
         };
 
         // Add signing configuration if provided
