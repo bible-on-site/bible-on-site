@@ -38,6 +38,7 @@ Environment variables:
 - `VITE_WEBSITE_URL`: Main website URL for cache invalidation
 - `VITE_AWS_REGION`: AWS region for S3
 - `VITE_S3_BUCKET`: S3 bucket name for rabbi images
+- `OPENAI_API_KEY` / `OPENAI_MODEL` (optional): Tanahpedia entry LLM assistant — server-side only; see `docs/tanahpedia/admin-llm-assistant.md`
 
 ### Development
 

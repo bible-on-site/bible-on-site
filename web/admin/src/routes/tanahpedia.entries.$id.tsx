@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
+import { EntryStructuralPanel } from "~/components/tanahpedia/EntryStructuralPanel";
+import { TanahpediaLlmAssistantPanel } from "~/components/tanahpedia/TanahpediaLlmAssistantPanel";
 import { WysiwygEditor } from "~/components/WysiwygEditor";
 import {
 	createEntry,
@@ -159,15 +161,25 @@ function EntryEditPage() {
 				</div>
 			</div>
 
-			<div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/60 p-5 text-amber-950">
-				<h2 className="text-sm font-bold text-amber-900 mb-1">
-					GenAI (בקרוב)
-				</h2>
-				<p className="text-sm text-amber-900/85 leading-relaxed">
-					כאן יתווספו הצעות ניסוח, סיכום מקורות וכלים חכמים לעריכה. כרגע אין חיבור
-					למודל — עריכת התוכן היא ידנית בעורך למטה.
-				</p>
-			</div>
+			{!isNew && (
+				<TanahpediaLlmAssistantPanel
+					entryId={id}
+					formData={formData}
+					onApplyEntryFields={(patch) => {
+						setFormData((prev) => ({ ...prev, ...patch }));
+						setHasChanges(true);
+					}}
+				/>
+			)}
+
+			{isNew ? (
+				<div className="rounded-lg border border-amber-200 bg-amber-50/60 p-4 text-sm text-amber-950">
+					עריכת מבנה יישויות ועוזר ה־LLM זמינים לאחר שמירת ערך חדש (נוצר מזהה
+					בשרת).
+				</div>
+			) : (
+				<EntryStructuralPanel entryId={id} />
+			)}
 
 			<form className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
 				<div className="p-8 space-y-6">

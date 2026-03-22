@@ -285,6 +285,8 @@ Create in `web/api/src/dtos/tanahpedia/`:
 
 ### 6.0 Centralized AI-Assisted Edits (#1241) (first admin feature after entry editor)
 
+**Implemented (entry editor slice):** JSON-only LLM suggestions with full HTML + linked-entity structural context + schema summary — see [admin-llm-assistant.md](./admin-llm-assistant.md).
+
 Single admin flow for **reference linking** (articles → entries) and **entry/entity creation**:
 
 - **Inputs:** Entity type (optional; from enum; if omitted, AI may pick/suggest), Entity name (optional; if omitted, AI may suggest from context)

@@ -1,8 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import {
 	CATEGORY_LABELS,
-	ENTITY_TYPES,
 	type CategoryKey,
+	ENTITY_TYPES,
 	type EntityType,
 } from "~/lib/tanahpedia/labels";
 import { execute, query, queryOne } from "../db";
@@ -78,7 +78,9 @@ export const listTanahpediaEntriesForAdmin = createServerFn({ method: "POST" })
 			);
 		}
 
-		if (PERSON_ROLE_KEYS.includes(category as (typeof PERSON_ROLE_KEYS)[number])) {
+		if (
+			PERSON_ROLE_KEYS.includes(category as (typeof PERSON_ROLE_KEYS)[number])
+		) {
 			const roleTable =
 				category === "PROPHET"
 					? "tanahpedia_person_role_prophet"
@@ -97,7 +99,9 @@ export const listTanahpediaEntriesForAdmin = createServerFn({ method: "POST" })
 			);
 		}
 
-		if (ANIMAL_KIND_KEYS.includes(category as (typeof ANIMAL_KIND_KEYS)[number])) {
+		if (
+			ANIMAL_KIND_KEYS.includes(category as (typeof ANIMAL_KIND_KEYS)[number])
+		) {
 			return await query<TanahpediaEntryListItem>(
 				`SELECT DISTINCT ent.id, ent.unique_name, ent.title, ent.created_at, ent.updated_at
 				 FROM tanahpedia_entry ent
@@ -113,7 +117,9 @@ export const listTanahpediaEntriesForAdmin = createServerFn({ method: "POST" })
 		}
 
 		if (
-			ANIMAL_PURITY_KEYS.includes(category as (typeof ANIMAL_PURITY_KEYS)[number])
+			ANIMAL_PURITY_KEYS.includes(
+				category as (typeof ANIMAL_PURITY_KEYS)[number],
+			)
 		) {
 			return await query<TanahpediaEntryListItem>(
 				`SELECT DISTINCT ent.id, ent.unique_name, ent.title, ent.created_at, ent.updated_at
@@ -199,18 +205,25 @@ export const getTanahpediaCategoryCounts = createServerFn({
 
 	for (const row of entityRows) counts[row.entityType] = Number(row.cnt);
 	for (const row of roleRows) counts[row.role as CategoryKey] = Number(row.cnt);
-	for (const row of animalRows) counts[row.cat as CategoryKey] = Number(row.cnt);
+	for (const row of animalRows)
+		counts[row.cat as CategoryKey] = Number(row.cnt);
 
 	return { counts, labels: CATEGORY_LABELS };
 });
 
+export async function loadTanahpediaEntryById(
+	id: string,
+): Promise<TanahpediaEntry | null> {
+	return queryOne<TanahpediaEntry>(
+		"SELECT id, unique_name, title, content, created_at, updated_at FROM tanahpedia_entry WHERE id = ?",
+		[id],
+	);
+}
+
 export const getEntry = createServerFn({ method: "GET" })
 	.inputValidator((data: string) => data)
 	.handler(async ({ data: id }) => {
-		const entry = await queryOne<TanahpediaEntry>(
-			"SELECT id, unique_name, title, content, created_at, updated_at FROM tanahpedia_entry WHERE id = ?",
-			[id],
-		);
+		const entry = await loadTanahpediaEntryById(id);
 		if (!entry) throw new Error("Entry not found");
 		return entry;
 	});
