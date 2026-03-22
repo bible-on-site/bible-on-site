@@ -91,8 +91,11 @@ partial class Build
             }
             else if (Platform.Equals("Android", StringComparison.OrdinalIgnoreCase))
             {
-                // Android restore is handled by dotnet publish (with TargetFramework property
-                // limiting to Android only). No separate restore needed.
+                var hostRid = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier;
+                DotNetRestore(s => s
+                    .SetProjectFile(MainProject)
+                    .SetProperty("TargetFramework", "net10.0-android")
+                    .SetRuntime(hostRid));
             }
             else if (Platform.Equals("iOS", StringComparison.OrdinalIgnoreCase))
             {
@@ -170,6 +173,7 @@ partial class Build
             .SetProject(MainProject)
             .SetConfiguration(Configuration)
             .SetFramework("net10.0-android")
+            .EnableNoRestore()
             .SetProperties(msbuildProperties));
 
         // Find and copy AAB to artifacts directory (MAUI doesn't respect --output for AAB)
