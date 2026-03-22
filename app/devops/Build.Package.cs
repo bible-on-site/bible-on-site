@@ -1,7 +1,6 @@
 using System.Text.RegularExpressions;
 using Nuke.Common;
 using Nuke.Common.IO;
-using Nuke.Common.Tooling;
 using Nuke.Common.Tools.DotNet;
 using static Nuke.Common.Tools.DotNet.DotNetTasks;
 
@@ -95,7 +94,7 @@ partial class Build
                 DotNetRestore(s => s
                     .SetProjectFile(MainProject)
                     .SetProperty("TargetFramework", "net10.0-android")
-                    .SetProperty("UseCurrentRuntimeIdentifier", "false"));
+                    .SetRuntime("android-arm64"));
             }
             else if (Platform.Equals("iOS", StringComparison.OrdinalIgnoreCase))
             {
@@ -148,21 +147,18 @@ partial class Build
     {
         Serilog.Log.Information("Packaging for Android (AAB)...");
 
-        var properties = new Dictionary<string, string>
+        var msbuildProperties = new Dictionary<string, object>
         {
-            ["Configuration"] = Configuration,
-            ["TargetFramework"] = "net10.0-android",
-            ["AndroidPackageFormat"] = "aab",
-            ["UseCurrentRuntimeIdentifier"] = "false"
+            ["AndroidPackageFormat"] = "aab"
         };
 
         if (!string.IsNullOrEmpty(AndroidKeystore))
         {
-            properties["AndroidKeyStore"] = "true";
-            properties["AndroidSigningKeyStore"] = AndroidKeystore;
-            properties["AndroidSigningStorePass"] = AndroidKeystorePassword ?? "";
-            properties["AndroidSigningKeyAlias"] = AndroidKeyAlias ?? "";
-            properties["AndroidSigningKeyPass"] = AndroidKeyPassword ?? "";
+            msbuildProperties["AndroidKeyStore"] = "true";
+            msbuildProperties["AndroidSigningKeyStore"] = AndroidKeystore;
+            msbuildProperties["AndroidSigningStorePass"] = AndroidKeystorePassword ?? "";
+            msbuildProperties["AndroidSigningKeyAlias"] = AndroidKeyAlias ?? "";
+            msbuildProperties["AndroidSigningKeyPass"] = AndroidKeyPassword ?? "";
             Serilog.Log.Information("Android signing enabled with provided keystore");
         }
         else
@@ -170,15 +166,17 @@ partial class Build
             Serilog.Log.Warning("No Android keystore provided - building unsigned AAB");
         }
 
-        var propsArgs = string.Join(" ", properties.Select(kv => $"/p:{kv.Key}=\"{kv.Value}\""));
-        var msbuildArgs = $"msbuild \"{MainProject}\" /t:SignAndroidPackage /restore:false {propsArgs}";
-        Serilog.Log.Information($"Running: dotnet {msbuildArgs}");
-        ProcessTasks.StartProcess("dotnet", msbuildArgs, workingDirectory: RootDirectory)
-            .AssertZeroExitCode();
+        DotNetPublish(s => s
+            .SetProject(MainProject)
+            .SetConfiguration(Configuration)
+            .SetFramework("net10.0-android")
+            .SetRuntime("android-arm64")
+            .SetProperties(msbuildProperties)
+            .EnableNoRestore());
 
         // Find and copy AAB to artifacts directory (MAUI doesn't respect --output for AAB)
         var binDir = MainProject.Parent / "bin" / Configuration / "net10.0-android";
-        var aabFiles = binDir.GlobFiles("**/*-Signed.aab");  // Only get signed AABs
+        var aabFiles = binDir.GlobFiles("**/*-Signed.aab");
 
         if (aabFiles.Count > 0)
         {
