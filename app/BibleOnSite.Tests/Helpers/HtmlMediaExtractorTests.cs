@@ -205,5 +205,46 @@ public class HtmlMediaExtractorTests
 
             segments.Should().BeEmpty();
         }
+
+        [Fact]
+        public void extracts_media_nested_inside_div()
+        {
+            const string url = "https://example.com/nested.mp4";
+            var html = $"""<p>Before</p><div class="player"><video src="{url}" controls></video></div><p>After</p>""";
+
+            var segments = HtmlMediaExtractor.ExtractSegments(html);
+
+            segments.Should().HaveCount(3);
+            segments[0].Kind.Should().Be(SegmentKind.Html);
+            segments[0].Html.Should().Contain("Before");
+
+            segments[1].Should().BeEquivalentTo(
+                new ContentSegment(SegmentKind.Media, null, url, MediaType.Video));
+
+            segments[2].Kind.Should().Be(SegmentKind.Html);
+            segments[2].Html.Should().Contain("After");
+        }
+
+        [Fact]
+        public void extracts_multiple_nested_media_elements()
+        {
+            const string videoUrl = "https://example.com/vid.mp4";
+            const string audioUrl = "https://example.com/aud.mp3";
+            var html = $"""<div><p>Intro</p><div><video src="{videoUrl}"></video></div><span><audio src="{audioUrl}"></audio></span><p>End</p></div>""";
+
+            var segments = HtmlMediaExtractor.ExtractSegments(html);
+
+            var mediaSegments = segments.Where(s => s.Kind == SegmentKind.Media).ToList();
+            mediaSegments.Should().HaveCount(2);
+            mediaSegments[0].Should().BeEquivalentTo(
+                new ContentSegment(SegmentKind.Media, null, videoUrl, MediaType.Video));
+            mediaSegments[1].Should().BeEquivalentTo(
+                new ContentSegment(SegmentKind.Media, null, audioUrl, MediaType.Audio));
+
+            var htmlSegments = segments.Where(s => s.Kind == SegmentKind.Html).ToList();
+            htmlSegments.Should().HaveCountGreaterThanOrEqualTo(2);
+            htmlSegments.First().Html.Should().Contain("Intro");
+            htmlSegments.Last().Html.Should().Contain("End");
+        }
     }
 }

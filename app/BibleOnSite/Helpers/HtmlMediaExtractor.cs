@@ -23,28 +23,50 @@ public static class HtmlMediaExtractor
         var doc = new HtmlDocument();
         doc.LoadHtml(html);
 
-        var htmlBuffer = new System.IO.StringWriter();
-        foreach (var node in doc.DocumentNode.ChildNodes)
+        var mediaNodes = doc.DocumentNode.Descendants()
+            .Where(IsMediaNode)
+            .ToList();
+
+        if (mediaNodes.Count == 0)
         {
-            if (IsMediaNode(node))
+            var trimmed = html.Trim();
+            if (!string.IsNullOrEmpty(trimmed))
+                segments.Add(new ContentSegment(SegmentKind.Html, trimmed, null, null));
+            return segments;
+        }
+
+        var mediaMap = new Dictionary<string, (string? Url, MediaType Type)>();
+        foreach (var mediaNode in mediaNodes)
+        {
+            var sourceUrl = GetMediaSourceUrl(mediaNode);
+            var type = mediaNode.Name.Equals("video", StringComparison.OrdinalIgnoreCase)
+                ? MediaType.Video
+                : MediaType.Audio;
+            var placeholder = $"<!--MEDIA_{mediaMap.Count}-->";
+            mediaMap[placeholder] = (sourceUrl, type);
+
+            var placeholderNode = HtmlNode.CreateNode(placeholder);
+            mediaNode.ParentNode.ReplaceChild(placeholderNode, mediaNode);
+        }
+
+        var resultHtml = doc.DocumentNode.InnerHtml;
+        var parts = System.Text.RegularExpressions.Regex.Split(resultHtml, @"(<!--MEDIA_\d+-->)");
+
+        foreach (var part in parts)
+        {
+            if (mediaMap.TryGetValue(part, out var media))
             {
-                FlushHtmlBuffer(htmlBuffer, segments);
-                var sourceUrl = GetMediaSourceUrl(node);
-                if (!string.IsNullOrEmpty(sourceUrl))
-                {
-                    var type = node.Name.Equals("video", StringComparison.OrdinalIgnoreCase)
-                        ? MediaType.Video
-                        : MediaType.Audio;
-                    segments.Add(new ContentSegment(SegmentKind.Media, null, sourceUrl, type));
-                }
+                if (!string.IsNullOrEmpty(media.Url))
+                    segments.Add(new ContentSegment(SegmentKind.Media, null, media.Url, media.Type));
             }
             else
             {
-                node.WriteTo(htmlBuffer);
+                var trimmed = part.Trim();
+                if (!string.IsNullOrEmpty(trimmed) && trimmed != "<br>" && trimmed != "<br/>")
+                    segments.Add(new ContentSegment(SegmentKind.Html, trimmed, null, null));
             }
         }
 
-        FlushHtmlBuffer(htmlBuffer, segments);
         return segments;
     }
 
@@ -76,16 +98,6 @@ public static class HtmlMediaExtractor
         var sourceChild = mediaNode.SelectSingleNode(".//source");
         var childSrc = sourceChild?.GetAttributeValue("src", string.Empty);
         return string.IsNullOrEmpty(childSrc) ? null : childSrc;
-    }
-
-    private static void FlushHtmlBuffer(System.IO.StringWriter buffer, List<ContentSegment> segments)
-    {
-        var html = buffer.ToString().Trim();
-        if (!string.IsNullOrEmpty(html) && html != "<br>" && html != "<br/>")
-        {
-            segments.Add(new ContentSegment(SegmentKind.Html, html, null, null));
-        }
-        buffer.GetStringBuilder().Clear();
     }
 }
 
