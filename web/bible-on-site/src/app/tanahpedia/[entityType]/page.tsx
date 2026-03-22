@@ -24,6 +24,8 @@ import { EntityListItem } from "../components/EntityListItem";
 import { TanahpediaPlacesMap } from "../components/TanahpediaPlacesMap";
 import styles from "../page.module.css";
 
+export const dynamic = "force-dynamic";
+
 // this reserverd function is a magic for caching
 /* istanbul ignore next: only runs during next build */
 export async function generateStaticParams() {
@@ -126,6 +128,7 @@ export default async function EntityTypePage({
 	let entities: Awaited<ReturnType<typeof getEntitiesWithEntries>>;
 	let homepage: Awaited<ReturnType<typeof getCategoryHomepage>>;
 	let placeMapMarkers: Awaited<ReturnType<typeof getPlaceMapMarkers>> = [];
+	let listLoadError: string | null = null;
 	try {
 		let entitiesPromise: Promise<typeof entities>;
 		if (sub && entityType === "PERSON") {
@@ -154,7 +157,12 @@ export default async function EntityTypePage({
 			getCategoryHomepage(entityType),
 			mapPromise,
 		]);
-	} catch {
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		if (process.env.NODE_ENV === "development") {
+			console.error("[tanahpedia] category list DB load failed:", err);
+		}
+		listLoadError = msg;
 		entities = [];
 		homepage = null;
 		placeMapMarkers = [];
@@ -167,6 +175,24 @@ export default async function EntityTypePage({
 		<div className={styles.tanahpediaPage}>
 			<TanahpediaBreadcrumb currentCategory={currentCategory} />
 			<h1 className={styles.pageTitle}>{label}</h1>
+
+			{listLoadError ? (
+				<div className={styles.dbLoadWarning} role="alert">
+					<strong className={styles.dbLoadWarningTitle}>
+						לא נטענה הרשימה מהמסד
+					</strong>
+					<p className={styles.dbLoadWarningText}>
+						בדקו חיבור ל-MySQL ושהמסד מכיל את טבלאות תנכפדיה (למשל אחרי{" "}
+						<code className={styles.dbLoadWarningCode}>
+							cargo make mysql-populate-dev
+						</code>
+						).
+					</p>
+					{process.env.NODE_ENV === "development" ? (
+						<pre className={styles.dbLoadWarningPre}>{listLoadError}</pre>
+					) : null}
+				</div>
+			) : null}
 
 			{homepage?.content && !sub && (
 				<div

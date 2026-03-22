@@ -23,6 +23,47 @@
   text-align: center;
 }
 
+.dbLoadWarning {
+  max-width: 40rem;
+  margin: 0 auto 24px auto;
+  padding: 16px;
+  border-radius: 12px;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  text-align: right;
+}
+
+.dbLoadWarningTitle {
+  display: block;
+  color: #92400e;
+  margin-bottom: 8px;
+}
+
+.dbLoadWarningText {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #78350f;
+  line-height: 1.5;
+}
+
+.dbLoadWarningCode {
+  font-size: 0.85em;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 4px;
+}
+
+.dbLoadWarningPre {
+  margin: 12px 0 0 0;
+  padding: 10px;
+  font-size: 0.8rem;
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .breadcrumb {
   font-size: 0.9rem;
   color: #6b7280;

@@ -15,6 +15,8 @@ import { PersonFamilyTree } from "../../components/PersonFamilyTree";
 import { TanahpediaBreadcrumb } from "../../components/TanahpediaBreadcrumb";
 import styles from "../../page.module.css";
 
+export const dynamic = "force-dynamic";
+
 /** Plain-text snippet for meta description (entry content may be HTML). */
 function metaDescriptionFromContent(html: string, maxLen: number): string {
 	const plain = html

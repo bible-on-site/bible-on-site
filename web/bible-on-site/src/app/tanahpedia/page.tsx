@@ -19,8 +19,8 @@ export const metadata: Metadata = {
 	description: 'אנציקלופדיה לתנ"ך - אישים, מקומות, אירועים ועוד',
 };
 
-// SSG: This page is statically generated at build time
-export const revalidate = 3600;
+// Always read fresh counts from MySQL (avoid stale “0 ערכים” after populate or when DB was down at build).
+export const dynamic = "force-dynamic";
 
 export default async function TanahpediaLandingPage() {
 	const today = HebrewDate.fromGregorian(new Date());
@@ -31,13 +31,19 @@ export default async function TanahpediaLandingPage() {
 	let counts: Record<CategoryKey, number>;
 	let recentEntries: Awaited<ReturnType<typeof getRecentEntries>>;
 	let todayEvents: Awaited<ReturnType<typeof getTodayInTanahEvents>>;
+	let loadError: string | null = null;
 	try {
 		[counts, recentEntries, todayEvents] = await Promise.all([
 			getCategoryCounts(),
 			getRecentEntries(8),
 			getTodayInTanahEvents(hebrewMonth, hebrewDay),
 		]);
-	} catch {
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		if (process.env.NODE_ENV === "development") {
+			console.error("[tanahpedia] landing DB load failed:", err);
+		}
+		loadError = msg;
 		counts = Object.fromEntries(
 			Object.keys(CATEGORY_LABELS).map((k) => [k, 0]),
 		) as Record<CategoryKey, number>;
@@ -51,6 +57,28 @@ export default async function TanahpediaLandingPage() {
 			<p className={styles.pageSubtitle}>
 				אנציקלופדיה לתנ&quot;ך - אישים, מקומות, אירועים, חפצים ועוד
 			</p>
+
+			{loadError ? (
+				<div className={styles.dbLoadWarning} role="alert">
+					<strong className={styles.dbLoadWarningTitle}>
+						לא נטענו נתונים מהמסד
+					</strong>
+					<p className={styles.dbLoadWarningText}>
+						ודאו ש-MySQL פעיל, ש-DB_URL ב-.dev.env מצביע על אותה מסד שמולא ב־
+						<code className={styles.dbLoadWarningCode}>
+							cargo make mysql-populate-dev
+						</code>
+						, ואז הריצו שוב{" "}
+						<code className={styles.dbLoadWarningCode}>
+							npm run dev
+						</code>
+						.
+					</p>
+					{process.env.NODE_ENV === "development" ? (
+						<pre className={styles.dbLoadWarningPre}>{loadError}</pre>
+					) : null}
+				</div>
+			) : null}
 
 			{todayEvents.length > 0 && (
 				<section className={styles.todaySection}>
