@@ -149,11 +149,9 @@ partial class Build
 
         var msbuildProperties = new Dictionary<string, object>
         {
-            ["AndroidPackageFormat"] = "aab",
-            ["UseCurrentRuntimeIdentifier"] = "false"
+            ["AndroidPackageFormat"] = "aab"
         };
 
-        // Add signing configuration if provided
         if (!string.IsNullOrEmpty(AndroidKeystore))
         {
             msbuildProperties["AndroidKeyStore"] = "true";
@@ -173,7 +171,8 @@ partial class Build
             .SetConfiguration(Configuration)
             .SetFramework("net10.0-android")
             .EnableNoRestore()
-            .SetProperties(msbuildProperties));
+            .SetProperties(msbuildProperties)
+            .SetProcessArgumentConfigurator(a => a.Add("--ucr").Add("false")));
 
         // Find and copy AAB to artifacts directory (MAUI doesn't respect --output for AAB)
         var binDir = MainProject.Parent / "bin" / Configuration / "net10.0-android";
