@@ -221,6 +221,7 @@ partial class PadDeliveryService
                 return;
             }
 
+#pragma warning disable CA1416 // Guarded by runtime SdkInt check; R/GetInstallSourceInfo require API 30+
             if ((int)Android.OS.Build.VERSION.SdkInt >= (int)Android.OS.BuildVersionCodes.R)
             {
                 var info = pm.GetInstallSourceInfo(pn);
@@ -229,6 +230,7 @@ partial class PadDeliveryService
                 if (installing != "com.android.vending")
                     lines.Add("PAD: On-demand packs are served for installs from Google Play (installer com.android.vending). Other sources often cannot download PAD.");
             }
+#pragma warning restore CA1416
             else
             {
 #pragma warning disable CA1422 // GetInstallerPackageName deprecated — used only below API R (30)
