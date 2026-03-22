@@ -58,6 +58,13 @@ This will start the Vite dev server at http://localhost:3101
 npm run build
 ```
 
+### Tests & coverage
+
+- Unit: `npm run test:unit` / coverage: `npm run coverage:unit` (outputs `web/admin/.coverage/unit/lcov.info`)
+- E2E: `npm run test:e2e`
+- Merge unit (+ E2E lcov when configured): `npm run coverage:merge` → `web/admin/.coverage/merged/lcov.info`
+- CI publishes the merged report to Codecov with flag **`admin`** (see root `README.md`).
+
 ## Project Structure
 
 ```

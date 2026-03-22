@@ -32,6 +32,12 @@ coverage:
         informational: true
         flags:
           - bulletin
+      admin:
+        target: auto
+        threshold: 1%
+        informational: true
+        flags:
+          - admin
       data:
         # TODO: Increase target once data is covered by CI
         target: 0%
@@ -61,6 +67,9 @@ flags:
   bulletin:
     paths:
       - web/bulletin/src/
+  admin:
+    paths:
+      - web/admin/src/
   data:
     paths:
       - data/

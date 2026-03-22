@@ -87,6 +87,10 @@ env:
   ADMIN_NODE_VERSION_FILE: web/admin/package.json
   ADMIN_UNIT_JUNIT_REPORT_ARTIFACT_NAME: admin-unit-junit-report-${{ github.run_id }}
   ADMIN_E2E_JUNIT_REPORT_ARTIFACT_NAME: admin-e2e-junit-report-${{ github.run_id }}
+  ADMIN_COVERAGE_ARTIFACT_NAME_MASTER: admin-coverage.master
+  ADMIN_COVERAGE_ARTIFACT_NAME_WF: admin-coverage.${{ github.run_id }}
+  ADMIN_MERGED_COVERAGE_DIRECTORY: web/admin/.coverage/merged
+  ADMIN_MERGED_COVERAGE_REPORT: web/admin/.coverage/merged/lcov.info
   BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER: bulletin-coverage.master
   BULLETIN_COVERAGE_ARTIFACT_NAME_WF: bulletin-coverage.${{ github.run_id }}
   BULLETIN_COVERAGE_DIRECTORY: web/bulletin/.coverage/unit
@@ -146,6 +150,7 @@ jobs:
       is_api_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_api_master_coverage_available }}
       is_app_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_app_master_coverage_available }}
       is_bulletin_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_bulletin_master_coverage_available }}
+      is_admin_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_admin_master_coverage_available }}
       is_website_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_website_master_coverage_available }}
       is_perushim_data_sql_available: ${{ steps.check_master_coverage_artifacts.outputs.is_perushim_data_sql_available }}
       is_perushim_notes_sqlite_available: ${{ steps.check_master_coverage_artifacts.outputs.is_perushim_notes_sqlite_available }}
@@ -178,6 +183,7 @@ jobs:
           IS_API_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}")
           IS_APP_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}")
           IS_BULLETIN_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}")
+          IS_ADMIN_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}")
           IS_WEBSITE_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}")
           IS_PERUSHIM_DATA_SQL_AVAILABLE=$(check_and_download_artifact "${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}")
           IS_PERUSHIM_NOTES_SQLITE_AVAILABLE=$(check_and_download_artifact "${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}")
@@ -185,6 +191,7 @@ jobs:
           echo "API master coverage available: $IS_API_MASTER_COVERAGE_AVAILABLE"
           echo "App master coverage available: $IS_APP_MASTER_COVERAGE_AVAILABLE"
           echo "Bulletin master coverage available: $IS_BULLETIN_MASTER_COVERAGE_AVAILABLE"
+          echo "Admin master coverage available: $IS_ADMIN_MASTER_COVERAGE_AVAILABLE"
           echo "Website master coverage available: $IS_WEBSITE_MASTER_COVERAGE_AVAILABLE"
           echo "Perushim data SQL available: $IS_PERUSHIM_DATA_SQL_AVAILABLE"
           echo "Perushim notes SQLite available: $IS_PERUSHIM_NOTES_SQLITE_AVAILABLE"
@@ -192,6 +199,7 @@ jobs:
           echo "is_api_master_coverage_available=$IS_API_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_app_master_coverage_available=$IS_APP_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_bulletin_master_coverage_available=$IS_BULLETIN_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
+          echo "is_admin_master_coverage_available=$IS_ADMIN_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_website_master_coverage_available=$IS_WEBSITE_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_perushim_data_sql_available=$IS_PERUSHIM_DATA_SQL_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_perushim_notes_sqlite_available=$IS_PERUSHIM_NOTES_SQLITE_AVAILABLE" >> $GITHUB_OUTPUT
@@ -229,6 +237,15 @@ jobs:
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
+          retention-days: 90
+          overwrite: true
+
+      - name: Re-upload Admin master coverage for current workflow
+        if: steps.check_master_coverage_artifacts.outputs.is_admin_master_coverage_available == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
+          path: /tmp/${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
           retention-days: 90
           overwrite: true
 
@@ -1026,8 +1043,8 @@ jobs:
   admin_ci:
     name: Admin CI
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_admin_changes]
-    if: ${{ needs.determine_admin_changes.outputs.module_changed == 'true' || needs.determine_admin_changes.outputs.ci_changed == 'true' }}
+    needs: [setup_env, determine_admin_changes, determine_baseline_availability]
+    if: ${{ needs.determine_admin_changes.outputs.module_changed == 'true' || needs.determine_admin_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_admin_master_coverage_available == 'false' }}
     defaults:
       run:
         working-directory: ${{ env.ADMIN_DIRECTORY }}
@@ -1064,9 +1081,9 @@ jobs:
         id: npm-typecheck
         run: npx tsc --noEmit
 
-      - name: Unit Test
+      - name: Unit Test with Coverage
         id: npm-unit-test
-        run: npm run test:unit
+        run: npm run coverage:unit
 
       - name: Build
         id: npm-build
@@ -1145,6 +1162,27 @@ jobs:
           S3_SECRET_ACCESS_KEY: test_1234
           S3_FORCE_PATH_STYLE: "true"
         run: npm run test:e2e
+
+      - name: Merge test coverage (unit; E2E lcov when enabled)
+        run: npm run coverage:merge
+
+      - name: Store Admin Coverage Report (wf)
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_WF }}
+          path: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
+          retention-days: 400
+          overwrite: true
+          if-no-files-found: error
+
+      - name: Store Admin Coverage Report (master)
+        if: ${{ env.IS_MASTER_BRANCH == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
+          path: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
+          retention-days: 400
+          overwrite: true
 
       - name: Store Admin E2E HTML Report
         uses: actions/upload-artifact@v7
@@ -2138,7 +2176,8 @@ jobs:
           fi
 
           ADMIN_MODULE_CHANGED=$([ "${{ needs.determine_admin_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$ADMIN_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ]; then
+          ADMIN_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_admin_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$ADMIN_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$ADMIN_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             ADMIN_STATUS=$([ "${{ needs.admin_ci.result }}" = "failure" ] && echo "failure" || echo "success") # Generated
             if [ "$ADMIN_STATUS" = "failure" ]; then
               echo "Overall status: failure"
@@ -2223,6 +2262,21 @@ jobs:
           files: ${{ env.BULLETIN_COVERAGE_REPORT }}
           disable_search: true
           flags: bulletin
+          fail_ci_if_error: false
+
+      - name: Restore Admin Coverage Report
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.admin_ci.result != 'skipped' && env.ADMIN_COVERAGE_ARTIFACT_NAME_WF || env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
+          path: ${{ env.ADMIN_MERGED_COVERAGE_DIRECTORY }}
+
+      - name: Publish Admin Coverage To Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
+          disable_search: true
+          flags: admin
           fail_ci_if_error: false
 
       - name: Restore lcov Docker image
