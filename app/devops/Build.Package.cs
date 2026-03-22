@@ -94,7 +94,8 @@ partial class Build
             {
                 DotNetRestore(s => s
                     .SetProjectFile(MainProject)
-                    .SetProperty("TargetFramework", "net10.0-android"));
+                    .SetProperty("TargetFramework", "net10.0-android")
+                    .SetProperty("UseCurrentRuntimeIdentifier", "false"));
             }
             else if (Platform.Equals("iOS", StringComparison.OrdinalIgnoreCase))
             {
@@ -151,7 +152,8 @@ partial class Build
         {
             ["Configuration"] = Configuration,
             ["TargetFramework"] = "net10.0-android",
-            ["AndroidPackageFormat"] = "aab"
+            ["AndroidPackageFormat"] = "aab",
+            ["UseCurrentRuntimeIdentifier"] = "false"
         };
 
         if (!string.IsNullOrEmpty(AndroidKeystore))
