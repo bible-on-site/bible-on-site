@@ -272,6 +272,18 @@ jobs:
           name: ${{ inputs.perushim_notes_sqlite_artifact || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.APP_DIRECTORY }}/BibleOnSite/${{ env.PERUSHIM_NOTES_ANDROID_ASSET_RELDIR }}
 
+      - name: Verify perushim SQLite present (required for PAD asset pack in AAB)
+        run: |
+          set -euo pipefail
+          SQLITE="${{ env.APP_DIRECTORY }}/BibleOnSite/${{ env.PERUSHIM_NOTES_ANDROID_ASSET_RELDIR }}/sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
+          if [ ! -f "$SQLITE" ]; then
+            echo "::error::Perushim notes DB missing at $SQLITE — the AAB would ship without the perushim_notes on-demand pack (GetPackLocation null on device)."
+            echo "Directory listing:"
+            ls -laR "${{ env.APP_DIRECTORY }}/BibleOnSite/${{ env.PERUSHIM_NOTES_ANDROID_ASSET_RELDIR }}" || true
+            exit 1
+          fi
+          ls -la "$SQLITE"
+
       - name: Decode Android keystore
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > ${{ runner.temp }}/keystore.jks
@@ -292,6 +304,25 @@ jobs:
               --android-key-password "${{ secrets.ANDROID_KEY_PASSWORD }}"
           else
             dotnet run --project devops -- Package --platform Android --configuration Release
+          fi
+
+      - name: Sanity-check AAB for perushim asset pack module
+        working-directory: ${{ env.APP_DIRECTORY }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          aabs=(.artifacts/*.aab)
+          if [ ${#aabs[@]} -eq 0 ]; then
+            echo "::error::No AAB in .artifacts"
+            exit 1
+          fi
+          AAB="${aabs[0]}"
+          echo "Checking $AAB for perushim / asset pack entries..."
+          if unzip -l "$AAB" | grep -qiE 'perushim|asset.pack|assetpack|split'; then
+            unzip -l "$AAB" | grep -iE 'perushim|asset.pack|assetpack|split' | head -40
+          else
+            echo "::warning::No obvious perushim/asset-pack path in AAB zip listing — verify Play Asset Delivery packaging if PAD fails on device."
+            unzip -l "$AAB" | head -30
           fi
 
       - name: Set artifact name output
