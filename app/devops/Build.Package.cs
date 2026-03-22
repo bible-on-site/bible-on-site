@@ -93,7 +93,8 @@ partial class Build
             {
                 DotNetRestore(s => s
                     .SetProjectFile(MainProject)
-                    .SetProperty("TargetFramework", "net10.0-android"));
+                    .SetProperty("TargetFramework", "net10.0-android")
+                    .SetProperty("UseMonoRuntime", "false"));
             }
             else if (Platform.Equals("iOS", StringComparison.OrdinalIgnoreCase))
             {
