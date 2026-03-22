@@ -72,6 +72,10 @@ struct Cli {
     #[arg(long, default_value = "../tanahpedia_family_edge_lab_data.sql")]
     tanahpedia_family_edge_lab_script: String,
 
+    /// Place entry ארץ ישראל + קטגוריית MAP (Leaflet/OSM, ללא API key)
+    #[arg(long, default_value = "../tanahpedia_place_eretz_yisrael_data.sql")]
+    tanahpedia_place_eretz_yisrael_script: String,
+
     /// Production database URL (for checking if tanahpedia data exists in prod)
     /// Can also be set via PROD_DB_URL environment variable
     #[arg(long, env = "PROD_DB_URL")]
@@ -476,6 +480,12 @@ async fn apply_tanahpedia_family_demonstrations(
             "tanahpedia-family-jacob",
         )
         .await?;
+    }
+
+    let eretz_path = base_path.join(&cli.tanahpedia_place_eretz_yisrael_script);
+    if eretz_path.exists() {
+        println!("Applying tanahpedia place seed (ארץ ישראל + מפת מקומות)...");
+        execute_script(conn, &eretz_path, "tanahpedia-place-eretz-yisrael").await?;
     }
 
     Ok(())

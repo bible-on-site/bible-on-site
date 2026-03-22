@@ -357,6 +357,50 @@ export async function getPlaceMapMarkers(): Promise<PlaceMapMarker[]> {
 	return out;
 }
 
+/**
+ * Map markers for place entities linked to a single entry (e.g. ארץ ישראל on the entry page).
+ */
+export async function getPlaceMapMarkersForEntry(
+	entryId: string,
+): Promise<PlaceMapMarker[]> {
+	const rows = await query<{
+		placeId: string;
+		placeName: string;
+		modernName: string | null;
+		latitude: unknown;
+		longitude: unknown;
+		entryUniqueName: string | null;
+	}>(
+		`SELECT pi.id AS placeId, e.name AS placeName, pi.modern_name AS modernName,
+		        pi.latitude AS latitude, pi.longitude AS longitude,
+		        ent.unique_name AS entryUniqueName
+		 FROM tanahpedia_entry_entity ee
+		 INNER JOIN tanahpedia_entry ent ON ent.id = ee.entry_id
+		 INNER JOIN tanahpedia_entity e ON e.id = ee.entity_id
+		 INNER JOIN tanahpedia_place p ON p.entity_id = e.id
+		 INNER JOIN tanahpedia_place_identification pi ON pi.place_id = p.id
+		 WHERE ee.entry_id = ?
+		   AND e.entity_type = 'PLACE'
+		   AND pi.latitude IS NOT NULL AND pi.longitude IS NOT NULL`,
+		[entryId],
+	);
+	const out: PlaceMapMarker[] = [];
+	for (const r of rows) {
+		const lat = parseCoordinate(r.latitude);
+		const lng = parseCoordinate(r.longitude);
+		if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+		out.push({
+			placeId: r.placeId,
+			placeName: r.placeName,
+			modernName: r.modernName,
+			lat,
+			lng,
+			entryUniqueName: r.entryUniqueName,
+		});
+	}
+	return out;
+}
+
 type RelatedRow = {
 	relatedPersonId: string;
 	relatedEntityId: string;

@@ -87,6 +87,10 @@
   margin: 0 0 16px 0;
 }
 
+.entryMapSection {
+  margin-bottom: 28px;
+}
+
 .categoryGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

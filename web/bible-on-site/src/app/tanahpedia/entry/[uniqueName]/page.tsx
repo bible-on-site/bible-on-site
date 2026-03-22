@@ -9,9 +9,11 @@ import {
 	getEntriesByEntityType,
 	getEntryByUniqueName,
 	getPersonFamilySummary,
+	getPlaceMapMarkersForEntry,
 } from "@/lib/tanahpedia/service";
 import type { EntityType, CategoryKey } from "@/lib/tanahpedia/types";
 import { PersonFamilyTree } from "../../components/PersonFamilyTree";
+import { TanahpediaPlacesMap } from "../../components/TanahpediaPlacesMap";
 import { TanahpediaBreadcrumb } from "../../components/TanahpediaBreadcrumb";
 import styles from "../../page.module.css";
 
@@ -113,6 +115,14 @@ export default async function EntryPage({
 		personFamily = null;
 	}
 
+	let placeMapMarkers: Awaited<ReturnType<typeof getPlaceMapMarkersForEntry>> =
+		[];
+	try {
+		placeMapMarkers = await getPlaceMapMarkersForEntry(entry.id);
+	} catch {
+		placeMapMarkers = [];
+	}
+
 	return (
 		<div className={styles.tanahpediaPage}>
 			<TanahpediaBreadcrumb
@@ -136,6 +146,18 @@ export default async function EntryPage({
 					))}
 				</div>
 			)}
+
+			{placeMapMarkers.length > 0 ? (
+				<section
+					className={styles.entryMapSection}
+					aria-labelledby="entry-place-map-heading"
+				>
+					<h2 id="entry-place-map-heading" className={styles.sectionTitle}>
+						מפה
+					</h2>
+					<TanahpediaPlacesMap markers={placeMapMarkers} />
+				</section>
+			) : null}
 
 			{personFamily ? <PersonFamilyTree summary={personFamily} /> : null}
 

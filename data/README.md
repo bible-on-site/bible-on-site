@@ -77,6 +77,8 @@ The db-populator runs `tanahpedia_family_shimshon_data.sql` after Tanahpedia see
 
 Before family demo SQL, the populator applies `tanahpedia_incremental_lookups.sql` (`INSERT IGNORE` for new lookup rows such as `FORBIDDEN_WITH_GENTILE`) so older DBs do not fail FK checks when running `cargo make mysql-apply-tanahpedia-families` only.
 
+After the יעקב script, `tanahpedia_place_eretz_yisrael_data.sql` adds the `eretz-yisrael` place entry (coordinates + category homepage `MAP` for `/tanahpedia/place`). Re-run `cargo make mysql-apply-tanahpedia-families` or full populate to apply it on an existing DB.
+
 After that, when `tanahpedia_family_jacob_data.sql` is present, the populator always applies the **יעקב** demo (Tanahpedia entry `יעקב`, parents, four wives including בלהה וזלפה as full wives per הכתב והקבלה בראשית לב כג, children, and brother עשו). Idempotent fixed UUIDs (`e200…` / `p200…` / `ea200…` — the script deletes only those before re-insert).
 
 **יעקב** does **not** come from `tanahpedia_legacy_migration.sql`; if the DB was filled without running the full data phase (e.g. prod sync only), run the family scripts explicitly (see below).

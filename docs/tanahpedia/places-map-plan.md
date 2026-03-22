@@ -4,6 +4,8 @@
 
 - האתר משתמש ב־**Leaflet** עם אריחי **OpenStreetMap (OSM)** דרך `https://tile.openstreetmap.org/`.
 - אין צורך במפתח API; יש לציין ייחוס ל־OpenStreetMap (מוצג בבקרת המפה ובטקסט בעמוד).
+- **ערך לדוגמה:** `eretz-yisrael` — ישות `PLACE` עם `tanahpedia_place_identification` (קואורדינטות); מפה בעמוד הערך ובעמוד `/tanahpedia/place` כשה־homepage מוגדר `layout_type = MAP`. הנתונים ב־`data/mysql/tanahpedia_place_eretz_yisrael_data.sql` (מרוץ אחרי populate משפחות).
+- **עמדת תוכן:** ארץ ישראל לפי התורה שייכת לעם ישראל; האתר **אינו** משרטט שכבת גבולות דמיונית משלו — רק סמני נקודות לערכים.
 
 ## סוגיית גבולות ושטחים (יהודה ושומרון, עזה)
 
