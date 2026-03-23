@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.302",
+	"version": "0.2.303",
 	"private": true,
 	"license": "MIT",
 	"browserslist": [
@@ -93,7 +93,7 @@
 		"ts-jest": "29.4.6",
 		"ts-node": "10.9.2",
 		"tsx": "4.21.0",
-		"typescript": "5.9.3",
+		"typescript": "6.0.2",
 		"web-vitals": "5.1.0"
 	}
 }
