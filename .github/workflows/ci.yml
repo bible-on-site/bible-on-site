@@ -1316,7 +1316,7 @@ jobs:
 
       - name: Publish API Unit/E2E Report To Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ steps.list_api_junit_files.outputs.junit_files }}
@@ -1409,7 +1409,7 @@ jobs:
 
       - name: Publish App Unit Report To Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
@@ -1456,7 +1456,7 @@ jobs:
 
       - name: Publish App Integration Report To Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
@@ -1629,7 +1629,7 @@ jobs:
 
       - name: Publish Bulletin Unit Report To Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.BULLETIN_DIRECTORY }}/.junit-report/unit/results.xml
@@ -1723,7 +1723,7 @@ jobs:
 
       - name: Publish Data Unit Report To Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.DATA_DIRECTORY }}/.junit-report/unit/results.xml
@@ -1797,7 +1797,7 @@ jobs:
 
       - name: Publish Data Integration Report To Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.DATA_DIRECTORY }}/.junit-report/integration/results.xml
@@ -1985,7 +1985,7 @@ jobs:
 
       - name: Publish Website Unit/E2E/Perf Report To Codecov
         if: ${{ needs.website_e2e.result != 'skipped' }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           working-directory: ${{ env.TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY }}
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -2172,7 +2172,7 @@ jobs:
           path: ${{ env.WEBSITE_MERGED_COVERAGE_DIRECTORY }}
 
       - name: Publish Website Coverage To Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
@@ -2187,7 +2187,7 @@ jobs:
           path: ${{ env.API_MERGED_COVERAGE_DIRECTORY }}
 
       - name: Publish API Coverage To Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.API_COVERAGE_REPORT }}
@@ -2202,7 +2202,7 @@ jobs:
           path: ${{ env.APP_MERGED_COVERAGE_DIRECTORY }}
 
       - name: Publish App Coverage To Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.APP_COVERAGE_REPORT }}
@@ -2217,7 +2217,7 @@ jobs:
           path: ${{ env.BULLETIN_COVERAGE_DIRECTORY }}
 
       - name: Publish Bulletin Coverage To Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.BULLETIN_COVERAGE_REPORT }}
