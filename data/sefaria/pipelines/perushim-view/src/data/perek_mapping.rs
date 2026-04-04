@@ -216,13 +216,13 @@ mod tests {
 
         for (key, expected_sefer) in standard_keys {
             let result = english_node_key_to_sefer(key);
-            assert!(
-                result.is_some(),
-                "Key '{}' should map to a sefer",
-                key
-            );
+            assert!(result.is_some(), "Key '{}' should map to a sefer", key);
             let (sefer, _) = result.unwrap();
-            assert_eq!(sefer, expected_sefer, "Key '{}' should map to sefer {}", key, expected_sefer);
+            assert_eq!(
+                sefer, expected_sefer,
+                "Key '{}' should map to sefer {}",
+                key, expected_sefer
+            );
         }
     }
 
@@ -256,16 +256,52 @@ mod tests {
     fn test_english_node_key_resolves_to_valid_perek_id() {
         // Every mapped key should produce a valid (non-zero) first_perek_id
         let all_keys = vec![
-            "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy",
-            "Joshua", "Judges", "I Samuel", "II Samuel", "I Kings", "II Kings",
-            "Isaiah", "Jeremiah", "Ezekiel",
-            "Hosea", "Joel", "Amos", "Obadiah", "Jonah", "Micah",
-            "Nahum", "Habakkuk", "Zephaniah", "Haggai", "Zechariah", "Malachi",
-            "Psalms", "Proverbs", "Job",
-            "Song of Songs", "Ruth", "Book of Ruth", "Lamentations", "Ecclesiastes", "Esther",
-            "Daniel", "Ezra", "Nehemiah", "I Chronicles", "II Chronicles",
+            "Genesis",
+            "Exodus",
+            "Leviticus",
+            "Numbers",
+            "Deuteronomy",
+            "Joshua",
+            "Judges",
+            "I Samuel",
+            "II Samuel",
+            "I Kings",
+            "II Kings",
+            "Isaiah",
+            "Jeremiah",
+            "Ezekiel",
+            "Hosea",
+            "Joel",
+            "Amos",
+            "Obadiah",
+            "Jonah",
+            "Micah",
+            "Nahum",
+            "Habakkuk",
+            "Zephaniah",
+            "Haggai",
+            "Zechariah",
+            "Malachi",
+            "Psalms",
+            "Proverbs",
+            "Job",
+            "Song of Songs",
+            "Ruth",
+            "Book of Ruth",
+            "Lamentations",
+            "Ecclesiastes",
+            "Esther",
+            "Daniel",
+            "Ezra",
+            "Nehemiah",
+            "I Chronicles",
+            "II Chronicles",
             // Transliterated variants
-            "Bereshit", "Shemot", "Vayikra", "Bamidbar", "Devarim",
+            "Bereshit",
+            "Shemot",
+            "Vayikra",
+            "Bamidbar",
+            "Devarim",
         ];
         for key in all_keys {
             let (sefer, additional) = english_node_key_to_sefer(key)
@@ -274,7 +310,9 @@ mod tests {
             assert!(
                 perek_id > 0,
                 "Key '{}' mapped to sefer={}, additional={:?} but first_perek_id is 0",
-                key, sefer, additional
+                key,
+                sefer,
+                additional
             );
         }
     }
