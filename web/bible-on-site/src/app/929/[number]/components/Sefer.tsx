@@ -172,7 +172,7 @@ const Sefer = (props: {
 	}, [perekIds, perekObj.perekId]);
 
 	const contentPages = perakim.flatMap((perek, perekIdx) => [
-		<React.Fragment key={`perek-${perekIdx + 1}`}>
+		<React.Fragment key={`perek-${perek.header}`}>
 			<section className={styles.pageContentPage}>
 				<div className={styles.pageHeaderRight}>
 					<div className={styles.pageHeaderRow}>
@@ -243,7 +243,7 @@ const Sefer = (props: {
 				</div>
 			</section>
 		</React.Fragment>,
-	<React.Fragment key={`blank-${perekIdx + 1}`}>
+	<React.Fragment key={`blank-${perek.header}`}>
 		<BlankPageContent
 			articles={perekIdx === currentPerekIdx ? articles : batchSummaries[String(perekIds?.[perekIdx] ?? 0)]?.articles}
 			perushim={perekIdx === currentPerekIdx ? perushim : batchSummaries[String(perekIds?.[perekIdx] ?? 0)]?.perushim}
