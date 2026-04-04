@@ -123,25 +123,32 @@ pub fn extract(docs: &[Document]) -> Extracted {
         let additional = doc.get("additional").and_then(bson_to_optional_i64);
         let base_perek_id = perek_mapping::first_perek_id(sefer, additional);
 
-        if base_perek_id == 0 {
-            continue; // Unknown sefer mapping
-        }
-
         if let Some(bson::Bson::Array(versions)) = doc.get("versions") {
             // Use the first version (usually only one after filtering)
             match versions.first() {
                 // Simple schema: versions[0] is a flat array of chapters
                 Some(bson::Bson::Array(chapters)) => {
+                    if base_perek_id == 0 {
+                        continue; // Unknown sefer mapping
+                    }
                     flatten_chapters(&mut notes, perush_id, base_perek_id, chapters);
                 }
-                // Complex schema (e.g. Ramban, Ibn Ezra on Torah): versions[0]
-                // is a Document with node keys like {"intro": [...], "default": [[...]]}
-                // The actual verse-by-verse commentary lives in the "default" node
-                // (or whichever node the schema marks as default).
+                // Complex schema: versions[0] is a Document with node keys.
+                // Two cases:
+                // 1. Single-book with intro/default nodes (e.g. Ramban on Torah):
+                //    sefer is known, extract from the "default" node.
+                // 2. Multi-book entry (e.g. HaKtav VeHaKabalah): sefer is 0,
+                //    iterate over all book nodes using schema.nodes metadata.
                 Some(bson::Bson::Document(version_doc)) => {
-                    let default_key = find_default_node_key(doc);
-                    if let Some(bson::Bson::Array(chapters)) = version_doc.get(&default_key) {
-                        flatten_chapters(&mut notes, perush_id, base_perek_id, chapters);
+                    if base_perek_id > 0 {
+                        // Single-book complex schema
+                        let default_key = find_default_node_key(doc);
+                        if let Some(bson::Bson::Array(chapters)) = version_doc.get(&default_key) {
+                            flatten_chapters(&mut notes, perush_id, base_perek_id, chapters);
+                        }
+                    } else {
+                        // Multi-book complex schema: iterate over all book nodes
+                        flatten_multi_book_nodes(&mut notes, perush_id, doc, version_doc);
                     }
                 }
                 _ => {}
@@ -195,6 +202,50 @@ fn find_default_node_key(doc: &Document) -> String {
         }
     }
     "default".to_string()
+}
+
+/// Extract notes from a multi-book complex schema document.
+///
+/// Multi-book commentaries (e.g., HaKtav VeHaKabalah) have a single index
+/// entry with schema nodes for each book. The version document contains
+/// keys matching the English node names (e.g., "Genesis", "Exodus").
+/// We iterate over all book nodes with depth >= 3, map each to a sefer,
+/// and extract its chapters.
+fn flatten_multi_book_nodes(
+    notes: &mut Vec<Note>,
+    perush_id: i64,
+    doc: &Document,
+    version_doc: &Document,
+) {
+    if let Some(bson::Bson::Document(schema)) = doc.get("schema")
+        && let Some(bson::Bson::Array(nodes)) = schema.get("nodes")
+    {
+        for node in nodes {
+            if let bson::Bson::Document(node_doc) = node {
+                let depth = match node_doc.get("depth") {
+                    Some(bson::Bson::Int32(n)) => *n as i64,
+                    Some(bson::Bson::Int64(n)) => *n,
+                    _ => 0,
+                };
+                // Only process book-level nodes (depth >= 3 = chapter/verse/comment)
+                if depth < 3 {
+                    continue;
+                }
+                if let Some(bson::Bson::String(key)) = node_doc.get("key") {
+                    if let Some((sefer, additional)) = perek_mapping::english_node_key_to_sefer(key)
+                    {
+                        let base_perek_id = perek_mapping::first_perek_id(sefer, additional);
+                        if base_perek_id > 0 {
+                            if let Some(bson::Bson::Array(chapters)) = version_doc.get(key.as_str())
+                            {
+                                flatten_chapters(notes, perush_id, base_perek_id, chapters);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Flatten chapter/verse/note arrays into Note rows.
@@ -751,5 +802,169 @@ mod tests {
         };
         let result = extract(&[doc]);
         assert_eq!(result.parshanim[0].name, "אברהם סבע");
+    }
+
+    // ─── multi-book complex schema tests ─────────────────────────────────────
+
+    /// Helper: build a multi-book complex-schema pipeline output document.
+    /// Simulates commentaries like HaKtav VeHaKabalah that have a single index
+    /// entry covering multiple books, with `sefer = 0` (unmapped).
+    fn multi_book_schema_doc(
+        name: &str,
+        book_nodes: &[(&str, bson::Bson)], // (node_key, chapters)
+    ) -> Document {
+        let mut version_doc = Document::new();
+        let mut schema_nodes = vec![bson!({"key": "Introduction", "depth": 1})];
+
+        for (key, chapters) in book_nodes {
+            version_doc.insert(key.to_string(), chapters.clone());
+            schema_nodes.push(
+                bson!({"key": *key, "depth": 3, "addressTypes": ["Perek", "Pasuk", "Integer"]}),
+            );
+        }
+
+        doc! {
+            "name": name,
+            "authors": [name],
+            "sefer": 0,  // multi-book entries have no single sefer
+            "versions": [version_doc],
+            "schema": {
+                "nodes": schema_nodes
+            }
+        }
+    }
+
+    #[test]
+    fn multi_book_schema_extraction() {
+        // HaKtav VeHaKabalah-like: two Torah books
+        let doc = multi_book_schema_doc(
+            "הכתב והקבלה",
+            &[
+                ("Genesis", bson!([["gen ch1 v1", "gen ch1 v2"]])),
+                ("Exodus", bson!([["exo ch1 v1"]])),
+            ],
+        );
+        let result = extract(&[doc]);
+
+        assert_eq!(result.parshanim.len(), 1);
+        assert_eq!(result.perushim.len(), 1);
+        assert_eq!(
+            result.notes.len(),
+            3,
+            "should extract notes from all book nodes"
+        );
+
+        // Genesis → sefer 1 → base_perek_id = 1
+        assert_eq!(result.notes[0].perek_id, 1);
+        assert_eq!(result.notes[0].pasuk, 1);
+        assert_eq!(result.notes[0].note_content, "gen ch1 v1");
+
+        assert_eq!(result.notes[1].perek_id, 1);
+        assert_eq!(result.notes[1].pasuk, 2);
+        assert_eq!(result.notes[1].note_content, "gen ch1 v2");
+
+        // Exodus → sefer 2 → base_perek_id = 51
+        assert_eq!(result.notes[2].perek_id, 51);
+        assert_eq!(result.notes[2].pasuk, 1);
+        assert_eq!(result.notes[2].note_content, "exo ch1 v1");
+    }
+
+    #[test]
+    fn multi_book_schema_all_five_torah_books() {
+        let doc = multi_book_schema_doc(
+            "חזקוני",
+            &[
+                ("Genesis", bson!([["g"]])),
+                ("Exodus", bson!([["e"]])),
+                ("Leviticus", bson!([["l"]])),
+                ("Numbers", bson!([["n"]])),
+                ("Deuteronomy", bson!([["d"]])),
+            ],
+        );
+        let result = extract(&[doc]);
+
+        assert_eq!(result.notes.len(), 5);
+        assert_eq!(result.notes[0].perek_id, 1); // Genesis
+        assert_eq!(result.notes[1].perek_id, 51); // Exodus
+        assert_eq!(result.notes[2].perek_id, 91); // Leviticus
+        assert_eq!(result.notes[3].perek_id, 118); // Numbers
+        assert_eq!(result.notes[4].perek_id, 154); // Deuteronomy
+    }
+
+    #[test]
+    fn multi_book_schema_transliterated_keys() {
+        // Rabbeinu Bahya-like: uses Bereshit, Shemot, etc.
+        let doc = multi_book_schema_doc(
+            "רבנו בחיי",
+            &[
+                ("Bereshit", bson!([["note1"]])),
+                ("Shemot", bson!([["note2"]])),
+            ],
+        );
+        let result = extract(&[doc]);
+
+        assert_eq!(result.notes.len(), 2);
+        assert_eq!(result.notes[0].perek_id, 1); // Bereshit → Genesis
+        assert_eq!(result.notes[1].perek_id, 51); // Shemot → Exodus
+    }
+
+    #[test]
+    fn multi_book_schema_book_of_ruth_variant() {
+        // Tzafnat Pa'neach-like: has "Book of Ruth" alongside Torah
+        let doc = multi_book_schema_doc(
+            "צפנת פענח",
+            &[
+                ("Genesis", bson!([["torah note"]])),
+                ("Book of Ruth", bson!([["ruth note"]])),
+            ],
+        );
+        let result = extract(&[doc]);
+
+        assert_eq!(result.notes.len(), 2);
+        assert_eq!(result.notes[0].perek_id, 1); // Genesis
+        assert_eq!(result.notes[1].perek_id, 799); // Ruth
+    }
+
+    #[test]
+    fn multi_book_schema_skips_non_book_nodes() {
+        // Introduction and Postscript nodes should be skipped
+        let version_doc = doc! {
+            "Introduction": [["intro text"]],
+            "Genesis": [["real note"]],
+            "Postscript": [["postscript"]],
+        };
+
+        let doc = doc! {
+            "name": "test multi",
+            "authors": ["test"],
+            "sefer": 0,
+            "versions": [version_doc],
+            "schema": {
+                "nodes": [
+                    { "key": "Introduction", "depth": 1 },
+                    { "key": "Genesis", "depth": 3, "addressTypes": ["Perek", "Pasuk", "Integer"] },
+                    { "key": "Postscript", "depth": 1 }
+                ]
+            }
+        };
+
+        let result = extract(&[doc]);
+        assert_eq!(result.notes.len(), 1, "should only extract from book nodes");
+        assert_eq!(result.notes[0].note_content, "real note");
+    }
+
+    #[test]
+    fn multi_book_schema_multiple_chapters_correct_perek_ids() {
+        // Genesis with 3 chapters → perek_id 1, 2, 3
+        let doc = multi_book_schema_doc(
+            "test",
+            &[("Genesis", bson!([["ch1 note"], ["ch2 note"], ["ch3 note"]]))],
+        );
+        let result = extract(&[doc]);
+
+        assert_eq!(result.notes.len(), 3);
+        assert_eq!(result.notes[0].perek_id, 1);
+        assert_eq!(result.notes[1].perek_id, 2);
+        assert_eq!(result.notes[2].perek_id, 3);
     }
 }
