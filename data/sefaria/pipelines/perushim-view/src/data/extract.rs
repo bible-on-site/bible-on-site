@@ -231,16 +231,14 @@ fn flatten_multi_book_nodes(
                 if depth < 3 {
                     continue;
                 }
-                if let Some(bson::Bson::String(key)) = node_doc.get("key") {
-                    if let Some((sefer, additional)) = perek_mapping::english_node_key_to_sefer(key)
+                if let Some(bson::Bson::String(key)) = node_doc.get("key")
+                    && let Some((sefer, additional)) = perek_mapping::english_node_key_to_sefer(key)
+                {
+                    let base_perek_id = perek_mapping::first_perek_id(sefer, additional);
+                    if base_perek_id > 0
+                        && let Some(bson::Bson::Array(chapters)) = version_doc.get(key.as_str())
                     {
-                        let base_perek_id = perek_mapping::first_perek_id(sefer, additional);
-                        if base_perek_id > 0 {
-                            if let Some(bson::Bson::Array(chapters)) = version_doc.get(key.as_str())
-                            {
-                                flatten_chapters(notes, perush_id, base_perek_id, chapters);
-                            }
-                        }
+                        flatten_chapters(notes, perush_id, base_perek_id, chapters);
                     }
                 }
             }
