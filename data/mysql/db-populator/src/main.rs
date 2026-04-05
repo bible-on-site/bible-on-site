@@ -303,7 +303,7 @@ fn is_note_primary_duplicate_error(err: &sqlx_core::error::Error, statement: &st
     }
 
     let message = err.to_string().to_ascii_lowercase();
-    message.contains("duplicate entry") && message.contains("note.primary")
+    message.contains("duplicate entry") && message.contains("primary")
 }
 
 fn note_insert_ignore_variant(statement: &str) -> Option<String> {
