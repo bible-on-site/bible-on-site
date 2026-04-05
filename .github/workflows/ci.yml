@@ -693,8 +693,14 @@ jobs:
   website_performance:
     name: Website Performance
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_website_changes, determine_baseline_availability]
-    if: ${{ needs.determine_website_changes.outputs.module_changed == 'true' || needs.determine_website_changes.outputs.ci_changed == 'true' }}
+    needs: [setup_env, determine_website_changes, determine_baseline_availability, perushim_data]
+    if: >-
+      ${{ always() && !cancelled() &&
+        needs.setup_env.result == 'success' &&
+        needs.determine_website_changes.result == 'success' &&
+        needs.determine_baseline_availability.result == 'success' &&
+        (needs.determine_website_changes.outputs.module_changed == 'true' || needs.determine_website_changes.outputs.ci_changed == 'true')
+      }}
     defaults:
       run:
         working-directory: ${{ env.WEBSITE_DIRECTORY }}
@@ -751,9 +757,10 @@ jobs:
       # ============ MySQL + Perushim Setup for SSG ============
       # Populate MySQL with perushim data so `next build` can statically
       # generate perush pages without "Access denied" errors.
-      # Only restores when master baseline artifact is available (similar to coverage baseline pattern).
+      # Prefers the current workflow's artifact (from perushim_data job) over
+      # the master baseline so pipeline code changes take effect immediately.
       - name: Install and start MySQL
-        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
         with:
@@ -762,31 +769,31 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
-      - name: Download perushim SQL master baseline
-        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+      - name: Download perushim SQL
+        if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         uses: actions/download-artifact@v8
         with:
-          name: ${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
+          name: ${{ needs.perushim_data.result == 'success' && 'perushim-data-sql' || env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
           path: ${{ env.DATA_DIRECTORY }}/mysql/perushim-sql-master
 
       - name: Setup Rust
-        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-make
-        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-make
 
       - name: Cache Cargo dependencies
-        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: ${{ env.DATA_DIRECTORY }}
 
       - name: Populate MySQL for build
-        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         working-directory: ${{ env.DATA_DIRECTORY }}
         env:
           DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
@@ -797,7 +804,7 @@ jobs:
       - name: Build
         id: npm-build
         env:
-          DB_URL: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' && 'mysql://root:test_123@127.0.0.1:3306/tanah_test' || '' }}
+          DB_URL: ${{ (needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true') && 'mysql://root:test_123@127.0.0.1:3306/tanah_test' || '' }}
         run: npm run build
 
       - name: Perf Test
@@ -854,8 +861,17 @@ jobs:
         determine_baseline_availability,
         determine_docker_image_availability,
         build_lcov_docker,
+        perushim_data,
       ]
-    if: ${{ always() && !cancelled() && !failure() && (needs.determine_website_changes.outputs.module_changed == 'true' || needs.determine_website_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_website_master_coverage_available == 'false') }}
+    if: >-
+      ${{ always() && !cancelled() &&
+        needs.setup_env.result == 'success' &&
+        needs.determine_website_changes.result == 'success' &&
+        needs.determine_baseline_availability.result == 'success' &&
+        (needs.determine_docker_image_availability.result == 'success' || needs.determine_docker_image_availability.result == 'skipped') &&
+        (needs.build_lcov_docker.result == 'success' || needs.build_lcov_docker.result == 'skipped') &&
+        (needs.determine_website_changes.outputs.module_changed == 'true' || needs.determine_website_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_website_master_coverage_available == 'false')
+      }}
     defaults:
       run:
         working-directory: ${{ env.WEBSITE_DIRECTORY }}
@@ -954,17 +970,17 @@ jobs:
         run: cargo build --release
 
       # ============ Populate MySQL before build (for SSG / generateStaticParams) ============
-      # Restore perushim SQL from master baseline so `next build` can statically
-      # generate perush pages without DB errors (same pattern as coverage baseline).
-      - name: Download perushim SQL master baseline
-        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+      # Restore perushim SQL so `next build` can statically generate perush pages
+      # without DB errors. Prefers the current workflow's artifact over master baseline.
+      - name: Download perushim SQL
+        if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         uses: actions/download-artifact@v8
         with:
-          name: ${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
+          name: ${{ needs.perushim_data.result == 'success' && 'perushim-data-sql' || env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
           path: ${{ env.DATA_DIRECTORY }}/mysql/perushim-sql-master
 
       - name: Populate MySQL for build
-        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         working-directory: ${{ env.DATA_DIRECTORY }}
         env:
           DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
@@ -975,7 +991,7 @@ jobs:
       - name: Build
         id: npm-build
         env:
-          DB_URL: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' && 'mysql://root:test_123@127.0.0.1:3306/tanah_test' || '' }}
+          DB_URL: ${{ (needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true') && 'mysql://root:test_123@127.0.0.1:3306/tanah_test' || '' }}
         run: npm run build
 
       - name: E2E Test
@@ -1674,7 +1690,15 @@ jobs:
   data_ci:
     name: Data CI
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_data_changes, determine_docker_image_availability, build_sefaria_mongo_docker, build_lcov_docker, determine_baseline_availability]
+    needs:
+      [
+        setup_env,
+        determine_data_changes,
+        determine_docker_image_availability,
+        build_sefaria_mongo_docker,
+        build_lcov_docker,
+        determine_baseline_availability,
+      ]
     if: ${{ always() && !cancelled() && !failure() && (needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_data_master_coverage_available == 'false') }}
     defaults:
       run:

@@ -1,0 +1,56 @@
+---
+description: "Agent does the work; user does not run build/copy/commands. Covers error suppression policy, local reproduction, monitoring, and ownership."
+applyTo: "**"
+---
+
+# Agent Practices
+
+**The agent performs tasks. The user does not.**
+
+- Run commands yourself: build, copy scripts, installs, dev server, tests. Do not instruct the user to "run this in your terminal" or "then run the copy script."
+- When working on flip book integration with the local `html-flip-book` repo: build in html-flip-book, then in the website run `USE_LOCAL_FLIP_BOOK=1 npm run postinstall` to copy the local build into node_modules (or add a script that runs that). Do not rely on the file: dependency in CI; the website uses the published npm package.
+- Apply fixes, run linters, and verify; do not leave follow-up steps for the user unless they explicitly ask.
+
+# No Suppressing Errors Without Approval
+
+**Never silence, suppress, or ignore errors/warnings to make CI pass.**
+
+- Do not add `--ignore-errors`, `continue-on-error`, `|| true`, `catch {}` (empty), or equivalent flags to work around a failing step.
+- Do not downgrade errors to warnings, skip failing tests, or disable lint rules to unblock a pipeline.
+- If a tool or CI step is failing, **find and fix the root cause**.
+- If a proper fix is genuinely infeasible in the current scope, **ask the user for approval** before introducing any suppression, and explain exactly what is being suppressed and why.
+
+```
+# BAD - suppressing to make CI green
+lcov --ignore-errors inconsistent,corrupt ...
+continue-on-error: true
+
+# GOOD - fix the root cause
+# Normalize the coverage data so it's consistent before merging
+```
+
+# Reproduce Locally Before Remote Iteration
+
+**Reproduce and iterate on issues locally instead of pushing to remote CI.**
+
+- When a CI/CD step fails, reproduce the failure locally first (run tests, builds, linters, Docker builds, coverage merges locally).
+- Iterate on the fix locally until it passes, then push once.
+- Do not use remote CI as a trial-and-error debugging loop (push → wait 10 min → read logs → push again).
+- Acceptable exceptions: failures that depend on CI-only infrastructure (secrets, cloud services, specific runner environments). Even then, minimize remote round-trips by reasoning through the issue first.
+
+# Monitor When Asked
+
+**When the user asks to monitor (e.g. a branch until CI is stable), actually monitor until the situation is resolved.**
+
+- Do not stop after one check or after reporting "CI failed." Keep monitoring: recheck status after a short wait, and repeat until the run completes (success or a clear, actionable failure).
+- Do not overlook or drop the task until there are no remaining issues—e.g. CI is green, or the failure is identified and fixed (including package.json / package-lock / install issues if that was the context).
+- Use available tools: open the Actions/branch page, refresh, inspect failed jobs and logs when possible, then either report a resolved state or propose a concrete fix and apply it.
+
+# Own Your Work
+
+**Never refer to code you wrote as "pre-existing" or "already there."**
+
+- Everything in this codebase was written by the agent (you). There is no other developer.
+- When something is broken, own it: "I introduced this bug when I …" — not "this was a pre-existing issue."
+- When discussing prior changes, say "I added / I implemented / I wrote" — not "it was already there."
+- Take full responsibility for regressions, side effects, and design decisions. Diagnose and fix them without deflecting.
