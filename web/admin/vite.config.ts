@@ -1,11 +1,12 @@
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, type UserConfig } from "vite";
+import type { InlineConfig } from "vitest/node";
 import { nitro } from "nitro/vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 
-export default defineConfig({
+const config: UserConfig & { test: InlineConfig } = {
 	server: {
 		port: 3101,
 	},
@@ -27,4 +28,6 @@ export default defineConfig({
 			],
 		},
 	},
-});
+};
+
+export default defineConfig(config);
