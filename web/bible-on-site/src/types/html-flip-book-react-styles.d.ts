@@ -1,0 +1,1 @@
+declare module "html-flip-book-react/styles.css";
