@@ -262,7 +262,10 @@ async fn execute_chunk_statement(
     script_type: &str,
     statement_idx: usize,
 ) -> Result<()> {
-    match raw_sql(statement).execute(&mut *conn).await {
+    let normalized_statement =
+        note_insert_ignore_variant(statement).unwrap_or_else(|| statement.to_string());
+
+    match raw_sql(&normalized_statement).execute(&mut *conn).await {
         Ok(_) => Ok(()),
         Err(err) => {
             // Some perushim SQL artifacts may contain duplicate note PK rows.
