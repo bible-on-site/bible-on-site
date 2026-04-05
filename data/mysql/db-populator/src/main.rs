@@ -224,16 +224,7 @@ async fn execute_script_chunked(
             buf.push_str(line);
             buf.push('\n');
             if !buf.trim().is_empty() {
-                raw_sql(buf.trim())
-                    .execute(&mut *conn)
-                    .await
-                    .with_context(|| {
-                        format!(
-                            "Failed to execute {} statement #{}",
-                            script_type,
-                            stmt_count + 1
-                        )
-                    })?;
+                execute_chunk_statement(conn, buf.trim(), script_type, stmt_count + 1).await?;
                 stmt_count += 1;
             }
             buf.clear();
@@ -244,16 +235,7 @@ async fn execute_script_chunked(
             buf.push_str(line);
             buf.push('\n');
             if !buf.trim().is_empty() {
-                raw_sql(buf.trim())
-                    .execute(&mut *conn)
-                    .await
-                    .with_context(|| {
-                        format!(
-                            "Failed to execute {} statement #{}",
-                            script_type,
-                            stmt_count + 1
-                        )
-                    })?;
+                execute_chunk_statement(conn, buf.trim(), script_type, stmt_count + 1).await?;
                 stmt_count += 1;
             }
             buf.clear();
@@ -263,10 +245,7 @@ async fn execute_script_chunked(
         buf.push('\n');
     }
     if !buf.trim().is_empty() {
-        raw_sql(buf.trim())
-            .execute(&mut *conn)
-            .await
-            .with_context(|| format!("Failed to execute {} final statement", script_type))?;
+        execute_chunk_statement(conn, buf.trim(), script_type, stmt_count + 1).await?;
         stmt_count += 1;
     }
 
@@ -275,6 +254,70 @@ async fn execute_script_chunked(
         script_type, stmt_count
     );
     Ok(())
+}
+
+async fn execute_chunk_statement(
+    conn: &mut MySqlConnection,
+    statement: &str,
+    script_type: &str,
+    statement_idx: usize,
+) -> Result<()> {
+    match raw_sql(statement).execute(&mut *conn).await {
+        Ok(_) => Ok(()),
+        Err(err) => {
+            // Some perushim SQL artifacts may contain duplicate note PK rows.
+            // Retry only these statements as INSERT IGNORE so unique rows still load.
+            if is_note_primary_duplicate_error(&err, statement)
+                && let Some(ignore_statement) = note_insert_ignore_variant(statement)
+            {
+                println!(
+                    "⚠️  Duplicate note PK in {} statement #{}; retrying with INSERT IGNORE",
+                    script_type, statement_idx
+                );
+                raw_sql(&ignore_statement)
+                    .execute(&mut *conn)
+                    .await
+                    .with_context(|| {
+                        format!(
+                            "Failed to execute {} statement #{} with INSERT IGNORE fallback",
+                            script_type, statement_idx
+                        )
+                    })?;
+                return Ok(());
+            }
+
+            Err(err).with_context(|| {
+                format!(
+                    "Failed to execute {} statement #{}",
+                    script_type, statement_idx
+                )
+            })
+        }
+    }
+}
+
+fn is_note_primary_duplicate_error(err: &sqlx_core::error::Error, statement: &str) -> bool {
+    let statement_lower = statement.trim_start().to_ascii_lowercase();
+    if !statement_lower.starts_with("insert into note ") {
+        return false;
+    }
+
+    let message = err.to_string().to_ascii_lowercase();
+    message.contains("duplicate entry") && message.contains("note.primary")
+}
+
+fn note_insert_ignore_variant(statement: &str) -> Option<String> {
+    let trimmed = statement.trim_start();
+    let leading_ws = &statement[..statement.len() - trimmed.len()];
+
+    if let Some(rest) = trimmed.strip_prefix("INSERT INTO note ") {
+        return Some(format!("{}INSERT IGNORE INTO note {}", leading_ws, rest));
+    }
+    if let Some(rest) = trimmed.strip_prefix("insert into note ") {
+        return Some(format!("{}INSERT IGNORE INTO note {}", leading_ws, rest));
+    }
+
+    None
 }
 
 /// Filters out USE statements from SQL script.
