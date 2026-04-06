@@ -10,6 +10,7 @@ applyTo: "**"
 - Run commands yourself: build, copy scripts, installs, dev server, tests. Do not instruct the user to "run this in your terminal" or "then run the copy script."
 - When working on flip book integration with the local `html-flip-book` repo: build in html-flip-book, then in the website run `USE_LOCAL_FLIP_BOOK=1 npm run postinstall` to copy the local build into node_modules (or add a script that runs that). Do not rely on the file: dependency in CI; the website uses the published npm package.
 - Apply fixes, run linters, and verify; do not leave follow-up steps for the user unless they explicitly ask.
+- Continue automatically with aligned next actions. If the user's intention is clear and the next step directly advances it, execute it without asking for additional confirmation.
 
 # No Suppressing Errors Without Approval
 

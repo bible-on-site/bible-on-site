@@ -27,6 +27,8 @@ applyTo: "**"
 
 **Do not ask the user to execute commands or steps.** Run commands, builds, and runs yourself (e.g. terminal, build, run app). If something is blocked (e.g. app already running), document what to do in comments or a short note; do not assign the user to "close the app and run again."
 
+**Do not ask "next steps?" when intent is already clear.** If a next action is a direct continuation of the user's stated goal and does not conflict with constraints, execute it immediately and report progress.
+
 ## Investigation
 
 Use **GitHub CLI (`gh`)** for GitHub-related issues:
