@@ -62,7 +62,7 @@ export class SeferPage {
 		const seferOverlay = this.page.locator('[class*="seferOverlay"]');
 		await expect(seferOverlay).toBeVisible({ timeout: 10_000 });
 		await expect(
-			seferOverlay.locator('[class*="bookWrapper"]'),
+			seferOverlay.locator('[class*="bookWrapper"]:visible').first(),
 		).toBeVisible({ timeout: 15_000 });
 	}
 
