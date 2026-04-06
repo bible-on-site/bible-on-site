@@ -207,7 +207,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="CommunityToolkit.Maui" Version="14.0.1" />
-		<PackageReference Include="CommunityToolkit.Maui.MediaElement" Version="8.0.1" />
+		<PackageReference Include="CommunityToolkit.Maui.MediaElement" Version="9.0.0" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.1" />
 		<PackageReference Include="GraphQL.Client" Version="6.1.0" />
 		<PackageReference Include="GraphQL.Client.Serializer.Newtonsoft" Version="6.1.0" />
