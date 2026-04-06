@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, realpathSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import { reportBenchmark } from "../util/benchmark";
@@ -16,9 +16,22 @@ function getDirectorySizeBytes(dirPath: string): number {
 	}
 
 	let totalSize = 0;
+	const visitedRealPaths = new Set<string>();
 
 	function calculateSize(currentPath: string): void {
-		const stats = statSync(currentPath);
+		const stats = lstatSync(currentPath);
+
+		// Standalone outputs may contain symlinks. Following them can double-count
+		// large trees or recurse into cycles, inflating measured size.
+		if (stats.isSymbolicLink()) {
+			return;
+		}
+
+		const realPath = realpathSync(currentPath);
+		if (visitedRealPaths.has(realPath)) {
+			return;
+		}
+		visitedRealPaths.add(realPath);
 
 		if (stats.isFile()) {
 			totalSize += stats.size;
