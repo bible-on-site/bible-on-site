@@ -37,6 +37,7 @@ When using a tool/library/framework for the first time:
   2. Fix the issue or ask clarifying questions if unsure
   3. Never say "this is unrelated" and move on without resolution
 - Use of client components in `web/bible-on-site` is forbidden unless explicitly requested
+- If user intent is clear, continue with the next aligned implementation step automatically instead of asking "next steps?".
 
 ### GitHub Issue Creation
 
