@@ -26,7 +26,7 @@
 		"@aws-sdk/client-ssm": "^3.1018.0",
 		"@aws-sdk/client-sts": "3.1018.0",
 		"@aws-sdk/credential-providers": "3.1003.0",
-		"dotenv": "17.3.1",
+		"dotenv": "17.4.1",
 		"semver": "7.7.4",
 		"yargs": "18.0.0"
 	}
