@@ -57,12 +57,12 @@
 		"next": "16.1.6",
 		"nuqs": "2.8.9",
 		"pdf-lib": "1.17.1",
-		"rate-limiter-flexible": "11.0.0",
-		"react": "19.2.4",
-		"react-dom": "19.2.4",
+		"rate-limiter-flexible": "11.0.1",
+		"react": "19.2.5",
+		"react-dom": "19.2.5",
 		"react-phone-number-input": "3.4.16",
 		"sharp": "0.34.5",
-		"sunrise-sunset-js": "3.2.0",
+		"sunrise-sunset-js": "3.2.1",
 		"temporal-polyfill": "0.3.2"
 	},
 	"devDependencies": {
