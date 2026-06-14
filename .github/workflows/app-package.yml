@@ -349,7 +349,7 @@ jobs:
     name: Package iOS (IPA)
     needs: [resolve_perushim_artifact]
     if: ${{ always() && !cancelled() && !failure() && (inputs.platform == 'iOS' || inputs.platform == 'All') }}
-    runs-on: macos-26
+    runs-on: macos-15
     outputs:
       artifact_name: ${{ steps.set_artifact_name.outputs.artifact_name }}
       module_version: ${{ steps.get_version.outputs.VERSION }}
