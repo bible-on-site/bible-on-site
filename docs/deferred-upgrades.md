@@ -60,4 +60,3 @@ until the upstream/first-party fix lands.
   the deprecated `baseUrl`).
 - All conservative (non-major) dependency refreshes across website, admin,
   devops, api, data, bulletin.
-</content>
