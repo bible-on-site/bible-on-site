@@ -23,6 +23,9 @@ updates:
       # See https://github.com/bible-on-site/bible-on-site/issues/1634
       - dependency-name: "next"
         versions: [">=16.2.0"]
+      # See https://github.com/bible-on-site/bible-on-site/issues/1636
+      - dependency-name: "sunrise-sunset-js"
+        versions: [">=3.3.0"]
       # See https://github.com/bible-on-site/bible-on-site/issues/985
       - dependency-name: "node"
         versions: [">=24.12.0"]

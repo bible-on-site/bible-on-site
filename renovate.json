@@ -34,6 +34,11 @@
 			"allowedVersions": "<16.2.0"
 		},
 		{
+			"description": "See https://github.com/bible-on-site/bible-on-site/issues/1636",
+			"matchPackageNames": ["sunrise-sunset-js"],
+			"allowedVersions": "<3.3.0"
+		},
+		{
 			"description": "See https://github.com/bible-on-site/bible-on-site/issues/985",
 			"matchPackageNames": ["node"],
 			"matchDepTypes": ["engines"],
