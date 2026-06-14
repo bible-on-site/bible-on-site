@@ -255,7 +255,7 @@ function debugEntry(entryData, stage) {
 	}
 	const entryPath = entryData.path ?? entryData?.data?.path;
 	const normalized = entryPath?.replace(/\\/g, "/");
-	if (!normalized || !normalized.includes(DEBUG_SANITIZE_PATH)) {
+	if (!normalized?.includes(DEBUG_SANITIZE_PATH)) {
 		return;
 	}
 	const safeDump = {

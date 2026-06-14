@@ -20,6 +20,9 @@ updates:
     ignore:
       # See https://github.com/bible-on-site/bible-on-site/issues/528
       - dependency-name: "swc-plugin-coverage-instrument"
+      # See https://github.com/bible-on-site/bible-on-site/issues/1634
+      - dependency-name: "next"
+        versions: [">=16.2.0"]
       # See https://github.com/bible-on-site/bible-on-site/issues/985
       - dependency-name: "node"
         versions: [">=24.12.0"]

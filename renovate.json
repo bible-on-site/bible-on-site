@@ -29,6 +29,11 @@
 			"enabled": false
 		},
 		{
+			"description": "See https://github.com/bible-on-site/bible-on-site/issues/1634",
+			"matchPackageNames": ["next"],
+			"allowedVersions": "<16.2.0"
+		},
+		{
 			"description": "See https://github.com/bible-on-site/bible-on-site/issues/985",
 			"matchPackageNames": ["node"],
 			"matchDepTypes": ["engines"],
