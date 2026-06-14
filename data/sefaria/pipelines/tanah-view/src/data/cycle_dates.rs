@@ -98,9 +98,10 @@ fn month_ordinal_to_legacy(ordinal: u8, year: i32) -> u8 {
 /// Converts a Hebrew Date to the legacy integer format: YYYYMMDD
 /// where MM is the legacy month number (see month_ordinal_to_legacy)
 fn hdate_to_legacy_int(hdate: &Date<Hebrew>) -> i64 {
-    let year = hdate.extended_year() as i64;
+    let extended_year = hdate.year().extended_year();
+    let year = extended_year as i64;
     let month_ordinal = hdate.month().ordinal;
-    let month = month_ordinal_to_legacy(month_ordinal, hdate.extended_year()) as i64;
+    let month = month_ordinal_to_legacy(month_ordinal, extended_year) as i64;
     let day = hdate.day_of_month().0 as i64;
     year * 10000 + month * 100 + day
 }
@@ -275,7 +276,7 @@ mod tests {
         // 29 Kislev 5775 = Dec 21, 2014
         let iso_date = Date::try_new_iso(2014, 12, 21).unwrap();
         let hdate = iso_date.to_calendar(hebrew_calendar);
-        assert_eq!(hdate.extended_year(), 5775);
+        assert_eq!(hdate.year().extended_year(), 5775);
         assert_eq!(hdate.month().ordinal, 3); // Kislev
         assert_eq!(hdate.day_of_month().0, 29);
         assert_eq!(hdate_to_legacy_int(&hdate), 57750329);
@@ -283,7 +284,7 @@ mod tests {
         // 3 Av 5778 = July 15, 2018
         let iso_date2 = Date::try_new_iso(2018, 7, 15).unwrap();
         let hdate2 = iso_date2.to_calendar(hebrew_calendar);
-        assert_eq!(hdate2.extended_year(), 5778);
+        assert_eq!(hdate2.year().extended_year(), 5778);
         // Av is month 11 in legacy, ordinal 11 in non-leap year
         assert_eq!(hdate_to_legacy_int(&hdate2), 57781103);
     }
@@ -295,7 +296,7 @@ mod tests {
         // First cycle begins on 2014-12-21 which is 29 Kislev 5775
         let iso_date = Date::try_new_iso(2014, 12, 21).unwrap();
         let hdate = iso_date.to_calendar(hebrew_calendar);
-        assert_eq!(hdate.extended_year(), 5775);
+        assert_eq!(hdate.year().extended_year(), 5775);
         assert_eq!(hdate.month().ordinal, 3); // Kislev is month 3
         assert_eq!(hdate.day_of_month().0, 29);
         // Kislev = month 3 in legacy format
@@ -304,7 +305,7 @@ mod tests {
         // Second cycle begins on 2018-07-15 which is 3 Av 5778
         let iso_date2 = Date::try_new_iso(2018, 7, 15).unwrap();
         let hdate2 = iso_date2.to_calendar(hebrew_calendar);
-        assert_eq!(hdate2.extended_year(), 5778);
+        assert_eq!(hdate2.year().extended_year(), 5778);
         assert_eq!(hdate2.month().ordinal, 11); // Av is month 11 in non-leap year
         assert_eq!(hdate2.day_of_month().0, 3);
         // Av = month 11 in legacy format
