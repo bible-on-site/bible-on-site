@@ -160,14 +160,22 @@ pub fn extract(docs: &[Document]) -> Extracted {
     // different source books, producing duplicate (perush_id, perek_id, pasuk,
     // note_idx) keys with different content. Keep the first occurrence, matching
     // the SQLite INSERT OR IGNORE behaviour.
-    let mut seen = HashSet::new();
-    notes.retain(|n| seen.insert((n.perush_id, n.perek_id, n.pasuk, n.note_idx)));
+    dedup_notes_by_pk(&mut notes);
 
     Extracted {
         parshanim,
         perushim,
         notes,
     }
+}
+
+/// Remove notes that share a primary key `(perush_id, perek_id, pasuk, note_idx)`,
+/// keeping the first occurrence. This matches the SQLite `INSERT OR IGNORE`
+/// behaviour and prevents MySQL duplicate-key (1062) failures when multi-book
+/// commentaries map the same perek from different source books.
+fn dedup_notes_by_pk(notes: &mut Vec<Note>) {
+    let mut seen = HashSet::new();
+    notes.retain(|n| seen.insert((n.perush_id, n.perek_id, n.pasuk, n.note_idx)));
 }
 
 /// Find the node key that contains the verse-by-verse commentary data
@@ -971,5 +979,31 @@ mod tests {
         assert_eq!(result.notes[0].perek_id, 1);
         assert_eq!(result.notes[1].perek_id, 2);
         assert_eq!(result.notes[2].perek_id, 3);
+    }
+
+    #[test]
+    fn dedup_notes_by_pk_keeps_first_occurrence() {
+        let note = |perush_id, perek_id, pasuk, note_idx, content: &str| Note {
+            perush_id,
+            perek_id,
+            pasuk,
+            note_idx,
+            note_content: content.to_string(),
+        };
+        let mut notes = vec![
+            note(1, 16, 38, 0, "first"),
+            note(1, 16, 38, 0, "duplicate - different content"),
+            note(1, 16, 38, 1, "distinct note_idx"),
+            note(2, 16, 38, 0, "distinct perush"),
+        ];
+
+        dedup_notes_by_pk(&mut notes);
+
+        // The duplicate PK (1, 16, 38, 0) collapses to a single row, keeping the
+        // first occurrence; rows differing in any PK component are preserved.
+        assert_eq!(notes.len(), 3);
+        assert_eq!(notes[0].note_content, "first");
+        assert_eq!(notes[1].note_idx, 1);
+        assert_eq!(notes[2].perush_id, 2);
     }
 }
