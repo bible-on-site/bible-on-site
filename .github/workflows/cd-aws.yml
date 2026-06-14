@@ -54,7 +54,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup crane
-        uses: imjasonh/setup-crane@v0.5
+        uses: imjasonh/setup-crane@v0.6
 
       - name: Login to ECR
         run: |
