@@ -4,7 +4,7 @@
 //! This module deduplicates parshanim and perushim, and flattens the nested
 //! version arrays into individual note rows.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bson::Document;
 
@@ -155,6 +155,13 @@ pub fn extract(docs: &[Document]) -> Extracted {
             }
         }
     }
+
+    // Deduplicate notes: multi-book commentaries can map the same perek from
+    // different source books, producing duplicate (perush_id, perek_id, pasuk,
+    // note_idx) keys with different content. Keep the first occurrence, matching
+    // the SQLite INSERT OR IGNORE behaviour.
+    let mut seen = HashSet::new();
+    notes.retain(|n| seen.insert((n.perush_id, n.perek_id, n.pasuk, n.note_idx)));
 
     Extracted {
         parshanim,
