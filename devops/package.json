@@ -3,10 +3,10 @@
 		"node": ">=24.11.1 <24.12.0"
 	},
 	"devDependencies": {
-		"@types/node": "25.5.0",
+		"@types/node": "25.9.3",
 		"@types/semver": "7.7.1",
 		"@types/yargs": "17.0.35",
-		"tsx": "4.21.0"
+		"tsx": "4.22.4"
 	},
 	"scripts": {
 		"coverage:merge": "node --import tsx ./merge-coverage.mts",
@@ -19,15 +19,15 @@
 		"bump:cargo": "node --import tsx ./bump-cargo-version.ts"
 	},
 	"dependencies": {
-		"@aws-sdk/client-ec2": "3.1024.0",
-		"@aws-sdk/client-ecr": "3.1014.0",
-		"@aws-sdk/client-lambda": "3.1024.0",
-		"@aws-sdk/client-s3": "3.1018.0",
-		"@aws-sdk/client-ssm": "^3.1018.0",
-		"@aws-sdk/client-sts": "3.1018.0",
-		"@aws-sdk/credential-providers": "3.1003.0",
-		"dotenv": "17.3.1",
-		"semver": "7.7.4",
+		"@aws-sdk/client-ec2": "3.1068.0",
+		"@aws-sdk/client-ecr": "3.1068.0",
+		"@aws-sdk/client-lambda": "3.1068.0",
+		"@aws-sdk/client-s3": "3.1068.0",
+		"@aws-sdk/client-ssm": "3.1068.0",
+		"@aws-sdk/client-sts": "3.1068.0",
+		"@aws-sdk/credential-providers": "3.1068.0",
+		"dotenv": "17.4.2",
+		"semver": "7.8.4",
 		"yargs": "18.0.0"
 	}
 }
