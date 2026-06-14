@@ -1,5 +1,4 @@
 import Image from "@tiptap/extension-image";
-import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import { type Editor, EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -27,11 +26,11 @@ export function WysiwygEditor({
 				heading: {
 					levels: [1, 2, 3],
 				},
+				link: {
+					openOnClick: false,
+				},
 			}),
 			Image,
-			Link.configure({
-				openOnClick: false,
-			}),
 			Placeholder.configure({
 				placeholder,
 			}),
