@@ -46,7 +46,7 @@ CREATE TABLE `note` (
     `perek_id` smallint NOT NULL,
     `pasuk` smallint NOT NULL,
     `note_idx` smallint NOT NULL,
-    `note_content` text NOT NULL,
+    `note_content` mediumtext NOT NULL,
     PRIMARY KEY (`perush_id`, `perek_id`, `pasuk`, `note_idx`),
     KEY `idx_note_perek` (`perek_id`),
     KEY `idx_note_perek_pasuk` (`perek_id`, `pasuk`),
