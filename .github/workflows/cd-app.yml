@@ -179,7 +179,7 @@ jobs:
     if: ${{ github.event.client_payload.ios_artifact_name != '' || inputs.ios_artifact_name != '' }}
     permissions:
       contents: read
-    runs-on: macos-15
+    runs-on: macos-26
 
     env:
       MODULE_VERSION: ${{ github.event.client_payload.module_version || '0.0.0' }}
