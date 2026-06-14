@@ -79,6 +79,11 @@ async fn main() -> Result<()> {
         .map(|s| s.to_string())
         .unwrap_or_else(|| "tanah_test".to_string());
 
+    // Quote the database name as a MySQL identifier. A backtick inside an
+    // identifier is escaped by doubling it, preventing a name parsed from the
+    // connection URL from breaking out of the backtick-quoted context.
+    let database_ident = database_name.replace('`', "``");
+
     // First connect without specifying a database to create it if needed
     let options_no_db = options.clone().database("");
 
@@ -94,7 +99,7 @@ async fn main() -> Result<()> {
 
     // Handle --drop-only mode
     if cli.drop_only {
-        let drop_db_sql = format!("DROP DATABASE IF EXISTS `{}`", database_name);
+        let drop_db_sql = format!("DROP DATABASE IF EXISTS `{}`", database_ident);
         raw_sql(AssertSqlSafe(drop_db_sql))
             .execute(&mut conn)
             .await
@@ -107,7 +112,7 @@ async fn main() -> Result<()> {
     // Create database if it doesn't exist
     let create_db_sql = format!(
         "CREATE DATABASE IF NOT EXISTS `{}` CHARACTER SET utf8mb3",
-        database_name
+        database_ident
     );
     raw_sql(AssertSqlSafe(create_db_sql))
         .execute(&mut conn)
