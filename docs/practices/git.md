@@ -75,4 +75,6 @@ git ls-remote --heads origin <branch-name>
 ### Pull Request Management
 - Always create a new branch for each feature or fix
 - Pull request is automatically created when publishing a branch
+- The auto-create-PR runs as a GitHub Action and takes a short while after the push. **Do not immediately `gh pr create`** — it will collide with the auto-created PR. Instead, wait and check the Actions run (`gh run list --branch <branch>` / look for the "Auto Create PR" workflow), then locate the PR with `gh pr list --head <branch>`. Only create one manually if the workflow finished without producing a PR.
+- The auto-created PR uses the commit message as its body; update it afterwards with `gh pr edit <number> --body ...` if a fuller description is warranted.
 - Only @DoradSoft can merge PRs unless explicitly delegated to do so
