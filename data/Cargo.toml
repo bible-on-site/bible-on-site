@@ -25,7 +25,7 @@ anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 chrono = "0.4"
 chrono-tz = "0.10"
-icu_calendar = "2.1"
+icu_calendar = "2.2"
 dotenvy = "0.15"
 rusqlite = { version = "0.38", features = ["bundled"] }
 flate2 = "1"
