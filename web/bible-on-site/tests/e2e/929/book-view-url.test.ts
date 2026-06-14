@@ -47,7 +47,7 @@ test.describe("Book view URL navigation", () => {
 
 	test("slug URL with ?book opens book (requires DB)", async ({ page }) => {
 		const response = await page.goto("/929/1");
-		if (!response || response.status() !== 200) {
+		if (response?.status() !== 200) {
 			test.skip();
 			return;
 		}
@@ -84,7 +84,7 @@ test.describe("Book view URL navigation", () => {
 		page,
 	}) => {
 		const response = await page.goto("/929/1");
-		if (!response || response.status() !== 200) {
+		if (response?.status() !== 200) {
 			test.skip();
 			return;
 		}

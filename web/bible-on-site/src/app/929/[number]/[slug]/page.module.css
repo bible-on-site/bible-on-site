@@ -25,10 +25,6 @@
 	margin-bottom: 16px;
 }
 
-.authorLink:hover .authorName {
-	color: #1552ac;
-}
-
 .authorImage {
 	width: 80px;
 	height: 80px;
@@ -49,6 +45,10 @@
 	font-weight: 600;
 	color: #1c2c5d;
 	transition: color 0.2s;
+}
+
+.authorLink:hover .authorName {
+	color: #1552ac;
 }
 
 .articleTitle {

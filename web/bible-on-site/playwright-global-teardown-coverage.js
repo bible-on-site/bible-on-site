@@ -19,7 +19,7 @@ const globalTeardown = async (config) => {
 		);
 		return;
 	}
-	if (!client || !client.getIstanbulCoverage) {
+	if (!client?.getIstanbulCoverage) {
 		console.warn(
 			`[coverage] Debug port ${getRouterDebugPort()} connected but Istanbul coverage not available. ` +
 				"The dev server may not have been started with --inspect flag.",
