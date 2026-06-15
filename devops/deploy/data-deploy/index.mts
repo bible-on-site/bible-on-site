@@ -118,13 +118,33 @@ class DataDeployer extends DeployerBase {
 			s3_prefix: this.s3Prefix,
 		};
 
-		const response = await lambdaClient.send(
-			new InvokeCommand({
-				FunctionName: LAMBDA_FUNCTION_NAME,
-				Payload: Buffer.from(JSON.stringify(payload)),
-				LogType: "Tail",
-			}),
-		);
+		const response = await lambdaClient
+			.send(
+				new InvokeCommand({
+					FunctionName: LAMBDA_FUNCTION_NAME,
+					Payload: Buffer.from(JSON.stringify(payload)),
+					LogType: "Tail",
+				}),
+			)
+			.catch((err: unknown) => {
+				// A service-side fault (e.g. HTTP 502) is thrown here before any
+				// response/tail-log is available — it means the Lambda runtime
+				// itself failed to run (bad package, init crash, deprecated
+				// runtime, out-of-memory). The function code is maintained
+				// outside this repo, so surface where to look.
+				const status = (
+					err as { $metadata?: { httpStatusCode?: number } }
+				)?.$metadata?.httpStatusCode;
+				const reason = err instanceof Error ? err.message : String(err);
+				throw new Error(
+					`Failed to invoke Lambda '${LAMBDA_FUNCTION_NAME}'` +
+						(status ? ` (HTTP ${status})` : "") +
+						`: ${reason}. This is a Lambda runtime/service fault, not a ` +
+						`data error. Inspect the function's CloudWatch Logs ` +
+						`(/aws/lambda/${LAMBDA_FUNCTION_NAME}) and verify it is deployed ` +
+						`with a supported runtime.`,
+				);
+			});
 
 		// Decode and log the Lambda logs
 		if (response.LogResult) {
