@@ -127,22 +127,30 @@ class DataDeployer extends DeployerBase {
 				}),
 			)
 			.catch((err: unknown) => {
-				// A service-side fault (e.g. HTTP 502) is thrown here before any
-				// response/tail-log is available — it means the Lambda runtime
-				// itself failed to run (bad package, init crash, deprecated
-				// runtime, out-of-memory). The function code is maintained
-				// outside this repo, so surface where to look.
 				const status = (
 					err as { $metadata?: { httpStatusCode?: number } }
 				)?.$metadata?.httpStatusCode;
 				const reason = err instanceof Error ? err.message : String(err);
+				// A 5xx is a service-side fault thrown before any response/tail-log
+				// is available: the Lambda runtime itself failed to run (bad
+				// package, init crash, deprecated runtime, OOM). Its code is
+				// maintained outside this repo, so point at CloudWatch. Other
+				// errors (4xx: AccessDenied, ResourceNotFound, invalid params) are
+				// caller/config issues where the function never ran.
+				const isServerFault = status !== undefined && status >= 500;
+				const guidance = isServerFault
+					? ` This is a Lambda runtime/service fault, not a data error. ` +
+						`Inspect the function's CloudWatch Logs ` +
+						`(/aws/lambda/${LAMBDA_FUNCTION_NAME}) and verify it is deployed ` +
+						`with a supported runtime.`
+					: ` The invocation request itself failed (likely a permissions, ` +
+						`configuration, or missing-function issue); the function may ` +
+						`never have run.`;
 				throw new Error(
 					`Failed to invoke Lambda '${LAMBDA_FUNCTION_NAME}'` +
 						(status ? ` (HTTP ${status})` : "") +
-						`: ${reason}. This is a Lambda runtime/service fault, not a ` +
-						`data error. Inspect the function's CloudWatch Logs ` +
-						`(/aws/lambda/${LAMBDA_FUNCTION_NAME}) and verify it is deployed ` +
-						`with a supported runtime.`,
+						`: ${reason}.${guidance}`,
+					{ cause: err },
 				);
 			});
 
