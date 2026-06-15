@@ -20,6 +20,20 @@ In order to understand some topic related to this repository, refer to the `docs
 - **Windows "nul" Files**: Before committing, check for and remove any accidentally created `nul` files (a Windows artifact). Run: `find . -name "nul" -type f -delete` or manually delete them.
 - **Branch Verification**: Before pushing to a branch, verify it doesn't already exist on remote (may have been merged). See `docs/practices/git.md` for details.
 
+### Dependency & CI Maintenance
+
+Lessons from past dependency refreshes — apply these to avoid breaking `master`:
+
+- **Validate before pushing a dep refresh** (local-only validation is NOT enough — CI runs in UTC with a clean `npm ci`):
+  1. `cd web/bible-on-site && TZ=UTC npm run test:unit` — website hebrew-date/tzeit tests (e.g. `constructTsetAwareHDate`) pass in local timezones but fail under CI's UTC when date libs change.
+  2. `npm ci --dry-run` in **every** touched npm module (especially `web/admin`) — catches `package.json`/lockfile drift before the Dockerized CI jobs do.
+  3. For .NET majors, `dotnet restore app/BibleOnSite.Tests/BibleOnSite.Tests.csproj` — catches `NU1605` package-downgrade errors without needing mobile workloads.
+- **Renovate grouped "all non-major" PRs are risky**: their lockfile maintenance can drop transitive optional deps (e.g. `@emnapi/*` from `web/admin/package-lock.json`), breaking the Dockerized `npm ci` in the Package Admin job. These PRs often have **auto-merge enabled** and will re-break `master`. Run `gh pr merge <n> --disable-auto`, then supersede with a hand-built branch that applies only the real dep change plus freshly regenerated lockfiles (`npm install`).
+- **Held dependencies** (see `renovate.json` for the authoritative list): `next` <16.2.0, `sunrise-sunset-js` <3.2.1 (both 3.2.1 and 3.3.0 break tzeit under UTC), `node` engines/nvm/dockerfile pinned `>=24.11.1 <24.12.0`, `macos` runner <26 (breaks the MAUI iOS build), `swc-plugin-coverage-instrument` disabled, `bson` held (mongodb pins bson 2). Keep `.nvmrc` in sync with the `engines` range.
+- **Version-gate collisions**: CI's `verify-version` compares a gated module's version against the highest released git tag (`<module>-v*`), and the release bot bumps gated versions on `master` after each merge. On long-lived/dep branches, `git merge origin/master` then bump the gated module to **exceed master HEAD's** value. Gated modules: `website`, `api`, `app`, `bulletin`, `admin`. Note a `web/api/Dockerfile` change triggers the `api` gate and `.csproj` changes trigger the `app` gate.
+- **CDs** (Bulletin / RDS / App) are triggered by `repository_dispatch` from the release pipeline, not manually; fixes land on the next release. The `db-populator` Lambda is an external Python function whose code is not in this repo — diagnose its failures via CloudWatch (`/aws/lambda/bible-on-site-db-populator`).
+
+
 ### Tool Learning Protocol
 
 When using a tool/library/framework for the first time:
