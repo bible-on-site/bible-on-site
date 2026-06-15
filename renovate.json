@@ -43,6 +43,12 @@
 			"matchPackageNames": ["node"],
 			"matchDepTypes": ["engines"],
 			"allowedVersions": ">=24.11.1 <24.12.0"
+		},
+		{
+			"description": "macos-26 breaks the .NET MAUI iOS build (default Xcode 26); see https://github.com/bible-on-site/bible-on-site/issues/1627",
+			"matchManagers": ["github-actions"],
+			"matchPackageNames": ["macos"],
+			"allowedVersions": "<26"
 		}
 	],
 	"bumpVersion": "patch",
