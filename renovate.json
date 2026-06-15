@@ -36,7 +36,7 @@
 		{
 			"description": "See https://github.com/bible-on-site/bible-on-site/issues/1636",
 			"matchPackageNames": ["sunrise-sunset-js"],
-			"allowedVersions": "<3.3.0"
+			"allowedVersions": "<3.2.1"
 		},
 		{
 			"description": "See https://github.com/bible-on-site/bible-on-site/issues/985",
