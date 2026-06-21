@@ -39,6 +39,16 @@
 			"allowedVersions": "<3.2.1"
 		},
 		{
+			"description": "See https://github.com/bible-on-site/bible-on-site/issues/1699",
+			"matchPackageNames": ["temporal-polyfill"],
+			"allowedVersions": "<1.0.0"
+		},
+		{
+			"description": "See https://github.com/bible-on-site/bible-on-site/issues/1700",
+			"matchPackageNames": ["typst-pdf"],
+			"allowedVersions": "<0.15"
+		},
+		{
 			"description": "See https://github.com/bible-on-site/bible-on-site/issues/985",
 			"matchPackageNames": ["node"],
 			"matchDepTypes": ["engines"],

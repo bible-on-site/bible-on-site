@@ -29,7 +29,7 @@ RUN cargo build --locked --release && \
 # runtime dependencies for the application. This often uses a different base
 # image from the build stage where the necessary files are copied from the build
 # stage.
-FROM alpine:3.24.0 AS final
+FROM alpine:3.24.1 AS final
 
 # Create a non-privileged user that the app will run under.
 # See https://docs.docker.com/go/dockerfile-user-best-practices/
