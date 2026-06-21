@@ -1,8 +1,11 @@
 # Tanahpedia External Revision API
 
-API-first interface that lets an **external AI client** propose revisions to Tanahpedia
-entries. Proposals are stored as `PENDING` rows in `tanahpedia_entry_revision` for human
-triage in the Admin GUI and are **never auto-applied** to the live entry.
+API-first interface that lets an **external AI client** propose — and, when authorized,
+apply — revisions to Tanahpedia entries. Submissions are stored as `PENDING` rows in
+`tanahpedia_entry_revision` and are never applied as a side effect of submission. The same
+authorized client (or a human in the Admin GUI) then applies a revision **explicitly**,
+which updates the live `tanahpedia_entry` and marks the revision `APPLIED`. The revision
+row is retained as the change's audit/history record.
 
 ## Endpoint
 
@@ -42,6 +45,30 @@ Validation (server-side):
 - At least one of `proposedUniqueName` / `proposedTitle` / `proposedContent` must be present.
 - When `entryId` is supplied it must reference an existing entry, otherwise `NOT_FOUND`.
 
+## Mutation — apply a revision
+
+Applies a stored revision to the live entry. **Authorized only** (same bearer token as
+submission — the whole API is for authorized clients, not the public).
+
+```graphql
+mutation Apply($id: String!) {
+  applyEntryRevision(id: $id) {
+    id
+    entryId     # the live entry the change was applied to
+    status      # "APPLIED"
+    updatedAt
+  }
+}
+```
+
+- **Existing entry:** the revision's present `proposed*` fields overwrite that entry; absent
+  fields are left untouched.
+- **New entry** (`entryId` was null): a new entry is created — this requires both
+  `proposedUniqueName` and `proposedTitle` (the entry's non-null columns) — and the revision
+  is linked back to the new entry.
+- Re-applying an already-`APPLIED` revision is rejected (`BAD_REQUEST`); a missing revision
+  or a deleted target entry returns `NOT_FOUND`.
+
 ## Query — triage queue (Admin / internal)
 
 ```graphql
@@ -57,7 +84,7 @@ query Pending {
 }
 ```
 
-Both `status` (`PENDING` / `APPROVED` / `REJECTED`) and `entryId` are optional filters;
+Both `status` (`PENDING` / `APPLIED` / `APPROVED` / `REJECTED`) and `entryId` are optional filters;
 results are returned newest-first.
 
 ## Storage

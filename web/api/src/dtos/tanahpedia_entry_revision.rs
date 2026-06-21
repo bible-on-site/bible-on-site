@@ -16,7 +16,7 @@ pub struct EntryRevision {
     pub source: String,
     /// AI rationale / notes for the human editor.
     pub notes: Option<String>,
-    /// Lifecycle marker: `PENDING`, `APPROVED`, or `REJECTED`.
+    /// Lifecycle marker: `PENDING`, `APPLIED`, `APPROVED`, or `REJECTED`.
     pub status: String,
     pub created_at: String,
     pub updated_at: String,

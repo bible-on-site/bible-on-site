@@ -20,21 +20,19 @@ impl ApiAuth {
         Self { bearer }
     }
 
-    /// Authorizes a request to submit an entry revision.
+    /// Authorizes a request to submit or apply an entry revision.
     ///
     /// Fails closed: if `TANAHPEDIA_REVISION_API_KEY` is unset/empty the endpoint
     /// is disabled and every request is rejected. The presented token is compared
     /// to the configured key in constant time to avoid leaking it via timing.
-    pub fn authorize_revision_submitter(&self) -> Result<(), ServiceError> {
+    pub fn authorize_revision_manager(&self) -> Result<(), ServiceError> {
         let expected = env::var(REVISION_API_KEY_ENV)
             .ok()
             .filter(|key| !key.is_empty());
 
         match (expected, self.bearer.as_deref()) {
             (Some(expected), Some(presented)) if constant_time_eq(&expected, presented) => Ok(()),
-            (None, _) => Err(ServiceError::unauthorized(
-                "Revision submission is not configured",
-            )),
+            (None, _) => Err(ServiceError::unauthorized("Revision API is not configured")),
             _ => Err(ServiceError::unauthorized("Invalid or missing API key")),
         }
     }
@@ -77,7 +75,7 @@ mod tests {
         let _guard = ENV_LOCK.lock().unwrap();
         unsafe { env::remove_var(REVISION_API_KEY_ENV) };
         let auth = ApiAuth::new(Some("anything".to_string()));
-        assert!(auth.authorize_revision_submitter().is_err());
+        assert!(auth.authorize_revision_manager().is_err());
     }
 
     #[test]
@@ -86,10 +84,10 @@ mod tests {
         unsafe { env::set_var(REVISION_API_KEY_ENV, "correct-horse") };
         assert!(
             ApiAuth::new(Some("wrong".to_string()))
-                .authorize_revision_submitter()
+                .authorize_revision_manager()
                 .is_err()
         );
-        assert!(ApiAuth::new(None).authorize_revision_submitter().is_err());
+        assert!(ApiAuth::new(None).authorize_revision_manager().is_err());
         unsafe { env::remove_var(REVISION_API_KEY_ENV) };
     }
 
@@ -99,7 +97,7 @@ mod tests {
         unsafe { env::set_var(REVISION_API_KEY_ENV, "correct-horse") };
         assert!(
             ApiAuth::new(Some("correct-horse".to_string()))
-                .authorize_revision_submitter()
+                .authorize_revision_manager()
                 .is_ok()
         );
         unsafe { env::remove_var(REVISION_API_KEY_ENV) };

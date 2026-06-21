@@ -46,11 +46,30 @@ impl TanahpediaRevisionsMutation {
         input: SubmitEntryRevisionInput,
     ) -> Result<EntryRevision> {
         ctx.data::<ApiAuth>()?
-            .authorize_revision_submitter()
+            .authorize_revision_manager()
             .map_err(|e| e.extend())?;
 
         Ok(
             tanahpedia_revisions_service::create_revision(ctx.data::<Database>()?, input)
+                .await
+                .map_err(|e| e.extend())?
+                .into(),
+        )
+    }
+
+    /// Apply a stored revision to the live entry (authorized clients only).
+    ///
+    /// Requires the same `Authorization: Bearer <TANAHPEDIA_REVISION_API_KEY>`
+    /// header as submission. The revision row is retained as the change's audit
+    /// record and marked `APPLIED`. When the revision has no `entryId` a new
+    /// entry is created and linked back to the revision.
+    async fn apply_entry_revision(&self, ctx: &Context<'_>, id: String) -> Result<EntryRevision> {
+        ctx.data::<ApiAuth>()?
+            .authorize_revision_manager()
+            .map_err(|e| e.extend())?;
+
+        Ok(
+            tanahpedia_revisions_service::apply_revision(ctx.data::<Database>()?, id)
                 .await
                 .map_err(|e| e.extend())?
                 .into(),
