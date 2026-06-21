@@ -218,6 +218,15 @@
 		<PackageReference Include="SQLitePCLRaw.bundle_green" Version="2.1.11" />
 	</ItemGroup>
 
+	<!-- NU1903 / GHSA-2m69-gcr7-jv3q (CVE-2025-6965): SQLitePCLRaw.lib.e_sqlite3.* <= 2.1.11
+	     bundle a SQLite < 3.50.2 with an aggregate-terms memory-corruption bug. There is no
+	     patched SQLitePCLRaw release yet (latest is 2.1.11), so the audit warning (treated as
+	     error) cannot be cleared by upgrading. Suppress only this advisory until upstream ships
+	     a bundle with SQLite >= 3.50.2. Tracked in https://github.com/bible-on-site/bible-on-site/issues/1702 -->
+	<ItemGroup>
+		<NuGetAuditSuppress Include="https://github.com/advisories/GHSA-2m69-gcr7-jv3q" />
+	</ItemGroup>
+
 	<!-- Plugin.Firebase supports iOS and Android only (not MacCatalyst or Windows) -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<PackageReference Include="Plugin.Firebase.Analytics" Version="4.0.0" />
