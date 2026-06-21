@@ -548,7 +548,10 @@ jobs:
         with:
           name: ${{ env.BULLETIN_LAMBDA_ZIP_ARTIFACT_NAME }}
           path: ${{ env.BULLETIN_DIRECTORY }}/.release/bulletin-lambda-v${{ steps.get_version.outputs.MODULE_VERSION }}.zip
-          retention-days: 1
+          # Release artifact consumed by cd-bulletin (repository_dispatch). Must
+          # outlive a single day so a failed/late CD can be re-run without the
+          # artifact expiring (matches the website/api release artifacts at 90).
+          retention-days: 90
 
   package_admin:
     name: Package Admin
