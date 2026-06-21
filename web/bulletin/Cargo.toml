@@ -4,7 +4,7 @@ description = "Bible on Site PDF Bulletin Generator (AWS Lambda)"
 license-file = "../../license"
 repository = "https://github.com/bible-on-site/bible-on-site"
 publish = false
-version = "0.1.5"
+version = "0.1.7"
 edition = "2024"
 
 [lib]
@@ -17,15 +17,15 @@ path = "src/main.rs"
 
 [dependencies]
 # AWS Lambda runtime (production)
-lambda_http = "1.0"
-lambda_runtime = "1.0"
+lambda_http = "1.2"
+lambda_runtime = "1.2"
 
 # PDF generation via Typst engine (proper Hebrew text shaping via rustybuzz)
 typst-as-lib = { version = "0.15", default-features = false }
 typst-pdf = "0.14"
 
 # Database — shared layer from API
-sea-orm = { version = "1.1.19", default-features = false, features = [
+sea-orm = { version = "1.1.20", default-features = false, features = [
     "sqlx-mysql",
     "runtime-tokio-native-tls",
 ] }
@@ -36,7 +36,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 # Async runtime
-tokio = { version = "1.48", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.52", features = ["macros", "rt-multi-thread"] }
 
 # Error handling
 anyhow = "1.0"
@@ -50,7 +50,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dotenvy = "0.15"
 
 [dev-dependencies]
-sea-orm = { version = "1.1.19", default-features = false, features = ["mock"] }
+sea-orm = { version = "1.1.20", default-features = false, features = ["mock"] }
 
 [workspace]
 members = ["."]
