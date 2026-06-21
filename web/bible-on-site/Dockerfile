@@ -35,6 +35,15 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG DB_URL
 ENV DB_URL=$DB_URL
 
+# NEXT_PUBLIC_ENV must be set at build time: NEXT_PUBLIC_* vars are inlined by
+# Next.js during `npm run build`, and statically-rendered pages bake in this
+# value. Without it, isProduction() evaluates to false in the built image and
+# production-only features (e.g. Google Analytics) are silently disabled even
+# though the ECS task definition sets NEXT_PUBLIC_ENV at runtime. Defaults to
+# production (this image is the production artifact); override via --build-arg.
+ARG NEXT_PUBLIC_ENV=production
+ENV NEXT_PUBLIC_ENV=$NEXT_PUBLIC_ENV
+
 RUN npm run build
 
 # Production image, copy all the files and run next
