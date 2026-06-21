@@ -271,25 +271,109 @@ args = [
 ]
 
 # =============================================================================
-# Coverage Tasks (tanah-view)
+# Coverage Tasks
 # =============================================================================
 
-[tasks.coverage-dir-create]
-description = "Create coverage output directory"
-cwd = "./sefaria/pipelines/tanah-view"
+[tasks.coverage-unit-dir-create]
+description = "Create unit coverage output directory"
 command = "mkdir"
-args = ["-p", ".coverage"]
+args = ["-p", ".coverage/unit"]
 
-[tasks.coverage-tanah-view]
-description = "Run tanah-view tests with coverage and generate lcov.info"
-cwd = "./sefaria/pipelines/tanah-view"
-dependencies = ["coverage-dir-create"]
+[tasks.coverage-unit-lcov]
+description = "Run unit tests with coverage and generate lcov.info"
+dependencies = ["coverage-unit-dir-create"]
 command = "cargo"
-args = ["llvm-cov", "--lcov", "--output-path", ".coverage/lcov.info"]
+args = [
+    "llvm-cov",
+    "test",
+    "--workspace",
+    "--lcov",
+    "--output-path",
+    ".coverage/unit/lcov.info",
+]
 
-[tasks.coverage-tanah-view-browser]
-description = "Run tanah-view tests with coverage and open HTML report in browser"
+[tasks.coverage-unit-junit]
+description = "Run unit tests with JUnit output for CI reporting"
+dependencies = ["test-unit-dir-create"]
+command = "cargo"
+args = ["nextest", "run", "--workspace", "--profile", "ci"]
+
+# TODO: run unit tests only once and report both lcov and junit
+[tasks.coverage-unit]
+description = "Run unit tests with both coverage (lcov) and JUnit output"
+dependencies = ["coverage-unit-lcov", "coverage-unit-junit"]
+
+[tasks.coverage-integration-dir-create]
+description = "Create integration coverage output directory"
+command = "mkdir"
+args = ["-p", ".coverage/integration"]
+
+[tasks.coverage-integration-lcov]
+description = "Run integration tests with coverage and generate lcov.info"
+dependencies = ["coverage-integration-dir-create"]
+command = "cargo"
+args = [
+    "llvm-cov",
+    "test",
+    "--workspace",
+    "--features",
+    "integration",
+    "--lcov",
+    "--output-path",
+    ".coverage/integration/lcov.info",
+]
+
+[tasks.coverage-integration-junit]
+description = "Run integration tests with JUnit output for CI reporting"
+dependencies = ["test-integration-dir-create"]
+command = "cargo"
+args = [
+    "nextest",
+    "run",
+    "--workspace",
+    "--features",
+    "integration",
+    "--profile",
+    "ci-integration",
+]
+
+# TODO: run integration tests only once and report both lcov and junit
+[tasks.coverage-integration]
+description = "Run integration tests with both coverage (lcov) and JUnit output"
+dependencies = ["coverage-integration-lcov", "coverage-integration-junit"]
+
+[tasks.coverage-merged-dir-create]
+description = "Create merged coverage output directory"
+command = "mkdir"
+args = ["-p", ".coverage/merged"]
+
+[tasks.coverage-merge]
+description = "Merge unit and integration coverage reports into a single lcov.info"
+dependencies = ["coverage-merged-dir-create"]
+command = "docker"
+args = [
+    "run",
+    "--rm",
+    "-t",
+    "-v",
+    "${CARGO_MAKE_WORKING_DIRECTORY}/.coverage:/.coverage",
+    "lcov-cli:0.0.2",
+    "--rc",
+    "branch_coverage=1",
+    "-a",
+    "/.coverage/unit/lcov.info",
+    "-a",
+    "/.coverage/integration/lcov.info",
+    "-o",
+    "/.coverage/merged/lcov.info",
+]
+
+[tasks.coverage-all]
+description = "Run all tests with coverage and merge reports"
+dependencies = ["coverage-unit", "coverage-integration", "coverage-merge"]
+
+[tasks.coverage-unit-browser]
+description = "Run unit tests with coverage and open HTML report in browser"
 condition = { env_not_set = ["CI"] }
-cwd = "./sefaria/pipelines/tanah-view"
 command = "cargo"
-args = ["llvm-cov", "--html", "--open"]
+args = ["llvm-cov", "test", "--workspace", "--html", "--open"]
