@@ -4,6 +4,7 @@ pub mod astronomical_object_creation_day;
 pub mod category_homepage;
 pub mod entry;
 pub mod entry_entity;
+pub mod entry_revision;
 pub mod entry_synonym;
 pub mod entry_synonym_disambiguation;
 pub mod event;
