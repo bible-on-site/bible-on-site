@@ -2176,8 +2176,8 @@ jobs:
           fi
 
           API_MODULE_CHANGED=$([ "${{ needs.determine_api_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          API_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_api_master_coverage_available }}" = "false" ] && echo "true" || echo "false") # Generated
-          if [ "$API_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$API_MASTER_COVERAGE_AVAILABLE" = "true" ]; then
+          API_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_api_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$API_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$API_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             API_STATUS=$([ "${{ needs.api_e2e.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$API_STATUS" = "failure" ]; then
               echo "Overall status: failure"
@@ -2186,8 +2186,8 @@ jobs:
           fi
 
           APP_MODULE_CHANGED=$([ "${{ needs.determine_app_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          APP_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_app_master_coverage_available }}" = "false" ] && echo "true" || echo "false") # Generated
-          if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$APP_MASTER_COVERAGE_AVAILABLE" = "true" ]; then
+          APP_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_app_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$APP_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             APP_STATUS=$([ "${{ needs.app_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$APP_STATUS" = "failure" ]; then
               echo "Overall status: failure"
@@ -2206,8 +2206,8 @@ jobs:
           fi
 
           BULLETIN_MODULE_CHANGED=$([ "${{ needs.determine_bulletin_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          BULLETIN_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_bulletin_master_coverage_available }}" = "false" ] && echo "true" || echo "false") # Generated
-          if [ "$BULLETIN_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$BULLETIN_MASTER_COVERAGE_AVAILABLE" = "true" ]; then
+          BULLETIN_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_bulletin_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$BULLETIN_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$BULLETIN_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             BULLETIN_STATUS=$([ "${{ needs.bulletin_ci.result }}" = "failure" ] && echo "failure" || echo "success") # Generated
             if [ "$BULLETIN_STATUS" = "failure" ]; then
               echo "Overall status: failure"
@@ -2225,8 +2225,8 @@ jobs:
           fi
 
           DATA_MODULE_CHANGED=$([ "${{ needs.determine_data_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          DATA_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_data_master_coverage_available }}" = "false" ] && echo "true" || echo "false") # Generated
-          if [ "$DATA_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$DATA_MASTER_COVERAGE_AVAILABLE" = "true" ]; then
+          DATA_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_data_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$DATA_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$DATA_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             # Only fail if data_ci or perushim_data explicitly failed (not if skipped)
             DATA_STATUS=$([ "${{ needs.data_ci.result }}" = "failure" ] && echo "failure" || echo "success") # Generated
             PERUSHIM_STATUS=$([ "${{ needs.perushim_data.result }}" = "failure" ] && echo "failure" || echo "success") # Generated
