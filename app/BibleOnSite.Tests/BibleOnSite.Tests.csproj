@@ -35,6 +35,13 @@
     <PackageReference Include="SQLitePCLRaw.bundle_green" Version="2.1.11" />
   </ItemGroup>
 
+  <!-- NU1903 / GHSA-2m69-gcr7-jv3q (CVE-2025-6965): no patched SQLitePCLRaw release exists yet;
+       suppress only this advisory until upstream ships a bundle with SQLite >= 3.50.2.
+       Tracked in https://github.com/bible-on-site/bible-on-site/issues/1702 -->
+  <ItemGroup>
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-2m69-gcr7-jv3q" />
+  </ItemGroup>
+
   <ItemGroup>
     <!--
       Note: We don't reference BibleOnSite.csproj directly as it targets MAUI platforms.
