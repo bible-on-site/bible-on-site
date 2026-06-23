@@ -19,13 +19,13 @@
 		"bump:cargo": "node --import tsx ./bump-cargo-version.ts"
 	},
 	"dependencies": {
-		"@aws-sdk/client-ec2": "3.1073.0",
-		"@aws-sdk/client-ecr": "3.1073.0",
-		"@aws-sdk/client-lambda": "3.1073.0",
-		"@aws-sdk/client-s3": "3.1073.0",
-		"@aws-sdk/client-ssm": "3.1073.0",
-		"@aws-sdk/client-sts": "3.1073.0",
-		"@aws-sdk/credential-providers": "3.1073.0",
+		"@aws-sdk/client-ec2": "3.1075.0",
+		"@aws-sdk/client-ecr": "3.1075.0",
+		"@aws-sdk/client-lambda": "3.1075.0",
+		"@aws-sdk/client-s3": "3.1075.0",
+		"@aws-sdk/client-ssm": "3.1075.0",
+		"@aws-sdk/client-sts": "3.1075.0",
+		"@aws-sdk/credential-providers": "3.1075.0",
 		"dotenv": "17.4.2",
 		"semver": "7.8.5",
 		"yargs": "18.0.0"
