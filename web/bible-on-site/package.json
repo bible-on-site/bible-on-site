@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.320",
+	"version": "0.2.321",
 	"private": true,
 	"license": "MIT",
 	"browserslist": [
@@ -65,7 +65,7 @@
 		"temporal-polyfill": "0.3.2"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.5.0",
+		"@biomejs/biome": "2.5.1",
 		"@playwright/test": "1.61.0",
 		"@swc/core": "1.15.43",
 		"@swc/jest": "0.2.39",
