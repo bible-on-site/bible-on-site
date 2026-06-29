@@ -150,6 +150,28 @@ CREATE TABLE `tanahpedia_entry_entity` (
     CONSTRAINT `fk_entry_entity_entity` FOREIGN KEY (`entity_id`) REFERENCES `tanahpedia_entity` (`id`) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
+-- Entry revisions submitted by EXTERNAL AI clients via the API for human triage.
+-- entry_id NULL = the revision proposes a brand-new entry. status is a free-text
+-- lifecycle marker (PENDING / APPROVED / REJECTED) kept as a string to avoid an
+-- enum migration; nothing is applied to `tanahpedia_entry` until a human approves.
+DROP TABLE IF EXISTS `tanahpedia_entry_revision`;
+CREATE TABLE `tanahpedia_entry_revision` (
+    `id` char(36) NOT NULL,
+    `entry_id` char(36) DEFAULT NULL COMMENT 'NULL = proposes a new entry',
+    `proposed_unique_name` varchar(255) DEFAULT NULL,
+    `proposed_title` varchar(255) DEFAULT NULL,
+    `proposed_content` mediumtext,
+    `source` varchar(255) NOT NULL COMMENT 'External AI client / model identifier',
+    `notes` text COMMENT 'AI rationale / notes for the human editor',
+    `status` varchar(20) NOT NULL DEFAULT 'PENDING',
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_entry_revision_entry` (`entry_id`),
+    KEY `idx_entry_revision_status` (`status`),
+    CONSTRAINT `fk_entry_revision_entry` FOREIGN KEY (`entry_id`) REFERENCES `tanahpedia_entry` (`id`) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
 -- -------------------------------------------
 -- PERSON
 -- -------------------------------------------

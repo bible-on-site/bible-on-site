@@ -207,6 +207,22 @@ Table tanahpedia_entry_entity {
   entity_id char(36) [ref: > tanahpedia_entity.id]
 }
 
+// Revisions fed by EXTERNAL AI clients through the API for human triage.
+// entry_id NULL => proposes a brand-new entry. Nothing is applied to
+// tanahpedia_entry until a human approves the revision.
+Table tanahpedia_entry_revision {
+  id char(36) [pk]
+  entry_id char(36) [ref: > tanahpedia_entry.id, note: 'NULL = proposes a new entry']
+  proposed_unique_name varchar(255)
+  proposed_title varchar(255)
+  proposed_content mediumtext
+  source varchar(255) [note: 'External AI client / model identifier']
+  notes text [note: 'AI rationale / notes for the human editor']
+  status varchar(20) [note: 'PENDING, APPROVED, REJECTED']
+  created_at datetime
+  updated_at datetime
+}
+
 // -------------------------------------------
 // PERSON
 // -------------------------------------------

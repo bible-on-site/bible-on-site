@@ -592,7 +592,7 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "bible-on-site-api"
-version = "0.1.25"
+version = "0.1.33"
 dependencies = [
  "actix-web",
  "anyhow",
@@ -600,6 +600,7 @@ dependencies = [
  "async-graphql-actix-web",
  "cargo-llvm-cov",
  "cargo-make",
+ "chrono",
  "derive_more",
  "dotenvy",
  "entities",
@@ -613,6 +614,7 @@ dependencies = [
  "tracing-bunyan-formatter",
  "tracing-log 0.2.0",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
