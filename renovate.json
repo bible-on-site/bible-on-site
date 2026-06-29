@@ -49,6 +49,11 @@
 			"allowedVersions": "<0.15"
 		},
 		{
+			"description": "@playwright/test 1.61.1 mis-transpiles .mjs files (esbuild emits CommonJS `exports` in ESM scope) -> Website E2E exits 1 at shared/tests-util/environment.mjs; see https://github.com/bible-on-site/bible-on-site/issues/1726",
+			"matchPackageNames": ["@playwright/test", "playwright", "playwright-core"],
+			"allowedVersions": "<1.61.1"
+		},
+		{
 			"description": "See https://github.com/bible-on-site/bible-on-site/issues/985",
 			"matchPackageNames": ["node"],
 			"matchDepTypes": ["engines"],
