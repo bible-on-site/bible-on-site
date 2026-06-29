@@ -138,6 +138,7 @@ public partial class PreferencesViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowPerushimSection));
         OnPropertyChanged(nameof(IsPerushimInstalled));
         OnPropertyChanged(nameof(ShowPerushimDownload));
+        OnPropertyChanged(nameof(ShowPerushimDownloadButton));
         OnPropertyChanged(nameof(PerushimNotesStatusText));
     }
 

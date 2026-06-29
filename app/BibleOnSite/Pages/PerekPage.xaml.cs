@@ -350,7 +350,7 @@ public partial class PerekPage : ContentPage
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Refresh perushim on appearing failed: {ex.Message}");
+            Console.Error.WriteLine($"Refresh perushim on appearing failed: {ex}");
         }
     }
 
@@ -1173,7 +1173,7 @@ public partial class PerekPage : ContentPage
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Navigate to perushim settings failed: {ex.Message}");
+            Console.Error.WriteLine($"Navigate to perushim settings failed: {ex}");
         }
     }
 
