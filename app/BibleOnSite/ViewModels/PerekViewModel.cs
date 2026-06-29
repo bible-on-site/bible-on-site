@@ -80,6 +80,9 @@ public partial class PerekViewModel : ObservableObject
     /// <summary>Whether to show the download perushim button (notes not yet available).</summary>
     public bool ShowDownloadPerushimButton => PerushimCatalogAvailable && !PerushimNotesAvailable;
 
+    /// <summary>Whether to show the "go to settings to download perushim" CTA (notes not installed).</summary>
+    public bool ShowGoToPerushimSettings => !PerushimNotesAvailable;
+
     private List<PerekPerushNote> _perushNotesCache = new();
 
     /// <summary>
@@ -252,6 +255,7 @@ public partial class PerekViewModel : ObservableObject
         PerushimNotesAvailable = PerushimNotesService.Instance.IsAvailable;
         OnPropertyChanged(nameof(PerushimEmptyMessage));
         OnPropertyChanged(nameof(ShowDownloadPerushimButton));
+        OnPropertyChanged(nameof(ShowGoToPerushimSettings));
 
         // Remember which perushim the user had checked so we can preserve them
         var previouslyChecked = new HashSet<int>(CheckedPerushim);

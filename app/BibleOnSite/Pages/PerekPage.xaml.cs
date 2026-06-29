@@ -326,6 +326,32 @@ public partial class PerekPage : ContentPage
                 _isLoading = false;
             }
         }
+        else if (_viewModel.PerekId > 0 && !_isLoading)
+        {
+            // Perushim may have been installed (downloaded in Preferences) or cleared by the OS
+            // since this page last appeared. Re-check and reload so they show without an app restart.
+            await RefreshPerushimIfAvailabilityChangedAsync();
+        }
+    }
+
+    /// <summary>
+    /// Reloads perushim for the current perek when notes-availability changed since the last load
+    /// (e.g. the user downloaded the package in Preferences and returned to this page).
+    /// </summary>
+    private async Task RefreshPerushimIfAvailabilityChangedAsync()
+    {
+        try
+        {
+            await PerushimNotesService.Instance.InitializeAsync();
+            if (PerushimNotesService.Instance.IsAvailable != _viewModel.PerushimNotesAvailable)
+            {
+                await _viewModel.LoadPerushimAsync(_viewModel.PerekId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Refresh perushim on appearing failed: {ex.Message}");
+        }
     }
 
     private static int GetInitialPerekId()
@@ -1139,27 +1165,15 @@ public partial class PerekPage : ContentPage
         }
     }
 
-    private async void OnDownloadPerushimClicked(object? sender, EventArgs e)
+    private async void OnGoToPerushimSettingsClicked(object? sender, EventArgs e)
     {
-        if (sender is Button btn)
-            btn.IsEnabled = false;
         try
         {
-            var ok = await PerushimNotesService.Instance.TryDownloadNotesAsync();
-            if (ok && _viewModel.PerekId > 0)
-            {
-                await _viewModel.LoadPerushimAsync(_viewModel.PerekId);
-            }
+            await Shell.Current.GoToAsync("PreferencesPage");
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Download perushim failed: {ex.Message}");
-            await DisplayAlertAsync("שגיאה", "לא ניתן להוריד פירושים. נסו שוב מאוחר יותר.", "אישור");
-        }
-        finally
-        {
-            if (sender is Button b)
-                b.IsEnabled = true;
+            Console.Error.WriteLine($"Navigate to perushim settings failed: {ex.Message}");
         }
     }
 
