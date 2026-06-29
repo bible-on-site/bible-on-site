@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.322",
+	"version": "0.2.323",
 	"private": true,
 	"license": "MIT",
 	"browserslist": [
@@ -46,7 +46,7 @@
 	"dependencies": {
 		"@aws-sdk/client-lambda": "3.1075.0",
 		"@pdf-lib/fontkit": "1.1.1",
-		"autoprefixer": "10.5.0",
+		"autoprefixer": "10.5.2",
 		"flowbite": "4.0.2",
 		"flowbite-react": "0.12.17",
 		"gematry": "1.0.2",
@@ -66,7 +66,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.1",
-		"@playwright/test": "1.61.0",
+		"@playwright/test": "1.61.1",
 		"@swc/core": "1.15.43",
 		"@swc/jest": "0.2.39",
 		"@testing-library/dom": "10.4.1",
@@ -85,7 +85,7 @@
 		"lighthouse": "13.4.0",
 		"monocart-reporter": "2.11.3",
 		"picomatch": "4.0.4",
-		"postcss": "8.5.15",
+		"postcss": "8.5.16",
 		"sass": "1.101.0",
 		"shx": "0.4.0",
 		"swc-plugin-coverage-instrument": "0.0.32",
