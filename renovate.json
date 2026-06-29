@@ -49,9 +49,9 @@
 			"allowedVersions": "<0.15"
 		},
 		{
-			"description": "monocart-reporter 2.12.x breaks Website CI (Playwright run exits 1 at the [MR] report step); see https://github.com/bible-on-site/bible-on-site/issues/1726",
-			"matchPackageNames": ["monocart-reporter"],
-			"allowedVersions": "<2.12.0"
+			"description": "@playwright/test 1.61.1 mis-transpiles .mjs files (esbuild emits CommonJS `exports` in ESM scope) -> Website E2E exits 1 at shared/tests-util/environment.mjs; see https://github.com/bible-on-site/bible-on-site/issues/1726",
+			"matchPackageNames": ["@playwright/test", "playwright", "playwright-core"],
+			"allowedVersions": "<1.61.1"
 		},
 		{
 			"description": "See https://github.com/bible-on-site/bible-on-site/issues/985",
