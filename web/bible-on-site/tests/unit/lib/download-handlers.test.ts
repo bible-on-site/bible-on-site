@@ -18,7 +18,7 @@ describe("download handlers", () => {
 
 	describe("setSeferDownloadHandler + getSeferDownloadHandler", () => {
 		it("roundtrip: set and get returns the same handler", () => {
-			const handler: SeferDownloadHandler = async () => [
+			const handler: SeferDownloadHandler = async (_ctx) => [
 				"pdf",
 				new Uint8Array([1]),
 			];
@@ -31,7 +31,7 @@ describe("download handlers", () => {
 		});
 
 		it("set to null after setting a handler clears it", () => {
-			const handler: SeferDownloadHandler = async () => [
+			const handler: SeferDownloadHandler = async (_ctx) => [
 				"pdf",
 				new Uint8Array([1]),
 			];

@@ -64,9 +64,17 @@ async fn generate_pdf_core(req: GeneratePdfRequest) -> Result<(Vec<u8>, String),
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fonts"));
 
+    let cover_hex = req
+        .cover_accent_hex
+        .clone()
+        .unwrap_or_else(|| "475569".to_string());
+
     let pdf_req = pdf::PdfRequest {
         sefer_name: sefer_name.clone(),
         perakim,
+        include_cover: req.include_cover,
+        include_toc: req.include_toc,
+        cover_accent_hex: cover_hex,
     };
 
     let buf = pdf::build_pdf(&pdf_req, &fonts_dir)

@@ -149,20 +149,25 @@ describe("downloadSefer", () => {
 	it('returns { error: "not_implemented" } when no handler set', async () => {
 		mockGetSeferDownloadHandler.mockReturnValue(null);
 
-		const result = await downloadSefer();
+		const result = await downloadSefer({
+			seferName: "בראשית",
+			perekIds: [1],
+		});
 
 		expect(result).toEqual({ error: "not_implemented" });
 	});
 
 	it("returns { ext, data } with base64 data when handler returns [ext, Uint8Array]", async () => {
 		const bin = new Uint8Array([1, 2, 3]);
-		mockGetSeferDownloadHandler.mockReturnValue((async () => [
-			"pdf",
-			bin,
-		]) as ReturnType<typeof getSeferDownloadHandler>);
+		const ctx = { seferName: "בראשית", perekIds: [1, 2] };
+		const handler = jest.fn(async () => ["pdf", bin] as const);
+		mockGetSeferDownloadHandler.mockReturnValue(
+			handler as ReturnType<typeof getSeferDownloadHandler>,
+		);
 
-		const result = await downloadSefer();
+		const result = await downloadSefer(ctx);
 
+		expect(handler).toHaveBeenCalledWith(ctx);
 		expect(result).toEqual({
 			ext: "pdf",
 			data: Buffer.from(bin).toString("base64"),
@@ -177,7 +182,10 @@ describe("downloadSefer", () => {
 			throw new Error("binary not found");
 		}) as unknown as ReturnType<typeof getSeferDownloadHandler>);
 
-		const result = await downloadSefer();
+		const result = await downloadSefer({
+			seferName: "בראשית",
+			perekIds: [1],
+		});
 
 		expect(result).toEqual({ error: "service_unavailable" });
 		expect(consoleSpy).toHaveBeenCalledWith(

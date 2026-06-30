@@ -7,12 +7,20 @@ pub enum ServiceError {
     InternalServerError(String),
     #[display("{_0}")]
     NotFound(String),
+    #[display("{_0}")]
+    BadRequest(String),
+    #[display("{_0}")]
+    Unauthorized(String),
 }
 
 pub const INTERNAL_SERVER_ERROR: &str = "Internal Server Error";
 pub const INTERNAL_SERVER_ERROR_STATUS_CODE: u16 = 500;
 pub const NOT_FOUND: &str = "Not Found";
 pub const NOT_FOUND_STATUS_CODE: u16 = 404;
+pub const BAD_REQUEST: &str = "Bad Request";
+pub const BAD_REQUEST_STATUS_CODE: u16 = 400;
+pub const UNAUTHORIZED: &str = "Unauthorized";
+pub const UNAUTHORIZED_STATUS_CODE: u16 = 401;
 
 impl ErrorExtensions for ServiceError {
     fn extend(&self) -> Error {
@@ -24,6 +32,14 @@ impl ErrorExtensions for ServiceError {
             ServiceError::NotFound(_) => {
                 e.set("code", "NOT_FOUND");
                 e.set("statusCode", NOT_FOUND_STATUS_CODE);
+            }
+            ServiceError::BadRequest(_) => {
+                e.set("code", "BAD_REQUEST");
+                e.set("statusCode", BAD_REQUEST_STATUS_CODE);
+            }
+            ServiceError::Unauthorized(_) => {
+                e.set("code", "UNAUTHORIZED");
+                e.set("statusCode", UNAUTHORIZED_STATUS_CODE);
             }
         })
     }
@@ -58,5 +74,15 @@ impl ServiceError {
         }
 
         error
+    }
+
+    pub fn bad_request(message: &str) -> Self {
+        tracing::warn!(BAD_REQUEST, %message);
+        Self::BadRequest(message.to_string())
+    }
+
+    pub fn unauthorized(message: &str) -> Self {
+        tracing::warn!(UNAUTHORIZED, %message);
+        Self::Unauthorized(message.to_string())
     }
 }

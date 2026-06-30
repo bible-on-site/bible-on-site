@@ -20,10 +20,14 @@ import { semanticPagesToPerekIds } from "./tanach-pdf";
 /** Shape expected by the bulletin service (camelCase — matches Rust serde config). */
 interface BulletinRequest {
 	perakimIds: number[];
+	seferName?: string;
 	includePerushim: boolean;
 	includeArticles: boolean;
 	articleIds: number[];
 	authorIds: number[];
+	includeCover?: boolean;
+	includeToc?: boolean;
+	coverAccentHex?: string;
 }
 
 function getBulletinLambdaName(): string | undefined {
@@ -154,12 +158,21 @@ function invokeBulletinBinary(request: BulletinRequest): Uint8Array {
 	return new Uint8Array(result);
 }
 
+export interface GeneratePdfViaBulletinOptions {
+	seferName?: string;
+	includeCover?: boolean;
+	includeToc?: boolean;
+	/** Hex without leading # (e.g. 8B0000) */
+	coverAccentHex?: string;
+}
+
 /**
  * Generate a PDF for the given perek IDs.
  * Routes to Lambda (production) or local binary (dev) based on BULLETIN_LAMBDA_NAME.
  */
 export async function generatePdfViaBulletin(
 	perekIds: number[],
+	options?: GeneratePdfViaBulletinOptions,
 ): Promise<Uint8Array> {
 	const request: BulletinRequest = {
 		perakimIds: perekIds,
@@ -168,6 +181,19 @@ export async function generatePdfViaBulletin(
 		articleIds: [],
 		authorIds: [],
 	};
+
+	if (options?.seferName != null) {
+		request.seferName = options.seferName;
+	}
+	if (options?.includeCover === true) {
+		request.includeCover = true;
+	}
+	if (options?.includeToc === true) {
+		request.includeToc = true;
+	}
+	if (options?.coverAccentHex != null && options.coverAccentHex.length > 0) {
+		request.coverAccentHex = options.coverAccentHex.replace(/^#/, "");
+	}
 
 	const lambdaName = getBulletinLambdaName();
 	if (lambdaName) {

@@ -5,7 +5,7 @@ description = "Bible on Site API"
 license-file = "../../license"
 repository = "https://github.com/bible-on-site/bible-on-site"
 publish = false
-version = "0.1.32"
+version = "0.1.33"
 edition = "2024"
 
 [dependencies]
@@ -34,6 +34,8 @@ sea-orm = { version = "1.1.20", default-features = false, features = [
     "runtime-actix-native-tls",
 ] }
 entities = { path = "./entities" }
+uuid = { version = "1.18.1", features = ["v4"] }
+chrono = { version = "0.4.42", default-features = false, features = ["clock"] }
 
 [dev-dependencies]
 cargo-llvm-cov = "0.8.7"

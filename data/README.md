@@ -56,6 +56,8 @@ Outputs will be written to `sefaria/.outputs/`.
 | `generate-tanah-view-sqlite` | Generate Tanah view as SQLite |
 | `mysql-populate` | Populate MySQL database with structure and test data |
 | `mysql-populate-data-only` | Populate MySQL database with test data only |
+| `mysql-apply-tanahpedia-families` | תנכפדיה בלבד: שמשון (אם קיים) + יעקב — בלי populate מלא |
+| `mysql-apply-tanahpedia-edge-lab` | 38 ערכי דמו למקרי קצה בעץ משפחה (מעבדה; UUIDs קבועים) |
 
 ## 929 Study Program Cycles
 
@@ -71,19 +73,33 @@ Each perek includes:
 
 The `mysql/db-populator` crate populates a MySQL database with Tanah structure and test data.
 
+The db-populator runs `tanahpedia_family_shimshon_data.sql` after Tanahpedia seeds whenever the **target** database has a `tanahpedia_person` row for entity name **שמשון** (from `tanahpedia_legacy_migration.sql` or from prod sync). This is **independent** of whether the legacy migration ran (e.g. when `PROD_DB_URL` is set and prod already has Tanahpedia). The script is idempotent (fixed UUIDs). It needs `source_citation` columns on `tanahpedia_person_union` / `tanahpedia_person_parent_child`. For an **existing** DB created from an older `tanahpedia_structure.sql`, run `tanahpedia_alter_source_citation.sql` once before populate.
+
+Before family demo SQL, the populator applies `tanahpedia_incremental_lookups.sql` (`INSERT IGNORE` for new lookup rows such as `FORBIDDEN_WITH_GENTILE`) so older DBs do not fail FK checks when running `cargo make mysql-apply-tanahpedia-families` only.
+
+After the יעקב script, `tanahpedia_place_eretz_yisrael_data.sql` adds the `eretz-yisrael` place entry (coordinates + category homepage `MAP` for `/tanahpedia/place`). Re-run `cargo make mysql-apply-tanahpedia-families` or full populate to apply it on an existing DB.
+
+After that, when `tanahpedia_family_jacob_data.sql` is present, the populator always applies the **יעקב** demo (Tanahpedia entry `יעקב`, parents, four wives including בלהה וזלפה as full wives per הכתב והקבלה בראשית לב כג, children, and brother עשו). Idempotent fixed UUIDs (`e200…` / `p200…` / `ea200…` — the script deletes only those before re-insert).
+
+**יעקב** does **not** come from `tanahpedia_legacy_migration.sql`; if the DB was filled without running the full data phase (e.g. prod sync only), run the family scripts explicitly (see below).
+
 ### Development database (tanah-dev)
 
 The development database is named **tanah-dev**. It is used by the website, admin, and data tooling when running locally. `DB_URL` in `data/.dev.env` (and in `web/bible-on-site/.dev.env`, `web/admin/.dev.env`) points to `tanah-dev`.
 
 ### Default populate flow (dev)
 
-To create and populate the dev database from structure and test data:
+To create and populate the **tanah-dev** database (structure, sefarim/perakim, perushim, tanahpedia seeds — **without** bundled demo authors/articles from `tanah_test_data.sql`):
 
 ```bash
 cargo make mysql-populate-dev
 ```
 
-This uses `DB_URL` from `data/.dev.env` and targets the `tanah-dev` database.
+This uses `DB_URL` from `data/.dev.env`. Use real articles via [sync from production](#sync-from-production-optional), or load the full SQL demo seed when needed:
+
+```bash
+cargo make mysql-populate-dev-with-test-articles
+```
 
 ### Populate Database (generic)
 
@@ -96,9 +112,17 @@ cargo make mysql-populate-dev
 
 # Data only (skip structure recreation)
 cargo make mysql-populate-data-only
+
+# תנכפדיה — רק דמו משפחות (שמשון אם יש איש, אז יעקב); לא דורס ישויות אחרות
+cargo make mysql-apply-tanahpedia-families
+
+# מעבדת מקרי קצה לעץ משפחה (אחרי populate/seed); ראו docs/plans/tanahpedia-family-edge-lab.md
+cargo make mysql-apply-tanahpedia-edge-lab
 ```
 
 The `DB_URL` environment variable should be in the format: `mysql://user:pass@host:port/database`
+
+**Production / DB שכבר מלא:** אחרי deploy או sync, אם **יעקב** חסר ברשימת אישים — `cargo make mysql-apply-tanahpedia-families` (עם `DB_URL` ליעד). אופציונלי: `--ensure-tanahpedia-seed` רק אם חסרים טבלאות lookup של תנכפדיה (עלול להיכשל אם הזרע כבר קיים).
 
 ### Sync from production (optional)
 

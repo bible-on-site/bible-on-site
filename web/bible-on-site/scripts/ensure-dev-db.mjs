@@ -1,8 +1,8 @@
 /**
- * Ensures tanah-dev MySQL database is populated before dev (perushim, articles, etc.).
- * Skips if parshan table already has rows. Runs cargo make mysql-populate-dev when needed.
- * If MySQL is not reachable, logs a warning and continues — dev server will start
- * but DB-dependent features (perushim, articles) will not work.
+ * Ensures tanah-dev is bootstrapped without bundled demo articles.
+ * - If tanah_sefer has no rows → run mysql-populate-dev (structure + sefarim/perushim, no tanah_test_data.sql).
+ * - Removes legacy demo authors (לדוגמא) unless KEEP_BUNDLED_TEST_ARTICLES=1.
+ * For production-like content: devops/setup-dev-env.mts sync-from-prod
  */
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -35,14 +35,14 @@ function parseDbUrl(url) {
 		port: Number.parseInt(u.port || "3306", 10),
 		user: u.username || "root",
 		password: u.password || "",
-		database: u.pathname?.slice(1) || "tanah-dev",
+		database: u.pathname?.slice(1)?.split("?")[0] || "tanah-dev",
 	};
 }
 
 /**
- * @returns {boolean|null} true = populated, false = needs populate, null = MySQL unreachable
+ * @returns {boolean|null} true = bootstrapped, false = need populate, null = unreachable
  */
-async function checkParshanHasRows(dbUrl) {
+async function checkTanahBootstrapped(dbUrl) {
 	const mysql = await import("mysql2/promise");
 	const opts = parseDbUrl(dbUrl);
 	try {
@@ -52,11 +52,10 @@ async function checkParshanHasRows(dbUrl) {
 		});
 		try {
 			const [rows] = await conn.execute(
-				"SELECT 1 FROM parshan LIMIT 1",
+				"SELECT 1 AS ok FROM tanah_sefer LIMIT 1",
 			);
 			return Array.isArray(rows) && rows.length > 0;
 		} catch (queryErr) {
-			// Table may not exist yet
 			const msg = String(queryErr?.message ?? queryErr);
 			if (
 				msg.includes("doesn't exist") ||
@@ -74,14 +73,68 @@ async function checkParshanHasRows(dbUrl) {
 			msg.includes("Unknown database") ||
 			msg.includes("Unknown Database")
 		) {
-			return false; // DB doesn't exist, need to populate
+			return false;
 		}
-		return null; // connection refused, etc.
+		return null;
+	}
+}
+
+async function removeBundledTestArticleSeed(dbUrl) {
+	if (process.env.KEEP_BUNDLED_TEST_ARTICLES === "1") {
+		return;
+	}
+	const mysql = await import("mysql2/promise");
+	const opts = parseDbUrl(dbUrl);
+	let conn;
+	try {
+		conn = await mysql.createConnection({
+			...opts,
+			connectTimeout: 5000,
+		});
+	} catch {
+		return;
+	}
+	try {
+		const [authors] = await conn.execute(
+			`SELECT id FROM tanah_author
+			 WHERE name LIKE '%לדוגמא%'
+			    OR name LIKE '%רב עם תיאור ארוך%'`,
+		);
+		if (!Array.isArray(authors) || authors.length === 0) {
+			return;
+		}
+		console.info(
+			"  ensure-dev-db: removing bundled demo authors/articles — set KEEP_BUNDLED_TEST_ARTICLES=1 to keep",
+		);
+		await conn.execute(
+			`DELETE ta FROM tanah_article ta
+			 INNER JOIN tanah_author auth ON ta.author_id = auth.id
+			 WHERE auth.name LIKE '%לדוגמא%'
+			    OR auth.name LIKE '%רב עם תיאור ארוך%'`,
+		);
+		await conn.execute(
+			`DELETE FROM tanah_author
+			 WHERE name LIKE '%לדוגמא%'
+			    OR name LIKE '%רב עם תיאור ארוך%'`,
+		);
+	} catch (e) {
+		const msg = String(e?.message ?? e);
+		if (
+			msg.includes("doesn't exist") ||
+			msg.includes("Unknown table")
+		) {
+			return;
+		}
+		throw e;
+	} finally {
+		await conn.end();
 	}
 }
 
 function runMysqlPopulate() {
-	console.info("Populating tanah-dev (structure + data + perushim)...");
+	console.info(
+		"Populating tanah-dev (structure + sefarim/perushim; no bundled demo articles)…",
+	);
 	const result = spawnSync("cargo", ["make", "mysql-populate-dev"], {
 		cwd: dataDir,
 		stdio: "inherit",
@@ -99,21 +152,21 @@ async function main() {
 		return;
 	}
 
-	const hasRows = await checkParshanHasRows(dbUrl);
-	if (hasRows === null) {
+	const bootstrapped = await checkTanahBootstrapped(dbUrl);
+	if (bootstrapped === null) {
 		console.warn(
 			"  ensure-dev-db: MySQL not reachable. Start MySQL and run: cd data && cargo make mysql-populate-dev",
 		);
 		return;
 	}
-	if (hasRows) {
-		return; // already populated
+	if (!bootstrapped) {
+		if (!runMysqlPopulate()) {
+			console.error("  ensure-dev-db: mysql-populate-dev failed");
+			process.exit(1);
+		}
 	}
 
-	if (!runMysqlPopulate()) {
-		console.error("  ensure-dev-db: mysql-populate-dev failed");
-		process.exit(1);
-	}
+	await removeBundledTestArticleSeed(dbUrl);
 }
 
 main().catch((err) => {
