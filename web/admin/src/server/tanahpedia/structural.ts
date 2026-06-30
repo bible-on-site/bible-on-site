@@ -47,7 +47,7 @@ function toNum(v: unknown): number | null {
 }
 
 function isDbEntityType(t: string): t is EntityType {
-	return ADMIN_CREATABLE_ENTITY_TYPES.includes(t as EntityType);
+	return (ADMIN_CREATABLE_ENTITY_TYPES as readonly string[]).includes(t);
 }
 
 async function getMainNameTypeId(): Promise<string> {
@@ -290,7 +290,7 @@ export const createEntityAndLinkToEntry = createServerFn({ method: "POST" })
 			data,
 	)
 	.handler(async ({ data }) => {
-		if (!ADMIN_CREATABLE_ENTITY_TYPES.includes(data.entityType)) {
+		if (!(ADMIN_CREATABLE_ENTITY_TYPES as readonly string[]).includes(data.entityType)) {
 			throw new Error("סוג יישות לא נתמך ליצירה");
 		}
 		const name = data.displayName.trim();
