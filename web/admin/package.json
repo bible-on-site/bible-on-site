@@ -1,6 +1,6 @@
 {
 	"name": "admin",
-	"version": "0.1.28",
+	"version": "0.1.29",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -73,7 +73,7 @@
 		"@types/react": "19.2.14",
 		"@types/react-dom": "19.2.3",
 		"@types/uuid": "11.0.0",
-		"@vitejs/plugin-react": "4.7.0",
+		"@vitejs/plugin-react": "6.0.3",
 		"@vitest/coverage-v8": "4.1.9",
 		"autoprefixer": "10.4.27",
 		"dotenv-cli": "7.4.4",
