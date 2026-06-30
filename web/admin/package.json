@@ -49,6 +49,7 @@
 		"@tiptap/pm": "2.27.2",
 		"@tiptap/react": "2.27.2",
 		"@tiptap/starter-kit": "2.27.2",
+		"dompurify": "^3.4.11",
 		"flowbite": "4.0.1",
 		"flowbite-react": "0.12.17",
 		"gematry": "1.0.2",

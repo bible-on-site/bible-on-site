@@ -1,3 +1,8 @@
+jest.mock("isomorphic-dompurify", () => ({
+	__esModule: true,
+	default: { sanitize: (html: string) => html },
+}));
+
 import {
 	toPreviewHtml,
 	truncatePreviewSnippet,
@@ -11,10 +16,11 @@ describe("tanahpedia/preview-format", () => {
 			expect(toPreviewHtml(html)).toBe("א<br>ב<br>ג");
 		});
 
-		it("normalizes styled headers and strips script leaving text", () => {
-			const html =
-				'<h2 style="color:red">כותרת</h2><script>x</script><p>טקסט</p>';
-			expect(toPreviewHtml(html)).toBe("<h2>כותרת</h2>xטקסט");
+		it("normalizes headers and flattens paragraphs to br", () => {
+			// Sanitization (script / attribute removal) is delegated to DOMPurify,
+			// mocked here as a passthrough and exercised against the real server in E2E.
+			const html = "<h2>כותרת</h2><p>טקסט</p>";
+			expect(toPreviewHtml(html)).toBe("<h2>כותרת</h2>טקסט");
 		});
 
 		it("skips empty headers and collapses duplicate br", () => {

@@ -5,6 +5,7 @@ import ListItem from "@tiptap/extension-list-item";
 import Placeholder from "@tiptap/extension-placeholder";
 import { type Editor, EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import DOMPurify from "dompurify";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorShortcutModal } from "./editor/EditorShortcutModal";
@@ -769,8 +770,10 @@ export function WysiwygEditor({
 			{mode === "preview" && (
 				<div
 					className="admin-prose border-t border-gray-100"
-					// biome-ignore lint/security/noDangerouslySetInnerHtml: admin preview of own HTML
-					dangerouslySetInnerHTML={{ __html: previewHtml || "<p></p>" }}
+					// biome-ignore lint/security/noDangerouslySetInnerHtml: DOMPurify-sanitized admin preview HTML
+					dangerouslySetInnerHTML={{
+						__html: DOMPurify.sanitize(previewHtml || "<p></p>"),
+					}}
 				/>
 			)}
 

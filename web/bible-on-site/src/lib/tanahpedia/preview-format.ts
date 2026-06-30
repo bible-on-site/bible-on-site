@@ -1,26 +1,47 @@
+import DOMPurify from "isomorphic-dompurify";
+
 /**
  * HTML → safe snippet for Tanahpedia hover preview API.
  */
 
+/** Tags retained in the final, rendered preview snippet. */
+const PREVIEW_OUTPUT_TAGS = ["h2", "h3", "h4", "br"];
+/** Structural tags we still need to transform below before the final allowlist. */
+const PREVIEW_INPUT_TAGS = ["p", "sup", "hr", ...PREVIEW_OUTPUT_TAGS];
+
 export function toPreviewHtml(html: string): string {
-	return (
-		html
-			.replace(/\\n/g, "")
-			.replace(/\r?\n/g, "")
-			.replace(/<sup[^>]*>.*?<\/sup>/gi, "")
-			.replace(/<hr\s*\/?>/gi, "")
-			.replace(/<(h[2-4])\s[^>]*>/gi, "<$1>")
-			.replace(/<h[2-4]>\s*<\/h[2-4]>/gi, "")
-			.replace(/<p[^>]*>(.*?)<\/p>/gi, "$1<br>")
-			.replace(/<(?!\/?(?:h[2-4]|br)\b)[^>]+>/gi, "")
-			.replace(/&nbsp;/g, " ")
-			.replace(/[ \t]+/g, " ")
-			.replace(/(<br\s*\/?\s*>\s*){2,}/gi, "<br>")
-			.replace(/<br\s*\/?\s*>(\s*<h[2-4]>)/gi, "$1")
-			.replace(/(<\/h[2-4]>)\s*<br\s*\/?\s*>/gi, "$1")
-			.replace(/^(\s|<br\s*\/?\s*>)+/, "")
-			.replace(/(\s|<br\s*\/?\s*>)+$/, "")
-	);
+	// Sanitize up-front with a vetted sanitizer so the cosmetic transforms below
+	// only ever operate on safe, normalized markup. This removes <script> (and
+	// its contents), event handlers and any disallowed tags/attributes, closing
+	// the XSS surface for this snippet which is rendered via dangerouslySetInnerHTML.
+	const safe = DOMPurify.sanitize(html, {
+		ALLOWED_TAGS: PREVIEW_INPUT_TAGS,
+		ALLOWED_ATTR: [],
+	});
+
+	const transformed = safe
+		.replace(/\\n/g, "")
+		.replace(/\r?\n/g, "")
+		.replace(/<sup>[\s\S]*?<\/sup>/gi, "")
+		.replace(/<hr\s*\/?>/gi, "")
+		.replace(/<h[2-4]>\s*<\/h[2-4]>/gi, "")
+		.replace(/<p>([\s\S]*?)<\/p>/gi, "$1<br>")
+		.replace(/&nbsp;/g, " ")
+		.replace(/[ \t]+/g, " ")
+		// Normalize every <br> variant to a canonical form first so the collapse
+		// and trim passes below stay linear (no nested quantifiers → no ReDoS).
+		.replace(/<br\s*\/?\s*>/gi, "<br>")
+		.replace(/(?:<br>\s*){2,}/gi, "<br>")
+		.replace(/<br>(\s*<h[2-4]>)/gi, "$1")
+		.replace(/(<\/h[2-4]>)\s*<br>/gi, "$1")
+		.replace(/^(?:\s|<br>)+/, "")
+		.replace(/(?:\s|<br>)+$/, "");
+
+	// Defensive final allowlist (API contract: this snippet is server-sanitized).
+	return DOMPurify.sanitize(transformed, {
+		ALLOWED_TAGS: PREVIEW_OUTPUT_TAGS,
+		ALLOWED_ATTR: [],
+	});
 }
 
 const ELLIPSIS = "…";
@@ -55,10 +76,9 @@ export function truncatePreviewSnippet(
 	if (cutIdx <= 0) return snippet;
 
 	let out = `${snippet.slice(0, cutIdx)}${ELLIPSIS}`;
-	const openH = out.match(/<h[2-4]>(?![\s\S]*<\/h[2-4]>)/i);
+	const openH = out.match(/<h([2-4])>(?![\s\S]*<\/h[2-4]>)/i);
 	if (openH) {
-		const tag = openH[0].replace("<", "</").replace(">", "");
-		out += `${tag}>`;
+		out += `</h${openH[1]}>`;
 	}
 	return out;
 }
