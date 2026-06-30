@@ -259,7 +259,7 @@ function SpouseInterpretationsCard({ edges }: { edges: PersonFamilySpouseEdge[] 
 			) : null}
 			{sorted.map((edge, i) => (
 				<div
-					key={`${edge.unionType}-${edge.unionOrder ?? "x"}-${i}`}
+					key={`${edge.unionType}-${edge.unionOrder ?? "x"}-${edge.sourceCitation ?? "nc"}`}
 					className={i === 0 ? styles.spouseOpinionFirst : styles.spouseOpinion}
 				>
 					<span className={styles.spouseOpinionTitle}>
