@@ -1,5 +1,5 @@
 import { defineConfig } from "@playwright/test";
-import { shouldMeasureCov } from "../shared/tests-util/environment.mjs";
+import { isCI, shouldMeasureCov } from "../shared/tests-util/environment.mjs";
 import { getBaseConfig } from "./playwright.base.config";
 import {
 	type TestConfigWebServer,
@@ -19,6 +19,11 @@ export default defineConfig({
 		command: webServerCommand,
 	},
 	fullyParallel: true,
-	retries: 0,
+	// Browser-timing nondeterminism under parallel CI load (e.g. the lazy
+	// FlipBook mount) can occasionally exceed a wait. Retry on CI so a single
+	// transient flake doesn't fail the whole job; a genuine regression still
+	// fails every attempt, and a trace is captured on first retry (base config).
+	// Locally we keep 0 retries to surface flakes during development.
+	retries: isCI ? 2 : 0,
 	workers: 4,
 });

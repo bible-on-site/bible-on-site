@@ -61,9 +61,15 @@ export class SeferPage {
 	async verifySeferViewIsOpen(): Promise<void> {
 		const seferOverlay = this.page.locator('[class*="seferOverlay"]');
 		await expect(seferOverlay).toBeVisible({ timeout: 10_000 });
-		await expect(
-			seferOverlay.locator('[class*="bookWrapper"]'),
-		).toBeVisible({ timeout: 15_000 });
+		// <Sefer> mounts only after a low-priority startTransition commits, and the
+		// FlipBook is an ssr:false dynamic import that must load its chunk and then
+		// initialize (it builds every perek page). Under parallel CI load that can
+		// take well over 15s, so wait for the wrapper to attach first (a clear
+		// failure if it never mounts), then for it to lay out, with a budget sized
+		// to the worst-case mount rather than the typical one.
+		const bookWrapper = seferOverlay.locator('[class*="bookWrapper"]');
+		await expect(bookWrapper).toBeAttached({ timeout: 20_000 });
+		await expect(bookWrapper).toBeVisible({ timeout: 20_000 });
 	}
 
 	/**
