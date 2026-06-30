@@ -1,3 +1,8 @@
+ci:
+  # biome-lint runs each web module's own locally-installed Biome; pre-commit.ci
+  # has no module node_modules, and each module's CI lint job is the
+  # authoritative remote gate, so skip it in the cloud and keep it local-only.
+  skip: [biome-lint]
 repos:
   - repo: "https://github.com/mxr/sync-pre-commit-deps"
     rev: v0.0.4
@@ -35,3 +40,9 @@ repos:
         language: python
         types: [markdown]
         additional_dependencies: ["md-dead-link-check==1.2.0"]
+      - id: biome-lint
+        name: biome-lint (per-module)
+        entry: node devops/precommit-biome.mjs
+        language: system
+        files: ^web/(bible-on-site|admin)/.*\.(ts|tsx|js|jsx|mjs|cjs)$
+        pass_filenames: true
