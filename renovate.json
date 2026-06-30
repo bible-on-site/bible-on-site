@@ -70,6 +70,21 @@
 			"matchManagers": ["github-actions"],
 			"matchPackageNames": ["macos"],
 			"allowedVersions": "<26"
+		},
+		{
+			"description": "vite 8 switches to the rolldown bundler, which fails the admin build on a direct eval in a dependency; see https://github.com/bible-on-site/bible-on-site/issues/1739",
+			"matchPackageNames": ["vite"],
+			"allowedVersions": "<8"
+		},
+		{
+			"description": "@vitejs/plugin-react 6 peer-requires vite ^8 (held); see https://github.com/bible-on-site/bible-on-site/issues/1739",
+			"matchPackageNames": ["@vitejs/plugin-react"],
+			"allowedVersions": "<6"
+		},
+		{
+			"description": "typescript 6 is a major jump that fails CI; held until a coordinated migration; see https://github.com/bible-on-site/bible-on-site/issues/1740",
+			"matchPackageNames": ["typescript"],
+			"allowedVersions": "<6"
 		}
 	],
 	"bumpVersion": "patch",
