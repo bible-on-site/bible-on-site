@@ -12,7 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Google.Apis.AndroidPublisher.v3" Version="1.74.0.4165" />
+    <PackageReference Include="Google.Apis.AndroidPublisher.v3" Version="1.75.0.4193" />
     <PackageReference Include="Nuke.Common" Version="10.1.0" />
   </ItemGroup>
 

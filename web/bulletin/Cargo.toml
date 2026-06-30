@@ -4,7 +4,7 @@ description = "Bible on Site PDF Bulletin Generator (AWS Lambda)"
 license-file = "../../license"
 repository = "https://github.com/bible-on-site/bible-on-site"
 publish = false
-version = "0.1.10"
+version = "0.1.11"
 edition = "2024"
 
 [lib]
@@ -21,7 +21,7 @@ lambda_http = "1.2"
 lambda_runtime = "1.2"
 
 # PDF generation via Typst engine (proper Hebrew text shaping via rustybuzz)
-typst-as-lib = { version = "0.15", default-features = false }
+typst-as-lib = { version = "0.16", default-features = false }
 typst-pdf = "0.14"
 
 # Database — shared layer from API
