@@ -85,6 +85,12 @@
 			"description": "typescript 6 is a major jump that fails CI; held until a coordinated migration; see https://github.com/bible-on-site/bible-on-site/issues/1740",
 			"matchPackageNames": ["typescript"],
 			"allowedVersions": "<6"
+		},
+		{
+			"description": "typst-as-lib 0.16 pulls typst-library 0.15 whose PagedDocument no longer implements Output, breaking the bulletin Rust build; see https://github.com/bible-on-site/bible-on-site/issues/1742",
+			"matchManagers": ["cargo"],
+			"matchPackageNames": ["typst-as-lib"],
+			"allowedVersions": "<0.16"
 		}
 	],
 	"bumpVersion": "patch",
