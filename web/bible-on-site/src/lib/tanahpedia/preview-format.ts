@@ -54,9 +54,6 @@ export function truncatePreviewSnippet(
 	snippet: string,
 	maxLen: number,
 ): string {
-	const textOnly = snippet.replace(/<[^>]+>/g, "");
-	if (textOnly.length <= maxLen) return snippet;
-
 	let textLen = 0;
 	let cutIdx = 0;
 	for (let i = 0; i < snippet.length; i++) {
@@ -68,11 +65,11 @@ export function truncatePreviewSnippet(
 			}
 		}
 		textLen++;
-		if (textLen >= maxLen) {
+		if (textLen === maxLen) {
 			cutIdx = i + 1;
-			break;
 		}
 	}
+	if (textLen <= maxLen || cutIdx <= 0) return snippet;
 	if (cutIdx <= 0) return snippet;
 
 	let out = `${snippet.slice(0, cutIdx)}${ELLIPSIS}`;

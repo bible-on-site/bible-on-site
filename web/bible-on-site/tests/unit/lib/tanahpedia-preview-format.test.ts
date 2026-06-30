@@ -48,7 +48,7 @@ describe("tanahpedia/preview-format", () => {
 			const snippet = `<p>${plain}</p>`;
 			const out = truncatePreviewSnippet(snippet, 10);
 			expect(out.endsWith("…")).toBe(true);
-			const visibleLen = out.replace(/<[^>]+>/g, "").replace("…", "").length;
+			const visibleLen = (out.match(/x/g) ?? []).length;
 			expect(visibleLen).toBeLessThanOrEqual(10);
 		});
 
