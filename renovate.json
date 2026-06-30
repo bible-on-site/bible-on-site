@@ -72,6 +72,11 @@
 			"allowedVersions": "<26"
 		},
 		{
+			"description": "TipTap 3 changes extension option typings and breaks the admin WysiwygEditor (built on TipTap 2.27); see https://github.com/bible-on-site/bible-on-site/issues/1745",
+			"matchPackageNames": ["/tiptap/"],
+			"allowedVersions": "<3"
+		},
+		{
 			"description": "vite 8 switches to the rolldown bundler, which fails the admin build on a direct eval in a dependency; see https://github.com/bible-on-site/bible-on-site/issues/1739",
 			"matchPackageNames": ["vite"],
 			"allowedVersions": "<8"
