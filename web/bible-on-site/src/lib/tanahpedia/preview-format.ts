@@ -70,7 +70,6 @@ export function truncatePreviewSnippet(
 		}
 	}
 	if (textLen <= maxLen || cutIdx <= 0) return snippet;
-	if (cutIdx <= 0) return snippet;
 
 	let out = `${snippet.slice(0, cutIdx)}${ELLIPSIS}`;
 	const openH = out.match(/<h([2-4])>(?![\s\S]*<\/h[2-4]>)/i);
