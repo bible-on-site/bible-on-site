@@ -29,10 +29,47 @@
 			"enabled": false
 		},
 		{
+			"description": "See https://github.com/bible-on-site/bible-on-site/issues/1634",
+			"matchPackageNames": ["next"],
+			"allowedVersions": "<16.2.0"
+		},
+		{
+			"description": "See https://github.com/bible-on-site/bible-on-site/issues/1636",
+			"matchPackageNames": ["sunrise-sunset-js"],
+			"allowedVersions": "<3.2.1"
+		},
+		{
+			"description": "See https://github.com/bible-on-site/bible-on-site/issues/1699",
+			"matchPackageNames": ["temporal-polyfill"],
+			"allowedVersions": "<1.0.0"
+		},
+		{
+			"description": "See https://github.com/bible-on-site/bible-on-site/issues/1700",
+			"matchPackageNames": ["typst-pdf"],
+			"allowedVersions": "<0.15"
+		},
+		{
+			"description": "@playwright/test 1.61.1 mis-transpiles .mjs files (esbuild emits CommonJS `exports` in ESM scope) -> Website E2E exits 1 at shared/tests-util/environment.mjs; see https://github.com/bible-on-site/bible-on-site/issues/1726",
+			"matchPackageNames": ["@playwright/test", "playwright", "playwright-core"],
+			"allowedVersions": "<1.61.1"
+		},
+		{
 			"description": "See https://github.com/bible-on-site/bible-on-site/issues/985",
 			"matchPackageNames": ["node"],
 			"matchDepTypes": ["engines"],
 			"allowedVersions": ">=24.11.1 <24.12.0"
+		},
+		{
+			"description": "Keep .nvmrc / Docker node in sync with the held engines range; see https://github.com/bible-on-site/bible-on-site/issues/985",
+			"matchManagers": ["nvm", "dockerfile", "docker-compose"],
+			"matchPackageNames": ["node"],
+			"allowedVersions": ">=24.11.1 <24.12.0"
+		},
+		{
+			"description": "macos-26 breaks the .NET MAUI iOS build (default Xcode 26); see https://github.com/bible-on-site/bible-on-site/issues/1627",
+			"matchManagers": ["github-actions"],
+			"matchPackageNames": ["macos"],
+			"allowedVersions": "<26"
 		}
 	],
 	"bumpVersion": "patch",

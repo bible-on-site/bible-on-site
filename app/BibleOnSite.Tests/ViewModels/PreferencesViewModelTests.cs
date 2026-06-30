@@ -298,4 +298,140 @@ public class PreferencesViewModelTests : IDisposable
     }
 
     #endregion
+
+    /// <summary>
+    /// Preferences + perushim-related paths using <see cref="PerushimNotesService.CreateForTesting"/> and a fake PAD service.
+    /// </summary>
+    public sealed class PreferencesViewModelPerushimTests : IDisposable
+    {
+        private readonly string _tempDir;
+        private readonly InMemoryPreferencesStorage _storage;
+        private readonly PreferencesService _service;
+        private readonly PreferencesViewModel _viewModel;
+
+        public PreferencesViewModelPerushimTests()
+        {
+            _tempDir = Path.Combine(Path.GetTempPath(), "BibleOnSiteTests_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(_tempDir);
+            var fakePad = new FakePadDeliveryService();
+            var perushim = PerushimNotesService.CreateForTesting(fakePad, _tempDir);
+            _storage = new InMemoryPreferencesStorage();
+            _service = PreferencesService.CreateForTesting(_storage);
+            _viewModel = new PreferencesViewModel(_service, perushim);
+        }
+
+        public void Dispose()
+        {
+            PreferencesService.ResetForTesting();
+            try
+            {
+                if (Directory.Exists(_tempDir))
+                {
+                    Directory.Delete(_tempDir, true);
+                }
+            }
+            catch
+            {
+                // best-effort cleanup of temp test directory
+            }
+        }
+
+        [Fact]
+        public void IsPerekToLoadTodays_ReturnsTrue_WhenPerekToLoadIsTodays()
+        {
+            _service.PerekToLoad = PerekToLoad.Todays;
+
+            _viewModel.IsPerekToLoadTodays.Should().BeTrue();
+        }
+
+        [Fact]
+        public void IsPerekToLoadTodays_SetTrue_SetsPerekToLoadToTodays()
+        {
+            _service.PerekToLoad = PerekToLoad.LastLearnt;
+
+            _viewModel.IsPerekToLoadTodays = true;
+
+            _service.PerekToLoad.Should().Be(PerekToLoad.Todays);
+            _viewModel.PerekToLoad.Should().Be(PerekToLoad.Todays);
+        }
+
+        [Fact]
+        public void IsPerekToLoadLastLearnt_ReturnsTrue_WhenPerekToLoadIsLastLearnt()
+        {
+            _service.PerekToLoad = PerekToLoad.LastLearnt;
+
+            _viewModel.IsPerekToLoadLastLearnt.Should().BeTrue();
+        }
+
+        [Fact]
+        public void IsPerekToLoadLastLearnt_SetTrue_SetsPerekToLoadToLastLearnt()
+        {
+            _service.PerekToLoad = PerekToLoad.Todays;
+
+            _viewModel.IsPerekToLoadLastLearnt = true;
+
+            _service.PerekToLoad.Should().Be(PerekToLoad.LastLearnt);
+            _viewModel.PerekToLoad.Should().Be(PerekToLoad.LastLearnt);
+        }
+
+        [Fact]
+        public void ShowPerushimSection_AlwaysReturnsTrue()
+        {
+            _viewModel.ShowPerushimSection.Should().BeTrue();
+        }
+
+        [Fact]
+        public void IsPerushimInstalled_ReturnsFalse_WhenNotesNotAvailable()
+        {
+            _viewModel.IsPerushimInstalled.Should().BeFalse();
+        }
+
+        [Fact]
+        public void ShowPerushimDownload_ReturnsTrue_WhenNotesNotAvailable()
+        {
+            _viewModel.ShowPerushimDownload.Should().BeTrue();
+        }
+
+        [Fact]
+        public void PerushimNotesStatusText_ReturnsNotInstalledText_WhenNotAvailable()
+        {
+            _viewModel.PerushimNotesStatusText.Should().Be("חבילת הפירושים לא הותקנה. הורידו כדי להפעיל פירושים.");
+        }
+
+        [Fact]
+        public void PerekToLoad_WhenSameValue_DoesNotFirePropertyChanged()
+        {
+            _viewModel.PerekToLoad = PerekToLoad.Todays;
+            var eventCount = 0;
+            _viewModel.PropertyChanged += (_, _) => eventCount++;
+
+            _viewModel.PerekToLoad = PerekToLoad.Todays;
+
+            eventCount.Should().Be(0);
+        }
+
+        [Fact]
+        public void LastLearntPerek_WhenSameValue_DoesNotFirePropertyChanged()
+        {
+            _viewModel.LastLearntPerek = 7;
+            var eventCount = 0;
+            _viewModel.PropertyChanged += (_, _) => eventCount++;
+
+            _viewModel.LastLearntPerek = 7;
+
+            eventCount.Should().Be(0);
+        }
+    }
+
+    private sealed class FakePadDeliveryService : IPadDeliveryService
+    {
+        public Task<string?> TryGetAssetPathAsync(string packName, CancellationToken cancellationToken = default) =>
+            Task.FromResult<string?>(null);
+
+        public Task<bool> FetchAsync(string packName, IProgress<double>? progress = null, CancellationToken cancellationToken = default) =>
+            Task.FromResult(false);
+
+        public Task<List<string>> GetDeliveryDiagnosticsAsync(string packName) =>
+            Task.FromResult(new List<string>());
+    }
 }

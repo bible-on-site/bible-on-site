@@ -1,0 +1,75 @@
+---
+description: "Pre-commit, commit process, branch management, and PR practices"
+applyTo: "**"
+---
+
+# Git Practices
+
+## Pre-commit
+
+- Config: `.pre-commit-config.yaml`; venv: `devops/.venv/`; tool config: `devops/pyproject.toml`.
+- Husky runs pre-commit via `.husky/pre-commit`.
+- Adding a hook: add to `.pre-commit-config.yaml`, then update `docs/devops/pre-commit.md`.
+
+## Clean Working Directory Before Commit
+
+**MANDATORY**: Before every commit, the agent MUST ensure the working directory is clean of unrelated changes:
+
+1. Run `git status` and `git diff` to inspect **all** modified, staged, and untracked files.
+2. For each change, decide: **is this change correct and acceptable?** (regardless of who wrote it or when it appeared).
+   - **If yes** — stage it and include it in the commit (or a separate commit if it's unrelated to the current task).
+   - **If no** — discard it (`git checkout -- <file>` for tracked files, `rm` for untracked artifacts).
+3. Never leave stray changes in the working directory. Every file must be either committed or discarded before proceeding to the next task.
+4. Untracked build artifacts, test outputs, and temporary files (e.g. `test_stdout.txt`, `*.zip`, extracted directories) should be removed unless they are intentional project assets.
+
+## Commit Process
+
+1. **Before commit**: Review staged changes for PII (AWS IDs, API keys, passwords, emails). Use `git diff --cached`.
+2. After `git commit`, pre-commit may auto-fix; check `git status`.
+3. If files were auto-fixed, stage and amend:
+   `git diff-tree --no-commit-id --name-only -r HEAD | xargs git add && git commit --amend --no-edit`
+4. Push only when the working tree is clean.
+
+**Agents**:
+- **MANDATORY**: After every `git commit`, you MUST run `git status` and inspect the output. If the working tree is not clean (pre-commit hooks often auto-fix files), stage all changed files and amend: `git diff-tree --no-commit-id --name-only -r HEAD | xargs git add && git commit --amend --no-edit`. Repeat until the working tree is clean.
+- When you make changes that should be committed, **you** commit and push—do not tell the user to run git commands.
+- **NEVER** tell the user to run commands. You execute all commands yourself using the shell tool. This includes git commands, AWS CLI, docker, npm scripts, and any other CLI operations.
+
+## Branch Management
+
+Before pushing, check if the branch already exists on remote (may be merged/deleted):
+
+```bash
+git ls-remote --heads origin <branch-name>
+```
+
+If it exists: check if merged; if merged, use a new branch name; if not, fetch and rebase before pushing.
+
+## Pre-Push: Merge from Master
+
+**MANDATORY before every push**, the agent MUST:
+
+1. Fetch and merge the latest `master` into the current branch:
+   ```bash
+   git fetch origin master
+   git merge origin/master
+   ```
+2. If there are merge conflicts, **resolve them immediately** — inspect each conflicting file, apply the correct resolution (preserving both sides where appropriate), stage the resolved files, and complete the merge commit.
+3. Only push after the merge is clean and the working tree has no conflicts or uncommitted changes.
+
+## Post-Push: Monitor CI
+
+**MANDATORY after every push**, the agent MUST:
+
+1. Wait briefly (10–20 seconds), then check the CI status of the pushed commit/branch:
+   ```bash
+   gh run list --branch <branch-name> --limit 3
+   ```
+2. If a run is in progress, poll periodically (every 30–60 seconds) until it completes or the user intervenes.
+3. If CI fails, inspect the failure (`gh run view <run-id> --log-failed`), diagnose the root cause, fix it locally, and push again (repeating the merge-from-master step).
+4. Report the final CI status to the user.
+
+## Pull Requests
+
+- Use a new branch per feature/fix. PR is created when publishing the branch.
+- Only @DoradSoft can merge unless explicitly delegated.

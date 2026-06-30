@@ -40,10 +40,7 @@ test("Hides perek breadcrumbs when toggling to sefer view", async ({
 
 	const seferOverlay = page.locator('[class*="seferOverlay"]');
 	await expect(seferOverlay).toBeVisible({ timeout: 10_000 });
-	const opacity = await seferOverlay.evaluate(
-		(el) => getComputedStyle(el).opacity,
-	);
-	expect(opacity).toBe("1");
+	await expect(seferOverlay).toHaveCSS("opacity", "1", { timeout: 5_000 });
 });
 
 test("Hides overlay after animation when toggling sefer view OFF", async ({

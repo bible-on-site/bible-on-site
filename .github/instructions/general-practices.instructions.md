@@ -1,0 +1,40 @@
+---
+description: "General principles, language policy, tool learning, and investigation practices"
+applyTo: "**"
+---
+
+# General Practices
+
+- **Do not hand off to the user.** The agent performs every step that can be performed. Forbidden: the phrase "(for you)" or "for you" in that sense; "you need to …"; "you should …"; "what you should do is …"; or any wording that assigns a remaining action to the user. Only state that the user must do something when they have explicitly asked to be informed, or when the agent cannot perform the action (e.g. token/permission/API limit).
+
+- **Prefer the latest stable version** of any toolset, framework, or package unless there is a specific compatibility concern.
+
+## Language Policy
+
+**No shell scripts (.sh, .bash) in this repository.**
+
+- **DevOps**: Node.js/TypeScript (`devops/`)
+- **Data processing**: Rust (`data/`)
+
+## Tool Learning (Agents/Copilot)
+
+1. Check `.github/tool-registry.md` for existing research.
+2. If missing/outdated: use Context7 (`resolve-library-id` → `get-library-docs`), official docs, or GitHub.
+3. Update the registry with tool name, version, date, and key learnings.
+4. Apply learnings.
+
+## Agent execution
+
+**Do not ask the user to execute commands or steps.** Run commands, builds, and runs yourself (e.g. terminal, build, run app). If something is blocked (e.g. app already running), document what to do in comments or a short note; do not assign the user to "close the app and run again."
+
+**Do not ask "next steps?" when intent is already clear.** If a next action is a direct continuation of the user's stated goal and does not conflict with constraints, execute it immediately and report progress.
+
+## Investigation
+
+Use **GitHub CLI (`gh`)** for GitHub-related issues:
+
+```bash
+gh run view <run-id> --log-failed
+gh run view <run-id> --json workflowName,event,conclusion
+gh api repos/<owner>/<repo>/commits/<sha>
+```

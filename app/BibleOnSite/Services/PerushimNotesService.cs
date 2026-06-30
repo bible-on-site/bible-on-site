@@ -136,7 +136,7 @@ public class PerushimNotesService
         if (_initialized)
             return;
 
-        var dbPath = Path.Combine(FileSystem.AppDataDirectory, NotesDbName);
+        var dbPath = Path.Combine(DataDirectory, NotesDbName);
 
         if (!File.Exists(dbPath))
         {
@@ -174,7 +174,7 @@ public class PerushimNotesService
     /// </summary>
     public async Task<bool> TryDownloadNotesAsync(IProgress<double>? progress = null)
     {
-        var dbPath = Path.Combine(FileSystem.AppDataDirectory, NotesDbName);
+        var dbPath = Path.Combine(DataDirectory, NotesDbName);
         if (File.Exists(dbPath))
         {
             await InitializeAsync();

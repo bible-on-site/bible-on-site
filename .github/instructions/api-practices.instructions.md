@@ -1,0 +1,33 @@
+---
+description: "Rust GraphQL API development and testing practices for web/api"
+applyTo: "web/api/**"
+---
+
+# API (web/api) Practices
+
+## Legacy Reference
+
+When asked to **inspire from legacy API** or reference the old API implementation, look at the `legacy-api/` directory in the repo root. This is an untracked directory containing the previous API codebase for reference.
+
+## Development
+
+Use **cargo-make** (`Makefile.toml`):
+
+| Task | Command |
+| ---- | ------- |
+| Run API | `cargo make run-api` |
+| E2E Tests | `cargo make test-e2e` |
+| E2E Coverage | `cargo make coverage-e2e` |
+| Lint | `cargo make lint` |
+| Clean | `cargo make clean` |
+| Build Docker | `cargo make package` |
+
+## Testing
+
+- E2E in `tests/e2e/` with Playwright. Use `DB_URL` or `.test.env`.
+- Populate test DB: `cd data && DB_URL="mysql://root:test_123@localhost:3306/tanah_test" cargo make mysql-populate`
+- MySQL CLI: `mysql -u root -ptest_123 tanah_test`
+
+## Structure
+
+- Entities: `entities/`; Services: `src/services/`; Resolvers: `src/resolvers/`; DTOs: `src/dtos/`.

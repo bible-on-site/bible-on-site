@@ -39,8 +39,8 @@ coverage:
         flags:
           - admin
       data:
-        # TODO: Increase target once data is covered by CI
-        target: 0%
+        target: auto
+        threshold: 1%
         flags:
           - data
     patch:

@@ -91,9 +91,11 @@ partial class Build
             }
             else if (Platform.Equals("Android", StringComparison.OrdinalIgnoreCase))
             {
-                // Android restore is handled by publish itself — .NET 10 infers a host RID
-                // during publish that doesn't match a RID-less restore, so a separate restore
-                // here would produce unusable assets.
+                DotNetRestore(s => s
+                    .SetProjectFile(MainProject)
+                    .SetProperty("TargetFramework", "net10.0-android")
+                    .SetProperty("RuntimeIdentifiers", "android-arm64")
+                    .SetRuntime("android-arm64"));
             }
             else if (Platform.Equals("iOS", StringComparison.OrdinalIgnoreCase))
             {
@@ -149,10 +151,9 @@ partial class Build
         var msbuildProperties = new Dictionary<string, object>
         {
             ["AndroidPackageFormat"] = "aab",
-            ["TargetFramework"] = "net10.0-android"
+            ["RuntimeIdentifiers"] = "android-arm64"
         };
 
-        // Add signing configuration if provided
         if (!string.IsNullOrEmpty(AndroidKeystore))
         {
             msbuildProperties["AndroidKeyStore"] = "true";
@@ -171,11 +172,13 @@ partial class Build
             .SetProject(MainProject)
             .SetConfiguration(Configuration)
             .SetFramework("net10.0-android")
-            .SetProperties(msbuildProperties));
+            .SetRuntime("android-arm64")
+            .SetProperties(msbuildProperties)
+            .EnableNoRestore());
 
         // Find and copy AAB to artifacts directory (MAUI doesn't respect --output for AAB)
         var binDir = MainProject.Parent / "bin" / Configuration / "net10.0-android";
-        var aabFiles = binDir.GlobFiles("**/*-Signed.aab");  // Only get signed AABs
+        var aabFiles = binDir.GlobFiles("**/*-Signed.aab");
 
         if (aabFiles.Count > 0)
         {

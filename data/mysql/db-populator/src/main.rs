@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use sqlx_core::connection::{ConnectOptions, Connection};
 use sqlx_core::raw_sql::raw_sql;
+use sqlx_core::sql_str::AssertSqlSafe;
 use sqlx_mysql::{MySqlConnectOptions, MySqlConnection};
 use std::path::Path;
 use std::str::FromStr;
@@ -134,6 +135,11 @@ async fn main() -> Result<()> {
         .map(|s| s.to_string())
         .unwrap_or_else(|| "tanah_test".to_string());
 
+    // Quote the database name as a MySQL identifier. A backtick inside an
+    // identifier is escaped by doubling it, preventing a name parsed from the
+    // connection URL from breaking out of the backtick-quoted context.
+    let database_ident = database_name.replace('`', "``");
+
     // First connect without specifying a database to create it if needed
     let options_no_db = options.clone().database("");
 
@@ -149,8 +155,8 @@ async fn main() -> Result<()> {
 
     // Handle --drop-only mode
     if cli.drop_only {
-        let drop_db_sql = format!("DROP DATABASE IF EXISTS `{}`", database_name);
-        raw_sql(&drop_db_sql)
+        let drop_db_sql = format!("DROP DATABASE IF EXISTS `{}`", database_ident);
+        raw_sql(AssertSqlSafe(drop_db_sql))
             .execute(&mut conn)
             .await
             .with_context(|| format!("Failed to drop database '{}'", database_name))?;
@@ -162,9 +168,9 @@ async fn main() -> Result<()> {
     // Create database if it doesn't exist
     let create_db_sql = format!(
         "CREATE DATABASE IF NOT EXISTS `{}` CHARACTER SET utf8mb3",
-        database_name
+        database_ident
     );
-    raw_sql(&create_db_sql)
+    raw_sql(AssertSqlSafe(create_db_sql))
         .execute(&mut conn)
         .await
         .with_context(|| format!("Failed to create database '{}'", database_name))?;
@@ -321,7 +327,7 @@ async fn execute_script(
 
     // Use raw_sql to execute the entire script at once
     // This handles MySQL comments and other DDL that prepared statements don't support
-    raw_sql(&script)
+    raw_sql(AssertSqlSafe(script))
         .execute(&mut *conn)
         .await
         .with_context(|| format!("Failed to execute {} script", script_type))?;
@@ -356,7 +362,7 @@ async fn execute_script_chunked(
             buf.push_str(line);
             buf.push('\n');
             if !buf.trim().is_empty() {
-                raw_sql(buf.trim())
+                raw_sql(AssertSqlSafe(buf.trim()))
                     .execute(&mut *conn)
                     .await
                     .with_context(|| {
@@ -376,7 +382,7 @@ async fn execute_script_chunked(
             buf.push_str(line);
             buf.push('\n');
             if !buf.trim().is_empty() {
-                raw_sql(buf.trim())
+                raw_sql(AssertSqlSafe(buf.trim()))
                     .execute(&mut *conn)
                     .await
                     .with_context(|| {
@@ -395,7 +401,7 @@ async fn execute_script_chunked(
         buf.push('\n');
     }
     if !buf.trim().is_empty() {
-        raw_sql(buf.trim())
+        raw_sql(AssertSqlSafe(buf.trim()))
             .execute(&mut *conn)
             .await
             .with_context(|| format!("Failed to execute {} final statement", script_type))?;

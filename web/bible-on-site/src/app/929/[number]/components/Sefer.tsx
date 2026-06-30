@@ -187,8 +187,15 @@ const Sefer = (props: {
 		getPerekSummariesBatch(idsToFetch).then(setBatchSummaries).catch(() => {});
 	}, [perekIds, perekObj.perekId]);
 
-	const contentPages = perakim.flatMap((perek, perekIdx) => [
-		<React.Fragment key={`perek-${perekIdx + 1}`}>
+	const contentPages = perakim.flatMap((perek, perekIdx) => {
+		// Prefer a stable perek id for keys; fall back to index only when the id
+		// isn't available, so React state stays attached to the right page even
+		// if the perakim order ever changes.
+		const perekKeyBase = perekIds?.[perekIdx] ?? `idx-${perekIdx + 1}`;
+		const perekKey = `perek-${perekKeyBase}`;
+		const blankKey = `blank-${perekKeyBase}`;
+		return [
+		<React.Fragment key={perekKey}>
 			<section className={styles.pageContentPage}>
 				<div className={styles.pageHeaderRight}>
 					<div className={styles.pageHeaderRow}>
@@ -242,7 +249,7 @@ const Sefer = (props: {
 				</div>
 			</section>
 		</React.Fragment>,
-	<React.Fragment key={`blank-${perekIdx + 1}`}>
+	<React.Fragment key={blankKey}>
 		<BlankPageContent
 			articles={perekIdx === currentPerekIdx ? articles : batchSummaries[String(perekIds?.[perekIdx] ?? 0)]?.articles}
 			perushim={perekIdx === currentPerekIdx ? perushim : batchSummaries[String(perekIds?.[perekIdx] ?? 0)]?.perushim}
@@ -251,7 +258,8 @@ const Sefer = (props: {
 			initialSlug={perekIds?.[perekIdx] === perekObj.perekId ? initialSlug : undefined}
 		/>
 	</React.Fragment>,
-	]);
+	];
+	});
 
 	// Total pages: cover + cover-interior + TOC + (perakim * 2) + backCover
 	const totalPages = 3 + perakim.length * 2 + 1;
