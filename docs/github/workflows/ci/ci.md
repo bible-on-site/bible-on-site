@@ -14,7 +14,7 @@
 ### 1. Setup & Detection
 - **Setup Environment Variables**: Extract Playwright versions, set env vars
 - **Determine Baseline Availability**: Check if master coverage artifacts exist (cross-workflow)
-  - Downloads and re-uploads master artifacts to make them available in current run
+  - Downloads and re-uploads master artifacts to make them available in current run (website, API, app, bulletin, **admin**)
 - **Determine Changes**: Per-module change detection (Website, API, App, Data)
 - **Build LCOV Docker Image**: Prepare coverage tooling
 
@@ -31,7 +31,7 @@ Each module CI runs only if: module changed OR CI files changed OR baseline unav
 
 ### 3. Cross Module CI
 - Restores coverage from module CIs (or master baseline if skipped)
-- Publishes coverage to Codecov (per-module flags)
+- Publishes coverage to Codecov (per-module flags: `website`, `api`, `app`, `bulletin`, `admin`, …)
 - Merges and publishes cross-module coverage to Codacy
 
 ### 4. Packaging (Master Only)

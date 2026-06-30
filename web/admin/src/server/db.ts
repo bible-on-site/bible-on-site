@@ -1,7 +1,7 @@
 import mysql from "mysql2/promise";
+import { resolveMysqlUrl } from "./db-config";
 
-const dbUrl =
-	process.env.DB_URL || "mysql://root:test_123@localhost:3306/tanah";
+const dbUrl = resolveMysqlUrl();
 
 // Parse the URL to extract connection parameters
 const url = new URL(dbUrl);

@@ -5,6 +5,7 @@ Encyclopedic layer for the Bible-on-site stack: entries, entities (person, place
 ## Contents
 
 - **[implementation-plan.md](./implementation-plan.md)** – Implementation plan (data layer, website, app, API, admin, future plans).
+- **[external-revision-api.md](./external-revision-api.md)** – API-first external-AI revision interface (`submitEntryRevision` mutation, triage query, auth).
 - **[tanachpedia.dbml](./tanachpedia.dbml)** – Canonical DBML schema for all `tanahpedia_*` tables.
 
 ## GitHub project and issues

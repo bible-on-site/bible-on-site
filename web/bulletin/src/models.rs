@@ -31,6 +31,18 @@ pub struct GeneratePdfRequest {
     /// If non-empty, limit articles to these author IDs.
     #[serde(default)]
     pub author_ids: Vec<i32>,
+
+    /// First page: styled cover with sefer title (full-sefer download).
+    #[serde(default)]
+    pub include_cover: bool,
+
+    /// After cover: TOC listing all perakim in this PDF.
+    #[serde(default)]
+    pub include_toc: bool,
+
+    /// Accent color for cover ornament (hex without `#`, e.g. `8B0000`).
+    #[serde(default)]
+    pub cover_accent_hex: Option<String>,
 }
 
 fn default_true() -> bool {

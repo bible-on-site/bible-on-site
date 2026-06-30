@@ -12,7 +12,8 @@ export default defineConfig({
 		coverage: {
 			provider: "v8",
 			reporter: ["text", "json", "lcov"],
-			reportsDirectory: "./.coverage",
+			// Aligns with tests/util/merge-coverage.mts (.coverage/unit/lcov.info)
+			reportsDirectory: "./.coverage/unit",
 		},
 	},
 });
