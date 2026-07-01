@@ -77,6 +77,11 @@
 			"allowedVersions": "<3"
 		},
 		{
+			"description": "nitro-nightly bumps repeatedly break the admin build and introduce CVEs; nitro is dictated by @tanstack/react-start, so disable direct bumps; see https://github.com/bible-on-site/bible-on-site/issues/1748",
+			"matchPackageNames": ["nitro", "nitro-nightly"],
+			"enabled": false
+		},
+		{
 			"description": "vite 8 switches to the rolldown bundler, which fails the admin build on a direct eval in a dependency; see https://github.com/bible-on-site/bible-on-site/issues/1739",
 			"matchPackageNames": ["vite"],
 			"allowedVersions": "<8"
