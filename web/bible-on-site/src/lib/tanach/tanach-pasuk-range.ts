@@ -6,7 +6,7 @@ export function normalizePasukSlugHyphens(slug: string): string {
 }
 
 function normalizeLettersToken(raw: string): string {
-	return raw.replace(/[""׳]/g, "'").trim();
+	return raw.replace(/["׳]/g, "'").trim();
 }
 
 /**

@@ -46,7 +46,7 @@ function perekIdsForVolume(
 
 function normalizePerekLetters(raw: string): string {
 	const first = raw.split(/[\s–—-]+/u)[0]?.trim() ?? raw;
-	return first.replace(/[""]/g, "'");
+	return first.replace(/"/g, "'");
 }
 
 let cachedNames: string[] | null = null;
