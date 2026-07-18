@@ -78,12 +78,12 @@ export async function generateMetadata({
 
 	if (!author) {
 		return {
-			title: "הרב לא נמצא | תנ״ך באתר",
+			title: "הרב לא נמצא | תנ\"ך באתר",
 		};
 	}
 
 	return {
-		title: `${author.name} | תנ״ך באתר`,
+		title: `${author.name} | תנ"ך באתר`,
 		description: author.details
 			? author.details.slice(0, 160)
 			: `מאמרים מאת ${author.name}`,

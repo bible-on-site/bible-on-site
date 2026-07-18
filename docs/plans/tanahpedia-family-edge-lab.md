@@ -23,7 +23,7 @@ node data/mysql/scripts/generate-tanahpedia-edge-lab.mjs
 | `tanahpedia_person_parent_child` עם `alt_group_id` שונה בין קבוצות | בלוק **«חלופי»** + שורת כרטיסים (כמו בהורים; מיושם גם ל**ילדים**) |
 | `relationship_type_id` → BIOLOGICAL / ADOPTIVE / STEP / FOSTER | שורת מטא «אב/אם · ביולוגי/אימוץ/חורג/אומנות» |
 | `union_type_id` → MARRIAGE / PILEGESH / FORBIDDEN_WITH_GENTILE / BANNED_INCEST / BETROTHAL | כרטיס זיווג או תתי־כותרות בכרטיס ממוזג |
-| שתי שורות union לאותו `entity` של בן/בת זוג: MARRIAGE + FORBIDDEN_WITH_GENTILE, אותו `union_order` | **מיזוג** לכרטיס אחד + טקסט דעות (הרמב״ם / רש״י…) |
+| שתי שורות union לאותו `entity` של בן/בת זוג: MARRIAGE + FORBIDDEN_WITH_GENTILE, אותו `union_order` | **מיזוג** לכרטיס אחד + טקסט דעות (הרמב"ם / רש"י…) |
 | `start_date`, `end_date`, `end_reason_id` ב־`tanahpedia_person_union` | סיומת מטא: התחלה / פטירה או גירושין + תאריך (פורמט YYYY-MM-DD) |
 | אחים: אותו `parent_id` לשני `child` | כרטיסי **אחים** לצד המוקד (חציית שמאל/ימין) |
 | ישות בלי `tanahpedia_entry_entity` | שם תצוגה בלבד, **ללא קישור** לערך |

@@ -72,7 +72,7 @@ export async function generateStaticParams({
 	}
 	for (const pair of perushPairs) {
 		if (pair.perekId === perekId) {
-			slugs.push({ slug: pair.perushName });
+			slugs.push({ slug: encodeURIComponent(pair.perushName) });
 		}
 	}
 
@@ -134,7 +134,7 @@ export async function generateMetadata({
 		const article = await getCachedArticle(id);
 		if (!article) {
 			return {
-				title: "מאמר לא נמצא | תנ״ך באתר",
+				title: "מאמר לא נמצא | תנ\"ך באתר",
 			};
 		}
 
@@ -146,7 +146,7 @@ export async function generateMetadata({
 			plainText = plainText.replace(/<[^>]*>/g, "");
 		} while (plainText !== prev);
 		return {
-			title: `${article.name} | ${article.authorName} | תנ״ך באתר`,
+			title: `${article.name} | ${article.authorName} | תנ"ך באתר`,
 			description: plainText
 				? plainText.slice(0, 160)
 				: `מאמר מאת ${article.authorName}`,
@@ -159,7 +159,7 @@ export async function generateMetadata({
 
 	if (!perush) {
 		return {
-			title: "פירוש לא נמצא | תנ״ך באתר",
+			title: "פירוש לא נמצא | תנ\"ך באתר",
 		};
 	}
 
@@ -167,27 +167,16 @@ export async function generateMetadata({
 	const sefer = getSeferByName(perekObj.sefer);
 
 	return {
-		title: `${perush.name} על ${sefer.name} ${perekObj.perekHeb} | תנ״ך באתר`,
+		title: `${perush.name} על ${sefer.name} ${perekObj.perekHeb} | תנ"ך באתר`,
 		description: `פירוש ${perush.name} מאת ${perush.parshanName} על ${sefer.name} פרק ${perekObj.perekHeb}`,
 	};
 }
 
 export default async function ArticlePage({
 	params,
-	searchParams,
 }: {
 	params: Promise<{ number: string; slug: string }>;
-	searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-	const sp = searchParams ? await searchParams : {};
-	const pasukScrollFromQuery = (() => {
-		const raw = sp.pasuk;
-		const s = Array.isArray(raw) ? raw[0] : raw;
-		if (s == null || s === "") return null;
-		const n = Number.parseInt(s, 10);
-		return Number.isFinite(n) && n > 0 ? n : null;
-	})();
-
 	const { number, slug: rawSlug } = await params;
 	const slug = decodeURIComponent(rawSlug);
 	const perekId = Number.parseInt(number, 10);
@@ -347,7 +336,7 @@ export default async function ArticlePage({
 	return (
 		<>
 			<ScrollToSlug targetId="perush-view" />
-			<ScrollToPerushPasukNote pasuk={pasukScrollFromQuery} />
+			<ScrollToPerushPasukNote />
 			<Suspense>
 				<SeferComposite
 					perekObj={perekObj}
@@ -435,18 +424,12 @@ export default async function ArticlePage({
 							const noteAnchorId = !prevSamePasuk
 								? `perush-pasuk-${note.pasuk}`
 								: undefined;
-							const isHighlighted =
-								pasukScrollFromQuery != null &&
-								note.pasuk === pasukScrollFromQuery;
 							return (
 								<div
 									key={`${note.pasuk}-${note.noteIdx}`}
 									id={noteAnchorId}
-									className={
-										isHighlighted
-											? `${styles.note} ${styles.noteHighlight}`
-											: styles.note
-									}
+									className={styles.note}
+									data-perush-pasuk={note.pasuk}
 								>
 									<span className={styles.notePasuk}>
 										פסוק {toLetters(note.pasuk)}:

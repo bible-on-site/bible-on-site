@@ -197,8 +197,8 @@ describe("[slug] page", () => {
 				{ articleId: 100, perekId: 6 },
 			]);
 			mockGetAllPerushPerekNamePairs.mockResolvedValue([
-				{ perekId: 5, perushName: "רש״י" },
-				{ perekId: 6, perushName: "רמב״ן" },
+				{ perekId: 5, perushName: 'רש"י' },
+				{ perekId: 6, perushName: 'רמב"ן' },
 			]);
 
 			const result = await generateStaticParams({
@@ -208,7 +208,7 @@ describe("[slug] page", () => {
 			expect(result).toEqual([
 				{ slug: "42" },
 				{ slug: "43" },
-				{ slug: "רש״י" },
+				{ slug: encodeURIComponent('רש"י') },
 			]);
 		});
 	});
@@ -222,7 +222,7 @@ describe("[slug] page", () => {
 			});
 
 			expect(result).toEqual({
-				title: "מאמר לדוגמא | הרב ישראל | תנ״ך באתר",
+				title: 'מאמר לדוגמא | הרב ישראל | תנ"ך באתר',
 				description: "תקציר המאמר",
 			});
 		});
@@ -277,7 +277,7 @@ describe("[slug] page", () => {
 			});
 
 			expect(result).toEqual({
-				title: "מאמר לא נמצא | תנ״ך באתר",
+				title: 'מאמר לא נמצא | תנ"ך באתר',
 			});
 		});
 
@@ -305,7 +305,7 @@ describe("[slug] page", () => {
 				],
 			};
 			mockGetPerushimByPerekId.mockResolvedValue([
-				{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 10 },
+				{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 10 },
 			]);
 			mockGetPerekByPerekId.mockReturnValue(perek);
 			mockGetSeferByName.mockReturnValue({
@@ -319,11 +319,11 @@ describe("[slug] page", () => {
 			});
 
 			const result = await generateMetadata({
-				params: Promise.resolve({ number: "5", slug: "רש״י" }),
+				params: Promise.resolve({ number: "5", slug: 'רש"י' }),
 			});
 
-			expect(result.title).toContain("רש״י");
-			expect(result.title).toContain("תנ״ך באתר");
+			expect(result.title).toContain('רש"י');
+			expect(result.title).toContain('תנ"ך באתר');
 		});
 
 		it("returns not-found metadata when perush name not found", async () => {
@@ -333,7 +333,7 @@ describe("[slug] page", () => {
 				params: Promise.resolve({ number: "5", slug: "unknown" }),
 			});
 
-			expect(result).toEqual({ title: "פירוש לא נמצא | תנ״ך באתר" });
+			expect(result).toEqual({ title: 'פירוש לא נמצא | תנ"ך באתר' });
 		});
 	});
 
@@ -493,39 +493,39 @@ describe("[slug] page", () => {
 		it("renders perush view when slug is non-numeric", async () => {
 			const perush = {
 				id: 1,
-				name: "רש״י",
-				parshanName: "רש״י",
+				name: 'רש"י',
+				parshanName: 'רש"י',
 				noteCount: 10,
 			};
 			mockGetPerushimByPerekId.mockResolvedValue([perush]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
-				name: "רש״י",
-				parshanName: "רש״י",
+				name: 'רש"י',
+				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
 			});
 
 			const jsx = await ArticlePage({
-				params: Promise.resolve({ number: "5", slug: "רש״י" }),
+				params: Promise.resolve({ number: "5", slug: 'רש"י' }),
 			});
 			render(jsx);
 
-			expect(screen.getAllByText("רש״י").length).toBeGreaterThanOrEqual(1);
+			expect(screen.getAllByText('רש"י').length).toBeGreaterThanOrEqual(1);
 			expect(screen.getByText("חזרה לפרק →")).toBeTruthy();
 		});
 
-		it("highlights perush notes matching the pasuk query", async () => {
+		it("marks perush notes with pasuk data for client-side deep-link highlighting", async () => {
 			const perush = {
 				id: 1,
-				name: "רש״י",
-				parshanName: "רש״י",
+				name: 'רש"י',
+				parshanName: 'רש"י',
 				noteCount: 10,
 			};
 			mockGetPerushimByPerekId.mockResolvedValue([perush]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
-				name: "רש״י",
-				parshanName: "רש״י",
+				name: 'רש"י',
+				parshanName: 'רש"י',
 				notes: [
 					{ pasuk: 1, noteIdx: 0, noteContent: "<p>ראשון</p>" },
 					{ pasuk: 2, noteIdx: 0, noteContent: "<p>שני</p>" },
@@ -534,40 +534,18 @@ describe("[slug] page", () => {
 			});
 
 			const jsx = await ArticlePage({
-				params: Promise.resolve({ number: "5", slug: "רש״י" }),
-				searchParams: Promise.resolve({ pasuk: ["2"] }),
+				params: Promise.resolve({ number: "5", slug: 'רש"י' }),
 			});
 			const { container } = render(jsx);
 
 			const firstNote = container.querySelector("#perush-pasuk-1");
 			const secondNote = container.querySelector("#perush-pasuk-2");
-			const highlightedNotes = container.querySelectorAll(".noteHighlight");
-			expect(firstNote?.className).not.toContain("noteHighlight");
-			expect(secondNote?.className).toContain("noteHighlight");
-			expect(highlightedNotes).toHaveLength(2);
-		});
-
-		it("does not highlight perush notes when the pasuk query is invalid", async () => {
-			const perush = {
-				id: 1,
-				name: "רש״י",
-				parshanName: "רש״י",
-				noteCount: 10,
-			};
-			mockGetPerushimByPerekId.mockResolvedValue([perush]);
-			mockGetPerushDetail.mockResolvedValue({
-				id: 1,
-				name: "רש״י",
-				parshanName: "רש״י",
-				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>ראשון</p>" }],
-			});
-
-			const jsx = await ArticlePage({
-				params: Promise.resolve({ number: "5", slug: "רש״י" }),
-				searchParams: Promise.resolve({ pasuk: "0" }),
-			});
-			const { container } = render(jsx);
-
+			const secondPasukNotes = container.querySelectorAll(
+				'[data-perush-pasuk="2"]',
+			);
+			expect(firstNote?.getAttribute("data-perush-pasuk")).toBe("1");
+			expect(secondNote?.getAttribute("data-perush-pasuk")).toBe("2");
+			expect(secondPasukNotes).toHaveLength(2);
 			expect(container.querySelector(".noteHighlight")).toBeNull();
 		});
 
@@ -613,13 +591,13 @@ describe("[slug] page", () => {
 		it("calls notFound when perushDetail is null", async () => {
 			const { notFound } = jest.requireMock("next/navigation");
 			mockGetPerushimByPerekId.mockResolvedValue([
-				{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 10 },
+				{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 10 },
 			]);
 			mockGetPerushDetail.mockResolvedValue(null);
 
 			await expect(
 				ArticlePage({
-					params: Promise.resolve({ number: "5", slug: "רש״י" }),
+					params: Promise.resolve({ number: "5", slug: 'רש"י' }),
 				}),
 			).rejects.toThrow("NEXT_NOT_FOUND");
 
@@ -629,17 +607,17 @@ describe("[slug] page", () => {
 		it("renders perush view with all segment types", async () => {
 			mockGetPerekByPerekId.mockReturnValue(allSegmentTypesPerek);
 			mockGetPerushimByPerekId.mockResolvedValue([
-				{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 5 },
+				{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 5 },
 			]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
-				name: "רש״י",
-				parshanName: "רש״י",
+				name: 'רש"י',
+				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "note" }],
 			});
 
 			const jsx = await ArticlePage({
-				params: Promise.resolve({ number: "5", slug: "רש״י" }),
+				params: Promise.resolve({ number: "5", slug: 'רש"י' }),
 			});
 			const { container } = render(jsx);
 
@@ -661,24 +639,24 @@ describe("[slug] page", () => {
 
 		it("passes initialSlug to SeferComposite for perush view", async () => {
 			mockGetPerushimByPerekId.mockResolvedValue([
-				{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 10 },
+				{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 10 },
 			]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
-				name: "רש״י",
-				parshanName: "רש״י",
+				name: 'רש"י',
+				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
 			});
 
 			const jsx = await ArticlePage({
-				params: Promise.resolve({ number: "5", slug: "רש״י" }),
+				params: Promise.resolve({ number: "5", slug: 'רש"י' }),
 			});
 			const { container } = render(jsx);
 
 			const seferComposite = container.querySelector(
 				"[data-testid='sefer-composite']",
 			);
-			expect(seferComposite?.getAttribute("data-initial-slug")).toBe("רש״י");
+			expect(seferComposite?.getAttribute("data-initial-slug")).toBe('רש"י');
 		});
 
 		it("renders article-view section with correct id for scroll target", async () => {
@@ -693,17 +671,17 @@ describe("[slug] page", () => {
 
 		it("renders perush-view section with correct id for scroll target", async () => {
 			mockGetPerushimByPerekId.mockResolvedValue([
-				{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 10 },
+				{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 10 },
 			]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
-				name: "רש״י",
-				parshanName: "רש״י",
+				name: 'רש"י',
+				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
 			});
 
 			const jsx = await ArticlePage({
-				params: Promise.resolve({ number: "5", slug: "רש״י" }),
+				params: Promise.resolve({ number: "5", slug: 'רש"י' }),
 			});
 			const { container } = render(jsx);
 

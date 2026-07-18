@@ -407,6 +407,7 @@ type RelatedRow = {
 	displayName: string;
 	entryUniqueName: string | null;
 	entryTitle: string | null;
+	relatedSex?: string | null;
 };
 
 function mapRelated(r: RelatedRow): PersonFamilyRelatedPerson {
@@ -416,6 +417,7 @@ function mapRelated(r: RelatedRow): PersonFamilyRelatedPerson {
 		displayName: r.displayName,
 		entryUniqueName: r.entryUniqueName,
 		entryTitle: r.entryTitle,
+		sex: r.relatedSex ?? null,
 	};
 }
 
@@ -454,7 +456,9 @@ export async function getPersonFamilySummary(
 			ppc.source_citation AS sourceCitation,
 			parent_p.id AS relatedPersonId, ${pe}.id AS relatedEntityId,
 			${pe}.name AS displayName,
-			${uqP} AS entryUniqueName, ${tqP} AS entryTitle
+			${uqP} AS entryUniqueName, ${tqP} AS entryTitle,
+			(SELECT sx.sex FROM tanahpedia_person_sex sx
+			 WHERE sx.person_id = parent_p.id AND sx.alt_group_id IS NULL LIMIT 1) AS relatedSex
 		FROM tanahpedia_person_parent_child ppc
 		INNER JOIN tanahpedia_person parent_p ON parent_p.id = ppc.parent_id
 		INNER JOIN tanahpedia_entity ${pe} ON ${pe}.id = parent_p.entity_id
@@ -464,14 +468,26 @@ export async function getPersonFamilySummary(
 
 	const childSql = `SELECT ppc.alt_group_id AS altGroupId,
 			pr.name AS parentRole, pct.name AS relationshipType,
+			ppc.source_citation AS sourceCitation,
 			child_p.id AS relatedPersonId, ${ce}.id AS relatedEntityId,
 			${ce}.name AS displayName,
-			${uqC} AS entryUniqueName, ${tqC} AS entryTitle
+			${uqC} AS entryUniqueName, ${tqC} AS entryTitle,
+			(SELECT sx.sex FROM tanahpedia_person_sex sx
+			 WHERE sx.person_id = child_p.id AND sx.alt_group_id IS NULL LIMIT 1) AS relatedSex,
+			co_e.id AS coParentEntityId,
+			co_e.name AS coParentDisplayName,
+			(SELECT MIN(u2.union_order) FROM tanahpedia_person_union u2
+			 WHERE (u2.person1_id = ? AND u2.person2_id = ppc_co.parent_id)
+			    OR (u2.person2_id = ? AND u2.person1_id = ppc_co.parent_id)) AS coParentUnionOrder
 		FROM tanahpedia_person_parent_child ppc
 		INNER JOIN tanahpedia_person child_p ON child_p.id = ppc.child_id
 		INNER JOIN tanahpedia_entity ${ce} ON ${ce}.id = child_p.entity_id
 		INNER JOIN tanahpedia_lookup_parent_role pr ON pr.id = ppc.parent_role_id
 		INNER JOIN tanahpedia_lookup_parent_child_type pct ON pct.id = ppc.relationship_type_id
+		LEFT JOIN tanahpedia_person_parent_child ppc_co
+			ON ppc_co.child_id = ppc.child_id AND ppc_co.parent_id <> ppc.parent_id
+		LEFT JOIN tanahpedia_person co_p ON co_p.id = ppc_co.parent_id
+		LEFT JOIN tanahpedia_entity co_e ON co_e.id = co_p.entity_id
 		WHERE ppc.parent_id = ?`;
 
 	const spouseSql = `SELECT u.alt_group_id AS altGroupId, ut.name AS unionType,
@@ -482,7 +498,9 @@ export async function getPersonFamilySummary(
 			u.end_date AS unionEndDate,
 			op.id AS relatedPersonId, ${oe}.id AS relatedEntityId,
 			${oe}.name AS displayName,
-			${uqO} AS entryUniqueName, ${tqO} AS entryTitle
+			${uqO} AS entryUniqueName, ${tqO} AS entryTitle,
+			(SELECT sx.sex FROM tanahpedia_person_sex sx
+			 WHERE sx.person_id = op.id AND sx.alt_group_id IS NULL LIMIT 1) AS relatedSex
 		FROM tanahpedia_person_union u
 		INNER JOIN tanahpedia_lookup_union_type ut ON ut.id = u.union_type_id
 		LEFT JOIN tanahpedia_lookup_union_end_reason uer ON uer.id = u.end_reason_id
@@ -498,7 +516,12 @@ export async function getPersonFamilySummary(
 			 WHERE ee2.entity_id = other_e.id ORDER BY ent.title LIMIT 1) AS entryUniqueName,
 			(SELECT ent.title FROM tanahpedia_entry_entity ee2
 			 INNER JOIN tanahpedia_entry ent ON ent.id = ee2.entry_id
-			 WHERE ee2.entity_id = other_e.id ORDER BY ent.title LIMIT 1) AS entryTitle
+			 WHERE ee2.entity_id = other_e.id ORDER BY ent.title LIMIT 1) AS entryTitle,
+			(SELECT sx.sex FROM tanahpedia_person_sex sx
+			 WHERE sx.person_id = other_p.id AND sx.alt_group_id IS NULL LIMIT 1) AS relatedSex,
+			(SELECT MIN(bd.birth_date) FROM tanahpedia_person_birth_date bd
+			 WHERE bd.person_id = other_p.id AND bd.alt_group_id IS NULL) AS relatedBirthDate,
+			other_edge.source_citation AS siblingSourceCitation
 		FROM tanahpedia_person_parent_child my_edge
 		INNER JOIN tanahpedia_person_parent_child other_edge
 		  ON other_edge.parent_id = my_edge.parent_id
@@ -507,7 +530,12 @@ export async function getPersonFamilySummary(
 		INNER JOIN tanahpedia_entity other_e ON other_e.id = other_p.entity_id
 		WHERE my_edge.child_id = ? AND other_p.id <> ?`;
 
-	const [parentRows, childRows, spouseRows, siblingRows] = await Promise.all([
+	const focalBirthSql = `SELECT MIN(birth_date) AS focalBirthDate
+		FROM tanahpedia_person_birth_date
+		WHERE person_id = ? AND alt_group_id IS NULL`;
+
+	const [parentRows, childRows, spouseRows, siblingRows, focalBirthRows] =
+		await Promise.all([
 		query<
 			RelatedRow & {
 				altGroupId: string | null;
@@ -522,8 +550,11 @@ export async function getPersonFamilySummary(
 				parentRole: string;
 				relationshipType: string;
 				sourceCitation: string | null;
+				coParentEntityId: string | null;
+				coParentDisplayName: string | null;
+				coParentUnionOrder: number | null;
 			}
-		>(childSql, [personId]),
+		>(childSql, [personId, personId, personId]),
 		query<
 			RelatedRow & {
 				altGroupId: string | null;
@@ -533,10 +564,25 @@ export async function getPersonFamilySummary(
 				unionEndReason: string | null;
 				unionStartDate: number | null;
 				unionEndDate: number | null;
+				relatedSex: string | null;
 			}
 		>(spouseSql, [personId, personId, personId]),
-		query<RelatedRow>(siblingSql, [personId, personId]),
+		query<
+			RelatedRow & {
+				relatedBirthDate: number | string | null;
+				siblingSourceCitation: string | null;
+			}
+		>(siblingSql, [personId, personId]),
+		query<{ focalBirthDate: number | string | null }>(focalBirthSql, [
+			personId,
+		]),
 	]);
+
+	const rawFocalBd = focalBirthRows[0]?.focalBirthDate;
+	const focalBirthYyyymmdd =
+		rawFocalBd != null && rawFocalBd !== ""
+			? Number(rawFocalBd)
+			: null;
 
 	const parents: PersonFamilyParentEdge[] = parentRows.map((r) => ({
 		related: mapRelated(r),
@@ -554,9 +600,16 @@ export async function getPersonFamilySummary(
 			relationshipType: r.relationshipType,
 			altGroupId: r.altGroupId,
 			sourceCitation: r.sourceCitation,
+			coParentEntityId: r.coParentEntityId ?? null,
+			coParentDisplayName: r.coParentDisplayName ?? null,
+			coParentUnionOrder:
+				r.coParentUnionOrder != null ? Number(r.coParentUnionOrder) : null,
 		};
 		const dedupeKey = `${edge.related.entityId}|${edge.relationshipType}|${edge.parentRole}|${edge.altGroupId ?? ""}`;
-		if (!childDedupe.has(dedupeKey)) {
+		const prev = childDedupe.get(dedupeKey);
+		if (!prev) {
+			childDedupe.set(dedupeKey, edge);
+		} else if (!prev.coParentEntityId && edge.coParentEntityId) {
 			childDedupe.set(dedupeKey, edge);
 		}
 	}
@@ -576,7 +629,20 @@ export async function getPersonFamilySummary(
 	const sibDedupe = new Map<string, PersonFamilyRelatedPerson>();
 	for (const r of siblingRows) {
 		const rel = mapRelated(r);
-		if (!sibDedupe.has(rel.entityId)) sibDedupe.set(rel.entityId, rel);
+		const bd = r.relatedBirthDate;
+		rel.birthDateYyyymmdd =
+			bd != null && bd !== "" ? Number(bd) : null;
+		const cite =
+			r.siblingSourceCitation != null && String(r.siblingSourceCitation).trim() !== ""
+				? String(r.siblingSourceCitation).trim()
+				: null;
+		const prev = sibDedupe.get(rel.entityId);
+		if (!prev) {
+			if (cite) rel.sourceCitation = cite;
+			sibDedupe.set(rel.entityId, rel);
+		} else {
+			if (cite && !prev.sourceCitation) prev.sourceCitation = cite;
+		}
 	}
 	const siblings = [...sibDedupe.values()].sort((a, b) =>
 		a.displayName.localeCompare(b.displayName, "he"),
@@ -594,6 +660,9 @@ export async function getPersonFamilySummary(
 		focalEntityId: entityId,
 		focalDisplayName,
 		focalSex,
+		focalBirthYyyymmdd: Number.isFinite(focalBirthYyyymmdd)
+			? focalBirthYyyymmdd
+			: null,
 		parents,
 		children,
 		spouses,
@@ -604,7 +673,7 @@ export async function getPersonFamilySummary(
 export async function getCategoryCounts(): Promise<
 	Record<CategoryKey, number>
 > {
-	const [entityRows, roleRows, animalRows] = await Promise.all([
+	const [entityRows, roleRows, animalRows, placeRowCountRows] = await Promise.all([
 		query<{ entityType: EntityType; cnt: number }>(
 			`SELECT e.entity_type AS entityType, COUNT(DISTINCT ee.entry_id) AS cnt
 			 FROM tanahpedia_entry_entity ee
@@ -635,6 +704,7 @@ export async function getCategoryCounts(): Promise<
 			 JOIN tanahpedia_entry_entity ee ON ee.entity_id = a.entity_id
 			 GROUP BY ap.purity`,
 		),
+		query<{ c: number }>("SELECT COUNT(*) AS c FROM tanahpedia_place"),
 	]);
 	const counts = {} as Record<CategoryKey, number>;
 	for (const et of ENTITY_TYPES) counts[et] = 0;
@@ -651,6 +721,9 @@ export async function getCategoryCounts(): Promise<
 		counts[row.role as CategoryKey] = Number(row.cnt);
 	for (const row of animalRows)
 		counts[row.cat as CategoryKey] = Number(row.cnt);
+	/* מקומות: אם אין ערך מקושר לישות PLACE אך קיימות שורות ב־tanahpedia_place (דמו / אכלוס חלקי), אל נציג 0 */
+	const placeRows = Number(placeRowCountRows[0]?.c ?? 0);
+	if (counts.PLACE === 0 && placeRows > 0) counts.PLACE = placeRows;
 	return counts;
 }
 

@@ -44,7 +44,7 @@ public static class HebrewDateHelper
         {
             var perek = kvp.Value;
             // Check if the perek's HebDate contains this date
-            // HebDate is stored as formatted string like "כ״ח שבט תשפ״ו"
+            // HebDate is stored as formatted string like "כ"ח שבט תשפ"ו"
             // We need to compare using the raw database date
             if (perek.HebDateNumeric == hebDateNum)
             {

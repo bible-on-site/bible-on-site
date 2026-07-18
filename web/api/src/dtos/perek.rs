@@ -24,7 +24,7 @@ fn number_to_hebrew(n: i32) -> String {
         result.push_str(hundreds[h]);
     }
 
-    // Handle special cases: 15 = ט״ו, 16 = ט״ז
+    // Handle special cases: 15 = ט"ו, 16 = ט"ז
     if t == 1 && o == 5 {
         result.push_str("טו");
     } else if t == 1 && o == 6 {
@@ -41,7 +41,7 @@ fn number_to_hebrew(n: i32) -> String {
     add_gershayim(&result)
 }
 
-/// Add gershayim (״) before the last character, or geresh (') for single character
+/// Add gershayim (") before the last character, or geresh (') for single character
 fn add_gershayim(s: &str) -> String {
     let chars: Vec<char> = s.chars().collect();
     if chars.is_empty() {
@@ -51,7 +51,7 @@ fn add_gershayim(s: &str) -> String {
         format!("{}'", s)
     } else {
         let (before_last, last) = s.char_indices().last().map(|(i, c)| (&s[..i], c)).unwrap();
-        format!("{}״{}", before_last, last)
+        format!("{}\"{}", before_last, last)
     }
 }
 
@@ -190,19 +190,19 @@ mod tests {
         assert_eq!(number_to_hebrew(1), "א'");
         assert_eq!(number_to_hebrew(5), "ה'");
 
-        // Two digits (gets gershayim ״)
+        // Two digits (gets gershayim \")
         assert_eq!(number_to_hebrew(10), "י'");
-        assert_eq!(number_to_hebrew(11), "י״א");
-        assert_eq!(number_to_hebrew(22), "כ״ב");
+        assert_eq!(number_to_hebrew(11), "י\"א");
+        assert_eq!(number_to_hebrew(22), "כ\"ב");
 
         // Special cases: 15 and 16
-        assert_eq!(number_to_hebrew(15), "ט״ו");
-        assert_eq!(number_to_hebrew(16), "ט״ז");
+        assert_eq!(number_to_hebrew(15), "ט\"ו");
+        assert_eq!(number_to_hebrew(16), "ט\"ז");
 
         // Three digits
         assert_eq!(number_to_hebrew(100), "ק'");
-        assert_eq!(number_to_hebrew(785), "תשפ״ה");
-        assert_eq!(number_to_hebrew(999), "תתקצ״ט"); // 900+90+9 = ת + ת + ק + צ + ט
+        assert_eq!(number_to_hebrew(785), "תשפ\"ה");
+        assert_eq!(number_to_hebrew(999), "תתקצ\"ט"); // 900+90+9 = ת + ת + ק + צ + ט
     }
 
     #[test]
