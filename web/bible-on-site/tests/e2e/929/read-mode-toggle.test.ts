@@ -20,6 +20,7 @@ async function toggleSeferOn(page: import("@playwright/test").Page) {
 		}
 		await expect(overlay).toBeVisible();
 	}).toPass({ timeout: 15_000 });
+	await expect(checkbox).toBeChecked({ timeout: 5_000 });
 }
 
 async function toggleSeferOff(page: import("@playwright/test").Page) {
@@ -54,11 +55,7 @@ test("Hides overlay after animation when toggling sefer view OFF", async ({
 
 	const seferOverlay = page.locator('[class*="seferOverlay"]');
 
-	// Wait for the lazy-loaded Sefer component to mount inside the overlay,
-	// confirming the React startTransition has committed.
-	await expect(
-		seferOverlay.locator('[class*="bookWrapper"]'),
-	).toBeVisible({ timeout: 15_000 });
+	await expect(seferOverlay).toHaveCSS("opacity", "1", { timeout: 5_000 });
 
 	// Toggle OFF
 	await toggleSeferOff(page);
