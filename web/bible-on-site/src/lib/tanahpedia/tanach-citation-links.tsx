@@ -8,11 +8,16 @@ import type {
 } from "@/data/db/tanah-view-types";
 import { normalizePasukSlugHyphens } from "@/lib/tanach/tanach-pasuk-range";
 
-const RE_ESCAPE = /[.*+?^${}()|[\]\\]/g;
-
-function escapeRe(s: string): string {
-	return s.replace(RE_ESCAPE, "\\$&");
+interface TanachRefMatch {
+	index: number;
+	full: string;
+	seferCitation: string;
+	perekRaw: string;
+	pasukRaw?: string;
 }
+
+const HEBREW_REF_TOKEN = /^[א-ת][א-ת"׳']{0,4}$/u;
+const HEBREW_PASUK_TOKEN = /^[א-ת][א-ת"׳']{0,4}(?:[-־][א-ת][א-ת"׳']{0,4})?$/u;
 
 /** ספר או כרך (למשל שמואל א) כפי שמופיע במקורות בטקסט */
 function resolveSeferVolume(
@@ -45,8 +50,6 @@ function normalizePerekLetters(raw: string): string {
 }
 
 let cachedNames: string[] | null = null;
-let cachedRegex: RegExp | null = null;
-
 function seferNamesForCitations(): string[] {
 	if (cachedNames) return cachedNames;
 	const keys = new Set<string>();
@@ -64,16 +67,64 @@ function seferNamesForCitations(): string[] {
 	return cachedNames;
 }
 
-function tanachRefRegex(): RegExp {
-	if (cachedRegex) return cachedRegex;
-	const alt = seferNamesForCitations().map(escapeRe).join("|");
-	/* מילה עברית לפרק; פסוק אופציונלי — מילה אחת או טווח מילים עם מקף */
-	const hebWord = `[א-ת](?:[א-ת"׳'"]{0,4})?`;
-	cachedRegex = new RegExp(
-		`(${alt})\\s+(${hebWord})(?:\\s+(${hebWord}(?:[-־]${hebWord})?))?`,
-		"gu",
-	);
-	return cachedRegex;
+function isWhitespace(ch: string | undefined): boolean {
+	return ch != null && /\s/u.test(ch);
+}
+
+function readToken(text: string, start: number): { token: string; end: number } {
+	let end = start;
+	while (end < text.length && !isWhitespace(text[end])) end++;
+	return { token: text.slice(start, end), end };
+}
+
+function findTanachRefAt(text: string, start: number): TanachRefMatch | null {
+	for (const seferName of seferNamesForCitations()) {
+		if (!text.startsWith(seferName, start)) continue;
+
+		let cursor = start + seferName.length;
+		if (!isWhitespace(text[cursor])) continue;
+		while (isWhitespace(text[cursor])) cursor++;
+
+		const perek = readToken(text, cursor);
+		if (!HEBREW_REF_TOKEN.test(perek.token)) continue;
+		cursor = perek.end;
+
+		let pasukRaw: string | undefined;
+		let end = cursor;
+		if (isWhitespace(text[cursor])) {
+			let pasukStart = cursor;
+			while (isWhitespace(text[pasukStart])) pasukStart++;
+			const pasuk = readToken(text, pasukStart);
+			if (HEBREW_PASUK_TOKEN.test(pasuk.token)) {
+				pasukRaw = pasuk.token;
+				end = pasuk.end;
+			}
+		}
+
+		return {
+			index: start,
+			full: text.slice(start, end),
+			seferCitation: seferName,
+			perekRaw: perek.token,
+			pasukRaw,
+		};
+	}
+	return null;
+}
+
+function findTanachRefMatches(text: string): TanachRefMatch[] {
+	const matches: TanachRefMatch[] = [];
+	let cursor = 0;
+	while (cursor < text.length) {
+		const match = findTanachRefAt(text, cursor);
+		if (!match) {
+			cursor++;
+			continue;
+		}
+		matches.push(match);
+		cursor = match.index + match.full.length;
+	}
+	return matches;
 }
 
 /** מנקה טקסט פסוק ל־slug בנתיב (ללא רווחים סביב מקף) */
@@ -146,14 +197,8 @@ export function buildKetavVeKabbalah929PerushHref(
 function firstTanachRefMatchFromIndex(
 	line: string,
 	minIndex: number,
-): RegExpMatchArray | null {
-	const re = tanachRefRegex();
-	for (const m of line.matchAll(re)) {
-		if ((m.index ?? 0) >= minIndex) {
-			return m as RegExpMatchArray;
-		}
-	}
-	return null;
+): TanachRefMatch | null {
+	return findTanachRefMatches(line).find((m) => m.index >= minIndex) ?? null;
 }
 
 /** שורת מקור בעץ משפחה: קישור אחד מ«הכתב והקבלה» עד הפסוק — ל־929 בפירוש הכתב והקבלה */
@@ -166,17 +211,17 @@ export function renderFamilyTreeCitationLine(
 		return renderCitationWithTanachLinks(line, linkClassName);
 	}
 	const refMatch = firstTanachRefMatchFromIndex(line, kvkIdx);
-	if (!refMatch?.[3]?.trim()) {
+	if (!refMatch?.pasukRaw?.trim()) {
 		return renderCitationWithTanachLinks(line, linkClassName);
 	}
-	const seferC = refMatch[1];
-	const perekRaw = refMatch[2];
-	const pasukRaw = refMatch[3];
+	const seferC = refMatch.seferCitation;
+	const perekRaw = refMatch.perekRaw;
+	const pasukRaw = refMatch.pasukRaw;
 	const href = buildKetavVeKabbalah929PerushHref(seferC, perekRaw, pasukRaw);
 	if (!href) {
 		return renderCitationWithTanachLinks(line, linkClassName);
 	}
-	const linkEnd = (refMatch.index ?? 0) + refMatch[0].length;
+	const linkEnd = refMatch.index + refMatch.full.length;
 	const nodes: ReactNode[] = [];
 	if (kvkIdx > 0) {
 		nodes.push(
@@ -204,20 +249,14 @@ export function renderCitationWithTanachLinks(
 	text: string,
 	linkClassName: string,
 ): ReactNode[] {
-	const re = tanachRefRegex();
 	const nodes: ReactNode[] = [];
 	let last = 0;
-	re.lastIndex = 0;
-	for (const m of text.matchAll(re)) {
-		const full = m[0];
-		const index = m.index ?? 0;
+	for (const match of findTanachRefMatches(text)) {
+		const { full, index, seferCitation, perekRaw, pasukRaw } = match;
 		if (index > last) {
 			nodes.push(text.slice(last, index));
 		}
-		const seferC = m[1];
-		const perekRaw = m[2];
-		const pasukRaw = m[3];
-		const href = tryTanachHref(seferC, perekRaw, pasukRaw);
+		const href = tryTanachHref(seferCitation, perekRaw, pasukRaw);
 		if (href) {
 			nodes.push(
 				<Link
