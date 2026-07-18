@@ -10,12 +10,16 @@ import {
 	getPerekIdsForSefer,
 	getSeferByName,
 } from "../../../../data/sefer-dto";
-import { getArticleById, getArticleSummariesByPerekId, getAllArticlePerekIdPairs } from "../../../../lib/articles";
+import {
+	getAllArticlePerekIdPairs,
+	getArticleById,
+	getArticleSummariesByPerekId,
+} from "../../../../lib/articles";
 import { authorNameToSlug } from "../../../../lib/authors";
 import {
+	getAllPerushPerekNamePairs,
 	getPerushDetail,
 	getPerushimByPerekId,
-	getAllPerushPerekNamePairs,
 } from "../../../../lib/perushim";
 import { ArticlesSection } from "../components/ArticlesSection";
 import Breadcrumb from "../components/Breadcrumb";
@@ -26,19 +30,26 @@ import { Stuma } from "../components/Stuma";
 import perekStyles from "../page.module.css";
 import styles from "./page.module.css";
 import { ScrollToSlug } from "./ScrollToArticle";
+import { ScrollToPerushPasukNote } from "./ScrollToPerushPasuk";
 
 /**
  * Module-level caches for bulk queries, shared across all 929 parent
  * invocations within the same build worker. Ensures exactly one DB
  * round-trip per query type regardless of parallelism.
  */
-let articlePairsPromise: Promise<{ articleId: number; perekId: number }[]> | null = null;
-let perushPairsPromise: Promise<{ perekId: number; perushName: string }[]> | null = null;
+let articlePairsPromise: Promise<
+	{ articleId: number; perekId: number }[]
+> | null = null;
+let perushPairsPromise: Promise<
+	{ perekId: number; perushName: string }[]
+> | null = null;
 
 /* istanbul ignore next: only runs during next build */
 export async function generateStaticParams({
 	params,
-}: { params: { number: string } }) {
+}: {
+	params: { number: string };
+}) {
 	const perekId = Number.parseInt(params.number, 10);
 
 	if (!articlePairsPromise) {
@@ -163,9 +174,20 @@ export async function generateMetadata({
 
 export default async function ArticlePage({
 	params,
+	searchParams,
 }: {
 	params: Promise<{ number: string; slug: string }>;
+	searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+	const sp = searchParams ? await searchParams : {};
+	const pasukScrollFromQuery = (() => {
+		const raw = sp.pasuk;
+		const s = Array.isArray(raw) ? raw[0] : raw;
+		if (s == null || s === "") return null;
+		const n = Number.parseInt(s, 10);
+		return Number.isFinite(n) && n > 0 ? n : null;
+	})();
+
 	const { number, slug: rawSlug } = await params;
 	const slug = decodeURIComponent(rawSlug);
 	const perekId = Number.parseInt(number, 10);
@@ -325,6 +347,7 @@ export default async function ArticlePage({
 	return (
 		<>
 			<ScrollToSlug targetId="perush-view" />
+			<ScrollToPerushPasukNote pasuk={pasukScrollFromQuery} />
 			<Suspense>
 				<SeferComposite
 					perekObj={perekObj}
@@ -406,21 +429,36 @@ export default async function ArticlePage({
 					</header>
 
 					<div className={styles.perushContent}>
-						{perushDetail.notes.map((note) => (
-							<div
-								key={`${note.pasuk}-${note.noteIdx}`}
-								className={styles.note}
-							>
-								<span className={styles.notePasuk}>
-									פסוק {toLetters(note.pasuk)}:
-								</span>
+						{perushDetail.notes.map((note, idx) => {
+							const prevSamePasuk =
+								idx > 0 && perushDetail.notes[idx - 1].pasuk === note.pasuk;
+							const noteAnchorId = !prevSamePasuk
+								? `perush-pasuk-${note.pasuk}`
+								: undefined;
+							const isHighlighted =
+								pasukScrollFromQuery != null &&
+								note.pasuk === pasukScrollFromQuery;
+							return (
 								<div
-									className={styles.noteContent}
-									// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
-									dangerouslySetInnerHTML={{ __html: note.noteContent }}
-								/>
-							</div>
-						))}
+									key={`${note.pasuk}-${note.noteIdx}`}
+									id={noteAnchorId}
+									className={
+										isHighlighted
+											? `${styles.note} ${styles.noteHighlight}`
+											: styles.note
+									}
+								>
+									<span className={styles.notePasuk}>
+										פסוק {toLetters(note.pasuk)}:
+									</span>
+									<div
+										className={styles.noteContent}
+										// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
+										dangerouslySetInnerHTML={{ __html: note.noteContent }}
+									/>
+								</div>
+							);
+						})}
 					</div>
 
 					<div className={styles.backToPerek}>
