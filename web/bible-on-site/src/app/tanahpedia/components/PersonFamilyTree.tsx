@@ -766,7 +766,7 @@ function PersonFamilyTreeContent({
 		};
 		measure();
 		if (typeof ResizeObserver === "undefined") return;
-		const ro = new ResizeObserver(measure);
+		const ro = new ResizeObserver(() => measure());
 		ro.observe(el);
 		return () => ro.disconnect();
 	}, [matrixEligible]);
