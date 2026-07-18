@@ -102,7 +102,27 @@
                                 BackgroundColor="{StaticResource Primary}"
                                 TextColor="White"
                                 CornerRadius="8"
-                                IsVisible="{Binding ShowPerushimDownload}"/>
+                                IsVisible="{Binding ShowPerushimDownloadButton}"/>
+                        <!-- Download progress overlay (visible while the package downloads) -->
+                        <VerticalStackLayout Spacing="6" IsVisible="{Binding IsPerushimDownloading}">
+                            <Grid>
+                                <Button Text="{Binding PerushimDownloadStatusText}"
+                                        IsEnabled="False"
+                                        BackgroundColor="{StaticResource Primary}"
+                                        TextColor="White"
+                                        CornerRadius="8"
+                                        Opacity="0.75"/>
+                                <ActivityIndicator IsRunning="{Binding IsPerushimDownloading}"
+                                                   Color="White"
+                                                   HorizontalOptions="End"
+                                                   VerticalOptions="Center"
+                                                   Margin="0,0,16,0"
+                                                   WidthRequest="18"
+                                                   HeightRequest="18"/>
+                            </Grid>
+                            <ProgressBar Progress="{Binding PerushimDownloadProgress}"
+                                         ProgressColor="{StaticResource Primary}"/>
+                        </VerticalStackLayout>
                         <Button Text="ייצוא לוגים לתמיכה"
                                 Command="{Binding ExportPerushimLogsCommand}"
                                 AutomationId="ExportPerushimLogsButton"

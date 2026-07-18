@@ -102,6 +102,26 @@ public partial class PreferencesViewModel : ObservableObject
             ? "חבילת הפירושים מותקנת ✓"
             : "חבילת הפירושים לא הותקנה. הורידו כדי להפעיל פירושים.";
 
+    /// <summary>True while the perushim package is downloading.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowPerushimDownloadButton))]
+    [NotifyPropertyChangedFor(nameof(PerushimDownloadStatusText))]
+    private bool _isPerushimDownloading;
+
+    /// <summary>Download progress in the range 0..1 (stays 0 until the first report).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PerushimDownloadStatusText))]
+    private double _perushimDownloadProgress;
+
+    /// <summary>Idle download button: shown only when not installed and not currently downloading.</summary>
+    public bool ShowPerushimDownloadButton => ShowPerushimDownload && !IsPerushimDownloading;
+
+    /// <summary>Label shown on the progress overlay (percentage when reported, else a generic message).</summary>
+    public string PerushimDownloadStatusText =>
+        PerushimDownloadProgress > 0
+            ? $"מוריד… {(int)Math.Round(PerushimDownloadProgress * 100)}%"
+            : "מוריד…";
+
     /// <summary>
     /// Loads preferences from device storage.
     /// </summary>
@@ -118,6 +138,7 @@ public partial class PreferencesViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowPerushimSection));
         OnPropertyChanged(nameof(IsPerushimInstalled));
         OnPropertyChanged(nameof(ShowPerushimDownload));
+        OnPropertyChanged(nameof(ShowPerushimDownloadButton));
         OnPropertyChanged(nameof(PerushimNotesStatusText));
     }
 
@@ -127,14 +148,28 @@ public partial class PreferencesViewModel : ObservableObject
     [RelayCommand]
     public async Task DownloadPerushimAsync()
     {
-        var ok = await _perushimNotesService.TryDownloadNotesAsync();
-        OnPropertyChanged(nameof(ShowPerushimSection));
-        OnPropertyChanged(nameof(IsPerushimInstalled));
-        OnPropertyChanged(nameof(ShowPerushimDownload));
-        OnPropertyChanged(nameof(PerushimNotesStatusText));
-        if (!ok && Application.Current?.Windows?.Count > 0 && Application.Current.Windows[0].Page is Page page)
+        if (IsPerushimDownloading)
+            return;
+
+        IsPerushimDownloading = true;
+        PerushimDownloadProgress = 0;
+        try
         {
-            await page.DisplayAlertAsync("שגיאה", "לא ניתן להוריד את חבילת הפירושים. נסו שוב מאוחר יותר.", "אישור");
+            var progress = new Progress<double>(p => PerushimDownloadProgress = Math.Clamp(p, 0, 1));
+            var ok = await _perushimNotesService.TryDownloadNotesAsync(progress);
+            if (!ok && Application.Current?.Windows?.Count > 0 && Application.Current.Windows[0].Page is Page page)
+            {
+                await page.DisplayAlertAsync("שגיאה", "לא ניתן להוריד את חבילת הפירושים. נסו שוב מאוחר יותר.", "אישור");
+            }
+        }
+        finally
+        {
+            IsPerushimDownloading = false;
+            OnPropertyChanged(nameof(ShowPerushimSection));
+            OnPropertyChanged(nameof(IsPerushimInstalled));
+            OnPropertyChanged(nameof(ShowPerushimDownload));
+            OnPropertyChanged(nameof(ShowPerushimDownloadButton));
+            OnPropertyChanged(nameof(PerushimNotesStatusText));
         }
     }
 

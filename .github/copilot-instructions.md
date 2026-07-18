@@ -33,7 +33,6 @@ Lessons from past dependency refreshes — apply these to avoid breaking `master
 - **Version-gate collisions**: CI's `verify-version` compares a gated module's version against the highest released git tag (`<module>-v*`), and the release bot bumps gated versions on `master` after each merge. On long-lived/dep branches, `git merge origin/master` then bump the gated module to **exceed master HEAD's** value. Gated modules: `website`, `api`, `app`, `bulletin`, `admin`. Note a `web/api/Dockerfile` change triggers the `api` gate and `.csproj` changes trigger the `app` gate.
 - **CDs** (Bulletin / RDS / App) are triggered by `repository_dispatch` from the release pipeline, not manually; fixes land on the next release. The `db-populator` Lambda is an external Python function whose code is not in this repo — diagnose its failures via CloudWatch (`/aws/lambda/bible-on-site-db-populator`).
 
-
 ### Tool Learning Protocol
 
 When using a tool/library/framework for the first time:
@@ -50,6 +49,16 @@ When using a tool/library/framework for the first time:
   1. Investigate the root cause (is it your change? environment issue? flaky test?)
   2. Fix the issue or ask clarifying questions if unsure
   3. Never say "this is unrelated" and move on without resolution
+- **Never leave anything red — and never _assume_ a red is fixed.** Every red signal is your responsibility until it is **verified green with freshly-observed evidence** (a passing run/badge you actually re-checked), or **explicitly tracked with its true current status**. This covers CI checks, the merge queue, CD deployments (AWS / Bulletin / RDS / App), the README/Project Status dashboard badges, Uptime Robot, and codecov. For each red:
+  1. **Track it explicitly, with evidence** — record the concrete artifact (run ID, PR number, issue, badge) and its real, just-observed status by re-querying the source of truth (`gh run list`/`gh run view`, the badge endpoint, AWS), not by inference. Keep that tracking entry (todo list / issue) updated until it is green. Report the status you _observed_, never the status you _expect_.
+  2. **Diagnose the root cause** before acting — distinguish a real failure from a stale/transient one (e.g. expired artifact, idle/restoring Lambda, OIDC hiccup) and from red-herring log lines (e.g. `digest-mismatch` is an _input_ of `actions/download-artifact`, not an error).
+  3. **Fix it at the source** if it is in your control (code, config, workflow, infra you can reach via AWS SSO).
+  4. **Opening a PR or filing an issue is _not_ resolution; only green is.** A CD/badge reflects its **latest run** and stays red until a **new successful run** flips it — a merged preventive fix (e.g. raising artifact retention) does **not** clear the existing red. Never mark a red done, or imply it is resolved, until you have re-verified it is actually green. If clearing it depends on a future release/dispatch/external action, state plainly that it is **still red** and keep it tracked as such.
+  5. **Never mask a red** — do not hide a real failure with `continue-on-error`, do not inflate the codecov `coverage.range` to recolor a badge, and do not re-deploy stale artifacts to fake a green. Fix the underlying cause instead.
+  6. **If blocked by external/user action** (e.g. MS Store Partner Center submission errors, a prod deploy that needs confirmation, expired artifacts needing a fresh release dispatch), file a tracked issue (with the required P/D labels + project) **and** surface it explicitly to the user with the exact action needed **and** the fact that it is **still red** — never silently move on or imply it is resolved.
+  7. **Prevent recurrence** — when a red came from a systemic gap (e.g. too-short artifact retention), propose/implement the preventive fix, not just the one-off unblock.
+- **Do not ask the user to "watch" or "confirm" CI/PR status** — always check it yourself and report observed results with evidence.
+- **Do not tell the user to merge if the user delegated execution to you** — when checks are green and policy allows, perform the merge yourself (or enqueue it) and then verify the post-merge state.
 - Use of client components in `web/bible-on-site` is forbidden unless explicitly requested
 - If user intent is clear, continue with the next aligned implementation step automatically instead of asking "next steps?".
 
