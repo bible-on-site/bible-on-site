@@ -61,22 +61,29 @@ export default async function TanahpediaLandingPage() {
 			{loadError ? (
 				<div className={styles.dbLoadWarning} role="alert">
 					<strong className={styles.dbLoadWarningTitle}>
-						לא נטענו נתונים מהמסד
+						התוכן אינו זמין כרגע
 					</strong>
-					<p className={styles.dbLoadWarningText}>
-						ודאו ש-MySQL פעיל, ש-DB_URL ב-.dev.env מצביע על אותה מסד שמולא ב־
-						<code className={styles.dbLoadWarningCode}>
-							cargo make mysql-populate-dev
-						</code>
-						, ואז הריצו שוב{" "}
-						<code className={styles.dbLoadWarningCode}>
-							npm run dev
-						</code>
-						.
-					</p>
 					{process.env.NODE_ENV === "development" ? (
-						<pre className={styles.dbLoadWarningPre}>{loadError}</pre>
-					) : null}
+						<>
+							<p className={styles.dbLoadWarningText}>
+								ודאו ש-MySQL פעיל, ש-DB_URL ב-.dev.env מצביע על אותה מסד
+								שמולא ב־
+								<code className={styles.dbLoadWarningCode}>
+									cargo make mysql-populate-dev
+								</code>
+								, ואז הריצו שוב{" "}
+								<code className={styles.dbLoadWarningCode}>
+									npm run dev
+								</code>
+								.
+							</p>
+							<pre className={styles.dbLoadWarningPre}>{loadError}</pre>
+						</>
+					) : (
+						<p className={styles.dbLoadWarningText}>
+							אירעה שגיאה בטעינת הנתונים. נסו לרענן את העמוד מאוחר יותר.
+						</p>
+					)}
 				</div>
 			) : null}
 
