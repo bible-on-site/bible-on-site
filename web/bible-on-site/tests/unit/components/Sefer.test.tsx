@@ -113,7 +113,7 @@ jest.mock("@/data/sefer-dto", () => ({
 
 jest.mock("@/util/hebdates-util", () => ({
 	constructTsetAwareHDate: () => ({
-		toTraditionalHebrewString: () => "כ״ג אדר תשפ״ו",
+		toTraditionalHebrewString: () => "כ\"ג אדר תשפ\"ו",
 	}),
 }));
 
@@ -168,7 +168,7 @@ describe("Sefer component", () => {
 		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		expect(screen.queryByTestId("mock-modal")).toBeNull();
 
-		fireEvent.click(screen.getByLabelText("ספרי התנ״ך"));
+		fireEvent.click(screen.getByLabelText("ספרי התנ\"ך"));
 		expect(screen.getByTestId("mock-modal")).toBeInTheDocument();
 
 		fireEvent.click(screen.getByTestId("close-modal"));

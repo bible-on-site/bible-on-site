@@ -41,7 +41,7 @@ describe("perushim service", () => {
 				{
 					perush_id: 2,
 					perush_name: "Rashi",
-					parshan_name: "רש״י",
+					parshan_name: "רש\"י",
 					note_count: 5,
 					priority: 100,
 				},
@@ -57,7 +57,7 @@ describe("perushim service", () => {
 			);
 			expect(result).toEqual([
 				{ id: 1, name: "Ibn Ezra", parshanName: "אבן עזרא", noteCount: 10 },
-				{ id: 2, name: "Rashi", parshanName: "רש״י", noteCount: 5 },
+				{ id: 2, name: "Rashi", parshanName: "רש\"י", noteCount: 5 },
 			]);
 		});
 
@@ -104,7 +104,7 @@ describe("perushim service", () => {
 				.mockResolvedValueOnce([
 					{
 						perush_name: "Rashi on Torah",
-						parshan_name: "רש״י",
+						parshan_name: "רש\"י",
 						parshan_birth_year: 1040,
 					},
 				])
@@ -115,7 +115,7 @@ describe("perushim service", () => {
 			const result = await getPerushDetail(38, 1);
 
 			expect(result).not.toBeNull();
-			expect(result?.parshanName).toBe("רש״י");
+			expect(result?.parshanName).toBe("רש\"י");
 			expect(result?.parshanBirthYear).toBe(1040);
 			expect(result?.notes).toHaveLength(1);
 		});
@@ -224,17 +224,17 @@ describe("perushim service", () => {
 	describe("getAllPerushPerekNamePairs", () => {
 		it("returns mapped pairs from query results", async () => {
 			mockQuery.mockResolvedValue([
-				{ perek_id: 1, perush_name: "רש״י" },
-				{ perek_id: 1, perush_name: "רמב״ן" },
-				{ perek_id: 2, perush_name: "רש״י" },
+				{ perek_id: 1, perush_name: "רש\"י" },
+				{ perek_id: 1, perush_name: "רמב\"ן" },
+				{ perek_id: 2, perush_name: "רש\"י" },
 			]);
 
 			const result = await getAllPerushPerekNamePairs();
 
 			expect(result).toEqual([
-				{ perekId: 1, perushName: "רש״י" },
-				{ perekId: 1, perushName: "רמב״ן" },
-				{ perekId: 2, perushName: "רש״י" },
+				{ perekId: 1, perushName: "רש\"י" },
+				{ perekId: 1, perushName: "רמב\"ן" },
+				{ perekId: 2, perushName: "רש\"י" },
 			]);
 			expect(mockQuery).toHaveBeenCalledWith(
 				expect.stringContaining("SELECT DISTINCT n.perek_id"),

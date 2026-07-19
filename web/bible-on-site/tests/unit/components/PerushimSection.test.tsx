@@ -46,7 +46,7 @@ describe("PerushimSection", () => {
 
 	it("renders carousel links when perushim provided (SEO mode)", () => {
 		const perushim: PerushSummary[] = [
-			{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 55 },
+			{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 55 },
 			{
 				id: 14,
 				name: "ביאור שטיינזלץ",
@@ -55,20 +55,20 @@ describe("PerushimSection", () => {
 			},
 		];
 		render(<PerushimSection perekId={1} perushim={perushim} />);
-		expect(screen.getByRole("link", { name: /רש״י/ })).toBeTruthy();
+		expect(screen.getByRole("link", { name: /רש"י/ })).toBeTruthy();
 		expect(screen.getByRole("link", { name: /ביאור שטיינזלץ/ })).toBeTruthy();
 		expect(screen.getByText("55 פסוקים")).toBeTruthy();
 	});
 
 	it("renders links with correct href for SEO", () => {
 		const perushim: PerushSummary[] = [
-			{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 55 },
+			{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 55 },
 		];
 		render(<PerushimSection perekId={5} perushim={perushim} />);
-		const link = screen.getByRole("link", { name: /רש״י/ });
+		const link = screen.getByRole("link", { name: /רש"י/ });
 		expect(link).toHaveAttribute(
 			"href",
-			`/929/5/${encodeURIComponent("רש״י")}`,
+			`/929/5/${encodeURIComponent('רש"י')}`,
 		);
 	});
 
@@ -102,7 +102,7 @@ describe("PerushimSection", () => {
 	it("delegates to onPerushClick when provided (renders buttons)", () => {
 		const onPerushClick = jest.fn();
 		const perushim: PerushSummary[] = [
-			{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 55 },
+			{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 55 },
 		];
 		render(
 			<PerushimSection
@@ -111,7 +111,7 @@ describe("PerushimSection", () => {
 				onPerushClick={onPerushClick}
 			/>,
 		);
-		fireEvent.click(screen.getByRole("button", { name: /רש״י/ }));
+		fireEvent.click(screen.getByRole("button", { name: /רש"י/ }));
 		expect(onPerushClick).toHaveBeenCalledWith(perushim[0]);
 		expect(mockGetPerushNotesForPage).not.toHaveBeenCalled();
 	});
@@ -119,12 +119,12 @@ describe("PerushimSection", () => {
 	it("handles error in internal handlePerushClick", async () => {
 		mockGetPerushNotesForPage.mockRejectedValue(new Error("fail"));
 		const perushim: PerushSummary[] = [
-			{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 55 },
+			{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 55 },
 		];
 		render(<PerushimSection perekId={1} perushim={perushim} />);
 
 		await act(async () => {
-			fireEvent.click(screen.getByRole("link", { name: /רש״י/ }));
+			fireEvent.click(screen.getByRole("link", { name: /רש"י/ }));
 		});
 
 		expect(screen.getByText("פרשנים על הפרק")).toBeTruthy();
@@ -136,12 +136,12 @@ describe("PerushimSection", () => {
 		]);
 		const pushStateSpy = jest.spyOn(history, "pushState");
 		const perushim: PerushSummary[] = [
-			{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 55 },
+			{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 55 },
 		];
 		render(<PerushimSection perekId={5} perushim={perushim} />);
 
 		await act(async () => {
-			fireEvent.click(screen.getByRole("link", { name: /רש״י/ }));
+			fireEvent.click(screen.getByRole("link", { name: /רש"י/ }));
 		});
 
 		pushStateSpy.mockClear();

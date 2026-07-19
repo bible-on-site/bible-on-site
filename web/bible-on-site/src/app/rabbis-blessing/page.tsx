@@ -24,19 +24,19 @@ const blessingVideos = [
 	{
 		id: 1,
 		rabbi: "הרב דוד חי הכהן",
-		title: "ברכת הדרך לתנ״ך על הפרק",
+		title: 'ברכת הדרך לתנ"ך על הפרק',
 		filename: "1_בראשית א_ברכת הרב דוד חי הכהן.mp4",
 	},
 	{
 		id: 2,
 		rabbi: "הרב שמואל אליהו",
-		title: "ברכת הדרך לתנ״ך על הפרק",
+		title: 'ברכת הדרך לתנ"ך על הפרק',
 		filename: "1_בראשית א_ברכת הרב שמואל אליהו.mp4",
 	},
 	{
 		id: 3,
 		rabbi: "הרב אריאל",
-		title: "ברכת הדרך לתנ״ך על הפרק",
+		title: 'ברכת הדרך לתנ"ך על הפרק',
 		filename: "1_ברכת הרב בראשית א_אריאל.mp4",
 	},
 ];
@@ -49,7 +49,7 @@ export default function RabbisBlessingPage() {
 	return (
 		<div className={styles.rabbisBlessingPage}>
 			<h1 className={styles.pageTitle}>רבנים מברכים</h1>
-			<p className={styles.pageSubtitle}>ברכות רבנים לתנ״ך על הפרק</p>
+			<p className={styles.pageSubtitle}>ברכות רבנים לתנ"ך על הפרק</p>
 
 			<div className={styles.videoGrid}>
 				{blessingVideos.map((video) => (
@@ -79,13 +79,13 @@ export default function RabbisBlessingPage() {
 				<article className={styles.videoCard}>
 					<ImageLightbox
 						src={posterUrl}
-						alt="דורש ציון – ברכה לתנ״ך על הפרק"
+						alt={'דורש ציון – ברכה לתנ"ך על הפרק'}
 						width={924}
 						height={577}
 					/>
 					<div className={styles.videoInfo}>
 						<h2 className={styles.rabbiName}>דורש ציון</h2>
-						<p className={styles.videoTitle}>ברכה לתנ״ך על הפרק</p>
+						<p className={styles.videoTitle}>ברכה לתנ"ך על הפרק</p>
 					</div>
 				</article>
 			</div>

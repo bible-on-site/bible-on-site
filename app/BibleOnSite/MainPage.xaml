@@ -14,12 +14,12 @@
                 SemanticProperties.Description="dot net bot in a hovercraft number nine"/>
 
             <Label
-                Text="תנ״ך על האתר"
+                Text="תנ&quot;ך על האתר"
                 Style="{StaticResource Headline}"
                 SemanticProperties.HeadingLevel="Level1"/>
 
             <Label
-                Text="מיזם לימוד תנ״ך יומי"
+                Text="מיזם לימוד תנ&quot;ך יומי"
                 Style="{StaticResource SubHeadline}"
                 SemanticProperties.HeadingLevel="Level2"/>
 

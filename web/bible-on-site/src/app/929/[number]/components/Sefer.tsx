@@ -22,8 +22,19 @@ import {
 	Toolbar,
 } from "html-flip-book-react/toolbar";
 import dynamic from "next/dynamic";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type PerekSummaries, downloadPageRanges, downloadSefer, getPerekSummariesBatch } from "@/app/929/[number]/actions";
+import React, {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
+import {
+	downloadPageRanges,
+	downloadSefer,
+	getPerekSummariesBatch,
+	type PerekSummaries,
+} from "@/app/929/[number]/actions";
 import { BookshelfModal } from "@/app/components/Bookshelf";
 import type { PerekObj } from "@/data/perek-dto";
 import { getSeferColor } from "@/data/sefer-colors";
@@ -35,18 +46,18 @@ import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import { BlankPageContent } from "./BlankPageContent";
 import { Ptuah } from "./Ptuha";
-import { Stuma } from "./Stuma";
-import { TanahpediaLink } from "./TanahpediaLink";
 import { renderPasukWithEntityRefs } from "./pasuk-renderer";
+import { Stuma } from "./Stuma";
+import styles from "./sefer.module.css";
 import {
-	CONTENT_OFFSET,
 	buildHistoryMapper,
 	buildPageSemantics,
+	CONTENT_OFFSET,
 	computeInitialTurnedLeaves,
 	toHebrewWithPunctuation,
 	wrapDownloadResult,
 } from "./sefer-page-utils";
-import styles from "./sefer.module.css";
+import { TanahpediaLink } from "./TanahpediaLink";
 import "html-flip-book-react/styles.css";
 import "./sefer.css";
 
@@ -91,7 +102,14 @@ const Sefer = (props: {
 	entityRefsByPerek?: Record<number, PerekEntityReference[]>;
 	initialSlug?: string;
 }) => {
-	const { perekObj, articles, perushim, perekIds, entityRefsByPerek, initialSlug } = props;
+	const {
+		perekObj,
+		articles,
+		perushim,
+		perekIds,
+		entityRefsByPerek,
+		initialSlug,
+	} = props;
 	const sefer = getSeferByName(perekObj.sefer);
 	const flipBookRef = useRef<FlipBookHandle>(null);
 	const bookWrapperRef = useRef<HTMLDivElement>(null);
@@ -117,10 +135,7 @@ const Sefer = (props: {
 		return result;
 	}, [entityRefsByPerek, perekIds]);
 
-	const perekHeaders = useMemo(
-		() => perakim.map((p) => p.header),
-		[perakim],
-	);
+	const perekHeaders = useMemo(() => perakim.map((p) => p.header), [perakim]);
 	const hePageSemantics: PageSemantics = useMemo(
 		() => buildPageSemantics(perakim.length, perekHeaders),
 		[perakim.length, perekHeaders],
@@ -147,12 +162,8 @@ const Sefer = (props: {
 					<div className={styles.coverOrnament}>✦</div>
 					<h1 className={styles.coverTitle}>ספר {perekObj.sefer}</h1>
 					<div className={styles.coverDivider} />
-					<p className={styles.coverSubtitle}>
-						מקראות גדולות
-					</p>
-					<p className={styles.coverEdition}>
-						עם מאמרים מרבנים בני זמנינו
-					</p>
+					<p className={styles.coverSubtitle}>מקראות גדולות</p>
+					<p className={styles.coverEdition}>עם מאמרים מרבנים בני זמנינו</p>
 				</div>
 			</div>
 		</section>
@@ -180,11 +191,15 @@ const Sefer = (props: {
 
 	// One-time batch fetch of article/perushim summaries for all perakim
 	// except the current one (which has SSG data). Keyed by perekId string.
-	const [batchSummaries, setBatchSummaries] = useState<Record<string, PerekSummaries>>({});
+	const [batchSummaries, setBatchSummaries] = useState<
+		Record<string, PerekSummaries>
+	>({});
 	useEffect(() => {
 		const idsToFetch = perekIds?.filter((id) => id !== perekObj.perekId) ?? [];
 		if (idsToFetch.length === 0) return;
-		getPerekSummariesBatch(idsToFetch).then(setBatchSummaries).catch(() => {});
+		getPerekSummariesBatch(idsToFetch)
+			.then(setBatchSummaries)
+			.catch(() => {});
 	}, [perekIds, perekObj.perekId]);
 
 	const contentPages = perakim.flatMap((perek, perekIdx) => {
@@ -195,70 +210,81 @@ const Sefer = (props: {
 		const perekKey = `perek-${perekKeyBase}`;
 		const blankKey = `blank-${perekKeyBase}`;
 		return [
-		<React.Fragment key={perekKey}>
-			<section className={styles.pageContentPage}>
-				<div className={styles.pageHeaderRight}>
-					<div className={styles.pageHeaderRow}>
-						<span className={styles.pageHeaderSefer}>{perekObj.sefer}</span>
-						<span className={styles.pageHeaderPerek}>
-							{toLetters(perekIdx + 1, { addQuotes: true })}
-						</span>
+			<React.Fragment key={perekKey}>
+				<section className={styles.pageContentPage}>
+					<div className={styles.pageHeaderRight}>
+						<div className={styles.pageHeaderRow}>
+							<span className={styles.pageHeaderSefer}>{perekObj.sefer}</span>
+							<span className={styles.pageHeaderPerek}>
+								{toLetters(perekIdx + 1, { addQuotes: true })}
+							</span>
+						</div>
+						<div className={styles.perekHeader} title={perek.header}>
+							{perek.header}
+						</div>
 					</div>
-					<div className={styles.perekHeader} title={perek.header}>
-						{perek.header}
+					<div className={styles.perekTextScrollWrapper}>
+						<article className={styles.perekText}>
+							{perek.pesukim.map((pasuk, pasukIdx) => {
+								const pasukKey = pasukIdx + 1;
+								const pasukNumElement = (
+									<span className={styles.pasukNum}>
+										{toLetters(pasukIdx + 1)}
+									</span>
+								);
+								const perekLookup =
+									entityRefLookupsByPerekIdx[perekIdx] ??
+									buildEntityRefLookup([]);
+								const pasukElement = renderPasukWithEntityRefs(
+									pasuk.segments,
+									pasukIdx,
+									perekLookup,
+									Ptuah,
+									Stuma,
+									styles.qri,
+									(entryUniqueName, children, key) => (
+										<TanahpediaLink
+											key={key}
+											entryUniqueName={entryUniqueName}
+											className={styles.tanahpediaLink}
+										>
+											{children}
+										</TanahpediaLink>
+									),
+								);
+								return (
+									<React.Fragment key={pasukKey}>
+										{pasukNumElement}
+										<span> </span>
+										{pasukElement}
+										<span> </span>
+									</React.Fragment>
+								);
+							})}
+						</article>
 					</div>
-				</div>
-				<div className={styles.perekTextScrollWrapper}>
-					<article className={styles.perekText}>
-						{perek.pesukim.map((pasuk, pasukIdx) => {
-							const pasukKey = pasukIdx + 1;
-							const pasukNumElement = (
-								<span className={styles.pasukNum}>
-									{toLetters(pasukIdx + 1)}
-								</span>
-							);
-							const perekLookup = entityRefLookupsByPerekIdx[perekIdx]
-								?? buildEntityRefLookup([]);
-							const pasukElement = renderPasukWithEntityRefs(
-								pasuk.segments,
-								pasukIdx,
-								perekLookup,
-								Ptuah,
-								Stuma,
-								styles.qri,
-								(entryUniqueName, children, key) => (
-									<TanahpediaLink
-										key={key}
-										entryUniqueName={entryUniqueName}
-										className={styles.tanahpediaLink}
-									>
-										{children}
-									</TanahpediaLink>
-								),
-							);
-							return (
-								<React.Fragment key={pasukKey}>
-									{pasukNumElement}
-									<span> </span>
-									{pasukElement}
-									<span> </span>
-								</React.Fragment>
-							);
-						})}
-					</article>
-				</div>
-			</section>
-		</React.Fragment>,
-	<React.Fragment key={blankKey}>
-		<BlankPageContent
-			articles={perekIdx === currentPerekIdx ? articles : batchSummaries[String(perekIds?.[perekIdx] ?? 0)]?.articles}
-			perushim={perekIdx === currentPerekIdx ? perushim : batchSummaries[String(perekIds?.[perekIdx] ?? 0)]?.perushim}
-			perekId={perekIds?.[perekIdx] ?? 0}
-			hebrewDateStr={hebrewDateStr}
-			initialSlug={perekIds?.[perekIdx] === perekObj.perekId ? initialSlug : undefined}
-		/>
-	</React.Fragment>,
-	];
+				</section>
+			</React.Fragment>,
+			<React.Fragment key={blankKey}>
+				<BlankPageContent
+					articles={
+						perekIdx === currentPerekIdx
+							? articles
+							: batchSummaries[String(perekIds?.[perekIdx] ?? 0)]?.articles
+					}
+					perushim={
+						perekIdx === currentPerekIdx
+							? perushim
+							: batchSummaries[String(perekIds?.[perekIdx] ?? 0)]?.perushim
+					}
+					perekId={perekIds?.[perekIdx] ?? 0}
+					hebrewDateStr={hebrewDateStr}
+					initialSlug={
+						perekIds?.[perekIdx] === perekObj.perekId ? initialSlug : undefined
+					}
+				/>
+			</React.Fragment>,
+		];
 	});
 
 	// Total pages: cover + cover-interior + TOC + (perakim * 2) + backCover
@@ -272,7 +298,9 @@ const Sefer = (props: {
 			pageSemantics={hePageSemantics}
 			heading="תוכן העניינים"
 			direction="rtl"
-			filter={(entry) => entry.pageIndex >= CONTENT_OFFSET && entry.title.length > 0}
+			filter={(entry) =>
+				entry.pageIndex >= CONTENT_OFFSET && entry.title.length > 0
+			}
 		/>
 	);
 
@@ -326,30 +354,30 @@ const Sefer = (props: {
 						}}
 					/>
 				</div>
-			<Toolbar
-				flipBookRef={flipBookRef}
-				direction="rtl"
-				pageSemantics={hePageSemantics}
-				fullscreenTargetRef={bookWrapperRef}
-			>
-				<div className="flipbook-toolbar-start">
-					<FullscreenButton />
-					<TocButton />
-					<ActionButton onClick={openBookshelf} ariaLabel="ספרי התנ״ך">
-						<BookshelfIcon size={18} />
-					</ActionButton>
-				</div>
-				<div className="flipbook-toolbar-nav-cluster">
-					<FirstPageButton />
-					<PrevButton />
-					<PageIndicator ariaLabel="עבור לפרק (מספר עברי)" />
-					<NextButton />
-					<LastPageButton />
-				</div>
-				<div className="flipbook-toolbar-end">
-					<DownloadDropdown ariaLabel="הורדה" />
-				</div>
-			</Toolbar>
+				<Toolbar
+					flipBookRef={flipBookRef}
+					direction="rtl"
+					pageSemantics={hePageSemantics}
+					fullscreenTargetRef={bookWrapperRef}
+				>
+					<div className="flipbook-toolbar-start">
+						<FullscreenButton />
+						<TocButton />
+						<ActionButton onClick={openBookshelf} ariaLabel={'ספרי התנ"ך'}>
+							<BookshelfIcon size={18} />
+						</ActionButton>
+					</div>
+					<div className="flipbook-toolbar-nav-cluster">
+						<FirstPageButton />
+						<PrevButton />
+						<PageIndicator ariaLabel="עבור לפרק (מספר עברי)" />
+						<NextButton />
+						<LastPageButton />
+					</div>
+					<div className="flipbook-toolbar-end">
+						<DownloadDropdown ariaLabel="הורדה" />
+					</div>
+				</Toolbar>
 			</div>
 			<BookshelfModal isOpen={isBookshelfOpen} onClose={closeBookshelf} />
 		</>

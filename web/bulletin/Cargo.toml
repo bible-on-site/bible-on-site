@@ -56,6 +56,6 @@ sea-orm = { version = "1.1.20", default-features = false, features = ["mock"] }
 members = ["."]
 
 [profile.release]
-opt-level = "z"    # Optimize for size (Lambda)
+opt-level = "z" # Optimize for size (Lambda)
 lto = true
 strip = true

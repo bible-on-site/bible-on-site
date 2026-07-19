@@ -98,7 +98,7 @@ describe("[authorParam] page", () => {
 			});
 
 			expect(result).toEqual({
-				title: "הרב לדוגמא | תנ״ך באתר",
+				title: "הרב לדוגמא | תנ\"ך באתר",
 				description: "תיאור ארוך מאוד",
 			});
 			expect(mockGetAuthorById).toHaveBeenCalledWith(1);
@@ -119,7 +119,7 @@ describe("[authorParam] page", () => {
 			});
 
 			expect(result).toEqual({
-				title: "הרב לדוגמא | תנ״ך באתר",
+				title: "הרב לדוגמא | תנ\"ך באתר",
 				description: "מאמרים מאת הרב לדוגמא",
 			});
 			expect(mockGetAuthorByName).toHaveBeenCalledWith("הרב לדוגמא");
@@ -133,7 +133,7 @@ describe("[authorParam] page", () => {
 			});
 
 			expect(result).toEqual({
-				title: "הרב לא נמצא | תנ״ך באתר",
+				title: "הרב לא נמצא | תנ\"ך באתר",
 			});
 		});
 

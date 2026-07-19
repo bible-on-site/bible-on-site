@@ -31,8 +31,8 @@ import { PerushFullView } from "../../../src/app/929/[number]/components/PerushF
 
 const samplePerush = {
 	id: 1,
-	name: "רש״י",
-	parshanName: "רש״י",
+	name: 'רש"י',
+	parshanName: 'רש"י',
 	notes: [
 		{ pasuk: 1, noteIdx: 0, noteContent: "<p>note 1</p>" },
 		{ pasuk: 2, noteIdx: 0, noteContent: "<p>note 2</p>" },
@@ -42,7 +42,7 @@ const samplePerush = {
 describe("PerushFullView", () => {
 	it("renders perush name and parshan name", () => {
 		render(<PerushFullView perush={samplePerush} onBack={jest.fn()} />);
-		expect(screen.getAllByText("רש״י").length).toBeGreaterThanOrEqual(1);
+		expect(screen.getAllByText('רש"י').length).toBeGreaterThanOrEqual(1);
 	});
 
 	it("renders back button that calls onBack", () => {
@@ -90,7 +90,7 @@ describe("PerushFullView", () => {
 		const shareLink = screen.getByLabelText("שיתוף");
 		expect(shareLink).toBeTruthy();
 		expect(shareLink.getAttribute("href")).toBe(
-			`/929/5/${encodeURIComponent("רש״י")}`,
+			`/929/5/${encodeURIComponent('רש"י')}`,
 		);
 	});
 

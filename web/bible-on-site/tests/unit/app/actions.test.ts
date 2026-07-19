@@ -130,7 +130,7 @@ describe("getPerushimSummariesForPerek", () => {
 
 	it("delegates to getPerushimByPerekId", async () => {
 		const perushim = [
-			{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 10 },
+			{ id: 1, name: "רש\"י", parshanName: "רש\"י", noteCount: 10 },
 		];
 		mockGetPerushimByPerekId.mockResolvedValue(perushim);
 

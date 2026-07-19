@@ -15,10 +15,10 @@ describe("ShareButton", () => {
 	});
 
 	it("renders an anchor with the canonical path as href", () => {
-		render(<ShareButton canonicalPath="/929/5/רש״י" />);
+		render(<ShareButton canonicalPath={'/929/5/רש"י'} />);
 
 		const link = screen.getByRole("link", { name: "שיתוף" });
-		expect(link).toHaveAttribute("href", "/929/5/רש״י");
+		expect(link).toHaveAttribute("href", '/929/5/רש"י');
 	});
 
 	it("shows share text by default", () => {

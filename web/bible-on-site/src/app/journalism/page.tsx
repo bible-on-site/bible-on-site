@@ -23,14 +23,14 @@ function getS3BaseUrl(): string {
 const journalismItems = [
 	{
 		id: 1,
-		title: "כתבה בעלון ״גילוי דעת״",
-		description: "פרסום על תנ״ך על הפרק בעלון ״גילוי דעת״ – שמיני תשע״ט",
+		title: "כתבה בעלון \"גילוי דעת\"",
+		description: "פרסום על תנ\"ך על הפרק בעלון \"גילוי דעת\" – שמיני תשע\"ט",
 		filename: "תקשורת - גילוי דעת שמיני תשעט.webp",
 	},
 	{
 		id: 2,
-		title: "תגובת מערכת ״גילוי דעת״",
-		description: "תגובת מערכת העלון לפרסום על תנ״ך על הפרק – שמיני תשע״ט",
+		title: "תגובת מערכת \"גילוי דעת\"",
+		description: "תגובת מערכת העלון לפרסום על תנ\"ך על הפרק – שמיני תשע\"ט",
 		filename: "תקשורת - תגובת גילוי דעת לפרסום - שמיני תשעט.webp",
 	},
 ];
@@ -49,7 +49,7 @@ export default function JournalismPage() {
 		<div className={styles.journalismPage}>
 			<h1 className={styles.pageTitle}>על הפרק בתקשורת</h1>
 			<p className={styles.pageSubtitle}>
-				סיקור תקשורתי של תנ״ך על הפרק
+				סיקור תקשורתי של תנ"ך על הפרק
 			</p>
 
 			<JournalismGallery items={items} />

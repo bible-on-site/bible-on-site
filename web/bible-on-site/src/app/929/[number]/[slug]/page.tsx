@@ -10,12 +10,16 @@ import {
 	getPerekIdsForSefer,
 	getSeferByName,
 } from "../../../../data/sefer-dto";
-import { getArticleById, getArticleSummariesByPerekId, getAllArticlePerekIdPairs } from "../../../../lib/articles";
+import {
+	getAllArticlePerekIdPairs,
+	getArticleById,
+	getArticleSummariesByPerekId,
+} from "../../../../lib/articles";
 import { authorNameToSlug } from "../../../../lib/authors";
 import {
+	getAllPerushPerekNamePairs,
 	getPerushDetail,
 	getPerushimByPerekId,
-	getAllPerushPerekNamePairs,
 } from "../../../../lib/perushim";
 import { ArticlesSection } from "../components/ArticlesSection";
 import Breadcrumb from "../components/Breadcrumb";
@@ -26,19 +30,26 @@ import { Stuma } from "../components/Stuma";
 import perekStyles from "../page.module.css";
 import styles from "./page.module.css";
 import { ScrollToSlug } from "./ScrollToArticle";
+import { ScrollToPerushPasukNote } from "./ScrollToPerushPasuk";
 
 /**
  * Module-level caches for bulk queries, shared across all 929 parent
  * invocations within the same build worker. Ensures exactly one DB
  * round-trip per query type regardless of parallelism.
  */
-let articlePairsPromise: Promise<{ articleId: number; perekId: number }[]> | null = null;
-let perushPairsPromise: Promise<{ perekId: number; perushName: string }[]> | null = null;
+let articlePairsPromise: Promise<
+	{ articleId: number; perekId: number }[]
+> | null = null;
+let perushPairsPromise: Promise<
+	{ perekId: number; perushName: string }[]
+> | null = null;
 
 /* istanbul ignore next: only runs during next build */
 export async function generateStaticParams({
 	params,
-}: { params: { number: string } }) {
+}: {
+	params: { number: string };
+}) {
 	const perekId = Number.parseInt(params.number, 10);
 
 	if (!articlePairsPromise) {
@@ -61,7 +72,7 @@ export async function generateStaticParams({
 	}
 	for (const pair of perushPairs) {
 		if (pair.perekId === perekId) {
-			slugs.push({ slug: pair.perushName });
+			slugs.push({ slug: encodeURIComponent(pair.perushName) });
 		}
 	}
 
@@ -123,7 +134,7 @@ export async function generateMetadata({
 		const article = await getCachedArticle(id);
 		if (!article) {
 			return {
-				title: "מאמר לא נמצא | תנ״ך באתר",
+				title: "מאמר לא נמצא | תנ\"ך באתר",
 			};
 		}
 
@@ -135,7 +146,7 @@ export async function generateMetadata({
 			plainText = plainText.replace(/<[^>]*>/g, "");
 		} while (plainText !== prev);
 		return {
-			title: `${article.name} | ${article.authorName} | תנ״ך באתר`,
+			title: `${article.name} | ${article.authorName} | תנ"ך באתר`,
 			description: plainText
 				? plainText.slice(0, 160)
 				: `מאמר מאת ${article.authorName}`,
@@ -148,7 +159,7 @@ export async function generateMetadata({
 
 	if (!perush) {
 		return {
-			title: "פירוש לא נמצא | תנ״ך באתר",
+			title: "פירוש לא נמצא | תנ\"ך באתר",
 		};
 	}
 
@@ -156,7 +167,7 @@ export async function generateMetadata({
 	const sefer = getSeferByName(perekObj.sefer);
 
 	return {
-		title: `${perush.name} על ${sefer.name} ${perekObj.perekHeb} | תנ״ך באתר`,
+		title: `${perush.name} על ${sefer.name} ${perekObj.perekHeb} | תנ"ך באתר`,
 		description: `פירוש ${perush.name} מאת ${perush.parshanName} על ${sefer.name} פרק ${perekObj.perekHeb}`,
 	};
 }
@@ -325,6 +336,7 @@ export default async function ArticlePage({
 	return (
 		<>
 			<ScrollToSlug targetId="perush-view" />
+			<ScrollToPerushPasukNote />
 			<Suspense>
 				<SeferComposite
 					perekObj={perekObj}
@@ -406,21 +418,30 @@ export default async function ArticlePage({
 					</header>
 
 					<div className={styles.perushContent}>
-						{perushDetail.notes.map((note) => (
-							<div
-								key={`${note.pasuk}-${note.noteIdx}`}
-								className={styles.note}
-							>
-								<span className={styles.notePasuk}>
-									פסוק {toLetters(note.pasuk)}:
-								</span>
+						{perushDetail.notes.map((note, idx) => {
+							const prevSamePasuk =
+								idx > 0 && perushDetail.notes[idx - 1].pasuk === note.pasuk;
+							const noteAnchorId = !prevSamePasuk
+								? `perush-pasuk-${note.pasuk}`
+								: undefined;
+							return (
 								<div
-									className={styles.noteContent}
-									// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
-									dangerouslySetInnerHTML={{ __html: note.noteContent }}
-								/>
-							</div>
-						))}
+									key={`${note.pasuk}-${note.noteIdx}`}
+									id={noteAnchorId}
+									className={styles.note}
+									data-perush-pasuk={note.pasuk}
+								>
+									<span className={styles.notePasuk}>
+										פסוק {toLetters(note.pasuk)}:
+									</span>
+									<div
+										className={styles.noteContent}
+										// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
+										dangerouslySetInnerHTML={{ __html: note.noteContent }}
+									/>
+								</div>
+							);
+						})}
 					</div>
 
 					<div className={styles.backToPerek}>
