@@ -406,7 +406,10 @@ jobs:
     with:
       module_directory: ${{ needs.setup_env.outputs.data_directory }}
       module_name: ${{ needs.setup_env.outputs.data_directory }}
-      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml"
+      # Include the data-deploy tooling so that changes to how data is deployed
+      # to production (e.g. the SQL_FILES manifest in devops/deploy/data-deploy)
+      # re-trigger the data CD and re-populate the production database.
+      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,devops/deploy/data-deploy"
 
   determine_perushim_pipeline_changes:
     name: Determine Perushim Pipeline Changes
