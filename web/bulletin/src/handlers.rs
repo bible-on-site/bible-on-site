@@ -334,4 +334,51 @@ mod tests {
             r#"{"error":"perakimIds must not be empty"}"#
         );
     }
+
+    #[tokio::test]
+    async fn lambda_generate_pdf_accepts_binary_json_and_reports_unknown_perek() {
+        let response = lambda_handler(request(
+            "/api/generate-pdf",
+            Body::Binary(br#"{"perakimIds":[999999],"includeArticles":false}"#.to_vec()),
+        ))
+        .await
+        .expect("core validation should become a response");
+
+        assert_eq!(response.status().as_u16(), 500);
+        assert_eq!(
+            text_body(response.body()),
+            r#"{"error":"Unknown perekId: 999999"}"#
+        );
+    }
+
+    #[tokio::test]
+    async fn lambda_generate_pdf_returns_pdf_bytes_and_download_headers() {
+        let response = lambda_handler(request(
+            "/api/generate-pdf",
+            Body::Text(
+                r##"{"seferName":"Genesis","perakimIds":[1],"includeArticles":false,"coverAccentHex":"#123abc"}"##
+                    .to_string(),
+            ),
+        ))
+        .await
+        .expect("valid request should become a PDF response");
+
+        assert_eq!(response.status().as_u16(), 200);
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "application/pdf"
+        );
+        assert!(
+            response
+                .headers()
+                .get("content-disposition")
+                .unwrap()
+                .as_bytes()
+                .starts_with(b"attachment; filename=\"Genesis-")
+        );
+        match response.body() {
+            Body::Binary(bytes) => assert!(bytes.starts_with(b"%PDF")),
+            _ => panic!("expected PDF binary body"),
+        }
+    }
 }
