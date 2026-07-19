@@ -1,6 +1,6 @@
 {
 	"name": "admin",
-	"version": "0.1.36",
+	"version": "0.1.37",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -54,7 +54,7 @@
 		"flowbite-react": "0.12.17",
 		"gematry": "1.0.2",
 		"jose": "6.2.3",
-		"mysql2": "3.23.0",
+		"mysql2": "3.23.1",
 		"nitro": "npm:nitro-nightly@3.0.1-20260320-182900-2218d454",
 		"react": "19.2.7",
 		"react-dom": "19.2.7",
