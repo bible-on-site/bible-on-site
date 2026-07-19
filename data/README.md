@@ -56,6 +56,9 @@ Outputs will be written to `sefaria/.outputs/`.
 | `generate-tanah-view-sqlite` | Generate Tanah view as SQLite |
 | `mysql-populate` | Populate MySQL database with structure and test data |
 | `mysql-populate-data-only` | Populate MySQL database with test data only |
+| `mysql-upgrade-tanahpedia-structure` | Safely create/upgrade Tanahpedia structure without dropping existing content |
+| `mysql-seed-tanahpedia-baseline` | Safely seed Tanahpedia lookup/baseline rows without overwriting content |
+| `mysql-upgrade-tanahpedia-dev` | Safe Tanahpedia structure + baseline seed for `tanah-dev` |
 | `mysql-apply-tanahpedia-families` | תנכפדיה בלבד: שמשון (אם קיים) + יעקב — בלי populate מלא |
 | `mysql-apply-tanahpedia-edge-lab` | 38 ערכי דמו למקרי קצה בעץ משפחה (מעבדה; UUIDs קבועים) |
 
@@ -73,13 +76,20 @@ Each perek includes:
 
 The `mysql/db-populator` crate populates a MySQL database with Tanah structure and test data.
 
-The db-populator runs `tanahpedia_family_shimshon_data.sql` after Tanahpedia seeds whenever the **target** database has a `tanahpedia_person` row for entity name **שמשון** (from `tanahpedia_legacy_migration.sql` or from prod sync). This is **independent** of whether the legacy migration ran (e.g. when `PROD_DB_URL` is set and prod already has Tanahpedia). The script is idempotent (fixed UUIDs). It needs `source_citation` columns on `tanahpedia_person_union` / `tanahpedia_person_parent_child`. For an **existing** DB created from an older `tanahpedia_structure.sql`, run `tanahpedia_alter_source_citation.sql` once before populate.
+The db-populator has two Tanahpedia modes:
+
+- **Destructive rebuild** (`mysql-populate*`): recreates Tanah/Tanahpedia tables and seeds local/CI data. Use for fresh dev/test databases only.
+- **Safe upgrade/seed** (`mysql-upgrade-tanahpedia-*`, `mysql-seed-tanahpedia-baseline`): creates missing Tanahpedia tables, applies idempotent structure upgrades, and inserts lookup/baseline rows without dropping or replacing content. Use for production-like databases and after syncing remote content locally.
+
+The safe structure path reuses `tanahpedia_structure.sql` as the source schema, but the Rust populator removes `DROP TABLE IF EXISTS` statements and converts `CREATE TABLE` to `CREATE TABLE IF NOT EXISTS` at runtime. Future structural changes should be added as idempotent upgrade scripts, not by relying on destructive rebuilds.
+
+The db-populator runs `tanahpedia_family_shimshon_data.sql` after Tanahpedia seeds whenever the **target** database has a `tanahpedia_person` row for entity name **שמשון** (from `tanahpedia_legacy_migration.sql` or from prod sync). This is **independent** of whether the legacy migration ran (e.g. when `PROD_DB_URL` is set and prod already has Tanahpedia). The script is idempotent for its fixed demo UUIDs. It needs `source_citation` columns on `tanahpedia_person_union` / `tanahpedia_person_parent_child`; the db-populator adds those columns idempotently after checking `information_schema` in safe/full Tanahpedia paths.
 
 Before family demo SQL, the populator applies `tanahpedia_incremental_lookups.sql` (`INSERT IGNORE` for new lookup rows such as `FORBIDDEN_WITH_GENTILE`) so older DBs do not fail FK checks when running `cargo make mysql-apply-tanahpedia-families` only.
 
 After the יעקב script, `tanahpedia_place_eretz_yisrael_data.sql` adds the `eretz-yisrael` place entry (coordinates + category homepage `MAP` for `/tanahpedia/place`). Re-run `cargo make mysql-apply-tanahpedia-families` or full populate to apply it on an existing DB.
 
-After that, when `tanahpedia_family_jacob_data.sql` is present, the populator always applies the **יעקב** demo (Tanahpedia entry `יעקב`, parents, four wives including בלהה וזלפה as full wives per הכתב והקבלה בראשית לב כג, children, and brother עשו). Idempotent fixed UUIDs (`e200…` / `p200…` / `ea200…` — the script deletes only those before re-insert).
+After that, when `tanahpedia_family_jacob_data.sql` is present, full populate applies the **יעקב** demo (Tanahpedia entry `יעקב`, parents, four wives including בלהה וזלפה as full wives per הכתב והקבלה בראשית לב כג, children, and brother עשו) only when the entry is missing. `mysql-apply-tanahpedia-families` forces the family/place demo scripts. The demo scripts use fixed UUIDs (`e200…` / `p200…` / `ea200…` — each script deletes only its own fixed demo rows before re-insert), so do not use the forced demo task as the normal content editing path after production content is edited remotely.
 
 **יעקב** does **not** come from `tanahpedia_legacy_migration.sql`; if the DB was filled without running the full data phase (e.g. prod sync only), run the family scripts explicitly (see below).
 
@@ -113,6 +123,13 @@ cargo make mysql-populate-dev
 # Data only (skip structure recreation)
 cargo make mysql-populate-data-only
 
+# תנכפדיה — מבנה בטוח + זרעי lookup בלי מחיקת תוכן
+cargo make mysql-upgrade-tanahpedia-structure
+cargo make mysql-seed-tanahpedia-baseline
+
+# תנכפדיה — אותו safe upgrade עבור tanah-dev
+cargo make mysql-upgrade-tanahpedia-dev
+
 # תנכפדיה — רק דמו משפחות (שמשון אם יש איש, אז יעקב); לא דורס ישויות אחרות
 cargo make mysql-apply-tanahpedia-families
 
@@ -122,7 +139,22 @@ cargo make mysql-apply-tanahpedia-edge-lab
 
 The `DB_URL` environment variable should be in the format: `mysql://user:pass@host:port/database`
 
-**Production / DB שכבר מלא:** אחרי deploy או sync, אם **יעקב** חסר ברשימת אישים — `cargo make mysql-apply-tanahpedia-families` (עם `DB_URL` ליעד). אופציונלי: `--ensure-tanahpedia-seed` רק אם חסרים טבלאות lookup של תנכפדיה (עלול להיכשל אם הזרע כבר קיים).
+**Production / DB שכבר מלא:** אל תריצו populate מלא. הריצו את המסלול הבטוח עם `DB_URL` ליעד:
+
+```bash
+cargo make mysql-upgrade-tanahpedia-structure
+cargo make mysql-seed-tanahpedia-baseline
+```
+
+אם צריך להכניס את דמו המשפחות הראשוני בלבד, אפשר להריץ `cargo make mysql-apply-tanahpedia-families`; אחרי שתוכן נערך מרחוק דרך admin/API, לא להשתמש במשימת הדמו כנתיב עריכה רגיל.
+
+### Tanahpedia content direction
+
+Tanahpedia SQL files should remain responsible for schema, stable lookup rows, bootstrap seed, and local/demo fixtures. Normal content expansion should move through the admin Tanahpedia edit API, so production content can evolve remotely. For local development against remote content, sync the remote DB into `tanah-dev`, then run the safe structure/baseline upgrade:
+
+```bash
+cargo make mysql-upgrade-tanahpedia-dev
+```
 
 ### Sync from production (optional)
 

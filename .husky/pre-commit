@@ -33,6 +33,8 @@ if echo "$changed_files" | grep -q '^web/bible-on-site/'; then
 fi
 
 if echo "$changed_files" | grep -q '^web/admin/'; then
+    echo "Running shared checks for web/admin..."
+    .husky/shared-checks.sh web/admin || exit 1
     echo "Running pre-commit tasks for web/admin..."
     cd ./web/admin
     npm run lint || exit 1

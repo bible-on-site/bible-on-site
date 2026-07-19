@@ -6,14 +6,14 @@
 -- GOD (singleton)
 -- -------------------------------------------
 
-INSERT INTO `tanahpedia_god` (`id`) VALUES
+INSERT IGNORE INTO `tanahpedia_god` (`id`) VALUES
 ('00000000-0000-0000-0000-000000000001');
 
 -- -------------------------------------------
 -- LOOKUP: Name Types
 -- -------------------------------------------
 
-INSERT INTO `tanahpedia_lookup_name_type` (`id`, `name`) VALUES
+INSERT IGNORE INTO `tanahpedia_lookup_name_type` (`id`, `name`) VALUES
 ('10000000-0000-0000-0000-000000000001', 'MAIN'),
 ('10000000-0000-0000-0000-000000000002', 'ADDITIONAL'),
 ('10000000-0000-0000-0000-000000000003', 'NICKNAME');
@@ -22,7 +22,7 @@ INSERT INTO `tanahpedia_lookup_name_type` (`id`, `name`) VALUES
 -- LOOKUP: Union Types
 -- -------------------------------------------
 
-INSERT INTO `tanahpedia_lookup_union_type` (`id`, `name`) VALUES
+INSERT IGNORE INTO `tanahpedia_lookup_union_type` (`id`, `name`) VALUES
 ('20000000-0000-0000-0000-000000000001', 'MARRIAGE'),
 ('20000000-0000-0000-0000-000000000002', 'PILEGESH'),
 ('20000000-0000-0000-0000-000000000003', 'FORBIDDEN_WITH_GENTILE'),
@@ -33,7 +33,7 @@ INSERT INTO `tanahpedia_lookup_union_type` (`id`, `name`) VALUES
 -- LOOKUP: Union End Reasons
 -- -------------------------------------------
 
-INSERT INTO `tanahpedia_lookup_union_end_reason` (`id`, `name`) VALUES
+INSERT IGNORE INTO `tanahpedia_lookup_union_end_reason` (`id`, `name`) VALUES
 ('30000000-0000-0000-0000-000000000001', 'DEATH'),
 ('30000000-0000-0000-0000-000000000002', 'DIVORCE');
 
@@ -41,7 +41,7 @@ INSERT INTO `tanahpedia_lookup_union_end_reason` (`id`, `name`) VALUES
 -- LOOKUP: Parent-Child Types
 -- -------------------------------------------
 
-INSERT INTO `tanahpedia_lookup_parent_child_type` (`id`, `name`) VALUES
+INSERT IGNORE INTO `tanahpedia_lookup_parent_child_type` (`id`, `name`) VALUES
 ('40000000-0000-0000-0000-000000000001', 'BIOLOGICAL'),
 ('40000000-0000-0000-0000-000000000002', 'ADOPTIVE'),
 ('40000000-0000-0000-0000-000000000003', 'STEP'),
@@ -51,6 +51,6 @@ INSERT INTO `tanahpedia_lookup_parent_child_type` (`id`, `name`) VALUES
 -- LOOKUP: Parent Roles
 -- -------------------------------------------
 
-INSERT INTO `tanahpedia_lookup_parent_role` (`id`, `name`) VALUES
+INSERT IGNORE INTO `tanahpedia_lookup_parent_role` (`id`, `name`) VALUES
 ('50000000-0000-0000-0000-000000000001', 'FATHER'),
 ('50000000-0000-0000-0000-000000000002', 'MOTHER');
