@@ -153,7 +153,7 @@ CREATE TABLE `tanahpedia_entry_entity` (
 -- Entry revisions submitted by EXTERNAL AI clients via the API for human triage.
 -- entry_id NULL = the revision proposes a brand-new entry. status is a free-text
 -- lifecycle marker (PENDING / APPROVED / REJECTED) kept as a string to avoid an
--- enum migration; nothing is applied to `tanahpedia_entry` until a human approves.
+-- enum migration. Nothing is applied to `tanahpedia_entry` until a human approves.
 DROP TABLE IF EXISTS `tanahpedia_entry_revision`;
 CREATE TABLE `tanahpedia_entry_revision` (
     `id` char(36) NOT NULL,
