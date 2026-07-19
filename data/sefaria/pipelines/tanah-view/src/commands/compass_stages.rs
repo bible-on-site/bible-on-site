@@ -59,6 +59,33 @@ fn bson_value_to_shell(value: &bson::Bson, indent: usize) -> String {
     }
 }
 
+fn compass_stage_filename(index: usize, stage_names: &[&str]) -> String {
+    let stage_name = stage_names.get(index).unwrap_or(&"stage");
+    format!("{:02}-{}.mongodb-compass-stage", index + 1, stage_name)
+}
+
+fn compass_stage_content(index: usize, stage: &Document) -> String {
+    if let Some((op, inner)) = stage.iter().next() {
+        if let bson::Bson::Document(inner_doc) = inner {
+            format!(
+                "// Stage {}: {}\n{}",
+                index + 1,
+                op,
+                bson_to_shell_format(inner_doc, 0)
+            )
+        } else {
+            format!(
+                "// Stage {}: {}\n{}",
+                index + 1,
+                op,
+                bson_value_to_shell(inner, 0)
+            )
+        }
+    } else {
+        bson_to_shell_format(stage, 0)
+    }
+}
+
 pub fn generate() -> Result<()> {
     println!("📊 Generating MongoDB Compass stages...");
 
@@ -87,30 +114,9 @@ pub fn generate() -> Result<()> {
     ];
 
     for (i, stage) in pipeline.iter().enumerate() {
-        let stage_name = stage_names.get(i).unwrap_or(&"stage");
-        let filename = format!("{:02}-{}.mongodb-compass-stage", i + 1, stage_name);
+        let filename = compass_stage_filename(i, &stage_names);
         let output_path = outputs_dir.join(&filename);
-
-        // Get the stage operator (e.g., "$match", "$project")
-        let stage_content = if let Some((op, inner)) = stage.iter().next() {
-            if let bson::Bson::Document(inner_doc) = inner {
-                format!(
-                    "// Stage {}: {}\n{}",
-                    i + 1,
-                    op,
-                    bson_to_shell_format(inner_doc, 0)
-                )
-            } else {
-                format!(
-                    "// Stage {}: {}\n{}",
-                    i + 1,
-                    op,
-                    bson_value_to_shell(inner, 0)
-                )
-            }
-        } else {
-            bson_to_shell_format(stage, 0)
-        };
+        let stage_content = compass_stage_content(i, stage);
 
         fs::write(&output_path, &stage_content)?;
         println!("  📄 {}", filename);
@@ -170,5 +176,43 @@ mod tests {
     fn bson_to_shell_format_handles_empty_documents_and_unknown_values() {
         assert_eq!(bson_to_shell_format(&Document::new(), 0), "{}");
         assert!(bson_value_to_shell(&Bson::ObjectId(Default::default()), 0).contains("ObjectId"));
+    }
+
+    #[test]
+    fn compass_stage_filename_uses_named_stage_and_fallback() {
+        let stage_names = ["match", "lookup"];
+
+        assert_eq!(
+            compass_stage_filename(0, &stage_names),
+            "01-match.mongodb-compass-stage"
+        );
+        assert_eq!(
+            compass_stage_filename(3, &stage_names),
+            "04-stage.mongodb-compass-stage"
+        );
+    }
+
+    #[test]
+    fn compass_stage_content_formats_document_stage_with_header() {
+        let stage = doc! {
+            "$project": {
+                "title": 1,
+                "display": "$display_title",
+            }
+        };
+
+        let content = compass_stage_content(1, &stage);
+
+        assert!(content.starts_with("// Stage 2: $project\n"));
+        assert!(content.contains("title: 1"));
+        assert!(content.contains("display: \"$display_title\""));
+    }
+
+    #[test]
+    fn compass_stage_content_formats_scalar_and_empty_stages() {
+        let scalar_stage = doc! { "$limit": 5 };
+
+        assert_eq!(compass_stage_content(2, &scalar_stage), "// Stage 3: $limit\n5");
+        assert_eq!(compass_stage_content(0, &Document::new()), "{}");
     }
 }
