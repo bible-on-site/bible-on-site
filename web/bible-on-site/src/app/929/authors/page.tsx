@@ -61,8 +61,8 @@ const getCachedAuthors = unstable_cache(
 );
 
 export const metadata = {
-	title: "הרבנים | תנ״ך באתר",
-	description: "רשימת הרבנים וכותבי המאמרים באתר תנ״ך על הפרק",
+	title: "הרבנים | תנ\"ך באתר",
+	description: "רשימת הרבנים וכותבי המאמרים באתר תנ\"ך על הפרק",
 };
 
 export default async function AuthorsPage() {

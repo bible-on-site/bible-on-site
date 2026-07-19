@@ -514,6 +514,12 @@ export interface PersonFamilyRelatedPerson {
 	displayName: string;
 	entryUniqueName: string | null;
 	entryTitle: string | null;
+	/** MALE / FEMALE / UNKNOWN מ־tanahpedia_person_sex (שורה ללא alt_group) */
+	sex: string | null;
+	/** YYYYMMDD מ־tanahpedia_person_birth_date (ללא alt_group) — לחלוקת אחים מבוגרים/צעירים */
+	birthDateYyyymmdd?: number | null;
+	/** מקור לקישור תנ"ך — מ־parent_child של האח מול הורה משותף (אם קיים) */
+	sourceCitation?: string | null;
 }
 
 export interface PersonFamilyParentEdge {
@@ -530,6 +536,11 @@ export interface PersonFamilyChildEdge {
 	relationshipType: string;
 	altGroupId: string | null;
 	sourceCitation: string | null;
+	/** הורה נוסף בצמד (למשל האם כשהמוקד אב) — לקיבוץ ילדים לפי בת זוג */
+	coParentEntityId: string | null;
+	coParentDisplayName: string | null;
+	/** סדר זיווג מול ההורה הנוסף (תואם כרטיסי בנות זוג) */
+	coParentUnionOrder: number | null;
 }
 
 export interface PersonFamilySpouseEdge {
@@ -551,6 +562,8 @@ export interface PersonFamilySummary {
 	focalDisplayName: string;
 	/** From tanahpedia_person_sex when present (MALE / FEMALE). */
 	focalSex: string | null;
+	/** תאריך לידה של המוקד (YYYYMMDD) לחלוקת אחים; null אם אין במסד */
+	focalBirthYyyymmdd: number | null;
 	parents: PersonFamilyParentEdge[];
 	children: PersonFamilyChildEdge[];
 	spouses: PersonFamilySpouseEdge[];

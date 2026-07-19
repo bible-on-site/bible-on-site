@@ -72,7 +72,7 @@ const mockGetPerushNotesForPage = getPerushNotesForPage as jest.MockedFunction<
 >;
 
 const mockPerushim = [
-	{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 10 },
+	{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 10 },
 ];
 
 const mockArticles: Article[] = [
@@ -212,14 +212,14 @@ describe("BlankPageContent", () => {
 		);
 
 		await act(async () => {
-			fireEvent.click(screen.getByRole("button", { name: /רש״י/ }));
+			fireEvent.click(screen.getByRole("button", { name: /רש"י/ }));
 		});
 
 		await waitFor(() => {
 			expect(pushSpy).toHaveBeenCalledWith(
 				{ perushId: 1 },
 				"",
-				"/929/615/%D7%A8%D7%A9%D7%B4%D7%99?book",
+				"/929/615/%D7%A8%D7%A9%22%D7%99?book",
 			);
 		});
 
@@ -257,7 +257,7 @@ describe("BlankPageContent", () => {
 			/>,
 		);
 
-		const perushButton = screen.getByRole("button", { name: /רש״י/ });
+		const perushButton = screen.getByRole("button", { name: /רש"י/ });
 		await act(async () => {
 			fireEvent.click(perushButton);
 		});
@@ -283,7 +283,7 @@ describe("BlankPageContent", () => {
 
 		// Click perush to open full view
 		await act(async () => {
-			fireEvent.click(screen.getByRole("button", { name: /רש״י/ }));
+			fireEvent.click(screen.getByRole("button", { name: /רש"י/ }));
 		});
 
 		await waitFor(() => {
@@ -313,7 +313,7 @@ describe("BlankPageContent", () => {
 		);
 
 		await act(async () => {
-			fireEvent.click(screen.getByRole("button", { name: /רש״י/ }));
+			fireEvent.click(screen.getByRole("button", { name: /רש"י/ }));
 		});
 
 		// Should still show carousel (selectedPerush set to null on error)
@@ -358,7 +358,7 @@ describe("BlankPageContent", () => {
 						perushim={mockPerushim}
 						perekId={1}
 						hebrewDateStr="י׳ בשבט"
-						initialSlug="רש״י"
+						initialSlug={'רש"י'}
 					/>,
 				);
 			});

@@ -30,7 +30,7 @@ export function Footer() {
 			</nav>
 			<div className={styles.footerBottom}>
 				<span className={styles.copyright}>
-					© {startYearStr} - {currentYearStr} תנ״ך על הפרק
+					© {startYearStr} - {currentYearStr} תנ"ך על הפרק
 				</span>
 				<span className={styles.separator}>|</span>
 				<a

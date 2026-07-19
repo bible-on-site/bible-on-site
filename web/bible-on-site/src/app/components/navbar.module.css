@@ -16,7 +16,7 @@
 }
 
 .menuBtn {
-  position: fixed;
+  position: absolute;
   top: 1.25rem;
   right: 1.25rem;
   width: 2rem;

@@ -320,7 +320,7 @@ fn append_cover_page(markup: &mut String, req: &PdfRequest) {
   #v(0.6em)
   #line(length: 55%, stroke: 2.5pt + rgb("{hex}"))
   #v(0.4em)
-  #text(11pt)[תנ״ך]
+  #text(11pt)[תנ\"ך]
   #v(1fr)
 ]
 "#,
@@ -585,7 +585,7 @@ mod tests {
         };
         let markup = generate_typst_markup(&req);
         assert!(markup.contains("תוכן העניינים"));
-        assert!(markup.contains("תנ״ך"));
+        assert!(markup.contains("תנ\\\"ך"));
         assert!(markup.contains("rgb(\"8B0000\")"));
         assert!(markup.contains("בראשית א – כותרת"));
     }

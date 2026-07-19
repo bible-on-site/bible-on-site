@@ -33,7 +33,7 @@ jobs:
         run: git fetch --tags origin
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: devops/package.json
           cache-dependency-path: devops/package-lock.json

@@ -99,7 +99,7 @@ describe("sitemap default export", () => {
 		(getPerushimByPerekId as jest.Mock).mockImplementation((perekId: number) =>
 			perekId === 1
 				? Promise.resolve([
-						{ id: 1, name: "רש״י", parshanName: "רש״י", noteCount: 5 },
+						{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 5 },
 					])
 				: Promise.resolve([]),
 		);
@@ -108,7 +108,7 @@ describe("sitemap default export", () => {
 
 		const urls = result.map((e) => e.url);
 		expect(urls).toContain(
-			`https://example.com/929/1/${encodeURIComponent("רש״י")}`,
+			`https://example.com/929/1/${encodeURIComponent('רש"י')}`,
 		);
 		// root + sections + 929 index + 929 perakim + 0 articles + 1 perush + authors index + 0 authors
 		const expectedLength =

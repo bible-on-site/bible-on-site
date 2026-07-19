@@ -84,7 +84,7 @@ const BookshelfModal: React.FC<BookshelfModalProps> = ({ isOpen, onClose }) => {
 			className={styles.modal}
 			onClick={handleBackdropClick}
 			onKeyDown={handleBackdropKeyDown}
-			aria-label="ספרי התנ״ך"
+			aria-label={'ספרי התנ"ך'}
 		>
 			<div className={styles.content}>
 				<button

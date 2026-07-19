@@ -9,6 +9,7 @@ monocart-report/
 .ssh/
 .release/
 .cache/
+.tanahpedia-dev.env
 legacy-app/
 legacy-api/
 legacy-website/

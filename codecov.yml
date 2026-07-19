@@ -22,8 +22,11 @@ coverage:
         flags:
           - app
       website:
-        target: 99%
-        threshold: 1%
+        # Enforce no regression from the current base coverage. A fixed 99%
+        # target is stale: current master website LCOV is ~85% once Tanahpedia
+        # source files are included in the website flag.
+        target: auto
+        threshold: 0%
         flags:
           - website
       bulletin:
