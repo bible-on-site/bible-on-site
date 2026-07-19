@@ -1789,8 +1789,19 @@ jobs:
         id: fmt-check
         run: cargo make fmt-check
 
+      - name: Install and start MySQL
+        id: mysql
+        uses: shogo82148/actions-setup-mysql@v1
+        with:
+          mysql-version: "8.4"
+          root-password: test_123
+          distribution: "mysql"
+          auto-start: true
+
       - name: Unit Test
         id: unit-test
+        env:
+          DB_POPULATOR_TEST_DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_db_populator_test
         run: cargo make coverage-unit
 
       - name: Store Data Unit JUnit Report
