@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	ADMIN_EDITOR_SHORTCUT_EXTRAS_KEY,
 	parseStoredShortcutExtras,
-} from "./adminEditorShortcuts";
+} from "~/components/editor/adminEditorShortcuts";
 
 function createEditor() {
 	const chain = {

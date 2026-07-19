@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { EditorShortcutModal } from "./EditorShortcutModal";
+import { EditorShortcutModal } from "~/components/editor/EditorShortcutModal";
 
 describe("EditorShortcutModal", () => {
 	it("renders nothing when closed", () => {

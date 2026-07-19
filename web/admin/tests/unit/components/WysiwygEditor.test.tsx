@@ -7,7 +7,7 @@ import {
 	within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { WysiwygEditor } from "../../components/WysiwygEditor";
+import { WysiwygEditor } from "~/components/WysiwygEditor";
 
 const editorState = vi.hoisted(() => {
 	let html = "<p>Initial</p>";

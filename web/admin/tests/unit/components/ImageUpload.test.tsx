@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ImageUpload } from "../../components/ImageUpload";
+import { ImageUpload } from "~/components/ImageUpload";
 
 class MockFileReader {
 	result: string | ArrayBuffer | null = null;

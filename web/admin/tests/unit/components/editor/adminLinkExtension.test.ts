@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { AdminLink, buildLinkHref, inferLinkType } from "./adminLinkExtension";
+import {
+	AdminLink,
+	buildLinkHref,
+	inferLinkType,
+} from "~/components/editor/adminLinkExtension";
 
 type LinkOptions = {
 	openOnClick?: boolean;

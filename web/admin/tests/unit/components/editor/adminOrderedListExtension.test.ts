@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AdminOrderedList } from "./adminOrderedListExtension";
+import { AdminOrderedList } from "~/components/editor/adminOrderedListExtension";
 
 type OrderedListAttribute = {
 	default: string;

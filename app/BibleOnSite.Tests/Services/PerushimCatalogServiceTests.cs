@@ -16,7 +16,7 @@ public sealed class PerushimCatalogServiceTests : IDisposable
 
     public PerushimCatalogServiceTests()
     {
-        _tempRoot = Path.Combine(Path.GetTempPath(), "BibleOnSiteCatalogTests_" + Guid.NewGuid());
+        _tempRoot = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         Directory.CreateDirectory(_tempRoot);
     }
 
@@ -30,7 +30,15 @@ public sealed class PerushimCatalogServiceTests : IDisposable
             if (Directory.Exists(_tempRoot))
                 Directory.Delete(_tempRoot, true);
         }
-        catch
+        catch (DirectoryNotFoundException)
+        {
+            // Best-effort cleanup on temp directory.
+        }
+        catch (IOException)
+        {
+            // Best-effort cleanup on temp directory.
+        }
+        catch (UnauthorizedAccessException)
         {
             // Best-effort cleanup on temp directory.
         }
@@ -96,7 +104,8 @@ public sealed class PerushimCatalogServiceTests : IDisposable
     private async Task<SQLiteAsyncConnection> CreateCatalogConnectionAsync(
         params (int id, string? name, int priority)[] rows)
     {
-        var dbPath = Path.Combine(_tempRoot, Guid.NewGuid() + ".sqlite");
+        var dbFileName = Path.ChangeExtension(Path.GetRandomFileName(), ".sqlite");
+        var dbPath = Path.Combine(_tempRoot, dbFileName);
         var connection = new SQLiteAsyncConnection(
             dbPath,
             SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create);

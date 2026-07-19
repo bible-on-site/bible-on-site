@@ -3,8 +3,12 @@ import {
 	CATEGORY_HIERARCHY,
 	labelForCategoryKey,
 	websiteSubcategoryPath,
-} from "./category-hierarchy";
-import { CATEGORY_LABELS, ENTITY_TYPE_LABELS, ENTITY_TYPES } from "./labels";
+} from "~/lib/tanahpedia/category-hierarchy";
+import {
+	CATEGORY_LABELS,
+	ENTITY_TYPE_LABELS,
+	ENTITY_TYPES,
+} from "~/lib/tanahpedia/labels";
 
 describe("tanahpedia category hierarchy", () => {
 	it("lists every base entity type exactly once", () => {
