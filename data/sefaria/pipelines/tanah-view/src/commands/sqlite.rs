@@ -266,3 +266,222 @@ fn insert_perakim(tx: &rusqlite::Transaction, sefer_id: i64, perakim: &[Perek]) 
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{Additional, Pasuk, RecordingTimeFrame, Segment};
+
+    fn segment(segment_type: &str, value: Option<&str>) -> Segment {
+        Segment {
+            value: value.map(str::to_string),
+            segment_type: segment_type.to_string(),
+            recording_time_frame: None,
+            ktiv_offset: None,
+            qri_offset: None,
+        }
+    }
+
+    fn perek(perek_id: i32, star_rise: Vec<&str>) -> Perek {
+        Perek {
+            perek_id,
+            header: format!("Header {perek_id}"),
+            date: vec![57750329, 57750330],
+            star_rise: star_rise.into_iter().map(str::to_string).collect(),
+            pesukim: vec![Pasuk {
+                segments: vec![
+                    Segment {
+                        value: Some("written".to_string()),
+                        segment_type: "ktiv".to_string(),
+                        recording_time_frame: None,
+                        ktiv_offset: None,
+                        qri_offset: Some(1),
+                    },
+                    Segment {
+                        value: Some("read".to_string()),
+                        segment_type: "qri".to_string(),
+                        recording_time_frame: Some(RecordingTimeFrame {
+                            from: "00:01".to_string(),
+                            to: "00:02".to_string(),
+                        }),
+                        ktiv_offset: Some(-1),
+                        qri_offset: None,
+                    },
+                    segment("stuma", None),
+                ],
+            }],
+        }
+    }
+
+    fn sample_sefarim() -> Vec<Sefer> {
+        vec![
+            Sefer {
+                id: "book-a".to_string(),
+                name: "Book A".to_string(),
+                tanach_us_name: Some("BookA".to_string()),
+                helek: "Torah".to_string(),
+                pesukim_count: 3,
+                perek_from: 1,
+                perek_to: 1,
+                additionals: None,
+                perakim: Some(vec![perek(1, vec!["05:30"])]),
+            },
+            Sefer {
+                id: "book-b".to_string(),
+                name: "Book B".to_string(),
+                tanach_us_name: None,
+                helek: "Torah".to_string(),
+                pesukim_count: 3,
+                perek_from: 2,
+                perek_to: 2,
+                additionals: Some(vec![Additional {
+                    letter: "B".to_string(),
+                    name: "Book B II".to_string(),
+                    tanach_us_name: None,
+                    helek: "Torah".to_string(),
+                    order: 2,
+                    pesukim_count: 3,
+                    perek_from: 2,
+                    perek_to: 2,
+                    perakim: vec![perek(2, vec!["06:15", "06:16"])],
+                }]),
+                perakim: None,
+            },
+        ]
+    }
+
+    #[test]
+    fn insert_metadata_writes_generator_source_and_timestamp() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE _metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            .unwrap();
+
+        let tx = conn.transaction().unwrap();
+        insert_metadata(&tx, "dump-name").unwrap();
+        tx.commit().unwrap();
+
+        let rows: Vec<(String, String)> = conn
+            .prepare("SELECT key, value FROM _metadata ORDER BY key")
+            .unwrap()
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+
+        assert_eq!(rows.len(), 3);
+        assert!(rows.iter().any(|(key, _)| key == "generated_at"));
+        assert!(
+            rows.iter()
+                .any(|(key, value)| key == "source" && value == "dump-name")
+        );
+        assert!(
+            rows.iter()
+                .any(|(key, value)| key == "generator" && value.contains("generate-tanah-view"))
+        );
+    }
+
+    #[test]
+    fn create_db_roundtrips_sefarim_additionals_dates_and_segments() {
+        let dir =
+            std::env::temp_dir().join(format!("tanah_view_sqlite_test_{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("tanah.sqlite");
+
+        create_db(&path, &sample_sefarim(), "dump-name").unwrap();
+
+        let conn = Connection::open(&path).unwrap();
+        let sefer_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM tanah_sefer", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(sefer_count, 2);
+
+        let additional_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM tanah_additional", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(additional_count, 1);
+
+        let perek_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM tanah_perek", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(perek_count, 2);
+
+        let date_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM tanah_perek_date", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(date_count, 4);
+
+        let fallback_star_rise: String = conn
+            .query_row(
+                "SELECT star_rise FROM tanah_perek_date WHERE perek_id = 1 AND cycle = 2",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(fallback_star_rise, "");
+
+        let segment_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM tanah_pasuk_segment", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(segment_count, 6);
+
+        let value_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tanah_pasuk_segment_value",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(value_count, 4);
+
+        let offsets: Vec<i64> = conn
+            .prepare("SELECT qri_ktiv_offset FROM tanah_pasuk_segment_qri_ktiv_offset ORDER BY id")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(offsets, vec![1, -1, 1, -1]);
+
+        let recording_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tanah_pasuk_segment_recording_time_frame",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(recording_count, 2);
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn create_db_overwrites_existing_file() {
+        let dir = std::env::temp_dir().join(format!(
+            "tanah_view_sqlite_overwrite_test_{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("tanah.sqlite");
+        fs::write(&path, b"old file").unwrap();
+
+        create_db(&path, &sample_sefarim()[..1], "dump-v1").unwrap();
+
+        let conn = Connection::open(&path).unwrap();
+        let source: String = conn
+            .query_row(
+                "SELECT value FROM _metadata WHERE key = 'source'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(source, "dump-v1");
+
+        fs::remove_dir_all(&dir).ok();
+    }
+}

@@ -153,3 +153,67 @@ pub fn build(headers_bson: Bson, dates_bson: Bson, star_rise_bson: Bson) -> Docu
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bson::bson;
+
+    #[test]
+    fn build_sets_first_sefer_perek_from_to_one() {
+        let stage = build(bson!(["h1"]), bson!([[57750329]]), bson!([["05:30"]]));
+        let set = stage.get_document("$set").unwrap();
+        let perek_from = set.get_document("perekFrom").unwrap();
+        let condition = perek_from.get_document("$cond").unwrap();
+
+        assert_eq!(condition.get_i32("then"), Ok(1));
+        assert_eq!(
+            condition
+                .get_document("if")
+                .unwrap()
+                .get_array("$eq")
+                .unwrap()
+                .first(),
+            Some(&Bson::String("$order".to_string()))
+        );
+    }
+
+    #[test]
+    fn build_maps_perakim_with_header_dates_and_star_rise_arrays() {
+        let stage = build(
+            bson!(["Header 1", "Header 2"]),
+            bson!([[57750329], [57750330]]),
+            bson!([["05:30"], ["05:31"]]),
+        );
+        let set = stage.get_document("$set").unwrap();
+        let map = set
+            .get_document("perakim")
+            .unwrap()
+            .get_document("$map")
+            .unwrap();
+
+        assert_eq!(map.get_str("as"), Ok("index"));
+        assert!(
+            map.get_document("input")
+                .unwrap()
+                .get_array("$range")
+                .unwrap()
+                .contains(&Bson::Int32(0))
+        );
+
+        let merge_objects = map
+            .get_document("in")
+            .unwrap()
+            .get_document("$let")
+            .unwrap()
+            .get_document("in")
+            .unwrap()
+            .get_array("$mergeObjects")
+            .unwrap();
+        let enriched = merge_objects[1].as_document().unwrap();
+        assert!(enriched.contains_key("perekId"));
+        assert!(enriched.contains_key("header"));
+        assert!(enriched.contains_key("date"));
+        assert!(enriched.contains_key("star_rise"));
+    }
+}

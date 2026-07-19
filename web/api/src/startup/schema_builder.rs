@@ -76,6 +76,28 @@ mod tests {
         }
     }
 
+    fn revision_model(
+        id: &str,
+        entry_id: Option<&str>,
+    ) -> entities::tanahpedia::entry_revision::Model {
+        let now = chrono::NaiveDate::from_ymd_opt(2026, 7, 19)
+            .unwrap()
+            .and_hms_opt(12, 0, 0)
+            .unwrap();
+        entities::tanahpedia::entry_revision::Model {
+            id: id.to_string(),
+            entry_id: entry_id.map(str::to_string),
+            proposed_unique_name: Some("avraham".to_string()),
+            proposed_title: Some("Avraham".to_string()),
+            proposed_content: Some("<p>Body</p>".to_string()),
+            source: "gpt-test".to_string(),
+            notes: Some("review note".to_string()),
+            status: "PENDING".to_string(),
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
     fn mock_row(
         values: impl IntoIterator<Item = (&'static str, Value)>,
     ) -> BTreeMap<String, Value> {
@@ -203,6 +225,60 @@ mod tests {
         );
         assert_eq!(json["starter"]["perekArticlesCounters"][0], 2);
         assert_eq!(json["starter"]["perekArticlesCounters"][928], 7);
+    }
+
+    #[tokio::test]
+    async fn schema_executes_tanahpedia_revision_query() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<
+                    entities::tanahpedia::entry_revision::Model,
+                    Vec<entities::tanahpedia::entry_revision::Model>,
+                    _,
+                >([vec![revision_model("rev-1", Some("entry-1"))]])
+                .into_connection(),
+        );
+        let schema = build_schema(&db);
+
+        let response = schema
+            .execute(Request::new(
+                r#"{ tanahpediaEntryRevisions(status: "PENDING", entryId: "entry-1") { id entryId proposedTitle source notes status createdAt } }"#,
+            ))
+            .await;
+
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let json = response.data.into_json().unwrap();
+        let revision = &json["tanahpediaEntryRevisions"][0];
+        assert_eq!(revision["id"], "rev-1");
+        assert_eq!(revision["entryId"], "entry-1");
+        assert_eq!(revision["proposedTitle"], "Avraham");
+        assert_eq!(revision["source"], "gpt-test");
+        assert_eq!(revision["status"], "PENDING");
+    }
+
+    #[tokio::test]
+    async fn schema_rejects_revision_mutations_without_api_auth() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let schema = build_schema(&db);
+
+        let submit = schema
+            .execute(
+                Request::new(
+                    r#"mutation { submitEntryRevision(input: { source: "gpt-test", proposedTitle: "Title" }) { id } }"#,
+                )
+                .data(crate::common::auth::ApiAuth::new(None)),
+            )
+            .await;
+        assert!(!submit.errors.is_empty());
+
+        let apply = schema
+            .execute(
+                Request::new(r#"mutation { applyEntryRevision(id: "rev-1") { id } }"#)
+                    .data(crate::common::auth::ApiAuth::new(None)),
+            )
+            .await;
+        assert!(!apply.errors.is_empty());
     }
 }
 
