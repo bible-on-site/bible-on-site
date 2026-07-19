@@ -661,11 +661,7 @@ async fn execute_script_chunked(
             .execute(&mut *conn)
             .await
             .with_context(|| {
-                format!(
-                    "Failed to execute {} statement #{}",
-                    script_type,
-                    index + 1
-                )
+                format!("Failed to execute {} statement #{}", script_type, index + 1)
             })?;
     }
 

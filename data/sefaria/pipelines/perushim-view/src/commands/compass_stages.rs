@@ -210,7 +210,10 @@ mod tests {
     fn compass_stage_content_formats_scalar_and_empty_stages() {
         let scalar_stage = doc! { "$limit": 5 };
 
-        assert_eq!(compass_stage_content(2, &scalar_stage), "// Stage 3: $limit\n5");
+        assert_eq!(
+            compass_stage_content(2, &scalar_stage),
+            "// Stage 3: $limit\n5"
+        );
         assert_eq!(compass_stage_content(0, &Document::new()), "{}");
     }
 }
