@@ -334,12 +334,6 @@
   direction: rtl;
 }
 
-/* קו האחים חוצה את אמצע גובה הכרטיס (לא את שורת המקורות בלבד) */
-.siblingGridPre .siblingClusterInRow,
-.siblingGridPost .siblingClusterInRow {
-  align-items: center;
-}
-
 .siblingGridPre {
   display: flex;
   flex-direction: row;
@@ -391,6 +385,7 @@
   flex-wrap: nowrap;
   flex: 0 1 auto;
   min-width: 0;
+  align-items: center;
 }
 
 .siblingGridFocal {
@@ -414,11 +409,6 @@
   border-radius: 1px;
   z-index: 0;
   pointer-events: none;
-}
-
-.siblingGridFocal .focalWrap {
-  position: relative;
-  z-index: 1;
 }
 
 .siblingCluster {
@@ -464,6 +454,8 @@
 .focalWrap {
   flex: 0 0 auto;
   align-self: center;
+  position: relative;
+  z-index: 1;
 }
 
 .spouseBridgeCenter {

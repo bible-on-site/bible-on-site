@@ -347,4 +347,156 @@ describe("PersonFamilyTree", () => {
 			screen.getByRole("group", { name: /ילדים מ.רחל/ }),
 		).toBeInTheDocument();
 	});
+
+	it("sorts parents by role and renders unlinked names with relationship labels", () => {
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			parents: [
+				{
+					related: related("mother", "אם", null, "FEMALE"),
+					parentRole: "MOTHER",
+					relationshipType: "ADOPTIVE",
+					altGroupId: null,
+					sourceCitation: " ",
+				},
+				{
+					related: related("father", "אב", null, "MALE"),
+					parentRole: "FATHER",
+					relationshipType: "BIOLOGICAL",
+					altGroupId: null,
+					sourceCitation: null,
+				},
+			],
+		};
+
+		render(<PersonFamilyTree summary={summary} />);
+
+		const parentRowText = screen.getByText("הורים").closest("section")?.textContent;
+		expect(parentRowText).toContain("אב");
+		expect(parentRowText).toContain("אם");
+		expect(parentRowText?.indexOf("אב")).toBeLessThan(
+			parentRowText?.indexOf("אם") ?? Number.POSITIVE_INFINITY,
+		);
+		expect(screen.getByText(/מאמץ|מאמצת|אימוץ/)).toBeInTheDocument();
+		expect(screen.getAllByText("אב").some((node) => node.closest("a"))).toBe(false);
+	});
+
+	it("renders loose children in a separate spouse matrix column", () => {
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			focalSex: "MALE",
+			spouses: [
+				{
+					related: related("spouse", "לאה", `entry-spouse`, "FEMALE"),
+					unionType: "MARRIAGE",
+					unionOrder: 1,
+					altGroupId: null,
+					sourceCitation: null,
+					unionEndReason: null,
+					unionStartDate: null,
+					unionEndDate: null,
+				},
+			],
+			children: [
+				{
+					related: related("mapped", "בן ממופה", `entry-mapped`, "MALE"),
+					parentRole: "FATHER",
+					relationshipType: "BIOLOGICAL",
+					altGroupId: null,
+					sourceCitation: null,
+					coParentEntityId: "spouse",
+					coParentDisplayName: "לאה",
+					coParentUnionOrder: 1,
+				},
+				{
+					related: related("loose", "בן ללא מיפוי", null, "MALE"),
+					parentRole: "FATHER",
+					relationshipType: "BIOLOGICAL",
+					altGroupId: null,
+					sourceCitation: "בראשית א\nבראשית ב",
+					coParentEntityId: null,
+					coParentDisplayName: null,
+					coParentUnionOrder: null,
+				},
+			],
+		};
+
+		render(<PersonFamilyTree summary={summary} />);
+
+		expect(
+			screen.getByRole("group", { name: "ילדים ללא מיפוי מלא לבת זוג בגרף" }),
+		).toBeInTheDocument();
+		expect(screen.getByText("בן ללא מיפוי").closest("a")).toBeNull();
+		expect(screen.getByRole("link", { name: "בראשית א" })).toBeInTheDocument();
+		expect(screen.getByRole("link", { name: "בראשית ב" })).toBeInTheDocument();
+	});
+
+	it("renders Jacob children in chronology swimlanes including loose children", () => {
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			focalDisplayName: "יעקב",
+			focalSex: "MALE",
+			spouses: [
+				{
+					related: related("leah", "לאה", `entry-leah`, "FEMALE"),
+					unionType: "MARRIAGE",
+					unionOrder: 1,
+					altGroupId: null,
+					sourceCitation: null,
+					unionEndReason: null,
+					unionStartDate: null,
+					unionEndDate: null,
+				},
+				{
+					related: related("rachel", "רחל", `entry-rachel`, "FEMALE"),
+					unionType: "MARRIAGE",
+					unionOrder: 2,
+					altGroupId: null,
+					sourceCitation: null,
+					unionEndReason: null,
+					unionStartDate: null,
+					unionEndDate: null,
+				},
+			],
+			children: [
+				{
+					related: related("reuven", "ראובן", `entry-reuven`, "MALE"),
+					parentRole: "FATHER",
+					relationshipType: "BIOLOGICAL",
+					altGroupId: null,
+					sourceCitation: null,
+					coParentEntityId: "leah",
+					coParentDisplayName: "לאה",
+					coParentUnionOrder: 1,
+				},
+				{
+					related: related("yosef", "יוסף", `entry-yosef`, "MALE"),
+					parentRole: "FATHER",
+					relationshipType: "BIOLOGICAL",
+					altGroupId: null,
+					sourceCitation: null,
+					coParentEntityId: "rachel",
+					coParentDisplayName: "רחל",
+					coParentUnionOrder: 2,
+				},
+				{
+					related: related("unknown", "ילד נוסף", null, "MALE"),
+					parentRole: "FATHER",
+					relationshipType: "BIOLOGICAL",
+					altGroupId: null,
+					sourceCitation: null,
+					coParentEntityId: "unknown-mother",
+					coParentDisplayName: "אם אחרת",
+					coParentUnionOrder: null,
+				},
+			],
+		};
+
+		render(<PersonFamilyTree summary={summary} />);
+
+		expect(screen.getByText("אחר")).toBeInTheDocument();
+		expect(screen.getByText("ראובן")).toBeInTheDocument();
+		expect(screen.getByText("יוסף")).toBeInTheDocument();
+		expect(screen.getByText("ילד נוסף")).toBeInTheDocument();
+	});
 });
