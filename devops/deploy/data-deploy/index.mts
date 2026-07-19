@@ -45,7 +45,6 @@ const SQL_FILES = [
 	// Tanahpedia production-safe deploy path.
 	// Keep this list strictly non-destructive (no CREATE TABLE statements), so
 	// API-created entries and edits survive repeated release deploys.
-	"tanahpedia_alter_source_citation.sql",
 	"tanahpedia_seed_data.sql",
 	"tanahpedia_incremental_lookups.sql",
 ];
