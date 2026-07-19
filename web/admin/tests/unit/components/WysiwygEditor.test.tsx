@@ -305,6 +305,25 @@ describe("WysiwygEditor", () => {
 		);
 	});
 
+	it("changes footnote mode options and closes the dialog without insertion", () => {
+		renderEditor();
+
+		fireEvent.click(screen.getAllByRole("button")[15]);
+		const modeInputs = document.querySelectorAll<HTMLInputElement>(
+			'input[name="fnm"]',
+		);
+
+		fireEvent.click(modeInputs[1]);
+		expect(modeInputs[1]).toBeChecked();
+		fireEvent.click(modeInputs[0]);
+		expect(modeInputs[0]).toBeChecked();
+		const dialog = screen.getByRole("dialog");
+		fireEvent.click(within(dialog).getAllByRole("button")[0]);
+
+		expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+		expect(editorState.chain.insertContent).not.toHaveBeenCalled();
+	});
+
 	it("does not add an image when the prompt is cancelled", () => {
 		vi.mocked(prompt).mockReturnValue(null);
 		renderEditor();
@@ -312,6 +331,31 @@ describe("WysiwygEditor", () => {
 		fireEvent.click(screen.getAllByRole("button")[14]);
 
 		expect(editorState.chain.setImage).not.toHaveBeenCalled();
+	});
+
+	it("updates link panel type and external target options", () => {
+		renderEditor();
+
+		editorState.setSelectionEmpty(false);
+		fireEvent.click(screen.getAllByRole("button")[13]);
+		const linkTypeInputs = document.querySelectorAll<HTMLInputElement>(
+			'input[name="linkType"]',
+		);
+		const hrefInput = screen.getByRole("textbox");
+
+		fireEvent.click(linkTypeInputs[2]);
+		expect(hrefInput).toHaveValue("#note-1");
+		fireEvent.click(linkTypeInputs[0]);
+		fireEvent.click(screen.getByRole("checkbox"));
+		fireEvent.change(hrefInput, {
+			target: { value: "https://example.com/plain" },
+		});
+		fireEvent.click(screen.getAllByRole("button")[16]);
+
+		expect(editorState.chain.setLink).toHaveBeenLastCalledWith({
+			href: "https://example.com/plain",
+			linkType: "external",
+		});
 	});
 
 	it("selects an existing link when a link inside the editor is clicked", () => {

@@ -144,6 +144,26 @@ public sealed class PerushimNotesServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task LoadNotesForPerekAsync_UsesFallbackNameAndEmptyContent()
+    {
+        var dataDir = Path.Combine(_tempRoot, nameof(LoadNotesForPerekAsync_UsesFallbackNameAndEmptyContent));
+        Directory.CreateDirectory(dataDir);
+        await CreateNotesDatabaseAsync(
+            dataDir,
+            (42, 3, 5, 2, null));
+
+        var service = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
+        await service.InitializeAsync();
+
+        var notes = await service.LoadNotesForPerekAsync(3, new Dictionary<int, Perush>());
+
+        notes.Should().ContainSingle();
+        notes[0].PerushId.Should().Be(42);
+        notes[0].PerushName.Should().Be("Perush 42");
+        notes[0].NoteContent.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task LoadNotesForPerekAsync_WhenNotInitialized_ReturnsEmpty()
     {
         var dataDir = Path.Combine(_tempRoot, nameof(LoadNotesForPerekAsync_WhenNotInitialized_ReturnsEmpty));
@@ -155,9 +175,57 @@ public sealed class PerushimNotesServiceTests : IDisposable
         notes.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task TryDownloadNotesAsync_CopiesAvailablePadDatabase()
+    {
+        var dataDir = Path.Combine(_tempRoot, nameof(TryDownloadNotesAsync_CopiesAvailablePadDatabase));
+        var padDir = Path.Combine(_tempRoot, "pad-root");
+        Directory.CreateDirectory(dataDir);
+        Directory.CreateDirectory(padDir);
+        await CreateNotesDatabaseAsync(padDir, (9, 4, 1, 0, "pad note"));
+
+        var service = PerushimNotesService.CreateForTesting(
+            new FakePadDeliveryService { AssetPath = padDir },
+            dataDir);
+
+        var downloaded = await service.TryDownloadNotesAsync();
+
+        downloaded.Should().BeTrue();
+        service.IsAvailable.Should().BeTrue();
+        File.Exists(Path.Combine(dataDir, NotesDbFileName)).Should().BeTrue();
+        var ids = await service.GetPerushIdsForPerekAsync(4);
+        ids.Should().Equal(9);
+    }
+
+    [Fact]
+    public async Task TryDownloadNotesAsync_FetchesThenCopiesDatabaseFromAssetsFolder()
+    {
+        var dataDir = Path.Combine(_tempRoot, nameof(TryDownloadNotesAsync_FetchesThenCopiesDatabaseFromAssetsFolder));
+        var padDir = Path.Combine(_tempRoot, "pad-assets");
+        var assetsDir = Path.Combine(padDir, "assets");
+        Directory.CreateDirectory(dataDir);
+        Directory.CreateDirectory(assetsDir);
+        await CreateNotesDatabaseAsync(assetsDir, (11, 6, 2, 0, "asset note"));
+        var fakePad = new FakePadDeliveryService
+        {
+            FetchResult = true,
+            AssetPathAfterFetch = padDir
+        };
+
+        var service = PerushimNotesService.CreateForTesting(fakePad, dataDir);
+
+        var downloaded = await service.TryDownloadNotesAsync();
+
+        downloaded.Should().BeTrue();
+        fakePad.FetchCalls.Should().Be(1);
+        service.IsAvailable.Should().BeTrue();
+        var ids = await service.GetPerushIdsForPerekAsync(6);
+        ids.Should().Equal(11);
+    }
+
     private static async Task CreateNotesDatabaseAsync(
         string dataDirectory,
-        params (int perushId, int perekId, int pasuk, int noteIdx, string content)[] rows)
+        params (int perushId, int perekId, int pasuk, int noteIdx, string? content)[] rows)
     {
         var dbPath = Path.Combine(dataDirectory, NotesDbFileName);
         var conn = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create);
@@ -182,11 +250,23 @@ public sealed class PerushimNotesServiceTests : IDisposable
 
     private sealed class FakePadDeliveryService : IPadDeliveryService
     {
-        public Task<string?> TryGetAssetPathAsync(string packName, CancellationToken cancellationToken = default) =>
-            Task.FromResult<string?>(null);
+        public string? AssetPath { get; set; }
 
-        public Task<bool> FetchAsync(string packName, IProgress<double>? progress = null, CancellationToken cancellationToken = default) =>
-            Task.FromResult(false);
+        public string? AssetPathAfterFetch { get; set; }
+
+        public bool FetchResult { get; set; }
+
+        public int FetchCalls { get; private set; }
+
+        public Task<string?> TryGetAssetPathAsync(string packName, CancellationToken cancellationToken = default) =>
+            Task.FromResult(AssetPath);
+
+        public Task<bool> FetchAsync(string packName, IProgress<double>? progress = null, CancellationToken cancellationToken = default)
+        {
+            FetchCalls++;
+            AssetPath = AssetPathAfterFetch ?? AssetPath;
+            return Task.FromResult(FetchResult);
+        }
 
         public Task<List<string>> GetDeliveryDiagnosticsAsync(string packName) =>
             Task.FromResult(new List<string>());
