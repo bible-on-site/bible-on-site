@@ -654,47 +654,49 @@ async fn execute_script_chunked(
         .with_context(|| format!("Failed to read {} script: {:?}", script_type, script_path))?;
 
     let script = filter_use_statements(&script);
-    let mut stmt_count = 0usize;
+    let statements = split_sql_script_statements(&script);
 
+    for (index, statement) in statements.iter().enumerate() {
+        raw_sql(AssertSqlSafe(statement.as_str()))
+            .execute(&mut *conn)
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to execute {} statement #{}",
+                    script_type,
+                    index + 1
+                )
+            })?;
+    }
+
+    println!(
+        "{} script executed successfully ({} statements)",
+        script_type,
+        statements.len()
+    );
+    Ok(())
+}
+
+fn split_sql_script_statements(script: &str) -> Vec<String> {
+    let mut statements = Vec::new();
     let mut buf = String::new();
+
     for line in script.lines() {
         let trimmed = line.trim();
         if trimmed == ");" {
-            // End of multi-line INSERT INTO note ... VALUES (...), (...), ... );
             buf.push_str(line);
             buf.push('\n');
             if !buf.trim().is_empty() {
-                raw_sql(AssertSqlSafe(buf.trim()))
-                    .execute(&mut *conn)
-                    .await
-                    .with_context(|| {
-                        format!(
-                            "Failed to execute {} statement #{}",
-                            script_type,
-                            stmt_count + 1
-                        )
-                    })?;
-                stmt_count += 1;
+                statements.push(buf.trim().to_string());
             }
             buf.clear();
             continue;
         }
         if trimmed.ends_with(';') && trimmed != ");" {
-            // Single-line statement (SET, INSERT parshan, INSERT perush, etc.)
             buf.push_str(line);
             buf.push('\n');
             if !buf.trim().is_empty() {
-                raw_sql(AssertSqlSafe(buf.trim()))
-                    .execute(&mut *conn)
-                    .await
-                    .with_context(|| {
-                        format!(
-                            "Failed to execute {} statement #{}",
-                            script_type,
-                            stmt_count + 1
-                        )
-                    })?;
-                stmt_count += 1;
+                statements.push(buf.trim().to_string());
             }
             buf.clear();
             continue;
@@ -702,19 +704,12 @@ async fn execute_script_chunked(
         buf.push_str(line);
         buf.push('\n');
     }
+
     if !buf.trim().is_empty() {
-        raw_sql(AssertSqlSafe(buf.trim()))
-            .execute(&mut *conn)
-            .await
-            .with_context(|| format!("Failed to execute {} final statement", script_type))?;
-        stmt_count += 1;
+        statements.push(buf.trim().to_string());
     }
 
-    println!(
-        "{} script executed successfully ({} statements)",
-        script_type, stmt_count
-    );
-    Ok(())
+    statements
 }
 
 /// Filters out USE statements from SQL script.
@@ -798,6 +793,31 @@ CREATE TABLE `tanahpedia_person` (
         let sql = "insert into a values (1);";
 
         assert_eq!(make_insert_sql_ignore_duplicates(sql.to_string()), sql);
+    }
+
+    #[test]
+    fn split_sql_script_statements_handles_single_multiline_and_final_statements() {
+        let sql = "\
+USE `tanah`;
+SET FOREIGN_KEY_CHECKS = 0;
+INSERT INTO note (id, body) VALUES
+  (1, 'first'),
+  (2, 'second')
+);
+INSERT INTO parshan VALUES (1, 'Rashi');
+SELECT 1";
+
+        let statements = split_sql_script_statements(&filter_use_statements(sql));
+
+        assert_eq!(
+            statements,
+            vec![
+                "SET FOREIGN_KEY_CHECKS = 0;",
+                "INSERT INTO note (id, body) VALUES\n  (1, 'first'),\n  (2, 'second')\n);",
+                "INSERT INTO parshan VALUES (1, 'Rashi');",
+                "SELECT 1",
+            ]
+        );
     }
 
     #[test]
