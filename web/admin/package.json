@@ -1,10 +1,6 @@
 {
 	"name": "admin",
-<<<<<<< HEAD
-	"version": "0.1.40",
-=======
 	"version": "0.1.41",
->>>>>>> dfb0025 (Add Tanahpedia family API and non-destructive deploy path)
 	"private": true,
 	"type": "module",
 	"scripts": {
