@@ -122,3 +122,51 @@ pub fn generate() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bson::{Bson, doc};
+
+    #[test]
+    fn bson_to_shell_format_formats_nested_documents_with_unquoted_keys() {
+        let doc = doc! {
+            "$match": {
+                "title": "Rashi",
+                "enabled": true,
+                "count": 2,
+            }
+        };
+
+        let shell = bson_to_shell_format(&doc, 0);
+
+        assert!(shell.contains("$match: {"));
+        assert!(shell.contains("title: \"Rashi\""));
+        assert!(shell.contains("enabled: true"));
+        assert!(shell.contains("count: 2"));
+    }
+
+    #[test]
+    fn bson_value_to_shell_formats_arrays_and_escaped_strings() {
+        let value = Bson::Array(vec![
+            Bson::String("line\n\"quoted\"\\path".to_string()),
+            Bson::Int64(7),
+            Bson::Double(1.5),
+            Bson::Null,
+        ]);
+
+        let shell = bson_value_to_shell(&value, 0);
+
+        assert!(shell.starts_with("["));
+        assert!(shell.contains("\"line\\n\\\"quoted\\\"\\\\path\""));
+        assert!(shell.contains("7"));
+        assert!(shell.contains("1.5"));
+        assert!(shell.contains("null"));
+    }
+
+    #[test]
+    fn bson_to_shell_format_handles_empty_documents_and_unknown_values() {
+        assert_eq!(bson_to_shell_format(&Document::new(), 0), "{}");
+        assert!(bson_value_to_shell(&Bson::ObjectId(Default::default()), 0).contains("ObjectId"));
+    }
+}
