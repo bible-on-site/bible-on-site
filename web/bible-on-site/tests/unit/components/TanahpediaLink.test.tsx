@@ -54,6 +54,7 @@ describe("TanahpediaLink", () => {
 	});
 
 	it("links to the encoded entry and shows a fetched preview on hover", async () => {
+		const linkLabel = "Moshe";
 		const fetchMock = mockFetch({
 			ok: true,
 			json: async () => ({
@@ -64,11 +65,11 @@ describe("TanahpediaLink", () => {
 
 		render(
 			<TanahpediaLink entryUniqueName="moshe rabbeinu" className="entity-link">
-				Moshe
+				{linkLabel}
 			</TanahpediaLink>,
 		);
 
-		const link = screen.getByRole("link", { name: "Moshe" });
+		const link = screen.getByRole("link", { name: linkLabel });
 		expect(link).toHaveAttribute(
 			"href",
 			"/tanahpedia/entry/moshe%20rabbeinu",
@@ -87,6 +88,7 @@ describe("TanahpediaLink", () => {
 	});
 
 	it("keeps the preview open while the tooltip is hovered, then hides it after leaving", async () => {
+		const linkLabel = "Miriam";
 		mockFetch({
 			ok: true,
 			json: async () => ({
@@ -96,10 +98,10 @@ describe("TanahpediaLink", () => {
 		});
 
 		render(
-			<TanahpediaLink entryUniqueName="miriam">Miriam</TanahpediaLink>,
+			<TanahpediaLink entryUniqueName="miriam">{linkLabel}</TanahpediaLink>,
 		);
 
-		const link = screen.getByRole("link", { name: "Miriam" });
+		const link = screen.getByRole("link", { name: linkLabel });
 		await hoverLink(link, { clientX: 10, clientY: 12 });
 		const tooltip = await screen.findByRole("tooltip");
 
@@ -123,6 +125,8 @@ describe("TanahpediaLink", () => {
 	});
 
 	it("caches successful previews between hovers for the same entry", async () => {
+		const linkLabel = "Aharon";
+		const secondLinkLabel = "Aharon again";
 		const fetchMock = mockFetch({
 			ok: true,
 			json: async () => ({
@@ -132,26 +136,31 @@ describe("TanahpediaLink", () => {
 		});
 
 		const { unmount } = render(
-			<TanahpediaLink entryUniqueName="aharon">Aharon</TanahpediaLink>,
+			<TanahpediaLink entryUniqueName="aharon">{linkLabel}</TanahpediaLink>,
 		);
-		await hoverLink(screen.getByRole("link", { name: "Aharon" }));
+		await hoverLink(screen.getByRole("link", { name: linkLabel }));
 		expect(await screen.findByRole("tooltip")).toHaveTextContent("Aharon");
 		unmount();
 
-		render(<TanahpediaLink entryUniqueName="aharon">Aharon again</TanahpediaLink>);
-		await hoverLink(screen.getByRole("link", { name: "Aharon again" }));
+		render(
+			<TanahpediaLink entryUniqueName="aharon">{secondLinkLabel}</TanahpediaLink>,
+		);
+		await hoverLink(screen.getByRole("link", { name: secondLinkLabel }));
 
 		expect(await screen.findByRole("tooltip")).toHaveTextContent("Aharon");
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
 	it("does not render a tooltip when preview loading fails", async () => {
+		const linkLabel = "No preview";
 		const fetchMock = jest.fn().mockRejectedValue(new Error("offline"));
 		global.fetch = fetchMock as unknown as typeof fetch;
 
-		render(<TanahpediaLink entryUniqueName="no-preview">No preview</TanahpediaLink>);
+		render(
+			<TanahpediaLink entryUniqueName="no-preview">{linkLabel}</TanahpediaLink>,
+		);
 
-		await hoverLink(screen.getByRole("link", { name: "No preview" }));
+		await hoverLink(screen.getByRole("link", { name: linkLabel }));
 
 		await expect(fetchMock).toHaveBeenCalledWith(
 			"/api/tanahpedia/preview/no-preview",
