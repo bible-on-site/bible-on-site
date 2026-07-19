@@ -221,6 +221,37 @@ cwd = "./mysql/db-populator"
 command = "cargo"
 args = ["run", "--release", "--", "--skip-structure"]
 
+[tasks.mysql-upgrade-tanahpedia-structure]
+description = "Safely create/upgrade Tanahpedia structure without dropping existing content; uses DB_URL from environment"
+cwd = "./mysql/db-populator"
+command = "cargo"
+args = ["run", "--release", "--", "--tanahpedia-structure-only"]
+
+[tasks.mysql-seed-tanahpedia-baseline]
+description = "Safely seed Tanahpedia lookup/baseline rows without overwriting content; uses DB_URL from environment"
+cwd = "./mysql/db-populator"
+command = "cargo"
+args = [
+    "run",
+    "--release",
+    "--",
+    "--tanahpedia-baseline-only",
+    "--ensure-tanahpedia-seed",
+]
+
+[tasks.mysql-upgrade-tanahpedia-dev]
+description = "Safely create/upgrade Tanahpedia structure and baseline seed in tanah-dev"
+env_files = [".dev.env"]
+cwd = "./mysql/db-populator"
+command = "cargo"
+args = [
+    "run",
+    "--release",
+    "--",
+    "--tanahpedia-baseline-only",
+    "--ensure-tanahpedia-seed",
+]
+
 [tasks.mysql-apply-tanahpedia-families]
 description = "Apply Tanahpedia family demo SQL only (שמשון if person exists, then יעקב); uses data/.dev.env DB_URL; skip full populate"
 env_files = [".dev.env"]
@@ -232,6 +263,7 @@ args = [
     "--",
     "--skip-structure",
     "--tanahpedia-families-only",
+    "--ensure-tanahpedia-seed",
 ]
 
 [tasks.mysql-apply-tanahpedia-edge-lab]
@@ -245,6 +277,7 @@ args = [
     "--",
     "--skip-structure",
     "--tanahpedia-edge-lab-only",
+    "--ensure-tanahpedia-seed",
 ]
 
 [tasks.dev]
