@@ -34,22 +34,37 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: npm ci --no-audit
 
-      - name: Download Generated Perushim SQL
-        uses: actions/download-artifact@v8
-        with:
-          name: perushim-data-sql
-          path: data/mysql
-          github-token: ${{ secrets.BOT_PAT }}
-          repository: ${{ github.repository }}
-          run-id: ${{ github.event.client_payload.run_id }}
-
-      - name: Verify Perushim Data File
+      # Download the perushim SQL from the dispatching run. Prefer the per-run
+      # `perushim-data-sql` artifact (freshly generated during a data release);
+      # fall back to the always-present `perushim-data-sql.master` baseline when the
+      # per-run artifact is absent or expired. Both artifacts contain perushim_data.sql.
+      # The run's artifacts are inspected explicitly (and non-expired ones selected)
+      # so a genuine download error is not masked and a clear failure is raised when
+      # neither artifact is available.
+      - name: Download Perushim SQL
+        env:
+          GH_TOKEN: ${{ secrets.BOT_PAT }}
+          RUN_ID: ${{ github.event.client_payload.run_id }}
+          REPO: ${{ github.repository }}
         run: |
-          if [ ! -f data/mysql/perushim_data.sql ]; then
-            echo "❌ perushim_data.sql not found after artifact download"
+          set -euo pipefail
+          mkdir -p data/mysql
+          available=$(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" --paginate \
+            --jq '.artifacts[] | select(.expired == false) | .name')
+          if echo "$available" | grep -qx "perushim-data-sql"; then
+            artifact="perushim-data-sql"
+          elif echo "$available" | grep -qx "perushim-data-sql.master"; then
+            artifact="perushim-data-sql.master"
+          else
+            echo "No non-expired perushim artifact found on run $RUN_ID." >&2
+            echo "Available (non-expired) artifacts:" >&2
+            echo "$available" >&2
             exit 1
           fi
-          echo "✅ perushim_data.sql downloaded successfully ($(wc -l < data/mysql/perushim_data.sql) lines)"
+          echo "Using perushim artifact: $artifact"
+          gh run download "$RUN_ID" -R "$REPO" -n "$artifact" -D data/mysql/perushim-dl
+          cp data/mysql/perushim-dl/perushim_data.sql data/mysql/perushim_data.sql
+          echo "perushim_data.sql ready ($(wc -l < data/mysql/perushim_data.sql) lines)"
 
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v6
