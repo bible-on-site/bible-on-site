@@ -1,4 +1,11 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+	act,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+	within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WysiwygEditor } from "../../components/WysiwygEditor";
 
@@ -8,6 +15,7 @@ const editorState = vi.hoisted(() => {
 	let attributes = new Map<string, Record<string, unknown>>();
 	let selectionEmpty = false;
 	const listeners = new Map<string, Set<() => void>>();
+	let useEditorResult: unknown;
 
 	const chain = {
 		focus: vi.fn(() => chain),
@@ -39,7 +47,11 @@ const editorState = vi.hoisted(() => {
 			}),
 		},
 		state: {
-			selection: { get empty() { return selectionEmpty; } },
+			selection: {
+				get empty() {
+					return selectionEmpty;
+				},
+			},
 			doc: { descendants: vi.fn() },
 		},
 		view: {
@@ -61,6 +73,7 @@ const editorState = vi.hoisted(() => {
 			listeners.get(event)?.delete(handler);
 		}),
 	};
+	useEditorResult = editor;
 
 	function reset() {
 		html = "<p>Initial</p>";
@@ -68,6 +81,7 @@ const editorState = vi.hoisted(() => {
 		attributes = new Map<string, Record<string, unknown>>();
 		selectionEmpty = false;
 		listeners.clear();
+		useEditorResult = editor;
 		vi.clearAllMocks();
 	}
 
@@ -86,6 +100,10 @@ const editorState = vi.hoisted(() => {
 		},
 		setAttributes: (name: string, next: Record<string, unknown>) => {
 			attributes.set(name, next);
+		},
+		getEditor: () => useEditorResult,
+		setUseEditorResult: (next: unknown) => {
+			useEditorResult = next;
 		},
 		emit: (event: string) => {
 			for (const handler of listeners.get(event) ?? []) handler();
@@ -112,7 +130,7 @@ vi.mock("@tiptap/react", () => ({
 			{String(Boolean(editor))}
 		</div>
 	),
-	useEditor: vi.fn(() => editorState.editor),
+	useEditor: vi.fn(() => editorState.getEditor()),
 }));
 
 function renderEditor(onChange = vi.fn(), content = "<p>Initial</p>") {
@@ -129,6 +147,19 @@ function renderEditor(onChange = vi.fn(), content = "<p>Initial</p>") {
 	};
 }
 
+function clickFootnoteDialogAddButton() {
+	const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+	if (!dialog) {
+		throw new Error("Expected footnote dialog to be open");
+	}
+	const buttons = within(dialog).getAllByRole("button");
+	const addButton = buttons.at(-1);
+	if (!addButton) {
+		throw new Error("Expected footnote dialog to have an add button");
+	}
+	fireEvent.click(addButton);
+}
+
 describe("WysiwygEditor", () => {
 	beforeEach(() => {
 		editorState.reset();
@@ -140,6 +171,14 @@ describe("WysiwygEditor", () => {
 	afterEach(() => {
 		vi.unstubAllGlobals();
 		vi.restoreAllMocks();
+	});
+
+	it("renders a loading placeholder while TipTap has not created an editor", () => {
+		editorState.setUseEditorResult(null);
+
+		const { container } = renderEditor();
+
+		expect(container.firstElementChild).toHaveClass("animate-pulse");
 	});
 
 	it("renders toolbar controls and runs formatting commands", () => {
@@ -158,12 +197,34 @@ describe("WysiwygEditor", () => {
 		expect(editorState.chain.toggleStrike).toHaveBeenCalledTimes(1);
 		expect(editorState.chain.toggleHeading).toHaveBeenCalledWith({ level: 1 });
 		expect(editorState.chain.toggleBulletList).toHaveBeenCalledTimes(1);
-		expect(editorState.chain.updateAttributes).toHaveBeenCalledWith("orderedList", {
-			orderedType: "decimal",
-		});
-		expect(editorState.chain.updateAttributes).toHaveBeenCalledWith("orderedList", {
-			orderedType: "hebrew-alpha",
-		});
+		expect(editorState.chain.updateAttributes).toHaveBeenCalledWith(
+			"orderedList",
+			{
+				orderedType: "decimal",
+			},
+		);
+		expect(editorState.chain.updateAttributes).toHaveBeenCalledWith(
+			"orderedList",
+			{
+				orderedType: "hebrew-alpha",
+			},
+		);
+	});
+
+	it("updates ordered-list attributes without toggling when the list is already active", () => {
+		editorState.setActive("orderedList");
+		editorState.setAttributes("orderedList", { orderedType: "decimal" });
+		renderEditor();
+
+		fireEvent.click(screen.getAllByRole("button")[12]);
+
+		expect(editorState.chain.toggleOrderedList).not.toHaveBeenCalled();
+		expect(editorState.chain.updateAttributes).toHaveBeenCalledWith(
+			"orderedList",
+			{
+				orderedType: "hebrew-alpha",
+			},
+		);
 	});
 
 	it("switches source mode, flushes source edits, and renders sanitized preview", async () => {
@@ -175,7 +236,9 @@ describe("WysiwygEditor", () => {
 		fireEvent.change(source, { target: { value: "<p>Source</p>" } });
 		fireEvent.click(screen.getByRole("button", { name: "תצוגה מקדימה" }));
 
-		expect(editorState.editor.commands.setContent).toHaveBeenCalledWith("<p>Source</p>");
+		expect(editorState.editor.commands.setContent).toHaveBeenCalledWith(
+			"<p>Source</p>",
+		);
 		expect(onChange).toHaveBeenCalledWith("<p>Source</p>");
 		await waitFor(() => expect(screen.getByText("Source")).toBeInTheDocument());
 	});
@@ -194,9 +257,12 @@ describe("WysiwygEditor", () => {
 			linkType: "external",
 		});
 
-		fireEvent.change(screen.getByPlaceholderText("https://… / slug / #note-1"), {
-			target: { value: "https://example.com" },
-		});
+		fireEvent.change(
+			screen.getByPlaceholderText("https://… / slug / #note-1"),
+			{
+				target: { value: "https://example.com" },
+			},
+		);
 		fireEvent.click(screen.getByRole("button", { name: "עדכן קישור" }));
 		expect(editorState.chain.setLink).toHaveBeenCalledWith({
 			href: "https://example.com",
@@ -211,7 +277,9 @@ describe("WysiwygEditor", () => {
 			linkType: "comment",
 		});
 		act(() => editorState.emit("selectionUpdate"));
-		expect(screen.getByRole("button", { name: "הסר קישור" })).not.toBeDisabled();
+		expect(
+			screen.getByRole("button", { name: "הסר קישור" }),
+		).not.toBeDisabled();
 		fireEvent.click(screen.getByRole("button", { name: "הסר קישור" }));
 		expect(editorState.chain.unsetLink).toHaveBeenCalledTimes(1);
 	});
@@ -228,9 +296,91 @@ describe("WysiwygEditor", () => {
 		});
 
 		fireEvent.click(screen.getByRole("button", { name: "הערה" }));
-		expect(screen.getByRole("dialog", { name: "הערות (כמו בתנכפדיה)" })).toBeInTheDocument();
+		expect(
+			screen.getByRole("dialog", { name: "הערות (כמו בתנכפדיה)" }),
+		).toBeInTheDocument();
 		fireEvent.click(screen.getByRole("button", { name: "הוסף" }));
 		expect(editorState.chain.insertContent).toHaveBeenCalledWith(
+			expect.stringContaining('id="noteref-2"'),
+		);
+	});
+
+	it("does not add an image when the prompt is cancelled", () => {
+		vi.mocked(prompt).mockReturnValue(null);
+		renderEditor();
+
+		fireEvent.click(screen.getAllByRole("button")[14]);
+
+		expect(editorState.chain.setImage).not.toHaveBeenCalled();
+	});
+
+	it("selects an existing link when a link inside the editor is clicked", () => {
+		const { container } = renderEditor();
+		const link = container.querySelector(".ProseMirror a");
+		expect(link).not.toBeNull();
+
+		fireEvent.click(link as Element);
+
+		expect(editorState.editor.view.posAtDOM).toHaveBeenCalledWith(link, 0);
+		expect(editorState.chain.setTextSelection).toHaveBeenCalledWith(4);
+		expect(editorState.chain.extendMarkRange).toHaveBeenCalledWith("link");
+	});
+
+	it("rejects invalid footnote slot numbers before mutating content", () => {
+		const html = '<p>Body</p><p id="note-1"><strong>a.</strong> old</p>';
+		editorState.setHtml(html);
+		renderEditor(vi.fn(), html);
+
+		fireEvent.click(screen.getAllByRole("button")[15]);
+		fireEvent.click(
+			document.querySelectorAll<HTMLInputElement>('input[name="fnplace"]')[1],
+		);
+		fireEvent.change(screen.getByRole("spinbutton"), {
+			target: { value: "4" },
+		});
+		clickFootnoteDialogAddButton();
+
+		expect(alert).toHaveBeenCalledWith(expect.stringContaining("1"));
+		expect(editorState.chain.insertContent).not.toHaveBeenCalled();
+	});
+
+	it("alerts when slot insertion cannot find the temporary marker", () => {
+		const html = '<p>Body</p><p id="note-1"><strong>a.</strong> old</p>';
+		editorState.setHtml(html);
+		renderEditor(vi.fn(), html);
+
+		fireEvent.click(screen.getAllByRole("button")[15]);
+		fireEvent.click(
+			document.querySelectorAll<HTMLInputElement>('input[name="fnplace"]')[1],
+		);
+		clickFootnoteDialogAddButton();
+
+		expect(editorState.chain.insertContent).toHaveBeenCalledWith(
+			"@@ADMIN_FN_ANCHOR_v1@@",
+		);
+		expect(alert).toHaveBeenCalledTimes(1);
+	});
+
+	it("inserts a footnote into a numbered slot when the marker is found", () => {
+		const html = '<p>Body</p><p id="note-1"><strong>a.</strong> old</p>';
+		editorState.setHtml(html);
+		editorState.editor.state.doc.descendants.mockImplementation((callback) => {
+			callback({ isText: true, text: "@@ADMIN_FN_ANCHOR_v1@@" }, 10);
+			return true;
+		});
+		renderEditor(vi.fn(), html);
+
+		fireEvent.click(screen.getAllByRole("button")[15]);
+		fireEvent.click(
+			document.querySelectorAll<HTMLInputElement>('input[name="fnplace"]')[1],
+		);
+		clickFootnoteDialogAddButton();
+
+		expect(editorState.chain.setTextSelection).toHaveBeenCalledWith({
+			from: 10,
+			to: 32,
+		});
+		expect(editorState.chain.insertContent).toHaveBeenLastCalledWith(
 			expect.stringContaining('id="noteref-2"'),
 		);
 	});
@@ -244,12 +394,16 @@ describe("WysiwygEditor", () => {
 		expect(textarea).toHaveValue('{"Mod-b":"bold"}');
 
 		fireEvent.change(textarea, { target: { value: '{"Mod-i":"italic"}' } });
-		fireEvent.click(screen.getByRole("button", { name: "שמור JSON והחל עורך" }));
+		fireEvent.click(
+			screen.getByRole("button", { name: "שמור JSON והחל עורך" }),
+		);
 
 		expect(localStorage.getItem("admin-editor-shortcut-extras")).toBe(
 			'{"Mod-i":"italic"}',
 		);
-		expect(screen.queryByRole("dialog", { name: "קיצורי מקלדת" })).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("dialog", { name: "קיצורי מקלדת" }),
+		).not.toBeInTheDocument();
 	});
 
 	it("rejects invalid shortcut JSON", () => {
@@ -258,9 +412,13 @@ describe("WysiwygEditor", () => {
 		fireEvent.change(screen.getByLabelText("קיצורים מותאמים JSON"), {
 			target: { value: "{" },
 		});
-		fireEvent.click(screen.getByRole("button", { name: "שמור JSON והחל עורך" }));
+		fireEvent.click(
+			screen.getByRole("button", { name: "שמור JSON והחל עורך" }),
+		);
 
 		expect(alert).toHaveBeenCalledWith("JSON לא תקין. בדוק את הפורמט.");
-		expect(screen.getByRole("dialog", { name: "קיצורי מקלדת" })).toBeInTheDocument();
+		expect(
+			screen.getByRole("dialog", { name: "קיצורי מקלדת" }),
+		).toBeInTheDocument();
 	});
 });
