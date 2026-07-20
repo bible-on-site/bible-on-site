@@ -507,6 +507,7 @@ public class PreferencesViewModelTests : IDisposable
         public Task<bool> FetchAsync(string packName, IProgress<double>? progress = null, CancellationToken cancellationToken = default)
         {
             _ = packName;
+            _ = cancellationToken;
             FetchCalls++;
             foreach (var value in ProgressReports)
             {
