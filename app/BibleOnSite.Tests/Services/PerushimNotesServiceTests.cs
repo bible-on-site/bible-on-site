@@ -253,6 +253,107 @@ public sealed class PerushimNotesServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task InitializeAsync_WithOlderPadDatabase_KeepsLocalDatabase()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(InitializeAsync_WithOlderPadDatabase_KeepsLocalDatabase));
+        var padDir = Path.Join(_tempRoot, "pad-older");
+        Directory.CreateDirectory(dataDir);
+        Directory.CreateDirectory(padDir);
+        await CreateNotesDatabaseAsync(
+            dataDir,
+            buildTimestamp: 200,
+            (3, 8, 1, 0, "local note"));
+        await CreateNotesDatabaseAsync(
+            padDir,
+            buildTimestamp: 100,
+            (4, 8, 1, 0, "pad note"));
+
+        var service = PerushimNotesService.CreateForTesting(
+            new FakePadDeliveryService { AssetPath = padDir },
+            dataDir);
+
+        await service.InitializeAsync();
+
+        service.IsAvailable.Should().BeTrue();
+        var notes = await service.LoadNotesForPerekAsync(8, new Dictionary<int, Perush>());
+        notes.Should().ContainSingle().Which.NoteContent.Should().Be("local note");
+    }
+
+    [Fact]
+    public async Task TryDownloadNotesAsync_WhenLocalDatabaseAlreadyExists_ReturnsTrueWithoutFetching()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(TryDownloadNotesAsync_WhenLocalDatabaseAlreadyExists_ReturnsTrueWithoutFetching));
+        Directory.CreateDirectory(dataDir);
+        await CreateNotesDatabaseAsync(dataDir, (7, 3, 1, 0, "local note"));
+        var fakePad = new FakePadDeliveryService();
+        var service = PerushimNotesService.CreateForTesting(fakePad, dataDir);
+
+        var downloaded = await service.TryDownloadNotesAsync();
+
+        downloaded.Should().BeTrue();
+        fakePad.FetchCalls.Should().Be(0);
+        service.IsAvailable.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task TryDownloadNotesAsync_WhenFetchedPackHasNoDatabase_ReturnsFalse()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(TryDownloadNotesAsync_WhenFetchedPackHasNoDatabase_ReturnsFalse));
+        var padDir = Path.Join(_tempRoot, "pad-empty-after-fetch");
+        Directory.CreateDirectory(dataDir);
+        Directory.CreateDirectory(padDir);
+        var fakePad = new FakePadDeliveryService
+        {
+            FetchResult = true,
+            AssetPathAfterFetch = padDir
+        };
+        var service = PerushimNotesService.CreateForTesting(fakePad, dataDir);
+
+        var downloaded = await service.TryDownloadNotesAsync();
+
+        downloaded.Should().BeFalse();
+        fakePad.FetchCalls.Should().Be(1);
+        service.IsAvailable.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TryDownloadNotesAsync_WhenTargetDirectoryIsMissing_ReturnsFalse()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(TryDownloadNotesAsync_WhenTargetDirectoryIsMissing_ReturnsFalse));
+        var padDir = Path.Join(_tempRoot, "pad-target-missing");
+        Directory.CreateDirectory(padDir);
+        await CreateNotesDatabaseAsync(padDir, (8, 4, 1, 0, "pad note"));
+        var service = PerushimNotesService.CreateForTesting(
+            new FakePadDeliveryService { AssetPath = padDir },
+            dataDir);
+
+        var downloaded = await service.TryDownloadNotesAsync();
+
+        downloaded.Should().BeFalse();
+        service.IsAvailable.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task InitializeAsync_WhenPadMetadataIsUnreadable_KeepsLocalDatabase()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(InitializeAsync_WhenPadMetadataIsUnreadable_KeepsLocalDatabase));
+        var padDir = Path.Join(_tempRoot, "pad-bad-metadata");
+        Directory.CreateDirectory(dataDir);
+        Directory.CreateDirectory(padDir);
+        await CreateNotesDatabaseAsync(dataDir, buildTimestamp: 200, (9, 4, 1, 0, "local note"));
+        await File.WriteAllTextAsync(Path.Join(padDir, NotesDbFileName), "not sqlite");
+        var service = PerushimNotesService.CreateForTesting(
+            new FakePadDeliveryService { AssetPath = padDir },
+            dataDir);
+
+        await service.InitializeAsync();
+
+        service.IsAvailable.Should().BeTrue();
+        var notes = await service.LoadNotesForPerekAsync(4, new Dictionary<int, Perush>());
+        notes.Should().ContainSingle().Which.NoteContent.Should().Be("local note");
+    }
+
+    [Fact]
     public async Task TryDownloadNotesAsync_WhenDeliveryUnavailable_ReturnsFalse()
     {
         var dataDir = Path.Join(_tempRoot, nameof(TryDownloadNotesAsync_WhenDeliveryUnavailable_ReturnsFalse));

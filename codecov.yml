@@ -12,38 +12,33 @@ coverage:
         threshold: 0%
         informational: true
       api:
-        target: auto
-        threshold: 1%
+        target: 97%
+        threshold: 0%
         flags:
           - api
       app:
-        target: auto
+        target: 79%
         threshold: 0%
         flags:
           - app
       website:
-        # Enforce no regression from the current base coverage. A fixed 99%
-        # target is stale: current master website LCOV is ~85% once Tanahpedia
-        # source files are included in the website flag.
-        target: auto
+        target: 90%
         threshold: 0%
         flags:
           - website
       bulletin:
-        target: auto
-        threshold: 1%
-        informational: true
+        target: 90%
+        threshold: 0%
         flags:
           - bulletin
       admin:
-        target: auto
-        threshold: 1%
-        informational: true
+        target: 86%
+        threshold: 0%
         flags:
           - admin
       data:
-        target: auto
-        threshold: 1%
+        target: 84%
+        threshold: 0%
         flags:
           - data
     patch:
