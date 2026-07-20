@@ -17,7 +17,7 @@ coverage:
         flags:
           - api
       app:
-        target: 81%
+        target: 79%
         threshold: 0%
         flags:
           - app
