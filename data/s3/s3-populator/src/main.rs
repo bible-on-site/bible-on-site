@@ -117,6 +117,8 @@ struct SampleAuthorImage {
     color: &'static str,
 }
 
+const DEFAULT_AVATAR_KEY: &str = "authors/default.jpg";
+
 const SAMPLE_IMAGES: &[SampleAuthorImage] = &[
     SampleAuthorImage {
         author_id: 1,
@@ -135,6 +137,10 @@ const SAMPLE_IMAGES: &[SampleAuthorImage] = &[
         color: "yellow",
     },
 ];
+
+fn sample_author_key(author_id: u32) -> String {
+    format!("authors/high-res/{}.jpg", author_id)
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -288,23 +294,22 @@ async fn populate_sample_images(client: &Client, bucket: &str) -> Result<()> {
     println!("\nPopulating sample author images...");
 
     // Upload default avatar (used when author has no image)
-    let default_key = "authors/default.jpg";
     let default_image = generate_placeholder_image("gray");
     client
         .put_object()
         .bucket(bucket)
-        .key(default_key)
+        .key(DEFAULT_AVATAR_KEY)
         .body(ByteStream::from(default_image))
         .content_type("image/jpeg")
         .cache_control("max-age=31536000")
         .send()
         .await
-        .with_context(|| format!("Failed to upload: {}", default_key))?;
-    println!("  Uploaded: {} (default avatar)", default_key);
+        .with_context(|| format!("Failed to upload: {}", DEFAULT_AVATAR_KEY))?;
+    println!("  Uploaded: {} (default avatar)", DEFAULT_AVATAR_KEY);
 
     // Upload sample author images - matches production: authors/high-res/{id}.jpg
     for sample in SAMPLE_IMAGES {
-        let key = format!("authors/high-res/{}.jpg", sample.author_id);
+        let key = sample_author_key(sample.author_id);
         let image_data = generate_placeholder_image(sample.color);
 
         client
@@ -326,4 +331,142 @@ async fn populate_sample_images(client: &Client, bucket: &str) -> Result<()> {
         SAMPLE_IMAGES.len()
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    fn cli_from(args: &[&str]) -> Cli {
+        let mut argv = vec!["s3-populator"];
+        argv.extend_from_slice(args);
+        Cli::parse_from(argv)
+    }
+
+    fn chunk_payload<'a>(png: &'a [u8], chunk_type: &[u8; 4]) -> Option<&'a [u8]> {
+        let mut offset = 8usize;
+        while offset + 12 <= png.len() {
+            let length = u32::from_be_bytes(png[offset..offset + 4].try_into().ok()?) as usize;
+            let chunk_start = offset + 4;
+            let data_start = chunk_start + 4;
+            let data_end = data_start + length;
+            let crc_end = data_end + 4;
+            if crc_end > png.len() {
+                return None;
+            }
+            if &png[chunk_start..data_start] == chunk_type {
+                return Some(&png[data_start..data_end]);
+            }
+            offset = crc_end;
+        }
+        None
+    }
+
+    fn chunk_types(png: &[u8]) -> Vec<[u8; 4]> {
+        let mut types = Vec::new();
+        let mut offset = 8usize;
+        while offset + 12 <= png.len() {
+            let length = u32::from_be_bytes(png[offset..offset + 4].try_into().unwrap()) as usize;
+            let chunk_start = offset + 4;
+            let data_end = chunk_start + 4 + length;
+            types.push(png[chunk_start..chunk_start + 4].try_into().unwrap());
+            offset = data_end + 4;
+        }
+        types
+    }
+
+    #[test]
+    fn cli_defaults_and_overrides_match_development_s3_setup() {
+        let defaults = cli_from(&[]);
+        assert_eq!(defaults.bucket, "bible-on-site-assets-dev");
+        assert_eq!(defaults.region, "us-east-1");
+        assert_eq!(defaults.endpoint, None);
+        assert_eq!(defaults.access_key_id, "test");
+        assert_eq!(defaults.secret_access_key, "test");
+        assert!(!defaults.clear_only);
+        assert!(!defaults.skip_clear);
+
+        let custom = cli_from(&[
+            "--bucket",
+            "assets",
+            "--region",
+            "eu-west-1",
+            "--endpoint",
+            "http://localhost:9000",
+            "--access-key-id",
+            "minio",
+            "--secret-access-key",
+            "secret",
+            "--clear-only",
+            "--skip-clear",
+        ]);
+        assert_eq!(custom.bucket, "assets");
+        assert_eq!(custom.region, "eu-west-1");
+        assert_eq!(custom.endpoint.as_deref(), Some("http://localhost:9000"));
+        assert_eq!(custom.access_key_id, "minio");
+        assert_eq!(custom.secret_access_key, "secret");
+        assert!(custom.clear_only);
+        assert!(custom.skip_clear);
+    }
+
+    #[test]
+    fn generated_placeholder_png_has_expected_chunks_dimensions_and_color() {
+        let png = generate_placeholder_image("blue");
+
+        assert_eq!(&png[..8], &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]);
+        assert_eq!(chunk_types(&png), vec![*b"IHDR", *b"IDAT", *b"IEND"]);
+
+        let ihdr = chunk_payload(&png, b"IHDR").expect("IHDR chunk");
+        assert_eq!(u32::from_be_bytes(ihdr[0..4].try_into().unwrap()), 64);
+        assert_eq!(u32::from_be_bytes(ihdr[4..8].try_into().unwrap()), 64);
+        assert_eq!(ihdr[8], 8);
+        assert_eq!(ihdr[9], 2);
+
+        let idat = chunk_payload(&png, b"IDAT").expect("IDAT chunk");
+        let raw = miniz_oxide::inflate::decompress_to_vec_zlib(idat).expect("zlib payload");
+        assert_eq!(raw.len(), 64 * (1 + 64 * 3));
+        assert_eq!(&raw[..4], &[0, 66, 133, 244]);
+    }
+
+    #[test]
+    fn unknown_placeholder_color_falls_back_to_gray() {
+        let png = generate_placeholder_image("unknown");
+        let idat = chunk_payload(&png, b"IDAT").expect("IDAT chunk");
+        let raw = miniz_oxide::inflate::decompress_to_vec_zlib(idat).expect("zlib payload");
+
+        assert_eq!(&raw[..4], &[0, 128, 128, 128]);
+    }
+
+    #[test]
+    fn write_chunk_encodes_length_type_payload_and_crc() {
+        let mut output = Vec::new();
+
+        write_chunk(&mut output, b"tEST", b"abc");
+
+        assert_eq!(&output[0..4], &3u32.to_be_bytes());
+        assert_eq!(&output[4..8], b"tEST");
+        assert_eq!(&output[8..11], b"abc");
+        let expected_crc = crc32fast::hash(b"tESTabc");
+        assert_eq!(&output[11..15], &expected_crc.to_be_bytes());
+    }
+
+    #[test]
+    fn sample_image_keys_match_runtime_upload_layout() {
+        assert_eq!(DEFAULT_AVATAR_KEY, "authors/default.jpg");
+        assert_eq!(sample_author_key(42), "authors/high-res/42.jpg");
+        assert_eq!(SAMPLE_IMAGES.len(), 4);
+        assert_eq!(
+            SAMPLE_IMAGES
+                .iter()
+                .map(|sample| sample_author_key(sample.author_id))
+                .collect::<Vec<_>>(),
+            vec![
+                "authors/high-res/1.jpg",
+                "authors/high-res/2.jpg",
+                "authors/high-res/3.jpg",
+                "authors/high-res/4.jpg",
+            ],
+        );
+    }
 }

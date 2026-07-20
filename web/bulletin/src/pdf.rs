@@ -511,6 +511,36 @@ mod tests {
     }
 
     #[test]
+    fn test_html_to_typst_extended_markup_and_numeric_entities() {
+        let html = concat!(
+            "<h1>Top</h1>",
+            "<h3>Sub</h3>",
+            "<h4>Minor</h4>",
+            "<blockquote>Quote</blockquote>",
+            "<ul><li>One</li><li>Two</li></ul>",
+            "<p><u>under</u> &#35; &unknown;</p>"
+        );
+        let typst = html_to_typst(html);
+
+        assert!(typst.contains("== Top"));
+        assert!(typst.contains("==== Sub"));
+        assert!(typst.contains("#text(weight: \"bold\")[Minor]"));
+        assert!(typst.contains("#pad(right: 2em)[Quote]"));
+        assert!(typst.contains("- One"));
+        assert!(typst.contains("- Two"));
+        assert!(typst.contains("#underline[under]"));
+        assert!(typst.contains("\\#"));
+        assert!(typst.contains("&unknown;"));
+    }
+
+    #[test]
+    fn test_html_to_typst_closes_unbalanced_inline_marks() {
+        let typst = html_to_typst("<p><strong>bold <em>italic <u>under");
+
+        assert!(typst.contains("#strong[bold #emph[italic #underline[under]]]"));
+    }
+
+    #[test]
     fn test_html_to_typst_headings() {
         let html = "<h2>כותרת</h2><p>תוכן</p>";
         let typst = html_to_typst(html);
@@ -588,6 +618,38 @@ mod tests {
         assert!(markup.contains("תנ\\\"ך"));
         assert!(markup.contains("rgb(\"8B0000\")"));
         assert!(markup.contains("בראשית א – כותרת"));
+    }
+
+    #[test]
+    fn test_generate_typst_markup_handles_empty_headers_blank_pesukim_and_articles() {
+        let req = PdfRequest {
+            sefer_name: "Genesis".to_string(),
+            perakim: vec![PdfPerekInput {
+                perek_heb: "1".to_string(),
+                header: String::new(),
+                pesukim: vec![
+                    "First / escaped".to_string(),
+                    "   ".to_string(),
+                    "Third".to_string(),
+                ],
+                articles: vec![(
+                    "Article / Name".to_string(),
+                    "Author".to_string(),
+                    "<p>Body <strong>bold</strong></p>".to_string(),
+                )],
+            }],
+            include_cover: true,
+            include_toc: true,
+            cover_accent_hex: "###".to_string(),
+        };
+        let markup = generate_typst_markup(&req);
+
+        assert!(markup.contains("rgb(\"475569\")"));
+        assert!(markup.contains("Genesis 1"));
+        assert!(markup.contains(&format!("*{}* First \\/ escaped", to_hebrew_letter(1))));
+        assert!(!markup.contains(&format!("*{}*    ", to_hebrew_letter(2))));
+        assert!(markup.contains("Article \\/ Name \\/ Author"));
+        assert!(markup.contains("#strong[bold]"));
     }
 
     #[test]

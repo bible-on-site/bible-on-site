@@ -190,6 +190,32 @@ describe("bulletin-client", () => {
 			expect(body.includeArticles).toBe(true);
 		});
 
+		it("passes optional cover and sefer metadata through to Lambda", async () => {
+			mockSend.mockResolvedValue(makeLambdaResponse(makeFakePdf()));
+
+			await generatePdfViaBulletin([7], {
+				seferName: "שמות",
+				includeCover: true,
+				includeToc: true,
+				coverAccentHex: "#8B0000",
+			});
+
+			const invokeInput = mockSend.mock.calls[0][0];
+			const event = JSON.parse(
+				Buffer.from(invokeInput.Payload).toString("utf-8"),
+			);
+			const body = JSON.parse(event.body);
+			expect(body).toEqual(
+				expect.objectContaining({
+					perakimIds: [7],
+					seferName: "שמות",
+					includeCover: true,
+					includeToc: true,
+					coverAccentHex: "8B0000",
+				}),
+			);
+		});
+
 		it("returns PDF bytes from Lambda response", async () => {
 			const fakePdf = makeFakePdf(4096);
 			mockSend.mockResolvedValue(makeLambdaResponse(fakePdf));
@@ -208,6 +234,17 @@ describe("bulletin-client", () => {
 
 			await expect(generatePdfViaBulletin([1])).rejects.toThrow(
 				/Bulletin Lambda error/,
+			);
+		});
+
+		it("uses unknown when Lambda FunctionError has no payload", async () => {
+			mockSend.mockResolvedValue({
+				FunctionError: "Unhandled",
+				Payload: undefined,
+			});
+
+			await expect(generatePdfViaBulletin([1])).rejects.toThrow(
+				/Bulletin Lambda error: unknown/,
 			);
 		});
 
@@ -245,6 +282,24 @@ describe("bulletin-client", () => {
 			await expect(generatePdfViaBulletin([1])).rejects.toThrow(
 				/expected a PDF/,
 			);
+		});
+
+		it("decodes non-base64 Lambda bodies as binary PDF bytes", async () => {
+			const fakePdf = makeFakePdf();
+			mockSend.mockResolvedValue({
+				Payload: Buffer.from(
+					JSON.stringify({
+						statusCode: 200,
+						body: fakePdf.toString("binary"),
+						isBase64Encoded: false,
+					}),
+				),
+			});
+
+			const result = await generatePdfViaBulletin([1]);
+
+			expect(result).toBeInstanceOf(Uint8Array);
+			expect(result.slice(0, 5)).toEqual(new Uint8Array(PDF_HEADER));
 		});
 
 		it("does not invoke the local binary", async () => {

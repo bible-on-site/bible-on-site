@@ -6,7 +6,7 @@ import {
 	maxFootnoteIndex,
 	prepareHtmlForNewFootnoteAtSlot,
 	resyncFootnoteRefLettersFromHtml,
-} from "./adminFootnoteHtml";
+} from "~/components/editor/adminFootnoteHtml";
 
 describe("adminFootnoteHtml", () => {
 	describe("maxFootnoteIndex", () => {

@@ -16,6 +16,7 @@ import {
 	downloadSefer,
 	getArticleForBook,
 	getArticleSummariesForPerek,
+	getPerekSummariesBatch,
 	getPerushNotesForPage,
 	getPerushimSummariesForPerek,
 } from "../../../src/app/929/[number]/actions";
@@ -138,6 +139,72 @@ describe("getPerushimSummariesForPerek", () => {
 
 		expect(mockGetPerushimByPerekId).toHaveBeenCalledWith(5);
 		expect(result).toEqual(perushim);
+	});
+});
+
+describe("getPerekSummariesBatch", () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+	});
+
+	it("returns article and perush summaries keyed by perek id", async () => {
+		const articleSummaries = new Map([
+			[
+				5,
+				[
+					{
+						id: 1,
+						perekId: 5,
+						authorId: 1,
+						abstract: "abs 5",
+						name: "article 5",
+						priority: 1,
+						authorName: "rav 5",
+						authorImageUrl: "url-5",
+					},
+				],
+			],
+			[
+				6,
+				[
+					{
+						id: 2,
+						perekId: 6,
+						authorId: 2,
+						abstract: "abs 6",
+						name: "article 6",
+						priority: 2,
+						authorName: "rav 6",
+						authorImageUrl: "url-6",
+					},
+				],
+			],
+		]);
+		const perushSummaries = new Map([
+			[5, [{ id: 10, name: "Rashi 5", parshanName: "Rashi", noteCount: 3 }]],
+			[6, [{ id: 11, name: "Rashi 6", parshanName: "Rashi", noteCount: 4 }]],
+		]);
+		mockGetArticleSummariesByPerekId.mockImplementation(async (id) =>
+			articleSummaries.get(id) ?? [],
+		);
+		mockGetPerushimByPerekId.mockImplementation(async (id) =>
+			perushSummaries.get(id) ?? [],
+		);
+
+		const result = await getPerekSummariesBatch([5, 6]);
+
+		expect(result).toEqual({
+			"5": {
+				articles: articleSummaries.get(5),
+				perushim: perushSummaries.get(5),
+			},
+			"6": {
+				articles: articleSummaries.get(6),
+				perushim: perushSummaries.get(6),
+			},
+		});
+		expect(mockGetArticleSummariesByPerekId).toHaveBeenCalledTimes(2);
+		expect(mockGetPerushimByPerekId).toHaveBeenCalledTimes(2);
 	});
 });
 

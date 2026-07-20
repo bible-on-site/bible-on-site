@@ -3,7 +3,7 @@ import {
 	defaultMysqlDatabaseName,
 	defaultMysqlUrl,
 	resolveMysqlUrl,
-} from "./db-config";
+} from "~/server/db-config";
 
 describe("db-config", () => {
 	afterEach(() => {

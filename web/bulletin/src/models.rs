@@ -57,3 +57,39 @@ pub struct GeneratePdfResponse {
     pub filename: String,
     pub page_count: usize,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generate_pdf_request_deserializes_camel_case_defaults() {
+        let req: GeneratePdfRequest =
+            serde_json::from_str(r##"{"perakimIds":[1,2],"coverAccentHex":"#123abc"}"##)
+                .expect("request should deserialize");
+
+        assert_eq!(req.perakim_ids, vec![1, 2]);
+        assert!(req.include_articles);
+        assert!(!req.include_perushim);
+        assert!(!req.include_cover);
+        assert!(!req.include_toc);
+        assert!(req.article_ids.is_empty());
+        assert!(req.author_ids.is_empty());
+        assert_eq!(req.cover_accent_hex.as_deref(), Some("#123abc"));
+    }
+
+    #[test]
+    fn generate_pdf_request_allows_filter_and_layout_options() {
+        let req: GeneratePdfRequest = serde_json::from_str(
+            r#"{"perakimIds":[3],"includeArticles":false,"includePerushim":true,"articleIds":[8],"authorIds":[5],"includeCover":true,"includeToc":true}"#,
+        )
+        .expect("request should deserialize");
+
+        assert!(!req.include_articles);
+        assert!(req.include_perushim);
+        assert_eq!(req.article_ids, vec![8]);
+        assert_eq!(req.author_ids, vec![5]);
+        assert!(req.include_cover);
+        assert!(req.include_toc);
+    }
+}

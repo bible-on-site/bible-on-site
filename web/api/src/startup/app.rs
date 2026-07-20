@@ -133,3 +133,74 @@ async fn health_check() -> HttpResponse {
         version: env!("CARGO_PKG_VERSION"),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::{
+        App,
+        body::to_bytes,
+        http::{StatusCode, header},
+        test,
+    };
+    use sea_orm::{DatabaseBackend, MockDatabase};
+
+    fn mock_database() -> Database {
+        Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entities::article::Model, Vec<entities::article::Model>, _>(
+                    [vec![]],
+                )
+                .into_connection(),
+        )
+    }
+
+    #[actix_web::test]
+    async fn health_check_returns_status_and_version() {
+        let response = health_check().await;
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body())
+            .await
+            .expect("health body should be readable");
+        let body = std::str::from_utf8(&body).expect("health body should be utf8");
+        assert!(body.contains(r#""status":"ok""#));
+        assert!(body.contains(env!("CARGO_PKG_VERSION")));
+    }
+
+    #[actix_web::test]
+    async fn build_app_config_wires_health_playground_and_graphql_post() {
+        let db = mock_database();
+        let shutdown_signal = Arc::new(AtomicBool::new(false));
+        let app = test::init_service(
+            App::new().configure(ActixApp::build_app_config(&db, shutdown_signal)),
+        )
+        .await;
+
+        let health_response =
+            test::call_service(&app, test::TestRequest::get().uri("/health").to_request()).await;
+        assert_eq!(health_response.status(), StatusCode::OK);
+
+        let playground_response =
+            test::call_service(&app, test::TestRequest::get().uri("/").to_request()).await;
+        assert_eq!(playground_response.status(), StatusCode::OK);
+        assert_eq!(
+            playground_response
+                .headers()
+                .get(header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok()),
+            Some("text/html; charset=utf-8")
+        );
+
+        let graphql_response = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/")
+                .insert_header((header::CONTENT_TYPE, "application/json"))
+                .set_payload(r#"{"query":"{ __typename }"}"#)
+                .to_request(),
+        )
+        .await;
+        assert_eq!(graphql_response.status(), StatusCode::OK);
+    }
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatPerekLabel, toHebrewWithPunctuation } from "../../utils/hebrew";
+import { formatPerekLabel, toHebrewWithPunctuation } from "~/utils/hebrew";
 
 describe("toHebrewWithPunctuation", () => {
 	it("returns single letter with geresh for single-digit numbers", () => {

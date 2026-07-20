@@ -256,3 +256,139 @@ fn generate_perek_date_sql(sql: &mut String, sefarim: &[Sefer]) {
     }
     sql.push('\n');
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{Additional, Pasuk, RecordingTimeFrame, Segment};
+
+    fn segment(segment_type: &str, value: Option<&str>) -> Segment {
+        Segment {
+            value: value.map(str::to_string),
+            segment_type: segment_type.to_string(),
+            recording_time_frame: None,
+            ktiv_offset: None,
+            qri_offset: None,
+        }
+    }
+
+    fn perek(perek_id: i32, header: &str, star_rise: Vec<&str>) -> Perek {
+        Perek {
+            perek_id,
+            header: header.to_string(),
+            date: vec![57750329, 57000132],
+            star_rise: star_rise.into_iter().map(str::to_string).collect(),
+            pesukim: vec![Pasuk {
+                segments: vec![
+                    Segment {
+                        value: Some("written".to_string()),
+                        segment_type: "ktiv".to_string(),
+                        recording_time_frame: None,
+                        ktiv_offset: None,
+                        qri_offset: Some(1),
+                    },
+                    Segment {
+                        value: Some("read".to_string()),
+                        segment_type: "qri".to_string(),
+                        recording_time_frame: Some(RecordingTimeFrame {
+                            from: "00:01".to_string(),
+                            to: "00:02".to_string(),
+                        }),
+                        ktiv_offset: Some(-1),
+                        qri_offset: None,
+                    },
+                    segment("ptuha", None),
+                ],
+            }],
+        }
+    }
+
+    fn sample_sefarim() -> Vec<Sefer> {
+        vec![
+            Sefer {
+                id: "book-a".to_string(),
+                name: "Book 'A'".to_string(),
+                tanach_us_name: Some("Book\\A".to_string()),
+                helek: "Torah".to_string(),
+                pesukim_count: 3,
+                perek_from: 1,
+                perek_to: 1,
+                additionals: None,
+                perakim: Some(vec![perek(1, "Header\nOne", vec!["05:30", "06:07:08"])]),
+            },
+            Sefer {
+                id: "book-b".to_string(),
+                name: "Book B".to_string(),
+                tanach_us_name: None,
+                helek: "Torah".to_string(),
+                pesukim_count: 2,
+                perek_from: 2,
+                perek_to: 3,
+                additionals: Some(vec![Additional {
+                    letter: "A".to_string(),
+                    name: "Book B A".to_string(),
+                    tanach_us_name: Some("BookB I".to_string()),
+                    helek: "Torah".to_string(),
+                    order: 2,
+                    pesukim_count: 2,
+                    perek_from: 2,
+                    perek_to: 3,
+                    perakim: vec![perek(2, "Additional", vec!["07:45"])],
+                }]),
+                perakim: None,
+            },
+        ]
+    }
+
+    #[test]
+    fn escape_sql_string_escapes_control_and_quote_characters() {
+        assert_eq!(
+            escape_sql_string("a\\b'c\nd\re\tf"),
+            "a\\\\b\\'c\\nd\\re\\tf"
+        );
+    }
+
+    #[test]
+    fn hebdate_to_mysql_date_clamps_invalid_parts_and_falls_back_year() {
+        assert_eq!(hebdate_to_mysql_date(57750329), "2014-03-28");
+        assert_eq!(hebdate_to_mysql_date(57801332), "2019-12-28");
+        assert_eq!(hebdate_to_mysql_date(57000000), "2024-01-01");
+    }
+
+    #[test]
+    fn collect_all_perakim_includes_direct_and_additional_books() {
+        let sefarim = sample_sefarim();
+        let ids: Vec<i32> = collect_all_perakim(&sefarim)
+            .into_iter()
+            .map(|p| p.perek_id)
+            .collect();
+
+        assert_eq!(ids, vec![1, 2]);
+    }
+
+    #[test]
+    fn generate_sql_writes_all_tanah_tables_with_escaped_values() {
+        let dir =
+            std::env::temp_dir().join(format!("tanah_view_mysql_test_{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("tanah.sql");
+
+        generate_sql(&path, &sample_sefarim(), "dump-name").unwrap();
+
+        let sql = fs::read_to_string(&path).unwrap();
+        assert!(sql.contains("-- Source: dump-name"));
+        assert!(sql.contains("SET FOREIGN_KEY_CHECKS = 0;"));
+        assert!(sql.contains("INSERT INTO tanah_sefer"));
+        assert!(sql.contains("Book \\'A\\'"));
+        assert!(sql.contains("'Book\\\\A'"));
+        assert!(sql.contains("Book B', NULL"));
+        assert!(sql.contains("INSERT INTO tanah_additional"));
+        assert!(sql.contains("'A', 'BookB I', 2, 3"));
+        assert!(sql.contains("Header\\nOne"));
+        assert!(sql.contains("'2014-03-28', '57750329', '05:30:00'"));
+        assert!(sql.contains("'2024-01-28', '57000132', '06:07:08'"));
+        assert!(sql.contains("SET FOREIGN_KEY_CHECKS = 1;"));
+
+        fs::remove_dir_all(&dir).ok();
+    }
+}

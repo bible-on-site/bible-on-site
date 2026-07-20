@@ -77,3 +77,71 @@ fn author_mapping_branches() -> Vec<Document> {
     })
     .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bson::Bson;
+
+    #[test]
+    fn author_mapping_branches_pin_explicit_person_key_overrides() {
+        let branches = author_mapping_branches();
+
+        assert_eq!(branches.len(), 8);
+        assert!(branches.iter().any(|branch| {
+            branch.get_str("then") == Ok("abarbanel")
+                && branch
+                    .get_document("case")
+                    .and_then(|case| case.get_array("$eq"))
+                    .map(|eq| eq.contains(&Bson::String("isaac-abarbanel".to_string())))
+                    .unwrap_or(false)
+        }));
+        assert!(
+            branches
+                .iter()
+                .any(|branch| branch.get_str("then") == Ok("chizkuni"))
+        );
+    }
+
+    #[test]
+    fn build_normalizes_author_arrays_and_defaults_missing_authors_to_empty_array() {
+        let stage = build();
+        let add_fields = stage.get_document("$addFields").unwrap();
+        let authors = add_fields.get_document("authors").unwrap();
+        let condition = authors.get_document("$cond").unwrap();
+
+        assert_eq!(
+            condition
+                .get_document("if")
+                .unwrap()
+                .get_array("$eq")
+                .unwrap()
+                .get(1),
+            Some(&Bson::String("array".to_string()))
+        );
+        assert_eq!(condition.get_array("else").unwrap().len(), 0);
+
+        let map = condition
+            .get_document("then")
+            .unwrap()
+            .get_document("$map")
+            .unwrap();
+        assert_eq!(map.get_str("input"), Ok("$authors"));
+        assert_eq!(map.get_str("as"), Ok("author"));
+
+        let default = map
+            .get_document("in")
+            .unwrap()
+            .get_document("$switch")
+            .unwrap()
+            .get_document("default")
+            .unwrap()
+            .get_document("$toLower")
+            .unwrap()
+            .get_document("$replaceAll")
+            .unwrap();
+        assert_eq!(default.get_str("input"), Ok("$$author"));
+        assert_eq!(default.get_str("find"), Ok("-"));
+        assert_eq!(default.get_str("replacement"), Ok(" "));
+    }
+}

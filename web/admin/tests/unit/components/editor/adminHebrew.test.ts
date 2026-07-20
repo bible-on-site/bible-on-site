@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hebrewOrdinalLetter } from "./adminHebrew";
+import { hebrewOrdinalLetter } from "~/components/editor/adminHebrew";
 
 describe("adminHebrew", () => {
 	describe("hebrewOrdinalLetter", () => {
