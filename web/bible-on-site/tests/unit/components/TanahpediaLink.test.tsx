@@ -196,18 +196,19 @@ describe("TanahpediaLink", () => {
 	it("clears a pending hide timer on unmount", async () => {
 		jest.useFakeTimers();
 		const clearTimeoutSpy = jest.spyOn(global, "clearTimeout");
+		const linkText = "Deborah";
 		mockFetch({
 			ok: true,
 			json: async () => ({
-				title: "Deborah",
+				title: linkText,
 				snippet: "Judge",
 			}),
 		});
 
 		const { unmount } = render(
-			<TanahpediaLink entryUniqueName="deborah">Deborah</TanahpediaLink>,
+			<TanahpediaLink entryUniqueName="deborah">{linkText}</TanahpediaLink>,
 		);
-		const link = screen.getByRole("link", { name: "Deborah" });
+		const link = screen.getByRole("link", { name: linkText });
 		await hoverLink(link);
 		fireEvent.mouseLeave(link);
 		unmount();
