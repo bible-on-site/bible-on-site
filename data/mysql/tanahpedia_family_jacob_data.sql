@@ -262,7 +262,7 @@ INSERT INTO tanahpedia_person_union (
 		NULL,
 		NULL,
 		NULL,
-		'בראשית כט'
+		'בראשית כט כג'
 	),
 	(
 		'u2000000-0000-4000-8000-000000000002',
@@ -274,7 +274,7 @@ INSERT INTO tanahpedia_person_union (
 		NULL,
 		NULL,
 		NULL,
-		'בראשית כט'
+		'בראשית כט כח'
 	),
 	(
 		'u2000000-0000-4000-8000-000000000003',
