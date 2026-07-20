@@ -11,6 +11,30 @@ applyTo: "**"
 - Husky runs pre-commit via `.husky/pre-commit`.
 - Adding a hook: add to `.pre-commit-config.yaml`, then update `docs/devops/pre-commit.md`.
 
+## Task Boundary Workdir Gate
+
+**MANDATORY**: Do not start a task and do not finish a task while the workdir is dirty unless every dirty file has been explicitly triaged and handled.
+
+### Start gate (before implementation)
+
+1. Run `git status --short` and inspect all modified/staged/untracked files.
+2. Classify every dirty file into exactly one bucket:
+   - **In-scope for the current task**
+   - **Intentional out-of-scope user work**
+   - **Generated/temporary noise**
+3. Act on each bucket before writing code:
+   - **In-scope**: keep and continue.
+   - **Intentional out-of-scope**: isolate (separate commit/branch/stash) and do not mix with current task. If ownership or intent is unclear, stop and ask.
+   - **Generated/temporary noise**: remove/revert immediately.
+4. Do not begin implementation until no unclassified dirt remains.
+
+### Finish gate (before reporting done)
+
+1. Run `git status --short` again.
+2. Re-triage any remaining dirt with the same buckets above.
+3. Resolve all remaining dirt by commit, isolation, or cleanup.
+4. Do not mark task complete while unresolved/unclassified changes remain.
+
 ## Clean Working Directory Before Commit
 
 **MANDATORY**: Before every commit, the agent MUST ensure the working directory is clean of unrelated changes:
