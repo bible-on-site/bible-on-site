@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getTanahpediaSchemaSummaryForLlm } from "~/lib/tanahpedia/schema-registry";
-import { loadTanahpediaEntryById } from "./entries";
-import { loadEntryStructuralContext } from "./structural";
+import { loadTanahpediaEntryById } from "./entry-loader.server";
+import { loadEntryStructuralContext } from "./structural-loader.server";
 
 /** פלט מוצע בלבד — ללא הרצת SQL או כתיבה ל־DB על ידי המודל */
 export interface TanahpediaLlmProposal {
