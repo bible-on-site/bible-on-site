@@ -2,6 +2,7 @@ import type { Editor } from "@tiptap/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	ADMIN_EDITOR_SHORTCUT_EXTRAS_KEY,
+	adminEditorShortcutsExtension,
 	parseStoredShortcutExtras,
 } from "~/components/editor/adminEditorShortcuts";
 
@@ -104,6 +105,14 @@ describe("adminEditorShortcuts", () => {
 			href: "/tanahpedia/entry/משה",
 			linkType: "internal",
 		});
+		promptSpy.mockReturnValueOnce("#note-4");
+		expect(parseStoredShortcutExtras(editor)["Mod-k"]()).toBe(true);
+		expect(chain.extendMarkRange).toHaveBeenCalledWith("link");
+		expect(chain.setLink).toHaveBeenCalledWith({
+			href: "#note-4",
+			linkType: "comment",
+		});
+
 		promptSpy.mockReturnValueOnce("");
 		expect(parseStoredShortcutExtras(editor)["Mod-k"]()).toBe(true);
 		expect(chain.extendMarkRange).toHaveBeenCalledWith("link");
@@ -111,5 +120,53 @@ describe("adminEditorShortcuts", () => {
 
 		promptSpy.mockReturnValueOnce(null);
 		expect(parseStoredShortcutExtras(editor)["Mod-k"]()).toBe(false);
+	});
+
+	it("builds default keyboard shortcuts and lets stored extras override them", () => {
+		const promptSpy = vi.spyOn(window, "prompt").mockReturnValue("#note-2");
+		const { chain, editor } = createEditor();
+
+		const baseShortcuts =
+			adminEditorShortcutsExtension.config.addKeyboardShortcuts?.call({
+				editor,
+			});
+
+		expect(baseShortcuts).toBeDefined();
+		expect(baseShortcuts?.["Mod-1"]()).toBe(true);
+		expect(baseShortcuts?.["Mod-2"]()).toBe(true);
+		expect(baseShortcuts?.["Mod-3"]()).toBe(true);
+		expect(baseShortcuts?.["Mod-4"]()).toBe(true);
+		expect(baseShortcuts?.["Mod-5"]()).toBe(true);
+		expect(baseShortcuts?.["Mod-6"]()).toBe(true);
+		expect(chain.toggleHeading).toHaveBeenCalledWith({ level: 1 });
+		expect(chain.toggleHeading).toHaveBeenCalledWith({ level: 2 });
+		expect(chain.toggleHeading).toHaveBeenCalledWith({ level: 3 });
+		expect(chain.toggleHeading).toHaveBeenCalledWith({ level: 4 });
+		expect(chain.toggleHeading).toHaveBeenCalledWith({ level: 5 });
+		expect(chain.toggleHeading).toHaveBeenCalledWith({ level: 6 });
+
+		expect(baseShortcuts?.["Mod-i"]()).toBe(true);
+		expect(chain.setLink).toHaveBeenCalledWith({
+			href: "#note-2",
+			linkType: "comment",
+		});
+		expect(promptSpy).toHaveBeenCalledTimes(1);
+
+		expect(baseShortcuts?.["Mod-Shift-7"]()).toBe(true);
+		expect(chain.toggleBulletList).toHaveBeenCalledTimes(1);
+		expect(baseShortcuts?.["Mod-Shift-8"]()).toBe(true);
+		expect(chain.toggleOrderedList).toHaveBeenCalledTimes(1);
+
+		localStorage.setItem(
+			ADMIN_EDITOR_SHORTCUT_EXTRAS_KEY,
+			JSON.stringify({ "Mod-2": "bold" }),
+		);
+		const overriddenShortcuts =
+			adminEditorShortcutsExtension.config.addKeyboardShortcuts?.call({
+				editor,
+			});
+
+		expect(overriddenShortcuts?.["Mod-2"]()).toBe(true);
+		expect(chain.toggleBold).toHaveBeenCalledTimes(1);
 	});
 });
