@@ -5,6 +5,7 @@ import {
 	ENTITY_TYPES,
 	type EntityType,
 } from "~/lib/tanahpedia/labels";
+import { loadTanahpediaEntryById } from "./entry-loader.server";
 import { execute, query, queryOne } from "../db";
 
 const ANIMAL_KIND_KEYS = ["BEHEMA", "CHAYA", "OF", "SHERETZ"] as const;
@@ -210,15 +211,6 @@ export const getTanahpediaCategoryCounts = createServerFn({
 
 	return { counts, labels: CATEGORY_LABELS };
 });
-
-export async function loadTanahpediaEntryById(
-	id: string,
-): Promise<TanahpediaEntry | null> {
-	return queryOne<TanahpediaEntry>(
-		"SELECT id, unique_name, title, content, created_at, updated_at FROM tanahpedia_entry WHERE id = ?",
-		[id],
-	);
-}
 
 export const getEntry = createServerFn({ method: "GET" })
 	.inputValidator((data: string) => data)
