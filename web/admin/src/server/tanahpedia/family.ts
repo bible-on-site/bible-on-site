@@ -4,16 +4,20 @@ import { execute, query, queryOne } from "../db";
 import {
 	type CreateFamilyPersonInput,
 	type CreateParentChildLinkInput,
+	type CreatePersonNameInput,
 	type CreateUnionLinkInput,
 	type DeleteFamilyPersonInput,
 	type DeleteParentChildLinkInput,
+	type DeletePersonNameInput,
 	type DeleteUnionLinkInput,
+	FAMILY_NAME_TYPES,
 	FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES,
 	FAMILY_PARENT_ROLES,
 	FAMILY_UNION_END_REASONS,
 	FAMILY_UNION_TYPES,
 	type UpdateFamilyPersonInput,
 	type UpdateParentChildLinkInput,
+	type UpdatePersonNameInput,
 	type UpdateUnionLinkInput,
 } from "./family-api-spec";
 
@@ -38,6 +42,85 @@ async function getMainNameTypeId(): Promise<string> {
 		throw new Error("Missing tanahpedia_lookup_name_type row for MAIN");
 	}
 	return row.id;
+}
+
+async function getNameTypeIdByName(name: string): Promise<string> {
+	const row = await queryOne<{ id: string }>(
+		"SELECT id FROM tanahpedia_lookup_name_type WHERE name = ? LIMIT 1",
+		[name],
+	);
+	if (!row) {
+		throw new Error(`Missing tanahpedia_lookup_name_type row for ${name}`);
+	}
+	return row.id;
+}
+
+async function getGodId(): Promise<string> {
+	const row = await queryOne<{ id: string }>(
+		"SELECT id FROM tanahpedia_god LIMIT 1",
+	);
+	if (!row) throw new Error("Missing tanahpedia_god singleton row");
+	return row.id;
+}
+
+/**
+ * Upserts or deletes a person's single-row-per-person biographical fact
+ * (sex, birth_date, death_date, death_cause, birth_place). Passing `null`
+ * deletes the existing row (if any); passing a value inserts or updates it.
+ */
+async function upsertPersonSingleton(params: {
+	table:
+		| "tanahpedia_person_birth_date"
+		| "tanahpedia_person_death_date"
+		| "tanahpedia_person_death_cause"
+		| "tanahpedia_person_birth_place";
+	valueColumn: string;
+	personId: string;
+	value: string | number | null;
+}): Promise<void> {
+	const { table, valueColumn, personId, value } = params;
+	if (value === null) {
+		await execute(`DELETE FROM ${table} WHERE person_id = ?`, [personId]);
+		return;
+	}
+	const existing = await queryOne<{ id: string }>(
+		`SELECT id FROM ${table} WHERE person_id = ? LIMIT 1`,
+		[personId],
+	);
+	if (existing) {
+		await execute(`UPDATE ${table} SET ${valueColumn} = ? WHERE id = ?`, [
+			value,
+			existing.id,
+		]);
+	} else {
+		await execute(
+			`INSERT INTO ${table} (id, person_id, ${valueColumn}, alt_group_id) VALUES (?, ?, ?, NULL)`,
+			[randomUUID(), personId, value],
+		);
+	}
+}
+
+/** Enables/disables a non-exclusive person role (prophet, king). */
+async function setPersonRole(params: {
+	table: "tanahpedia_person_role_prophet" | "tanahpedia_person_role_king";
+	personId: string;
+	enabled: boolean;
+}): Promise<void> {
+	const { table, personId, enabled } = params;
+	if (!enabled) {
+		await execute(`DELETE FROM ${table} WHERE person_id = ?`, [personId]);
+		return;
+	}
+	const existing = await queryOne<{ id: string }>(
+		`SELECT id FROM ${table} WHERE person_id = ? LIMIT 1`,
+		[personId],
+	);
+	if (!existing) {
+		await execute(`INSERT INTO ${table} (id, person_id) VALUES (?, ?)`, [
+			randomUUID(),
+			personId,
+		]);
+	}
 }
 
 async function getLookupIdByName(params: {
@@ -105,6 +188,52 @@ export const createFamilyPersonNode = createServerFn({ method: "POST" })
 				[randomUUID(), personId, sex],
 			);
 		}
+		if (data.birthDate != null) {
+			await upsertPersonSingleton({
+				table: "tanahpedia_person_birth_date",
+				valueColumn: "birth_date",
+				personId,
+				value: data.birthDate,
+			});
+		}
+		if (data.deathDate != null) {
+			await upsertPersonSingleton({
+				table: "tanahpedia_person_death_date",
+				valueColumn: "death_date",
+				personId,
+				value: data.deathDate,
+			});
+		}
+		if (data.deathCause != null) {
+			await upsertPersonSingleton({
+				table: "tanahpedia_person_death_cause",
+				valueColumn: "death_cause",
+				personId,
+				value: data.deathCause,
+			});
+		}
+		if (data.birthPlaceId != null) {
+			await upsertPersonSingleton({
+				table: "tanahpedia_person_birth_place",
+				valueColumn: "place_id",
+				personId,
+				value: data.birthPlaceId,
+			});
+		}
+		if (data.isProphet) {
+			await setPersonRole({
+				table: "tanahpedia_person_role_prophet",
+				personId,
+				enabled: true,
+			});
+		}
+		if (data.isKing) {
+			await setPersonRole({
+				table: "tanahpedia_person_role_king",
+				personId,
+				enabled: true,
+			});
+		}
 
 		let linkId: string | null = null;
 		if (data.linkToEntryId?.trim()) {
@@ -122,8 +251,17 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 	.inputValidator((data: UpdateFamilyPersonInput) => data)
 	.handler(async ({ data }) => {
 		const entityId = requiredNonEmpty(data.entityId, "entityId");
-		if (data.displayName === undefined && data.sex === undefined) {
-			throw new Error("At least one of displayName or sex must be provided");
+		if (
+			data.displayName === undefined &&
+			data.sex === undefined &&
+			data.birthDate === undefined &&
+			data.deathDate === undefined &&
+			data.deathCause === undefined &&
+			data.birthPlaceId === undefined &&
+			data.isProphet === undefined &&
+			data.isKing === undefined
+		) {
+			throw new Error("At least one field must be provided to update");
 		}
 
 		if (data.displayName !== undefined) {
@@ -176,6 +314,68 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 						[randomUUID(), person.id, sex],
 					);
 				}
+			}
+		}
+
+		if (
+			data.birthDate !== undefined ||
+			data.deathDate !== undefined ||
+			data.deathCause !== undefined ||
+			data.birthPlaceId !== undefined ||
+			data.isProphet !== undefined ||
+			data.isKing !== undefined
+		) {
+			const person = await queryOne<{ id: string }>(
+				`SELECT id FROM tanahpedia_person WHERE entity_id = ? LIMIT 1`,
+				[entityId],
+			);
+			if (!person) throw new Error(`Person not found for entity: ${entityId}`);
+
+			if (data.birthDate !== undefined) {
+				await upsertPersonSingleton({
+					table: "tanahpedia_person_birth_date",
+					valueColumn: "birth_date",
+					personId: person.id,
+					value: data.birthDate,
+				});
+			}
+			if (data.deathDate !== undefined) {
+				await upsertPersonSingleton({
+					table: "tanahpedia_person_death_date",
+					valueColumn: "death_date",
+					personId: person.id,
+					value: data.deathDate,
+				});
+			}
+			if (data.deathCause !== undefined) {
+				await upsertPersonSingleton({
+					table: "tanahpedia_person_death_cause",
+					valueColumn: "death_cause",
+					personId: person.id,
+					value: data.deathCause,
+				});
+			}
+			if (data.birthPlaceId !== undefined) {
+				await upsertPersonSingleton({
+					table: "tanahpedia_person_birth_place",
+					valueColumn: "place_id",
+					personId: person.id,
+					value: data.birthPlaceId,
+				});
+			}
+			if (data.isProphet !== undefined) {
+				await setPersonRole({
+					table: "tanahpedia_person_role_prophet",
+					personId: person.id,
+					enabled: data.isProphet,
+				});
+			}
+			if (data.isKing !== undefined) {
+				await setPersonRole({
+					table: "tanahpedia_person_role_king",
+					personId: person.id,
+					enabled: data.isKing,
+				});
 			}
 		}
 
@@ -472,6 +672,142 @@ export const deleteUnionLink = createServerFn({ method: "POST" })
 			[id],
 		);
 		assertAffected(result, `Union link not found: ${id}`);
+
+		return { id };
+	});
+
+export const createPersonName = createServerFn({ method: "POST" })
+	.inputValidator((data: CreatePersonNameInput) => data)
+	.handler(async ({ data }) => {
+		const personId = requiredNonEmpty(data.personId, "personId");
+		const name = requiredNonEmpty(data.name, "name");
+		const nameType = data.nameType.trim().toUpperCase();
+		if (!isOneOf(nameType, FAMILY_NAME_TYPES)) {
+			throw new Error("Invalid nameType");
+		}
+		if (data.giverPersonId && data.isGodGiven) {
+			throw new Error("giverPersonId and isGodGiven are mutually exclusive");
+		}
+
+		const nameTypeId = await getNameTypeIdByName(nameType);
+		const id = randomUUID();
+		await execute(
+			`INSERT INTO tanahpedia_person_name (id, person_id, name, name_type_id, alt_group_id)
+			 VALUES (?, ?, ?, ?, ?)`,
+			[id, personId, name, nameTypeId, data.altGroupId ?? null],
+		);
+
+		if (data.giverPersonId) {
+			await execute(
+				`INSERT INTO tanahpedia_person_name_giver_person (id, person_name_id, giver_person_id, alt_group_id)
+				 VALUES (?, ?, ?, NULL)`,
+				[randomUUID(), id, data.giverPersonId],
+			);
+		}
+		if (data.isGodGiven) {
+			const godId = await getGodId();
+			await execute(
+				`INSERT INTO tanahpedia_person_name_giver_god (id, person_name_id, god_id, alt_group_id)
+				 VALUES (?, ?, ?, NULL)`,
+				[randomUUID(), id, godId],
+			);
+		}
+
+		return { id };
+	});
+
+export const updatePersonName = createServerFn({ method: "POST" })
+	.inputValidator((data: UpdatePersonNameInput) => data)
+	.handler(async ({ data }) => {
+		const id = requiredNonEmpty(data.id, "id");
+
+		const sets: string[] = [];
+		const params: unknown[] = [];
+
+		if (data.name !== undefined) {
+			sets.push("name = ?");
+			params.push(requiredNonEmpty(data.name, "name"));
+		}
+
+		if (data.nameType !== undefined) {
+			const nameType = data.nameType.trim().toUpperCase();
+			if (!isOneOf(nameType, FAMILY_NAME_TYPES)) {
+				throw new Error("Invalid nameType");
+			}
+			const nameTypeId = await getNameTypeIdByName(nameType);
+			sets.push("name_type_id = ?");
+			params.push(nameTypeId);
+		}
+
+		if (data.altGroupId !== undefined) {
+			sets.push("alt_group_id = ?");
+			params.push(data.altGroupId);
+		}
+
+		if (
+			sets.length === 0 &&
+			data.giverPersonId === undefined &&
+			data.isGodGiven === undefined
+		) {
+			throw new Error("At least one field must be provided to update");
+		}
+
+		if (sets.length > 0) {
+			params.push(id);
+			const result = await execute(
+				`UPDATE tanahpedia_person_name SET ${sets.join(", ")} WHERE id = ?`,
+				params,
+			);
+			assertAffected(result, `Person name not found: ${id}`);
+		} else {
+			const existing = await queryOne<{ id: string }>(
+				`SELECT id FROM tanahpedia_person_name WHERE id = ? LIMIT 1`,
+				[id],
+			);
+			if (!existing) throw new Error(`Person name not found: ${id}`);
+		}
+
+		if (data.giverPersonId !== undefined) {
+			await execute(
+				`DELETE FROM tanahpedia_person_name_giver_person WHERE person_name_id = ?`,
+				[id],
+			);
+			if (data.giverPersonId !== null) {
+				await execute(
+					`INSERT INTO tanahpedia_person_name_giver_person (id, person_name_id, giver_person_id, alt_group_id)
+					 VALUES (?, ?, ?, NULL)`,
+					[randomUUID(), id, data.giverPersonId],
+				);
+			}
+		}
+
+		if (data.isGodGiven !== undefined) {
+			await execute(
+				`DELETE FROM tanahpedia_person_name_giver_god WHERE person_name_id = ?`,
+				[id],
+			);
+			if (data.isGodGiven) {
+				const godId = await getGodId();
+				await execute(
+					`INSERT INTO tanahpedia_person_name_giver_god (id, person_name_id, god_id, alt_group_id)
+					 VALUES (?, ?, ?, NULL)`,
+					[randomUUID(), id, godId],
+				);
+			}
+		}
+
+		return { id };
+	});
+
+export const deletePersonName = createServerFn({ method: "POST" })
+	.inputValidator((data: DeletePersonNameInput) => data)
+	.handler(async ({ data }) => {
+		const id = requiredNonEmpty(data.id, "id");
+		const result = await execute(
+			`DELETE FROM tanahpedia_person_name WHERE id = ?`,
+			[id],
+		);
+		assertAffected(result, `Person name not found: ${id}`);
 
 		return { id };
 	});
