@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getTanahpediaSchemaSummaryForLlm } from "./schema-registry";
+import { getTanahpediaSchemaSummaryForLlm } from "~/lib/tanahpedia/schema-registry";
 
 describe("getTanahpediaSchemaSummaryForLlm", () => {
 	it("includes core tables and LLM safety rule", () => {

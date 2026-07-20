@@ -39,3 +39,33 @@ pub fn build_pipeline() -> Vec<Document> {
         stage_sort::build(),
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_pipeline_returns_expected_stage_order() {
+        let pipeline = build_pipeline();
+
+        let operators: Vec<&str> = pipeline
+            .iter()
+            .map(|stage| stage.iter().next().unwrap().0.as_str())
+            .collect();
+
+        assert_eq!(
+            operators,
+            vec![
+                "$match",
+                "$lookup",
+                "$addFields",
+                "$lookup",
+                "$project",
+                "$project",
+                "$match",
+                "$project",
+                "$sort",
+            ]
+        );
+    }
+}

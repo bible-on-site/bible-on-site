@@ -231,3 +231,154 @@ async fn lambda_generate_pdf(
             .unwrap()),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request(path: &str, body: Body) -> LambdaRequest {
+        let mut request = LambdaRequest::new(body);
+        *request.uri_mut() = path.parse().expect("path should parse");
+        request
+    }
+
+    fn text_body(body: &Body) -> &str {
+        match body {
+            Body::Text(text) => text,
+            _ => panic!("expected text body"),
+        }
+    }
+
+    #[test]
+    fn build_filename_handles_empty_single_and_multi_perek_requests() {
+        assert_eq!(build_filename("Sefer", &[]), "Sefer.pdf");
+
+        let single = build_filename("Sefer", &[1]);
+        assert!(single.starts_with("Sefer-"));
+        assert!(single.ends_with(".pdf"));
+        assert_ne!(single, "Sefer-.pdf");
+
+        let multi = build_filename("Sefer", &[1, 2]);
+        assert!(multi.starts_with("Sefer-"));
+        assert!(multi.ends_with(".pdf"));
+        assert!(multi.matches('-').count() >= 2);
+    }
+
+    #[test]
+    fn build_filename_keeps_unknown_perek_ids_predictable() {
+        assert_eq!(build_filename("Sefer", &[999_999]), "Sefer-.pdf");
+        assert_eq!(build_filename("Sefer", &[1, 999_999]), {
+            let first = build_filename("Sefer", &[1])
+                .trim_start_matches("Sefer-")
+                .trim_end_matches(".pdf")
+                .to_string();
+            format!("Sefer-{}-.pdf", first)
+        });
+    }
+
+    #[tokio::test]
+    async fn lambda_handler_returns_health_and_not_found_responses() {
+        let health = lambda_handler(request("/health", Body::Empty))
+            .await
+            .expect("health should not fail");
+        assert_eq!(health.status().as_u16(), 200);
+        assert_eq!(
+            health.headers().get("content-type").unwrap(),
+            "application/json"
+        );
+        assert_eq!(
+            text_body(health.body()),
+            r#"{"status":"ok","service":"bulletin"}"#
+        );
+
+        let missing = lambda_handler(request("/missing", Body::Empty))
+            .await
+            .expect("not found should not fail");
+        assert_eq!(missing.status().as_u16(), 404);
+        assert_eq!(text_body(missing.body()), r#"{"error":"not_found"}"#);
+    }
+
+    #[tokio::test]
+    async fn lambda_generate_pdf_rejects_missing_and_invalid_json_bodies() {
+        let missing = lambda_handler(request("/api/generate-pdf", Body::Empty))
+            .await
+            .expect("missing body should become a response");
+        assert_eq!(missing.status().as_u16(), 400);
+        assert_eq!(
+            text_body(missing.body()),
+            r#"{"error":"Missing request body"}"#
+        );
+
+        let invalid = lambda_handler(request(
+            "/api/generate-pdf",
+            Body::Text("{not-json".to_string()),
+        ))
+        .await
+        .expect("invalid JSON should become a response");
+        assert_eq!(invalid.status().as_u16(), 400);
+        assert!(text_body(invalid.body()).starts_with(r#"{"error":"#));
+    }
+
+    #[tokio::test]
+    async fn lambda_generate_pdf_returns_validation_errors_from_core() {
+        let response = lambda_handler(request(
+            "/api/generate-pdf",
+            Body::Text(r#"{"perakimIds":[],"includeArticles":false}"#.to_string()),
+        ))
+        .await
+        .expect("core validation should become a response");
+
+        assert_eq!(response.status().as_u16(), 500);
+        assert_eq!(
+            text_body(response.body()),
+            r#"{"error":"perakimIds must not be empty"}"#
+        );
+    }
+
+    #[tokio::test]
+    async fn lambda_generate_pdf_accepts_binary_json_and_reports_unknown_perek() {
+        let response = lambda_handler(request(
+            "/api/generate-pdf",
+            Body::Binary(br#"{"perakimIds":[999999],"includeArticles":false}"#.to_vec()),
+        ))
+        .await
+        .expect("core validation should become a response");
+
+        assert_eq!(response.status().as_u16(), 500);
+        assert_eq!(
+            text_body(response.body()),
+            r#"{"error":"Unknown perekId: 999999"}"#
+        );
+    }
+
+    #[tokio::test]
+    async fn lambda_generate_pdf_returns_pdf_bytes_and_download_headers() {
+        let response = lambda_handler(request(
+            "/api/generate-pdf",
+            Body::Text(
+                r##"{"seferName":"Genesis","perakimIds":[1],"includeArticles":false,"coverAccentHex":"#123abc"}"##
+                    .to_string(),
+            ),
+        ))
+        .await
+        .expect("valid request should become a PDF response");
+
+        assert_eq!(response.status().as_u16(), 200);
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "application/pdf"
+        );
+        assert!(
+            response
+                .headers()
+                .get("content-disposition")
+                .unwrap()
+                .as_bytes()
+                .starts_with(b"attachment; filename=\"Genesis-")
+        );
+        match response.body() {
+            Body::Binary(bytes) => assert!(bytes.starts_with(b"%PDF")),
+            _ => panic!("expected PDF binary body"),
+        }
+    }
+}

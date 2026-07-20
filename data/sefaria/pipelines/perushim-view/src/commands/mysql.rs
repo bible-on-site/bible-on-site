@@ -146,3 +146,114 @@ fn generate_notes_sql(sql: &mut String, notes: &[Note]) {
     }
     sql.push('\n');
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_extracted(note_count: usize) -> Extracted {
+        Extracted {
+            parshanim: vec![
+                Parshan {
+                    id: 1,
+                    name: "Rashi's \\ path".to_string(),
+                    birth_year: Some(1040),
+                    has_pic: true,
+                },
+                Parshan {
+                    id: 2,
+                    name: "Unknown".to_string(),
+                    birth_year: None,
+                    has_pic: false,
+                },
+            ],
+            perushim: vec![
+                Perush {
+                    id: 10,
+                    name: "Commentary One".to_string(),
+                    parshan_id: 1,
+                    comp_date: Some("1100".to_string()),
+                    pub_date: None,
+                    priority: 20,
+                },
+                Perush {
+                    id: 11,
+                    name: "Commentary Two".to_string(),
+                    parshan_id: 2,
+                    comp_date: None,
+                    pub_date: Some("1200".to_string()),
+                    priority: 30,
+                },
+            ],
+            notes: (0..note_count)
+                .map(|idx| Note {
+                    perush_id: 10,
+                    perek_id: 1,
+                    pasuk: (idx % 5) as i64 + 1,
+                    note_idx: idx as i64,
+                    note_content: format!("note '{idx}'\nline"),
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn escape_sql_uses_standard_quotes_and_control_escapes() {
+        assert_eq!(escape_sql("a\\b'c\nd\re\tf"), "a\\\\b''c\\nd\\re\\tf");
+    }
+
+    #[test]
+    fn generate_parshanim_sql_handles_optional_birth_year_and_picture_flag() {
+        let mut sql = String::new();
+
+        generate_parshanim_sql(&mut sql, &sample_extracted(0).parshanim);
+
+        assert!(sql.contains("-- parshan"));
+        assert!(sql.contains("Rashi''s \\\\ path', 1040, 1"));
+        assert!(sql.contains("'Unknown', NULL, 0"));
+    }
+
+    #[test]
+    fn generate_perushim_sql_handles_optional_dates() {
+        let mut sql = String::new();
+
+        generate_perushim_sql(&mut sql, &sample_extracted(0).perushim);
+
+        assert!(sql.contains("'Commentary One', 1, '1100', NULL, 20"));
+        assert!(sql.contains("'Commentary Two', 2, NULL, '1200', 30"));
+    }
+
+    #[test]
+    fn generate_notes_sql_batches_large_note_sets() {
+        let mut sql = String::new();
+
+        generate_notes_sql(&mut sql, &sample_extracted(NOTES_BATCH_SIZE + 1).notes);
+
+        assert_eq!(sql.matches("INSERT INTO note").count(), 2);
+        assert!(sql.contains("(10, 1, 1, 0, 'note ''0''\\nline')"));
+        assert!(sql.contains("(10, 1, 1, 500, 'note ''500''\\nline')"));
+    }
+
+    #[test]
+    fn generate_sql_writes_complete_perushim_seed_file() {
+        let dir = std::env::temp_dir().join(format!("perushim_mysql_test_{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("perushim.sql");
+
+        generate_sql(&path, &sample_extracted(2), "dump-name").unwrap();
+
+        let sql = fs::read_to_string(&path).unwrap();
+        assert!(sql.contains("-- Source: dump-name"));
+        assert!(sql.contains("SET NAMES utf8mb4;"));
+        assert!(sql.contains("SET FOREIGN_KEY_CHECKS = 0;"));
+        assert!(sql.contains("TRUNCATE TABLE note;"));
+        assert!(sql.contains("TRUNCATE TABLE perush;"));
+        assert!(sql.contains("TRUNCATE TABLE parshan;"));
+        assert!(sql.contains("INSERT INTO parshan"));
+        assert!(sql.contains("INSERT INTO perush"));
+        assert!(sql.contains("INSERT INTO note"));
+        assert!(sql.contains("SET FOREIGN_KEY_CHECKS = 1;"));
+
+        fs::remove_dir_all(&dir).ok();
+    }
+}

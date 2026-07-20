@@ -53,3 +53,34 @@ impl Author {
         Ok(count)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn author_model() -> Model {
+        Model {
+            id: 7,
+            name: "Author".to_string(),
+            details: "Details".to_string(),
+        }
+    }
+
+    #[test]
+    fn author_from_model_has_no_precomputed_count() {
+        let author = Author::from(author_model());
+
+        assert_eq!(author.id, 7);
+        assert_eq!(author.name, "Author");
+        assert_eq!(author.details, "Details");
+        assert_eq!(author.precomputed_articles_count, None);
+    }
+
+    #[test]
+    fn with_articles_count_sets_precomputed_count() {
+        let author = Author::with_articles_count(author_model(), 12);
+
+        assert_eq!(author.id, 7);
+        assert_eq!(author.precomputed_articles_count, Some(12));
+    }
+}

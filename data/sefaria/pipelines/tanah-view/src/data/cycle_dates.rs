@@ -381,4 +381,35 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn month_ordinal_to_legacy_returns_unknown_ordinals_unchanged() {
+        assert_eq!(month_ordinal_to_legacy(99, 5779), 99);
+    }
+
+    #[test]
+    fn dates_to_bson_converts_nested_date_arrays() {
+        let dates = vec![vec![57750329, 57750330], vec![57750331]];
+
+        assert_eq!(
+            dates_to_bson(&dates),
+            Bson::Array(vec![
+                Bson::Array(vec![Bson::Int64(57750329), Bson::Int64(57750330)]),
+                Bson::Array(vec![Bson::Int64(57750331)]),
+            ])
+        );
+    }
+
+    #[test]
+    fn star_rise_to_bson_converts_nested_time_arrays() {
+        let star_rise = vec![vec!["05:30".to_string()], vec!["06:15".to_string()]];
+
+        assert_eq!(
+            star_rise_to_bson(&star_rise),
+            Bson::Array(vec![
+                Bson::Array(vec![Bson::String("05:30".to_string())]),
+                Bson::Array(vec![Bson::String("06:15".to_string())]),
+            ])
+        );
+    }
 }

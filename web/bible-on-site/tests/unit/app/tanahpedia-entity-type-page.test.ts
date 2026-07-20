@@ -27,11 +27,12 @@ jest.mock("../../../src/lib/tanahpedia/service", () => ({
 	getAnimalsByClassification: jest.fn(),
 	getCategoryHomepage: jest.fn(),
 	getPlaceMapMarkers: jest.fn().mockResolvedValue([]),
-	ENTITY_TYPES: ["PERSON", "PLACE", "EVENT"],
+	ENTITY_TYPES: ["PERSON", "PLACE", "EVENT", "ANIMAL"],
 	ENTITY_TYPE_LABELS: {
 		PERSON: "אישים",
 		PLACE: "מקומות",
 		EVENT: "אירועים",
+		ANIMAL: "בעלי חיים",
 	},
 	CATEGORY_LABELS: {
 		PERSON: "אישים",
@@ -39,14 +40,26 @@ jest.mock("../../../src/lib/tanahpedia/service", () => ({
 		EVENT: "אירועים",
 		PROPHET: "נביאים",
 		KING: "מלכים",
+		ANIMAL: "בעלי חיים",
+		BEHEMA: "בהמה",
+		CHAYA: "חיה",
+		OF: "עוף",
+		SHERETZ: "שרץ",
+		TAHOR: "טהור",
+		TAMEH: "טמא",
 	},
 }));
 
 import {
 	getAllEntityTypeParams,
+	getAnimalsByClassification,
 	getEntitiesWithEntries,
+	getEntitiesWithEntriesByRole,
 	getCategoryHomepage,
+	getPlaceMapMarkers,
 } from "../../../src/lib/tanahpedia/service";
+import { render, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
 import EntityTypePage, {
 	generateMetadata,
 	generateStaticParams,
@@ -58,8 +71,19 @@ const mockGetAllEntityTypeParams = getAllEntityTypeParams as jest.MockedFunction
 const mockGetEntitiesWithEntries = getEntitiesWithEntries as jest.MockedFunction<
 	typeof getEntitiesWithEntries
 >;
+const mockGetEntitiesWithEntriesByRole =
+	getEntitiesWithEntriesByRole as jest.MockedFunction<
+		typeof getEntitiesWithEntriesByRole
+	>;
+const mockGetAnimalsByClassification =
+	getAnimalsByClassification as jest.MockedFunction<
+		typeof getAnimalsByClassification
+	>;
 const mockGetCategoryHomepage = getCategoryHomepage as jest.MockedFunction<
 	typeof getCategoryHomepage
+>;
+const mockGetPlaceMapMarkers = getPlaceMapMarkers as jest.MockedFunction<
+	typeof getPlaceMapMarkers
 >;
 
 describe("tanahpedia/[entityType] page", () => {
@@ -95,6 +119,7 @@ describe("tanahpedia/[entityType] page", () => {
 				{ entityType: "person" },
 				{ entityType: "place" },
 				{ entityType: "event" },
+				{ entityType: "animal" },
 			]);
 		});
 	});
@@ -154,6 +179,116 @@ describe("tanahpedia/[entityType] page", () => {
 			});
 
 			expect(result).toBeDefined();
+		});
+
+		it("uses role-specific entity loading when a valid person role is requested", async () => {
+			mockGetEntitiesWithEntriesByRole.mockResolvedValue([
+				{
+					entityType: "PERSON",
+					entityId: "prophet-1",
+					entityName: "Prophet one",
+					linkedEntries: [],
+				},
+			]);
+			mockGetCategoryHomepage.mockResolvedValue(null);
+
+			const result = await EntityTypePage({
+				params: Promise.resolve({ entityType: "person" }),
+				searchParams: Promise.resolve({ role: "prophet" }),
+			});
+
+			expect(result).toBeDefined();
+			expect(mockGetEntitiesWithEntriesByRole).toHaveBeenCalledWith("PROPHET");
+			expect(mockGetEntitiesWithEntries).not.toHaveBeenCalled();
+		});
+
+		it.each([
+			["kind", { kind: "chaya" }, "kind", "CHAYA"],
+			["purity", { purity: "tahor" }, "purity", "TAHOR"],
+		] as const)(
+			"uses animal %s classification loading when requested",
+			async (_label, searchParams, classificationType, classificationValue) => {
+				mockGetAnimalsByClassification.mockResolvedValue([
+					{
+						entityType: "ANIMAL",
+						entityId: "animal-1",
+						entityName: "Animal one",
+						linkedEntries: [],
+					},
+				]);
+				mockGetCategoryHomepage.mockResolvedValue(null);
+
+				const result = await EntityTypePage({
+					params: Promise.resolve({ entityType: "animal" }),
+					searchParams: Promise.resolve(searchParams),
+				});
+
+				expect(result).toBeDefined();
+				expect(mockGetAnimalsByClassification).toHaveBeenCalledWith(
+					classificationType,
+					classificationValue,
+				);
+			},
+		);
+
+		it("loads place map markers when the place homepage uses map layout", async () => {
+			mockGetEntitiesWithEntries.mockResolvedValue([]);
+			mockGetCategoryHomepage.mockResolvedValue({
+				id: "homepage-place",
+				entityType: "PLACE",
+				layoutType: "MAP",
+				config: null,
+				content: null,
+				updatedAt: "2026-01-01",
+			});
+			mockGetPlaceMapMarkers.mockResolvedValue([
+				{
+					placeId: "place-1",
+					placeName: "Jerusalem",
+					modernName: null,
+					lat: 31.778,
+					lng: 35.235,
+					entryUniqueName: "jerusalem",
+				},
+			]);
+
+			const result = await EntityTypePage({
+				params: Promise.resolve({ entityType: "place" }),
+				searchParams: Promise.resolve({}),
+			});
+
+			expect(result).toBeDefined();
+			expect(mockGetPlaceMapMarkers).toHaveBeenCalledTimes(1);
+		});
+
+		it("renders a database warning when category loading fails", async () => {
+			const oldNodeEnv = process.env.NODE_ENV;
+			Object.defineProperty(process.env, "NODE_ENV", {
+				value: "development",
+				configurable: true,
+			});
+			mockGetEntitiesWithEntries.mockRejectedValue(new Error("connection down"));
+
+			const result = await EntityTypePage({
+				params: Promise.resolve({ entityType: "person" }),
+				searchParams: Promise.resolve({}),
+			});
+
+			render(result as ReactElement);
+			expect(screen.getByRole("alert")).toBeInTheDocument();
+			Object.defineProperty(process.env, "NODE_ENV", {
+				value: oldNodeEnv,
+				configurable: true,
+			});
+		});
+
+		it("throws notFound for invalid entity type params", async () => {
+			await expect(
+				EntityTypePage({
+					params: Promise.resolve({ entityType: "invalid" }),
+					searchParams: Promise.resolve({}),
+				}),
+			).rejects.toThrow("NEXT_NOT_FOUND");
 		});
 	});
 });

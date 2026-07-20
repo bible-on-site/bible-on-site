@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { render } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 jest.mock("@/app/components/Bookshelf/bookshelf.module.scss", () => ({
 	root: "root",
@@ -54,5 +54,21 @@ describe("Bookshelf (no today sefer)", () => {
 		const { container } = render(<Bookshelf />);
 		// No bookmarkRibbon div should be rendered
 		expect(container.innerHTML).not.toContain("bookmarkRibbon");
+	});
+
+	it("uses the sefer starting perek when today's perek matches no sefer", () => {
+		Object.defineProperty(window, "innerWidth", {
+			value: 800,
+			writable: true,
+			configurable: true,
+		});
+
+		const onSeferClick = jest.fn();
+		render(<Bookshelf onSeferClick={onSeferClick} />);
+
+		fireEvent.click(screen.getByRole("button"));
+
+		expect(onSeferClick).toHaveBeenCalledTimes(1);
+		expect(onSeferClick).toHaveBeenCalledWith("בראשית", 1);
 	});
 });

@@ -87,6 +87,19 @@ describe("Bookshelf", () => {
 			expect(screen.getByText("כתובים")).toBeInTheDocument();
 		});
 
+		it("sizes each shelf from its grouped book count", () => {
+			const { container } = render(<Bookshelf />);
+			const surfaces = Array.from(container.querySelectorAll(".surface"));
+
+			expect(surfaces).toHaveLength(4);
+			expect(surfaces.map((surface) => surface.getAttribute("style"))).toEqual([
+				"width: 144px;",
+				"width: 112px;",
+				"width: 112px;",
+				"width: 112px;",
+			]);
+		});
+
 		it("calls onSeferClick with sefer name and perekFrom when a non-today book is clicked", () => {
 			const onSeferClick = jest.fn();
 			render(<Bookshelf onSeferClick={onSeferClick} />);

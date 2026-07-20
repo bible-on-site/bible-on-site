@@ -1,9 +1,11 @@
 using BibleOnSite.Services;
+using BibleOnSite.Tests.Support;
 using FluentAssertions;
 using Xunit;
 
 namespace BibleOnSite.Tests.Services;
 
+[Collection(PreferencesServiceCollection.Name)]
 public class PreferencesServiceTests : IDisposable
 {
     private readonly InMemoryPreferencesStorage _storage;
