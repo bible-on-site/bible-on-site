@@ -1,6 +1,4 @@
-import handler, {
-	createServerEntry,
-} from "@tanstack/react-start/server-entry";
+import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 import {
 	buildClearSessionCookie,
 	buildSessionCookie,
@@ -13,6 +11,36 @@ import {
 
 const SKIP_AUTH = process.env.SKIP_AUTH === "true";
 
+function firstHeaderValue(value: string | null): string | null {
+	if (!value) return null;
+	return value.split(",")[0]?.trim() || null;
+}
+
+function resolveRequestOrigin(request: Request): {
+	origin: string;
+	isSecure: boolean;
+} {
+	const url = new URL(request.url);
+	const forwardedProto = firstHeaderValue(
+		request.headers.get("x-forwarded-proto"),
+	);
+	const forwardedHost = firstHeaderValue(
+		request.headers.get("x-forwarded-host"),
+	);
+	const hostHeader = firstHeaderValue(request.headers.get("host"));
+
+	const protocol =
+		forwardedProto === "https" || forwardedProto === "http"
+			? forwardedProto
+			: url.protocol.replace(":", "");
+	const host = forwardedHost || hostHeader || url.host;
+
+	return {
+		origin: `${protocol}://${host}`,
+		isSecure: protocol === "https",
+	};
+}
+
 export default createServerEntry({
 	async fetch(request) {
 		if (SKIP_AUTH) {
@@ -20,8 +48,7 @@ export default createServerEntry({
 		}
 
 		const url = new URL(request.url);
-		const origin = `${url.protocol}//${url.host}`;
-		const isSecure = url.protocol === "https:";
+		const { origin, isSecure } = resolveRequestOrigin(request);
 
 		if (url.pathname === "/auth/callback") {
 			return handleCallback(url, origin, isSecure);
