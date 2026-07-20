@@ -313,7 +313,7 @@ public class PreferencesViewModelTests : IDisposable
 
         public PreferencesViewModelPerushimTests()
         {
-            _tempDir = Path.Combine(Path.GetTempPath(), "BibleOnSiteTests_" + Guid.NewGuid().ToString("N"));
+            _tempDir = Path.Join(Path.GetTempPath(), Path.GetRandomFileName());
             Directory.CreateDirectory(_tempDir);
             var fakePad = new FakePadDeliveryService();
             var perushim = PerushimNotesService.CreateForTesting(fakePad, _tempDir);
@@ -332,9 +332,17 @@ public class PreferencesViewModelTests : IDisposable
                     Directory.Delete(_tempDir, true);
                 }
             }
-            catch
+            catch (DirectoryNotFoundException)
             {
-                // best-effort cleanup of temp test directory
+                // Best-effort cleanup of temp test directory.
+            }
+            catch (IOException)
+            {
+                // Best-effort cleanup of temp test directory.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Best-effort cleanup of temp test directory.
             }
         }
 
@@ -358,6 +366,16 @@ public class PreferencesViewModelTests : IDisposable
         }
 
         [Fact]
+        public void IsPerekToLoadTodays_SetFalse_DoesNotChangePerekToLoad()
+        {
+            _service.PerekToLoad = PerekToLoad.Todays;
+
+            _viewModel.IsPerekToLoadTodays = false;
+
+            _service.PerekToLoad.Should().Be(PerekToLoad.Todays);
+        }
+
+        [Fact]
         public void IsPerekToLoadLastLearnt_ReturnsTrue_WhenPerekToLoadIsLastLearnt()
         {
             _service.PerekToLoad = PerekToLoad.LastLearnt;
@@ -377,6 +395,16 @@ public class PreferencesViewModelTests : IDisposable
         }
 
         [Fact]
+        public void IsPerekToLoadLastLearnt_SetFalse_DoesNotChangePerekToLoad()
+        {
+            _service.PerekToLoad = PerekToLoad.LastLearnt;
+
+            _viewModel.IsPerekToLoadLastLearnt = false;
+
+            _service.PerekToLoad.Should().Be(PerekToLoad.LastLearnt);
+        }
+
+        [Fact]
         public void ShowPerushimSection_AlwaysReturnsTrue()
         {
             _viewModel.ShowPerushimSection.Should().BeTrue();
@@ -392,6 +420,22 @@ public class PreferencesViewModelTests : IDisposable
         public void ShowPerushimDownload_ReturnsTrue_WhenNotesNotAvailable()
         {
             _viewModel.ShowPerushimDownload.Should().BeTrue();
+        }
+
+        [Fact]
+        public void ShowPerushimDownloadButton_ReturnsFalse_WhileDownloading()
+        {
+            _viewModel.IsPerushimDownloading = true;
+
+            _viewModel.ShowPerushimDownloadButton.Should().BeFalse();
+        }
+
+        [Fact]
+        public void PerushimDownloadStatusText_ReturnsPercentage_WhenProgressWasReported()
+        {
+            _viewModel.PerushimDownloadProgress = 0.426;
+
+            _viewModel.PerushimDownloadStatusText.Should().EndWith("43%");
         }
 
         [Fact]
@@ -423,15 +467,50 @@ public class PreferencesViewModelTests : IDisposable
 
             eventCount.Should().Be(0);
         }
+
+        [Fact]
+        public async Task DownloadPerushimAsync_WhenAlreadyDownloading_ReturnsWithoutFetching()
+        {
+            _viewModel.IsPerushimDownloading = true;
+
+            await _viewModel.DownloadPerushimCommand.ExecuteAsync(null);
+
+            _viewModel.IsPerushimDownloading.Should().BeTrue();
+        }
+
+        [Fact]
+        public async Task DownloadPerushimAsync_WhenDownloadFails_ResetsStateAndKeepsClampedProgress()
+        {
+            var fakePad = new FakePadDeliveryService { ProgressReports = [1.5] };
+            var perushim = PerushimNotesService.CreateForTesting(fakePad, _tempDir);
+            var viewModel = new PreferencesViewModel(_service, perushim);
+
+            await viewModel.DownloadPerushimCommand.ExecuteAsync(null);
+            await Task.Delay(50);
+
+            fakePad.FetchCalls.Should().Be(1);
+            viewModel.IsPerushimDownloading.Should().BeFalse();
+            viewModel.PerushimDownloadProgress.Should().Be(1);
+            viewModel.ShowPerushimDownloadButton.Should().BeTrue();
+        }
     }
 
     private sealed class FakePadDeliveryService : IPadDeliveryService
     {
+        public List<double> ProgressReports { get; init; } = [];
+
+        public int FetchCalls { get; private set; }
+
         public Task<string?> TryGetAssetPathAsync(string packName, CancellationToken cancellationToken = default) =>
             Task.FromResult<string?>(null);
 
-        public Task<bool> FetchAsync(string packName, IProgress<double>? progress = null, CancellationToken cancellationToken = default) =>
-            Task.FromResult(false);
+        public Task<bool> FetchAsync(string packName, IProgress<double>? progress = null, CancellationToken cancellationToken = default)
+        {
+            FetchCalls++;
+            foreach (var value in ProgressReports)
+                progress?.Report(value);
+            return Task.FromResult(false);
+        }
 
         public Task<List<string>> GetDeliveryDiagnosticsAsync(string packName) =>
             Task.FromResult(new List<string>());
