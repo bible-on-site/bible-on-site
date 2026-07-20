@@ -4,9 +4,12 @@
   display: grid;
   align-items: center;
 }
-/*
+
 .container {
-} */
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
 
 .breadcrumb {
   list-style: none;
@@ -14,10 +17,16 @@
   margin: 0 18px 0 0;
   font-size: 14px;
   color: #555;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .breadcrumb li {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
 }
 
 .breadcrumb > li:not(:last-child):after {
@@ -91,14 +100,21 @@
 
 .glyphicon {
   display: inline-block;
-  font-style: normal;
-  font-variant: normal;
-  text-rendering: auto;
-  line-height: 1;
+  width: 8px;
+  height: 8px;
+  vertical-align: middle;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
 }
 
-.glyphicon-triangle-bottom::before {
-  content: "▼";
+.glyphicon-triangle-bottom {
+  -webkit-mask-image: url("/icons/chevron-down.svg");
+  mask-image: url("/icons/chevron-down.svg");
 }
 
 .drop {
@@ -153,14 +169,33 @@
 }
 
 .small {
-  font-size: 9px;
   margin-right: 4px;
   color: #666;
-  transition: transform 0.2s ease;
+  transition: transform 0.2s ease, margin 0.2s ease;
 }
 
 .drop-container:hover .small {
   transform: translateY(1px);
+}
+
+@media (max-width: 480px) {
+  .breadcrumb {
+    font-size: 12px;
+    margin: 0 8px 0 0;
+  }
+
+  .breadcrumb > li:not(:last-child):after {
+    margin: 0 4px;
+  }
+
+  .glyphicon {
+    width: 7px;
+    height: 7px;
+  }
+
+  .small {
+    margin-right: 2px;
+  }
 }
 
 .perek-grid {
