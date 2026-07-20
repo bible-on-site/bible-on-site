@@ -12,6 +12,14 @@ applyTo: "**"
 - Apply fixes, run linters, and verify; do not leave follow-up steps for the user unless they explicitly ask.
 - Continue automatically with aligned next actions. If the user's intention is clear and the next step directly advances it, execute it without asking for additional confirmation.
 
+# Workdir Cleanliness Gate
+
+**Never start or finish a task with an untriaged dirty workdir.**
+
+- Before starting implementation: run `git status --short`, classify each dirty file (in-scope / out-of-scope user work / generated noise), then isolate or clean appropriately.
+- Before reporting completion: run `git status --short` again and repeat the same triage.
+- If any dirty file has unclear ownership or intent, stop and ask before proceeding.
+
 # No Suppressing Errors Without Approval
 
 **Never silence, suppress, or ignore errors/warnings to make CI pass.**

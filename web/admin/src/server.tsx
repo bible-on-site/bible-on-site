@@ -1,6 +1,4 @@
-import handler, {
-	createServerEntry,
-} from "@tanstack/react-start/server-entry";
+import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 import {
 	buildClearSessionCookie,
 	buildSessionCookie,
@@ -13,6 +11,40 @@ import {
 
 const SKIP_AUTH = process.env.SKIP_AUTH === "true";
 
+function firstHeaderValue(value: string | null): string | null {
+	if (!value) return null;
+	return value.split(",")[0]?.trim() || null;
+}
+
+function resolveRequestOrigin(request: Request): {
+	origin: string;
+	isSecure: boolean;
+} {
+	const url = new URL(request.url);
+	// Trust X-Forwarded-Proto: our nginx reverse proxy explicitly sets it
+	// (proxy_set_header X-Forwarded-Proto https;) for every server block.
+	const forwardedProto = firstHeaderValue(
+		request.headers.get("x-forwarded-proto"),
+	);
+	// Do NOT trust X-Forwarded-Host: nginx does not set/overwrite it, so a
+	// client could spoof it directly. Use the Host header instead - nginx
+	// explicitly forwards it (proxy_set_header Host $host;) and it is only
+	// reachable in the first place via the matching server_name/SNI, so it
+	// reflects the domain the client actually connected to.
+	const hostHeader = firstHeaderValue(request.headers.get("host"));
+
+	const protocol =
+		forwardedProto === "https" || forwardedProto === "http"
+			? forwardedProto
+			: url.protocol.replace(":", "");
+	const host = hostHeader || url.host;
+
+	return {
+		origin: `${protocol}://${host}`,
+		isSecure: protocol === "https",
+	};
+}
+
 export default createServerEntry({
 	async fetch(request) {
 		if (SKIP_AUTH) {
@@ -20,8 +52,7 @@ export default createServerEntry({
 		}
 
 		const url = new URL(request.url);
-		const origin = `${url.protocol}//${url.host}`;
-		const isSecure = url.protocol === "https:";
+		const { origin, isSecure } = resolveRequestOrigin(request);
 
 		if (url.pathname === "/auth/callback") {
 			return handleCallback(url, origin, isSecure);
