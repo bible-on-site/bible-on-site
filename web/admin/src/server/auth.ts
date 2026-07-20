@@ -10,9 +10,10 @@ const COGNITO_DOMAIN = requireEnv("COGNITO_DOMAIN");
 // the admin API without a browser/SAML session. Entirely optional/additive: if
 // COGNITO_SERVICE_CLIENT_ID is not configured, verifyServiceAccessToken always
 // returns false and only the existing cookie-based user login path is usable.
-const COGNITO_SERVICE_CLIENT_ID = process.env.COGNITO_SERVICE_CLIENT_ID;
+const COGNITO_SERVICE_CLIENT_ID =
+	process.env.COGNITO_SERVICE_CLIENT_ID?.trim() || undefined;
 const COGNITO_SERVICE_SCOPE =
-	process.env.COGNITO_SERVICE_SCOPE ?? "admin-api/service";
+	process.env.COGNITO_SERVICE_SCOPE?.trim() || "admin-api/service";
 
 function requireEnv(name: string): string {
 	const value = process.env[name];
