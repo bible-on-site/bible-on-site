@@ -108,6 +108,8 @@ describe("ImageUpload", () => {
 		const dropZone = getDropZone();
 		fireEvent.dragEnter(dropZone);
 		expect(dropZone.className).toContain("border-blue-500");
+		fireEvent.dragLeave(dropZone);
+		expect(dropZone.className).not.toContain("border-blue-500");
 
 		const file = imageFile("drop.png");
 		fireEvent.drop(dropZone, { dataTransfer: { files: [file] } });

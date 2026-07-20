@@ -6,6 +6,7 @@ import {
 	waitFor,
 	within,
 } from "@testing-library/react";
+import { useEditor } from "@tiptap/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WysiwygEditor } from "~/components/WysiwygEditor";
 
@@ -243,6 +244,43 @@ describe("WysiwygEditor", () => {
 		await waitFor(() => expect(screen.getByText("Source")).toBeInTheDocument());
 	});
 
+	it("auto-saves editor updates after the debounce delay", async () => {
+		const onChange = vi.fn();
+		renderEditor(onChange);
+		const editorOptions = vi.mocked(useEditor).mock.calls.at(-1)?.[0];
+		if (!editorOptions || !("onUpdate" in editorOptions)) {
+			throw new Error("Expected WysiwygEditor to configure TipTap onUpdate");
+		}
+
+		act(() => {
+			editorOptions.onUpdate?.({
+				editor: { getHTML: vi.fn(() => "<p>Changed</p>") },
+			} as never);
+		});
+
+		await waitFor(() =>
+			expect(onChange).toHaveBeenCalledWith("<p>Changed</p>"),
+		);
+	});
+
+	it("syncs changed content props back into TipTap", () => {
+		const onChange = vi.fn();
+		const { rerender } = renderEditor(onChange);
+
+		rerender(
+			<WysiwygEditor
+				content="<p>Updated from props</p>"
+				onChange={onChange}
+				placeholder="Body"
+				autoSaveDelay={1}
+			/>,
+		);
+
+		expect(editorState.editor.commands.setContent).toHaveBeenCalledWith(
+			"<p>Updated from props</p>",
+		);
+	});
+
 	it("creates, updates, and removes links from the link panel", () => {
 		renderEditor();
 
@@ -277,6 +315,16 @@ describe("WysiwygEditor", () => {
 			linkType: "comment",
 		});
 		act(() => editorState.emit("selectionUpdate"));
+		fireEvent.change(screen.getByRole("textbox"), {
+			target: { value: "#note-3" },
+		});
+		fireEvent.click(screen.getAllByRole("button")[16]);
+		expect(editorState.chain.extendMarkRange).toHaveBeenCalledWith("link");
+		expect(editorState.chain.setLink).toHaveBeenCalledWith({
+			href: "#note-3",
+			linkType: "comment",
+		});
+
 		expect(
 			screen.getByRole("button", { name: "הסר קישור" }),
 		).not.toBeDisabled();
@@ -464,5 +512,28 @@ describe("WysiwygEditor", () => {
 		expect(
 			screen.getByRole("dialog", { name: "קיצורי מקלדת" }),
 		).toBeInTheDocument();
+	});
+
+	it("clears shortcut overrides and closes shortcut help", () => {
+		localStorage.setItem("admin-editor-shortcut-extras", '{"Mod-b":"bold"}');
+		renderEditor();
+
+		fireEvent.click(screen.getAllByRole("button")[3]);
+		const textarea = document.querySelector("textarea");
+		if (!textarea) {
+			throw new Error("Expected shortcut JSON textarea to be rendered");
+		}
+		fireEvent.change(textarea, {
+			target: { value: "   " },
+		});
+		fireEvent.click(within(screen.getByRole("dialog")).getAllByRole("button")[2]);
+
+		expect(localStorage.getItem("admin-editor-shortcut-extras")).toBeNull();
+
+		fireEvent.click(screen.getAllByRole("button")[3]);
+		const dialog = screen.getByRole("dialog");
+		fireEvent.click(within(dialog).getAllByRole("button")[0]);
+
+		expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 	});
 });
