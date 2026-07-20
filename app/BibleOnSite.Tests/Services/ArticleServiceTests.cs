@@ -190,11 +190,13 @@ public class ArticleServiceTests
             {
                 await _serverTask;
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException ex)
             {
+                _ = ex;
             }
-            catch (ObjectDisposedException)
+            catch (ObjectDisposedException ex)
             {
+                _ = ex;
             }
 
             _cts.Dispose();
@@ -226,13 +228,17 @@ public class ArticleServiceTests
             {
                 var count = await stream.ReadAsync(buffer);
                 if (count == 0)
+                {
                     break;
+                }
 
                 received.AddRange(buffer.Take(count));
                 var request = Encoding.UTF8.GetString(received.ToArray());
                 var headerEnd = request.IndexOf("\r\n\r\n", StringComparison.Ordinal);
                 if (headerEnd < 0)
+                {
                     continue;
+                }
 
                 var headers = request[..headerEnd];
                 var contentLength = headers
@@ -245,7 +251,9 @@ public class ArticleServiceTests
                 var bodyStart = headerEnd + 4;
                 var bodyBytesRead = received.Count - bodyStart;
                 if (bodyBytesRead >= contentLength)
+                {
                     return Encoding.UTF8.GetString(received.Skip(bodyStart).Take(contentLength).ToArray());
+                }
             }
 
             return string.Empty;
