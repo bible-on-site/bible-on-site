@@ -22,8 +22,11 @@ jest.mock("next/link", () => ({
 jest.mock("../../../src/lib/tanahpedia/service", () => ({
 	...jest.requireActual("../../../src/lib/tanahpedia/service"),
 	getAllEntryUniqueNames: jest.fn(),
+	getEntries: jest.fn(),
+	getEntriesByEntityType: jest.fn(),
 	getEntryByUniqueName: jest.fn(),
 	getPersonFamilySummary: jest.fn().mockResolvedValue(null),
+	getPlaceMapMarkersForEntry: jest.fn().mockResolvedValue([]),
 	ENTITY_TYPE_LABELS: {
 		PERSON: "אישים",
 		PLACE: "מקומות",
@@ -32,8 +35,14 @@ jest.mock("../../../src/lib/tanahpedia/service", () => ({
 
 import {
 	getAllEntryUniqueNames,
+	getEntries,
+	getEntriesByEntityType,
 	getEntryByUniqueName,
+	getPersonFamilySummary,
+	getPlaceMapMarkersForEntry,
 } from "../../../src/lib/tanahpedia/service";
+import { render, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
 import EntryPage, {
 	generateMetadata,
 	generateStaticParams,
@@ -45,6 +54,15 @@ const mockGetAllEntryUniqueNames = getAllEntryUniqueNames as jest.MockedFunction
 const mockGetEntryByUniqueName = getEntryByUniqueName as jest.MockedFunction<
 	typeof getEntryByUniqueName
 >;
+const mockGetEntries = getEntries as jest.MockedFunction<typeof getEntries>;
+const mockGetEntriesByEntityType =
+	getEntriesByEntityType as jest.MockedFunction<typeof getEntriesByEntityType>;
+const mockGetPersonFamilySummary =
+	getPersonFamilySummary as jest.MockedFunction<typeof getPersonFamilySummary>;
+const mockGetPlaceMapMarkersForEntry =
+	getPlaceMapMarkersForEntry as jest.MockedFunction<
+		typeof getPlaceMapMarkersForEntry
+	>;
 
 describe("tanahpedia/entry/[uniqueName] page", () => {
 	beforeEach(() => {
@@ -182,6 +200,18 @@ describe("tanahpedia/entry/[uniqueName] page", () => {
 
 	describe("EntryPage", () => {
 		it("renders entry when found", async () => {
+			mockGetEntriesByEntityType.mockResolvedValue([
+				{
+					id: "entry-1",
+					uniqueName: "\u05de\u05e9\u05d4-\u05e8\u05d1\u05e0\u05d5",
+					title: "\u05de\u05e9\u05d4 \u05e8\u05d1\u05e0\u05d5",
+					content: null,
+					createdAt: "2024-01-01T00:00:00Z",
+					updatedAt: "2024-01-01T00:00:00Z",
+				},
+			]);
+			mockGetPersonFamilySummary.mockRejectedValue(new Error("family down"));
+			mockGetPlaceMapMarkersForEntry.mockResolvedValue([]);
 			mockGetEntryByUniqueName.mockResolvedValue({
 				id: "entry-1",
 				uniqueName: "משה-רבנו",
@@ -204,7 +234,53 @@ describe("tanahpedia/entry/[uniqueName] page", () => {
 				params: Promise.resolve({ uniqueName: "משה-רבנו" }),
 			});
 
-			expect(result).toBeDefined();
+			render(result as ReactElement);
+			expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+				"\u05de\u05e9\u05d4 \u05e8\u05d1\u05e0\u05d5",
+			);
+			expect(
+				screen.getByText("\u05ea\u05d5\u05db\u05df \u05d4\u05e2\u05e8\u05da"),
+			).toBeInTheDocument();
+			expect(mockGetEntriesByEntityType).toHaveBeenCalledWith("PERSON");
+			expect(mockGetPersonFamilySummary).toHaveBeenCalledWith(
+				"entity-1",
+				"\u05de\u05e9\u05d4 \u05e8\u05d1\u05e0\u05d5",
+			);
+		});
+
+		it("renders empty content and sibling fallback when entry has no entities", async () => {
+			mockGetEntries.mockResolvedValue([
+				{
+					id: "entry-sibling",
+					uniqueName: "sibling",
+					title: "Sibling",
+					content: null,
+					createdAt: "2024-01-01T00:00:00Z",
+					updatedAt: "2024-01-01T00:00:00Z",
+				},
+			]);
+			mockGetEntryByUniqueName.mockResolvedValue({
+				id: "entry-2",
+				uniqueName: "empty",
+				title: "Empty Entry",
+				content: null,
+				createdAt: "2024-01-01T00:00:00Z",
+				updatedAt: "2024-01-01T00:00:00Z",
+				entities: [],
+			});
+
+			const result = await EntryPage({
+				params: Promise.resolve({ uniqueName: "empty" }),
+			});
+
+			render(result as ReactElement);
+			expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+				"Empty Entry",
+			);
+			expect(
+				screen.getByText(/\u05d0\u05d9\u05df \u05ea\u05d5\u05db\u05df \u05e2\u05d3\u05d9\u05d9\u05df/),
+			).toBeInTheDocument();
+			expect(mockGetEntries).toHaveBeenCalledWith(500, 0);
 		});
 	});
 });

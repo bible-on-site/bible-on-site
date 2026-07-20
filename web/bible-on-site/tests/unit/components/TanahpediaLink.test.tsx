@@ -167,4 +167,51 @@ describe("TanahpediaLink", () => {
 		);
 		expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 	});
+
+	it("caches missing previews and avoids a second failed fetch", async () => {
+		const linkLabel = "Missing preview";
+		const secondLinkLabel = "Missing again";
+		const fetchMock = mockFetch({ ok: false });
+
+		const { unmount } = render(
+			<TanahpediaLink entryUniqueName="missing-preview">
+				{linkLabel}
+			</TanahpediaLink>,
+		);
+		await hoverLink(screen.getByRole("link", { name: linkLabel }));
+		expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+		unmount();
+
+		render(
+			<TanahpediaLink entryUniqueName="missing-preview">
+				{secondLinkLabel}
+			</TanahpediaLink>,
+		);
+		await hoverLink(screen.getByRole("link", { name: secondLinkLabel }));
+
+		expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("clears a pending hide timer on unmount", async () => {
+		jest.useFakeTimers();
+		const clearTimeoutSpy = jest.spyOn(global, "clearTimeout");
+		mockFetch({
+			ok: true,
+			json: async () => ({
+				title: "Deborah",
+				snippet: "Judge",
+			}),
+		});
+
+		const { unmount } = render(
+			<TanahpediaLink entryUniqueName="deborah">Deborah</TanahpediaLink>,
+		);
+		const link = screen.getByRole("link", { name: "Deborah" });
+		await hoverLink(link);
+		fireEvent.mouseLeave(link);
+		unmount();
+
+		expect(clearTimeoutSpy).toHaveBeenCalled();
+	});
 });

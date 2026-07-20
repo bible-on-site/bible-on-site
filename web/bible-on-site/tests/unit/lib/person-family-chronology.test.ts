@@ -91,3 +91,29 @@ describe("person-family-chronology", () => {
 		]);
 	});
 });
+
+describe("person-family-chronology fallback ordering", () => {
+	it("falls back to alphabetic order when chronology keys tie", () => {
+		const sorted = [childEdge("\u05d1\u05ea"), childEdge("\u05d0\u05d7")].sort(
+			(a, b) =>
+				compareChildEdgesChronology(a, b, "\u05e9\u05de\u05e9\u05d5\u05df"),
+		);
+
+		expect(sorted.map((e) => e.related.displayName)).toEqual([
+			"\u05d0\u05d7",
+			"\u05d1\u05ea",
+		]);
+	});
+
+	it("uses zero fallback for unknown Jacob child with empty display name", () => {
+		const edge = childEdge("   ");
+
+		expect(
+			compareChildEdgesChronology(
+				edge,
+				childEdge("\u05d6\u05e8"),
+				"\u05d9\u05e2\u05e7\u05d1",
+			),
+		).toBeLessThan(0);
+	});
+});
