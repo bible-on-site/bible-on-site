@@ -45,6 +45,20 @@ Description: |
   | `<USER_POOL_ID>` | Cognito User Pool ID | `aws cognito-idp list-user-pools --max-results 10 --region il-central-1 --query "UserPools[?Name=='bible-on-site-admin'].Id" --output text` |
   | `<CLIENT_ID>` | App client ID | `aws cognito-idp list-user-pool-clients --user-pool-id <USER_POOL_ID> --region il-central-1 --query "UserPoolClients[?ClientName=='admin-web-app'].ClientId" --output text` |
   | `<CLIENT_SECRET>` | App client secret | `aws cognito-idp describe-user-pool-client --user-pool-id <USER_POOL_ID> --client-id <CLIENT_ID> --region il-central-1 --query 'UserPoolClient.ClientSecret' --output text` |
+  | `<SERVICE_CLIENT_ID>` | M2M app client ID | `aws cognito-idp list-user-pool-clients --user-pool-id <USER_POOL_ID> --region il-central-1 --query "UserPoolClients[?ClientName=='admin-service-m2m'].ClientId" --output text` |
+  | `<SERVICE_CLIENT_SECRET>` | M2M app client secret | `aws cognito-idp describe-user-pool-client --user-pool-id <USER_POOL_ID> --client-id <SERVICE_CLIENT_ID> --region il-central-1 --query 'UserPoolClient.ClientSecret' --output text` |
+
+  Machine-to-Machine (M2M) Access:
+  A second, entirely separate app client (`admin-service-m2m`) supports the
+  OAuth2 `client_credentials` grant so automated scripts can call the admin
+  HTTP API without a browser/SAML session. It is scoped to a dedicated custom
+  scope (`admin-api/service`) via a Resource Server, and is never granted
+  `AWSSSO` as an identity provider (it cannot be used for interactive login).
+  The server (`web/admin/src/server.tsx` / `src/server/auth.ts`) verifies the
+  resulting access token's `token_use`, `client_id`, and `scope` claims via
+  the same JWKS as the user-facing ID tokens, and only enables this path when
+  `COGNITO_SERVICE_CLIENT_ID` is configured - it is purely additive to the
+  existing cookie-based SSO login flow.
 
 Parameters:
   UserPoolName:
@@ -142,6 +156,37 @@ Resources:
         - ALLOW_REFRESH_TOKEN_AUTH
         - ALLOW_USER_SRP_AUTH
 
+  # ===========================================================================
+  # Resource Server + M2M App Client (client_credentials grant)
+  # ===========================================================================
+  AdminApiResourceServer:
+    Type: AWS::Cognito::UserPoolResourceServer
+    Properties:
+      UserPoolId: !Ref AdminUserPool
+      Identifier: admin-api
+      Name: Admin API
+      Scopes:
+        - ScopeName: service
+          ScopeDescription: Machine-to-machine access to the admin HTTP API
+
+  AdminServiceAppClient:
+    Type: AWS::Cognito::UserPoolClient
+    DependsOn: AdminApiResourceServer
+    Properties:
+      ClientName: admin-service-m2m
+      # Client ID: <SERVICE_CLIENT_ID> (see restoration table above)
+      # Client Secret: stored in SSM Parameter Store
+      #   Name: bible-on-site-admin-service-client-secret
+      #   (only needed by the calling script, never by the server itself -
+      #    the server verifies tokens against the public JWKS only)
+      UserPoolId: !Ref AdminUserPool
+      GenerateSecret: true
+      AllowedOAuthFlows:
+        - client_credentials
+      AllowedOAuthScopes:
+        - admin-api/service
+      AllowedOAuthFlowsUserPoolClient: true
+
 Outputs:
   UserPoolId:
     Description: Cognito User Pool ID
@@ -162,3 +207,7 @@ Outputs:
   SAMLIdPName:
     Description: SAML Identity Provider name in Cognito
     Value: AWSSSO
+
+  ServiceAppClientId:
+    Description: M2M (client_credentials) App Client ID
+    Value: !Ref AdminServiceAppClient
