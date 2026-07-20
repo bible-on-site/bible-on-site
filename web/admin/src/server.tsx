@@ -21,19 +21,23 @@ function resolveRequestOrigin(request: Request): {
 	isSecure: boolean;
 } {
 	const url = new URL(request.url);
+	// Trust X-Forwarded-Proto: our nginx reverse proxy explicitly sets it
+	// (proxy_set_header X-Forwarded-Proto https;) for every server block.
 	const forwardedProto = firstHeaderValue(
 		request.headers.get("x-forwarded-proto"),
 	);
-	const forwardedHost = firstHeaderValue(
-		request.headers.get("x-forwarded-host"),
-	);
+	// Do NOT trust X-Forwarded-Host: nginx does not set/overwrite it, so a
+	// client could spoof it directly. Use the Host header instead - nginx
+	// explicitly forwards it (proxy_set_header Host $host;) and it is only
+	// reachable in the first place via the matching server_name/SNI, so it
+	// reflects the domain the client actually connected to.
 	const hostHeader = firstHeaderValue(request.headers.get("host"));
 
 	const protocol =
 		forwardedProto === "https" || forwardedProto === "http"
 			? forwardedProto
 			: url.protocol.replace(":", "");
-	const host = forwardedHost || hostHeader || url.host;
+	const host = hostHeader || url.host;
 
 	return {
 		origin: `${protocol}://${host}`,
