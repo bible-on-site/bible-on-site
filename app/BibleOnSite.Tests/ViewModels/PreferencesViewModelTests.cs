@@ -1,4 +1,5 @@
 using BibleOnSite.Services;
+using BibleOnSite.Tests.Support;
 using BibleOnSite.ViewModels;
 using FluentAssertions;
 
@@ -7,6 +8,7 @@ namespace BibleOnSite.Tests.ViewModels;
 /// <summary>
 /// Unit tests for PreferencesViewModel.
 /// </summary>
+[Collection(PreferencesServiceCollection.Name)]
 public class PreferencesViewModelTests : IDisposable
 {
     private readonly InMemoryPreferencesStorage _storage;

@@ -223,8 +223,60 @@ public sealed class PerushimNotesServiceTests : IDisposable
         ids.Should().Equal(11);
     }
 
+    [Fact]
+    public async Task InitializeAsync_WithNewerPadDatabase_ReplacesLocalDatabase()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(InitializeAsync_WithNewerPadDatabase_ReplacesLocalDatabase));
+        var padDir = Path.Join(_tempRoot, "pad-newer");
+        Directory.CreateDirectory(dataDir);
+        Directory.CreateDirectory(padDir);
+        await CreateNotesDatabaseAsync(
+            dataDir,
+            buildTimestamp: 100,
+            (3, 8, 1, 0, "local note"));
+        await CreateNotesDatabaseAsync(
+            padDir,
+            buildTimestamp: 200,
+            (4, 8, 1, 0, "pad note"));
+
+        var service = PerushimNotesService.CreateForTesting(
+            new FakePadDeliveryService { AssetPath = padDir },
+            dataDir);
+
+        await service.InitializeAsync();
+
+        service.IsAvailable.Should().BeTrue();
+        var ids = await service.GetPerushIdsForPerekAsync(8);
+        ids.Should().Equal(4);
+        var notes = await service.LoadNotesForPerekAsync(8, new Dictionary<int, Perush>());
+        notes.Should().ContainSingle().Which.NoteContent.Should().Be("pad note");
+    }
+
+    [Fact]
+    public async Task TryDownloadNotesAsync_WhenDeliveryUnavailable_ReturnsFalse()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(TryDownloadNotesAsync_WhenDeliveryUnavailable_ReturnsFalse));
+        Directory.CreateDirectory(dataDir);
+        var fakePad = new FakePadDeliveryService { FetchResult = false };
+        var progress = new Progress<double>();
+        var service = PerushimNotesService.CreateForTesting(fakePad, dataDir);
+
+        var downloaded = await service.TryDownloadNotesAsync(progress);
+
+        downloaded.Should().BeFalse();
+        fakePad.FetchCalls.Should().Be(1);
+        fakePad.LastProgress.Should().BeSameAs(progress);
+        service.IsAvailable.Should().BeFalse();
+    }
+
     private static async Task CreateNotesDatabaseAsync(
         string dataDirectory,
+        params (int perushId, int perekId, int pasuk, int noteIdx, string? content)[] rows) =>
+        await CreateNotesDatabaseAsync(dataDirectory, 1700000000, rows);
+
+    private static async Task CreateNotesDatabaseAsync(
+        string dataDirectory,
+        long buildTimestamp,
         params (int perushId, int perekId, int pasuk, int noteIdx, string? content)[] rows)
     {
         var dbPath = Path.Join(dataDirectory, NotesDbFileName);
@@ -232,7 +284,9 @@ public sealed class PerushimNotesServiceTests : IDisposable
 
         await conn.ExecuteAsync("CREATE TABLE IF NOT EXISTS _metadata (key TEXT, value TEXT)");
         await conn.ExecuteAsync("DELETE FROM _metadata");
-        await conn.ExecuteAsync("INSERT INTO _metadata (key, value) VALUES ('build_timestamp', '1700000000')");
+        await conn.ExecuteAsync(
+            "INSERT INTO _metadata (key, value) VALUES ('build_timestamp', ?)",
+            buildTimestamp.ToString());
 
         await conn.ExecuteAsync(
             "CREATE TABLE IF NOT EXISTS note (perush_id INTEGER, perek_id INTEGER, pasuk INTEGER, note_idx INTEGER, note_content TEXT)");
@@ -258,12 +312,15 @@ public sealed class PerushimNotesServiceTests : IDisposable
 
         public int FetchCalls { get; private set; }
 
+        public IProgress<double>? LastProgress { get; private set; }
+
         public Task<string?> TryGetAssetPathAsync(string packName, CancellationToken cancellationToken = default) =>
             Task.FromResult(AssetPath);
 
         public Task<bool> FetchAsync(string packName, IProgress<double>? progress = null, CancellationToken cancellationToken = default)
         {
             FetchCalls++;
+            LastProgress = progress;
             AssetPath = AssetPathAfterFetch ?? AssetPath;
             return Task.FromResult(FetchResult);
         }
