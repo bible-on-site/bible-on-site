@@ -108,8 +108,15 @@ export async function verifyServiceAccessToken(
 }
 
 export function parseCookie(cookieHeader: string, name: string): string | null {
-	const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
-	return match ? decodeURIComponent(match[1]) : null;
+	for (const part of cookieHeader.split(";")) {
+		const separatorIndex = part.indexOf("=");
+		if (separatorIndex === -1) continue;
+		const key = part.slice(0, separatorIndex).trim();
+		if (key === name) {
+			return decodeURIComponent(part.slice(separatorIndex + 1));
+		}
+	}
+	return null;
 }
 
 export function buildSessionCookie(
