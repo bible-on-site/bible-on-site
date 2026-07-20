@@ -19,6 +19,17 @@ jest.mock("next/link", () => ({
 	default: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+jest.mock("next/dynamic", () => ({
+	__esModule: true,
+	default:
+		(
+			_loader: () => Promise<unknown>,
+			options?: { loading?: () => React.ReactNode },
+		) =>
+		() =>
+			options?.loading ? options.loading() : null,
+}));
+
 jest.mock("../../../src/lib/tanahpedia/service", () => ({
 	...jest.requireActual("../../../src/lib/tanahpedia/service"),
 	getAllEntryUniqueNames: jest.fn(),
@@ -281,6 +292,114 @@ describe("tanahpedia/entry/[uniqueName] page", () => {
 				screen.getByText(/\u05d0\u05d9\u05df \u05ea\u05d5\u05db\u05df \u05e2\u05d3\u05d9\u05d9\u05df/),
 			).toBeInTheDocument();
 			expect(mockGetEntries).toHaveBeenCalledWith(500, 0);
+		});
+
+		it("continues rendering when fallback sibling loading fails", async () => {
+			mockGetEntries.mockRejectedValue(new Error("siblings down"));
+			mockGetPlaceMapMarkersForEntry.mockResolvedValue([]);
+			mockGetEntryByUniqueName.mockResolvedValue({
+				id: "entry-no-siblings",
+				uniqueName: "no-siblings",
+				title: "No Siblings",
+				content: null,
+				createdAt: "2024-01-01T00:00:00Z",
+				updatedAt: "2024-01-01T00:00:00Z",
+				entities: [],
+			});
+
+			const result = await EntryPage({
+				params: Promise.resolve({ uniqueName: "no-siblings" }),
+			});
+
+			render(result as ReactElement);
+			expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+				"No Siblings",
+			);
+			expect(mockGetEntries).toHaveBeenCalledWith(500, 0);
+		});
+
+		it("renders place maps and person family sections when available", async () => {
+			mockGetEntriesByEntityType.mockResolvedValue([]);
+			mockGetPersonFamilySummary.mockResolvedValue({
+				focalPersonId: "person-1",
+				focalEntityId: "person-entity",
+				focalDisplayName: "\u05d3\u05de\u05d5\u05ea",
+				focalSex: "MALE",
+				focalBirthYyyymmdd: null,
+				parents: [],
+				children: [
+					{
+						related: {
+							personId: "child-person",
+							entityId: "child-entity",
+							displayName: "\u05d9\u05dc\u05d3",
+							entryUniqueName: null,
+							entryTitle: null,
+							sex: "MALE",
+						},
+						parentRole: "FATHER",
+						relationshipType: "BIOLOGICAL",
+						altGroupId: null,
+						sourceCitation: null,
+						coParentEntityId: null,
+						coParentDisplayName: null,
+						coParentUnionOrder: null,
+					},
+				],
+				spouses: [],
+				siblings: [],
+			});
+			mockGetPlaceMapMarkersForEntry.mockResolvedValue([
+				{
+					placeId: "place-1",
+					placeName: "Jerusalem",
+					modernName: null,
+					lat: 31.778,
+					lng: 35.235,
+					entryUniqueName: "jerusalem",
+				},
+			]);
+			mockGetEntryByUniqueName.mockResolvedValue({
+				id: "entry-map-family",
+				uniqueName: "map-family",
+				title: "Map Family",
+				content: "<p>Body</p>",
+				createdAt: "2024-01-01T00:00:00Z",
+				updatedAt: "2024-01-01T00:00:00Z",
+				entities: [
+					{
+						id: "ee-place",
+						entryId: "entry-map-family",
+						entityId: "place-1",
+						entityType: "PLACE",
+						entityName: "Jerusalem",
+					},
+					{
+						id: "ee-person",
+						entryId: "entry-map-family",
+						entityId: "person-entity",
+						entityType: "PERSON",
+						entityName: "\u05d3\u05de\u05d5\u05ea",
+					},
+				],
+			});
+
+			const result = await EntryPage({
+				params: Promise.resolve({ uniqueName: "map-family" }),
+			});
+
+			render(result as ReactElement);
+			expect(screen.getByRole("heading", { level: 2, name: "\u05de\u05e4\u05d4" })).toBeInTheDocument();
+			expect(screen.getByText(/docs\/tanahpedia\/places-map-plan\.md/)).toBeInTheDocument();
+			expect(screen.getByText("\u05de\u05e9\u05e4\u05d7\u05d4")).toBeInTheDocument();
+			expect(mockGetEntriesByEntityType).toHaveBeenCalledWith("PLACE");
+			expect(mockGetPersonFamilySummary).toHaveBeenCalledWith(
+				"person-entity",
+				"\u05d3\u05de\u05d5\u05ea",
+			);
+			expect(mockGetPlaceMapMarkersForEntry).toHaveBeenCalledWith(
+				"entry-map-family",
+			);
 		});
 	});
 });

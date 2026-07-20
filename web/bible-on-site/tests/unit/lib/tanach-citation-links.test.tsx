@@ -92,6 +92,29 @@ describe("renderCitationWithTanachLinks", () => {
 		expect(container.textContent).toBe(text);
 		expect(container.querySelector("a")).toBeNull();
 	});
+
+	it("leaves citations with non-Hebrew perek tokens unlinked", () => {
+		const text = "\u05d1\u05e8\u05d0\u05e9\u05d9\u05ea 123";
+		const { container } = render(
+			<div>{renderCitationWithTanachLinks(text, "cite")}</div>,
+		);
+
+		expect(container.textContent).toBe(text);
+		expect(container.querySelector("a")).toBeNull();
+	});
+
+	it("links only through the perek when the following pasuk token is invalid", () => {
+		const text = "\u05d1\u05e8\u05d0\u05e9\u05d9\u05ea \u05d0 123";
+		const { container } = render(
+			<div>{renderCitationWithTanachLinks(text, "cite")}</div>,
+		);
+
+		const link = screen.getByRole("link", {
+			name: "\u05d1\u05e8\u05d0\u05e9\u05d9\u05ea \u05d0",
+		});
+		expect(link.getAttribute("href")).toMatch(/^\/929\/\d+$/);
+		expect(container.textContent).toBe(text);
+	});
 });
 
 describe("buildKetavVeKabbalah929PerushHref", () => {
@@ -133,6 +156,16 @@ describe("buildKetavVeKabbalah929PerushHref", () => {
 
 		expect(href).not.toBeNull();
 		expect(href).not.toContain("pasuk=");
+	});
+
+	it("returns null when the perek is not gematria", () => {
+		expect(
+			buildKetavVeKabbalah929PerushHref(
+				"\u05d1\u05e8\u05d0\u05e9\u05d9\u05ea",
+				"not-a-perek",
+				"\u05d0",
+			),
+		).toBeNull();
 	});
 });
 

@@ -690,6 +690,13 @@ describe("PersonFamilyTree", () => {
 					coParentDisplayName: "\u05d1\u05dc\u05d4\u05d4",
 					coParentUnionOrder: null,
 				}),
+				childEdge({
+					id: "naftali",
+					name: "\u05e0\u05e4\u05ea\u05dc\u05d9",
+					coParentEntityId: "bilhah",
+					coParentDisplayName: "\u05d1\u05dc\u05d4\u05d4",
+					coParentUnionOrder: null,
+				}),
 			],
 		};
 
@@ -700,6 +707,7 @@ describe("PersonFamilyTree", () => {
 		expect(screen.getByText("\u05e9\u05de\u05e2\u05d5\u05df")).toBeInTheDocument();
 		expect(screen.getByText("\u05d9\u05d5\u05e1\u05e3")).toBeInTheDocument();
 		expect(screen.getByText("\u05d3\u05df")).toBeInTheDocument();
+		expect(screen.getByText("\u05e0\u05e4\u05ea\u05dc\u05d9")).toBeInTheDocument();
 	});
 
 	it("measures spouse matrix rows with ResizeObserver and disconnects on unmount", () => {
@@ -865,6 +873,363 @@ describe("PersonFamilyTree", () => {
 		expect(
 			screen.getByText(/\u05d4\u05d5\u05e8\u05d4 \u05de\u05d6\u05d5\u05d4\u05d4/),
 		).toBeInTheDocument();
+	});
+
+	it("sorts ungrouped non-matrix children by display name", () => {
+		const firstChild = "\u05d0\u05dc\u05e3";
+		const secondChild = "\u05d1\u05d9\u05ea";
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			children: [
+				childEdge({ id: "second", name: secondChild }),
+				childEdge({ id: "first", name: firstChild }),
+			],
+		};
+
+		render(<PersonFamilyTree summary={summary} />);
+
+		const childTexts = screen
+			.getAllByTestId("family-child-card")
+			.map((card) => card.textContent ?? "");
+		expect(childTexts[0]).toContain(firstChild);
+		expect(childTexts[1]).toContain(secondChild);
+		expect(
+			screen.queryByText(/\u05dc\u05d0 \u05de\u05d6\u05d5\u05d4\u05d4/),
+		).not.toBeInTheDocument();
+	});
+
+	it("orders child co-parent buckets by known union order before name and unknown", () => {
+		const orderedParent = "\u05d4\u05d5\u05e8\u05d4 \u05e8\u05d0\u05e9\u05d5\u05df";
+		const namedParent = "\u05d4\u05d5\u05e8\u05d4 \u05e9\u05e0\u05d9";
+		const looseChild = "\u05d9\u05dc\u05d3 \u05dc\u05dc\u05d0";
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			children: [
+				childEdge({
+					id: "named",
+					name: "\u05d9\u05dc\u05d3 \u05de\u05d4\u05d5\u05e8\u05d4 \u05e9\u05e0\u05d9",
+					coParentEntityId: "named-parent",
+					coParentDisplayName: namedParent,
+				}),
+				childEdge({
+					id: "loose",
+					name: looseChild,
+					coParentEntityId: null,
+					coParentDisplayName: null,
+				}),
+				childEdge({
+					id: "ordered",
+					name: "\u05d9\u05dc\u05d3 \u05de\u05d4\u05d5\u05e8\u05d4 \u05e8\u05d0\u05e9\u05d5\u05df",
+					coParentEntityId: "ordered-parent",
+					coParentDisplayName: orderedParent,
+					coParentUnionOrder: 1,
+				}),
+			],
+		};
+
+		render(<PersonFamilyTree summary={summary} />);
+
+		const treeText =
+			screen.getByRole("region", { name: /\u05de\u05e9\u05e4\u05d7\u05d4/ })
+				.textContent ?? "";
+		expect(treeText.indexOf(orderedParent)).toBeLessThan(
+			treeText.indexOf(namedParent),
+		);
+		expect(treeText.indexOf(namedParent)).toBeLessThan(
+			treeText.indexOf(looseChild),
+		);
+	});
+
+	it("keeps unknown co-parent child buckets after identified buckets", () => {
+		const orderedChild = "\u05d9\u05dc\u05d3 \u05de\u05d4\u05d5\u05e8\u05d4 \u05de\u05e1\u05d5\u05d3\u05e8";
+		const unnamedChild = "\u05d9\u05dc\u05d3 \u05de\u05d4\u05d5\u05e8\u05d4 \u05dc\u05dc\u05d0 \u05e9\u05dd";
+		const looseChild = "\u05d9\u05dc\u05d3 \u05d7\u05d5\u05e4\u05e9\u05d9";
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			children: [
+				childEdge({
+					id: "loose-first",
+					name: looseChild,
+					coParentEntityId: null,
+					coParentDisplayName: null,
+				}),
+				childEdge({
+					id: "unnamed-parent",
+					name: unnamedChild,
+					coParentEntityId: "unnamed-parent",
+					coParentDisplayName: null,
+				}),
+				childEdge({
+					id: "ordered-parent",
+					name: orderedChild,
+					coParentEntityId: "ordered-parent",
+					coParentDisplayName: "\u05d4\u05d5\u05e8\u05d4 \u05de\u05e1\u05d5\u05d3\u05e8",
+					coParentUnionOrder: 1,
+				}),
+			],
+		};
+
+		render(<PersonFamilyTree summary={summary} />);
+
+		const treeText =
+			screen.getByRole("region", { name: /\u05de\u05e9\u05e4\u05d7\u05d4/ })
+				.textContent ?? "";
+		expect(treeText.indexOf(orderedChild)).toBeLessThan(
+			treeText.indexOf(unnamedChild),
+		);
+		expect(treeText.indexOf(unnamedChild)).toBeLessThan(
+			treeText.indexOf(looseChild),
+		);
+	});
+
+	it("shows child relationship ribbons without requiring a citation", () => {
+		const childName = "\u05d9\u05dc\u05d3 \u05de\u05d0\u05d5\u05de\u05e5";
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			children: [
+				childEdge({
+					id: "adopted",
+					name: childName,
+					relationshipType: "ADOPTIVE",
+				}),
+			],
+		};
+
+		render(<PersonFamilyTree summary={summary} />);
+
+		const childCard = screen.getByTestId("family-child-card");
+		expect(childCard).toHaveTextContent(childName);
+		expect(childCard).toHaveTextContent("\u05d0\u05d9\u05de\u05d5\u05e5");
+	});
+
+	it("sorts non-Jacob matrix children and renders empty spouse columns", () => {
+		const leah = "\u05dc\u05d0\u05d4";
+		const rachel = "\u05e8\u05d7\u05dc";
+		const firstChild = "\u05d0\u05dc\u05e3";
+		const secondChild = "\u05d1\u05d9\u05ea";
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			focalSex: "MALE",
+			spouses: [
+				spouseEdge({ id: "leah", name: leah, unionOrder: 1 }),
+				spouseEdge({ id: "rachel", name: rachel, unionOrder: 2 }),
+			],
+			children: [
+				childEdge({
+					id: "second",
+					name: secondChild,
+					coParentEntityId: "leah",
+					coParentDisplayName: leah,
+					coParentUnionOrder: 1,
+				}),
+				childEdge({
+					id: "first",
+					name: firstChild,
+					coParentEntityId: "leah",
+					coParentDisplayName: leah,
+					coParentUnionOrder: 1,
+				}),
+			],
+		};
+
+		render(<PersonFamilyTree summary={summary} />);
+
+		expect(screen.getByRole("group", { name: new RegExp(leah) })).toBeInTheDocument();
+		expect(
+			screen.getByRole("group", { name: new RegExp(rachel) }),
+		).toBeInTheDocument();
+		const treeText =
+			screen.getByRole("region", { name: /\u05de\u05e9\u05e4\u05d7\u05d4/ })
+				.textContent ?? "";
+		expect(treeText.indexOf(firstChild)).toBeLessThan(
+			treeText.indexOf(secondChild),
+		);
+	});
+
+	it("renders single-spouse timeline blocks without order ribbons", () => {
+		const spouseName = "\u05d0\u05e9\u05d4 \u05d7\u05dc\u05d5\u05e4\u05d9\u05ea";
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			focalSex: "MALE",
+			spouses: [
+				spouseEdge({
+					id: "alternate",
+					name: spouseName,
+					unionOrder: null,
+					altGroupId: "alt-spouse",
+					unionEndDate: 19000101,
+				}),
+			],
+		};
+
+		render(<PersonFamilyTree summary={summary} />);
+
+		expect(screen.getByText(spouseName)).toBeInTheDocument();
+		expect(screen.getByText(/1900-01-01/)).toBeInTheDocument();
+		expect(screen.queryByText(/\u05e1\u05d3\u05e8/)).not.toBeInTheDocument();
+	});
+
+	it("fuses reversed forbidden rows and sorts same-rank spouse opinions", () => {
+		const fusedName = "\u05d6\u05d9\u05d5\u05d5\u05d2 \u05d4\u05e4\u05d5\u05da";
+		const customName = "\u05d3\u05e2\u05d4 \u05de\u05d5\u05ea\u05d0\u05de\u05ea";
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			focalSex: "MALE",
+			spouses: [
+				spouseEdge({
+					id: "fused",
+					name: fusedName,
+					unionType: "FORBIDDEN_WITH_GENTILE",
+					unionOrder: 1,
+				}),
+				spouseEdge({
+					id: "fused",
+					name: fusedName,
+					unionType: "MARRIAGE",
+					unionOrder: 1,
+				}),
+				spouseEdge({
+					id: "custom",
+					name: customName,
+					unionType: "ZZZ_CUSTOM",
+					unionOrder: null,
+					altGroupId: "custom",
+				}),
+				spouseEdge({
+					id: "custom",
+					name: customName,
+					unionType: "AAA_CUSTOM",
+					unionOrder: null,
+					altGroupId: "custom",
+				}),
+			],
+		};
+
+		render(<PersonFamilyTree summary={summary} />);
+
+		expect(screen.getAllByText(fusedName).length).toBe(1);
+		const treeText =
+			screen.getByRole("region", { name: /\u05de\u05e9\u05e4\u05d7\u05d4/ })
+				.textContent ?? "";
+		expect(treeText.indexOf("AAA_CUSTOM")).toBeLessThan(
+			treeText.indexOf("ZZZ_CUSTOM"),
+		);
+	});
+
+	it("sorts same-role parents inside an alternate parent group by display name", () => {
+		const firstParent = "\u05d0\u05dd \u05d0";
+		const secondParent = "\u05d0\u05dd \u05d1";
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			parents: [
+				{
+					related: related("second-parent", secondParent, null, "FEMALE"),
+					parentRole: "MOTHER",
+					relationshipType: "ADOPTIVE",
+					altGroupId: "alt",
+					sourceCitation: null,
+				},
+				{
+					related: related("first-parent", firstParent, null, "FEMALE"),
+					parentRole: "MOTHER",
+					relationshipType: "STEP",
+					altGroupId: "alt",
+					sourceCitation: null,
+				},
+			],
+		};
+
+		render(<PersonFamilyTree summary={summary} />);
+
+		const treeText =
+			screen.getByRole("region", { name: /\u05de\u05e9\u05e4\u05d7\u05d4/ })
+				.textContent ?? "";
+		expect(treeText.indexOf(firstParent)).toBeLessThan(
+			treeText.indexOf(secondParent),
+		);
+	});
+
+	it("renders Jacob child ordering without spouse data and without a loose matrix column", () => {
+		const leah = "\u05dc\u05d0\u05d4";
+		const rachel = "\u05e8\u05d7\u05dc";
+		const jacobChildren = [
+			childEdge({
+				id: "yosef",
+				name: "\u05d9\u05d5\u05e1\u05e3",
+				coParentEntityId: "rachel",
+				coParentDisplayName: rachel,
+				coParentUnionOrder: 2,
+			}),
+			childEdge({
+				id: "shimon",
+				name: "\u05e9\u05de\u05e2\u05d5\u05df",
+				coParentEntityId: "leah",
+				coParentDisplayName: leah,
+				coParentUnionOrder: 1,
+			}),
+			childEdge({
+				id: "reuven",
+				name: "\u05e8\u05d0\u05d5\u05d1\u05df",
+				coParentEntityId: "leah",
+				coParentDisplayName: leah,
+				coParentUnionOrder: 1,
+			}),
+			childEdge({
+				id: "levi",
+				name: "\u05dc\u05d5\u05d9",
+				coParentEntityId: "leah",
+				coParentDisplayName: leah,
+				coParentUnionOrder: 1,
+			}),
+			childEdge({
+				id: "yehuda",
+				name: "\u05d9\u05d4\u05d5\u05d3\u05d4",
+				coParentEntityId: "leah",
+				coParentDisplayName: leah,
+				coParentUnionOrder: 1,
+			}),
+		];
+
+		const { rerender } = render(
+			<PersonFamilyTree
+				summary={{
+					...baseSummary,
+					focalDisplayName: "\u05d9\u05e2\u05e7\u05d1",
+					children: jacobChildren,
+				}}
+			/>,
+		);
+
+		let treeText =
+			screen.getByRole("region", { name: /\u05de\u05e9\u05e4\u05d7\u05d4/ })
+				.textContent ?? "";
+		expect(treeText.indexOf("\u05e8\u05d0\u05d5\u05d1\u05df")).toBeLessThan(
+			treeText.indexOf("\u05e9\u05de\u05e2\u05d5\u05df"),
+		);
+		expect(treeText.indexOf("\u05e9\u05de\u05e2\u05d5\u05df")).toBeLessThan(
+			treeText.indexOf("\u05d9\u05d5\u05e1\u05e3"),
+		);
+
+		rerender(
+			<PersonFamilyTree
+				summary={{
+					...baseSummary,
+					focalDisplayName: "\u05d9\u05e2\u05e7\u05d1",
+					focalSex: "MALE",
+					spouses: [
+						spouseEdge({ id: "leah", name: leah, unionOrder: 1 }),
+						spouseEdge({ id: "rachel", name: rachel, unionOrder: 2 }),
+					],
+					children: jacobChildren,
+				}}
+			/>,
+		);
+
+		treeText =
+			screen.getByRole("region", { name: /\u05de\u05e9\u05e4\u05d7\u05d4/ })
+				.textContent ?? "";
+		expect(treeText).not.toContain("\u05d0\u05d7\u05e8");
+		expect(screen.getByText("\u05d9\u05d5\u05e1\u05e3")).toBeInTheDocument();
 	});
 
 	it("keeps incompatible spouse rows separate when they cannot be fused", () => {
