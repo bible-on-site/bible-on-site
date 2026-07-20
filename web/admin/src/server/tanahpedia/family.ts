@@ -1,15 +1,21 @@
 import { randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
+import { execute, query, queryOne } from "../db";
 import {
+	type CreateFamilyPersonInput,
+	type CreateParentChildLinkInput,
+	type CreateUnionLinkInput,
+	type DeleteFamilyPersonInput,
+	type DeleteParentChildLinkInput,
+	type DeleteUnionLinkInput,
 	FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES,
 	FAMILY_PARENT_ROLES,
 	FAMILY_UNION_END_REASONS,
 	FAMILY_UNION_TYPES,
-	type CreateFamilyPersonInput,
-	type CreateParentChildLinkInput,
-	type CreateUnionLinkInput,
+	type UpdateFamilyPersonInput,
+	type UpdateParentChildLinkInput,
+	type UpdateUnionLinkInput,
 } from "./family-api-spec";
-import { execute, query, queryOne } from "../db";
 
 function requiredNonEmpty(v: string, field: string): string {
 	const s = v.trim();
@@ -50,19 +56,30 @@ async function getLookupIdByName(params: {
 	return row.id;
 }
 
+function validateSex(
+	rawSex: string | null | undefined,
+): "MALE" | "FEMALE" | "UNKNOWN" | null {
+	const sex = rawSex?.trim().toUpperCase() ?? null;
+	if (sex !== null && sex !== "MALE" && sex !== "FEMALE" && sex !== "UNKNOWN") {
+		throw new Error("sex must be MALE, FEMALE, UNKNOWN, or null");
+	}
+	return sex;
+}
+
+function assertAffected(
+	result: { affectedRows: number },
+	notFoundMessage: string,
+): void {
+	if (result.affectedRows === 0) {
+		throw new Error(notFoundMessage);
+	}
+}
+
 export const createFamilyPersonNode = createServerFn({ method: "POST" })
 	.inputValidator((data: CreateFamilyPersonInput) => data)
 	.handler(async ({ data }) => {
 		const name = requiredNonEmpty(data.displayName, "displayName");
-		const sex = data.sex?.trim().toUpperCase() ?? null;
-		if (
-			sex !== null &&
-			sex !== "MALE" &&
-			sex !== "FEMALE" &&
-			sex !== "UNKNOWN"
-		) {
-			throw new Error("sex must be MALE, FEMALE, UNKNOWN, or null");
-		}
+		const sex = validateSex(data.sex);
 
 		const entityId = randomUUID();
 		const personId = randomUUID();
@@ -72,10 +89,10 @@ export const createFamilyPersonNode = createServerFn({ method: "POST" })
 			`INSERT INTO tanahpedia_entity (id, entity_type, name) VALUES (?, 'PERSON', ?)`,
 			[entityId, name],
 		);
-		await execute(`INSERT INTO tanahpedia_person (id, entity_id) VALUES (?, ?)`, [
-			personId,
-			entityId,
-		]);
+		await execute(
+			`INSERT INTO tanahpedia_person (id, entity_id) VALUES (?, ?)`,
+			[personId, entityId],
+		);
 		await execute(
 			`INSERT INTO tanahpedia_person_name (id, person_id, name, name_type_id, alt_group_id)
 			 VALUES (?, ?, ?, ?, NULL)`,
@@ -101,6 +118,106 @@ export const createFamilyPersonNode = createServerFn({ method: "POST" })
 		return { entityId, personId, linkId };
 	});
 
+export const updateFamilyPersonNode = createServerFn({ method: "POST" })
+	.inputValidator((data: UpdateFamilyPersonInput) => data)
+	.handler(async ({ data }) => {
+		const entityId = requiredNonEmpty(data.entityId, "entityId");
+		if (data.displayName === undefined && data.sex === undefined) {
+			throw new Error("At least one of displayName or sex must be provided");
+		}
+
+		if (data.displayName !== undefined) {
+			const name = requiredNonEmpty(data.displayName, "displayName");
+			const result = await execute(
+				`UPDATE tanahpedia_entity SET name = ? WHERE id = ?`,
+				[name, entityId],
+			);
+			assertAffected(result, `Person entity not found: ${entityId}`);
+
+			const person = await queryOne<{ id: string }>(
+				`SELECT id FROM tanahpedia_person WHERE entity_id = ? LIMIT 1`,
+				[entityId],
+			);
+			if (person) {
+				const mainNameTypeId = await getMainNameTypeId();
+				await execute(
+					`UPDATE tanahpedia_person_name SET name = ? WHERE person_id = ? AND name_type_id = ?`,
+					[name, person.id, mainNameTypeId],
+				);
+			}
+		}
+
+		if (data.sex !== undefined) {
+			const sex = validateSex(data.sex);
+			const person = await queryOne<{ id: string }>(
+				`SELECT id FROM tanahpedia_person WHERE entity_id = ? LIMIT 1`,
+				[entityId],
+			);
+			if (!person) throw new Error(`Person not found for entity: ${entityId}`);
+
+			if (sex === null) {
+				await execute(`DELETE FROM tanahpedia_person_sex WHERE person_id = ?`, [
+					person.id,
+				]);
+			} else {
+				const existing = await queryOne<{ id: string }>(
+					`SELECT id FROM tanahpedia_person_sex WHERE person_id = ? LIMIT 1`,
+					[person.id],
+				);
+				if (existing) {
+					await execute(
+						`UPDATE tanahpedia_person_sex SET sex = ? WHERE id = ?`,
+						[sex, existing.id],
+					);
+				} else {
+					await execute(
+						`INSERT INTO tanahpedia_person_sex (id, person_id, sex, alt_group_id)
+						 VALUES (?, ?, ?, NULL)`,
+						[randomUUID(), person.id, sex],
+					);
+				}
+			}
+		}
+
+		return { entityId };
+	});
+
+export const deleteFamilyPersonNode = createServerFn({ method: "POST" })
+	.inputValidator((data: DeleteFamilyPersonInput) => data)
+	.handler(async ({ data }) => {
+		const entityId = requiredNonEmpty(data.entityId, "entityId");
+		const person = await queryOne<{ id: string }>(
+			`SELECT id FROM tanahpedia_person WHERE entity_id = ? LIMIT 1`,
+			[entityId],
+		);
+		if (!person) throw new Error(`Person not found for entity: ${entityId}`);
+
+		await execute(
+			`DELETE FROM tanahpedia_person_union WHERE person1_id = ? OR person2_id = ?`,
+			[person.id, person.id],
+		);
+		await execute(
+			`DELETE FROM tanahpedia_person_parent_child WHERE parent_id = ? OR child_id = ?`,
+			[person.id, person.id],
+		);
+		await execute(`DELETE FROM tanahpedia_person_name WHERE person_id = ?`, [
+			person.id,
+		]);
+		await execute(`DELETE FROM tanahpedia_person_sex WHERE person_id = ?`, [
+			person.id,
+		]);
+		await execute(`DELETE FROM tanahpedia_entry_entity WHERE entity_id = ?`, [
+			entityId,
+		]);
+		await execute(`DELETE FROM tanahpedia_person WHERE id = ?`, [person.id]);
+		const result = await execute(`DELETE FROM tanahpedia_entity WHERE id = ?`, [
+			entityId,
+		]);
+		assertAffected(result, `Person entity not found: ${entityId}`);
+
+		return { entityId };
+	});
+
 export const createParentChildLink = createServerFn({ method: "POST" })
 	.inputValidator((data: CreateParentChildLinkInput) => data)
 	.handler(async ({ data }) => {
@@ -113,7 +230,10 @@ export const createParentChildLink = createServerFn({ method: "POST" })
 			throw new Error("Invalid parentRole");
 		}
 
-		const parentPersonId = requiredNonEmpty(data.parentPersonId, "parentPersonId");
+		const parentPersonId = requiredNonEmpty(
+			data.parentPersonId,
+			"parentPersonId",
+		);
 		const childPersonId = requiredNonEmpty(data.childPersonId, "childPersonId");
 
 		const relationshipTypeId = await getLookupIdByName({
@@ -140,6 +260,77 @@ export const createParentChildLink = createServerFn({ method: "POST" })
 				data.sourceCitation ?? null,
 			],
 		);
+
+		return { id };
+	});
+
+export const updateParentChildLink = createServerFn({ method: "POST" })
+	.inputValidator((data: UpdateParentChildLinkInput) => data)
+	.handler(async ({ data }) => {
+		const id = requiredNonEmpty(data.id, "id");
+
+		const sets: string[] = [];
+		const params: unknown[] = [];
+
+		if (data.relationshipType !== undefined) {
+			const relationshipType = data.relationshipType.trim().toUpperCase();
+			if (!isOneOf(relationshipType, FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES)) {
+				throw new Error("Invalid relationshipType");
+			}
+			const relationshipTypeId = await getLookupIdByName({
+				table: "tanahpedia_lookup_parent_child_type",
+				name: relationshipType,
+			});
+			sets.push("relationship_type_id = ?");
+			params.push(relationshipTypeId);
+		}
+
+		if (data.parentRole !== undefined) {
+			const parentRole = data.parentRole.trim().toUpperCase();
+			if (!isOneOf(parentRole, FAMILY_PARENT_ROLES)) {
+				throw new Error("Invalid parentRole");
+			}
+			const parentRoleId = await getLookupIdByName({
+				table: "tanahpedia_lookup_parent_role",
+				name: parentRole,
+			});
+			sets.push("parent_role_id = ?");
+			params.push(parentRoleId);
+		}
+
+		if (data.altGroupId !== undefined) {
+			sets.push("alt_group_id = ?");
+			params.push(data.altGroupId);
+		}
+
+		if (data.sourceCitation !== undefined) {
+			sets.push("source_citation = ?");
+			params.push(data.sourceCitation);
+		}
+
+		if (sets.length === 0) {
+			throw new Error("At least one field must be provided to update");
+		}
+
+		params.push(id);
+		const result = await execute(
+			`UPDATE tanahpedia_person_parent_child SET ${sets.join(", ")} WHERE id = ?`,
+			params,
+		);
+		assertAffected(result, `Parent-child link not found: ${id}`);
+
+		return { id };
+	});
+
+export const deleteParentChildLink = createServerFn({ method: "POST" })
+	.inputValidator((data: DeleteParentChildLinkInput) => data)
+	.handler(async ({ data }) => {
+		const id = requiredNonEmpty(data.id, "id");
+		const result = await execute(
+			`DELETE FROM tanahpedia_person_parent_child WHERE id = ?`,
+			[id],
+		);
+		assertAffected(result, `Parent-child link not found: ${id}`);
 
 		return { id };
 	});
@@ -192,6 +383,95 @@ export const createUnionLink = createServerFn({ method: "POST" })
 				data.sourceCitation ?? null,
 			],
 		);
+
+		return { id };
+	});
+
+export const updateUnionLink = createServerFn({ method: "POST" })
+	.inputValidator((data: UpdateUnionLinkInput) => data)
+	.handler(async ({ data }) => {
+		const id = requiredNonEmpty(data.id, "id");
+
+		const sets: string[] = [];
+		const params: unknown[] = [];
+
+		if (data.unionType !== undefined) {
+			const unionType = data.unionType.trim().toUpperCase();
+			if (!isOneOf(unionType, FAMILY_UNION_TYPES)) {
+				throw new Error("Invalid unionType");
+			}
+			const unionTypeId = await getLookupIdByName({
+				table: "tanahpedia_lookup_union_type",
+				name: unionType,
+			});
+			sets.push("union_type_id = ?");
+			params.push(unionTypeId);
+		}
+
+		if (data.unionOrder !== undefined) {
+			sets.push("union_order = ?");
+			params.push(data.unionOrder);
+		}
+
+		if (data.startDate !== undefined) {
+			sets.push("start_date = ?");
+			params.push(data.startDate);
+		}
+
+		if (data.endDate !== undefined) {
+			sets.push("end_date = ?");
+			params.push(data.endDate);
+		}
+
+		if (data.endReason !== undefined) {
+			let endReasonId: string | null = null;
+			if (data.endReason !== null) {
+				const endReason = data.endReason.trim().toUpperCase();
+				if (!isOneOf(endReason, FAMILY_UNION_END_REASONS)) {
+					throw new Error("Invalid endReason");
+				}
+				endReasonId = await getLookupIdByName({
+					table: "tanahpedia_lookup_union_end_reason",
+					name: endReason,
+				});
+			}
+			sets.push("end_reason_id = ?");
+			params.push(endReasonId);
+		}
+
+		if (data.altGroupId !== undefined) {
+			sets.push("alt_group_id = ?");
+			params.push(data.altGroupId);
+		}
+
+		if (data.sourceCitation !== undefined) {
+			sets.push("source_citation = ?");
+			params.push(data.sourceCitation);
+		}
+
+		if (sets.length === 0) {
+			throw new Error("At least one field must be provided to update");
+		}
+
+		params.push(id);
+		const result = await execute(
+			`UPDATE tanahpedia_person_union SET ${sets.join(", ")} WHERE id = ?`,
+			params,
+		);
+		assertAffected(result, `Union link not found: ${id}`);
+
+		return { id };
+	});
+
+export const deleteUnionLink = createServerFn({ method: "POST" })
+	.inputValidator((data: DeleteUnionLinkInput) => data)
+	.handler(async ({ data }) => {
+		const id = requiredNonEmpty(data.id, "id");
+		const result = await execute(
+			`DELETE FROM tanahpedia_person_union WHERE id = ?`,
+			[id],
+		);
+		assertAffected(result, `Union link not found: ${id}`);
 
 		return { id };
 	});
