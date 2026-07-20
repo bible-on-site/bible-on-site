@@ -16,7 +16,7 @@ public sealed class PerushimCatalogServiceTests : IDisposable
 
     public PerushimCatalogServiceTests()
     {
-        _tempRoot = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        _tempRoot = Path.Join(Path.GetTempPath(), Path.GetRandomFileName());
         Directory.CreateDirectory(_tempRoot);
     }
 
@@ -105,7 +105,8 @@ public sealed class PerushimCatalogServiceTests : IDisposable
         params (int id, string? name, int priority)[] rows)
     {
         var dbFileName = Path.ChangeExtension(Path.GetRandomFileName(), ".sqlite");
-        var dbPath = Path.Combine(_tempRoot, dbFileName);
+        dbFileName = Path.GetFileName(dbFileName);
+        var dbPath = Path.Join(_tempRoot, dbFileName);
         var connection = new SQLiteAsyncConnection(
             dbPath,
             SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create);

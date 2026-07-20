@@ -125,19 +125,27 @@ describe("adminEditorShortcuts", () => {
 	it("builds default keyboard shortcuts and lets stored extras override them", () => {
 		const promptSpy = vi.spyOn(window, "prompt").mockReturnValue("#note-2");
 		const { chain, editor } = createEditor();
+		const shortcutContext = {
+			name: "adminEditorShortcuts",
+			options: {},
+			storage: {},
+			editor,
+			parent: undefined,
+		};
+		const commandProps = { editor };
 
 		const baseShortcuts =
-			adminEditorShortcutsExtension.config.addKeyboardShortcuts?.call({
-				editor,
-			});
+			adminEditorShortcutsExtension.config.addKeyboardShortcuts?.call(
+				shortcutContext,
+			);
 
 		expect(baseShortcuts).toBeDefined();
-		expect(baseShortcuts?.["Mod-1"]()).toBe(true);
-		expect(baseShortcuts?.["Mod-2"]()).toBe(true);
-		expect(baseShortcuts?.["Mod-3"]()).toBe(true);
-		expect(baseShortcuts?.["Mod-4"]()).toBe(true);
-		expect(baseShortcuts?.["Mod-5"]()).toBe(true);
-		expect(baseShortcuts?.["Mod-6"]()).toBe(true);
+		expect(baseShortcuts?.["Mod-1"](commandProps)).toBe(true);
+		expect(baseShortcuts?.["Mod-2"](commandProps)).toBe(true);
+		expect(baseShortcuts?.["Mod-3"](commandProps)).toBe(true);
+		expect(baseShortcuts?.["Mod-4"](commandProps)).toBe(true);
+		expect(baseShortcuts?.["Mod-5"](commandProps)).toBe(true);
+		expect(baseShortcuts?.["Mod-6"](commandProps)).toBe(true);
 		expect(chain.toggleHeading).toHaveBeenCalledWith({ level: 1 });
 		expect(chain.toggleHeading).toHaveBeenCalledWith({ level: 2 });
 		expect(chain.toggleHeading).toHaveBeenCalledWith({ level: 3 });
@@ -145,16 +153,16 @@ describe("adminEditorShortcuts", () => {
 		expect(chain.toggleHeading).toHaveBeenCalledWith({ level: 5 });
 		expect(chain.toggleHeading).toHaveBeenCalledWith({ level: 6 });
 
-		expect(baseShortcuts?.["Mod-i"]()).toBe(true);
+		expect(baseShortcuts?.["Mod-i"](commandProps)).toBe(true);
 		expect(chain.setLink).toHaveBeenCalledWith({
 			href: "#note-2",
 			linkType: "comment",
 		});
 		expect(promptSpy).toHaveBeenCalledTimes(1);
 
-		expect(baseShortcuts?.["Mod-Shift-7"]()).toBe(true);
+		expect(baseShortcuts?.["Mod-Shift-7"](commandProps)).toBe(true);
 		expect(chain.toggleBulletList).toHaveBeenCalledTimes(1);
-		expect(baseShortcuts?.["Mod-Shift-8"]()).toBe(true);
+		expect(baseShortcuts?.["Mod-Shift-8"](commandProps)).toBe(true);
 		expect(chain.toggleOrderedList).toHaveBeenCalledTimes(1);
 
 		localStorage.setItem(
@@ -162,11 +170,11 @@ describe("adminEditorShortcuts", () => {
 			JSON.stringify({ "Mod-2": "bold" }),
 		);
 		const overriddenShortcuts =
-			adminEditorShortcutsExtension.config.addKeyboardShortcuts?.call({
-				editor,
-			});
+			adminEditorShortcutsExtension.config.addKeyboardShortcuts?.call(
+				shortcutContext,
+			);
 
-		expect(overriddenShortcuts?.["Mod-2"]()).toBe(true);
+		expect(overriddenShortcuts?.["Mod-2"](commandProps)).toBe(true);
 		expect(chain.toggleBold).toHaveBeenCalledTimes(1);
 	});
 });

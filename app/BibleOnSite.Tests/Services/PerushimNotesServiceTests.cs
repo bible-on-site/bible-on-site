@@ -21,7 +21,7 @@ public sealed class PerushimNotesServiceTests : IDisposable
 
     public PerushimNotesServiceTests()
     {
-        _tempRoot = Path.Combine(Path.GetTempPath(), "BibleOnSiteTests_" + Guid.NewGuid());
+        _tempRoot = Path.Join(Path.GetTempPath(), "BibleOnSiteTests_" + Path.GetRandomFileName());
         Directory.CreateDirectory(_tempRoot);
     }
 
@@ -49,7 +49,7 @@ public sealed class PerushimNotesServiceTests : IDisposable
     [Fact]
     public async Task InitializeAsync_WithExistingDb_SetsIsAvailableTrue()
     {
-        var dataDir = Path.Combine(_tempRoot, nameof(InitializeAsync_WithExistingDb_SetsIsAvailableTrue));
+        var dataDir = Path.Join(_tempRoot, nameof(InitializeAsync_WithExistingDb_SetsIsAvailableTrue));
         Directory.CreateDirectory(dataDir);
         await CreateNotesDatabaseAsync(dataDir);
 
@@ -63,7 +63,7 @@ public sealed class PerushimNotesServiceTests : IDisposable
     [Fact]
     public async Task InitializeAsync_WithoutDb_AndNoPad_SetsNotesMissing()
     {
-        var dataDir = Path.Combine(_tempRoot, nameof(InitializeAsync_WithoutDb_AndNoPad_SetsNotesMissing));
+        var dataDir = Path.Join(_tempRoot, nameof(InitializeAsync_WithoutDb_AndNoPad_SetsNotesMissing));
         Directory.CreateDirectory(dataDir);
 
         var service = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
@@ -76,7 +76,7 @@ public sealed class PerushimNotesServiceTests : IDisposable
     [Fact]
     public async Task InitializeAsync_CalledTwice_IsIdempotent()
     {
-        var dataDir = Path.Combine(_tempRoot, nameof(InitializeAsync_CalledTwice_IsIdempotent));
+        var dataDir = Path.Join(_tempRoot, nameof(InitializeAsync_CalledTwice_IsIdempotent));
         Directory.CreateDirectory(dataDir);
         await CreateNotesDatabaseAsync(dataDir);
 
@@ -91,7 +91,7 @@ public sealed class PerushimNotesServiceTests : IDisposable
     [Fact]
     public async Task GetPerushIdsForPerekAsync_ReturnsDistinctIds()
     {
-        var dataDir = Path.Combine(_tempRoot, nameof(GetPerushIdsForPerekAsync_ReturnsDistinctIds));
+        var dataDir = Path.Join(_tempRoot, nameof(GetPerushIdsForPerekAsync_ReturnsDistinctIds));
         Directory.CreateDirectory(dataDir);
         await CreateNotesDatabaseAsync(
             dataDir,
@@ -110,7 +110,7 @@ public sealed class PerushimNotesServiceTests : IDisposable
     [Fact]
     public async Task LoadNotesForPerekAsync_ReturnsNotes()
     {
-        var dataDir = Path.Combine(_tempRoot, nameof(LoadNotesForPerekAsync_ReturnsNotes));
+        var dataDir = Path.Join(_tempRoot, nameof(LoadNotesForPerekAsync_ReturnsNotes));
         Directory.CreateDirectory(dataDir);
         await CreateNotesDatabaseAsync(
             dataDir,
@@ -146,7 +146,7 @@ public sealed class PerushimNotesServiceTests : IDisposable
     [Fact]
     public async Task LoadNotesForPerekAsync_UsesFallbackNameAndEmptyContent()
     {
-        var dataDir = Path.Combine(_tempRoot, nameof(LoadNotesForPerekAsync_UsesFallbackNameAndEmptyContent));
+        var dataDir = Path.Join(_tempRoot, nameof(LoadNotesForPerekAsync_UsesFallbackNameAndEmptyContent));
         Directory.CreateDirectory(dataDir);
         await CreateNotesDatabaseAsync(
             dataDir,
@@ -166,7 +166,7 @@ public sealed class PerushimNotesServiceTests : IDisposable
     [Fact]
     public async Task LoadNotesForPerekAsync_WhenNotInitialized_ReturnsEmpty()
     {
-        var dataDir = Path.Combine(_tempRoot, nameof(LoadNotesForPerekAsync_WhenNotInitialized_ReturnsEmpty));
+        var dataDir = Path.Join(_tempRoot, nameof(LoadNotesForPerekAsync_WhenNotInitialized_ReturnsEmpty));
         Directory.CreateDirectory(dataDir);
 
         var service = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
@@ -178,8 +178,8 @@ public sealed class PerushimNotesServiceTests : IDisposable
     [Fact]
     public async Task TryDownloadNotesAsync_CopiesAvailablePadDatabase()
     {
-        var dataDir = Path.Combine(_tempRoot, nameof(TryDownloadNotesAsync_CopiesAvailablePadDatabase));
-        var padDir = Path.Combine(_tempRoot, "pad-root");
+        var dataDir = Path.Join(_tempRoot, nameof(TryDownloadNotesAsync_CopiesAvailablePadDatabase));
+        var padDir = Path.Join(_tempRoot, "pad-root");
         Directory.CreateDirectory(dataDir);
         Directory.CreateDirectory(padDir);
         await CreateNotesDatabaseAsync(padDir, (9, 4, 1, 0, "pad note"));
@@ -192,7 +192,7 @@ public sealed class PerushimNotesServiceTests : IDisposable
 
         downloaded.Should().BeTrue();
         service.IsAvailable.Should().BeTrue();
-        File.Exists(Path.Combine(dataDir, NotesDbFileName)).Should().BeTrue();
+        File.Exists(Path.Join(dataDir, NotesDbFileName)).Should().BeTrue();
         var ids = await service.GetPerushIdsForPerekAsync(4);
         ids.Should().Equal(9);
     }
@@ -200,9 +200,9 @@ public sealed class PerushimNotesServiceTests : IDisposable
     [Fact]
     public async Task TryDownloadNotesAsync_FetchesThenCopiesDatabaseFromAssetsFolder()
     {
-        var dataDir = Path.Combine(_tempRoot, nameof(TryDownloadNotesAsync_FetchesThenCopiesDatabaseFromAssetsFolder));
-        var padDir = Path.Combine(_tempRoot, "pad-assets");
-        var assetsDir = Path.Combine(padDir, "assets");
+        var dataDir = Path.Join(_tempRoot, nameof(TryDownloadNotesAsync_FetchesThenCopiesDatabaseFromAssetsFolder));
+        var padDir = Path.Join(_tempRoot, "pad-assets");
+        var assetsDir = Path.Join(padDir, "assets");
         Directory.CreateDirectory(dataDir);
         Directory.CreateDirectory(assetsDir);
         await CreateNotesDatabaseAsync(assetsDir, (11, 6, 2, 0, "asset note"));
@@ -227,7 +227,7 @@ public sealed class PerushimNotesServiceTests : IDisposable
         string dataDirectory,
         params (int perushId, int perekId, int pasuk, int noteIdx, string? content)[] rows)
     {
-        var dbPath = Path.Combine(dataDirectory, NotesDbFileName);
+        var dbPath = Path.Join(dataDirectory, NotesDbFileName);
         var conn = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create);
 
         await conn.ExecuteAsync("CREATE TABLE IF NOT EXISTS _metadata (key TEXT, value TEXT)");
