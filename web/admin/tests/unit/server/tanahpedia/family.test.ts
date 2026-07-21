@@ -155,6 +155,26 @@ describe("tanahpedia family api", () => {
 		);
 	});
 
+	it("rejects a whitespace-only deathCause on create", async () => {
+		queryOneMock.mockResolvedValueOnce({ id: "name-type-main" });
+
+		await expect(
+			createFamilyPersonNode({
+				data: { displayName: "Moses", deathCause: "   " },
+			}),
+		).rejects.toThrow("deathCause is required");
+	});
+
+	it("rejects a whitespace-only birthPlaceId on create", async () => {
+		queryOneMock.mockResolvedValueOnce({ id: "name-type-main" });
+
+		await expect(
+			createFamilyPersonNode({
+				data: { displayName: "Moses", birthPlaceId: "   " },
+			}),
+		).rejects.toThrow("birthPlaceId is required");
+	});
+
 	it("creates parent-child link with lookup ids", async () => {
 		queryOneMock
 			.mockResolvedValueOnce({ id: "rel-bio" })
@@ -453,6 +473,26 @@ describe("tanahpedia family api", () => {
 				updateFamilyPersonNode({ data: { entityId: "entity-1" } }),
 			).rejects.toThrow("At least one field must be provided to update");
 			expect(executeMock).not.toHaveBeenCalled();
+		});
+
+		it("rejects a whitespace-only deathCause on update", async () => {
+			queryOneMock.mockResolvedValueOnce({ id: "person-1" });
+
+			await expect(
+				updateFamilyPersonNode({
+					data: { entityId: "entity-1", deathCause: "   " },
+				}),
+			).rejects.toThrow("deathCause is required");
+		});
+
+		it("rejects a whitespace-only birthPlaceId on update", async () => {
+			queryOneMock.mockResolvedValueOnce({ id: "person-1" });
+
+			await expect(
+				updateFamilyPersonNode({
+					data: { entityId: "entity-1", birthPlaceId: "   " },
+				}),
+			).rejects.toThrow("birthPlaceId is required");
 		});
 
 		it("inserts birth date, death date, death cause, birth place, and roles", async () => {
@@ -1002,6 +1042,33 @@ describe("tanahpedia family api", () => {
 			expect(executeMock).not.toHaveBeenCalled();
 		});
 
+		it("rejects a whitespace-only giverPersonId", async () => {
+			await expect(
+				createPersonName({
+					data: {
+						personId: "person-1",
+						name: "Israel",
+						nameType: "ADDITIONAL",
+						giverPersonId: "   ",
+					},
+				}),
+			).rejects.toThrow("giverPersonId is required");
+			expect(executeMock).not.toHaveBeenCalled();
+		});
+
+		it("rejects a missing nameType", async () => {
+			await expect(
+				createPersonName({
+					data: {
+						personId: "person-1",
+						name: "Israel",
+						nameType: undefined as unknown as "ADDITIONAL",
+					},
+				}),
+			).rejects.toThrow("nameType is required");
+			expect(executeMock).not.toHaveBeenCalled();
+		});
+
 		it("rejects invalid name type", async () => {
 			await expect(
 				createPersonName({
@@ -1037,7 +1104,7 @@ describe("tanahpedia family api", () => {
 			);
 		});
 
-		it("replaces the human giver", async () => {
+		it("replaces the human giver and clears a stale God-giver row", async () => {
 			queryOneMock.mockResolvedValueOnce({ id: "name-1" });
 			executeMock.mockResolvedValue(undefined);
 
@@ -1045,13 +1112,41 @@ describe("tanahpedia family api", () => {
 				data: { id: "name-1", giverPersonId: "person-2" },
 			});
 
-			expect(executeMock).toHaveBeenCalledWith(
-				"DELETE FROM tanahpedia_person_name_giver_person WHERE person_name_id = ?",
-				["name-1"],
+			expect(executeMock).toHaveBeenCalledTimes(3);
+			expect(executeMock.mock.calls[0]?.[0]).toContain(
+				"DELETE FROM tanahpedia_person_name_giver_person",
 			);
 			expect(executeMock.mock.calls[1]?.[0]).toContain(
+				"DELETE FROM tanahpedia_person_name_giver_god",
+			);
+			expect(executeMock.mock.calls[2]?.[0]).toContain(
 				"INSERT INTO tanahpedia_person_name_giver_person",
 			);
+			expect(executeMock.mock.calls[2]?.[1]).toEqual([
+				expect.any(String),
+				"name-1",
+				"person-2",
+			]);
+		});
+
+		it("rejects a whitespace-only giverPersonId", async () => {
+			queryOneMock.mockResolvedValueOnce({ id: "name-1" });
+
+			await expect(
+				updatePersonName({
+					data: { id: "name-1", giverPersonId: "   " },
+				}),
+			).rejects.toThrow("giverPersonId is required");
+			expect(executeMock).not.toHaveBeenCalled();
+		});
+
+		it("rejects setting giverPersonId and isGodGiven together", async () => {
+			await expect(
+				updatePersonName({
+					data: { id: "name-1", giverPersonId: "person-2", isGodGiven: true },
+				}),
+			).rejects.toThrow("giverPersonId and isGodGiven are mutually exclusive");
+			expect(executeMock).not.toHaveBeenCalled();
 		});
 
 		it("clears the human giver when set to null", async () => {
@@ -1069,7 +1164,7 @@ describe("tanahpedia family api", () => {
 			);
 		});
 
-		it("sets the God-given flag", async () => {
+		it("sets the God-given flag and clears a stale human-giver row", async () => {
 			queryOneMock
 				.mockResolvedValueOnce({ id: "name-1" })
 				.mockResolvedValueOnce({ id: "god-1" });
@@ -1079,10 +1174,14 @@ describe("tanahpedia family api", () => {
 				data: { id: "name-1", isGodGiven: true },
 			});
 
+			expect(executeMock).toHaveBeenCalledTimes(3);
 			expect(executeMock.mock.calls[0]?.[0]).toContain(
 				"DELETE FROM tanahpedia_person_name_giver_god",
 			);
 			expect(executeMock.mock.calls[1]?.[0]).toContain(
+				"DELETE FROM tanahpedia_person_name_giver_person",
+			);
+			expect(executeMock.mock.calls[2]?.[0]).toContain(
 				"INSERT INTO tanahpedia_person_name_giver_god",
 			);
 		});

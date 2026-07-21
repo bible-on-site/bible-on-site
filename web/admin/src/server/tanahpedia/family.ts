@@ -209,7 +209,7 @@ export const createFamilyPersonNode = createServerFn({ method: "POST" })
 				table: "tanahpedia_person_death_cause",
 				valueColumn: "death_cause",
 				personId,
-				value: data.deathCause,
+				value: requiredNonEmpty(data.deathCause, "deathCause"),
 			});
 		}
 		if (data.birthPlaceId != null) {
@@ -217,7 +217,7 @@ export const createFamilyPersonNode = createServerFn({ method: "POST" })
 				table: "tanahpedia_person_birth_place",
 				valueColumn: "place_id",
 				personId,
-				value: data.birthPlaceId,
+				value: requiredNonEmpty(data.birthPlaceId, "birthPlaceId"),
 			});
 		}
 		if (data.isProphet) {
@@ -352,7 +352,10 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 					table: "tanahpedia_person_death_cause",
 					valueColumn: "death_cause",
 					personId: person.id,
-					value: data.deathCause,
+					value:
+						data.deathCause !== null
+							? requiredNonEmpty(data.deathCause, "deathCause")
+							: null,
 				});
 			}
 			if (data.birthPlaceId !== undefined) {
@@ -360,7 +363,10 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 					table: "tanahpedia_person_birth_place",
 					valueColumn: "place_id",
 					personId: person.id,
-					value: data.birthPlaceId,
+					value:
+						data.birthPlaceId !== null
+							? requiredNonEmpty(data.birthPlaceId, "birthPlaceId")
+							: null,
 				});
 			}
 			if (data.isProphet !== undefined) {
@@ -681,11 +687,18 @@ export const createPersonName = createServerFn({ method: "POST" })
 	.handler(async ({ data }) => {
 		const personId = requiredNonEmpty(data.personId, "personId");
 		const name = requiredNonEmpty(data.name, "name");
+		if (typeof data.nameType !== "string" || !data.nameType.trim()) {
+			throw new Error("nameType is required");
+		}
 		const nameType = data.nameType.trim().toUpperCase();
 		if (!isOneOf(nameType, FAMILY_NAME_TYPES)) {
 			throw new Error("Invalid nameType");
 		}
-		if (data.giverPersonId && data.isGodGiven) {
+		const giverPersonId =
+			data.giverPersonId != null
+				? requiredNonEmpty(data.giverPersonId, "giverPersonId")
+				: undefined;
+		if (giverPersonId && data.isGodGiven) {
 			throw new Error("giverPersonId and isGodGiven are mutually exclusive");
 		}
 
@@ -697,11 +710,11 @@ export const createPersonName = createServerFn({ method: "POST" })
 			[id, personId, name, nameTypeId, data.altGroupId ?? null],
 		);
 
-		if (data.giverPersonId) {
+		if (giverPersonId) {
 			await execute(
 				`INSERT INTO tanahpedia_person_name_giver_person (id, person_name_id, giver_person_id, alt_group_id)
 				 VALUES (?, ?, ?, NULL)`,
-				[randomUUID(), id, data.giverPersonId],
+				[randomUUID(), id, giverPersonId],
 			);
 		}
 		if (data.isGodGiven) {
@@ -752,6 +765,17 @@ export const updatePersonName = createServerFn({ method: "POST" })
 			throw new Error("At least one field must be provided to update");
 		}
 
+		// Normalize once so an empty/whitespace-only value fails fast with a
+		// clear error instead of a downstream FK constraint failure, and so the
+		// mutual-exclusivity check below and the insert use the same value.
+		const normalizedGiverPersonId =
+			data.giverPersonId !== undefined && data.giverPersonId !== null
+				? requiredNonEmpty(data.giverPersonId, "giverPersonId")
+				: data.giverPersonId;
+		if (normalizedGiverPersonId && data.isGodGiven) {
+			throw new Error("giverPersonId and isGodGiven are mutually exclusive");
+		}
+
 		if (sets.length > 0) {
 			params.push(id);
 			const result = await execute(
@@ -772,11 +796,18 @@ export const updatePersonName = createServerFn({ method: "POST" })
 				`DELETE FROM tanahpedia_person_name_giver_person WHERE person_name_id = ?`,
 				[id],
 			);
-			if (data.giverPersonId !== null) {
+			if (normalizedGiverPersonId) {
+				// Setting a human giver must not leave a stale God-giver row from
+				// an earlier state, to preserve mutual exclusivity between the two
+				// giver tables.
+				await execute(
+					`DELETE FROM tanahpedia_person_name_giver_god WHERE person_name_id = ?`,
+					[id],
+				);
 				await execute(
 					`INSERT INTO tanahpedia_person_name_giver_person (id, person_name_id, giver_person_id, alt_group_id)
 					 VALUES (?, ?, ?, NULL)`,
-					[randomUUID(), id, data.giverPersonId],
+					[randomUUID(), id, normalizedGiverPersonId],
 				);
 			}
 		}
@@ -787,6 +818,13 @@ export const updatePersonName = createServerFn({ method: "POST" })
 				[id],
 			);
 			if (data.isGodGiven) {
+				// Setting the God-given flag must not leave a stale human-giver row
+				// from an earlier state, to preserve mutual exclusivity between the
+				// two giver tables.
+				await execute(
+					`DELETE FROM tanahpedia_person_name_giver_person WHERE person_name_id = ?`,
+					[id],
+				);
 				const godId = await getGodId();
 				await execute(
 					`INSERT INTO tanahpedia_person_name_giver_god (id, person_name_id, god_id, alt_group_id)

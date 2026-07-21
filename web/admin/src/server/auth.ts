@@ -113,7 +113,13 @@ export function parseCookie(cookieHeader: string, name: string): string | null {
 		if (separatorIndex === -1) continue;
 		const key = part.slice(0, separatorIndex).trim();
 		if (key === name) {
-			return decodeURIComponent(part.slice(separatorIndex + 1));
+			try {
+				return decodeURIComponent(part.slice(separatorIndex + 1));
+			} catch {
+				// Malformed percent-encoding in an attacker-controlled cookie header
+				// must not crash the request; treat it as a missing/invalid cookie.
+				return null;
+			}
 		}
 	}
 	return null;

@@ -181,6 +181,10 @@ Resources:
       #    the server verifies tokens against the public JWKS only)
       UserPoolId: !Ref AdminUserPool
       GenerateSecret: true
+      # Explicit (rather than implicit-default) so the service client can never
+      # be used with an identity-provider-based flow such as AWSSSO.
+      SupportedIdentityProviders:
+        - COGNITO
       AllowedOAuthFlows:
         - client_credentials
       AllowedOAuthScopes:

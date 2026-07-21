@@ -157,6 +157,12 @@ describe("parseCookie", () => {
 			),
 		).toBe("abc123");
 	});
+
+	it("returns null instead of throwing on malformed percent-encoding", async () => {
+		const { parseCookie } = await loadAuth();
+
+		expect(parseCookie("admin_session=a%b", "admin_session")).toBeNull();
+	});
 });
 
 describe("browser auth helpers", () => {
