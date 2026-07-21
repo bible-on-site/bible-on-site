@@ -7,13 +7,15 @@ const { executeMock, queryMock, queryOneMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-start", () => ({
-	createServerFn: () => {
-		const chain = {
-			inputValidator: () => chain,
-			handler: (fn: unknown) => fn,
-		};
-		return chain;
-	},
+	createServerFn: () => ({
+		inputValidator: (validate: (data: unknown) => unknown) => ({
+			handler:
+				(fn: (args: { data: unknown }) => unknown) =>
+				(args: { data: unknown }) =>
+					fn({ data: validate(args.data) }),
+		}),
+		handler: (fn: unknown) => fn,
+	}),
 }));
 
 vi.mock("~/server/db", () => ({
@@ -77,6 +79,33 @@ describe("tanahpedia family api", () => {
 		expect(executeMock).not.toHaveBeenCalled();
 	});
 
+	it("rejects a blank required field", async () => {
+		await expect(
+			createFamilyPersonNode({ data: { displayName: "   " } }),
+		).rejects.toThrow("displayName is required");
+		expect(executeMock).not.toHaveBeenCalled();
+	});
+
+	it("throws when the MAIN name type lookup row is missing", async () => {
+		queryOneMock.mockResolvedValueOnce(null);
+
+		await expect(
+			createFamilyPersonNode({ data: { displayName: "Jacob" } }),
+		).rejects.toThrow("Missing tanahpedia_lookup_name_type row for MAIN");
+	});
+
+	it("creates a person node without sex or entry link", async () => {
+		queryOneMock.mockResolvedValueOnce({ id: "name-type-main" });
+		executeMock.mockResolvedValue(undefined);
+
+		const result = await createFamilyPersonNode({
+			data: { displayName: "Jacob" },
+		});
+
+		expect(result.linkId).toBeNull();
+		expect(executeMock).toHaveBeenCalledTimes(3);
+	});
+
 	it("creates parent-child link with lookup ids", async () => {
 		queryOneMock
 			.mockResolvedValueOnce({ id: "rel-bio" })
@@ -121,6 +150,63 @@ describe("tanahpedia family api", () => {
 		expect(executeMock).not.toHaveBeenCalled();
 	});
 
+	it("rejects invalid parent role", async () => {
+		await expect(
+			createParentChildLink({
+				data: {
+					parentPersonId: "parent-1",
+					childPersonId: "child-1",
+					relationshipType: "BIOLOGICAL",
+					parentRole: "INVALID" as unknown as "FATHER",
+				},
+			}),
+		).rejects.toThrow("Invalid parentRole");
+		expect(executeMock).not.toHaveBeenCalled();
+	});
+
+	it("throws when a lookup row is missing", async () => {
+		queryOneMock.mockResolvedValueOnce(null);
+
+		await expect(
+			createParentChildLink({
+				data: {
+					parentPersonId: "parent-1",
+					childPersonId: "child-1",
+					relationshipType: "BIOLOGICAL",
+					parentRole: "FATHER",
+				},
+			}),
+		).rejects.toThrow(
+			"Missing tanahpedia_lookup_parent_child_type row for BIOLOGICAL",
+		);
+	});
+
+	it("creates a parent-child link without altGroupId or sourceCitation", async () => {
+		queryOneMock
+			.mockResolvedValueOnce({ id: "rel-bio" })
+			.mockResolvedValueOnce({ id: "role-father" });
+		executeMock.mockResolvedValue(undefined);
+
+		const result = await createParentChildLink({
+			data: {
+				parentPersonId: "parent-1",
+				childPersonId: "child-1",
+				relationshipType: "BIOLOGICAL",
+				parentRole: "FATHER",
+			},
+		});
+
+		expect(executeMock.mock.calls[0]?.[1]).toEqual([
+			result.id,
+			"parent-1",
+			"child-1",
+			"rel-bio",
+			"role-father",
+			null,
+			null,
+		]);
+	});
+
 	it("rejects union where both people are identical", async () => {
 		await expect(
 			createUnionLink({
@@ -132,6 +218,55 @@ describe("tanahpedia family api", () => {
 			}),
 		).rejects.toThrow("person1Id and person2Id must be different");
 		expect(executeMock).not.toHaveBeenCalled();
+	});
+
+	it("rejects invalid union type", async () => {
+		await expect(
+			createUnionLink({
+				data: {
+					person1Id: "p1",
+					person2Id: "p2",
+					unionType: "INVALID" as unknown as "MARRIAGE",
+				},
+			}),
+		).rejects.toThrow("Invalid unionType");
+		expect(executeMock).not.toHaveBeenCalled();
+	});
+
+	it("rejects invalid end reason on create", async () => {
+		await expect(
+			createUnionLink({
+				data: {
+					person1Id: "p1",
+					person2Id: "p2",
+					unionType: "MARRIAGE",
+					endReason: "INVALID" as unknown as "DEATH",
+				},
+			}),
+		).rejects.toThrow("Invalid endReason");
+		expect(executeMock).not.toHaveBeenCalled();
+	});
+
+	it("creates a union link without end reason or optional fields", async () => {
+		queryOneMock.mockResolvedValueOnce({ id: "union-marriage" });
+		executeMock.mockResolvedValue(undefined);
+
+		const result = await createUnionLink({
+			data: { person1Id: "p1", person2Id: "p2", unionType: "MARRIAGE" },
+		});
+
+		expect(executeMock.mock.calls[0]?.[1]).toEqual([
+			result.id,
+			"p1",
+			"p2",
+			"union-marriage",
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+		]);
 	});
 
 	it("creates union link with end reason lookup", async () => {
@@ -356,6 +491,29 @@ describe("tanahpedia family api", () => {
 				}),
 			).rejects.toThrow("Person not found for entity: missing");
 		});
+
+		it("skips name propagation when the entity is not a person", async () => {
+			executeMock.mockResolvedValueOnce({ affectedRows: 1 });
+			queryOneMock.mockResolvedValueOnce(null);
+
+			const result = await updateFamilyPersonNode({
+				data: { entityId: "entity-1", displayName: "Israel" },
+			});
+
+			expect(result).toEqual({ entityId: "entity-1" });
+			expect(executeMock).toHaveBeenCalledTimes(1);
+		});
+
+		it("throws when updating sex for a person that is not found", async () => {
+			queryOneMock.mockResolvedValueOnce(null);
+
+			await expect(
+				updateFamilyPersonNode({
+					data: { entityId: "entity-1", sex: "MALE" },
+				}),
+			).rejects.toThrow("Person not found for entity: entity-1");
+			expect(executeMock).not.toHaveBeenCalled();
+		});
 	});
 
 	describe("deleteFamilyPersonNode", () => {
@@ -418,6 +576,32 @@ describe("tanahpedia family api", () => {
 				}),
 			).rejects.toThrow("Invalid relationshipType");
 			expect(executeMock).not.toHaveBeenCalled();
+		});
+
+		it("rejects invalid parent role on update", async () => {
+			await expect(
+				updateParentChildLink({
+					data: {
+						id: "link-1",
+						parentRole: "INVALID" as unknown as "FATHER",
+					},
+				}),
+			).rejects.toThrow("Invalid parentRole");
+			expect(executeMock).not.toHaveBeenCalled();
+		});
+
+		it("updates altGroupId only", async () => {
+			executeMock.mockResolvedValueOnce({ affectedRows: 1 });
+
+			const result = await updateParentChildLink({
+				data: { id: "link-1", altGroupId: "alt-1" },
+			});
+
+			expect(result).toEqual({ id: "link-1" });
+			expect(executeMock).toHaveBeenCalledWith(
+				"UPDATE tanahpedia_person_parent_child SET alt_group_id = ? WHERE id = ?",
+				["alt-1", "link-1"],
+			);
 		});
 
 		it("throws when no fields are provided", async () => {
@@ -529,6 +713,19 @@ describe("tanahpedia family api", () => {
 			expect(executeMock).toHaveBeenCalledWith(
 				"UPDATE tanahpedia_person_union SET end_reason_id = ? WHERE id = ?",
 				["end-divorce", "union-1"],
+			);
+		});
+
+		it("updates unionOrder without altGroupId or sourceCitation", async () => {
+			executeMock.mockResolvedValueOnce({ affectedRows: 1 });
+
+			await updateUnionLink({
+				data: { id: "union-1", unionOrder: 1 },
+			});
+
+			expect(executeMock).toHaveBeenCalledWith(
+				"UPDATE tanahpedia_person_union SET union_order = ? WHERE id = ?",
+				[1, "union-1"],
 			);
 		});
 
