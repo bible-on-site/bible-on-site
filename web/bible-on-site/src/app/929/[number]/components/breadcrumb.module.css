@@ -100,21 +100,14 @@
 
 .glyphicon {
   display: inline-block;
-  width: 8px;
-  height: 8px;
-  vertical-align: middle;
-  background-color: currentColor;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-size: contain;
-  mask-size: contain;
+  font-style: normal;
+  font-variant: normal;
+  text-rendering: auto;
+  line-height: 1;
 }
 
-.glyphicon-triangle-bottom {
-  -webkit-mask-image: url("/icons/chevron-down.svg");
-  mask-image: url("/icons/chevron-down.svg");
+.glyphicon-triangle-bottom::before {
+  content: "▼";
 }
 
 .drop {
@@ -169,6 +162,7 @@
 }
 
 .small {
+  font-size: 9px;
   margin-right: 4px;
   color: #666;
   transition: transform 0.2s ease, margin 0.2s ease;
@@ -188,9 +182,8 @@
     margin: 0 4px;
   }
 
-  .glyphicon {
-    width: 7px;
-    height: 7px;
+  .glyphicon-triangle-bottom::before {
+    font-size: 8px;
   }
 
   .small {
