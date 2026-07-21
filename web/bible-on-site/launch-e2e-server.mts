@@ -117,17 +117,22 @@ async function populateDatabase(): Promise<void> {
 
 /**
  * Verify that the test database has all required tables with data.
- * Uses the mysql CLI client so we don't add a Node MySQL dependency here.
+ * Uses the app's mysql2 dependency so local and CI runs don't depend on a
+ * separately installed mysql CLI.
  */
 async function verifyTestDatabase(dbUrl: string): Promise<void> {
 	log("[DB Health] Verifying test database tables...");
 
 	const url = new URL(dbUrl);
-	const host = url.hostname;
-	const port = url.port || "3306";
-	const user = url.username;
-	const password = url.password;
-	const database = url.pathname.slice(1).split("?")[0];
+	const database = url.pathname.slice(1);
+	const { default: mysql } = await import("mysql2/promise");
+	const connection = await mysql.createConnection({
+		host: url.hostname,
+		port: Number.parseInt(url.port || "3306", 10),
+		user: decodeURIComponent(url.username),
+		password: decodeURIComponent(url.password),
+		database,
+	});
 
 	// Tables that must exist and contain at least 1 row for e2e tests to pass.
 	// When adding a new feature that queries a new table, add it here!
@@ -141,35 +146,26 @@ async function verifyTestDatabase(dbUrl: string): Promise<void> {
 		"note",
 	];
 
-	const mysqlArgs = [
-		"-h",
-		host,
-		"-P",
-		port,
-		"-u",
-		user,
-		...(password ? [`-p${password}`] : []),
-		database,
-		"-N",
-		"-B", // no headers, tab-separated
-	];
-
 	const missing: string[] = [];
 	const empty: string[] = [];
 
-	for (const table of requiredTables) {
-		try {
-			const result = execSync(
-				`mysql ${mysqlArgs.map((a) => `"${a}"`).join(" ")} -e "SELECT COUNT(*) FROM \\\`${table}\\\`"`,
-				{ stdio: "pipe", shell: true, timeout: 10_000 },
-			);
-			const count = Number.parseInt(result.toString().trim(), 10);
-			if (count === 0) {
-				empty.push(table);
+	try {
+		for (const table of requiredTables) {
+			try {
+				const [rows] = await connection.execute(
+					`SELECT COUNT(*) AS row_count FROM \`${table}\``,
+				);
+				const [{ row_count: rowCount }] = rows as { row_count: number }[];
+				const count = Number(rowCount);
+				if (count === 0) {
+					empty.push(table);
+				}
+			} catch {
+				missing.push(table);
 			}
-		} catch {
-			missing.push(table);
 		}
+	} finally {
+		await connection.end();
 	}
 
 	if (missing.length > 0 || empty.length > 0) {
