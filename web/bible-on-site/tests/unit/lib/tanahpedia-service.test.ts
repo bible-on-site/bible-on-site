@@ -190,6 +190,44 @@ describe("tanahpedia service", () => {
 		expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining(roleTable));
 	});
 
+	it("merges duplicate person role rows and skips incomplete linked entries", async () => {
+		mockQuery.mockResolvedValueOnce([
+			{
+				entityId: "entity-person",
+				entityName: "Moses",
+				entryId: "entry-moses",
+				entryUniqueName: "moses",
+				entryTitle: "Moses",
+			},
+			{
+				entityId: "entity-person",
+				entityName: "Moses",
+				entryId: null,
+				entryUniqueName: null,
+				entryTitle: null,
+			},
+			{
+				entityId: "entity-person",
+				entityName: "Moses",
+				entryId: "entry-moshe",
+				entryUniqueName: "moshe",
+				entryTitle: "Moshe",
+			},
+		]);
+
+		await expect(getEntitiesWithEntriesByRole("PROPHET")).resolves.toEqual([
+			{
+				entityType: "PERSON",
+				entityId: "entity-person",
+				entityName: "Moses",
+				linkedEntries: [
+					{ id: "entry-moses", uniqueName: "moses", title: "Moses" },
+					{ id: "entry-moshe", uniqueName: "moshe", title: "Moshe" },
+				],
+			},
+		]);
+	});
+
 	it.each([
 		["kind" as const, "BEHEMA", "tanahpedia_animal_kind", "kind"],
 		["purity" as const, "TAHOR", "tanahpedia_animal_purity", "purity"],
@@ -237,6 +275,37 @@ describe("tanahpedia service", () => {
 			);
 		},
 	);
+
+	it("merges duplicate animal classification rows", async () => {
+		mockQuery.mockResolvedValueOnce([
+			{
+				entityId: "entity-animal",
+				entityName: "Ox",
+				entryId: "entry-ox",
+				entryUniqueName: "ox",
+				entryTitle: "Ox",
+			},
+			{
+				entityId: "entity-animal",
+				entityName: "Ox",
+				entryId: "entry-shor",
+				entryUniqueName: "shor",
+				entryTitle: "Shor",
+			},
+		]);
+
+		await expect(getAnimalsByClassification("kind", "BEHEMA")).resolves.toEqual([
+			{
+				entityType: "ANIMAL",
+				entityId: "entity-animal",
+				entityName: "Ox",
+				linkedEntries: [
+					{ id: "entry-ox", uniqueName: "ox", title: "Ox" },
+					{ id: "entry-shor", uniqueName: "shor", title: "Shor" },
+				],
+			},
+		]);
+	});
 
 	it("parses category homepage JSON config and returns null for missing rows", async () => {
 		mockQuery
@@ -393,6 +462,16 @@ describe("tanahpedia service", () => {
 			.mockResolvedValueOnce([{ c: "6" }]);
 
 		await expect(getCategoryCounts()).resolves.toMatchObject({ PLACE: 9 });
+	});
+
+	it("leaves place counts at zero when no fallback place count row exists", async () => {
+		mockQuery
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([]);
+
+		await expect(getCategoryCounts()).resolves.toMatchObject({ PLACE: 0 });
 	});
 
 	it("queries recent entries and all unique names", async () => {
@@ -583,6 +662,21 @@ describe("tanahpedia service", () => {
 					coParentDisplayName: "רחל",
 					coParentUnionOrder: "2",
 				},
+				{
+					altGroupId: null,
+					parentRole: "FATHER",
+					relationshipType: "BIOLOGICAL",
+					sourceCitation: "duplicate after co-parent",
+					relatedPersonId: "p-yosef",
+					relatedEntityId: "e-yosef",
+					displayName: "Yosef",
+					entryUniqueName: "yosef",
+					entryTitle: "Yosef",
+					relatedSex: "MALE",
+					coParentEntityId: null,
+					coParentDisplayName: null,
+					coParentUnionOrder: null,
+				},
 			])
 			.mockResolvedValueOnce([
 				{
@@ -623,6 +717,16 @@ describe("tanahpedia service", () => {
 					siblingSourceCitation: "בראשית כה",
 				},
 				{
+					relatedPersonId: "p-esav",
+					relatedEntityId: "e-esav",
+					displayName: "Esav",
+					entryUniqueName: "esav",
+					entryTitle: "Esav",
+					relatedSex: "MALE",
+					relatedBirthDate: "18000101",
+					siblingSourceCitation: "later duplicate",
+				},
+				{
 					relatedPersonId: "p-binyamin",
 					relatedEntityId: "e-binyamin",
 					displayName: "בנימין",
@@ -631,6 +735,16 @@ describe("tanahpedia service", () => {
 					relatedSex: "MALE",
 					relatedBirthDate: null,
 					siblingSourceCitation: " ",
+				},
+				{
+					relatedPersonId: "p-dan",
+					relatedEntityId: "e-dan",
+					displayName: "Dan",
+					entryUniqueName: "dan",
+					entryTitle: "Dan",
+					relatedSex: "MALE",
+					relatedBirthDate: "18000103",
+					siblingSourceCitation: "source for new sibling",
 				},
 			])
 			.mockResolvedValueOnce([{ focalBirthDate: "18000102" }]);
@@ -658,7 +772,7 @@ describe("tanahpedia service", () => {
 			unionOrder: 2,
 			related: { displayName: "רחל", sex: "FEMALE" },
 		});
-		expect(result?.siblings).toHaveLength(2);
+		expect(result?.siblings).toHaveLength(3);
 		expect(result?.siblings).toEqual(expect.arrayContaining([
 			expect.objectContaining({
 				displayName: "עשו",
@@ -668,6 +782,11 @@ describe("tanahpedia service", () => {
 			expect.objectContaining({
 				displayName: "בנימין",
 				birthDateYyyymmdd: null,
+			}),
+			expect.objectContaining({
+				displayName: "Dan",
+				birthDateYyyymmdd: 18000103,
+				sourceCitation: "source for new sibling",
 			}),
 		]));
 	});

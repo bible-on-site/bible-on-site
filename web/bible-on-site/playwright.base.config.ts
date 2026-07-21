@@ -12,7 +12,7 @@ import type { TestType } from "./tests/util/playwright/types";
 
 export function getBaseConfig(testType: TestType) {
 	const WEB_SERVER_URL = "http://127.0.0.1:3001";
-	const baseTimeout = isCI ? 60000 : 20000;
+	const baseTimeout = isCI || shouldMeasureCov ? 60000 : 20000;
 	const timeout = baseTimeout;
 	const config = defineConfig({
 		testMatch: [`${testType}/**/*.test.ts`],
