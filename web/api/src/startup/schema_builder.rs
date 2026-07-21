@@ -1,4 +1,9 @@
-use async_graphql::{EmptySubscription, MergedObject, Schema};
+use actix_web::{HttpRequest, HttpResponse, Result, web::Data};
+use async_graphql::{
+    EmptySubscription, MergedObject, Schema,
+    http::{GraphQLPlaygroundConfig, playground_source},
+};
+use async_graphql_actix_web::{GraphQLRequest, GraphQLResponse};
 
 use crate::common::auth::ApiAuth;
 use crate::providers::Database;
@@ -30,6 +35,32 @@ pub fn build_schema(database: &Database) -> Schema<QueryRoot, MutationRoot, Empt
     )
     .data(database.to_owned())
     .finish()
+}
+
+/// Extracts a `Authorization: Bearer <token>` header value, if present.
+fn extract_bearer(req: &HttpRequest) -> Option<String> {
+    req.headers()
+        .get(actix_web::http::header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+        .map(|token| token.trim().to_string())
+        .filter(|token| !token.is_empty())
+}
+
+pub async fn graphql_request(
+    schema: Data<Schema<QueryRoot, MutationRoot, EmptySubscription>>,
+    req: HttpRequest,
+    gql_req: GraphQLRequest,
+) -> GraphQLResponse {
+    let auth = ApiAuth::new(extract_bearer(&req));
+    schema.execute(gql_req.into_inner().data(auth)).await.into()
+}
+
+pub async fn graphql_playground() -> Result<HttpResponse> {
+    let source = playground_source(GraphQLPlaygroundConfig::new("/"));
+    Ok(HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(source))
 }
 
 #[cfg(test)]
@@ -280,39 +311,4 @@ mod tests {
             .await;
         assert!(!apply.errors.is_empty());
     }
-}
-
-use actix_web::{HttpRequest, HttpResponse, Result, web::Data};
-use async_graphql::{
-    http::{GraphQLPlaygroundConfig, playground_source},
-    // ...
-};
-use async_graphql_actix_web::{GraphQLRequest, GraphQLResponse};
-
-// ...
-
-/// Extracts a `Authorization: Bearer <token>` header value, if present.
-fn extract_bearer(req: &HttpRequest) -> Option<String> {
-    req.headers()
-        .get(actix_web::http::header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.strip_prefix("Bearer "))
-        .map(|token| token.trim().to_string())
-        .filter(|token| !token.is_empty())
-}
-
-pub async fn graphql_request(
-    schema: Data<Schema<QueryRoot, MutationRoot, EmptySubscription>>,
-    req: HttpRequest,
-    gql_req: GraphQLRequest,
-) -> GraphQLResponse {
-    let auth = ApiAuth::new(extract_bearer(&req));
-    schema.execute(gql_req.into_inner().data(auth)).await.into()
-}
-
-pub async fn graphql_playground() -> Result<HttpResponse> {
-    let source = playground_source(GraphQLPlaygroundConfig::new("/"));
-    Ok(HttpResponse::Ok()
-        .content_type("text/html; charset=utf-8")
-        .body(source))
 }
