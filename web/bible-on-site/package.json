@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.348",
+	"version": "0.2.350",
 	"private": true,
 	"license": "MIT",
 	"browserslist": [
@@ -72,7 +72,7 @@
 		"@swc/core": "1.15.46",
 		"@swc/jest": "0.2.39",
 		"@testing-library/dom": "10.4.1",
-		"@testing-library/jest-dom": "6.9.1",
+		"@testing-library/jest-dom": "7.0.0",
 		"@testing-library/react": "16.3.2",
 		"@types/jest": "30.0.0",
 		"@types/leaflet": "1.9.21",
