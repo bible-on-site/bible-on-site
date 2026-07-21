@@ -1,6 +1,6 @@
 {
 	"name": "admin",
-	"version": "0.1.70",
+	"version": "0.1.71",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -56,8 +56,8 @@
 		"jose": "6.2.3",
 		"mysql2": "3.23.1",
 		"nitro": "npm:nitro-nightly@3.0.1-20260320-182900-2218d454",
-		"react": "19.2.7",
-		"react-dom": "19.2.7",
+		"react": "19.2.8",
+		"react-dom": "19.2.8",
 		"uuid": "14.0.1",
 		"vinxi": "0.5.11"
 	},

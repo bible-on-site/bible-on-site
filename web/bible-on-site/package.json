@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.360",
+	"version": "0.2.361",
 	"private": true,
 	"license": "MIT",
 	"browserslist": [
@@ -59,8 +59,8 @@
 		"next": "16.1.7",
 		"nuqs": "2.9.1",
 		"pdf-lib": "1.17.1",
-		"react": "19.2.7",
-		"react-dom": "19.2.7",
+		"react": "19.2.8",
+		"react-dom": "19.2.8",
 		"react-phone-number-input": "3.4.17",
 		"sharp": "0.35.3",
 		"sunrise-sunset-js": "3.2.0",
@@ -86,7 +86,7 @@
 		"jest-environment-jsdom": "30.4.1",
 		"jest-junit": "17.0.0",
 		"lighthouse": "13.4.1",
-		"monocart-reporter": "2.12.2",
+		"monocart-reporter": "2.12.3",
 		"picomatch": "4.0.5",
 		"postcss": "8.5.21",
 		"sass": "1.101.3",
