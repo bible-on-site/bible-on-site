@@ -1,4 +1,10 @@
 import { expect, test } from "../../util/playwright/test-fixture";
+import {
+	isCI,
+	shouldMeasureCov,
+} from "../../../../shared/tests-util/environment.mjs";
+
+const bookMountTimeoutMs = isCI || shouldMeasureCov ? 60_000 : 15_000;
 
 /**
  * E2E tests for book-view URL navigation.
@@ -31,7 +37,7 @@ test.describe("Book view URL navigation", () => {
 		await expect(overlay).toBeVisible({ timeout: 15_000 });
 
 		const bookWrapper = overlay.locator('[class*="bookWrapper"]');
-		await expect(bookWrapper).toBeVisible({ timeout: 15_000 });
+		await expect(bookWrapper).toBeVisible({ timeout: bookMountTimeoutMs });
 
 		const nextButton = page.locator('[aria-label="הדף הבא"]');
 		if (await nextButton.isVisible()) {
@@ -77,7 +83,7 @@ test.describe("Book view URL navigation", () => {
 		await expect(overlay).toBeVisible({ timeout: 15_000 });
 
 		const bookWrapper = overlay.locator('[class*="bookWrapper"]');
-		await expect(bookWrapper).toBeVisible({ timeout: 15_000 });
+		await expect(bookWrapper).toBeVisible({ timeout: bookMountTimeoutMs });
 	});
 
 	test("book opens and renders from slug URL with ?book (requires DB)", async ({
@@ -114,6 +120,6 @@ test.describe("Book view URL navigation", () => {
 		await expect(overlay).toBeVisible({ timeout: 15_000 });
 
 		const bookWrapper = overlay.locator('[class*="bookWrapper"]');
-		await expect(bookWrapper).toBeVisible({ timeout: 15_000 });
+		await expect(bookWrapper).toBeVisible({ timeout: bookMountTimeoutMs });
 	});
 });

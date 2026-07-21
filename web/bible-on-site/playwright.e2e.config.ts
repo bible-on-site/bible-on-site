@@ -25,5 +25,5 @@ export default defineConfig({
 	// fails every attempt, and a trace is captured on first retry (base config).
 	// Locally we keep 0 retries to surface flakes during development.
 	retries: isCI ? 2 : 0,
-	workers: 4,
+	workers: shouldMeasureCov ? 1 : 4,
 });
