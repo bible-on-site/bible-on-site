@@ -106,6 +106,55 @@ describe("tanahpedia family api", () => {
 		expect(executeMock).toHaveBeenCalledTimes(3);
 	});
 
+	it("creates a person node with biographical fields and roles", async () => {
+		queryOneMock
+			.mockResolvedValueOnce({ id: "name-type-main" })
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(null);
+		executeMock.mockResolvedValue(undefined);
+
+		await createFamilyPersonNode({
+			data: {
+				displayName: "Moses",
+				birthDate: 100,
+				deathDate: 200,
+				deathCause: "old age",
+				birthPlaceId: "place-1",
+				isProphet: true,
+				isKing: true,
+			},
+		});
+
+		expect(executeMock).toHaveBeenCalledWith(
+			expect.stringContaining("tanahpedia_person_birth_date"),
+			expect.arrayContaining([100]),
+		);
+		expect(executeMock).toHaveBeenCalledWith(
+			expect.stringContaining("tanahpedia_person_death_date"),
+			expect.arrayContaining([200]),
+		);
+		expect(executeMock).toHaveBeenCalledWith(
+			expect.stringContaining("tanahpedia_person_death_cause"),
+			expect.arrayContaining(["old age"]),
+		);
+		expect(executeMock).toHaveBeenCalledWith(
+			expect.stringContaining("tanahpedia_person_birth_place"),
+			expect.arrayContaining(["place-1"]),
+		);
+		expect(executeMock).toHaveBeenCalledWith(
+			expect.stringContaining("tanahpedia_person_role_prophet"),
+			expect.any(Array),
+		);
+		expect(executeMock).toHaveBeenCalledWith(
+			expect.stringContaining("tanahpedia_person_role_king"),
+			expect.any(Array),
+		);
+	});
+
 	it("creates parent-child link with lookup ids", async () => {
 		queryOneMock
 			.mockResolvedValueOnce({ id: "rel-bio" })
@@ -482,6 +531,79 @@ describe("tanahpedia family api", () => {
 			);
 		});
 
+		it("updates existing biographical singleton rows", async () => {
+			queryOneMock
+				.mockResolvedValueOnce({ id: "person-1" })
+				.mockResolvedValueOnce({ id: "birth-1" })
+				.mockResolvedValueOnce({ id: "death-1" })
+				.mockResolvedValueOnce({ id: "cause-1" })
+				.mockResolvedValueOnce({ id: "place-link-1" });
+			executeMock.mockResolvedValue(undefined);
+
+			await updateFamilyPersonNode({
+				data: {
+					entityId: "entity-1",
+					birthDate: 101,
+					deathDate: 202,
+					deathCause: "battle",
+					birthPlaceId: "place-2",
+				},
+			});
+
+			expect(executeMock).toHaveBeenCalledWith(
+				"UPDATE tanahpedia_person_birth_date SET birth_date = ? WHERE id = ?",
+				[101, "birth-1"],
+			);
+			expect(executeMock).toHaveBeenCalledWith(
+				"UPDATE tanahpedia_person_death_date SET death_date = ? WHERE id = ?",
+				[202, "death-1"],
+			);
+			expect(executeMock).toHaveBeenCalledWith(
+				"UPDATE tanahpedia_person_death_cause SET death_cause = ? WHERE id = ?",
+				["battle", "cause-1"],
+			);
+			expect(executeMock).toHaveBeenCalledWith(
+				"UPDATE tanahpedia_person_birth_place SET place_id = ? WHERE id = ?",
+				["place-2", "place-link-1"],
+			);
+		});
+
+		it("clears death date and birth place singleton rows", async () => {
+			queryOneMock.mockResolvedValueOnce({ id: "person-1" });
+			executeMock.mockResolvedValue(undefined);
+
+			await updateFamilyPersonNode({
+				data: {
+					entityId: "entity-1",
+					deathDate: null,
+					birthPlaceId: null,
+				},
+			});
+
+			expect(executeMock).toHaveBeenCalledWith(
+				"DELETE FROM tanahpedia_person_death_date WHERE person_id = ?",
+				["person-1"],
+			);
+			expect(executeMock).toHaveBeenCalledWith(
+				"DELETE FROM tanahpedia_person_birth_place WHERE person_id = ?",
+				["person-1"],
+			);
+		});
+
+		it("leaves existing role rows in place when enabling roles", async () => {
+			queryOneMock
+				.mockResolvedValueOnce({ id: "person-1" })
+				.mockResolvedValueOnce({ id: "prophet-role-1" })
+				.mockResolvedValueOnce({ id: "king-role-1" });
+			executeMock.mockResolvedValue(undefined);
+
+			await updateFamilyPersonNode({
+				data: { entityId: "entity-1", isProphet: true, isKing: true },
+			});
+
+			expect(executeMock).not.toHaveBeenCalled();
+		});
+
 		it("throws when person is not found while updating biographical fields", async () => {
 			queryOneMock.mockResolvedValueOnce(null);
 
@@ -540,6 +662,22 @@ describe("tanahpedia family api", () => {
 				deleteFamilyPersonNode({ data: { entityId: "missing" } }),
 			).rejects.toThrow("Person not found for entity: missing");
 			expect(executeMock).not.toHaveBeenCalled();
+		});
+
+		it("throws when the entity delete affects no rows", async () => {
+			queryOneMock.mockResolvedValueOnce({ id: "person-1" });
+			executeMock
+				.mockResolvedValueOnce({ affectedRows: 1 })
+				.mockResolvedValueOnce({ affectedRows: 1 })
+				.mockResolvedValueOnce({ affectedRows: 1 })
+				.mockResolvedValueOnce({ affectedRows: 1 })
+				.mockResolvedValueOnce({ affectedRows: 1 })
+				.mockResolvedValueOnce({ affectedRows: 1 })
+				.mockResolvedValueOnce({ affectedRows: 0 });
+
+			await expect(
+				deleteFamilyPersonNode({ data: { entityId: "missing-entity" } }),
+			).rejects.toThrow("Person entity not found: missing-entity");
 		});
 	});
 
