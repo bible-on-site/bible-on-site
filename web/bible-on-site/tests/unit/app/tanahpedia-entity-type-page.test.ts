@@ -149,6 +149,20 @@ describe("tanahpedia/[entityType] page", () => {
 			});
 		});
 
+		it("ignores invalid role and animal filters in metadata", async () => {
+			const personResult = await generateMetadata({
+				params: Promise.resolve({ entityType: "person" }),
+				searchParams: Promise.resolve({ role: "judge" }),
+			});
+			const animalResult = await generateMetadata({
+				params: Promise.resolve({ entityType: "animal" }),
+				searchParams: Promise.resolve({ kind: "dragon", purity: "unknown" }),
+			});
+
+			expect(personResult.title).toBe("אישים | תנכפדיה");
+			expect(animalResult.title).toBe("בעלי חיים | תנכפדיה");
+		});
+
 		it("returns not found for invalid entity type", async () => {
 			const result = await generateMetadata({
 				params: Promise.resolve({ entityType: "invalid" }),
@@ -168,17 +182,35 @@ describe("tanahpedia/[entityType] page", () => {
 					entityType: "PERSON",
 					entityId: "entity-1",
 					entityName: "משה רבנו",
-					linkedEntries: [],
+					linkedEntries: [
+						{
+							id: "entry-1",
+							uniqueName: "moshe",
+							title: "משה רבנו",
+						},
+					],
 				},
 			]);
-			mockGetCategoryHomepage.mockResolvedValue(null);
+			mockGetCategoryHomepage.mockResolvedValue({
+				id: "homepage-person",
+				entityType: "PERSON",
+				layoutType: "LIST",
+				config: null,
+				content: "<p>Intro content</p>",
+				updatedAt: "2026-01-01",
+			});
 
 			const result = await EntityTypePage({
 				params: Promise.resolve({ entityType: "person" }),
 				searchParams: Promise.resolve({}),
 			});
 
-			expect(result).toBeDefined();
+			render(result as ReactElement);
+			expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+				"אישים",
+			);
+			expect(screen.getByText("Intro content")).toBeInTheDocument();
+			expect(screen.getByText(/1/)).toBeInTheDocument();
 		});
 
 		it("uses role-specific entity loading when a valid person role is requested", async () => {

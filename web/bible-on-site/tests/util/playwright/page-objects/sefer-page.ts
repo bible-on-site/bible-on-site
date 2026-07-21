@@ -1,5 +1,11 @@
 import type { Page } from "@playwright/test";
 import { expect } from "@playwright/test";
+import {
+	isCI,
+	shouldMeasureCov,
+} from "../../../../../shared/tests-util/environment.mjs";
+
+const flipBookMountTimeoutMs = isCI || shouldMeasureCov ? 60_000 : 20_000;
 
 /**
  * Page Object Model for Sefer view functionality
@@ -68,8 +74,12 @@ export class SeferPage {
 		// failure if it never mounts), then for it to lay out, with a budget sized
 		// to the worst-case mount rather than the typical one.
 		const bookWrapper = seferOverlay.locator('[class*="bookWrapper"]');
-		await expect(bookWrapper).toBeAttached({ timeout: 20_000 });
-		await expect(bookWrapper).toBeVisible({ timeout: 20_000 });
+		await expect(bookWrapper).toBeAttached({
+			timeout: flipBookMountTimeoutMs,
+		});
+		await expect(bookWrapper).toBeVisible({
+			timeout: flipBookMountTimeoutMs,
+		});
 	}
 
 	/**
