@@ -7,6 +7,7 @@ import {
 	getLogoutUrl,
 	parseCookie,
 	verifyIdToken,
+	verifyServiceAccessToken,
 } from "./server/auth";
 
 const SKIP_AUTH = process.env.SKIP_AUTH === "true";
@@ -60,6 +61,16 @@ export default createServerEntry({
 
 		if (url.pathname === "/auth/logout") {
 			return handleLogout(origin);
+		}
+
+		// M2M path: automated scripts authenticate with a Cognito client_credentials
+		// access token instead of the browser cookie session. Purely additive - falls
+		// through to the existing cookie check below when absent/invalid.
+		const authHeader = firstHeaderValue(request.headers.get("authorization"));
+		const bearerMatch = authHeader?.match(/^Bearer\s+(.+)$/i);
+		const bearerToken = bearerMatch?.[1]?.trim();
+		if (bearerToken && (await verifyServiceAccessToken(bearerToken))) {
+			return handler.fetch(request);
 		}
 
 		const cookieHeader = request.headers.get("cookie") || "";

@@ -17,6 +17,8 @@ export const FAMILY_UNION_TYPES = [
 
 export const FAMILY_UNION_END_REASONS = ["DEATH", "DIVORCE"] as const;
 
+export const FAMILY_NAME_TYPES = ["ADDITIONAL", "NICKNAME"] as const;
+
 export type FamilyParentChildRelationshipType =
 	(typeof FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES)[number];
 
@@ -26,20 +28,56 @@ export type FamilyUnionType = (typeof FAMILY_UNION_TYPES)[number];
 
 export type FamilyUnionEndReason = (typeof FAMILY_UNION_END_REASONS)[number];
 
+export type FamilyNameType = (typeof FAMILY_NAME_TYPES)[number];
+
 export interface CreateFamilyPersonInput {
 	displayName: string;
 	sex?: "MALE" | "FEMALE" | "UNKNOWN" | null;
 	linkToEntryId?: string | null;
+	birthDate?: number | null;
+	deathDate?: number | null;
+	deathCause?: string | null;
+	birthPlaceId?: string | null;
+	isProphet?: boolean;
+	isKing?: boolean;
 }
 
 export interface UpdateFamilyPersonInput {
 	entityId: string;
 	displayName?: string;
 	sex?: "MALE" | "FEMALE" | "UNKNOWN" | null;
+	birthDate?: number | null;
+	deathDate?: number | null;
+	deathCause?: string | null;
+	birthPlaceId?: string | null;
+	isProphet?: boolean;
+	isKing?: boolean;
 }
 
 export interface DeleteFamilyPersonInput {
 	entityId: string;
+}
+
+export interface CreatePersonNameInput {
+	personId: string;
+	name: string;
+	nameType: FamilyNameType;
+	altGroupId?: string | null;
+	giverPersonId?: string | null;
+	isGodGiven?: boolean;
+}
+
+export interface UpdatePersonNameInput {
+	id: string;
+	name?: string;
+	nameType?: FamilyNameType;
+	altGroupId?: string | null;
+	giverPersonId?: string | null;
+	isGodGiven?: boolean;
+}
+
+export interface DeletePersonNameInput {
+	id: string;
 }
 
 export interface CreateParentChildLinkInput {
@@ -131,6 +169,18 @@ export const FAMILY_API_SPEC = {
 		},
 		deleteUnionLink: {
 			input: "DeleteUnionLinkInput",
+			output: "{ id }",
+		},
+		createPersonName: {
+			input: "CreatePersonNameInput",
+			output: "{ id }",
+		},
+		updatePersonName: {
+			input: "UpdatePersonNameInput",
+			output: "{ id }",
+		},
+		deletePersonName: {
+			input: "DeletePersonNameInput",
 			output: "{ id }",
 		},
 	},
