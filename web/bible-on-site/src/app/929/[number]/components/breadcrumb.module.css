@@ -4,9 +4,12 @@
   display: grid;
   align-items: center;
 }
-/*
+
 .container {
-} */
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
 
 .breadcrumb {
   list-style: none;
@@ -14,10 +17,16 @@
   margin: 0 18px 0 0;
   font-size: 14px;
   color: #555;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .breadcrumb li {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
 }
 
 .breadcrumb > li:not(:last-child):after {
@@ -156,11 +165,30 @@
   font-size: 9px;
   margin-right: 4px;
   color: #666;
-  transition: transform 0.2s ease;
+  transition: transform 0.2s ease, margin 0.2s ease;
 }
 
 .drop-container:hover .small {
   transform: translateY(1px);
+}
+
+@media (max-width: 480px) {
+  .breadcrumb {
+    font-size: 12px;
+    margin: 0 8px 0 0;
+  }
+
+  .breadcrumb > li:not(:last-child):after {
+    margin: 0 4px;
+  }
+
+  .glyphicon-triangle-bottom::before {
+    font-size: 8px;
+  }
+
+  .small {
+    margin-right: 2px;
+  }
 }
 
 .perek-grid {
