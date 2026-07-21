@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.339",
+	"version": "0.2.347",
 	"private": true,
 	"license": "MIT",
 	"browserslist": [
@@ -44,7 +44,7 @@
 		"node": ">=24.11.1 <24.12.0"
 	},
 	"dependencies": {
-		"@aws-sdk/client-lambda": "3.1090.0",
+		"@aws-sdk/client-lambda": "3.1091.0",
 		"@hebcal/core": "6.8.0",
 		"@pdf-lib/fontkit": "1.1.1",
 		"autoprefixer": "10.5.4",
@@ -85,11 +85,11 @@
 		"jest": "30.4.2",
 		"jest-environment-jsdom": "30.4.1",
 		"jest-junit": "17.0.0",
-		"lighthouse": "13.4.0",
+		"lighthouse": "13.4.1",
 		"monocart-reporter": "2.12.2",
 		"picomatch": "4.0.5",
 		"postcss": "8.5.20",
-		"sass": "1.101.0",
+		"sass": "1.101.3",
 		"shx": "0.4.0",
 		"swc-plugin-coverage-instrument": "0.0.32",
 		"ts-jest": "29.4.11",

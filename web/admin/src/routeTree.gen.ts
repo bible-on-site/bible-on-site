@@ -9,25 +9,20 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as TanahpediaRouteImport } from './routes/tanahpedia'
-import { Route as RabbisRouteImport } from './routes/rabbis'
-import { Route as ArticlesRouteImport } from './routes/articles'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as TanahpediaPlacesRouteImport } from './routes/tanahpedia.places'
-import { Route as TanahpediaPersonsRouteImport } from './routes/tanahpedia.persons'
-import { Route as RabbisIdRouteImport } from './routes/rabbis.$id'
+import { Route as ArticlesRouteImport } from './routes/articles'
+import { Route as RabbisRouteImport } from './routes/rabbis'
+import { Route as TanahpediaRouteImport } from './routes/tanahpedia'
 import { Route as ArticlesIdRouteImport } from './routes/articles.$id'
-import { Route as TanahpediaEntriesIdRouteImport } from './routes/tanahpedia.entries.$id'
+import { Route as RabbisIdRouteImport } from './routes/rabbis.$id'
+import { Route as TanahpediaPersonsRouteImport } from './routes/tanahpedia.persons'
+import { Route as TanahpediaPlacesRouteImport } from './routes/tanahpedia.places'
 import { Route as ArticlesPerekPerekIdRouteImport } from './routes/articles.perek.$perekId'
+import { Route as TanahpediaEntriesIdRouteImport } from './routes/tanahpedia.entries.$id'
 
-const TanahpediaRoute = TanahpediaRouteImport.update({
-  id: '/tanahpedia',
-  path: '/tanahpedia',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RabbisRoute = RabbisRouteImport.update({
-  id: '/rabbis',
-  path: '/rabbis',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ArticlesRoute = ArticlesRouteImport.update({
@@ -35,40 +30,45 @@ const ArticlesRoute = ArticlesRouteImport.update({
   path: '/articles',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const RabbisRoute = RabbisRouteImport.update({
+  id: '/rabbis',
+  path: '/rabbis',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TanahpediaPlacesRoute = TanahpediaPlacesRouteImport.update({
-  id: '/places',
-  path: '/places',
-  getParentRoute: () => TanahpediaRoute,
-} as any)
-const TanahpediaPersonsRoute = TanahpediaPersonsRouteImport.update({
-  id: '/persons',
-  path: '/persons',
-  getParentRoute: () => TanahpediaRoute,
-} as any)
-const RabbisIdRoute = RabbisIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => RabbisRoute,
+const TanahpediaRoute = TanahpediaRouteImport.update({
+  id: '/tanahpedia',
+  path: '/tanahpedia',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ArticlesIdRoute = ArticlesIdRouteImport.update({
   id: '/$id',
   path: '/$id',
   getParentRoute: () => ArticlesRoute,
 } as any)
-const TanahpediaEntriesIdRoute = TanahpediaEntriesIdRouteImport.update({
-  id: '/entries/$id',
-  path: '/entries/$id',
+const RabbisIdRoute = RabbisIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => RabbisRoute,
+} as any)
+const TanahpediaPersonsRoute = TanahpediaPersonsRouteImport.update({
+  id: '/persons',
+  path: '/persons',
+  getParentRoute: () => TanahpediaRoute,
+} as any)
+const TanahpediaPlacesRoute = TanahpediaPlacesRouteImport.update({
+  id: '/places',
+  path: '/places',
   getParentRoute: () => TanahpediaRoute,
 } as any)
 const ArticlesPerekPerekIdRoute = ArticlesPerekPerekIdRouteImport.update({
   id: '/perek/$perekId',
   path: '/perek/$perekId',
   getParentRoute: () => ArticlesRoute,
+} as any)
+const TanahpediaEntriesIdRoute = TanahpediaEntriesIdRouteImport.update({
+  id: '/entries/$id',
+  path: '/entries/$id',
+  getParentRoute: () => TanahpediaRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -156,18 +156,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/tanahpedia': {
-      id: '/tanahpedia'
-      path: '/tanahpedia'
-      fullPath: '/tanahpedia'
-      preLoaderRoute: typeof TanahpediaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/rabbis': {
-      id: '/rabbis'
-      path: '/rabbis'
-      fullPath: '/rabbis'
-      preLoaderRoute: typeof RabbisRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/articles': {
@@ -177,33 +170,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ArticlesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/rabbis': {
+      id: '/rabbis'
+      path: '/rabbis'
+      fullPath: '/rabbis'
+      preLoaderRoute: typeof RabbisRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/tanahpedia/places': {
-      id: '/tanahpedia/places'
-      path: '/places'
-      fullPath: '/tanahpedia/places'
-      preLoaderRoute: typeof TanahpediaPlacesRouteImport
-      parentRoute: typeof TanahpediaRoute
-    }
-    '/tanahpedia/persons': {
-      id: '/tanahpedia/persons'
-      path: '/persons'
-      fullPath: '/tanahpedia/persons'
-      preLoaderRoute: typeof TanahpediaPersonsRouteImport
-      parentRoute: typeof TanahpediaRoute
-    }
-    '/rabbis/$id': {
-      id: '/rabbis/$id'
-      path: '/$id'
-      fullPath: '/rabbis/$id'
-      preLoaderRoute: typeof RabbisIdRouteImport
-      parentRoute: typeof RabbisRoute
+    '/tanahpedia': {
+      id: '/tanahpedia'
+      path: '/tanahpedia'
+      fullPath: '/tanahpedia'
+      preLoaderRoute: typeof TanahpediaRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/articles/$id': {
       id: '/articles/$id'
@@ -212,11 +191,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ArticlesIdRouteImport
       parentRoute: typeof ArticlesRoute
     }
-    '/tanahpedia/entries/$id': {
-      id: '/tanahpedia/entries/$id'
-      path: '/entries/$id'
-      fullPath: '/tanahpedia/entries/$id'
-      preLoaderRoute: typeof TanahpediaEntriesIdRouteImport
+    '/rabbis/$id': {
+      id: '/rabbis/$id'
+      path: '/$id'
+      fullPath: '/rabbis/$id'
+      preLoaderRoute: typeof RabbisIdRouteImport
+      parentRoute: typeof RabbisRoute
+    }
+    '/tanahpedia/persons': {
+      id: '/tanahpedia/persons'
+      path: '/persons'
+      fullPath: '/tanahpedia/persons'
+      preLoaderRoute: typeof TanahpediaPersonsRouteImport
+      parentRoute: typeof TanahpediaRoute
+    }
+    '/tanahpedia/places': {
+      id: '/tanahpedia/places'
+      path: '/places'
+      fullPath: '/tanahpedia/places'
+      preLoaderRoute: typeof TanahpediaPlacesRouteImport
       parentRoute: typeof TanahpediaRoute
     }
     '/articles/perek/$perekId': {
@@ -225,6 +218,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/articles/perek/$perekId'
       preLoaderRoute: typeof ArticlesPerekPerekIdRouteImport
       parentRoute: typeof ArticlesRoute
+    }
+    '/tanahpedia/entries/$id': {
+      id: '/tanahpedia/entries/$id'
+      path: '/entries/$id'
+      fullPath: '/tanahpedia/entries/$id'
+      preLoaderRoute: typeof TanahpediaEntriesIdRouteImport
+      parentRoute: typeof TanahpediaRoute
     }
   }
 }
