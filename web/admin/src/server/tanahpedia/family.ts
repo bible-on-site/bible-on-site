@@ -65,7 +65,7 @@ async function getGodId(): Promise<string> {
 
 /**
  * Upserts or deletes a person's single-row-per-person biographical fact
- * (sex, birth_date, death_date, death_cause, birth_place). Passing `null`
+ * (birth_date, death_date, death_cause, birth_place). Passing `null`
  * deletes the existing row (if any); passing a value inserts or updates it.
  */
 async function upsertPersonSingleton(params: {
@@ -74,7 +74,7 @@ async function upsertPersonSingleton(params: {
 		| "tanahpedia_person_death_date"
 		| "tanahpedia_person_death_cause"
 		| "tanahpedia_person_birth_place";
-	valueColumn: string;
+	valueColumn: "birth_date" | "death_date" | "death_cause" | "place_id";
 	personId: string;
 	value: string | number | null;
 }): Promise<void> {
@@ -743,6 +743,9 @@ export const updatePersonName = createServerFn({ method: "POST" })
 		}
 
 		if (data.nameType !== undefined) {
+			if (typeof data.nameType !== "string" || !data.nameType.trim()) {
+				throw new Error("nameType is required");
+			}
 			const nameType = data.nameType.trim().toUpperCase();
 			if (!isOneOf(nameType, FAMILY_NAME_TYPES)) {
 				throw new Error("Invalid nameType");

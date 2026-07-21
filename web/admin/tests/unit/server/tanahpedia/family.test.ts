@@ -1104,6 +1104,18 @@ describe("tanahpedia family api", () => {
 			);
 		});
 
+		it("rejects a non-string nameType", async () => {
+			await expect(
+				updatePersonName({
+					data: {
+						id: "name-1",
+						nameType: null as unknown as "NICKNAME",
+					},
+				}),
+			).rejects.toThrow("nameType is required");
+			expect(executeMock).not.toHaveBeenCalled();
+		});
+
 		it("replaces the human giver and clears a stale God-giver row", async () => {
 			queryOneMock.mockResolvedValueOnce({ id: "name-1" });
 			executeMock.mockResolvedValue(undefined);
