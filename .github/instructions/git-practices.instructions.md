@@ -97,3 +97,24 @@ If it exists: check if merged; if merged, use a new branch name; if not, fetch a
 
 - Use a new branch per feature/fix. PR is created when publishing the branch.
 - Only @DoradSoft can merge unless explicitly delegated.
+
+## Review Comment Triage (MANDATORY before every merge)
+
+**Never merge or enqueue a PR (`gh pr merge`, enabling auto-merge, or adding to the merge queue) without first triaging every review comment — from GitHub Copilot, Codacy, human reviewers, or any other reviewer — even if CI/coverage/version gates are all green.**
+
+1. Fetch all reviews, line comments, and general PR conversation comments before merging/re-merging:
+   ```bash
+   gh api repos/<owner>/<repo>/pulls/<n>/reviews --paginate
+   gh api repos/<owner>/<repo>/pulls/<n>/comments --paginate
+   gh api repos/<owner>/<repo>/issues/<n>/comments --paginate
+   ```
+2. For every distinct comment, explicitly decide one of:
+   - **Embrace**: the comment is correct and should block/improve this PR — fix it directly on the branch, re-validate (tests/lint/build), commit, and push.
+   - **Defer**: the comment is valid but out of scope for this PR — file a tracked GitHub issue per [github-issues.instructions.md](github-issues.instructions.md) (Priority + Difficulty + Type + Component labels, added to the relevant project board) and reference it in the triage summary.
+   - **Dismiss**: the comment is invalid or not applicable — state the reasoning explicitly (based on correctness, severity, and priority).
+3. Before deciding, re-read the current on-disk state of any flagged file — a comment may already be resolved by a later commit.
+4. Post a triage summary as a PR comment (`gh pr comment <n> --body-file <file>`) listing every comment's disposition, then delete any local scratch file used to draft it — the PR comment is the durable record, not a repo file.
+5. Only after every comment has been triaged (and any embraced fixes pushed and green) may the PR be merged or re-enqueued.
+
+This applies to every review round — if new comments appear after a later push (e.g. from Renovate/master-merge churn), repeat the triage before merging again.
+
