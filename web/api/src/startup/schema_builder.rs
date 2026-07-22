@@ -12,6 +12,7 @@ use crate::resolvers::authors_resolver;
 use crate::resolvers::perakim_resolver;
 use crate::resolvers::sefarim_resolver;
 use crate::resolvers::starter_resolver;
+use crate::resolvers::tanahpedia_family_resolver;
 use crate::resolvers::tanahpedia_revisions_resolver;
 
 #[derive(MergedObject, Default)]
@@ -21,6 +22,7 @@ pub struct QueryRoot(
     perakim_resolver::PerakimQuery,
     sefarim_resolver::SefarimQuery,
     starter_resolver::StarterQuery,
+    tanahpedia_family_resolver::TanahpediaFamilyQuery,
     tanahpedia_revisions_resolver::TanahpediaRevisionsQuery,
 );
 
