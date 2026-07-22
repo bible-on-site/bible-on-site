@@ -15,10 +15,14 @@ Canonical behavior and contracts are defined in other docs. If anything here con
 - Supported remotely in production GraphQL API:
   - `submitEntryRevision`
   - `applyEntryRevision`
+  - `tanahpediaFindPersons` (read-only, find a `PERSON` entity by exact display name)
+  - `tanahpediaPersonUnions` (read-only, list a person's union links with the other party
+    resolved and the `sourceCitation` needed to review/correct a link)
 - Not exposed remotely in `web/api` yet:
   - `createFamilyPersonNode`
   - `createParentChildLink`
   - `createUnionLink`
+  - `updateUnionLink` (and the rest of the family graph CRUD)
 
 The family graph mutations above currently live in the admin app flow and are not documented as public Rust GraphQL mutations in the canonical API docs yet.
 

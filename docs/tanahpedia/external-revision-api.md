@@ -87,6 +87,45 @@ query Pending {
 Both `status` (`PENDING` / `APPLIED` / `APPROVED` / `REJECTED`) and `entryId` are optional filters;
 results are returned newest-first.
 
+## Query — family graph lookups (find persons / list unions)
+
+Read-only queries that let an authorized client discover the internal ids needed to review
+or correct family-graph data (e.g. a union's `sourceCitation`) without direct DB access.
+**Authorized only** — same bearer token as the mutations above.
+
+```graphql
+query FindPersons($name: String!) {
+  tanahpediaFindPersons(name: $name) {
+    entityId
+    personId
+    displayName
+  }
+}
+```
+
+Returns every `PERSON` entity whose display name exactly matches `name` (Torah names are
+frequently shared, so more than one match is possible — disambiguate using `entityId`).
+
+```graphql
+query PersonUnions($personId: String!) {
+  tanahpediaPersonUnions(personId: $personId) {
+    id
+    unionType
+    unionOrder
+    sourceCitation
+    person1Id
+    person2Id
+    otherPersonId
+    otherDisplayName
+  }
+}
+```
+
+Lists every union (marriage/pilegesh/betrothal/etc.) row involving `personId`, resolving the
+other party's id and display name so the union can be identified without a direct join.
+These queries only read `tanahpedia_person`, `tanahpedia_entity`, `tanahpedia_person_union`,
+and `tanahpedia_lookup_union_type` — they do not expose or modify any other table.
+
 ## Storage
 
 Table `tanahpedia_entry_revision` (see [tanachpedia.dbml](./tanachpedia.dbml)) — a staging
