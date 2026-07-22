@@ -2,6 +2,8 @@ pub mod animal;
 pub mod astronomical_object;
 pub mod astronomical_object_creation_day;
 pub mod category_homepage;
+pub mod entity;
+pub mod entity_tanah_source;
 pub mod entry;
 pub mod entry_entity;
 pub mod entry_revision;

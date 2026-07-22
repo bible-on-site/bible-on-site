@@ -5,7 +5,7 @@ use entities::perek::Model;
 
 /// Convert a number to Hebrew letters (gematry) with gershayim.
 /// Supports numbers 1-999.
-fn number_to_hebrew(n: i32) -> String {
+pub(crate) fn number_to_hebrew(n: i32) -> String {
     if n <= 0 || n > 999 {
         return n.to_string();
     }
