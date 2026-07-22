@@ -16,15 +16,23 @@ Canonical behavior and contracts are defined in other docs. If anything here con
   - `submitEntryRevision`
   - `applyEntryRevision`
   - `tanahpediaFindPersons` (read-only, find a `PERSON` entity by exact display name)
+  - `tanahpediaFindEntities` (read-only, find any entity type by exact display name)
+  - `tanahpediaEntityTanahSources` (read-only, an entity's own direct Tanah citations)
   - `tanahpediaPersonUnions` (read-only, list a person's union links with the other party
     resolved and the `sourceCitation` needed to review/correct a link)
+  - `tanahpediaPersonParentChild` (read-only, list a person's parent/child links with the
+    other party resolved and the `sourceCitation` needed to review/correct a link)
+  - `tanahpediaPersonDetails` (read-only, a person's full name/sex/birth/death/citation detail)
 - Not exposed remotely in `web/api` yet:
   - `createFamilyPersonNode`
   - `createParentChildLink`
   - `createUnionLink`
   - `updateUnionLink` (and the rest of the family graph CRUD)
 
-The family graph mutations above currently live in the admin app flow and are not documented as public Rust GraphQL mutations in the canonical API docs yet.
+The family graph mutations above currently live in the admin app flow and are not documented as public Rust GraphQL mutations in the canonical API docs yet. Deeply-typed reads for
+non-person entity domains (place coordinates, event date ranges, war participants, etc.) are
+also not yet exposed — see [external-revision-api.md](./external-revision-api.md) for the
+current scope of the family-graph read queries.
 
 ## Endpoint and auth
 
