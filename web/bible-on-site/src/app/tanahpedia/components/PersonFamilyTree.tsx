@@ -316,10 +316,23 @@ function citationRibbonBlock(text: string | null) {
 	return (
 		<div className={styles.relationRibbonCitation}>
 			{lines.map((line) => (
-				<div
-					key={line}
-					className={styles.relationRibbonCitationLine}
-				>
+				<div key={line} className={styles.relationRibbonCitationLine}>
+					{renderFamilyTreeCitationLine(line.trim(), styles.citationTanachLink)}
+				</div>
+			))}
+		</div>
+	);
+}
+
+/** מקור האדם עצמו (למשל פסוק הלידה) — מוצג בתוך משבצת הכרטיס, מתחת לשם */
+function cardCitationBlock(text: string | null) {
+	if (!text?.trim()) return null;
+	const lines = text.split("\n").filter((l) => l.trim());
+	if (lines.length === 0) return null;
+	return (
+		<div className={styles.cardCitation}>
+			{lines.map((line) => (
+				<div key={line} className={styles.cardCitationLine}>
 					{renderFamilyTreeCitationLine(line.trim(), styles.citationTanachLink)}
 				</div>
 			))}
@@ -376,10 +389,10 @@ function ParentCard({ edge }: { edge: PersonFamilyParentEdge }) {
 					{extra}
 				</span>
 			</div>
-			{citationRibbonBlock(edge.sourceCitation)}
 			<div className={styles.card}>
 				<PersonSexMark sex={edge.related.sex} />
 				<PersonNameLink related={edge.related} />
+				{cardCitationBlock(edge.sourceCitation)}
 			</div>
 		</div>
 	);
@@ -387,24 +400,21 @@ function ParentCard({ edge }: { edge: PersonFamilyParentEdge }) {
 
 function ChildCard({ edge }: { edge: PersonFamilyChildEdge }) {
 	const meta = focalChildCardMetaLine(edge);
-	const showRibbon = Boolean(meta || edge.sourceCitation);
 	const face = (
 		<div className={styles.card}>
 			<PersonSexMark sex={edge.related.sex} />
 			<PersonNameLink related={edge.related} />
+			{cardCitationBlock(edge.sourceCitation)}
 		</div>
 	);
-	if (!showRibbon) {
+	if (!meta) {
 		return <div data-testid="family-child-card">{face}</div>;
 	}
 	return (
 		<div className={styles.personCardStack} data-testid="family-child-card">
-			{meta ? (
-				<div className={styles.relationRibbon}>
-					<span className={styles.relationRibbonMain}>{meta}</span>
-				</div>
-			) : null}
-			{citationRibbonBlock(edge.sourceCitation)}
+			<div className={styles.relationRibbon}>
+				<span className={styles.relationRibbonMain}>{meta}</span>
+			</div>
 			{face}
 		</div>
 	);
@@ -438,10 +448,12 @@ function SpouseCard({
 			) : null}
 			<div
 				className={styles.card}
+				data-testid="family-spouse-card"
 				data-matrix-spouse-card={matrixSpouseCardMark ? "" : undefined}
 			>
 				<PersonSexMark sex={edge.related.sex} />
 				<PersonNameLink related={edge.related} />
+				{cardCitationBlock(edge.personSourceCitation)}
 			</div>
 		</div>
 	);
@@ -759,7 +771,10 @@ function PersonFamilyTreeContent({
 			setMatrixMarriageLineYpx(Math.max(8, Math.round(lineCenterY)));
 			setMatrixSpouseMidPx(Math.max(12, Math.round(rowH - lineCenterY + 8)));
 			// Inset the horizontal spouse line to end near the outermost card centers
-			const insetRight = Math.max(4, Math.round(rowRect.width - firstCardCenterX - 4));
+			const insetRight = Math.max(
+				4,
+				Math.round(rowRect.width - firstCardCenterX - 4),
+			);
 			const insetLeft = Math.max(4, Math.round(lastCardCenterX - 4));
 			el.style.setProperty("--matrix-line-inset-left", `${insetLeft}px`);
 			el.style.setProperty("--matrix-line-inset-right", `${insetRight}px`);
@@ -988,58 +1003,58 @@ function PersonFamilyTreeContent({
 													const rowNumber = rowIdx + 1;
 													const rowKey = `${child.related.entityId}-${child.parentRole}-${child.relationshipType}-${child.coParentEntityId ?? "loose"}`;
 													return [
-													...orderedSpouseUnits.map((unit, colIdx) => {
-														const pid = unit.edges[0].related.entityId;
-														const isMatch = child.coParentEntityId === pid;
-														return (
-															<div
-																key={`swim-${pid}-${rowKey}`}
-																className={
-																	isMatch
-																		? styles.jacobSwimlaneCell
-																		: styles.jacobSwimlaneCellEmpty
-																}
-																style={{
-																	gridColumn: colIdx + 1,
-																	gridRow: rowNumber,
-																}}
-															>
-																{isMatch ? <ChildCard edge={child} /> : null}
-															</div>
-														);
-													}),
-													...(showJacobLooseTopCell
-														? [
-																(() => {
-																	const isLoose =
-																		childEdgeCoParentOutsideSpouses(
-																			child,
-																			spousePartnerIdsForSeq,
+														...orderedSpouseUnits.map((unit, colIdx) => {
+															const pid = unit.edges[0].related.entityId;
+															const isMatch = child.coParentEntityId === pid;
+															return (
+																<div
+																	key={`swim-${pid}-${rowKey}`}
+																	className={
+																		isMatch
+																			? styles.jacobSwimlaneCell
+																			: styles.jacobSwimlaneCellEmpty
+																	}
+																	style={{
+																		gridColumn: colIdx + 1,
+																		gridRow: rowNumber,
+																	}}
+																>
+																	{isMatch ? <ChildCard edge={child} /> : null}
+																</div>
+															);
+														}),
+														...(showJacobLooseTopCell
+															? [
+																	(() => {
+																		const isLoose =
+																			childEdgeCoParentOutsideSpouses(
+																				child,
+																				spousePartnerIdsForSeq,
+																			);
+																		return (
+																			<div
+																				key={`swim-loose-${rowKey}`}
+																				className={
+																					isLoose
+																						? styles.jacobSwimlaneCell
+																						: styles.jacobSwimlaneCellEmpty
+																				}
+																				style={{
+																					gridColumn:
+																						orderedSpouseUnits.length + 1,
+																					gridRow: rowNumber,
+																				}}
+																			>
+																				{isLoose ? (
+																					<ChildCard edge={child} />
+																				) : null}
+																			</div>
 																		);
-																	return (
-																		<div
-																			key={`swim-loose-${rowKey}`}
-																			className={
-																				isLoose
-																					? styles.jacobSwimlaneCell
-																					: styles.jacobSwimlaneCellEmpty
-																			}
-																			style={{
-																				gridColumn:
-																					orderedSpouseUnits.length + 1,
-																				gridRow: rowNumber,
-																			}}
-																		>
-																			{isLoose ? (
-																				<ChildCard edge={child} />
-																			) : null}
-																		</div>
-																	);
-															})(),
-														]
-													: []),
+																	})(),
+																]
+															: []),
 													];
-													})}
+												})}
 											</div>
 										</div>
 									) : (

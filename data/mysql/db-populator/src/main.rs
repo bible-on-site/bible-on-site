@@ -54,6 +54,12 @@ struct Cli {
     #[arg(long, default_value = "../tanahpedia_alter_source_citation.sql")]
     tanahpedia_source_citation_upgrade_script: String,
 
+    /// Path to Tanahpedia person-source-citation upgrade SQL file (the related
+    /// person's own citation on a union, distinct from the union's relationship
+    /// citation stored in source_citation)
+    #[arg(long, default_value = "../tanahpedia_alter_person_source_citation.sql")]
+    tanahpedia_person_source_citation_upgrade_script: String,
+
     /// Path to Tanahpedia lookup seed SQL file
     #[arg(long, default_value = "../tanahpedia_seed_data.sql")]
     tanahpedia_seed_script: String,
@@ -297,6 +303,7 @@ async fn main() -> Result<()> {
 struct TanahpediaScripts {
     structure: std::path::PathBuf,
     source_citation_upgrade: std::path::PathBuf,
+    person_source_citation_upgrade: std::path::PathBuf,
     seed: std::path::PathBuf,
     incremental_lookups: std::path::PathBuf,
     legacy: std::path::PathBuf,
@@ -311,6 +318,8 @@ impl TanahpediaScripts {
         Self {
             structure: base_path.join(&cli.tanahpedia_structure_script),
             source_citation_upgrade: base_path.join(&cli.tanahpedia_source_citation_upgrade_script),
+            person_source_citation_upgrade: base_path
+                .join(&cli.tanahpedia_person_source_citation_upgrade_script),
             seed: base_path.join(&cli.tanahpedia_seed_script),
             incremental_lookups: base_path.join(&cli.tanahpedia_incremental_lookups_script),
             legacy: base_path.join(&cli.tanahpedia_legacy_script),
@@ -370,7 +379,8 @@ async fn apply_tanahpedia_safe_upgrades(
     conn: &mut MySqlConnection,
     scripts: &TanahpediaScripts,
 ) -> Result<()> {
-    apply_source_citation_upgrade(conn, &scripts.source_citation_upgrade).await
+    apply_source_citation_upgrade(conn, &scripts.source_citation_upgrade).await?;
+    apply_person_source_citation_upgrade(conn, &scripts.person_source_citation_upgrade).await
 }
 
 async fn apply_tanahpedia_incremental_lookups(
@@ -441,6 +451,20 @@ async fn apply_source_citation_upgrade(
         script_path,
         "tanahpedia_person_parent_child",
         "source_citation",
+        "VARCHAR(400) NULL",
+    )
+    .await
+}
+
+async fn apply_person_source_citation_upgrade(
+    conn: &mut MySqlConnection,
+    script_path: &Path,
+) -> Result<()> {
+    apply_column_add_if_missing(
+        conn,
+        script_path,
+        "tanahpedia_person_union",
+        "person_source_citation",
         "VARCHAR(400) NULL",
     )
     .await
@@ -834,6 +858,12 @@ SELECT 1";
         assert_eq!(
             scripts.source_citation_upgrade,
             PathBuf::from("/repo/data/mysql/db-populator/../tanahpedia_alter_source_citation.sql",),
+        );
+        assert_eq!(
+            scripts.person_source_citation_upgrade,
+            PathBuf::from(
+                "/repo/data/mysql/db-populator/../tanahpedia_alter_person_source_citation.sql",
+            ),
         );
         assert_eq!(
             scripts.incremental_lookups,

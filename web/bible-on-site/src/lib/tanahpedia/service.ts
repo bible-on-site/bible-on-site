@@ -493,6 +493,7 @@ export async function getPersonFamilySummary(
 	const spouseSql = `SELECT u.alt_group_id AS altGroupId, ut.name AS unionType,
 			u.union_order AS unionOrder,
 			u.source_citation AS sourceCitation,
+			u.person_source_citation AS personSourceCitation,
 			uer.name AS unionEndReason,
 			u.start_date AS unionStartDate,
 			u.end_date AS unionEndDate,
@@ -536,53 +537,52 @@ export async function getPersonFamilySummary(
 
 	const [parentRows, childRows, spouseRows, siblingRows, focalBirthRows] =
 		await Promise.all([
-		query<
-			RelatedRow & {
-				altGroupId: string | null;
-				parentRole: string;
-				relationshipType: string;
-				sourceCitation: string | null;
-			}
-		>(parentSql, [personId]),
-		query<
-			RelatedRow & {
-				altGroupId: string | null;
-				parentRole: string;
-				relationshipType: string;
-				sourceCitation: string | null;
-				coParentEntityId: string | null;
-				coParentDisplayName: string | null;
-				coParentUnionOrder: number | null;
-			}
-		>(childSql, [personId, personId, personId]),
-		query<
-			RelatedRow & {
-				altGroupId: string | null;
-				unionType: string;
-				unionOrder: number | null;
-				sourceCitation: string | null;
-				unionEndReason: string | null;
-				unionStartDate: number | null;
-				unionEndDate: number | null;
-				relatedSex: string | null;
-			}
-		>(spouseSql, [personId, personId, personId]),
-		query<
-			RelatedRow & {
-				relatedBirthDate: number | string | null;
-				siblingSourceCitation: string | null;
-			}
-		>(siblingSql, [personId, personId]),
-		query<{ focalBirthDate: number | string | null }>(focalBirthSql, [
-			personId,
-		]),
-	]);
+			query<
+				RelatedRow & {
+					altGroupId: string | null;
+					parentRole: string;
+					relationshipType: string;
+					sourceCitation: string | null;
+				}
+			>(parentSql, [personId]),
+			query<
+				RelatedRow & {
+					altGroupId: string | null;
+					parentRole: string;
+					relationshipType: string;
+					sourceCitation: string | null;
+					coParentEntityId: string | null;
+					coParentDisplayName: string | null;
+					coParentUnionOrder: number | null;
+				}
+			>(childSql, [personId, personId, personId]),
+			query<
+				RelatedRow & {
+					altGroupId: string | null;
+					unionType: string;
+					unionOrder: number | null;
+					sourceCitation: string | null;
+					personSourceCitation: string | null;
+					unionEndReason: string | null;
+					unionStartDate: number | null;
+					unionEndDate: number | null;
+					relatedSex: string | null;
+				}
+			>(spouseSql, [personId, personId, personId]),
+			query<
+				RelatedRow & {
+					relatedBirthDate: number | string | null;
+					siblingSourceCitation: string | null;
+				}
+			>(siblingSql, [personId, personId]),
+			query<{ focalBirthDate: number | string | null }>(focalBirthSql, [
+				personId,
+			]),
+		]);
 
 	const rawFocalBd = focalBirthRows[0]?.focalBirthDate;
 	const focalBirthYyyymmdd =
-		rawFocalBd != null && rawFocalBd !== ""
-			? Number(rawFocalBd)
-			: null;
+		rawFocalBd != null && rawFocalBd !== "" ? Number(rawFocalBd) : null;
 
 	const parents: PersonFamilyParentEdge[] = parentRows.map((r) => ({
 		related: mapRelated(r),
@@ -621,6 +621,7 @@ export async function getPersonFamilySummary(
 		unionOrder: r.unionOrder,
 		altGroupId: r.altGroupId,
 		sourceCitation: r.sourceCitation,
+		personSourceCitation: r.personSourceCitation,
 		unionEndReason: r.unionEndReason,
 		unionStartDate: r.unionStartDate,
 		unionEndDate: r.unionEndDate,
@@ -630,10 +631,10 @@ export async function getPersonFamilySummary(
 	for (const r of siblingRows) {
 		const rel = mapRelated(r);
 		const bd = r.relatedBirthDate;
-		rel.birthDateYyyymmdd =
-			bd != null && bd !== "" ? Number(bd) : null;
+		rel.birthDateYyyymmdd = bd != null && bd !== "" ? Number(bd) : null;
 		const cite =
-			r.siblingSourceCitation != null && String(r.siblingSourceCitation).trim() !== ""
+			r.siblingSourceCitation != null &&
+			String(r.siblingSourceCitation).trim() !== ""
 				? String(r.siblingSourceCitation).trim()
 				: null;
 		const prev = sibDedupe.get(rel.entityId);
@@ -673,15 +674,16 @@ export async function getPersonFamilySummary(
 export async function getCategoryCounts(): Promise<
 	Record<CategoryKey, number>
 > {
-	const [entityRows, roleRows, animalRows, placeRowCountRows] = await Promise.all([
-		query<{ entityType: EntityType; cnt: number }>(
-			`SELECT e.entity_type AS entityType, COUNT(DISTINCT ee.entry_id) AS cnt
+	const [entityRows, roleRows, animalRows, placeRowCountRows] =
+		await Promise.all([
+			query<{ entityType: EntityType; cnt: number }>(
+				`SELECT e.entity_type AS entityType, COUNT(DISTINCT ee.entry_id) AS cnt
 			 FROM tanahpedia_entry_entity ee
 			 JOIN tanahpedia_entity e ON e.id = ee.entity_id
 			 GROUP BY e.entity_type`,
-		),
-		query<{ role: string; cnt: number }>(
-			`SELECT 'PROPHET' AS role, COUNT(DISTINCT ee.entry_id) AS cnt
+			),
+			query<{ role: string; cnt: number }>(
+				`SELECT 'PROPHET' AS role, COUNT(DISTINCT ee.entry_id) AS cnt
 			 FROM tanahpedia_person_role_prophet pr
 			 JOIN tanahpedia_person p ON p.id = pr.person_id
 			 JOIN tanahpedia_entry_entity ee ON ee.entity_id = p.entity_id
@@ -690,9 +692,9 @@ export async function getCategoryCounts(): Promise<
 			 FROM tanahpedia_person_role_king pk
 			 JOIN tanahpedia_person p ON p.id = pk.person_id
 			 JOIN tanahpedia_entry_entity ee ON ee.entity_id = p.entity_id`,
-		),
-		query<{ cat: string; cnt: number }>(
-			`SELECT ak.kind AS cat, COUNT(DISTINCT ee.entry_id) AS cnt
+			),
+			query<{ cat: string; cnt: number }>(
+				`SELECT ak.kind AS cat, COUNT(DISTINCT ee.entry_id) AS cnt
 			 FROM tanahpedia_animal_kind ak
 			 JOIN tanahpedia_animal a ON a.id = ak.animal_id
 			 JOIN tanahpedia_entry_entity ee ON ee.entity_id = a.entity_id
@@ -703,9 +705,9 @@ export async function getCategoryCounts(): Promise<
 			 JOIN tanahpedia_animal a ON a.id = ap.animal_id
 			 JOIN tanahpedia_entry_entity ee ON ee.entity_id = a.entity_id
 			 GROUP BY ap.purity`,
-		),
-		query<{ c: number }>("SELECT COUNT(*) AS c FROM tanahpedia_place"),
-	]);
+			),
+			query<{ c: number }>("SELECT COUNT(*) AS c FROM tanahpedia_place"),
+		]);
 	const counts = {} as Record<CategoryKey, number>;
 	for (const et of ENTITY_TYPES) counts[et] = 0;
 	counts.PROPHET = 0;
@@ -717,8 +719,7 @@ export async function getCategoryCounts(): Promise<
 	counts.TAHOR = 0;
 	counts.TAMEH = 0;
 	for (const row of entityRows) counts[row.entityType] = Number(row.cnt);
-	for (const row of roleRows)
-		counts[row.role as CategoryKey] = Number(row.cnt);
+	for (const row of roleRows) counts[row.role as CategoryKey] = Number(row.cnt);
 	for (const row of animalRows)
 		counts[row.cat as CategoryKey] = Number(row.cnt);
 	/* מקומות: אם אין ערך מקושר לישות PLACE אך קיימות שורות ב־tanahpedia_place (דמו / אכלוס חלקי), אל נציג 0 */
