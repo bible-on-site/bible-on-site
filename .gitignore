@@ -20,6 +20,9 @@ test-results/
 # Rust build artifacts
 **/target/
 
+# Python bytecode cache (e.g. from validate_lambda_parser.py)
+__pycache__/
+
 # Raw data files (downloaded/generated locally, except tracked assets)
 app/BibleOnSite/Resources/Raw/*
 !app/BibleOnSite/Resources/Raw/*.sqlite
