@@ -97,6 +97,24 @@
   text-align: center;
 }
 
+/* מקור האדם עצמו (למשל פסוק הלידה), בתוך משבצת הכרטיס מתחת לשם */
+.cardCitation {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.cardCitationLine {
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.cardCitationLine + .cardCitationLine {
+  margin-top: 2px;
+}
+
 /* ז / נ — פינה עליונה ב־inline-start (ב־RTL ימין) */
 .sexMark {
   position: absolute;
