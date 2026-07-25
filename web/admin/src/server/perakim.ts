@@ -25,7 +25,7 @@ export const getPerakim = createServerFn({ method: "GET" }).handler(
 
 // Get perek by ID
 export const getPerek = createServerFn({ method: "GET" })
-	.inputValidator((data: number) => data)
+	.validator((data: number) => data)
 	.handler(async ({ data: id }) => {
 		const perek = await queryOne<Perek>(
 			`SELECT ${PEREK_COLUMNS} FROM tanah_perek_view WHERE perek_id = ?`,

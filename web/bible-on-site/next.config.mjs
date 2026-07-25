@@ -9,6 +9,14 @@ const nextConfig = {
 	transpilePackages: ["html-flip-book-react"],
 	turbopack: {
 		root: import.meta.dirname,
+		...(isProduction
+			? {
+					resolveAlias: {
+						"@/lib/download/bulletin-client-local":
+							"./src/lib/download/bulletin-client-local.production.ts",
+					},
+				}
+			: {}),
 	},
 	images: {
 		unoptimized: !isProduction,

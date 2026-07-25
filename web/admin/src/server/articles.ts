@@ -32,7 +32,7 @@ export const getArticles = createServerFn({ method: "GET" }).handler(
 
 // Get articles by perek
 export const getArticlesByPerek = createServerFn({ method: "GET" })
-	.inputValidator((data: number) => data)
+	.validator((data: number) => data)
 	.handler(async ({ data: perekId }) => {
 		const articles = await query<
 			Omit<Article, "content"> & { author_name?: string }
@@ -48,7 +48,7 @@ export const getArticlesByPerek = createServerFn({ method: "GET" })
 
 // Get article by ID (with content)
 export const getArticle = createServerFn({ method: "GET" })
-	.inputValidator((data: number) => data)
+	.validator((data: number) => data)
 	.handler(async ({ data: id }) => {
 		const article = await queryOne<Article>(
 			"SELECT id, perek_id, author_id, abstract, name, priority, content FROM tanah_article WHERE id = ?",
@@ -64,7 +64,7 @@ export const getArticle = createServerFn({ method: "GET" })
 
 // Create article
 export const createArticle = createServerFn({ method: "POST" })
-	.inputValidator((data: ArticleFormData) => data)
+	.validator((data: ArticleFormData) => data)
 	.handler(async ({ data }) => {
 		if (!data.name || !data.perek_id || !data.author_id) {
 			throw new Error("Name, perek_id, and author_id are required");
@@ -95,7 +95,7 @@ export const createArticle = createServerFn({ method: "POST" })
 
 // Update article
 export const updateArticle = createServerFn({ method: "POST" })
-	.inputValidator((data: { id: number } & ArticleFormData) => data)
+	.validator((data: { id: number } & ArticleFormData) => data)
 	.handler(async ({ data }) => {
 		if (!data.name || !data.perek_id || !data.author_id) {
 			throw new Error("Name, perek_id, and author_id are required");
@@ -127,7 +127,7 @@ export const updateArticle = createServerFn({ method: "POST" })
 
 // Delete article
 export const deleteArticle = createServerFn({ method: "POST" })
-	.inputValidator((data: number) => data)
+	.validator((data: number) => data)
 	.handler(async ({ data }) => {
 		await execute("DELETE FROM tanah_article WHERE id = ?", [data]);
 		return { success: true };
@@ -135,7 +135,7 @@ export const deleteArticle = createServerFn({ method: "POST" })
 
 // Cache invalidation - call CloudFront or your caching layer
 export const invalidateArticleCache = createServerFn({ method: "POST" })
-	.inputValidator((data: number) => data)
+	.validator((data: number) => data)
 	.handler(async ({ data: articleId }) => {
 		// TODO: Implement CloudFront invalidation when ready
 		console.log(`Invalidating cache for article ${articleId}`);
@@ -143,7 +143,7 @@ export const invalidateArticleCache = createServerFn({ method: "POST" })
 	});
 
 export const invalidatePerekCache = createServerFn({ method: "POST" })
-	.inputValidator((data: number) => data)
+	.validator((data: number) => data)
 	.handler(async ({ data: perekId }) => {
 		// TODO: Implement CloudFront invalidation when ready
 		console.log(`Invalidating cache for perek ${perekId}`);

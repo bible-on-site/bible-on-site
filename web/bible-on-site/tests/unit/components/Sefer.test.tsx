@@ -171,15 +171,22 @@ const minimalPerek: PerekObj = {
 				{
 					type: "qri" as const,
 					value: "בְּרֵאשִׁית",
-					recordingTimeFrame: { start: 0, end: 1 },
+					recordingTimeFrame: {
+						from: "00:00:00" as never,
+						to: "00:00:01" as never,
+					},
+					ktivOffset: 1,
 				},
-				{ type: "ktiv" as const, value: "בראשית" },
+				{ type: "ktiv" as const, value: "בראשית", qriOffset: -1 },
 				{ type: "ptuha" as const },
 				{ type: "stuma" as const },
 				{
 					type: "qri" as const,
 					value: "הָאָ֖רֶץ",
-					recordingTimeFrame: { start: 2, end: 3 },
+					recordingTimeFrame: {
+						from: "00:00:02" as never,
+						to: "00:00:03" as never,
+					},
 				},
 			],
 		},
@@ -291,12 +298,18 @@ describe("Sefer component", () => {
 						{
 							type: "qri" as const,
 							value: "מִן־",
-							recordingTimeFrame: { start: 0, end: 1 },
+							recordingTimeFrame: {
+								from: "00:00:00" as never,
+								to: "00:00:01" as never,
+							},
 						},
 						{
 							type: "qri" as const,
 							value: "הָאָ֖רֶץ",
-							recordingTimeFrame: { start: 1, end: 2 },
+							recordingTimeFrame: {
+								from: "00:00:01" as never,
+								to: "00:00:02" as never,
+							},
 						},
 					],
 				},

@@ -14,11 +14,6 @@ public sealed class PerushimNotesServiceTests : IDisposable
 
     private readonly string _tempRoot;
 
-    static PerushimNotesServiceTests()
-    {
-        SQLitePCL.Batteries_V2.Init();
-    }
-
     public PerushimNotesServiceTests()
     {
         _tempRoot = Path.Join(Path.GetTempPath(), "BibleOnSiteTests_" + Path.GetRandomFileName());

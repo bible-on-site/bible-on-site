@@ -9,11 +9,6 @@ public sealed class PerushimCatalogServiceTests : IDisposable
     private readonly string _tempRoot;
     private readonly List<SQLiteAsyncConnection> _connections = [];
 
-    static PerushimCatalogServiceTests()
-    {
-        SQLitePCL.Batteries_V2.Init();
-    }
-
     public PerushimCatalogServiceTests()
     {
         _tempRoot = Path.Join(Path.GetTempPath(), Path.GetRandomFileName());
