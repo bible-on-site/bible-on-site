@@ -1,5 +1,4 @@
-import { createRequire } from "node:module";
-import * as perushimDB from "./sefaria-dump-5784-sivan-4.perushim.json";
+import perushimDB from "./sefaria-dump-5784-sivan-4.perushim.json";
 
 export interface PerushimListItem {
 	id: number;
@@ -8,12 +7,6 @@ export interface PerushimListItem {
 	priority: number;
 }
 
-const perushim: PerushimListItem[] = Array.from(
-	process.env.IS_TEST_ENV
-		? (createRequire(import.meta.url)(
-				"./sefaria-dump-5784-sivan-4.perushim.json",
-			) as PerushimListItem[])
-		: /* istanbul ignore next: will never be reached in testing env */ (perushimDB as unknown as PerushimListItem[]),
-);
+const perushim: PerushimListItem[] = Array.from(perushimDB);
 
 export { perushim };
