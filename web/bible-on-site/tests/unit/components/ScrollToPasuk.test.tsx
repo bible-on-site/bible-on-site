@@ -4,6 +4,10 @@
 import { render } from "@testing-library/react";
 import { ScrollToPasuk } from "@/app/929/[number]/components/ScrollToPasuk";
 
+jest.mock("next/navigation", () => ({
+	useSearchParams: () => new URLSearchParams(window.location.search),
+}));
+
 describe("ScrollToPasuk", () => {
 	beforeEach(() => {
 		jest.useFakeTimers();
@@ -83,5 +87,38 @@ describe("ScrollToPasuk", () => {
 		jest.advanceTimersByTime(120);
 
 		expect(document.getElementById("pasuk-23")).toBeNull();
+	});
+
+	it("clears stale highlights when the query changes", () => {
+		const first = document.createElement("div");
+		first.id = "pasuk-6";
+		first.scrollIntoView = jest.fn();
+		const second = document.createElement("div");
+		second.id = "pasuk-7";
+		second.scrollIntoView = jest.fn();
+		document.body.append(first, second);
+		window.history.replaceState(null, "", "/929/32?pasuk=ו");
+
+		const { rerender } = render(<ScrollToPasuk maxVerse={30} />);
+		window.history.replaceState(null, "", "/929/32?pasuk=ז");
+		rerender(<ScrollToPasuk maxVerse={30} />);
+
+		expect(first.className).not.toContain("pasukHighlight");
+		expect(second.className).toContain("pasukHighlight");
+	});
+
+	it("clears the timer and highlights on unmount", () => {
+		const div = document.createElement("div");
+		div.id = "pasuk-23";
+		div.scrollIntoView = jest.fn();
+		document.body.appendChild(div);
+		window.history.replaceState(null, "", "/929/32?pasuk=כג");
+
+		const { unmount } = render(<ScrollToPasuk maxVerse={30} />);
+		unmount();
+		jest.advanceTimersByTime(120);
+
+		expect(div.className).not.toContain("pasukHighlight");
+		expect(div.scrollIntoView).not.toHaveBeenCalled();
 	});
 });
