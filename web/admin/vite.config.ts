@@ -10,7 +10,7 @@ function handleRollupWarning(warning: RollupLog, warn: LoggingFunction) {
 	const sourceIds = [warning.id, ...(warning.ids ?? [])];
 	const isTanStackDependency =
 		sourceIds.some((id) =>
-			id?.replaceAll("\\", "/").includes("/node_modules/@tanstack/"),
+			id?.replace(/\\/g, "/").includes("/node_modules/@tanstack/"),
 		) || warning.message.includes('in "node_modules/@tanstack/');
 	const isKnownDirective =
 		warning.code === "MODULE_LEVEL_DIRECTIVE" &&
