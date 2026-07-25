@@ -300,24 +300,42 @@ function PersonNameLink({ related }: { related: PersonFamilyRelatedPerson }) {
 			<Link
 				href={`/tanahpedia/entry/${encodeURIComponent(related.entryUniqueName)}`}
 				className={styles.personLink}
+				title={label}
 			>
 				{label}
 			</Link>
 		);
 	}
-	return <span className={styles.personUnlinked}>{related.displayName}</span>;
+	return (
+		<span className={styles.personUnlinked} title={related.displayName}>
+			{related.displayName}
+		</span>
+	);
+}
+
+function citationLines(text: string | null) {
+	if (!text?.trim()) return [];
+	const occurrenceCounts = new Map<string, number>();
+	return text
+		.split("\n")
+		.map((line) => line.trim())
+		.filter(Boolean)
+		.map((line) => {
+			const occurrence = (occurrenceCounts.get(line) ?? 0) + 1;
+			occurrenceCounts.set(line, occurrence);
+			return { key: `${line}:${occurrence}`, line };
+		});
 }
 
 /** מקור מהתנ"ך / תנכפדיה מתחת לשורת טיב הקשר (שורה לכל פסקה בטקסט ה־DB) */
 function citationRibbonBlock(text: string | null) {
-	if (!text?.trim()) return null;
-	const lines = text.split("\n").filter((l) => l.trim());
+	const lines = citationLines(text);
 	if (lines.length === 0) return null;
 	return (
 		<div className={styles.relationRibbonCitation}>
-			{lines.map((line) => (
-				<div key={line} className={styles.relationRibbonCitationLine}>
-					{renderFamilyTreeCitationLine(line.trim(), styles.citationTanachLink)}
+			{lines.map(({ key, line }) => (
+				<div key={key} className={styles.relationRibbonCitationLine}>
+					{renderFamilyTreeCitationLine(line, styles.citationTanachLink)}
 				</div>
 			))}
 		</div>
@@ -326,14 +344,13 @@ function citationRibbonBlock(text: string | null) {
 
 /** מקור האדם עצמו (למשל פסוק הלידה) — מוצג בתוך משבצת הכרטיס, מתחת לשם */
 function cardCitationBlock(text: string | null) {
-	if (!text?.trim()) return null;
-	const lines = text.split("\n").filter((l) => l.trim());
+	const lines = citationLines(text);
 	if (lines.length === 0) return null;
 	return (
 		<div className={styles.cardCitation}>
-			{lines.map((line) => (
-				<div key={line} className={styles.cardCitationLine}>
-					{renderFamilyTreeCitationLine(line.trim(), styles.citationTanachLink)}
+			{lines.map(({ key, line }) => (
+				<div key={key} className={styles.cardCitationLine}>
+					{renderFamilyTreeCitationLine(line, styles.citationTanachLink)}
 				</div>
 			))}
 		</div>

@@ -151,11 +151,15 @@
 }
 
 .personLink {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
   color: #4338ca;
   font-weight: 700;
   text-decoration: none;
   font-size: 1rem;
   line-height: 1.4;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -164,16 +168,20 @@
 }
 
 .personUnlinked {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
   color: #1e293b;
   font-weight: 600;
   font-size: 1rem;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 /* כאשר תג המין (ז/נ) קיים בכרטיס, שומרים רצועת מקום פנויה סימטרית משני
    הצדדים (לא רק בצד התג) כדי שהשם לעולם לא ייגע בתג, וגם יישאר ממורכז
-   בדיוק - ריפוד חד-צדדי היה מזיז את הטקסט הנראה הצידה. גם שם ארוך יעטוף
-   שורה מוקדם יותר במקום להיתקל בתג. */
+  בדיוק - ריפוד חד-צדדי היה מזיז את הטקסט הנראה הצידה. שם ארוך נחתך
+  באליפסיס במקום להיתקל בתג. */
 .card:has(.sexMark) .personLink,
 .card:has(.sexMark) .personUnlinked,
 .cardFocal:has(.sexMark) .personLink,
