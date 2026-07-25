@@ -26,6 +26,11 @@
   font-weight: 700;
   text-decoration: underline;
 }
+.pasukHighlight {
+  background: rgba(254, 243, 199, 0.95);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
+  border-radius: 3px;
+}
 .perekTextHeader h1 {
   color: #9a92d1;
   font-size: 1.2em;

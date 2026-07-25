@@ -344,9 +344,15 @@ function PersonSexMark({ sex }: { sex: string | null }) {
 	const mark = personSexCornerMark(sex);
 	if (!mark) return null;
 	const label = sex === "MALE" ? "זכר" : sex === "FEMALE" ? "נקבה" : undefined;
+	const sexClass =
+		sex === "MALE"
+			? styles.sexMarkMale
+			: sex === "FEMALE"
+				? styles.sexMarkFemale
+				: "";
 	return (
 		<span
-			className={styles.sexMark}
+			className={`${styles.sexMark} ${sexClass}`}
 			title={label ?? undefined}
 			aria-hidden="true"
 		>
@@ -746,13 +752,18 @@ function PersonFamilyTreeContent({
 			? orderedSpouseUnits.length + 1
 			: orderedSpouseUnits.length;
 
+	// שורת נישואין אחידה: קו אנכי מהמוקד יורד עד קו אופקי בגובה אמצע הכרטיסים.
+	// מוצגת גם במטריצה עם ילדים (כמו יעקב) וגם כשאין ילדים (כמו שמשון) — אותם
+	// כללי CSS בדיוק, בלי דיברגנציה. spouseChildrenMatrixOuter + matrixSpouseRow.
+	const showSpouseMarriageRow = matrixEligible || orderedSpouseUnits.length > 1;
+
 	const matrixSpouseRowRef = useRef<HTMLDivElement>(null);
 	const [matrixSpouseMidPx, setMatrixSpouseMidPx] = useState(36);
 	const [matrixMarriageLineYpx, setMatrixMarriageLineYpx] = useState(36);
 
 	useLayoutEffect(() => {
 		const el = matrixSpouseRowRef.current;
-		if (!el || !matrixEligible) return;
+		if (!el || !showSpouseMarriageRow) return;
 		const measure = () => {
 			const rowRect = el.getBoundingClientRect();
 			const rowH = rowRect.height;
@@ -784,7 +795,7 @@ function PersonFamilyTreeContent({
 		const ro = new ResizeObserver(measure);
 		ro.observe(el);
 		return () => ro.disconnect();
-	}, [matrixEligible]);
+	}, [showSpouseMarriageRow]);
 
 	return (
 		<section className={styles.section} aria-labelledby="person-family-heading">
@@ -1126,6 +1137,41 @@ function PersonFamilyTreeContent({
 											) : null}
 										</div>
 									)}
+								</div>
+							) : orderedSpouseUnits.length > 1 ? (
+								// כמה בנות זוג ללא ילדים ממופים (למשל שמשון): אותה שורת
+								// נישואין כמו יעקב — קו אנכי מהמוקד יורד עד קו אופקי בגובה
+								// אמצע הכרטיסים, רק בלי שורת הילדים שמתחת.
+								<div
+									className={styles.spouseChildrenMatrixOuter}
+									style={
+										{
+											"--matrix-spouse-mid-px": `${matrixSpouseMidPx}px`,
+											"--matrix-marriage-line-y": `${matrixMarriageLineYpx}px`,
+										} as CSSProperties
+									}
+								>
+									<div
+										ref={matrixSpouseRowRef}
+										className={styles.matrixSpouseRow}
+										style={{
+											gridTemplateColumns: `repeat(${matrixColCount}, minmax(128px, 1fr))`,
+										}}
+									>
+										{orderedSpouseUnits.map((unit) => (
+											<div
+												key={`sp-only-${unit.edges
+													.map(
+														(edge) =>
+															`${edge.related.entityId}-${edge.unionType}-${edge.unionOrder ?? "x"}-${edge.altGroupId ?? "d"}`,
+													)
+													.join("_")}`}
+												className={styles.matrixSpouseCell}
+											>
+												<SpouseUnitCardBlock unit={unit} matrixSpouseCardMark />
+											</div>
+										))}
+									</div>
 								</div>
 							) : (
 								<div className={styles.spouseTierCards}>

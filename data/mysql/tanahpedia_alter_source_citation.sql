@@ -4,24 +4,37 @@
 -- information_schema first. This makes the script safe to execute
 -- unconditionally on every deploy (production data-deploy Lambda has no
 -- pre-check, it just re-runs this file every time).
-SET @preparedStatement = (SELECT IF(
-	(SELECT COUNT(*) FROM information_schema.COLUMNS
-	 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tanahpedia_person_union'
-	   AND COLUMN_NAME = 'source_citation') > 0,
-	'SELECT 1',
-	'ALTER TABLE tanahpedia_person_union ADD COLUMN source_citation VARCHAR(400) NULL'
-));
-PREPARE addSourceCitationToUnion FROM @preparedStatement;
+SET @preparedStatement = (
+        SELECT IF(
+                (
+                    SELECT COUNT(*)
+                    FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                        AND TABLE_NAME = 'tanahpedia_person_union'
+                        AND COLUMN_NAME = 'source_citation'
+                ) > 0,
+                'SELECT 1',
+                'ALTER TABLE tanahpedia_person_union ADD COLUMN source_citation VARCHAR(400) NULL'
+            )
+    );
+PREPARE addSourceCitationToUnion
+FROM @preparedStatement;
 EXECUTE addSourceCitationToUnion;
 DEALLOCATE PREPARE addSourceCitationToUnion;
-
-SET @preparedStatement = (SELECT IF(
-	(SELECT COUNT(*) FROM information_schema.COLUMNS
-	 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tanahpedia_person_parent_child'
-	   AND COLUMN_NAME = 'source_citation') > 0,
-	'SELECT 1',
-	'ALTER TABLE tanahpedia_person_parent_child ADD COLUMN source_citation VARCHAR(400) NULL'
-));
-PREPARE addSourceCitationToParentChild FROM @preparedStatement;
+SET @preparedStatement = (
+        SELECT IF(
+                (
+                    SELECT COUNT(*)
+                    FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                        AND TABLE_NAME = 'tanahpedia_person_parent_child'
+                        AND COLUMN_NAME = 'source_citation'
+                ) > 0,
+                'SELECT 1',
+                'ALTER TABLE tanahpedia_person_parent_child ADD COLUMN source_citation VARCHAR(400) NULL'
+            )
+    );
+PREPARE addSourceCitationToParentChild
+FROM @preparedStatement;
 EXECUTE addSourceCitationToParentChild;
 DEALLOCATE PREPARE addSourceCitationToParentChild;

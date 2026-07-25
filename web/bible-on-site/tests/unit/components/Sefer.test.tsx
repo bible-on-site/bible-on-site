@@ -18,50 +18,60 @@ jest.mock("next/dynamic", () => {
 		};
 });
 
-jest.mock("html-flip-book-react", () => ({
-	TocPage: (props: Record<string, unknown>) => {
-		capturedTocProps = props;
-		return <div data-testid="mock-toc" />;
-	},
-}), { virtual: true });
+jest.mock(
+	"html-flip-book-react",
+	() => ({
+		TocPage: (props: Record<string, unknown>) => {
+			capturedTocProps = props;
+			return <div data-testid="mock-toc" />;
+		},
+	}),
+	{ virtual: true },
+);
 
-jest.mock("html-flip-book-react/toolbar", () => ({
-	ActionButton: ({
-		onClick,
-		children,
-		ariaLabel,
-	}: {
-		onClick: () => void;
-		children: React.ReactNode;
-		ariaLabel: string;
-	}) => (
-		<button type="button" onClick={onClick} aria-label={ariaLabel}>
-			{children}
-		</button>
-	),
-	BookshelfIcon: () => <span>shelf</span>,
-	DownloadDropdown: () => <div />,
-	FirstPageButton: () => <div />,
-	FullscreenButton: () => <div />,
-	LastPageButton: () => <div />,
-	NextButton: () => <div />,
-	PageIndicator: () => <div />,
-	PrevButton: () => <div />,
-	TocButton: () => <div />,
-	Toolbar: ({ children }: { children: React.ReactNode }) => (
-		<div>{children}</div>
-	),
-}), { virtual: true });
+jest.mock(
+	"html-flip-book-react/toolbar",
+	() => ({
+		ActionButton: ({
+			onClick,
+			children,
+			ariaLabel,
+		}: {
+			onClick: () => void;
+			children: React.ReactNode;
+			ariaLabel: string;
+		}) => (
+			<button type="button" onClick={onClick} aria-label={ariaLabel}>
+				{children}
+			</button>
+		),
+		BookshelfIcon: () => <span>shelf</span>,
+		DownloadDropdown: () => <div />,
+		FirstPageButton: () => <div />,
+		FullscreenButton: () => <div />,
+		LastPageButton: () => <div />,
+		NextButton: () => <div />,
+		PageIndicator: () => <div />,
+		PrevButton: () => <div />,
+		TocButton: () => <div />,
+		Toolbar: ({ children }: { children: React.ReactNode }) => (
+			<div>{children}</div>
+		),
+	}),
+	{ virtual: true },
+);
 
 jest.mock("html-flip-book-react/styles.css", () => ({}), { virtual: true });
 jest.mock("@/app/929/[number]/components/sefer.css", () => ({}));
-jest.mock("@/app/929/[number]/components/sefer.module.css", () =>
-	new Proxy(
-		{},
-		{
-			get: (_t, prop) => (typeof prop === "string" ? prop : ""),
-		},
-	),
+jest.mock(
+	"@/app/929/[number]/components/sefer.module.css",
+	() =>
+		new Proxy(
+			{},
+			{
+				get: (_t, prop) => (typeof prop === "string" ? prop : ""),
+			},
+		),
 );
 
 const mockDownloadSefer = jest.fn();
@@ -75,7 +85,10 @@ jest.mock("@/app/components/Bookshelf", () => ({
 	BookshelfModal: ({
 		isOpen,
 		onClose,
-	}: { isOpen: boolean; onClose: () => void }) =>
+	}: {
+		isOpen: boolean;
+		onClose: () => void;
+	}) =>
 		isOpen ? (
 			<div data-testid="mock-modal">
 				<button type="button" onClick={onClose} data-testid="close-modal">
@@ -86,7 +99,8 @@ jest.mock("@/app/components/Bookshelf", () => ({
 }));
 
 jest.mock("@/data/db/tanah-view-types", () => ({
-	isQriDifferentThanKtiv: (segment: { value: string }) => segment.value === "בְּרֵאשִׁית",
+	isQriDifferentThanKtiv: (segment: { value: string }) =>
+		segment.value === "בְּרֵאשִׁית",
 }));
 
 jest.mock("@/data/sefer-colors", () => ({
@@ -95,25 +109,37 @@ jest.mock("@/data/sefer-colors", () => ({
 
 jest.mock("@/data/sefer-dto", () => ({
 	getSeferByName: jest.fn().mockReturnValue({
-		perakim: [{
-			header: "בראשית א",
-			pesukim: [{
-				segments: [
-					{ type: "qri" as const, value: "בְּרֵאשִׁית", recordingTimeFrame: { start: 0, end: 1 } },
-					{ type: "ktiv" as const, value: "בראשית" },
-					{ type: "ptuha" as const },
-					{ type: "stuma" as const },
-					{ type: "qri" as const, value: "הָאָ֖רֶץ", recordingTimeFrame: { start: 2, end: 3 } },
+		perakim: [
+			{
+				header: "בראשית א",
+				pesukim: [
+					{
+						segments: [
+							{
+								type: "qri" as const,
+								value: "בְּרֵאשִׁית",
+								recordingTimeFrame: { start: 0, end: 1 },
+							},
+							{ type: "ktiv" as const, value: "בראשית" },
+							{ type: "ptuha" as const },
+							{ type: "stuma" as const },
+							{
+								type: "qri" as const,
+								value: "הָאָ֖רֶץ",
+								recordingTimeFrame: { start: 2, end: 3 },
+							},
+						],
+					},
 				],
-			}],
-		}],
+			},
+		],
 	}),
 	getPerekIdsForSefer: jest.fn().mockReturnValue([1]),
 }));
 
 jest.mock("@/util/hebdates-util", () => ({
 	constructTsetAwareHDate: () => ({
-		toTraditionalHebrewString: () => "כ\"ג אדר תשפ\"ו",
+		toTraditionalHebrewString: () => 'כ"ג אדר תשפ"ו',
 	}),
 }));
 
@@ -139,15 +165,25 @@ const minimalPerek: PerekObj = {
 	helek: "תורה",
 	sefer: "בראשית",
 	source: "mechon-mamre" as const,
-	pesukim: [{
-		segments: [
-			{ type: "qri" as const, value: "בְּרֵאשִׁית", recordingTimeFrame: { start: 0, end: 1 } },
-			{ type: "ktiv" as const, value: "בראשית" },
-			{ type: "ptuha" as const },
-			{ type: "stuma" as const },
-			{ type: "qri" as const, value: "הָאָ֖רֶץ", recordingTimeFrame: { start: 2, end: 3 } },
-		],
-	}],
+	pesukim: [
+		{
+			segments: [
+				{
+					type: "qri" as const,
+					value: "בְּרֵאשִׁית",
+					recordingTimeFrame: { start: 0, end: 1 },
+				},
+				{ type: "ktiv" as const, value: "בראשית" },
+				{ type: "ptuha" as const },
+				{ type: "stuma" as const },
+				{
+					type: "qri" as const,
+					value: "הָאָ֖רֶץ",
+					recordingTimeFrame: { start: 2, end: 3 },
+				},
+			],
+		},
+	],
 };
 
 describe("Sefer component", () => {
@@ -168,7 +204,7 @@ describe("Sefer component", () => {
 		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		expect(screen.queryByTestId("mock-modal")).toBeNull();
 
-		fireEvent.click(screen.getByLabelText("ספרי התנ\"ך"));
+		fireEvent.click(screen.getByLabelText('ספרי התנ"ך'));
 		expect(screen.getByTestId("mock-modal")).toBeInTheDocument();
 
 		fireEvent.click(screen.getByTestId("close-modal"));
@@ -185,7 +221,10 @@ describe("Sefer component", () => {
 
 	it("TocPage filter excludes cover pages and empty titles", () => {
 		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
-		const filter = capturedTocProps.filter as (entry: { pageIndex: number; title: string }) => boolean;
+		const filter = capturedTocProps.filter as (entry: {
+			pageIndex: number;
+			title: string;
+		}) => boolean;
 		expect(filter).toBeDefined();
 		expect(filter({ pageIndex: 0, title: "cover" })).toBe(false);
 		expect(filter({ pageIndex: 5, title: "" })).toBe(false);
@@ -246,22 +285,51 @@ describe("Sefer component", () => {
 	it("renders maqaf-ending segments without trailing space", () => {
 		const perekWithMaqaf: PerekObj = {
 			...minimalPerek,
-			pesukim: [{
-				segments: [
-					{ type: "qri" as const, value: "מִן־", recordingTimeFrame: { start: 0, end: 1 } },
-					{ type: "qri" as const, value: "הָאָ֖רֶץ", recordingTimeFrame: { start: 1, end: 2 } },
-				],
-			}],
+			pesukim: [
+				{
+					segments: [
+						{
+							type: "qri" as const,
+							value: "מִן־",
+							recordingTimeFrame: { start: 0, end: 1 },
+						},
+						{
+							type: "qri" as const,
+							value: "הָאָ֖רֶץ",
+							recordingTimeFrame: { start: 1, end: 2 },
+						},
+					],
+				},
+			],
 		};
 		render(<Sefer perekObj={perekWithMaqaf} articles={[]} perushim={[]} />);
 		expect(screen.getByTestId("mock-flipbook")).toBeInTheDocument();
 	});
 
 	it("renders sefer with additionals (uses flatMap branch)", () => {
-		const { getSeferByName } = jest.requireMock("@/data/sefer-dto") as { getSeferByName: jest.Mock };
+		const { getSeferByName } = jest.requireMock("@/data/sefer-dto") as {
+			getSeferByName: jest.Mock;
+		};
 		getSeferByName.mockReturnValueOnce({
 			additionals: [
-				{ perakim: [{ header: "שמואל א א", pesukim: [{ segments: [{ type: "qri" as const, value: "word", recordingTimeFrame: { start: 0, end: 1 } }] }] }] },
+				{
+					perakim: [
+						{
+							header: "שמואל א א",
+							pesukim: [
+								{
+									segments: [
+										{
+											type: "qri" as const,
+											value: "word",
+											recordingTimeFrame: { start: 0, end: 1 },
+										},
+									],
+								},
+							],
+						},
+					],
+				},
 			],
 		});
 

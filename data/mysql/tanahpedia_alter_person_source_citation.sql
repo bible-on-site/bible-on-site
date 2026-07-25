@@ -10,13 +10,20 @@
 -- person_source_citation holds the related persons own citation (e.g. the verse
 -- where she is first mentioned or her children are born), shown separately when
 -- it differs from the relationship citation.
-SET @preparedStatement = (SELECT IF(
-	(SELECT COUNT(*) FROM information_schema.COLUMNS
-	 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tanahpedia_person_union'
-	   AND COLUMN_NAME = 'person_source_citation') > 0,
-	'SELECT 1',
-	'ALTER TABLE tanahpedia_person_union ADD COLUMN person_source_citation VARCHAR(400) NULL'
-));
-PREPARE addPersonSourceCitationToUnion FROM @preparedStatement;
+SET @preparedStatement = (
+        SELECT IF(
+                (
+                    SELECT COUNT(*)
+                    FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                        AND TABLE_NAME = 'tanahpedia_person_union'
+                        AND COLUMN_NAME = 'person_source_citation'
+                ) > 0,
+                'SELECT 1',
+                'ALTER TABLE tanahpedia_person_union ADD COLUMN person_source_citation VARCHAR(400) NULL'
+            )
+    );
+PREPARE addPersonSourceCitationToUnion
+FROM @preparedStatement;
 EXECUTE addPersonSourceCitationToUnion;
 DEALLOCATE PREPARE addPersonSourceCitationToUnion;

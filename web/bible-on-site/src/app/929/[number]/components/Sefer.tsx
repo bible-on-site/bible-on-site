@@ -153,6 +153,7 @@ const Sefer = (props: {
 
 	const frontCover = (
 		<section
+			key="front-cover"
 			className={`${styles.page} ${styles.cover}`}
 			aria-label="עטיפה קדמית"
 			style={{ "--cover-color": seferColor } as React.CSSProperties}
@@ -170,6 +171,7 @@ const Sefer = (props: {
 	);
 	const backCover = (
 		<section
+			key="back-cover"
 			className={`${styles.page} ${styles.cover}`}
 			aria-label="עטיפה אחורית"
 			style={{ "--cover-color": seferColor } as React.CSSProperties}
