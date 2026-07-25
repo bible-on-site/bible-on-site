@@ -50,7 +50,7 @@ export function PerushFullView({
 		<section className={rootClass}>
 			<header className={styles.fullViewHeader}>
 				<button type="button" className={styles.backButton} onClick={onBack}>
-					חזרה לפרשנים &larr;
+					&rarr; חזרה לפרשנים
 				</button>
 				<div className={styles.fullViewTitle}>
 					<h2 className={styles.sectionTitle}>{perush.name}</h2>

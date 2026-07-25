@@ -148,9 +148,8 @@ class DataDeployer extends DeployerBase {
 				}),
 			)
 			.catch((err: unknown) => {
-				const status = (
-					err as { $metadata?: { httpStatusCode?: number } }
-				)?.$metadata?.httpStatusCode;
+				const status = (err as { $metadata?: { httpStatusCode?: number } })
+					?.$metadata?.httpStatusCode;
 				const reason = err instanceof Error ? err.message : String(err);
 				// A 5xx is a service-side fault thrown before any response/tail-log
 				// is available: the Lambda runtime itself failed to run (bad

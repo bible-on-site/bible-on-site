@@ -76,7 +76,7 @@
 .card {
   position: relative;
   min-width: 140px;
-  max-width: 220px;
+  max-width: 280px;
   padding: 12px 14px;
   background: #fff;
   border-radius: 10px;
@@ -132,6 +132,19 @@
   background: #f8fafc;
 }
 
+/* ז (זכר) — פסים אלכסוניים כחולים; נ (נקבה) — פסים אלכסוניים ורודים */
+.sexMarkMale {
+  color: #1e40af;
+  border-color: #93c5fd;
+  background-image: repeating-linear-gradient(45deg, #dbeafe, #dbeafe 3px, #eff6ff 3px, #eff6ff 6px);
+}
+
+.sexMarkFemale {
+  color: #9d174d;
+  border-color: #f9a8d4;
+  background-image: repeating-linear-gradient(45deg, #fce7f3, #fce7f3 3px, #fdf2f8 3px, #fdf2f8 6px);
+}
+
 .coParentChildLabel {
   margin: 0 auto 8px;
   text-align: center;
@@ -143,7 +156,7 @@
   text-decoration: none;
   font-size: 1rem;
   line-height: 1.4;
-  word-break: break-word;
+  white-space: nowrap;
 }
 
 .personLink:hover {
@@ -154,6 +167,19 @@
   color: #1e293b;
   font-weight: 600;
   font-size: 1rem;
+  white-space: nowrap;
+}
+
+/* כאשר תג המין (ז/נ) קיים בכרטיס, שומרים רצועת מקום פנויה סימטרית משני
+   הצדדים (לא רק בצד התג) כדי שהשם לעולם לא ייגע בתג, וגם יישאר ממורכז
+   בדיוק - ריפוד חד-צדדי היה מזיז את הטקסט הנראה הצידה. גם שם ארוך יעטוף
+   שורה מוקדם יותר במקום להיתקל בתג. */
+.card:has(.sexMark) .personLink,
+.card:has(.sexMark) .personUnlinked,
+.cardFocal:has(.sexMark) .personLink,
+.cardFocal:has(.sexMark) .personUnlinked {
+  display: inline-block;
+  padding-inline: 32px;
 }
 
 /* ערימת כרטיס: טיב קשר + מקור מעל המשבצת (בין קווי העץ לכרטיס) */
@@ -162,7 +188,7 @@
   flex-direction: column;
   align-items: center;
   width: 100%;
-  max-width: 220px;
+  max-width: 280px;
   position: relative;
   z-index: 2;
 }

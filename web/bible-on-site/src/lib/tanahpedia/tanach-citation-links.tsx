@@ -1,6 +1,7 @@
 import { toNumber } from "gematry";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { perushim } from "@/data/db/perushim";
 import { sefarim } from "@/data/db/sefarim";
 import type {
 	AdditionalsItem,
@@ -71,7 +72,10 @@ function isWhitespace(ch: string | undefined): boolean {
 	return ch != null && /\s/u.test(ch);
 }
 
-function readToken(text: string, start: number): { token: string; end: number } {
+function readToken(
+	text: string,
+	start: number,
+): { token: string; end: number } {
 	let end = start;
 	while (end < text.length && !isWhitespace(text[end])) end++;
 	return { token: text.slice(start, end), end };
@@ -127,11 +131,6 @@ function findTanachRefMatches(text: string): TanachRefMatch[] {
 	return matches;
 }
 
-/** מנקה טקסט פסוק ל־slug בנתיב (ללא רווחים סביב מקף) */
-function compactPasukSlugForUrl(pasukRaw: string): string {
-	return normalizePasukSlugHyphens(pasukRaw).replace(/\s+/g, "");
-}
-
 function getPerekIdForTanachRef(
 	seferCitation: string,
 	perekRaw: string,
@@ -147,12 +146,27 @@ function getPerekIdForTanachRef(
 }
 
 function pasukLettersToPositiveInt(pasukRaw: string): number | null {
-	const first = pasukRaw.trim().split(/[\s–—-]+/u)[0]?.trim() ?? "";
+	const first =
+		pasukRaw
+			.trim()
+			.split(/[\s–—-]+/u)[0]
+			?.trim() ?? "";
 	if (!first) return null;
 	const n = toNumber(first);
 	return n != null && n > 0 ? n : null;
 }
 
+/** מנקה טקסט פסוק ל־ערך query (ללא רווחים סביב מקף) */
+function compactPasukSlugForUrl(pasukRaw: string): string {
+	return normalizePasukSlugHyphens(pasukRaw).replace(/\s+/g, "");
+}
+
+/**
+ * קישור לפרק בתנ"ך לפי מקור (ספר+פרק[+פסוק]). `/929/{number}/[slug]`
+ * תומך רק במאמר (מספרי) או שם פירוש — אין נתיב לעגינה על פסוק ספציפי
+ * ללא פירוש — לכן פסוק מצוין כ־`?pasuk=` (נקרא ומסומן ב-`ScrollToPasuk`
+ * בדף הפרק עצמו), ולא כ־slug בנתיב (זה היה גורם ל-404).
+ */
 function tryTanachHref(
 	seferCitation: string,
 	perekRaw: string,
@@ -168,26 +182,52 @@ function tryTanachHref(
 	if (!slug) {
 		return `/929/${perekId}`;
 	}
-	return `/929/${perekId}/${encodeURIComponent(slug)}`;
+	return `/929/${perekId}?pasuk=${encodeURIComponent(slug)}`;
 }
 
-/** שם הפירוש ב־929 (כפי ב־perushim.json) */
-export const PERUSH_NAME_HAKTAV_VEKABBALAH = "הכתב והקבלה";
+let cachedPerushNames: string[] | null = null;
+/** כל שמות הפירושים הידועים באתר (מ־perushim.json), מהארוך לקצר להתאמה חמדנית. */
+function perushNamesForCitations(): string[] {
+	if (cachedPerushNames) return cachedPerushNames;
+	cachedPerushNames = [...new Set(perushim.map((p) => p.name))].sort(
+		(a, b) => b.length - a.length,
+	);
+	return cachedPerushNames;
+}
 
-const KETAV_VEKABBALAH_PHRASE = "הכתב והקבלה";
+/** מציאת ההתרחשות המוקדמת ביותר של שם פירוש ידוע כלשהו בטקסט — גנרי, לא תלוי בשם פירוש ספציפי. */
+function findKnownPerushNameMatch(
+	line: string,
+): { name: string; index: number } | null {
+	let best: { name: string; index: number } | null = null;
+	for (const name of perushNamesForCitations()) {
+		const idx = line.indexOf(name);
+		if (idx === -1) continue;
+		if (
+			!best ||
+			idx < best.index ||
+			(idx === best.index && name.length > best.name.length)
+		) {
+			best = { name, index: idx };
+		}
+	}
+	return best;
+}
 
 /**
- * דף על הפרק + פירוש הכתב והקבלה; `?pasuk=` גולל לבלוק ההערה לפסוק בפירוש.
+ * דף על הפרק + פירוש נתון (כל פירוש שקיים באתר, לפי שמו); `?pasuk=` גולל
+ * לבלוק ההערה לפסוק בפירוש.
  */
-export function buildKetavVeKabbalah929PerushHref(
+export function build929PerushHref(
 	seferCitation: string,
 	perekRaw: string,
 	pasukRaw: string,
+	perushName: string,
 ): string | null {
 	const perekId = getPerekIdForTanachRef(seferCitation, perekRaw);
 	if (perekId == null) return null;
 	const pasukNum = pasukLettersToPositiveInt(pasukRaw);
-	const slug = encodeURIComponent(PERUSH_NAME_HAKTAV_VEKABBALAH);
+	const slug = encodeURIComponent(perushName);
 	if (pasukNum != null) {
 		return `/929/${perekId}/${slug}?pasuk=${pasukNum}`;
 	}
@@ -201,40 +241,45 @@ function firstTanachRefMatchFromIndex(
 	return findTanachRefMatches(line).find((m) => m.index >= minIndex) ?? null;
 }
 
-/** שורת מקור בעץ משפחה: קישור אחד מ«הכתב והקבלה» עד הפסוק — ל־929 בפירוש הכתב והקבלה */
+/**
+ * שורת מקור בעץ משפחה: כאשר הטקסט מזכיר שם פירוש קיים באתר (כל פירוש, לא
+ * תלוי בשם ספציפי) ולאחריו מקור בתנ"ך עם פסוק — קישור אחד משם הפירוש עד
+ * הפסוק, ל־929 באותו פירוש. אחרת (או כשאין פסוק) — קישורי תנ"ך רגילים.
+ */
 export function renderFamilyTreeCitationLine(
 	line: string,
 	linkClassName: string,
 ): ReactNode[] {
-	const kvkIdx = line.indexOf(KETAV_VEKABBALAH_PHRASE);
-	if (kvkIdx === -1) {
+	const perushMatch = findKnownPerushNameMatch(line);
+	if (!perushMatch) {
 		return renderCitationWithTanachLinks(line, linkClassName);
 	}
-	const refMatch = firstTanachRefMatchFromIndex(line, kvkIdx);
+	const refMatch = firstTanachRefMatchFromIndex(line, perushMatch.index);
 	if (!refMatch?.pasukRaw?.trim()) {
 		return renderCitationWithTanachLinks(line, linkClassName);
 	}
 	const seferC = refMatch.seferCitation;
 	const perekRaw = refMatch.perekRaw;
 	const pasukRaw = refMatch.pasukRaw;
-	const href = buildKetavVeKabbalah929PerushHref(seferC, perekRaw, pasukRaw);
+	const href = build929PerushHref(seferC, perekRaw, pasukRaw, perushMatch.name);
 	if (!href) {
 		return renderCitationWithTanachLinks(line, linkClassName);
 	}
+	const perushIdx = perushMatch.index;
 	const linkEnd = refMatch.index + refMatch.full.length;
 	const nodes: ReactNode[] = [];
-	if (kvkIdx > 0) {
+	if (perushIdx > 0) {
 		nodes.push(
-			...renderCitationWithTanachLinks(line.slice(0, kvkIdx), linkClassName),
+			...renderCitationWithTanachLinks(line.slice(0, perushIdx), linkClassName),
 		);
 	}
 	nodes.push(
 		<Link
-			key={`kvk929-${kvkIdx}-${linkEnd}`}
+			key={`perush929-${perushIdx}-${linkEnd}`}
 			href={href}
 			className={linkClassName}
 		>
-			{line.slice(kvkIdx, linkEnd)}
+			{line.slice(perushIdx, linkEnd)}
 		</Link>,
 	);
 	if (linkEnd < line.length) {
