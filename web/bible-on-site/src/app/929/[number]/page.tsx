@@ -113,7 +113,9 @@ export default async function Perek({
 					entityRefsByPerek={entityRefsByPerek}
 				/>
 			</Suspense>
-			<ScrollToPasuk maxVerse={perekObj.pesukim.length} />
+			<Suspense>
+				<ScrollToPasuk maxVerse={perekObj.pesukim.length} />
+			</Suspense>
 			<div className={`${styles.perekContainer} seo-content`}>
 				<Breadcrumb perekObj={perekObj} />
 
