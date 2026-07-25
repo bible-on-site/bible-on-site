@@ -89,7 +89,7 @@ describe("authors service", () => {
 
 	describe("checkS3Availability (via getAuthorImageUrl)", () => {
 		it("skips check in production mode", () => {
-			process.env.NODE_ENV = "production";
+			jest.replaceProperty(process.env, "NODE_ENV", "production");
 			process.env.S3_ENDPOINT = "http://localhost:4566";
 
 			// Should not throw or fetch — early return in production

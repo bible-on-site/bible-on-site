@@ -4,6 +4,7 @@
 		"target": "esnext",
 		"module": "ESNext",
 		"strict": true,
+		"skipLibCheck": true,
 		"esModuleInterop": true,
 		"forceConsistentCasingInFileNames": true,
 		"noImplicitReturns": true,
@@ -21,11 +22,12 @@
 		"noEmit": true,
 		"declaration": true,
 		"declarationMap": true,
-		"moduleResolution": "node",
+		"moduleResolution": "bundler",
 		"outDir": "./dist",
 		"rootDir": "../..",
-		"baseUrl": ".",
-		"ignoreDeprecations": "6.0",
+		"paths": {
+			"@/*": ["../src/*"]
+		},
 		"types": ["node", "jest"],
 		"jsx": "preserve"
 	},

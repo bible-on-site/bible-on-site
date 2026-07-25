@@ -8,7 +8,7 @@ const { executeMock, queryMock, queryOneMock } = vi.hoisted(() => ({
 
 vi.mock("@tanstack/react-start", () => ({
 	createServerFn: () => ({
-		inputValidator: (validate: (data: unknown) => unknown) => ({
+		validator: (validate: (data: unknown) => unknown) => ({
 			handler:
 				(fn: (args: { data: unknown }) => unknown) =>
 				(args: { data: unknown }) =>

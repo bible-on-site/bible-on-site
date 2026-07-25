@@ -34,13 +34,13 @@ async function getMainNameTypeId(): Promise<string> {
 }
 
 export const getEntryStructuralContext = createServerFn({ method: "GET" })
-	.inputValidator((data: string) => data)
+	.validator((data: string) => data)
 	.handler(async ({ data: entryId }): Promise<EntryStructuralContext> => {
 		return loadEntryStructuralContext(entryId);
 	});
 
 export const updateEntityDisplayName = createServerFn({ method: "POST" })
-	.inputValidator((data: { entityId: string; name: string }) => data)
+	.validator((data: { entityId: string; name: string }) => data)
 	.handler(async ({ data }) => {
 		const name = data.name.trim();
 		if (!name) throw new Error("שם יישות ריק");
@@ -52,7 +52,7 @@ export const updateEntityDisplayName = createServerFn({ method: "POST" })
 	});
 
 export const updatePersonMainName = createServerFn({ method: "POST" })
-	.inputValidator(
+	.validator(
 		(data: { personId: string; name: string; mainNameRowId?: string | null }) =>
 			data,
 	)
@@ -90,7 +90,7 @@ export const updatePersonMainName = createServerFn({ method: "POST" })
 	});
 
 export const updatePersonSex = createServerFn({ method: "POST" })
-	.inputValidator(
+	.validator(
 		(data: { personId: string; sex: PersonSex; sexRowId?: string | null }) =>
 			data,
 	)
@@ -122,7 +122,7 @@ export interface PlaceIdentificationInput {
 }
 
 export const replacePlaceIdentifications = createServerFn({ method: "POST" })
-	.inputValidator(
+	.validator(
 		(data: { placeId: string; rows: PlaceIdentificationInput[] }) => data,
 	)
 	.handler(async ({ data }) => {
@@ -161,7 +161,7 @@ export const replacePlaceIdentifications = createServerFn({ method: "POST" })
 	});
 
 export const createEntityAndLinkToEntry = createServerFn({ method: "POST" })
-	.inputValidator(
+	.validator(
 		(data: { entryId: string; entityType: EntityType; displayName: string }) =>
 			data,
 	)

@@ -3,12 +3,15 @@ jest.mock("@/data/sefer-colors", () => ({
 }));
 
 const mockPageRangesHandler = jest.fn();
-const mockGeneratePdfViaBulletin = jest.fn(async () => new Uint8Array([1, 2, 3]));
+const mockGeneratePdfViaBulletin = jest.fn(
+	async (_perekIds: number[], _options?: unknown) =>
+		new Uint8Array([1, 2, 3]),
+);
 
 jest.mock("../../../src/lib/download/bulletin-client", () => ({
 	createBulletinPageRangesHandler: jest.fn(() => mockPageRangesHandler),
-	generatePdfViaBulletin: (...args: unknown[]) =>
-		mockGeneratePdfViaBulletin(...args),
+	generatePdfViaBulletin: (perekIds: number[], options?: unknown) =>
+		mockGeneratePdfViaBulletin(perekIds, options),
 }));
 
 import { getSeferColor } from "@/data/sefer-colors";

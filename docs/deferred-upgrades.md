@@ -16,9 +16,8 @@ into two categories:
 
 | Package | Module | Held at | Target | Tracking | Reason |
 | --- | --- | --- | --- | --- | --- |
-| `next` | web/bible-on-site | 16.1.6 | 16.2.x / 16.3 | [#1634](https://github.com/bible-on-site/bible-on-site/issues/1634) | 16.2.x Turbopack build regression (`Invariant: Expected to inject all imports … incrementalCacheHandler`). Upstream fix vercel/next.js#86630 not yet in a stable release. |
 | `sunrise-sunset-js` | web/bible-on-site | 3.2.0 | 3.3.0 | [#1636](https://github.com/bible-on-site/bible-on-site/issues/1636) | 3.3.0 changes `getTwilight`/`civilDusk` so the tzeit-aware Hebrew date no longer advances after nightfall under UTC (CI). Needs the tzeit/Hebrew-date logic made timezone-robust first. |
-| `swc-plugin-coverage-instrument` | web/bible-on-site | 0.0.32 | latest | [#528](https://github.com/bible-on-site/bible-on-site/issues/528) | Tightly coupled to the Next.js version; bumping in lockstep with Next is required. Currently the latest compatible with Next 16.1.x. |
+| `swc-plugin-coverage-instrument` | web/bible-on-site | 0.0.32 | latest | [#528](https://github.com/bible-on-site/bible-on-site/issues/528) | Tightly coupled to the Next.js version; bumping in lockstep with Next is required. Version 0.0.32 is validated with Next 16.2.12. |
 | `bson` | data | 2 | 3 | — | `mongodb` 3.5.1 (latest) still pins `bson` 2.15. Bumping `bson` to 3 on its own splits the crate so the driver's `Document`/`Bson` types no longer match. Held until the `mongodb` driver adopts `bson` 3. |
 
 These are **hard blocks**: applying them re-introduces a known, reproduced
