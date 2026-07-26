@@ -54,12 +54,11 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
 }
 
 #[cfg(test)]
+pub(crate) static ENV_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+#[cfg(test)]
 mod tests {
     use super::*;
-
-    // Serialize tests that mutate the shared process env var.
-    use std::sync::Mutex;
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn constant_time_eq_matches_std_equality() {
@@ -70,17 +69,17 @@ mod tests {
         assert!(constant_time_eq("", ""));
     }
 
-    #[test]
-    fn authorize_fails_when_key_not_configured() {
-        let _guard = ENV_LOCK.lock().unwrap();
+    #[tokio::test]
+    async fn authorize_fails_when_key_not_configured() {
+        let _guard = ENV_LOCK.lock().await;
         unsafe { env::remove_var(REVISION_API_KEY_ENV) };
         let auth = ApiAuth::new(Some("anything".to_string()));
         assert!(auth.authorize_revision_manager().is_err());
     }
 
-    #[test]
-    fn authorize_fails_with_wrong_or_missing_token() {
-        let _guard = ENV_LOCK.lock().unwrap();
+    #[tokio::test]
+    async fn authorize_fails_with_wrong_or_missing_token() {
+        let _guard = ENV_LOCK.lock().await;
         unsafe { env::set_var(REVISION_API_KEY_ENV, "correct-horse") };
         assert!(
             ApiAuth::new(Some("wrong".to_string()))
@@ -91,9 +90,9 @@ mod tests {
         unsafe { env::remove_var(REVISION_API_KEY_ENV) };
     }
 
-    #[test]
-    fn authorize_succeeds_with_correct_token() {
-        let _guard = ENV_LOCK.lock().unwrap();
+    #[tokio::test]
+    async fn authorize_succeeds_with_correct_token() {
+        let _guard = ENV_LOCK.lock().await;
         unsafe { env::set_var(REVISION_API_KEY_ENV, "correct-horse") };
         assert!(
             ApiAuth::new(Some("correct-horse".to_string()))
