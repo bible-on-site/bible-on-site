@@ -48,11 +48,11 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.0.85</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>5.0.86</ApplicationDisplayVersion>
 		<!-- Windows MSIX requires each version component ≤65535, so we use a separate incrementing value -->
 		<!-- Android versionCode can be large, continuing from Play Store's 40000017 -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000085</ApplicationVersion>
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">85</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000086</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">86</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<!-- WindowsPackageType None = unpackaged (fixes "Class not registered" when running from CLI). MSIX for Store: /p:WindowsPackageType=MSIX -->
@@ -206,25 +206,15 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="CommunityToolkit.Maui" Version="14.2.2" />
+		<PackageReference Include="CommunityToolkit.Maui" Version="15.0.0" />
 		<PackageReference Include="CommunityToolkit.Maui.MediaElement" Version="10.0.0" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 		<PackageReference Include="GraphQL.Client" Version="6.1.0" />
 		<PackageReference Include="GraphQL.Client.Serializer.Newtonsoft" Version="6.1.0" />
 		<PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
-		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.80" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.90" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.10" />
 		<PackageReference Include="sqlite-net-pcl" Version="1.11.285" />
-		<PackageReference Include="SQLitePCLRaw.bundle_green" Version="2.1.11" />
-	</ItemGroup>
-
-	<!-- NU1903 / GHSA-2m69-gcr7-jv3q (CVE-2025-6965): SQLitePCLRaw.lib.e_sqlite3.* <= 2.1.11
-	     bundle a SQLite < 3.50.2 with an aggregate-terms memory-corruption bug. There is no
-	     patched SQLitePCLRaw release yet (latest is 2.1.11), so the audit warning (treated as
-	     error) cannot be cleared by upgrading. Suppress only this advisory until upstream ships
-	     a bundle with SQLite >= 3.50.2. Tracked in https://github.com/bible-on-site/bible-on-site/issues/1702 -->
-	<ItemGroup>
-		<NuGetAuditSuppress Include="https://github.com/advisories/GHSA-2m69-gcr7-jv3q" />
 	</ItemGroup>
 
 	<!-- Plugin.Firebase supports iOS and Android only (not MacCatalyst or Windows) -->

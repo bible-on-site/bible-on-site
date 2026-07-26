@@ -548,7 +548,10 @@ export interface PersonFamilySpouseEdge {
 	unionType: string;
 	unionOrder: number | null;
 	altGroupId: string | null;
+	/** מקור לסיווג הזוגיות עצמה (למשל פרשנות המסווגת אותה כנישואין) */
 	sourceCitation: string | null;
+	/** מקור אישי לבת/בן הזוג עצמם (כשנבדל ממקור סיווג הזוגיות) */
+	personSourceCitation: string | null;
 	/** Lookup code e.g. DEATH, DIVORCE when union ended */
 	unionEndReason: string | null;
 	/** YYYYMMDD when modeled (MySQL may return string) */

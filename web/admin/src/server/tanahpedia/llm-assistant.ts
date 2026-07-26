@@ -137,7 +137,7 @@ function safeParseProposal(json: string): TanahpediaLlmProposal {
 }
 
 export const suggestTanahpediaEntryEdits = createServerFn({ method: "POST" })
-	.inputValidator((data: SuggestEditsInput) => data)
+	.validator((data: SuggestEditsInput) => data)
 	.handler(async ({ data }) => {
 		const [entryRow, structural] = await Promise.all([
 			loadTanahpediaEntryById(data.entryId),

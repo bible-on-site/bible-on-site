@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { formatPerekLabel, toHebrewWithPunctuation } from "~/utils/hebrew";
 
 describe("toHebrewWithPunctuation", () => {
+	it("returns an empty string for zero", () => {
+		expect(toHebrewWithPunctuation(0)).toBe("");
+	});
+
 	it("returns single letter with geresh for single-digit numbers", () => {
 		expect(toHebrewWithPunctuation(1)).toBe("א'");
 		expect(toHebrewWithPunctuation(2)).toBe("ב'");
@@ -21,6 +25,8 @@ describe("toHebrewWithPunctuation", () => {
 	it("handles larger numbers", () => {
 		expect(toHebrewWithPunctuation(100)).toBe("ק'");
 		expect(toHebrewWithPunctuation(150)).toBe('ק"נ');
+		expect(toHebrewWithPunctuation(415)).toBe('תט"ו');
+		expect(toHebrewWithPunctuation(500)).toBe('ת"ק');
 	});
 });
 

@@ -28,7 +28,7 @@ describe("checkS3Availability happy path", () => {
 
 	it("completes without warning when S3 is reachable", async () => {
 		process.env.S3_ENDPOINT = "http://localhost:4566";
-		process.env.NODE_ENV = "test";
+		jest.replaceProperty(process.env, "NODE_ENV", "test");
 
 		const mockFetch = jest.fn().mockResolvedValue({ ok: true, status: 200 });
 		global.fetch = mockFetch;

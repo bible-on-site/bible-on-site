@@ -290,6 +290,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn schema_executes_all_tanahpedia_family_resolvers() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let schema = build_schema(&db);
+
+        let response = schema
+            .execute(
+                Request::new(
+                    r#"{
+                        persons: tanahpediaFindPersons(name: " ") { personId }
+                        entities: tanahpediaFindEntities(name: " ") { entityId }
+                        sources: tanahpediaEntityTanahSources(entityId: " ") { citation }
+                        unions: tanahpediaPersonUnions(personId: " ") { id }
+                        parentChild: tanahpediaPersonParentChild(personId: " ") { id }
+                        details: tanahpediaPersonDetails(personId: " ") { personId }
+                    }"#,
+                )
+                .data(crate::common::auth::ApiAuth::with_revision_api_key(
+                    Some("family-test-key".to_string()),
+                    Some("family-test-key".to_string()),
+                )),
+            )
+            .await;
+
+        assert_eq!(response.errors.len(), 6, "{:?}", response.errors);
+        assert!(
+            response
+                .errors
+                .iter()
+                .all(|error| error.message.contains("is required")),
+            "{:?}",
+            response.errors
+        );
+    }
+
+    #[tokio::test]
     async fn schema_rejects_revision_mutations_without_api_auth() {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());

@@ -43,7 +43,7 @@ export const getAuthors = createServerFn({ method: "GET" }).handler(
 
 // Get author by ID
 export const getAuthor = createServerFn({ method: "GET" })
-	.inputValidator((data: number) => data)
+	.validator((data: number) => data)
 	.handler(async ({ data: id }) => {
 		const row = await queryOne<AuthorRow>(
 			"SELECT id, name, details FROM tanah_author WHERE id = ?",
@@ -59,7 +59,7 @@ export const getAuthor = createServerFn({ method: "GET" })
 
 // Create author
 export const createAuthor = createServerFn({ method: "POST" })
-	.inputValidator((data: AuthorFormData) => data)
+	.validator((data: AuthorFormData) => data)
 	.handler(async ({ data }) => {
 		if (!data.name) {
 			throw new Error("Name is required");
@@ -84,7 +84,7 @@ export const createAuthor = createServerFn({ method: "POST" })
 
 // Update author
 export const updateAuthor = createServerFn({ method: "POST" })
-	.inputValidator((data: { id: number } & AuthorFormData) => data)
+	.validator((data: { id: number } & AuthorFormData) => data)
 	.handler(async ({ data }) => {
 		if (!data.name) {
 			throw new Error("Name is required");
@@ -109,7 +109,7 @@ export const updateAuthor = createServerFn({ method: "POST" })
 
 // Delete author
 export const deleteAuthor = createServerFn({ method: "POST" })
-	.inputValidator((data: number) => data)
+	.validator((data: number) => data)
 	.handler(async ({ data: id }) => {
 		await execute("DELETE FROM tanah_author WHERE id = ?", [id]);
 		return { success: true };

@@ -38,9 +38,7 @@ import {
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 
-const mockExecFileSync = execFileSync as jest.MockedFunction<
-	typeof execFileSync
->;
+const mockExecFileSync = execFileSync as jest.Mock;
 const mockExistsSync = existsSync as jest.MockedFunction<typeof existsSync>;
 
 const PDF_HEADER = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d]);
@@ -67,14 +65,26 @@ function makeLambdaResponse(pdfBuf: Buffer) {
 describe("bulletin-client", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
-		mockExistsSync.mockImplementation(
-			(path: string) =>
-				path.includes("target/debug/bulletin") ||
-				path.includes("target\\debug\\bulletin"),
-		);
+		mockExistsSync.mockReturnValue(true);
 	});
 
 	describe("generatePdfViaBulletin (dev mode — no BULLETIN_LAMBDA_NAME)", () => {
+		it("requires Lambda configuration in production", async () => {
+			const nodeEnv = jest.replaceProperty(
+				process.env,
+				"NODE_ENV",
+				"production",
+			);
+			try {
+				await expect(generatePdfViaBulletin([1])).rejects.toThrow(
+					/BULLETIN_LAMBDA_NAME is required/,
+				);
+				expect(mockExecFileSync).not.toHaveBeenCalled();
+			} finally {
+				nodeEnv.restore();
+			}
+		});
+
 		it("sends just perek IDs on stdin — no text data", async () => {
 			const fakePdf = makeFakePdf();
 			mockExecFileSync.mockReturnValue(fakePdf);

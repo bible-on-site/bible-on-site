@@ -47,7 +47,7 @@ export const getEntries = createServerFn({ method: "GET" }).handler(
  * (title / unique_name). Mirrors public tanahpedia category resolution.
  */
 export const listTanahpediaEntriesForAdmin = createServerFn({ method: "POST" })
-	.inputValidator(
+	.validator(
 		(data: { category?: string; q?: string } | undefined) => data ?? {},
 	)
 	.handler(async ({ data }) => {
@@ -213,7 +213,7 @@ export const getTanahpediaCategoryCounts = createServerFn({
 });
 
 export const getEntry = createServerFn({ method: "GET" })
-	.inputValidator((data: string) => data)
+	.validator((data: string) => data)
 	.handler(async ({ data: id }) => {
 		const entry = await loadTanahpediaEntryById(id);
 		if (!entry) throw new Error("Entry not found");
@@ -221,7 +221,7 @@ export const getEntry = createServerFn({ method: "GET" })
 	});
 
 export const createEntry = createServerFn({ method: "POST" })
-	.inputValidator(
+	.validator(
 		(data: {
 			id: string;
 			unique_name: string;
@@ -241,7 +241,7 @@ export const createEntry = createServerFn({ method: "POST" })
 	});
 
 export const updateEntry = createServerFn({ method: "POST" })
-	.inputValidator(
+	.validator(
 		(data: {
 			id: string;
 			unique_name: string;
@@ -261,14 +261,14 @@ export const updateEntry = createServerFn({ method: "POST" })
 	});
 
 export const deleteEntry = createServerFn({ method: "POST" })
-	.inputValidator((data: string) => data)
+	.validator((data: string) => data)
 	.handler(async ({ data: id }) => {
 		await execute("DELETE FROM tanahpedia_entry WHERE id = ?", [id]);
 		return { success: true };
 	});
 
 export const getEntryEntities = createServerFn({ method: "GET" })
-	.inputValidator((data: string) => data)
+	.validator((data: string) => data)
 	.handler(async ({ data: entryId }) => {
 		return await query<TanahpediaEntryEntity>(
 			`SELECT ee.id, ee.entry_id, ee.entity_id, e.entity_type AS entity_type
@@ -280,7 +280,7 @@ export const getEntryEntities = createServerFn({ method: "GET" })
 	});
 
 export const assignEntity = createServerFn({ method: "POST" })
-	.inputValidator(
+	.validator(
 		(data: { id: string; entry_id: string; entity_id: string }) => data,
 	)
 	.handler(async ({ data }) => {
@@ -292,7 +292,7 @@ export const assignEntity = createServerFn({ method: "POST" })
 	});
 
 export const removeEntity = createServerFn({ method: "POST" })
-	.inputValidator((data: string) => data)
+	.validator((data: string) => data)
 	.handler(async ({ data: id }) => {
 		await execute("DELETE FROM tanahpedia_entry_entity WHERE id = ?", [id]);
 		return { success: true };

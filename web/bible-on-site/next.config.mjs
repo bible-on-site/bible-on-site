@@ -1,7 +1,13 @@
+import path from "node:path";
+
 const KB = 1024;
 const MB = KB * KB;
 
 const isProduction = process.env.NODE_ENV === "production";
+const productionBulletinClient = path.resolve(
+	import.meta.dirname,
+	"src/lib/download/bulletin-client-local.production.ts",
+);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -9,6 +15,21 @@ const nextConfig = {
 	transpilePackages: ["html-flip-book-react"],
 	turbopack: {
 		root: import.meta.dirname,
+		...(isProduction
+			? {
+					resolveAlias: {
+						"@/lib/download/bulletin-client-local":
+							"./src/lib/download/bulletin-client-local.production.ts",
+					},
+				}
+			: {}),
+	},
+	webpack(config) {
+		if (isProduction) {
+			config.resolve.alias["@/lib/download/bulletin-client-local"] =
+				productionBulletinClient;
+		}
+		return config;
 	},
 	images: {
 		unoptimized: !isProduction,

@@ -72,6 +72,7 @@ import {
 } from "../../../src/data/sefer-dto";
 import { getPerushimByPerekId } from "../../../src/lib/perushim";
 import { getArticlesByPerekId } from "../../../src/lib/articles/service";
+import type { QriSegment } from "../../../src/data/db/tanah-view-types";
 import {
 	buildTanachPdfForPerekRange,
 	createTanachPageRangesHandler,
@@ -102,6 +103,21 @@ const mockGetArticlesByPerekId = getArticlesByPerekId as jest.MockedFunction<
 // biome-ignore lint/suspicious/noExplicitAny: test helper to access mock internals
 const pdfLib = jest.requireMock("pdf-lib") as any;
 
+function timeframe(
+	from: string,
+	to: string,
+): QriSegment["recordingTimeFrame"] {
+	return { from, to } as unknown as QriSegment["recordingTimeFrame"];
+}
+
+function qri(value: string): QriSegment {
+	return {
+		type: "qri",
+		value,
+		recordingTimeFrame: timeframe("00:00:00", "00:00:01"),
+	};
+}
+
 function makePerek(
 	sefer: string,
 	perekHeb: string,
@@ -116,7 +132,7 @@ function makePerek(
 		helek: "תורה",
 		source: `${sefer} ${perekHeb}`,
 		pesukim: pasukTexts.map((text) => ({
-			segments: [{ type: "qri" as const, value: text }],
+			segments: [qri(text)],
 		})),
 	};
 }
@@ -124,34 +140,31 @@ function makePerek(
 describe("segmentsToText", () => {
 	it("separates word-segments with spaces", () => {
 		const segments = [
-			{ type: "qri" as const, value: "וַיְדַבֵּר" },
-			{ type: "qri" as const, value: "יְהוָה" },
-			{ type: "qri" as const, value: "אֶל־" },
-			{ type: "qri" as const, value: "מֹשֶׁה" },
+			qri("וַיְדַבֵּר"),
+			qri("יְהוָה"),
+			qri("אֶל־"),
+			qri("מֹשֶׁה"),
 		];
 		expect(segmentsToText(segments)).toBe("וַיְדַבֵּר יְהוָה אֶל־מֹשֶׁה");
 	});
 
 	it("removes extra space after maqaf (U+05BE)", () => {
-		const segments = [
-			{ type: "qri" as const, value: "אֶל־" },
-			{ type: "qri" as const, value: "מֹשֶׁה" },
-		];
+		const segments = [qri("אֶל־"), qri("מֹשֶׁה")];
 		// maqaf connects words — no space between them
 		expect(segmentsToText(segments)).toBe("אֶל־מֹשֶׁה");
 	});
 
 	it("adds space from stuma/ptuha segments", () => {
 		const segments = [
-			{ type: "qri" as const, value: "בְּרֵאשִׁית" },
+			qri("בְּרֵאשִׁית"),
 			{ type: "stuma" as const, value: "" },
-			{ type: "qri" as const, value: "בָּרָא" },
+			qri("בָּרָא"),
 		];
 		expect(segmentsToText(segments)).toBe("בְּרֵאשִׁית בָּרָא");
 	});
 
 	it("handles ktiv segments", () => {
-		const segments = [{ type: "ktiv" as const, value: "הִוא" }];
+		const segments = [{ type: "ktiv" as const, value: "הִוא", qriOffset: 0 }];
 		expect(segmentsToText(segments)).toBe("הִוא");
 	});
 

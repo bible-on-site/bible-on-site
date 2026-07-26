@@ -11,6 +11,8 @@ engines:
 # Exclude MySQL/SQLite schema files: SQL analyzer uses T-SQL dialect and flags
 # valid MySQL backticks and SQLite PRAGMA/AUTOINCREMENT as syntax errors
 exclude_paths:
+  - "data/mysql/tanahpedia_alter_person_source_citation.sql"
+  - "data/mysql/tanahpedia_alter_source_citation.sql"
   - "data/mysql/perushim_structure.sql"
   - "data/mysql/perushim_data.sql"
   - "data/sqlite/perushim_catalog_structure.sql"

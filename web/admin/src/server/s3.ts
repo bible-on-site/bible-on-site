@@ -121,7 +121,7 @@ interface UploadAuthorImageInput {
 
 // Server function to upload author image
 export const uploadAuthorImage = createServerFn({ method: "POST" })
-	.inputValidator((data: UploadAuthorImageInput) => data)
+	.validator((data: UploadAuthorImageInput) => data)
 	.handler(async ({ data }) => {
 		const { authorId, contentType, base64Data } = data;
 

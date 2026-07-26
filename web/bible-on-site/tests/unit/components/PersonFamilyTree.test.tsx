@@ -51,6 +51,7 @@ function spouseEdge({
 	unionOrder = 1,
 	altGroupId = null,
 	sourceCitation = null,
+	personSourceCitation = null,
 	unionEndReason = null,
 	unionStartDate = null,
 	unionEndDate = null,
@@ -61,6 +62,7 @@ function spouseEdge({
 	unionOrder?: number | null;
 	altGroupId?: string | null;
 	sourceCitation?: string | null;
+	personSourceCitation?: string | null;
 	unionEndReason?: string | null;
 	unionStartDate?: number | string | null;
 	unionEndDate?: number | string | null;
@@ -71,6 +73,7 @@ function spouseEdge({
 		unionOrder,
 		altGroupId,
 		sourceCitation,
+		personSourceCitation,
 		unionEndReason,
 		unionStartDate,
 		unionEndDate,
@@ -134,6 +137,7 @@ describe("PersonFamilyTree", () => {
 					unionOrder: 1,
 					altGroupId: null,
 					sourceCitation: null,
+					personSourceCitation: null,
 					unionEndReason: null,
 					unionStartDate: null,
 					unionEndDate: null,
@@ -160,10 +164,81 @@ describe("PersonFamilyTree", () => {
 		expect(screen.getByText("ילדים")).toBeInTheDocument();
 		expect(screen.getByText("אח")).toBeInTheDocument();
 		expect(screen.getAllByText("אחים").length).toBeGreaterThanOrEqual(1);
-		expect(screen.getByText("שמשון")).toBeInTheDocument();
+		expect(screen.getByText("שמשון").parentElement).toHaveAttribute(
+			"data-has-sex-mark",
+			"",
+		);
+		expect(screen.getByText("דלילה").parentElement).toHaveAttribute(
+			"data-has-sex-mark",
+			"",
+		);
+		expect(screen.getByText("מנוח").parentElement).not.toHaveAttribute(
+			"data-has-sex-mark",
+		);
 		const childCard = screen.getByTestId("family-child-card");
 		expect(childCard).toHaveTextContent("ילד");
 		expect(childCard.textContent).not.toMatch(/\bאב\b/);
+	});
+
+	it("renders a child's own source citation inside its card box, not as an external ribbon", () => {
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			focalSex: "MALE",
+			children: [
+				childEdge({
+					id: "c-reuven",
+					name: "ראובן",
+					sourceCitation: "בראשית כט לב",
+				}),
+			],
+		};
+		render(<PersonFamilyTree summary={summary} />);
+		const childCard = screen.getByTestId("family-child-card");
+		expect(childCard).toHaveTextContent("ראובן");
+		expect(childCard).toHaveTextContent("בראשית כט לב");
+	});
+
+	it("renders a spouse's own source citation inside its card box, alongside (not instead of) the relationship citation", () => {
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			focalSex: "MALE",
+			spouses: [
+				spouseEdge({
+					id: "bilhah",
+					name: "בלהה",
+					unionOrder: 3,
+					sourceCitation: "הכתב והקבלה בראשית לב כג",
+					personSourceCitation: "בראשית ל ד",
+				}),
+			],
+		};
+		render(<PersonFamilyTree summary={summary} />);
+		const spouseCard = screen.getByTestId("family-spouse-card");
+		expect(spouseCard).toHaveTextContent("בלהה");
+		expect(spouseCard).toHaveTextContent("בראשית ל ד");
+		expect(spouseCard).not.toHaveTextContent("הכתב והקבלה");
+		expect(screen.getByText("הכתב והקבלה בראשית לב כג")).toBeInTheDocument();
+	});
+
+	it("renders a spouse's own citation only once when it matches the relationship citation (no external ribbon)", () => {
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			focalSex: "MALE",
+			spouses: [
+				spouseEdge({
+					id: "leah",
+					name: "לאה",
+					unionOrder: 1,
+					sourceCitation: null,
+					personSourceCitation: "בראשית כט כג",
+				}),
+			],
+		};
+		render(<PersonFamilyTree summary={summary} />);
+		const spouseCard = screen.getByTestId("family-spouse-card");
+		expect(spouseCard).toHaveTextContent("לאה");
+		expect(spouseCard).toHaveTextContent("בראשית כט כג");
+		expect(screen.getAllByText("בראשית כט כג")).toHaveLength(1);
 	});
 
 	it("shows אחים מבוגרים and אחים צעירים when sibling birth dates bracket focal", () => {
@@ -197,6 +272,7 @@ describe("PersonFamilyTree", () => {
 					unionOrder: 1,
 					altGroupId: "g1",
 					sourceCitation: "משנה תורה",
+					personSourceCitation: null,
 					unionEndReason: null,
 					unionStartDate: null,
 					unionEndDate: null,
@@ -207,6 +283,7 @@ describe("PersonFamilyTree", () => {
 					unionOrder: 1,
 					altGroupId: "g1",
 					sourceCitation: 'רש"י',
+					personSourceCitation: null,
 					unionEndReason: null,
 					unionStartDate: null,
 					unionEndDate: null,
@@ -240,6 +317,7 @@ describe("PersonFamilyTree", () => {
 					unionOrder: 1,
 					altGroupId: null,
 					sourceCitation: "משנה תורה",
+					personSourceCitation: null,
 					unionEndReason: null,
 					unionStartDate: null,
 					unionEndDate: null,
@@ -250,6 +328,7 @@ describe("PersonFamilyTree", () => {
 					unionOrder: 1,
 					altGroupId: "other",
 					sourceCitation: 'רש"י',
+					personSourceCitation: null,
 					unionEndReason: null,
 					unionStartDate: null,
 					unionEndDate: null,
@@ -304,6 +383,7 @@ describe("PersonFamilyTree", () => {
 					unionOrder: 1,
 					altGroupId: null,
 					sourceCitation: null,
+					personSourceCitation: null,
 					unionEndReason: "DEATH",
 					unionStartDate: 18000101,
 					unionEndDate: 18500101,
@@ -369,6 +449,7 @@ describe("PersonFamilyTree", () => {
 					unionOrder: 1,
 					altGroupId: null,
 					sourceCitation: null,
+					personSourceCitation: null,
 					unionEndReason: null,
 					unionStartDate: null,
 					unionEndDate: null,
@@ -379,6 +460,7 @@ describe("PersonFamilyTree", () => {
 					unionOrder: 2,
 					altGroupId: null,
 					sourceCitation: null,
+					personSourceCitation: null,
 					unionEndReason: null,
 					unionStartDate: null,
 					unionEndDate: null,
@@ -439,14 +521,18 @@ describe("PersonFamilyTree", () => {
 
 		render(<PersonFamilyTree summary={summary} />);
 
-		const parentRowText = screen.getByText("הורים").closest("section")?.textContent;
+		const parentRowText = screen
+			.getByText("הורים")
+			.closest("section")?.textContent;
 		expect(parentRowText).toContain("אב");
 		expect(parentRowText).toContain("אם");
 		expect(parentRowText?.indexOf("אב")).toBeLessThan(
 			parentRowText?.indexOf("אם") ?? Number.POSITIVE_INFINITY,
 		);
 		expect(screen.getByText(/מאמץ|מאמצת|אימוץ/)).toBeInTheDocument();
-		expect(screen.getAllByText("אב").some((node) => node.closest("a"))).toBe(false);
+		expect(screen.getAllByText("אב").some((node) => node.closest("a"))).toBe(
+			false,
+		);
 	});
 
 	it("renders loose children in a separate spouse matrix column", () => {
@@ -460,6 +546,7 @@ describe("PersonFamilyTree", () => {
 					unionOrder: 1,
 					altGroupId: null,
 					sourceCitation: null,
+					personSourceCitation: null,
 					unionEndReason: null,
 					unionStartDate: null,
 					unionEndDate: null,
@@ -511,6 +598,7 @@ describe("PersonFamilyTree", () => {
 					unionOrder: 1,
 					altGroupId: null,
 					sourceCitation: null,
+					personSourceCitation: null,
 					unionEndReason: null,
 					unionStartDate: null,
 					unionEndDate: null,
@@ -521,6 +609,7 @@ describe("PersonFamilyTree", () => {
 					unionOrder: 2,
 					altGroupId: null,
 					sourceCitation: null,
+					personSourceCitation: null,
 					unionEndReason: null,
 					unionStartDate: null,
 					unionEndDate: null,
@@ -606,7 +695,9 @@ describe("PersonFamilyTree", () => {
 			screen.getByText(/\u05dc\u05d0 \u05de\u05d6\u05d5\u05d4\u05d4/),
 		).toBeInTheDocument();
 		expect(
-			screen.getByText("\u05d9\u05dc\u05d3 \u05dc\u05dc\u05d0 \u05d4\u05d5\u05e8\u05d4"),
+			screen.getByText(
+				"\u05d9\u05dc\u05d3 \u05dc\u05dc\u05d0 \u05d4\u05d5\u05e8\u05d4",
+			),
 		).toBeInTheDocument();
 	});
 
@@ -703,11 +794,17 @@ describe("PersonFamilyTree", () => {
 		render(<PersonFamilyTree summary={summary} />);
 
 		expect(screen.getByText("\u05d0\u05d7\u05e8")).toBeInTheDocument();
-		expect(screen.getByText("\u05e8\u05d0\u05d5\u05d1\u05df")).toBeInTheDocument();
-		expect(screen.getByText("\u05e9\u05de\u05e2\u05d5\u05df")).toBeInTheDocument();
+		expect(
+			screen.getByText("\u05e8\u05d0\u05d5\u05d1\u05df"),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText("\u05e9\u05de\u05e2\u05d5\u05df"),
+		).toBeInTheDocument();
 		expect(screen.getByText("\u05d9\u05d5\u05e1\u05e3")).toBeInTheDocument();
 		expect(screen.getByText("\u05d3\u05df")).toBeInTheDocument();
-		expect(screen.getByText("\u05e0\u05e4\u05ea\u05dc\u05d9")).toBeInTheDocument();
+		expect(
+			screen.getByText("\u05e0\u05e4\u05ea\u05dc\u05d9"),
+		).toBeInTheDocument();
 	});
 
 	it("measures spouse matrix rows with ResizeObserver and disconnects on unmount", () => {
@@ -761,8 +858,7 @@ describe("PersonFamilyTree", () => {
 		unmount();
 		expect(disconnect).toHaveBeenCalled();
 
-		HTMLElement.prototype.getBoundingClientRect =
-			originalGetBoundingClientRect;
+		HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
 		global.ResizeObserver = originalResizeObserver;
 	});
 
@@ -801,7 +897,12 @@ describe("PersonFamilyTree", () => {
 			...baseSummary,
 			parents: [
 				{
-					related: related("alt-mother", "\u05d0\u05dd \u05d7\u05dc\u05d5\u05e4\u05d9\u05ea", null, "FEMALE"),
+					related: related(
+						"alt-mother",
+						"\u05d0\u05dd \u05d7\u05dc\u05d5\u05e4\u05d9\u05ea",
+						null,
+						"FEMALE",
+					),
 					parentRole: "MOTHER",
 					relationshipType: "ADOPTIVE",
 					altGroupId: "alt",
@@ -823,9 +924,13 @@ describe("PersonFamilyTree", () => {
 			screen.getByText("\u05d4\u05d5\u05e8\u05d9\u05dd").closest("section")
 				?.textContent ?? "";
 		expect(parentSectionText.indexOf("\u05d0\u05d1")).toBeLessThan(
-			parentSectionText.indexOf("\u05d0\u05dd \u05d7\u05dc\u05d5\u05e4\u05d9\u05ea"),
+			parentSectionText.indexOf(
+				"\u05d0\u05dd \u05d7\u05dc\u05d5\u05e4\u05d9\u05ea",
+			),
 		);
-		expect(screen.getAllByText("\u05d7\u05dc\u05d5\u05e4\u05d9").length).toBeGreaterThan(0);
+		expect(
+			screen.getAllByText("\u05d7\u05dc\u05d5\u05e4\u05d9").length,
+		).toBeGreaterThan(0);
 	});
 
 	it("sorts co-parent child buckets by display name when union order is absent", () => {
@@ -849,7 +954,9 @@ describe("PersonFamilyTree", () => {
 
 		render(<PersonFamilyTree summary={summary} />);
 
-		const treeText = screen.getByRole("region", { name: /\u05de\u05e9\u05e4\u05d7\u05d4/ }).textContent ?? "";
+		const treeText =
+			screen.getByRole("region", { name: /\u05de\u05e9\u05e4\u05d7\u05d4/ })
+				.textContent ?? "";
 		expect(treeText.indexOf("\u05d0\u05d4\u05d5\u05d1\u05d4")).toBeLessThan(
 			treeText.indexOf("\u05d6\u05dc\u05e4\u05d4"),
 		);
@@ -863,7 +970,8 @@ describe("PersonFamilyTree", () => {
 					id: "only-child",
 					name: "\u05d9\u05dc\u05d3",
 					coParentEntityId: "named-parent",
-					coParentDisplayName: "\u05d4\u05d5\u05e8\u05d4 \u05de\u05d6\u05d5\u05d4\u05d4",
+					coParentDisplayName:
+						"\u05d4\u05d5\u05e8\u05d4 \u05de\u05d6\u05d5\u05d4\u05d4",
 				}),
 			],
 		};
@@ -871,7 +979,9 @@ describe("PersonFamilyTree", () => {
 		render(<PersonFamilyTree summary={summary} />);
 
 		expect(
-			screen.getByText(/\u05d4\u05d5\u05e8\u05d4 \u05de\u05d6\u05d5\u05d4\u05d4/),
+			screen.getByText(
+				/\u05d4\u05d5\u05e8\u05d4 \u05de\u05d6\u05d5\u05d4\u05d4/,
+			),
 		).toBeInTheDocument();
 	});
 
@@ -899,7 +1009,8 @@ describe("PersonFamilyTree", () => {
 	});
 
 	it("orders child co-parent buckets by known union order before name and unknown", () => {
-		const orderedParent = "\u05d4\u05d5\u05e8\u05d4 \u05e8\u05d0\u05e9\u05d5\u05df";
+		const orderedParent =
+			"\u05d4\u05d5\u05e8\u05d4 \u05e8\u05d0\u05e9\u05d5\u05df";
 		const namedParent = "\u05d4\u05d5\u05e8\u05d4 \u05e9\u05e0\u05d9";
 		const looseChild = "\u05d9\u05dc\u05d3 \u05dc\u05dc\u05d0";
 		const summary: PersonFamilySummary = {
@@ -941,8 +1052,10 @@ describe("PersonFamilyTree", () => {
 	});
 
 	it("keeps unknown co-parent child buckets after identified buckets", () => {
-		const orderedChild = "\u05d9\u05dc\u05d3 \u05de\u05d4\u05d5\u05e8\u05d4 \u05de\u05e1\u05d5\u05d3\u05e8";
-		const unnamedChild = "\u05d9\u05dc\u05d3 \u05de\u05d4\u05d5\u05e8\u05d4 \u05dc\u05dc\u05d0 \u05e9\u05dd";
+		const orderedChild =
+			"\u05d9\u05dc\u05d3 \u05de\u05d4\u05d5\u05e8\u05d4 \u05de\u05e1\u05d5\u05d3\u05e8";
+		const unnamedChild =
+			"\u05d9\u05dc\u05d3 \u05de\u05d4\u05d5\u05e8\u05d4 \u05dc\u05dc\u05d0 \u05e9\u05dd";
 		const looseChild = "\u05d9\u05dc\u05d3 \u05d7\u05d5\u05e4\u05e9\u05d9";
 		const summary: PersonFamilySummary = {
 			...baseSummary,
@@ -963,7 +1076,8 @@ describe("PersonFamilyTree", () => {
 					id: "ordered-parent",
 					name: orderedChild,
 					coParentEntityId: "ordered-parent",
-					coParentDisplayName: "\u05d4\u05d5\u05e8\u05d4 \u05de\u05e1\u05d5\u05d3\u05e8",
+					coParentDisplayName:
+						"\u05d4\u05d5\u05e8\u05d4 \u05de\u05e1\u05d5\u05d3\u05e8",
 					coParentUnionOrder: 1,
 				}),
 			],
@@ -1034,7 +1148,9 @@ describe("PersonFamilyTree", () => {
 
 		render(<PersonFamilyTree summary={summary} />);
 
-		expect(screen.getByRole("group", { name: new RegExp(leah) })).toBeInTheDocument();
+		expect(
+			screen.getByRole("group", { name: new RegExp(leah) }),
+		).toBeInTheDocument();
 		expect(
 			screen.getByRole("group", { name: new RegExp(rachel) }),
 		).toBeInTheDocument();
@@ -1047,7 +1163,8 @@ describe("PersonFamilyTree", () => {
 	});
 
 	it("renders single-spouse timeline blocks without order ribbons", () => {
-		const spouseName = "\u05d0\u05e9\u05d4 \u05d7\u05dc\u05d5\u05e4\u05d9\u05ea";
+		const spouseName =
+			"\u05d0\u05e9\u05d4 \u05d7\u05dc\u05d5\u05e4\u05d9\u05ea";
 		const summary: PersonFamilySummary = {
 			...baseSummary,
 			focalSex: "MALE",
@@ -1071,7 +1188,8 @@ describe("PersonFamilyTree", () => {
 
 	it("fuses reversed forbidden rows and sorts same-rank spouse opinions", () => {
 		const fusedName = "\u05d6\u05d9\u05d5\u05d5\u05d2 \u05d4\u05e4\u05d5\u05da";
-		const customName = "\u05d3\u05e2\u05d4 \u05de\u05d5\u05ea\u05d0\u05de\u05ea";
+		const customName =
+			"\u05d3\u05e2\u05d4 \u05de\u05d5\u05ea\u05d0\u05de\u05ea";
 		const summary: PersonFamilySummary = {
 			...baseSummary,
 			focalSex: "MALE",
@@ -1310,6 +1428,8 @@ describe("PersonFamilyTree", () => {
 
 		expect(screen.getByText("\u05d0\u05e9\u05d4")).toBeInTheDocument();
 		expect(screen.queryByText(/\u05e1\u05d3\u05e8/)).not.toBeInTheDocument();
-		expect(screen.getAllByText(/\u05d0\u05d9\u05e8\u05d5\u05e1\u05d9\u05df/).length).toBeGreaterThan(0);
+		expect(
+			screen.getAllByText(/\u05d0\u05d9\u05e8\u05d5\u05e1\u05d9\u05df/).length,
+		).toBeGreaterThan(0);
 	});
 });
