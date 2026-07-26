@@ -21,7 +21,7 @@ async-graphql = { version = "7.2.1", default-features = false, features = [
 async-graphql-actix-web = "7.2.1"
 dotenvy = "0.15.7"
 serde = { version = "1.0.228", features = ["derive"] }
-tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread", "sync"] }
+tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread"] }
 anyhow = "1.0.102"
 tracing = "0.1.44"
 tracing-actix-web = "0.7.21"
@@ -40,8 +40,6 @@ chrono = { version = "0.4.42", default-features = false, features = ["clock"] }
 [dev-dependencies]
 cargo-llvm-cov = "0.8.7"
 cargo-make = "0.37.24"
-semver-bump = "1.0.1"
-tomato-toml = { git = "https://github.com/doradsoft/rust-tomato-toml", branch = "latest" }
 sea-orm = { version = "2.0.0", default-features = false, features = ["mock"] }
 
 [[bin]]
@@ -56,7 +54,3 @@ incremental = true
 
 [package.metadata.release]
 pre-release-commit-message = "chore(release): {{version}} [skip ci]"
-
-[package.metadata.cargo-udeps.ignore] #TODO: somehow the ignore list got ignored...
-normal = ["semver-bump", "tomato-toml"]
-build = ["semver-bump", "tomato-toml"]

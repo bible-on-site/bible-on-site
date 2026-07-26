@@ -1,13 +1,12 @@
 import { toNumber } from "gematry";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { perushim } from "@/data/db/perushim";
+import { perushNames } from "@/data/db/perush-names";
 import { sefarim } from "@/data/db/sefarim";
 import type {
 	AdditionalsItem,
 	SefarimItemWithPerakim,
 } from "@/data/db/tanah-view-types";
-import { normalizePasukSlugHyphens } from "@/lib/tanach/tanach-pasuk-range";
 
 interface TanachRefMatch {
 	index: number;
@@ -156,16 +155,9 @@ function pasukLettersToPositiveInt(pasukRaw: string): number | null {
 	return n != null && n > 0 ? n : null;
 }
 
-/** מנקה טקסט פסוק ל־ערך query (ללא רווחים סביב מקף) */
-function compactPasukSlugForUrl(pasukRaw: string): string {
-	return normalizePasukSlugHyphens(pasukRaw).replace(/\s+/g, "");
-}
-
 /**
- * קישור לפרק בתנ"ך לפי מקור (ספר+פרק[+פסוק]). `/929/{number}?pasuk={slug}`
- * תומך רק במאמר (מספרי) או שם פירוש — אין נתיב לעגינה על פסוק ספציפי
- * ללא פירוש — לכן פסוק מצוין כ־`?pasuk=` (נקרא ומסומן ב-`ScrollToPasuk`
- * בדף הפרק עצמו), ולא כ־slug בנתיב (זה היה גורם ל-404).
+ * קישור לפרק בתנ"ך לפי מקור (ספר+פרק[+פסוק]). `/929/{number}#pasuk-{number}`
+ * עוגן הפסוק משתמש בגלילה המובנית של הדפדפן וב־`:target` לסימון ללא JavaScript.
  */
 function tryTanachHref(
 	seferCitation: string,
@@ -178,21 +170,11 @@ function tryTanachHref(
 	if (!pasukTrim) {
 		return `/929/${perekId}`;
 	}
-	const slug = compactPasukSlugForUrl(pasukTrim);
-	if (!slug) {
+	const pasukNum = pasukLettersToPositiveInt(pasukTrim);
+	if (pasukNum == null) {
 		return `/929/${perekId}`;
 	}
-	return `/929/${perekId}?pasuk=${encodeURIComponent(slug)}`;
-}
-
-let cachedPerushNames: string[] | null = null;
-/** כל שמות הפירושים הידועים באתר (מ־perushim.json), מהארוך לקצר להתאמה חמדנית. */
-function perushNamesForCitations(): string[] {
-	if (cachedPerushNames) return cachedPerushNames;
-	cachedPerushNames = [...new Set(perushim.map((p) => p.name))].sort(
-		(a, b) => b.length - a.length,
-	);
-	return cachedPerushNames;
+	return `/929/${perekId}#pasuk-${pasukNum}`;
 }
 
 /** מציאת ההתרחשות המוקדמת ביותר של שם פירוש ידוע כלשהו בטקסט — גנרי, לא תלוי בשם פירוש ספציפי. */
@@ -200,7 +182,7 @@ function findKnownPerushNameMatch(
 	line: string,
 ): { name: string; index: number } | null {
 	let best: { name: string; index: number } | null = null;
-	for (const name of perushNamesForCitations()) {
+	for (const name of perushNames) {
 		const idx = line.indexOf(name);
 		if (idx === -1) continue;
 		if (

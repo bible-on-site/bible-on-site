@@ -26,10 +26,11 @@
   font-weight: 700;
   text-decoration: underline;
 }
-.pasukHighlight {
+.perekText > [id^="pasuk-"]:target {
   background: rgba(254, 243, 199, 0.95);
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
   border-radius: 3px;
+  scroll-margin-block-start: calc((100vh - 72px) / 2);
 }
 .perekTextHeader h1 {
   color: #9a92d1;

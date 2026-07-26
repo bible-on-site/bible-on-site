@@ -28,18 +28,18 @@ describe("renderCitationWithTanachLinks", () => {
 		expect(a?.textContent).toBe("בראשית ה");
 	});
 
-	it("links sefer, perek, and single pasuk to /929/{perekId}?pasuk={slug}", () => {
+	it("links sefer, perek, and single pasuk to a native pasuk anchor", () => {
 		const nodes = renderCitationWithTanachLinks("בראשית כט לב", "cite");
 		render(<div>{nodes}</div>);
 		const a = screen.getByRole("link", { name: "בראשית כט לב" });
-		expect(a.getAttribute("href")).toMatch(/^\/929\/\d+\?pasuk=%D7%9C%D7%91$/);
+		expect(a.getAttribute("href")).toMatch(/^\/929\/\d+#pasuk-32$/);
 	});
 
-	it("links pasuk range to /929/{perekId}?pasuk={slug} using the normalized hyphen range", () => {
+	it("anchors a pasuk range at its first pasuk", () => {
 		const nodes = renderCitationWithTanachLinks("בראשית ל ו-ח", "cite");
 		render(<div>{nodes}</div>);
 		const a = screen.getByRole("link", { name: "בראשית ל ו-ח" });
-		expect(a.getAttribute("href")).toMatch(/^\/929\/\d+\?pasuk=%D7%95-%D7%97$/);
+		expect(a.getAttribute("href")).toMatch(/^\/929\/\d+#pasuk-6$/);
 	});
 
 	it("links additional-volume citations and preserves surrounding text", () => {
@@ -51,7 +51,7 @@ describe("renderCitationWithTanachLinks", () => {
 
 		expect(container.textContent).toBe("ראו שמואל א ג ד להרחבה");
 		const link = screen.getByRole("link", { name: "שמואל א ג ד" });
-		expect(link.getAttribute("href")).toMatch(/^\/929\/\d+\?pasuk=%D7%93$/);
+		expect(link.getAttribute("href")).toMatch(/^\/929\/\d+#pasuk-4$/);
 	});
 
 	it("leaves unresolvable and plain text citations unlinked", () => {
