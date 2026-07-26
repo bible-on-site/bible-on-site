@@ -103,14 +103,18 @@ const mockGetArticlesByPerekId = getArticlesByPerekId as jest.MockedFunction<
 // biome-ignore lint/suspicious/noExplicitAny: test helper to access mock internals
 const pdfLib = jest.requireMock("pdf-lib") as any;
 
+function timeframe(
+	from: string,
+	to: string,
+): QriSegment["recordingTimeFrame"] {
+	return { from, to } as unknown as QriSegment["recordingTimeFrame"];
+}
+
 function qri(value: string): QriSegment {
 	return {
 		type: "qri",
 		value,
-		recordingTimeFrame: {
-			from: "00:00:00" as never,
-			to: "00:00:01" as never,
-		},
+		recordingTimeFrame: timeframe("00:00:00", "00:00:01"),
 	};
 }
 
