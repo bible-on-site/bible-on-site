@@ -378,6 +378,10 @@ function PersonSexMark({ sex }: { sex: string | null }) {
 	);
 }
 
+function sexMarkDataAttribute(sex: string | null): "" | undefined {
+	return personSexCornerMark(sex) ? "" : undefined;
+}
+
 function spouseTimelineSuffix(edge: PersonFamilySpouseEdge): string {
 	const bits: string[] = [];
 	const start = formatUnionYyyymmdd(edge.unionStartDate);
@@ -412,7 +416,10 @@ function ParentCard({ edge }: { edge: PersonFamilyParentEdge }) {
 					{extra}
 				</span>
 			</div>
-			<div className={styles.card}>
+			<div
+				className={styles.card}
+				data-has-sex-mark={sexMarkDataAttribute(edge.related.sex)}
+			>
 				<PersonSexMark sex={edge.related.sex} />
 				<PersonNameLink related={edge.related} />
 				{cardCitationBlock(edge.sourceCitation)}
@@ -424,7 +431,10 @@ function ParentCard({ edge }: { edge: PersonFamilyParentEdge }) {
 function ChildCard({ edge }: { edge: PersonFamilyChildEdge }) {
 	const meta = focalChildCardMetaLine(edge);
 	const face = (
-		<div className={styles.card}>
+		<div
+			className={styles.card}
+			data-has-sex-mark={sexMarkDataAttribute(edge.related.sex)}
+		>
 			<PersonSexMark sex={edge.related.sex} />
 			<PersonNameLink related={edge.related} />
 			{cardCitationBlock(edge.sourceCitation)}
@@ -473,6 +483,7 @@ function SpouseCard({
 				className={styles.card}
 				data-testid="family-spouse-card"
 				data-matrix-spouse-card={matrixSpouseCardMark ? "" : undefined}
+				data-has-sex-mark={sexMarkDataAttribute(edge.related.sex)}
 			>
 				<PersonSexMark sex={edge.related.sex} />
 				<PersonNameLink related={edge.related} />
@@ -498,6 +509,7 @@ function SpouseInterpretationsCard({
 			<div
 				className={styles.card}
 				data-matrix-spouse-card={matrixSpouseCardMark ? "" : undefined}
+				data-has-sex-mark={sexMarkDataAttribute(head.related.sex)}
 			>
 				<PersonSexMark sex={head.related.sex} />
 				<PersonNameLink related={head.related} />
@@ -556,7 +568,10 @@ function SiblingCard({ related }: { related: PersonFamilyRelatedPerson }) {
 			className={styles.personCardStack}
 			title={related.sourceCitation ?? undefined}
 		>
-			<div className={styles.card}>
+			<div
+				className={styles.card}
+				data-has-sex-mark={sexMarkDataAttribute(related.sex)}
+			>
 				<PersonSexMark sex={related.sex} />
 				<PersonNameLink related={related} />
 			</div>
@@ -905,7 +920,10 @@ function PersonFamilyTreeContent({
 								<div className={styles.focalSpineRod} aria-hidden />
 							) : null}
 							<div className={styles.focalWrap}>
-								<div className={styles.cardFocal}>
+								<div
+									className={styles.cardFocal}
+									data-has-sex-mark={sexMarkDataAttribute(focalSex)}
+								>
 									<PersonSexMark sex={focalSex} />
 									<span className={styles.personUnlinked}>
 										{focalDisplayName}

@@ -164,7 +164,17 @@ describe("PersonFamilyTree", () => {
 		expect(screen.getByText("ילדים")).toBeInTheDocument();
 		expect(screen.getByText("אח")).toBeInTheDocument();
 		expect(screen.getAllByText("אחים").length).toBeGreaterThanOrEqual(1);
-		expect(screen.getByText("שמשון")).toBeInTheDocument();
+		expect(screen.getByText("שמשון").parentElement).toHaveAttribute(
+			"data-has-sex-mark",
+			"",
+		);
+		expect(screen.getByText("דלילה").parentElement).toHaveAttribute(
+			"data-has-sex-mark",
+			"",
+		);
+		expect(screen.getByText("מנוח").parentElement).not.toHaveAttribute(
+			"data-has-sex-mark",
+		);
 		const childCard = screen.getByTestId("family-child-card");
 		expect(childCard).toHaveTextContent("ילד");
 		expect(childCard.textContent).not.toMatch(/\bאב\b/);
