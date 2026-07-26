@@ -15,7 +15,6 @@ import Breadcrumb from "./components/Breadcrumb";
 import { PerushimSection } from "./components/PerushimSection";
 import { Ptuah } from "./components/Ptuha";
 import { renderPasukWithEntityRefs } from "./components/pasuk-renderer";
-import { ScrollToPasuk } from "./components/ScrollToPasuk";
 import SeferComposite from "./components/SeferComposite";
 import { Stuma } from "./components/Stuma";
 import { TanahpediaLink } from "./components/TanahpediaLink";
@@ -112,9 +111,6 @@ export default async function Perek({
 					perekIds={perekIds}
 					entityRefsByPerek={entityRefsByPerek}
 				/>
-			</Suspense>
-			<Suspense>
-				<ScrollToPasuk maxVerse={perekObj.pesukim.length} />
 			</Suspense>
 			<div className={`${styles.perekContainer} seo-content`}>
 				<Breadcrumb perekObj={perekObj} />
