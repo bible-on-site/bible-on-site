@@ -290,6 +290,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn schema_executes_all_tanahpedia_family_resolvers() {
+        let _guard = crate::common::auth::ENV_LOCK.lock().await;
+        unsafe {
+            std::env::set_var(crate::common::auth::REVISION_API_KEY_ENV, "family-test-key")
+        };
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let schema = build_schema(&db);
+
+        let response = schema
+            .execute(
+                Request::new(
+                    r#"{
+                        persons: tanahpediaFindPersons(name: " ") { personId }
+                        entities: tanahpediaFindEntities(name: " ") { entityId }
+                        sources: tanahpediaEntityTanahSources(entityId: " ") { citation }
+                        unions: tanahpediaPersonUnions(personId: " ") { id }
+                        parentChild: tanahpediaPersonParentChild(personId: " ") { id }
+                        details: tanahpediaPersonDetails(personId: " ") { personId }
+                    }"#,
+                )
+                .data(crate::common::auth::ApiAuth::new(Some(
+                    "family-test-key".to_string(),
+                ))),
+            )
+            .await;
+
+        unsafe { std::env::remove_var(crate::common::auth::REVISION_API_KEY_ENV) };
+        assert_eq!(response.errors.len(), 6, "{:?}", response.errors);
+        assert!(
+            response
+                .errors
+                .iter()
+                .all(|error| error.message.contains("is required")),
+            "{:?}",
+            response.errors
+        );
+    }
+
+    #[tokio::test]
     async fn schema_rejects_revision_mutations_without_api_auth() {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
