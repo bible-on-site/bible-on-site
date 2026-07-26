@@ -3,7 +3,7 @@
 -- extension), so this uses the standard prepared-statement idiom to check
 -- information_schema first. This makes the script safe to execute
 -- unconditionally on every deploy (production data-deploy Lambda has no
--- pre-check, it just re-runs this file every time).
+-- pre-check; this file is re-run on every deployment).
 SET @preparedStatement = (
         SELECT IF(
                 (
