@@ -157,6 +157,14 @@ jest.mock("@/app/929/[number]/components/Stuma", () => ({
 
 import Sefer from "@/app/929/[number]/components/Sefer";
 import type { PerekObj } from "@/data/perek-dto";
+import type { QriSegment } from "@/data/db/tanah-view-types";
+
+function timeframe(
+	from: string,
+	to: string,
+): QriSegment["recordingTimeFrame"] {
+	return { from, to } as unknown as QriSegment["recordingTimeFrame"];
+}
 
 const minimalPerek: PerekObj = {
 	perekId: 1,
@@ -171,10 +179,7 @@ const minimalPerek: PerekObj = {
 				{
 					type: "qri" as const,
 					value: "בְּרֵאשִׁית",
-					recordingTimeFrame: {
-						from: "00:00:00" as never,
-						to: "00:00:01" as never,
-					},
+					recordingTimeFrame: timeframe("00:00:00", "00:00:01"),
 					ktivOffset: 1,
 				},
 				{ type: "ktiv" as const, value: "בראשית", qriOffset: -1 },
@@ -183,10 +188,7 @@ const minimalPerek: PerekObj = {
 				{
 					type: "qri" as const,
 					value: "הָאָ֖רֶץ",
-					recordingTimeFrame: {
-						from: "00:00:02" as never,
-						to: "00:00:03" as never,
-					},
+					recordingTimeFrame: timeframe("00:00:02", "00:00:03"),
 				},
 			],
 		},
@@ -298,18 +300,12 @@ describe("Sefer component", () => {
 						{
 							type: "qri" as const,
 							value: "מִן־",
-							recordingTimeFrame: {
-								from: "00:00:00" as never,
-								to: "00:00:01" as never,
-							},
+							recordingTimeFrame: timeframe("00:00:00", "00:00:01"),
 						},
 						{
 							type: "qri" as const,
 							value: "הָאָ֖רֶץ",
-							recordingTimeFrame: {
-								from: "00:00:01" as never,
-								to: "00:00:02" as never,
-							},
+							recordingTimeFrame: timeframe("00:00:01", "00:00:02"),
 						},
 					],
 				},
