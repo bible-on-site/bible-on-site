@@ -2,22 +2,22 @@
 
 import { toLetters } from "gematry";
 import { unstable_cache } from "next/cache";
-import React, { Suspense } from "react";
+import { Suspense } from "react";
 import { getPerekByPerekId } from "../../../data/perek-dto";
-import { getSeferByName, getPerekIdsForSefer } from "../../../data/sefer-dto";
+import { getPerekIdsForSefer, getSeferByName } from "../../../data/sefer-dto";
 import { getArticleSummariesByPerekId } from "../../../lib/articles";
 import { getPerushimByPerekId } from "../../../lib/perushim";
 import { buildEntityRefLookup } from "../../../lib/tanahpedia/entity-ref-lookup";
 import type { PerekEntityReference } from "../../../lib/tanahpedia/service";
 import { getEntityReferencesForPerek } from "../../../lib/tanahpedia/service";
 import { ArticlesSection } from "./components/ArticlesSection";
-import { PerushimSection } from "./components/PerushimSection";
 import Breadcrumb from "./components/Breadcrumb";
+import { PerushimSection } from "./components/PerushimSection";
 import { Ptuah } from "./components/Ptuha";
+import { renderPasukWithEntityRefs } from "./components/pasuk-renderer";
 import SeferComposite from "./components/SeferComposite";
 import { Stuma } from "./components/Stuma";
 import { TanahpediaLink } from "./components/TanahpediaLink";
-import { renderPasukWithEntityRefs } from "./components/pasuk-renderer";
 import styles from "./page.module.css";
 // perakim are a closed list — no fallback rendering for unknown IDs.
 export const dynamicParams = false;
@@ -97,7 +97,9 @@ export default async function Perek({
 	const articles = await getCachedArticleSummaries(perekId);
 	const perushim = await getCachedPerushim(perekId);
 	const entityRefsByPerek = await fetchAllEntityRefs(perekIds);
-	const entityRefLookup = buildEntityRefLookup(entityRefsByPerek[perekId] ?? []);
+	const entityRefLookup = buildEntityRefLookup(
+		entityRefsByPerek[perekId] ?? [],
+	);
 
 	return (
 		<>
@@ -137,12 +139,12 @@ export default async function Perek({
 							),
 						);
 						return (
-							<React.Fragment key={pasukKey}>
+							<span key={pasukKey} id={`pasuk-${pasukKey}`}>
 								{pasukNumElement}
 								<span> </span>
 								{pasukElement}
 								<span> </span>
-							</React.Fragment>
+							</span>
 						);
 					})}
 				</article>

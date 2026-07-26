@@ -13,10 +13,10 @@ import {
 	getCategoryHomepage,
 	getEntitiesWithEntries,
 	getEntitiesWithEntriesByRole,
+	getEntityReferencesForPerek,
 	getEntries,
 	getEntriesByEntityType,
 	getEntryByUniqueName,
-	getEntityReferencesForPerek,
 	getPersonFamilySummary,
 	getPlaceIdentifications,
 	getPlaceMapMarkers,
@@ -92,15 +92,18 @@ describe("tanahpedia service", () => {
 		await expect(getEntriesByEntityType("PLACE")).resolves.toEqual([
 			{ id: "entry-place", title: "ירושלים" },
 		]);
-		expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("WHERE e.entity_type = ?"), [
-			"PLACE",
-		]);
+		expect(mockQuery).toHaveBeenCalledWith(
+			expect.stringContaining("WHERE e.entity_type = ?"),
+			["PLACE"],
+		);
 	});
 
 	it("returns null when an entity has no person row", async () => {
 		mockQuery.mockResolvedValueOnce([]);
 
-		await expect(getPersonFamilySummary("entity-x", "פלוני")).resolves.toBeNull();
+		await expect(
+			getPersonFamilySummary("entity-x", "פלוני"),
+		).resolves.toBeNull();
 		expect(mockQuery).toHaveBeenCalledTimes(1);
 	});
 
@@ -154,9 +157,10 @@ describe("tanahpedia service", () => {
 				linkedEntries: [],
 			},
 		]);
-		expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("WHERE e.entity_type = ?"), [
-			"PLACE",
-		]);
+		expect(mockQuery).toHaveBeenCalledWith(
+			expect.stringContaining("WHERE e.entity_type = ?"),
+			["PLACE"],
+		);
 	});
 
 	it.each([
@@ -231,27 +235,26 @@ describe("tanahpedia service", () => {
 	it.each([
 		["kind" as const, "BEHEMA", "tanahpedia_animal_kind", "kind"],
 		["purity" as const, "TAHOR", "tanahpedia_animal_purity", "purity"],
-	])(
-		"groups animal entities by %s classification",
-		async (classType, value, table, column) => {
-			mockQuery.mockResolvedValueOnce([
-				{
-					entityId: "entity-animal",
-					entityName: "שור",
-					entryId: "entry-ox",
-					entryUniqueName: "שור",
-					entryTitle: "שור",
-				},
-				{
-					entityId: "entity-animal-empty",
-					entityName: "ראם",
-					entryId: null,
-					entryUniqueName: null,
-					entryTitle: null,
-				},
-			]);
+	])("groups animal entities by %s classification", async (classType, value, table, column) => {
+		mockQuery.mockResolvedValueOnce([
+			{
+				entityId: "entity-animal",
+				entityName: "שור",
+				entryId: "entry-ox",
+				entryUniqueName: "שור",
+				entryTitle: "שור",
+			},
+			{
+				entityId: "entity-animal-empty",
+				entityName: "ראם",
+				entryId: null,
+				entryUniqueName: null,
+				entryTitle: null,
+			},
+		]);
 
-			await expect(getAnimalsByClassification(classType, value)).resolves.toEqual([
+		await expect(getAnimalsByClassification(classType, value)).resolves.toEqual(
+			[
 				{
 					entityType: "ANIMAL",
 					entityId: "entity-animal",
@@ -264,17 +267,17 @@ describe("tanahpedia service", () => {
 					entityName: "ראם",
 					linkedEntries: [],
 				},
-			]);
-			expect(mockQuery).toHaveBeenCalledWith(
-				expect.stringContaining(`FROM ${table} ac`),
-				[value],
-			);
-			expect(mockQuery).toHaveBeenCalledWith(
-				expect.stringContaining(`WHERE ac.${column} = ?`),
-				[value],
-			);
-		},
-	);
+			],
+		);
+		expect(mockQuery).toHaveBeenCalledWith(
+			expect.stringContaining(`FROM ${table} ac`),
+			[value],
+		);
+		expect(mockQuery).toHaveBeenCalledWith(
+			expect.stringContaining(`WHERE ac.${column} = ?`),
+			[value],
+		);
+	});
 
 	it("merges duplicate animal classification rows", async () => {
 		mockQuery.mockResolvedValueOnce([
@@ -294,17 +297,19 @@ describe("tanahpedia service", () => {
 			},
 		]);
 
-		await expect(getAnimalsByClassification("kind", "BEHEMA")).resolves.toEqual([
-			{
-				entityType: "ANIMAL",
-				entityId: "entity-animal",
-				entityName: "Ox",
-				linkedEntries: [
-					{ id: "entry-ox", uniqueName: "ox", title: "Ox" },
-					{ id: "entry-shor", uniqueName: "shor", title: "Shor" },
-				],
-			},
-		]);
+		await expect(getAnimalsByClassification("kind", "BEHEMA")).resolves.toEqual(
+			[
+				{
+					entityType: "ANIMAL",
+					entityId: "entity-animal",
+					entityName: "Ox",
+					linkedEntries: [
+						{ id: "entry-ox", uniqueName: "ox", title: "Ox" },
+						{ id: "entry-shor", uniqueName: "shor", title: "Shor" },
+					],
+				},
+			],
+		);
 	});
 
 	it("parses category homepage JSON config and returns null for missing rows", async () => {
@@ -348,7 +353,9 @@ describe("tanahpedia service", () => {
 	it("queries 3D models and place identifications", async () => {
 		mockQuery
 			.mockResolvedValueOnce([{ id: "model-1", entityId: "entity-tool" }])
-			.mockResolvedValueOnce([{ id: "place-identification-1", placeName: "שילה" }]);
+			.mockResolvedValueOnce([
+				{ id: "place-identification-1", placeName: "שילה" },
+			]);
 
 		await expect(get3DModels("entity-tool")).resolves.toEqual([
 			{ id: "model-1", entityId: "entity-tool" },
@@ -478,10 +485,7 @@ describe("tanahpedia service", () => {
 		mockQuery
 			.mockResolvedValueOnce([{ id: "entry-recent", title: "recent" }])
 			.mockResolvedValueOnce([])
-			.mockResolvedValueOnce([
-				{ uniqueName: "אברהם" },
-				{ uniqueName: "שרה" },
-			]);
+			.mockResolvedValueOnce([{ uniqueName: "אברהם" }, { uniqueName: "שרה" }]);
 
 		await expect(getRecentEntries(2)).resolves.toEqual([
 			{ id: "entry-recent", title: "recent" },
@@ -516,7 +520,9 @@ describe("tanahpedia service", () => {
 			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([{ focalBirthDate: "not-a-date" }]);
 
-		await expect(getPersonFamilySummary("entity-focal", "מוקד")).resolves.toMatchObject({
+		await expect(
+			getPersonFamilySummary("entity-focal", "מוקד"),
+		).resolves.toMatchObject({
 			focalBirthYyyymmdd: null,
 			parents: [
 				expect.objectContaining({
@@ -595,7 +601,9 @@ describe("tanahpedia service", () => {
 			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([{ focalBirthDate: "" }]);
 
-		await expect(getPersonFamilySummary("entity-lone", "יחיד")).resolves.toBeNull();
+		await expect(
+			getPersonFamilySummary("entity-lone", "יחיד"),
+		).resolves.toBeNull();
 	});
 
 	it("maps family rows with sex, co-parent, sibling chronology, and focal birth", async () => {
@@ -763,7 +771,9 @@ describe("tanahpedia service", () => {
 			related: { displayName: "יצחק", sex: "MALE" },
 		});
 		expect(result?.children).toHaveLength(2);
-		expect(result?.children.find((c) => c.related.displayName === "יוסף")).toMatchObject({
+		expect(
+			result?.children.find((c) => c.related.displayName === "יוסף"),
+		).toMatchObject({
 			coParentEntityId: "e-rachel",
 			coParentDisplayName: "רחל",
 			coParentUnionOrder: 2,
@@ -773,21 +783,23 @@ describe("tanahpedia service", () => {
 			related: { displayName: "רחל", sex: "FEMALE" },
 		});
 		expect(result?.siblings).toHaveLength(3);
-		expect(result?.siblings).toEqual(expect.arrayContaining([
-			expect.objectContaining({
-				displayName: "עשו",
-				birthDateYyyymmdd: 18000101,
-				sourceCitation: "בראשית כה",
-			}),
-			expect.objectContaining({
-				displayName: "בנימין",
-				birthDateYyyymmdd: null,
-			}),
-			expect.objectContaining({
-				displayName: "Dan",
-				birthDateYyyymmdd: 18000103,
-				sourceCitation: "source for new sibling",
-			}),
-		]));
+		expect(result?.siblings).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					displayName: "עשו",
+					birthDateYyyymmdd: 18000101,
+					sourceCitation: "בראשית כה",
+				}),
+				expect.objectContaining({
+					displayName: "בנימין",
+					birthDateYyyymmdd: null,
+				}),
+				expect.objectContaining({
+					displayName: "Dan",
+					birthDateYyyymmdd: 18000103,
+					sourceCitation: "source for new sibling",
+				}),
+			]),
+		);
 	});
 });

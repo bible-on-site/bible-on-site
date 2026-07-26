@@ -25,7 +25,7 @@ export const getPersons = createServerFn({ method: "GET" }).handler(
 );
 
 export const getPerson = createServerFn({ method: "GET" })
-	.inputValidator((data: string) => data)
+	.validator((data: string) => data)
 	.handler(async ({ data: id }) => {
 		const person = await queryOne<TanahpediaPerson>(
 			`SELECT p.id, pn.name, ps.sex, pb.birth_date, pd.death_date
@@ -43,7 +43,7 @@ export const getPerson = createServerFn({ method: "GET" })
 	});
 
 export const createPerson = createServerFn({ method: "POST" })
-	.inputValidator(
+	.validator(
 		(data: {
 			id: string;
 			name: string;
@@ -69,7 +69,7 @@ export const createPerson = createServerFn({ method: "POST" })
 	});
 
 export const deletePerson = createServerFn({ method: "POST" })
-	.inputValidator((data: string) => data)
+	.validator((data: string) => data)
 	.handler(async ({ data: id }) => {
 		await execute("DELETE FROM tanahpedia_person WHERE id = ?", [id]);
 		return { success: true };

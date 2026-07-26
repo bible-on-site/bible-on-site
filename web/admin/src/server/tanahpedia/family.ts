@@ -159,7 +159,7 @@ function assertAffected(
 }
 
 export const createFamilyPersonNode = createServerFn({ method: "POST" })
-	.inputValidator((data: CreateFamilyPersonInput) => data)
+	.validator((data: CreateFamilyPersonInput) => data)
 	.handler(async ({ data }) => {
 		const name = requiredNonEmpty(data.displayName, "displayName");
 		const sex = validateSex(data.sex);
@@ -248,7 +248,7 @@ export const createFamilyPersonNode = createServerFn({ method: "POST" })
 	});
 
 export const updateFamilyPersonNode = createServerFn({ method: "POST" })
-	.inputValidator((data: UpdateFamilyPersonInput) => data)
+	.validator((data: UpdateFamilyPersonInput) => data)
 	.handler(async ({ data }) => {
 		const entityId = requiredNonEmpty(data.entityId, "entityId");
 		if (
@@ -389,7 +389,7 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 	});
 
 export const deleteFamilyPersonNode = createServerFn({ method: "POST" })
-	.inputValidator((data: DeleteFamilyPersonInput) => data)
+	.validator((data: DeleteFamilyPersonInput) => data)
 	.handler(async ({ data }) => {
 		const entityId = requiredNonEmpty(data.entityId, "entityId");
 		const person = await queryOne<{ id: string }>(
@@ -425,7 +425,7 @@ export const deleteFamilyPersonNode = createServerFn({ method: "POST" })
 	});
 
 export const createParentChildLink = createServerFn({ method: "POST" })
-	.inputValidator((data: CreateParentChildLinkInput) => data)
+	.validator((data: CreateParentChildLinkInput) => data)
 	.handler(async ({ data }) => {
 		const relationshipType = data.relationshipType.trim().toUpperCase();
 		if (!isOneOf(relationshipType, FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES)) {
@@ -471,7 +471,7 @@ export const createParentChildLink = createServerFn({ method: "POST" })
 	});
 
 export const updateParentChildLink = createServerFn({ method: "POST" })
-	.inputValidator((data: UpdateParentChildLinkInput) => data)
+	.validator((data: UpdateParentChildLinkInput) => data)
 	.handler(async ({ data }) => {
 		const id = requiredNonEmpty(data.id, "id");
 
@@ -529,7 +529,7 @@ export const updateParentChildLink = createServerFn({ method: "POST" })
 	});
 
 export const deleteParentChildLink = createServerFn({ method: "POST" })
-	.inputValidator((data: DeleteParentChildLinkInput) => data)
+	.validator((data: DeleteParentChildLinkInput) => data)
 	.handler(async ({ data }) => {
 		const id = requiredNonEmpty(data.id, "id");
 		const result = await execute(
@@ -542,7 +542,7 @@ export const deleteParentChildLink = createServerFn({ method: "POST" })
 	});
 
 export const createUnionLink = createServerFn({ method: "POST" })
-	.inputValidator((data: CreateUnionLinkInput) => data)
+	.validator((data: CreateUnionLinkInput) => data)
 	.handler(async ({ data }) => {
 		const unionType = data.unionType.trim().toUpperCase();
 		if (!isOneOf(unionType, FAMILY_UNION_TYPES)) {
@@ -594,7 +594,7 @@ export const createUnionLink = createServerFn({ method: "POST" })
 	});
 
 export const updateUnionLink = createServerFn({ method: "POST" })
-	.inputValidator((data: UpdateUnionLinkInput) => data)
+	.validator((data: UpdateUnionLinkInput) => data)
 	.handler(async ({ data }) => {
 		const id = requiredNonEmpty(data.id, "id");
 
@@ -670,7 +670,7 @@ export const updateUnionLink = createServerFn({ method: "POST" })
 	});
 
 export const deleteUnionLink = createServerFn({ method: "POST" })
-	.inputValidator((data: DeleteUnionLinkInput) => data)
+	.validator((data: DeleteUnionLinkInput) => data)
 	.handler(async ({ data }) => {
 		const id = requiredNonEmpty(data.id, "id");
 		const result = await execute(
@@ -683,7 +683,7 @@ export const deleteUnionLink = createServerFn({ method: "POST" })
 	});
 
 export const createPersonName = createServerFn({ method: "POST" })
-	.inputValidator((data: CreatePersonNameInput) => data)
+	.validator((data: CreatePersonNameInput) => data)
 	.handler(async ({ data }) => {
 		const personId = requiredNonEmpty(data.personId, "personId");
 		const name = requiredNonEmpty(data.name, "name");
@@ -730,7 +730,7 @@ export const createPersonName = createServerFn({ method: "POST" })
 	});
 
 export const updatePersonName = createServerFn({ method: "POST" })
-	.inputValidator((data: UpdatePersonNameInput) => data)
+	.validator((data: UpdatePersonNameInput) => data)
 	.handler(async ({ data }) => {
 		const id = requiredNonEmpty(data.id, "id");
 
@@ -841,7 +841,7 @@ export const updatePersonName = createServerFn({ method: "POST" })
 	});
 
 export const deletePersonName = createServerFn({ method: "POST" })
-	.inputValidator((data: DeletePersonNameInput) => data)
+	.validator((data: DeletePersonNameInput) => data)
 	.handler(async ({ data }) => {
 		const id = requiredNonEmpty(data.id, "id");
 		const result = await execute(

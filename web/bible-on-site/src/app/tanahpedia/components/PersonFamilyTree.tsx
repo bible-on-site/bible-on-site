@@ -300,27 +300,57 @@ function PersonNameLink({ related }: { related: PersonFamilyRelatedPerson }) {
 			<Link
 				href={`/tanahpedia/entry/${encodeURIComponent(related.entryUniqueName)}`}
 				className={styles.personLink}
+				title={label}
 			>
 				{label}
 			</Link>
 		);
 	}
-	return <span className={styles.personUnlinked}>{related.displayName}</span>;
+	return (
+		<span className={styles.personUnlinked} title={related.displayName}>
+			{related.displayName}
+		</span>
+	);
+}
+
+function citationLines(text: string | null) {
+	if (!text?.trim()) return [];
+	const occurrenceCounts = new Map<string, number>();
+	return text
+		.split("\n")
+		.map((line) => line.trim())
+		.filter(Boolean)
+		.map((line) => {
+			const occurrence = (occurrenceCounts.get(line) ?? 0) + 1;
+			occurrenceCounts.set(line, occurrence);
+			return { key: `${line}:${occurrence}`, line };
+		});
 }
 
 /** מקור מהתנ"ך / תנכפדיה מתחת לשורת טיב הקשר (שורה לכל פסקה בטקסט ה־DB) */
 function citationRibbonBlock(text: string | null) {
-	if (!text?.trim()) return null;
-	const lines = text.split("\n").filter((l) => l.trim());
+	const lines = citationLines(text);
 	if (lines.length === 0) return null;
 	return (
 		<div className={styles.relationRibbonCitation}>
-			{lines.map((line) => (
-				<div
-					key={line}
-					className={styles.relationRibbonCitationLine}
-				>
-					{renderFamilyTreeCitationLine(line.trim(), styles.citationTanachLink)}
+			{lines.map(({ key, line }) => (
+				<div key={key} className={styles.relationRibbonCitationLine}>
+					{renderFamilyTreeCitationLine(line, styles.citationTanachLink)}
+				</div>
+			))}
+		</div>
+	);
+}
+
+/** מקור האדם עצמו (למשל פסוק הלידה) — מוצג בתוך משבצת הכרטיס, מתחת לשם */
+function cardCitationBlock(text: string | null) {
+	const lines = citationLines(text);
+	if (lines.length === 0) return null;
+	return (
+		<div className={styles.cardCitation}>
+			{lines.map(({ key, line }) => (
+				<div key={key} className={styles.cardCitationLine}>
+					{renderFamilyTreeCitationLine(line, styles.citationTanachLink)}
 				</div>
 			))}
 		</div>
@@ -331,15 +361,25 @@ function PersonSexMark({ sex }: { sex: string | null }) {
 	const mark = personSexCornerMark(sex);
 	if (!mark) return null;
 	const label = sex === "MALE" ? "זכר" : sex === "FEMALE" ? "נקבה" : undefined;
+	const sexClass =
+		sex === "MALE"
+			? styles.sexMarkMale
+			: sex === "FEMALE"
+				? styles.sexMarkFemale
+				: "";
 	return (
 		<span
-			className={styles.sexMark}
+			className={`${styles.sexMark} ${sexClass}`}
 			title={label ?? undefined}
 			aria-hidden="true"
 		>
 			{mark}
 		</span>
 	);
+}
+
+function sexMarkDataAttribute(sex: string | null): "" | undefined {
+	return personSexCornerMark(sex) ? "" : undefined;
 }
 
 function spouseTimelineSuffix(edge: PersonFamilySpouseEdge): string {
@@ -376,10 +416,13 @@ function ParentCard({ edge }: { edge: PersonFamilyParentEdge }) {
 					{extra}
 				</span>
 			</div>
-			{citationRibbonBlock(edge.sourceCitation)}
-			<div className={styles.card}>
+			<div
+				className={styles.card}
+				data-has-sex-mark={sexMarkDataAttribute(edge.related.sex)}
+			>
 				<PersonSexMark sex={edge.related.sex} />
 				<PersonNameLink related={edge.related} />
+				{cardCitationBlock(edge.sourceCitation)}
 			</div>
 		</div>
 	);
@@ -387,24 +430,24 @@ function ParentCard({ edge }: { edge: PersonFamilyParentEdge }) {
 
 function ChildCard({ edge }: { edge: PersonFamilyChildEdge }) {
 	const meta = focalChildCardMetaLine(edge);
-	const showRibbon = Boolean(meta || edge.sourceCitation);
 	const face = (
-		<div className={styles.card}>
+		<div
+			className={styles.card}
+			data-has-sex-mark={sexMarkDataAttribute(edge.related.sex)}
+		>
 			<PersonSexMark sex={edge.related.sex} />
 			<PersonNameLink related={edge.related} />
+			{cardCitationBlock(edge.sourceCitation)}
 		</div>
 	);
-	if (!showRibbon) {
+	if (!meta) {
 		return <div data-testid="family-child-card">{face}</div>;
 	}
 	return (
 		<div className={styles.personCardStack} data-testid="family-child-card">
-			{meta ? (
-				<div className={styles.relationRibbon}>
-					<span className={styles.relationRibbonMain}>{meta}</span>
-				</div>
-			) : null}
-			{citationRibbonBlock(edge.sourceCitation)}
+			<div className={styles.relationRibbon}>
+				<span className={styles.relationRibbonMain}>{meta}</span>
+			</div>
 			{face}
 		</div>
 	);
@@ -438,10 +481,13 @@ function SpouseCard({
 			) : null}
 			<div
 				className={styles.card}
+				data-testid="family-spouse-card"
 				data-matrix-spouse-card={matrixSpouseCardMark ? "" : undefined}
+				data-has-sex-mark={sexMarkDataAttribute(edge.related.sex)}
 			>
 				<PersonSexMark sex={edge.related.sex} />
 				<PersonNameLink related={edge.related} />
+				{cardCitationBlock(edge.personSourceCitation)}
 			</div>
 		</div>
 	);
@@ -463,6 +509,7 @@ function SpouseInterpretationsCard({
 			<div
 				className={styles.card}
 				data-matrix-spouse-card={matrixSpouseCardMark ? "" : undefined}
+				data-has-sex-mark={sexMarkDataAttribute(head.related.sex)}
 			>
 				<PersonSexMark sex={head.related.sex} />
 				<PersonNameLink related={head.related} />
@@ -521,7 +568,10 @@ function SiblingCard({ related }: { related: PersonFamilyRelatedPerson }) {
 			className={styles.personCardStack}
 			title={related.sourceCitation ?? undefined}
 		>
-			<div className={styles.card}>
+			<div
+				className={styles.card}
+				data-has-sex-mark={sexMarkDataAttribute(related.sex)}
+			>
 				<PersonSexMark sex={related.sex} />
 				<PersonNameLink related={related} />
 			</div>
@@ -734,13 +784,18 @@ function PersonFamilyTreeContent({
 			? orderedSpouseUnits.length + 1
 			: orderedSpouseUnits.length;
 
+	// שורת נישואין אחידה: קו אנכי מהמוקד יורד עד קו אופקי בגובה אמצע הכרטיסים.
+	// מוצגת גם במטריצה עם ילדים (כמו יעקב) וגם כשאין ילדים (כמו שמשון) — אותם
+	// כללי CSS בדיוק, בלי דיברגנציה. spouseChildrenMatrixOuter + matrixSpouseRow.
+	const showSpouseMarriageRow = matrixEligible || orderedSpouseUnits.length > 1;
+
 	const matrixSpouseRowRef = useRef<HTMLDivElement>(null);
 	const [matrixSpouseMidPx, setMatrixSpouseMidPx] = useState(36);
 	const [matrixMarriageLineYpx, setMatrixMarriageLineYpx] = useState(36);
 
 	useLayoutEffect(() => {
 		const el = matrixSpouseRowRef.current;
-		if (!el || !matrixEligible) return;
+		if (!el || !showSpouseMarriageRow) return;
 		const measure = () => {
 			const rowRect = el.getBoundingClientRect();
 			const rowH = rowRect.height;
@@ -759,7 +814,10 @@ function PersonFamilyTreeContent({
 			setMatrixMarriageLineYpx(Math.max(8, Math.round(lineCenterY)));
 			setMatrixSpouseMidPx(Math.max(12, Math.round(rowH - lineCenterY + 8)));
 			// Inset the horizontal spouse line to end near the outermost card centers
-			const insetRight = Math.max(4, Math.round(rowRect.width - firstCardCenterX - 4));
+			const insetRight = Math.max(
+				4,
+				Math.round(rowRect.width - firstCardCenterX - 4),
+			);
 			const insetLeft = Math.max(4, Math.round(lastCardCenterX - 4));
 			el.style.setProperty("--matrix-line-inset-left", `${insetLeft}px`);
 			el.style.setProperty("--matrix-line-inset-right", `${insetRight}px`);
@@ -769,7 +827,7 @@ function PersonFamilyTreeContent({
 		const ro = new ResizeObserver(measure);
 		ro.observe(el);
 		return () => ro.disconnect();
-	}, [matrixEligible]);
+	}, [showSpouseMarriageRow]);
 
 	return (
 		<section className={styles.section} aria-labelledby="person-family-heading">
@@ -862,7 +920,10 @@ function PersonFamilyTreeContent({
 								<div className={styles.focalSpineRod} aria-hidden />
 							) : null}
 							<div className={styles.focalWrap}>
-								<div className={styles.cardFocal}>
+								<div
+									className={styles.cardFocal}
+									data-has-sex-mark={sexMarkDataAttribute(focalSex)}
+								>
 									<PersonSexMark sex={focalSex} />
 									<span className={styles.personUnlinked}>
 										{focalDisplayName}
@@ -988,58 +1049,58 @@ function PersonFamilyTreeContent({
 													const rowNumber = rowIdx + 1;
 													const rowKey = `${child.related.entityId}-${child.parentRole}-${child.relationshipType}-${child.coParentEntityId ?? "loose"}`;
 													return [
-													...orderedSpouseUnits.map((unit, colIdx) => {
-														const pid = unit.edges[0].related.entityId;
-														const isMatch = child.coParentEntityId === pid;
-														return (
-															<div
-																key={`swim-${pid}-${rowKey}`}
-																className={
-																	isMatch
-																		? styles.jacobSwimlaneCell
-																		: styles.jacobSwimlaneCellEmpty
-																}
-																style={{
-																	gridColumn: colIdx + 1,
-																	gridRow: rowNumber,
-																}}
-															>
-																{isMatch ? <ChildCard edge={child} /> : null}
-															</div>
-														);
-													}),
-													...(showJacobLooseTopCell
-														? [
-																(() => {
-																	const isLoose =
-																		childEdgeCoParentOutsideSpouses(
-																			child,
-																			spousePartnerIdsForSeq,
+														...orderedSpouseUnits.map((unit, colIdx) => {
+															const pid = unit.edges[0].related.entityId;
+															const isMatch = child.coParentEntityId === pid;
+															return (
+																<div
+																	key={`swim-${pid}-${rowKey}`}
+																	className={
+																		isMatch
+																			? styles.jacobSwimlaneCell
+																			: styles.jacobSwimlaneCellEmpty
+																	}
+																	style={{
+																		gridColumn: colIdx + 1,
+																		gridRow: rowNumber,
+																	}}
+																>
+																	{isMatch ? <ChildCard edge={child} /> : null}
+																</div>
+															);
+														}),
+														...(showJacobLooseTopCell
+															? [
+																	(() => {
+																		const isLoose =
+																			childEdgeCoParentOutsideSpouses(
+																				child,
+																				spousePartnerIdsForSeq,
+																			);
+																		return (
+																			<div
+																				key={`swim-loose-${rowKey}`}
+																				className={
+																					isLoose
+																						? styles.jacobSwimlaneCell
+																						: styles.jacobSwimlaneCellEmpty
+																				}
+																				style={{
+																					gridColumn:
+																						orderedSpouseUnits.length + 1,
+																					gridRow: rowNumber,
+																				}}
+																			>
+																				{isLoose ? (
+																					<ChildCard edge={child} />
+																				) : null}
+																			</div>
 																		);
-																	return (
-																		<div
-																			key={`swim-loose-${rowKey}`}
-																			className={
-																				isLoose
-																					? styles.jacobSwimlaneCell
-																					: styles.jacobSwimlaneCellEmpty
-																			}
-																			style={{
-																				gridColumn:
-																					orderedSpouseUnits.length + 1,
-																				gridRow: rowNumber,
-																			}}
-																		>
-																			{isLoose ? (
-																				<ChildCard edge={child} />
-																			) : null}
-																		</div>
-																	);
-															})(),
-														]
-													: []),
+																	})(),
+																]
+															: []),
 													];
-													})}
+												})}
 											</div>
 										</div>
 									) : (
@@ -1111,6 +1172,41 @@ function PersonFamilyTreeContent({
 											) : null}
 										</div>
 									)}
+								</div>
+							) : orderedSpouseUnits.length > 1 ? (
+								// כמה בנות זוג ללא ילדים ממופים (למשל שמשון): אותה שורת
+								// נישואין כמו יעקב — קו אנכי מהמוקד יורד עד קו אופקי בגובה
+								// אמצע הכרטיסים, רק בלי שורת הילדים שמתחת.
+								<div
+									className={styles.spouseChildrenMatrixOuter}
+									style={
+										{
+											"--matrix-spouse-mid-px": `${matrixSpouseMidPx}px`,
+											"--matrix-marriage-line-y": `${matrixMarriageLineYpx}px`,
+										} as CSSProperties
+									}
+								>
+									<div
+										ref={matrixSpouseRowRef}
+										className={styles.matrixSpouseRow}
+										style={{
+											gridTemplateColumns: `repeat(${matrixColCount}, minmax(128px, 1fr))`,
+										}}
+									>
+										{orderedSpouseUnits.map((unit) => (
+											<div
+												key={`sp-only-${unit.edges
+													.map(
+														(edge) =>
+															`${edge.related.entityId}-${edge.unionType}-${edge.unionOrder ?? "x"}-${edge.altGroupId ?? "d"}`,
+													)
+													.join("_")}`}
+												className={styles.matrixSpouseCell}
+											>
+												<SpouseUnitCardBlock unit={unit} matrixSpouseCardMark />
+											</div>
+										))}
+									</div>
 								</div>
 							) : (
 								<div className={styles.spouseTierCards}>

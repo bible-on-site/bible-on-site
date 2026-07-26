@@ -10,6 +10,12 @@
 // now contains admin/API-authored content, production deploys must avoid any Tanahpedia
 // CREATE TABLE script to prevent data loss.
 //
+// Tanahpedia `tanahpedia_alter_*.sql` column-upgrade scripts ARE included: they
+// only ever ADD a column (checked via information_schema + a PREPARE/EXECUTE
+// idiom, since plain MySQL has no ADD COLUMN IF NOT EXISTS clause), never
+// CREATE/DROP a table, so the Lambda's preprocessor never rewrites them and
+// they are safe to re-run unconditionally on every deploy.
+//
 // Dynamic structure (articles, dedications, authors, etc.) is managed manually via admin zone.
 
 import fs from "node:fs";
@@ -45,6 +51,10 @@ const SQL_FILES = [
 	// Tanahpedia production-safe deploy path.
 	// Keep this list strictly non-destructive (no CREATE TABLE statements), so
 	// API-created entries and edits survive repeated release deploys.
+	// Column-upgrade scripts run before seed/lookup data in case later data
+	// ever needs the new columns.
+	"tanahpedia_alter_source_citation.sql",
+	"tanahpedia_alter_person_source_citation.sql",
 	"tanahpedia_seed_data.sql",
 	"tanahpedia_incremental_lookups.sql",
 ];
@@ -138,9 +148,8 @@ class DataDeployer extends DeployerBase {
 				}),
 			)
 			.catch((err: unknown) => {
-				const status = (
-					err as { $metadata?: { httpStatusCode?: number } }
-				)?.$metadata?.httpStatusCode;
+				const status = (err as { $metadata?: { httpStatusCode?: number } })
+					?.$metadata?.httpStatusCode;
 				const reason = err instanceof Error ? err.message : String(err);
 				// A 5xx is a service-side fault thrown before any response/tail-log
 				// is available: the Lambda runtime itself failed to run (bad

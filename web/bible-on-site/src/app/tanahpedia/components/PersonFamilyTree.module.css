@@ -76,7 +76,7 @@
 .card {
   position: relative;
   min-width: 140px;
-  max-width: 220px;
+  max-width: 280px;
   padding: 12px 14px;
   background: #fff;
   border-radius: 10px;
@@ -97,6 +97,24 @@
   text-align: center;
 }
 
+/* מקור האדם עצמו (למשל פסוק הלידה), בתוך משבצת הכרטיס מתחת לשם */
+.cardCitation {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.cardCitationLine {
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.cardCitationLine + .cardCitationLine {
+  margin-top: 2px;
+}
+
 /* ז / נ — פינה עליונה ב־inline-start (ב־RTL ימין) */
 .sexMark {
   position: absolute;
@@ -114,18 +132,35 @@
   background: #f8fafc;
 }
 
+/* ז (זכר) — פסים אלכסוניים כחולים; נ (נקבה) — פסים אלכסוניים ורודים */
+.sexMarkMale {
+  color: #1e40af;
+  border-color: #93c5fd;
+  background-image: repeating-linear-gradient(45deg, #dbeafe, #dbeafe 3px, #eff6ff 3px, #eff6ff 6px);
+}
+
+.sexMarkFemale {
+  color: #9d174d;
+  border-color: #f9a8d4;
+  background-image: repeating-linear-gradient(45deg, #fce7f3, #fce7f3 3px, #fdf2f8 3px, #fdf2f8 6px);
+}
+
 .coParentChildLabel {
   margin: 0 auto 8px;
   text-align: center;
 }
 
 .personLink {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
   color: #4338ca;
   font-weight: 700;
   text-decoration: none;
   font-size: 1rem;
   line-height: 1.4;
-  word-break: break-word;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .personLink:hover {
@@ -133,9 +168,26 @@
 }
 
 .personUnlinked {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
   color: #1e293b;
   font-weight: 600;
   font-size: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* כאשר תג המין (ז/נ) קיים בכרטיס, שומרים רצועת מקום פנויה סימטרית משני
+   הצדדים (לא רק בצד התג) כדי שהשם לעולם לא ייגע בתג, וגם יישאר ממורכז
+  בדיוק - ריפוד חד-צדדי היה מזיז את הטקסט הנראה הצידה. שם ארוך נחתך
+  באליפסיס במקום להיתקל בתג. */
+.card[data-has-sex-mark] .personLink,
+.card[data-has-sex-mark] .personUnlinked,
+.cardFocal[data-has-sex-mark] .personLink,
+.cardFocal[data-has-sex-mark] .personUnlinked {
+  display: inline-block;
+  padding-inline: 32px;
 }
 
 /* ערימת כרטיס: טיב קשר + מקור מעל המשבצת (בין קווי העץ לכרטיס) */
@@ -144,7 +196,7 @@
   flex-direction: column;
   align-items: center;
   width: 100%;
-  max-width: 220px;
+  max-width: 280px;
   position: relative;
   z-index: 2;
 }

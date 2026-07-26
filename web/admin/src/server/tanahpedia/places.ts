@@ -33,7 +33,7 @@ export const getPlaces = createServerFn({ method: "GET" }).handler(async () => {
 });
 
 export const getPlace = createServerFn({ method: "GET" })
-	.inputValidator((data: string) => data)
+	.validator((data: string) => data)
 	.handler(async ({ data: id }) => {
 		const place = await queryOne<TanahpediaPlace>(
 			`SELECT p.id, p.entity_id, e.name AS name
@@ -47,7 +47,7 @@ export const getPlace = createServerFn({ method: "GET" })
 	});
 
 export const getPlaceIdentifications = createServerFn({ method: "GET" })
-	.inputValidator((data: string) => data)
+	.validator((data: string) => data)
 	.handler(async ({ data: placeId }) => {
 		const rows = await query<{
 			id: string;
@@ -67,7 +67,7 @@ export const getPlaceIdentifications = createServerFn({ method: "GET" })
 	});
 
 export const createPlace = createServerFn({ method: "POST" })
-	.inputValidator((data: { name: string }) => data)
+	.validator((data: { name: string }) => data)
 	.handler(async ({ data }) => {
 		const name = data.name.trim();
 		if (!name) throw new Error("שם מקום ריק");
@@ -85,7 +85,7 @@ export const createPlace = createServerFn({ method: "POST" })
 	});
 
 export const deletePlace = createServerFn({ method: "POST" })
-	.inputValidator((data: string) => data)
+	.validator((data: string) => data)
 	.handler(async ({ data: id }) => {
 		const row = await queryOne<{ entity_id: string }>(
 			"SELECT entity_id FROM tanahpedia_place WHERE id = ?",

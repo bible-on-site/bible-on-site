@@ -13,11 +13,29 @@ pub const REVISION_API_KEY_ENV: &str = "TANAHPEDIA_REVISION_API_KEY";
 #[derive(Clone, Debug, Default)]
 pub struct ApiAuth {
     bearer: Option<String>,
+    revision_api_key: Option<String>,
 }
 
 impl ApiAuth {
     pub fn new(bearer: Option<String>) -> Self {
-        Self { bearer }
+        let revision_api_key = env::var(REVISION_API_KEY_ENV)
+            .ok()
+            .filter(|key| !key.is_empty());
+        Self {
+            bearer,
+            revision_api_key,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_revision_api_key(
+        bearer: Option<String>,
+        revision_api_key: Option<String>,
+    ) -> Self {
+        Self {
+            bearer,
+            revision_api_key,
+        }
     }
 
     /// Authorizes a request to submit or apply an entry revision.
@@ -26,12 +44,8 @@ impl ApiAuth {
     /// is disabled and every request is rejected. The presented token is compared
     /// to the configured key in constant time to avoid leaking it via timing.
     pub fn authorize_revision_manager(&self) -> Result<(), ServiceError> {
-        let expected = env::var(REVISION_API_KEY_ENV)
-            .ok()
-            .filter(|key| !key.is_empty());
-
-        match (expected, self.bearer.as_deref()) {
-            (Some(expected), Some(presented)) if constant_time_eq(&expected, presented) => Ok(()),
+        match (self.revision_api_key.as_deref(), self.bearer.as_deref()) {
+            (Some(expected), Some(presented)) if constant_time_eq(expected, presented) => Ok(()),
             (None, _) => Err(ServiceError::unauthorized("Revision API is not configured")),
             _ => Err(ServiceError::unauthorized("Invalid or missing API key")),
         }
@@ -57,10 +71,6 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
 mod tests {
     use super::*;
 
-    // Serialize tests that mutate the shared process env var.
-    use std::sync::Mutex;
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
-
     #[test]
     fn constant_time_eq_matches_std_equality() {
         assert!(constant_time_eq("secret-key", "secret-key"));
@@ -71,35 +81,44 @@ mod tests {
     }
 
     #[test]
+    fn new_captures_current_process_configuration() {
+        let expected = env::var(REVISION_API_KEY_ENV)
+            .ok()
+            .filter(|key| !key.is_empty());
+        let auth = ApiAuth::new(None);
+        assert_eq!(auth.revision_api_key, expected);
+    }
+
+    #[test]
     fn authorize_fails_when_key_not_configured() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        unsafe { env::remove_var(REVISION_API_KEY_ENV) };
-        let auth = ApiAuth::new(Some("anything".to_string()));
+        let auth = ApiAuth::with_revision_api_key(Some("anything".to_string()), None);
         assert!(auth.authorize_revision_manager().is_err());
     }
 
     #[test]
     fn authorize_fails_with_wrong_or_missing_token() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        unsafe { env::set_var(REVISION_API_KEY_ENV, "correct-horse") };
+        let expected = Some("correct-horse".to_string());
         assert!(
-            ApiAuth::new(Some("wrong".to_string()))
+            ApiAuth::with_revision_api_key(Some("wrong".to_string()), expected.clone())
                 .authorize_revision_manager()
                 .is_err()
         );
-        assert!(ApiAuth::new(None).authorize_revision_manager().is_err());
-        unsafe { env::remove_var(REVISION_API_KEY_ENV) };
+        assert!(
+            ApiAuth::with_revision_api_key(None, expected)
+                .authorize_revision_manager()
+                .is_err()
+        );
     }
 
     #[test]
     fn authorize_succeeds_with_correct_token() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        unsafe { env::set_var(REVISION_API_KEY_ENV, "correct-horse") };
         assert!(
-            ApiAuth::new(Some("correct-horse".to_string()))
+            ApiAuth::with_revision_api_key(
+                Some("correct-horse".to_string()),
+                Some("correct-horse".to_string()),
+            )
                 .authorize_revision_manager()
                 .is_ok()
         );
-        unsafe { env::remove_var(REVISION_API_KEY_ENV) };
     }
 }

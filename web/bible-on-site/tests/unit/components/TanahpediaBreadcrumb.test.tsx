@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { render, screen, within } from "@testing-library/react";
-import type { ReactNode } from "react";
+import type { AriaAttributes, ReactNode } from "react";
 import { TanahpediaBreadcrumb } from "../../../src/app/tanahpedia/components/TanahpediaBreadcrumb";
 
 jest.mock("next/link", () => ({
@@ -16,7 +16,7 @@ jest.mock("next/link", () => ({
 		href: string;
 		children: ReactNode;
 		className?: string;
-		"aria-current"?: string;
+		"aria-current"?: AriaAttributes["aria-current"];
 	}) {
 		return (
 			<a href={href} className={className} aria-current={ariaCurrent}>

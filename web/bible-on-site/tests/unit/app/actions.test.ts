@@ -227,10 +227,11 @@ describe("downloadSefer", () => {
 	it("returns { ext, data } with base64 data when handler returns [ext, Uint8Array]", async () => {
 		const bin = new Uint8Array([1, 2, 3]);
 		const ctx = { seferName: "בראשית", perekIds: [1, 2] };
-		const handler = jest.fn(async () => ["pdf", bin] as const);
-		mockGetSeferDownloadHandler.mockReturnValue(
-			handler as ReturnType<typeof getSeferDownloadHandler>,
-		);
+		const handler = jest.fn(async (): Promise<[string, Uint8Array]> => [
+			"pdf",
+			bin,
+		]);
+		mockGetSeferDownloadHandler.mockReturnValue(handler);
 
 		const result = await downloadSefer(ctx);
 

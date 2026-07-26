@@ -5,7 +5,7 @@ description = "Bible on Site API"
 license-file = "../../license"
 repository = "https://github.com/bible-on-site/bible-on-site"
 publish = false
-version = "0.1.48"
+version = "0.1.49"
 edition = "2024"
 
 [dependencies]
@@ -40,8 +40,6 @@ chrono = { version = "0.4.42", default-features = false, features = ["clock"] }
 [dev-dependencies]
 cargo-llvm-cov = "0.8.7"
 cargo-make = "0.37.24"
-semver-bump = "1.0.1"
-tomato-toml = { git = "https://github.com/doradsoft/rust-tomato-toml", branch = "latest" }
 sea-orm = { version = "2.0.0", default-features = false, features = ["mock"] }
 
 [[bin]]
@@ -56,7 +54,3 @@ incremental = true
 
 [package.metadata.release]
 pre-release-commit-message = "chore(release): {{version}} [skip ci]"
-
-[package.metadata.cargo-udeps.ignore] #TODO: somehow the ignore list got ignored...
-normal = ["semver-bump", "tomato-toml"]
-build = ["semver-bump", "tomato-toml"]

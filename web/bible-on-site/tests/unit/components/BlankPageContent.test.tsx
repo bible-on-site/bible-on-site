@@ -263,7 +263,7 @@ describe("BlankPageContent", () => {
 		});
 
 		await waitFor(() => {
-			expect(screen.getByText("חזרה לפרשנים ←")).toBeTruthy();
+			expect(screen.getByText("→ חזרה לפרשנים")).toBeTruthy();
 		});
 	});
 
@@ -287,7 +287,7 @@ describe("BlankPageContent", () => {
 		});
 
 		await waitFor(() => {
-			expect(screen.getByText("חזרה לפרשנים ←")).toBeTruthy();
+			expect(screen.getByText("→ חזרה לפרשנים")).toBeTruthy();
 		});
 
 		// Click back
@@ -365,7 +365,7 @@ describe("BlankPageContent", () => {
 
 			await waitFor(() => {
 				expect(mockGetPerushNotesForPage).toHaveBeenCalledWith(1, 1);
-				expect(screen.getByText("חזרה לפרשנים ←")).toBeTruthy();
+				expect(screen.getByText("→ חזרה לפרשנים")).toBeTruthy();
 			});
 		});
 

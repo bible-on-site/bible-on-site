@@ -30,21 +30,30 @@
 }
 
 .breadcrumb > li:not(:last-child):after {
-  content: ">";
+  content: "\203A";
+  display: inline-block;
+  font-style: normal;
+  font-size: 16px;
+  line-height: 1;
   margin: 0 8px;
   color: #999;
   font-weight: normal;
 }
 
 .breadcrumb li a {
+  padding: 4px 8px;
+  border-radius: 4px;
   text-decoration: underline;
   color: #0066cc;
-  transition: color 0.2s ease;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease;
 }
 
 .breadcrumb li a:hover {
   color: #0052a3;
   text-decoration: underline;
+  background-color: #f0f0f0;
 }
 
 .breadcrumb li a:focus {
@@ -147,7 +156,9 @@
   padding: 8px 16px;
   text-decoration: none;
   color: #333;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
 
 .drop ul li a:hover {
@@ -165,7 +176,9 @@
   font-size: 9px;
   margin-right: 4px;
   color: #666;
-  transition: transform 0.2s ease, margin 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    margin 0.2s ease;
 }
 
 .drop-container:hover .small {
@@ -180,6 +193,12 @@
 
   .breadcrumb > li:not(:last-child):after {
     margin: 0 4px;
+    font-size: 13px;
+  }
+
+  .breadcrumb li a,
+  .active > button {
+    padding: 4px 4px;
   }
 
   .glyphicon-triangle-bottom::before {
