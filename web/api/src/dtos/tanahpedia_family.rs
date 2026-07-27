@@ -152,3 +152,29 @@ pub struct TanahpediaPersonDetail {
     pub birth_place_ids: Vec<String>,
     pub tanah_sources: Vec<TanahpediaEntityTanahSource>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_graphql::{InputType, value};
+
+    #[test]
+    fn person_node_input_parses_all_graphql_fields() {
+        let input = PutTanahpediaPersonNodeInput::parse(Some(value!({
+            "entityId": "entity-1",
+            "personId": "person-1",
+            "displayName": "שמשון",
+            "sexId": "sex-1",
+            "sex": "MALE",
+            "sexAltGroupId": "alternate-1"
+        })))
+        .expect("person node input should parse");
+
+        assert_eq!(input.entity_id, "entity-1");
+        assert_eq!(input.person_id, "person-1");
+        assert_eq!(input.display_name, "שמשון");
+        assert_eq!(input.sex_id, "sex-1");
+        assert_eq!(input.sex, "MALE");
+        assert_eq!(input.sex_alt_group_id.as_deref(), Some("alternate-1"));
+    }
+}
