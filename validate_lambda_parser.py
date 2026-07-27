@@ -1,18 +1,20 @@
 """
-Local validation: simulate the Lambda's SQL parsing on all 4 SQL files
+Local validation: simulate the Lambda's SQL parsing on all deployed SQL files
 (same order as the deployer) and verify every extracted statement is
 syntactically valid by executing it against a local MySQL instance.
 
 Usage:
-    python validate_lambda_parser.py [--db DB_URL]
+    python validate_lambda_parser.py [--db DB_URL] [--parse-only]
 
 The script locates the SQL files at data/mysql/ relative to itself.
 perushim_data.sql is expected in /tmp/perushim-sql/ (downloaded artifact).
 """
 
-import sys
+import argparse
+import json
 import os
 import re
+import sys
 
 
 # ---------------------------------------------------------------------------
@@ -138,32 +140,58 @@ def parse_file(filepath):
         return parse_statements(content)
 
 
+def validate_lambda_safe_comments(filepath):
+    """Reject line comments that the production splitter can misparse as SQL."""
+    with open(filepath, "r", encoding="utf-8") as sql_file:
+        for line_number, line in enumerate(sql_file, start=1):
+            stripped = line.lstrip()
+            if stripped.startswith("--") and (";" in stripped or "'" in stripped):
+                raise ValueError(
+                    f"{filepath}:{line_number}: Lambda-unsafe SQL line comment "
+                    "contains a semicolon or apostrophe"
+                )
+
+
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--db", dest="db_url")
+    parser.add_argument("--parse-only", action="store_true")
+    args = parser.parse_args()
+
     script_dir = os.path.dirname(os.path.abspath(__file__))
     data_dir = os.path.join(script_dir, "data", "mysql")
 
-    sql_files = [
-        ("tanah_static_structure.sql", os.path.join(data_dir, "tanah_static_structure.sql")),
-        ("tanah_sefarim_and_perakim_data.sql", os.path.join(data_dir, "tanah_sefarim_and_perakim_data.sql")),
-        ("perushim_structure.sql", os.path.join(data_dir, "perushim_structure.sql")),
-    ]
+    manifest_path = os.path.join(
+        script_dir, "devops", "deploy", "data-deploy", "sql-files.json"
+    )
+    with open(manifest_path, "r", encoding="utf-8") as manifest_file:
+        deploy_files = json.load(manifest_file)
 
-    # perushim_data.sql comes from the artifact
+    # perushim_data.sql comes from the artifact.
     artifact_path = os.path.join(os.environ.get("TEMP", "/tmp"), "perushim-sql", "perushim_data.sql")
-    if os.path.isfile(artifact_path):
-        sql_files.append(("perushim_data.sql", artifact_path))
-    else:
-        local_path = os.path.join(data_dir, "perushim_data.sql")
-        if os.path.isfile(local_path):
-            sql_files.append(("perushim_data.sql", local_path))
-        else:
-            print(f"WARNING: perushim_data.sql not found at {artifact_path} or {local_path}")
+    local_perushim_path = os.path.join(data_dir, "perushim_data.sql")
+
+    sql_files = []
+    for name in deploy_files:
+        if name == "perushim_data.sql":
+            if os.path.isfile(artifact_path):
+                sql_files.append((name, artifact_path))
+            elif os.path.isfile(local_perushim_path):
+                sql_files.append((name, local_perushim_path))
+            else:
+                print(
+                    "WARNING: perushim_data.sql not found at "
+                    f"{artifact_path} or {local_perushim_path}"
+                )
+            continue
+        sql_files.append((name, os.path.join(data_dir, name)))
 
     all_stmts = []
     for name, fpath in sql_files:
         if not os.path.isfile(fpath):
             print(f"SKIP: {name} not found at {fpath}")
             continue
+        validate_lambda_safe_comments(fpath)
         size_mb = os.path.getsize(fpath) / (1024 * 1024)
         path_type = "streaming" if size_mb > 10 else "preprocess"
         stmts = parse_file(fpath)
@@ -172,6 +200,10 @@ def main():
 
     print(f"\nTotal: {len(all_stmts)} executable statements across {len(sql_files)} files")
 
+    if args.parse_only:
+        print("LAMBDA PARSER VALIDATION PASSED.")
+        return
+
     # Try executing against local MySQL
     try:
         import pymysql
@@ -179,7 +211,10 @@ def main():
         print("\npymysql not installed — skipping live DB validation.")
         sys.exit(0)
 
-    db_url = os.environ.get("DB_URL", "mysql://root:test_123@localhost:3306/tanah-dev?ssl-mode=DISABLED")
+    db_url = args.db_url or os.environ.get(
+        "DB_URL",
+        "mysql://root:test_123@localhost:3306/tanah-dev?ssl-mode=DISABLED",
+    )
     from urllib.parse import urlparse
     parsed = urlparse(db_url)
     db_name = parsed.path.lstrip("/").split("?")[0]
