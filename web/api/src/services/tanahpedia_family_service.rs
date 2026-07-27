@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+
 use crate::{
     common::error_handling::{INTERNAL_SERVER_ERROR, ServiceError},
     dtos::perek::number_to_hebrew,
@@ -370,23 +372,46 @@ pub async fn get_person_unions(
         .await
         .map_err(db_error)?;
 
-    let mut summaries = Vec::with_capacity(unions.len());
-    for u in unions {
-        let union_type = lookup_union_type::Entity::find_by_id(u.union_type_id.clone())
-            .one(conn)
+    let union_type_ids = unions
+        .iter()
+        .map(|union| union.union_type_id.clone())
+        .collect::<HashSet<_>>();
+    let union_types = lookup_union_type::Entity::find()
+        .filter(lookup_union_type::Column::Id.is_in(union_type_ids))
+        .all(conn)
+        .await
+        .map_err(db_error)?
+        .into_iter()
+        .map(|row| (row.id, row.name))
+        .collect::<HashMap<_, _>>();
+
+    let end_reason_ids = unions
+        .iter()
+        .filter_map(|union| union.end_reason_id.clone())
+        .collect::<HashSet<_>>();
+    let end_reasons = if end_reason_ids.is_empty() {
+        HashMap::new()
+    } else {
+        lookup_union_end_reason::Entity::find()
+            .filter(lookup_union_end_reason::Column::Id.is_in(end_reason_ids))
+            .all(conn)
             .await
             .map_err(db_error)?
-            .map(|row| row.name)
+            .into_iter()
+            .map(|row| (row.id, row.name))
+            .collect()
+    };
+
+    let mut summaries = Vec::with_capacity(unions.len());
+    for u in unions {
+        let union_type = union_types
+            .get(&u.union_type_id)
+            .cloned()
             .unwrap_or_default();
-        let end_reason = if let Some(end_reason_id) = u.end_reason_id.clone() {
-            lookup_union_end_reason::Entity::find_by_id(end_reason_id)
-                .one(conn)
-                .await
-                .map_err(db_error)?
-                .map(|row| row.name)
-        } else {
-            None
-        };
+        let end_reason = u
+            .end_reason_id
+            .as_ref()
+            .and_then(|id| end_reasons.get(id).cloned());
 
         let other_person_id = if u.person1_id == person_id {
             u.person2_id.clone()
