@@ -772,13 +772,13 @@ pub async fn get_person_details(
         });
     }
 
-    let sex_rows = person_sex::Entity::find()
+    let sex_models = person_sex::Entity::find()
         .filter(person_sex::Column::PersonId.eq(person_id.clone()))
         .all(conn)
         .await
         .map_err(db_error)?;
-    let sexes = sex_rows.iter().map(|row| row.sex.clone()).collect();
-    let sex_rows = sex_rows
+    let sexes = sex_models.iter().map(|row| row.sex.clone()).collect();
+    let sex_rows = sex_models
         .into_iter()
         .map(|row| TanahpediaPersonSex {
             id: row.id,
