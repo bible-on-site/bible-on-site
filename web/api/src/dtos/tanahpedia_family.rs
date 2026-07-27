@@ -1,4 +1,35 @@
-use async_graphql::SimpleObject;
+use async_graphql::{InputObject, SimpleObject};
+
+#[derive(InputObject, Debug, Clone)]
+pub struct PutTanahpediaParentChildInput {
+    pub id: String,
+    pub parent_person_id: String,
+    pub child_person_id: String,
+    pub relationship_type: String,
+    pub parent_role: String,
+    pub alt_group_id: Option<String>,
+    pub source_citation: Option<String>,
+}
+
+#[derive(InputObject, Debug, Clone)]
+pub struct PutTanahpediaPersonUnionInput {
+    pub id: String,
+    pub person1_id: String,
+    pub person2_id: String,
+    pub union_type: String,
+    pub union_order: Option<i32>,
+    pub start_date: Option<i32>,
+    pub end_date: Option<i32>,
+    pub end_reason: Option<String>,
+    pub alt_group_id: Option<String>,
+    pub source_citation: Option<String>,
+    pub person_source_citation: Option<String>,
+}
+
+#[derive(SimpleObject, Debug, Clone)]
+pub struct TanahpediaFamilyLinkWriteResult {
+    pub id: String,
+}
 
 /// A Tanahpedia person match, used to resolve a display name to the internal
 /// `entityId`/`personId` pair needed by other family-graph operations.
@@ -27,7 +58,12 @@ pub struct TanahpediaPersonUnionSummary {
     pub id: String,
     pub union_type: String,
     pub union_order: Option<i32>,
+    pub start_date: Option<i32>,
+    pub end_date: Option<i32>,
+    pub end_reason: Option<String>,
+    pub alt_group_id: Option<String>,
     pub source_citation: Option<String>,
+    pub person_source_citation: Option<String>,
     pub person1_id: String,
     pub person2_id: String,
     pub other_person_id: String,
@@ -43,6 +79,7 @@ pub struct TanahpediaPersonParentChildSummary {
     pub id: String,
     pub relationship_type: String,
     pub parent_role: String,
+    pub alt_group_id: Option<String>,
     pub source_citation: Option<String>,
     pub parent_id: String,
     pub child_id: String,

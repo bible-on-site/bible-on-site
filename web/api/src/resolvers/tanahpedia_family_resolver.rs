@@ -2,7 +2,8 @@ use async_graphql::{Context, ErrorExtensions, Object, Result};
 
 use crate::common::auth::ApiAuth;
 use crate::dtos::tanahpedia_family::{
-    TanahpediaEntitySummary, TanahpediaEntityTanahSource, TanahpediaPersonDetail,
+    PutTanahpediaParentChildInput, PutTanahpediaPersonUnionInput, TanahpediaEntitySummary,
+    TanahpediaEntityTanahSource, TanahpediaFamilyLinkWriteResult, TanahpediaPersonDetail,
     TanahpediaPersonParentChildSummary, TanahpediaPersonSummary, TanahpediaPersonUnionSummary,
 };
 use crate::providers::Database;
@@ -10,6 +11,64 @@ use crate::services::tanahpedia_family_service;
 
 #[derive(Default)]
 pub struct TanahpediaFamilyQuery;
+
+#[derive(Default)]
+pub struct TanahpediaFamilyMutation;
+
+#[Object]
+impl TanahpediaFamilyMutation {
+    async fn put_tanahpedia_parent_child_link(
+        &self,
+        ctx: &Context<'_>,
+        input: PutTanahpediaParentChildInput,
+    ) -> Result<TanahpediaFamilyLinkWriteResult> {
+        ctx.data::<ApiAuth>()?
+            .authorize_revision_manager()
+            .map_err(|e| e.extend())?;
+        tanahpedia_family_service::put_parent_child_link(ctx.data::<Database>()?, input)
+            .await
+            .map_err(|e| e.extend())
+    }
+
+    async fn delete_tanahpedia_parent_child_link(
+        &self,
+        ctx: &Context<'_>,
+        id: String,
+    ) -> Result<TanahpediaFamilyLinkWriteResult> {
+        ctx.data::<ApiAuth>()?
+            .authorize_revision_manager()
+            .map_err(|e| e.extend())?;
+        tanahpedia_family_service::delete_parent_child_link(ctx.data::<Database>()?, id)
+            .await
+            .map_err(|e| e.extend())
+    }
+
+    async fn put_tanahpedia_person_union(
+        &self,
+        ctx: &Context<'_>,
+        input: PutTanahpediaPersonUnionInput,
+    ) -> Result<TanahpediaFamilyLinkWriteResult> {
+        ctx.data::<ApiAuth>()?
+            .authorize_revision_manager()
+            .map_err(|e| e.extend())?;
+        tanahpedia_family_service::put_person_union(ctx.data::<Database>()?, input)
+            .await
+            .map_err(|e| e.extend())
+    }
+
+    async fn delete_tanahpedia_person_union(
+        &self,
+        ctx: &Context<'_>,
+        id: String,
+    ) -> Result<TanahpediaFamilyLinkWriteResult> {
+        ctx.data::<ApiAuth>()?
+            .authorize_revision_manager()
+            .map_err(|e| e.extend())?;
+        tanahpedia_family_service::delete_person_union(ctx.data::<Database>()?, id)
+            .await
+            .map_err(|e| e.extend())
+    }
+}
 
 #[Object]
 impl TanahpediaFamilyQuery {

@@ -117,8 +117,8 @@ mod tests {
                 Some("correct-horse".to_string()),
                 Some("correct-horse".to_string()),
             )
-                .authorize_revision_manager()
-                .is_ok()
+            .authorize_revision_manager()
+            .is_ok()
         );
     }
 }
