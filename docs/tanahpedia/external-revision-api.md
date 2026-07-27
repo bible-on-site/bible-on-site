@@ -202,7 +202,9 @@ mutation PutPersonNode($input: PutTanahpediaPersonNodeInput!) {
 `sexId` values plus `displayName` and `sex` (`MALE`, `FEMALE`, or `UNKNOWN`). It optionally
 accepts `sexAltGroupId`. The mutation atomically upserts the `PERSON` entity, typed person row,
 and sex row. Replaying the same input is idempotent. It rejects an id that already belongs to a
-different entity type/person binding instead of reassigning existing data.
+different entity type/person binding instead of reassigning existing data. This is a full put:
+omitting `sexAltGroupId` clears an existing value. An unchanged replay does not refresh the
+entity's `updatedAt` timestamp.
 
 ```graphql
 mutation PutParentChild($input: PutTanahpediaParentChildInput!) {

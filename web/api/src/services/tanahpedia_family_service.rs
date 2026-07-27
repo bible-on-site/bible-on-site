@@ -51,6 +51,17 @@ fn optional(
         .transpose()
 }
 
+fn normalized_sex(value: String) -> Result<String, ServiceError> {
+    let sex = required(value, "sex", 7)?.to_uppercase();
+    if matches!(sex.as_str(), "MALE" | "FEMALE" | "UNKNOWN") {
+        Ok(sex)
+    } else {
+        Err(ServiceError::bad_request(
+            "sex must be MALE, FEMALE, or UNKNOWN",
+        ))
+    }
+}
+
 async fn require_person(
     conn: &sea_orm::DatabaseConnection,
     person_id: &str,
@@ -134,13 +145,8 @@ pub async fn put_person_node(
     let person_id = required(input.person_id, "personId", 36)?;
     let display_name = required(input.display_name, "displayName", 255)?;
     let sex_id = required(input.sex_id, "sexId", 36)?;
-    let sex = required(input.sex, "sex", 7)?.to_uppercase();
+    let sex = normalized_sex(input.sex)?;
     let sex_alt_group_id = optional(input.sex_alt_group_id, "sexAltGroupId", 36)?;
-    if !matches!(sex.as_str(), "MALE" | "FEMALE" | "UNKNOWN") {
-        return Err(ServiceError::bad_request(
-            "sex must be MALE, FEMALE, or UNKNOWN",
-        ));
-    }
 
     let transaction = db.get_connection().begin().await.map_err(db_error)?;
     if let Some(existing) = entity::Entity::find_by_id(entity_id.clone())
@@ -197,11 +203,7 @@ pub async fn put_person_node(
     )
     .on_conflict(
         OnConflict::column(entity::Column::Id)
-            .update_columns([
-                entity::Column::EntityType,
-                entity::Column::Name,
-                entity::Column::UpdatedAt,
-            ])
+            .update_columns([entity::Column::EntityType, entity::Column::Name])
             .to_owned(),
     )
     .exec(&transaction)
@@ -941,6 +943,13 @@ mod tests {
         assert!(matches!(err, ServiceError::BadRequest(_)));
     }
 
+    #[test]
+    fn normalized_sex_accepts_case_insensitive_values() {
+        assert_eq!(normalized_sex("male".to_string()).unwrap(), "MALE");
+        assert_eq!(normalized_sex("FEMALE".to_string()).unwrap(), "FEMALE");
+        assert_eq!(normalized_sex(" unknown ".to_string()).unwrap(), "UNKNOWN");
+    }
+
     #[tokio::test]
     async fn put_person_node_upserts_the_complete_node() {
         let mock_db = MockDatabase::new(DatabaseBackend::MySql)
@@ -1010,6 +1019,43 @@ mod tests {
         assert_eq!(second.entity_id, first.entity_id);
         assert_eq!(second.person_id, first.person_id);
         assert_eq!(second.sex_id, first.sex_id);
+    }
+
+    #[tokio::test]
+    async fn put_person_node_attaches_a_missing_person_to_an_existing_entity() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "entity-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<person::Model, Vec<person::Model>, _>([vec![]])
+                .append_query_results::<person::Model, Vec<person::Model>, _>([vec![]])
+                .append_query_results::<person_sex::Model, Vec<person_sex::Model>, _>([vec![]])
+                .append_exec_results([
+                    MockExecResult {
+                        last_insert_id: 0,
+                        rows_affected: 1,
+                    },
+                    MockExecResult {
+                        last_insert_id: 0,
+                        rows_affected: 1,
+                    },
+                    MockExecResult {
+                        last_insert_id: 0,
+                        rows_affected: 1,
+                    },
+                ])
+                .into_connection(),
+        );
+
+        let result = put_person_node(&db, person_node_input())
+            .await
+            .expect("should attach missing person");
+
+        assert_eq!(result.entity_id, "entity-1");
+        assert_eq!(result.person_id, "person-1");
+        assert_eq!(result.sex_id, "sex-1");
     }
 
     #[tokio::test]
