@@ -23,13 +23,12 @@ Canonical behavior and contracts are defined in other docs. If anything here con
   - `tanahpediaPersonParentChild` (read-only, list a person's parent/child links with the
     other party resolved and the `sourceCitation` needed to review/correct a link)
   - `tanahpediaPersonDetails` (read-only, a person's full name/sex/birth/death/citation detail)
-- Not exposed remotely in `web/api` yet:
-  - `createFamilyPersonNode`
-  - `createParentChildLink`
-  - `createUnionLink`
-  - `updateUnionLink` (and the rest of the family graph CRUD)
+	- `putTanahpediaParentChildLink` (idempotent create/update by relationship id)
+	- `deleteTanahpediaParentChildLink`
+	- `putTanahpediaPersonUnion` (idempotent create/update by relationship id)
+	- `deleteTanahpediaPersonUnion`
 
-The family graph mutations above currently live in the admin app flow and are not documented as public Rust GraphQL mutations in the canonical API docs yet. Deeply-typed reads for
+Creating new person nodes remains in the admin app flow. Deeply-typed reads for
 non-person entity domains (place coordinates, event date ranges, war participants, etc.) are
 also not yet exposed — see [external-revision-api.md](./external-revision-api.md) for the
 current scope of the family-graph read queries.
@@ -237,14 +236,15 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-## Current limitation and next API step
+## Family relationship writes
 
-If the goal is full family graph creation for יעקב (people, parent-child links, unions) via remote Rust GraphQL API, add dedicated mutations under `web/api` that mirror:
+Resolve each existing person with `tanahpediaFindPersons`, then use
+`putTanahpediaParentChildLink` and `putTanahpediaPersonUnion` to create or replace links.
+The caller supplies the stable relationship `id`, so replaying the same request is safe and
+does not create duplicates. The delete mutations remove links by that same id. See
+[external-revision-api.md](./external-revision-api.md#mutations--family-relationship-writes)
+for the complete inputs, lookup values, validation, and GraphQL examples.
 
-- `createFamilyPersonNode`
-- `createParentChildLink`
-- `createUnionLink`
-
-Until then, remote external clients can create/update entries through the revision API, while family graph mutation remains in admin server-function endpoints.
+Creating a person node that does not yet exist still uses the admin app flow.
 
 Roadmap reference: [implementation-plan.md](./implementation-plan.md)

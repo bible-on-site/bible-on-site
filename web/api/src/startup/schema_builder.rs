@@ -27,7 +27,10 @@ pub struct QueryRoot(
 );
 
 #[derive(MergedObject, Default)]
-pub struct MutationRoot(tanahpedia_revisions_resolver::TanahpediaRevisionsMutation);
+pub struct MutationRoot(
+    tanahpedia_family_resolver::TanahpediaFamilyMutation,
+    tanahpedia_revisions_resolver::TanahpediaRevisionsMutation,
+);
 
 pub fn build_schema(database: &Database) -> Schema<QueryRoot, MutationRoot, EmptySubscription> {
     Schema::build(
@@ -69,7 +72,7 @@ pub async fn graphql_playground() -> Result<HttpResponse> {
 mod tests {
     use super::*;
     use async_graphql::Request;
-    use sea_orm::{DatabaseBackend, MockDatabase, Value};
+    use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, Value};
     use std::collections::BTreeMap;
 
     fn article_model(id: i32, perek_id: i16, author_id: i16) -> entities::article::Model {
@@ -348,5 +351,96 @@ mod tests {
             )
             .await;
         assert!(!apply.errors.is_empty());
+    }
+
+    #[tokio::test]
+    async fn schema_rejects_family_mutations_without_api_auth() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let schema = build_schema(&db);
+        let operations = [
+            r#"mutation { putTanahpediaParentChildLink(input: { id: "pc", parentPersonId: "p", childPersonId: "c", relationshipType: "BIOLOGICAL", parentRole: "FATHER" }) { id } }"#,
+            r#"mutation { deleteTanahpediaParentChildLink(id: "pc") { id } }"#,
+            r#"mutation { putTanahpediaPersonUnion(input: { id: "u", person1Id: "p1", person2Id: "p2", unionType: "MARRIAGE" }) { id } }"#,
+            r#"mutation { deleteTanahpediaPersonUnion(id: "u") { id } }"#,
+        ];
+
+        for operation in operations {
+            let response = schema
+                .execute(Request::new(operation).data(crate::common::auth::ApiAuth::new(None)))
+                .await;
+            assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
+            assert_eq!(response.errors[0].message, "Revision API is not configured");
+        }
+    }
+
+    #[tokio::test]
+    async fn schema_executes_authorized_family_mutations() {
+        use entities::tanahpedia::{
+            lookup_parent_child_type, lookup_parent_role, lookup_union_type, person,
+        };
+
+        let person_model = |id: &str| person::Model {
+            id: id.to_string(),
+            entity_id: format!("entity-{id}"),
+        };
+        let exec_result = MockExecResult {
+            last_insert_id: 0,
+            rows_affected: 1,
+        };
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                    "parent",
+                )]])
+                .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                    "child",
+                )]])
+                .append_query_results::<lookup_parent_child_type::Model, Vec<lookup_parent_child_type::Model>, _>(
+                    [vec![lookup_parent_child_type::Model {
+                        id: "pct-biological".to_string(),
+                        name: "BIOLOGICAL".to_string(),
+                    }]],
+                )
+                .append_query_results::<lookup_parent_role::Model, Vec<lookup_parent_role::Model>, _>([vec![
+                    lookup_parent_role::Model {
+                        id: "pr-father".to_string(),
+                        name: "FATHER".to_string(),
+                    },
+                ]])
+                .append_exec_results([exec_result.clone()])
+                .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                    "person-1",
+                )]])
+                .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                    "person-2",
+                )]])
+                .append_query_results::<lookup_union_type::Model, Vec<lookup_union_type::Model>, _>([vec![
+                    lookup_union_type::Model {
+                        id: "ut-marriage".to_string(),
+                        name: "MARRIAGE".to_string(),
+                    },
+                ]])
+                .append_exec_results([exec_result.clone(), exec_result.clone(), exec_result])
+                .into_connection(),
+        );
+        let schema = build_schema(&db);
+        let auth = || {
+            crate::common::auth::ApiAuth::with_revision_api_key(
+                Some("family-test-key".to_string()),
+                Some("family-test-key".to_string()),
+            )
+        };
+        let operations = [
+            r#"mutation { putTanahpediaParentChildLink(input: { id: "pc", parentPersonId: "parent", childPersonId: "child", relationshipType: "BIOLOGICAL", parentRole: "FATHER" }) { id } }"#,
+            r#"mutation { putTanahpediaPersonUnion(input: { id: "u", person1Id: "person-1", person2Id: "person-2", unionType: "MARRIAGE" }) { id } }"#,
+            r#"mutation { deleteTanahpediaParentChildLink(id: "pc") { id } }"#,
+            r#"mutation { deleteTanahpediaPersonUnion(id: "u") { id } }"#,
+        ];
+
+        for operation in operations {
+            let response = schema.execute(Request::new(operation).data(auth())).await;
+            assert!(response.errors.is_empty(), "{:?}", response.errors);
+        }
     }
 }

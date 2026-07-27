@@ -2,7 +2,8 @@ use crate::{
     common::error_handling::{INTERNAL_SERVER_ERROR, ServiceError},
     dtos::perek::number_to_hebrew,
     dtos::tanahpedia_family::{
-        TanahpediaEntitySummary, TanahpediaEntityTanahSource, TanahpediaPersonDetail,
+        PutTanahpediaParentChildInput, PutTanahpediaPersonUnionInput, TanahpediaEntitySummary,
+        TanahpediaEntityTanahSource, TanahpediaFamilyLinkWriteResult, TanahpediaPersonDetail,
         TanahpediaPersonName, TanahpediaPersonParentChildSummary, TanahpediaPersonSummary,
         TanahpediaPersonUnionSummary,
     },
@@ -11,14 +12,259 @@ use crate::{
 use entities::perek;
 use entities::tanahpedia::{
     entity, entity_tanah_source, lookup_name_type, lookup_parent_child_type, lookup_parent_role,
-    lookup_union_type, person, person_birth_date, person_birth_place, person_death_cause,
-    person_death_date, person_name, person_parent_child, person_sex, person_union,
+    lookup_union_end_reason, lookup_union_type, person, person_birth_date, person_birth_place,
+    person_death_cause, person_death_date, person_name, person_parent_child, person_sex,
+    person_union,
 };
-use sea_orm::{ColumnTrait, QueryFilter};
-use sea_orm::{Condition, EntityTrait};
+use sea_orm::sea_query::OnConflict;
+use sea_orm::{ColumnTrait, Condition, EntityTrait, IntoActiveModel, QueryFilter};
 
 fn db_error(db_err: sea_orm::DbErr) -> ServiceError {
     ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
+}
+
+fn required(value: String, field: &str, max_len: usize) -> Result<String, ServiceError> {
+    let value = value.trim().to_string();
+    if value.is_empty() {
+        return Err(ServiceError::bad_request(&format!("{field} is required")));
+    }
+    if value.chars().count() > max_len {
+        return Err(ServiceError::bad_request(&format!(
+            "{field} must be at most {max_len} characters"
+        )));
+    }
+    Ok(value)
+}
+
+fn optional(
+    value: Option<String>,
+    field: &str,
+    max_len: usize,
+) -> Result<Option<String>, ServiceError> {
+    value
+        .map(|value| required(value, field, max_len))
+        .transpose()
+}
+
+async fn require_person(
+    conn: &sea_orm::DatabaseConnection,
+    person_id: &str,
+) -> Result<(), ServiceError> {
+    if person::Entity::find_by_id(person_id.to_string())
+        .one(conn)
+        .await
+        .map_err(db_error)?
+        .is_none()
+    {
+        return Err(ServiceError::bad_request(&format!(
+            "personId {person_id} does not reference an existing person"
+        )));
+    }
+    Ok(())
+}
+
+async fn parent_child_type_id(
+    conn: &sea_orm::DatabaseConnection,
+    name: String,
+) -> Result<String, ServiceError> {
+    let name = required(name, "relationshipType", 50)?.to_uppercase();
+    lookup_parent_child_type::Entity::find()
+        .filter(lookup_parent_child_type::Column::Name.eq(name.clone()))
+        .one(conn)
+        .await
+        .map_err(db_error)?
+        .map(|row| row.id)
+        .ok_or_else(|| ServiceError::bad_request(&format!("unknown relationshipType {name}")))
+}
+
+async fn parent_role_id(
+    conn: &sea_orm::DatabaseConnection,
+    name: String,
+) -> Result<String, ServiceError> {
+    let name = required(name, "parentRole", 50)?.to_uppercase();
+    lookup_parent_role::Entity::find()
+        .filter(lookup_parent_role::Column::Name.eq(name.clone()))
+        .one(conn)
+        .await
+        .map_err(db_error)?
+        .map(|row| row.id)
+        .ok_or_else(|| ServiceError::bad_request(&format!("unknown parentRole {name}")))
+}
+
+async fn union_type_id(
+    conn: &sea_orm::DatabaseConnection,
+    name: String,
+) -> Result<String, ServiceError> {
+    let name = required(name, "unionType", 50)?.to_uppercase();
+    lookup_union_type::Entity::find()
+        .filter(lookup_union_type::Column::Name.eq(name.clone()))
+        .one(conn)
+        .await
+        .map_err(db_error)?
+        .map(|row| row.id)
+        .ok_or_else(|| ServiceError::bad_request(&format!("unknown unionType {name}")))
+}
+
+async fn union_end_reason_id(
+    conn: &sea_orm::DatabaseConnection,
+    name: Option<String>,
+) -> Result<Option<String>, ServiceError> {
+    let Some(name) = optional(name, "endReason", 50)?.map(|name| name.to_uppercase()) else {
+        return Ok(None);
+    };
+    lookup_union_end_reason::Entity::find()
+        .filter(lookup_union_end_reason::Column::Name.eq(name.clone()))
+        .one(conn)
+        .await
+        .map_err(db_error)?
+        .map(|row| Some(row.id))
+        .ok_or_else(|| ServiceError::bad_request(&format!("unknown endReason {name}")))
+}
+
+pub async fn put_parent_child_link(
+    db: &Database,
+    input: PutTanahpediaParentChildInput,
+) -> Result<TanahpediaFamilyLinkWriteResult, ServiceError> {
+    let conn = db.get_connection();
+    let id = required(input.id, "id", 36)?;
+    let parent_id = required(input.parent_person_id, "parentPersonId", 36)?;
+    let child_id = required(input.child_person_id, "childPersonId", 36)?;
+    let relationship_type = required(input.relationship_type, "relationshipType", 50)?;
+    let parent_role = required(input.parent_role, "parentRole", 50)?;
+    let alt_group_id = optional(input.alt_group_id, "altGroupId", 36)?;
+    let source_citation = optional(input.source_citation, "sourceCitation", 400)?;
+    if parent_id == child_id {
+        return Err(ServiceError::bad_request(
+            "a person cannot be their own parent",
+        ));
+    }
+    require_person(conn, &parent_id).await?;
+    require_person(conn, &child_id).await?;
+
+    let model = person_parent_child::Model {
+        id: id.clone(),
+        parent_id,
+        child_id,
+        relationship_type_id: parent_child_type_id(conn, relationship_type).await?,
+        parent_role_id: parent_role_id(conn, parent_role).await?,
+        alt_group_id,
+        source_citation,
+    };
+
+    person_parent_child::Entity::insert(model.into_active_model())
+        .on_conflict(
+            OnConflict::column(person_parent_child::Column::Id)
+                .update_columns([
+                    person_parent_child::Column::ParentId,
+                    person_parent_child::Column::ChildId,
+                    person_parent_child::Column::RelationshipTypeId,
+                    person_parent_child::Column::ParentRoleId,
+                    person_parent_child::Column::AltGroupId,
+                    person_parent_child::Column::SourceCitation,
+                ])
+                .to_owned(),
+        )
+        .exec(conn)
+        .await
+        .map_err(db_error)?;
+
+    Ok(TanahpediaFamilyLinkWriteResult { id })
+}
+
+pub async fn delete_parent_child_link(
+    db: &Database,
+    id: String,
+) -> Result<TanahpediaFamilyLinkWriteResult, ServiceError> {
+    let id = required(id, "id", 36)?;
+    let result = person_parent_child::Entity::delete_by_id(id.clone())
+        .exec(db.get_connection())
+        .await
+        .map_err(db_error)?;
+    if result.rows_affected == 0 {
+        return Err(ServiceError::not_found(
+            "parent-child link not found",
+            None::<&str>,
+        ));
+    }
+    Ok(TanahpediaFamilyLinkWriteResult { id })
+}
+
+pub async fn put_person_union(
+    db: &Database,
+    input: PutTanahpediaPersonUnionInput,
+) -> Result<TanahpediaFamilyLinkWriteResult, ServiceError> {
+    let conn = db.get_connection();
+    let id = required(input.id, "id", 36)?;
+    let person1_id = required(input.person1_id, "person1Id", 36)?;
+    let person2_id = required(input.person2_id, "person2Id", 36)?;
+    let union_type = required(input.union_type, "unionType", 50)?;
+    let end_reason = optional(input.end_reason, "endReason", 50)?;
+    let alt_group_id = optional(input.alt_group_id, "altGroupId", 36)?;
+    let source_citation = optional(input.source_citation, "sourceCitation", 400)?;
+    let person_source_citation =
+        optional(input.person_source_citation, "personSourceCitation", 400)?;
+    if person1_id == person2_id {
+        return Err(ServiceError::bad_request(
+            "a person cannot be united with themselves",
+        ));
+    }
+    require_person(conn, &person1_id).await?;
+    require_person(conn, &person2_id).await?;
+
+    let model = person_union::Model {
+        id: id.clone(),
+        person1_id,
+        person2_id,
+        union_type_id: union_type_id(conn, union_type).await?,
+        union_order: input.union_order,
+        start_date: input.start_date,
+        end_date: input.end_date,
+        end_reason_id: union_end_reason_id(conn, end_reason).await?,
+        alt_group_id,
+        source_citation,
+        person_source_citation,
+    };
+
+    person_union::Entity::insert(model.into_active_model())
+        .on_conflict(
+            OnConflict::column(person_union::Column::Id)
+                .update_columns([
+                    person_union::Column::Person1Id,
+                    person_union::Column::Person2Id,
+                    person_union::Column::UnionTypeId,
+                    person_union::Column::UnionOrder,
+                    person_union::Column::StartDate,
+                    person_union::Column::EndDate,
+                    person_union::Column::EndReasonId,
+                    person_union::Column::AltGroupId,
+                    person_union::Column::SourceCitation,
+                    person_union::Column::PersonSourceCitation,
+                ])
+                .to_owned(),
+        )
+        .exec(conn)
+        .await
+        .map_err(db_error)?;
+
+    Ok(TanahpediaFamilyLinkWriteResult { id })
+}
+
+pub async fn delete_person_union(
+    db: &Database,
+    id: String,
+) -> Result<TanahpediaFamilyLinkWriteResult, ServiceError> {
+    let id = required(id, "id", 36)?;
+    let result = person_union::Entity::delete_by_id(id.clone())
+        .exec(db.get_connection())
+        .await
+        .map_err(db_error)?;
+    if result.rows_affected == 0 {
+        return Err(ServiceError::not_found(
+            "person union not found",
+            None::<&str>,
+        ));
+    }
+    Ok(TanahpediaFamilyLinkWriteResult { id })
 }
 
 /// Formats a perek + pasuk pair as a human-readable Hebrew citation, e.g.
@@ -132,6 +378,15 @@ pub async fn get_person_unions(
             .map_err(db_error)?
             .map(|row| row.name)
             .unwrap_or_default();
+        let end_reason = if let Some(end_reason_id) = u.end_reason_id.clone() {
+            lookup_union_end_reason::Entity::find_by_id(end_reason_id)
+                .one(conn)
+                .await
+                .map_err(db_error)?
+                .map(|row| row.name)
+        } else {
+            None
+        };
 
         let other_person_id = if u.person1_id == person_id {
             u.person2_id.clone()
@@ -147,7 +402,12 @@ pub async fn get_person_unions(
             id: u.id,
             union_type,
             union_order: u.union_order,
+            start_date: u.start_date,
+            end_date: u.end_date,
+            end_reason,
+            alt_group_id: u.alt_group_id,
             source_citation: u.source_citation,
+            person_source_citation: u.person_source_citation,
             person1_id: u.person1_id,
             person2_id: u.person2_id,
             other_person_id,
@@ -292,6 +552,7 @@ pub async fn get_person_parent_child(
             id: row.id,
             relationship_type,
             parent_role,
+            alt_group_id: row.alt_group_id,
             source_citation: row.source_citation,
             parent_id: row.parent_id,
             child_id: row.child_id,
@@ -417,7 +678,7 @@ pub async fn get_person_details(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sea_orm::{DatabaseBackend, MockDatabase};
+    use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult};
 
     fn entity_model(id: &str, name: &str) -> entity::Model {
         entity::Model {
@@ -449,6 +710,7 @@ mod tests {
         person2_id: &str,
         union_order: Option<i32>,
         source_citation: Option<&str>,
+        person_source_citation: Option<&str>,
     ) -> person_union::Model {
         person_union::Model {
             id: id.to_string(),
@@ -456,12 +718,163 @@ mod tests {
             person2_id: person2_id.to_string(),
             union_type_id: "ut-marriage".to_string(),
             union_order,
+            start_date: Some(20000101),
+            end_date: Some(20010101),
+            end_reason_id: Some("uer-death".to_string()),
+            alt_group_id: Some("alt-union".to_string()),
+            source_citation: source_citation.map(str::to_string),
+            person_source_citation: person_source_citation.map(str::to_string),
+        }
+    }
+
+    fn parent_child_input() -> PutTanahpediaParentChildInput {
+        PutTanahpediaParentChildInput {
+            id: "pc-1".to_string(),
+            parent_person_id: "parent-1".to_string(),
+            child_person_id: "child-1".to_string(),
+            relationship_type: "biological".to_string(),
+            parent_role: "father".to_string(),
+            alt_group_id: None,
+            source_citation: Some("בראשית".to_string()),
+        }
+    }
+
+    fn union_input() -> PutTanahpediaPersonUnionInput {
+        PutTanahpediaPersonUnionInput {
+            id: "union-1".to_string(),
+            person1_id: "person-1".to_string(),
+            person2_id: "person-2".to_string(),
+            union_type: "marriage".to_string(),
+            union_order: Some(1),
             start_date: None,
             end_date: None,
-            end_reason_id: None,
+            end_reason: Some("death".to_string()),
             alt_group_id: None,
-            source_citation: source_citation.map(str::to_string),
+            source_citation: Some("בראשית".to_string()),
+            person_source_citation: Some("בראשית כט".to_string()),
         }
+    }
+
+    #[tokio::test]
+    async fn put_parent_child_link_rejects_self_parent() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let mut input = parent_child_input();
+        input.child_person_id = input.parent_person_id.clone();
+
+        let err = put_parent_child_link(&db, input).await.unwrap_err();
+
+        assert!(matches!(err, ServiceError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn put_parent_child_link_resolves_lookups_and_upserts() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                "parent-1",
+                "entity-parent",
+            )]])
+            .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                "child-1",
+                "entity-child",
+            )]])
+            .append_query_results::<lookup_parent_child_type::Model, Vec<lookup_parent_child_type::Model>, _>(
+                [vec![lookup_parent_child_type::Model {
+                    id: "pct-biological".to_string(),
+                    name: "BIOLOGICAL".to_string(),
+                }]],
+            )
+            .append_query_results::<lookup_parent_role::Model, Vec<lookup_parent_role::Model>, _>([vec![
+                lookup_parent_role::Model {
+                    id: "pr-father".to_string(),
+                    name: "FATHER".to_string(),
+                },
+            ]])
+            .append_exec_results([MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            }])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let result = put_parent_child_link(&db, parent_child_input())
+            .await
+            .expect("should upsert");
+
+        assert_eq!(result.id, "pc-1");
+    }
+
+    #[tokio::test]
+    async fn put_person_union_rejects_long_citation_before_querying() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let mut input = union_input();
+        input.person_source_citation = Some("x".repeat(401));
+
+        let err = put_person_union(&db, input).await.unwrap_err();
+
+        assert!(matches!(err, ServiceError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn put_person_union_resolves_lookups_and_upserts() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                "person-1", "entity-1",
+            )]])
+            .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                "person-2", "entity-2",
+            )]])
+            .append_query_results::<lookup_union_type::Model, Vec<lookup_union_type::Model>, _>([
+                vec![union_type_model("ut-marriage", "MARRIAGE")],
+            ])
+            .append_query_results::<lookup_union_end_reason::Model, Vec<lookup_union_end_reason::Model>, _>([
+                vec![lookup_union_end_reason::Model {
+                    id: "uer-death".to_string(),
+                    name: "DEATH".to_string(),
+                }],
+            ])
+            .append_exec_results([MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            }])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let result = put_person_union(&db, union_input())
+            .await
+            .expect("should upsert");
+
+        assert_eq!(result.id, "union-1");
+    }
+
+    #[tokio::test]
+    async fn delete_links_return_not_found_when_missing() {
+        let parent_db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_exec_results([MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 0,
+                }])
+                .into_connection(),
+        );
+        let union_db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_exec_results([MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 0,
+                }])
+                .into_connection(),
+        );
+
+        assert!(matches!(
+            delete_parent_child_link(&parent_db, "missing".to_string()).await,
+            Err(ServiceError::NotFound(_))
+        ));
+        assert!(matches!(
+            delete_person_union(&union_db, "missing".to_string()).await,
+            Err(ServiceError::NotFound(_))
+        ));
     }
 
     #[tokio::test]
@@ -527,10 +940,23 @@ mod tests {
     async fn get_person_unions_resolves_other_party_display_name() {
         let mock_db = MockDatabase::new(DatabaseBackend::MySql)
             .append_query_results::<person_union::Model, Vec<person_union::Model>, _>([vec![
-                union_model("union-1", "yaakov", "leah", Some(1), Some("בראשית כט")),
+                union_model(
+                    "union-1",
+                    "yaakov",
+                    "leah",
+                    Some(1),
+                    Some("בראשית כט"),
+                    Some("בראשית כט טז"),
+                ),
             ]])
             .append_query_results::<lookup_union_type::Model, Vec<lookup_union_type::Model>, _>([
                 vec![union_type_model("ut-marriage", "MARRIAGE")],
+            ])
+            .append_query_results::<lookup_union_end_reason::Model, Vec<lookup_union_end_reason::Model>, _>([
+                vec![lookup_union_end_reason::Model {
+                    id: "uer-death".to_string(),
+                    name: "DEATH".to_string(),
+                }],
             ])
             .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
                 "leah",
@@ -550,9 +976,17 @@ mod tests {
         assert_eq!(unions.len(), 1);
         assert_eq!(unions[0].id, "union-1");
         assert_eq!(unions[0].union_type, "MARRIAGE");
+        assert_eq!(unions[0].start_date, Some(20000101));
+        assert_eq!(unions[0].end_date, Some(20010101));
+        assert_eq!(unions[0].end_reason.as_deref(), Some("DEATH"));
+        assert_eq!(unions[0].alt_group_id.as_deref(), Some("alt-union"));
         assert_eq!(unions[0].other_person_id, "leah");
         assert_eq!(unions[0].other_display_name, "לאה");
         assert_eq!(unions[0].source_citation.as_deref(), Some("בראשית כט"));
+        assert_eq!(
+            unions[0].person_source_citation.as_deref(),
+            Some("בראשית כט טז")
+        );
     }
 
     #[tokio::test]
@@ -613,7 +1047,7 @@ mod tests {
             child_id: child_id.to_string(),
             relationship_type_id: "pct-biological".to_string(),
             parent_role_id: "pr-father".to_string(),
-            alt_group_id: None,
+            alt_group_id: Some("alt-parent".to_string()),
             source_citation: source_citation.map(str::to_string),
         }
     }
@@ -754,6 +1188,7 @@ mod tests {
         assert_eq!(links.len(), 1);
         assert_eq!(links[0].relationship_type, "BIOLOGICAL");
         assert_eq!(links[0].parent_role, "FATHER");
+        assert_eq!(links[0].alt_group_id.as_deref(), Some("alt-parent"));
         assert!(links[0].queried_is_parent);
         assert_eq!(links[0].other_person_id, "yosef");
         assert_eq!(links[0].other_display_name, "יוסף");

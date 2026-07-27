@@ -14,6 +14,7 @@ pub struct Model {
     pub end_reason_id: Option<String>,
     pub alt_group_id: Option<String>,
     pub source_citation: Option<String>,
+    pub person_source_citation: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
