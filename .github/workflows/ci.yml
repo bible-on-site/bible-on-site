@@ -1801,6 +1801,10 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
+      - name: Validate Production SQL Parser Compatibility
+        working-directory: ${{ github.workspace }}
+        run: python validate_lambda_parser.py --parse-only
+
       - name: Unit Test
         id: unit-test
         env:
@@ -2565,8 +2569,9 @@ jobs:
     name: Release Data
     needs: [setup_env, determine_data_changes, cross_module_ci, data_ci, perushim_data]
     # Note: Using always() as a workaround for reusable workflow result evaluation issues (see #1065)
-    # Also verify cross_module_ci, data_ci, and perushim_data passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.perushim_data.result == 'success' && (needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true') && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    # Perushim generation is intentionally skipped for Tanahpedia/schema-only changes;
+    # Data CD falls back to the always-present master artifact in that case.
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.data_ci.result == 'success' && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true') && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
     runs-on: ubuntu-latest

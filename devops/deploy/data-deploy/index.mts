@@ -29,6 +29,9 @@ import {
 } from "@aws-sdk/client-s3";
 import * as dotenv from "dotenv";
 import { DeployerBase } from "../deployer-base.mjs";
+import sqlFiles from "./sql-files.json" with {
+	type: "json",
+};
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,22 +45,9 @@ dotenv.config({
 const S3_BUCKET = "bible-on-site-data-deploy";
 const LAMBDA_FUNCTION_NAME = "bible-on-site-db-populator";
 
-// SQL files to deploy (order matters: structure before data)
-const SQL_FILES = [
-	"tanah_static_structure.sql",
-	"tanah_sefarim_and_perakim_data.sql",
-	"perushim_structure.sql",
-	"perushim_data.sql",
-	// Tanahpedia production-safe deploy path.
-	// Keep this list strictly non-destructive (no CREATE TABLE statements), so
-	// API-created entries and edits survive repeated release deploys.
-	// Column-upgrade scripts run before seed/lookup data in case later data
-	// ever needs the new columns.
-	"tanahpedia_alter_source_citation.sql",
-	"tanahpedia_alter_person_source_citation.sql",
-	"tanahpedia_seed_data.sql",
-	"tanahpedia_incremental_lookups.sql",
-];
+// Order matters: structure before data. Keep Tanahpedia entries strictly
+// non-destructive so API-created content survives repeated release deploys.
+const SQL_FILES = sqlFiles;
 
 class DataDeployer extends DeployerBase {
 	private readonly region: string;
