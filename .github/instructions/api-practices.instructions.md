@@ -28,6 +28,15 @@ Use **cargo-make** (`Makefile.toml`):
 - Populate test DB: `cd data && DB_URL="mysql://root:test_123@localhost:3306/tanah_test" cargo make mysql-populate`
 - MySQL CLI: `mysql -u root -ptest_123 tanah_test`
 
+### Authenticated Recovery APIs
+
+- Revision/family management auth fails closed when its environment key is missing or blank. Test missing, wrong, and correct bearer tokens at the GraphQL schema boundary.
+- Use caller-supplied stable IDs for idempotent recovery puts and expose lossless reads for all fields those puts accept. Validate a put, read-back equality, and a second identical put.
+- Resolve lookup names in batches outside relationship loops. SeaORM mock tests must contain exactly the query results production consumes; unused appended results hide query-count regressions.
+- Before diagnosing a production database mismatch, compare a known stable ID through the API with the same entity rendered by the website. Exact-name searches alone are not a sufficient discriminator.
+- Check `/health` for the deployed package version before calling a newly merged mutation. ECS can deploy new secrets on an older image successfully.
+- Do not assume `.env` overrides production configuration without inspecting the release image. The current API Dockerfile excludes `.env` and copies only the compiled binary into the final stage.
+
 ## Structure
 
 - Entities: `entities/`; Services: `src/services/`; Resolvers: `src/resolvers/`; DTOs: `src/dtos/`.

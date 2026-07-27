@@ -20,6 +20,8 @@ In order to understand some topic related to this repository, refer to the `docs
 - **Windows "nul" Files**: Before committing, check for and remove any accidentally created `nul` files (a Windows artifact). Run: `find . -name "nul" -type f -delete` or manually delete them.
 - **Branch Verification**: Before pushing to a branch, verify it doesn't already exist on remote (may have been merged). See `docs/practices/git.md` for details.
 - **Quote Character Style**: Do not use the Hebrew gershayim character `"`. Use the ASCII double quote character `"` instead, escaped or encoded as required by the file format.
+- **Non-interactive CLI output on Windows**: Do not use `gh ... --watch` in the integrated Git Bash terminal; it repeatedly opens an alternate buffer and hides auditable output. Use REST/GraphQL snapshots or redirect the watcher to a file. Set `GH_PAGER=cat GH_FORCE_TTY=0 PAGER=cat` for GitHub CLI and `AWS_PAGER=''` for AWS CLI.
+- **MINGW path conversion**: Git Bash can rewrite colon paths and leading-slash arguments. Prefix commands such as `git show "origin/master:path"` or AWS SSM names beginning with `/` with `MSYS_NO_PATHCONV=1`, or use the repository's established root-level SSM names without a leading slash.
 
 ### Dependency & CI Maintenance
 
