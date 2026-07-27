@@ -145,7 +145,12 @@ query PersonUnions($personId: String!) {
     id
     unionType
     unionOrder
+    startDate
+    endDate
+    endReason
+    altGroupId
     sourceCitation
+    personSourceCitation
     person1Id
     person2Id
     otherPersonId
@@ -163,6 +168,7 @@ query PersonParentChild($personId: String!) {
     id
     relationshipType
     parentRole
+    altGroupId
     sourceCitation
     parentId
     childId
@@ -175,6 +181,42 @@ query PersonParentChild($personId: String!) {
 
 Lists every parent/child row involving `personId` on either side. `queriedIsParent` tells the
 caller whether `personId` is the parent (`true`) or the child (`false`) in that row.
+
+## Mutations — family relationship writes
+
+Authorized clients can idempotently create or replace relationship rows after resolving the
+person ids with `tanahpediaFindPersons`. Replaying a `put` mutation with the same relationship
+`id` updates that row instead of creating a duplicate.
+
+```graphql
+mutation PutParentChild($input: PutTanahpediaParentChildInput!) {
+  putTanahpediaParentChildLink(input: $input) { id }
+}
+
+mutation PutUnion($input: PutTanahpediaPersonUnionInput!) {
+  putTanahpediaPersonUnion(input: $input) { id }
+}
+
+mutation DeleteParentChild($id: String!) {
+  deleteTanahpediaParentChildLink(id: $id) { id }
+}
+
+mutation DeleteUnion($id: String!) {
+  deleteTanahpediaPersonUnion(id: $id) { id }
+}
+```
+
+`PutTanahpediaParentChildInput` requires `id`, `parentPersonId`, `childPersonId`,
+`relationshipType`, and `parentRole`; it optionally accepts `altGroupId` and
+`sourceCitation`. `PutTanahpediaPersonUnionInput` requires `id`, `person1Id`, `person2Id`,
+and `unionType`; it optionally accepts `unionOrder`, `startDate`, `endDate`, `endReason`,
+`altGroupId`, `sourceCitation`, and `personSourceCitation`.
+
+Lookup names are case-insensitive. Current parent-child types are `BIOLOGICAL`, `ADOPTIVE`,
+`STEP`, and `FOSTER`; parent roles are `FATHER` and `MOTHER`; union types are `MARRIAGE`,
+`PILEGESH`, `FORBIDDEN_WITH_GENTILE`, `BANNED_INCEST`, and `BETROTHAL`; end reasons are
+`DEATH` and `DIVORCE`. Citations are limited to 400 characters. People on both sides must
+exist and must be distinct. Deletes return `NOT_FOUND` when the relationship id does not exist.
 
 ```graphql
 query PersonDetails($personId: String!) {
