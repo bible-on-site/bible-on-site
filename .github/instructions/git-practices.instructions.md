@@ -96,7 +96,18 @@ If it exists: check if merged; if merged, use a new branch name; if not, fetch a
 ## Pull Requests
 
 - Use a new branch per feature/fix. PR is created when publishing the branch.
+- The Auto Create PR workflow normally creates the PR after the first push. Wait for that workflow and locate the PR by head branch before calling `gh pr create`, or duplicate PR creation can collide.
 - Only @DoradSoft can merge unless explicitly delegated.
+
+## Merge Queue
+
+- Treat GraphQL `mergeQueueEntry { position state }` and final PR `state`/`mergedAt` as the source of truth. `autoMergeRequest: null`, `mergeStateStatus: UNKNOWN`, or `mergeable: UNKNOWN` does not prove that a PR left the queue.
+- The `gh pr merge` notice that the merge strategy is controlled by the merge queue is not a failure; confirm the resulting queue entry.
+- Track the current `merge_group` run and its head SHA. A green pull-request run is not evidence that the merge-group run passed.
+- Refresh PR state immediately before editing, pushing, enqueueing, or commenting; a queued PR can merge while another investigation is in progress.
+- To stop an already queued PR, dequeue it with the GraphQL `dequeuePullRequest` mutation before disabling auto-merge. Disabling auto-merge alone does not remove an active queue entry.
+- Code-scanning review threads are not ordinary conversations and cannot be manually resolved. Fix the alert, wait for CodeQL to mark it fixed/outdated, then recheck merge readiness.
+- Before declaring all open work consolidated, list every non-draft open PR and account for each one explicitly.
 
 ## Review Comment Triage (MANDATORY before every merge)
 
@@ -113,8 +124,9 @@ If it exists: check if merged; if merged, use a new branch name; if not, fetch a
    - **Defer**: the comment is valid but out of scope for this PR — file a tracked GitHub issue per [github-issues.instructions.md](github-issues.instructions.md) (Priority + Difficulty + Type + Component labels, added to the relevant project board) and reference it in the triage summary.
    - **Dismiss**: the comment is invalid or not applicable — state the reasoning explicitly (based on correctness, severity, and priority).
 3. Before deciding, re-read the current on-disk state of any flagged file — a comment may already be resolved by a later commit.
-4. Post a triage summary as a PR comment (`gh pr comment <n> --body-file <file>`) listing every comment's disposition, then delete any local scratch file used to draft it — the PR comment is the durable record, not a repo file.
-5. Only after every comment has been triaged (and any embraced fixes pushed and green) may the PR be merged or re-enqueued.
+4. For an embraced comment, verify the exact changed bytes, commit, and pushed SHA before replying that it is resolved. A passing formatter or test does not prove that the requested text/code change was actually made.
+5. Post a triage summary as a PR comment (`gh pr comment <n> --body-file <file>`) listing every comment's disposition, then delete any local scratch file used to draft it — the PR comment is the durable record, not a repo file.
+6. Only after every comment has been triaged (and any embraced fixes pushed and green) may the PR be merged or re-enqueued.
 
 This applies to every review round — if new comments appear after a later push (e.g. from Renovate/master-merge churn), repeat the triage before merging again.
 
