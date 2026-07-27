@@ -1,6 +1,6 @@
 {
 	"name": "admin",
-	"version": "0.1.79",
+	"version": "0.1.80",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -33,8 +33,8 @@
 		"node": ">=24.11.1 <24.12.0"
 	},
 	"dependencies": {
-		"@aws-sdk/client-s3": "3.1095.0",
-		"@aws-sdk/s3-request-presigner": "3.1095.0",
+		"@aws-sdk/client-s3": "3.1096.0",
+		"@aws-sdk/s3-request-presigner": "3.1096.0",
 		"@tanstack/react-query": "5.101.4",
 		"@tanstack/react-router": "1.170.18",
 		"@tanstack/react-router-devtools": "1.167.0",
@@ -53,7 +53,7 @@
 		"flowbite": "4.0.2",
 		"flowbite-react": "0.12.17",
 		"jose": "6.2.4",
-		"mysql2": "3.23.1",
+		"mysql2": "3.23.2",
 		"nitro": "npm:nitro-nightly@3.0.1-20260320-182900-2218d454",
 		"react": "19.2.8",
 		"react-dom": "19.2.8",
