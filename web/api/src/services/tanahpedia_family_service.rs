@@ -4,9 +4,10 @@ use crate::{
     common::error_handling::{INTERNAL_SERVER_ERROR, ServiceError},
     dtos::perek::number_to_hebrew,
     dtos::tanahpedia_family::{
-        PutTanahpediaParentChildInput, PutTanahpediaPersonUnionInput, TanahpediaEntitySummary,
-        TanahpediaEntityTanahSource, TanahpediaFamilyLinkWriteResult, TanahpediaPersonDetail,
-        TanahpediaPersonName, TanahpediaPersonParentChildSummary, TanahpediaPersonSummary,
+        PutTanahpediaParentChildInput, PutTanahpediaPersonNodeInput, PutTanahpediaPersonUnionInput,
+        TanahpediaEntitySummary, TanahpediaEntityTanahSource, TanahpediaFamilyLinkWriteResult,
+        TanahpediaPersonDetail, TanahpediaPersonName, TanahpediaPersonNodeWriteResult,
+        TanahpediaPersonParentChildSummary, TanahpediaPersonSex, TanahpediaPersonSummary,
         TanahpediaPersonUnionSummary,
     },
     providers::Database,
@@ -19,7 +20,9 @@ use entities::tanahpedia::{
     person_union,
 };
 use sea_orm::sea_query::OnConflict;
-use sea_orm::{ColumnTrait, Condition, EntityTrait, IntoActiveModel, QueryFilter};
+use sea_orm::{
+    ColumnTrait, Condition, EntityTrait, IntoActiveModel, QueryFilter, TransactionTrait,
+};
 
 fn db_error(db_err: sea_orm::DbErr) -> ServiceError {
     ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
@@ -46,6 +49,17 @@ fn optional(
     value
         .map(|value| required(value, field, max_len))
         .transpose()
+}
+
+fn normalized_sex(value: String) -> Result<String, ServiceError> {
+    let sex = required(value, "sex", 7)?.to_uppercase();
+    if matches!(sex.as_str(), "MALE" | "FEMALE" | "UNKNOWN") {
+        Ok(sex)
+    } else {
+        Err(ServiceError::bad_request(
+            "sex must be MALE, FEMALE, or UNKNOWN",
+        ))
+    }
 }
 
 async fn require_person(
@@ -121,6 +135,132 @@ async fn union_end_reason_id(
         .map_err(db_error)?
         .map(|row| Some(row.id))
         .ok_or_else(|| ServiceError::bad_request(&format!("unknown endReason {name}")))
+}
+
+pub async fn put_person_node(
+    db: &Database,
+    input: PutTanahpediaPersonNodeInput,
+) -> Result<TanahpediaPersonNodeWriteResult, ServiceError> {
+    let entity_id = required(input.entity_id, "entityId", 36)?;
+    let person_id = required(input.person_id, "personId", 36)?;
+    let display_name = required(input.display_name, "displayName", 255)?;
+    let sex_id = required(input.sex_id, "sexId", 36)?;
+    let sex = normalized_sex(input.sex)?;
+    let sex_alt_group_id = optional(input.sex_alt_group_id, "sexAltGroupId", 36)?;
+
+    let transaction = db.get_connection().begin().await.map_err(db_error)?;
+    let existing_entity = entity::Entity::find_by_id(entity_id.clone())
+        .one(&transaction)
+        .await
+        .map_err(db_error)?;
+    if existing_entity
+        .as_ref()
+        .is_some_and(|existing| existing.entity_type != "PERSON")
+    {
+        return Err(ServiceError::bad_request(
+            "entityId references a non-PERSON entity",
+        ));
+    }
+    if let Some(existing) = person::Entity::find_by_id(person_id.clone())
+        .one(&transaction)
+        .await
+        .map_err(db_error)?
+        && existing.entity_id != entity_id
+    {
+        return Err(ServiceError::bad_request(
+            "personId belongs to a different entityId",
+        ));
+    }
+    if let Some(existing) = person::Entity::find()
+        .filter(person::Column::EntityId.eq(entity_id.clone()))
+        .one(&transaction)
+        .await
+        .map_err(db_error)?
+        && existing.id != person_id
+    {
+        return Err(ServiceError::bad_request(
+            "entityId belongs to a different personId",
+        ));
+    }
+    if let Some(existing) = person_sex::Entity::find_by_id(sex_id.clone())
+        .one(&transaction)
+        .await
+        .map_err(db_error)?
+        && existing.person_id != person_id
+    {
+        return Err(ServiceError::bad_request(
+            "sexId belongs to a different personId",
+        ));
+    }
+    let now = chrono::Utc::now().naive_utc();
+    if existing_entity
+        .as_ref()
+        .is_none_or(|existing| existing.name != display_name)
+    {
+        entity::Entity::insert(
+            entity::Model {
+                id: entity_id.clone(),
+                entity_type: "PERSON".to_string(),
+                name: display_name,
+                created_at: now,
+                updated_at: now,
+            }
+            .into_active_model(),
+        )
+        .on_conflict(
+            OnConflict::column(entity::Column::Id)
+                .update_columns([entity::Column::EntityType, entity::Column::Name])
+                .to_owned(),
+        )
+        .exec(&transaction)
+        .await
+        .map_err(db_error)?;
+    }
+
+    person::Entity::insert(
+        person::Model {
+            id: person_id.clone(),
+            entity_id: entity_id.clone(),
+        }
+        .into_active_model(),
+    )
+    .on_conflict(
+        OnConflict::column(person::Column::Id)
+            .update_column(person::Column::EntityId)
+            .to_owned(),
+    )
+    .exec(&transaction)
+    .await
+    .map_err(db_error)?;
+
+    person_sex::Entity::insert(
+        person_sex::Model {
+            id: sex_id.clone(),
+            person_id: person_id.clone(),
+            sex,
+            alt_group_id: sex_alt_group_id,
+        }
+        .into_active_model(),
+    )
+    .on_conflict(
+        OnConflict::column(person_sex::Column::Id)
+            .update_columns([
+                person_sex::Column::PersonId,
+                person_sex::Column::Sex,
+                person_sex::Column::AltGroupId,
+            ])
+            .to_owned(),
+    )
+    .exec(&transaction)
+    .await
+    .map_err(db_error)?;
+    transaction.commit().await.map_err(db_error)?;
+
+    Ok(TanahpediaPersonNodeWriteResult {
+        entity_id,
+        person_id,
+        sex_id,
+    })
 }
 
 pub async fn put_parent_child_link(
@@ -639,13 +779,19 @@ pub async fn get_person_details(
         });
     }
 
-    let sexes = person_sex::Entity::find()
+    let sex_models = person_sex::Entity::find()
         .filter(person_sex::Column::PersonId.eq(person_id.clone()))
         .all(conn)
         .await
-        .map_err(db_error)?
+        .map_err(db_error)?;
+    let sexes = sex_models.iter().map(|row| row.sex.clone()).collect();
+    let sex_rows = sex_models
         .into_iter()
-        .map(|row| row.sex)
+        .map(|row| TanahpediaPersonSex {
+            id: row.id,
+            sex: row.sex,
+            alt_group_id: row.alt_group_id,
+        })
         .collect();
 
     let birth_dates = person_birth_date::Entity::find()
@@ -692,6 +838,7 @@ pub async fn get_person_details(
         display_name: entity_row.name,
         names,
         sexes,
+        sex_rows,
         birth_dates,
         death_dates,
         death_causes,
@@ -778,6 +925,220 @@ mod tests {
             source_citation: Some("בראשית".to_string()),
             person_source_citation: Some("בראשית כט".to_string()),
         }
+    }
+
+    fn person_node_input() -> PutTanahpediaPersonNodeInput {
+        PutTanahpediaPersonNodeInput {
+            entity_id: "entity-1".to_string(),
+            person_id: "person-1".to_string(),
+            display_name: "שמשון".to_string(),
+            sex_id: "sex-1".to_string(),
+            sex: "male".to_string(),
+            sex_alt_group_id: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn put_person_node_rejects_unknown_sex_before_querying() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let mut input = person_node_input();
+        input.sex = "other".to_string();
+
+        let err = put_person_node(&db, input).await.unwrap_err();
+
+        assert!(matches!(err, ServiceError::BadRequest(_)));
+    }
+
+    #[test]
+    fn normalized_sex_accepts_case_insensitive_values() {
+        assert_eq!(normalized_sex("male".to_string()).unwrap(), "MALE");
+        assert_eq!(normalized_sex("FEMALE".to_string()).unwrap(), "FEMALE");
+        assert_eq!(normalized_sex(" unknown ".to_string()).unwrap(), "UNKNOWN");
+    }
+
+    #[tokio::test]
+    async fn put_person_node_upserts_the_complete_node() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![]])
+            .append_query_results::<person::Model, Vec<person::Model>, _>([vec![]])
+            .append_query_results::<person::Model, Vec<person::Model>, _>([vec![]])
+            .append_query_results::<person_sex::Model, Vec<person_sex::Model>, _>([vec![]])
+            .append_exec_results([
+                MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                },
+                MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                },
+                MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                },
+            ])
+            .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                "entity-1",
+                "שמשון",
+            )]])
+            .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                "person-1", "entity-1",
+            )]])
+            .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                "person-1", "entity-1",
+            )]])
+            .append_query_results::<person_sex::Model, Vec<person_sex::Model>, _>([vec![
+                person_sex::Model {
+                    id: "sex-1".to_string(),
+                    person_id: "person-1".to_string(),
+                    sex: "MALE".to_string(),
+                    alt_group_id: None,
+                },
+            ]])
+            .append_exec_results([
+                MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                },
+                MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                },
+            ])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let first = put_person_node(&db, person_node_input())
+            .await
+            .expect("should upsert");
+        let second = put_person_node(&db, person_node_input())
+            .await
+            .expect("replay should upsert");
+
+        assert_eq!(first.entity_id, "entity-1");
+        assert_eq!(first.person_id, "person-1");
+        assert_eq!(first.sex_id, "sex-1");
+        assert_eq!(second.entity_id, first.entity_id);
+        assert_eq!(second.person_id, first.person_id);
+        assert_eq!(second.sex_id, first.sex_id);
+    }
+
+    #[tokio::test]
+    async fn put_person_node_attaches_missing_person_without_updating_matching_entity() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "entity-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<person::Model, Vec<person::Model>, _>([vec![]])
+                .append_query_results::<person::Model, Vec<person::Model>, _>([vec![]])
+                .append_query_results::<person_sex::Model, Vec<person_sex::Model>, _>([vec![]])
+                .append_exec_results([
+                    MockExecResult {
+                        last_insert_id: 0,
+                        rows_affected: 1,
+                    },
+                    MockExecResult {
+                        last_insert_id: 0,
+                        rows_affected: 1,
+                    },
+                ])
+                .into_connection(),
+        );
+
+        let result = put_person_node(&db, person_node_input())
+            .await
+            .expect("should attach missing person");
+
+        assert_eq!(result.entity_id, "entity-1");
+        assert_eq!(result.person_id, "person-1");
+        assert_eq!(result.sex_id, "sex-1");
+    }
+
+    #[tokio::test]
+    async fn put_person_node_rejects_non_person_entity_collision() {
+        let mut existing = entity_model("entity-1", "מקום");
+        existing.entity_type = "PLACE".to_string();
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![existing]])
+                .into_connection(),
+        );
+
+        let err = put_person_node(&db, person_node_input()).await.unwrap_err();
+
+        assert!(matches!(err, ServiceError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn put_person_node_rejects_person_id_collision() {
+        let db =
+            Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![
+                        entity_model("entity-1", "שמשון"),
+                    ]])
+                    .append_query_results::<person::Model, Vec<person::Model>, _>([vec![
+                        person_model("person-1", "entity-other"),
+                    ]])
+                    .into_connection(),
+            );
+
+        let err = put_person_node(&db, person_node_input()).await.unwrap_err();
+
+        assert!(matches!(err, ServiceError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn put_person_node_rejects_entity_id_collision() {
+        let db =
+            Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![
+                        entity_model("entity-1", "שמשון"),
+                    ]])
+                    .append_query_results::<person::Model, Vec<person::Model>, _>([vec![]])
+                    .append_query_results::<person::Model, Vec<person::Model>, _>([vec![
+                        person_model("person-other", "entity-1"),
+                    ]])
+                    .into_connection(),
+            );
+
+        let err = put_person_node(&db, person_node_input()).await.unwrap_err();
+
+        assert!(matches!(err, ServiceError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn put_person_node_rejects_sex_id_collision() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "entity-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                    "person-1", "entity-1",
+                )]])
+                .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                    "person-1", "entity-1",
+                )]])
+                .append_query_results::<person_sex::Model, Vec<person_sex::Model>, _>([vec![
+                    person_sex::Model {
+                        id: "sex-1".to_string(),
+                        person_id: "person-other".to_string(),
+                        sex: "MALE".to_string(),
+                        alt_group_id: None,
+                    },
+                ]])
+                .into_connection(),
+        );
+
+        let err = put_person_node(&db, person_node_input()).await.unwrap_err();
+
+        assert!(matches!(err, ServiceError::BadRequest(_)));
     }
 
     #[tokio::test]
@@ -1307,6 +1668,8 @@ mod tests {
         assert_eq!(detail.names.len(), 1);
         assert_eq!(detail.names[0].name_type, "BIRTH");
         assert_eq!(detail.sexes, vec!["FEMALE".to_string()]);
+        assert_eq!(detail.sex_rows.len(), 1);
+        assert_eq!(detail.sex_rows[0].id, "sex-1");
         assert!(detail.birth_dates.is_empty());
         assert_eq!(detail.tanah_sources.len(), 1);
         assert_eq!(detail.tanah_sources[0].citation, "בראשית ל' ד'");

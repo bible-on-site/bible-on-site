@@ -182,11 +182,29 @@ query PersonParentChild($personId: String!) {
 Lists every parent/child row involving `personId` on either side. `queriedIsParent` tells the
 caller whether `personId` is the parent (`true`) or the child (`false`) in that row.
 
-## Mutations — family relationship writes
+## Mutations — person-node and family relationship writes
 
 Authorized clients can idempotently create or replace relationship rows after resolving the
 person ids with `tanahpediaFindPersons`. Replaying a `put` mutation with the same relationship
 `id` updates that row instead of creating a duplicate.
+
+```graphql
+mutation PutPersonNode($input: PutTanahpediaPersonNodeInput!) {
+  putTanahpediaPersonNode(input: $input) {
+    entityId
+    personId
+    sexId
+  }
+}
+```
+
+`PutTanahpediaPersonNodeInput` requires caller-supplied stable `entityId`, `personId`, and
+`sexId` values plus `displayName` and `sex` (`MALE`, `FEMALE`, or `UNKNOWN`). It optionally
+accepts `sexAltGroupId`. The mutation atomically upserts the `PERSON` entity, typed person row,
+and sex row. Replaying the same input is idempotent. It rejects an id that already belongs to a
+different entity type/person binding instead of reassigning existing data. This is a full put:
+omitting `sexAltGroupId` clears an existing value. An unchanged replay does not refresh the
+entity's `updatedAt` timestamp.
 
 ```graphql
 mutation PutParentChild($input: PutTanahpediaParentChildInput!) {
@@ -231,6 +249,11 @@ query PersonDetails($personId: String!) {
       altGroupId
     }
     sexes
+    sexRows {
+      id
+      sex
+      altGroupId
+    }
     birthDates
     deathDates
     deathCauses
@@ -246,9 +269,10 @@ query PersonDetails($personId: String!) {
 
 Returns the full reviewable detail for a person in one call: every name (with resolved
 name type), sex, birth/death date, death cause, birth place id, and entity-level Tanah
-citation. Each list field can have more than one entry because the schema allows multiple
-alternate-opinion rows per person (`altGroupId`). Errors with `NOT_FOUND` when the person (or
-its linked entity) doesn't exist.
+citation. `sexes` remains the compact value list; `sexRows` is the lossless form containing
+the stable row id and `altGroupId` needed for read-after-write comparison. Each list field can
+have more than one entry because the schema allows multiple alternate-opinion rows per person
+(`altGroupId`). Errors with `NOT_FOUND` when the person (or its linked entity) doesn't exist.
 
 These queries only read `tanahpedia_entity`, `tanahpedia_person`, `tanahpedia_person_name`,
 `tanahpedia_person_sex`, `tanahpedia_person_birth_date`, `tanahpedia_person_death_date`,

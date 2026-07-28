@@ -23,15 +23,15 @@ Canonical behavior and contracts are defined in other docs. If anything here con
   - `tanahpediaPersonParentChild` (read-only, list a person's parent/child links with the
     other party resolved and the `sourceCitation` needed to review/correct a link)
   - `tanahpediaPersonDetails` (read-only, a person's full name/sex/birth/death/citation detail)
+	- `putTanahpediaPersonNode` (idempotent entity/person/sex upsert by stable ids)
   - `putTanahpediaParentChildLink` (idempotent create/update by relationship id)
   - `deleteTanahpediaParentChildLink`
   - `putTanahpediaPersonUnion` (idempotent create/update by relationship id)
   - `deleteTanahpediaPersonUnion`
 
-Creating new person nodes remains in the admin app flow. Deeply-typed reads for
-non-person entity domains (place coordinates, event date ranges, war participants, etc.) are
-also not yet exposed — see [external-revision-api.md](./external-revision-api.md) for the
-current scope of the family-graph read queries.
+Deeply-typed writes and reads for non-person entity domains (place coordinates, event date
+ranges, war participants, etc.) are not exposed — see
+[external-revision-api.md](./external-revision-api.md) for the current family-graph contract.
 
 ## Endpoint and auth
 
@@ -236,15 +236,14 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-## Family relationship writes
+## Person-node and family relationship writes
 
-Resolve each existing person with `tanahpediaFindPersons`, then use
+Create or repair a person node with `putTanahpediaPersonNode`. Resolve each existing person
+with `tanahpediaFindPersons`, then use
 `putTanahpediaParentChildLink` and `putTanahpediaPersonUnion` to create or replace links.
 The caller supplies the stable relationship `id`, so replaying the same request is safe and
 does not create duplicates. The delete mutations remove links by that same id. See
-[external-revision-api.md](./external-revision-api.md#mutations--family-relationship-writes)
+[external-revision-api.md](./external-revision-api.md#mutations--person-node-and-family-relationship-writes)
 for the complete inputs, lookup values, validation, and GraphQL examples.
-
-Creating a person node that does not yet exist still uses the admin app flow.
 
 Roadmap reference: [implementation-plan.md](./implementation-plan.md)

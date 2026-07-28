@@ -2,9 +2,10 @@ use async_graphql::{Context, ErrorExtensions, Object, Result};
 
 use crate::common::auth::ApiAuth;
 use crate::dtos::tanahpedia_family::{
-    PutTanahpediaParentChildInput, PutTanahpediaPersonUnionInput, TanahpediaEntitySummary,
-    TanahpediaEntityTanahSource, TanahpediaFamilyLinkWriteResult, TanahpediaPersonDetail,
-    TanahpediaPersonParentChildSummary, TanahpediaPersonSummary, TanahpediaPersonUnionSummary,
+    PutTanahpediaParentChildInput, PutTanahpediaPersonNodeInput, PutTanahpediaPersonUnionInput,
+    TanahpediaEntitySummary, TanahpediaEntityTanahSource, TanahpediaFamilyLinkWriteResult,
+    TanahpediaPersonDetail, TanahpediaPersonNodeWriteResult, TanahpediaPersonParentChildSummary,
+    TanahpediaPersonSummary, TanahpediaPersonUnionSummary,
 };
 use crate::providers::Database;
 use crate::services::tanahpedia_family_service;
@@ -17,6 +18,19 @@ pub struct TanahpediaFamilyMutation;
 
 #[Object]
 impl TanahpediaFamilyMutation {
+    async fn put_tanahpedia_person_node(
+        &self,
+        ctx: &Context<'_>,
+        input: PutTanahpediaPersonNodeInput,
+    ) -> Result<TanahpediaPersonNodeWriteResult> {
+        ctx.data::<ApiAuth>()?
+            .authorize_revision_manager()
+            .map_err(|e| e.extend())?;
+        tanahpedia_family_service::put_person_node(ctx.data::<Database>()?, input)
+            .await
+            .map_err(|e| e.extend())
+    }
+
     async fn put_tanahpedia_parent_child_link(
         &self,
         ctx: &Context<'_>,
