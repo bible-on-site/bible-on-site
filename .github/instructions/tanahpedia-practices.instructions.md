@@ -74,6 +74,7 @@ Do not infer data loss while a schema migration or reader deployment is incomple
 ## Family Tree UI
 
 - Node titles remain on one line. Size the card/container for the longest supported title instead of wrapping the title.
+- When those max-content cards exceed a narrow viewport, make the family tier the horizontal RTL scroll owner; never widen the document or shrink tracks until cards overlap. Verify every card is fully reachable across the scroll range and that cards remain disjoint.
 - For multiple unequal-width spouse cards, use equal grid columns rather than centered flex distribution; connector vertices must land at equal `(index + 0.5) / count` positions.
 - Horizontal buses stop at the outer connector vertices, and the focal vertical connector stops at the bus. Scope matrix and non-matrix connector rules separately so a fix for one layout cannot cross or overshoot the other.
 - Prefer stretchable connector geometry (`top` plus `bottom`) and stacking-context containment over fixed heights tied to label content.
