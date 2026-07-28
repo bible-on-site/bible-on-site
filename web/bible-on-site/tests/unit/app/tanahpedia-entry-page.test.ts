@@ -214,7 +214,7 @@ describe("tanahpedia/entry/[uniqueName] page", () => {
 			jest.restoreAllMocks();
 		});
 
-		it("renders entry when found", async () => {
+		it("renders entry and logs when family loading fails", async () => {
 			const consoleError = jest.spyOn(console, "error").mockImplementation();
 			mockGetEntriesByEntityType.mockResolvedValue([
 				{
