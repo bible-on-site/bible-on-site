@@ -44,10 +44,14 @@ Use evidence before mutation. A Tanahpedia entry, entity, typed row, supporting 
 1. Trace the owning production read path first. Tanahpedia website pages read MySQL directly in Next.js server code; they do not use the Rust GraphQL family resolver for rendering.
 2. Establish a known-good control on the same surface. Compare a known intact graph, the affected graph, the API `/health` version, and both production domains.
 3. Prefer stable IDs and lossless detail reads. An empty exact-name search is not proof that a node was deleted; query a known person/entity ID and inspect the rendered server payload before concluding that data is absent.
-4. Inventory the full graph before replay: focal entry-to-entity association, entity/person rows, supporting nodes, sex/name metadata, parent-child links, unions, lookup values, and every optional citation/date/alternate-group field.
-5. If prerequisite nodes or the focal entry-to-entity association are missing, extend the authenticated API with idempotent mutations. A standalone entity is not renderable from an entry page. Do not force relationship-only mutations or bypass the API with SQL.
-6. Create nodes and the focal entry association before relationships. Replay with stable caller-supplied IDs, reread every field and exact row count, then verify that a second replay creates no duplicates or timestamp churn.
-7. Verify expected family names in rendered HTML on every production domain and inspect contextual family-load logs. HTTP 200 alone is not completion evidence.
+4. Read the canonical fixture's identity semantics before choosing IDs. If SQL discovers the focal person (for example, by name) but uses fixed IDs only for support nodes, resolve and reuse the entry-linked focal person; do not invent a fixed focal ID.
+5. Treat exact-name matches as candidates, not identity. Torah names are shared and legacy data may contain duplicates. Disambiguate with entry associations, stable IDs, typed rows, and relationship ownership before writing.
+6. Inventory the full graph before replay: all entry-to-entity associations, entity/person rows, supporting nodes, sex/name metadata, parent-child links, unions, lookup values, and every optional citation/date/alternate-group field. Multiple identical entity badges are evidence of duplicate entry links.
+7. If prerequisite nodes or the focal entry-to-entity association are missing, extend the authenticated API with idempotent mutations. A standalone entity is not renderable from an entry page. Do not force relationship-only mutations or bypass the API with SQL.
+8. Create nodes and the focal entry association before relationships. Replay with stable caller-supplied IDs, reread every field and exact row count, then verify that a second replay creates no duplicates or timestamp churn.
+9. On Windows or Git Bash, stream non-ASCII GraphQL JSON to native `curl` through stdin with `--data-binary @-`; do not pass Hebrew JSON through argv. Compare returned bytes after every write before continuing.
+10. Verify expected family names in rendered HTML and the browser DOM on every production domain, then inspect contextual family-load logs. The website reads MySQL directly and may select the first unordered entry association, so successful API readback and HTTP 200 are not completion evidence.
+11. Cleanup mutations must be narrower than content-admin deletion. Delete an exact duplicate entry link by ID, and remove an accidental person attachment only after transactionally proving it has no entry association, family edges, or person metadata. Preserve the entity unless its deletion is separately intended.
 
 Do not infer data loss while a schema migration or reader deployment is incomplete. Restore read compatibility first, then determine what is actually missing.
 
@@ -55,6 +59,7 @@ Do not infer data loss while a schema migration or reader deployment is incomple
 
 - Authentication must fail closed when `TANAHPEDIA_REVISION_API_KEY` is absent, blank, or incorrect.
 - Put mutations are idempotent by caller-supplied stable ID; deletes return `NOT_FOUND` for an absent row instead of silently succeeding.
+- Recovery deletions must lock and validate the exact supplied IDs. Refuse orphan-person cleanup when any entry association, family edge, role, name, date, place, or other person metadata remains.
 - Read responses must be lossless for every writable field so a caller can read, replay, and compare without direct database access.
 - Validate referenced people, lookup names, self-links, and citation lengths before writing.
 - Batch lookup and related-entity reads outside row loops. Tests must model the real query sequence and must not append unused mock results that hide extra or missing queries.
@@ -69,6 +74,7 @@ Do not infer data loss while a schema migration or reader deployment is incomple
 ## Family Tree UI
 
 - Node titles remain on one line. Size the card/container for the longest supported title instead of wrapping the title.
+- When those max-content cards exceed a narrow viewport, make the family tier the horizontal RTL scroll owner; never widen the document or shrink tracks until cards overlap. Verify every card is fully reachable across the scroll range and that cards remain disjoint.
 - For multiple unequal-width spouse cards, use equal grid columns rather than centered flex distribution; connector vertices must land at equal `(index + 0.5) / count` positions.
 - Horizontal buses stop at the outer connector vertices, and the focal vertical connector stops at the bus. Scope matrix and non-matrix connector rules separately so a fix for one layout cannot cross or overshoot the other.
 - Prefer stretchable connector geometry (`top` plus `bottom`) and stacking-context containment over fixed heights tied to label content.

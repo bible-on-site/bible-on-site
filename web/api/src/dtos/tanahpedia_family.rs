@@ -18,6 +18,13 @@ pub struct PutTanahpediaPersonNodeInput {
 }
 
 #[derive(InputObject, Debug, Clone)]
+pub struct DeleteTanahpediaPersonNodeInput {
+    pub entity_id: String,
+    pub person_id: String,
+    pub sex_id: String,
+}
+
+#[derive(InputObject, Debug, Clone)]
 pub struct PutTanahpediaParentChildInput {
     pub id: String,
     pub parent_person_id: String,
@@ -170,7 +177,7 @@ pub struct TanahpediaPersonDetail {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use async_graphql::{InputType, value};
+    use async_graphql::{InputType, registry::Registry, value};
 
     #[test]
     fn entry_entity_link_input_parses_all_graphql_fields() {
@@ -204,5 +211,53 @@ mod tests {
         assert_eq!(input.sex_id, "sex-1");
         assert_eq!(input.sex, "MALE");
         assert_eq!(input.sex_alt_group_id.as_deref(), Some("alternate-1"));
+    }
+
+    #[test]
+    fn delete_person_node_input_parses_and_serializes_all_graphql_fields() {
+        assert!(DeleteTanahpediaPersonNodeInput::parse(None).is_err());
+        let input = DeleteTanahpediaPersonNodeInput::parse(Some(value!({
+            "entityId": "entity-1",
+            "personId": "person-1",
+            "sexId": "sex-1"
+        })))
+        .expect("delete person node input should parse");
+
+        assert_eq!(input.entity_id, "entity-1");
+        assert_eq!(input.person_id, "person-1");
+        assert_eq!(input.sex_id, "sex-1");
+        assert_eq!(
+            DeleteTanahpediaPersonNodeInput::type_name(),
+            "DeleteTanahpediaPersonNodeInput"
+        );
+        assert_eq!(
+            DeleteTanahpediaPersonNodeInput::qualified_type_name(),
+            "DeleteTanahpediaPersonNodeInput!"
+        );
+        let mut registry = Registry::default();
+        assert_eq!(
+            DeleteTanahpediaPersonNodeInput::create_type_info(&mut registry),
+            "DeleteTanahpediaPersonNodeInput!"
+        );
+        assert!(
+            registry
+                .types
+                .contains_key("DeleteTanahpediaPersonNodeInput")
+        );
+        assert_eq!(
+            DeleteTanahpediaPersonNodeInput::federation_fields().as_deref(),
+            Some("{ entityId personId sexId }")
+        );
+        assert!(input.as_raw_value().is_some());
+        let cloned = input.clone();
+        assert!(format!("{cloned:?}").contains("person-1"));
+        assert_eq!(
+            input.to_value(),
+            value!({
+                "entityId": "entity-1",
+                "personId": "person-1",
+                "sexId": "sex-1"
+            })
+        );
     }
 }
