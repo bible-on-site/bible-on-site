@@ -4,9 +4,9 @@ use crate::{
     common::error_handling::{INTERNAL_SERVER_ERROR, ServiceError},
     dtos::perek::number_to_hebrew,
     dtos::tanahpedia_family::{
-        PutTanahpediaEntryEntityLinkInput, PutTanahpediaParentChildInput,
-        PutTanahpediaPersonNodeInput, PutTanahpediaPersonUnionInput, TanahpediaEntitySummary,
-        TanahpediaEntityTanahSource, TanahpediaEntryEntityLinkWriteResult,
+        DeleteTanahpediaPersonNodeInput, PutTanahpediaEntryEntityLinkInput,
+        PutTanahpediaParentChildInput, PutTanahpediaPersonNodeInput, PutTanahpediaPersonUnionInput,
+        TanahpediaEntitySummary, TanahpediaEntityTanahSource, TanahpediaEntryEntityLinkWriteResult,
         TanahpediaFamilyLinkWriteResult, TanahpediaPersonDetail, TanahpediaPersonName,
         TanahpediaPersonNodeWriteResult, TanahpediaPersonParentChildSummary, TanahpediaPersonSex,
         TanahpediaPersonSummary, TanahpediaPersonUnionSummary,
@@ -22,13 +22,47 @@ use entities::tanahpedia::{
 };
 use sea_orm::sea_query::OnConflict;
 use sea_orm::{
-    ColumnTrait, Condition, EntityTrait, FromQueryResult, IntoActiveModel, QueryFilter,
-    QuerySelect, TransactionTrait,
+    ColumnTrait, Condition, DatabaseBackend, EntityTrait, FromQueryResult, IntoActiveModel,
+    QueryFilter, QuerySelect, Statement, TransactionTrait, Value,
 };
 
 #[derive(FromQueryResult)]
 struct EntryId {
     id: String,
+}
+
+#[derive(FromQueryResult)]
+struct PersonDependencyCount {
+    dependency_count: i64,
+}
+
+const PERSON_DEPENDENCY_SQL: &str = r#"SELECT (
+    EXISTS(SELECT 1 FROM tanahpedia_entry_entity WHERE entity_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_name WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_birth_date WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_death_date WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_death_cause WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_birth_place WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_role_prophet WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_role_king WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_name_giver_person WHERE giver_person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_war_side_participant_person WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_saying_speaker_person WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_saying_audience_person WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_prophecy_prophet WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_prophecy_recipient_person WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_parent_child WHERE parent_id = ? OR child_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_union WHERE person1_id = ? OR person2_id = ?)
+) AS dependency_count"#;
+const PERSON_DEPENDENCY_PERSON_BIND_COUNT: usize = 17;
+
+fn person_dependency_values(entity_id: &str, person_id: &str) -> Vec<Value> {
+    std::iter::once(entity_id.to_string().into())
+        .chain(std::iter::repeat_n(
+            person_id.to_string().into(),
+            PERSON_DEPENDENCY_PERSON_BIND_COUNT,
+        ))
+        .collect()
 }
 
 fn db_error(db_err: sea_orm::DbErr) -> ServiceError {
@@ -172,6 +206,32 @@ pub async fn put_entry_entity_link(
         id,
         entry_id,
         entity_id,
+    })
+}
+
+pub async fn delete_entry_entity_link(
+    db: &Database,
+    id: String,
+) -> Result<TanahpediaEntryEntityLinkWriteResult, ServiceError> {
+    let id = required(id, "id", 36)?;
+    let transaction = db.get_connection().begin().await.map_err(db_error)?;
+    let existing = entry_entity::Entity::find_by_id(id.clone())
+        .lock_exclusive()
+        .one(&transaction)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ServiceError::not_found("entry/entity link not found", None::<&str>))?;
+
+    entry_entity::Entity::delete_by_id(id.clone())
+        .exec(&transaction)
+        .await
+        .map_err(db_error)?;
+    transaction.commit().await.map_err(db_error)?;
+
+    Ok(TanahpediaEntryEntityLinkWriteResult {
+        id,
+        entry_id: existing.entry_id,
+        entity_id: existing.entity_id,
     })
 }
 
@@ -367,6 +427,77 @@ pub async fn put_person_node(
     .exec(&transaction)
     .await
     .map_err(db_error)?;
+    transaction.commit().await.map_err(db_error)?;
+
+    Ok(TanahpediaPersonNodeWriteResult {
+        entity_id,
+        person_id,
+        sex_id,
+    })
+}
+
+pub async fn delete_orphan_person_node(
+    db: &Database,
+    input: DeleteTanahpediaPersonNodeInput,
+) -> Result<TanahpediaPersonNodeWriteResult, ServiceError> {
+    let entity_id = required(input.entity_id, "entityId", 36)?;
+    let person_id = required(input.person_id, "personId", 36)?;
+    let sex_id = required(input.sex_id, "sexId", 36)?;
+    let transaction = db.get_connection().begin().await.map_err(db_error)?;
+
+    entity::Entity::find_by_id(entity_id.clone())
+        .lock_exclusive()
+        .one(&transaction)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ServiceError::not_found("entity not found", None::<&str>))?;
+    let existing_person = person::Entity::find_by_id(person_id.clone())
+        .lock_exclusive()
+        .one(&transaction)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ServiceError::not_found("person not found", None::<&str>))?;
+    if existing_person.entity_id != entity_id {
+        return Err(ServiceError::bad_request(
+            "personId belongs to a different entityId",
+        ));
+    }
+
+    let sex_rows = person_sex::Entity::find()
+        .filter(person_sex::Column::PersonId.eq(person_id.clone()))
+        .lock_exclusive()
+        .all(&transaction)
+        .await
+        .map_err(db_error)?;
+    if sex_rows.len() != 1 || sex_rows[0].id != sex_id {
+        return Err(ServiceError::bad_request(
+            "person must have exactly the supplied sexId",
+        ));
+    }
+
+    let dependencies = PersonDependencyCount::find_by_statement(Statement::from_sql_and_values(
+        DatabaseBackend::MySql,
+        PERSON_DEPENDENCY_SQL,
+        person_dependency_values(&entity_id, &person_id),
+    ))
+    .one(&transaction)
+    .await
+    .map_err(db_error)?
+    .ok_or_else(|| ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, None::<&str>))?;
+    if dependencies.dependency_count != 0 {
+        return Err(ServiceError::bad_request(
+            "person node still has linked data",
+        ));
+    }
+
+    person_sex::Entity::delete_by_id(sex_id.clone())
+        .exec(&transaction)
+        .await
+        .map_err(db_error)?;
+    person::Entity::delete_by_id(person_id.clone())
+        .exec(&transaction)
+        .await
+        .map_err(db_error)?;
     transaction.commit().await.map_err(db_error)?;
 
     Ok(TanahpediaPersonNodeWriteResult {
@@ -962,8 +1093,10 @@ pub async fn get_person_details(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::{BTreeMap, HashSet};
+
     use super::*;
-    use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, QueryTrait};
+    use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, QueryTrait, Value};
 
     fn entity_model(id: &str, name: &str) -> entity::Model {
         entity::Model {
@@ -999,6 +1132,48 @@ mod tests {
             entry_id: entry_id.to_string(),
             entity_id: entity_id.to_string(),
         }
+    }
+
+    fn person_sex_model(id: &str, person_id: &str) -> person_sex::Model {
+        person_sex::Model {
+            id: id.to_string(),
+            person_id: person_id.to_string(),
+            sex: "MALE".to_string(),
+            alt_group_id: None,
+        }
+    }
+
+    fn dependency_count_row(count: i64) -> BTreeMap<String, Value> {
+        BTreeMap::from([("dependency_count".to_string(), count.into())])
+    }
+
+    #[test]
+    fn orphan_person_guard_covers_every_person_reference_table() {
+        let schema = include_str!("../../../../data/mysql/tanahpedia_structure.sql");
+        let mut current_table = "";
+        let mut reference_tables = HashSet::new();
+        for line in schema.lines().map(str::trim) {
+            if let Some(table) = line
+                .strip_prefix("CREATE TABLE `")
+                .and_then(|suffix| suffix.split('`').next())
+            {
+                current_table = table;
+            }
+            if line.contains("REFERENCES `tanahpedia_person`") {
+                reference_tables.insert(current_table);
+            }
+        }
+
+        assert_eq!(reference_tables.len(), 16);
+        assert!(reference_tables.remove("tanahpedia_person_sex"));
+        for table in reference_tables {
+            assert!(PERSON_DEPENDENCY_SQL.contains(table), "missing {table}");
+        }
+        assert!(PERSON_DEPENDENCY_SQL.contains("tanahpedia_entry_entity"));
+        assert_eq!(
+            person_dependency_values("entity-1", "person-1").len(),
+            PERSON_DEPENDENCY_SQL.matches('?').count()
+        );
     }
 
     fn union_type_model(id: &str, name: &str) -> lookup_union_type::Model {
@@ -1326,6 +1501,44 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn delete_entry_entity_link_returns_deleted_link() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry_entity::Model, Vec<entry_entity::Model>, _>([vec![
+                    entry_entity_model("entry-entity-1", "entry-1", "entity-1"),
+                ]])
+                .append_exec_results([MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                }])
+                .into_connection(),
+        );
+
+        let deleted = delete_entry_entity_link(&db, "entry-entity-1".to_string())
+            .await
+            .expect("should delete link");
+
+        assert_eq!(deleted.id, "entry-entity-1");
+        assert_eq!(deleted.entry_id, "entry-1");
+        assert_eq!(deleted.entity_id, "entity-1");
+    }
+
+    #[tokio::test]
+    async fn delete_entry_entity_link_rejects_missing_link() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry_entity::Model, Vec<entry_entity::Model>, _>([vec![]])
+                .into_connection(),
+        );
+
+        let error = delete_entry_entity_link(&db, "missing".to_string())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(error, ServiceError::NotFound(_)));
+    }
+
+    #[tokio::test]
     async fn put_person_node_rejects_unknown_sex_before_querying() {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
@@ -1335,6 +1548,146 @@ mod tests {
         let err = put_person_node(&db, input).await.unwrap_err();
 
         assert!(matches!(err, ServiceError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn delete_orphan_person_node_preserves_entity() {
+        let exec_result = MockExecResult {
+            last_insert_id: 0,
+            rows_affected: 1,
+        };
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "entity-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                    "person-1", "entity-1",
+                )]])
+                .append_query_results::<person_sex::Model, Vec<person_sex::Model>, _>([vec![
+                    person_sex_model("sex-1", "person-1"),
+                ]])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![dependency_count_row(0)],
+                ])
+                .append_exec_results([exec_result.clone(), exec_result])
+                .into_connection(),
+        );
+
+        let deleted = delete_orphan_person_node(
+            &db,
+            DeleteTanahpediaPersonNodeInput {
+                entity_id: "entity-1".to_string(),
+                person_id: "person-1".to_string(),
+                sex_id: "sex-1".to_string(),
+            },
+        )
+        .await
+        .expect("should delete orphan attachment");
+
+        assert_eq!(deleted.entity_id, "entity-1");
+        assert_eq!(deleted.person_id, "person-1");
+        assert_eq!(deleted.sex_id, "sex-1");
+        let transaction_log = db.get_connection().clone().into_transaction_log();
+        assert_eq!(transaction_log.len(), 1);
+        let executed_sql = format!("{:?}", transaction_log[0]);
+        assert!(executed_sql.contains("tanahpedia_person_sex"));
+        assert!(executed_sql.contains("DELETE FROM `tanahpedia_person`"));
+        assert!(!executed_sql.contains("DELETE FROM `tanahpedia_entity`"));
+    }
+
+    #[tokio::test]
+    async fn delete_orphan_person_node_rejects_linked_data() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "entity-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                    "person-1", "entity-1",
+                )]])
+                .append_query_results::<person_sex::Model, Vec<person_sex::Model>, _>([vec![
+                    person_sex_model("sex-1", "person-1"),
+                ]])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![dependency_count_row(1)],
+                ])
+                .into_connection(),
+        );
+
+        let error = delete_orphan_person_node(
+            &db,
+            DeleteTanahpediaPersonNodeInput {
+                entity_id: "entity-1".to_string(),
+                person_id: "person-1".to_string(),
+                sex_id: "sex-1".to_string(),
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(error, ServiceError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn delete_orphan_person_node_rejects_entity_mismatch() {
+        let db =
+            Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![
+                        entity_model("entity-1", "שמשון"),
+                    ]])
+                    .append_query_results::<person::Model, Vec<person::Model>, _>([vec![
+                        person_model("person-1", "entity-other"),
+                    ]])
+                    .into_connection(),
+            );
+
+        let error = delete_orphan_person_node(
+            &db,
+            DeleteTanahpediaPersonNodeInput {
+                entity_id: "entity-1".to_string(),
+                person_id: "person-1".to_string(),
+                sex_id: "sex-1".to_string(),
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(error, ServiceError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn delete_orphan_person_node_rejects_sex_mismatch() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "entity-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                    "person-1", "entity-1",
+                )]])
+                .append_query_results::<person_sex::Model, Vec<person_sex::Model>, _>([vec![
+                    person_sex_model("sex-other", "person-1"),
+                ]])
+                .into_connection(),
+        );
+
+        let error = delete_orphan_person_node(
+            &db,
+            DeleteTanahpediaPersonNodeInput {
+                entity_id: "entity-1".to_string(),
+                person_id: "person-1".to_string(),
+                sex_id: "sex-1".to_string(),
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(error, ServiceError::BadRequest(_)));
     }
 
     #[test]
