@@ -465,6 +465,89 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn schema_executes_authorized_family_cleanup_mutations() {
+        use entities::tanahpedia::{entity, entry_entity, person, person_sex};
+
+        let now = chrono::Utc::now().naive_utc();
+        let exec_result = MockExecResult {
+            last_insert_id: 0,
+            rows_affected: 1,
+        };
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry_entity::Model, Vec<entry_entity::Model>, _>([vec![
+                    entry_entity::Model {
+                        id: "entry-entity-1".to_string(),
+                        entry_id: "entry-1".to_string(),
+                        entity_id: "entity-duplicate".to_string(),
+                    },
+                ]])
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![
+                    entity::Model {
+                        id: "entity-duplicate".to_string(),
+                        entity_type: "PERSON".to_string(),
+                        name: "שמשון".to_string(),
+                        created_at: now,
+                        updated_at: now,
+                    },
+                ]])
+                .append_query_results::<person::Model, Vec<person::Model>, _>([vec![
+                    person::Model {
+                        id: "person-duplicate".to_string(),
+                        entity_id: "entity-duplicate".to_string(),
+                    },
+                ]])
+                .append_query_results::<person_sex::Model, Vec<person_sex::Model>, _>([vec![
+                    person_sex::Model {
+                        id: "sex-duplicate".to_string(),
+                        person_id: "person-duplicate".to_string(),
+                        sex: "MALE".to_string(),
+                        alt_group_id: None,
+                    },
+                ]])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![BTreeMap::from([(
+                        "dependency_count".to_string(),
+                        0_i64.into(),
+                    )])],
+                ])
+                .append_exec_results([exec_result.clone(), exec_result.clone(), exec_result])
+                .into_connection(),
+        );
+        let schema = build_schema(&db);
+        let auth = || {
+            crate::common::auth::ApiAuth::with_revision_api_key(
+                Some("family-test-key".to_string()),
+                Some("family-test-key".to_string()),
+            )
+        };
+
+        let delete_link = schema
+            .execute(
+                Request::new(
+                    r#"mutation { deleteTanahpediaEntryEntityLink(id: "entry-entity-1") { id entryId entityId } }"#,
+                )
+                .data(auth()),
+            )
+            .await;
+        assert!(delete_link.errors.is_empty(), "{:?}", delete_link.errors);
+
+        let delete_person = schema
+            .execute(
+                Request::new(
+                    r#"mutation { deleteTanahpediaOrphanPersonNode(input: { entityId: "entity-duplicate", personId: "person-duplicate", sexId: "sex-duplicate" }) { entityId personId sexId } }"#,
+                )
+                .data(auth()),
+            )
+            .await;
+        assert!(
+            delete_person.errors.is_empty(),
+            "{:?}",
+            delete_person.errors
+        );
+    }
+
+    #[tokio::test]
     async fn schema_executes_authorized_family_mutations() {
         use entities::tanahpedia::{
             lookup_parent_child_type, lookup_parent_role, lookup_union_type, person,
