@@ -1,6 +1,13 @@
 use async_graphql::{InputObject, SimpleObject};
 
 #[derive(InputObject, Debug, Clone)]
+pub struct PutTanahpediaEntryEntityLinkInput {
+    pub id: String,
+    pub entry_unique_name: String,
+    pub entity_id: String,
+}
+
+#[derive(InputObject, Debug, Clone)]
 pub struct PutTanahpediaPersonNodeInput {
     pub entity_id: String,
     pub person_id: String,
@@ -39,6 +46,13 @@ pub struct PutTanahpediaPersonUnionInput {
 #[derive(SimpleObject, Debug, Clone)]
 pub struct TanahpediaFamilyLinkWriteResult {
     pub id: String,
+}
+
+#[derive(SimpleObject, Debug, Clone)]
+pub struct TanahpediaEntryEntityLinkWriteResult {
+    pub id: String,
+    pub entry_id: String,
+    pub entity_id: String,
 }
 
 #[derive(SimpleObject, Debug, Clone)]
@@ -157,6 +171,20 @@ pub struct TanahpediaPersonDetail {
 mod tests {
     use super::*;
     use async_graphql::{InputType, value};
+
+    #[test]
+    fn entry_entity_link_input_parses_all_graphql_fields() {
+        let input = PutTanahpediaEntryEntityLinkInput::parse(Some(value!({
+            "id": "entry-entity-1",
+            "entryUniqueName": "שמשון",
+            "entityId": "entity-1"
+        })))
+        .expect("entry/entity link input should parse");
+
+        assert_eq!(input.id, "entry-entity-1");
+        assert_eq!(input.entry_unique_name, "שמשון");
+        assert_eq!(input.entity_id, "entity-1");
+    }
 
     #[test]
     fn person_node_input_parses_all_graphql_fields() {

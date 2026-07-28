@@ -210,7 +210,12 @@ describe("tanahpedia/entry/[uniqueName] page", () => {
 	});
 
 	describe("EntryPage", () => {
-		it("renders entry when found", async () => {
+		afterEach(() => {
+			jest.restoreAllMocks();
+		});
+
+		it("renders entry and logs when family loading fails", async () => {
+			const consoleError = jest.spyOn(console, "error").mockImplementation();
 			mockGetEntriesByEntityType.mockResolvedValue([
 				{
 					id: "entry-1",
@@ -256,6 +261,17 @@ describe("tanahpedia/entry/[uniqueName] page", () => {
 			expect(mockGetPersonFamilySummary).toHaveBeenCalledWith(
 				"entity-1",
 				"\u05de\u05e9\u05d4 \u05e8\u05d1\u05e0\u05d5",
+			);
+			expect(consoleError).toHaveBeenCalledWith(
+				"[tanahpedia] person family load failed",
+				{
+					uniqueName: "משה-רבנו",
+					entityId: "entity-1",
+				},
+				expect.any(Error),
+			);
+			expect((consoleError.mock.calls[0][2] as Error).message).toBe(
+				"family down",
 			);
 		});
 

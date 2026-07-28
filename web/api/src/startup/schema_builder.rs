@@ -359,6 +359,7 @@ mod tests {
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
         let schema = build_schema(&db);
         let operations = [
+            r#"mutation { putTanahpediaEntryEntityLink(input: { id: "ee", entryUniqueName: "entry", entityId: "e" }) { id } }"#,
             r#"mutation { putTanahpediaPersonNode(input: { entityId: "e", personId: "p", displayName: "Name", sexId: "s", sex: "MALE" }) { personId } }"#,
             r#"mutation { putTanahpediaParentChildLink(input: { id: "pc", parentPersonId: "p", childPersonId: "c", relationshipType: "BIOLOGICAL", parentRole: "FATHER" }) { id } }"#,
             r#"mutation { deleteTanahpediaParentChildLink(id: "pc") { id } }"#,
@@ -373,6 +374,57 @@ mod tests {
             assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
             assert_eq!(response.errors[0].message, "Revision API is not configured");
         }
+    }
+
+    #[tokio::test]
+    async fn schema_executes_authorized_entry_entity_link_mutation() {
+        use entities::tanahpedia::{entity, entry, entry_entity};
+
+        let now = chrono::Utc::now().naive_utc();
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry::Model {
+                    id: "entry-1".to_string(),
+                    unique_name: "שמשון".to_string(),
+                    title: "שמשון".to_string(),
+                    content: None,
+                    created_at: now,
+                    updated_at: now,
+                }]])
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![
+                    entity::Model {
+                        id: "entity-1".to_string(),
+                        entity_type: "PERSON".to_string(),
+                        name: "שמשון".to_string(),
+                        created_at: now,
+                        updated_at: now,
+                    },
+                ]])
+                .append_query_results::<entry_entity::Model, Vec<entry_entity::Model>, _>([vec![]])
+                .append_query_results::<entry_entity::Model, Vec<entry_entity::Model>, _>([vec![]])
+                .append_exec_results([MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                }])
+                .into_connection(),
+        );
+        let response = build_schema(&db)
+            .execute(
+                Request::new(
+                    r#"mutation { putTanahpediaEntryEntityLink(input: { id: "entry-entity-1", entryUniqueName: "שמשון", entityId: "entity-1" }) { id entryId entityId } }"#,
+                )
+                .data(crate::common::auth::ApiAuth::with_revision_api_key(
+                    Some("family-test-key".to_string()),
+                    Some("family-test-key".to_string()),
+                )),
+            )
+            .await;
+
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(
+            response.data.into_json().unwrap()["putTanahpediaEntryEntityLink"]["entryId"],
+            "entry-1"
+        );
     }
 
     #[tokio::test]
