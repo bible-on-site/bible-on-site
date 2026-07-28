@@ -210,6 +210,10 @@ describe("tanahpedia/entry/[uniqueName] page", () => {
 	});
 
 	describe("EntryPage", () => {
+		afterEach(() => {
+			jest.restoreAllMocks();
+		});
+
 		it("renders entry when found", async () => {
 			const consoleError = jest.spyOn(console, "error").mockImplementation();
 			mockGetEntriesByEntityType.mockResolvedValue([
@@ -269,7 +273,6 @@ describe("tanahpedia/entry/[uniqueName] page", () => {
 			expect((consoleError.mock.calls[0][2] as Error).message).toBe(
 				"family down",
 			);
-			consoleError.mockRestore();
 		});
 
 		it("renders empty content and sibling fallback when entry has no entities", async () => {
