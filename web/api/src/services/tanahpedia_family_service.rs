@@ -127,7 +127,7 @@ pub async fn put_entry_entity_link(
         ));
     }
 
-    entry_entity::Entity::insert(
+    let insert_result = entry_entity::Entity::insert(
         entry_entity::Model {
             id: id.clone(),
             entry_id: entry_id.clone(),
@@ -136,8 +136,28 @@ pub async fn put_entry_entity_link(
         .into_active_model(),
     )
     .exec(&transaction)
-    .await
-    .map_err(db_error)?;
+    .await;
+    if let Err(insert_error) = insert_result {
+        if let Some(existing) = entry_entity::Entity::find_by_id(id.clone())
+            .lock_exclusive()
+            .one(&transaction)
+            .await
+            .map_err(db_error)?
+        {
+            if existing.entry_id != entry_id || existing.entity_id != entity_id {
+                return Err(ServiceError::bad_request(
+                    "id belongs to a different entry/entity link",
+                ));
+            }
+            transaction.commit().await.map_err(db_error)?;
+            return Ok(TanahpediaEntryEntityLinkWriteResult {
+                id,
+                entry_id,
+                entity_id,
+            });
+        }
+        return Err(db_error(insert_error));
+    }
     transaction.commit().await.map_err(db_error)?;
 
     Ok(TanahpediaEntryEntityLinkWriteResult {
@@ -1178,6 +1198,90 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(err, ServiceError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn put_entry_entity_link_reconciles_concurrent_exact_insert() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
+                    "entry-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "entity-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<entry_entity::Model, Vec<entry_entity::Model>, _>([vec![]])
+                .append_query_results::<entry_entity::Model, Vec<entry_entity::Model>, _>([vec![]])
+                .append_exec_errors([sea_orm::DbErr::RecordNotInserted])
+                .append_query_results::<entry_entity::Model, Vec<entry_entity::Model>, _>([vec![
+                    entry_entity_model("entry-entity-1", "entry-1", "entity-1"),
+                ]])
+                .into_connection(),
+        );
+
+        let result = put_entry_entity_link(&db, entry_entity_link_input())
+            .await
+            .expect("should reconcile exact concurrent insert");
+
+        assert_eq!(result.id, "entry-entity-1");
+        assert_eq!(result.entry_id, "entry-1");
+        assert_eq!(result.entity_id, "entity-1");
+    }
+
+    #[tokio::test]
+    async fn put_entry_entity_link_rejects_concurrent_id_collision() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
+                    "entry-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "entity-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<entry_entity::Model, Vec<entry_entity::Model>, _>([vec![]])
+                .append_query_results::<entry_entity::Model, Vec<entry_entity::Model>, _>([vec![]])
+                .append_exec_errors([sea_orm::DbErr::RecordNotInserted])
+                .append_query_results::<entry_entity::Model, Vec<entry_entity::Model>, _>([vec![
+                    entry_entity_model("entry-entity-1", "entry-other", "entity-1"),
+                ]])
+                .into_connection(),
+        );
+
+        let err = put_entry_entity_link(&db, entry_entity_link_input())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, ServiceError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn put_entry_entity_link_preserves_unrelated_insert_error() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
+                    "entry-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "entity-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<entry_entity::Model, Vec<entry_entity::Model>, _>([vec![]])
+                .append_query_results::<entry_entity::Model, Vec<entry_entity::Model>, _>([vec![]])
+                .append_exec_errors([sea_orm::DbErr::Custom("insert failed".to_string())])
+                .append_query_results::<entry_entity::Model, Vec<entry_entity::Model>, _>([vec![]])
+                .into_connection(),
+        );
+
+        let err = put_entry_entity_link(&db, entry_entity_link_input())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, ServiceError::InternalServerError(_)));
     }
 
     #[tokio::test]

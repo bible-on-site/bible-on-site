@@ -263,8 +263,11 @@ describe("tanahpedia/entry/[uniqueName] page", () => {
 				{
 					uniqueName: "משה-רבנו",
 					entityId: "entity-1",
-					error: new Error("family down"),
 				},
+				expect.any(Error),
+			);
+			expect((consoleError.mock.calls[0][2] as Error).message).toBe(
+				"family down",
 			);
 			consoleError.mockRestore();
 		});

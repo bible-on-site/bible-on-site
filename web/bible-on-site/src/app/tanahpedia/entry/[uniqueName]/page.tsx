@@ -112,11 +112,14 @@ export default async function EntryPage({
 			);
 		}
 	} catch (error) {
-		console.error("[tanahpedia] person family load failed", {
-			uniqueName: entry.uniqueName,
-			entityId: personEntity?.entityId,
+		console.error(
+			"[tanahpedia] person family load failed",
+			{
+				uniqueName: entry.uniqueName,
+				entityId: personEntity?.entityId,
+			},
 			error,
-		});
+		);
 		personFamily = null;
 	}
 
