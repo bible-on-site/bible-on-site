@@ -103,15 +103,23 @@ export default async function EntryPage({
 	}
 
 	let personFamily = null;
+	const personEntity = entry.entities.find((e) => e.entityType === "PERSON");
 	try {
-		const personEntity = entry.entities.find((e) => e.entityType === "PERSON");
 		if (personEntity) {
 			personFamily = await getPersonFamilySummary(
 				personEntity.entityId,
 				personEntity.entityName,
 			);
 		}
-	} catch {
+	} catch (error) {
+		console.error(
+			"[tanahpedia] person family load failed",
+			{
+				uniqueName: entry.uniqueName,
+				entityId: personEntity?.entityId,
+			},
+			error,
+		);
 		personFamily = null;
 	}
 
