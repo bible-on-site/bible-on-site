@@ -44,9 +44,10 @@ Use evidence before mutation. A Tanahpedia entry, entity, typed row, supporting 
 1. Trace the owning production read path first. Tanahpedia website pages read MySQL directly in Next.js server code; they do not use the Rust GraphQL family resolver for rendering.
 2. Establish a known-good control on the same surface. Compare a known intact graph, the affected graph, the API `/health` version, and both production domains.
 3. Prefer stable IDs and lossless detail reads. An empty exact-name search is not proof that a node was deleted; query a known person/entity ID and inspect the rendered server payload before concluding that data is absent.
-4. Inventory the full graph before replay: focal entity/person, supporting entity/person rows, sex/name metadata, parent-child links, unions, lookup values, and every optional citation/date/alternate-group field.
-5. If prerequisite nodes are missing, extend the authenticated API with an idempotent node mutation. Do not force relationship-only mutations or bypass the API with SQL.
-6. Replay with stable caller-supplied IDs, reread every field, and verify that a second replay creates no duplicates.
+4. Inventory the full graph before replay: focal entry-to-entity association, entity/person rows, supporting nodes, sex/name metadata, parent-child links, unions, lookup values, and every optional citation/date/alternate-group field.
+5. If prerequisite nodes or the focal entry-to-entity association are missing, extend the authenticated API with idempotent mutations. A standalone entity is not renderable from an entry page. Do not force relationship-only mutations or bypass the API with SQL.
+6. Create nodes and the focal entry association before relationships. Replay with stable caller-supplied IDs, reread every field and exact row count, then verify that a second replay creates no duplicates or timestamp churn.
+7. Verify expected family names in rendered HTML on every production domain and inspect contextual family-load logs. HTTP 200 alone is not completion evidence.
 
 Do not infer data loss while a schema migration or reader deployment is incomplete. Restore read compatibility first, then determine what is actually missing.
 

@@ -189,6 +189,14 @@ person ids with `tanahpediaFindPersons`. Replaying a `put` mutation with the sam
 `id` updates that row instead of creating a duplicate.
 
 ```graphql
+mutation PutEntryEntityLink($input: PutTanahpediaEntryEntityLinkInput!) {
+  putTanahpediaEntryEntityLink(input: $input) {
+    id
+    entryId
+    entityId
+  }
+}
+
 mutation PutPersonNode($input: PutTanahpediaPersonNodeInput!) {
   putTanahpediaPersonNode(input: $input) {
     entityId
@@ -197,6 +205,11 @@ mutation PutPersonNode($input: PutTanahpediaPersonNodeInput!) {
   }
 }
 ```
+
+`PutTanahpediaEntryEntityLinkInput` requires a caller-supplied stable `id`, the existing
+entry's `entryUniqueName`, and an existing `entityId`. It creates the association the website
+uses to discover an entry's typed root entity. Exact replay performs no write. The mutation
+rejects a link id owned by another pair and rejects a pair already owned by another link id.
 
 `PutTanahpediaPersonNodeInput` requires caller-supplied stable `entityId`, `personId`, and
 `sexId` values plus `displayName` and `sex` (`MALE`, `FEMALE`, or `UNKNOWN`). It optionally

@@ -1,6 +1,13 @@
 use async_graphql::{InputObject, SimpleObject};
 
 #[derive(InputObject, Debug, Clone)]
+pub struct PutTanahpediaEntryEntityLinkInput {
+    pub id: String,
+    pub entry_unique_name: String,
+    pub entity_id: String,
+}
+
+#[derive(InputObject, Debug, Clone)]
 pub struct PutTanahpediaPersonNodeInput {
     pub entity_id: String,
     pub person_id: String,
@@ -39,6 +46,13 @@ pub struct PutTanahpediaPersonUnionInput {
 #[derive(SimpleObject, Debug, Clone)]
 pub struct TanahpediaFamilyLinkWriteResult {
     pub id: String,
+}
+
+#[derive(SimpleObject, Debug, Clone)]
+pub struct TanahpediaEntryEntityLinkWriteResult {
+    pub id: String,
+    pub entry_id: String,
+    pub entity_id: String,
 }
 
 #[derive(SimpleObject, Debug, Clone)]

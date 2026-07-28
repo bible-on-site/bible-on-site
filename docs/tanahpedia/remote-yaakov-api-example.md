@@ -23,7 +23,8 @@ Canonical behavior and contracts are defined in other docs. If anything here con
   - `tanahpediaPersonParentChild` (read-only, list a person's parent/child links with the
     other party resolved and the `sourceCitation` needed to review/correct a link)
   - `tanahpediaPersonDetails` (read-only, a person's full name/sex/birth/death/citation detail)
-	- `putTanahpediaPersonNode` (idempotent entity/person/sex upsert by stable ids)
+  - `putTanahpediaEntryEntityLink` (idempotent entry/root-entity association by stable id)
+  - `putTanahpediaPersonNode` (idempotent entity/person/sex upsert by stable ids)
   - `putTanahpediaParentChildLink` (idempotent create/update by relationship id)
   - `deleteTanahpediaParentChildLink`
   - `putTanahpediaPersonUnion` (idempotent create/update by relationship id)

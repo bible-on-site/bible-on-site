@@ -211,6 +211,7 @@ describe("tanahpedia/entry/[uniqueName] page", () => {
 
 	describe("EntryPage", () => {
 		it("renders entry when found", async () => {
+			const consoleError = jest.spyOn(console, "error").mockImplementation();
 			mockGetEntriesByEntityType.mockResolvedValue([
 				{
 					id: "entry-1",
@@ -257,6 +258,15 @@ describe("tanahpedia/entry/[uniqueName] page", () => {
 				"entity-1",
 				"\u05de\u05e9\u05d4 \u05e8\u05d1\u05e0\u05d5",
 			);
+			expect(consoleError).toHaveBeenCalledWith(
+				"[tanahpedia] person family load failed",
+				{
+					uniqueName: "משה-רבנו",
+					entityId: "entity-1",
+					error: new Error("family down"),
+				},
+			);
+			consoleError.mockRestore();
 		});
 
 		it("renders empty content and sibling fallback when entry has no entities", async () => {

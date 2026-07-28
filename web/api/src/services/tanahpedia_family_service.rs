@@ -4,24 +4,26 @@ use crate::{
     common::error_handling::{INTERNAL_SERVER_ERROR, ServiceError},
     dtos::perek::number_to_hebrew,
     dtos::tanahpedia_family::{
-        PutTanahpediaParentChildInput, PutTanahpediaPersonNodeInput, PutTanahpediaPersonUnionInput,
-        TanahpediaEntitySummary, TanahpediaEntityTanahSource, TanahpediaFamilyLinkWriteResult,
-        TanahpediaPersonDetail, TanahpediaPersonName, TanahpediaPersonNodeWriteResult,
-        TanahpediaPersonParentChildSummary, TanahpediaPersonSex, TanahpediaPersonSummary,
-        TanahpediaPersonUnionSummary,
+        PutTanahpediaEntryEntityLinkInput, PutTanahpediaParentChildInput,
+        PutTanahpediaPersonNodeInput, PutTanahpediaPersonUnionInput, TanahpediaEntitySummary,
+        TanahpediaEntityTanahSource, TanahpediaEntryEntityLinkWriteResult,
+        TanahpediaFamilyLinkWriteResult, TanahpediaPersonDetail, TanahpediaPersonName,
+        TanahpediaPersonNodeWriteResult, TanahpediaPersonParentChildSummary, TanahpediaPersonSex,
+        TanahpediaPersonSummary, TanahpediaPersonUnionSummary,
     },
     providers::Database,
 };
 use entities::perek;
 use entities::tanahpedia::{
-    entity, entity_tanah_source, lookup_name_type, lookup_parent_child_type, lookup_parent_role,
-    lookup_union_end_reason, lookup_union_type, person, person_birth_date, person_birth_place,
-    person_death_cause, person_death_date, person_name, person_parent_child, person_sex,
-    person_union,
+    entity, entity_tanah_source, entry, entry_entity, lookup_name_type, lookup_parent_child_type,
+    lookup_parent_role, lookup_union_end_reason, lookup_union_type, person, person_birth_date,
+    person_birth_place, person_death_cause, person_death_date, person_name, person_parent_child,
+    person_sex, person_union,
 };
 use sea_orm::sea_query::OnConflict;
 use sea_orm::{
-    ColumnTrait, Condition, EntityTrait, IntoActiveModel, QueryFilter, TransactionTrait,
+    ColumnTrait, Condition, EntityTrait, IntoActiveModel, QueryFilter, QuerySelect,
+    TransactionTrait,
 };
 
 fn db_error(db_err: sea_orm::DbErr) -> ServiceError {
@@ -60,6 +62,89 @@ fn normalized_sex(value: String) -> Result<String, ServiceError> {
             "sex must be MALE, FEMALE, or UNKNOWN",
         ))
     }
+}
+
+pub async fn put_entry_entity_link(
+    db: &Database,
+    input: PutTanahpediaEntryEntityLinkInput,
+) -> Result<TanahpediaEntryEntityLinkWriteResult, ServiceError> {
+    let id = required(input.id, "id", 36)?;
+    let entry_unique_name = required(input.entry_unique_name, "entryUniqueName", 255)?;
+    let entity_id = required(input.entity_id, "entityId", 36)?;
+
+    let transaction = db.get_connection().begin().await.map_err(db_error)?;
+    let entry_id = entry::Entity::find()
+        .filter(entry::Column::UniqueName.eq(entry_unique_name))
+        .lock_exclusive()
+        .one(&transaction)
+        .await
+        .map_err(db_error)?
+        .map(|entry| entry.id)
+        .ok_or_else(|| {
+            ServiceError::bad_request("entryUniqueName does not reference an existing entry")
+        })?;
+    if entity::Entity::find_by_id(entity_id.clone())
+        .one(&transaction)
+        .await
+        .map_err(db_error)?
+        .is_none()
+    {
+        return Err(ServiceError::bad_request(
+            "entityId does not reference an existing entity",
+        ));
+    }
+
+    if let Some(existing) = entry_entity::Entity::find_by_id(id.clone())
+        .lock_exclusive()
+        .one(&transaction)
+        .await
+        .map_err(db_error)?
+    {
+        if existing.entry_id != entry_id || existing.entity_id != entity_id {
+            return Err(ServiceError::bad_request(
+                "id belongs to a different entry/entity link",
+            ));
+        }
+        transaction.commit().await.map_err(db_error)?;
+        return Ok(TanahpediaEntryEntityLinkWriteResult {
+            id,
+            entry_id,
+            entity_id,
+        });
+    }
+
+    if entry_entity::Entity::find()
+        .filter(entry_entity::Column::EntryId.eq(entry_id.clone()))
+        .filter(entry_entity::Column::EntityId.eq(entity_id.clone()))
+        .lock_exclusive()
+        .one(&transaction)
+        .await
+        .map_err(db_error)?
+        .is_some()
+    {
+        return Err(ServiceError::bad_request(
+            "entry/entity pair already belongs to a different id",
+        ));
+    }
+
+    entry_entity::Entity::insert(
+        entry_entity::Model {
+            id: id.clone(),
+            entry_id: entry_id.clone(),
+            entity_id: entity_id.clone(),
+        }
+        .into_active_model(),
+    )
+    .exec(&transaction)
+    .await
+    .map_err(db_error)?;
+    transaction.commit().await.map_err(db_error)?;
+
+    Ok(TanahpediaEntryEntityLinkWriteResult {
+        id,
+        entry_id,
+        entity_id,
+    })
 }
 
 async fn require_person(
@@ -850,7 +935,7 @@ pub async fn get_person_details(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult};
+    use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, QueryTrait};
 
     fn entity_model(id: &str, name: &str) -> entity::Model {
         entity::Model {
@@ -865,6 +950,25 @@ mod tests {
     fn person_model(id: &str, entity_id: &str) -> person::Model {
         person::Model {
             id: id.to_string(),
+            entity_id: entity_id.to_string(),
+        }
+    }
+
+    fn entry_model(id: &str, unique_name: &str) -> entry::Model {
+        entry::Model {
+            id: id.to_string(),
+            unique_name: unique_name.to_string(),
+            title: unique_name.to_string(),
+            content: None,
+            created_at: chrono::Utc::now().naive_utc(),
+            updated_at: chrono::Utc::now().naive_utc(),
+        }
+    }
+
+    fn entry_entity_model(id: &str, entry_id: &str, entity_id: &str) -> entry_entity::Model {
+        entry_entity::Model {
+            id: id.to_string(),
+            entry_id: entry_id.to_string(),
             entity_id: entity_id.to_string(),
         }
     }
@@ -936,6 +1040,172 @@ mod tests {
             sex: "male".to_string(),
             sex_alt_group_id: None,
         }
+    }
+
+    fn entry_entity_link_input() -> PutTanahpediaEntryEntityLinkInput {
+        PutTanahpediaEntryEntityLinkInput {
+            id: "entry-entity-1".to_string(),
+            entry_unique_name: "שמשון".to_string(),
+            entity_id: "entity-1".to_string(),
+        }
+    }
+
+    #[test]
+    fn entry_entity_insert_uses_only_canonical_table_columns() {
+        let statement = entry_entity::Entity::insert(
+            entry_entity_model("entry-entity-1", "entry-1", "entity-1").into_active_model(),
+        )
+        .build(DatabaseBackend::MySql);
+
+        assert!(statement.sql.contains("`id`, `entry_id`, `entity_id`"));
+        assert!(!statement.sql.contains("entity_type"));
+    }
+
+    #[test]
+    fn entry_entity_collision_lookups_lock_concurrent_writes() {
+        let entry_statement = entry::Entity::find()
+            .filter(entry::Column::UniqueName.eq("שמשון"))
+            .lock_exclusive()
+            .build(DatabaseBackend::MySql);
+        let id_statement = entry_entity::Entity::find_by_id("entry-entity-1")
+            .lock_exclusive()
+            .build(DatabaseBackend::MySql);
+        let pair_statement = entry_entity::Entity::find()
+            .filter(entry_entity::Column::EntryId.eq("entry-1"))
+            .filter(entry_entity::Column::EntityId.eq("entity-1"))
+            .lock_exclusive()
+            .build(DatabaseBackend::MySql);
+
+        assert!(entry_statement.to_string().ends_with("FOR UPDATE"));
+        assert!(id_statement.to_string().ends_with("FOR UPDATE"));
+        assert!(pair_statement.to_string().ends_with("FOR UPDATE"));
+    }
+
+    #[tokio::test]
+    async fn put_entry_entity_link_creates_and_replays_without_another_write() {
+        let link = entry_entity_model("entry-entity-1", "entry-1", "entity-1");
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
+                    "entry-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "entity-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<entry_entity::Model, Vec<entry_entity::Model>, _>([vec![]])
+                .append_query_results::<entry_entity::Model, Vec<entry_entity::Model>, _>([vec![]])
+                .append_exec_results([MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                }])
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
+                    "entry-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "entity-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<entry_entity::Model, Vec<entry_entity::Model>, _>([vec![
+                    link,
+                ]])
+                .into_connection(),
+        );
+
+        let first = put_entry_entity_link(&db, entry_entity_link_input())
+            .await
+            .expect("should create link");
+        let second = put_entry_entity_link(&db, entry_entity_link_input())
+            .await
+            .expect("should replay link");
+
+        assert_eq!(first.id, "entry-entity-1");
+        assert_eq!(first.entry_id, "entry-1");
+        assert_eq!(first.entity_id, "entity-1");
+        assert_eq!(second.id, first.id);
+        assert_eq!(second.entry_id, first.entry_id);
+        assert_eq!(second.entity_id, first.entity_id);
+    }
+
+    #[tokio::test]
+    async fn put_entry_entity_link_rejects_id_collision() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
+                    "entry-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "entity-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<entry_entity::Model, Vec<entry_entity::Model>, _>([vec![
+                    entry_entity_model("entry-entity-1", "entry-other", "entity-1"),
+                ]])
+                .into_connection(),
+        );
+
+        let err = put_entry_entity_link(&db, entry_entity_link_input())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, ServiceError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn put_entry_entity_link_rejects_pair_collision() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
+                    "entry-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "entity-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<entry_entity::Model, Vec<entry_entity::Model>, _>([vec![]])
+                .append_query_results::<entry_entity::Model, Vec<entry_entity::Model>, _>([vec![
+                    entry_entity_model("entry-entity-other", "entry-1", "entity-1"),
+                ]])
+                .into_connection(),
+        );
+
+        let err = put_entry_entity_link(&db, entry_entity_link_input())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, ServiceError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn put_entry_entity_link_rejects_missing_entry_or_entity() {
+        let missing_entry_db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![]])
+                .into_connection(),
+        );
+        let missing_entity_db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
+                    "entry-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![]])
+                .into_connection(),
+        );
+
+        let missing_entry = put_entry_entity_link(&missing_entry_db, entry_entity_link_input())
+            .await
+            .unwrap_err();
+        let missing_entity = put_entry_entity_link(&missing_entity_db, entry_entity_link_input())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(missing_entry, ServiceError::BadRequest(_)));
+        assert!(matches!(missing_entity, ServiceError::BadRequest(_)));
     }
 
     #[tokio::test]
