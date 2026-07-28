@@ -36,6 +36,25 @@ struct PersonDependencyCount {
     dependency_count: i64,
 }
 
+const PERSON_DEPENDENCY_SQL: &str = r#"SELECT (
+    EXISTS(SELECT 1 FROM tanahpedia_entry_entity WHERE entity_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_name WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_birth_date WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_death_date WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_death_cause WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_birth_place WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_role_prophet WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_role_king WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_name_giver_person WHERE giver_person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_war_side_participant_person WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_saying_speaker_person WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_saying_audience_person WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_prophecy_prophet WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_prophecy_recipient_person WHERE person_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_parent_child WHERE parent_id = ? OR child_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person_union WHERE person1_id = ? OR person2_id = ?)
+) AS dependency_count"#;
+
 fn db_error(db_err: sea_orm::DbErr) -> ServiceError {
     ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
 }
@@ -446,24 +465,16 @@ pub async fn delete_orphan_person_node(
         ));
     }
 
-    let dependency_sql = r#"SELECT (
-        EXISTS(SELECT 1 FROM tanahpedia_entry_entity WHERE entity_id = ?) +
-        EXISTS(SELECT 1 FROM tanahpedia_person_name WHERE person_id = ?) +
-        EXISTS(SELECT 1 FROM tanahpedia_person_birth_date WHERE person_id = ?) +
-        EXISTS(SELECT 1 FROM tanahpedia_person_death_date WHERE person_id = ?) +
-        EXISTS(SELECT 1 FROM tanahpedia_person_death_cause WHERE person_id = ?) +
-        EXISTS(SELECT 1 FROM tanahpedia_person_birth_place WHERE person_id = ?) +
-        EXISTS(SELECT 1 FROM tanahpedia_person_role_prophet WHERE person_id = ?) +
-        EXISTS(SELECT 1 FROM tanahpedia_person_role_king WHERE person_id = ?) +
-        EXISTS(SELECT 1 FROM tanahpedia_person_name_giver_person WHERE giver_person_id = ?) +
-        EXISTS(SELECT 1 FROM tanahpedia_person_parent_child WHERE parent_id = ? OR child_id = ?) +
-        EXISTS(SELECT 1 FROM tanahpedia_person_union WHERE person1_id = ? OR person2_id = ?)
-    ) AS dependency_count"#;
     let dependencies = PersonDependencyCount::find_by_statement(Statement::from_sql_and_values(
         DatabaseBackend::MySql,
-        dependency_sql,
+        PERSON_DEPENDENCY_SQL,
         [
             entity_id.clone().into(),
+            person_id.clone().into(),
+            person_id.clone().into(),
+            person_id.clone().into(),
+            person_id.clone().into(),
+            person_id.clone().into(),
             person_id.clone().into(),
             person_id.clone().into(),
             person_id.clone().into(),
@@ -1091,7 +1102,7 @@ pub async fn get_person_details(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, HashSet};
 
     use super::*;
     use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, QueryTrait, Value};
@@ -1143,6 +1154,31 @@ mod tests {
 
     fn dependency_count_row(count: i64) -> BTreeMap<String, Value> {
         BTreeMap::from([("dependency_count".to_string(), count.into())])
+    }
+
+    #[test]
+    fn orphan_person_guard_covers_every_person_reference_table() {
+        let schema = include_str!("../../../../data/mysql/tanahpedia_structure.sql");
+        let mut current_table = "";
+        let mut reference_tables = HashSet::new();
+        for line in schema.lines().map(str::trim) {
+            if let Some(table) = line
+                .strip_prefix("CREATE TABLE `")
+                .and_then(|suffix| suffix.split('`').next())
+            {
+                current_table = table;
+            }
+            if line.contains("REFERENCES `tanahpedia_person`") {
+                reference_tables.insert(current_table);
+            }
+        }
+
+        assert_eq!(reference_tables.len(), 16);
+        assert!(reference_tables.remove("tanahpedia_person_sex"));
+        for table in reference_tables {
+            assert!(PERSON_DEPENDENCY_SQL.contains(table), "missing {table}");
+        }
+        assert!(PERSON_DEPENDENCY_SQL.contains("tanahpedia_entry_entity"));
     }
 
     fn union_type_model(id: &str, name: &str) -> lookup_union_type::Model {

@@ -36,7 +36,7 @@ Use **cargo-make** (`Makefile.toml`):
 - Before diagnosing a production database mismatch, compare a known stable ID through the API with the same entity rendered by the website. Exact-name searches alone are not a sufficient discriminator.
 - On Windows or Git Bash, pipe non-ASCII JSON to native `curl --data-binary @-`; command-line arguments can corrupt Hebrew while still producing valid JSON. Verify returned UTF-8 bytes before issuing dependent writes.
 - Read fixture identity semantics literally. A focal person selected by query must be resolved to the entry-linked production person; fixed support IDs do not imply that the focal person should receive a new fixed ID.
-- Keep recovery deletes narrowly guarded. Lock the target rows, require exact entity/person/metadata IDs, and reject deletion while any association, relationship, role, or detail row remains.
+- Keep recovery deletes narrowly guarded. Lock the target rows, require exact entity/person/metadata IDs, and reject deletion while any entry association or foreign-key-backed person reference remains. Audit every `REFERENCES tanahpedia_person` constraint in the canonical schema rather than relying only on website family tables.
 - Check `/health` for the deployed package version before calling a newly merged mutation. ECS can deploy new secrets on an older image successfully.
 - Do not assume `.env` overrides production configuration without inspecting the release image. The current API Dockerfile excludes `.env` and copies only the compiled binary into the final stage.
 
