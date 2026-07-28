@@ -51,7 +51,7 @@ Use evidence before mutation. A Tanahpedia entry, entity, typed row, supporting 
 8. Create nodes and the focal entry association before relationships. Replay with stable caller-supplied IDs, reread every field and exact row count, then verify that a second replay creates no duplicates or timestamp churn.
 9. On Windows or Git Bash, stream non-ASCII GraphQL JSON to native `curl` through stdin with `--data-binary @-`; do not pass Hebrew JSON through argv. Compare returned bytes after every write before continuing.
 10. Verify expected family names in rendered HTML and the browser DOM on every production domain, then inspect contextual family-load logs. The website reads MySQL directly and may select the first unordered entry association, so successful API readback and HTTP 200 are not completion evidence.
-11. Cleanup mutations must be narrower than content-admin deletion. Delete an exact duplicate entry link by ID, and remove an accidental person attachment only after transactionally proving it has no entry association, family edges, or person metadata. Preserve the entity unless its deletion is separately intended.
+11. Cleanup mutations must be narrower than content-admin deletion. Delete an exact duplicate entry link by ID, and remove an accidental person attachment only after transactionally proving it has no entry association, family edges, or person metadata. This deliberately leaves the entity, which public category indexes render as `(אין ערך)`. If that shell is also accidental, delete it in a separate authenticated transaction that matches its ID, type, and display name and proves that none of the schema's direct entity-reference tables contain it.
 
 Do not infer data loss while a schema migration or reader deployment is incomplete. Restore read compatibility first, then determine what is actually missing.
 
@@ -60,6 +60,7 @@ Do not infer data loss while a schema migration or reader deployment is incomple
 - Authentication must fail closed when `TANAHPEDIA_REVISION_API_KEY` is absent, blank, or incorrect.
 - Put mutations are idempotent by caller-supplied stable ID; deletes return `NOT_FOUND` for an absent row instead of silently succeeding.
 - Recovery deletions must lock and validate the exact supplied IDs. Refuse orphan-person cleanup when any entry association, family edge, role, name, date, place, or other person metadata remains.
+- Orphan-entity cleanup is a separate operation after typed-node cleanup. It must match `entityId`, `entityType`, and `displayName`, lock the entity row, and refuse deletion while any direct foreign-key reference remains. Derive a test from `tanahpedia_structure.sql` so a newly added entity-reference table fails coverage until the guard includes it.
 - Read responses must be lossless for every writable field so a caller can read, replay, and compare without direct database access.
 - Validate referenced people, lookup names, self-links, and citation lengths before writing.
 - Batch lookup and related-entity reads outside row loops. Tests must model the real query sequence and must not append unused mock results that hide extra or missing queries.
@@ -74,7 +75,8 @@ Do not infer data loss while a schema migration or reader deployment is incomple
 ## Family Tree UI
 
 - Node titles remain on one line. Size the card/container for the longest supported title instead of wrapping the title.
-- When those max-content cards exceed a narrow viewport, make the family tier the horizontal RTL scroll owner; never widen the document or shrink tracks until cards overlap. Verify every card is fully reachable across the scroll range and that cards remain disjoint.
+- On narrow screens, a spouse-only row with no child matrix becomes a centered vertical relationship rail so every card is fully visible without nested horizontal scrolling. Matrices that preserve spouse/child column relationships remain on a horizontal RTL scroll owner. Never widen the document or shrink tracks until cards overlap.
+- Parent cards use equal responsive columns. The horizontal parent bus must terminate at the outer card centers, with both endpoint errors measured independently on narrow and wide viewports.
 - For multiple unequal-width spouse cards, use equal grid columns rather than centered flex distribution; connector vertices must land at equal `(index + 0.5) / count` positions.
 - Horizontal buses stop at the outer connector vertices, and the focal vertical connector stops at the bus. Scope matrix and non-matrix connector rules separately so a fix for one layout cannot cross or overshoot the other.
 - Prefer stretchable connector geometry (`top` plus `bottom`) and stacking-context containment over fixed heights tied to label content.
