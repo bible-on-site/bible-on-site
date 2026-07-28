@@ -29,6 +29,27 @@ async function horizontalOverflow(locator: Locator): Promise<number> {
 	return locator.evaluate((el) => el.scrollWidth - el.clientWidth);
 }
 
+/**
+ * The largest number of CSS pixels by which any descendant of `locator` spills
+ * past the viewport horizontally (either off the right edge or off the left
+ * edge). 0 means every card stays fully on-screen. This catches content that is
+ * clipped-and-lost (no scroll container) — e.g. a sibling card pushed off-screen.
+ */
+async function worstViewportEscape(locator: Locator): Promise<number> {
+	return locator.evaluate((root) => {
+		const vw = window.innerWidth;
+		let worst = 0;
+		for (const el of root.querySelectorAll("*")) {
+			const r = el.getBoundingClientRect();
+			if (r.width < 24 || r.width > 2000) continue;
+			const overRight = r.right - vw;
+			const overLeft = -r.left;
+			worst = Math.max(worst, overRight, overLeft);
+		}
+		return Math.round(worst);
+	});
+}
+
 test.describe("Tanahpedia person family tree responsive layout", () => {
 	test("renders the Jacob spouses-with-children matrix per viewport", async ({
 		page,
@@ -81,4 +102,73 @@ test.describe("Tanahpedia person family tree responsive layout", () => {
 		);
 		expect(await horizontalOverflow(familyRegion)).toBeLessThanOrEqual(1);
 	});
+
+	// The original 600px media breakpoint only shrank the spouse-only rail at
+	// <=600px, leaving a 601–950px "dead zone" where the full-width desktop rail
+	// overflowed. The content-aware collapse must reflow the rail to a vertical
+	// stack at every width it does not fit — not just below 600px.
+	//
+	// Two mechanisms keep the rail from spilling, and both are exercised here:
+	//  - <=600px: a CSS media query forces the single-column stack (anti-flash),
+	//    so JS never needs to collapse and leaves data-spouse-rail="rail".
+	//  - >600px (the former dead zone): the media query no longer applies, so the
+	//    content-aware JS collapse must kick in and set data-spouse-rail="collapsed".
+	// Either way, the rail must never overflow or clip at any of these widths.
+	for (const width of [360, 550, 700, 850]) {
+		test(`collapses the Shimshon spouse-only rail without overflow at ${width}px`, async ({
+			page,
+		}) => {
+			await page.setViewportSize({ width, height: 1100 });
+			await page.goto(SHIMSHON_URL);
+
+			const familyRegion = page.getByRole("region", { name: "משפחה" });
+			await expect(familyRegion).toBeVisible();
+
+			const rail = page.locator("[data-spouse-rail]");
+			await expect(rail).toBeVisible();
+
+			// Nothing may scroll or spill horizontally at any of these widths.
+			expect(
+				await horizontalOverflow(page.locator("body")),
+			).toBeLessThanOrEqual(1);
+			expect(await horizontalOverflow(familyRegion)).toBeLessThanOrEqual(1);
+			expect(await worstViewportEscape(familyRegion)).toBeLessThanOrEqual(1);
+
+			if (width > 600) {
+				// Above the CSS media breakpoint the JS content-aware collapse is the
+				// only thing preventing the natural multi-column rail from spilling,
+				// so it must reflow to the vertical single-column stack (not scroll).
+				await expect(rail).toHaveAttribute("data-spouse-rail", "collapsed");
+			}
+		});
+	}
+
+	// A sibling (e.g. עשו next to יעקב) must never be clipped off the viewport on
+	// narrow screens: the focal+sibling row must reflow rather than overflow.
+	for (const width of [320, 360, 414]) {
+		test(`keeps every sibling within the viewport at ${width}px`, async ({
+			page,
+		}) => {
+			await page.setViewportSize({ width, height: 1400 });
+			await page.goto(JACOB_URL);
+
+			const familyRegion = page.getByRole("region", { name: "משפחה" });
+			await expect(familyRegion).toBeVisible();
+
+			// עשו is one of Jacob's siblings; it must be rendered fully on-screen.
+			const esav = familyRegion.getByText("עשו", { exact: true });
+			await expect(esav).toBeVisible();
+			const esavInView = await esav.evaluate((el) => {
+				const r = el.getBoundingClientRect();
+				return r.left >= -1 && r.right <= window.innerWidth + 1;
+			});
+			expect(esavInView).toBe(true);
+
+			// No card anywhere in the tree may be clipped off the viewport.
+			expect(await worstViewportEscape(familyRegion)).toBeLessThanOrEqual(1);
+			expect(
+				await horizontalOverflow(page.locator("body")),
+			).toBeLessThanOrEqual(1);
+		});
+	}
 });

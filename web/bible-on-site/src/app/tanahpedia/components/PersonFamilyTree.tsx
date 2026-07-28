@@ -667,27 +667,30 @@ function SpouseUnitNodes({
 	});
 }
 
+/** מרווח היסטרזיס (px) שמונע ריצוד קיפול/פרישה סביב סף ההתאמה של המטריצה. */
+export const SPOUSE_MATRIX_COLLAPSE_HYSTERESIS_PX = 24;
+
 /**
- * מזהה מסך צר (טלפון) כדי להחליף את מטריצת בן-הזוג+ילדים בפריסה אנכית.
- * ברירת המחדל היא false כך שה-SSR והרינדור הראשון תואמים (מטריצת דסקטופ),
- * ואז useLayoutEffect מעדכן לפי matchMedia בלי אי-התאמת הידרציה.
+ * החלטה טהורה: האם לקפל את מטריצת בן-הזוג+ילדים לפריסה אנכית (מובייל).
+ * מקפלים כאשר הרוחב הטבעי של המטריצה גדול מהרוחב הזמין במכולה — כלומר המטריצה
+ * הייתה גולשת אופקית. ההחלטה תלויה בהתאמה בפועל ולא ברוחב מסך קבוע, כך שהמעבר
+ * מדויק לכל מספר בנות זוג/ילדים ולכל רוחב מסך. ההיסטרזיס מונע ריצוד סביב הסף.
  */
-function useIsNarrowViewport(maxWidth: number): boolean {
-	const [narrow, setNarrow] = useState(false);
-	useLayoutEffect(() => {
-		if (
-			typeof window === "undefined" ||
-			typeof window.matchMedia !== "function"
-		) {
-			return;
-		}
-		const mql = window.matchMedia(`(max-width: ${maxWidth}px)`);
-		const update = () => setNarrow(mql.matches);
-		update();
-		mql.addEventListener("change", update);
-		return () => mql.removeEventListener("change", update);
-	}, [maxWidth]);
-	return narrow;
+export function shouldCollapseSpouseMatrix({
+	previous,
+	availableWidth,
+	naturalWidth,
+	hysteresisPx = SPOUSE_MATRIX_COLLAPSE_HYSTERESIS_PX,
+}: {
+	previous: boolean;
+	availableWidth: number;
+	naturalWidth: number;
+	hysteresisPx?: number;
+}): boolean {
+	if (naturalWidth <= 0 || availableWidth <= 0) return previous;
+	if (availableWidth < naturalWidth) return true;
+	if (availableWidth >= naturalWidth + hysteresisPx) return false;
+	return previous;
 }
 
 type MobileMatrixColumn = {
@@ -951,7 +954,79 @@ function PersonFamilyTreeContent({
 		return () => ro.disconnect();
 	}, [showSpouseMarriageRow]);
 
-	const isNarrowViewport = useIsNarrowViewport(600);
+	const spouseTierRef = useRef<HTMLDivElement>(null);
+	const matrixOuterRef = useRef<HTMLDivElement>(null);
+	const naturalMatrixWidthRef = useRef(0);
+	const [collapseMatrix, setCollapseMatrix] = useState(false);
+
+	// מעבר תלוי-תוכן: מודדים אם מטריצת הדסקטופ נכנסת במכולה; אם היא גולשת אופקית
+	// מקפלים אותה לפריסה אנכית (MobileMatrixStack). כך זה מדויק בכל רוחב מסך
+	// ולכל מספר בנות זוג/ילדים, במקום סף פיקסלים שרירותי.
+	useLayoutEffect(() => {
+		if (!matrixEligible) {
+			naturalMatrixWidthRef.current = 0;
+			setCollapseMatrix(false);
+			return;
+		}
+		const tier = spouseTierRef.current;
+		if (!tier) return;
+		const evaluate = () => {
+			const outer = matrixOuterRef.current;
+			if (outer) {
+				naturalMatrixWidthRef.current = Math.max(
+					naturalMatrixWidthRef.current,
+					outer.scrollWidth,
+				);
+			}
+			setCollapseMatrix((previous) =>
+				shouldCollapseSpouseMatrix({
+					previous,
+					availableWidth: tier.clientWidth,
+					naturalWidth: naturalMatrixWidthRef.current,
+				}),
+			);
+		};
+		evaluate();
+		if (typeof ResizeObserver === "undefined") return;
+		const ro = new ResizeObserver(evaluate);
+		ro.observe(tier);
+		return () => ro.disconnect();
+	}, [matrixEligible]);
+
+	// מסילת בנות-זוג בלבד (שמשון וכד' — בלי ילדים ממופים). אותה לוגיקה תלוית-תוכן
+	// כמו במטריצה: אם המסילה האופקית גולשת מהמכולה מקפלים אותה לטור אנכי. כך זה
+	// מדויק גם בטווח 601–950px שאין לו @media, ולא רק מתחת ל-600.
+	const spouseOnlyRail = !matrixEligible && orderedSpouseUnits.length > 1;
+	const naturalSpouseOnlyWidthRef = useRef(0);
+	const [collapseSpouseOnly, setCollapseSpouseOnly] = useState(false);
+
+	useLayoutEffect(() => {
+		if (!spouseOnlyRail) {
+			naturalSpouseOnlyWidthRef.current = 0;
+			setCollapseSpouseOnly(false);
+			return;
+		}
+		const tier = spouseTierRef.current;
+		if (!tier) return;
+		const evaluate = () => {
+			naturalSpouseOnlyWidthRef.current = Math.max(
+				naturalSpouseOnlyWidthRef.current,
+				tier.scrollWidth,
+			);
+			setCollapseSpouseOnly((previous) =>
+				shouldCollapseSpouseMatrix({
+					previous,
+					availableWidth: tier.clientWidth,
+					naturalWidth: naturalSpouseOnlyWidthRef.current,
+				}),
+			);
+		};
+		evaluate();
+		if (typeof ResizeObserver === "undefined") return;
+		const ro = new ResizeObserver(evaluate);
+		ro.observe(tier);
+		return () => ro.disconnect();
+	}, [spouseOnlyRail]);
 
 	/* פריסת מובייל למטריצה: כל בת זוג + ילדיה בטור, לפי סדר הכרונולוגיה של יעקב
 	 * או לפי עמודות בת-הזוג במטריצה הרגילה. נשמר סדר הילדים כמו בדסקטופ. */
@@ -1101,6 +1176,7 @@ function PersonFamilyTreeContent({
 							</div>
 						</div>
 						<div
+							ref={spouseTierRef}
 							className={`${styles.spouseTierFullWidth} ${!matrixEligible && orderedSpouseUnits.length > 1 ? styles.spouseTierSpouseOnly : ""}`}
 							data-spouse-layout={
 								matrixEligible
@@ -1111,7 +1187,7 @@ function PersonFamilyTreeContent({
 							}
 						>
 							{matrixEligible ? (
-								isNarrowViewport ? (
+								collapseMatrix ? (
 									<MobileMatrixStack
 										columns={mobileMatrixColumns}
 										looseChildren={mobileMatrixLooseChildren}
@@ -1119,6 +1195,7 @@ function PersonFamilyTreeContent({
 									/>
 								) : (
 								<div
+									ref={matrixOuterRef}
 									className={styles.spouseChildrenMatrixOuter}
 									style={
 										{
@@ -1329,9 +1406,11 @@ function PersonFamilyTreeContent({
 							) : orderedSpouseUnits.length > 1 ? (
 								// כמה בנות זוג ללא ילדים ממופים (למשל שמשון): אותה שורת
 								// נישואין כמו יעקב — קו אנכי מהמוקד יורד עד קו אופקי בגובה
-								// אמצע הכרטיסים, רק בלי שורת הילדים שמתחת.
+								// אמצע הכרטיסים, רק בלי שורת הילדים שמתחת. כשהמסילה גולשת
+								// מהמכולה (601–950px וכו') מקפלים לטור אנכי דרך spouseOnlyCollapsed.
 								<div
-									className={`${styles.spouseChildrenMatrixOuter} ${styles.spouseOnlyMatrix}`}
+									className={`${styles.spouseChildrenMatrixOuter} ${styles.spouseOnlyMatrix}${collapseSpouseOnly ? ` ${styles.spouseOnlyCollapsed}` : ""}`}
+									data-spouse-rail={collapseSpouseOnly ? "collapsed" : "rail"}
 									style={
 										{
 											"--matrix-spouse-mid-px": `${matrixSpouseMidPx}px`,
