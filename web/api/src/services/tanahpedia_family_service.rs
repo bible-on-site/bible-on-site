@@ -149,11 +149,13 @@ pub async fn put_person_node(
     let sex_alt_group_id = optional(input.sex_alt_group_id, "sexAltGroupId", 36)?;
 
     let transaction = db.get_connection().begin().await.map_err(db_error)?;
-    if let Some(existing) = entity::Entity::find_by_id(entity_id.clone())
+    let existing_entity = entity::Entity::find_by_id(entity_id.clone())
         .one(&transaction)
         .await
-        .map_err(db_error)?
-        && existing.entity_type != "PERSON"
+        .map_err(db_error)?;
+    if existing_entity
+        .as_ref()
+        .is_some_and(|existing| existing.entity_type != "PERSON")
     {
         return Err(ServiceError::bad_request(
             "entityId references a non-PERSON entity",
@@ -191,24 +193,29 @@ pub async fn put_person_node(
         ));
     }
     let now = chrono::Utc::now().naive_utc();
-    entity::Entity::insert(
-        entity::Model {
-            id: entity_id.clone(),
-            entity_type: "PERSON".to_string(),
-            name: display_name,
-            created_at: now,
-            updated_at: now,
-        }
-        .into_active_model(),
-    )
-    .on_conflict(
-        OnConflict::column(entity::Column::Id)
-            .update_columns([entity::Column::EntityType, entity::Column::Name])
-            .to_owned(),
-    )
-    .exec(&transaction)
-    .await
-    .map_err(db_error)?;
+    if existing_entity
+        .as_ref()
+        .is_none_or(|existing| existing.name != display_name)
+    {
+        entity::Entity::insert(
+            entity::Model {
+                id: entity_id.clone(),
+                entity_type: "PERSON".to_string(),
+                name: display_name,
+                created_at: now,
+                updated_at: now,
+            }
+            .into_active_model(),
+        )
+        .on_conflict(
+            OnConflict::column(entity::Column::Id)
+                .update_columns([entity::Column::EntityType, entity::Column::Name])
+                .to_owned(),
+        )
+        .exec(&transaction)
+        .await
+        .map_err(db_error)?;
+    }
 
     person::Entity::insert(
         person::Model {
@@ -998,10 +1005,6 @@ mod tests {
                     last_insert_id: 0,
                     rows_affected: 1,
                 },
-                MockExecResult {
-                    last_insert_id: 0,
-                    rows_affected: 1,
-                },
             ])
             .into_connection();
         let db = Database::from_connection(mock_db);
@@ -1022,7 +1025,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn put_person_node_attaches_a_missing_person_to_an_existing_entity() {
+    async fn put_person_node_attaches_missing_person_without_updating_matching_entity() {
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
                 .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
@@ -1033,10 +1036,6 @@ mod tests {
                 .append_query_results::<person::Model, Vec<person::Model>, _>([vec![]])
                 .append_query_results::<person_sex::Model, Vec<person_sex::Model>, _>([vec![]])
                 .append_exec_results([
-                    MockExecResult {
-                        last_insert_id: 0,
-                        rows_affected: 1,
-                    },
                     MockExecResult {
                         last_insert_id: 0,
                         rows_affected: 1,
