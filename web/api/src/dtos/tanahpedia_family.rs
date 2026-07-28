@@ -18,6 +18,13 @@ pub struct PutTanahpediaPersonNodeInput {
 }
 
 #[derive(InputObject, Debug, Clone)]
+pub struct DeleteTanahpediaPersonNodeInput {
+    pub entity_id: String,
+    pub person_id: String,
+    pub sex_id: String,
+}
+
+#[derive(InputObject, Debug, Clone)]
 pub struct PutTanahpediaParentChildInput {
     pub id: String,
     pub parent_person_id: String,

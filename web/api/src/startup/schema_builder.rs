@@ -360,7 +360,9 @@ mod tests {
         let schema = build_schema(&db);
         let operations = [
             r#"mutation { putTanahpediaEntryEntityLink(input: { id: "ee", entryUniqueName: "entry", entityId: "e" }) { id } }"#,
+            r#"mutation { deleteTanahpediaEntryEntityLink(id: "ee") { id } }"#,
             r#"mutation { putTanahpediaPersonNode(input: { entityId: "e", personId: "p", displayName: "Name", sexId: "s", sex: "MALE" }) { personId } }"#,
+            r#"mutation { deleteTanahpediaOrphanPersonNode(input: { entityId: "e", personId: "p", sexId: "s" }) { personId } }"#,
             r#"mutation { putTanahpediaParentChildLink(input: { id: "pc", parentPersonId: "p", childPersonId: "c", relationshipType: "BIOLOGICAL", parentRole: "FATHER" }) { id } }"#,
             r#"mutation { deleteTanahpediaParentChildLink(id: "pc") { id } }"#,
             r#"mutation { putTanahpediaPersonUnion(input: { id: "u", person1Id: "p1", person2Id: "p2", unionType: "MARRIAGE" }) { id } }"#,

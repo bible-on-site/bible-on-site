@@ -2,11 +2,11 @@ use async_graphql::{Context, ErrorExtensions, Object, Result};
 
 use crate::common::auth::ApiAuth;
 use crate::dtos::tanahpedia_family::{
-    PutTanahpediaEntryEntityLinkInput, PutTanahpediaParentChildInput, PutTanahpediaPersonNodeInput,
-    PutTanahpediaPersonUnionInput, TanahpediaEntitySummary, TanahpediaEntityTanahSource,
-    TanahpediaEntryEntityLinkWriteResult, TanahpediaFamilyLinkWriteResult, TanahpediaPersonDetail,
-    TanahpediaPersonNodeWriteResult, TanahpediaPersonParentChildSummary, TanahpediaPersonSummary,
-    TanahpediaPersonUnionSummary,
+    DeleteTanahpediaPersonNodeInput, PutTanahpediaEntryEntityLinkInput,
+    PutTanahpediaParentChildInput, PutTanahpediaPersonNodeInput, PutTanahpediaPersonUnionInput,
+    TanahpediaEntitySummary, TanahpediaEntityTanahSource, TanahpediaEntryEntityLinkWriteResult,
+    TanahpediaFamilyLinkWriteResult, TanahpediaPersonDetail, TanahpediaPersonNodeWriteResult,
+    TanahpediaPersonParentChildSummary, TanahpediaPersonSummary, TanahpediaPersonUnionSummary,
 };
 use crate::providers::Database;
 use crate::services::tanahpedia_family_service;
@@ -32,6 +32,19 @@ impl TanahpediaFamilyMutation {
             .map_err(|e| e.extend())
     }
 
+    async fn delete_tanahpedia_entry_entity_link(
+        &self,
+        ctx: &Context<'_>,
+        id: String,
+    ) -> Result<TanahpediaEntryEntityLinkWriteResult> {
+        ctx.data::<ApiAuth>()?
+            .authorize_revision_manager()
+            .map_err(|e| e.extend())?;
+        tanahpedia_family_service::delete_entry_entity_link(ctx.data::<Database>()?, id)
+            .await
+            .map_err(|e| e.extend())
+    }
+
     async fn put_tanahpedia_person_node(
         &self,
         ctx: &Context<'_>,
@@ -41,6 +54,19 @@ impl TanahpediaFamilyMutation {
             .authorize_revision_manager()
             .map_err(|e| e.extend())?;
         tanahpedia_family_service::put_person_node(ctx.data::<Database>()?, input)
+            .await
+            .map_err(|e| e.extend())
+    }
+
+    async fn delete_tanahpedia_orphan_person_node(
+        &self,
+        ctx: &Context<'_>,
+        input: DeleteTanahpediaPersonNodeInput,
+    ) -> Result<TanahpediaPersonNodeWriteResult> {
+        ctx.data::<ApiAuth>()?
+            .authorize_revision_manager()
+            .map_err(|e| e.extend())?;
+        tanahpedia_family_service::delete_orphan_person_node(ctx.data::<Database>()?, input)
             .await
             .map_err(|e| e.extend())
     }
