@@ -311,20 +311,26 @@
 }
 
 .parentRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   position: relative;
-  width: fit-content;
-  flex-wrap: nowrap;
+  width: min(100%, 608px);
   margin-inline: auto;
   gap: 48px;
   margin-bottom: 0;
+}
+
+.parentRow[data-parent-count="1"] {
+  width: min(100%, 280px);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .parentRow::before {
   content: "";
   position: absolute;
   top: 75%;
-  left: calc(50% - 20px);
-  right: calc(50% - 20px);
+  left: var(--parent-line-inset-left, calc((100% - 48px) / 4));
+  right: var(--parent-line-inset-right, calc((100% - 48px) / 4));
   transform: translateY(-50%);
   height: 2px;
   background: #c7d2fe;
@@ -345,6 +351,11 @@
   border-radius: 1px;
   z-index: 0;
   pointer-events: none;
+}
+
+.parentRow[data-parent-count="1"]::before {
+  left: 50%;
+  right: 50%;
 }
 
 /* שורה עליונה: אחים–לייבל–מוקד–לייבל–אחים; מתחת גשר לבנות זוג; שורה מלאה לכרטיסים */
@@ -603,6 +614,10 @@
 
 .matrixSpouseRow {
   display: grid;
+  grid-template-columns: repeat(
+    var(--matrix-column-count),
+    minmax(128px, 1fr)
+  );
   gap: 10px 18px;
   justify-items: stretch;
   align-items: end;
@@ -815,6 +830,71 @@
   line-height: 1.4;
   color: #475569;
   text-align: center;
+}
+
+@media (max-width: 600px) {
+  .section {
+    padding-inline: 10px;
+  }
+
+  .parentRow {
+    width: 100%;
+    gap: 12px;
+  }
+
+  .parentRow::before {
+    left: var(--parent-line-inset-left, calc((100% - 12px) / 4));
+    right: var(--parent-line-inset-right, calc((100% - 12px) / 4));
+  }
+
+  .parentRow .personCardStack {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .parentRow .card {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    padding-inline: 8px;
+  }
+
+  .spouseTierSpouseOnly {
+    overflow: visible;
+  }
+
+  .spouseOnlyMatrix {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .spouseOnlyMatrix .matrixSpouseRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .spouseOnlyMatrix .matrixSpouseRow::after {
+    top: var(--matrix-line-start-y, 0);
+    right: auto;
+    bottom: calc(100% - var(--matrix-line-end-y, calc(100% - 43px)));
+    left: 50%;
+    width: 2px;
+    height: auto;
+    transform: translateX(-50%);
+  }
+
+  .spouseOnlyMatrix .personCardStack {
+    max-width: min(240px, 100%);
+  }
+
+  .spouseOnlyMatrix .relationRibbon,
+  .spouseOnlyMatrix .relationRibbonCitation,
+  .spouseOnlyMatrix .spouseUnionTimelineRibbon {
+    position: relative;
+    z-index: 2;
+    background: #f1f3fb;
+    border-radius: 6px;
+  }
 }
 
 /* כותרת שיטה מעל שורת טיב הקשר — מחוץ למשבצת הלבנה */

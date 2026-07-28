@@ -4,9 +4,10 @@ use crate::{
     common::error_handling::{INTERNAL_SERVER_ERROR, ServiceError},
     dtos::perek::number_to_hebrew,
     dtos::tanahpedia_family::{
-        DeleteTanahpediaPersonNodeInput, PutTanahpediaEntryEntityLinkInput,
-        PutTanahpediaParentChildInput, PutTanahpediaPersonNodeInput, PutTanahpediaPersonUnionInput,
-        TanahpediaEntitySummary, TanahpediaEntityTanahSource, TanahpediaEntryEntityLinkWriteResult,
+        DeleteTanahpediaOrphanEntityInput, DeleteTanahpediaPersonNodeInput,
+        PutTanahpediaEntryEntityLinkInput, PutTanahpediaParentChildInput,
+        PutTanahpediaPersonNodeInput, PutTanahpediaPersonUnionInput, TanahpediaEntitySummary,
+        TanahpediaEntityTanahSource, TanahpediaEntryEntityLinkWriteResult,
         TanahpediaFamilyLinkWriteResult, TanahpediaPersonDetail, TanahpediaPersonName,
         TanahpediaPersonNodeWriteResult, TanahpediaPersonParentChildSummary, TanahpediaPersonSex,
         TanahpediaPersonSummary, TanahpediaPersonUnionSummary,
@@ -56,6 +57,27 @@ const PERSON_DEPENDENCY_SQL: &str = r#"SELECT (
 ) AS dependency_count"#;
 const PERSON_DEPENDENCY_PERSON_BIND_COUNT: usize = 17;
 
+const ENTITY_DEPENDENCY_SQL: &str = r#"SELECT (
+    EXISTS(SELECT 1 FROM tanahpedia_entity_tanah_source WHERE entity_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_entry_entity WHERE entity_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_person WHERE entity_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_place WHERE entity_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_event WHERE entity_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_war WHERE entity_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_nation WHERE entity_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_animal WHERE entity_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_object WHERE entity_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_temple_tool WHERE entity_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_3d_model WHERE entity_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_plant WHERE entity_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_astronomical_object WHERE entity_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_sefer WHERE entity_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_tanah_sefer WHERE entity_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_saying WHERE entity_id = ?) +
+    EXISTS(SELECT 1 FROM tanahpedia_prophecy WHERE entity_id = ?)
+) AS dependency_count"#;
+const ENTITY_DEPENDENCY_BIND_COUNT: usize = 17;
+
 fn person_dependency_values(entity_id: &str, person_id: &str) -> Vec<Value> {
     std::iter::once(entity_id.to_string().into())
         .chain(std::iter::repeat_n(
@@ -63,6 +85,10 @@ fn person_dependency_values(entity_id: &str, person_id: &str) -> Vec<Value> {
             PERSON_DEPENDENCY_PERSON_BIND_COUNT,
         ))
         .collect()
+}
+
+fn entity_dependency_values(entity_id: &str) -> Vec<Value> {
+    std::iter::repeat_n(entity_id.to_string().into(), ENTITY_DEPENDENCY_BIND_COUNT).collect()
 }
 
 fn db_error(db_err: sea_orm::DbErr) -> ServiceError {
@@ -504,6 +530,53 @@ pub async fn delete_orphan_person_node(
         entity_id,
         person_id,
         sex_id,
+    })
+}
+
+pub async fn delete_orphan_entity(
+    db: &Database,
+    input: DeleteTanahpediaOrphanEntityInput,
+) -> Result<TanahpediaEntitySummary, ServiceError> {
+    let entity_id = required(input.entity_id, "entityId", 36)?;
+    let entity_type = required(input.entity_type, "entityType", 50)?.to_uppercase();
+    let display_name = required(input.display_name, "displayName", 255)?;
+    let transaction = db.get_connection().begin().await.map_err(db_error)?;
+
+    let existing = entity::Entity::find_by_id(entity_id.clone())
+        .lock_exclusive()
+        .one(&transaction)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ServiceError::not_found("entity not found", None::<&str>))?;
+    if existing.entity_type != entity_type || existing.name != display_name {
+        return Err(ServiceError::bad_request(
+            "entity identity does not match entityType and displayName",
+        ));
+    }
+
+    let dependencies = PersonDependencyCount::find_by_statement(Statement::from_sql_and_values(
+        DatabaseBackend::MySql,
+        ENTITY_DEPENDENCY_SQL,
+        entity_dependency_values(&entity_id),
+    ))
+    .one(&transaction)
+    .await
+    .map_err(db_error)?
+    .ok_or_else(|| ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, None::<&str>))?;
+    if dependencies.dependency_count != 0 {
+        return Err(ServiceError::bad_request("entity still has linked data"));
+    }
+
+    entity::Entity::delete_by_id(entity_id.clone())
+        .exec(&transaction)
+        .await
+        .map_err(db_error)?;
+    transaction.commit().await.map_err(db_error)?;
+
+    Ok(TanahpediaEntitySummary {
+        entity_id,
+        entity_type,
+        display_name,
     })
 }
 
@@ -1176,6 +1249,33 @@ mod tests {
         );
     }
 
+    #[test]
+    fn orphan_entity_guard_covers_every_entity_reference_table() {
+        let schema = include_str!("../../../../data/mysql/tanahpedia_structure.sql");
+        let mut current_table = "";
+        let mut reference_tables = HashSet::new();
+        for line in schema.lines().map(str::trim) {
+            if let Some(table) = line
+                .strip_prefix("CREATE TABLE `")
+                .and_then(|suffix| suffix.split('`').next())
+            {
+                current_table = table;
+            }
+            if line.contains("REFERENCES `tanahpedia_entity`") {
+                reference_tables.insert(current_table);
+            }
+        }
+
+        assert_eq!(reference_tables.len(), ENTITY_DEPENDENCY_BIND_COUNT);
+        for table in reference_tables {
+            assert!(ENTITY_DEPENDENCY_SQL.contains(table), "missing {table}");
+        }
+        assert_eq!(
+            entity_dependency_values("entity-1").len(),
+            ENTITY_DEPENDENCY_SQL.matches('?').count()
+        );
+    }
+
     fn union_type_model(id: &str, name: &str) -> lookup_union_type::Model {
         lookup_union_type::Model {
             id: id.to_string(),
@@ -1682,6 +1782,95 @@ mod tests {
                 entity_id: "entity-1".to_string(),
                 person_id: "person-1".to_string(),
                 sex_id: "sex-1".to_string(),
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(error, ServiceError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn delete_orphan_entity_deletes_exact_unreferenced_entity() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "entity-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![dependency_count_row(0)],
+                ])
+                .append_exec_results([MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                }])
+                .into_connection(),
+        );
+
+        let deleted = delete_orphan_entity(
+            &db,
+            DeleteTanahpediaOrphanEntityInput {
+                entity_id: "entity-1".to_string(),
+                entity_type: "person".to_string(),
+                display_name: "שמשון".to_string(),
+            },
+        )
+        .await
+        .expect("should delete exact orphan entity");
+
+        assert_eq!(deleted.entity_id, "entity-1");
+        assert_eq!(deleted.entity_type, "PERSON");
+        assert_eq!(deleted.display_name, "שמשון");
+        let transaction_log = db.get_connection().clone().into_transaction_log();
+        assert!(format!("{:?}", transaction_log[0]).contains("DELETE FROM `tanahpedia_entity`"));
+    }
+
+    #[tokio::test]
+    async fn delete_orphan_entity_rejects_linked_data() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "entity-1",
+                    "שמשון",
+                )]])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![dependency_count_row(1)],
+                ])
+                .into_connection(),
+        );
+
+        let error = delete_orphan_entity(
+            &db,
+            DeleteTanahpediaOrphanEntityInput {
+                entity_id: "entity-1".to_string(),
+                entity_type: "PERSON".to_string(),
+                display_name: "שמשון".to_string(),
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(error, ServiceError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn delete_orphan_entity_rejects_identity_mismatch() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                    "entity-1",
+                    "שמשון",
+                )]])
+                .into_connection(),
+        );
+
+        let error = delete_orphan_entity(
+            &db,
+            DeleteTanahpediaOrphanEntityInput {
+                entity_id: "entity-1".to_string(),
+                entity_type: "PLACE".to_string(),
+                display_name: "שמשון".to_string(),
             },
         )
         .await
