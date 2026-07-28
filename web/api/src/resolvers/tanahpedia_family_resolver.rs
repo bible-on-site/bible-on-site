@@ -2,11 +2,12 @@ use async_graphql::{Context, ErrorExtensions, Object, Result};
 
 use crate::common::auth::ApiAuth;
 use crate::dtos::tanahpedia_family::{
-    DeleteTanahpediaPersonNodeInput, PutTanahpediaEntryEntityLinkInput,
-    PutTanahpediaParentChildInput, PutTanahpediaPersonNodeInput, PutTanahpediaPersonUnionInput,
-    TanahpediaEntitySummary, TanahpediaEntityTanahSource, TanahpediaEntryEntityLinkWriteResult,
-    TanahpediaFamilyLinkWriteResult, TanahpediaPersonDetail, TanahpediaPersonNodeWriteResult,
-    TanahpediaPersonParentChildSummary, TanahpediaPersonSummary, TanahpediaPersonUnionSummary,
+    DeleteTanahpediaOrphanEntityInput, DeleteTanahpediaPersonNodeInput,
+    PutTanahpediaEntryEntityLinkInput, PutTanahpediaParentChildInput, PutTanahpediaPersonNodeInput,
+    PutTanahpediaPersonUnionInput, TanahpediaEntitySummary, TanahpediaEntityTanahSource,
+    TanahpediaEntryEntityLinkWriteResult, TanahpediaFamilyLinkWriteResult, TanahpediaPersonDetail,
+    TanahpediaPersonNodeWriteResult, TanahpediaPersonParentChildSummary, TanahpediaPersonSummary,
+    TanahpediaPersonUnionSummary,
 };
 use crate::providers::Database;
 use crate::services::tanahpedia_family_service;
@@ -67,6 +68,19 @@ impl TanahpediaFamilyMutation {
             .authorize_revision_manager()
             .map_err(|e| e.extend())?;
         tanahpedia_family_service::delete_orphan_person_node(ctx.data::<Database>()?, input)
+            .await
+            .map_err(|e| e.extend())
+    }
+
+    async fn delete_tanahpedia_orphan_entity(
+        &self,
+        ctx: &Context<'_>,
+        input: DeleteTanahpediaOrphanEntityInput,
+    ) -> Result<TanahpediaEntitySummary> {
+        ctx.data::<ApiAuth>()?
+            .authorize_revision_manager()
+            .map_err(|e| e.extend())?;
+        tanahpedia_family_service::delete_orphan_entity(ctx.data::<Database>()?, input)
             .await
             .map_err(|e| e.extend())
     }

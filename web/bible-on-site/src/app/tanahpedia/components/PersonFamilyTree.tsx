@@ -418,12 +418,29 @@ function ParentCard({ edge }: { edge: PersonFamilyParentEdge }) {
 			</div>
 			<div
 				className={styles.card}
+				data-parent-card
 				data-has-sex-mark={sexMarkDataAttribute(edge.related.sex)}
 			>
 				<PersonSexMark sex={edge.related.sex} />
 				<PersonNameLink related={edge.related} />
 				{cardCitationBlock(edge.sourceCitation)}
 			</div>
+		</div>
+	);
+}
+
+function ParentRow({ parents }: { parents: PersonFamilyParentEdge[] }) {
+	return (
+		<div
+			className={`${styles.row} ${styles.parentRow}`}
+			data-parent-count={parents.length}
+		>
+			{parents.map((edge) => (
+				<ParentCard
+					key={`${edge.related.entityId}-${edge.parentRole}-${edge.relationshipType}-${edge.altGroupId ?? "d"}`}
+					edge={edge}
+				/>
+			))}
 		</div>
 	);
 }
@@ -801,6 +818,7 @@ function PersonFamilyTreeContent({
 			const rowH = rowRect.height;
 			let lineCenterY = rowH / 2;
 			const cards = el.querySelectorAll("[data-matrix-spouse-card]");
+			const cardCenters: Array<{ x: number; y: number }> = [];
 			let firstCardCenterX = 0;
 			let lastCardCenterX = rowRect.width;
 			for (const node of cards) {
@@ -808,11 +826,28 @@ function PersonFamilyTreeContent({
 				const mid = r.top - rowRect.top + r.height / 2;
 				if (mid > lineCenterY) lineCenterY = mid;
 				const cx = r.left - rowRect.left + r.width / 2;
+				cardCenters.push({ x: cx, y: mid });
 				if (cx < lastCardCenterX) lastCardCenterX = cx;
 				if (cx > firstCardCenterX) firstCardCenterX = cx;
 			}
+			const isVertical =
+				cardCenters.length > 1 &&
+				Math.max(...cardCenters.map(({ x }) => x)) -
+					Math.min(...cardCenters.map(({ x }) => x)) <
+					2;
+			if (isVertical) {
+				lineCenterY = Math.min(...cardCenters.map(({ y }) => y));
+			}
 			setMatrixMarriageLineYpx(Math.max(8, Math.round(lineCenterY)));
 			setMatrixSpouseMidPx(Math.max(12, Math.round(rowH - lineCenterY + 8)));
+			el.style.setProperty(
+				"--matrix-line-start-y",
+				`${Math.round(Math.min(...cardCenters.map(({ y }) => y)))}px`,
+			);
+			el.style.setProperty(
+				"--matrix-line-end-y",
+				`${Math.round(Math.max(...cardCenters.map(({ y }) => y)))}px`,
+			);
 			// Inset the horizontal spouse line to end near the outermost card centers
 			const insetRight = Math.max(
 				4,
@@ -838,14 +873,7 @@ function PersonFamilyTreeContent({
 			{parents.length > 0 ? (
 				<>
 					{parentKeys.length <= 1 && parentKeys[0] === null ? (
-						<div className={`${styles.row} ${styles.parentRow}`}>
-							{sortedParentsGlobal.map((edge) => (
-								<ParentCard
-									key={`${edge.related.entityId}-${edge.parentRole}-${edge.relationshipType}`}
-									edge={edge}
-								/>
-							))}
-						</div>
+						<ParentRow parents={sortedParentsGlobal} />
 					) : (
 						parentKeys.map((key) => {
 							const group = parentGroups.get(key) ?? [];
@@ -870,14 +898,7 @@ function PersonFamilyTreeContent({
 											</span>
 										</div>
 									) : null}
-									<div className={`${styles.row} ${styles.parentRow}`}>
-										{sorted.map((edge) => (
-											<ParentCard
-												key={`${edge.related.entityId}-${edge.parentRole}-${edge.relationshipType}-${key ?? "d"}`}
-												edge={edge}
-											/>
-										))}
-									</div>
+									<ParentRow parents={sorted} />
 								</div>
 							);
 						})
@@ -966,7 +987,16 @@ function PersonFamilyTreeContent({
 								</span>
 							</div>
 						</div>
-						<div className={styles.spouseTierFullWidth}>
+						<div
+							className={`${styles.spouseTierFullWidth} ${!matrixEligible && orderedSpouseUnits.length > 1 ? styles.spouseTierSpouseOnly : ""}`}
+							data-spouse-layout={
+								matrixEligible
+									? "matrix"
+									: orderedSpouseUnits.length > 1
+										? "spouse-only"
+										: "cards"
+							}
+						>
 							{matrixEligible ? (
 								<div
 									className={styles.spouseChildrenMatrixOuter}
@@ -980,9 +1010,11 @@ function PersonFamilyTreeContent({
 									<div
 										ref={matrixSpouseRowRef}
 										className={styles.matrixSpouseRow}
-										style={{
-											gridTemplateColumns: `repeat(${matrixColCount}, minmax(128px, 1fr))`,
-										}}
+										style={
+											{
+												"--matrix-column-count": matrixColCount,
+											} as CSSProperties
+										}
 									>
 										{orderedSpouseUnits.map((unit) => (
 											<div
@@ -1178,7 +1210,7 @@ function PersonFamilyTreeContent({
 								// נישואין כמו יעקב — קו אנכי מהמוקד יורד עד קו אופקי בגובה
 								// אמצע הכרטיסים, רק בלי שורת הילדים שמתחת.
 								<div
-									className={styles.spouseChildrenMatrixOuter}
+									className={`${styles.spouseChildrenMatrixOuter} ${styles.spouseOnlyMatrix}`}
 									style={
 										{
 											"--matrix-spouse-mid-px": `${matrixSpouseMidPx}px`,
@@ -1189,9 +1221,11 @@ function PersonFamilyTreeContent({
 									<div
 										ref={matrixSpouseRowRef}
 										className={styles.matrixSpouseRow}
-										style={{
-											gridTemplateColumns: `repeat(${matrixColCount}, minmax(128px, 1fr))`,
-										}}
+										style={
+											{
+												"--matrix-column-count": matrixColCount,
+											} as CSSProperties
+										}
 									>
 										{orderedSpouseUnits.map((unit) => (
 											<div

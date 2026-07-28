@@ -363,6 +363,7 @@ mod tests {
             r#"mutation { deleteTanahpediaEntryEntityLink(id: "ee") { id } }"#,
             r#"mutation { putTanahpediaPersonNode(input: { entityId: "e", personId: "p", displayName: "Name", sexId: "s", sex: "MALE" }) { personId } }"#,
             r#"mutation { deleteTanahpediaOrphanPersonNode(input: { entityId: "e", personId: "p", sexId: "s" }) { personId } }"#,
+            r#"mutation { deleteTanahpediaOrphanEntity(input: { entityId: "e", entityType: "PERSON", displayName: "Name" }) { entityId } }"#,
             r#"mutation { putTanahpediaParentChildLink(input: { id: "pc", parentPersonId: "p", childPersonId: "c", relationshipType: "BIOLOGICAL", parentRole: "FATHER" }) { id } }"#,
             r#"mutation { deleteTanahpediaParentChildLink(id: "pc") { id } }"#,
             r#"mutation { putTanahpediaPersonUnion(input: { id: "u", person1Id: "p1", person2Id: "p2", unionType: "MARRIAGE" }) { id } }"#,
@@ -511,7 +512,27 @@ mod tests {
                         0_i64.into(),
                     )])],
                 ])
-                .append_exec_results([exec_result.clone(), exec_result.clone(), exec_result])
+                .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![
+                    entity::Model {
+                        id: "entity-duplicate".to_string(),
+                        entity_type: "PERSON".to_string(),
+                        name: "שמשון".to_string(),
+                        created_at: now,
+                        updated_at: now,
+                    },
+                ]])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![BTreeMap::from([(
+                        "dependency_count".to_string(),
+                        0_i64.into(),
+                    )])],
+                ])
+                .append_exec_results([
+                    exec_result.clone(),
+                    exec_result.clone(),
+                    exec_result.clone(),
+                    exec_result,
+                ])
                 .into_connection(),
         );
         let schema = build_schema(&db);
@@ -544,6 +565,20 @@ mod tests {
             delete_person.errors.is_empty(),
             "{:?}",
             delete_person.errors
+        );
+
+        let delete_entity = schema
+            .execute(
+                Request::new(
+                    r#"mutation { deleteTanahpediaOrphanEntity(input: { entityId: "entity-duplicate", entityType: "PERSON", displayName: "שמשון" }) { entityId entityType displayName } }"#,
+                )
+                .data(auth()),
+            )
+            .await;
+        assert!(
+            delete_entity.errors.is_empty(),
+            "{:?}",
+            delete_entity.errors
         );
     }
 

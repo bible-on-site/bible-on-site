@@ -180,6 +180,36 @@ describe("PersonFamilyTree", () => {
 		expect(childCard.textContent).not.toMatch(/\bאב\b/);
 	});
 
+	it("marks equal parent columns and the responsive spouse-only layout", () => {
+		const parent = (id: string, name: string, role: "FATHER" | "MOTHER") => ({
+			related: related(id, name),
+			parentRole: role,
+			relationshipType: "BIOLOGICAL",
+			altGroupId: null,
+			sourceCitation: null,
+		});
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			parents: [
+				parent("father", "מנוח", "FATHER"),
+				parent("mother", "הצללפוני", "MOTHER"),
+			],
+			spouses: [
+				spouseEdge({ id: "spouse-1", name: "בת פלשתים מתמנתה" }),
+				spouseEdge({ id: "spouse-2", name: "אשת שמשון מעזה", unionOrder: 2 }),
+				spouseEdge({ id: "spouse-3", name: "דלילה", unionOrder: 3 }),
+			],
+		};
+
+		const { container } = render(<PersonFamilyTree summary={summary} />);
+
+		expect(container.querySelector('[data-parent-count="2"]')).not.toBeNull();
+		expect(
+			container.querySelector('[data-spouse-layout="spouse-only"]'),
+		).not.toBeNull();
+		expect(screen.getAllByTestId("family-spouse-card")).toHaveLength(3);
+	});
+
 	it("renders a child's own source citation inside its card box, not as an external ribbon", () => {
 		const summary: PersonFamilySummary = {
 			...baseSummary,

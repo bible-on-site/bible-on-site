@@ -219,6 +219,37 @@ different entity type/person binding instead of reassigning existing data. This 
 omitting `sexAltGroupId` clears an existing value. An unchanged replay does not refresh the
 entity's `updatedAt` timestamp.
 
+Cleanup is intentionally split into narrow, reviewable stages. Removing a duplicate person
+attachment does not silently delete its entity:
+
+```graphql
+mutation DeleteOrphanPersonNode($input: DeleteTanahpediaPersonNodeInput!) {
+  deleteTanahpediaOrphanPersonNode(input: $input) {
+    entityId
+    personId
+    sexId
+  }
+}
+
+mutation DeleteOrphanEntity($input: DeleteTanahpediaOrphanEntityInput!) {
+  deleteTanahpediaOrphanEntity(input: $input) {
+    entityId
+    entityType
+    displayName
+  }
+}
+```
+
+`DeleteTanahpediaPersonNodeInput` requires the exact `entityId`, `personId`, and `sexId`.
+The mutation locks those rows and rejects deletion while the person has any entry link,
+relationship, name, role, date, place, citation, or other person metadata. The entity remains
+and therefore appears as `(אין ערך)` in a public category index until separately removed.
+
+`DeleteTanahpediaOrphanEntityInput` requires the exact `entityId`, `entityType`, and
+`displayName`. The mutation locks and rechecks that identity, then rejects deletion while any
+table with a direct foreign key to `tanahpedia_entity` still references it. Use this second
+mutation only when preserving the unlinked entity is not intended.
+
 ```graphql
 mutation PutParentChild($input: PutTanahpediaParentChildInput!) {
   putTanahpediaParentChildLink(input: $input) { id }

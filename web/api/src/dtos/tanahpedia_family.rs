@@ -25,6 +25,13 @@ pub struct DeleteTanahpediaPersonNodeInput {
 }
 
 #[derive(InputObject, Debug, Clone)]
+pub struct DeleteTanahpediaOrphanEntityInput {
+    pub entity_id: String,
+    pub entity_type: String,
+    pub display_name: String,
+}
+
+#[derive(InputObject, Debug, Clone)]
 pub struct PutTanahpediaParentChildInput {
     pub id: String,
     pub parent_person_id: String,
@@ -259,5 +266,19 @@ mod tests {
                 "sexId": "sex-1"
             })
         );
+    }
+
+    #[test]
+    fn delete_orphan_entity_input_parses_all_identity_guards() {
+        let input = DeleteTanahpediaOrphanEntityInput::parse(Some(value!({
+            "entityId": "entity-1",
+            "entityType": "PERSON",
+            "displayName": "שמשון"
+        })))
+        .expect("delete orphan entity input should parse");
+
+        assert_eq!(input.entity_id, "entity-1");
+        assert_eq!(input.entity_type, "PERSON");
+        assert_eq!(input.display_name, "שמשון");
     }
 }
