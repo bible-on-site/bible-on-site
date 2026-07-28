@@ -561,7 +561,8 @@
   grid-row: 3;
   padding-top: 6px;
   margin-top: 2px;
-  overflow: visible;
+  overflow-x: auto;
+  overflow-y: visible;
 }
 
 .spouseTierCards {
@@ -576,8 +577,9 @@
 /* מטריצה: שורת בנות זוג (קו אופקי במרכז גובה הכרטיסים) → ילדים עם קו אנכי נשען על אותו קו */
 .spouseChildrenMatrixOuter {
   position: relative;
-  width: 100%;
-  max-width: 100%;
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
   margin: 0 auto;
   direction: rtl;
   /* מחצית גובה שורת בנות הזוג — לחיבור הקו האנכי לקו האופקי (מומר ב-JS) */
