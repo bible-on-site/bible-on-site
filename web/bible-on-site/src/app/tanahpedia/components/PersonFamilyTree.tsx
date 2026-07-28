@@ -667,6 +667,93 @@ function SpouseUnitNodes({
 	});
 }
 
+/**
+ * מזהה מסך צר (טלפון) כדי להחליף את מטריצת בן-הזוג+ילדים בפריסה אנכית.
+ * ברירת המחדל היא false כך שה-SSR והרינדור הראשון תואמים (מטריצת דסקטופ),
+ * ואז useLayoutEffect מעדכן לפי matchMedia בלי אי-התאמת הידרציה.
+ */
+function useIsNarrowViewport(maxWidth: number): boolean {
+	const [narrow, setNarrow] = useState(false);
+	useLayoutEffect(() => {
+		if (
+			typeof window === "undefined" ||
+			typeof window.matchMedia !== "function"
+		) {
+			return;
+		}
+		const mql = window.matchMedia(`(max-width: ${maxWidth}px)`);
+		const update = () => setNarrow(mql.matches);
+		update();
+		mql.addEventListener("change", update);
+		return () => mql.removeEventListener("change", update);
+	}, [maxWidth]);
+	return narrow;
+}
+
+type MobileMatrixColumn = {
+	unit: SpouseUnit;
+	partnerId: string;
+	kids: PersonFamilyChildEdge[];
+};
+
+/**
+ * פריסת מובייל למטריצת בן-זוג+ילדים (יעקב וכד'): במקום מטריצה אופקית עם גלילה
+ * צידית, כל בת זוג מוצגת מעל ילדיה בטור אנכי — כך שהכל נקרא ברוחב טלפון בלי
+ * גלילה אופקית, בדומה למסילת ה-spouse-only של שמשון.
+ */
+function MobileMatrixStack({
+	columns,
+	looseChildren,
+	looseLabel,
+}: {
+	columns: MobileMatrixColumn[];
+	looseChildren: PersonFamilyChildEdge[];
+	looseLabel: string;
+}) {
+	return (
+		<div className={styles.matrixMobileStack} data-matrix-mobile="">
+			{columns.map(({ unit, partnerId, kids }) => (
+				<div
+					key={`m-col-${partnerId}-${unit.altGroupKey ?? "d"}`}
+					className={styles.matrixMobileColumn}
+				>
+					<div className={styles.matrixMobileSpouse}>
+						<SpouseUnitCardBlock unit={unit} />
+					</div>
+					{kids.length > 0 ? (
+						<>
+							<div className={styles.matrixMobileConnector} aria-hidden />
+							<div className={styles.matrixMobileChildren}>
+								{kids.map((edge) => (
+									<ChildCard
+										key={`m-kid-${partnerId}-${edge.related.entityId}-${edge.parentRole}-${edge.relationshipType}`}
+										edge={edge}
+									/>
+								))}
+							</div>
+						</>
+					) : null}
+				</div>
+			))}
+			{looseChildren.length > 0 ? (
+				<div key="m-col-loose" className={styles.matrixMobileColumn}>
+					<div className={styles.matrixMobileLooseLabel}>
+						<span className={styles.familyTreeSectionLabel}>{looseLabel}</span>
+					</div>
+					<div className={styles.matrixMobileChildren}>
+						{looseChildren.map((edge) => (
+							<ChildCard
+								key={`m-loose-${edge.related.entityId}-${edge.parentRole}-${edge.relationshipType}`}
+								edge={edge}
+							/>
+						))}
+					</div>
+				</div>
+			) : null}
+		</div>
+	);
+}
+
 function PersonFamilyTreeContent({
 	summary,
 }: {
@@ -864,6 +951,32 @@ function PersonFamilyTreeContent({
 		return () => ro.disconnect();
 	}, [showSpouseMarriageRow]);
 
+	const isNarrowViewport = useIsNarrowViewport(600);
+
+	/* פריסת מובייל למטריצה: כל בת זוג + ילדיה בטור, לפי סדר הכרונולוגיה של יעקב
+	 * או לפי עמודות בת-הזוג במטריצה הרגילה. נשמר סדר הילדים כמו בדסקטופ. */
+	const mobileMatrixColumns: MobileMatrixColumn[] = matrixEligible
+		? orderedSpouseUnits.map((unit) => {
+				const partnerId = unit.edges[0].related.entityId;
+				const kids = jacobChildrenSequenceLayout
+					? jacobGlobalChildTimeline.filter(
+							(c) => c.coParentEntityId === partnerId,
+						)
+					: (columnChildren.get(partnerId) ?? []);
+				return { unit, partnerId, kids };
+			})
+		: [];
+
+	const mobileMatrixLooseChildren: PersonFamilyChildEdge[] = matrixEligible
+		? jacobChildrenSequenceLayout
+			? jacobGlobalChildTimeline.filter(
+					(c) =>
+						c.coParentEntityId == null ||
+						!spousePartnerIdsForSeq.has(c.coParentEntityId),
+				)
+			: looseChildren
+		: [];
+
 	return (
 		<section className={styles.section} aria-labelledby="person-family-heading">
 			<h2 id="person-family-heading" className={styles.title}>
@@ -998,6 +1111,13 @@ function PersonFamilyTreeContent({
 							}
 						>
 							{matrixEligible ? (
+								isNarrowViewport ? (
+									<MobileMatrixStack
+										columns={mobileMatrixColumns}
+										looseChildren={mobileMatrixLooseChildren}
+										looseLabel="ילדים ללא מיפוי מלא לבת זוג בגרף"
+									/>
+								) : (
 								<div
 									className={styles.spouseChildrenMatrixOuter}
 									style={
@@ -1205,6 +1325,7 @@ function PersonFamilyTreeContent({
 										</div>
 									)}
 								</div>
+								)
 							) : orderedSpouseUnits.length > 1 ? (
 								// כמה בנות זוג ללא ילדים ממופים (למשל שמשון): אותה שורת
 								// נישואין כמו יעקב — קו אנכי מהמוקד יורד עד קו אופקי בגובה

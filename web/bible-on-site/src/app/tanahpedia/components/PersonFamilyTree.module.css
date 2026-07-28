@@ -895,7 +895,80 @@
     background: #f1f3fb;
     border-radius: 6px;
   }
+
+  /* מטריצת בן-זוג+ילדים (יעקב) במסך צר: טור אנכי לכל בת זוג + ילדיה,
+     בלי גלילה אופקית. מוחלף ב-JS ב-MobileMatrixStack מתחת ל-600px. */
+  .matrixMobileStack .relationRibbon,
+  .matrixMobileStack .relationRibbonCitation,
+  .matrixMobileStack .spouseUnionTimelineRibbon {
+    position: relative;
+    z-index: 2;
+    background: #f1f3fb;
+    border-radius: 6px;
+  }
 }
+
+.matrixMobileStack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  width: 100%;
+  direction: rtl;
+  padding-top: 4px;
+}
+
+.matrixMobileColumn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 320px;
+  min-width: 0;
+}
+
+.matrixMobileSpouse {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.matrixMobileConnector {
+  width: 2px;
+  height: 18px;
+  background: linear-gradient(180deg, #c7d2fe 0%, #6366f1 60%, #818cf8 100%);
+  border-radius: 1px;
+  margin: 6px 0 4px;
+  flex-shrink: 0;
+}
+
+.matrixMobileChildren {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 8px;
+  width: 100%;
+  justify-items: stretch;
+}
+
+.matrixMobileChildren .personCardStack,
+.matrixMobileChildren [data-testid="family-child-card"] {
+  width: 100%;
+  min-width: 0;
+}
+
+.matrixMobileChildren .card {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding-inline: 8px;
+}
+
+.matrixMobileLooseLabel {
+  margin: 0 0 6px;
+  text-align: center;
+}
+
 
 /* כותרת שיטה מעל שורת טיב הקשר — מחוץ למשבצת הלבנה */
 .spouseOpinionTitleInline {

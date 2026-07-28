@@ -687,6 +687,77 @@ describe("PersonFamilyTree", () => {
 		expect(screen.getByText("ילד נוסף")).toBeInTheDocument();
 	});
 
+	it("collapses the matrix into a vertical mother-grouped stack on narrow viewports", () => {
+		const originalMatchMedia = window.matchMedia;
+		const listeners = new Set<() => void>();
+		window.matchMedia = ((query: string) => ({
+			matches: query.includes("max-width"),
+			media: query,
+			onchange: null,
+			addEventListener: (_evt: string, cb: () => void) => listeners.add(cb),
+			removeEventListener: (_evt: string, cb: () => void) =>
+				listeners.delete(cb),
+			addListener: (cb: () => void) => listeners.add(cb),
+			removeListener: (cb: () => void) => listeners.delete(cb),
+			dispatchEvent: () => false,
+		})) as unknown as typeof window.matchMedia;
+
+		try {
+			const summary: PersonFamilySummary = {
+				...baseSummary,
+				focalDisplayName: "יעקב",
+				focalSex: "MALE",
+				spouses: [
+					spouseEdge({ id: "leah", name: "לאה", unionOrder: 1 }),
+					spouseEdge({ id: "rachel", name: "רחל", unionOrder: 2 }),
+				],
+				children: [
+					childEdge({
+						id: "reuven",
+						name: "ראובן",
+						coParentEntityId: "leah",
+						coParentDisplayName: "לאה",
+						coParentUnionOrder: 1,
+					}),
+					childEdge({
+						id: "yosef",
+						name: "יוסף",
+						coParentEntityId: "rachel",
+						coParentDisplayName: "רחל",
+						coParentUnionOrder: 2,
+					}),
+					childEdge({
+						id: "unknown",
+						name: "ילד נוסף",
+						coParentEntityId: "unknown-mother",
+						coParentDisplayName: "אם אחרת",
+					}),
+				],
+			};
+
+			const { container } = render(<PersonFamilyTree summary={summary} />);
+
+			// The vertical mobile stack is used, not the horizontal desktop matrix.
+			expect(container.querySelector("[data-matrix-mobile]")).not.toBeNull();
+			expect(
+				container.querySelectorAll("[data-matrix-spouse-card]"),
+			).toHaveLength(0);
+
+			// Every spouse and child still renders exactly once (no duplication).
+			expect(screen.getAllByTestId("family-spouse-card")).toHaveLength(2);
+			expect(screen.getAllByTestId("family-child-card")).toHaveLength(3);
+
+			// Each mother is grouped directly above her own child in DOM order.
+			const treeText =
+				screen.getByRole("region", { name: /משפחה/ }).textContent ?? "";
+			expect(treeText.indexOf("לאה")).toBeLessThan(treeText.indexOf("ראובן"));
+			expect(treeText.indexOf("רחל")).toBeLessThan(treeText.indexOf("יוסף"));
+			expect(treeText).toContain("ילד נוסף");
+		} finally {
+			window.matchMedia = originalMatchMedia;
+		}
+	});
+
 	it("groups non-matrix children by co-parent with named and unnamed buckets", () => {
 		const sara = "\u05e9\u05e8\u05d4";
 		const hagar = "\u05d4\u05d2\u05e8";
