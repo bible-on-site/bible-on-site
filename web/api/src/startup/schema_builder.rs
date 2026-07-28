@@ -359,6 +359,7 @@ mod tests {
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
         let schema = build_schema(&db);
         let operations = [
+            r#"mutation { putTanahpediaPersonNode(input: { entityId: "e", personId: "p", displayName: "Name", sexId: "s", sex: "MALE" }) { personId } }"#,
             r#"mutation { putTanahpediaParentChildLink(input: { id: "pc", parentPersonId: "p", childPersonId: "c", relationshipType: "BIOLOGICAL", parentRole: "FATHER" }) { id } }"#,
             r#"mutation { deleteTanahpediaParentChildLink(id: "pc") { id } }"#,
             r#"mutation { putTanahpediaPersonUnion(input: { id: "u", person1Id: "p1", person2Id: "p2", unionType: "MARRIAGE" }) { id } }"#,
@@ -372,6 +373,41 @@ mod tests {
             assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
             assert_eq!(response.errors[0].message, "Revision API is not configured");
         }
+    }
+
+    #[tokio::test]
+    async fn schema_executes_authorized_person_node_mutation() {
+        let exec_result = MockExecResult {
+            last_insert_id: 0,
+            rows_affected: 1,
+        };
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entities::tanahpedia::entity::Model, Vec<entities::tanahpedia::entity::Model>, _>([vec![]])
+                .append_query_results::<entities::tanahpedia::person::Model, Vec<entities::tanahpedia::person::Model>, _>([vec![]])
+                .append_query_results::<entities::tanahpedia::person::Model, Vec<entities::tanahpedia::person::Model>, _>([vec![]])
+                .append_query_results::<entities::tanahpedia::person_sex::Model, Vec<entities::tanahpedia::person_sex::Model>, _>([vec![]])
+                .append_exec_results([
+                    exec_result.clone(),
+                    exec_result.clone(),
+                    exec_result,
+                ])
+                .into_connection(),
+        );
+        let schema = build_schema(&db);
+        let response = schema
+            .execute(
+                Request::new(
+                    r#"mutation { putTanahpediaPersonNode(input: { entityId: "entity-1", personId: "person-1", displayName: "שמשון", sexId: "sex-1", sex: "MALE" }) { entityId personId sexId } }"#,
+                )
+                .data(crate::common::auth::ApiAuth::with_revision_api_key(
+                    Some("family-test-key".to_string()),
+                    Some("family-test-key".to_string()),
+                )),
+            )
+            .await;
+
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
     }
 
     #[tokio::test]

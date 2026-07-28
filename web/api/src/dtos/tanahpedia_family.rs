@@ -1,6 +1,16 @@
 use async_graphql::{InputObject, SimpleObject};
 
 #[derive(InputObject, Debug, Clone)]
+pub struct PutTanahpediaPersonNodeInput {
+    pub entity_id: String,
+    pub person_id: String,
+    pub display_name: String,
+    pub sex_id: String,
+    pub sex: String,
+    pub sex_alt_group_id: Option<String>,
+}
+
+#[derive(InputObject, Debug, Clone)]
 pub struct PutTanahpediaParentChildInput {
     pub id: String,
     pub parent_person_id: String,
@@ -29,6 +39,13 @@ pub struct PutTanahpediaPersonUnionInput {
 #[derive(SimpleObject, Debug, Clone)]
 pub struct TanahpediaFamilyLinkWriteResult {
     pub id: String,
+}
+
+#[derive(SimpleObject, Debug, Clone)]
+pub struct TanahpediaPersonNodeWriteResult {
+    pub entity_id: String,
+    pub person_id: String,
+    pub sex_id: String,
 }
 
 /// A Tanahpedia person match, used to resolve a display name to the internal
@@ -97,6 +114,13 @@ pub struct TanahpediaPersonName {
     pub alt_group_id: Option<String>,
 }
 
+#[derive(SimpleObject, Debug, Clone)]
+pub struct TanahpediaPersonSex {
+    pub id: String,
+    pub sex: String,
+    pub alt_group_id: Option<String>,
+}
+
 /// A direct Tanah citation (perek + pasuk) attached to any Tanahpedia entity —
 /// the "source for the entity itself", as opposed to a specific relationship's
 /// `sourceCitation` free-text field.
@@ -121,9 +145,36 @@ pub struct TanahpediaPersonDetail {
     pub display_name: String,
     pub names: Vec<TanahpediaPersonName>,
     pub sexes: Vec<String>,
+    pub sex_rows: Vec<TanahpediaPersonSex>,
     pub birth_dates: Vec<i32>,
     pub death_dates: Vec<i32>,
     pub death_causes: Vec<String>,
     pub birth_place_ids: Vec<String>,
     pub tanah_sources: Vec<TanahpediaEntityTanahSource>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_graphql::{InputType, value};
+
+    #[test]
+    fn person_node_input_parses_all_graphql_fields() {
+        let input = PutTanahpediaPersonNodeInput::parse(Some(value!({
+            "entityId": "entity-1",
+            "personId": "person-1",
+            "displayName": "שמשון",
+            "sexId": "sex-1",
+            "sex": "MALE",
+            "sexAltGroupId": "alternate-1"
+        })))
+        .expect("person node input should parse");
+
+        assert_eq!(input.entity_id, "entity-1");
+        assert_eq!(input.person_id, "person-1");
+        assert_eq!(input.display_name, "שמשון");
+        assert_eq!(input.sex_id, "sex-1");
+        assert_eq!(input.sex, "MALE");
+        assert_eq!(input.sex_alt_group_id.as_deref(), Some("alternate-1"));
+    }
 }
