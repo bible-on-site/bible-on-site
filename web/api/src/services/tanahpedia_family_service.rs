@@ -23,7 +23,7 @@ use entities::tanahpedia::{
 use sea_orm::sea_query::OnConflict;
 use sea_orm::{
     ColumnTrait, Condition, DatabaseBackend, EntityTrait, FromQueryResult, IntoActiveModel,
-    QueryFilter, QuerySelect, Statement, TransactionTrait,
+    QueryFilter, QuerySelect, Statement, TransactionTrait, Value,
 };
 
 #[derive(FromQueryResult)]
@@ -54,6 +54,16 @@ const PERSON_DEPENDENCY_SQL: &str = r#"SELECT (
     EXISTS(SELECT 1 FROM tanahpedia_person_parent_child WHERE parent_id = ? OR child_id = ?) +
     EXISTS(SELECT 1 FROM tanahpedia_person_union WHERE person1_id = ? OR person2_id = ?)
 ) AS dependency_count"#;
+const PERSON_DEPENDENCY_PERSON_BIND_COUNT: usize = 17;
+
+fn person_dependency_values(entity_id: &str, person_id: &str) -> Vec<Value> {
+    std::iter::once(entity_id.to_string().into())
+        .chain(std::iter::repeat_n(
+            person_id.to_string().into(),
+            PERSON_DEPENDENCY_PERSON_BIND_COUNT,
+        ))
+        .collect()
+}
 
 fn db_error(db_err: sea_orm::DbErr) -> ServiceError {
     ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
@@ -468,26 +478,7 @@ pub async fn delete_orphan_person_node(
     let dependencies = PersonDependencyCount::find_by_statement(Statement::from_sql_and_values(
         DatabaseBackend::MySql,
         PERSON_DEPENDENCY_SQL,
-        [
-            entity_id.clone().into(),
-            person_id.clone().into(),
-            person_id.clone().into(),
-            person_id.clone().into(),
-            person_id.clone().into(),
-            person_id.clone().into(),
-            person_id.clone().into(),
-            person_id.clone().into(),
-            person_id.clone().into(),
-            person_id.clone().into(),
-            person_id.clone().into(),
-            person_id.clone().into(),
-            person_id.clone().into(),
-            person_id.clone().into(),
-            person_id.clone().into(),
-            person_id.clone().into(),
-            person_id.clone().into(),
-            person_id.clone().into(),
-        ],
+        person_dependency_values(&entity_id, &person_id),
     ))
     .one(&transaction)
     .await
@@ -1179,6 +1170,10 @@ mod tests {
             assert!(PERSON_DEPENDENCY_SQL.contains(table), "missing {table}");
         }
         assert!(PERSON_DEPENDENCY_SQL.contains("tanahpedia_entry_entity"));
+        assert_eq!(
+            person_dependency_values("entity-1", "person-1").len(),
+            PERSON_DEPENDENCY_SQL.matches('?').count()
+        );
     }
 
     fn union_type_model(id: &str, name: &str) -> lookup_union_type::Model {
@@ -1594,7 +1589,12 @@ mod tests {
         assert_eq!(deleted.entity_id, "entity-1");
         assert_eq!(deleted.person_id, "person-1");
         assert_eq!(deleted.sex_id, "sex-1");
-        assert_eq!(db.get_connection().clone().into_transaction_log().len(), 1);
+        let transaction_log = db.get_connection().clone().into_transaction_log();
+        assert_eq!(transaction_log.len(), 1);
+        let executed_sql = format!("{:?}", transaction_log[0]);
+        assert!(executed_sql.contains("tanahpedia_person_sex"));
+        assert!(executed_sql.contains("DELETE FROM `tanahpedia_person`"));
+        assert!(!executed_sql.contains("DELETE FROM `tanahpedia_entity`"));
     }
 
     #[tokio::test]
