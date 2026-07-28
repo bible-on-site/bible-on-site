@@ -22,9 +22,14 @@ use entities::tanahpedia::{
 };
 use sea_orm::sea_query::OnConflict;
 use sea_orm::{
-    ColumnTrait, Condition, EntityTrait, IntoActiveModel, QueryFilter, QuerySelect,
-    TransactionTrait,
+    ColumnTrait, Condition, EntityTrait, FromQueryResult, IntoActiveModel, QueryFilter,
+    QuerySelect, TransactionTrait,
 };
+
+#[derive(FromQueryResult)]
+struct EntryId {
+    id: String,
+}
 
 fn db_error(db_err: sea_orm::DbErr) -> ServiceError {
     ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
@@ -74,8 +79,11 @@ pub async fn put_entry_entity_link(
 
     let transaction = db.get_connection().begin().await.map_err(db_error)?;
     let entry_id = entry::Entity::find()
+        .select_only()
+        .column(entry::Column::Id)
         .filter(entry::Column::UniqueName.eq(entry_unique_name))
         .lock_exclusive()
+        .into_model::<EntryId>()
         .one(&transaction)
         .await
         .map_err(db_error)?
@@ -1084,6 +1092,8 @@ mod tests {
     #[test]
     fn entry_entity_collision_lookups_lock_concurrent_writes() {
         let entry_statement = entry::Entity::find()
+            .select_only()
+            .column(entry::Column::Id)
             .filter(entry::Column::UniqueName.eq("שמשון"))
             .lock_exclusive()
             .build(DatabaseBackend::MySql);
@@ -1096,7 +1106,10 @@ mod tests {
             .lock_exclusive()
             .build(DatabaseBackend::MySql);
 
-        assert!(entry_statement.to_string().ends_with("FOR UPDATE"));
+        let entry_sql = entry_statement.to_string();
+        assert!(entry_sql.starts_with("SELECT `tanahpedia_entry`.`id`"));
+        assert!(!entry_sql.contains("content"));
+        assert!(entry_sql.ends_with("FOR UPDATE"));
         assert!(id_statement.to_string().ends_with("FOR UPDATE"));
         assert!(pair_statement.to_string().ends_with("FOR UPDATE"));
     }
