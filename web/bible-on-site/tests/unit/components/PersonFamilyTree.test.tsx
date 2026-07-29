@@ -886,6 +886,126 @@ describe("PersonFamilyTree", () => {
 		}
 	});
 
+	describe("generalized vertical preset on narrow viewports", () => {
+		function mockMatchMedia(matches: boolean) {
+			Object.defineProperty(window, "matchMedia", {
+				configurable: true,
+				writable: true,
+				value: jest.fn().mockReturnValue({
+					matches,
+					media: "(max-width: 767px)",
+					addEventListener: jest.fn(),
+					removeEventListener: jest.fn(),
+				}),
+			});
+		}
+
+		afterEach(() => {
+			delete (window as { matchMedia?: unknown }).matchMedia;
+		});
+
+		const verticalSummary: PersonFamilySummary = {
+			...baseSummary,
+			focalDisplayName: "יעקב",
+			focalSex: "MALE",
+			parents: [
+				{
+					related: related("yitzhak", "יצחק", "entry-yitzhak", "MALE"),
+					parentRole: "FATHER",
+					relationshipType: "BIOLOGICAL",
+					altGroupId: null,
+					sourceCitation: null,
+				},
+			],
+			siblings: [related("esav", "עשו", null, "MALE")],
+			spouses: [
+				spouseEdge({ id: "leah", name: "לאה", unionOrder: 1 }),
+				spouseEdge({ id: "rachel", name: "רחל", unionOrder: 2 }),
+			],
+			children: [
+				childEdge({
+					id: "reuven",
+					name: "ראובן",
+					coParentEntityId: "leah",
+					coParentDisplayName: "לאה",
+					coParentUnionOrder: 1,
+				}),
+				childEdge({
+					id: "yosef",
+					name: "יוסף",
+					coParentEntityId: "rachel",
+					coParentDisplayName: "רחל",
+					coParentUnionOrder: 2,
+				}),
+			],
+		};
+
+		it("stacks all relationships on one vertical axis: parents, focal, siblings, spouses, children", () => {
+			mockMatchMedia(true);
+
+			const { container } = render(
+				<PersonFamilyTree summary={verticalSummary} />,
+			);
+
+			expect(container.querySelector("[data-family-vertical]")).not.toBeNull();
+
+			// Strict vertical order: parent above focal, focal above sibling,
+			// sibling above spouse, and each mother above her own children.
+			const treeText =
+				screen.getByRole("region", { name: /משפחה/ }).textContent ?? "";
+			expect(treeText.indexOf("יצחק")).toBeLessThan(treeText.indexOf("יעקב"));
+			expect(treeText.indexOf("יעקב")).toBeLessThan(treeText.indexOf("עשו"));
+			expect(treeText.indexOf("עשו")).toBeLessThan(treeText.indexOf("לאה"));
+			expect(treeText.indexOf("לאה")).toBeLessThan(treeText.indexOf("ראובן"));
+			expect(treeText.indexOf("רחל")).toBeLessThan(treeText.indexOf("יוסף"));
+
+			// The siblings label sits above the sibling group (not aside).
+			expect(treeText.indexOf("אחים")).toBeLessThan(treeText.indexOf("עשו"));
+			expect(treeText.indexOf("יעקב")).toBeLessThan(treeText.indexOf("אחים"));
+
+			// Matrix spouses render as the mother-grouped vertical stack, never
+			// the wide desktop matrix.
+			expect(container.querySelector("[data-matrix-mobile]")).not.toBeNull();
+			expect(
+				container.querySelectorAll("[data-matrix-spouse-card]"),
+			).toHaveLength(0);
+		});
+
+		it("stacks a spouse-only rail vertically on narrow viewports", () => {
+			mockMatchMedia(true);
+
+			const { container } = render(
+				<PersonFamilyTree
+					summary={{
+						...baseSummary,
+						focalSex: "MALE",
+						spouses: [
+							spouseEdge({ id: "a", name: "אשה א", unionOrder: 1 }),
+							spouseEdge({ id: "b", name: "אשה ב", unionOrder: 2 }),
+							spouseEdge({ id: "c", name: "אשה ג", unionOrder: 3 }),
+						],
+					}}
+				/>,
+			);
+
+			expect(container.querySelector("[data-family-vertical]")).not.toBeNull();
+			expect(
+				container.querySelector('[data-spouse-rail="collapsed"]'),
+			).not.toBeNull();
+			expect(screen.getAllByTestId("family-spouse-card")).toHaveLength(3);
+		});
+
+		it("keeps the desktop layout on wide viewports", () => {
+			mockMatchMedia(false);
+
+			const { container } = render(
+				<PersonFamilyTree summary={verticalSummary} />,
+			);
+
+			expect(container.querySelector("[data-family-vertical]")).toBeNull();
+		});
+	});
+
 	it("groups non-matrix children by co-parent with named and unnamed buckets", () => {
 		const sara = "\u05e9\u05e8\u05d4";
 		const hagar = "\u05d4\u05d2\u05e8";

@@ -105,18 +105,13 @@ test.describe("Tanahpedia person family tree responsive layout", () => {
 
 	// The original 600px media breakpoint only shrank the spouse-only rail at
 	// <=600px, leaving a 601–950px "dead zone" where the full-width desktop rail
-	// overflowed. The content-aware collapse must reflow the rail to a vertical
-	// stack at every width it does not fit — not just below 600px.
-	//
-	// The invariant asserted here is the user-visible one and is independent of
-	// the seeded spouse count / label widths: at every width the spouse-only rail
-	// must never spill or clip horizontally. Two mechanisms cooperate to uphold
-	// it — a CSS media query forces a single column at <=600px, and the JS
-	// content-aware collapse reflows the rail above 600px whenever it would not
-	// fit. Whether the collapse actually engages at a given width depends on the
-	// data, so the collapse mechanism itself is verified deterministically in the
-	// unit tests (shouldCollapseSpouseMatrix + the component's data-spouse-rail
-	// state); here we only assert the width-independent no-overflow guarantee.
+	// overflowed. Small screens (<=767px) now use the generalized vertical preset
+	// (data-family-vertical): parents above, then the focal person, siblings,
+	// spouses and children — all on one vertical axis. Above 767px the
+	// content-aware collapse still reflows the rail whenever it would not fit.
+	// Whether that collapse engages at a given width depends on the data, so the
+	// collapse mechanism itself is verified deterministically in the unit tests;
+	// here we assert the width-independent no-overflow guarantee plus the preset.
 	for (const width of [360, 550, 700, 850]) {
 		test(`renders the Shimshon spouse-only rail without overflow at ${width}px`, async ({
 			page,
@@ -136,12 +131,24 @@ test.describe("Tanahpedia person family tree responsive layout", () => {
 			).toBeLessThanOrEqual(1);
 			expect(await horizontalOverflow(familyRegion)).toBeLessThanOrEqual(1);
 			expect(await worstViewportEscape(familyRegion)).toBeLessThanOrEqual(1);
+
+			if (width <= 767) {
+				// Small screens use the generalized vertical preset with the spouse
+				// stack rendered vertically.
+				await expect(page.locator("[data-family-vertical]")).toBeVisible();
+				await expect(rail).toHaveAttribute("data-spouse-rail", "collapsed");
+			} else {
+				await expect(page.locator("[data-family-vertical]")).toHaveCount(0);
+			}
 		});
 	}
 
 	// A sibling (e.g. עשו next to יעקב) must never be clipped off the viewport on
-	// narrow screens: the focal+sibling row must reflow rather than overflow.
-	for (const width of [320, 360, 414]) {
+	// narrow screens: the vertical preset stacks parents above the focal person,
+	// then siblings below it (label above the group), then spouses and children.
+	// 602/700 cover the 600–767 band where the old sibling grid pushed עשו
+	// off-screen.
+	for (const width of [320, 360, 414, 602, 700]) {
 		test(`keeps every sibling within the viewport at ${width}px`, async ({
 			page,
 		}) => {
@@ -151,6 +158,9 @@ test.describe("Tanahpedia person family tree responsive layout", () => {
 			const familyRegion = page.getByRole("region", { name: "משפחה" });
 			await expect(familyRegion).toBeVisible();
 
+			// Small screens use the generalized vertical preset.
+			await expect(page.locator("[data-family-vertical]")).toBeVisible();
+
 			// עשו is one of Jacob's siblings; it must be rendered fully on-screen.
 			const esav = familyRegion.getByText("עשו", { exact: true });
 			await expect(esav).toBeVisible();
@@ -159,6 +169,18 @@ test.describe("Tanahpedia person family tree responsive layout", () => {
 				return r.left >= -1 && r.right <= window.innerWidth + 1;
 			});
 			expect(esavInView).toBe(true);
+
+			// Vertical order: parents above focal, siblings below focal, spouses
+			// after siblings, each mother above her children.
+			const treeText = (await familyRegion.textContent()) ?? "";
+			expect(treeText.indexOf("יצחק")).toBeLessThan(
+				treeText.indexOf("יעקב"),
+			);
+			expect(treeText.indexOf("יעקב")).toBeLessThan(treeText.indexOf("עשו"));
+			expect(treeText.indexOf("עשו")).toBeLessThan(treeText.indexOf("לאה"));
+			expect(treeText.indexOf("לאה")).toBeLessThan(
+				treeText.indexOf("ראובן"),
+			);
 
 			// No card anywhere in the tree may be clipped off the viewport.
 			expect(await worstViewportEscape(familyRegion)).toBeLessThanOrEqual(1);
