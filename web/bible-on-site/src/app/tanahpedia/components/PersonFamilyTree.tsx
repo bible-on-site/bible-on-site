@@ -667,6 +667,102 @@ function SpouseUnitNodes({
 	});
 }
 
+/** מרווח היסטרזיס (px) שמונע ריצוד קיפול/פרישה סביב סף ההתאמה של המטריצה. */
+export const SPOUSE_MATRIX_COLLAPSE_HYSTERESIS_PX = 24;
+
+/**
+ * רוחב המסך המרבי (px) שבו עץ המשפחה עובר לפריסה האנכית המוכללת: כל הקשרים
+ * על ציר אנכי אחד — הורים למעלה, אחר כך המוקד, אחים, בנות זוג ולבסוף ילדים.
+ */
+export const FAMILY_TREE_VERTICAL_MAX_WIDTH_PX = 767;
+
+/**
+ * החלטה טהורה: האם לקפל את מטריצת בן-הזוג+ילדים לפריסה אנכית (מובייל).
+ * מקפלים כאשר הרוחב הטבעי של המטריצה גדול מהרוחב הזמין במכולה — כלומר המטריצה
+ * הייתה גולשת אופקית. ההחלטה תלויה בהתאמה בפועל ולא ברוחב מסך קבוע, כך שהמעבר
+ * מדויק לכל מספר בנות זוג/ילדים ולכל רוחב מסך. ההיסטרזיס מונע ריצוד סביב הסף.
+ */
+export function shouldCollapseSpouseMatrix({
+	previous,
+	availableWidth,
+	naturalWidth,
+	hysteresisPx = SPOUSE_MATRIX_COLLAPSE_HYSTERESIS_PX,
+}: {
+	previous: boolean;
+	availableWidth: number;
+	naturalWidth: number;
+	hysteresisPx?: number;
+}): boolean {
+	if (naturalWidth <= 0 || availableWidth <= 0) return previous;
+	if (availableWidth < naturalWidth) return true;
+	if (availableWidth >= naturalWidth + hysteresisPx) return false;
+	return previous;
+}
+
+type MobileMatrixColumn = {
+	unit: SpouseUnit;
+	partnerId: string;
+	kids: PersonFamilyChildEdge[];
+};
+
+/**
+ * פריסת מובייל למטריצת בן-זוג+ילדים (יעקב וכד'): במקום מטריצה אופקית עם גלילה
+ * צידית, כל בת זוג מוצגת מעל ילדיה בטור אנכי — כך שהכל נקרא ברוחב טלפון בלי
+ * גלילה אופקית, בדומה למסילת ה-spouse-only של שמשון.
+ */
+function MobileMatrixStack({
+	columns,
+	looseChildren,
+	looseLabel,
+}: {
+	columns: MobileMatrixColumn[];
+	looseChildren: PersonFamilyChildEdge[];
+	looseLabel: string;
+}) {
+	return (
+		<div className={styles.matrixMobileStack} data-matrix-mobile="">
+			{columns.map(({ unit, partnerId, kids }) => (
+				<div
+					key={`m-col-${partnerId}-${unit.altGroupKey ?? "d"}`}
+					className={styles.matrixMobileColumn}
+				>
+					<div className={styles.matrixMobileSpouse}>
+						<SpouseUnitCardBlock unit={unit} />
+					</div>
+					{kids.length > 0 ? (
+						<>
+							<div className={styles.matrixMobileConnector} aria-hidden />
+							<div className={styles.matrixMobileChildren}>
+								{kids.map((edge) => (
+									<ChildCard
+										key={`m-kid-${partnerId}-${edge.related.entityId}-${edge.parentRole}-${edge.relationshipType}`}
+										edge={edge}
+									/>
+								))}
+							</div>
+						</>
+					) : null}
+				</div>
+			))}
+			{looseChildren.length > 0 ? (
+				<div key="m-col-loose" className={styles.matrixMobileColumn}>
+					<div className={styles.matrixMobileLooseLabel}>
+						<span className={styles.familyTreeSectionLabel}>{looseLabel}</span>
+					</div>
+					<div className={styles.matrixMobileChildren}>
+						{looseChildren.map((edge) => (
+							<ChildCard
+								key={`m-loose-${edge.related.entityId}-${edge.parentRole}-${edge.relationshipType}`}
+								edge={edge}
+							/>
+						))}
+					</div>
+				</div>
+			) : null}
+		</div>
+	);
+}
+
 function PersonFamilyTreeContent({
 	summary,
 }: {
@@ -806,11 +902,38 @@ function PersonFamilyTreeContent({
 	// כללי CSS בדיוק, בלי דיברגנציה. spouseChildrenMatrixOuter + matrixSpouseRow.
 	const showSpouseMarriageRow = matrixEligible || orderedSpouseUnits.length > 1;
 
+	// פריסה אנכית מוכללת למסכים צרים: במקום לתקן כל שכבה בנפרד, מתחת לסף אחד
+	// כל העץ עובר לציר אנכי יחיד — הורים, מוקד, אחים, בנות זוג, ילדים — עם
+	// תווית מעל כל קבוצה וקו שדרה אחד. מעל הסף נשמרת פריסת הדסקטופ, ומנגנוני
+	// הקיפול תלויי-התוכן ממשיכים להגן על שכבות רחבות (מטריצה/מסילת בנות זוג).
+	const [isNarrow, setIsNarrow] = useState(false);
+
+	useLayoutEffect(() => {
+		if (
+			typeof window === "undefined" ||
+			typeof window.matchMedia !== "function"
+		) {
+			return;
+		}
+		const mq = window.matchMedia(
+			`(max-width: ${FAMILY_TREE_VERTICAL_MAX_WIDTH_PX}px)`,
+		);
+		const apply = () => setIsNarrow(mq.matches);
+		apply();
+		if (typeof mq.addEventListener !== "function") return;
+		mq.addEventListener("change", apply);
+		return () => mq.removeEventListener("change", apply);
+	}, []);
+
 	const matrixSpouseRowRef = useRef<HTMLDivElement>(null);
 	const [matrixSpouseMidPx, setMatrixSpouseMidPx] = useState(36);
 	const [matrixMarriageLineYpx, setMatrixMarriageLineYpx] = useState(36);
 
 	useLayoutEffect(() => {
+		// בפריסה האנכית שורת הנישואין המדודה לא מרונדרת כלל; המדידה רלוונטית רק
+		// לדסקטופ, וההסתמכות על isNarrow מחברת מחדש את ה-ResizeObserver לאלמנט
+		// החדש כשחוזרים לפריסת הדסקטופ.
+		if (isNarrow) return;
 		const el = matrixSpouseRowRef.current;
 		if (!el || !showSpouseMarriageRow) return;
 		const measure = () => {
@@ -862,7 +985,303 @@ function PersonFamilyTreeContent({
 		const ro = new ResizeObserver(measure);
 		ro.observe(el);
 		return () => ro.disconnect();
-	}, [showSpouseMarriageRow]);
+	}, [showSpouseMarriageRow, isNarrow]);
+
+	const spouseTierRef = useRef<HTMLDivElement>(null);
+	const matrixOuterRef = useRef<HTMLDivElement>(null);
+	const naturalMatrixWidthRef = useRef(0);
+	const [collapseMatrix, setCollapseMatrix] = useState(false);
+
+	// מעבר תלוי-תוכן: מודדים אם מטריצת הדסקטופ נכנסת במכולה; אם היא גולשת אופקית
+	// מקפלים אותה לפריסה אנכית (MobileMatrixStack). את הרוחב הטבעי שומרים רק
+	// ברגע הגלישה האמיתית — לא בכל מדידה — כי עם min-width:100% המדידה במסך רחב
+	// מחזירה את רוחב המכולה עצמה והייתה מנפחת את המטמון לצמיתות (ראצ'ט).
+	useLayoutEffect(() => {
+		if (!matrixEligible || isNarrow) {
+			naturalMatrixWidthRef.current = 0;
+			setCollapseMatrix(false);
+			return;
+		}
+		const tier = spouseTierRef.current;
+		if (!tier) return;
+		const evaluate = () => {
+			setCollapseMatrix((previous) => {
+				if (!previous) {
+					const outer = matrixOuterRef.current;
+					if (!outer) return previous;
+					const next = shouldCollapseSpouseMatrix({
+						previous,
+						availableWidth: tier.clientWidth,
+						naturalWidth: outer.scrollWidth,
+					});
+					if (next) naturalMatrixWidthRef.current = outer.scrollWidth;
+					return next;
+				}
+				return shouldCollapseSpouseMatrix({
+					previous,
+					availableWidth: tier.clientWidth,
+					naturalWidth: naturalMatrixWidthRef.current,
+				});
+			});
+		};
+		evaluate();
+		if (typeof ResizeObserver === "undefined") return;
+		const ro = new ResizeObserver(evaluate);
+		ro.observe(tier);
+		return () => ro.disconnect();
+	}, [matrixEligible, isNarrow]);
+
+	// מסילת בנות-זוג בלבד (שמשון וכד' — בלי ילדים ממופים). אותה לוגיקה תלוית-תוכן
+	// כמו במטריצה: אם המסילה האופקית גולשת מהמכולה מקפלים אותה לטור אנכי. כך זה
+	// מדויק גם בטווח 601–950px שאין לו @media, ולא רק מתחת ל-600.
+	const spouseOnlyRail = !matrixEligible && orderedSpouseUnits.length > 1;
+	const naturalSpouseOnlyWidthRef = useRef(0);
+	const [collapseSpouseOnly, setCollapseSpouseOnly] = useState(false);
+
+	useLayoutEffect(() => {
+		if (!spouseOnlyRail || isNarrow) {
+			naturalSpouseOnlyWidthRef.current = 0;
+			setCollapseSpouseOnly(false);
+			return;
+		}
+		const tier = spouseTierRef.current;
+		if (!tier) return;
+		const evaluate = () => {
+			setCollapseSpouseOnly((previous) => {
+				if (!previous) {
+					const next = shouldCollapseSpouseMatrix({
+						previous,
+						availableWidth: tier.clientWidth,
+						naturalWidth: tier.scrollWidth,
+					});
+					if (next) naturalSpouseOnlyWidthRef.current = tier.scrollWidth;
+					return next;
+				}
+				return shouldCollapseSpouseMatrix({
+					previous,
+					availableWidth: tier.clientWidth,
+					naturalWidth: naturalSpouseOnlyWidthRef.current,
+				});
+			});
+		};
+		evaluate();
+		if (typeof ResizeObserver === "undefined") return;
+		const ro = new ResizeObserver(evaluate);
+		ro.observe(tier);
+		return () => ro.disconnect();
+	}, [spouseOnlyRail, isNarrow]);
+
+	/* פריסת מובייל למטריצה: כל בת זוג + ילדיה בטור, לפי סדר הכרונולוגיה של יעקב
+	 * או לפי עמודות בת-הזוג במטריצה הרגילה. נשמר סדר הילדים כמו בדסקטופ. */
+	const mobileMatrixColumns: MobileMatrixColumn[] = matrixEligible
+		? orderedSpouseUnits.map((unit) => {
+				const partnerId = unit.edges[0].related.entityId;
+				const kids = jacobChildrenSequenceLayout
+					? jacobGlobalChildTimeline.filter(
+							(c) => c.coParentEntityId === partnerId,
+						)
+					: (columnChildren.get(partnerId) ?? []);
+				return { unit, partnerId, kids };
+			})
+		: [];
+
+	const mobileMatrixLooseChildren: PersonFamilyChildEdge[] = matrixEligible
+		? jacobChildrenSequenceLayout
+			? jacobGlobalChildTimeline.filter(
+					(c) =>
+						c.coParentEntityId == null ||
+						!spousePartnerIdsForSeq.has(c.coParentEntityId),
+				)
+			: looseChildren
+		: [];
+
+	const parentsRows =
+		parentKeys.length <= 1 && parentKeys[0] === null ? (
+			<ParentRow parents={sortedParentsGlobal} />
+		) : (
+			parentKeys.map((key) => {
+				const group = parentGroups.get(key) ?? [];
+				const sorted = [...group].sort((a, b) => {
+					const rk =
+						parentRoleSortKey(a.parentRole) - parentRoleSortKey(b.parentRole);
+					if (rk !== 0) return rk;
+					return a.related.displayName.localeCompare(
+						b.related.displayName,
+						"he",
+					);
+				});
+				return (
+					<div key={key ?? "default"} className={styles.altGroupBlock}>
+						{key !== null ? (
+							<div className={styles.altGroupLabel}>
+								<span
+									className={`${styles.familyTreeSectionLabel} ${styles.familyTreeSectionLabelAlt}`}
+								>
+									חלופי
+								</span>
+							</div>
+						) : null}
+						<ParentRow parents={sorted} />
+					</div>
+				);
+			})
+		);
+
+	const focalCardNode = (
+		<div
+			className={styles.cardFocal}
+			data-has-sex-mark={sexMarkDataAttribute(focalSex)}
+		>
+			<PersonSexMark sex={focalSex} />
+			<span className={styles.personUnlinked}>{focalDisplayName}</span>
+		</div>
+	);
+
+	const nonMatrixChildrenBlocks =
+		sortedChildren.length > 0 && !matrixEligible
+			? childKeys.map((key) => {
+					const group = childGroups.get(key) ?? [];
+					const sortedGroup = [...group].sort((a, b) =>
+						a.related.displayName.localeCompare(b.related.displayName, "he"),
+					);
+					const buckets = partitionChildrenByCoParent(
+						sortedGroup,
+						childEdgeCmp,
+					);
+					const showCoSub = shouldShowCoParentSubtitles(buckets);
+					return (
+						<div key={key ?? "default"} className={styles.altGroupBlock}>
+							{key !== null ? (
+								<div className={styles.altGroupLabel}>
+									<span
+										className={`${styles.familyTreeSectionLabel} ${styles.familyTreeSectionLabelAlt}`}
+									>
+										חלופי
+									</span>
+								</div>
+							) : null}
+							{buckets.map((bucket) => (
+								<Fragment key={bucket.key}>
+									{showCoSub ? (
+										<div className={styles.coParentChildLabel}>
+											<span className={styles.familyTreeSectionLabel}>
+												{childGroupByCoParentLabel(
+													bucket.coParentDisplayName,
+													bucket.key !== "__none__",
+												)}
+											</span>
+										</div>
+									) : null}
+									<div className={styles.row}>
+										{bucket.edges.map((edge) => (
+											<ChildCard
+												key={`${edge.related.entityId}-${edge.parentRole}-${edge.relationshipType}-${key ?? "d"}-${bucket.key}`}
+												edge={edge}
+											/>
+										))}
+									</div>
+								</Fragment>
+							))}
+						</div>
+					);
+				})
+			: null;
+
+	// פריסה אנכית מוכללת (מסכים צרים): כל הקשרים על ציר אנכי אחד — הורים למעלה,
+	// אחר כך המוקד, אחים, בנות זוג ולבסוף ילדים. תווית מעל כל קבוצה וקו שדרה
+	// יחיד — בלי קווי עזר אופקיים שמניחים שורה רחבה (ולכן בלי קווים יתומים/כפולים).
+	if (isNarrow) {
+		const siblingSections = [
+			{
+				key: "pre",
+				label: siblingLayout.preLabel,
+				cluster: siblingLayout.preCluster,
+			},
+			{
+				key: "post",
+				label: siblingLayout.postLabel,
+				cluster: siblingLayout.postCluster,
+			},
+		].filter((s) => s.cluster.length > 0);
+		return (
+			<section
+				className={styles.section}
+				aria-labelledby="person-family-heading"
+				data-family-vertical=""
+			>
+				<h2 id="person-family-heading" className={styles.title}>
+					משפחה
+				</h2>
+				<div className={styles.verticalAxis}>
+					{parents.length > 0 ? (
+						<>
+							<div className={styles.verticalTierLabel}>
+								<span className={styles.familyTreeSectionLabel}>הורים</span>
+							</div>
+							<div className={styles.verticalParents}>{parentsRows}</div>
+							<div className={styles.verticalConnector} aria-hidden />
+						</>
+					) : null}
+					<div className={styles.verticalFocal}>{focalCardNode}</div>
+					{siblingSections.map((s) => (
+						<Fragment key={`v-sib-${s.key}`}>
+							<div className={styles.verticalConnector} aria-hidden />
+							{s.label ? (
+								<div className={styles.verticalTierLabel}>
+									<span className={styles.familyTreeSectionLabel}>
+										{s.label}
+									</span>
+								</div>
+							) : null}
+							<div className={styles.verticalSiblingGroup}>
+								{s.cluster.map((rel) => (
+									<SiblingCard key={`v-${rel.entityId}`} related={rel} />
+								))}
+							</div>
+						</Fragment>
+					))}
+					{spouses.length > 0 ? (
+						<>
+							<div className={styles.verticalConnector} aria-hidden />
+							<div className={styles.verticalTierLabel}>
+								<span className={styles.familyTreeSectionLabel}>
+									{spouseSectionLabel}
+								</span>
+							</div>
+							{matrixEligible ? (
+								<MobileMatrixStack
+									columns={mobileMatrixColumns}
+									looseChildren={mobileMatrixLooseChildren}
+									looseLabel="ילדים ללא מיפוי מלא לבת זוג בגרף"
+								/>
+							) : (
+								<div
+									className={styles.verticalSpouseStack}
+									data-spouse-rail="collapsed"
+								>
+									<SpouseUnitNodes
+										units={orderedSpouseUnits}
+										keyPrefix="v-sp"
+									/>
+								</div>
+							)}
+						</>
+					) : null}
+					{nonMatrixChildrenBlocks ? (
+						<>
+							<div className={styles.verticalConnector} aria-hidden />
+							<div className={styles.verticalTierLabel}>
+								<span className={styles.familyTreeSectionLabel}>ילדים</span>
+							</div>
+							<div className={styles.verticalChildren}>
+								{nonMatrixChildrenBlocks}
+							</div>
+						</>
+					) : null}
+				</div>
+			</section>
+		);
+	}
 
 	return (
 		<section className={styles.section} aria-labelledby="person-family-heading">
@@ -872,37 +1291,7 @@ function PersonFamilyTreeContent({
 
 			{parents.length > 0 ? (
 				<>
-					{parentKeys.length <= 1 && parentKeys[0] === null ? (
-						<ParentRow parents={sortedParentsGlobal} />
-					) : (
-						parentKeys.map((key) => {
-							const group = parentGroups.get(key) ?? [];
-							const sorted = [...group].sort((a, b) => {
-								const rk =
-									parentRoleSortKey(a.parentRole) -
-									parentRoleSortKey(b.parentRole);
-								if (rk !== 0) return rk;
-								return a.related.displayName.localeCompare(
-									b.related.displayName,
-									"he",
-								);
-							});
-							return (
-								<div key={key ?? "default"} className={styles.altGroupBlock}>
-									{key !== null ? (
-										<div className={styles.altGroupLabel}>
-											<span
-												className={`${styles.familyTreeSectionLabel} ${styles.familyTreeSectionLabelAlt}`}
-											>
-												חלופי
-											</span>
-										</div>
-									) : null}
-									<ParentRow parents={sorted} />
-								</div>
-							);
-						})
-					)}
+					{parentsRows}
 					<div className={styles.parentConnectorStack} aria-hidden>
 						<div className={styles.parentConnectorDown} />
 					</div>
@@ -940,17 +1329,7 @@ function PersonFamilyTreeContent({
 							{parents.length > 0 || spouses.length > 0 ? (
 								<div className={styles.focalSpineRod} aria-hidden />
 							) : null}
-							<div className={styles.focalWrap}>
-								<div
-									className={styles.cardFocal}
-									data-has-sex-mark={sexMarkDataAttribute(focalSex)}
-								>
-									<PersonSexMark sex={focalSex} />
-									<span className={styles.personUnlinked}>
-										{focalDisplayName}
-									</span>
-								</div>
-							</div>
+							<div className={styles.focalWrap}>{focalCardNode}</div>
 						</div>
 						<div className={styles.siblingGridPost}>
 							{siblingLayout.postLabel ? (
@@ -988,6 +1367,7 @@ function PersonFamilyTreeContent({
 							</div>
 						</div>
 						<div
+							ref={spouseTierRef}
 							className={`${styles.spouseTierFullWidth} ${!matrixEligible && orderedSpouseUnits.length > 1 ? styles.spouseTierSpouseOnly : ""}`}
 							data-spouse-layout={
 								matrixEligible
@@ -998,7 +1378,15 @@ function PersonFamilyTreeContent({
 							}
 						>
 							{matrixEligible ? (
+								collapseMatrix ? (
+									<MobileMatrixStack
+										columns={mobileMatrixColumns}
+										looseChildren={mobileMatrixLooseChildren}
+										looseLabel="ילדים ללא מיפוי מלא לבת זוג בגרף"
+									/>
+								) : (
 								<div
+									ref={matrixOuterRef}
 									className={styles.spouseChildrenMatrixOuter}
 									style={
 										{
@@ -1205,12 +1593,15 @@ function PersonFamilyTreeContent({
 										</div>
 									)}
 								</div>
+								)
 							) : orderedSpouseUnits.length > 1 ? (
 								// כמה בנות זוג ללא ילדים ממופים (למשל שמשון): אותה שורת
 								// נישואין כמו יעקב — קו אנכי מהמוקד יורד עד קו אופקי בגובה
-								// אמצע הכרטיסים, רק בלי שורת הילדים שמתחת.
+								// אמצע הכרטיסים, רק בלי שורת הילדים שמתחת. כשהמסילה גולשת
+								// מהמכולה (601–950px וכו') מקפלים לטור אנכי דרך spouseOnlyCollapsed.
 								<div
-									className={`${styles.spouseChildrenMatrixOuter} ${styles.spouseOnlyMatrix}`}
+									className={`${styles.spouseChildrenMatrixOuter} ${styles.spouseOnlyMatrix}${collapseSpouseOnly ? ` ${styles.spouseOnlyCollapsed}` : ""}`}
+									data-spouse-rail={collapseSpouseOnly ? "collapsed" : "rail"}
 									style={
 										{
 											"--matrix-spouse-mid-px": `${matrixSpouseMidPx}px`,
@@ -1252,58 +1643,13 @@ function PersonFamilyTreeContent({
 				) : null}
 			</div>
 
-			{sortedChildren.length > 0 && !matrixEligible ? (
+			{nonMatrixChildrenBlocks ? (
 				<>
 					<div className={styles.connector} aria-hidden />
 					<div className={styles.tierLabel}>
 						<span className={styles.familyTreeSectionLabel}>ילדים</span>
 					</div>
-					{childKeys.map((key) => {
-						const group = childGroups.get(key) ?? [];
-						const sortedGroup = [...group].sort((a, b) =>
-							a.related.displayName.localeCompare(b.related.displayName, "he"),
-						);
-						const buckets = partitionChildrenByCoParent(
-							sortedGroup,
-							childEdgeCmp,
-						);
-						const showCoSub = shouldShowCoParentSubtitles(buckets);
-						return (
-							<div key={key ?? "default"} className={styles.altGroupBlock}>
-								{key !== null ? (
-									<div className={styles.altGroupLabel}>
-										<span
-											className={`${styles.familyTreeSectionLabel} ${styles.familyTreeSectionLabelAlt}`}
-										>
-											חלופי
-										</span>
-									</div>
-								) : null}
-								{buckets.map((bucket) => (
-									<Fragment key={bucket.key}>
-										{showCoSub ? (
-											<div className={styles.coParentChildLabel}>
-												<span className={styles.familyTreeSectionLabel}>
-													{childGroupByCoParentLabel(
-														bucket.coParentDisplayName,
-														bucket.key !== "__none__",
-													)}
-												</span>
-											</div>
-										) : null}
-										<div className={styles.row}>
-											{bucket.edges.map((edge) => (
-												<ChildCard
-													key={`${edge.related.entityId}-${edge.parentRole}-${edge.relationshipType}-${key ?? "d"}-${bucket.key}`}
-													edge={edge}
-												/>
-											))}
-										</div>
-									</Fragment>
-								))}
-							</div>
-						);
-					})}
+					{nonMatrixChildrenBlocks}
 				</>
 			) : null}
 		</section>

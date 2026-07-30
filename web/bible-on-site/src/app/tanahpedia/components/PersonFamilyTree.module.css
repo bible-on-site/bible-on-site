@@ -614,10 +614,7 @@
 
 .matrixSpouseRow {
   display: grid;
-  grid-template-columns: repeat(
-    var(--matrix-column-count),
-    minmax(128px, 1fr)
-  );
+  grid-template-columns: repeat(var(--matrix-column-count), minmax(128px, 1fr));
   gap: 10px 18px;
   justify-items: stretch;
   align-items: end;
@@ -837,6 +834,40 @@
     padding-inline: 10px;
   }
 
+  /* שורת מוקד±אחים: במסך צר הגריד הקשיח (minmax(0,1fr) auto minmax(0,1fr))
+     שיקף את רוחב עמודת האחים גם בצד הריק, מה שהכפיל את הרוחב והוציא אח (עשו)
+     אל מחוץ למסך. מחליפים לפריסת flex ממורכזת שנכנעת/עוטפת, ומסתירים את קווי
+     הקישור האופקיים שמניחים שורה בודדת. */
+  .siblingFocalRowGrid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .siblingGridPre,
+  .siblingGridFocal,
+  .siblingGridPost {
+    width: auto;
+    max-width: 100%;
+    flex: 0 1 auto;
+  }
+
+  .siblingGridPre,
+  .siblingGridPost {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .siblingClusterInRow {
+    flex-wrap: wrap;
+  }
+
+  .siblingTieStretch,
+  .siblingTieCompact {
+    display: none;
+  }
+
   .parentRow {
     width: 100%;
     gap: 12px;
@@ -895,6 +926,194 @@
     background: #f1f3fb;
     border-radius: 6px;
   }
+}
+
+/* מסילת בנות-זוג בלבד (שמשון וכד') שנמדדה ע"י ה-JS כגולשת מהמכולה: מקפלים
+   לטור אנכי בכל רוחב מסך (כולל טווח 601–950px שאין לו @media), לא רק מתחת ל-600.
+   משכפל את חוקי @media(max-width:600px) של .spouseOnlyMatrix אך מונע ע"י המחלקה. */
+.spouseOnlyCollapsed {
+  width: 100%;
+  min-width: 0;
+}
+
+.spouseOnlyCollapsed .matrixSpouseRow {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.spouseOnlyCollapsed .matrixSpouseRow::after {
+  top: var(--matrix-line-start-y, 0);
+  right: auto;
+  bottom: calc(100% - var(--matrix-line-end-y, calc(100% - 43px)));
+  left: 50%;
+  width: 2px;
+  height: auto;
+  transform: translateX(-50%);
+}
+
+.spouseOnlyCollapsed .personCardStack {
+  max-width: min(240px, 100%);
+}
+
+.spouseOnlyCollapsed .relationRibbon,
+.spouseOnlyCollapsed .relationRibbonCitation,
+.spouseOnlyCollapsed .spouseUnionTimelineRibbon {
+  position: relative;
+  z-index: 2;
+  background: #f1f3fb;
+  border-radius: 6px;
+}
+
+/* פריסה אנכית מוכללת (מסכים צרים): כל הקשרים על ציר אנכי אחד — הורים, מוקד,
+   אחים, בנות זוג, ילדים — תווית מעל כל קבוצה וקו שדרה יחיד. */
+.verticalAxis {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.verticalTierLabel {
+  margin: 0 auto 8px;
+  text-align: center;
+  position: relative;
+  z-index: 2;
+}
+
+.verticalConnector {
+  width: 2px;
+  height: 18px;
+  background: linear-gradient(180deg, #a5b4fc 0%, #c7d2fe 100%);
+  border-radius: 1px;
+  margin: 8px auto;
+  flex-shrink: 0;
+}
+
+.verticalParents {
+  width: 100%;
+}
+
+.verticalFocal {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.verticalSiblingGroup {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.verticalSiblingGroup .personCardStack {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.verticalSiblingGroup .card {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.verticalSpouseStack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+}
+
+.verticalSpouseStack .personCardStack {
+  max-width: min(240px, 100%);
+}
+
+.verticalSpouseStack .relationRibbon,
+.verticalSpouseStack .relationRibbonCitation,
+.verticalSpouseStack .spouseUnionTimelineRibbon {
+  position: relative;
+  z-index: 2;
+  background: #f1f3fb;
+  border-radius: 6px;
+}
+
+.verticalChildren {
+  width: 100%;
+}
+
+/* מטריצת בן-זוג+ילדים (יעקב): כשהמטריצה האופקית לא נכנסת במכולה, ה-JS מחליף
+   אותה בטור אנכי לכל בת זוג + ילדיה (MobileMatrixStack) — בכל רוחב מסך, לא רק
+   מתחת ל-600px. לכן חוקי המקורות/רצועות אינם בתוך @media אלא חלים תמיד. */
+.matrixMobileStack .relationRibbon,
+.matrixMobileStack .relationRibbonCitation,
+.matrixMobileStack .spouseUnionTimelineRibbon {
+  position: relative;
+  z-index: 2;
+  background: #f1f3fb;
+  border-radius: 6px;
+}
+
+.matrixMobileStack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  width: 100%;
+  direction: rtl;
+  padding-top: 4px;
+}
+
+.matrixMobileColumn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 640px;
+  min-width: 0;
+}
+
+.matrixMobileSpouse {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.matrixMobileConnector {
+  width: 2px;
+  height: 18px;
+  background: linear-gradient(180deg, #c7d2fe 0%, #6366f1 60%, #818cf8 100%);
+  border-radius: 1px;
+  margin: 6px 0 4px;
+  flex-shrink: 0;
+}
+
+.matrixMobileChildren {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 8px;
+  width: 100%;
+  justify-items: stretch;
+}
+
+.matrixMobileChildren .personCardStack,
+.matrixMobileChildren [data-testid="family-child-card"] {
+  width: 100%;
+  min-width: 0;
+}
+
+.matrixMobileChildren .card {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding-inline: 8px;
+}
+
+.matrixMobileLooseLabel {
+  margin: 0 0 6px;
+  text-align: center;
 }
 
 /* כותרת שיטה מעל שורת טיב הקשר — מחוץ למשבצת הלבנה */
