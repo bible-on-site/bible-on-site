@@ -2,7 +2,11 @@
  * @jest-environment jsdom
  */
 import { render, screen } from "@testing-library/react";
-import { PersonFamilyTree } from "../../../src/app/tanahpedia/components/PersonFamilyTree";
+import {
+	PersonFamilyTree,
+	SPOUSE_MATRIX_COLLAPSE_HYSTERESIS_PX,
+	shouldCollapseSpouseMatrix,
+} from "../../../src/app/tanahpedia/components/PersonFamilyTree";
 import type {
 	PersonFamilyChildEdge,
 	PersonFamilySpouseEdge,
@@ -685,6 +689,321 @@ describe("PersonFamilyTree", () => {
 		expect(screen.getByText("ראובן")).toBeInTheDocument();
 		expect(screen.getByText("יוסף")).toBeInTheDocument();
 		expect(screen.getByText("ילד נוסף")).toBeInTheDocument();
+	});
+
+	it("collapses the matrix into a vertical mother-grouped stack when it overflows its container", () => {
+		// המעבר תלוי-תוכן: מודדים אם המטריצה (scrollWidth) גולשת מהמכולה
+		// (clientWidth). מדמים גלישה כדי לוודא שנוצר MobileMatrixStack אנכי.
+		Object.defineProperty(HTMLElement.prototype, "scrollWidth", {
+			configurable: true,
+			get: () => 1000,
+		});
+		Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+			configurable: true,
+			get: () => 300,
+		});
+
+		try {
+			const summary: PersonFamilySummary = {
+				...baseSummary,
+				focalDisplayName: "יעקב",
+				focalSex: "MALE",
+				spouses: [
+					spouseEdge({ id: "leah", name: "לאה", unionOrder: 1 }),
+					spouseEdge({ id: "rachel", name: "רחל", unionOrder: 2 }),
+				],
+				children: [
+					childEdge({
+						id: "reuven",
+						name: "ראובן",
+						coParentEntityId: "leah",
+						coParentDisplayName: "לאה",
+						coParentUnionOrder: 1,
+					}),
+					childEdge({
+						id: "yosef",
+						name: "יוסף",
+						coParentEntityId: "rachel",
+						coParentDisplayName: "רחל",
+						coParentUnionOrder: 2,
+					}),
+					childEdge({
+						id: "unknown",
+						name: "ילד נוסף",
+						coParentEntityId: "unknown-mother",
+						coParentDisplayName: "אם אחרת",
+					}),
+				],
+			};
+
+			const { container } = render(<PersonFamilyTree summary={summary} />);
+
+			// The vertical mobile stack is used, not the horizontal desktop matrix.
+			expect(container.querySelector("[data-matrix-mobile]")).not.toBeNull();
+			expect(
+				container.querySelectorAll("[data-matrix-spouse-card]"),
+			).toHaveLength(0);
+
+			// Every spouse and child still renders exactly once (no duplication).
+			expect(screen.getAllByTestId("family-spouse-card")).toHaveLength(2);
+			expect(screen.getAllByTestId("family-child-card")).toHaveLength(3);
+
+			// Each mother is grouped directly above her own child in DOM order.
+			const treeText =
+				screen.getByRole("region", { name: /משפחה/ }).textContent ?? "";
+			expect(treeText.indexOf("לאה")).toBeLessThan(treeText.indexOf("ראובן"));
+			expect(treeText.indexOf("רחל")).toBeLessThan(treeText.indexOf("יוסף"));
+			expect(treeText).toContain("ילד נוסף");
+		} finally {
+			delete (HTMLElement.prototype as { scrollWidth?: number }).scrollWidth;
+			delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+		}
+	});
+
+	it("keeps the horizontal desktop matrix when it fits the container", () => {
+		// כשהמטריצה נכנסת במכולה (scrollWidth <= clientWidth) אין קיפול —
+		// נשמרת מטריצת הדסקטופ עם כרטיסי בנות הזוג האופקיים.
+		Object.defineProperty(HTMLElement.prototype, "scrollWidth", {
+			configurable: true,
+			get: () => 400,
+		});
+		Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+			configurable: true,
+			get: () => 1200,
+		});
+
+		try {
+			const summary: PersonFamilySummary = {
+				...baseSummary,
+				focalDisplayName: "יעקב",
+				focalSex: "MALE",
+				spouses: [
+					spouseEdge({ id: "leah", name: "לאה", unionOrder: 1 }),
+					spouseEdge({ id: "rachel", name: "רחל", unionOrder: 2 }),
+				],
+				children: [
+					childEdge({
+						id: "reuven",
+						name: "ראובן",
+						coParentEntityId: "leah",
+						coParentDisplayName: "לאה",
+						coParentUnionOrder: 1,
+					}),
+					childEdge({
+						id: "yosef",
+						name: "יוסף",
+						coParentEntityId: "rachel",
+						coParentDisplayName: "רחל",
+						coParentUnionOrder: 2,
+					}),
+				],
+			};
+
+			const { container } = render(<PersonFamilyTree summary={summary} />);
+
+			expect(container.querySelector("[data-matrix-mobile]")).toBeNull();
+			expect(
+				container.querySelectorAll("[data-matrix-spouse-card]").length,
+			).toBeGreaterThan(0);
+		} finally {
+			delete (HTMLElement.prototype as { scrollWidth?: number }).scrollWidth;
+			delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+		}
+	});
+
+	it("collapses the spouse-only rail to a vertical stack when it overflows (e.g. Shimshon)", () => {
+		// מסילת בנות-זוג בלבד (בלי ילדים ממופים) — כמו שמשון. כשהיא גולשת מהמכולה
+		// (טווח 601–950px וכו') צריך להתקפל לטור אנכי (data-spouse-rail="collapsed").
+		Object.defineProperty(HTMLElement.prototype, "scrollWidth", {
+			configurable: true,
+			get: () => 900,
+		});
+		Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+			configurable: true,
+			get: () => 300,
+		});
+
+		try {
+			const summary: PersonFamilySummary = {
+				...baseSummary,
+				focalDisplayName: "שמשון",
+				focalSex: "MALE",
+				spouses: [
+					spouseEdge({ id: "meaza", name: "אשת שמשון מעזה", unionOrder: 1 }),
+					spouseEdge({ id: "timna", name: "בת פלשתים מתמנתה", unionOrder: 2 }),
+					spouseEdge({ id: "dlila", name: "דלילה", unionOrder: 3 }),
+				],
+				children: [],
+			};
+
+			const { container } = render(<PersonFamilyTree summary={summary} />);
+
+			expect(
+				container.querySelector('[data-spouse-rail="collapsed"]'),
+			).not.toBeNull();
+			expect(container.querySelector('[data-spouse-rail="rail"]')).toBeNull();
+			// כל בנות הזוג עדיין מוצגות פעם אחת בלבד.
+			expect(screen.getAllByTestId("family-spouse-card")).toHaveLength(3);
+		} finally {
+			delete (HTMLElement.prototype as { scrollWidth?: number }).scrollWidth;
+			delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+		}
+	});
+
+	it("keeps the spouse-only rail horizontal when it fits the container", () => {
+		Object.defineProperty(HTMLElement.prototype, "scrollWidth", {
+			configurable: true,
+			get: () => 400,
+		});
+		Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+			configurable: true,
+			get: () => 1200,
+		});
+
+		try {
+			const summary: PersonFamilySummary = {
+				...baseSummary,
+				focalDisplayName: "שמשון",
+				focalSex: "MALE",
+				spouses: [
+					spouseEdge({ id: "meaza", name: "אשת שמשון מעזה", unionOrder: 1 }),
+					spouseEdge({ id: "timna", name: "בת פלשתים מתמנתה", unionOrder: 2 }),
+				],
+				children: [],
+			};
+
+			const { container } = render(<PersonFamilyTree summary={summary} />);
+
+			expect(
+				container.querySelector('[data-spouse-rail="rail"]'),
+			).not.toBeNull();
+			expect(
+				container.querySelector('[data-spouse-rail="collapsed"]'),
+			).toBeNull();
+		} finally {
+			delete (HTMLElement.prototype as { scrollWidth?: number }).scrollWidth;
+			delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+		}
+	});
+
+	describe("generalized vertical preset on narrow viewports", () => {
+		function mockMatchMedia(matches: boolean) {
+			Object.defineProperty(window, "matchMedia", {
+				configurable: true,
+				writable: true,
+				value: jest.fn().mockReturnValue({
+					matches,
+					media: "(max-width: 767px)",
+					addEventListener: jest.fn(),
+					removeEventListener: jest.fn(),
+				}),
+			});
+		}
+
+		afterEach(() => {
+			delete (window as { matchMedia?: unknown }).matchMedia;
+		});
+
+		const verticalSummary: PersonFamilySummary = {
+			...baseSummary,
+			focalDisplayName: "יעקב",
+			focalSex: "MALE",
+			parents: [
+				{
+					related: related("yitzhak", "יצחק", "entry-yitzhak", "MALE"),
+					parentRole: "FATHER",
+					relationshipType: "BIOLOGICAL",
+					altGroupId: null,
+					sourceCitation: null,
+				},
+			],
+			siblings: [related("esav", "עשו", null, "MALE")],
+			spouses: [
+				spouseEdge({ id: "leah", name: "לאה", unionOrder: 1 }),
+				spouseEdge({ id: "rachel", name: "רחל", unionOrder: 2 }),
+			],
+			children: [
+				childEdge({
+					id: "reuven",
+					name: "ראובן",
+					coParentEntityId: "leah",
+					coParentDisplayName: "לאה",
+					coParentUnionOrder: 1,
+				}),
+				childEdge({
+					id: "yosef",
+					name: "יוסף",
+					coParentEntityId: "rachel",
+					coParentDisplayName: "רחל",
+					coParentUnionOrder: 2,
+				}),
+			],
+		};
+
+		it("stacks all relationships on one vertical axis: parents, focal, siblings, spouses, children", () => {
+			mockMatchMedia(true);
+
+			const { container } = render(
+				<PersonFamilyTree summary={verticalSummary} />,
+			);
+
+			expect(container.querySelector("[data-family-vertical]")).not.toBeNull();
+
+			// Strict vertical order: parent above focal, focal above sibling,
+			// sibling above spouse, and each mother above her own children.
+			const treeText =
+				screen.getByRole("region", { name: /משפחה/ }).textContent ?? "";
+			expect(treeText.indexOf("יצחק")).toBeLessThan(treeText.indexOf("יעקב"));
+			expect(treeText.indexOf("יעקב")).toBeLessThan(treeText.indexOf("עשו"));
+			expect(treeText.indexOf("עשו")).toBeLessThan(treeText.indexOf("לאה"));
+			expect(treeText.indexOf("לאה")).toBeLessThan(treeText.indexOf("ראובן"));
+			expect(treeText.indexOf("רחל")).toBeLessThan(treeText.indexOf("יוסף"));
+
+			// The siblings label sits above the sibling group (not aside).
+			expect(treeText.indexOf("אחים")).toBeLessThan(treeText.indexOf("עשו"));
+			expect(treeText.indexOf("יעקב")).toBeLessThan(treeText.indexOf("אחים"));
+
+			// Matrix spouses render as the mother-grouped vertical stack, never
+			// the wide desktop matrix.
+			expect(container.querySelector("[data-matrix-mobile]")).not.toBeNull();
+			expect(
+				container.querySelectorAll("[data-matrix-spouse-card]"),
+			).toHaveLength(0);
+		});
+
+		it("stacks a spouse-only rail vertically on narrow viewports", () => {
+			mockMatchMedia(true);
+
+			const { container } = render(
+				<PersonFamilyTree
+					summary={{
+						...baseSummary,
+						focalSex: "MALE",
+						spouses: [
+							spouseEdge({ id: "a", name: "אשה א", unionOrder: 1 }),
+							spouseEdge({ id: "b", name: "אשה ב", unionOrder: 2 }),
+							spouseEdge({ id: "c", name: "אשה ג", unionOrder: 3 }),
+						],
+					}}
+				/>,
+			);
+
+			expect(container.querySelector("[data-family-vertical]")).not.toBeNull();
+			expect(
+				container.querySelector('[data-spouse-rail="collapsed"]'),
+			).not.toBeNull();
+			expect(screen.getAllByTestId("family-spouse-card")).toHaveLength(3);
+		});
+
+		it("keeps the desktop layout on wide viewports", () => {
+			mockMatchMedia(false);
+
+			const { container } = render(
+				<PersonFamilyTree summary={verticalSummary} />,
+			);
+
+			expect(container.querySelector("[data-family-vertical]")).toBeNull();
+		});
 	});
 
 	it("groups non-matrix children by co-parent with named and unnamed buckets", () => {
@@ -1461,5 +1780,62 @@ describe("PersonFamilyTree", () => {
 		expect(
 			screen.getAllByText(/\u05d0\u05d9\u05e8\u05d5\u05e1\u05d9\u05df/).length,
 		).toBeGreaterThan(0);
+	});
+});
+
+describe("shouldCollapseSpouseMatrix", () => {
+	it("collapses when the natural width exceeds the available width", () => {
+		expect(
+			shouldCollapseSpouseMatrix({
+				previous: false,
+				availableWidth: 320,
+				naturalWidth: 900,
+			}),
+		).toBe(true);
+	});
+
+	it("expands once available width clears natural width plus hysteresis", () => {
+		expect(
+			shouldCollapseSpouseMatrix({
+				previous: true,
+				availableWidth: 900 + SPOUSE_MATRIX_COLLAPSE_HYSTERESIS_PX,
+				naturalWidth: 900,
+			}),
+		).toBe(false);
+	});
+
+	it("keeps the previous state inside the hysteresis band to avoid flip-flopping", () => {
+		// available is >= natural but < natural + hysteresis: keep whatever it was.
+		expect(
+			shouldCollapseSpouseMatrix({
+				previous: true,
+				availableWidth: 905,
+				naturalWidth: 900,
+			}),
+		).toBe(true);
+		expect(
+			shouldCollapseSpouseMatrix({
+				previous: false,
+				availableWidth: 905,
+				naturalWidth: 900,
+			}),
+		).toBe(false);
+	});
+
+	it("returns the previous state when measurements are not ready yet", () => {
+		expect(
+			shouldCollapseSpouseMatrix({
+				previous: true,
+				availableWidth: 0,
+				naturalWidth: 0,
+			}),
+		).toBe(true);
+		expect(
+			shouldCollapseSpouseMatrix({
+				previous: false,
+				availableWidth: 0,
+				naturalWidth: 900,
+			}),
+		).toBe(false);
 	});
 });
