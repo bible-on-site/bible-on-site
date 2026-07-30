@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.383",
+	"version": "0.2.384",
 	"private": true,
 	"license": "MIT",
 	"browserslist": [
@@ -44,25 +44,25 @@
 		"node": ">=24.11.1 <24.12.0"
 	},
 	"overrides": {
-		"brace-expansion": "5.0.8",
-		"postcss": "8.5.24",
+		"brace-expansion": "5.0.9",
+		"postcss": "8.5.25",
 		"sharp": "0.35.3"
 	},
 	"dependencies": {
-		"@aws-sdk/client-lambda": "3.1097.0",
-		"@hebcal/core": "6.8.2",
+		"@aws-sdk/client-lambda": "3.1099.0",
+		"@hebcal/core": "6.9.1",
 		"@pdf-lib/fontkit": "1.1.1",
 		"autoprefixer": "10.5.4",
 		"flowbite": "4.0.2",
 		"flowbite-react": "0.12.17",
 		"gematry": "1.0.2",
 		"html-flip-book-react": "0.0.0-alpha.36",
-		"isomorphic-dompurify": "3.19.0",
+		"isomorphic-dompurify": "3.20.0",
 		"leaflet": "1.9.4",
 		"moment-timezone": "0.6.3",
 		"mysql2": "3.23.2",
 		"next": "16.2.12",
-		"nuqs": "2.9.2",
+		"nuqs": "2.9.3",
 		"pdf-lib": "1.17.1",
 		"react": "19.2.8",
 		"react-dom": "19.2.8",
@@ -74,7 +74,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "2.5.6",
 		"@playwright/test": "1.61.0",
-		"@swc/core": "1.15.46",
+		"@swc/core": "1.15.47",
 		"@swc/jest": "0.2.39",
 		"@testing-library/dom": "10.4.1",
 		"@testing-library/jest-dom": "7.0.0",
@@ -93,7 +93,7 @@
 		"lighthouse": "13.4.1",
 		"monocart-reporter": "2.12.4",
 		"picomatch": "4.0.5",
-		"postcss": "8.5.24",
+		"postcss": "8.5.25",
 		"sass": "1.102.0",
 		"shx": "0.4.0",
 		"swc-plugin-coverage-instrument": "0.0.32",
