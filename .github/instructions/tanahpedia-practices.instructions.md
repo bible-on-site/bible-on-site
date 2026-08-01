@@ -7,6 +7,43 @@ applyTo: "data/mysql/tanahpedia_*, web/api/src/**/tanahpedia*/**, web/api/src/re
 
 Every Tanahpedia change is exactly one of three kinds. Classify it before starting work, then follow the matching workflow below.
 
+## Tanahpedia Write API
+
+Do not rediscover the write path from the UI or database schema. The canonical contract, GraphQL examples, input fields, lookup values, and readback queries are in `docs/tanahpedia/external-revision-api.md`. The implementation sources of truth are `web/api/src/resolvers/tanahpedia_revisions_resolver.rs`, `web/api/src/resolvers/tanahpedia_family_resolver.rs`, and their DTOs/services.
+
+### Endpoints and authentication
+
+- Local GraphQL endpoint: `http://127.0.0.1:3003/`.
+- Production GraphQL endpoint: `https://api.xn--febl3a.com/`.
+- Start the local API from `web/api` with the project task `cargo make run-api-dev`.
+- Every write and family review query requires `Authorization: Bearer <TANAHPEDIA_REVISION_API_KEY>`. The API fails closed when the server variable is absent, blank, or does not match. For local work, set an ephemeral key in the API process and use the same environment value in the client; never print, commit, or place a production key in a request artifact.
+- On Windows/Git Bash, send non-ASCII GraphQL JSON through stdin with native `curl --data-binary @-`; do not pass Hebrew JSON through argv.
+
+### Mutation surfaces
+
+- Entry title, unique name, and HTML content use the audited two-step revision flow: `submitEntryRevision` creates a `PENDING` revision, then `applyEntryRevision` explicitly applies it. Capture the returned revision `id` and applied `entryId`.
+- Person nodes and family structure use authenticated, idempotent put mutations: `putTanahpediaPersonNode`, `putTanahpediaEntryEntityLink`, `putTanahpediaParentChildLink`, and `putTanahpediaPersonUnion`. These writes are direct structural puts, not entry revision rows.
+- Cleanup uses the corresponding narrow delete mutations documented in the canonical contract. Never substitute Admin server functions, direct SQL, seed scripts, or database clients for content writes.
+- Generate caller-supplied UUIDs once and retain the exact operation payload. Replays must reuse those stable IDs so a local verification rerun or approved production replay updates the same logical rows instead of creating duplicates.
+
+### Local seed = copy of production
+
+- The canonical local Tanahpedia dataset is a **prod copy**: `npx tsx devops/setup-dev-env.mts sync-from-prod` (AWS SSO first) restores production into `tanah-dev` and automatically applies the safe Tanahpedia structure/baseline upgrade. Refresh via re-sync when local data looks stale — never hand-repair local content to match production.
+- The demo family SQL scripts (`tanahpedia_family_*.sql`, `cargo make mysql-apply-tanahpedia-families`) are CI/edge-lab fixtures only. Do not treat them as the local seed and do not re-run them over a prod-synced database — their fixed-UUID delete/re-insert would overwrite API-authored rows sharing those IDs.
+
+### Required local-first sequence
+
+1. Fetch current `master` and inspect the checked-out schema/resolvers; do not assume a mutation present on another branch or worktree is deployed.
+2. Start the local API against a **prod-synced** local Tanahpedia database (see above) with an ephemeral revision API key. Confirm `/health` and make one authenticated read query before any write.
+3. Query first with `tanahpediaFindEntities`, `tanahpediaFindPersons`, `tanahpediaPersonDetails`, `tanahpediaPersonUnions`, and `tanahpediaPersonParentChild`. Exact-name results are candidates; disambiguate shared names by stable IDs and entry associations.
+4. For each new entry, call `submitEntryRevision`, inspect the `PENDING` result, call `applyEntryRevision`, and capture the resulting `entryId`.
+5. Put the person node, then link the applied entry to its entity with `putTanahpediaEntryEntityLink`. The link input uses `entryUniqueName`, not the returned entry UUID.
+6. Put parent-child and union rows only after every referenced person exists. Preserve every optional citation, order, date, end reason, and alternate-group field in the replay payload.
+7. Rerun the same puts to prove idempotency, then reread every writable field and exact relationship count through the authenticated queries.
+8. Verify the rendered local entry and related-node links in the website. A successful mutation or HTTP 200 alone is not sufficient.
+9. Save the exact endpoint-independent GraphQL operations, variables, stable IDs, and local readback results for review. Never save the bearer token.
+10. Stop before production. Only after explicit user approval, replay the same reviewed operations against the production endpoint using the production key from the environment, then repeat API readback and rendered verification on both production domains.
+
 ## 1. Schema change
 
 Adding/renaming/dropping a column, table, or relationship in a `tanahpedia_*` MySQL table.

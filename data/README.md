@@ -150,7 +150,11 @@ cargo make mysql-seed-tanahpedia-baseline
 
 ### Tanahpedia content direction
 
-Tanahpedia SQL files should remain responsible for schema, stable lookup rows, bootstrap seed, and local/demo fixtures. Normal content expansion should move through the admin Tanahpedia edit API, so production content can evolve remotely. For local development against remote content, sync the remote DB into `tanah-dev`, then run the safe structure/baseline upgrade:
+Tanahpedia SQL files should remain responsible for schema, stable lookup rows, bootstrap seed, and CI/edge-lab fixtures. Normal content expansion should move through the admin Tanahpedia edit API, so production content can evolve remotely.
+
+**The canonical local Tanahpedia seed is a copy of production** — run [sync from production](#sync-from-production-optional), which restores the full prod dump into `tanah-dev` and then automatically applies the safe Tanahpedia structure/baseline upgrade (`cargo make mysql-seed-tanahpedia-baseline`). Do not use the demo family scripts (`mysql-apply-tanahpedia-families`, `tanahpedia_family_*.sql`) as the local content seed; they remain fixtures for CI and the family edge lab, and their fixed-UUID delete/re-insert cycle would overwrite API-authored content that shares those IDs.
+
+If you synced by hand (outside `sync-from-prod`), run the safe upgrade yourself:
 
 ```bash
 cargo make mysql-upgrade-tanahpedia-dev
@@ -181,8 +185,9 @@ AWS_PROFILE=AdministratorAccess-250598594267 npx tsx devops/setup-dev-env.mts sy
 3. Temporarily authorizes your public IP on the RDS security group
 4. Runs `mysqldump` from production and restores into local `tanah-dev`
 5. **Migrates article content**: replaces S3 references from `bible-on-site-assets` → `bible-on-site-assets-dev`
-6. Optionally syncs S3 assets from prod to dev bucket
-7. Revokes the security group ingress rule
+6. **Applies the Tanahpedia safe structure + baseline seed** (`cargo make mysql-seed-tanahpedia-baseline`) — creates missing tables, idempotent column upgrades, and lookup rows without touching synced content
+7. Optionally syncs S3 assets from prod to dev bucket
+8. Revokes the security group ingress rule
 
 **S3 bucket naming convention:**
 

@@ -311,22 +311,29 @@ async function runSyncFromProd(): Promise<void> {
 		} else {
 			console.info("Dumping production database...");
 			console.info(`Running: mysqldump ${mysqldumpArgs.join(" ")}`);
-			const dumpResult = spawnSync("mysqldump", mysqldumpArgs, {
-				env: { ...process.env, MYSQL_PWD: prodDb.password },
-				stdio: ["ignore", "pipe", "pipe"],
-				maxBuffer: 100 * 1024 * 1024, // 100MB buffer for large dumps
-			});
+			// Stream stdout straight to the dump file — buffering the whole dump in
+			// memory (maxBuffer) fails with ENOBUFS once the prod DB outgrows it.
+			const dumpFd = fs.openSync(dumpPath, "w");
+			let dumpResult: ReturnType<typeof spawnSync>;
+			try {
+				dumpResult = spawnSync("mysqldump", mysqldumpArgs, {
+					env: { ...process.env, MYSQL_PWD: prodDb.password },
+					stdio: ["ignore", dumpFd, "pipe"],
+				});
+			} finally {
+				fs.closeSync(dumpFd);
+			}
 			if (dumpResult.error) {
 				throw new Error(`mysqldump spawn error: ${dumpResult.error.message}`);
 			}
 			if (dumpResult.status !== 0) {
 				const stderr = dumpResult.stderr?.toString() || "";
-				const stdout = dumpResult.stdout?.toString().slice(0, 500) || "";
 				throw new Error(
-					`mysqldump failed (exit ${dumpResult.status}): stderr=${stderr} stdout_start=${stdout}`,
+					`mysqldump failed (exit ${dumpResult.status}): stderr=${stderr}`,
 				);
 			}
-			fs.writeFileSync(dumpPath, dumpResult.stdout);
+			const dumpSizeMb = fs.statSync(dumpPath).size / 1_048_576;
+			console.info(`  Dump complete (${dumpSizeMb.toFixed(1)} MB)`);
 		}
 
 		if (dryRun) {
@@ -354,23 +361,30 @@ async function runSyncFromProd(): Promise<void> {
 				stdio: "inherit",
 			});
 			console.info("Restoring into dev database...");
-			const restoreResult = spawnSync(
-				"mysql",
-				[
-					"-h",
-					devDb.host,
-					"-P",
-					String(devDb.port),
-					"-u",
-					devDb.user,
-					devDb.database,
-				],
-				{
-					env: { ...process.env, MYSQL_PWD: devDb.password },
-					stdio: ["pipe", "inherit", "inherit"],
-					input: fs.readFileSync(dumpPath),
-				},
-			);
+			// Stream the dump file into mysql stdin — avoids loading the whole
+			// dump into memory (see ENOBUFS note on the dump side).
+			const restoreFd = fs.openSync(dumpPath, "r");
+			let restoreResult: ReturnType<typeof spawnSync>;
+			try {
+				restoreResult = spawnSync(
+					"mysql",
+					[
+						"-h",
+						devDb.host,
+						"-P",
+						String(devDb.port),
+						"-u",
+						devDb.user,
+						devDb.database,
+					],
+					{
+						env: { ...process.env, MYSQL_PWD: devDb.password },
+						stdio: [restoreFd, "inherit", "inherit"],
+					},
+				);
+			} finally {
+				fs.closeSync(restoreFd);
+			}
 			if (restoreResult.status !== 0) throw new Error("mysql restore failed");
 			fs.rmSync(dumpPath, { force: true });
 
@@ -529,6 +543,36 @@ async function runSyncFromProd(): Promise<void> {
 			if (sampleResult.stdout?.trim()) {
 				console.info(`  Sample migrated articles:\n${sampleResult.stdout}`);
 			}
+		}
+
+		// Tanahpedia safe structure + baseline seed on the freshly-synced dev DB.
+		// The prod dump is the canonical Tanahpedia content seed; this step only
+		// creates missing tables, applies idempotent column upgrades, and inserts
+		// lookup/baseline rows — it never drops or replaces synced content.
+		if (dryRun) {
+			console.info(
+				"[dry-run] Would run: cargo make mysql-seed-tanahpedia-baseline (Tanahpedia safe structure + baseline seed on dev DB)",
+			);
+		} else {
+			console.info(
+				"Applying Tanahpedia safe structure + baseline seed on dev DB...",
+			);
+			const tanahpediaUpgradeResult = spawnSync(
+				"cargo",
+				["make", "mysql-seed-tanahpedia-baseline"],
+				{
+					cwd: path.resolve(projectDir, "data"),
+					env: { ...process.env, DB_URL: devDbUrl },
+					stdio: "inherit",
+					shell: isWin,
+				},
+			);
+			if (tanahpediaUpgradeResult.status !== 0) {
+				throw new Error(
+					"Tanahpedia safe structure/baseline seed failed after prod sync",
+				);
+			}
+			console.info("  Tanahpedia safe structure + baseline seed complete");
 		}
 
 		// S3 sync (optional if buckets are set)
