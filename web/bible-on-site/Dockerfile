@@ -1,7 +1,11 @@
 # Note: Using classic docker build (DOCKER_BUILDKIT=0) for network:host support
 # Do not add BuildKit-specific syntax directives
 
-FROM node:24-alpine AS base
+# Node pinned to the held engines range (>=24.11.1 <24.12.0, see renovate.json /
+# issue #985): a floating node:24 tag gave the packaging `npm ci` a newer, stricter
+# npm than PR CI (which resolves node from engines), letting lockfile desyncs merge
+# green and then break master.
+FROM node:24.11.1-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
