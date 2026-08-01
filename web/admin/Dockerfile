@@ -1,8 +1,4 @@
-# Node pinned to the held engines range (>=24.11.1 <24.12.0, see renovate.json /
-# issue #985): a floating node:24 tag gave the packaging `npm ci` a newer, stricter
-# npm than PR CI (which resolves node from engines), letting lockfile desyncs merge
-# green and then break master.
-FROM node:24.11.1-alpine AS base
+FROM node:24-alpine AS base
 
 FROM base AS deps
 WORKDIR /app

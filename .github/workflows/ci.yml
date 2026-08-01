@@ -927,6 +927,15 @@ jobs:
           node --version && npm --version
           npm ci --no-audit
 
+      - name: Verify Lockfile Sync With Packaging npm
+        id: npm_lockfile_packaging_check
+        # The Package Website Docker build runs `npm ci` inside node:24-alpine,
+        # whose bundled npm is newer/stricter than the engines-pinned npm used
+        # above. A lockfile desync the pinned npm tolerates would otherwise only
+        # explode after merge (the packaging jobs are master-only), so validate
+        # here with the exact same image on every run.
+        run: docker run --rm -v "$PWD":/app -w /app node:24-alpine npm ci --dry-run --ignore-scripts --no-audit --no-fund
+
       - name: Install Playwright Browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
@@ -1106,6 +1115,15 @@ jobs:
       - name: Install npm Dependencies
         id: npm_ci
         run: npm ci --no-audit
+
+      - name: Verify Lockfile Sync With Packaging npm
+        id: npm_lockfile_packaging_check
+        # The Package Admin Docker build runs `npm ci` inside node:24-alpine,
+        # whose bundled npm is newer/stricter than the engines-pinned npm used
+        # above. A lockfile desync the pinned npm tolerates would otherwise only
+        # explode after merge (the packaging jobs are master-only), so validate
+        # here with the exact same image on every run.
+        run: docker run --rm -v "$PWD":/app -w /app node:24-alpine npm ci --dry-run --ignore-scripts --no-audit --no-fund
 
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
