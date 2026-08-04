@@ -444,8 +444,64 @@ describe("PersonFamilyTree", () => {
 			],
 		};
 		render(<PersonFamilyTree summary={summary} />);
-		const link = screen.getByRole("link", { name: "בראשית כח" });
-		expect(link.getAttribute("href")).toMatch(/^\/929\/\d+$/);
+		// Parent card and the focal card (own source derived from parent rows) both link it.
+		const links = screen.getAllByRole("link", { name: "בראשית כח" });
+		expect(links.length).toBe(2);
+		for (const link of links) {
+			expect(link.getAttribute("href")).toMatch(/^\/929\/\d+$/);
+		}
+	});
+
+	it("shows the focal person's own source from parent rows inside the focal card", () => {
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			focalDisplayName: "יעקב",
+			parents: [
+				{
+					related: related("p1", "יצחק", `entry-p1`, "MALE"),
+					parentRole: "FATHER",
+					relationshipType: "BIOLOGICAL",
+					altGroupId: null,
+					sourceCitation: "בראשית כה כו",
+				},
+				{
+					related: related("p2", "רבקה", `entry-p2`, "FEMALE"),
+					parentRole: "MOTHER",
+					relationshipType: "BIOLOGICAL",
+					altGroupId: null,
+					sourceCitation: "בראשית כה כו",
+				},
+			],
+		};
+		render(<PersonFamilyTree summary={summary} />);
+		// Deduped: parent cards (2) + focal card (1); identical citation not repeated in focal.
+		expect(screen.getAllByRole("link", { name: "בראשית כה כו" }).length).toBe(
+			3,
+		);
+	});
+
+	it("shows a sibling's source inside the sibling card", () => {
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			siblings: [
+				{
+					...related("sb", "עשו", `entry-sb`, "MALE"),
+					sourceCitation: "בראשית כה כה",
+				},
+			],
+			parents: [
+				{
+					related: related("p1", "יצחק", `entry-p1`, "MALE"),
+					parentRole: "FATHER",
+					relationshipType: "BIOLOGICAL",
+					altGroupId: null,
+					sourceCitation: null,
+				},
+			],
+		};
+		render(<PersonFamilyTree summary={summary} />);
+		const link = screen.getByRole("link", { name: "בראשית כה כה" });
+		expect(link.getAttribute("href")).toMatch(/^\/929\/\d+#pasuk-\d+$/);
 	});
 
 	it("renders alt group labels when altGroupId set on parents", () => {
