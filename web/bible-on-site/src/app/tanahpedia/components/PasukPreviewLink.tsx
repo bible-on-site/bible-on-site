@@ -15,31 +15,40 @@ import styles from "./pasuk-preview-link.module.css";
 interface PasukPreviewData {
 	reference: string;
 	text: string;
+	/** Sanitized perush-note snippet — present only for perush citations. */
+	noteHtml?: string;
 }
 
 const previewCache = new Map<string, PasukPreviewData | null>();
 
-/** Extracts perekId+pasuk from `/929/{id}#pasuk-{n}` or `/929/{id}/{perush}?pasuk={n}`. */
+/** Extracts perekId+pasuk (and perush name for perush pages) from tanach hrefs. */
 export function parsePasukRefFromHref(
 	href: string,
-): { perekId: number; pasuk: number } | null {
-	const anchor = /^\/929\/(\d+)(?:\/[^?#]+)?(?:\?pasuk=(\d+)|#pasuk-(\d+))$/.exec(
+): { perekId: number; pasuk: number; perush?: string } | null {
+	const anchor = /^\/929\/(\d+)(?:\/([^?#]+))?(?:\?pasuk=(\d+)|#pasuk-(\d+))$/.exec(
 		href,
 	);
 	if (!anchor) return null;
-	const pasukRaw = anchor[2] ?? anchor[3];
+	const pasukRaw = anchor[3] ?? anchor[4];
 	if (!pasukRaw) return null;
-	return { perekId: Number(anchor[1]), pasuk: Number(pasukRaw) };
+	const perushSlug = anchor[2];
+	return {
+		perekId: Number(anchor[1]),
+		pasuk: Number(pasukRaw),
+		...(perushSlug ? { perush: decodeURIComponent(perushSlug) } : {}),
+	};
 }
 
 async function fetchPasukPreview(
 	perekId: number,
 	pasuk: number,
+	perush?: string,
 ): Promise<PasukPreviewData | null> {
-	const key = `${perekId}:${pasuk}`;
+	const key = `${perekId}:${pasuk}:${perush ?? ""}`;
 	if (previewCache.has(key)) return previewCache.get(key) ?? null;
 	try {
-		const res = await fetch(`/api/tanah/pasuk/${perekId}/${pasuk}`);
+		const query = perush ? `?perush=${encodeURIComponent(perush)}` : "";
+		const res = await fetch(`/api/tanah/pasuk/${perekId}/${pasuk}${query}`);
 		if (!res.ok) {
 			previewCache.set(key, null);
 			return null;
@@ -81,7 +90,9 @@ export function PasukPreviewLink({
 			}
 			setPosition({ x: e.clientX, y: e.clientY });
 			setVisible(true);
-			fetchPasukPreview(pasukRef.perekId, pasukRef.pasuk).then(setPreview);
+			fetchPasukPreview(pasukRef.perekId, pasukRef.pasuk, pasukRef.perush).then(
+				setPreview,
+			);
 		},
 		[pasukRef],
 	);
@@ -117,6 +128,13 @@ export function PasukPreviewLink({
 							{preview.reference}
 						</div>
 						<div className={styles.pasukTooltipText}>{preview.text}</div>
+						{preview.noteHtml ? (
+							<div
+								className={styles.pasukTooltipNote}
+								// biome-ignore lint/security/noDangerouslySetInnerHtml: server-sanitized preview HTML (toPreviewHtml)
+								dangerouslySetInnerHTML={{ __html: preview.noteHtml }}
+							/>
+						) : null}
 					</div>,
 					document.body,
 				)
