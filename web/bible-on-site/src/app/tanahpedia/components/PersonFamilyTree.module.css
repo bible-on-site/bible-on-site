@@ -1,6 +1,7 @@
 .section {
   margin: 28px 0 32px;
-  padding: 20px 18px 24px;
+  /* left padding +3px offsets the 4px-vs-1px border asymmetry so content centers visually */
+  padding: 20px 18px 24px 21px;
   background: linear-gradient(160deg, #f8fafc 0%, #eef2ff 100%);
   border: 1px solid #c7d2fe;
   border-radius: 14px;
@@ -1051,7 +1052,9 @@
 .matrixMobileStack .spouseUnionTimelineRibbon {
   position: relative;
   z-index: 2;
-  background: #f1f3fb;
+  /* transparent: no line passes behind in the stacked layout, and a solid pill
+     clashes with the section gradient */
+  background: transparent;
   border-radius: 6px;
 }
 

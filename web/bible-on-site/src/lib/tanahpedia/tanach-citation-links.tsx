@@ -1,6 +1,6 @@
 import { toNumber } from "gematry";
-import Link from "next/link";
 import type { ReactNode } from "react";
+import { PasukPreviewLink } from "@/app/tanahpedia/components/PasukPreviewLink";
 import { perushNames } from "@/data/db/perush-names";
 import { sefarim } from "@/data/db/sefarim";
 import type {
@@ -256,13 +256,13 @@ export function renderFamilyTreeCitationLine(
 		);
 	}
 	nodes.push(
-		<Link
+		<PasukPreviewLink
 			key={`perush929-${perushIdx}-${linkEnd}`}
 			href={href}
 			className={linkClassName}
 		>
 			{line.slice(perushIdx, linkEnd)}
-		</Link>,
+		</PasukPreviewLink>,
 	);
 	if (linkEnd < line.length) {
 		nodes.push(
@@ -286,13 +286,13 @@ export function renderCitationWithTanachLinks(
 		const href = tryTanachHref(seferCitation, perekRaw, pasukRaw);
 		if (href) {
 			nodes.push(
-				<Link
+				<PasukPreviewLink
 					key={`tanach-${index}-${full}`}
 					href={href}
 					className={linkClassName}
 				>
 					{full}
-				</Link>,
+				</PasukPreviewLink>,
 			);
 		} else {
 			nodes.push(full);
