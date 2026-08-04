@@ -30,10 +30,10 @@ describe("parsePasukRefFromHref", () => {
 		});
 	});
 
-	it("parses perush query links", () => {
+	it("parses perush query links including the perush name", () => {
 		expect(
 			parsePasukRefFromHref("/929/32/%D7%94%D7%9B%D7%AA%D7%91?pasuk=23"),
-		).toEqual({ perekId: 32, pasuk: 23 });
+		).toEqual({ perekId: 32, pasuk: 23, perush: "הכתב" });
 	});
 
 	it("returns null for perek-only links", () => {
@@ -69,6 +69,32 @@ describe("PasukPreviewLink", () => {
 		await waitFor(() => {
 			expect(screen.getByRole("tooltip")).toHaveTextContent("וַיְהִי בָעֶרֶב");
 		});
+		expect(fetchMock).toHaveBeenCalledWith("/api/tanah/pasuk/29/23");
+	});
+
+	it("requests and renders the perush note for perush citations", async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				reference: 'הכתב והקבלה בראשית לב כ"ג',
+				text: "פסוק",
+				noteHtml: "<p>דברי הפירוש</p>",
+			}),
+		} as Response);
+		render(
+			<PasukPreviewLink href="/929/32/%D7%94%D7%9B%D7%AA%D7%91%20%D7%95%D7%94%D7%A7%D7%91%D7%9C%D7%94?pasuk=23">
+				הכתב והקבלה בראשית לב כג
+			</PasukPreviewLink>,
+		);
+		fireEvent.mouseEnter(
+			screen.getByRole("link", { name: "הכתב והקבלה בראשית לב כג" }),
+		);
+		await waitFor(() => {
+			expect(screen.getByRole("tooltip")).toHaveTextContent("דברי הפירוש");
+		});
+		expect(fetchMock).toHaveBeenCalledWith(
+			`/api/tanah/pasuk/32/23?perush=${encodeURIComponent("הכתב והקבלה")}`,
+		);
 	});
 
 	it("hides the tooltip after mouse leave", async () => {
