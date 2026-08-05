@@ -1,6 +1,7 @@
 .section {
   margin: 28px 0 32px;
-  padding: 20px 18px 24px;
+  /* left padding +3px offsets the 4px-vs-1px border asymmetry so content centers visually */
+  padding: 20px 18px 24px 21px;
   background: linear-gradient(160deg, #f8fafc 0%, #eef2ff 100%);
   border: 1px solid #c7d2fe;
   border-radius: 14px;
@@ -391,7 +392,8 @@
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   align-content: center;
-  column-gap: 10px;
+  /* joint spacing lives in the tie segments so the sibling line stays continuous */
+  column-gap: 0;
   row-gap: 8px;
   width: 100%;
   direction: rtl;
@@ -426,20 +428,21 @@
   align-self: center;
   flex: 1 1 0;
   min-width: 0;
-  max-width: 120px;
+  max-width: 124px;
   height: 2px;
-  margin: 0 2px;
+  margin: 0;
   background: #c7d2fe;
   border-radius: 1px;
 }
 
 .siblingTieCompact {
   align-self: center;
-  flex: 0 0 8px;
-  width: 8px;
-  min-width: 8px;
+  /* 22px = old 8px stub + its 2px margins + the old 10px grid gap */
+  flex: 0 0 22px;
+  width: 22px;
+  min-width: 22px;
   height: 2px;
-  margin: 0 2px;
+  margin: 0;
   background: #c7d2fe;
   border-radius: 1px;
 }
@@ -512,6 +515,23 @@
   min-width: 5.5rem;
   padding: 0 4px;
   align-self: center;
+  position: relative;
+}
+
+/* הקו עובר מאחורי התווית — הפיל האטום מסתיר את המרכז */
+.siblingBridge::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: calc(50% - 1px);
+  height: 2px;
+  background: #c7d2fe;
+  border-radius: 1px;
+}
+
+.siblingBridge > * {
+  position: relative;
+  z-index: 1;
 }
 
 .focalWrap {
@@ -982,10 +1002,11 @@
 
 .verticalConnector {
   width: 2px;
-  height: 18px;
+  /* full 34px span (was 18px + 8px margins) so the line touches its neighbors */
+  height: 34px;
   background: linear-gradient(180deg, #a5b4fc 0%, #c7d2fe 100%);
   border-radius: 1px;
-  margin: 8px auto;
+  margin: 0 auto;
   flex-shrink: 0;
 }
 
@@ -1051,7 +1072,9 @@
 .matrixMobileStack .spouseUnionTimelineRibbon {
   position: relative;
   z-index: 2;
-  background: #f1f3fb;
+  /* transparent: no line passes behind in the stacked layout, and a solid pill
+     clashes with the section gradient */
+  background: transparent;
   border-radius: 6px;
 }
 
@@ -1083,10 +1106,11 @@
 
 .matrixMobileConnector {
   width: 2px;
-  height: 18px;
+  /* full 28px span (was 18px + 6px/4px margins) so the line touches its neighbors */
+  height: 28px;
   background: linear-gradient(180deg, #c7d2fe 0%, #6366f1 60%, #818cf8 100%);
   border-radius: 1px;
-  margin: 6px 0 4px;
+  margin: 0;
   flex-shrink: 0;
 }
 
@@ -1098,10 +1122,15 @@
   justify-items: stretch;
 }
 
+/* Cards are width-capped (max-width) inside stretched grid items; without
+   self-centering they anchor to inline-start (right in RTL) and the whole
+   children cluster drifts off the column's connector line. */
 .matrixMobileChildren .personCardStack,
 .matrixMobileChildren [data-testid="family-child-card"] {
   width: 100%;
   min-width: 0;
+  max-width: 280px;
+  margin-inline: auto;
 }
 
 .matrixMobileChildren .card {
@@ -1109,6 +1138,7 @@
   width: 100%;
   min-width: 0;
   padding-inline: 8px;
+  margin-inline: auto;
 }
 
 .matrixMobileLooseLabel {

@@ -1,8 +1,15 @@
 {
 	"editor.formatOnSave": true,
 	"files.exclude": {
+		"data/.s3-sync-temp": true,
 		"**/test-results": true,
-		"**/.venv": true
+		"**/.venv": true,
+		"**/node_modules": true,
+		"app/.artifacts": true,
+		"app/.nuke": true,
+		"app/**/obj": true,
+		"app/**/bin": true,
+		"**/__pycache__": true
 	},
 	"search.exclude": {
 		"**/*.tanah_view.json": true,

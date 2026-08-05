@@ -444,8 +444,96 @@ describe("PersonFamilyTree", () => {
 			],
 		};
 		render(<PersonFamilyTree summary={summary} />);
-		const link = screen.getByRole("link", { name: "בראשית כח" });
-		expect(link.getAttribute("href")).toMatch(/^\/929\/\d+$/);
+		// Parent card and the focal card (own source derived from parent rows) both link it.
+		const links = screen.getAllByRole("link", { name: "בראשית כח" });
+		expect(links.length).toBe(2);
+		for (const link of links) {
+			expect(link.getAttribute("href")).toMatch(/^\/929\/\d+$/);
+		}
+	});
+
+	it("shows the focal person's own source from parent rows inside the focal card", () => {
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			focalDisplayName: "יעקב",
+			parents: [
+				{
+					related: related("p1", "יצחק", `entry-p1`, "MALE"),
+					parentRole: "FATHER",
+					relationshipType: "BIOLOGICAL",
+					altGroupId: null,
+					sourceCitation: "בראשית כה כו",
+				},
+				{
+					related: related("p2", "רבקה", `entry-p2`, "FEMALE"),
+					parentRole: "MOTHER",
+					relationshipType: "BIOLOGICAL",
+					altGroupId: null,
+					sourceCitation: "בראשית כה כו",
+				},
+			],
+		};
+		render(<PersonFamilyTree summary={summary} />);
+		// Deduped: parent cards (2) + focal card (1); identical citation not repeated in focal.
+		expect(screen.getAllByRole("link", { name: "בראשית כה כו" }).length).toBe(
+			3,
+		);
+	});
+
+	it("shows a sibling's source inside the sibling card", () => {
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			siblings: [
+				{
+					...related("sb", "עשו", `entry-sb`, "MALE"),
+					sourceCitation: "בראשית כה כה",
+				},
+			],
+			parents: [
+				{
+					related: related("p1", "יצחק", `entry-p1`, "MALE"),
+					parentRole: "FATHER",
+					relationshipType: "BIOLOGICAL",
+					altGroupId: null,
+					sourceCitation: null,
+				},
+			],
+		};
+		render(<PersonFamilyTree summary={summary} />);
+		const link = screen.getByRole("link", { name: "בראשית כה כה" });
+		expect(link.getAttribute("href")).toMatch(/^\/929\/\d+#pasuk-\d+$/);
+	});
+
+	it("sorts spouse alt groups by key and renders every disputed candidate", () => {
+		const disputed = (id: string, name: string, altGroupId: string) => ({
+			related: related(id, name, `entry-${id}`, "FEMALE"),
+			unionType: "MARRIAGE",
+			unionOrder: null,
+			altGroupId,
+			sourceCitation: null,
+			personSourceCitation: null,
+			unionEndReason: null,
+			unionStartDate: null,
+			unionEndDate: null,
+		});
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			focalSex: "MALE",
+			spouses: [
+				disputed("s-g2a", "אשה ג", "g2"),
+				disputed("s-g2b", "אשה ד", "g2"),
+				disputed("s-g1a", "אשה א", "g1"),
+				disputed("s-g1b", "אשה ב", "g1"),
+			],
+		};
+		render(<PersonFamilyTree summary={summary} />);
+		for (const name of ["אשה א", "אשה ב", "אשה ג", "אשה ד"]) {
+			expect(screen.getByText(name)).toBeInTheDocument();
+		}
+		// Groups are ordered by alt-group key: g1 members render before g2 members.
+		const treeText =
+			screen.getByRole("region", { name: /משפחה/ }).textContent ?? "";
+		expect(treeText.indexOf("אשה א")).toBeLessThan(treeText.indexOf("אשה ג"));
 	});
 
 	it("renders alt group labels when altGroupId set on parents", () => {

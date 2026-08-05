@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.387",
+	"version": "0.2.388",
 	"private": true,
 	"license": "MIT",
 	"browserslist": [
@@ -32,6 +32,7 @@
 		"test:perf": "echo 'NOTE: Perf tests require npm run build first (uses production server)' && dotenv -e .test.env -- playwright test --config=playwright.perf.config.ts",
 		"coverage:all": "npm run coverage:unit && npm run coverage:e2e && npm run coverage:merge",
 		"coverage:unit": "cross-env MEASURE_COV=1 node --no-deprecation --import tsx ./node_modules/jest/bin/jest.js",
+		"coverage:gaps": "node scripts/coverage-gaps.mjs",
 		"coverage:e2e": "dotenv -e .test.env -- cross-env MEASURE_COV=1 playwright test --config=playwright.e2e.config.ts --project=Desktop",
 		"coverage:merge": "node --import tsx ./tests/util/coverage/merge-coverage.mts",
 		"package": "cross-env-shell \"docker build -t bible-on-site:${npm_package_version} .\"",
