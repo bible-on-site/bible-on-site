@@ -61,6 +61,15 @@ applyTo: "**"
 
 ## Branch Management
 
+### Branches by Default — Never Clone
+
+**Work on branches inside the existing workspace by default.**
+
+- **NEVER create a clone** of the repository (`git clone`) to do work. Reuse the current workspace checkout.
+- Prefer creating a **branch** for each feature/fix and switching to it in place.
+- Use **git worktrees ONLY when the user explicitly asks for them** (e.g. "use a worktree" / "wt"). Do not spin up worktrees on your own initiative.
+- Clean up worktrees you were explicitly asked to create once their branch is merged (`git worktree remove <path>` + `git worktree prune`).
+
 Before pushing, check if the branch already exists on remote (may be merged/deleted):
 
 ```bash
