@@ -57,7 +57,7 @@ import type { ReactElement } from "react";
 import EntryPage, {
 	generateMetadata,
 	generateStaticParams,
-} from "../../../src/app/tanahpedia/entry/[uniqueName]/page";
+} from "../../../src/app/pedia/[uniqueName]/page";
 
 const mockGetAllEntryUniqueNames = getAllEntryUniqueNames as jest.MockedFunction<
 	typeof getAllEntryUniqueNames
@@ -75,7 +75,7 @@ const mockGetPlaceMapMarkersForEntry =
 		typeof getPlaceMapMarkersForEntry
 	>;
 
-describe("tanahpedia/entry/[uniqueName] page", () => {
+describe("pedia/[uniqueName] page", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 	});

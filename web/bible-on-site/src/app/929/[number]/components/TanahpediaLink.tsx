@@ -110,7 +110,7 @@ export function TanahpediaLink({
 	return (
 		<>
 			<Link
-				href={`/tanahpedia/entry/${encodeURIComponent(entryUniqueName)}`}
+				href={`/pedia/${encodeURIComponent(entryUniqueName)}`}
 				className={className}
 				onMouseEnter={showPreview}
 				onMouseLeave={hidePreview}

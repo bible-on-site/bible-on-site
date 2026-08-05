@@ -56,7 +56,7 @@ export default function PlacesMapClient({ markers }: { markers: PlaceMapMarker[]
 					? ` <span dir="ltr">(${escapeHtml(m.modernName)})</span>`
 					: "";
 				const url = m.entryUniqueName
-					? `/tanahpedia/entry/${encodeURIComponent(m.entryUniqueName)}`
+					? `/pedia/${encodeURIComponent(m.entryUniqueName)}`
 					: null;
 				const inner = url
 					? `<a href="${escapeHtml(url)}">${primary}</a>${secondary}`

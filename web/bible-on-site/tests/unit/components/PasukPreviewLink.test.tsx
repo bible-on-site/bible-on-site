@@ -41,7 +41,7 @@ describe("parsePasukRefFromHref", () => {
 	});
 
 	it("returns null for non-tanach links", () => {
-		expect(parsePasukRefFromHref("/tanahpedia/entry/x")).toBeNull();
+		expect(parsePasukRefFromHref("/pedia/x")).toBeNull();
 	});
 });
 

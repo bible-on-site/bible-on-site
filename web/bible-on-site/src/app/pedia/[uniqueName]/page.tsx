@@ -12,10 +12,10 @@ import {
 	getPlaceMapMarkersForEntry,
 } from "@/lib/tanahpedia/service";
 import type { EntityType, CategoryKey } from "@/lib/tanahpedia/types";
-import { PersonFamilyTree } from "../../components/PersonFamilyTree";
-import { TanahpediaPlacesMap } from "../../components/TanahpediaPlacesMap";
-import { TanahpediaBreadcrumb } from "../../components/TanahpediaBreadcrumb";
-import styles from "../../page.module.css";
+import { PersonFamilyTree } from "@/app/tanahpedia/components/PersonFamilyTree";
+import { TanahpediaPlacesMap } from "@/app/tanahpedia/components/TanahpediaPlacesMap";
+import { TanahpediaBreadcrumb } from "@/app/tanahpedia/components/TanahpediaBreadcrumb";
+import styles from "@/app/tanahpedia/page.module.css";
 
 export const dynamic = "force-dynamic";
 

@@ -19,7 +19,7 @@ export function EntityListItem({ entity }: { entity: EntityWithEntries }) {
 		return (
 			<li className={styles.entityItem}>
 				<Link
-					href={`/tanahpedia/entry/${encodeURIComponent(entry.uniqueName)}`}
+					href={`/pedia/${encodeURIComponent(entry.uniqueName)}`}
 					className={styles.entityEntryLink}
 				>
 					{entityName}
@@ -37,7 +37,7 @@ export function EntityListItem({ entity }: { entity: EntityWithEntries }) {
 					<span key={entry.id}>
 						{i > 0 && ", "}
 						<Link
-							href={`/tanahpedia/entry/${encodeURIComponent(entry.uniqueName)}`}
+							href={`/pedia/${encodeURIComponent(entry.uniqueName)}`}
 							className={styles.entityEntryLink}
 						>
 							{entry.title}

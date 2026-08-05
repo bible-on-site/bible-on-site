@@ -4,6 +4,7 @@ import type { ArticlePerekPair } from "../lib/articles";
 import { getAllArticlePerekIdPairs } from "../lib/articles";
 import { getAllAuthorSlugs } from "../lib/authors";
 import { getPerushimByPerekId } from "../lib/perushim";
+import { getAllEntryUniqueNames } from "../lib/tanahpedia/service";
 
 /**
  * Static section paths for the sitemap
@@ -151,6 +152,22 @@ export function generatePerushEntries(
 }
 
 /**
+ * Generates Tanahpedia entry (pedia) URL entries for the sitemap.
+ * Entries live at the short `/pedia/<uniqueName>` route.
+ */
+export function generatePediaEntries(
+	config: SitemapConfig,
+	entryUniqueNames: string[],
+): MetadataRoute.Sitemap {
+	return entryUniqueNames.map((uniqueName) => ({
+		url: `${config.baseUrl}/pedia/${encodeURIComponent(uniqueName)}`,
+		lastModified: config.lastModified,
+		changeFrequency: "monthly" as const,
+		priority: 0.7,
+	}));
+}
+
+/**
  * Generates the complete sitemap entries (pure function for testing)
  */
 export function generateSitemapEntries(
@@ -158,6 +175,7 @@ export function generateSitemapEntries(
 	authorSlugs: string[] = [],
 	articles: ArticlePerekPair[] = [],
 	perushim: PerushPerekPair[] = [],
+	pediaUniqueNames: string[] = [],
 ): MetadataRoute.Sitemap {
 	return [
 		generateRootEntry(config),
@@ -168,6 +186,7 @@ export function generateSitemapEntries(
 		...generatePerushEntries(config, perushim),
 		generateAuthorsIndexEntry(config),
 		...generateAuthorEntries(config, authorSlugs),
+		...generatePediaEntries(config, pediaUniqueNames),
 	];
 }
 
@@ -178,9 +197,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 	const baseUrl = `https://${host}`;
 
 	// Fetch dynamic data for sitemap entries in parallel
-	const [authorSlugs, articles] = await Promise.all([
+	const [authorSlugs, articles, pediaUniqueNames] = await Promise.all([
 		getAllAuthorSlugs(),
 		getAllArticlePerekIdPairs(),
+		getAllEntryUniqueNames(),
 	]);
 
 	// Fetch all perushim for all perakim
@@ -206,5 +226,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 		authorSlugs,
 		articles,
 		perushPerekPairs,
+		pediaUniqueNames,
 	);
 }
