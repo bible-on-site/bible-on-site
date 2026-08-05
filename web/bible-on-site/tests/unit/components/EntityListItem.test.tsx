@@ -53,7 +53,7 @@ describe("EntityListItem", () => {
 		const link = screen.getByRole("link", { name: "Single entry person" });
 		expect(link).toHaveAttribute(
 			"href",
-			"/tanahpedia/entry/person%20one",
+			"/pedia/person%20one",
 		);
 	});
 
@@ -78,11 +78,11 @@ describe("EntityListItem", () => {
 		expect(screen.getByText("Shared entity")).toBeInTheDocument();
 		expect(screen.getByRole("link", { name: "First Entry" })).toHaveAttribute(
 			"href",
-			"/tanahpedia/entry/first",
+			"/pedia/first",
 		);
 		expect(screen.getByRole("link", { name: "Second Entry" })).toHaveAttribute(
 			"href",
-			"/tanahpedia/entry/second%20entry",
+			"/pedia/second%20entry",
 		);
 	});
 });

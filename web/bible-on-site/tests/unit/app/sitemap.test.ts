@@ -3,6 +3,7 @@ import {
 	generateArticleEntries,
 	generateAuthorEntries,
 	generateAuthorsIndexEntry,
+	generatePediaEntries,
 	generatePerekEntries,
 	generateRootEntry,
 	generateSectionEntries,
@@ -227,6 +228,43 @@ describe("sitemap", () => {
 		});
 	});
 
+	describe("generatePediaEntries", () => {
+		it("returns pedia entries for provided unique names", () => {
+			const uniqueNames = ["יעקב", "שמשון"];
+			const result = generatePediaEntries(mockConfig, uniqueNames);
+
+			expect(result).toHaveLength(2);
+			expect(result[0].url).toBe(
+				`https://example.com/pedia/${encodeURIComponent("יעקב")}`,
+			);
+			expect(result[1].url).toBe(
+				`https://example.com/pedia/${encodeURIComponent("שמשון")}`,
+			);
+		});
+
+		it("returns empty array when no unique names provided", () => {
+			const result = generatePediaEntries(mockConfig, []);
+
+			expect(result).toHaveLength(0);
+		});
+
+		it("sets monthly change frequency for pedia entries", () => {
+			const result = generatePediaEntries(mockConfig, ["יעקב"]);
+
+			result.forEach((entry) => {
+				expect(entry.changeFrequency).toBe("monthly");
+			});
+		});
+
+		it("sets priority 0.7 for pedia entries", () => {
+			const result = generatePediaEntries(mockConfig, ["יעקב"]);
+
+			result.forEach((entry) => {
+				expect(entry.priority).toBe(0.7);
+			});
+		});
+	});
+
 	describe("generateSitemapEntries", () => {
 		it("returns all entries combined", () => {
 			const result = generateSitemapEntries(mockConfig);
@@ -347,6 +385,33 @@ describe("sitemap", () => {
 			expect(urls).toContain(
 				`https://example.com/929/authors/${encodeURIComponent("הרב ב")}`,
 			);
+		});
+
+		it("appends pedia entries after author entries", () => {
+			const slugs = ["הרב א"];
+			const pediaNames = ["יעקב", "שמשון"];
+			const result = generateSitemapEntries(
+				mockConfig,
+				slugs,
+				[],
+				[],
+				pediaNames,
+			);
+
+			// The last two entries are pedia URLs, in order
+			expect(result[result.length - 2].url).toBe(
+				`https://example.com/pedia/${encodeURIComponent("יעקב")}`,
+			);
+			expect(result[result.length - 1].url).toBe(
+				`https://example.com/pedia/${encodeURIComponent("שמשון")}`,
+			);
+		});
+
+		it("omits pedia entries when no unique names provided", () => {
+			const result = generateSitemapEntries(mockConfig);
+
+			const urls = result.map((e) => e.url);
+			expect(urls.some((url) => url.includes("/pedia/"))).toBe(false);
 		});
 	});
 

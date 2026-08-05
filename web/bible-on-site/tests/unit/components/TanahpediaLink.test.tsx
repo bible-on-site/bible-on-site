@@ -72,7 +72,7 @@ describe("TanahpediaLink", () => {
 		const link = screen.getByRole("link", { name: linkLabel });
 		expect(link).toHaveAttribute(
 			"href",
-			"/tanahpedia/entry/moshe%20rabbeinu",
+			"/pedia/moshe%20rabbeinu",
 		);
 		expect(link).toHaveClass("entity-link");
 

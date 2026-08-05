@@ -21,8 +21,8 @@ import { expect, test } from "../util/playwright/test-fixture";
  * so these routes are always populated in CI and locally.
  */
 
-const JACOB_URL = `/tanahpedia/entry/${encodeURIComponent("יעקב")}`;
-const SHIMSHON_URL = `/tanahpedia/entry/${encodeURIComponent("שמשון")}`;
+const JACOB_URL = `/pedia/${encodeURIComponent("יעקב")}`;
+const SHIMSHON_URL = `/pedia/${encodeURIComponent("שמשון")}`;
 
 /** Horizontal overflow of an element in CSS pixels (0 = no horizontal scroll). */
 async function horizontalOverflow(locator: Locator): Promise<number> {

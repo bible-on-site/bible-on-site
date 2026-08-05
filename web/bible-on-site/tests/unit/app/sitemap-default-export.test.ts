@@ -21,11 +21,16 @@ jest.mock("@/lib/perushim", () => ({
 	getPerushimByPerekId: jest.fn(),
 }));
 
+jest.mock("@/lib/tanahpedia/service", () => ({
+	getAllEntryUniqueNames: jest.fn(),
+}));
+
 import { headers } from "next/headers";
 import sitemapFn, { SITEMAP_SECTIONS, TOTAL_PERAKIM } from "@/app/sitemap";
 import { getAllArticlePerekIdPairs } from "@/lib/articles";
 import { getAllAuthorSlugs } from "@/lib/authors";
 import { getPerushimByPerekId } from "@/lib/perushim";
+import { getAllEntryUniqueNames } from "@/lib/tanahpedia/service";
 
 describe("sitemap default export", () => {
 	beforeEach(() => {
@@ -42,13 +47,14 @@ describe("sitemap default export", () => {
 		]);
 		// Return empty perushim for all 929 perakim
 		(getPerushimByPerekId as jest.Mock).mockResolvedValue([]);
+		(getAllEntryUniqueNames as jest.Mock).mockResolvedValue(["יעקב"]);
 
 		const result = await sitemapFn();
 
 		const urls = result.map((e) => e.url);
-		// root + sections + 929 index + 929 perakim + 1 article + 0 perushim + authors index + 2 authors
+		// root + sections + 929 index + 929 perakim + 1 article + 0 perushim + authors index + 2 authors + 1 pedia
 		const expectedLength =
-			1 + SITEMAP_SECTIONS.length + 1 + TOTAL_PERAKIM + 1 + 1 + 2;
+			1 + SITEMAP_SECTIONS.length + 1 + TOTAL_PERAKIM + 1 + 1 + 2 + 1;
 		expect(result).toHaveLength(expectedLength);
 
 		expect(urls[0]).toBe("https://example.com");
@@ -60,6 +66,9 @@ describe("sitemap default export", () => {
 		expect(urls).toContain(
 			`https://example.com/929/authors/${encodeURIComponent("הרב ב")}`,
 		);
+		expect(urls).toContain(
+			`https://example.com/pedia/${encodeURIComponent("יעקב")}`,
+		);
 	});
 
 	it("falls back to xn--febl3a.co.il when host header is absent", async () => {
@@ -69,6 +78,7 @@ describe("sitemap default export", () => {
 		(getAllAuthorSlugs as jest.Mock).mockResolvedValue([]);
 		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([]);
 		(getPerushimByPerekId as jest.Mock).mockResolvedValue([]);
+		(getAllEntryUniqueNames as jest.Mock).mockResolvedValue([]);
 
 		const result = await sitemapFn();
 
@@ -82,11 +92,13 @@ describe("sitemap default export", () => {
 		(getAllAuthorSlugs as jest.Mock).mockResolvedValue([]);
 		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([]);
 		(getPerushimByPerekId as jest.Mock).mockResolvedValue([]);
+		(getAllEntryUniqueNames as jest.Mock).mockResolvedValue([]);
 
 		await sitemapFn();
 
 		expect(getAllAuthorSlugs).toHaveBeenCalledTimes(1);
 		expect(getAllArticlePerekIdPairs).toHaveBeenCalledTimes(1);
+		expect(getAllEntryUniqueNames).toHaveBeenCalledTimes(1);
 	});
 
 	it("includes perushim URLs in sitemap", async () => {
@@ -95,6 +107,7 @@ describe("sitemap default export", () => {
 		});
 		(getAllAuthorSlugs as jest.Mock).mockResolvedValue([]);
 		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([]);
+		(getAllEntryUniqueNames as jest.Mock).mockResolvedValue([]);
 		// Return a perush only for perek 1, empty for rest
 		(getPerushimByPerekId as jest.Mock).mockImplementation((perekId: number) =>
 			perekId === 1
@@ -113,6 +126,30 @@ describe("sitemap default export", () => {
 		// root + sections + 929 index + 929 perakim + 0 articles + 1 perush + authors index + 0 authors
 		const expectedLength =
 			1 + SITEMAP_SECTIONS.length + 1 + TOTAL_PERAKIM + 0 + 1 + 1 + 0;
+		expect(result).toHaveLength(expectedLength);
+	});
+
+	it("includes pedia entry URLs in sitemap", async () => {
+		(headers as jest.Mock).mockResolvedValue({
+			get: (name: string) => (name === "host" ? "example.com" : null),
+		});
+		(getAllAuthorSlugs as jest.Mock).mockResolvedValue([]);
+		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([]);
+		(getPerushimByPerekId as jest.Mock).mockResolvedValue([]);
+		(getAllEntryUniqueNames as jest.Mock).mockResolvedValue(["יעקב", "שמשון"]);
+
+		const result = await sitemapFn();
+
+		const urls = result.map((e) => e.url);
+		expect(urls).toContain(
+			`https://example.com/pedia/${encodeURIComponent("יעקב")}`,
+		);
+		expect(urls).toContain(
+			`https://example.com/pedia/${encodeURIComponent("שמשון")}`,
+		);
+		// root + sections + 929 index + 929 perakim + 0 articles + 0 perushim + authors index + 0 authors + 2 pedias
+		const expectedLength =
+			1 + SITEMAP_SECTIONS.length + 1 + TOTAL_PERAKIM + 0 + 0 + 1 + 0 + 2;
 		expect(result).toHaveLength(expectedLength);
 	});
 });

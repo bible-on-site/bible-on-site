@@ -104,6 +104,12 @@ const nextConfig = {
 				destination: "/929/authors/:authorParam*",
 				permanent: true,
 			},
+			// Legacy /tanahpedia/entry/:uniqueName → /pedia/:uniqueName permanent redirect
+			{
+				source: "/tanahpedia/entry/:uniqueName",
+				destination: "/pedia/:uniqueName",
+				permanent: true,
+			},
 		];
 	},
 };

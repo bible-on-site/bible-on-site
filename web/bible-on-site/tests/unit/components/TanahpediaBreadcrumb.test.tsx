@@ -103,7 +103,7 @@ describe("TanahpediaBreadcrumb", () => {
 		expect(currentEntry).toHaveAttribute("aria-current", "page");
 		expect(screen.getByRole("link", { name: "Yehoshua" })).toHaveAttribute(
 			"href",
-			"/tanahpedia/entry/yehoshua%20bin%20nun",
+			"/pedia/yehoshua%20bin%20nun",
 		);
 	});
 

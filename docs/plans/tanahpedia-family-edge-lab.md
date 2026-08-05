@@ -35,7 +35,7 @@ node data/mysql/scripts/generate-tanahpedia-edge-lab.mjs
 
 ## טבלת תרחישים (38 ערכי מוקד)
 
-| # | `unique_name` (נתיב `/tanahpedia/entry/…`) | מה נבדק | איך זה נראה ב-UI |
+| # | `unique_name` (נתיב `/pedia/…`) | מה נבדק | איך זה נראה ב-UI |
 |---|-------------------------------------------|---------|-------------------|
 | 01 | `tanahpedia-lab-01-two-bio-parents` | אב + אם ביולוגיים | שורת הורים, שני כרטיסים |
 | 02 | `tanahpedia-lab-02-father-only` | אב בלבד | כרטיס אב בלבד |

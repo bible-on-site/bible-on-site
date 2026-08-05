@@ -298,7 +298,7 @@ function PersonNameLink({ related }: { related: PersonFamilyRelatedPerson }) {
 	if (related.entryUniqueName) {
 		return (
 			<Link
-				href={`/tanahpedia/entry/${encodeURIComponent(related.entryUniqueName)}`}
+				href={`/pedia/${encodeURIComponent(related.entryUniqueName)}`}
 				className={styles.personLink}
 				title={label}
 			>
