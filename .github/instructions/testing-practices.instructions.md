@@ -19,6 +19,15 @@ applyTo: "**"
 
 Use `/* istanbul ignore next */` for defensive/unreachable code; add a short reason. Custom handling in `tests/util/coverage/sanitize-coverage.js` makes SWC instrumentation respect these comments.
 
+### Finding coverage gaps (website)
+
+When codecov reports a patch-coverage drop, do NOT hand-parse lcov or write ad-hoc scripts:
+
+1. `npm run coverage:unit` — full run, writes `.coverage/unit/lcov.info`.
+2. `npm run coverage:gaps -- <path-substring> ...` — prints per-file missed line/branch numbers (no args = all files with gaps).
+3. Read each missed region in the source and write a targeted test per real path. lcov line numbers can be off by a line or duplicated (SWC sourcemap artifacts) — verify against the source before chasing a "missed" line that existing tests clearly cover.
+4. **Ownership**: every gap in a file you touched is yours to close — the agent wrote this codebase, so there is no "pre-existing" exclusion. Truly dead defensive branches get `/* istanbul ignore */` with a reason instead of contrived tests.
+
 ## Commands by Module
 
 | Module | Unit | E2E | Coverage |

@@ -1,0 +1,47 @@
+.pasukTooltip {
+  position: fixed;
+  z-index: 10001;
+  transform: translateX(-50%) translateY(-100%);
+  margin-top: -12px;
+  max-width: 340px;
+  padding: 12px 16px;
+  background: #fff;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(49, 46, 129, 0.14);
+  pointer-events: auto;
+  direction: rtl;
+}
+
+.pasukTooltipReference {
+  font-size: 13px;
+  font-weight: 700;
+  color: #312e81;
+  margin-bottom: 6px;
+  line-height: 1.4;
+  border-bottom: 1px solid #e0e7ff;
+  padding-bottom: 4px;
+}
+
+.pasukTooltipText {
+  font-size: 14px;
+  color: #1f2937;
+  line-height: 1.7;
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pasukTooltipNote {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed #e0e7ff;
+  font-size: 13px;
+  color: #4b5563;
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 8;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

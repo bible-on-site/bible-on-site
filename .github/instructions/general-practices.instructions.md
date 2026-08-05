@@ -38,3 +38,11 @@ gh run view <run-id> --log-failed
 gh run view <run-id> --json workflowName,event,conclusion
 gh api repos/<owner>/<repo>/commits/<sha>
 ```
+
+## Document Friction After Solving It
+
+When a task took noticeably longer than it should have (repeated probing, ad-hoc scripts, trial-and-error), **after** solving it:
+
+1. Add the efficient path to the relevant instruction file (or tool registry) so the next run is direct.
+2. **Promote scratch scripts into project tasks** — npm / cargo-make / nuke — even if the agent is currently the only user. A throwaway script that proved useful once (e.g. marking coverage gaps, publishing a Tanahpedia entry change set) belongs in the repo as a named task, not in a temp directory.
+3. Prefer extending an existing task runner over documenting raw CLI incantations.

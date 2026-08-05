@@ -581,16 +581,14 @@ function SpouseInterpretationsCard({
 
 function SiblingCard({ related }: { related: PersonFamilyRelatedPerson }) {
 	return (
-		<div
-			className={styles.personCardStack}
-			title={related.sourceCitation ?? undefined}
-		>
+		<div className={styles.personCardStack}>
 			<div
 				className={styles.card}
 				data-has-sex-mark={sexMarkDataAttribute(related.sex)}
 			>
 				<PersonSexMark sex={related.sex} />
 				<PersonNameLink related={related} />
+				{cardCitationBlock(related.sourceCitation ?? null)}
 			</div>
 		</div>
 	);
@@ -613,6 +611,7 @@ function SpouseUnitCardBlock({
 }) {
 	const nEnt = new Set(unit.edges.map((e) => e.related.entityId)).size;
 	const merged = unit.edges.length > 1 && nEnt === 1;
+	/* istanbul ignore next -- buildSpouseUnits emits one unit per entity, so a multi-entity unit cannot occur; defensive UI kept */
 	const showAltLabel = unit.altGroupKey != null && nEnt > 1;
 
 	const cards = merged ? (
@@ -1127,6 +1126,16 @@ function PersonFamilyTreeContent({
 			})
 		);
 
+	// The focal person's own source: distinct citations from their child-side parent rows.
+	const focalSourceCitation =
+		[
+			...new Set(
+				parents
+					.map((p) => p.sourceCitation?.trim())
+					.filter((c): c is string => Boolean(c)),
+			),
+		].join("\n") || null;
+
 	const focalCardNode = (
 		<div
 			className={styles.cardFocal}
@@ -1134,6 +1143,7 @@ function PersonFamilyTreeContent({
 		>
 			<PersonSexMark sex={focalSex} />
 			<span className={styles.personUnlinked}>{focalDisplayName}</span>
+			{cardCitationBlock(focalSourceCitation)}
 		</div>
 	);
 

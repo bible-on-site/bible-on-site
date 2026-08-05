@@ -266,3 +266,31 @@ describe("renderFamilyTreeCitationLine fallback edge cases", () => {
 		expect(container.querySelector("a")).toBeNull();
 	});
 });
+
+describe("perush name and pasuk parsing edge cases", () => {
+	it("prefers the longest perush name on an index tie", () => {
+		const { container } = render(
+			<div>
+				{renderFamilyTreeCitationLine(
+					"אבן עזרא מהדורא תניינא בראשית כח ג",
+					"cite",
+				)}
+			</div>,
+		);
+		const link = container.querySelector("a");
+		expect(decodeURIComponent(link?.getAttribute("href") ?? "")).toContain(
+			"אבן עזרא מהדורא תניינא",
+		);
+		expect(link?.getAttribute("href")).toContain("pasuk=3");
+	});
+
+	it("omits the pasuk query when the pasuk token is only dashes", () => {
+		const href = build929PerushHref("בראשית", "כח", "–", "אבן עזרא");
+		expect(href).toMatch(/^\/929\/\d+\//);
+		expect(href).not.toContain("pasuk=");
+	});
+
+	it("returns the input untouched for an empty citation string", () => {
+		expect(renderCitationWithTanachLinks("", "cite")).toEqual([""]);
+	});
+});
