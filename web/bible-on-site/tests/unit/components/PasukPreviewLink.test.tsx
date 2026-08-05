@@ -132,4 +132,73 @@ describe("PasukPreviewLink", () => {
 		await waitFor(() => expect(fetchMock).toHaveBeenCalled());
 		expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 	});
+
+	it("caches a network failure and does not refetch", async () => {
+		fetchMock.mockRejectedValue(new Error("offline"));
+		render(<PasukPreviewLink href="/929/33#pasuk-4">בראשית לג ד</PasukPreviewLink>);
+		const link = screen.getByRole("link", { name: "בראשית לג ד" });
+		fireEvent.mouseEnter(link);
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+		expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+		fireEvent.mouseLeave(link);
+		fireEvent.mouseEnter(link);
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+	});
+
+	it("serves repeat hovers from the cache", async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({ reference: "r", text: "קובץ" }),
+		} as Response);
+		render(<PasukPreviewLink href="/929/34#pasuk-5">בראשית לד ה</PasukPreviewLink>);
+		const link = screen.getByRole("link", { name: "בראשית לד ה" });
+		fireEvent.mouseEnter(link);
+		await waitFor(() => expect(screen.getByRole("tooltip")).toBeInTheDocument());
+		fireEvent.mouseLeave(link);
+		await waitFor(() =>
+			expect(screen.queryByRole("tooltip")).not.toBeInTheDocument(),
+		);
+		fireEvent.mouseEnter(link);
+		await waitFor(() => expect(screen.getByRole("tooltip")).toBeInTheDocument());
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("keeps the tooltip when re-hovering the link before the hide delay", async () => {
+		jest.useFakeTimers();
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({ reference: "r", text: "נשאר" }),
+		} as Response);
+		render(<PasukPreviewLink href="/929/35#pasuk-6">בראשית לה ו</PasukPreviewLink>);
+		const link = screen.getByRole("link", { name: "בראשית לה ו" });
+		fireEvent.mouseEnter(link);
+		await waitFor(() => expect(screen.getByRole("tooltip")).toBeInTheDocument());
+		fireEvent.mouseLeave(link);
+		fireEvent.mouseEnter(link);
+		jest.advanceTimersByTime(300);
+		expect(screen.getByRole("tooltip")).toBeInTheDocument();
+		jest.useRealTimers();
+	});
+
+	it("keeps the tooltip while the pointer is over it", async () => {
+		jest.useFakeTimers();
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({ reference: "r", text: "מרחף" }),
+		} as Response);
+		render(<PasukPreviewLink href="/929/36#pasuk-7">בראשית לו ז</PasukPreviewLink>);
+		const link = screen.getByRole("link", { name: "בראשית לו ז" });
+		fireEvent.mouseEnter(link);
+		await waitFor(() => expect(screen.getByRole("tooltip")).toBeInTheDocument());
+		fireEvent.mouseLeave(link);
+		fireEvent.mouseEnter(screen.getByRole("tooltip"));
+		jest.advanceTimersByTime(300);
+		expect(screen.getByRole("tooltip")).toBeInTheDocument();
+		fireEvent.mouseLeave(screen.getByRole("tooltip"));
+		jest.advanceTimersByTime(300);
+		await waitFor(() =>
+			expect(screen.queryByRole("tooltip")).not.toBeInTheDocument(),
+		);
+		jest.useRealTimers();
+	});
 });

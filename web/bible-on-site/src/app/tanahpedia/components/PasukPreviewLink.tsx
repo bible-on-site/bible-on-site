@@ -30,6 +30,7 @@ export function parsePasukRefFromHref(
 	);
 	if (!anchor) return null;
 	const pasukRaw = anchor[3] ?? anchor[4];
+	/* istanbul ignore next -- the regex alternation guarantees one pasuk group; defensive guard */
 	if (!pasukRaw) return null;
 	const perushSlug = anchor[2];
 	return {

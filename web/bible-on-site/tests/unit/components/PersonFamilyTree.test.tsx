@@ -504,6 +504,38 @@ describe("PersonFamilyTree", () => {
 		expect(link.getAttribute("href")).toMatch(/^\/929\/\d+#pasuk-\d+$/);
 	});
 
+	it("sorts spouse alt groups by key and renders every disputed candidate", () => {
+		const disputed = (id: string, name: string, altGroupId: string) => ({
+			related: related(id, name, `entry-${id}`, "FEMALE"),
+			unionType: "MARRIAGE",
+			unionOrder: null,
+			altGroupId,
+			sourceCitation: null,
+			personSourceCitation: null,
+			unionEndReason: null,
+			unionStartDate: null,
+			unionEndDate: null,
+		});
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			focalSex: "MALE",
+			spouses: [
+				disputed("s-g2a", "אשה ג", "g2"),
+				disputed("s-g2b", "אשה ד", "g2"),
+				disputed("s-g1a", "אשה א", "g1"),
+				disputed("s-g1b", "אשה ב", "g1"),
+			],
+		};
+		render(<PersonFamilyTree summary={summary} />);
+		for (const name of ["אשה א", "אשה ב", "אשה ג", "אשה ד"]) {
+			expect(screen.getByText(name)).toBeInTheDocument();
+		}
+		// Groups are ordered by alt-group key: g1 members render before g2 members.
+		const treeText =
+			screen.getByRole("region", { name: /משפחה/ }).textContent ?? "";
+		expect(treeText.indexOf("אשה א")).toBeLessThan(treeText.indexOf("אשה ג"));
+	});
+
 	it("renders alt group labels when altGroupId set on parents", () => {
 		const summary: PersonFamilySummary = {
 			...baseSummary,
