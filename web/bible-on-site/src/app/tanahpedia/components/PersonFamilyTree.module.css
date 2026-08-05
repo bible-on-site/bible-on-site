@@ -983,10 +983,11 @@
 
 .verticalConnector {
   width: 2px;
-  height: 18px;
+  /* full 34px span (was 18px + 8px margins) so the line touches its neighbors */
+  height: 34px;
   background: linear-gradient(180deg, #a5b4fc 0%, #c7d2fe 100%);
   border-radius: 1px;
-  margin: 8px auto;
+  margin: 0 auto;
   flex-shrink: 0;
 }
 
@@ -1086,10 +1087,11 @@
 
 .matrixMobileConnector {
   width: 2px;
-  height: 18px;
+  /* full 28px span (was 18px + 6px/4px margins) so the line touches its neighbors */
+  height: 28px;
   background: linear-gradient(180deg, #c7d2fe 0%, #6366f1 60%, #818cf8 100%);
   border-radius: 1px;
-  margin: 6px 0 4px;
+  margin: 0;
   flex-shrink: 0;
 }
 
