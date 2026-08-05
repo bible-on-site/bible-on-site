@@ -125,7 +125,7 @@ export function TanahpediaBreadcrumb({
 										{siblingEntries.map((e) => (
 											<li key={e.uniqueName}>
 												<Link
-													href={`/tanahpedia/entry/${encodeURIComponent(e.uniqueName)}`}
+													href={`/pedia/${encodeURIComponent(e.uniqueName)}`}
 													aria-current={
 														e.uniqueName === currentEntryUniqueName
 															? "page"

@@ -185,7 +185,7 @@ Create in `web/bible-on-site/src/app/tanahpedia/components/`:
 **Data flow:**
 1. `getEntityReferencesForPerek(perekId)` queries `entity_tanah_source` → `entity` → `entry_entity` → `entry`
 2. Returns: `{ entityName, entityType, entryUniqueName, pasukNumber, segmentStart, segmentEnd }`
-3. Website resolves pasuk text from static JSON, identifies the matching text range, and wraps it in `<a href="/tanahpedia/entry/{uniqueName}">`.
+3. Website resolves pasuk text from static JSON, identifies the matching text range, and wraps it in `<a href="/pedia/{uniqueName}">`.
 4. If `segmentStart`/`segmentEnd` are NULL, the entire pasuk text is linked.
 5. If segments are specified, only the matching sub-pasuk range is wrapped.
 

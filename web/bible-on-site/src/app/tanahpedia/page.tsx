@@ -102,7 +102,7 @@ export default async function TanahpediaLandingPage() {
 								<span className={styles.todayText}>
 									{event.entryUniqueName ? (
 										<Link
-											href={`/tanahpedia/entry/${encodeURIComponent(event.entryUniqueName)}`}
+											href={`/pedia/${encodeURIComponent(event.entryUniqueName)}`}
 											className={styles.todayLink}
 										>
 											{event.entryTitle ?? event.entityName}
@@ -163,7 +163,7 @@ export default async function TanahpediaLandingPage() {
 						{recentEntries.map((entry) => (
 							<li key={entry.id} className={styles.recentItem}>
 								<Link
-									href={`/tanahpedia/entry/${encodeURIComponent(entry.uniqueName)}`}
+									href={`/pedia/${encodeURIComponent(entry.uniqueName)}`}
 									className={styles.recentLink}
 								>
 									{entry.title}
