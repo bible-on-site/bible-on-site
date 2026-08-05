@@ -69,6 +69,23 @@ describe("GET /api/tanah/pasuk/[perekId]/[pasuk]", () => {
 		expect(body.reference).not.toContain("לא קיים");
 	});
 
+	it("falls back when the perush exists but has no note for the pasuk", async () => {
+		mockPerushim.mockResolvedValue([
+			{ id: 23, name: "הכתב והקבלה", parshanName: "רימ", noteCount: 1 },
+		]);
+		mockNotes.mockResolvedValue([
+			{ pasuk: 5, noteIdx: 1, noteContent: "<p>אחר</p>" },
+		]);
+		const res = await requestFor(
+			"32",
+			"23",
+			`?perush=${encodeURIComponent("הכתב והקבלה")}`,
+		);
+		expect(res.status).toBe(200);
+		const body = await res.json();
+		expect(body.noteHtml).toBeUndefined();
+	});
+
 	it.each([
 		["0", "1"],
 		["930", "1"],

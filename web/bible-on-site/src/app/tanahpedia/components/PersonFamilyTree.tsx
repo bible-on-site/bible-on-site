@@ -611,6 +611,7 @@ function SpouseUnitCardBlock({
 }) {
 	const nEnt = new Set(unit.edges.map((e) => e.related.entityId)).size;
 	const merged = unit.edges.length > 1 && nEnt === 1;
+	/* istanbul ignore next -- buildSpouseUnits emits one unit per entity, so a multi-entity unit cannot occur; defensive UI kept */
 	const showAltLabel = unit.altGroupKey != null && nEnt > 1;
 
 	const cards = merged ? (

@@ -26,6 +26,7 @@ Do not rediscover the write path from the UI or database schema. The canonical c
 - Person nodes and family structure use authenticated, idempotent put mutations: `putTanahpediaPersonNode`, `putTanahpediaEntryEntityLink`, `putTanahpediaParentChildLink`, and `putTanahpediaPersonUnion`. These writes are direct structural puts, not entry revision rows.
 - Cleanup uses the corresponding narrow delete mutations documented in the canonical contract. Never substitute Admin server functions, direct SQL, seed scripts, or database clients for content writes.
 - Generate caller-supplied UUIDs once and retain the exact operation payload. Replays must reuse those stable IDs so a local verification rerun or approved production replay updates the same logical rows instead of creating duplicates.
+- Prefer the named task over ad-hoc scripts: save the operation set as JSON and run `npm run tanahpedia:apply -- <ops.json> [--endpoint <url>]` from `devops/` — the same file applies locally first and replays on production after sign-off.
 
 ### Local seed = copy of production
 
