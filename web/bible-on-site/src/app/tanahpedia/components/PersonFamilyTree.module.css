@@ -1101,10 +1101,15 @@
   justify-items: stretch;
 }
 
+/* Cards are width-capped (max-width) inside stretched grid items; without
+   self-centering they anchor to inline-start (right in RTL) and the whole
+   children cluster drifts off the column's connector line. */
 .matrixMobileChildren .personCardStack,
 .matrixMobileChildren [data-testid="family-child-card"] {
   width: 100%;
   min-width: 0;
+  max-width: 280px;
+  margin-inline: auto;
 }
 
 .matrixMobileChildren .card {
@@ -1112,6 +1117,7 @@
   width: 100%;
   min-width: 0;
   padding-inline: 8px;
+  margin-inline: auto;
 }
 
 .matrixMobileLooseLabel {
