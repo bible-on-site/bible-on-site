@@ -392,7 +392,8 @@
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   align-content: center;
-  column-gap: 10px;
+  /* joint spacing lives in the tie segments so the sibling line stays continuous */
+  column-gap: 0;
   row-gap: 8px;
   width: 100%;
   direction: rtl;
@@ -427,20 +428,21 @@
   align-self: center;
   flex: 1 1 0;
   min-width: 0;
-  max-width: 120px;
+  max-width: 124px;
   height: 2px;
-  margin: 0 2px;
+  margin: 0;
   background: #c7d2fe;
   border-radius: 1px;
 }
 
 .siblingTieCompact {
   align-self: center;
-  flex: 0 0 8px;
-  width: 8px;
-  min-width: 8px;
+  /* 22px = old 8px stub + its 2px margins + the old 10px grid gap */
+  flex: 0 0 22px;
+  width: 22px;
+  min-width: 22px;
   height: 2px;
-  margin: 0 2px;
+  margin: 0;
   background: #c7d2fe;
   border-radius: 1px;
 }
@@ -513,6 +515,23 @@
   min-width: 5.5rem;
   padding: 0 4px;
   align-self: center;
+  position: relative;
+}
+
+/* הקו עובר מאחורי התווית — הפיל האטום מסתיר את המרכז */
+.siblingBridge::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: calc(50% - 1px);
+  height: 2px;
+  background: #c7d2fe;
+  border-radius: 1px;
+}
+
+.siblingBridge > * {
+  position: relative;
+  z-index: 1;
 }
 
 .focalWrap {
