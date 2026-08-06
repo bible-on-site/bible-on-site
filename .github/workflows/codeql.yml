@@ -1,0 +1,68 @@
+# ====================================================================================
+# CodeQL (advanced setup)
+# ====================================================================================
+# Migrated from CodeQL "default setup" to an advanced workflow so that `[skip ci]` in a
+# commit message is honored (default setup ignores it). The release bot tags every
+# version-bump commit with "[skip ci]" (e.g. "chore(release): Bump versions ... [skip ci]"),
+# so those pushes no longer trigger a CodeQL run. See
+# https://stackoverflow.com/questions/74030852.
+#
+# NOTE: We deliberately do NOT add a `paths-ignore` guard for version/lockfile paths.
+# `[skip ci]` already skips every bump commit regardless of which files it touches, and
+# a version bump also rewrites lockfiles (e.g. package-lock.json). Ignoring lockfile
+# paths would be unsafe — a dependency-only push (e.g. from Renovate) must still be
+# scanned for newly introduced vulnerabilities.
+#
+# Languages mirror the previous default setup: actions, csharp, javascript-typescript
+# (covers both JS and TS), and python. All use build-mode `none` (buildless analysis),
+# matching default setup and avoiding a heavy MAUI/.NET build in CI.
+# ====================================================================================
+name: CodeQL
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    - cron: "27 3 * * 1"
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            build-mode: none
+          - language: csharp
+            build-mode: none
+          - language: javascript-typescript
+            build-mode: none
+          - language: python
+            build-mode: none
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
