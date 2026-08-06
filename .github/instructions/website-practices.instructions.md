@@ -14,6 +14,7 @@ When asked to **inspire from legacy website** or reference the old website imple
 - Use Playwright at http://localhost:3001 (`npm run dev` if needed).
 - **Prefer server components for content**: content-rich (text, articles, sections) → SSG/SSR only for SEO and AIO. Use client components only for interactive/glue (navigation, animation, scroll, menu). Keep client components minimal and isolated; content should remain server-rendered.
 - Parse `.env` files with `dotenv`/`dotenv-cli`, not line-based regular expressions; Windows CRLF can leave `\r` in regex matches or cause an end-of-line match to fail.
+- Line endings are LF everywhere: the root `.gitattributes` (`* text=auto eol=lf`) forces LF in the working tree regardless of `core.autocrlf`, matching the LF blobs and CI. Lint with `npm run lint` (`biome lint`) only — do not run `biome check` or `biome format --write`. The project uses Biome as a linter, not a formatter/import-sorter, so `biome check` re-sorts imports and reflows un-formatted code the repo does not enforce (it no longer reports CRLF diffs after the `.gitattributes` fix).
 - Start specialized dev environments through their package script/local `node_modules/.bin` tool. Do not substitute `npx dotenv`, which can resolve a different package and silently fall back to the default database.
 - After replacing database data used by `unstable_cache(..., { revalidate: false })`, remove the full `.next` directory and restart. Removing only `.next/cache` did not invalidate all Next.js 16 data-cache state.
 
