@@ -115,6 +115,14 @@ describe("seo/core-jsonld", () => {
 			const crumbs = crumb?.itemListElement as Array<{ name: string }>;
 			expect(crumbs.map((c) => c.name)).toEqual(["בית", "בראשית א"]);
 		});
+
+		it("omits the sefer genre when there is no helek", () => {
+			const graph = buildPerekGraph(perekObj({ helek: "" }));
+			const sefer = nodesOf(graph).find(
+				(n) => n["@type"] === "Book" && n["@id"] === seferId("בראשית"),
+			);
+			expect(sefer?.genre).toBeUndefined();
+		});
 	});
 
 	describe("buildArticleGraph", () => {
@@ -140,6 +148,29 @@ describe("seo/core-jsonld", () => {
 		it("omits description when the abstract and content are empty", () => {
 			const graph = buildArticleGraph({
 				article: article({ abstract: "<p></p>", content: "" }),
+				perekObj: perekObj(),
+				authorSlug: "harav-ploni",
+			});
+			expect(nodeByType(graph, "Article")?.description).toBeUndefined();
+		});
+
+		it("falls back to content for the description and omits image when absent", () => {
+			const graph = buildArticleGraph({
+				article: article({
+					abstract: null,
+					content: "<p>גוף בלבד.</p>",
+					authorImageUrl: "",
+				}),
+				perekObj: perekObj(),
+				authorSlug: "harav-ploni",
+			});
+			expect(nodeByType(graph, "Article")?.description).toBe("גוף בלבד.");
+			expect(nodeByType(graph, "Person")?.image).toBeUndefined();
+		});
+
+		it("omits description when both abstract and content are null", () => {
+			const graph = buildArticleGraph({
+				article: article({ abstract: null, content: null }),
 				perekObj: perekObj(),
 				authorSlug: "harav-ploni",
 			});
@@ -202,6 +233,17 @@ describe("seo/core-jsonld", () => {
 			const person = nodeByType(graph, "Person");
 			expect(person?.image).toBeUndefined();
 			expect(person?.description).toBeUndefined();
+		});
+
+		it("attaches sameAs when external references are provided", () => {
+			const graph = buildAuthorGraph({
+				author: authorDetails(),
+				slug: "harav-ploni",
+				sameAs: ["https://www.wikidata.org/wiki/Q1234"],
+			});
+			expect(nodeByType(graph, "Person")?.sameAs).toEqual([
+				"https://www.wikidata.org/wiki/Q1234",
+			]);
 		});
 	});
 
