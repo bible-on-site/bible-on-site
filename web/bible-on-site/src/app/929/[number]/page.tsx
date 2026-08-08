@@ -7,9 +7,11 @@ import { getPerekByPerekId } from "../../../data/perek-dto";
 import { getPerekIdsForSefer, getSeferByName } from "../../../data/sefer-dto";
 import { getArticleSummariesByPerekId } from "../../../lib/articles";
 import { getPerushimByPerekId } from "../../../lib/perushim";
+import { buildPerekGraph } from "../../../lib/seo/core-jsonld";
 import { buildEntityRefLookup } from "../../../lib/tanahpedia/entity-ref-lookup";
 import type { PerekEntityReference } from "../../../lib/tanahpedia/service";
 import { getEntityReferencesForPerek } from "../../../lib/tanahpedia/service";
+import { JsonLd } from "../../components/JsonLd";
 import { ArticlesSection } from "./components/ArticlesSection";
 import Breadcrumb from "./components/Breadcrumb";
 import { PerushimSection } from "./components/PerushimSection";
@@ -103,6 +105,7 @@ export default async function Perek({
 
 	return (
 		<>
+			<JsonLd data={buildPerekGraph(perekObj)} />
 			<Suspense>
 				<SeferComposite
 					perekObj={perekObj}

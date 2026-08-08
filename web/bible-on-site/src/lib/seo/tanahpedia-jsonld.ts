@@ -12,9 +12,12 @@ import {
 	buildGraph,
 	hasContent,
 	nodeId,
+	plainText,
 	SITE_ORIGIN,
 	WEBSITE_ID,
 } from "./jsonld";
+
+export { plainText };
 
 export const TANAHPEDIA_PATH = "/tanahpedia";
 /** Stable `@id` of the Tanahpedia dictionary (the DefinedTermSet). */
@@ -65,15 +68,6 @@ export function entityRefId(
 	return entryUniqueName
 		? `${absUrl(entryPath(entryUniqueName))}#entity`
 		: `urn:tanahpedia:entity:${entityId}`;
-}
-
-/** Plain-text snippet from entry HTML, for a definition/description. */
-export function plainText(html: string, maxLen: number): string {
-	return html
-		.replace(/<[^>]*>/g, " ")
-		.replace(/\s+/g, " ")
-		.trim()
-		.slice(0, maxLen);
 }
 
 function toIsoDate(value: string | null | undefined): string | undefined {
