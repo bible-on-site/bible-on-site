@@ -12,6 +12,7 @@ import {
 	TANAHPEDIA_SET_ID,
 } from "../../../../src/lib/seo/tanahpedia-jsonld";
 import type {
+	EntityType,
 	EntryWithEntities,
 	PersonFamilySummary,
 	PlaceMapMarker,
@@ -59,6 +60,12 @@ describe("seo/tanahpedia-jsonld", () => {
 			expect(entityTypeToSchemaType("TANAH_SEFER")).toBe("Book");
 			expect(entityTypeToSchemaType("ANIMAL")).toBe("Thing");
 			expect(entityTypeToSchemaType("NATION")).toBe("Thing");
+		});
+
+		it("falls back to Thing for an unmapped entity type", () => {
+			expect(entityTypeToSchemaType("MYSTERY" as unknown as EntityType)).toBe(
+				"Thing",
+			);
 		});
 	});
 
@@ -306,6 +313,156 @@ describe("seo/tanahpedia-jsonld", () => {
 				"אברהם אבינו",
 			]);
 			expect(nodeByType(graph, "WebPage")?.about).toBeUndefined();
+		});
+
+		it("omits dateModified when updatedAt is null", () => {
+			const graph = buildEntryGraph({
+				...baseInput(),
+				entry: entry({ updatedAt: null as unknown as string }),
+			});
+			expect(nodeByType(graph, "WebPage")?.dateModified).toBeUndefined();
+		});
+
+		it("omits dateModified when updatedAt is not a valid date", () => {
+			const graph = buildEntryGraph({
+				...baseInput(),
+				entry: entry({ updatedAt: "not-a-real-date" }),
+			});
+			expect(nodeByType(graph, "WebPage")?.dateModified).toBeUndefined();
+		});
+
+		it("maps a female focal person and omits gender when sex is unknown", () => {
+			const femaleFamily: PersonFamilySummary = {
+				focalPersonId: "p-sara",
+				focalEntityId: "ent-avraham",
+				focalDisplayName: "שרה",
+				focalSex: "FEMALE",
+				focalBirthYyyymmdd: null,
+				parents: [],
+				children: [],
+				spouses: [],
+				siblings: [],
+			};
+			const female = buildEntryGraph({
+				...baseInput(),
+				personFamily: femaleFamily,
+			});
+			expect(nodeByType(female, "Person")?.gender).toBe("Female");
+
+			const unknown = buildEntryGraph({
+				...baseInput(),
+				personFamily: { ...femaleFamily, focalSex: null },
+			});
+			expect(nodeByType(unknown, "Person")?.gender).toBeUndefined();
+		});
+
+		it("emits siblings and skips a related person already present as an entity", () => {
+			const family: PersonFamilySummary = {
+				focalPersonId: "p-avraham",
+				focalEntityId: "ent-avraham",
+				focalDisplayName: "אברהם",
+				focalSex: "MALE",
+				focalBirthYyyymmdd: null,
+				parents: [],
+				children: [],
+				spouses: [],
+				siblings: [
+					{
+						personId: "p-nahor",
+						entityId: "ent-nahor",
+						displayName: "נחור",
+						entryUniqueName: "נחור",
+						entryTitle: "נחור",
+						sex: "MALE",
+					},
+					// entryUniqueName equals the entry's own → same @id as the focal
+					// entity, so this related person is skipped (continue branch).
+					{
+						personId: "p-dup",
+						entityId: "ent-dup",
+						displayName: "כפול",
+						entryUniqueName: "אברהם",
+						entryTitle: "אברהם אבינו",
+						sex: "MALE",
+					},
+				],
+			};
+			const graph = buildEntryGraph({ ...baseInput(), personFamily: family });
+			const focal = nodeByType(graph, "Person");
+			expect(focal?.sibling).toEqual([
+				{ "@id": `${SITE_ORIGIN}${entryPath("נחור")}#entity` },
+				{ "@id": `${SITE_ORIGIN}${entryPath("אברהם")}#entity` },
+			]);
+			const nahor = nodesOf(graph).find(
+				(n) => n["@id"] === `${SITE_ORIGIN}${entryPath("נחור")}#entity`,
+			);
+			expect(nahor).toMatchObject({ "@type": "Person", name: "נחור" });
+			expect(nahor?.url).toBe(`${SITE_ORIGIN}${entryPath("נחור")}`);
+			// The duplicate shares the focal entity @id and is not added again.
+			const focalId = `${SITE_ORIGIN}${entryPath("אברהם")}#entity`;
+			expect(nodesOf(graph).filter((n) => n["@id"] === focalId)).toHaveLength(
+				1,
+			);
+		});
+
+		it("omits geo without a matching marker and alternateName without a modern name", () => {
+			const placeEntry = entry({
+				uniqueName: "העי",
+				title: "העי",
+				content: "<p></p>",
+				entities: [
+					{
+						id: "ee-p",
+						entryId: "entry-1",
+						entityId: "ent-ai",
+						entityType: "PLACE",
+						entityName: "העי",
+					},
+				],
+			});
+			const noMatch = buildEntryGraph({
+				entry: placeEntry,
+				personFamily: null,
+				placeMarkers: [
+					{
+						placeId: "x",
+						placeName: "שכם",
+						modernName: "Nablus",
+						lat: 32.21,
+						lng: 35.28,
+						entryUniqueName: "שכם",
+					},
+				],
+				category: { label: "מקומות", entityType: "PLACE" },
+			});
+			expect(nodeByType(noMatch, "Place")?.geo).toBeUndefined();
+
+			const noModern = buildEntryGraph({
+				entry: placeEntry,
+				personFamily: null,
+				placeMarkers: [
+					{
+						placeId: "y",
+						placeName: "העי",
+						modernName: null,
+						lat: 31.92,
+						lng: 35.26,
+						entryUniqueName: "העי",
+					},
+				],
+				category: { label: "מקומות", entityType: "PLACE" },
+			});
+			const place = nodeByType(noModern, "Place");
+			expect(place?.geo).toBeDefined();
+			expect(place?.alternateName).toBeUndefined();
+		});
+
+		it("ignores an empty sameAs list for an entity", () => {
+			const graph = buildEntryGraph({
+				...baseInput(),
+				sameAsByEntityId: { "ent-avraham": [] },
+			});
+			expect(nodeByType(graph, "Person")?.sameAs).toBeUndefined();
 		});
 	});
 
