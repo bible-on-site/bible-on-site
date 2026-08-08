@@ -1,4 +1,4 @@
-import type { WithContext, Thing } from "schema-dts";
+import type { Thing, WithContext } from "schema-dts";
 import {
 	absUrl,
 	breadcrumbNode,
@@ -45,7 +45,7 @@ describe("seo/jsonld", () => {
 
 	describe("organizationNode", () => {
 		it("returns an Organization with a stable id and sameAs list", () => {
-			const org = organizationNode();
+			const org = organizationNode() as unknown as Record<string, unknown>;
 			expect(org["@type"]).toBe("Organization");
 			expect(org["@id"]).toBe(ORG_ID);
 			expect(org.name).toBe(SITE_NAME);
@@ -57,7 +57,7 @@ describe("seo/jsonld", () => {
 
 	describe("websiteNode", () => {
 		it("returns a WebSite linked to the Organization as publisher", () => {
-			const site = websiteNode();
+			const site = websiteNode() as unknown as Record<string, unknown>;
 			expect(site["@type"]).toBe("WebSite");
 			expect(site["@id"]).toBe(WEBSITE_ID);
 			expect(site.inLanguage).toBe("he");
@@ -74,7 +74,7 @@ describe("seo/jsonld", () => {
 					{ name: "אברהם", path: "/pedia/avraham" },
 				],
 				"/pedia/avraham",
-			);
+			) as unknown as Record<string, unknown>;
 			expect(crumb["@type"]).toBe("BreadcrumbList");
 			expect(crumb["@id"]).toBe(`${SITE_ORIGIN}/pedia/avraham#breadcrumb`);
 			const items = crumb.itemListElement as Array<{
