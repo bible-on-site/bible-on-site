@@ -113,6 +113,15 @@ export function renderJsonLd(node: Graph | WithContext<Thing>): string {
 	);
 }
 
+/** Plain-text snippet from HTML, for a definition/description/abstract. */
+export function plainText(html: string, maxLen: number): string {
+	return html
+		.replace(/<[^>]*>/g, " ")
+		.replace(/\s+/g, " ")
+		.trim()
+		.slice(0, maxLen);
+}
+
 /**
  * True when HTML has visible text once tags, entities, and whitespace are
  * stripped. Used to gate content-derived fields so placeholder entries
