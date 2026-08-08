@@ -139,6 +139,11 @@ describe("seo/jsonld", () => {
 			expect(hasContent("<p>&nbsp;</p>")).toBe(false);
 		});
 
+		it("strips an unterminated tag so it is not counted as content", () => {
+			expect(hasContent("<script")).toBe(false);
+			expect(hasContent("<img src=x")).toBe(false);
+		});
+
 		it("returns true when visible text remains after stripping tags", () => {
 			expect(hasContent("<p>אברהם</p>")).toBe(true);
 			expect(hasContent("plain text")).toBe(true);
