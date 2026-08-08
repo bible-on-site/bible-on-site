@@ -116,7 +116,7 @@ export function renderJsonLd(node: Graph | WithContext<Thing>): string {
 /** Plain-text snippet from HTML, for a definition/description/abstract. */
 export function plainText(html: string, maxLen: number): string {
 	return html
-		.replace(/<[^>]*>/g, " ")
+		.replace(/<[^>]*>?/g, " ")
 		.replace(/\s+/g, " ")
 		.trim()
 		.slice(0, maxLen);
@@ -132,7 +132,7 @@ export function hasContent(html: string | null | undefined): boolean {
 		return false;
 	}
 	const text = html
-		.replace(/<[^>]*>/g, "")
+		.replace(/<[^>]*>?/g, "")
 		.replace(/&nbsp;|&#160;|&#xa0;|\u00a0/gi, "")
 		.replace(/\s+/g, "");
 	return text.length > 0;

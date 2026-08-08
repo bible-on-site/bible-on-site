@@ -86,6 +86,11 @@ describe("seo/tanahpedia-jsonld", () => {
 			expect(plainText("<p>a   b</p>", 100)).toBe("a b");
 			expect(plainText("<b>abcdef</b>", 3)).toBe("abc");
 		});
+
+		it("removes an unterminated tag with no closing bracket", () => {
+			expect(plainText("safe<script", 100)).toBe("safe");
+			expect(plainText("a<img src=x b", 100)).toBe("a");
+		});
 	});
 
 	describe("buildEntryGraph", () => {
