@@ -113,13 +113,26 @@ export function renderJsonLd(node: Graph | WithContext<Thing>): string {
 	);
 }
 
+/**
+ * Strip HTML tags to plain text. The tag pattern is applied repeatedly until
+ * the string stops changing, so no `<` (hence no `<script`) can survive even
+ * for crafted, nested, or unterminated markup. This fixpoint-loop form is the
+ * remedy recommended for incomplete multi-character sanitization (CWE-116);
+ * a single pass of a multi-character tag regex can be bypassed.
+ */
+function stripHtmlTags(html: string, replacement: string): string {
+	let previous: string;
+	let stripped = html;
+	do {
+		previous = stripped;
+		stripped = stripped.replace(/<[^>]*>?/g, replacement);
+	} while (stripped !== previous);
+	return stripped;
+}
+
 /** Plain-text snippet from HTML, for a definition/description/abstract. */
 export function plainText(html: string, maxLen: number): string {
-	return html
-		.replace(/<[^>]*>?/g, " ")
-		.replace(/\s+/g, " ")
-		.trim()
-		.slice(0, maxLen);
+	return stripHtmlTags(html, " ").replace(/\s+/g, " ").trim().slice(0, maxLen);
 }
 
 /**
@@ -131,8 +144,7 @@ export function hasContent(html: string | null | undefined): boolean {
 	if (!html) {
 		return false;
 	}
-	const text = html
-		.replace(/<[^>]*>?/g, "")
+	const text = stripHtmlTags(html, "")
 		.replace(/&nbsp;|&#160;|&#xa0;|\u00a0/gi, "")
 		.replace(/\s+/g, "");
 	return text.length > 0;
