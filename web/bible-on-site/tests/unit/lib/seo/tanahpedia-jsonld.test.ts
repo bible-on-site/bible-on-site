@@ -1,11 +1,14 @@
 import { SITE_ORIGIN } from "../../../../src/lib/seo/jsonld";
 import {
+	buildCategoryGraph,
 	buildEntryGraph,
+	buildLandingGraph,
 	categoryPath,
 	entityRefId,
 	entityTypeToSchemaType,
 	entryPath,
 	plainText,
+	TANAHPEDIA_PATH,
 	TANAHPEDIA_SET_ID,
 } from "../../../../src/lib/seo/tanahpedia-jsonld";
 import type {
@@ -298,6 +301,62 @@ describe("seo/tanahpedia-jsonld", () => {
 				"אברהם אבינו",
 			]);
 			expect(nodeByType(graph, "WebPage")?.about).toBeUndefined();
+		});
+	});
+
+	describe("buildLandingGraph", () => {
+		it("emits CollectionPage + DefinedTermSet + breadcrumb", () => {
+			const graph = buildLandingGraph();
+			const page = nodeByType(graph, "CollectionPage");
+			expect(page?.["@id"]).toBe(`${SITE_ORIGIN}${TANAHPEDIA_PATH}#webpage`);
+			expect(page?.mainEntity).toEqual({ "@id": TANAHPEDIA_SET_ID });
+			const set = nodeByType(graph, "DefinedTermSet");
+			expect(set?.["@id"]).toBe(TANAHPEDIA_SET_ID);
+			const crumb = nodeByType(graph, "BreadcrumbList");
+			const items = crumb?.itemListElement as Array<{ name: string }>;
+			expect(items.map((i) => i.name)).toEqual(["בית", "תנכפדיה"]);
+		});
+	});
+
+	describe("buildCategoryGraph", () => {
+		it("emits CollectionPage + ItemList of entries + breadcrumb", () => {
+			const graph = buildCategoryGraph({
+				entityType: "PERSON",
+				label: "אישים",
+				items: [
+					{ uniqueName: "אברהם", title: "אברהם אבינו" },
+					{ uniqueName: "יצחק", title: "יצחק אבינו" },
+				],
+			});
+			const page = nodeByType(graph, "CollectionPage");
+			expect(page?.name).toBe("אישים");
+			expect(page?.about).toEqual({ "@id": TANAHPEDIA_SET_ID });
+			const list = nodeByType(graph, "ItemList");
+			expect(list?.numberOfItems).toBe(2);
+			const items = list?.itemListElement as Array<{
+				position: number;
+				url: string;
+				name: string;
+			}>;
+			expect(items[0]).toMatchObject({
+				position: 1,
+				url: `${SITE_ORIGIN}${entryPath("אברהם")}`,
+				name: "אברהם אבינו",
+			});
+			const crumb = nodeByType(graph, "BreadcrumbList");
+			const crumbs = crumb?.itemListElement as Array<{ name: string }>;
+			expect(crumbs.map((i) => i.name)).toEqual(["בית", "תנכפדיה", "אישים"]);
+		});
+
+		it("produces an empty ItemList when there are no entries", () => {
+			const graph = buildCategoryGraph({
+				entityType: "WAR",
+				label: "מלחמות",
+				items: [],
+			});
+			const list = nodeByType(graph, "ItemList");
+			expect(list?.numberOfItems).toBe(0);
+			expect(list?.itemListElement).toEqual([]);
 		});
 	});
 });
