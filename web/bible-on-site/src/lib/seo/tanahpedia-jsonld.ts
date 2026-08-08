@@ -251,3 +251,90 @@ export function buildEntryGraph(input: EntryGraphInput): Graph {
 
 	return buildGraph(nodes);
 }
+
+export const TANAHPEDIA_DESCRIPTION =
+	'אנציקלופדיה לתנ"ך - אישים, מקומות, אירועים, חפצים ועוד';
+
+/** Build the `@graph` for the Tanahpedia landing page (`/tanahpedia`). */
+export function buildLandingGraph(): Graph {
+	const url = absUrl(TANAHPEDIA_PATH);
+	const breadcrumb = breadcrumbNode(
+		[
+			{ name: "בית", path: "/" },
+			{ name: TANAHPEDIA_LABEL, path: TANAHPEDIA_PATH },
+		],
+		TANAHPEDIA_PATH,
+	);
+	const termSet: Record<string, unknown> = {
+		"@type": "DefinedTermSet",
+		"@id": TANAHPEDIA_SET_ID,
+		name: TANAHPEDIA_LABEL,
+		url,
+		inLanguage: "he",
+		description: TANAHPEDIA_DESCRIPTION,
+	};
+	const page: Record<string, unknown> = {
+		"@type": "CollectionPage",
+		"@id": nodeId(TANAHPEDIA_PATH, "webpage"),
+		url,
+		name: TANAHPEDIA_LABEL,
+		inLanguage: "he",
+		isPartOf: { "@id": WEBSITE_ID },
+		breadcrumb: { "@id": breadcrumb["@id"] },
+		mainEntity: { "@id": TANAHPEDIA_SET_ID },
+	};
+	return buildGraph([
+		page as unknown as Thing,
+		breadcrumb,
+		termSet as unknown as Thing,
+	]);
+}
+
+export interface CategoryGraphInput {
+	entityType: EntityType;
+	label: string;
+	items: { uniqueName: string; title: string }[];
+}
+
+/** Build the `@graph` for a category listing (`/tanahpedia/[entityType]`). */
+export function buildCategoryGraph(input: CategoryGraphInput): Graph {
+	const { entityType, label, items } = input;
+	const path = categoryPath(entityType);
+	const url = absUrl(path);
+	const listId = nodeId(path, "itemlist");
+	const breadcrumb = breadcrumbNode(
+		[
+			{ name: "בית", path: "/" },
+			{ name: TANAHPEDIA_LABEL, path: TANAHPEDIA_PATH },
+			{ name: label, path },
+		],
+		path,
+	);
+	const itemList: Record<string, unknown> = {
+		"@type": "ItemList",
+		"@id": listId,
+		numberOfItems: items.length,
+		itemListElement: items.map((item, index) => ({
+			"@type": "ListItem",
+			position: index + 1,
+			url: absUrl(entryPath(item.uniqueName)),
+			name: item.title,
+		})),
+	};
+	const page: Record<string, unknown> = {
+		"@type": "CollectionPage",
+		"@id": nodeId(path, "webpage"),
+		url,
+		name: label,
+		inLanguage: "he",
+		isPartOf: { "@id": WEBSITE_ID },
+		about: { "@id": TANAHPEDIA_SET_ID },
+		breadcrumb: { "@id": breadcrumb["@id"] },
+		mainEntity: { "@id": listId },
+	};
+	return buildGraph([
+		page as unknown as Thing,
+		breadcrumb,
+		itemList as unknown as Thing,
+	]);
+}

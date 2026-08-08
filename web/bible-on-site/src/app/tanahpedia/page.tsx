@@ -1,5 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { JsonLd } from "@/app/components/JsonLd";
+import { buildLandingGraph } from "@/lib/seo/tanahpedia-jsonld";
+import {
+	CATEGORY_HIERARCHY,
+	subcategoryHref,
+} from "@/lib/tanahpedia/category-hierarchy";
 import {
 	CATEGORY_LABELS,
 	getCategoryCounts,
@@ -7,10 +13,6 @@ import {
 	getTodayInTanahEvents,
 } from "@/lib/tanahpedia/service";
 import type { CategoryKey } from "@/lib/tanahpedia/types";
-import {
-	CATEGORY_HIERARCHY,
-	subcategoryHref,
-} from "@/lib/tanahpedia/category-hierarchy";
 import { HebrewDate } from "@/util/hebdates-util";
 import styles from "./page.module.css";
 
@@ -53,6 +55,7 @@ export default async function TanahpediaLandingPage() {
 
 	return (
 		<div className={styles.tanahpediaPage}>
+			<JsonLd data={buildLandingGraph()} />
 			<h1 className={styles.pageTitle}>תנכפדיה</h1>
 			<p className={styles.pageSubtitle}>
 				אנציקלופדיה לתנ&quot;ך - אישים, מקומות, אירועים, חפצים ועוד
@@ -66,16 +69,13 @@ export default async function TanahpediaLandingPage() {
 					{process.env.NODE_ENV === "development" ? (
 						<>
 							<p className={styles.dbLoadWarningText}>
-								ודאו ש-MySQL פעיל, ש-DB_URL ב-.dev.env מצביע על אותה מסד
-								שמולא ב־
+								ודאו ש-MySQL פעיל, ש-DB_URL ב-.dev.env מצביע על אותה מסד שמולא
+								ב־
 								<code className={styles.dbLoadWarningCode}>
 									cargo make mysql-populate-dev
 								</code>
 								, ואז הריצו שוב{" "}
-								<code className={styles.dbLoadWarningCode}>
-									npm run dev
-								</code>
-								.
+								<code className={styles.dbLoadWarningCode}>npm run dev</code>.
 							</p>
 							<pre className={styles.dbLoadWarningPre}>{loadError}</pre>
 						</>
@@ -90,9 +90,7 @@ export default async function TanahpediaLandingPage() {
 			{todayEvents.length > 0 && (
 				<section className={styles.todaySection}>
 					<div className={styles.todayHeader}>
-						<h2 className={styles.todaySectionTitle}>
-							היום בתנ&quot;ך
-						</h2>
+						<h2 className={styles.todaySectionTitle}>היום בתנ&quot;ך</h2>
 						<span className={styles.todayDate}>{hebrewDateStr}</span>
 					</div>
 					<ul className={styles.todayList}>
