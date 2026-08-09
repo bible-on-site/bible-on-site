@@ -326,12 +326,10 @@ describe("PersonFamilyTree", () => {
 		};
 		render(<PersonFamilyTree summary={summary} />);
 		expect(screen.getByText("דלילה")).toBeInTheDocument();
-		expect(screen.getByText('הרמב"ם: נישואין תקפים')).toBeInTheDocument();
-		expect(
-			screen.getByText(
-				/רש"י, רד"ק ותוספות: קשר פסול עם גויה \(אינו נישואין כהלכת התורה\)/,
-			),
-		).toBeInTheDocument();
+		expect(screen.getByText("שיטה א׳")).toBeInTheDocument();
+		expect(screen.getByText("שיטה ב׳")).toBeInTheDocument();
+		expect(screen.getByText("משנה תורה")).toBeInTheDocument();
+		expect(screen.getByText('רש"י')).toBeInTheDocument();
 		expect(
 			screen.getByText(
 				/לפי כל השיטות היא הייתה בת זוגו; נחלקים רק בטיב הקשר מול התורה/,
@@ -371,7 +369,40 @@ describe("PersonFamilyTree", () => {
 		};
 		render(<PersonFamilyTree summary={summary} />);
 		expect(screen.getAllByText("דלילה").length).toBe(1);
-		expect(screen.getByText('הרמב"ם: נישואין תקפים')).toBeInTheDocument();
+		expect(screen.getByText("שיטה א׳")).toBeInTheDocument();
+	});
+
+	it("shows the shared personal source on a merged multi-opinion spouse card", () => {
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			focalSex: "MALE",
+			spouses: [
+				{
+					related: related("s1", "קטורה"),
+					unionType: "MARRIAGE",
+					unionOrder: 3,
+					altGroupId: "g1",
+					sourceCitation: 'רד"ק בראשית כה א',
+					personSourceCitation: "בראשית כה א",
+					unionEndReason: null,
+					unionStartDate: null,
+					unionEndDate: null,
+				},
+				{
+					related: related("s1", "קטורה"),
+					unionType: "PILEGESH",
+					unionOrder: 3,
+					altGroupId: "g1",
+					sourceCitation: 'רש"י בראשית כה ו',
+					personSourceCitation: "בראשית כה א",
+					unionEndReason: null,
+					unionStartDate: null,
+					unionEndDate: null,
+				},
+			],
+		};
+		render(<PersonFamilyTree summary={summary} />);
+		expect(screen.getAllByText("בראשית כה א").length).toBe(1);
 	});
 
 	it("renders alt group labels when altGroupId set on children", () => {
@@ -505,7 +536,9 @@ describe("PersonFamilyTree", () => {
 		// The aggadic source attests the motherhood claim, so it stays on the mother card.
 		expect(screen.getAllByText('בבא בתרא צא ע"א').length).toBe(1);
 		// The Tanach birth record still reaches the focal card (mother card has none).
-		expect(screen.getAllByRole("link", { name: "בראשית יא כו" }).length).toBe(2);
+		expect(screen.getAllByRole("link", { name: "בראשית יא כו" }).length).toBe(
+			2,
+		);
 	});
 
 	it("shows a sibling's source inside the sibling card", () => {

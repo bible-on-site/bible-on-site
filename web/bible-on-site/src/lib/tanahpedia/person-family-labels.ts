@@ -51,7 +51,8 @@ export function formatUnionYyyymmdd(
 	value: number | string | null | undefined,
 ): string | null {
 	if (value == null || value === "") return null;
-	const n = typeof value === "string" ? Number.parseInt(value, 10) : Number(value);
+	const n =
+		typeof value === "string" ? Number.parseInt(value, 10) : Number(value);
 	if (Number.isNaN(n)) return null;
 	const s = String(Math.trunc(n));
 	if (s.length !== 8) return s;
@@ -65,24 +66,15 @@ export function spousesSectionLabel(focalSex: string | null): string {
 	return "זיווגים";
 }
 
+const OPINION_ORDINALS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳"];
+
 /**
- * כותרת מפורשת לבלוק דעה — כשיש שתי קורות לטיב הקשר (בת זוג אחת).
- * הרמב"ם מול רש"י, רד"ק ותוספות (דוגמה לשיטה שאינה כרמב"ם בשמשון).
+ * כותרת בלוק דעה כשיש כמה שיטות לטיב הקשר עם אותה בת זוג.
+ * הייחוס עצמו מגיע מהמקור של אותה שורה, ולא ממיפוי קשיח של סוג הקשר.
  */
-export function spouseHalachicOpinionTitle(unionTypeCode: string): string {
-	if (unionTypeCode === "MARRIAGE") {
-		return 'הרמב"ם: נישואין תקפים';
-	}
-	if (unionTypeCode === "FORBIDDEN_WITH_GENTILE") {
-		return 'רש"י, רד"ק ותוספות: קשר פסול עם גויה (אינו נישואין כהלכת התורה)';
-	}
-	if (unionTypeCode === "BANNED_INCEST") {
-		return "דעה לדוגמה: קשר אסור מחמת ערוה (אינו כרת קידושין)";
-	}
-	if (unionTypeCode === "BETROTHAL") {
-		return "דעה לדוגמה: אירוסין בלבד — עדיין לא חופה וקידושין";
-	}
-	return unionTypeLabel(unionTypeCode);
+export function spouseOpinionOrdinalTitle(index: number): string {
+	const ordinal = OPINION_ORDINALS[index];
+	return ordinal ? `שיטה ${ordinal}` : `שיטה ${index + 1}`;
 }
 
 /** Sort key: father before mother for consistent RTL row order (father first in DOM → right in RTL). */
@@ -95,7 +87,9 @@ export function parentRoleSortKey(code: string): number {
 /**
  * סימון שמרני בפינה: ז = זכר, נ = נקבה (מקוצר, ללא אייקונים).
  */
-export function personSexCornerMark(sex: string | null | undefined): string | null {
+export function personSexCornerMark(
+	sex: string | null | undefined,
+): string | null {
 	if (sex === "MALE") return "ז";
 	if (sex === "FEMALE") return "נ";
 	return null;
@@ -150,10 +144,7 @@ export function partitionSiblingsForFamilyTree(
 	const younger: PersonFamilyRelatedPerson[] = [];
 	const unknown: PersonFamilyRelatedPerson[] = [];
 
-	if (
-		focalBirthYyyymmdd == null ||
-		!Number.isFinite(focalBirthYyyymmdd)
-	) {
+	if (focalBirthYyyymmdd == null || !Number.isFinite(focalBirthYyyymmdd)) {
 		return splitSiblingsAlphabeticTwoColumns(siblings);
 	}
 
