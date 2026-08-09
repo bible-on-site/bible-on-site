@@ -692,7 +692,9 @@
      הילדים של בת זוג אחת והמטריצה מתקפלת לאנכית גם במסך רחב */
   max-width: 300px;
   min-height: 132px;
-  margin: 0;
+  /* auto inline margins keep the capped cell centred in its track, so the child
+     line stays under the spouse card instead of hugging the track's edge */
+  margin: 0 auto;
   padding: 0;
   border: none;
   display: flex;
@@ -722,7 +724,9 @@
   flex-direction: column;
   justify-content: flex-start;
   align-items: center;
-  /* הקו יוצא מתחתית כרטיס בת הזוג ולא מקו הנישואין שחוצה אותו */
+  /* ממשיך את הקו האנכי עד לקו האופקי של בנות הזוג */
+  margin-top: calc(-1 * var(--matrix-spouse-mid-px, 36px));
+  padding-top: var(--matrix-spouse-mid-px, 36px);
   padding-bottom: 6px;
   min-height: 12px;
 }
