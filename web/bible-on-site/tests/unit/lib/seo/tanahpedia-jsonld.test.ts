@@ -72,7 +72,7 @@ describe("seo/tanahpedia-jsonld", () => {
 	describe("entryPath / categoryPath", () => {
 		it("URL-encodes the unique name and lowercases the category", () => {
 			expect(entryPath("אברהם")).toBe(`/pedia/${encodeURIComponent("אברהם")}`);
-			expect(categoryPath("PERSON")).toBe("/tanahpedia/person");
+			expect(categoryPath("PERSON")).toBe("/pedia/אישים");
 		});
 	});
 

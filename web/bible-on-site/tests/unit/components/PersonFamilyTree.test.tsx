@@ -6,7 +6,7 @@ import {
 	PersonFamilyTree,
 	SPOUSE_MATRIX_COLLAPSE_HYSTERESIS_PX,
 	shouldCollapseSpouseMatrix,
-} from "../../../src/app/tanahpedia/components/PersonFamilyTree";
+} from "../../../src/app/pedia/components/PersonFamilyTree";
 import type {
 	PersonFamilyChildEdge,
 	PersonFamilySpouseEdge,

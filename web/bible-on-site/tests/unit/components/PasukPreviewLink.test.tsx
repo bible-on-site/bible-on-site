@@ -3,9 +3,9 @@
  */
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import {
-	parsePasukRefFromHref,
 	PasukPreviewLink,
-} from "../../../src/app/tanahpedia/components/PasukPreviewLink";
+	parsePasukRefFromHref,
+} from "../../../src/app/pedia/components/PasukPreviewLink";
 
 jest.mock("next/link", () => ({
 	__esModule: true,
@@ -60,7 +60,7 @@ describe("PasukPreviewLink", () => {
 	it("shows the pasuk preview tooltip on hover", async () => {
 		fetchMock.mockResolvedValue({
 			ok: true,
-			json: async () => ({ reference: "בראשית כט כ\"ג", text: "וַיְהִי בָעֶרֶב" }),
+			json: async () => ({ reference: 'בראשית כט כ"ג', text: "וַיְהִי בָעֶרֶב" }),
 		} as Response);
 		render(
 			<PasukPreviewLink href="/929/29#pasuk-23">בראשית כט כג</PasukPreviewLink>,
@@ -103,10 +103,14 @@ describe("PasukPreviewLink", () => {
 			ok: true,
 			json: async () => ({ reference: "r", text: "t" }),
 		} as Response);
-		render(<PasukPreviewLink href="/929/30#pasuk-4">בראשית ל ד</PasukPreviewLink>);
+		render(
+			<PasukPreviewLink href="/929/30#pasuk-4">בראשית ל ד</PasukPreviewLink>,
+		);
 		const link = screen.getByRole("link", { name: "בראשית ל ד" });
 		fireEvent.mouseEnter(link);
-		await waitFor(() => expect(screen.getByRole("tooltip")).toBeInTheDocument());
+		await waitFor(() =>
+			expect(screen.getByRole("tooltip")).toBeInTheDocument(),
+		);
 		fireEvent.mouseLeave(link);
 		jest.advanceTimersByTime(300);
 		await waitFor(() =>
@@ -127,7 +131,9 @@ describe("PasukPreviewLink", () => {
 			ok: false,
 			json: async () => null,
 		} as Response);
-		render(<PasukPreviewLink href="/929/31#pasuk-2">בראשית לא ב</PasukPreviewLink>);
+		render(
+			<PasukPreviewLink href="/929/31#pasuk-2">בראשית לא ב</PasukPreviewLink>,
+		);
 		fireEvent.mouseEnter(screen.getByRole("link", { name: "בראשית לא ב" }));
 		await waitFor(() => expect(fetchMock).toHaveBeenCalled());
 		expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
@@ -135,7 +141,9 @@ describe("PasukPreviewLink", () => {
 
 	it("caches a network failure and does not refetch", async () => {
 		fetchMock.mockRejectedValue(new Error("offline"));
-		render(<PasukPreviewLink href="/929/33#pasuk-4">בראשית לג ד</PasukPreviewLink>);
+		render(
+			<PasukPreviewLink href="/929/33#pasuk-4">בראשית לג ד</PasukPreviewLink>,
+		);
 		const link = screen.getByRole("link", { name: "בראשית לג ד" });
 		fireEvent.mouseEnter(link);
 		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
@@ -150,16 +158,22 @@ describe("PasukPreviewLink", () => {
 			ok: true,
 			json: async () => ({ reference: "r", text: "קובץ" }),
 		} as Response);
-		render(<PasukPreviewLink href="/929/34#pasuk-5">בראשית לד ה</PasukPreviewLink>);
+		render(
+			<PasukPreviewLink href="/929/34#pasuk-5">בראשית לד ה</PasukPreviewLink>,
+		);
 		const link = screen.getByRole("link", { name: "בראשית לד ה" });
 		fireEvent.mouseEnter(link);
-		await waitFor(() => expect(screen.getByRole("tooltip")).toBeInTheDocument());
+		await waitFor(() =>
+			expect(screen.getByRole("tooltip")).toBeInTheDocument(),
+		);
 		fireEvent.mouseLeave(link);
 		await waitFor(() =>
 			expect(screen.queryByRole("tooltip")).not.toBeInTheDocument(),
 		);
 		fireEvent.mouseEnter(link);
-		await waitFor(() => expect(screen.getByRole("tooltip")).toBeInTheDocument());
+		await waitFor(() =>
+			expect(screen.getByRole("tooltip")).toBeInTheDocument(),
+		);
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
@@ -169,10 +183,14 @@ describe("PasukPreviewLink", () => {
 			ok: true,
 			json: async () => ({ reference: "r", text: "נשאר" }),
 		} as Response);
-		render(<PasukPreviewLink href="/929/35#pasuk-6">בראשית לה ו</PasukPreviewLink>);
+		render(
+			<PasukPreviewLink href="/929/35#pasuk-6">בראשית לה ו</PasukPreviewLink>,
+		);
 		const link = screen.getByRole("link", { name: "בראשית לה ו" });
 		fireEvent.mouseEnter(link);
-		await waitFor(() => expect(screen.getByRole("tooltip")).toBeInTheDocument());
+		await waitFor(() =>
+			expect(screen.getByRole("tooltip")).toBeInTheDocument(),
+		);
 		fireEvent.mouseLeave(link);
 		fireEvent.mouseEnter(link);
 		jest.advanceTimersByTime(300);
@@ -186,10 +204,14 @@ describe("PasukPreviewLink", () => {
 			ok: true,
 			json: async () => ({ reference: "r", text: "מרחף" }),
 		} as Response);
-		render(<PasukPreviewLink href="/929/36#pasuk-7">בראשית לו ז</PasukPreviewLink>);
+		render(
+			<PasukPreviewLink href="/929/36#pasuk-7">בראשית לו ז</PasukPreviewLink>,
+		);
 		const link = screen.getByRole("link", { name: "בראשית לו ז" });
 		fireEvent.mouseEnter(link);
-		await waitFor(() => expect(screen.getByRole("tooltip")).toBeInTheDocument());
+		await waitFor(() =>
+			expect(screen.getByRole("tooltip")).toBeInTheDocument(),
+		);
 		fireEvent.mouseLeave(link);
 		fireEvent.mouseEnter(screen.getByRole("tooltip"));
 		jest.advanceTimersByTime(300);

@@ -44,6 +44,13 @@ jest.mock("../../../src/lib/tanahpedia/service", () => ({
 	},
 }));
 
+import { render, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { EntryView } from "../../../src/app/pedia/[slug]/entry-view";
+import {
+	generateMetadata,
+	generateStaticParams,
+} from "../../../src/app/pedia/[slug]/page";
 import {
 	getAllEntryUniqueNames,
 	getEntries,
@@ -52,16 +59,9 @@ import {
 	getPersonFamilySummary,
 	getPlaceMapMarkersForEntry,
 } from "../../../src/lib/tanahpedia/service";
-import { render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
-import EntryPage, {
-	generateMetadata,
-	generateStaticParams,
-} from "../../../src/app/pedia/[uniqueName]/page";
 
-const mockGetAllEntryUniqueNames = getAllEntryUniqueNames as jest.MockedFunction<
-	typeof getAllEntryUniqueNames
->;
+const mockGetAllEntryUniqueNames =
+	getAllEntryUniqueNames as jest.MockedFunction<typeof getAllEntryUniqueNames>;
 const mockGetEntryByUniqueName = getEntryByUniqueName as jest.MockedFunction<
 	typeof getEntryByUniqueName
 >;
@@ -90,29 +90,35 @@ describe("pedia/[uniqueName] page", () => {
 
 			const result = await generateStaticParams();
 
-			expect(result).toEqual([
-				{ uniqueName: "משה-רבנו" },
-				{ uniqueName: "יהושע-בן-נון" },
-				{ uniqueName: "דוד-המלך" },
-			]);
+			expect(result).toEqual(
+				expect.arrayContaining([
+					{ slug: "משה-רבנו" },
+					{ slug: "יהושע-בן-נון" },
+					{ slug: "דוד-המלך" },
+				]),
+			);
 		});
 
-		it("returns empty array when database is unavailable", async () => {
+		it("still returns the category slugs when the database is unavailable", async () => {
 			mockGetAllEntryUniqueNames.mockRejectedValue(
 				new Error("Database connection failed"),
 			);
 
 			const result = await generateStaticParams();
 
-			expect(result).toEqual([]);
+			expect(result).toEqual(
+				expect.arrayContaining([{ slug: "אישים" }, { slug: "נביאים" }]),
+			);
 		});
 
-		it("returns empty array when no entries exist", async () => {
+		it("returns only category slugs when no entries exist", async () => {
 			mockGetAllEntryUniqueNames.mockResolvedValue([]);
 
 			const result = await generateStaticParams();
 
-			expect(result).toEqual([]);
+			expect(result).toEqual(
+				expect.arrayContaining([{ slug: "אישים" }, { slug: "מקומות" }]),
+			);
 		});
 	});
 
@@ -129,7 +135,8 @@ describe("pedia/[uniqueName] page", () => {
 			});
 
 			const result = await generateMetadata({
-				params: Promise.resolve({ uniqueName: encodeURIComponent("משה-רבנו") }),
+				params: Promise.resolve({ slug: encodeURIComponent("משה-רבנו") }),
+				searchParams: Promise.resolve({}),
 			});
 
 			expect(result).toEqual({
@@ -150,7 +157,8 @@ describe("pedia/[uniqueName] page", () => {
 			});
 
 			const result = await generateMetadata({
-				params: Promise.resolve({ uniqueName: encodeURIComponent("משה-רבנו") }),
+				params: Promise.resolve({ slug: encodeURIComponent("משה-רבנו") }),
+				searchParams: Promise.resolve({}),
 			});
 
 			expect(result).toEqual({
@@ -163,7 +171,8 @@ describe("pedia/[uniqueName] page", () => {
 			mockGetEntryByUniqueName.mockResolvedValue(null);
 
 			const result = await generateMetadata({
-				params: Promise.resolve({ uniqueName: "nonexistent" }),
+				params: Promise.resolve({ slug: "nonexistent" }),
+				searchParams: Promise.resolve({}),
 			});
 
 			expect(result).toEqual({
@@ -184,7 +193,8 @@ describe("pedia/[uniqueName] page", () => {
 
 			const encoded = encodeURIComponent("שמשון");
 			const result = await generateMetadata({
-				params: Promise.resolve({ uniqueName: encoded }),
+				params: Promise.resolve({ slug: encoded }),
+				searchParams: Promise.resolve({}),
 			});
 
 			expect(mockGetEntryByUniqueName).toHaveBeenCalledWith("שמשון");
@@ -195,12 +205,11 @@ describe("pedia/[uniqueName] page", () => {
 		});
 
 		it("returns not found when database query fails", async () => {
-			mockGetEntryByUniqueName.mockRejectedValue(
-				new Error("Database error"),
-			);
+			mockGetEntryByUniqueName.mockRejectedValue(new Error("Database error"));
 
 			const result = await generateMetadata({
-				params: Promise.resolve({ uniqueName: "test" }),
+				params: Promise.resolve({ slug: "test" }),
+				searchParams: Promise.resolve({}),
 			});
 
 			expect(result).toEqual({
@@ -209,7 +218,7 @@ describe("pedia/[uniqueName] page", () => {
 		});
 	});
 
-	describe("EntryPage", () => {
+	describe("EntryView", () => {
 		afterEach(() => {
 			jest.restoreAllMocks();
 		});
@@ -246,9 +255,7 @@ describe("pedia/[uniqueName] page", () => {
 				],
 			});
 
-			const result = await EntryPage({
-				params: Promise.resolve({ uniqueName: "משה-רבנו" }),
-			});
+			const result = await EntryView({ slug: "משה-רבנו" });
 
 			render(result as ReactElement);
 			expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
@@ -296,16 +303,16 @@ describe("pedia/[uniqueName] page", () => {
 				entities: [],
 			});
 
-			const result = await EntryPage({
-				params: Promise.resolve({ uniqueName: "empty" }),
-			});
+			const result = await EntryView({ slug: "empty" });
 
 			render(result as ReactElement);
 			expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
 				"Empty Entry",
 			);
 			expect(
-				screen.getByText(/\u05d0\u05d9\u05df \u05ea\u05d5\u05db\u05df \u05e2\u05d3\u05d9\u05d9\u05df/),
+				screen.getByText(
+					/\u05d0\u05d9\u05df \u05ea\u05d5\u05db\u05df \u05e2\u05d3\u05d9\u05d9\u05df/,
+				),
 			).toBeInTheDocument();
 			expect(mockGetEntries).toHaveBeenCalledWith(500, 0);
 		});
@@ -323,9 +330,7 @@ describe("pedia/[uniqueName] page", () => {
 				entities: [],
 			});
 
-			const result = await EntryPage({
-				params: Promise.resolve({ uniqueName: "no-siblings" }),
-			});
+			const result = await EntryView({ slug: "no-siblings" });
 
 			render(result as ReactElement);
 			expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
@@ -400,14 +405,18 @@ describe("pedia/[uniqueName] page", () => {
 				],
 			});
 
-			const result = await EntryPage({
-				params: Promise.resolve({ uniqueName: "map-family" }),
-			});
+			const result = await EntryView({ slug: "map-family" });
 
 			render(result as ReactElement);
-			expect(screen.getByRole("heading", { level: 2, name: "\u05de\u05e4\u05d4" })).toBeInTheDocument();
-			expect(screen.getByText(/docs\/tanahpedia\/places-map-plan\.md/)).toBeInTheDocument();
-			expect(screen.getByText("\u05de\u05e9\u05e4\u05d7\u05d4")).toBeInTheDocument();
+			expect(
+				screen.getByRole("heading", { level: 2, name: "\u05de\u05e4\u05d4" }),
+			).toBeInTheDocument();
+			expect(
+				screen.getByText(/docs\/tanahpedia\/places-map-plan\.md/),
+			).toBeInTheDocument();
+			expect(
+				screen.getByText("\u05de\u05e9\u05e4\u05d7\u05d4"),
+			).toBeInTheDocument();
 			expect(mockGetEntriesByEntityType).toHaveBeenCalledWith("PLACE");
 			expect(mockGetPersonFamilySummary).toHaveBeenCalledWith(
 				"person-entity",

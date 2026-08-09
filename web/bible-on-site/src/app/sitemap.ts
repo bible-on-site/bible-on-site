@@ -4,7 +4,9 @@ import type { ArticlePerekPair } from "../lib/articles";
 import { getAllArticlePerekIdPairs } from "../lib/articles";
 import { getAllAuthorSlugs } from "../lib/authors";
 import { getPerushimByPerekId } from "../lib/perushim";
+import { CATEGORY_SLUGS, categoryHref } from "../lib/tanahpedia/category-slug";
 import { getAllEntryUniqueNames } from "../lib/tanahpedia/service";
+import type { CategoryKey } from "../lib/tanahpedia/types";
 
 /**
  * Static section paths for the sitemap
@@ -168,6 +170,34 @@ export function generatePediaEntries(
 }
 
 /**
+ * Generates the Tanahpedia landing page entry (`/pedia`).
+ */
+export function generatePediaIndexEntry(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap[0] {
+	return {
+		url: `${config.baseUrl}/pedia`,
+		lastModified: config.lastModified,
+		changeFrequency: "daily",
+		priority: 0.9,
+	};
+}
+
+/**
+ * Generates the Hebrew-slug category listing entries (`/pedia/<category>`).
+ */
+export function generatePediaCategoryEntries(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap {
+	return (Object.keys(CATEGORY_SLUGS) as CategoryKey[]).map((key) => ({
+		url: `${config.baseUrl}${categoryHref(key)}`,
+		lastModified: config.lastModified,
+		changeFrequency: "weekly" as const,
+		priority: 0.8,
+	}));
+}
+
+/**
  * Generates the complete sitemap entries (pure function for testing)
  */
 export function generateSitemapEntries(
@@ -186,6 +216,8 @@ export function generateSitemapEntries(
 		...generatePerushEntries(config, perushim),
 		generateAuthorsIndexEntry(config),
 		...generateAuthorEntries(config, authorSlugs),
+		generatePediaIndexEntry(config),
+		...generatePediaCategoryEntries(config),
 		...generatePediaEntries(config, pediaUniqueNames),
 	];
 }

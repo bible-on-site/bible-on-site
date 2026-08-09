@@ -4,10 +4,7 @@
 import { NextRequest } from "next/server";
 import { config, proxy } from "@/proxy";
 
-function makeRequest(
-	pathname: string,
-	opts?: { ua?: string },
-): NextRequest {
+function makeRequest(pathname: string, opts?: { ua?: string }): NextRequest {
 	const headers: Record<string, string> = {};
 	if (opts?.ua) headers["user-agent"] = opts.ua;
 	return new NextRequest(new URL(pathname, "https://localhost"), { headers });
@@ -86,6 +83,54 @@ describe("proxy", () => {
 
 		it("returns undefined when no user-agent is set", async () => {
 			const result = await proxy(makeRequest("/929/1"));
+			expect(result).toBeUndefined();
+		});
+	});
+
+	describe("legacy tanahpedia alias", () => {
+		it.each([
+			["/tanahpedia", "/pedia"],
+			["/tanahpedia/", "/pedia"],
+			["/tanahpedia/person", `/pedia/${encodeURIComponent("אישים")}`],
+			[
+				"/tanahpedia/person?role=prophet",
+				`/pedia/${encodeURIComponent("אישים")}?role=${encodeURIComponent("נביאים")}`,
+			],
+			[
+				"/tanahpedia/animal?kind=chaya",
+				`/pedia/${encodeURIComponent("בעלי-חיים")}?kind=${encodeURIComponent("חיות")}`,
+			],
+			[
+				"/tanahpedia/animal?purity=tahor",
+				`/pedia/${encodeURIComponent("בעלי-חיים")}?purity=${encodeURIComponent("טהורים")}`,
+			],
+			["/tanahpedia/nonsense", "/pedia"],
+			["/pedia/person", `/pedia/${encodeURIComponent("אישים")}`],
+			[
+				"/pedia/person?role=prophet",
+				`/pedia/${encodeURIComponent("אישים")}?role=${encodeURIComponent("נביאים")}`,
+			],
+		])("redirects %s permanently", async (path, expectedPath) => {
+			const result = await proxy(makeRequest(path));
+
+			expect(result?.status).toBe(308);
+			expect(result?.headers.get("location")).toBe(
+				`https://localhost${expectedPath}`,
+			);
+		});
+
+		it("leaves the tanahpedia preview API untouched", async () => {
+			const result = await proxy(makeRequest("/api/tanahpedia/preview/moshe"));
+			expect(result).toBeUndefined();
+		});
+
+		it.each([
+			"/pedia",
+			`/pedia/${encodeURIComponent("אישים")}`,
+			`/pedia/${encodeURIComponent("נביאים")}`,
+			`/pedia/${encodeURIComponent("משה-רבנו")}`,
+		])("leaves canonical %s untouched", async (path) => {
+			const result = await proxy(makeRequest(path));
 			expect(result).toBeUndefined();
 		});
 	});
