@@ -10,7 +10,7 @@ import {
 } from "react";
 import {
 	compareChildEdgesChronology,
-	shouldApplyJacobChildChronology,
+	shouldApplyChildBirthChronology,
 } from "@/lib/tanahpedia/person-family-chronology";
 import {
 	childGroupByCoParentLabel,
@@ -110,7 +110,7 @@ function buildPartnerChildColumns(
 	columnChildren: Map<string, PersonFamilyChildEdge[]>;
 	looseChildren: PersonFamilyChildEdge[];
 } {
-	const chronology = shouldApplyJacobChildChronology(
+	const chronology = shouldApplyChildBirthChronology(
 		focalDisplayName,
 		childEdges,
 	);
@@ -708,12 +708,39 @@ export function shouldCollapseSpouseMatrix({
 	return previous;
 }
 
+/**
+ * המרחק האנכי מקו הנישואין האופקי אל ראש עמוד הילדים, לפני שהעמוד נמשך כלפי מעלה.
+ * נמדד בפועל (ולא בהנחת מרווח קבוע) כדי שהקו יימשך רציף גם כשיש שורת תווית "ילדים"
+ * בין שורת בנות הזוג לעמודות.
+ */
+function measureSpouseMidPx({
+	outer,
+	rowRect,
+	lineCenterY,
+}: {
+	outer: HTMLElement | null;
+	rowRect: DOMRect;
+	lineCenterY: number;
+}): number {
+	const fallback = Math.max(12, Math.round(rowRect.height - lineCenterY + 8));
+	const trunk = outer?.querySelector<HTMLElement>("[data-matrix-column-trunk]");
+	if (!outer || !trunk) return fallback;
+	const appliedMid = Number.parseFloat(
+		getComputedStyle(outer).getPropertyValue("--matrix-spouse-mid-px"),
+	);
+	if (!Number.isFinite(appliedMid)) return fallback;
+	const trunkTopWithoutPull = trunk.getBoundingClientRect().top + appliedMid;
+	return Math.max(
+		12,
+		Math.round(trunkTopWithoutPull - (rowRect.top + lineCenterY)),
+	);
+}
+
 type MobileMatrixColumn = {
 	unit: SpouseUnit;
 	partnerId: string;
 	kids: PersonFamilyChildEdge[];
 };
-
 /**
  * פריסת מובייל למטריצת בן-זוג+ילדים (יעקב וכד'): במקום מטריצה אופקית עם גלילה
  * צידית, כל בת זוג מוצגת מעל ילדיה בטור אנכי — כך שהכל נקרא ברוחב טלפון בלי
@@ -808,7 +835,7 @@ function PersonFamilyTreeContent({
 		if (ak !== bk) return ak.localeCompare(bk);
 		return a.related.displayName.localeCompare(b.related.displayName, "he");
 	});
-	const sortedChildren = shouldApplyJacobChildChronology(
+	const sortedChildren = shouldApplyChildBirthChronology(
 		focalDisplayName,
 		sortedChildrenBase,
 	)
@@ -817,7 +844,7 @@ function PersonFamilyTreeContent({
 			)
 		: sortedChildrenBase;
 
-	const childEdgeCmp = shouldApplyJacobChildChronology(
+	const childEdgeCmp = shouldApplyChildBirthChronology(
 		focalDisplayName,
 		sortedChildren,
 	)
@@ -868,40 +895,40 @@ function PersonFamilyTreeContent({
 	/** סדר בנות הזוג לפי סדר הנישואין / union_order ב־DB, לא לפי לידת ילד ראשון */
 	const orderedSpouseUnits = spouseUnits;
 
-	const jacobChildrenSequenceLayout =
+	const childTimelineLayout =
 		matrixEligible &&
-		shouldApplyJacobChildChronology(focalDisplayName, sortedChildren);
+		shouldApplyChildBirthChronology(focalDisplayName, sortedChildren);
 
 	const spousePartnerIdsForSeq = new Set(
 		spouseUnits.map((u) => u.edges[0].related.entityId),
 	);
-	const jacobMappedChildren = sortedChildren.filter(
+	const timelineMappedChildren = sortedChildren.filter(
 		(c) =>
 			c.coParentEntityId != null &&
 			spousePartnerIdsForSeq.has(c.coParentEntityId),
 	);
-	const jacobLooseChildren = sortedChildren.filter(
+	const timelineLooseChildren = sortedChildren.filter(
 		(c) =>
 			c.coParentEntityId == null ||
 			!spousePartnerIdsForSeq.has(c.coParentEntityId),
 	);
 
-	const showJacobLooseTopCell =
-		jacobChildrenSequenceLayout && jacobLooseChildren.length > 0;
+	const showTimelineLooseTopCell =
+		childTimelineLayout && timelineLooseChildren.length > 0;
 
-	const jacobGlobalChildTimeline = jacobChildrenSequenceLayout
+	const globalChildTimeline = childTimelineLayout
 		? [
-				...[...jacobMappedChildren].sort((a, b) =>
+				...[...timelineMappedChildren].sort((a, b) =>
 					compareChildEdgesChronology(a, b, focalDisplayName),
 				),
-				...[...jacobLooseChildren].sort((a, b) =>
+				...[...timelineLooseChildren].sort((a, b) =>
 					compareChildEdgesChronology(a, b, focalDisplayName),
 				),
 			]
 		: [];
 
-	const matrixColCount = jacobChildrenSequenceLayout
-		? orderedSpouseUnits.length + (showJacobLooseTopCell ? 1 : 0)
+	const matrixColCount = childTimelineLayout
+		? orderedSpouseUnits.length + (showTimelineLooseTopCell ? 1 : 0)
 		: looseChildren.length > 0
 			? orderedSpouseUnits.length + 1
 			: orderedSpouseUnits.length;
@@ -971,7 +998,13 @@ function PersonFamilyTreeContent({
 				lineCenterY = Math.min(...cardCenters.map(({ y }) => y));
 			}
 			setMatrixMarriageLineYpx(Math.max(8, Math.round(lineCenterY)));
-			setMatrixSpouseMidPx(Math.max(12, Math.round(rowH - lineCenterY + 8)));
+			setMatrixSpouseMidPx(
+				measureSpouseMidPx({
+					outer: el.parentElement,
+					rowRect,
+					lineCenterY,
+				}),
+			);
 			el.style.setProperty(
 				"--matrix-line-start-y",
 				`${Math.round(Math.min(...cardCenters.map(({ y }) => y)))}px`,
@@ -1080,23 +1113,21 @@ function PersonFamilyTreeContent({
 		return () => ro.disconnect();
 	}, [spouseOnlyRail, isNarrow]);
 
-	/* פריסת מובייל למטריצה: כל בת זוג + ילדיה בטור, לפי סדר הכרונולוגיה של יעקב
+	/* פריסת מובייל למטריצה: כל בת זוג + ילדיה בטור, לפי סדר הכרונולוגיה
 	 * או לפי עמודות בת-הזוג במטריצה הרגילה. נשמר סדר הילדים כמו בדסקטופ. */
 	const mobileMatrixColumns: MobileMatrixColumn[] = matrixEligible
 		? orderedSpouseUnits.map((unit) => {
 				const partnerId = unit.edges[0].related.entityId;
-				const kids = jacobChildrenSequenceLayout
-					? jacobGlobalChildTimeline.filter(
-							(c) => c.coParentEntityId === partnerId,
-						)
+				const kids = childTimelineLayout
+					? globalChildTimeline.filter((c) => c.coParentEntityId === partnerId)
 					: (columnChildren.get(partnerId) ?? []);
 				return { unit, partnerId, kids };
 			})
 		: [];
 
 	const mobileMatrixLooseChildren: PersonFamilyChildEdge[] = matrixEligible
-		? jacobChildrenSequenceLayout
-			? jacobGlobalChildTimeline.filter(
+		? childTimelineLayout
+			? globalChildTimeline.filter(
 					(c) =>
 						c.coParentEntityId == null ||
 						!spousePartnerIdsForSeq.has(c.coParentEntityId),
@@ -1438,9 +1469,8 @@ function PersonFamilyTreeContent({
 													/>
 												</div>
 											))}
-											{showJacobLooseTopCell ||
-											(!jacobChildrenSequenceLayout &&
-												looseChildren.length > 0) ? (
+											{showTimelineLooseTopCell ||
+											(!childTimelineLayout && looseChildren.length > 0) ? (
 												<div
 													key="sp-top-loose"
 													className={styles.matrixSpouseCell}
@@ -1457,15 +1487,15 @@ function PersonFamilyTreeContent({
 											) : null}
 										</div>
 
-										{jacobChildrenSequenceLayout ? (
-											<div className={styles.jacobSwimlaneOuter}>
+										{childTimelineLayout ? (
+											<div className={styles.childTimelineOuter}>
 												<div className={styles.matrixChildrenTierLabel}>
 													<span className={styles.familyTreeSectionLabel}>
 														ילדים
 													</span>
 												</div>
 												<div
-													className={styles.jacobSwimlaneFlat}
+													className={styles.childTimelineFlat}
 													style={{
 														gridTemplateColumns: `repeat(${matrixColCount}, minmax(128px, 1fr))`,
 													}}
@@ -1473,25 +1503,27 @@ function PersonFamilyTreeContent({
 													{orderedSpouseUnits.map((unit, colIdx) => (
 														<div
 															key={`trunk-${unit.edges[0].related.entityId}`}
-															className={styles.jacobSwimlaneTrunk}
+															className={styles.childTimelineTrunk}
+															data-matrix-column-trunk=""
 															style={{
 																gridColumn: colIdx + 1,
-																gridRow: `1 / ${jacobGlobalChildTimeline.length + 1}`,
+																gridRow: `1 / ${globalChildTimeline.length + 1}`,
 															}}
 															aria-hidden
 														/>
 													))}
-													{showJacobLooseTopCell ? (
+													{showTimelineLooseTopCell ? (
 														<div
-															className={styles.jacobSwimlaneTrunk}
+															className={styles.childTimelineTrunk}
+															data-matrix-column-trunk=""
 															style={{
 																gridColumn: orderedSpouseUnits.length + 1,
-																gridRow: `1 / ${jacobGlobalChildTimeline.length + 1}`,
+																gridRow: `1 / ${globalChildTimeline.length + 1}`,
 															}}
 															aria-hidden
 														/>
 													) : null}
-													{jacobGlobalChildTimeline.flatMap((child, rowIdx) => {
+													{globalChildTimeline.flatMap((child, rowIdx) => {
 														const rowNumber = rowIdx + 1;
 														const rowKey = `${child.related.entityId}-${child.parentRole}-${child.relationshipType}-${child.coParentEntityId ?? "loose"}`;
 														return [
@@ -1503,8 +1535,8 @@ function PersonFamilyTreeContent({
 																		key={`swim-${pid}-${rowKey}`}
 																		className={
 																			isMatch
-																				? styles.jacobSwimlaneCell
-																				: styles.jacobSwimlaneCellEmpty
+																				? styles.childTimelineCell
+																				: styles.childTimelineCellEmpty
 																		}
 																		style={{
 																			gridColumn: colIdx + 1,
@@ -1517,7 +1549,7 @@ function PersonFamilyTreeContent({
 																	</div>
 																);
 															}),
-															...(showJacobLooseTopCell
+															...(showTimelineLooseTopCell
 																? [
 																		(() => {
 																			const isLoose =
@@ -1530,8 +1562,8 @@ function PersonFamilyTreeContent({
 																					key={`swim-loose-${rowKey}`}
 																					className={
 																						isLoose
-																							? styles.jacobSwimlaneCell
-																							: styles.jacobSwimlaneCellEmpty
+																							? styles.childTimelineCell
+																							: styles.childTimelineCellEmpty
 																					}
 																					style={{
 																						gridColumn:
@@ -1581,6 +1613,7 @@ function PersonFamilyTreeContent({
 															</legend>
 															<div
 																className={styles.marriageColumnTrunk}
+																data-matrix-column-trunk=""
 																aria-hidden
 															>
 																<div className={styles.marriageColumnLine} />
@@ -1606,6 +1639,7 @@ function PersonFamilyTreeContent({
 														</legend>
 														<div
 															className={styles.marriageColumnTrunk}
+															data-matrix-column-trunk=""
 															aria-hidden
 														>
 															<div className={styles.marriageColumnLine} />
