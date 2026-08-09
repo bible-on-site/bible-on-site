@@ -102,6 +102,20 @@ Lookup values (case-insensitive):
 - `endReason`: `DEATH`, `DIVORCE`
 - Citations: max 400 characters.
 
+## Citation style — must be pasuk-linked
+
+Tanah citations are auto-linked to `/929/<perek>#pasuk-<n>` by
+`web/bible-on-site/src/lib/tanahpedia/tanach-citation-links.tsx`. The parser reads
+`<sefer> <perek> <pasuk>` as **whitespace-separated Hebrew-letter tokens**, so any punctuation
+inside the reference breaks the match and the citation renders as dead plain text.
+
+- **No commas.** Correct: `בראשית יא כו`. Wrong: `בראשית יא, כו` (renders as dead plain text).
+- Ranges use a hyphen inside the pasuk token: `בראשית כא ב-ג`.
+- Gematria letters only; use ASCII `"` for gershayim, never the Hebrew gershayim character.
+- Non-Tanah sources (Gemara, Midrash) legitimately stay unlinked — e.g. `בבא בתרא צא ע"א`.
+- After writing, verify the rendered page actually emits `citationTanachLink` anchors. An accepted
+  mutation does not prove the citation is linkable.
+
 ## Required sequence
 
 1. `git fetch` and inspect the checked-out resolvers/schema — never assume a mutation from another branch is deployed.
