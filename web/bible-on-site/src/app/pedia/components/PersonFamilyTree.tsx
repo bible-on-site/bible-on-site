@@ -26,7 +26,10 @@ import {
 	unionEndReasonLabel,
 	unionTypeLabel,
 } from "@/lib/tanahpedia/person-family-labels";
-import { renderFamilyTreeCitationLine } from "@/lib/tanahpedia/tanach-citation-links";
+import {
+	hasTanachRef,
+	renderFamilyTreeCitationLine,
+} from "@/lib/tanahpedia/tanach-citation-links";
 import type {
 	PersonFamilyChildEdge,
 	PersonFamilyParentEdge,
@@ -1126,13 +1129,16 @@ function PersonFamilyTreeContent({
 			})
 		);
 
-	// The focal person's own source: distinct citations from their child-side parent rows.
+	// The focal person's own source is their Tanah birth record. A non-Tanah source
+	// (e.g. חז"ל identifying a parent) attests that parent claim only, so it stays on
+	// the parent's card instead of being attributed to the focal person.
 	const focalSourceCitation =
 		[
 			...new Set(
 				parents
 					.map((p) => p.sourceCitation?.trim())
-					.filter((c): c is string => Boolean(c)),
+					.filter((c): c is string => Boolean(c))
+					.filter(hasTanachRef),
 			),
 		].join("\n") || null;
 
