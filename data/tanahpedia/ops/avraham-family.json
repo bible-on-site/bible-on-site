@@ -1,0 +1,67 @@
+{
+	"endpoint": "http://127.0.0.1:3003/",
+	"personNodes": [
+		{
+			"entityId": "7aa083db-c77b-49a0-8bd6-80224a911013",
+			"personId": "9458dd10-43e8-4f09-b2b4-6a77c02e6779",
+			"sexId": "cc1bfef7-5633-4112-a5f6-6cc72a33e24d",
+			"displayName": "תרח",
+			"sex": "MALE"
+		},
+		{
+			"entityId": "a97c9d01-9a6f-4491-a712-53871dd6205c",
+			"personId": "9869a501-796f-4302-a050-40d0a75878dd",
+			"sexId": "6124de82-1fdd-481c-9872-79918ff506eb",
+			"displayName": "הרן",
+			"sex": "MALE"
+		},
+		{
+			"entityId": "0ebeb3f7-6b46-41fa-9696-3663832b603c",
+			"personId": "2b29965b-f336-4ae5-a5dc-63c9166c3bb6",
+			"sexId": "c247fb67-0050-45fe-a337-d3e8985f0885",
+			"displayName": "נחור",
+			"sex": "MALE"
+		},
+		{
+			"entityId": "993d25db-da66-4123-8ccd-83b7c06a853e",
+			"personId": "2bb25584-d9da-4ad6-aaea-9173e6eb1e32",
+			"sexId": "5cc1f165-ce8d-4cbd-ae17-f1d861ea51a5",
+			"displayName": "אמתלאי",
+			"sex": "FEMALE"
+		}
+	],
+	"parentChildLinks": [
+		{
+			"id": "1e8a8205-350b-4f20-9fad-b19e1984721c",
+			"parentPersonId": "9458dd10-43e8-4f09-b2b4-6a77c02e6779",
+			"childPersonId": "0d1f7f2e-3a54-4b8e-9c67-a1b2c3d4e502",
+			"relationshipType": "BIOLOGICAL",
+			"parentRole": "FATHER",
+			"sourceCitation": "בראשית יא, כו"
+		},
+		{
+			"id": "7fc12289-c1d2-4b57-9f4d-05e959bb2b96",
+			"parentPersonId": "2bb25584-d9da-4ad6-aaea-9173e6eb1e32",
+			"childPersonId": "0d1f7f2e-3a54-4b8e-9c67-a1b2c3d4e502",
+			"relationshipType": "BIOLOGICAL",
+			"parentRole": "MOTHER",
+			"sourceCitation": "בבא בתרא צא ע\"א"
+		},
+		{
+			"id": "7841ba77-5aca-4f9e-8849-2023bd80d9e0",
+			"parentPersonId": "9458dd10-43e8-4f09-b2b4-6a77c02e6779",
+			"childPersonId": "9869a501-796f-4302-a050-40d0a75878dd",
+			"relationshipType": "BIOLOGICAL",
+			"parentRole": "FATHER",
+			"sourceCitation": "בראשית יא, כו"
+		},
+		{
+			"id": "cf94003d-4755-42ba-a5a9-3bbc09687a9b",
+			"parentPersonId": "9458dd10-43e8-4f09-b2b4-6a77c02e6779",
+			"childPersonId": "2b29965b-f336-4ae5-a5dc-63c9166c3bb6",
+			"relationshipType": "BIOLOGICAL",
+			"parentRole": "FATHER",
+			"sourceCitation": "בראשית יא, כו"
+		}
+	]
+}
