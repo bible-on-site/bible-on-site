@@ -22,22 +22,6 @@ export const CATEGORY_HIERARCHY: CategoryHierarchyItem[] = [
 	{ type: "NATION" },
 ];
 
-const ANIMAL_KINDS: CategoryKey[] = ["BEHEMA", "CHAYA", "OF", "SHERETZ"];
-const ANIMAL_PURITIES: CategoryKey[] = ["TAHOR", "TAMEH"];
-
-export function subcategoryHref(key: CategoryKey): string {
-	if (key === "PROPHET" || key === "KING") {
-		return `/tanahpedia/person?role=${key.toLowerCase()}`;
-	}
-	if (ANIMAL_KINDS.includes(key)) {
-		return `/tanahpedia/animal?kind=${key.toLowerCase()}`;
-	}
-	if (ANIMAL_PURITIES.includes(key)) {
-		return `/tanahpedia/animal?purity=${key.toLowerCase()}`;
-	}
-	return `/tanahpedia/${key.toLowerCase()}`;
-}
-
 export function labelForCategoryKey(key: CategoryKey): string {
 	return CATEGORY_LABELS[key] ?? ENTITY_TYPE_LABELS[key as EntityType] ?? key;
 }

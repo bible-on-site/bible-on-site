@@ -2,14 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { JsonLd } from "@/app/components/JsonLd";
-import { PersonFamilyTree } from "@/app/tanahpedia/components/PersonFamilyTree";
-import { TanahpediaBreadcrumb } from "@/app/tanahpedia/components/TanahpediaBreadcrumb";
-import { TanahpediaPlacesMap } from "@/app/tanahpedia/components/TanahpediaPlacesMap";
-import styles from "@/app/tanahpedia/page.module.css";
 import { buildEntryGraph } from "@/lib/seo/tanahpedia-jsonld";
+import { categoryHref } from "@/lib/tanahpedia/category-slug";
 import {
 	ENTITY_TYPE_LABELS,
-	getAllEntryUniqueNames,
 	getEntries,
 	getEntriesByEntityType,
 	getEntryByUniqueName,
@@ -18,8 +14,10 @@ import {
 } from "@/lib/tanahpedia/service";
 import type { CategoryKey, EntityType } from "@/lib/tanahpedia/types";
 import { normalizedUniqueNameFromParam } from "@/lib/tanahpedia/unique-name-param";
-
-export const dynamic = "force-dynamic";
+import { PersonFamilyTree } from "../components/PersonFamilyTree";
+import { TanahpediaBreadcrumb } from "../components/TanahpediaBreadcrumb";
+import { TanahpediaPlacesMap } from "../components/TanahpediaPlacesMap";
+import styles from "../page.module.css";
 
 /** Plain-text snippet for meta description (entry content may be HTML). */
 function metaDescriptionFromContent(html: string, maxLen: number): string {
@@ -30,29 +28,10 @@ function metaDescriptionFromContent(html: string, maxLen: number): string {
 	return plain.slice(0, maxLen);
 }
 
-// this reserverd function is a magic for caching
-/* istanbul ignore next: only runs during next build */
-export async function generateStaticParams() {
-	try {
-		const uniqueNames = await getAllEntryUniqueNames();
-		// Decoded segment values — Next encodes URLs; runtime `params` match this shape.
-		return uniqueNames.map((uniqueName) => ({ uniqueName }));
-	} catch {
-		// If database is unavailable during build, return empty array
-		// Pages will be generated on-demand
-		return [];
-	}
-}
-
-export async function generateMetadata({
-	params,
-}: {
-	params: Promise<{ uniqueName: string }>;
-}): Promise<Metadata> {
-	const { uniqueName } = await params;
+export async function entryMetadata(slug: string): Promise<Metadata> {
 	try {
 		const entry = await getEntryByUniqueName(
-			normalizedUniqueNameFromParam(uniqueName),
+			normalizedUniqueNameFromParam(slug),
 		);
 		if (!entry) return { title: "לא נמצא" };
 		const fromContent = entry.content
@@ -67,15 +46,8 @@ export async function generateMetadata({
 	}
 }
 
-export default async function EntryPage({
-	params,
-}: {
-	params: Promise<{ uniqueName: string }>;
-}) {
-	const { uniqueName } = await params;
-	const entry = await getEntryByUniqueName(
-		normalizedUniqueNameFromParam(uniqueName),
-	);
+export async function EntryView({ slug }: { slug: string }) {
+	const entry = await getEntryByUniqueName(normalizedUniqueNameFromParam(slug));
 	if (!entry) notFound();
 
 	// Get the primary entity type for breadcrumb (use first entity if available)
@@ -163,7 +135,7 @@ export default async function EntryPage({
 					{entry.entities.map((ee) => (
 						<Link
 							key={ee.id}
-							href={`/tanahpedia/${ee.entityType.toLowerCase()}`}
+							href={categoryHref(ee.entityType as EntityType)}
 							className={styles.entityBadge}
 						>
 							{ENTITY_TYPE_LABELS[ee.entityType as EntityType] ?? ee.entityType}
@@ -197,7 +169,7 @@ export default async function EntryPage({
 			)}
 
 			<div className={styles.backLinkWrapper}>
-				<Link href="/tanahpedia" className={styles.backLink}>
+				<Link href="/pedia" className={styles.backLink}>
 					חזרה לתנכפדיה
 				</Link>
 			</div>

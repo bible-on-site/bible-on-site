@@ -1,4 +1,5 @@
 import type { Graph, Thing } from "schema-dts";
+import { categoryHref } from "@/lib/tanahpedia/category-slug";
 import type {
 	EntityType,
 	EntryWithEntities,
@@ -19,7 +20,7 @@ import {
 
 export { plainText };
 
-export const TANAHPEDIA_PATH = "/tanahpedia";
+export const TANAHPEDIA_PATH = "/pedia";
 /** Stable `@id` of the Tanahpedia dictionary (the DefinedTermSet). */
 export const TANAHPEDIA_SET_ID = `${SITE_ORIGIN}${TANAHPEDIA_PATH}#definedtermset`;
 export const TANAHPEDIA_LABEL = "תנכפדיה";
@@ -54,7 +55,7 @@ export function entryPath(uniqueName: string): string {
 
 /** Category listing path for an entity type. */
 export function categoryPath(entityType: EntityType): string {
-	return `${TANAHPEDIA_PATH}/${entityType.toLowerCase()}`;
+	return categoryHref(entityType);
 }
 
 /**
@@ -249,7 +250,7 @@ export function buildEntryGraph(input: EntryGraphInput): Graph {
 export const TANAHPEDIA_DESCRIPTION =
 	'אנציקלופדיה לתנ"ך - אישים, מקומות, אירועים, חפצים ועוד';
 
-/** Build the `@graph` for the Tanahpedia landing page (`/tanahpedia`). */
+/** Build the `@graph` for the Tanahpedia landing page (`/pedia`). */
 export function buildLandingGraph(): Graph {
 	const url = absUrl(TANAHPEDIA_PATH);
 	const breadcrumb = breadcrumbNode(
@@ -290,7 +291,7 @@ export interface CategoryGraphInput {
 	items: { uniqueName: string; title: string }[];
 }
 
-/** Build the `@graph` for a category listing (`/tanahpedia/[entityType]`). */
+/** Build the `@graph` for a category listing (`/pedia/[slug]`). */
 export function buildCategoryGraph(input: CategoryGraphInput): Graph {
 	const { entityType, label, items } = input;
 	const path = categoryPath(entityType);

@@ -4,8 +4,9 @@ import { JsonLd } from "@/app/components/JsonLd";
 import { buildLandingGraph } from "@/lib/seo/tanahpedia-jsonld";
 import {
 	CATEGORY_HIERARCHY,
-	subcategoryHref,
+	labelForCategoryKey,
 } from "@/lib/tanahpedia/category-hierarchy";
+import { categoryHref } from "@/lib/tanahpedia/category-slug";
 import {
 	CATEGORY_LABELS,
 	getCategoryCounts,
@@ -121,7 +122,7 @@ export default async function TanahpediaLandingPage() {
 					{CATEGORY_HIERARCHY.map((cat) => (
 						<div key={cat.type} className={styles.categoryGroup}>
 							<Link
-								href={`/tanahpedia/${cat.type.toLowerCase()}`}
+								href={categoryHref(cat.type)}
 								className={styles.categoryCard}
 							>
 								<div className={styles.categoryName}>
@@ -136,11 +137,11 @@ export default async function TanahpediaLandingPage() {
 									{cat.children.map((sub) => (
 										<Link
 											key={sub}
-											href={subcategoryHref(sub)}
+											href={categoryHref(sub)}
 											className={styles.subcategoryCard}
 										>
 											<span className={styles.subcategoryName}>
-												{CATEGORY_LABELS[sub]}
+												{labelForCategoryKey(sub)}
 											</span>
 											<span className={styles.subcategoryCount}>
 												{counts[sub]}
