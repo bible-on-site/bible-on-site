@@ -330,11 +330,6 @@ describe("PersonFamilyTree", () => {
 		expect(screen.getByText("שיטה ב׳")).toBeInTheDocument();
 		expect(screen.getByText("משנה תורה")).toBeInTheDocument();
 		expect(screen.getByText('רש"י')).toBeInTheDocument();
-		expect(
-			screen.getByText(
-				/לפי כל השיטות היא הייתה בת זוגו; נחלקים רק בטיב הקשר מול התורה/,
-			),
-		).toBeInTheDocument();
 		expect(screen.queryByText("חלופי")).not.toBeInTheDocument();
 	});
 

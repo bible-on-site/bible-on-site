@@ -534,20 +534,6 @@ function SpouseInterpretationsCard({
 		].join("\n") || null;
 	return (
 		<div className={styles.personCardStack}>
-			<div
-				className={styles.card}
-				data-matrix-spouse-card={matrixSpouseCardMark ? "" : undefined}
-				data-has-sex-mark={sexMarkDataAttribute(head.related.sex)}
-			>
-				<PersonSexMark sex={head.related.sex} />
-				<PersonNameLink related={head.related} />
-				{cardCitationBlock(personCitation)}
-				{multi ? (
-					<p className={styles.spouseDualOpinionNote}>
-						לפי כל השיטות היא הייתה בת זוגו; נחלקים רק בטיב הקשר מול התורה.
-					</p>
-				) : null}
-			</div>
 			{sorted.map((edge, i) => {
 				const orderOnly =
 					edge.unionOrder != null ? `סדר ${edge.unionOrder}` : "";
@@ -589,6 +575,16 @@ function SpouseInterpretationsCard({
 					</div>
 				);
 			})}
+			<div
+				className={styles.card}
+				data-testid="family-spouse-card"
+				data-matrix-spouse-card={matrixSpouseCardMark ? "" : undefined}
+				data-has-sex-mark={sexMarkDataAttribute(head.related.sex)}
+			>
+				<PersonSexMark sex={head.related.sex} />
+				<PersonNameLink related={head.related} />
+				{cardCitationBlock(personCitation)}
+			</div>
 		</div>
 	);
 }

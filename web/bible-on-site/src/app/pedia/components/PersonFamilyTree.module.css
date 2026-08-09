@@ -688,6 +688,9 @@
 .matrixKidsCell {
   width: 100%;
   min-width: 0;
+  /* תקרה לתרומת ה-max-content של הטור: בלעדיה רוחב המטריצה גדל עם מספר
+     הילדים של בת זוג אחת והמטריצה מתקפלת לאנכית גם במסך רחב */
+  max-width: 300px;
   min-height: 132px;
   margin: 0;
   padding: 0;
@@ -719,9 +722,7 @@
   flex-direction: column;
   justify-content: flex-start;
   align-items: center;
-  /* ממשיך את הקו האנכי עד לקו האופקי של בנות הזוג */
-  margin-top: calc(-1 * var(--matrix-spouse-mid-px, 36px));
-  padding-top: var(--matrix-spouse-mid-px, 36px);
+  /* הקו יוצא מתחתית כרטיס בת הזוג ולא מקו הנישואין שחוצה אותו */
   padding-bottom: 6px;
   min-height: 12px;
 }
@@ -736,13 +737,18 @@
 
 .marriageColumnChildren {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   justify-content: center;
   align-items: stretch;
   gap: 10px;
   width: 100%;
-  overflow-x: auto;
   padding-bottom: 4px;
+}
+
+.marriageColumnChildren > * {
+  flex: 0 1 auto;
+  min-width: 128px;
+  max-width: 100%;
 }
 
 /* יעקב: גריד שטוח — כל תא (שורה, עמודה) מפורש, גבהי שורות משותפים */
@@ -839,14 +845,6 @@
   flex-wrap: wrap;
   justify-content: center;
   gap: 12px;
-}
-
-.spouseDualOpinionNote {
-  margin: 8px 0 6px;
-  font-size: 0.72rem;
-  line-height: 1.4;
-  color: #475569;
-  text-align: center;
 }
 
 @media (max-width: 600px) {
@@ -1158,13 +1156,12 @@
 }
 
 .spouseOpinionRibbonFirst {
-  margin-top: 6px;
   width: 100%;
   max-width: 220px;
 }
 
 .spouseOpinionRibbon {
-  margin-top: 10px;
+  margin-top: 2px;
   padding-top: 8px;
   border-top: 1px solid #e2e8f0;
   width: 100%;
