@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { normalizedUniqueNameFromParam } from "@/lib/tanahpedia/unique-name-param";
+import { JsonLd } from "@/app/components/JsonLd";
+import { PersonFamilyTree } from "@/app/tanahpedia/components/PersonFamilyTree";
+import { TanahpediaBreadcrumb } from "@/app/tanahpedia/components/TanahpediaBreadcrumb";
+import { TanahpediaPlacesMap } from "@/app/tanahpedia/components/TanahpediaPlacesMap";
+import styles from "@/app/tanahpedia/page.module.css";
+import { buildEntryGraph } from "@/lib/seo/tanahpedia-jsonld";
 import {
 	ENTITY_TYPE_LABELS,
 	getAllEntryUniqueNames,
@@ -11,11 +16,8 @@ import {
 	getPersonFamilySummary,
 	getPlaceMapMarkersForEntry,
 } from "@/lib/tanahpedia/service";
-import type { EntityType, CategoryKey } from "@/lib/tanahpedia/types";
-import { PersonFamilyTree } from "@/app/tanahpedia/components/PersonFamilyTree";
-import { TanahpediaPlacesMap } from "@/app/tanahpedia/components/TanahpediaPlacesMap";
-import { TanahpediaBreadcrumb } from "@/app/tanahpedia/components/TanahpediaBreadcrumb";
-import styles from "@/app/tanahpedia/page.module.css";
+import type { CategoryKey, EntityType } from "@/lib/tanahpedia/types";
+import { normalizedUniqueNameFromParam } from "@/lib/tanahpedia/unique-name-param";
 
 export const dynamic = "force-dynamic";
 
@@ -77,9 +79,10 @@ export default async function EntryPage({
 	if (!entry) notFound();
 
 	// Get the primary entity type for breadcrumb (use first entity if available)
-	const primaryEntityType = entry.entities.length > 0
-		? (entry.entities[0].entityType as CategoryKey)
-		: null;
+	const primaryEntityType =
+		entry.entities.length > 0
+			? (entry.entities[0].entityType as CategoryKey)
+			: null;
 
 	let siblingEntries: { uniqueName: string; title: string }[] = [];
 	try {
@@ -131,8 +134,22 @@ export default async function EntryPage({
 		placeMapMarkers = [];
 	}
 
+	const primaryEntity = entry.entities[0] ?? null;
+	const entryGraph = buildEntryGraph({
+		entry,
+		personFamily,
+		placeMarkers: placeMapMarkers,
+		category: primaryEntity
+			? {
+					label: ENTITY_TYPE_LABELS[primaryEntity.entityType],
+					entityType: primaryEntity.entityType,
+				}
+			: null,
+	});
+
 	return (
 		<div className={styles.tanahpediaPage}>
+			<JsonLd data={entryGraph} />
 			<TanahpediaBreadcrumb
 				currentCategory={primaryEntityType}
 				currentEntryTitle={entry.title}

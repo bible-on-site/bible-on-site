@@ -2,14 +2,17 @@ import { unstable_cache } from "next/cache";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getPerekByPerekId } from "../../../../data/perek-dto";
+import type { AuthorDetails } from "../../../../lib/authors";
 import {
+	authorNameToSlug,
 	getAllAuthorSlugs,
 	getArticlesByAuthorId,
 	getAuthorById,
 	getAuthorByName,
 } from "../../../../lib/authors";
-import type { AuthorDetails } from "../../../../lib/authors";
-import { getPerekByPerekId } from "../../../../data/perek-dto";
+import { buildAuthorGraph } from "../../../../lib/seo/core-jsonld";
+import { JsonLd } from "../../../components/JsonLd";
 import styles from "./page.module.css";
 
 /**
@@ -78,7 +81,7 @@ export async function generateMetadata({
 
 	if (!author) {
 		return {
-			title: "הרב לא נמצא | תנ\"ך באתר",
+			title: 'הרב לא נמצא | תנ"ך באתר',
 		};
 	}
 
@@ -106,6 +109,12 @@ export default async function AuthorPage({
 
 	return (
 		<div className={styles.authorPage}>
+			<JsonLd
+				data={buildAuthorGraph({
+					author,
+					slug: authorNameToSlug(author.name),
+				})}
+			/>
 			<header className={styles.authorHeader}>
 				<div className={styles.authorImageContainer}>
 					{author.imageUrl ? (
@@ -132,9 +141,7 @@ export default async function AuthorPage({
 				<section className={styles.articlesSection}>
 					<header className={styles.sectionHeader}>
 						<span className={styles.sectionIcon}>📚</span>
-						<h2 className={styles.sectionTitle}>
-							מאמרים ({articles.length})
-						</h2>
+						<h2 className={styles.sectionTitle}>מאמרים ({articles.length})</h2>
 					</header>
 
 					<div className={styles.articlesList}>
@@ -146,9 +153,9 @@ export default async function AuthorPage({
 							>
 								<h3 className={styles.articleName}>{article.name}</h3>
 								<div className={styles.articleMeta}>
-								<span className={styles.perekLink}>
-									{getPerekByPerekId(article.perekId).source}
-								</span>
+									<span className={styles.perekLink}>
+										{getPerekByPerekId(article.perekId).source}
+									</span>
 								</div>
 							</Link>
 						))}

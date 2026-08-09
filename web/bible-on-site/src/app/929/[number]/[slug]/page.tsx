@@ -21,6 +21,11 @@ import {
 	getPerushDetail,
 	getPerushimByPerekId,
 } from "../../../../lib/perushim";
+import {
+	buildArticleGraph,
+	buildPerushGraph,
+} from "../../../../lib/seo/core-jsonld";
+import { JsonLd } from "../../../components/JsonLd";
 import { ArticlesSection } from "../components/ArticlesSection";
 import Breadcrumb from "../components/Breadcrumb";
 import { PerushimSection } from "../components/PerushimSection";
@@ -134,7 +139,7 @@ export async function generateMetadata({
 		const article = await getCachedArticle(id);
 		if (!article) {
 			return {
-				title: "מאמר לא נמצא | תנ\"ך באתר",
+				title: 'מאמר לא נמצא | תנ"ך באתר',
 			};
 		}
 
@@ -159,7 +164,7 @@ export async function generateMetadata({
 
 	if (!perush) {
 		return {
-			title: "פירוש לא נמצא | תנ\"ך באתר",
+			title: 'פירוש לא נמצא | תנ"ך באתר',
 		};
 	}
 
@@ -206,6 +211,13 @@ export default async function ArticlePage({
 
 		return (
 			<>
+				<JsonLd
+					data={buildArticleGraph({
+						article,
+						perekObj,
+						authorSlug: authorNameToSlug(article.authorName),
+					})}
+				/>
 				<ScrollToSlug targetId="article-view" />
 				<Suspense>
 					<SeferComposite
@@ -335,6 +347,7 @@ export default async function ArticlePage({
 
 	return (
 		<>
+			<JsonLd data={buildPerushGraph({ perush: perushDetail, perekObj })} />
 			<ScrollToSlug targetId="perush-view" />
 			<ScrollToPerushPasukNote />
 			<Suspense>
