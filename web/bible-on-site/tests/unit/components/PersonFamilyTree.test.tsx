@@ -480,6 +480,34 @@ describe("PersonFamilyTree", () => {
 		);
 	});
 
+	it("keeps a non-Tanach parent source on that parent's card only", () => {
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			focalDisplayName: "אברהם",
+			parents: [
+				{
+					related: related("p1", "תרח", `entry-p1`, "MALE"),
+					parentRole: "FATHER",
+					relationshipType: "BIOLOGICAL",
+					altGroupId: null,
+					sourceCitation: "בראשית יא כו",
+				},
+				{
+					related: related("p2", "אמתלאי", `entry-p2`, "FEMALE"),
+					parentRole: "MOTHER",
+					relationshipType: "BIOLOGICAL",
+					altGroupId: null,
+					sourceCitation: 'בבא בתרא צא ע"א',
+				},
+			],
+		};
+		render(<PersonFamilyTree summary={summary} />);
+		// The aggadic source attests the motherhood claim, so it stays on the mother card.
+		expect(screen.getAllByText('בבא בתרא צא ע"א').length).toBe(1);
+		// The Tanach birth record still reaches the focal card (mother card has none).
+		expect(screen.getAllByRole("link", { name: "בראשית יא כו" }).length).toBe(2);
+	});
+
 	it("shows a sibling's source inside the sibling card", () => {
 		const summary: PersonFamilySummary = {
 			...baseSummary,
