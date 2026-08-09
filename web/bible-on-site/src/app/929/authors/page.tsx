@@ -2,10 +2,9 @@ import { unstable_cache } from "next/cache";
 import Image from "next/image";
 import Link from "next/link";
 import { query } from "../../../lib/api-client";
-import {
-	authorNameToSlug,
-	getAuthorImageUrl,
-} from "../../../lib/authors";
+import { authorNameToSlug, getAuthorImageUrl } from "../../../lib/authors";
+import { buildAuthorsListGraph } from "../../../lib/seo/core-jsonld";
+import { JsonLd } from "../../components/JsonLd";
 import styles from "./page.module.css";
 
 interface AuthorRow {
@@ -61,8 +60,8 @@ const getCachedAuthors = unstable_cache(
 );
 
 export const metadata = {
-	title: "הרבנים | תנ\"ך באתר",
-	description: "רשימת הרבנים וכותבי המאמרים באתר תנ\"ך על הפרק",
+	title: 'הרבנים | תנ"ך באתר',
+	description: 'רשימת הרבנים וכותבי המאמרים באתר תנ"ך על הפרק',
 };
 
 export default async function AuthorsPage() {
@@ -70,6 +69,14 @@ export default async function AuthorsPage() {
 
 	return (
 		<div className={styles.authorsPage}>
+			<JsonLd
+				data={buildAuthorsListGraph({
+					authors: authors.map((author) => ({
+						name: author.name,
+						slug: authorNameToSlug(author.name),
+					})),
+				})}
+			/>
 			<h1 className={styles.pageTitle}>הרבנים</h1>
 
 			{authors.length > 0 ? (

@@ -29,6 +29,7 @@ jest.mock("../../../src/lib/authors", () => ({
 	getArticlesByAuthorId: jest.fn(),
 	getAuthorById: jest.fn(),
 	getAuthorByName: jest.fn(),
+	authorNameToSlug: (name: string) => name,
 }));
 
 import { render, screen } from "@testing-library/react";

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { JsonLd } from "@/app/components/JsonLd";
+import { buildCategoryGraph } from "@/lib/seo/tanahpedia-jsonld";
 import {
 	CATEGORY_LABELS,
 	ENTITY_TYPE_LABELS,
@@ -19,8 +21,8 @@ import type {
 	EntityType,
 	PersonRole,
 } from "@/lib/tanahpedia/types";
-import { TanahpediaBreadcrumb } from "../components/TanahpediaBreadcrumb";
 import { EntityListItem } from "../components/EntityListItem";
+import { TanahpediaBreadcrumb } from "../components/TanahpediaBreadcrumb";
 import { TanahpediaPlacesMap } from "../components/TanahpediaPlacesMap";
 import styles from "../page.module.css";
 
@@ -132,9 +134,7 @@ export default async function EntityTypePage({
 	try {
 		let entitiesPromise: Promise<typeof entities>;
 		if (sub && entityType === "PERSON") {
-			entitiesPromise = getEntitiesWithEntriesByRole(
-				sub.key as PersonRole,
-			);
+			entitiesPromise = getEntitiesWithEntriesByRole(sub.key as PersonRole);
 		} else if (sub && entityType === "ANIMAL") {
 			const kind = normalizeAnimalKind(sp.kind ?? null);
 			const purity = normalizeAnimalPurity(sp.purity ?? null);
@@ -171,8 +171,21 @@ export default async function EntityTypePage({
 	const label = sub ? sub.label : ENTITY_TYPE_LABELS[entityType];
 	const currentCategory = sub ? sub.key : (entityType as CategoryKey);
 
+	const listItems = entities.flatMap((entity) =>
+		entity.linkedEntries.map((le) => ({
+			uniqueName: le.uniqueName,
+			title: le.title,
+		})),
+	);
+	const categoryGraph = buildCategoryGraph({
+		entityType,
+		label,
+		items: listItems,
+	});
+
 	return (
 		<div className={styles.tanahpediaPage}>
+			<JsonLd data={categoryGraph} />
 			<TanahpediaBreadcrumb currentCategory={currentCategory} />
 			<h1 className={styles.pageTitle}>{label}</h1>
 
