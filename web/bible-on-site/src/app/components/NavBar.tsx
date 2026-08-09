@@ -41,7 +41,7 @@ export const NavBar = () => {
 					</li>
 					<li className={`${styles.menuItem} ${styles.ribbonComingSoon}`}>
 						<Image src="/icons/book.svg" alt="" width={16} height={16} />
-						<Link href="/tanahpedia">
+						<Link href="/pedia">
 							<span>תנכפדיה</span>
 						</Link>
 					</li>

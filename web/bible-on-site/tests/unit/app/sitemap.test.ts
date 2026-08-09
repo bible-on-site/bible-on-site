@@ -12,6 +12,10 @@ import {
 	type SitemapConfig,
 	TOTAL_PERAKIM,
 } from "@/app/sitemap";
+import { CATEGORY_SLUGS } from "@/lib/tanahpedia/category-slug";
+
+/** `/pedia` landing entry plus one entry per Hebrew category slug. */
+const PEDIA_STATIC_COUNT = 1 + Object.keys(CATEGORY_SLUGS).length;
 
 describe("sitemap", () => {
 	const mockConfig: SitemapConfig = {
@@ -271,7 +275,12 @@ describe("sitemap", () => {
 
 			// 1 root + 6 sections + 1 929 index + 929 perakim + 1 authors index = 938
 			const expectedLength =
-				1 + SITEMAP_SECTIONS.length + 1 + TOTAL_PERAKIM + 1;
+				1 +
+				SITEMAP_SECTIONS.length +
+				1 +
+				TOTAL_PERAKIM +
+				1 +
+				PEDIA_STATIC_COUNT;
 			expect(result).toHaveLength(expectedLength);
 		});
 
@@ -345,17 +354,24 @@ describe("sitemap", () => {
 
 			// 1 root + 6 sections + 1 929 index + 929 perakim + 1 authors index + 3 authors = 941
 			const expectedLength =
-				1 + SITEMAP_SECTIONS.length + 1 + TOTAL_PERAKIM + 1 + 3;
+				1 +
+				SITEMAP_SECTIONS.length +
+				1 +
+				TOTAL_PERAKIM +
+				1 +
+				3 +
+				PEDIA_STATIC_COUNT;
 			expect(result).toHaveLength(expectedLength);
 
-			// Check last 3 entries are author pages
-			expect(result[result.length - 1].url).toBe(
+			// Author pages come right before the pedia landing/category block
+			const authorEnd = result.length - PEDIA_STATIC_COUNT;
+			expect(result[authorEnd - 1].url).toBe(
 				`https://example.com/929/authors/${encodeURIComponent("הרב ג")}`,
 			);
-			expect(result[result.length - 2].url).toBe(
+			expect(result[authorEnd - 2].url).toBe(
 				`https://example.com/929/authors/${encodeURIComponent("הרב ב")}`,
 			);
-			expect(result[result.length - 3].url).toBe(
+			expect(result[authorEnd - 3].url).toBe(
 				`https://example.com/929/authors/${encodeURIComponent("הרב א")}`,
 			);
 		});
@@ -370,7 +386,14 @@ describe("sitemap", () => {
 
 			// 1 root + 6 sections + 1 929 index + 929 perakim + 2 articles + 1 authors index + 2 authors = 942
 			const expectedLength =
-				1 + SITEMAP_SECTIONS.length + 1 + TOTAL_PERAKIM + 2 + 1 + 2;
+				1 +
+				SITEMAP_SECTIONS.length +
+				1 +
+				TOTAL_PERAKIM +
+				2 +
+				1 +
+				2 +
+				PEDIA_STATIC_COUNT;
 			expect(result).toHaveLength(expectedLength);
 
 			// Check articles are present
@@ -407,12 +430,15 @@ describe("sitemap", () => {
 			);
 		});
 
-		it("omits pedia entries when no unique names provided", () => {
+		it("omits pedia entry URLs when no unique names provided", () => {
 			const result = generateSitemapEntries(mockConfig);
 
 			const urls = result.map((e) => e.url);
-			expect(urls.some((url) => url.includes("/pedia/"))).toBe(false);
+			// Category listings remain; only per-entry URLs are absent.
+			expect(urls).toContain(`https://example.com/pedia/אישים`);
+			expect(urls.filter((url) => url.includes("/pedia"))).toHaveLength(
+				PEDIA_STATIC_COUNT,
+			);
 		});
 	});
-
 });

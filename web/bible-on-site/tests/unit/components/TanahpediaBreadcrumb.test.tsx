@@ -3,7 +3,7 @@
  */
 import { render, screen, within } from "@testing-library/react";
 import type { AriaAttributes, ReactNode } from "react";
-import { TanahpediaBreadcrumb } from "../../../src/app/tanahpedia/components/TanahpediaBreadcrumb";
+import { TanahpediaBreadcrumb } from "../../../src/app/pedia/components/TanahpediaBreadcrumb";
 
 jest.mock("next/link", () => ({
 	__esModule: true,
@@ -84,19 +84,19 @@ describe("TanahpediaBreadcrumb", () => {
 		expect(screen.getByRole("button", { name: /Moshe/ })).toBeInTheDocument();
 		expect(screen.getByRole("link", { name: "People" })).toHaveAttribute(
 			"href",
-			"/tanahpedia/person",
+			"/pedia/אישים",
 		);
 		expect(screen.getByRole("link", { name: "Kings" })).toHaveAttribute(
 			"href",
-			"/tanahpedia/person?role=king",
+			"/pedia/אישים?role=מלכים",
 		);
 		expect(screen.getByRole("link", { name: "Chaya" })).toHaveAttribute(
 			"href",
-			"/tanahpedia/animal?kind=chaya",
+			"/pedia/בעלי-חיים?kind=חיות",
 		);
 		expect(screen.getByRole("link", { name: "Tahor" })).toHaveAttribute(
 			"href",
-			"/tanahpedia/animal?purity=tahor",
+			"/pedia/בעלי-חיים?purity=טהורים",
 		);
 
 		const currentEntry = screen.getByRole("link", { name: "Moshe" });
