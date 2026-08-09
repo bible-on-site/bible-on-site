@@ -223,6 +223,13 @@ function firstTanachRefMatchFromIndex(
 	return findTanachRefMatches(line).find((m) => m.index >= minIndex) ?? null;
 }
 
+/** האם שורת המקור מכילה מראה מקום בתנ״ך שניתן לקשר — להבדיל ממקור חז״ל. */
+export function hasTanachRef(line: string): boolean {
+	return findTanachRefMatches(line).some(
+		(m) => tryTanachHref(m.seferCitation, m.perekRaw, m.pasukRaw) != null,
+	);
+}
+
 /**
  * שורת מקור בעץ משפחה: כאשר הטקסט מזכיר שם פירוש קיים באתר (כל פירוש, לא
  * תלוי בשם ספציפי) ולאחריו מקור בתנ"ך עם פסוק — קישור אחד משם הפירוש עד
