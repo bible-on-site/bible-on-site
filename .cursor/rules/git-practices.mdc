@@ -72,4 +72,4 @@ If it exists: check if merged; if merged, use a new branch name; if not, fetch a
 ## Pull Requests
 
 - Use a new branch per feature/fix. PR is created when publishing the branch.
-- Only @DoradSoft can merge unless explicitly delegated.
+- **The agent owns the repo end-to-end and merges PRs itself** once the required checks are green and every review comment is triaged. Dorad assigns tasks and reviews plans and expensive/hard-to-reverse decisions — surface those for approval before proceeding (e.g. prod RDS/schema deploys, destructive infra changes), but do not wait for a human to merge routine work.
