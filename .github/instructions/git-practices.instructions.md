@@ -106,7 +106,7 @@ If it exists: check if merged; if merged, use a new branch name; if not, fetch a
 
 - Use a new branch per feature/fix. PR is created when publishing the branch.
 - The Auto Create PR workflow normally creates the PR after the first push. Wait for that workflow and locate the PR by head branch before calling `gh pr create`, or duplicate PR creation can collide.
-- Only @DoradSoft can merge unless explicitly delegated.
+- **You (the agent) own the repo end-to-end and merge PRs yourself** once the required checks are green and every review comment is triaged. Dorad assigns tasks and reviews plans and expensive/hard-to-reverse decisions — surface those for approval *before* proceeding (e.g. prod RDS/schema deploys, destructive infra changes, anything hard to reverse), but do not wait for a human to merge routine work.
 
 ## Merge Queue
 
