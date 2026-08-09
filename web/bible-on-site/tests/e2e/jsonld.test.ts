@@ -77,7 +77,7 @@ test.describe("JSON-LD structured data", () => {
 	test("tanahpedia landing emits a DefinedTermSet CollectionPage", async ({
 		request,
 	}) => {
-		const { types } = await typesForRoute(request, "/tanahpedia");
+		const { types } = await typesForRoute(request, "/pedia");
 		expect(types.has("DefinedTermSet")).toBe(true);
 		expect(types.has("CollectionPage")).toBe(true);
 	});

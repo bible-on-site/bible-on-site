@@ -1,6 +1,6 @@
 import { toNumber } from "gematry";
 import type { ReactNode } from "react";
-import { PasukPreviewLink } from "@/app/tanahpedia/components/PasukPreviewLink";
+import { PasukPreviewLink } from "@/app/pedia/components/PasukPreviewLink";
 import { perushNames } from "@/data/db/perush-names";
 import { sefarim } from "@/data/db/sefarim";
 import type {

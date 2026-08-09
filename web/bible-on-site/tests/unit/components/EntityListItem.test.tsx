@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { render, screen } from "@testing-library/react";
-import { EntityListItem } from "@/app/tanahpedia/components/EntityListItem";
+import { EntityListItem } from "@/app/pedia/components/EntityListItem";
 import type { EntityWithEntries } from "@/lib/tanahpedia/types";
 
 jest.mock("next/link", () => ({
@@ -51,10 +51,7 @@ describe("EntityListItem", () => {
 		);
 
 		const link = screen.getByRole("link", { name: "Single entry person" });
-		expect(link).toHaveAttribute(
-			"href",
-			"/pedia/person%20one",
-		);
+		expect(link).toHaveAttribute("href", "/pedia/person%20one");
 	});
 
 	it("renders multiple entry title links next to the entity name", () => {

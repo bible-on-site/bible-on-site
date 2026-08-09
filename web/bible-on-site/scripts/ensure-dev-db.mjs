@@ -1,8 +1,9 @@
 /**
- * Ensures tanah-dev is bootstrapped without bundled demo articles.
- * - If tanah_sefer has no rows → run mysql-populate-dev (structure + sefarim/perushim, no tanah_test_data.sql).
+ * Keeps tanah-dev populated for local development.
+ * - Default: sync content from production; a failed download leaves local data untouched.
+ * - Falls back to mysql-populate-dev only when the local DB is also empty.
  * - Removes legacy demo authors (לדוגמא) unless KEEP_BUNDLED_TEST_ARTICLES=1.
- * For production-like content: devops/setup-dev-env.mts sync-from-prod
+ * Set DEV_DB_SYNC_FROM_PROD=0 to always reuse the local database.
  */
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -13,6 +14,7 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const webDir = resolve(__dirname, "..");
 const projectRoot = resolve(webDir, "../..");
 const dataDir = resolve(projectRoot, "data");
+const devopsDir = resolve(projectRoot, "devops");
 
 function loadDevEnv() {
 	const devEnvPath = resolve(webDir, ".dev.env");
@@ -51,16 +53,18 @@ async function checkTanahBootstrapped(dbUrl) {
 			connectTimeout: 5000,
 		});
 		try {
-			const [rows] = await conn.execute(
-				"SELECT 1 AS ok FROM tanah_sefer LIMIT 1",
-			);
-			return Array.isArray(rows) && rows.length > 0;
+			// Tanahpedia content only ships with the prod dump, so treat an empty
+			// entry table as "not bootstrapped" too.
+			for (const table of ["tanah_sefer", "tanahpedia_entry"]) {
+				const [rows] = await conn.execute(
+					`SELECT 1 AS ok FROM \`${table}\` LIMIT 1`,
+				);
+				if (!Array.isArray(rows) || rows.length === 0) return false;
+			}
+			return true;
 		} catch (queryErr) {
 			const msg = String(queryErr?.message ?? queryErr);
-			if (
-				msg.includes("doesn't exist") ||
-				msg.includes("Unknown table")
-			) {
+			if (msg.includes("doesn't exist") || msg.includes("Unknown table")) {
 				return false;
 			}
 			throw queryErr;
@@ -69,10 +73,7 @@ async function checkTanahBootstrapped(dbUrl) {
 		}
 	} catch (err) {
 		const msg = String(err?.message ?? err);
-		if (
-			msg.includes("Unknown database") ||
-			msg.includes("Unknown Database")
-		) {
+		if (msg.includes("Unknown database") || msg.includes("Unknown Database")) {
 			return false;
 		}
 		return null;
@@ -119,10 +120,7 @@ async function removeBundledTestArticleSeed(dbUrl) {
 		);
 	} catch (e) {
 		const msg = String(e?.message ?? e);
-		if (
-			msg.includes("doesn't exist") ||
-			msg.includes("Unknown table")
-		) {
+		if (msg.includes("doesn't exist") || msg.includes("Unknown table")) {
 			return;
 		}
 		throw e;
@@ -143,6 +141,18 @@ function runMysqlPopulate() {
 	return result.status === 0;
 }
 
+function runSyncFromProd() {
+	console.info("Syncing tanah-dev from production\u2026");
+	// The sync dumps to a file first and only restores after a successful dump,
+	// so a failed download leaves the existing local data intact.
+	const result = spawnSync(
+		"npm",
+		["run", "setup_dev_env", "--", "sync-from-prod"],
+		{ cwd: devopsDir, stdio: "inherit", shell: true },
+	);
+	return result.status === 0;
+}
+
 async function main() {
 	const dbUrl = loadDevEnv();
 	if (!dbUrl) {
@@ -159,9 +169,18 @@ async function main() {
 		);
 		return;
 	}
-	if (!bootstrapped) {
-		if (!runMysqlPopulate()) {
-			console.error("  ensure-dev-db: mysql-populate-dev failed");
+
+	const syncDisabled = process.env.DEV_DB_SYNC_FROM_PROD === "0";
+	const synced = syncDisabled ? false : runSyncFromProd();
+
+	if (!synced) {
+		if (!syncDisabled) {
+			console.warn(
+				"  ensure-dev-db: production not available — keeping the existing local tanah-dev data",
+			);
+		}
+		if (!bootstrapped && !runMysqlPopulate()) {
+			console.error("  ensure-dev-db: dev database bootstrap failed");
 			process.exit(1);
 		}
 	}

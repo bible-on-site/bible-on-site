@@ -1,12 +1,12 @@
-import type { CSSProperties } from "react";
 import Link from "next/link";
-import { CATEGORY_LABELS, ENTITY_TYPE_LABELS } from "@/lib/tanahpedia/service";
+import type { CSSProperties } from "react";
 import {
 	CATEGORY_HIERARCHY,
 	labelForCategoryKey,
-	subcategoryHref,
 } from "@/lib/tanahpedia/category-hierarchy";
-import type { EntityType, CategoryKey } from "@/lib/tanahpedia/types";
+import { categoryHref } from "@/lib/tanahpedia/category-slug";
+import { CATEGORY_LABELS, ENTITY_TYPE_LABELS } from "@/lib/tanahpedia/service";
+import type { CategoryKey, EntityType } from "@/lib/tanahpedia/types";
 import styles from "../../929/[number]/components/breadcrumb.module.css";
 
 export interface TanahpediaEntryNavItem {
@@ -29,8 +29,8 @@ export function TanahpediaBreadcrumb({
 	siblingEntries = [],
 }: TanahpediaBreadcrumbProps) {
 	const currentLabel = currentCategory
-		? CATEGORY_LABELS[currentCategory] ??
-			ENTITY_TYPE_LABELS[currentCategory as EntityType]
+		? (CATEGORY_LABELS[currentCategory] ??
+			ENTITY_TYPE_LABELS[currentCategory as EntityType])
 		: null;
 
 	const entryRows = Math.min(Math.max(siblingEntries.length, 1), 10);
@@ -47,7 +47,7 @@ export function TanahpediaBreadcrumb({
 						<Link href="/">תנ&quot;ך על הפרק</Link>
 					</li>
 					<li>
-						<Link href="/tanahpedia">תנכפדיה</Link>
+						<Link href="/pedia">תנכפדיה</Link>
 					</li>
 					{currentCategory && (
 						<li
@@ -75,7 +75,7 @@ export function TanahpediaBreadcrumb({
 											className={styles["tanahpedia-category-group"]}
 										>
 											<Link
-												href={`/tanahpedia/${type.toLowerCase()}`}
+												href={categoryHref(type)}
 												className={styles["tanahpedia-category-parent"]}
 											>
 												{ENTITY_TYPE_LABELS[type]}
@@ -84,7 +84,7 @@ export function TanahpediaBreadcrumb({
 												<ul className={styles["tanahpedia-nested"]}>
 													{children.map((sub) => (
 														<li key={sub}>
-															<Link href={subcategoryHref(sub)}>
+															<Link href={categoryHref(sub)}>
 																{labelForCategoryKey(sub)}
 															</Link>
 														</li>
@@ -117,9 +117,7 @@ export function TanahpediaBreadcrumb({
 								</button>
 								<div
 									className={`${styles.drop} ${styles["bg-white"]} ${styles["perek-grid"]}`}
-									style={
-										{ "--perek-rows": entryRows } as CSSProperties
-									}
+									style={{ "--perek-rows": entryRows } as CSSProperties}
 								>
 									<ul className={`${styles.list} ${styles.pl0}`}>
 										{siblingEntries.map((e) => (
