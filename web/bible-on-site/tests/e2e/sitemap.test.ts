@@ -121,7 +121,7 @@ test.describe("sitemap.xml", () => {
 		// Pedia URLs use URL-encoded Hebrew unique names: /pedia/%D7...
 		const pediaEntries = (body.match(/\/pedia\/[^<]+<\/loc>/g) || []).length;
 
-		// Expected: 1 root + sections + 1 929 index + 929 perakim + N articles + N perushim + 1 authors index + N authors + N pedias
+		// Expected: 1 root + sections + 1 929 index + 929 perakim + N articles + N perushim + 1 authors index + N authors + 1 pedia index + N pedias
 		const expectedCount =
 			1 +
 			SITEMAP_SECTIONS.length +
@@ -131,6 +131,7 @@ test.describe("sitemap.xml", () => {
 			perushEntries +
 			1 +
 			authorEntries +
+			1 +
 			pediaEntries;
 		expect(urlCount).toBe(expectedCount);
 	});
