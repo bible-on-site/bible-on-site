@@ -189,34 +189,71 @@ fn dedup_notes_by_pk(notes: &mut Vec<Note>) {
 fn find_default_node_key(doc: &Document) -> String {
     if let Some(bson::Bson::Document(schema)) = doc.get("schema")
         && let Some(bson::Bson::Array(nodes)) = schema.get("nodes")
+        && let Some(key) = find_content_node_key(nodes)
     {
-        // First pass: look for a node with key == "default"
-        for node in nodes {
-            if let bson::Bson::Document(node_doc) = node
-                && let Some(bson::Bson::String(key)) = node_doc.get("key")
-                && key == "default"
-            {
-                return key.clone();
-            }
-        }
-        // Second pass: look for a node with depth >= 3
-        // (chapter/verse/comment structure)
-        for node in nodes {
-            if let bson::Bson::Document(node_doc) = node {
-                let depth = match node_doc.get("depth") {
-                    Some(bson::Bson::Int32(n)) => *n as i64,
-                    Some(bson::Bson::Int64(n)) => *n,
-                    _ => 0,
-                };
-                if depth >= 3
-                    && let Some(bson::Bson::String(key)) = node_doc.get("key")
-                {
-                    return key.clone();
-                }
-            }
-        }
+        return key;
     }
     "default".to_string()
+}
+
+/// Pick the content node key out of a `nodes` array: prefer `default`, else the
+/// first node with depth >= 3 (chapter/verse/comment).
+fn find_content_node_key(nodes: &[bson::Bson]) -> Option<String> {
+    for node in nodes {
+        if let bson::Bson::Document(node_doc) = node
+            && let Some(bson::Bson::String(key)) = node_doc.get("key")
+            && key == "default"
+        {
+            return Some(key.clone());
+        }
+    }
+    for node in nodes {
+        if let bson::Bson::Document(node_doc) = node
+            && node_depth(node_doc) >= 3
+            && let Some(bson::Bson::String(key)) = node_doc.get("key")
+        {
+            return Some(key.clone());
+        }
+    }
+    None
+}
+
+fn node_depth(node_doc: &Document) -> i64 {
+    match node_doc.get("depth") {
+        Some(bson::Bson::Int32(n)) => *n as i64,
+        Some(bson::Bson::Int64(n)) => *n,
+        _ => 0,
+    }
+}
+
+/// Resolve the chapters array for one book node of a multi-book schema.
+///
+/// A book node is either a depth-3 JaggedArrayNode (`versions[book]` is the
+/// chapters array) or a SchemaNode wrapping `Introduction`/`default` children
+/// (Abarbanel on Torah), in which case the chapters live one level deeper under
+/// the content child key.
+fn book_node_chapters<'a>(
+    node_doc: &Document,
+    key: &str,
+    version_doc: &'a Document,
+) -> Option<&'a Vec<bson::Bson>> {
+    if node_depth(node_doc) >= 3 {
+        return match version_doc.get(key) {
+            Some(bson::Bson::Array(chapters)) => Some(chapters),
+            _ => None,
+        };
+    }
+    let bson::Bson::Array(children) = node_doc.get("nodes")? else {
+        return None;
+    };
+    let child_key = find_content_node_key(children)?;
+    let bson::Bson::Document(book_doc) = version_doc.get(key)? else {
+        return None;
+    };
+    match book_doc.get(&child_key) {
+        Some(bson::Bson::Array(chapters)) => Some(chapters),
+        _ => None,
+    }
 }
 
 /// Extract notes from a multi-book complex schema document.
@@ -236,25 +273,15 @@ fn flatten_multi_book_nodes(
         && let Some(bson::Bson::Array(nodes)) = schema.get("nodes")
     {
         for node in nodes {
-            if let bson::Bson::Document(node_doc) = node {
-                let depth = match node_doc.get("depth") {
-                    Some(bson::Bson::Int32(n)) => *n as i64,
-                    Some(bson::Bson::Int64(n)) => *n,
-                    _ => 0,
-                };
-                // Only process book-level nodes (depth >= 3 = chapter/verse/comment)
-                if depth < 3 {
-                    continue;
-                }
-                if let Some(bson::Bson::String(key)) = node_doc.get("key")
-                    && let Some((sefer, additional)) = perek_mapping::english_node_key_to_sefer(key)
+            if let bson::Bson::Document(node_doc) = node
+                && let Some(bson::Bson::String(key)) = node_doc.get("key")
+                && let Some((sefer, additional)) = perek_mapping::english_node_key_to_sefer(key)
+            {
+                let base_perek_id = perek_mapping::first_perek_id(sefer, additional);
+                if base_perek_id > 0
+                    && let Some(chapters) = book_node_chapters(node_doc, key, version_doc)
                 {
-                    let base_perek_id = perek_mapping::first_perek_id(sefer, additional);
-                    if base_perek_id > 0
-                        && let Some(bson::Bson::Array(chapters)) = version_doc.get(key.as_str())
-                    {
-                        flatten_chapters(notes, perush_id, base_perek_id, chapters);
-                    }
+                    flatten_chapters(notes, perush_id, base_perek_id, chapters);
                 }
             }
         }
@@ -1005,5 +1032,114 @@ mod tests {
         assert_eq!(notes[0].note_content, "first");
         assert_eq!(notes[1].note_idx, 1);
         assert_eq!(notes[2].perush_id, 2);
+    }
+
+    /// Helper: build a multi-book document whose book nodes are SchemaNodes that
+    /// wrap `Introduction` + `default` children (Abarbanel on Torah's shape).
+    fn nested_multi_book_schema_doc(name: &str, book_nodes: &[(&str, bson::Bson)]) -> Document {
+        let mut version_doc = Document::new();
+        let mut schema_nodes: Vec<bson::Bson> = Vec::new();
+
+        for (key, chapters) in book_nodes {
+            version_doc.insert(
+                key.to_string(),
+                bson!({ "Introduction": [["intro"]], "default": chapters.clone() }),
+            );
+            schema_nodes.push(bson!({
+                "key": *key,
+                "nodeType": "SchemaNode",
+                "nodes": [
+                    { "key": "Introduction", "depth": 1 },
+                    { "key": "default", "depth": 3, "default": true },
+                ],
+            }));
+        }
+
+        doc! {
+            "name": name,
+            "authors": [name],
+            "sefer": 0,
+            "versions": [version_doc],
+            "schema": { "nodes": schema_nodes },
+        }
+    }
+
+    #[test]
+    fn nested_multi_book_schema_extraction() {
+        // Abarbanel on Torah: each book node is a SchemaNode with no own depth,
+        // so its chapters sit one level deeper under the "default" child.
+        let doc = nested_multi_book_schema_doc(
+            "אברבנאל",
+            &[
+                ("Genesis", bson!([["gen ch1 v1", "gen ch1 v2"]])),
+                ("Exodus", bson!([["exo ch1 v1"]])),
+            ],
+        );
+        let result = extract(&[doc]);
+
+        assert_eq!(result.notes.len(), 3);
+        assert_eq!(result.notes[0].perek_id, 1);
+        assert_eq!(result.notes[0].note_content, "gen ch1 v1");
+        assert_eq!(result.notes[1].pasuk, 2);
+        assert_eq!(result.notes[2].perek_id, 51);
+        assert_eq!(result.notes[2].note_content, "exo ch1 v1");
+    }
+
+    #[test]
+    fn nested_multi_book_schema_skips_introduction_content() {
+        let doc = nested_multi_book_schema_doc("אברבנאל", &[("Genesis", bson!([["real"]]))]);
+        let result = extract(&[doc]);
+
+        assert_eq!(result.notes.len(), 1);
+        assert_eq!(result.notes[0].note_content, "real");
+    }
+
+    #[test]
+    fn book_node_chapters_resolves_flat_and_nested_nodes() {
+        let flat_node = doc! { "key": "Genesis", "depth": 3 };
+        let flat_version = doc! { "Genesis": [["flat"]] };
+        assert!(book_node_chapters(&flat_node, "Genesis", &flat_version).is_some());
+
+        let nested_node = doc! {
+            "key": "Genesis",
+            "nodes": [
+                { "key": "Introduction", "depth": 1 },
+                { "key": "default", "depth": 3 },
+            ],
+        };
+        let nested_version = doc! {
+            "Genesis": { "Introduction": [["i"]], "default": [["nested"]] },
+        };
+        assert!(book_node_chapters(&nested_node, "Genesis", &nested_version).is_some());
+
+        // A nested node whose version payload is missing yields nothing.
+        assert!(book_node_chapters(&nested_node, "Genesis", &doc! {}).is_none());
+        // A depth-1 leaf node without children is not book content.
+        let intro_node = doc! { "key": "Introduction", "depth": 1 };
+        assert!(book_node_chapters(&intro_node, "Introduction", &flat_version).is_none());
+    }
+
+    #[test]
+    fn find_content_node_key_prefers_default_then_depth_three() {
+        let with_default = vec![
+            bson!({ "key": "Introduction", "depth": 1 }),
+            bson!({ "key": "default", "depth": 3 }),
+        ];
+        assert_eq!(
+            find_content_node_key(&with_default).as_deref(),
+            Some("default")
+        );
+
+        let depth_only = vec![
+            bson!({ "key": "Introduction", "depth": 1 }),
+            bson!({ "key": "Genesis", "depth": 3 }),
+        ];
+        assert_eq!(
+            find_content_node_key(&depth_only).as_deref(),
+            Some("Genesis")
+        );
+
+        let none = vec![bson!({ "key": "Introduction", "depth": 1 })];
+        assert_eq!(find_content_node_key(&none), None);
     }
 }

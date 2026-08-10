@@ -10,7 +10,7 @@ import {
 } from "react";
 import {
 	compareChildEdgesChronology,
-	shouldApplyJacobChildChronology,
+	shouldApplyChildBirthChronology,
 } from "@/lib/tanahpedia/person-family-chronology";
 import {
 	childGroupByCoParentLabel,
@@ -21,7 +21,7 @@ import {
 	partitionSiblingsForFamilyTree,
 	personSexCornerMark,
 	relationshipTypeLabel,
-	spouseHalachicOpinionTitle,
+	spouseOpinionOrdinalTitle,
 	spousesSectionLabel,
 	unionEndReasonLabel,
 	unionTypeLabel,
@@ -110,7 +110,7 @@ function buildPartnerChildColumns(
 	columnChildren: Map<string, PersonFamilyChildEdge[]>;
 	looseChildren: PersonFamilyChildEdge[];
 } {
-	const chronology = shouldApplyJacobChildChronology(
+	const chronology = shouldApplyChildBirthChronology(
 		focalDisplayName,
 		childEdges,
 	);
@@ -524,21 +524,16 @@ function SpouseInterpretationsCard({
 	const sorted = sortEdgesForOpinions(edges);
 	const head = sorted[0];
 	const multi = sorted.length > 1;
+	const personCitation =
+		[
+			...new Set(
+				sorted
+					.map((e) => e.personSourceCitation?.trim())
+					.filter((c): c is string => Boolean(c)),
+			),
+		].join("\n") || null;
 	return (
 		<div className={styles.personCardStack}>
-			<div
-				className={styles.card}
-				data-matrix-spouse-card={matrixSpouseCardMark ? "" : undefined}
-				data-has-sex-mark={sexMarkDataAttribute(head.related.sex)}
-			>
-				<PersonSexMark sex={head.related.sex} />
-				<PersonNameLink related={head.related} />
-				{multi ? (
-					<p className={styles.spouseDualOpinionNote}>
-						לפי כל השיטות היא הייתה בת זוגו; נחלקים רק בטיב הקשר מול התורה.
-					</p>
-				) : null}
-			</div>
 			{sorted.map((edge, i) => {
 				const orderOnly =
 					edge.unionOrder != null ? `סדר ${edge.unionOrder}` : "";
@@ -553,9 +548,11 @@ function SpouseInterpretationsCard({
 						}
 					>
 						<div className={styles.relationRibbon}>
-							<span className={styles.spouseOpinionTitleInline}>
-								{spouseHalachicOpinionTitle(edge.unionType)}
-							</span>
+							{multi ? (
+								<span className={styles.spouseOpinionTitleInline}>
+									{spouseOpinionOrdinalTitle(i)}
+								</span>
+							) : null}
 							<span className={styles.relationRibbonSubRow}>
 								<span className={styles.relationRibbonMain}>
 									{unionTypeLabel(edge.unionType)}
@@ -578,6 +575,16 @@ function SpouseInterpretationsCard({
 					</div>
 				);
 			})}
+			<div
+				className={styles.card}
+				data-testid="family-spouse-card"
+				data-matrix-spouse-card={matrixSpouseCardMark ? "" : undefined}
+				data-has-sex-mark={sexMarkDataAttribute(head.related.sex)}
+			>
+				<PersonSexMark sex={head.related.sex} />
+				<PersonNameLink related={head.related} />
+				{cardCitationBlock(personCitation)}
+			</div>
 		</div>
 	);
 }
@@ -701,12 +708,39 @@ export function shouldCollapseSpouseMatrix({
 	return previous;
 }
 
+/**
+ * המרחק האנכי מקו הנישואין האופקי אל ראש עמוד הילדים, לפני שהעמוד נמשך כלפי מעלה.
+ * נמדד בפועל (ולא בהנחת מרווח קבוע) כדי שהקו יימשך רציף גם כשיש שורת תווית "ילדים"
+ * בין שורת בנות הזוג לעמודות.
+ */
+function measureSpouseMidPx({
+	outer,
+	rowRect,
+	lineCenterY,
+}: {
+	outer: HTMLElement | null;
+	rowRect: DOMRect;
+	lineCenterY: number;
+}): number {
+	const fallback = Math.max(12, Math.round(rowRect.height - lineCenterY + 8));
+	const trunk = outer?.querySelector<HTMLElement>("[data-matrix-column-trunk]");
+	if (!outer || !trunk) return fallback;
+	const appliedMid = Number.parseFloat(
+		getComputedStyle(outer).getPropertyValue("--matrix-spouse-mid-px"),
+	);
+	if (!Number.isFinite(appliedMid)) return fallback;
+	const trunkTopWithoutPull = trunk.getBoundingClientRect().top + appliedMid;
+	return Math.max(
+		12,
+		Math.round(trunkTopWithoutPull - (rowRect.top + lineCenterY)),
+	);
+}
+
 type MobileMatrixColumn = {
 	unit: SpouseUnit;
 	partnerId: string;
 	kids: PersonFamilyChildEdge[];
 };
-
 /**
  * פריסת מובייל למטריצת בן-זוג+ילדים (יעקב וכד'): במקום מטריצה אופקית עם גלילה
  * צידית, כל בת זוג מוצגת מעל ילדיה בטור אנכי — כך שהכל נקרא ברוחב טלפון בלי
@@ -801,7 +835,7 @@ function PersonFamilyTreeContent({
 		if (ak !== bk) return ak.localeCompare(bk);
 		return a.related.displayName.localeCompare(b.related.displayName, "he");
 	});
-	const sortedChildren = shouldApplyJacobChildChronology(
+	const sortedChildren = shouldApplyChildBirthChronology(
 		focalDisplayName,
 		sortedChildrenBase,
 	)
@@ -810,7 +844,7 @@ function PersonFamilyTreeContent({
 			)
 		: sortedChildrenBase;
 
-	const childEdgeCmp = shouldApplyJacobChildChronology(
+	const childEdgeCmp = shouldApplyChildBirthChronology(
 		focalDisplayName,
 		sortedChildren,
 	)
@@ -861,40 +895,40 @@ function PersonFamilyTreeContent({
 	/** סדר בנות הזוג לפי סדר הנישואין / union_order ב־DB, לא לפי לידת ילד ראשון */
 	const orderedSpouseUnits = spouseUnits;
 
-	const jacobChildrenSequenceLayout =
+	const childTimelineLayout =
 		matrixEligible &&
-		shouldApplyJacobChildChronology(focalDisplayName, sortedChildren);
+		shouldApplyChildBirthChronology(focalDisplayName, sortedChildren);
 
 	const spousePartnerIdsForSeq = new Set(
 		spouseUnits.map((u) => u.edges[0].related.entityId),
 	);
-	const jacobMappedChildren = sortedChildren.filter(
+	const timelineMappedChildren = sortedChildren.filter(
 		(c) =>
 			c.coParentEntityId != null &&
 			spousePartnerIdsForSeq.has(c.coParentEntityId),
 	);
-	const jacobLooseChildren = sortedChildren.filter(
+	const timelineLooseChildren = sortedChildren.filter(
 		(c) =>
 			c.coParentEntityId == null ||
 			!spousePartnerIdsForSeq.has(c.coParentEntityId),
 	);
 
-	const showJacobLooseTopCell =
-		jacobChildrenSequenceLayout && jacobLooseChildren.length > 0;
+	const showTimelineLooseTopCell =
+		childTimelineLayout && timelineLooseChildren.length > 0;
 
-	const jacobGlobalChildTimeline = jacobChildrenSequenceLayout
+	const globalChildTimeline = childTimelineLayout
 		? [
-				...[...jacobMappedChildren].sort((a, b) =>
+				...[...timelineMappedChildren].sort((a, b) =>
 					compareChildEdgesChronology(a, b, focalDisplayName),
 				),
-				...[...jacobLooseChildren].sort((a, b) =>
+				...[...timelineLooseChildren].sort((a, b) =>
 					compareChildEdgesChronology(a, b, focalDisplayName),
 				),
 			]
 		: [];
 
-	const matrixColCount = jacobChildrenSequenceLayout
-		? orderedSpouseUnits.length + (showJacobLooseTopCell ? 1 : 0)
+	const matrixColCount = childTimelineLayout
+		? orderedSpouseUnits.length + (showTimelineLooseTopCell ? 1 : 0)
 		: looseChildren.length > 0
 			? orderedSpouseUnits.length + 1
 			: orderedSpouseUnits.length;
@@ -964,7 +998,13 @@ function PersonFamilyTreeContent({
 				lineCenterY = Math.min(...cardCenters.map(({ y }) => y));
 			}
 			setMatrixMarriageLineYpx(Math.max(8, Math.round(lineCenterY)));
-			setMatrixSpouseMidPx(Math.max(12, Math.round(rowH - lineCenterY + 8)));
+			setMatrixSpouseMidPx(
+				measureSpouseMidPx({
+					outer: el.parentElement,
+					rowRect,
+					lineCenterY,
+				}),
+			);
 			el.style.setProperty(
 				"--matrix-line-start-y",
 				`${Math.round(Math.min(...cardCenters.map(({ y }) => y)))}px`,
@@ -1073,23 +1113,21 @@ function PersonFamilyTreeContent({
 		return () => ro.disconnect();
 	}, [spouseOnlyRail, isNarrow]);
 
-	/* פריסת מובייל למטריצה: כל בת זוג + ילדיה בטור, לפי סדר הכרונולוגיה של יעקב
+	/* פריסת מובייל למטריצה: כל בת זוג + ילדיה בטור, לפי סדר הכרונולוגיה
 	 * או לפי עמודות בת-הזוג במטריצה הרגילה. נשמר סדר הילדים כמו בדסקטופ. */
 	const mobileMatrixColumns: MobileMatrixColumn[] = matrixEligible
 		? orderedSpouseUnits.map((unit) => {
 				const partnerId = unit.edges[0].related.entityId;
-				const kids = jacobChildrenSequenceLayout
-					? jacobGlobalChildTimeline.filter(
-							(c) => c.coParentEntityId === partnerId,
-						)
+				const kids = childTimelineLayout
+					? globalChildTimeline.filter((c) => c.coParentEntityId === partnerId)
 					: (columnChildren.get(partnerId) ?? []);
 				return { unit, partnerId, kids };
 			})
 		: [];
 
 	const mobileMatrixLooseChildren: PersonFamilyChildEdge[] = matrixEligible
-		? jacobChildrenSequenceLayout
-			? jacobGlobalChildTimeline.filter(
+		? childTimelineLayout
+			? globalChildTimeline.filter(
 					(c) =>
 						c.coParentEntityId == null ||
 						!spousePartnerIdsForSeq.has(c.coParentEntityId),
@@ -1401,214 +1439,224 @@ function PersonFamilyTreeContent({
 										looseLabel="ילדים ללא מיפוי מלא לבת זוג בגרף"
 									/>
 								) : (
-								<div
-									ref={matrixOuterRef}
-									className={styles.spouseChildrenMatrixOuter}
-									style={
-										{
-											"--matrix-spouse-mid-px": `${matrixSpouseMidPx}px`,
-											"--matrix-marriage-line-y": `${matrixMarriageLineYpx}px`,
-										} as CSSProperties
-									}
-								>
 									<div
-										ref={matrixSpouseRowRef}
-										className={styles.matrixSpouseRow}
+										ref={matrixOuterRef}
+										className={styles.spouseChildrenMatrixOuter}
 										style={
 											{
-												"--matrix-column-count": matrixColCount,
+												"--matrix-spouse-mid-px": `${matrixSpouseMidPx}px`,
+												"--matrix-marriage-line-y": `${matrixMarriageLineYpx}px`,
 											} as CSSProperties
 										}
 									>
-										{orderedSpouseUnits.map((unit) => (
-											<div
-												key={`sp-top-${unit.edges[0].related.entityId}-${unit.altGroupKey ?? "d"}`}
-												className={styles.matrixSpouseCell}
-											>
-												<SpouseUnitCardBlock unit={unit} matrixSpouseCardMark />
-											</div>
-										))}
-										{showJacobLooseTopCell ||
-										(!jacobChildrenSequenceLayout &&
-											looseChildren.length > 0) ? (
-											<div
-												key="sp-top-loose"
-												className={styles.matrixSpouseCell}
-											>
+										<div
+											ref={matrixSpouseRowRef}
+											className={styles.matrixSpouseRow}
+											style={
+												{
+													"--matrix-column-count": matrixColCount,
+												} as CSSProperties
+											}
+										>
+											{orderedSpouseUnits.map((unit) => (
 												<div
-													className={styles.marriageColumnSpousePlaceholder}
-													aria-hidden
+													key={`sp-top-${unit.edges[0].related.entityId}-${unit.altGroupKey ?? "d"}`}
+													className={styles.matrixSpouseCell}
 												>
-													<span className={styles.marriageColumnLooseTitle}>
-														אחר
+													<SpouseUnitCardBlock
+														unit={unit}
+														matrixSpouseCardMark
+													/>
+												</div>
+											))}
+											{showTimelineLooseTopCell ||
+											(!childTimelineLayout && looseChildren.length > 0) ? (
+												<div
+													key="sp-top-loose"
+													className={styles.matrixSpouseCell}
+												>
+													<div
+														className={styles.marriageColumnSpousePlaceholder}
+														aria-hidden
+													>
+														<span className={styles.marriageColumnLooseTitle}>
+															אחר
+														</span>
+													</div>
+												</div>
+											) : null}
+										</div>
+
+										{childTimelineLayout ? (
+											<div className={styles.childTimelineOuter}>
+												<div className={styles.matrixChildrenTierLabel}>
+													<span className={styles.familyTreeSectionLabel}>
+														ילדים
 													</span>
 												</div>
+												<div
+													className={styles.childTimelineFlat}
+													style={{
+														gridTemplateColumns: `repeat(${matrixColCount}, minmax(128px, 1fr))`,
+													}}
+												>
+													{orderedSpouseUnits.map((unit, colIdx) => (
+														<div
+															key={`trunk-${unit.edges[0].related.entityId}`}
+															className={styles.childTimelineTrunk}
+															data-matrix-column-trunk=""
+															style={{
+																gridColumn: colIdx + 1,
+																gridRow: `1 / ${globalChildTimeline.length + 1}`,
+															}}
+															aria-hidden
+														/>
+													))}
+													{showTimelineLooseTopCell ? (
+														<div
+															className={styles.childTimelineTrunk}
+															data-matrix-column-trunk=""
+															style={{
+																gridColumn: orderedSpouseUnits.length + 1,
+																gridRow: `1 / ${globalChildTimeline.length + 1}`,
+															}}
+															aria-hidden
+														/>
+													) : null}
+													{globalChildTimeline.flatMap((child, rowIdx) => {
+														const rowNumber = rowIdx + 1;
+														const rowKey = `${child.related.entityId}-${child.parentRole}-${child.relationshipType}-${child.coParentEntityId ?? "loose"}`;
+														return [
+															...orderedSpouseUnits.map((unit, colIdx) => {
+																const pid = unit.edges[0].related.entityId;
+																const isMatch = child.coParentEntityId === pid;
+																return (
+																	<div
+																		key={`swim-${pid}-${rowKey}`}
+																		className={
+																			isMatch
+																				? styles.childTimelineCell
+																				: styles.childTimelineCellEmpty
+																		}
+																		style={{
+																			gridColumn: colIdx + 1,
+																			gridRow: rowNumber,
+																		}}
+																	>
+																		{isMatch ? (
+																			<ChildCard edge={child} />
+																		) : null}
+																	</div>
+																);
+															}),
+															...(showTimelineLooseTopCell
+																? [
+																		(() => {
+																			const isLoose =
+																				childEdgeCoParentOutsideSpouses(
+																					child,
+																					spousePartnerIdsForSeq,
+																				);
+																			return (
+																				<div
+																					key={`swim-loose-${rowKey}`}
+																					className={
+																						isLoose
+																							? styles.childTimelineCell
+																							: styles.childTimelineCellEmpty
+																					}
+																					style={{
+																						gridColumn:
+																							orderedSpouseUnits.length + 1,
+																						gridRow: rowNumber,
+																					}}
+																				>
+																					{isLoose ? (
+																						<ChildCard edge={child} />
+																					) : null}
+																				</div>
+																			);
+																		})(),
+																	]
+																: []),
+														];
+													})}
+												</div>
 											</div>
-										) : null}
-									</div>
-
-									{jacobChildrenSequenceLayout ? (
-										<div className={styles.jacobSwimlaneOuter}>
-											<div className={styles.matrixChildrenTierLabel}>
-												<span className={styles.familyTreeSectionLabel}>
-													ילדים
-												</span>
-											</div>
+										) : (
 											<div
-												className={styles.jacobSwimlaneFlat}
+												className={styles.matrixBelowSpouses}
 												style={{
 													gridTemplateColumns: `repeat(${matrixColCount}, minmax(128px, 1fr))`,
 												}}
 											>
-												{orderedSpouseUnits.map((unit, colIdx) => (
-													<div
-														key={`trunk-${unit.edges[0].related.entityId}`}
-														className={styles.jacobSwimlaneTrunk}
-														style={{
-															gridColumn: colIdx + 1,
-															gridRow: `1 / ${jacobGlobalChildTimeline.length + 1}`,
-														}}
-														aria-hidden
-													/>
-												))}
-												{showJacobLooseTopCell ? (
-													<div
-														className={styles.jacobSwimlaneTrunk}
-														style={{
-															gridColumn: orderedSpouseUnits.length + 1,
-															gridRow: `1 / ${jacobGlobalChildTimeline.length + 1}`,
-														}}
-														aria-hidden
-													/>
-												) : null}
-												{jacobGlobalChildTimeline.flatMap((child, rowIdx) => {
-													const rowNumber = rowIdx + 1;
-													const rowKey = `${child.related.entityId}-${child.parentRole}-${child.relationshipType}-${child.coParentEntityId ?? "loose"}`;
-													return [
-														...orderedSpouseUnits.map((unit, colIdx) => {
-															const pid = unit.edges[0].related.entityId;
-															const isMatch = child.coParentEntityId === pid;
-															return (
-																<div
-																	key={`swim-${pid}-${rowKey}`}
-																	className={
-																		isMatch
-																			? styles.jacobSwimlaneCell
-																			: styles.jacobSwimlaneCellEmpty
-																	}
-																	style={{
-																		gridColumn: colIdx + 1,
-																		gridRow: rowNumber,
-																	}}
-																>
-																	{isMatch ? <ChildCard edge={child} /> : null}
-																</div>
-															);
-														}),
-														...(showJacobLooseTopCell
-															? [
-																	(() => {
-																		const isLoose =
-																			childEdgeCoParentOutsideSpouses(
-																				child,
-																				spousePartnerIdsForSeq,
-																			);
-																		return (
-																			<div
-																				key={`swim-loose-${rowKey}`}
-																				className={
-																					isLoose
-																						? styles.jacobSwimlaneCell
-																						: styles.jacobSwimlaneCellEmpty
-																				}
-																				style={{
-																					gridColumn:
-																						orderedSpouseUnits.length + 1,
-																					gridRow: rowNumber,
-																				}}
-																			>
-																				{isLoose ? (
-																					<ChildCard edge={child} />
-																				) : null}
-																			</div>
-																		);
-																	})(),
-																]
-															: []),
-													];
-												})}
-											</div>
-										</div>
-									) : (
-										<div
-											className={styles.matrixBelowSpouses}
-											style={{
-												gridTemplateColumns: `repeat(${matrixColCount}, minmax(128px, 1fr))`,
-											}}
-										>
-											<div className={styles.matrixChildrenTierLabel}>
-												<span className={styles.familyTreeSectionLabel}>
-													ילדים
-												</span>
-											</div>
+												<div className={styles.matrixChildrenTierLabel}>
+													<span className={styles.familyTreeSectionLabel}>
+														ילדים
+													</span>
+												</div>
 
-											{orderedSpouseUnits.map((unit, idx) => {
-												const partnerEntityId = unit.edges[0].related.entityId;
-												const partnerName = unit.edges[0].related.displayName;
-												const colKey = `${partnerEntityId}-m-${idx}`;
-												const kids = columnChildren.get(partnerEntityId) ?? [];
-												return (
+												{orderedSpouseUnits.map((unit, idx) => {
+													const partnerEntityId =
+														unit.edges[0].related.entityId;
+													const partnerName = unit.edges[0].related.displayName;
+													const colKey = `${partnerEntityId}-m-${idx}`;
+													const kids =
+														columnChildren.get(partnerEntityId) ?? [];
+													return (
+														<fieldset
+															key={`kids-${colKey}`}
+															className={styles.matrixKidsCell}
+														>
+															<legend className={styles.marriageColumnLegend}>
+																{`ילדים מ־${partnerName}`}
+															</legend>
+															<div
+																className={styles.marriageColumnTrunk}
+																data-matrix-column-trunk=""
+																aria-hidden
+															>
+																<div className={styles.marriageColumnLine} />
+															</div>
+															<div className={styles.marriageColumnChildren}>
+																{kids.map((edge) => (
+																	<ChildCard
+																		key={`${colKey}-${edge.related.entityId}-${edge.parentRole}-${edge.relationshipType}`}
+																		edge={edge}
+																	/>
+																))}
+															</div>
+														</fieldset>
+													);
+												})}
+												{looseChildren.length > 0 ? (
 													<fieldset
-														key={`kids-${colKey}`}
+														key="kids-loose"
 														className={styles.matrixKidsCell}
 													>
 														<legend className={styles.marriageColumnLegend}>
-															{`ילדים מ־${partnerName}`}
+															ילדים ללא מיפוי מלא לבת זוג בגרף
 														</legend>
 														<div
 															className={styles.marriageColumnTrunk}
+															data-matrix-column-trunk=""
 															aria-hidden
 														>
 															<div className={styles.marriageColumnLine} />
 														</div>
 														<div className={styles.marriageColumnChildren}>
-															{kids.map((edge) => (
+															{looseChildren.map((edge) => (
 																<ChildCard
-																	key={`${colKey}-${edge.related.entityId}-${edge.parentRole}-${edge.relationshipType}`}
+																	key={`loose-${edge.related.entityId}-${edge.parentRole}-${edge.relationshipType}`}
 																	edge={edge}
 																/>
 															))}
 														</div>
 													</fieldset>
-												);
-											})}
-											{looseChildren.length > 0 ? (
-												<fieldset
-													key="kids-loose"
-													className={styles.matrixKidsCell}
-												>
-													<legend className={styles.marriageColumnLegend}>
-														ילדים ללא מיפוי מלא לבת זוג בגרף
-													</legend>
-													<div
-														className={styles.marriageColumnTrunk}
-														aria-hidden
-													>
-														<div className={styles.marriageColumnLine} />
-													</div>
-													<div className={styles.marriageColumnChildren}>
-														{looseChildren.map((edge) => (
-															<ChildCard
-																key={`loose-${edge.related.entityId}-${edge.parentRole}-${edge.relationshipType}`}
-																edge={edge}
-															/>
-														))}
-													</div>
-												</fieldset>
-											) : null}
-										</div>
-									)}
-								</div>
+												) : null}
+											</div>
+										)}
+									</div>
 								)
 							) : orderedSpouseUnits.length > 1 ? (
 								// כמה בנות זוג ללא ילדים ממופים (למשל שמשון): אותה שורת

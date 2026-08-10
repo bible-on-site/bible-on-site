@@ -1,6 +1,6 @@
 import {
 	compareChildEdgesChronology,
-	shouldApplyJacobChildChronology,
+	shouldApplyChildBirthChronology,
 } from "@/lib/tanahpedia/person-family-chronology";
 import type { PersonFamilyChildEdge } from "@/lib/tanahpedia/types";
 
@@ -32,9 +32,7 @@ describe("person-family-chronology", () => {
 			childEdge("ראובן"),
 			childEdge("דן"),
 			childEdge("יוסף"),
-		].sort((a, b) =>
-			compareChildEdgesChronology(a, b, focal),
-		);
+		].sort((a, b) => compareChildEdgesChronology(a, b, focal));
 		expect(edges.map((e) => e.related.displayName)).toEqual([
 			"ראובן",
 			"דן",
@@ -43,20 +41,20 @@ describe("person-family-chronology", () => {
 		]);
 	});
 
-	it("applies only when focal is יעקב and enough known children", () => {
+	it("applies only for a registered focal person with enough known children", () => {
 		expect(
-			shouldApplyJacobChildChronology("יעקב", [
+			shouldApplyChildBirthChronology("יעקב", [
 				childEdge("ראובן"),
 				childEdge("שמעון"),
 				childEdge("לוי"),
 				childEdge("יהודה"),
 			]),
 		).toBe(true);
-		expect(shouldApplyJacobChildChronology("יעקב", [childEdge("ראובן")])).toBe(
+		expect(shouldApplyChildBirthChronology("יעקב", [childEdge("ראובן")])).toBe(
 			false,
 		);
 		expect(
-			shouldApplyJacobChildChronology("שמשון", [
+			shouldApplyChildBirthChronology("שמשון", [
 				childEdge("ראובן"),
 				childEdge("שמעון"),
 				childEdge("לוי"),
@@ -65,17 +63,26 @@ describe("person-family-chronology", () => {
 		).toBe(false);
 	});
 
+	it("orders Avraham children: Yishmael, then Yitzhak, then Ketura's sons", () => {
+		const focal = "אברהם";
+		const edges = [
+			childEdge("שוח"),
+			childEdge("יצחק"),
+			childEdge("זמרן"),
+			childEdge("ישמעאל"),
+		].sort((a, b) => compareChildEdgesChronology(a, b, focal));
+		expect(edges.map((e) => e.related.displayName)).toEqual([
+			"ישמעאל",
+			"יצחק",
+			"זמרן",
+			"שוח",
+		]);
+		expect(shouldApplyChildBirthChronology(focal, edges)).toBe(true);
+	});
+
 	it("orders full Jacob swimlane timeline (interleaved mothers)", () => {
 		const focal = "יעקב";
-		const names = [
-			"יוסף",
-			"ראובן",
-			"דן",
-			"יהודה",
-			"נפתלי",
-			"יששכר",
-			"גד",
-		];
+		const names = ["יוסף", "ראובן", "דן", "יהודה", "נפתלי", "יששכר", "גד"];
 		const edges = names.map((n) => childEdge(n));
 		const sorted = [...edges].sort((a, b) =>
 			compareChildEdgesChronology(a, b, focal),

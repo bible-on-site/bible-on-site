@@ -2,23 +2,24 @@
 description: "Tanahpedia family-tree data edits via the authenticated write API — person nodes, parent-child links and unions"
 tools:
   [
-    "vscode",
-    "execute",
-    "read",
-    "edit",
-    "search",
-    "web",
-    "gitkraken/git_add_or_commit",
-    "gitkraken/git_branch",
-    "gitkraken/git_checkout",
-    "gitkraken/git_log_or_diff",
-    "gitkraken/git_push",
-    "gitkraken/git_status",
-    "github/*",
+    vscode,
+    execute,
+    read,
+    edit,
+    search,
+    web,
     "io.github.bytebase/dbhub/*",
-    "todo",
+    "github/*",
+    browser,
+    gitkraken/git_add_or_commit,
+    gitkraken/git_branch,
+    gitkraken/git_checkout,
+    gitkraken/git_log_or_diff,
+    gitkraken/git_push,
+    gitkraken/git_status,
+    todo,
   ]
-model: Claude Opus 4.5 (copilot)
+model: Claude Opus 5 (copilot)
 ---
 
 # Tanahpedia Family Agent
@@ -42,14 +43,14 @@ Never a schema change: if a field does not exist yet, stop and escalate — do n
 
 ## Environment
 
-| Thing | Value |
-| ----- | ----- |
-| Local GraphQL | `http://127.0.0.1:3003/` |
-| Prod GraphQL | `https://api.xn--febl3a.com/` |
-| Start API | `cd web/api && cargo make run-api-dev` (export `TANAHPEDIA_REVISION_API_KEY` first) |
-| Website dev | `cd web/bible-on-site && npm run dev` → port 3001 |
-| Dev DB | `mysql://root:test_123@localhost:3306/tanah-dev` |
-| Apply task | `cd devops && npm run tanahpedia:apply -- <ops.json> [--endpoint <url>]` |
+| Thing         | Value                                                                               |
+| ------------- | ----------------------------------------------------------------------------------- |
+| Local GraphQL | `http://127.0.0.1:3003/`                                                            |
+| Prod GraphQL  | `https://api.xn--febl3a.com/`                                                       |
+| Start API     | `cd web/api && cargo make run-api-dev` (export `TANAHPEDIA_REVISION_API_KEY` first) |
+| Website dev   | `cd web/bible-on-site && npm run dev` → port 3001                                   |
+| Dev DB        | `mysql://root:test_123@localhost:3306/tanah-dev`                                    |
+| Apply task    | `cd devops && npm run tanahpedia:apply -- <ops.json> [--endpoint <url>]`            |
 
 Auth fails closed: every write needs `Authorization: Bearer $TANAHPEDIA_REVISION_API_KEY`, and the
 server must have been started with the same value.
@@ -86,8 +87,17 @@ applied locally, reviewed, then replayed on prod.
   "entries": [{ "uniqueName": "...", "title": "...", "content": "<p></p>", "entityId": "...", "linkId": "..." }],
   "personNodes": [{ "entityId": "...", "personId": "...", "sexId": "...", "displayName": "...", "sex": "MALE" }],
   "entryEntityLinks": [{ "id": "...", "entryUniqueName": "...", "entityId": "..." }],
-  "parentChildLinks": [{ "id": "...", "parentPersonId": "...", "childPersonId": "...", "relationshipType": "BIOLOGICAL", "parentRole": "FATHER", "sourceCitation": "..." }],
-  "unions": [{ "id": "...", "person1Id": "...", "person2Id": "...", "unionType": "MARRIAGE" }]
+  "parentChildLinks": [
+    {
+      "id": "...",
+      "parentPersonId": "...",
+      "childPersonId": "...",
+      "relationshipType": "BIOLOGICAL",
+      "parentRole": "FATHER",
+      "sourceCitation": "...",
+    },
+  ],
+  "unions": [{ "id": "...", "person1Id": "...", "person2Id": "...", "unionType": "MARRIAGE" }],
 }
 ```
 
@@ -116,12 +126,34 @@ inside the reference breaks the match and the citation renders as dead plain tex
 - After writing, verify the rendered page actually emits `citationTanachLink` anchors. An accepted
   mutation does not prove the citation is linkable.
 
+## Disputed relationships — alt groups, not a single guess
+
+When Rishonim disagree about the **nature** of a relationship (e.g. אשה vs פילגש), never pick one
+side. Write one row per opinion and tie them together:
+
+- Same `altGroupId` (a fresh UUID) on every row of the dispute, same partner, same `unionOrder`.
+- `unionType` differs per row; each row's `sourceCitation` carries **that opinion's** sources
+  (newline-separated when there is more than one).
+- `personSourceCitation` is the pasuk establishing the relationship itself, and is identical on
+  every row of the group — the dispute is about classification, not existence.
+- The UI merges the group into one card, shows the shared `personSourceCitation` on the card, and
+  emits a neutral `שיטה א׳ / שיטה ב׳` ribbon per opinion. Attribution comes from the citations —
+  never hardcode posek names in the UI.
+
+Example (קטורה): `PILEGESH` with `פשטות המקרא דברי הימים א א לב` + `רש"י בראשית כה ו`, and
+`MARRIAGE` with `רד"ק בראשית כה א` + `משמע מרמב"ן בראשית כה א`, both `personSourceCitation`
+`בראשית כה א`.
+
+When only one opinion is modeled but the classification still rests on an interpretation
+(e.g. יעקב/בלהה/זלפה), keep the split: interpretive source in `sourceCitation`, pasuk in
+`personSourceCitation`.
+
 ## Required sequence
 
 1. `git fetch` and inspect the checked-out resolvers/schema — never assume a mutation from another branch is deployed.
 2. Start the local API against a prod-synced `tanah-dev`; confirm `/health` and one authenticated read before writing.
 3. **Discover before writing.** Query `tanahpediaFindPersons`, `tanahpediaPersonDetails`,
-   `tanahpediaPersonUnions`, `tanahpediaPersonParentChild`. Exact-name hits are *candidates*, not
+   `tanahpediaPersonUnions`, `tanahpediaPersonParentChild`. Exact-name hits are _candidates_, not
    identity — Torah names repeat. Disambiguate by stable ID and entry association.
 4. Create person nodes **before** any relationship referencing them.
 5. New entries: `submitEntryRevision` → inspect `PENDING` → `applyEntryRevision` → capture `entryId`,
