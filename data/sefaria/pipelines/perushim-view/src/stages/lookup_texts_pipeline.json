@@ -41,6 +41,8 @@
 			}
 		}
 	},
-	{ "$project": { "chapter": 1 } },
-	{ "$limit": 1 }
+	{ "$addFields": { "versionSize": { "$bsonSize": "$$ROOT" } } },
+	{ "$sort": { "versionSize": -1, "versionTitle": 1 } },
+	{ "$limit": 1 },
+	{ "$project": { "chapter": 1 } }
 ]

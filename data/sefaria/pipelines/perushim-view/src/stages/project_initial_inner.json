@@ -220,7 +220,12 @@
 			"depth": 1,
 			"addressTypes": 1,
 			"sectionNames": 1,
-			"key": 1
+			"key": 1,
+			"nodes": {
+				"depth": 1,
+				"key": 1,
+				"default": 1
+			}
 		}
 	},
 	"title": {

@@ -7,11 +7,11 @@ import {
 	partitionSiblingsForFamilyTree,
 	personSexCornerMark,
 	relationshipTypeLabel,
-	spouseHalachicOpinionTitle,
-	spousesSectionLabel,
 	siblingSectionLabelGeneric,
 	siblingSectionLabelOlder,
 	siblingSectionLabelYounger,
+	spouseOpinionOrdinalTitle,
+	spousesSectionLabel,
 	unionEndReasonLabel,
 	unionTypeLabel,
 } from "../../../src/lib/tanahpedia/person-family-labels";
@@ -44,9 +44,7 @@ describe("person-family-labels", () => {
 		it("returns Hebrew for known union types", () => {
 			expect(unionTypeLabel("MARRIAGE")).toBe("נישואין");
 			expect(unionTypeLabel("PILEGESH")).toBe("פילגש");
-			expect(unionTypeLabel("FORBIDDEN_WITH_GENTILE")).toBe(
-				"קשר פסול עם גויה",
-			);
+			expect(unionTypeLabel("FORBIDDEN_WITH_GENTILE")).toBe("קשר פסול עם גויה");
 			expect(unionTypeLabel("BANNED_INCEST")).toBe("קשר אסור (ערוה)");
 			expect(unionTypeLabel("BETROTHAL")).toBe("אירוסין");
 		});
@@ -98,29 +96,14 @@ describe("person-family-labels", () => {
 		});
 	});
 
-	describe("spouseHalachicOpinionTitle", () => {
-		it("states Rambam marriage view explicitly", () => {
-			expect(spouseHalachicOpinionTitle("MARRIAGE")).toBe(
-				'הרמב"ם: נישואין תקפים',
-			);
+	describe("spouseOpinionOrdinalTitle", () => {
+		it("returns Hebrew ordinals for the first opinions", () => {
+			expect(spouseOpinionOrdinalTitle(0)).toBe("שיטה א׳");
+			expect(spouseOpinionOrdinalTitle(1)).toBe("שיטה ב׳");
 		});
 
-		it("names Rishonim and forbidden bond for the alternative view", () => {
-			expect(spouseHalachicOpinionTitle("FORBIDDEN_WITH_GENTILE")).toContain(
-				"רש\"י",
-			);
-			expect(spouseHalachicOpinionTitle("FORBIDDEN_WITH_GENTILE")).toContain(
-				"קשר פסול עם גויה",
-			);
-		});
-
-		it("describes banned incest and betrothal demo opinions", () => {
-			expect(spouseHalachicOpinionTitle("BANNED_INCEST")).toContain("ערוה");
-			expect(spouseHalachicOpinionTitle("BETROTHAL")).toContain("אירוסין");
-		});
-
-		it("falls back to the union label", () => {
-			expect(spouseHalachicOpinionTitle("PILEGESH")).toBe("פילגש");
+		it("falls back to a numeric ordinal beyond the Hebrew list", () => {
+			expect(spouseOpinionOrdinalTitle(9)).toBe("שיטה 10");
 		});
 	});
 
@@ -162,7 +145,11 @@ describe("person-family-labels", () => {
 	});
 
 	describe("partitionSiblingsForFamilyTree", () => {
-		const sibling = (entityId: string, displayName: string, birthDateYyyymmdd?: number | null) => ({
+		const sibling = (
+			entityId: string,
+			displayName: string,
+			birthDateYyyymmdd?: number | null,
+		) => ({
 			personId: `p-${entityId}`,
 			entityId,
 			displayName,
