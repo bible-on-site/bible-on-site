@@ -680,9 +680,12 @@
 
 .matrixChildrenTierLabel {
   grid-column: 1 / -1;
-  margin: 8px 0 4px;
+  margin: 16px 0 12px;
   width: 100%;
   text-align: center;
+  /* הקווים האנכיים נמשכים מעלה מעבר לתווית, ולכן היא חייבת שכבה מעליהם */
+  position: relative;
+  z-index: 2;
 }
 
 .matrixKidsCell {
