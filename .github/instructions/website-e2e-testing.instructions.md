@@ -7,23 +7,19 @@ applyTo: "web/bible-on-site/tests/e2e/**, web/bible-on-site/playwright*.config.t
 
 ## Prerequisites
 
-MySQL must be running locally (Windows service, port 3306). The launcher (`launch-e2e-server.mts`) handles DB population via `cargo make mysql-populate` and starts the server automatically.
+MySQL must run locally (Windows service, port 3306); `launch-e2e-server.mts` populates it via `cargo make mysql-populate` and starts the server.
 
-**Stale server pitfall**: Playwright uses `reuseExistingServer: true`. If a previous server (dev or prod) is still running on port 3001, Playwright will silently reuse it instead of starting fresh. Before re-running e2e, check for and kill any leftover process on port 3001.
-
-**Standalone mode**: `next start` does NOT work with `output: "standalone"` in `next.config.mjs`. The launcher uses `node .next/standalone/server.js` for production and `next dev` for coverage.
+- **Stale server**: `reuseExistingServer: true` silently reuses anything already on port 3001 — kill leftovers before re-running.
+- **Standalone**: `next start` does not work with `output: "standalone"`; the launcher uses `node .next/standalone/server.js` (production) and `next dev` (coverage).
 
 ## Commands
 
-| Command | Server mode | Notes |
+| Command | Server | Notes |
 |---|---|---|
-| `npm run test:e2e` | standalone server (production) | Requires `npm run build` first |
-| `npm run coverage:e2e` | `next dev` (dev + SWC instrumentation) | No build needed |
-| `npm run coverage:all` | unit + e2e + merge | Runs `coverage:unit`, then `coverage:e2e`, then merges LCOV |
+| `npm run test:e2e` | standalone (production) | needs `npm run build` first |
+| `npm run coverage:e2e` | `next dev` + SWC instrumentation | no build needed |
+| `npm run coverage:all` | unit + e2e + merge | merges LCOV |
 
-## Coverage mode
+## Coverage
 
-- `coverage:e2e` starts the dev server; SWC coverage plugin is enabled automatically in non-production mode.
-- Global setup warms key routes (`/`, `/929`, `/929/1`, etc.) to stabilize coverage runs.
-- Coverage LCOV is written to `.coverage/e2e/lcov.info`.
-- `coverage:merge` combines unit + e2e LCOV into `.coverage/merged/lcov.info`.
+Non-production mode enables the SWC plugin automatically, and global setup warms key routes (`/`, `/929`, `/929/1`) to stabilize runs. E2E LCOV lands in `.coverage/e2e/lcov.info`; `coverage:merge` combines unit + e2e into `.coverage/merged/lcov.info`.

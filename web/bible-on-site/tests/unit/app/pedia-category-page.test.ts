@@ -80,41 +80,36 @@ describe("pedia/[slug] category route", () => {
 		it("returns the category label for a Hebrew slug", async () => {
 			const result = await generateMetadata({
 				params: Promise.resolve({ slug: "אישים" }),
-				searchParams: Promise.resolve({}),
 			});
 
 			expect(result.title).toBe("אישים | תנכפדיה");
 			expect(result.alternates?.canonical).toBe("/pedia/אישים");
 		});
 
-		it("returns the subcategory label when a role filter is applied", async () => {
-			const result = await generateMetadata({
-				params: Promise.resolve({ slug: "אישים" }),
-				searchParams: Promise.resolve({ role: "נביאים" }),
-			});
-
-			expect(result.title).toBe("נביאים | תנכפדיה");
-			expect(result.alternates?.canonical).toBe("/pedia/אישים?role=נביאים");
-		});
-
 		it("returns the subcategory label for the short sugar slug", async () => {
 			const result = await generateMetadata({
 				params: Promise.resolve({ slug: "נביאים" }),
-				searchParams: Promise.resolve({}),
 			});
 
 			expect(result.title).toBe("נביאים | תנכפדיה");
-			expect(result.alternates?.canonical).toBe("/pedia/אישים?role=נביאים");
+			expect(result.alternates?.canonical).toBe("/pedia/נביאים");
+		});
+
+		it("ignores search filters and resolves by slug only", async () => {
+			const result = await generateMetadata({
+				params: Promise.resolve({ slug: "אישים" }),
+			});
+
+			expect(result.title).toBe("אישים | תנכפדיה");
+			expect(result.alternates?.canonical).toBe("/pedia/אישים");
 		});
 
 		it("ignores filters that do not belong to the category", async () => {
 			const personResult = await generateMetadata({
 				params: Promise.resolve({ slug: "אישים" }),
-				searchParams: Promise.resolve({ role: "שופטים" }),
 			});
 			const animalResult = await generateMetadata({
 				params: Promise.resolve({ slug: "בעלי-חיים" }),
-				searchParams: Promise.resolve({ kind: "דרקונים", purity: "לא-ידוע" }),
 			});
 
 			expect(personResult.title).toBe("אישים | תנכפדיה");
@@ -126,7 +121,6 @@ describe("pedia/[slug] category route", () => {
 
 			const result = await generateMetadata({
 				params: Promise.resolve({ slug: "משה-רבנו" }),
-				searchParams: Promise.resolve({}),
 			});
 
 			expect(result.title).toBe("לא נמצא");
@@ -266,19 +260,17 @@ describe("pedia/[slug] category route", () => {
 		it("still renders a legacy English slug when the proxy is bypassed", async () => {
 			const result = await PediaSlugPage({
 				params: Promise.resolve({ slug: "person" }),
-				searchParams: Promise.resolve({ role: "prophet" }),
 			});
 
 			expect(
 				(result as ReactElement<{ resolved: { sub: string | null } }>).props
 					.resolved.sub,
-			).toBe("PROPHET");
+			).toBeNull();
 		});
 
 		it("treats an unknown slug as an entry lookup", async () => {
 			const result = await PediaSlugPage({
 				params: Promise.resolve({ slug: "לא-קיים" }),
-				searchParams: Promise.resolve({}),
 			});
 
 			expect((result as ReactElement<{ slug: string }>).props.slug).toBe(

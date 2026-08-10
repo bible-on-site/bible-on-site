@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 	description: 'אנציקלופדיה לתנ"ך - אישים, מקומות, אירועים ועוד',
 };
 
-// Always read fresh counts from MySQL (avoid stale “0 ערכים” after populate or when DB was down at build).
+// Dynamic for a production reason: "היום בתנ״ך" is keyed to the current Hebrew date and the list shows recent entries.
 export const dynamic = "force-dynamic";
 
 export default async function TanahpediaLandingPage() {

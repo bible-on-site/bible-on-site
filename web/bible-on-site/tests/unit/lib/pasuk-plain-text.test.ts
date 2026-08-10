@@ -5,14 +5,21 @@ function pasuk(segments: Pasuk["segments"]): Pasuk {
 	return { segments } as Pasuk;
 }
 
+function mockTimeframe() {
+	return {
+		from: { type: "string", pattern: "^\\d{2}:\\d{2}:\\d{2}$" },
+		to: { type: "string", pattern: "^\\d{2}:\\d{2}:\\d{2}$" },
+	} as const;
+}
+
 describe("pasukPlainText", () => {
 	it("joins regular qri segments with spaces", () => {
 		expect(
 			pasukPlainText(
 				pasuk([
-					{ type: "qri", value: "וַיְהִי", recordingTimeFrame: [0, 1] },
-					{ type: "qri", value: "בָעֶרֶב", recordingTimeFrame: [1, 2] },
-				] as Pasuk["segments"]),
+					{ type: "qri", value: "וַיְהִי", recordingTimeFrame: mockTimeframe() },
+					{ type: "qri", value: "בָעֶרֶב", recordingTimeFrame: mockTimeframe() },
+				]),
 			),
 		).toBe("וַיְהִי בָעֶרֶב");
 	});
@@ -21,9 +28,9 @@ describe("pasukPlainText", () => {
 		expect(
 			pasukPlainText(
 				pasuk([
-					{ type: "qri", value: "אֶת־", recordingTimeFrame: [0, 1] },
-					{ type: "qri", value: "לֵאָה", recordingTimeFrame: [1, 2] },
-				] as Pasuk["segments"]),
+					{ type: "qri", value: "אֶת־", recordingTimeFrame: mockTimeframe() },
+					{ type: "qri", value: "לֵאָה", recordingTimeFrame: mockTimeframe() },
+				]),
 			),
 		).toBe("אֶת־לֵאָה");
 	});
@@ -32,10 +39,10 @@ describe("pasukPlainText", () => {
 		expect(
 			pasukPlainText(
 				pasuk([
-					{ type: "qri", value: "דָּן", recordingTimeFrame: [0, 1] },
+					{ type: "qri", value: "דָּן", recordingTimeFrame: mockTimeframe() },
 					{ type: "ptuha" },
 					{ type: "stuma" },
-				] as Pasuk["segments"]),
+				]),
 			),
 		).toBe("דָּן");
 	});
@@ -45,8 +52,13 @@ describe("pasukPlainText", () => {
 			pasukPlainText(
 				pasuk([
 					{ type: "ktiv", value: "כתיב", qriOffset: 1 },
-					{ type: "qri", value: "קרי", recordingTimeFrame: [0, 1], ktivOffset: -1 },
-				] as Pasuk["segments"]),
+					{
+						type: "qri",
+						value: "קרי",
+						recordingTimeFrame: mockTimeframe(),
+						ktivOffset: -1,
+					},
+				]),
 			),
 		).toBe("קרי");
 	});
@@ -54,9 +66,7 @@ describe("pasukPlainText", () => {
 	it("keeps orphan ktiv (qriOffset 0)", () => {
 		expect(
 			pasukPlainText(
-				pasuk([
-					{ type: "ktiv", value: "יתום", qriOffset: 0 },
-				] as Pasuk["segments"]),
+				pasuk([{ type: "ktiv", value: "יתום", qriOffset: 0 }]),
 			),
 		).toBe("יתום");
 	});

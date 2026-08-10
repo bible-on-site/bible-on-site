@@ -5,25 +5,14 @@ applyTo: "web/bible-on-site/**/929/**, **/Sefer*.tsx, **/FlipBook*, **/copy-loca
 
 # Flip Book Integration
 
-## Local dev with local html-flip-book repo
+## Local dev
 
-- **Build** in `html-flip-book`: `npm run build`
-- **Copy into website** from `web/bible-on-site`: `USE_LOCAL_FLIP_BOOK=1 npm run postinstall` (or add a script that runs that) to copy the local build into node_modules.
+Build in `html-flip-book` (`npm run build`), then from `web/bible-on-site` run `USE_LOCAL_FLIP_BOOK=1 npm run postinstall` to copy that build into `node_modules`. CI/production use the **published** `html-flip-book-react`; the copy script runs only with `USE_LOCAL_FLIP_BOOK=1` or a `file:` dependency.
 
-The website depends on the **published** `html-flip-book-react` package for CI/production; the copy script only runs when `USE_LOCAL_FLIP_BOOK=1` or when the dependency is `file:`.
+## Publishing
 
-## Publishing html-flip-book — fully automated, never manual
+Never `npm publish` or create a GitHub Release manually — merging to master auto-releases and auto-publishes (details in `html-flip-book/.cursor/rules/ci-cd.mdc`).
 
-**Never run `npm publish` manually. Never create GitHub Releases manually.**
+## After library changes
 
-See `html-flip-book/.cursor/rules/ci-cd.mdc` for the full CI/CD pipeline details. In short: just merge to master — CI auto-releases, CD auto-publishes to npm.
-
-## Keeping bible-on-site CI green after library changes
-
-When `html-flip-book` types or APIs change, the **published npm package must be updated before** `bible-on-site` CI can pass. Sequence:
-1. Push & merge library changes → CI auto-releases → CD publishes to npm.
-2. Only then update `bible-on-site` to use the new version and push.
-
-When upgrading the dependency version, update **both**:
-- `package.json` → `html-flip-book-react` version
-- `scripts/toggle-flip-book-dep.mjs` → `NPM_VERSION` constant
+`bible-on-site` CI passes only once the new package is on npm: merge the library first, then bump here — updating **both** `html-flip-book-react` in `package.json` and `NPM_VERSION` in `scripts/toggle-flip-book-dep.mjs`.

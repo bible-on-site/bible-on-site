@@ -88,15 +88,15 @@ describe("TanahpediaBreadcrumb", () => {
 		);
 		expect(screen.getByRole("link", { name: "Kings" })).toHaveAttribute(
 			"href",
-			"/pedia/אישים?role=מלכים",
+			"/pedia/מלכים",
 		);
 		expect(screen.getByRole("link", { name: "Chaya" })).toHaveAttribute(
 			"href",
-			"/pedia/בעלי-חיים?kind=חיות",
+			"/pedia/חיות",
 		);
 		expect(screen.getByRole("link", { name: "Tahor" })).toHaveAttribute(
 			"href",
-			"/pedia/בעלי-חיים?purity=טהורים",
+			"/pedia/טהורים",
 		);
 
 		const currentEntry = screen.getByRole("link", { name: "Moshe" });

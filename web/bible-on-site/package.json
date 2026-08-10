@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.403",
+	"version": "0.2.404",
 	"private": true,
 	"license": "MIT",
 	"browserslist": [
@@ -62,7 +62,7 @@
 		"leaflet": "1.9.4",
 		"moment-timezone": "0.6.3",
 		"mysql2": "3.23.2",
-		"next": "16.2.12",
+		"next": "16.3.0",
 		"nuqs": "2.9.4",
 		"pdf-lib": "1.17.1",
 		"react": "19.2.8",

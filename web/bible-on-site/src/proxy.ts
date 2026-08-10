@@ -30,7 +30,11 @@ export function canonicalPediaTarget(url: URL): string | null {
 	if (!second) return null;
 
 	const resolved = resolveCategoryRoute(second, filters);
-	return resolved && !resolved.isCanonicalSlug ? resolved.canonicalPath : null;
+	if (!resolved) return null;
+
+	const hasFilters =
+		Boolean(filters.role) || Boolean(filters.kind) || Boolean(filters.purity);
+	return !resolved.isCanonicalSlug || hasFilters ? resolved.canonicalPath : null;
 }
 
 export async function proxy(

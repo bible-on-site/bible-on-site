@@ -5,29 +5,17 @@ applyTo: "**"
 
 # Agent Practices
 
-**The agent performs tasks. The user does not.**
+Execution ownership is defined in [user-does-not-execute.instructions.md](user-does-not-execute.instructions.md): you run every command and finish every ask in the same turn. This file adds the repo-specific gates.
 
-- Run commands yourself: build, copy scripts, installs, dev server, tests. Do not instruct the user to "run this in your terminal" or "then run the copy script."
-- When working on flip book integration with the local `html-flip-book` repo: build in html-flip-book, then in the website run `USE_LOCAL_FLIP_BOOK=1 npm run postinstall` to copy the local build into node_modules (or add a script that runs that). Do not rely on the file: dependency in CI; the website uses the published npm package.
-- Apply fixes, run linters, and verify; do not leave follow-up steps for the user unless they explicitly ask.
-- Continue automatically with aligned next actions. If the user's intention is clear and the next step directly advances it, execute it without asking for additional confirmation.
+- Flip book: build in `html-flip-book`, then run `USE_LOCAL_FLIP_BOOK=1 npm run postinstall` in the website. CI/production use the published npm package, not the `file:` dependency.
 
 # Workdir Cleanliness Gate
 
-**Never start or finish a task with an untriaged dirty workdir.**
-
-- Before starting implementation: run `git status --short`, classify each dirty file (in-scope / out-of-scope user work / generated noise), then isolate or clean appropriately.
-- Before reporting completion: run `git status --short` again and repeat the same triage.
-- If any dirty file has unclear ownership or intent, stop and ask before proceeding.
+See [git-practices.instructions.md](git-practices.instructions.md#task-boundary-workdir-gate): `git status --short` before implementing and before reporting done, every dirty file triaged as in-scope, isolated user work, or noise.
 
 # No Suppressing Errors Without Approval
 
-**Never silence, suppress, or ignore errors/warnings to make CI pass.**
-
-- Do not add `--ignore-errors`, `continue-on-error`, `|| true`, `catch {}` (empty), or equivalent flags to work around a failing step.
-- Do not downgrade errors to warnings, skip failing tests, or disable lint rules to unblock a pipeline.
-- If a tool or CI step is failing, **find and fix the root cause**.
-- If a proper fix is genuinely infeasible in the current scope, **ask the user for approval** before introducing any suppression, and explain exactly what is being suppressed and why.
+**Never silence an error or warning to make CI pass** — no `--ignore-errors`, `continue-on-error`, `|| true`, empty `catch {}`, downgraded severities, skipped tests, or disabled lint rules. Fix the root cause. If a proper fix is genuinely out of scope, get approval first and state exactly what is being suppressed and why.
 
 ```
 # BAD - suppressing to make CI green
@@ -40,26 +28,8 @@ continue-on-error: true
 
 # Reproduce Locally Before Remote Iteration
 
-**Reproduce and iterate on issues locally instead of pushing to remote CI.**
-
-- When a CI/CD step fails, reproduce the failure locally first (run tests, builds, linters, Docker builds, coverage merges locally).
-- Iterate on the fix locally until it passes, then push once.
-- Do not use remote CI as a trial-and-error debugging loop (push → wait 10 min → read logs → push again).
-- Acceptable exceptions: failures that depend on CI-only infrastructure (secrets, cloud services, specific runner environments). Even then, minimize remote round-trips by reasoning through the issue first.
-
-# Monitor When Asked
-
-**When the user asks to monitor (e.g. a branch until CI is stable), actually monitor until the situation is resolved.**
-
-- Do not stop after one check or after reporting "CI failed." Keep monitoring: recheck status after a short wait, and repeat until the run completes (success or a clear, actionable failure).
-- Do not overlook or drop the task until there are no remaining issues—e.g. CI is green, or the failure is identified and fixed (including package.json / package-lock / install issues if that was the context).
-- Use available tools: open the Actions/branch page, refresh, inspect failed jobs and logs when possible, then either report a resolved state or propose a concrete fix and apply it.
+Reproduce failures locally (tests, builds, linters, Docker builds, coverage merges), iterate until they pass, then push once. Never use remote CI as a trial-and-error loop. Only CI-only infrastructure (secrets, cloud services, runner environments) justifies remote iteration — and then minimize round-trips.
 
 # Own Your Work
 
-**Never refer to code you wrote as "pre-existing" or "already there."**
-
-- Everything in this codebase was written by the agent (you). There is no other developer.
-- When something is broken, own it: "I introduced this bug when I …" — not "this was a pre-existing issue."
-- When discussing prior changes, say "I added / I implemented / I wrote" — not "it was already there."
-- Take full responsibility for regressions, side effects, and design decisions. Diagnose and fix them without deflecting.
+Everything in this codebase was written by you; there is no other developer. Never call your own code "pre-existing" or "already there" — say "I added / I introduced this bug" and fix regressions, side effects, and design mistakes without deflecting.
