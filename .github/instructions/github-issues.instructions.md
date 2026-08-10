@@ -5,53 +5,16 @@ applyTo: "**"
 
 # GitHub Issues Management
 
-When creating GitHub issues, ALWAYS include:
-1. Appropriate **labels** (Priority + Difficulty + Type + Component)
-2. Add to relevant **projects**
+Every new issue needs **labels** (one Priority + one Difficulty + one Type + all applicable Components) and membership in **every relevant project**.
 
-## Labels (REQUIRED categories)
+- **Priority**: `P1` top, `P2` prioritized, `P3` nice to have.
+- **Difficulty**: `D1` low, `D2` medium, `D3` high, `D4` huge.
+- **Type**: `bug`, `enhancement`, `documentation`, `security`, `performance`, `investigation`.
+- **Component**: `app` (MAUI), `admin`, `FE` (website), `DB`/`MySQL`, `AWS`, `devops`/`CI`/`CD`, `tests`/`e2e`/`API Tests`/`E2E Tests`.
+- **Projects** (`gh project item-add <ID> --owner bible-on-site --url <issue-url>`): `2` website, `3` API, `4` App, `5` Data, `6` Admin.
 
-### Priority (pick one)
-- `P1` - Top Priority
-- `P2` - Prioritized
-- `P3` - Nice to have
+Title is descriptive (e.g. `Data CI: JUnit report file not generated`); `[P1-P3]`/`[D1-D4]` prefixes are optional since labels carry it. Body template:
 
-### Difficulty (pick one)
-- `D1` - Low Difficulty
-- `D2` - Medium Difficulty
-- `D3` - High Difficulty
-- `D4` - Huge Difficulty
-
-### Type (pick one)
-- `bug`, `enhancement`, `documentation`, `security`, `performance`, `investigation`
-
-### Component (pick all that apply)
-- `app` - Mobile app (.NET MAUI)
-- `admin` - Admin panel
-- `FE` - Frontend (website)
-- `DB`, `MySQL` - Database
-- `AWS` - AWS infrastructure
-- `devops`, `CI`, `CD` - DevOps/CI/CD
-- `tests`, `e2e`, `API Tests`, `E2E Tests`
-
-## Projects (add to ALL relevant)
-
-After creating issue, add to projects:
-```bash
-gh project item-add <ID> --owner bible-on-site --url <issue-url>
-```
-
-Project IDs:
-- `6` = Admin
-- `5` = Data
-- `4` = App
-- `3` = API
-- `2` = website
-
-## Title & Body
-
-- **Title**: Descriptive; optional prefixes `[P1-P3]`, `[D1-D4]` (or use labels). Example: `Data CI: JUnit report file not generated`.
-- **Body template**:
 ```markdown
 ## Problem
 Brief description of the issue.
@@ -60,16 +23,13 @@ Brief description of the issue.
 - Link to failing CI run, error logs, or related code
 
 ## Root Cause (if known)
-Analysis of why this is happening.
 
 ## Solution (if known)
-Proposed fix or approach.
 ```
 
-## Complete Example
+Complete example:
 
 ```bash
-# 1. Create issue with labels
 gh issue create \
   --title "Feature title" \
   --body "## Problem
@@ -79,8 +39,6 @@ Description here
 - https://github.com/..." \
   --label "enhancement,P2,D2,app,admin,DB"
 
-# 2. Add to all relevant projects
 gh project item-add 6 --owner bible-on-site --url <url>
-gh project item-add 5 --owner bible-on-site --url <url>
 gh project item-add 4 --owner bible-on-site --url <url>
 ```

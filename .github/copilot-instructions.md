@@ -2,8 +2,6 @@
 
 ## Documentation References
 
-In order to understand some topic related to this repository, refer to the `docs/` directory:
-
 | Topic                | Documentation Path     |
 | -------------------- | ---------------------- |
 | **Practices**        | `docs/practices/`      |
@@ -12,75 +10,44 @@ In order to understand some topic related to this repository, refer to the `docs
 | AWS Infrastructure   | `docs/aws/`            |
 | App Development      | `docs/app/`            |
 
-## Quick Reference for Agents
+## Known Workarounds
 
-### Known Workarounds
+- **Terminal**: prepend a leading space to every command (temporary bug) — ` cd /path && command`.
+- **Windows `nul` files**: delete before committing (`find . -name "nul" -type f -delete`).
+- **Branches**: verify the branch does not already exist on remote before pushing (see `docs/practices/git.md`).
+- **Quotes**: never use the Hebrew gershayim `"` — use ASCII `"`, escaped or encoded as the file format requires.
+- **Non-interactive CLI on Windows**: no `gh ... --watch` in Git Bash (it reopens an alternate buffer and hides auditable output) — use REST/GraphQL snapshots or redirect the watcher to a file. Set `GH_PAGER=cat GH_FORCE_TTY=0 PAGER=cat` and `AWS_PAGER=''`.
+- **MINGW path conversion**: prefix colon paths and leading-slash arguments with `MSYS_NO_PATHCONV=1` (e.g. `git show "origin/master:path"`, SSM names starting with `/`), or use the repository's root-level SSM names.
 
-- **Terminal Commands**: Due to a temporary bug, always prepend a leading space before running any commands in terminal (e.g., ` cd /path && command` instead of `cd /path && command`).
-- **Windows "nul" Files**: Before committing, check for and remove any accidentally created `nul` files (a Windows artifact). Run: `find . -name "nul" -type f -delete` or manually delete them.
-- **Branch Verification**: Before pushing to a branch, verify it doesn't already exist on remote (may have been merged). See `docs/practices/git.md` for details.
-- **Quote Character Style**: Do not use the Hebrew gershayim character `"`. Use the ASCII double quote character `"` instead, escaped or encoded as required by the file format.
-- **Non-interactive CLI output on Windows**: Do not use `gh ... --watch` in the integrated Git Bash terminal; it repeatedly opens an alternate buffer and hides auditable output. Use REST/GraphQL snapshots or redirect the watcher to a file. Set `GH_PAGER=cat GH_FORCE_TTY=0 PAGER=cat` for GitHub CLI and `AWS_PAGER=''` for AWS CLI.
-- **MINGW path conversion**: Git Bash can rewrite colon paths and leading-slash arguments. Prefix commands such as `git show "origin/master:path"` or AWS SSM names beginning with `/` with `MSYS_NO_PATHCONV=1`, or use the repository's established root-level SSM names without a leading slash.
+## Dependency & CI Maintenance
 
-### Dependency & CI Maintenance
+- **Validate a dep refresh locally before pushing** — CI runs in UTC with a clean `npm ci`:
+  1. `cd web/bible-on-site && TZ=UTC npm run test:unit` — hebrew-date/tzeit tests (e.g. `constructTsetAwareHDate`) pass in local timezones but fail under UTC when date libs change.
+  2. `npm ci --dry-run` in **every** touched npm module (especially `web/admin`) to catch `package.json`/lockfile drift before the Dockerized CI jobs do.
+  3. For .NET majors, `dotnet restore app/BibleOnSite.Tests/BibleOnSite.Tests.csproj` — catches `NU1605` downgrades without mobile workloads.
+- **Renovate grouped "all non-major" PRs are risky**: their lockfile maintenance can drop transitive optional deps (e.g. `@emnapi/*` from `web/admin/package-lock.json`), breaking the Dockerized `npm ci`, and they auto-merge and re-break master. Run `gh pr merge <n> --disable-auto`, then supersede with a hand-built branch carrying only the real dep change plus regenerated lockfiles. PR CI used to miss this because the Package (Docker) jobs run only on master pushes while module CI resolves node from the engines pin (older, lenient npm), whereas the floating `node:24` image ships a stricter npm that rejects the desynced lockfile — so Admin CI and Website CI now run "Verify Lockfile Sync With Packaging npm" (`npm ci --dry-run` inside `node:24-alpine`); keep that step.
+- **Held dependencies** (authoritative list in `renovate.json`): `sunrise-sunset-js` <3.2.1 (3.2.1 and 3.3.0 break tzeit under UTC), node engines/nvm/dockerfile pinned `>=24.11.1 <24.12.0`, `macos` runner <26 (breaks the MAUI iOS build), `swc-plugin-coverage-instrument` disabled, `bson` held (mongodb pins bson 2). Keep `.nvmrc` in sync with `engines`.
+- **Version-gate collisions**: CI compares a gated module's version against the highest released `<module>-v*` tag, and the release bot bumps gated versions on master after each merge. On long-lived/dep branches, merge `origin/master` then bump the gated module above master HEAD's value. Gated modules: `website`, `api`, `app`, `bulletin`, `admin` — a `web/api/Dockerfile` change triggers `api`, `.csproj` changes trigger `app`.
+- **CDs** (Bulletin / RDS / App) run from `repository_dispatch` in the release pipeline, never manually, so fixes land on the next release. The `db-populator` Lambda is external to this repo — diagnose via CloudWatch (`/aws/lambda/bible-on-site-db-populator`).
 
-Lessons from past dependency refreshes — apply these to avoid breaking `master`:
+## Tool Learning Protocol
 
-- **Validate before pushing a dep refresh** (local-only validation is NOT enough — CI runs in UTC with a clean `npm ci`):
-  1. `cd web/bible-on-site && TZ=UTC npm run test:unit` — website hebrew-date/tzeit tests (e.g. `constructTsetAwareHDate`) pass in local timezones but fail under CI's UTC when date libs change.
-  2. `npm ci --dry-run` in **every** touched npm module (especially `web/admin`) — catches `package.json`/lockfile drift before the Dockerized CI jobs do.
-  3. For .NET majors, `dotnet restore app/BibleOnSite.Tests/BibleOnSite.Tests.csproj` — catches `NU1605` package-downgrade errors without needing mobile workloads.
-- **Renovate grouped "all non-major" PRs are risky**: their lockfile maintenance can drop transitive optional deps (e.g. `@emnapi/*` from `web/admin/package-lock.json`), breaking the Dockerized `npm ci` in the Package Admin job. These PRs often have auto-merge enabled and will re-break master. Run `gh pr merge <n> --disable-auto`, then supersede with a hand-built branch that applies only the real dep change plus freshly regenerated lockfiles (`npm install`). **Why PR CI used to miss it**: the Package (Docker) jobs run only on master pushes, and the module CI jobs resolve node from the engines pin (older, lenient npm) while the floating `node:24` Docker tag pulls a newer, stricter npm whose `npm ci` rejects the desynced lockfile ("Missing … from lock file"). Admin CI and Website CI therefore run a "Verify Lockfile Sync With Packaging npm" step (`npm ci --dry-run` inside the same `node:24-alpine` image) on every run, so a desync fails the feature branch instead of master — keep that step when touching those jobs.
-- **Held dependencies** (see `renovate.json` for the authoritative list): `sunrise-sunset-js` <3.2.1 (both 3.2.1 and 3.3.0 break tzeit under UTC), `node` engines/nvm/dockerfile pinned `>=24.11.1 <24.12.0`, `macos` runner <26 (breaks the MAUI iOS build), `swc-plugin-coverage-instrument` disabled, `bson` held (mongodb pins bson 2). Keep `.nvmrc` in sync with the `engines` range.
-- **Version-gate collisions**: CI's `verify-version` compares a gated module's version against the highest released git tag (`<module>-v*`), and the release bot bumps gated versions on `master` after each merge. On long-lived/dep branches, `git merge origin/master` then bump the gated module to **exceed master HEAD's** value. Gated modules: `website`, `api`, `app`, `bulletin`, `admin`. Note a `web/api/Dockerfile` change triggers the `api` gate and `.csproj` changes trigger the `app` gate.
-- **CDs** (Bulletin / RDS / App) are triggered by `repository_dispatch` from the release pipeline, not manually; fixes land on the next release. The `db-populator` Lambda is an external Python function whose code is not in this repo — diagnose its failures via CloudWatch (`/aws/lambda/bible-on-site-db-populator`).
+Check `.github/tool-registry.md`; if the entry is missing or outdated, research it (Context7 `resolve-library-id` → `get-library-docs`, official docs, GitHub), record tool/version/date/learnings there, then apply them.
 
-### Tool Learning Protocol
+## Quality Ownership
 
-When using a tool/library/framework for the first time:
+- **Never ignore a compiler or linter error/warning** — keep 0 problems in VS Code.
+- **Never dismiss a test failure**: find the root cause (your change? environment? flaky?) and fix it or ask — never call it "unrelated" and move on.
+- **Never leave anything red, and never _assume_ a red is fixed.** Every red signal (CI, merge queue, CD for AWS/Bulletin/RDS/App, README/Project Status badges, Uptime Robot, codecov) is yours until **verified green with freshly observed evidence** or **tracked with its true current status**:
+  1. **Track with evidence** — record the artifact (run ID, PR, issue, badge) and re-query the source of truth (`gh run list`/`gh run view`, badge endpoint, AWS). Report the status you observed, never the one you expect.
+  2. **Diagnose before acting** — separate real failures from stale/transient ones (expired artifact, idle Lambda, OIDC hiccup) and from red herrings (`digest-mismatch` is an _input_ of `actions/download-artifact`).
+  3. **Fix at the source** when it is in your control (code, config, workflow, reachable infra).
+  4. **Only green is resolution.** A CD/badge reflects its latest run, so a merged preventive fix does not clear it; if clearing depends on a future release/dispatch/external action, say plainly it is **still red** and keep it tracked — and if you are blocked externally (Store submission, prod deploy confirmation, expired artifacts), file a tracked issue **and** state the exact action needed.
+  5. **Never mask a red** — no `continue-on-error`, no inflated codecov `coverage.range`, no re-deploying stale artifacts. Prevent recurrence when the cause was systemic (e.g. too-short artifact retention).
+- Check CI/PR status yourself with evidence; never ask the user to watch or confirm. When checks are green and policy allows, merge (or enqueue) yourself and verify the post-merge state.
+- Client components in `web/bible-on-site` are forbidden unless explicitly requested.
+- When the user's intent is clear, continue with the next aligned step instead of asking "next steps?".
 
-1. Check `.github/tool-registry.md` for existing research
-2. If missing/outdated: use Context7 (`resolve-library-id` → `get-library-docs`), official docs, or GitHub
-3. Update registry with: tool name, version, date, key learnings
-4. Apply learnings
+## GitHub Issue Creation
 
-### Quality Ownership
-
-- **Never ignore compiler or linter errors/warnings** — maintain 0 problems in VS Code
-- **Never dismiss test failures** — you are the owner of repo quality. If a test fails:
-  1. Investigate the root cause (is it your change? environment issue? flaky test?)
-  2. Fix the issue or ask clarifying questions if unsure
-  3. Never say "this is unrelated" and move on without resolution
-- **Never leave anything red — and never _assume_ a red is fixed.** Every red signal is your responsibility until it is **verified green with freshly-observed evidence** (a passing run/badge you actually re-checked), or **explicitly tracked with its true current status**. This covers CI checks, the merge queue, CD deployments (AWS / Bulletin / RDS / App), the README/Project Status dashboard badges, Uptime Robot, and codecov. For each red:
-  1. **Track it explicitly, with evidence** — record the concrete artifact (run ID, PR number, issue, badge) and its real, just-observed status by re-querying the source of truth (`gh run list`/`gh run view`, the badge endpoint, AWS), not by inference. Keep that tracking entry (todo list / issue) updated until it is green. Report the status you _observed_, never the status you _expect_.
-  2. **Diagnose the root cause** before acting — distinguish a real failure from a stale/transient one (e.g. expired artifact, idle/restoring Lambda, OIDC hiccup) and from red-herring log lines (e.g. `digest-mismatch` is an _input_ of `actions/download-artifact`, not an error).
-  3. **Fix it at the source** if it is in your control (code, config, workflow, infra you can reach via AWS SSO).
-  4. **Opening a PR or filing an issue is _not_ resolution; only green is.** A CD/badge reflects its **latest run** and stays red until a **new successful run** flips it — a merged preventive fix (e.g. raising artifact retention) does **not** clear the existing red. Never mark a red done, or imply it is resolved, until you have re-verified it is actually green. If clearing it depends on a future release/dispatch/external action, state plainly that it is **still red** and keep it tracked as such.
-  5. **Never mask a red** — do not hide a real failure with `continue-on-error`, do not inflate the codecov `coverage.range` to recolor a badge, and do not re-deploy stale artifacts to fake a green. Fix the underlying cause instead.
-  6. **If blocked by external/user action** (e.g. MS Store Partner Center submission errors, a prod deploy that needs confirmation, expired artifacts needing a fresh release dispatch), file a tracked issue (with the required P/D labels + project) **and** surface it explicitly to the user with the exact action needed **and** the fact that it is **still red** — never silently move on or imply it is resolved.
-  7. **Prevent recurrence** — when a red came from a systemic gap (e.g. too-short artifact retention), propose/implement the preventive fix, not just the one-off unblock.
-- **Do not ask the user to "watch" or "confirm" CI/PR status** — always check it yourself and report observed results with evidence.
-- **Do not tell the user to merge if the user delegated execution to you** — when checks are green and policy allows, perform the merge yourself (or enqueue it) and then verify the post-merge state.
-- Use of client components in `web/bible-on-site` is forbidden unless explicitly requested
-- If user intent is clear, continue with the next aligned implementation step automatically instead of asking "next steps?".
-
-### GitHub Issue Creation
-
-When creating GitHub issues, **always** include:
-
-1. **Priority label** (required): `P1` (Top Priority), `P2` (Prioritized), or `P3` (Nice to have)
-2. **Difficulty label** (required): `D1` (Low), `D2` (Medium), `D3` (High), or `D4` (Huge)
-3. **Project** (required): Add to the appropriate project:
-   - `App` (project #4) — for mobile app issues
-   - `API` (project #3) — for backend API issues
-   - `website` (project #2) — for frontend website issues
-   - `Data` (project #5) — for data pipeline issues
-   - `Admin` (project #6) — for admin portal issues
-
-Use gh CLI to add labels and project:
-
-```bash
-gh issue edit <number> --repo bible-on-site/bible-on-site --add-label "P3,D1"
-gh project item-add <project-number> --owner bible-on-site --url <issue-url>
-```
+See [instructions/github-issues.instructions.md](instructions/github-issues.instructions.md): every issue needs Priority + Difficulty + Type + Component labels and the matching project (App #4, API #3, website #2, Data #5, Admin #6).

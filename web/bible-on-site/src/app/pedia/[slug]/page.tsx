@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import {
 	CATEGORY_SLUGS,
-	type CategorySearchParams,
 	resolveCategoryRoute,
 } from "@/lib/tanahpedia/category-slug";
 import { getAllEntryUniqueNames } from "@/lib/tanahpedia/service";
@@ -9,11 +8,10 @@ import type { CategoryKey } from "@/lib/tanahpedia/types";
 import { CategoryView, categoryMetadata } from "./category-view";
 import { EntryView, entryMetadata } from "./entry-view";
 
-export const dynamic = "force-dynamic";
+export const dynamic = "force-static";
 
 interface PediaRouteProps {
 	params: Promise<{ slug: string }>;
-	searchParams: Promise<CategorySearchParams>;
 }
 
 // this reserverd function is a magic for caching
@@ -34,20 +32,17 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({
 	params,
-	searchParams,
 }: PediaRouteProps): Promise<Metadata> {
 	const { slug } = await params;
-	const resolved = resolveCategoryRoute(slug, await searchParams);
+	const resolved = resolveCategoryRoute(slug);
 	return resolved ? categoryMetadata(resolved) : entryMetadata(slug);
 }
 
 export default async function PediaSlugPage({
 	params,
-	searchParams,
 }: PediaRouteProps) {
 	const { slug } = await params;
-	const sp = await searchParams;
-	const resolved = resolveCategoryRoute(slug, sp);
+	const resolved = resolveCategoryRoute(slug);
 	// Legacy English slugs are redirected to their Hebrew form by the proxy.
 	return resolved ? (
 		<CategoryView resolved={resolved} />
