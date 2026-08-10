@@ -7,16 +7,17 @@ applyTo: "web/bible-on-site/**"
 
 ## Legacy Reference
 
-When asked to **inspire from legacy website** or reference the old website implementation, look at the `legacy-website/` directory in the repo root. This is an untracked directory containing the previous website codebase for reference.
+"Inspire from legacy website" = the untracked `legacy-website/` directory in the repo root.
 
 ## Development
 
-- Use Playwright at http://localhost:3001 (`npm run dev` if needed).
-- **Prefer server components for content**: content-rich (text, articles, sections) → SSG/SSR only for SEO and AIO. Use client components only for interactive/glue (navigation, animation, scroll, menu). Keep client components minimal and isolated; content should remain server-rendered.
-- Parse `.env` files with `dotenv`/`dotenv-cli`, not line-based regular expressions; Windows CRLF can leave `\r` in regex matches or cause an end-of-line match to fail.
-- Line endings are LF everywhere: the root `.gitattributes` (`* text=auto eol=lf`) forces LF in the working tree regardless of `core.autocrlf`, matching the LF blobs and CI. Lint with `npm run lint` (`biome lint`) only — do not run `biome check` or `biome format --write`. The project uses Biome as a linter, not a formatter/import-sorter, so `biome check` re-sorts imports and reflows un-formatted code the repo does not enforce (it no longer reports CRLF diffs after the `.gitattributes` fix).
-- Start specialized dev environments through their package script/local `node_modules/.bin` tool. Do not substitute `npx dotenv`, which can resolve a different package and silently fall back to the default database.
-- After replacing database data used by `unstable_cache(..., { revalidate: false })`, remove the full `.next` directory and restart. Removing only `.next/cache` did not invalidate all Next.js 16 data-cache state.
+- Drive Playwright against http://localhost:3001 (`npm run dev` if needed).
+- **Server components by default.** Content (text, articles, sections) stays server-rendered for SEO/AIO; client components are only interaction glue (navigation, animation, scroll, menu) and stay minimal and isolated.
+- **Routes are static by default.** A route may be dynamic only for a real production reason (e.g. a per-request redirect). Never force a route dynamic — or otherwise weaken production rendering — to dodge local staleness; `next dev` re-renders per request, so local problems stay local. Check the route table in `npm run build` output after touching rendering.
+- Parse `.env` files with `dotenv`/`dotenv-cli`, never line-based regexes — Windows CRLF leaves `\r` in matches or breaks end-of-line matching.
+- Line endings are LF everywhere (root `.gitattributes`: `* text=auto eol=lf`), matching the LF blobs and CI. Lint with `npm run lint` (`biome lint`) only — never `biome check` or `biome format --write`: Biome is a linter here, not a formatter/import-sorter, and those commands re-sort imports and reflow code the repo does not enforce.
+- Start specialized dev environments through their package script or local `node_modules/.bin`; `npx dotenv` can resolve a different package and silently fall back to the default database.
+- After replacing data behind `unstable_cache(..., { revalidate: false })`, delete the whole `.next` directory and restart — clearing `.next/cache` alone does not invalidate Next.js 16 data-cache state.
 
 ## Commands
 
@@ -29,11 +30,10 @@ When asked to **inspire from legacy website** or reference the old website imple
 
 ## Implementation Notes
 
-- For test assertions: non-null assertion with a linter suppression comment explaining why it's safe.
-- When catching errors, log with `console.warn` or `console.error`.
-- For database-backed optional UI, include route/entity context in the log before returning an empty fallback; otherwise a schema failure is indistinguishable from genuinely absent content.
-- For connector/layout geometry, use temporary high-contrast overlays to debug, then capture the final real colors at normal zoom on desktop and mobile. Tight clips verify junctions and full views verify composition; neither alone is sufficient.
+- Test assertions: non-null assertion plus a suppression comment explaining why it is safe.
+- Log caught errors with `console.warn`/`console.error`; for database-backed optional UI include route/entity context before the empty fallback, so a schema failure is distinguishable from absent content.
+- For connector/layout geometry, debug with temporary high-contrast overlays, then verify real colors at normal zoom on desktop and mobile — tight clips prove junctions, full views prove composition.
 
 ## Styling Guidelines
 
-- **Do not mix font families**: Use `font-family: inherit` to maintain consistency with the website's global font. Avoid introducing custom fonts (like "Lora", "Roboto", etc.) in component styles.
+**Never mix font families**: use `font-family: inherit`; no custom fonts (Lora, Roboto, …) in component styles.

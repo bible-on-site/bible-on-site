@@ -7,26 +7,22 @@ applyTo: "**"
 
 ## Strategy
 
-**Prefer unit tests over e2e.** Extract pure business logic into testable functions; unit test first, then add e2e for integration. Design for testability—if something is only testable via e2e, refactor to separate pure logic from side effects.
+Prefer unit tests over e2e: extract pure logic, unit test it, then add e2e for integration. If something is only testable via e2e, refactor to separate pure logic from side effects.
 
 ## Test Naming
 
-- **Top-level describe**: subject (component, function, module).
-- **Nested describe**: context (e.g. "when user is authenticated", "with invalid input").
-- **it/test**: expectation verb ("returns the correct value", "throws an error", "renders the component").
+Top-level `describe` = subject; nested `describe` = context ("when user is authenticated"); `it` = expectation verb ("returns the correct value", "throws an error").
 
 ## Coverage (Website)
 
-Use `/* istanbul ignore next */` for defensive/unreachable code; add a short reason. Custom handling in `tests/util/coverage/sanitize-coverage.js` makes SWC instrumentation respect these comments.
+Use `/* istanbul ignore next */` with a short reason for defensive/unreachable code; `tests/util/coverage/sanitize-coverage.js` makes SWC instrumentation honor it.
 
-### Finding coverage gaps (website)
+To find gaps — never hand-parse lcov or write ad-hoc scripts:
 
-When codecov reports a patch-coverage drop, do NOT hand-parse lcov or write ad-hoc scripts:
-
-1. `npm run coverage:unit` — full run, writes `.coverage/unit/lcov.info`.
-2. `npm run coverage:gaps -- <path-substring> ...` — prints per-file missed line/branch numbers (no args = all files with gaps).
-3. Read each missed region in the source and write a targeted test per real path. lcov line numbers can be off by a line or duplicated (SWC sourcemap artifacts) — verify against the source before chasing a "missed" line that existing tests clearly cover.
-4. **Ownership**: every gap in a file you touched is yours to close — the agent wrote this codebase, so there is no "pre-existing" exclusion. Truly dead defensive branches get `/* istanbul ignore */` with a reason instead of contrived tests.
+1. `npm run coverage:unit` (writes `.coverage/unit/lcov.info`).
+2. `npm run coverage:gaps -- <path-substring> ...` prints missed lines/branches (no args = every file with gaps).
+3. Read each missed region and write a targeted test per real path. lcov line numbers can be off by one or duplicated (SWC sourcemap artifacts) — verify against the source before chasing a "missed" line existing tests clearly cover.
+4. Every gap in a file you touched is yours to close; there is no "pre-existing" exclusion. Truly dead defensive branches get an ignore comment with a reason instead of a contrived test.
 
 ## Commands by Module
 
@@ -36,4 +32,4 @@ When codecov reports a patch-coverage drop, do NOT hand-parse lcov or write ad-h
 | API | (cargo) | `cargo make test-e2e` | `cargo make coverage-e2e` |
 | App | `dotnet run --project devops -- TestUnit` | `dotnet run --project devops -- TestE2E` | `dotnet run --project devops -- CoverageUnit` |
 
-App integration tests need API at `http://127.0.0.1:3003`; they use `[Trait("Category", "Integration")]`.
+App integration tests are marked `[Trait("Category", "Integration")]` and need the API at `http://127.0.0.1:3003`.

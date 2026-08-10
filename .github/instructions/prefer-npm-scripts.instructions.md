@@ -5,17 +5,6 @@ applyTo: "**"
 
 # Prefer Project Scripts Over Raw CLI
 
-When a project has a task runner (npm scripts, cargo-make, Nuke, etc.), **always use the defined script** instead of invoking the underlying CLI directly.
+Always run the repo's task runner (npm scripts, `cargo make`, `dotnet nuke`) rather than the underlying CLI — `npm run dev`, `npm test`, `npm run build`, not `npx next dev -p 3001`, `npx jest`, `npx next build`.
 
-## Rules
-
-- Before running any command, check `package.json` scripts (or equivalent) for a matching task.
-- Use `npm run dev` instead of `npx next dev -p 3001`.
-- Use `npm test` instead of `npx jest` / `npx vitest`.
-- Use `npm run build` instead of `npx next build`.
-- Same principle applies to `cargo make`, `dotnet nuke`, or any other task runner found in the repo.
-
-## Why
-
-- Scripts encode project-specific flags, env vars (e.g. `dotenv -e .dev.env`), and port numbers.
-- Running the CLI directly skips those and causes subtle breakage.
+Check `package.json` (or equivalent) for a matching task before running anything: scripts carry the required flags, env files (`dotenv -e .dev.env`), and ports, and bypassing them breaks subtly.

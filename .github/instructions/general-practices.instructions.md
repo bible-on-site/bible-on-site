@@ -5,29 +5,21 @@ applyTo: "**"
 
 # General Practices
 
-- **Do not hand off to the user.** The agent performs every step that can be performed. Forbidden: the phrase "(for you)" or "for you" in that sense; "you need to …"; "you should …"; "what you should do is …"; or any wording that assigns a remaining action to the user. Only state that the user must do something when they have explicitly asked to be informed, or when the agent cannot perform the action (e.g. token/permission/API limit).
-
-- **Prefer the latest stable version** of any toolset, framework, or package unless there is a specific compatibility concern.
+- **Never hand work back to the user.** Forbidden: "for you", "you need to…", "you should…", or any wording that assigns a remaining action. Say the user must act only when they asked to be told, or when you genuinely cannot act (permission, token, API limit).
+- **Prefer the latest stable version** of any tool, framework, or package unless there is a specific compatibility concern.
+- **Fix the product, not your own convenience.** Never weaken shipped behavior (e.g. forcing a page dynamic, loosening a check) to work around a local-development annoyance — solve it locally and keep production correct.
 
 ## Language Policy
 
-**No shell scripts (.sh, .bash) in this repository.**
+No shell scripts (`.sh`, `.bash`). DevOps is Node.js/TypeScript (`devops/`); data processing is Rust (`data/`).
 
-- **DevOps**: Node.js/TypeScript (`devops/`)
-- **Data processing**: Rust (`data/`)
+## Tool Learning
 
-## Tool Learning (Agents/Copilot)
+Check `.github/tool-registry.md` first. If it is missing or stale, research via Context7 (`resolve-library-id` → `get-library-docs`), official docs, or GitHub; record the tool, version, date, and key learnings there; then apply them.
 
-1. Check `.github/tool-registry.md` for existing research.
-2. If missing/outdated: use Context7 (`resolve-library-id` → `get-library-docs`), official docs, or GitHub.
-3. Update the registry with tool name, version, date, and key learnings.
-4. Apply learnings.
+## Agent Execution
 
-## Agent execution
-
-**Do not ask the user to execute commands or steps.** Run commands, builds, and runs yourself (e.g. terminal, build, run app). If something is blocked (e.g. app already running), document what to do in comments or a short note; do not assign the user to "close the app and run again."
-
-**Do not ask "next steps?" when intent is already clear.** If a next action is a direct continuation of the user's stated goal and does not conflict with constraints, execute it immediately and report progress.
+See [user-does-not-execute.instructions.md](user-does-not-execute.instructions.md). If something is blocked (e.g. the app is already running), note it briefly — never assign the user a fix.
 
 ## Investigation
 
@@ -41,8 +33,4 @@ gh api repos/<owner>/<repo>/commits/<sha>
 
 ## Document Friction After Solving It
 
-When a task took noticeably longer than it should have (repeated probing, ad-hoc scripts, trial-and-error), **after** solving it:
-
-1. Add the efficient path to the relevant instruction file (or tool registry) so the next run is direct.
-2. **Promote scratch scripts into project tasks** — npm / cargo-make / nuke — even if the agent is currently the only user. A throwaway script that proved useful once (e.g. marking coverage gaps, publishing a Tanahpedia entry change set) belongs in the repo as a named task, not in a temp directory.
-3. Prefer extending an existing task runner over documenting raw CLI incantations.
+When a task took far longer than it should have (repeated probing, ad-hoc scripts, trial and error), afterwards: add the efficient path to the relevant instruction file or tool registry, and promote any useful scratch script into a named project task (npm / cargo-make / nuke) instead of documenting raw CLI incantations.

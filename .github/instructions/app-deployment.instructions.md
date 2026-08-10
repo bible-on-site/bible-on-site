@@ -5,7 +5,7 @@ applyTo: "app/**"
 
 # Android App Deployment
 
-- **Always deploy to the physical device**, not the emulator.
-- Use `dotnet nuke RunAndroid` for regular APK builds.
-- For PAD (Play Asset Delivery) testing, build AAB with `bundletool build-apks` and `bundletool install-apks --local-testing`.
-- The physical device connects via ADB wireless pairing — ask the user for pairing code/port if the device is disconnected.
+- Deploy to the **physical device**, never the emulator.
+- Regular APKs: `dotnet nuke RunAndroid`.
+- PAD testing: `bundletool build-apks` + `bundletool install-apks --local-testing`.
+- Device pairs over ADB wireless; ask for pairing code/port when it is disconnected.

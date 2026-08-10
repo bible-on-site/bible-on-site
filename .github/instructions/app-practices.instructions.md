@@ -7,19 +7,16 @@ applyTo: "app/**"
 
 ## Legacy Reference
 
-When asked to **inspire from legacy app** or reference the old app implementation, look at the `legacy-app/` directory in the repo root. This is an untracked directory containing the previous app codebase for reference.
+"Inspire from legacy app" = the untracked `legacy-app/` directory in the repo root.
 
 ## Agent behavior
 
-When the user asks to run the app (e.g. "run the emulator", "run Android"), **run the command yourself** — start the process (e.g. in background) and report when it's started or if it failed. Do not reply with instructions for the user to run in their terminal unless they explicitly ask for the command.
-
-**Always check the terminal output.** After running any command (build, deploy, run, tests), **read the full terminal output**. If it shows errors (e.g. "Build FAILED", "error XA…", "error CS…", non-zero exit code, "Exception", "FATAL") then **do not report success**. Report that it failed, quote or summarize the error, and fix or investigate. For background processes, read the terminal file to see the actual output and exit state.
-
-**After fixing or editing app code (XAML or C#):** Run `dotnet build` from `app/BibleOnSite` (e.g. `-f net10.0-android` or `-f net10.0-windows10.0.19041.0`) and fix all errors and warnings so the build finishes with 0 errors and 0 warnings.
+- **Read the full terminal output of every command.** "Build FAILED", `error XA…`/`error CS…`, a non-zero exit, "Exception", or "FATAL" means report the failure with the error and fix it — never report success. For background processes, read the terminal file for the real output and exit state.
+- After editing XAML or C#, run `dotnet build` from `app/BibleOnSite` (e.g. `-f net10.0-android`, `-f net10.0-windows10.0.19041.0`) and finish with 0 errors and 0 warnings.
 
 ## Testing
 
-Use devops project for orchestration:
+Orchestrate through the devops project:
 
 | Task | Command |
 | ---- | ------- |
@@ -30,91 +27,70 @@ Use devops project for orchestration:
 | Unit Coverage | `dotnet run --project devops -- CoverageUnit` |
 | Integration Coverage | `dotnet run --project devops -- CoverageIntegration` |
 
-Integration tests use `[Trait("Category", "Integration")]`; API server must be at `http://127.0.0.1:3003`. Unit tests: xUnit, FluentAssertions, Moq in `BibleOnSite.Tests`. E2E: FlaUI in `BibleOnSite.Tests.E2E`.
+Integration tests use `[Trait("Category", "Integration")]` and need the API at `http://127.0.0.1:3003`. Unit tests: xUnit + FluentAssertions + Moq in `BibleOnSite.Tests`; E2E: FlaUI in `BibleOnSite.Tests.E2E`.
 
 ## Running the app (Android)
 
-**When the user asks to run the emulator or run Android, execute the run yourself** (e.g. in background or foreground); do not only output the command for the user to run.
-
-**ALWAYS use Nuke RunAndroid** for building and deploying. Do NOT use manual `dotnet build` commands unless specifically debugging build issues.
+**Always use Nuke RunAndroid** to build and deploy; manual `dotnet build` only when debugging build issues.
 
 ### Nuke RunAndroid (REQUIRED)
 
 From the **app** directory:
 
 ```bash
-# Default: one-shot build + install + launch (uses fast deploy after first install)
+# One-shot build + install + launch (fast deploy after the first install)
 dotnet run --project devops -- RunAndroid
 
-# Options:
-#   --full-apk     Force full APK install (embed native libs)
-#                  ONLY NEEDED: First install, WiFi deploy, or after wipe
-#   --fast-deploy  Force Fast Deployment (incremental, faster)
-#   --watch        Use dotnet watch for hot reload
-#   --api-env prod Use production API instead of local
+# --full-apk     force full APK (embed native libs): first install, WiFi deploy, after wipe
+# --fast-deploy  force incremental Fast Deployment
+# --watch        dotnet watch hot reload
+# --api-env prod use the production API instead of local
 ```
 
-**Auto-detection:** RunAndroid automatically:
-1. Ensures emulator is running (starts one if needed)
-2. Ensures API server is running (starts if needed, unless `--api-env prod`)
-3. Checks if app is installed on device:
-   - **Not installed** → uses full APK (~90s first deploy, only needed once)
-   - **Already installed** → uses Fast Deployment (~18s incremental)
-4. Builds, installs, launches the app
-5. Verifies app is running (PID check, crash detection)
+RunAndroid automatically starts the emulator and the API server (unless `--api-env prod`), chooses full APK (~90s, only when the app is not installed) or Fast Deployment (~18s incremental), then builds, installs, launches, and verifies the app (PID check, crash detection). After the first full install, fast deploy is automatic — `--full-apk` is only for a first install, WiFi deploy, or after a wipe.
 
-**Note:** After the first full APK install, fast deploy is used automatically on subsequent runs. Only use `--full-apk` for first install, WiFi deploys, or after wipe.
-
-**Required: run from `app/`.** Nuke looks for `.nuke` in the current directory; from repo root it fails with "Could not locate '.nuke' directory".
+**Run from `app/`**: Nuke looks for `.nuke` in the current directory and fails from the repo root with "Could not locate '.nuke' directory".
 
 ### Quick Launch Cheatsheet (manual)
 
 ```bash
-# Kill stale dotnet processes (if build lock errors)
+# Stale dotnet processes (build lock errors)
 cmd //c "taskkill /F /IM dotnet.exe"
 
-# Build + Fast Deploy (from app/BibleOnSite) - ~10s for incremental changes
+# Fast Deploy from app/BibleOnSite (~10s incremental)
 dotnet build -t:Install -f net10.0-android -c Debug
 
-# Full APK (first deploy or after wipe) - ~90s
+# Full APK (first deploy or after wipe, ~90s)
 dotnet build -t:Install -f net10.0-android -c Debug --property:EmbedAssembliesIntoApk=true
 
-# Force stop + Launch app (ensures new code runs)
-"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe" shell am force-stop com.tanah.daily929
-"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe" shell monkey -p com.tanah.daily929 -c android.intent.category.LAUNCHER 1
+# Force stop + launch (adb: $LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe)
+adb shell am force-stop com.tanah.daily929
+adb shell monkey -p com.tanah.daily929 -c android.intent.category.LAUNCHER 1
 
-# Verify running (returns PID if alive)
-"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe" shell pidof com.tanah.daily929
+# Verify (PID if alive)
+adb shell pidof com.tanah.daily929
 ```
 
-**Important:** Always force-stop before launch after install to ensure the new code runs. Without force-stop, Android may keep the old process running.
+**Always force-stop before launching after an install**, or Android may keep the old process alive.
 
 ### Fast Deployment vs Full APK
 
-| Mode | Time | When to use |
-|------|------|-------------|
-| Fast Deployment | ~10-20s | App already installed, incremental code changes |
-| Full APK | ~90s | First deploy, after emulator wipe, or if crash with `libmonosgen-2.0.so not found` |
+| Mode | Time | When |
+|------|------|------|
+| Fast Deployment | ~10-20s | app installed, incremental changes |
+| Full APK | ~90s | first deploy, after emulator wipe, or crash with `libmonosgen-2.0.so not found` |
 
-**Configuration:** The csproj (`BibleOnSite.csproj`) sets:
-```xml
-<EmbedAssembliesIntoApk Condition="... == 'android' AND '$(Configuration)' == 'Release'">true</EmbedAssembliesIntoApk>
-```
-- **Debug builds** use Fast Deployment by default (fast iteration)
-- **Release builds** embed assemblies (required for distribution)
-- Override with `--property:EmbedAssembliesIntoApk=true/false` or Nuke `--full-apk`/`--fast-deploy`
+`BibleOnSite.csproj` sets `EmbedAssembliesIntoApk` for android Release only, so Debug uses Fast Deployment and Release embeds assemblies for distribution. Override with `--property:EmbedAssembliesIntoApk=true/false` or Nuke `--full-apk`/`--fast-deploy`.
 
 ### Troubleshooting RunAndroid
 
-**If RunAndroid fails with build.log locked** ("The process cannot access the file ... \\.nuke\\temp\\build.log"): kill stale dotnet processes with `cmd //c "taskkill /F /IM dotnet.exe"` or use manual commands.
-
-**App crashes with `libmonosgen-2.0.so not found`:** Native libs missing. Run with `--full-apk` or manually add `--property:EmbedAssembliesIntoApk=true`.
-
-**dotnet watch "Too many changes":** Use one-shot build (`dotnet build -t:Install`) instead of watch for more reliable deploys.
+- **build.log locked** ("The process cannot access the file … `\.nuke\temp\build.log`"): `cmd //c "taskkill /F /IM dotnet.exe"`, or use the manual commands.
+- **Crash with `libmonosgen-2.0.so not found`**: native libs missing — rerun with `--full-apk` (or `--property:EmbedAssembliesIntoApk=true`).
+- **dotnet watch "Too many changes"**: use the one-shot `dotnet build -t:Install` instead of watch.
 
 ### Verify app is running
 
-**Always check the app is running after launch** — do not report success if it crashed:
+Never report success without checking; Nuke RunAndroid does this automatically, manual runs must too:
 
 ```bash
 # Returns PID if running, empty if crashed
@@ -124,87 +100,52 @@ adb shell pidof com.tanah.daily929
 adb logcat -d -t 200 | grep -E "FATAL|AndroidRuntime|libmonosgen"
 ```
 
-Nuke RunAndroid does this automatically. For manual runs, always verify and report result (e.g. "App running (PID 12345)" or "App crashed; logcat shows...").
-
 ## Android deployment (manual / WiFi)
 
-**WiFi:** Fast Deployment does not push native libs over network and the app crashes with `libmonosgen-2.0.so not found`. For WiFi deploy, use `--full-apk` flag.
+Fast Deployment does not push native libs over the network, so WiFi deploys crash with `libmonosgen-2.0.so not found` — use `--full-apk`. Prefer USB: WiFi needs the ~1 min full APK install, USB gets incremental deploys. Never hand-build with `--property:EmbedAssembliesIntoApk=true` (~3 min); Nuke's `--full-apk` reuses cached builds.
 
-**One-time setup (from device Wireless debugging):**
-1. Pair: `adb pair <pairing-ip>:<pairing-port>` and enter the 6-digit code.
-2. Connect: `adb connect <connection-ip>:<connection-port>`.
-3. Verify: `adb devices -l`.
+One-time pairing from the device's Wireless debugging screen: `adb pair <pairing-ip>:<pairing-port>` (6-digit code), `adb connect <ip>:<port>`, verify `adb devices -l`. Use the full adb path if it is not on PATH (`%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe`).
 
-**Deploy to WiFi device (recommended - use Nuke):**
 ```bash
-# From app/ directory - Nuke handles full APK build automatically
-dotnet run --project devops -- RunAndroid --full-apk
+dotnet run --project devops -- RunAndroid --full-apk   # from app/
 
-# Then manually install to WiFi device (Nuke targets emulator by default)
+# Nuke targets the emulator, so install to the WiFi device manually
 adb -s <device-ip:port> install -r --no-incremental bin/Debug/net10.0-android/com.tanah.daily929-Signed.apk
 adb -s <device-ip:port> shell am force-stop com.tanah.daily929
 adb -s <device-ip:port> shell am start -n com.tanah.daily929/crc640368fd9db13d8734.MainActivity
 ```
 
-**Note:** Don't manually build with `--property:EmbedAssembliesIntoApk=true` - it's slow (~3 min). Nuke's `--full-apk` reuses cached builds when possible.
-
-Use full path to adb if not in PATH: `%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe` (Windows).
-
-**Why WiFi reload is slow:** Fast Deployment (incremental push of only changed assemblies) works over USB and gives very fast reloads. Over WiFi we use full APK install so native libs are present; that takes ~1 min. For fast iteration, use USB when possible.
-
 ## Troubleshooting Android
 
 ### Emulator storage full (ADB0060 InsufficientSpaceException)
 
-The emulator's `/data` partition fills up with APKs and caches. Fix with adb (use `$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe` on Windows):
+`/data` fills with APKs and caches (use `$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe` on Windows):
 
 ```bash
-# Check available space
-adb shell 'df -h /data'
-
-# Clear temporary APKs
-adb shell 'rm -rf /data/local/tmp/*.apk'
-
-# Uninstall old app versions
+adb shell 'df -h /data'                    # check space
+adb shell 'rm -rf /data/local/tmp/*.apk'   # clear temporary APKs
 adb shell 'pm uninstall com.tanah.daily929'
-adb shell 'pm list packages -3'  # List 3rd party apps to uninstall
-
-# Trim app caches (request 1-2GB)
+adb shell 'pm list packages -3'            # other 3rd-party apps to remove
 adb shell 'pm trim-caches 2G'
 ```
 
-After clearing space, touch a source file to trigger `dotnet watch` rebuild.
+Then touch a source file to trigger a `dotnet watch` rebuild.
 
 ### App crashes on startup (TargetInvocationException in XAML)
 
-If the app crashes immediately with `TargetInvocationException` during `InitializeComponent`:
-1. Check `adb logcat` for the stack trace: `adb logcat -d | grep -A 50 "UNHANDLED EXCEPTION"`
-2. Common causes:
-   - XAML references an `x:Name` element that doesn't exist (code-behind out of sync with XAML)
-   - Missing resource (e.g., `StaticResource` not defined in App.xaml)
-   - Invalid font icon codes (5+ digit hex codes like `&#xf028a;` may cause issues)
-3. If recent changes broke it, revert both `.xaml` and `.xaml.cs` files together to stay in sync
+A crash during `InitializeComponent` usually means XAML references an `x:Name` that no longer exists, a missing `StaticResource`, or an invalid font icon code (5+ hex digits). Get the trace with `adb logcat -d | grep -A 50 "UNHANDLED EXCEPTION"`; when recent edits broke it, revert the `.xaml` and `.xaml.cs` together so they stay in sync.
 
 ### dotnet watch property syntax
 
-When using `dotnet watch`, use `--property:` instead of `-p:` for MSBuild properties. The `-p` shorthand is interpreted as `--project` by dotnet watch:
+`dotnet watch` reads `-p` as `--project`, so MSBuild properties need `--property:`:
 
 ```bash
-# Wrong - will fail
-dotnet watch build -p:EmbedAssembliesIntoApk=true
-
-# Correct
 dotnet watch build --property:EmbedAssembliesIntoApk=true
 ```
 
 ### Launch app manually after deployment
 
-If the app doesn't launch automatically after deploy:
-
 ```bash
-# Find the correct activity class
-adb shell 'dumpsys package com.tanah.daily929 | grep -A 5 "Activity Resolver"'
-
-# Launch the app
+adb shell 'dumpsys package com.tanah.daily929 | grep -A 5 "Activity Resolver"'  # find activity
 adb shell am start -n com.tanah.daily929/<activity-class>
 ```

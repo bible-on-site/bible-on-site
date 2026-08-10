@@ -5,118 +5,105 @@ applyTo: "data/mysql/tanahpedia_*, web/api/src/**/tanahpedia*/**, web/api/src/re
 
 # Tanahpedia Change Classification
 
-Every Tanahpedia change is exactly one of three kinds. Classify it before starting work, then follow the matching workflow below.
+Every Tanahpedia change is exactly one of three kinds. Classify it before starting, then follow the matching workflow.
 
 ## Tanahpedia Write API
 
-Do not rediscover the write path from the UI or database schema. The canonical contract, GraphQL examples, input fields, lookup values, and readback queries are in `docs/tanahpedia/external-revision-api.md`. The implementation sources of truth are `web/api/src/resolvers/tanahpedia_revisions_resolver.rs`, `web/api/src/resolvers/tanahpedia_family_resolver.rs`, and their DTOs/services.
+Never rediscover the write path from the UI or database schema: the canonical contract, GraphQL examples, input fields, lookup values, and readback queries are in `docs/tanahpedia/external-revision-api.md`; the implementations of record are `web/api/src/resolvers/tanahpedia_revisions_resolver.rs`, `web/api/src/resolvers/tanahpedia_family_resolver.rs`, and their DTOs/services.
 
 ### Endpoints and authentication
 
-- Local GraphQL endpoint: `http://127.0.0.1:3003/`.
-- Production GraphQL endpoint: `https://api.xn--febl3a.com/`.
-- Start the local API from `web/api` with the project task `cargo make run-api-dev`.
-- Every write and family review query requires `Authorization: Bearer <TANAHPEDIA_REVISION_API_KEY>`. The API fails closed when the server variable is absent, blank, or does not match. For local work, set an ephemeral key in the API process and use the same environment value in the client; never print, commit, or place a production key in a request artifact.
-- On Windows/Git Bash, send non-ASCII GraphQL JSON through stdin with native `curl --data-binary @-`; do not pass Hebrew JSON through argv.
+- Endpoints: local `http://127.0.0.1:3003/` (start from `web/api` with `cargo make run-api-dev`), production `https://api.xn--febl3a.com/`.
+- Every write and family review query needs `Authorization: Bearer <TANAHPEDIA_REVISION_API_KEY>`; the API fails closed when the server variable is absent, blank, or mismatched. Locally, set an ephemeral key in the API process and reuse that value in the client — never print, commit, or place a production key in a request artifact.
+- On Windows/Git Bash, send non-ASCII GraphQL JSON through stdin with native `curl --data-binary @-`, never through argv.
 
 ### Mutation surfaces
 
-- Entry title, unique name, and HTML content use the audited two-step revision flow: `submitEntryRevision` creates a `PENDING` revision, then `applyEntryRevision` explicitly applies it. Capture the returned revision `id` and applied `entryId`.
-- **No agent-authored entry content — anywhere, including locally.** The agent never writes entry body prose; entries it creates carry the empty-content placeholder (`<p></p>`) plus confirmed metadata only: title, unique name, entry-entity link, person nodes, relationships, and their Tanah citations. Entry prose is human-authored (Admin GUI / reviewed revisions).
-- Person nodes and family structure use authenticated, idempotent put mutations: `putTanahpediaPersonNode`, `putTanahpediaEntryEntityLink`, `putTanahpediaParentChildLink`, and `putTanahpediaPersonUnion`. These writes are direct structural puts, not entry revision rows.
-- Cleanup uses the corresponding narrow delete mutations documented in the canonical contract. Never substitute Admin server functions, direct SQL, seed scripts, or database clients for content writes.
-- Generate caller-supplied UUIDs once and retain the exact operation payload. Replays must reuse those stable IDs so a local verification rerun or approved production replay updates the same logical rows instead of creating duplicates.
-- Prefer the named task over ad-hoc scripts: save the operation set as JSON and run `npm run tanahpedia:apply -- <ops.json> [--endpoint <url>]` from `devops/` — the same file applies locally first and replays on production after sign-off.
+- Entry title, unique name, and HTML content go through the audited two-step revision flow: `submitEntryRevision` creates a `PENDING` revision, `applyEntryRevision` applies it. Capture the revision `id` and applied `entryId`.
+- **No agent-authored entry content — anywhere, including locally.** Agent-created entries carry the empty-content placeholder (`<p></p>`) plus confirmed metadata only: title, unique name, entry-entity link, person nodes, relationships, and Tanah citations. Prose is human-authored (Admin GUI / reviewed revisions).
+- Person nodes and family structure use authenticated, idempotent puts — `putTanahpediaPersonNode`, `putTanahpediaEntryEntityLink`, `putTanahpediaParentChildLink`, `putTanahpediaPersonUnion` — direct structural writes, not revision rows; cleanup uses the matching narrow deletes.
+- Never substitute Admin server functions, direct SQL, seed scripts, or database clients for content writes.
+- Generate caller-supplied UUIDs once and keep the exact payload, so replays update the same logical rows instead of duplicating them.
+- Save the operation set as JSON and run `npm run tanahpedia:apply -- <ops.json> [--endpoint <url>]` from `devops/` rather than ad-hoc scripts — the same file applies locally and replays on production after sign-off.
 
 ### Local seed = copy of production
 
-- The canonical local Tanahpedia dataset is a **prod copy**: `npx tsx devops/setup-dev-env.mts sync-from-prod` (AWS SSO first) restores production into `tanah-dev` and automatically applies the safe Tanahpedia structure/baseline upgrade. Refresh via re-sync when local data looks stale — never hand-repair local content to match production.
-- The demo family SQL scripts (`tanahpedia_family_*.sql`, `cargo make mysql-apply-tanahpedia-families`) are CI/edge-lab fixtures only. Do not treat them as the local seed and do not re-run them over a prod-synced database — their fixed-UUID delete/re-insert would overwrite API-authored rows sharing those IDs.
+- The canonical local dataset is a **prod copy**: `npx tsx devops/setup-dev-env.mts sync-from-prod` (AWS SSO first) restores production into `tanah-dev` and applies the safe structure/baseline upgrade. Refresh by re-syncing — never hand-repair local content.
+- The demo family SQL scripts (`tanahpedia_family_*.sql`, `cargo make mysql-apply-tanahpedia-families`) are CI/edge-lab fixtures only — never the local seed, and never re-run over a prod-synced database: their fixed-UUID delete/re-insert overwrites API-authored rows.
 
 ### Required local-first sequence
 
-1. Fetch current `master` and inspect the checked-out schema/resolvers; do not assume a mutation present on another branch or worktree is deployed.
-2. Start the local API against a **prod-synced** local Tanahpedia database (see above) with an ephemeral revision API key. Confirm `/health` and make one authenticated read query before any write.
-3. Query first with `tanahpediaFindEntities`, `tanahpediaFindPersons`, `tanahpediaPersonDetails`, `tanahpediaPersonUnions`, and `tanahpediaPersonParentChild`. Exact-name results are candidates; disambiguate shared names by stable IDs and entry associations.
-4. For each new entry, call `submitEntryRevision`, inspect the `PENDING` result, call `applyEntryRevision`, and capture the resulting `entryId`.
-5. Put the person node, then link the applied entry to its entity with `putTanahpediaEntryEntityLink`. The link input uses `entryUniqueName`, not the returned entry UUID.
-6. Put parent-child and union rows only after every referenced person exists. Preserve every optional citation, order, date, end reason, and alternate-group field in the replay payload.
-7. Rerun the same puts to prove idempotency, then reread every writable field and exact relationship count through the authenticated queries.
-8. Verify the rendered local entry and related-node links in the website. A successful mutation or HTTP 200 alone is not sufficient.
-9. Save the exact endpoint-independent GraphQL operations, variables, stable IDs, and local readback results for review. Never save the bearer token.
-10. Stop before production. Only after explicit user approval, replay the same reviewed operations against the production endpoint using the production key from the environment, then repeat API readback and rendered verification on both production domains.
+1. Fetch current `master` and inspect the checked-out schema/resolvers — a mutation on another branch or worktree is not deployed.
+2. Start the local API against a **prod-synced** database with an ephemeral revision key; confirm `/health` and one authenticated read before any write.
+3. Query first with `tanahpediaFindEntities`, `tanahpediaFindPersons`, `tanahpediaPersonDetails`, `tanahpediaPersonUnions`, `tanahpediaPersonParentChild`; disambiguate name matches by stable IDs and entry associations.
+4. Per new entry: `submitEntryRevision`, inspect the `PENDING` result, `applyEntryRevision`, capture the `entryId`.
+5. Put the person node, then link the applied entry with `putTanahpediaEntryEntityLink` (input takes `entryUniqueName`, not the entry UUID).
+6. Put parent-child and union rows only once every referenced person exists, preserving every optional citation, order, date, end reason, and alternate-group field.
+7. Rerun the puts to prove idempotency, then reread every writable field and exact relationship count.
+8. Verify the rendered local entry and its related-node links — a successful mutation or HTTP 200 is not sufficient.
+9. Save the endpoint-independent operations, variables, stable IDs, and readback results for review; never the bearer token.
+10. Stop before production. Only after explicit approval, replay the reviewed operations with the production key, then repeat readback and rendered verification on both production domains.
 
 ## 1. Schema change
 
 Adding/renaming/dropping a column, table, or relationship in a `tanahpedia_*` MySQL table.
 
-Required workflow, in order:
-
-1. Write the change as an **idempotent** SQL script — safe to re-run unconditionally. Plain MySQL has no `ADD COLUMN IF NOT EXISTS` (that's MariaDB-only); use the `information_schema` + `PREPARE`/`EXECUTE` idiom (see `data/mysql/tanahpedia_alter_*.sql`). Only `ALTER TABLE`, never `CREATE`/`DROP TABLE` (the production Lambda auto-injects `DROP TABLE IF EXISTS`/`DROP VIEW IF EXISTS` before any `CREATE TABLE`/`CREATE VIEW`, which would destroy data). Avoid semicolons and apostrophes inside `--` comments — the Lambda's statement splitter only tracks single-quoted strings, not comments, and either character there corrupts statement parsing.
-2. Add the alter script to `devops/deploy/data-deploy/sql-files.json` in the same schema PR and run `python validate_lambda_parser.py --parse-only`. The deployer and validator share this manifest, and Data CI executes the parser check.
-3. Merge and verify the schema-only Data CD reaches green **before** merging any API/website reader that references the new column. Do not rely on concurrent module releases for schema ordering.
-4. Extend the authenticated **write API** to support creating/editing the new field.
-5. Extend the **read API** (Rust GraphQL resolvers/DTOs in `web/api`) to retrieve the new field.
-6. Populate the data locally and test end-to-end (e.g. `cargo make mysql-apply-tanahpedia-families` or the relevant `db-populator` task) to confirm schema + write API + read API work together.
-7. Support the **representation** of the new field in the UI — website now, app in the future.
-8. Apply production content through the authenticated write API and verify the live website — never use raw SQL against production content.
+1. Write an **idempotent** SQL script, safe to re-run. MySQL has no `ADD COLUMN IF NOT EXISTS` (MariaDB-only) — use the `information_schema` + `PREPARE`/`EXECUTE` idiom (`data/mysql/tanahpedia_alter_*.sql`). `ALTER TABLE` only: the production Lambda auto-injects `DROP TABLE/VIEW IF EXISTS` before any `CREATE`, destroying data. No semicolons or apostrophes inside `--` comments — the Lambda's splitter only tracks single-quoted strings and either corrupts parsing.
+2. Add the script to `devops/deploy/data-deploy/sql-files.json` in the same PR and run `python validate_lambda_parser.py --parse-only` (shared by deployer, validator, and Data CI).
+3. Merge and confirm the schema-only Data CD is green **before** merging any API/website reader of the new column; never rely on concurrent module releases for ordering.
+4. Extend the authenticated **write API**, then the **read API** (Rust GraphQL resolvers/DTOs in `web/api`).
+5. Populate locally and test end-to-end (e.g. `cargo make mysql-apply-tanahpedia-families` or the relevant `db-populator` task).
+6. Represent the field in the UI — website now, app later.
+7. Apply production content through the authenticated write API and verify the live website; never raw SQL against production content.
 
 ## 2. Data change
 
-Content edits (new/changed entries, citations, relationships) with no schema change.
-
-1. Test locally.
-2. Apply to production using the authenticated **write API** — never raw SQL against production data.
-3. Reread through the authenticated API and compare every writable field, then verify the rendered result on both production domains.
+Content edits (entries, citations, relationships) with no schema change: test locally, apply to production through the authenticated **write API** (never raw SQL), then reread through the API, compare every writable field, and verify the rendered result on both production domains.
 
 ## 3. UI change
 
-Website/app presentation only — no schema or data change.
-
-1. Test locally.
-2. Merge.
+Website/app presentation only: test locally, then merge.
 
 ## Production Recovery
 
-Use evidence before mutation. A Tanahpedia entry, entity, typed row, supporting nodes, and relationship rows are separate records; an HTTP 200 entry page proves only that the entry exists.
+Use evidence before mutation. Entry, entity, typed row, supporting nodes, and relationship rows are separate records — an HTTP 200 entry page proves only that the entry exists.
 
-1. Trace the owning production read path first. Tanahpedia website pages read MySQL directly in Next.js server code; they do not use the Rust GraphQL family resolver for rendering.
-2. Establish a known-good control on the same surface. Compare a known intact graph, the affected graph, the API `/health` version, and both production domains.
-3. Prefer stable IDs and lossless detail reads. An empty exact-name search is not proof that a node was deleted; query a known person/entity ID and inspect the rendered server payload before concluding that data is absent.
-4. Read the canonical fixture's identity semantics before choosing IDs. If SQL discovers the focal person (for example, by name) but uses fixed IDs only for support nodes, resolve and reuse the entry-linked focal person; do not invent a fixed focal ID.
-5. Treat exact-name matches as candidates, not identity. Torah names are shared and legacy data may contain duplicates. Disambiguate with entry associations, stable IDs, typed rows, and relationship ownership before writing.
-6. Inventory the full graph before replay: all entry-to-entity associations, entity/person rows, supporting nodes, sex/name metadata, parent-child links, unions, lookup values, and every optional citation/date/alternate-group field. Multiple identical entity badges are evidence of duplicate entry links.
-7. If prerequisite nodes or the focal entry-to-entity association are missing, extend the authenticated API with idempotent mutations. A standalone entity is not renderable from an entry page. Do not force relationship-only mutations or bypass the API with SQL.
-8. Create nodes and the focal entry association before relationships. Replay with stable caller-supplied IDs, reread every field and exact row count, then verify that a second replay creates no duplicates or timestamp churn.
-9. On Windows or Git Bash, stream non-ASCII GraphQL JSON to native `curl` through stdin with `--data-binary @-`; do not pass Hebrew JSON through argv. Compare returned bytes after every write before continuing.
-10. Verify expected family names in rendered HTML and the browser DOM on every production domain, then inspect contextual family-load logs. The website reads MySQL directly and may select the first unordered entry association, so successful API readback and HTTP 200 are not completion evidence.
-11. Cleanup mutations must be narrower than content-admin deletion. Delete an exact duplicate entry link by ID, and remove an accidental person attachment only after transactionally proving it has no entry association, family edges, or person metadata. This deliberately leaves the entity, which public category indexes render as `(אין ערך)`. If that shell is also accidental, delete it in a separate authenticated transaction that matches its ID, type, and display name and proves that none of the schema's direct entity-reference tables contain it.
+1. Trace the owning read path first: Tanahpedia pages read MySQL directly in Next.js server code, not through the GraphQL family resolver.
+2. Establish a known-good control on the same surface: an intact graph, the affected graph, the API `/health` version, both production domains.
+3. Prefer stable IDs and lossless reads — an empty exact-name search does not prove deletion; query a known ID and inspect the rendered server payload.
+4. Follow the fixture's identity semantics: when only support nodes have fixed IDs, reuse the entry-linked focal person instead of inventing a focal ID.
+5. Name matches are candidates, not identity — disambiguate with entry associations, stable IDs, typed rows, and relationship ownership.
+6. Inventory the whole graph before replay: entry-entity associations, entity/person rows, supporting nodes, sex/name metadata, parent-child links, unions, lookup values, and every optional citation/date/alternate-group field. Duplicate entity badges mean duplicate entry links.
+7. Missing prerequisite nodes or focal association? Extend the authenticated API with idempotent mutations — a standalone entity is not renderable, and relationship-only mutations or SQL are never the answer.
+8. Create nodes and the focal association before relationships; replay with stable IDs, reread every field and row count, and confirm a second replay adds no duplicates or timestamp churn.
+9. Verify family names in rendered HTML and the DOM on every production domain, then inspect family-load logs — the website may pick the first unordered entry association, so readback and HTTP 200 are not completion evidence.
+10. Cleanup stays narrower than content-admin deletion: delete a duplicate entry link by ID; detach an accidental person only after transactionally proving it has no entry association, family edges, or metadata. That leaves the entity, shown in category indexes as `(אין ערך)`; delete an accidental shell in a separate transaction matching its ID, type, and display name and proving no direct entity-reference table holds it.
 
-Do not infer data loss while a schema migration or reader deployment is incomplete. Restore read compatibility first, then determine what is actually missing.
+Do not infer data loss while a schema migration or reader deployment is incomplete — restore read compatibility first.
 
 ## Remote Family API Contract
 
-- Authentication must fail closed when `TANAHPEDIA_REVISION_API_KEY` is absent, blank, or incorrect.
-- Put mutations are idempotent by caller-supplied stable ID; deletes return `NOT_FOUND` for an absent row instead of silently succeeding.
-- Recovery deletions must lock and validate the exact supplied IDs. Refuse orphan-person cleanup when any entry association, family edge, role, name, date, place, or other person metadata remains.
-- Orphan-entity cleanup is a separate operation after typed-node cleanup. It must match `entityId`, `entityType`, and `displayName`, lock the entity row, and refuse deletion while any direct foreign-key reference remains. Derive a test from `tanahpedia_structure.sql` so a newly added entity-reference table fails coverage until the guard includes it.
-- Read responses must be lossless for every writable field so a caller can read, replay, and compare without direct database access.
+- Authentication fails closed when `TANAHPEDIA_REVISION_API_KEY` is absent, blank, or incorrect.
+- Puts are idempotent by caller-supplied stable ID; deletes return `NOT_FOUND` rather than silently succeeding.
+- Recovery deletions lock and validate the exact supplied IDs, refusing orphan-person cleanup while any entry association, family edge, role, name, date, place, or other metadata remains.
+- Orphan-entity cleanup is a separate step after typed-node cleanup: match `entityId`, `entityType`, `displayName`, lock the row, and refuse while any direct foreign-key reference remains. Derive the test from `tanahpedia_structure.sql` so a new entity-reference table fails coverage until the guard covers it.
+- Reads are lossless for every writable field, so callers can read, replay, and compare without database access.
 - Validate referenced people, lookup names, self-links, and citation lengths before writing.
-- Batch lookup and related-entity reads outside row loops. Tests must model the real query sequence and must not append unused mock results that hide extra or missing queries.
+- Batch lookup and related-entity reads outside row loops; tests model the real query sequence and never append unused mock results.
 
 ## Deployment And Observability
 
-- Data release eligibility must depend on Tanahpedia/data changes, not on an unrelated optional job such as Perushim generation. An intentionally skipped optional job must not suppress schema deployment.
-- Run `validate_lambda_parser.py` against the shared production manifest in Data CI. Never assume SQL accepted by MySQL locally is compatible with the production Lambda parser.
-- Family-query failures must be logged with entry/entity context before the page degrades to no tree. Never silently convert a database or schema exception into an empty family graph.
-- Production smoke checks must assert known graph content, not only HTTP 200. Keep at least one known-good graph and the recovered graph in the checks.
+- Data release eligibility depends on Tanahpedia/data changes, not on an unrelated optional job (e.g. Perushim generation) — a skipped optional job must not suppress schema deployment.
+- Run `validate_lambda_parser.py` against the shared production manifest in Data CI; locally valid MySQL is not proof of Lambda-parser compatibility.
+- Log family-query failures with entry/entity context before degrading to no tree; never turn a database or schema exception into a silent empty graph.
+- Production smoke checks assert known graph content, not just HTTP 200, covering a known-good graph and the recovered graph.
 
 ## Family Tree UI
 
-- Node titles remain on one line. Size the card/container for the longest supported title instead of wrapping the title.
-- On narrow screens, a spouse-only row with no child matrix becomes a centered vertical relationship rail so every card is fully visible without nested horizontal scrolling. Matrices that preserve spouse/child column relationships remain on a horizontal RTL scroll owner. Never widen the document or shrink tracks until cards overlap.
-- Parent cards use equal responsive columns. The horizontal parent bus must terminate at the outer card centers, with both endpoint errors measured independently on narrow and wide viewports.
-- For multiple unequal-width spouse cards, use equal grid columns rather than centered flex distribution; connector vertices must land at equal `(index + 0.5) / count` positions.
-- Horizontal buses stop at the outer connector vertices, and the focal vertical connector stops at the bus. Scope matrix and non-matrix connector rules separately so a fix for one layout cannot cross or overshoot the other.
+- Node titles stay on one line: size the card for the longest supported title instead of wrapping.
+- On narrow screens a spouse-only row with no child matrix becomes a centered vertical rail so every card is visible without nested horizontal scrolling; matrices preserving spouse/child column relationships stay on a horizontal RTL scroll owner. Never widen the document or shrink tracks until cards overlap.
+- Parent cards use equal responsive columns, and the horizontal parent bus terminates at the outer card centers — measure both endpoint errors independently on narrow and wide viewports.
+- For unequal-width spouse cards use equal grid columns, not centered flex distribution; connector vertices must land at `(index + 0.5) / count`.
+- Horizontal buses stop at the outer connector vertices and the focal vertical connector stops at the bus. Scope matrix and non-matrix connector rules separately so one fix cannot break the other layout.
 - Prefer stretchable connector geometry (`top` plus `bottom`) and stacking-context containment over fixed heights tied to label content.
-- Debug geometry with high-contrast temporary overlays, then verify the real muted colors at normal zoom. Capture tight junction screenshots and full desktop/mobile views; a zoomed or debug-color screenshot alone is not completion evidence.
+- Debug with high-contrast temporary overlays, then verify the real muted colors at normal zoom, capturing both tight junction shots and full desktop/mobile views — a zoomed or debug-color screenshot is not completion evidence.

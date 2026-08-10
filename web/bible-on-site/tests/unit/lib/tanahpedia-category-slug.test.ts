@@ -57,10 +57,10 @@ describe("tanahpedia/category-slug", () => {
 			expect(categoryShortHref("PERSON")).toBe("/pedia/אישים");
 		});
 
-		it("uses the parent listing plus a filter query for subcategories", () => {
-			expect(categoryHref("PROPHET")).toBe("/pedia/אישים?role=נביאים");
-			expect(categoryHref("CHAYA")).toBe("/pedia/בעלי-חיים?kind=חיות");
-			expect(categoryHref("TAHOR")).toBe("/pedia/בעלי-חיים?purity=טהורים");
+		it("uses direct subcategory slugs", () => {
+			expect(categoryHref("PROPHET")).toBe("/pedia/נביאים");
+			expect(categoryHref("CHAYA")).toBe("/pedia/חיות");
+			expect(categoryHref("TAHOR")).toBe("/pedia/טהורים");
 		});
 
 		it("exposes the short sugar path for subcategories", () => {
@@ -99,7 +99,7 @@ describe("tanahpedia/category-slug", () => {
 				sub: "PROPHET",
 				slug: "אישים",
 				isCanonicalSlug: true,
-				canonicalPath: "/pedia/אישים?role=נביאים",
+				canonicalPath: "/pedia/נביאים",
 			});
 		});
 
@@ -109,7 +109,7 @@ describe("tanahpedia/category-slug", () => {
 				sub: "PROPHET",
 				slug: "נביאים",
 				isCanonicalSlug: true,
-				canonicalPath: "/pedia/אישים?role=נביאים",
+				canonicalPath: "/pedia/נביאים",
 			});
 		});
 
@@ -119,7 +119,7 @@ describe("tanahpedia/category-slug", () => {
 				sub: "PROPHET",
 				slug: "אישים",
 				isCanonicalSlug: false,
-				canonicalPath: "/pedia/אישים?role=נביאים",
+				canonicalPath: "/pedia/נביאים",
 			});
 		});
 
@@ -153,10 +153,10 @@ describe("tanahpedia/category-slug", () => {
 		it("maps legacy category and filter URLs", () => {
 			expect(pediaPathFromLegacy("person")).toBe("/pedia/אישים");
 			expect(pediaPathFromLegacy("person", { role: "prophet" })).toBe(
-				"/pedia/אישים?role=נביאים",
+				"/pedia/נביאים",
 			);
 			expect(pediaPathFromLegacy("animal", { purity: "tahor" })).toBe(
-				"/pedia/בעלי-חיים?purity=טהורים",
+				"/pedia/טהורים",
 			);
 		});
 

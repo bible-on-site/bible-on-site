@@ -7,23 +7,21 @@ applyTo: "**"
 
 ## Project
 
-Jewish Orthodox project. Avoid Christian terminology and reformist expressions. Perakim division is still used (not Parashot).
+Jewish Orthodox project: avoid Christian terminology and reformist expressions. Perakim division is still used (not Parashot).
 
 ## Terminology
 
-| Use This | Instead Of |
-| -------- | ---------- |
+| Use | Not |
+| --- | --- |
 | Tanah | Bible |
-| Sefer (Pl: Sefarim) | Book |
-| Perek (Pl: Perakim) | Chapter |
-| Pasuk (Pl: Pesukim) | Verse |
+| Sefer (pl. Sefarim) | Book |
+| Perek (pl. Perakim) | Chapter |
+| Pasuk (pl. Pesukim) | Verse |
 
-Book "additionals" (e.g. שמואל א/ב): use Hebrew names in code; sub-splits are "Additional" in UI. See `docs/practices/implementation.md` for the full table.
+Sefer "additionals" (e.g. שמואל א/ב): Hebrew names in code, "Additional" in UI. Full table: `docs/practices/implementation.md`.
 
 ## Code Quality
 
-**Never ignore compiler or linter errors/warnings.** Fix all issues from TypeScript, Rust (Clippy), .NET, Biome, ESLint, and other static analysis. **Maintain 0 errors and 0 warnings** (0 problems in VS Code).
+**Never ignore a compiler or linter error/warning** (TypeScript, Clippy, .NET, Biome, ESLint): keep 0 errors and 0 warnings. After every fix, run the build/lint for the changed area (`dotnet build`, `npm run build`/`npm run lint`) and clear what it reports.
 
-**After making fixes:** Always verify the build/linter. Run the relevant build or lint command for the changed area (e.g. `dotnet build` for app, `npm run build` or `npm run lint` for web) and fix any remaining errors or warnings before considering the change done.
-
-**Known exceptions** (ignore only these): In `.github/workflows/ci.yml`, "Context access might be invalid: module_changed" and "Unable to find reusable workflow".
+**Only known exceptions**, both in `.github/workflows/ci.yml`: "Context access might be invalid: module_changed" and "Unable to find reusable workflow".

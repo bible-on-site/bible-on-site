@@ -62,8 +62,7 @@ export function slugForCategoryKey(key: CategoryKey): string {
 /** Canonical public path for a category or subcategory. */
 export function categoryHref(key: CategoryKey): string {
 	if (isSubCategoryKey(key)) {
-		const { parent, param } = SUB_CATEGORY_PARENTS[key];
-		return `/pedia/${CATEGORY_SLUGS[parent]}?${param}=${CATEGORY_SLUGS[key]}`;
+		return `/pedia/${CATEGORY_SLUGS[key]}`;
 	}
 	return `/pedia/${CATEGORY_SLUGS[key]}`;
 }

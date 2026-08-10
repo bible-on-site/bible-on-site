@@ -94,21 +94,25 @@ describe("proxy", () => {
 			["/tanahpedia/person", `/pedia/${encodeURIComponent("אישים")}`],
 			[
 				"/tanahpedia/person?role=prophet",
-				`/pedia/${encodeURIComponent("אישים")}?role=${encodeURIComponent("נביאים")}`,
+				`/pedia/${encodeURIComponent("נביאים")}`,
 			],
 			[
 				"/tanahpedia/animal?kind=chaya",
-				`/pedia/${encodeURIComponent("בעלי-חיים")}?kind=${encodeURIComponent("חיות")}`,
+				`/pedia/${encodeURIComponent("חיות")}`,
 			],
 			[
 				"/tanahpedia/animal?purity=tahor",
-				`/pedia/${encodeURIComponent("בעלי-חיים")}?purity=${encodeURIComponent("טהורים")}`,
+				`/pedia/${encodeURIComponent("טהורים")}`,
 			],
 			["/tanahpedia/nonsense", "/pedia"],
 			["/pedia/person", `/pedia/${encodeURIComponent("אישים")}`],
 			[
 				"/pedia/person?role=prophet",
+				`/pedia/${encodeURIComponent("נביאים")}`,
+			],
+			[
 				`/pedia/${encodeURIComponent("אישים")}?role=${encodeURIComponent("נביאים")}`,
+				`/pedia/${encodeURIComponent("נביאים")}`,
 			],
 		])("redirects %s permanently", async (path, expectedPath) => {
 			const result = await proxy(makeRequest(path));

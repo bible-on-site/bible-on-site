@@ -136,7 +136,6 @@ describe("pedia/[uniqueName] page", () => {
 
 			const result = await generateMetadata({
 				params: Promise.resolve({ slug: encodeURIComponent("משה-רבנו") }),
-				searchParams: Promise.resolve({}),
 			});
 
 			expect(result).toEqual({
@@ -158,7 +157,6 @@ describe("pedia/[uniqueName] page", () => {
 
 			const result = await generateMetadata({
 				params: Promise.resolve({ slug: encodeURIComponent("משה-רבנו") }),
-				searchParams: Promise.resolve({}),
 			});
 
 			expect(result).toEqual({
@@ -172,7 +170,6 @@ describe("pedia/[uniqueName] page", () => {
 
 			const result = await generateMetadata({
 				params: Promise.resolve({ slug: "nonexistent" }),
-				searchParams: Promise.resolve({}),
 			});
 
 			expect(result).toEqual({
@@ -194,7 +191,6 @@ describe("pedia/[uniqueName] page", () => {
 			const encoded = encodeURIComponent("שמשון");
 			const result = await generateMetadata({
 				params: Promise.resolve({ slug: encoded }),
-				searchParams: Promise.resolve({}),
 			});
 
 			expect(mockGetEntryByUniqueName).toHaveBeenCalledWith("שמשון");
@@ -209,7 +205,6 @@ describe("pedia/[uniqueName] page", () => {
 
 			const result = await generateMetadata({
 				params: Promise.resolve({ slug: "test" }),
-				searchParams: Promise.resolve({}),
 			});
 
 			expect(result).toEqual({

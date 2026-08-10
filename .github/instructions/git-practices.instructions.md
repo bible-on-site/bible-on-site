@@ -7,135 +7,80 @@ applyTo: "**"
 
 ## Pre-commit
 
-- Config: `.pre-commit-config.yaml`; venv: `devops/.venv/`; tool config: `devops/pyproject.toml`.
-- Husky runs pre-commit via `.husky/pre-commit`.
-- Adding a hook: add to `.pre-commit-config.yaml`, then update `docs/devops/pre-commit.md`.
+Config `.pre-commit-config.yaml`; venv `devops/.venv/`; tool config `devops/pyproject.toml`; Husky runs it via `.husky/pre-commit`. When adding a hook, also update `docs/devops/pre-commit.md`.
 
 ## Task Boundary Workdir Gate
 
-**MANDATORY**: Do not start a task and do not finish a task while the workdir is dirty unless every dirty file has been explicitly triaged and handled.
+**MANDATORY**: never begin or finish a task with untriaged dirt.
 
-### Start gate (before implementation)
+Run `git status --short` before implementing and again before reporting done, and put every dirty file in exactly one bucket:
 
-1. Run `git status --short` and inspect all modified/staged/untracked files.
-2. Classify every dirty file into exactly one bucket:
-   - **In-scope for the current task**
-   - **Intentional out-of-scope user work**
-   - **Generated/temporary noise**
-3. Act on each bucket before writing code:
-   - **In-scope**: keep and continue.
-   - **Intentional out-of-scope**: isolate (separate commit/branch/stash) and do not mix with current task. If ownership or intent is unclear, stop and ask.
-   - **Generated/temporary noise**: remove/revert immediately.
-4. Do not begin implementation until no unclassified dirt remains.
+- **In-scope** — keep and continue.
+- **Intentional out-of-scope user work** — isolate in its own commit/branch/stash; never mix it into the current task.
+- **Generated/temporary noise** — remove or revert immediately.
 
-### Finish gate (before reporting done)
-
-1. Run `git status --short` again.
-2. Re-triage any remaining dirt with the same buckets above.
-3. Resolve all remaining dirt by commit, isolation, or cleanup.
-4. Do not mark task complete while unresolved/unclassified changes remain.
+If ownership or intent is unclear, stop and ask. Do not start coding, and do not mark the task complete, while unclassified dirt remains.
 
 ## Clean Working Directory Before Commit
 
-**MANDATORY**: Before every commit, the agent MUST ensure the working directory is clean of unrelated changes:
-
-1. Run `git status` and `git diff` to inspect **all** modified, staged, and untracked files.
-2. For each change, decide: **is this change correct and acceptable?** (regardless of who wrote it or when it appeared).
-   - **If yes** — stage it and include it in the commit (or a separate commit if it's unrelated to the current task).
-   - **If no** — discard it (`git checkout -- <file>` for tracked files, `rm` for untracked artifacts).
-3. Never leave stray changes in the working directory. Every file must be either committed or discarded before proceeding to the next task.
-4. Untracked build artifacts, test outputs, and temporary files (e.g. `test_stdout.txt`, `*.zip`, extracted directories) should be removed unless they are intentional project assets.
+Inspect **all** modified, staged, and untracked files (`git status`, `git diff`) and decide per change, regardless of origin: correct → stage and commit it (separately when unrelated to the task); wrong → discard it (`git checkout -- <file>`, or delete untracked artifacts). Build artifacts, test outputs, and temp files (`test_stdout.txt`, `*.zip`, extracted directories) go unless they are intentional project assets. Nothing may be left both uncommitted and undiscarded.
 
 ## Commit Process
 
-1. **Before commit**: Review staged changes for PII (AWS IDs, API keys, passwords, emails). Use `git diff --cached`.
-2. After `git commit`, pre-commit may auto-fix; check `git status`.
-3. If files were auto-fixed, stage and amend:
+1. Review staged changes for PII (AWS IDs, API keys, passwords, emails): `git diff --cached`.
+2. Commit, then **always** run `git status` — pre-commit hooks often auto-fix files.
+3. If files changed, restage and amend, repeating until the tree is clean:
    `git diff-tree --no-commit-id --name-only -r HEAD | xargs git add && git commit --amend --no-edit`
-4. Push only when the working tree is clean.
+4. Push only from a clean tree.
 
-**Agents**:
-- **MANDATORY**: After every `git commit`, you MUST run `git status` and inspect the output. If the working tree is not clean (pre-commit hooks often auto-fix files), stage all changed files and amend: `git diff-tree --no-commit-id --name-only -r HEAD | xargs git add && git commit --amend --no-edit`. Repeat until the working tree is clean.
-- When you make changes that should be committed, **you** commit and push—do not tell the user to run git commands.
-- **NEVER** tell the user to run commands. You execute all commands yourself using the shell tool. This includes git commands, AWS CLI, docker, npm scripts, and any other CLI operations.
+You run every git command yourself; never hand git (or AWS/docker/npm) commands to the user.
 
 ## Branch Management
 
-### Branches by Default — Never Clone
+- **Never clone** the repository to do work — reuse this checkout and create a branch per feature/fix.
+- Use **worktrees only when explicitly asked**, and clean them up after merge (`git worktree remove <path>` + `git worktree prune`).
+- Before pushing, check whether the branch already exists on remote (`git ls-remote --heads origin <branch-name>`): if it exists and was merged, use a new name; otherwise fetch and rebase first.
 
-**Work on branches inside the existing workspace by default.**
+## Pre-Push: Merge From Master
 
-- **NEVER create a clone** of the repository (`git clone`) to do work. Reuse the current workspace checkout.
-- Prefer creating a **branch** for each feature/fix and switching to it in place.
-- Use **git worktrees ONLY when the user explicitly asks for them** (e.g. "use a worktree" / "wt"). Do not spin up worktrees on your own initiative.
-- Clean up worktrees you were explicitly asked to create once their branch is merged (`git worktree remove <path>` + `git worktree prune`).
-
-Before pushing, check if the branch already exists on remote (may be merged/deleted):
-
-```bash
-git ls-remote --heads origin <branch-name>
-```
-
-If it exists: check if merged; if merged, use a new branch name; if not, fetch and rebase before pushing.
-
-## Pre-Push: Merge from Master
-
-**MANDATORY before every push**, the agent MUST:
-
-1. Fetch and merge the latest `master` into the current branch:
-   ```bash
-   git fetch origin master
-   git merge origin/master
-   ```
-2. If there are merge conflicts, **resolve them immediately** — inspect each conflicting file, apply the correct resolution (preserving both sides where appropriate), stage the resolved files, and complete the merge commit.
-3. Only push after the merge is clean and the working tree has no conflicts or uncommitted changes.
+**MANDATORY** before every push: `git fetch origin master && git merge origin/master`. Resolve any conflict immediately — inspect each file, apply the correct resolution (preserving both sides where appropriate), stage it, and complete the merge. Push only with a clean tree.
 
 ## Post-Push: Monitor CI
 
-**MANDATORY after every push**, the agent MUST:
+**MANDATORY** after every push: wait 10–20s, then `gh run list --branch <branch-name> --limit 3`, polling every 30–60s until it completes. On failure, inspect (`gh run view <run-id> --log-failed`), fix the root cause locally, and push again (repeating the master merge). Report the final observed status.
 
-1. Wait briefly (10–20 seconds), then check the CI status of the pushed commit/branch:
-   ```bash
-   gh run list --branch <branch-name> --limit 3
-   ```
-2. If a run is in progress, poll periodically (every 30–60 seconds) until it completes or the user intervenes.
-3. If CI fails, inspect the failure (`gh run view <run-id> --log-failed`), diagnose the root cause, fix it locally, and push again (repeating the merge-from-master step).
-4. Report the final CI status to the user.
+## Ship It — A Local Fix Is Not A Fix
+
+**Work that exists only in this checkout is not done.** Every fix, upgrade, and rule change is committed, pushed, and carried through its PR to merge in the same task — you are not fixing things for yourself.
+
+- Never end a task with committed-but-unpushed or uncommitted work, and never leave a branch published but unmerged, unless the user asked for review first or a hard blocker stops the merge.
+- "It works locally" is a checkpoint, not a deliverable: push, get CI green, triage review comments, merge, and verify the post-merge state.
+- Local-only validation is required *before* pushing (see [agent-practices.instructions.md](agent-practices.instructions.md)); it never replaces pushing.
 
 ## Pull Requests
 
-- Use a new branch per feature/fix. PR is created when publishing the branch.
-- The Auto Create PR workflow normally creates the PR after the first push. Wait for that workflow and locate the PR by head branch before calling `gh pr create`, or duplicate PR creation can collide.
-- **You (the agent) own the repo end-to-end and merge PRs yourself** once the required checks are green and every review comment is triaged. Dorad assigns tasks and reviews plans and expensive/hard-to-reverse decisions — surface those for approval *before* proceeding (e.g. prod RDS/schema deploys, destructive infra changes, anything hard to reverse), but do not wait for a human to merge routine work.
+- One branch per feature/fix; the PR is created when the branch is published.
+- The Auto Create PR workflow normally opens the PR after the first push — wait for it and locate the PR by head branch before calling `gh pr create`, or PR creation collides.
+- **You own the repo end-to-end and merge PRs yourself** once required checks are green and every review comment is triaged. Surface only plans and expensive/hard-to-reverse decisions for approval first (prod RDS/schema deploys, destructive infra, anything hard to reverse); do not wait for a human to merge routine work.
 
 ## Merge Queue
 
-- Treat GraphQL `mergeQueueEntry { position state }` and final PR `state`/`mergedAt` as the source of truth. `autoMergeRequest: null`, `mergeStateStatus: UNKNOWN`, or `mergeable: UNKNOWN` does not prove that a PR left the queue.
-- The `gh pr merge` notice that the merge strategy is controlled by the merge queue is not a failure; confirm the resulting queue entry.
-- Track the current `merge_group` run and its head SHA. A green pull-request run is not evidence that the merge-group run passed.
-- Refresh PR state immediately before editing, pushing, enqueueing, or commenting; a queued PR can merge while another investigation is in progress.
-- To stop an already queued PR, dequeue it with the GraphQL `dequeuePullRequest` mutation before disabling auto-merge. Disabling auto-merge alone does not remove an active queue entry.
-- Code-scanning review threads are not ordinary conversations and cannot be manually resolved. Fix the alert, wait for CodeQL to mark it fixed/outdated, then recheck merge readiness.
+- Source of truth is GraphQL `mergeQueueEntry { position state }` plus final PR `state`/`mergedAt`. `autoMergeRequest: null`, `mergeStateStatus: UNKNOWN`, or `mergeable: UNKNOWN` does not prove a PR left the queue.
+- `gh pr merge`'s notice that the merge queue controls the strategy is not a failure — confirm the resulting queue entry.
+- Track the current `merge_group` run and its head SHA; a green pull-request run is not evidence that the merge-group run passed.
+- Refresh PR state immediately before editing, pushing, enqueueing, or commenting — a queued PR can merge mid-investigation.
+- To stop a queued PR, dequeue it with the GraphQL `dequeuePullRequest` mutation; disabling auto-merge alone does not remove an active entry.
+- Code-scanning review threads cannot be resolved manually: fix the alert, wait for CodeQL to mark it fixed/outdated, then recheck merge readiness.
 - Before declaring all open work consolidated, list every non-draft open PR and account for each one explicitly.
 
 ## Review Comment Triage (MANDATORY before every merge)
 
-**Never merge or enqueue a PR (`gh pr merge`, enabling auto-merge, or adding to the merge queue) without first triaging every review comment — from GitHub Copilot, Codacy, human reviewers, or any other reviewer — even if CI/coverage/version gates are all green.**
+**Never merge or enqueue a PR without triaging every review comment** (Copilot, Codacy, human, any reviewer), even with all checks green. Repeat every review round, including comments from Renovate/master-merge churn.
 
-1. Fetch all reviews, line comments, and general PR conversation comments before merging/re-merging:
-   ```bash
-   gh api repos/<owner>/<repo>/pulls/<n>/reviews --paginate
-   gh api repos/<owner>/<repo>/pulls/<n>/comments --paginate
-   gh api repos/<owner>/<repo>/issues/<n>/comments --paginate
-   ```
-2. For every distinct comment, explicitly decide one of:
-   - **Embrace**: the comment is correct and should block/improve this PR — fix it directly on the branch, re-validate (tests/lint/build), commit, and push.
-   - **Defer**: the comment is valid but out of scope for this PR — file a tracked GitHub issue per [github-issues.instructions.md](github-issues.instructions.md) (Priority + Difficulty + Type + Component labels, added to the relevant project board) and reference it in the triage summary.
-   - **Dismiss**: the comment is invalid or not applicable — state the reasoning explicitly (based on correctness, severity, and priority).
-3. Before deciding, re-read the current on-disk state of any flagged file — a comment may already be resolved by a later commit.
-4. For an embraced comment, verify the exact changed bytes, commit, and pushed SHA before replying that it is resolved. A passing formatter or test does not prove that the requested text/code change was actually made.
-5. Post a triage summary as a PR comment (`gh pr comment <n> --body-file <file>`) listing every comment's disposition, then delete any local scratch file used to draft it — the PR comment is the durable record, not a repo file.
-6. Only after every comment has been triaged (and any embraced fixes pushed and green) may the PR be merged or re-enqueued.
-
-This applies to every review round — if new comments appear after a later push (e.g. from Renovate/master-merge churn), repeat the triage before merging again.
+1. Fetch `gh api repos/<owner>/<repo>/pulls/<n>/reviews --paginate`, `.../pulls/<n>/comments --paginate`, `.../issues/<n>/comments --paginate`.
+2. Re-read the flagged file's current on-disk state — a later commit may already have resolved it — then give each comment exactly one disposition:
+   - **Embrace** — fix on the branch, re-validate (tests/lint/build), commit, push. Verify the exact changed bytes, commit, and pushed SHA before replying "resolved"; a passing formatter or test does not prove the change was made.
+   - **Defer** — valid but out of scope: file a tracked issue per [github-issues.instructions.md](github-issues.instructions.md) (Priority + Difficulty + Type + Component labels, on the relevant board) and reference it.
+   - **Dismiss** — invalid or not applicable: state the reasoning (correctness, severity, priority).
+3. Post the triage summary as a PR comment (`gh pr comment <n> --body-file <file>`) — the durable record, not a repo file — delete the local scratch file, then merge or re-enqueue.
 
