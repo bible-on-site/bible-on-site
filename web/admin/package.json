@@ -1,6 +1,6 @@
 {
 	"name": "admin",
-	"version": "0.1.88",
+	"version": "0.1.89",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -33,12 +33,12 @@
 		"node": ">=24.11.1 <24.12.0"
 	},
 	"dependencies": {
-		"@aws-sdk/client-s3": "3.1106.0",
-		"@aws-sdk/s3-request-presigner": "3.1106.0",
+		"@aws-sdk/client-s3": "3.1108.0",
+		"@aws-sdk/s3-request-presigner": "3.1108.0",
 		"@tanstack/react-query": "5.101.4",
-		"@tanstack/react-router": "1.170.25",
+		"@tanstack/react-router": "1.170.27",
 		"@tanstack/react-router-devtools": "1.167.1",
-		"@tanstack/react-start": "1.168.42",
+		"@tanstack/react-start": "1.168.44",
 		"@tiptap/extension-bullet-list": "2.27.2",
 		"@tiptap/extension-image": "2.27.2",
 		"@tiptap/extension-italic": "2.27.2",
@@ -60,13 +60,13 @@
 		"uuid": "14.0.1"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.5.7",
+		"@biomejs/biome": "2.5.8",
 		"@playwright/test": "1.61.0",
 		"@tailwindcss/vite": "4.3.3",
 		"@testing-library/dom": "10.4.1",
 		"@testing-library/jest-dom": "7.0.1",
 		"@testing-library/react": "16.3.2",
-		"@testing-library/user-event": "14.6.3",
+		"@testing-library/user-event": "14.6.4",
 		"@types/node": "25.9.5",
 		"@types/react": "19.2.18",
 		"@types/react-dom": "19.2.4",
