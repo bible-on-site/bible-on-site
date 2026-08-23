@@ -6,7 +6,10 @@ import {
 	toStoredFootnoteHtml,
 } from "../../../../src/components/editor/adminFootnoteMigration";
 
-const LEGACY_REF = '<sup><a href="#note-1" id="noteref-1">א</a></sup>';
+const LEGACY_REF_PARAGRAPH =
+	'<p>גוף<sup><a href="#note-1" id="noteref-1">א</a></sup></p>';
+const TWO_LEGACY_REFS_PARAGRAPH =
+	'<p>גוף<sup><a href="#note-1" id="noteref-1">א</a></sup>ועוד<sup><a href="#note-1" id="noteref-1">א</a></sup></p>';
 
 function parse(html: string): Document {
 	return new DOMParser().parseFromString(html, "text/html");
@@ -15,7 +18,7 @@ function parse(html: string): Document {
 describe("hasLegacyFootnotes", () => {
 	describe("when the html uses the legacy hand-built markup", () => {
 		it("detects a legacy reference anchor", () => {
-			expect(hasLegacyFootnotes(`<p>גוף${LEGACY_REF}</p>`)).toBe(true);
+			expect(hasLegacyFootnotes(LEGACY_REF_PARAGRAPH)).toBe(true);
 		});
 
 		it("detects a legacy body paragraph", () => {
@@ -51,7 +54,8 @@ describe("migrateLegacyFootnotes", () => {
 
 	describe("when a reference and its body are present", () => {
 		const migrated = migrateLegacyFootnotes(
-			`<p>גוף${LEGACY_REF}</p><p id="note-1"><strong>א.</strong> טקסט ההערה</p>`,
+			LEGACY_REF_PARAGRAPH +
+				'<p id="note-1"><strong>א.</strong> טקסט ההערה</p>',
 		);
 		const doc = parse(migrated);
 
@@ -124,7 +128,7 @@ describe("migrateLegacyFootnotes", () => {
 
 	describe("when a reference has no matching body", () => {
 		it("creates an empty list item for it", () => {
-			const migrated = migrateLegacyFootnotes(`<p>גוף${LEGACY_REF}</p>`);
+			const migrated = migrateLegacyFootnotes(LEGACY_REF_PARAGRAPH);
 			const doc = parse(migrated);
 			const item = doc.querySelector("ol.footnotes li#fn\\:1");
 			expect(item).not.toBeNull();
@@ -135,7 +139,7 @@ describe("migrateLegacyFootnotes", () => {
 	describe("when two references share the same body", () => {
 		it("consumes the body only once", () => {
 			const migrated = migrateLegacyFootnotes(
-				`<p>גוף${LEGACY_REF}ועוד${LEGACY_REF}</p>` +
+				TWO_LEGACY_REFS_PARAGRAPH +
 					'<p id="note-1"><strong>א.</strong> טקסט</p>',
 			);
 			const doc = parse(migrated);
@@ -149,7 +153,7 @@ describe("migrateLegacyFootnotes", () => {
 	describe("when the body keeps inline markup", () => {
 		it("preserves the nested elements", () => {
 			const migrated = migrateLegacyFootnotes(
-				`<p>גוף${LEGACY_REF}</p>` +
+				LEGACY_REF_PARAGRAPH +
 					'<p id="note-1"><strong>א.</strong> ראו <em>ספר</em> כאן</p>',
 			);
 			const doc = parse(migrated);
