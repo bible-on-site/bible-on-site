@@ -135,14 +135,17 @@ describe("getLlmAssistantStatus", () => {
 
 		it("sends draft context and returns a validated proposal", async () => {
 			process.env.OPENAI_MODEL = "gpt-test";
-			const rawJson = JSON.stringify({
-				entry: { title: "כותרת מוצעת" },
-				linkedEntities: [{ entityId: "entity-person", displayName: "משה רבנו" }],
-			});
+			const rawJson =
+				'{"entry":{"title":"כותרת מוצעת"},"linkedEntities":[{"entityId":"entity-person","displayName":"משה רבנו"}]}';
 			const fetchMock = stubOpenAiResponse(rawJson);
 
 			await expect(suggestTanahpediaEntryEdits(suggestionInput)).resolves.toEqual({
-				proposal: JSON.parse(rawJson),
+				proposal: {
+					entry: { title: "כותרת מוצעת" },
+					linkedEntities: [
+						{ entityId: "entity-person", displayName: "משה רבנו" },
+					],
+				},
 				rawJson,
 			});
 			expect(loadEntryMock).toHaveBeenCalledWith("entry-1");
@@ -190,7 +193,7 @@ describe("getLlmAssistantStatus", () => {
 
 		it("rejects proposals for entities outside the entry", async () => {
 			stubOpenAiResponse(
-				JSON.stringify({ linkedEntities: [{ entityId: "entity-unlinked" }] }),
+				'{"linkedEntities":[{"entityId":"entity-unlinked"}]}',
 			);
 
 			await expect(suggestTanahpediaEntryEdits(suggestionInput)).rejects.toThrow(
