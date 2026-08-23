@@ -10,16 +10,28 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorShortcutModal } from "./editor/EditorShortcutModal";
 import {
+	EntryLinkPicker,
+	type EntryLinkOption,
+	type EntrySearch,
+} from "./editor/EntryLinkPicker";
+import {
 	ADMIN_EDITOR_SHORTCUT_EXTRAS_KEY,
 	adminEditorShortcutsExtension,
 } from "./editor/adminEditorShortcuts";
 import {
-	FOOTNOTE_INSERT_MARKER,
-	listFootnoteIndices,
-	maxFootnoteIndex,
-	prepareHtmlForNewFootnoteAtSlot,
-} from "./editor/adminFootnoteHtml";
-import { hebrewOrdinalLetter } from "./editor/adminHebrew";
+	canRemoveFootnote,
+	insertFootnoteAtSelection,
+	isSelectionInsideFootnotes,
+	removeFootnoteAtSelection,
+} from "./editor/adminFootnoteCommands";
+import {
+	AdminFootnoteDocument,
+	adminFootnoteExtensions,
+} from "./editor/adminFootnoteExtensions";
+import {
+	toEditorFootnoteHtml,
+	toStoredFootnoteHtml,
+} from "./editor/adminFootnoteMigration";
 import {
 	AdminLink,
 	buildLinkHref,
@@ -37,11 +49,37 @@ const ItalicNoShortcut = Italic.extend({
 
 type EditorMode = "visual" | "preview" | "source";
 
+/** Internal hrefs may be stored percent-encoded; humans read the decoded slug. */
+function decodeEntrySlug(href: string): string {
+	try {
+		return decodeURIComponent(href);
+	} catch {
+		return href;
+	}
+}
+
+/** Characters that would change what the URL means if left raw. */
+const UNSAFE_IN_HREF = /[\s"'<>#?%\\]/;
+
+/** Hebrew slugs stay readable in the markup; browsers encode them on request. */
+function toReadableHref(uniqueName: string): string {
+	return UNSAFE_IN_HREF.test(uniqueName)
+		? encodeURIComponent(uniqueName)
+		: uniqueName;
+}
+
+/** Toolbar presses must not steal the caret, or the command loses its target. */
+function keepCaret(event: ReactMouseEvent) {
+	event.preventDefault();
+}
+
 interface WysiwygEditorProps {
 	content: string;
 	onChange: (content: string) => void;
 	placeholder?: string;
 	autoSaveDelay?: number;
+	/** Enables the searchable entry list for internal links. */
+	searchEntries?: EntrySearch;
 }
 
 export function WysiwygEditor({
@@ -49,6 +87,7 @@ export function WysiwygEditor({
 	onChange,
 	placeholder = "הכנס תוכן...",
 	autoSaveDelay = 2000,
+	searchEntries,
 }: WysiwygEditorProps) {
 	const lastSavedContent = useRef(content);
 	const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -64,17 +103,10 @@ export function WysiwygEditor({
 	const [linkPanelBlank, setLinkPanelBlank] = useState(true);
 	const [linkPanelActive, setLinkPanelActive] = useState(false);
 
-	const [footnoteOpen, setFootnoteOpen] = useState(false);
-	const [footnoteNum, setFootnoteNum] = useState(1);
-	const [footnoteMode, setFootnoteMode] = useState<"ref" | "body">("ref");
-	const [footnotePlacement, setFootnotePlacement] = useState<"end" | "slot">(
-		"end",
-	);
-	const [footnoteSlotN, setFootnoteSlotN] = useState(1);
-
 	useEffect(() => {
-		setPreviewHtml(content);
-		setSourceDraft(content);
+		const stored = toStoredFootnoteHtml(toEditorFootnoteHtml(content));
+		setPreviewHtml(stored);
+		setSourceDraft(stored);
 	}, [content]);
 
 	const extensions = useMemo(
@@ -85,7 +117,11 @@ export function WysiwygEditor({
 				orderedList: false,
 				bulletList: false,
 				listItem: false,
+				document: false,
+				/* StarterKit v3 bundles Link; AdminLink replaces it. */
+				link: false,
 			}),
+			AdminFootnoteDocument,
 			ListItem,
 			BulletList,
 			AdminOrderedList,
@@ -94,6 +130,7 @@ export function WysiwygEditor({
 			AdminLink.configure({ openOnClick: false }),
 			Placeholder.configure({ placeholder }),
 			adminEditorShortcutsExtension,
+			...adminFootnoteExtensions,
 		],
 		[placeholder],
 	);
@@ -101,9 +138,9 @@ export function WysiwygEditor({
 	const editor = useEditor(
 		{
 			extensions,
-			content,
+			content: toEditorFootnoteHtml(content),
 			onUpdate: ({ editor: ed }: { editor: Editor }) => {
-				const html = ed.getHTML();
+				const html = toStoredFootnoteHtml(ed.getHTML());
 				setPreviewHtml(html);
 
 				if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -129,11 +166,13 @@ export function WysiwygEditor({
 		if (editor.isActive("link")) {
 			const href = editor.getAttributes("link").href as string | undefined;
 			const lt = editor.getAttributes("link").linkType as AdminLinkType | null;
-			setLinkPanelHref(href ?? "");
-			setLinkPanelType(lt ?? inferLinkType(href));
+			const type = lt ?? inferLinkType(href);
+			setLinkPanelHref(
+				type === "internal" ? decodeEntrySlug(href ?? "") : (href ?? ""),
+			);
+			setLinkPanelType(type);
 			setLinkPanelBlank(
-				(lt ?? inferLinkType(href)) === "external" &&
-					!!editor.getAttributes("link").target,
+				type === "external" && !!editor.getAttributes("link").target,
 			);
 			setLinkPanelActive(true);
 		} else {
@@ -152,11 +191,14 @@ export function WysiwygEditor({
 	}, [editor, syncLinkPanelFromEditor]);
 
 	useEffect(() => {
-		if (editor && content !== editor.getHTML()) {
-			editor.commands.setContent(content);
-			lastSavedContent.current = content;
-			setPreviewHtml(content);
-		}
+		if (!editor) return;
+		const migrated = toEditorFootnoteHtml(content);
+		if (migrated === editor.getHTML()) return;
+		editor.commands.setContent(migrated);
+		/* Normalized serialization, so a pure migration does not look like an edit. */
+		const normalized = toStoredFootnoteHtml(editor.getHTML());
+		lastSavedContent.current = normalized;
+		setPreviewHtml(normalized);
 	}, [content, editor]);
 
 	useEffect(() => {
@@ -167,10 +209,11 @@ export function WysiwygEditor({
 
 	const flushSourceToEditor = useCallback(() => {
 		if (!editor) return;
-		editor.commands.setContent(sourceDraft);
-		lastSavedContent.current = sourceDraft;
-		setPreviewHtml(sourceDraft);
-		onChange(sourceDraft);
+		editor.commands.setContent(toEditorFootnoteHtml(sourceDraft));
+		const stored = toStoredFootnoteHtml(editor.getHTML());
+		lastSavedContent.current = stored;
+		setPreviewHtml(stored);
+		onChange(stored);
 	}, [editor, onChange, sourceDraft]);
 
 	const handleModeChange = useCallback(
@@ -224,8 +267,24 @@ export function WysiwygEditor({
 		syncLinkPanelFromEditor();
 	}, [editor, syncLinkPanelFromEditor]);
 
-	const beginNewLink = useCallback(() => {
-		if (!editor) return;
+	const selectEntryLink = useCallback(
+		(entry: EntryLinkOption) => {
+			if (!editor) return;
+			const href = toReadableHref(entry.uniqueName);
+			setLinkPanelHref(href);
+			setLinkPanelType("internal");
+			const attrs = { href, linkType: "internal" } as TipTapLinkMarkAttrs;
+			if (editor.isActive("link")) {
+				editor.chain().focus().extendMarkRange("link").setLink(attrs).run();
+			} else if (!editor.state.selection.empty) {
+				editor.chain().focus().setLink(attrs).run();
+			}
+			syncLinkPanelFromEditor();
+		},
+		[editor, syncLinkPanelFromEditor],
+	);
+
+	const beginNewLink = useCallback(() => {		if (!editor) return;
 		const { empty } = editor.state.selection;
 		if (empty) {
 			window.alert("סמן טקסט ואז לחץ «קישור חדש».");
@@ -270,80 +329,23 @@ export function WysiwygEditor({
 		[editor],
 	);
 
-	const openFootnoteDialog = useCallback(() => {
+	/* Numbering, ordering and the footnote list are owned by tiptap-footnotes. */
+	const addFootnote = useCallback(() => {
 		if (!editor) return;
-		const max = maxFootnoteIndex(editor.getHTML());
-		setFootnotePlacement("end");
-		setFootnoteNum(max + 1);
-		setFootnoteSlotN(max >= 1 ? 2 : 1);
-		setFootnoteMode("ref");
-		setFootnoteOpen(true);
+		if (isSelectionInsideFootnotes(editor)) {
+			window.alert("מקם את הסמן בגוף הטקסט (לא ברשימת ההערות) והוסף הערה.");
+			return;
+		}
+		if (!insertFootnoteAtSelection(editor)) {
+			window.alert("לחץ בגוף הטקסט במקום שבו תופיע ההערה, ואז «+ הערה».");
+		}	}, [editor]);
+
+	const removeFootnote = useCallback(() => {
+		if (!editor) return;
+		if (!removeFootnoteAtSelection(editor)) {
+			window.alert("מקם את הסמן על אזכור הערה או בתוך ההערה שברצונך למחוק.");
+		}
 	}, [editor]);
-
-	const insertFootnoteAtEnd = useCallback(() => {
-		if (!editor) return;
-		const n = footnoteNum;
-		const letter = hebrewOrdinalLetter(n);
-		const html =
-			footnoteMode === "ref"
-				? `<sup><a href="#note-${n}" id="noteref-${n}">${letter}</a></sup>&nbsp;`
-				: `<p id="note-${n}"><strong>${letter}.</strong> </p>`;
-		editor.chain().focus().insertContent(html).run();
-		setFootnoteOpen(false);
-	}, [editor, footnoteMode, footnoteNum]);
-
-	const insertFootnoteAtSlot = useCallback(() => {
-		if (!editor) return;
-		const slotN = footnoteSlotN;
-		const max = maxFootnoteIndex(editor.getHTML());
-		if (slotN < 1 || slotN > max + 1) {
-			window.alert(`מספר הערה חייב להיות בין 1 ל-${max + 1}`);
-			return;
-		}
-		editor.chain().focus().insertContent(FOOTNOTE_INSERT_MARKER).run();
-		const htmlWithMarker = editor.getHTML();
-		let prepared: string;
-		try {
-			prepared = prepareHtmlForNewFootnoteAtSlot(htmlWithMarker, slotN);
-		} catch (e) {
-			const msg = e instanceof Error ? e.message : String(e);
-			window.alert(msg);
-			editor.commands.setContent(
-				htmlWithMarker.replaceAll(FOOTNOTE_INSERT_MARKER, ""),
-			);
-			return;
-		}
-		editor.commands.setContent(prepared);
-
-		let from = -1;
-		const markerLen = FOOTNOTE_INSERT_MARKER.length;
-		editor.state.doc.descendants((node, pos) => {
-			if (!node.isText) return;
-			const t = node.text;
-			if (!t?.includes(FOOTNOTE_INSERT_MARKER)) return;
-			const idx = t.indexOf(FOOTNOTE_INSERT_MARKER);
-			from = pos + idx;
-			return false;
-		});
-		if (from < 0) {
-			window.alert(
-				"לא נמצא סמן ההוספה במסמך. נסה שוב או השתמש במצב «בסוף הרשימה».",
-			);
-			return;
-		}
-		const letter = hebrewOrdinalLetter(slotN);
-		const snippet =
-			footnoteMode === "ref"
-				? `<sup><a href="#note-${slotN}" id="noteref-${slotN}">${letter}</a></sup>&nbsp;`
-				: `<p id="note-${slotN}"><strong>${letter}.</strong> </p>`;
-		editor
-			.chain()
-			.focus()
-			.setTextSelection({ from, to: from + markerLen })
-			.insertContent(snippet)
-			.run();
-		setFootnoteOpen(false);
-	}, [editor, footnoteMode, footnoteSlotN]);
 
 	const handleProseLinkClick = useCallback(
 		(e: ReactMouseEvent) => {
@@ -425,133 +427,6 @@ export function WysiwygEditor({
 				onExtrasDraftChange={setExtrasDraft}
 				onSaveExtras={saveExtras}
 			/>
-
-			{footnoteOpen && (
-				<div
-					className="fixed inset-0 z-[1990] flex items-center justify-center bg-black/40 p-4"
-					role="dialog"
-					aria-modal="true"
-					aria-labelledby="footnote-dlg-title"
-				>
-					<div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
-						<h2 id="footnote-dlg-title" className="text-lg font-bold">
-							הערות (כמו בתנכפדיה)
-						</h2>
-						<p className="text-sm text-gray-600 leading-relaxed">
-							<strong>בין שתי הערות:</strong> מקם את הסמן, בחר «במקום מספר», בחר את
-							מספר ההערה החדשה (למשל 2 בין 1 ל־3 הקודמות), ואשר — המערכת תדחוף את
-							מספרי ההערות מהמספר הזה ומעלה ותעדכן אותיות אזכור.{" "}
-							<code className="text-xs bg-gray-100 px-1">#note-N</code> /{" "}
-							<code className="text-xs bg-gray-100 px-1">id=&quot;note-N&quot;</code>
-						</p>
-						<p className="text-xs text-gray-500">
-							הערות במסמך:{" "}
-							{editor
-								? listFootnoteIndices(editor.getHTML()).join(", ") || "אין"
-								: "—"}
-						</p>
-						<div className="flex flex-col gap-2 text-sm">
-							<label className="flex items-center gap-2 cursor-pointer">
-								<input
-									type="radio"
-									name="fnplace"
-									checked={footnotePlacement === "end"}
-									onChange={() => {
-										setFootnotePlacement("end");
-										setFootnoteNum(
-											maxFootnoteIndex(editor?.getHTML() ?? "") + 1,
-										);
-									}}
-								/>
-								בסוף הרשימה (מספר חדש)
-							</label>
-							<label className="flex items-center gap-2 cursor-pointer">
-								<input
-									type="radio"
-									name="fnplace"
-									checked={footnotePlacement === "slot"}
-									onChange={() => {
-										setFootnotePlacement("slot");
-										const max = maxFootnoteIndex(editor?.getHTML() ?? "");
-										setFootnoteSlotN(max >= 1 ? 2 : 1);
-									}}
-								/>
-								במקום מספר — דוחף הערות באותו מספר ומעלה (סמן קודם את מיקום
-								האזכור)
-							</label>
-						</div>
-						{footnotePlacement === "end" ? (
-							<label className="block text-sm font-medium text-gray-700">
-								מספר הערה חדש
-								<input
-									type="number"
-									min={1}
-									value={footnoteNum}
-									onChange={(e) =>
-										setFootnoteNum(Number.parseInt(e.target.value, 10) || 1)
-									}
-									className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"
-								/>
-							</label>
-						) : (
-							<label className="block text-sm font-medium text-gray-700">
-								מספר ההערה החדשה (יישב במקום זה; קיימות ≥ מספר יוזזו +1)
-								<input
-									type="number"
-									min={1}
-									max={maxFootnoteIndex(editor?.getHTML() ?? "") + 1}
-									value={footnoteSlotN}
-									onChange={(e) =>
-										setFootnoteSlotN(Number.parseInt(e.target.value, 10) || 1)
-									}
-									className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"
-								/>
-							</label>
-						)}
-						<div className="flex flex-col gap-2 text-sm">
-							<label className="flex items-center gap-2 cursor-pointer">
-								<input
-									type="radio"
-									name="fnm"
-									checked={footnoteMode === "ref"}
-									onChange={() => setFootnoteMode("ref")}
-								/>
-								אזכור בהערת שוליים (sup)
-							</label>
-							<label className="flex items-center gap-2 cursor-pointer">
-								<input
-									type="radio"
-									name="fnm"
-									checked={footnoteMode === "body"}
-									onChange={() => setFootnoteMode("body")}
-								/>
-								פסקת הערה בתחתית (
-								<code className="text-xs">id=&quot;note-N&quot;</code>)
-							</label>
-						</div>
-						<div className="flex justify-end gap-2">
-							<button
-								type="button"
-								onClick={() => setFootnoteOpen(false)}
-								className="px-4 py-2 border rounded-lg text-sm"
-							>
-								ביטול
-							</button>
-							<button
-								type="button"
-								onClick={() =>
-									footnotePlacement === "end"
-										? insertFootnoteAtEnd()
-										: insertFootnoteAtSlot()
-								}
-								className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm"
-							>
-								הוסף
-							</button>
-						</div>
-					</div>
-				</div>
-			)}
 
 			<div className="sticky top-16 z-40 bg-white/95 backdrop-blur-sm border-b border-gray-300 shadow-sm">
 			<div className="bg-gray-50 border-b border-gray-200 p-2 flex flex-wrap gap-2 items-center">
@@ -676,10 +551,22 @@ export function WysiwygEditor({
 						</button>
 						<button
 							type="button"
-							onClick={openFootnoteDialog}
+							onMouseDown={keepCaret}
+							onClick={addFootnote}
+							title="מוסיפה אזכור במיקום הסמן וקופצת להערה החדשה לכתיבת התוכן; המספור מתעדכן לבד"
 							className="px-2 py-1 rounded text-sm bg-amber-50 border border-amber-200 text-amber-950"
 						>
-							הערה
+							+ הערה
+						</button>
+						<button
+							type="button"
+							onMouseDown={keepCaret}
+							onClick={removeFootnote}
+							disabled={!canRemoveFootnote(editor)}
+							title="מוחקת את ההערה שהסמן עליה — האזכור והפריט ברשימה גם יחד"
+							className="px-2 py-1 rounded text-sm bg-white border border-amber-200 text-amber-900 disabled:opacity-40"
+						>
+							− הערה
 						</button>
 					</>
 				)}
@@ -753,6 +640,13 @@ export function WysiwygEditor({
 							הסר קישור
 						</button>
 					</div>
+					{linkPanelType === "internal" && searchEntries && (
+						<EntryLinkPicker
+							search={searchEntries}
+							selectedUniqueName={decodeEntrySlug(linkPanelHref)}
+							onSelect={selectEntryLink}
+						/>
+					)}
 				</div>
 			)}
 			</div>

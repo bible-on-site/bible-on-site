@@ -11,6 +11,7 @@
 	},
 	"scripts": {
 		"coverage:merge": "node --import tsx ./merge-coverage.mts",
+		"dev": "node --import tsx ./dev-all.mts",
 		"setup_dev_env": "node --import tsx ./setup-dev-env.mts",
 		"tanahpedia:apply": "node ./tanahpedia-apply.mjs",
 		"verify-version": "node --import tsx ./github/ci/is-version-newer-than-baseline.ts",

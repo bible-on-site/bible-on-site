@@ -7,6 +7,7 @@ import {
 	ENTITY_TYPES,
 	get3DModels,
 	getAllEntityTypeParams,
+	getAllEntrySynonymNames,
 	getAllEntryUniqueNames,
 	getAnimalsByClassification,
 	getCategoryCounts,
@@ -16,6 +17,7 @@ import {
 	getEntityReferencesForPerek,
 	getEntries,
 	getEntriesByEntityType,
+	getEntriesBySynonym,
 	getEntryByUniqueName,
 	getPersonFamilySummary,
 	getPlaceIdentifications,
@@ -495,6 +497,50 @@ describe("tanahpedia service", () => {
 		expect(mockQuery).toHaveBeenLastCalledWith(expect.any(String), ["10"]);
 
 		await expect(getAllEntryUniqueNames()).resolves.toEqual(["אברהם", "שרה"]);
+	});
+
+	it("queries distinct synonym names that are not canonical entry names", async () => {
+		mockQuery.mockResolvedValueOnce([{ name: "משה" }, { name: "ישראל" }]);
+
+		await expect(getAllEntrySynonymNames()).resolves.toEqual(["משה", "ישראל"]);
+		expect(mockQuery).toHaveBeenCalledWith(
+			expect.stringContaining("SELECT DISTINCT s.name"),
+		);
+	});
+
+	it("deduplicates synonym targets while preserving disambiguation labels", async () => {
+		mockQuery.mockResolvedValueOnce([
+			{
+				entryId: "entry-1",
+				uniqueName: "יעקב-אבינו",
+				title: "יעקב אבינו",
+				label: null,
+			},
+			{
+				entryId: "entry-1",
+				uniqueName: "יעקב-אבינו",
+				title: "יעקב אבינו",
+				label: "אבי האומה",
+			},
+			{
+				entryId: "entry-2",
+				uniqueName: "יעקב-אחר",
+				title: "יעקב אחר",
+				label: null,
+			},
+			{
+				entryId: "entry-1",
+				uniqueName: "יעקב-אבינו",
+				title: "יעקב אבינו",
+				label: null,
+			},
+		]);
+
+		await expect(getEntriesBySynonym("יעקב")).resolves.toEqual([
+			expect.objectContaining({ entryId: "entry-1", label: "אבי האומה" }),
+			expect.objectContaining({ entryId: "entry-2", label: null }),
+		]);
+		expect(mockQuery).toHaveBeenCalledWith(expect.any(String), ["יעקב", "יעקב"]);
 	});
 
 	it("normalizes invalid focal birth dates when family rows exist", async () => {

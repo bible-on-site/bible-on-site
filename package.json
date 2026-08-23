@@ -6,6 +6,7 @@
 		"husky": "9.1.7"
 	},
 	"scripts": {
+		"dev": "npm run dev --prefix devops --",
 		"prepare": "husky",
 		"version": "cross-env-shell echo ${npm_package_version}"
 	},

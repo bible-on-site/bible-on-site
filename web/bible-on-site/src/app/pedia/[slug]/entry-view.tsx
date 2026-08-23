@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { JsonLd } from "@/app/components/JsonLd";
 import { buildEntryGraph } from "@/lib/seo/tanahpedia-jsonld";
 import { categoryHref } from "@/lib/tanahpedia/category-slug";
@@ -12,11 +12,16 @@ import {
 	getPersonFamilySummary,
 	getPlaceMapMarkersForEntry,
 } from "@/lib/tanahpedia/service";
+import {
+	entryHref,
+	resolveSynonymSlug,
+} from "@/lib/tanahpedia/synonym-resolution";
 import type { CategoryKey, EntityType } from "@/lib/tanahpedia/types";
 import { normalizedUniqueNameFromParam } from "@/lib/tanahpedia/unique-name-param";
 import { PersonFamilyTree } from "../components/PersonFamilyTree";
 import { TanahpediaBreadcrumb } from "../components/TanahpediaBreadcrumb";
 import { TanahpediaPlacesMap } from "../components/TanahpediaPlacesMap";
+import { DisambiguationView, disambiguationMetadata } from "./disambiguation-view";
 import styles from "../page.module.css";
 
 /** Plain-text snippet for meta description (entry content may be HTML). */
@@ -30,10 +35,15 @@ function metaDescriptionFromContent(html: string, maxLen: number): string {
 
 export async function entryMetadata(slug: string): Promise<Metadata> {
 	try {
-		const entry = await getEntryByUniqueName(
-			normalizedUniqueNameFromParam(slug),
-		);
-		if (!entry) return { title: "לא נמצא" };
+		const name = normalizedUniqueNameFromParam(slug);
+		const entry = await getEntryByUniqueName(name);
+		if (!entry) {
+			const resolution = await resolveSynonymSlug(name);
+			if (resolution.kind === "disambiguation") {
+				return disambiguationMetadata(name);
+			}
+			return { title: "לא נמצא" };
+		}
 		const fromContent = entry.content
 			? metaDescriptionFromContent(entry.content, 200)
 			: "";
@@ -47,8 +57,18 @@ export async function entryMetadata(slug: string): Promise<Metadata> {
 }
 
 export async function EntryView({ slug }: { slug: string }) {
-	const entry = await getEntryByUniqueName(normalizedUniqueNameFromParam(slug));
-	if (!entry) notFound();
+	const name = normalizedUniqueNameFromParam(slug);
+	const entry = await getEntryByUniqueName(name);
+	if (!entry) {
+		const resolution = await resolveSynonymSlug(name);
+		if (resolution.kind === "alias") {
+			permanentRedirect(entryHref(resolution.target.uniqueName));
+		}
+		if (resolution.kind === "disambiguation") {
+			return <DisambiguationView name={name} targets={resolution.targets} />;
+		}
+		notFound();
+	}
 
 	// Get the primary entity type for breadcrumb (use first entity if available)
 	const primaryEntityType =

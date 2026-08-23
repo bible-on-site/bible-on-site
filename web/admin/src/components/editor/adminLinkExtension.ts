@@ -1,4 +1,4 @@
-import Link from "@tiptap/extension-link";
+import Link, { type LinkOptions } from "@tiptap/extension-link";
 
 export type AdminLinkType = "external" | "internal" | "comment";
 
@@ -22,13 +22,13 @@ export const AdminLink = Link.extend({
 	name: "link",
 
 	addOptions() {
-		const parent = this.parent?.() ?? {};
+		/* Extending Link always has a parent; v3 types it as optional. */
+		const parent = this.parent?.() as LinkOptions;
 		return {
 			...parent,
 			openOnClick: false,
 			HTMLAttributes: {
-				...(parent as { HTMLAttributes?: Record<string, unknown> })
-					.HTMLAttributes,
+				...parent.HTMLAttributes,
 				target: null,
 				rel: null,
 			},

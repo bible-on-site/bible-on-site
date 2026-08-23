@@ -59,9 +59,12 @@
 /* מספור עברי א-ב (כמו ברשימות במאמרים) — data-ordered-type מגיע מ-TipTap */
 @counter-style admin-hebrew-alpha {
   system: fixed;
-  symbols: "\5D0" "\5D1" "\5D2" "\5D3" "\5D4" "\5D5" "\5D6" "\5D7" "\5D8" "\5D9" "\5DB" "\5DC" "\5DD" "\5DE" "\5DF" "\5E0" "\5E1" "\5E2" "\5E4" "\5E6" "\5E7" "\5E8" "\5E9" "\5EA";
+  symbols: "\5D0" "\5D1" "\5D2" "\5D3" "\5D4" "\5D5" "\5D6" "\5D7" "\5D8" "\5D9" "\5DB" "\5DC" "\5DE" "\5E0" "\5E1"
+    "\5E2" "\5E4" "\5E6" "\5E7" "\5E8" "\5E9" "\5EA";
   suffix: ". ";
 }
+
+/* להערות שוליים משתמשים ב-list-style-type: hebrew המובנה, התואם למספור בתוכן */
 
 .admin-prose ol[data-ordered-type="hebrew-alpha"] {
   list-style: admin-hebrew-alpha;
@@ -70,6 +73,35 @@
 
 .admin-prose li {
   margin: 0.25em 0;
+}
+
+/* הערות שוליים (tiptap-footnotes) — המספור העברי מגיע מה-counter, לא מהטקסט */
+.admin-prose ol.footnotes {
+  list-style: hebrew;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  padding-right: 2rem;
+  font-size: 0.95rem;
+  color: #374151;
+}
+
+.admin-prose ol.footnotes:has(li) {
+  border-top: 1px solid #d1d5db;
+}
+
+.admin-prose ol.footnotes li p {
+  margin: 0.15em 0;
+}
+
+.admin-prose a.footnote-backref {
+  margin-inline-start: 0.4em;
+  text-decoration: none;
+  color: #6b7280;
+}
+
+.admin-prose sup a.footnote-ref {
+  text-decoration: none;
+  padding: 0 1px;
 }
 
 .admin-prose blockquote {

@@ -136,6 +136,13 @@ function safeParseProposal(json: string): TanahpediaLlmProposal {
 	}
 }
 
+/** The assistant is only offered when the admin server holds an API key. */
+export const getLlmAssistantStatus = createServerFn({ method: "GET" }).handler(
+	async (): Promise<{ enabled: boolean }> => ({
+		enabled: Boolean(process.env.OPENAI_API_KEY?.trim()),
+	}),
+);
+
 export const suggestTanahpediaEntryEdits = createServerFn({ method: "POST" })
 	.validator((data: SuggestEditsInput) => data)
 	.handler(async ({ data }) => {

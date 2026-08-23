@@ -50,6 +50,14 @@ export interface EntrySynonymDisambiguation {
 	disambiguationLabel: string;
 }
 
+/** An entry a synonym resolves to; `label` distinguishes ambiguous matches. */
+export interface SynonymTarget {
+	entryId: string;
+	uniqueName: string;
+	title: string;
+	label: string | null;
+}
+
 export interface EntryEntity {
 	id: string;
 	entryId: string;

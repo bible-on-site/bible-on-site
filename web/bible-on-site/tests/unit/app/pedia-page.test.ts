@@ -12,6 +12,9 @@ jest.mock("next/navigation", () => ({
 	notFound: jest.fn(() => {
 		throw new Error("NEXT_NOT_FOUND");
 	}),
+	permanentRedirect: jest.fn((href: string) => {
+		throw new Error(`NEXT_REDIRECT:${href}`);
+	}),
 }));
 
 jest.mock("next/link", () => ({
@@ -33,6 +36,8 @@ jest.mock("next/dynamic", () => ({
 jest.mock("../../../src/lib/tanahpedia/service", () => ({
 	...jest.requireActual("../../../src/lib/tanahpedia/service"),
 	getAllEntryUniqueNames: jest.fn(),
+	getAllEntrySynonymNames: jest.fn().mockResolvedValue([]),
+	getEntriesBySynonym: jest.fn().mockResolvedValue([]),
 	getEntries: jest.fn(),
 	getEntriesByEntityType: jest.fn(),
 	getEntryByUniqueName: jest.fn(),
@@ -55,6 +60,7 @@ import {
 	getAllEntryUniqueNames,
 	getEntries,
 	getEntriesByEntityType,
+	getEntriesBySynonym,
 	getEntryByUniqueName,
 	getPersonFamilySummary,
 	getPlaceMapMarkersForEntry,
@@ -68,6 +74,8 @@ const mockGetEntryByUniqueName = getEntryByUniqueName as jest.MockedFunction<
 const mockGetEntries = getEntries as jest.MockedFunction<typeof getEntries>;
 const mockGetEntriesByEntityType =
 	getEntriesByEntityType as jest.MockedFunction<typeof getEntriesByEntityType>;
+const mockGetEntriesBySynonym =
+	getEntriesBySynonym as jest.MockedFunction<typeof getEntriesBySynonym>;
 const mockGetPersonFamilySummary =
 	getPersonFamilySummary as jest.MockedFunction<typeof getPersonFamilySummary>;
 const mockGetPlaceMapMarkersForEntry =
@@ -78,6 +86,7 @@ const mockGetPlaceMapMarkersForEntry =
 describe("pedia/[uniqueName] page", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockGetEntriesBySynonym.mockResolvedValue([]);
 	});
 
 	describe("generateStaticParams", () => {
@@ -174,6 +183,31 @@ describe("pedia/[uniqueName] page", () => {
 
 			expect(result).toEqual({
 				title: "לא נמצא",
+			});
+		});
+
+		it("returns disambiguation metadata for an ambiguous synonym", async () => {
+			mockGetEntryByUniqueName.mockResolvedValue(null);
+			mockGetEntriesBySynonym.mockResolvedValue([
+				{
+					entryId: "entry-1",
+					uniqueName: "יעקב-אבינו",
+					title: "יעקב אבינו",
+					label: "אבי האומה",
+				},
+				{
+					entryId: "entry-2",
+					uniqueName: "יעקב-אחר",
+					title: "יעקב אחר",
+					label: null,
+				},
+			]);
+
+			await expect(
+				generateMetadata({ params: Promise.resolve({ slug: "יעקב" }) }),
+			).resolves.toEqual({
+				title: "יעקב (פירושונים) | תנכפדיה",
+				description: "לשם «יעקב» יש יותר מערך אחד בתנכפדיה.",
 			});
 		});
 
@@ -274,6 +308,56 @@ describe("pedia/[uniqueName] page", () => {
 			);
 			expect((consoleError.mock.calls[0][2] as Error).message).toBe(
 				"family down",
+			);
+		});
+
+		it("permanently redirects a single-target alias", async () => {
+			mockGetEntryByUniqueName.mockResolvedValue(null);
+			mockGetEntriesBySynonym.mockResolvedValue([
+				{
+					entryId: "entry-1",
+					uniqueName: "משה-רבנו",
+					title: "משה רבנו",
+					label: null,
+				},
+			]);
+
+			await expect(EntryView({ slug: "משה" })).rejects.toThrow(
+				`NEXT_REDIRECT:/pedia/${encodeURIComponent("משה-רבנו")}`,
+			);
+		});
+
+		it("renders every target of an ambiguous synonym", async () => {
+			mockGetEntryByUniqueName.mockResolvedValue(null);
+			mockGetEntriesBySynonym.mockResolvedValue([
+				{
+					entryId: "entry-1",
+					uniqueName: "יעקב-אבינו",
+					title: "יעקב אבינו",
+					label: "אבי האומה",
+				},
+				{
+					entryId: "entry-2",
+					uniqueName: "יעקב-אחר",
+					title: "יעקב אחר",
+					label: null,
+				},
+			]);
+
+			render((await EntryView({ slug: "יעקב" })) as ReactElement);
+
+			expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("יעקב");
+			expect(screen.getByText("יעקב אבינו")).toBeInTheDocument();
+			expect(screen.getByText("יעקב אחר")).toBeInTheDocument();
+			expect(screen.getByText(/אבי האומה/)).toBeInTheDocument();
+		});
+
+		it("returns the framework not-found response for an unknown slug", async () => {
+			mockGetEntryByUniqueName.mockResolvedValue(null);
+			mockGetEntriesBySynonym.mockResolvedValue([]);
+
+			await expect(EntryView({ slug: "לא-קיים" })).rejects.toThrow(
+				"NEXT_NOT_FOUND",
 			);
 		});
 

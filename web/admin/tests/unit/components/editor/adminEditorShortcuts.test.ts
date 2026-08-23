@@ -130,6 +130,7 @@ describe("adminEditorShortcuts", () => {
 			options: {},
 			storage: {},
 			editor,
+			type: null,
 			parent: undefined,
 		};
 		const commandProps = { editor };

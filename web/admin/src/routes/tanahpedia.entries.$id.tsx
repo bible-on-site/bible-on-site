@@ -5,6 +5,8 @@ import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
 import { EntryStructuralPanel } from "~/components/tanahpedia/EntryStructuralPanel";
 import { TanahpediaLlmAssistantPanel } from "~/components/tanahpedia/TanahpediaLlmAssistantPanel";
 import { WysiwygEditor } from "~/components/WysiwygEditor";
+import { searchEntriesForLink } from "~/components/editor/entryLinkSearch";
+import { getLlmAssistantStatus } from "~/server/tanahpedia/llm-assistant";
 import {
 	createEntry,
 	deleteEntry,
@@ -36,6 +38,13 @@ function EntryEditPage() {
 	});
 	const [hasChanges, setHasChanges] = useState(false);
 	const [lastSaved, setLastSaved] = useState<Date | null>(null);
+	const [tab, setTab] = useState<"content" | "metadata">("content");
+
+	const { data: llmStatus } = useQuery({
+		queryKey: ["tanahpedia-llm-status"],
+		queryFn: () => getLlmAssistantStatus(),
+	});
+	const llmEnabled = llmStatus?.enabled === true;
 
 	const { data: entry, isLoading } = useQuery({
 		queryKey: ["tanahpedia-entry", id],
@@ -161,76 +170,108 @@ function EntryEditPage() {
 				</div>
 			</div>
 
-			{!isNew && (
-				<TanahpediaLlmAssistantPanel
-					entryId={id}
-					formData={formData}
-					onApplyEntryFields={(patch) => {
-						setFormData((prev) => ({ ...prev, ...patch }));
-						setHasChanges(true);
-					}}
-				/>
-			)}
+			<div className="flex gap-1 border-b border-gray-200" role="tablist">
+				{(
+					[
+						["content", "תוכן"],
+						["metadata", "מטא-דאטה"],
+					] as const
+				).map(([key, label]) => (
+					<button
+						key={key}
+						type="button"
+						role="tab"
+						aria-selected={tab === key}
+						onClick={() => setTab(key)}
+						className={`px-5 py-2.5 text-sm font-medium rounded-t-lg border border-b-0 transition-colors ${
+							tab === key
+								? "bg-white border-gray-200 text-blue-700"
+								: "bg-gray-50 border-transparent text-gray-600 hover:text-gray-900"
+						}`}
+					>
+						{label}
+					</button>
+				))}
+			</div>
 
-			{isNew ? (
-				<div className="rounded-lg border border-amber-200 bg-amber-50/60 p-4 text-sm text-amber-950">
-					עריכת מבנה יישויות ועוזר ה־LLM זמינים לאחר שמירת ערך חדש (נוצר מזהה
-					בשרת).
-				</div>
-			) : (
-				<EntryStructuralPanel entryId={id} />
+			{tab === "metadata" && (
+				<>
+					{!isNew && llmEnabled && (
+						<TanahpediaLlmAssistantPanel
+							entryId={id}
+							formData={formData}
+							onApplyEntryFields={(patch) => {
+								setFormData((prev) => ({ ...prev, ...patch }));
+								setHasChanges(true);
+							}}
+						/>
+					)}
+
+					{isNew ? (
+						<div className="rounded-lg border border-amber-200 bg-amber-50/60 p-4 text-sm text-amber-950">
+							עריכת מבנה יישויות זמינה לאחר שמירת ערך חדש (נוצר מזהה בשרת).
+						</div>
+					) : (
+						<EntryStructuralPanel entryId={id} />
+					)}
+				</>
 			)}
 
 			<form className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
 				<div className="p-8 space-y-6">
-					<div className="grid md:grid-cols-2 gap-6">
-						<div>
-							<label
-								htmlFor="title"
-								className="block text-sm font-semibold text-gray-700 mb-2"
-							>
-								כותרת <span className="text-red-500">*</span>
-							</label>
-							<input
-								id="title"
-								type="text"
-								value={formData.title}
-								onChange={(e) => handleFieldChange("title", e.target.value)}
-								className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-								placeholder="כותרת הערך"
-							/>
+					{tab === "metadata" && (
+						<div className="grid md:grid-cols-2 gap-6">
+							<div>
+								<label
+									htmlFor="title"
+									className="block text-sm font-semibold text-gray-700 mb-2"
+								>
+									כותרת <span className="text-red-500">*</span>
+								</label>
+								<input
+									id="title"
+									type="text"
+									value={formData.title}
+									onChange={(e) => handleFieldChange("title", e.target.value)}
+									className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+									placeholder="כותרת הערך"
+								/>
+							</div>
+							<div>
+								<label
+									htmlFor="unique_name"
+									className="block text-sm font-semibold text-gray-700 mb-2"
+								>
+									שם ייחודי (URL)
+								</label>
+								<input
+									id="unique_name"
+									type="text"
+									value={formData.unique_name}
+									onChange={(e) =>
+										handleFieldChange("unique_name", e.target.value)
+									}
+									className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+									placeholder="שם-ייחודי-בurl"
+								/>
+							</div>
 						</div>
-						<div>
-							<label
-								htmlFor="unique_name"
-								className="block text-sm font-semibold text-gray-700 mb-2"
-							>
-								שם ייחודי (URL)
-							</label>
-							<input
-								id="unique_name"
-								type="text"
-								value={formData.unique_name}
-								onChange={(e) =>
-									handleFieldChange("unique_name", e.target.value)
-								}
-								className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-								placeholder="שם-ייחודי-בurl"
-							/>
-						</div>
-					</div>
+					)}
 
-					<div>
-						{/* biome-ignore lint/a11y/noLabelWithoutControl: WysiwygEditor is a custom component */}
-						<label className="block text-sm font-semibold text-gray-700 mb-2">
-							תוכן הערך
-						</label>
-						<WysiwygEditor
-							content={formData.content}
-							onChange={handleContentChange}
-							placeholder="הכנס את תוכן הערך..."
-						/>
-					</div>
+					{tab === "content" && (
+						<div>
+							{/* biome-ignore lint/a11y/noLabelWithoutControl: WysiwygEditor is a custom component */}
+							<label className="block text-sm font-semibold text-gray-700 mb-2">
+								תוכן הערך
+							</label>
+							<WysiwygEditor
+								content={formData.content}
+								onChange={handleContentChange}
+								placeholder="הכנס את תוכן הערך..."
+								searchEntries={searchEntriesForLink}
+							/>
+						</div>
+					)}
 				</div>
 
 				<div className="flex justify-end gap-4 px-8 py-5 bg-gray-50 border-t border-gray-200">
