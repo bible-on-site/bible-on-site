@@ -15,6 +15,7 @@ const editorState = vi.hoisted(() => {
 	let active = new Set<string>();
 	let attributes = new Map<string, Record<string, unknown>>();
 	let selectionEmpty = false;
+	let selectionAncestors: string[] = [];
 	const listeners = new Map<string, Set<() => void>>();
 	let useEditorResult: unknown;
 
@@ -54,9 +55,14 @@ const editorState = vi.hoisted(() => {
 					return selectionEmpty;
 				},
 				$from: {
-					depth: 0,
+					get depth() {
+						return selectionAncestors.length;
+					},
 					pos: 0,
-					node: () => ({ type: { name: "doc" }, attrs: {} }),
+					node: (depth: number) => ({
+						type: { name: selectionAncestors[depth - 1] ?? "doc" },
+						attrs: { "data-id": "missing-footnote" },
+					}),
 					nodeBefore: null,
 					nodeAfter: null,
 				},
@@ -90,6 +96,7 @@ const editorState = vi.hoisted(() => {
 		active = new Set<string>();
 		attributes = new Map<string, Record<string, unknown>>();
 		selectionEmpty = false;
+		selectionAncestors = [];
 		listeners.clear();
 		useEditorResult = editor;
 		vi.clearAllMocks();
@@ -104,6 +111,9 @@ const editorState = vi.hoisted(() => {
 		},
 		setSelectionEmpty: (next: boolean) => {
 			selectionEmpty = next;
+		},
+		setSelectionAncestors: (...names: string[]) => {
+			selectionAncestors = names;
 		},
 		setActive: (...names: string[]) => {
 			active = new Set(names);
@@ -362,6 +372,41 @@ describe("WysiwygEditor", () => {
 		expect(editorState.chain.insertContent).not.toHaveBeenCalled();
 	});
 
+	it("preserves the caret and explains invalid footnote targets", () => {
+		const onChange = vi.fn();
+		const { rerender } = renderEditor(onChange);
+		const addButton = screen.getByRole("button", { name: "+ הערה" });
+
+		fireEvent.mouseDown(addButton);
+		editorState.setSelectionAncestors("footnotes");
+		fireEvent.click(addButton);
+		expect(alert).toHaveBeenLastCalledWith(
+			"מקם את הסמן בגוף הטקסט (לא ברשימת ההערות) והוסף הערה.",
+		);
+
+		editorState.setSelectionAncestors();
+		editorState.chain.run.mockReturnValueOnce(false);
+		fireEvent.click(addButton);
+		expect(alert).toHaveBeenLastCalledWith(
+			"לחץ בגוף הטקסט במקום שבו תופיע ההערה, ואז «+ הערה».",
+		);
+
+		editorState.setSelectionAncestors("footnotes", "footnote");
+		rerender(
+			<WysiwygEditor
+				content="<p>Initial</p>"
+				onChange={onChange}
+				placeholder="Body"
+				autoSaveDelay={1}
+			/>,
+		);
+		const removeButton = screen.getByRole("button", { name: "− הערה" });
+		fireEvent.click(removeButton);
+		expect(alert).toHaveBeenLastCalledWith(
+			"מקם את הסמן על אזכור הערה או בתוך ההערה שברצונך למחוק.",
+		);
+	});
+
 	it("does not open a footnote dialog anymore", () => {
 		renderEditor();
 
@@ -407,6 +452,36 @@ describe("WysiwygEditor", () => {
 			});
 		});
 
+		it("updates the full mark when choosing a replacement for an active link", async () => {
+			renderEditorWithEntrySearch();
+			editorState.setActive("link");
+			editorState.setAttributes("link", {
+				href: "old-entry",
+				linkType: "internal",
+			});
+			act(() => editorState.emit("selectionUpdate"));
+
+			fireEvent.click(await screen.findByText("משה רבנו"));
+
+			expect(editorState.chain.extendMarkRange).toHaveBeenCalledWith("link");
+			expect(editorState.chain.setLink).toHaveBeenCalledWith({
+				href: "משה-רבנו",
+				linkType: "internal",
+			});
+		});
+
+		it("does not create a link when entry text is not selected", async () => {
+			renderEditorWithEntrySearch();
+			editorState.setSelectionEmpty(true);
+			fireEvent.click(
+				document.querySelectorAll<HTMLInputElement>('input[name="linkType"]')[1],
+			);
+
+			fireEvent.click(await screen.findByText("משה רבנו"));
+
+			expect(editorState.chain.setLink).not.toHaveBeenCalled();
+		});
+
 		it("shows an existing encoded internal link decoded", () => {
 			renderEditorWithEntrySearch();
 			editorState.setActive("link");
@@ -417,6 +492,30 @@ describe("WysiwygEditor", () => {
 			act(() => editorState.emit("selectionUpdate"));
 
 			expect(screen.getByRole("textbox")).toHaveValue("משה-רבנו");
+		});
+
+		it("keeps a malformed encoded href editable", () => {
+			renderEditorWithEntrySearch();
+			editorState.setActive("link");
+			editorState.setAttributes("link", {
+				href: "%invalid",
+				linkType: "internal",
+			});
+			act(() => editorState.emit("selectionUpdate"));
+
+			expect(screen.getByRole("textbox")).toHaveValue("%invalid");
+		});
+
+		it("infers the type when an existing link has no explicit link metadata", () => {
+			renderEditorWithEntrySearch();
+			editorState.setActive("link");
+			editorState.setAttributes("link", { href: "#note-7" });
+			act(() => editorState.emit("selectionUpdate"));
+
+			expect(screen.getByRole("textbox")).toHaveValue("#note-7");
+			expect(
+				document.querySelectorAll<HTMLInputElement>('input[name="linkType"]')[2],
+			).toBeChecked();
 		});
 	});
 

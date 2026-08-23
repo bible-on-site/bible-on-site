@@ -36,7 +36,25 @@ vi.mock("~/components/tanahpedia/EntryStructuralPanel", () => ({
 }));
 
 vi.mock("~/components/tanahpedia/TanahpediaLlmAssistantPanel", () => ({
-	TanahpediaLlmAssistantPanel: () => <div data-testid="llm-panel" />,
+	TanahpediaLlmAssistantPanel: ({
+		onApplyEntryFields,
+	}: {
+		onApplyEntryFields: (patch: { title: string; unique_name: string }) => void;
+	}) => (
+		<div data-testid="llm-panel">
+			<button
+				type="button"
+				onClick={() =>
+					onApplyEntryFields({
+						title: "כותרת מוצעת",
+						unique_name: "שם-מוצע",
+					})
+				}
+			>
+				החל הצעה
+			</button>
+		</div>
+	),
 }));
 
 vi.mock("~/components/editor/entryLinkSearch", () => ({
@@ -105,6 +123,21 @@ describe("EntryEditPage", () => {
 				"true",
 			);
 		});
+
+		it("updates both metadata fields from user input", async () => {
+			renderPage();
+			fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
+
+			fireEvent.change(screen.getByLabelText(/כותרת/), {
+				target: { value: "כותרת חדשה" },
+			});
+			fireEvent.change(screen.getByLabelText("שם ייחודי (URL)"), {
+				target: { value: "שם-חדש" },
+			});
+
+			expect(screen.getByLabelText(/כותרת/)).toHaveValue("כותרת חדשה");
+			expect(screen.getByLabelText("שם ייחודי (URL)")).toHaveValue("שם-חדש");
+		});
 	});
 
 	describe("llm assistant", () => {
@@ -122,6 +155,16 @@ describe("EntryEditPage", () => {
 			fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
 
 			expect(await screen.findByTestId("llm-panel")).toBeInTheDocument();
+		});
+
+		it("applies proposed entry fields to the metadata form", async () => {
+			getLlmAssistantStatusMock.mockResolvedValue({ enabled: true });
+			renderPage();
+			fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
+			fireEvent.click(await screen.findByRole("button", { name: "החל הצעה" }));
+
+			expect(screen.getByLabelText(/כותרת/)).toHaveValue("כותרת מוצעת");
+			expect(screen.getByLabelText("שם ייחודי (URL)")).toHaveValue("שם-מוצע");
 		});
 	});
 });

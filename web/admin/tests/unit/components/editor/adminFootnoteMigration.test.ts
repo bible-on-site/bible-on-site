@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	hasLegacyFootnotes,
 	migrateLegacyFootnotes,
@@ -14,6 +14,10 @@ const TWO_LEGACY_REFS_PARAGRAPH =
 function parse(html: string): Document {
 	return new DOMParser().parseFromString(html, "text/html");
 }
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+});
 
 describe("hasLegacyFootnotes", () => {
 	describe("when the html uses the legacy hand-built markup", () => {
@@ -136,6 +140,20 @@ describe("migrateLegacyFootnotes", () => {
 		});
 	});
 
+	describe("when browser UUID generation is unavailable", () => {
+		it("generates distinct fallback ids", () => {
+			vi.stubGlobal("crypto", {});
+			const doc = parse(migrateLegacyFootnotes(TWO_LEGACY_REFS_PARAGRAPH));
+			const ids = Array.from(doc.querySelectorAll("a.footnote-ref"), (link) =>
+				link.getAttribute("data-id"),
+			);
+
+			expect(ids).toHaveLength(2);
+			expect(ids[0]).toMatch(/^fn-[a-z0-9]+-\d+$/);
+			expect(ids[1]).not.toBe(ids[0]);
+		});
+	});
+
 	describe("when two references share the same body", () => {
 		it("consumes the body only once", () => {
 			const migrated = migrateLegacyFootnotes(
@@ -199,6 +217,32 @@ describe("migrateLegacyFootnotes", () => {
 		it("keeps the body paragraphs before the footnote list", () => {
 			const list = doc.querySelector("ol.footnotes");
 			expect(list?.previousElementSibling?.tagName).toBe("P");
+		});
+	});
+
+	describe("when the legacy section contains formatting whitespace", () => {
+		it("removes blank boundary nodes with the old section", () => {
+			const legacy =
+				LEGACY_REF_PARAGRAPH +
+				"<hr>\n<h2>הערות</h2>\n" +
+				'<ol><li id="note-1"> \n<strong>א.</strong><em>טקסט</em>   </li></ol>';
+			const doc = parse(migrateLegacyFootnotes(legacy));
+
+			expect(doc.querySelector("ol.footnotes li")?.textContent).toBe("טקסט");
+			expect(doc.querySelector("hr")).toBeNull();
+			expect(doc.querySelector("h2")).toBeNull();
+		});
+	});
+
+	describe("when an unrelated node precedes an emptied legacy list", () => {
+		it("stops section cleanup at that boundary", () => {
+			const legacy =
+				LEGACY_REF_PARAGRAPH +
+				'<h2>הערות</h2>preserve boundary<ol><li id="note-1">טקסט</li></ol>';
+			const doc = parse(migrateLegacyFootnotes(legacy));
+
+			expect(doc.querySelector("ol.footnotes li")?.textContent).toBe("טקסט");
+			expect(doc.querySelector("h2")?.textContent).toBe("הערות");
 		});
 	});
 
