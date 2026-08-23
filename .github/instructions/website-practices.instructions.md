@@ -21,12 +21,12 @@ applyTo: "web/bible-on-site/**"
 
 ## Commands
 
-| Task | Command |
-| ---- | ------- |
-| Unit Tests | `npm run test:unit` |
-| E2E Tests | `npm run test:e2e` |
+| Task          | Command                 |
+| ------------- | ----------------------- |
+| Unit Tests    | `npm run test:unit`     |
+| E2E Tests     | `npm run test:e2e`      |
 | Unit Coverage | `npm run coverage:unit` |
-| E2E Coverage | `npm run coverage:e2e` |
+| E2E Coverage  | `npm run coverage:e2e`  |
 
 ## Implementation Notes
 

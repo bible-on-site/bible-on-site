@@ -33,6 +33,8 @@ jest.mock("next/dynamic", () => ({
 jest.mock("../../../src/lib/tanahpedia/service", () => ({
 	...jest.requireActual("../../../src/lib/tanahpedia/service"),
 	getAllEntryUniqueNames: jest.fn(),
+	getAllEntrySynonymNames: jest.fn().mockResolvedValue([]),
+	getEntriesBySynonym: jest.fn().mockResolvedValue([]),
 	getEntries: jest.fn(),
 	getEntriesByEntityType: jest.fn(),
 	getEntryByUniqueName: jest.fn(),

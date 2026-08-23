@@ -160,13 +160,90 @@ export const replacePlaceIdentifications = createServerFn({ method: "POST" })
 		return { success: true };
 	});
 
+/** Subtype tables that only need `(id, entity_id)`. */
+const SIMPLE_SUBTYPE_TABLES: Partial<Record<EntityType, string>> = {
+	PERSON: "tanahpedia_person",
+	PLACE: "tanahpedia_place",
+	EVENT: "tanahpedia_event",
+	ANIMAL: "tanahpedia_animal",
+	OBJECT: "tanahpedia_object",
+	PLANT: "tanahpedia_plant",
+	ASTRONOMICAL_OBJECT: "tanahpedia_astronomical_object",
+	SAYING: "tanahpedia_saying",
+	SEFER: "tanahpedia_sefer",
+	NATION: "tanahpedia_nation",
+};
+
+/** Specialisations that also need a row of their parent type. */
+const DERIVED_SUBTYPES: Partial<
+	Record<EntityType, { table: string; parentTable: string; parentColumn: string }>
+> = {
+	WAR: {
+		table: "tanahpedia_war",
+		parentTable: "tanahpedia_event",
+		parentColumn: "event_id",
+	},
+	TEMPLE_TOOL: {
+		table: "tanahpedia_temple_tool",
+		parentTable: "tanahpedia_object",
+		parentColumn: "object_id",
+	},
+	PROPHECY: {
+		table: "tanahpedia_prophecy",
+		parentTable: "tanahpedia_saying",
+		parentColumn: "saying_id",
+	},
+};
+
+async function insertSubtypeRows(
+	entityType: EntityType,
+	entityId: string,
+	name: string,
+): Promise<void> {
+	const derived = DERIVED_SUBTYPES[entityType];
+	if (derived) {
+		const parentId = randomUUID();
+		await execute(
+			`INSERT INTO ${derived.parentTable} (id, entity_id) VALUES (?, ?)`,
+			[parentId, entityId],
+		);
+		await execute(
+			`INSERT INTO ${derived.table} (id, ${derived.parentColumn}, entity_id) VALUES (?, ?, ?)`,
+			[randomUUID(), parentId, entityId],
+		);
+		return;
+	}
+
+	const table = SIMPLE_SUBTYPE_TABLES[entityType];
+	if (!table) throw new Error("סוג יישות לא נתמך ליצירה");
+
+	const subtypeId = randomUUID();
+	await execute(`INSERT INTO ${table} (id, entity_id) VALUES (?, ?)`, [
+		subtypeId,
+		entityId,
+	]);
+
+	if (entityType === "PERSON") {
+		const typeId = await getMainNameTypeId();
+		await execute(
+			`INSERT INTO tanahpedia_person_name (id, person_id, name, name_type_id, alt_group_id)
+			 VALUES (?, ?, ?, ?, NULL)`,
+			[randomUUID(), subtypeId, name, typeId],
+		);
+	}
+}
+
 export const createEntityAndLinkToEntry = createServerFn({ method: "POST" })
 	.validator(
 		(data: { entryId: string; entityType: EntityType; displayName: string }) =>
 			data,
 	)
 	.handler(async ({ data }) => {
-		if (!(ADMIN_CREATABLE_ENTITY_TYPES as readonly string[]).includes(data.entityType)) {
+		if (
+			!(ADMIN_CREATABLE_ENTITY_TYPES as readonly string[]).includes(
+				data.entityType,
+			)
+		) {
 			throw new Error("סוג יישות לא נתמך ליצירה");
 		}
 		const name = data.displayName.trim();
@@ -180,28 +257,7 @@ export const createEntityAndLinkToEntry = createServerFn({ method: "POST" })
 			[entityId, data.entityType, name],
 		);
 
-		if (data.entityType === "PERSON") {
-			const personId = randomUUID();
-			await execute(
-				`INSERT INTO tanahpedia_person (id, entity_id) VALUES (?, ?)`,
-				[personId, entityId],
-			);
-			const typeId = await getMainNameTypeId();
-			await execute(
-				`INSERT INTO tanahpedia_person_name (id, person_id, name, name_type_id, alt_group_id)
-				 VALUES (?, ?, ?, ?, NULL)`,
-				[randomUUID(), personId, name, typeId],
-			);
-		} else if (data.entityType === "PLACE") {
-			await execute(
-				`INSERT INTO tanahpedia_place (id, entity_id) VALUES (?, ?)`,
-				[randomUUID(), entityId],
-			);
-		} else {
-			throw new Error(
-				"יצירת סוג זה עדיין לא ממומשת — השתמש בזרימות נפרדות בעתיד",
-			);
-		}
+		await insertSubtypeRows(data.entityType, entityId, name);
 
 		await execute(
 			`INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (?, ?, ?)`,
@@ -209,4 +265,51 @@ export const createEntityAndLinkToEntry = createServerFn({ method: "POST" })
 		);
 
 		return { entityId, linkId };
+	});
+
+export interface EntitySearchResult {
+	entityId: string;
+	entityType: EntityType;
+	name: string;
+}
+
+/** Existing entities to link, newest-relevant first; excludes ones already linked. */
+export const searchEntities = createServerFn({ method: "POST" })
+	.validator((data: { entryId: string; query: string; entityType?: EntityType }) => data)
+	.handler(async ({ data }): Promise<EntitySearchResult[]> => {
+		const term = `%${data.query.trim()}%`;
+		const params: unknown[] = [data.entryId, term];
+		let typeFilter = "";
+		if (data.entityType) {
+			typeFilter = " AND e.entity_type = ?";
+			params.push(data.entityType);
+		}
+		return await query<EntitySearchResult>(
+			`SELECT e.id AS entityId, e.entity_type AS entityType, e.name AS name
+			   FROM tanahpedia_entity e
+			  WHERE e.id NOT IN (
+			        SELECT entity_id FROM tanahpedia_entry_entity WHERE entry_id = ?
+			      )
+			    AND e.name LIKE ?${typeFilter}
+			  ORDER BY e.name
+			  LIMIT 20`,
+			params,
+		);
+	});
+
+export const linkExistingEntityToEntry = createServerFn({ method: "POST" })
+	.validator((data: { entryId: string; entityId: string }) => data)
+	.handler(async ({ data }) => {
+		const existing = await queryOne<{ id: string }>(
+			`SELECT id FROM tanahpedia_entry_entity WHERE entry_id = ? AND entity_id = ?`,
+			[data.entryId, data.entityId],
+		);
+		if (existing) return { linkId: existing.id };
+
+		const linkId = randomUUID();
+		await execute(
+			`INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (?, ?, ?)`,
+			[linkId, data.entryId, data.entityId],
+		);
+		return { linkId };
 	});

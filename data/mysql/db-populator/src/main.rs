@@ -84,6 +84,9 @@ struct Cli {
     #[arg(long, default_value = "../tanahpedia_place_eretz_yisrael_data.sql")]
     tanahpedia_place_eretz_yisrael_script: String,
 
+    #[arg(long, default_value = "../tanahpedia_entry_synonym_data.sql")]
+    tanahpedia_entry_synonym_script: String,
+
     /// Path to Tanahpedia edge-case lab SQL file
     #[arg(long, default_value = "../tanahpedia_family_edge_lab_data.sql")]
     tanahpedia_edge_lab_script: String,
@@ -310,6 +313,7 @@ struct TanahpediaScripts {
     family_shimshon: std::path::PathBuf,
     family_jacob: std::path::PathBuf,
     place_eretz_yisrael: std::path::PathBuf,
+    entry_synonym: std::path::PathBuf,
     edge_lab: std::path::PathBuf,
 }
 
@@ -326,6 +330,7 @@ impl TanahpediaScripts {
             family_shimshon: base_path.join(&cli.tanahpedia_family_shimshon_script),
             family_jacob: base_path.join(&cli.tanahpedia_family_jacob_script),
             place_eretz_yisrael: base_path.join(&cli.tanahpedia_place_eretz_yisrael_script),
+            entry_synonym: base_path.join(&cli.tanahpedia_entry_synonym_script),
             edge_lab: base_path.join(&cli.tanahpedia_edge_lab_script),
         }
     }
@@ -430,6 +435,9 @@ async fn apply_tanahpedia_family_and_place_content(
         )
         .await?;
     }
+
+    /* Idempotent, so it always runs and picks up freshly created entries. */
+    execute_optional_script(conn, &scripts.entry_synonym, "tanahpedia-entry-synonym").await?;
 
     Ok(())
 }

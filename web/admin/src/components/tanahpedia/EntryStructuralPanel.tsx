@@ -15,6 +15,7 @@ import {
 	updatePersonMainName,
 	updatePersonSex,
 } from "~/server/tanahpedia/structural";
+import { ExistingEntityPicker } from "./ExistingEntityPicker";
 
 const structuralQueryKey = (entryId: string) =>
 	["tanahpedia-entry-structural", entryId] as const;
@@ -476,13 +477,7 @@ export function EntryStructuralPanel({ entryId }: EntryStructuralPanelProps) {
 		},
 	});
 
-	const createOptions = useMemo(
-		() =>
-			ADMIN_CREATABLE_ENTITY_TYPES.filter(
-				(t) => t === "PERSON" || t === "PLACE",
-			),
-		[],
-	);
+	const createOptions = useMemo(() => ADMIN_CREATABLE_ENTITY_TYPES, []);
 
 	if (isLoading) {
 		return (
@@ -561,6 +556,12 @@ export function EntryStructuralPanel({ entryId }: EntryStructuralPanelProps) {
 							: String(mutCreate.error)}
 					</p>
 				)}
+
+				<ExistingEntityPicker
+					entryId={entryId}
+					entityType={newType}
+					onLinked={invalidate}
+				/>
 			</div>
 
 			<div className="grid gap-4 md:grid-cols-2">

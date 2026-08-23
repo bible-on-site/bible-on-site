@@ -8,6 +8,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
 import { WysiwygEditor } from "~/components/WysiwygEditor";
+import { searchEntriesForLink } from "~/components/editor/entryLinkSearch";
 import {
 	type Article,
 	createArticle,
@@ -333,6 +334,7 @@ function ArticleEditPage() {
 							content={formData.content}
 							onChange={handleContentChange}
 							placeholder="הכנס את תוכן המאמר..."
+							searchEntries={searchEntriesForLink}
 						/>
 					</div>
 				</div>
