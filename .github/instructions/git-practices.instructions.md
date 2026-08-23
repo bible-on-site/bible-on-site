@@ -55,7 +55,7 @@ You run every git command yourself; never hand git (or AWS/docker/npm) commands 
 
 - Never end a task with committed-but-unpushed or uncommitted work, and never leave a branch published but unmerged, unless the user asked for review first or a hard blocker stops the merge.
 - "It works locally" is a checkpoint, not a deliverable: push, get CI green, triage review comments, merge, and verify the post-merge state.
-- Local-only validation is required *before* pushing (see [agent-practices.instructions.md](agent-practices.instructions.md)); it never replaces pushing.
+- Local-only validation is required _before_ pushing (see [agent-practices.instructions.md](agent-practices.instructions.md)); it never replaces pushing.
 
 ## Pull Requests
 
@@ -83,4 +83,3 @@ You run every git command yourself; never hand git (or AWS/docker/npm) commands 
    - **Defer** — valid but out of scope: file a tracked issue per [github-issues.instructions.md](github-issues.instructions.md) (Priority + Difficulty + Type + Component labels, on the relevant board) and reference it.
    - **Dismiss** — invalid or not applicable: state the reasoning (correctness, severity, priority).
 3. Post the triage summary as a PR comment (`gh pr comment <n> --body-file <file>`) — the durable record, not a repo file — delete the local scratch file, then merge or re-enqueue.
-

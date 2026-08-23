@@ -14,6 +14,7 @@ import type {
 	PersonFamilySummary,
 	PlaceIdentification,
 	PlaceMapMarker,
+	SynonymTarget,
 	ThreeDModel,
 } from "./types";
 
@@ -744,6 +745,50 @@ export async function getAllEntryUniqueNames(): Promise<string[]> {
 		"SELECT unique_name AS uniqueName FROM tanahpedia_entry ORDER BY unique_name",
 	);
 	return rows.map((row) => row.uniqueName);
+}
+
+/** Alternate names an entry can be reached by, e.g. `משה` for `משה-רבנו`. */
+export async function getAllEntrySynonymNames(): Promise<string[]> {
+	const rows = await query<{ name: string }>(
+		`SELECT DISTINCT s.name AS name
+		   FROM tanahpedia_entry_synonym s
+		  WHERE s.name NOT IN (SELECT unique_name FROM tanahpedia_entry)
+		  ORDER BY s.name`,
+	);
+	return rows.map((row) => row.name);
+}
+
+/**
+ * Entries a synonym can lead to. One result means a plain alias; several mean the
+ * name is ambiguous and the reader has to choose.
+ */
+export async function getEntriesBySynonym(
+	name: string,
+): Promise<SynonymTarget[]> {
+	const rows = await query<SynonymTarget>(
+		`SELECT e.id AS entryId, e.unique_name AS uniqueName, e.title AS title,
+		        NULL AS label
+		   FROM tanahpedia_entry_synonym s
+		   JOIN tanahpedia_entry e ON e.id = s.entry_id
+		  WHERE s.name = ?
+		  UNION
+		 SELECT e.id AS entryId, e.unique_name AS uniqueName, e.title AS title,
+		        d.disambiguation_label AS label
+		   FROM tanahpedia_entry_synonym s
+		   JOIN tanahpedia_entry_synonym_disambiguation d ON d.synonym_id = s.id
+		   JOIN tanahpedia_entry e ON e.id = d.entry_id
+		  WHERE s.name = ?
+		  ORDER BY title`,
+		[name, name],
+	);
+
+	/* A labelled row wins, so a disambiguation label is never lost to the plain one. */
+	const byEntry = new Map<string, SynonymTarget>();
+	for (const row of rows) {
+		const current = byEntry.get(row.entryId);
+		if (!current || (!current.label && row.label)) byEntry.set(row.entryId, row);
+	}
+	return [...byEntry.values()];
 }
 
 /**

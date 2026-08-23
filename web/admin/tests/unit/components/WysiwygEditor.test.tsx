@@ -15,6 +15,7 @@ const editorState = vi.hoisted(() => {
 	let active = new Set<string>();
 	let attributes = new Map<string, Record<string, unknown>>();
 	let selectionEmpty = false;
+	let selectionAncestors: string[] = [];
 	const listeners = new Map<string, Set<() => void>>();
 	let useEditorResult: unknown;
 
@@ -31,6 +32,7 @@ const editorState = vi.hoisted(() => {
 		extendMarkRange: vi.fn(() => chain),
 		unsetLink: vi.fn(() => chain),
 		setImage: vi.fn(() => chain),
+		addFootnote: vi.fn(() => chain),
 		insertContent: vi.fn((content: string) => {
 			html += content;
 			return chain;
@@ -52,9 +54,22 @@ const editorState = vi.hoisted(() => {
 				get empty() {
 					return selectionEmpty;
 				},
+				$from: {
+					get depth() {
+						return selectionAncestors.length;
+					},
+					pos: 0,
+					node: (depth: number) => ({
+						type: { name: selectionAncestors[depth - 1] ?? "doc" },
+						attrs: { "data-id": "missing-footnote" },
+					}),
+					nodeBefore: null,
+					nodeAfter: null,
+				},
 			},
 			doc: { descendants: vi.fn() },
 		},
+		isFocused: true,
 		view: {
 			posAtDOM: vi.fn(() => 4),
 		},
@@ -81,6 +96,7 @@ const editorState = vi.hoisted(() => {
 		active = new Set<string>();
 		attributes = new Map<string, Record<string, unknown>>();
 		selectionEmpty = false;
+		selectionAncestors = [];
 		listeners.clear();
 		useEditorResult = editor;
 		vi.clearAllMocks();
@@ -95,6 +111,9 @@ const editorState = vi.hoisted(() => {
 		},
 		setSelectionEmpty: (next: boolean) => {
 			selectionEmpty = next;
+		},
+		setSelectionAncestors: (...names: string[]) => {
+			selectionAncestors = names;
 		},
 		setActive: (...names: string[]) => {
 			active = new Set(names);
@@ -148,17 +167,23 @@ function renderEditor(onChange = vi.fn(), content = "<p>Initial</p>") {
 	};
 }
 
-function clickFootnoteDialogAddButton() {
-	const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
-	if (!dialog) {
-		throw new Error("Expected footnote dialog to be open");
-	}
-	const buttons = within(dialog).getAllByRole("button");
-	const addButton = buttons.at(-1);
-	if (!addButton) {
-		throw new Error("Expected footnote dialog to have an add button");
-	}
-	fireEvent.click(addButton);
+const PEDIA_ENTRIES = [
+	{ id: "1", title: "משה רבנו", uniqueName: "משה-רבנו" },
+	{ id: "2", title: "ארץ ישראל", uniqueName: "eretz yisrael" },
+];
+
+function renderEditorWithEntrySearch() {
+	const onChange = vi.fn();
+	render(
+		<WysiwygEditor
+			content="<p>Initial</p>"
+			onChange={onChange}
+			placeholder="Body"
+			autoSaveDelay={1}
+			searchEntries={async () => PEDIA_ENTRIES}
+		/>,
+	);
+	return { onChange };
 }
 
 describe("WysiwygEditor", () => {
@@ -318,7 +343,7 @@ describe("WysiwygEditor", () => {
 		fireEvent.change(screen.getByRole("textbox"), {
 			target: { value: "#note-3" },
 		});
-		fireEvent.click(screen.getAllByRole("button")[16]);
+		fireEvent.click(screen.getByRole("button", { name: "עדכן קישור" }));
 		expect(editorState.chain.extendMarkRange).toHaveBeenCalledWith("link");
 		expect(editorState.chain.setLink).toHaveBeenCalledWith({
 			href: "#note-3",
@@ -332,51 +357,173 @@ describe("WysiwygEditor", () => {
 		expect(editorState.chain.unsetLink).toHaveBeenCalledTimes(1);
 	});
 
-	it("adds images and inserts end footnotes", () => {
+	it("adds images and delegates footnote insertion to the extension", () => {
 		vi.mocked(prompt).mockReturnValue("https://example.com/image.jpg");
-		const html = '<p>Body</p><p id="note-1"><strong>א.</strong> old</p>';
-		editorState.setHtml(html);
-		renderEditor(vi.fn(), html);
+		renderEditor();
 
 		fireEvent.click(screen.getByRole("button", { name: "תמונה" }));
 		expect(editorState.chain.setImage).toHaveBeenCalledWith({
 			src: "https://example.com/image.jpg",
 		});
 
-		fireEvent.click(screen.getByRole("button", { name: "הערה" }));
-		expect(
-			screen.getByRole("dialog", { name: "הערות (כמו בתנכפדיה)" }),
-		).toBeInTheDocument();
-		fireEvent.click(screen.getByRole("button", { name: "הוסף" }));
-		expect(editorState.chain.insertContent).toHaveBeenCalledWith(
-			expect.stringContaining('id="noteref-2"'),
+		fireEvent.click(screen.getByRole("button", { name: "+ הערה" }));
+
+		expect(editorState.chain.addFootnote).toHaveBeenCalledTimes(1);
+		expect(editorState.chain.insertContent).not.toHaveBeenCalled();
+	});
+
+	it("preserves the caret and explains invalid footnote targets", () => {
+		const onChange = vi.fn();
+		const { rerender } = renderEditor(onChange);
+		const addButton = screen.getByRole("button", { name: "+ הערה" });
+
+		fireEvent.mouseDown(addButton);
+		editorState.setSelectionAncestors("footnotes");
+		fireEvent.click(addButton);
+		expect(alert).toHaveBeenLastCalledWith(
+			"מקם את הסמן בגוף הטקסט (לא ברשימת ההערות) והוסף הערה.",
+		);
+
+		editorState.setSelectionAncestors();
+		editorState.chain.run.mockReturnValueOnce(false);
+		fireEvent.click(addButton);
+		expect(alert).toHaveBeenLastCalledWith(
+			"לחץ בגוף הטקסט במקום שבו תופיע ההערה, ואז «+ הערה».",
+		);
+
+		editorState.setSelectionAncestors("footnotes", "footnote");
+		rerender(
+			<WysiwygEditor
+				content="<p>Initial</p>"
+				onChange={onChange}
+				placeholder="Body"
+				autoSaveDelay={1}
+			/>,
+		);
+		const removeButton = screen.getByRole("button", { name: "− הערה" });
+		fireEvent.click(removeButton);
+		expect(alert).toHaveBeenLastCalledWith(
+			"מקם את הסמן על אזכור הערה או בתוך ההערה שברצונך למחוק.",
 		);
 	});
 
-	it("changes footnote mode options and closes the dialog without insertion", () => {
+	it("does not open a footnote dialog anymore", () => {
 		renderEditor();
 
-		fireEvent.click(screen.getAllByRole("button")[15]);
-		const modeInputs = document.querySelectorAll<HTMLInputElement>(
-			'input[name="fnm"]',
-		);
-
-		fireEvent.click(modeInputs[1]);
-		expect(modeInputs[1]).toBeChecked();
-		fireEvent.click(modeInputs[0]);
-		expect(modeInputs[0]).toBeChecked();
-		const dialog = screen.getByRole("dialog");
-		fireEvent.click(within(dialog).getAllByRole("button")[0]);
+		fireEvent.click(screen.getByRole("button", { name: "+ הערה" }));
 
 		expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-		expect(editorState.chain.insertContent).not.toHaveBeenCalled();
+	});
+
+	describe("internal link entry picker", () => {
+		it("stays hidden until the link type is internal", () => {
+			renderEditorWithEntrySearch();
+			expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+		});
+
+		it("links to the readable hebrew slug rather than an encoded one", async () => {
+			renderEditorWithEntrySearch();
+			editorState.setSelectionEmpty(false);
+			fireEvent.click(
+				document.querySelectorAll<HTMLInputElement>('input[name="linkType"]')[1],
+			);
+
+			fireEvent.click(await screen.findByText("משה רבנו"));
+
+			expect(editorState.chain.setLink).toHaveBeenCalledWith({
+				href: "משה-רבנו",
+				linkType: "internal",
+			});
+			expect(screen.getByRole("textbox")).toHaveValue("משה-רבנו");
+		});
+
+		it("encodes a slug that would otherwise break the href", async () => {
+			renderEditorWithEntrySearch();
+			editorState.setSelectionEmpty(false);
+			fireEvent.click(
+				document.querySelectorAll<HTMLInputElement>('input[name="linkType"]')[1],
+			);
+
+			fireEvent.click(await screen.findByText("ארץ ישראל"));
+
+			expect(editorState.chain.setLink).toHaveBeenCalledWith({
+				href: "eretz%20yisrael",
+				linkType: "internal",
+			});
+		});
+
+		it("updates the full mark when choosing a replacement for an active link", async () => {
+			renderEditorWithEntrySearch();
+			editorState.setActive("link");
+			editorState.setAttributes("link", {
+				href: "old-entry",
+				linkType: "internal",
+			});
+			act(() => editorState.emit("selectionUpdate"));
+
+			fireEvent.click(await screen.findByText("משה רבנו"));
+
+			expect(editorState.chain.extendMarkRange).toHaveBeenCalledWith("link");
+			expect(editorState.chain.setLink).toHaveBeenCalledWith({
+				href: "משה-רבנו",
+				linkType: "internal",
+			});
+		});
+
+		it("does not create a link when entry text is not selected", async () => {
+			renderEditorWithEntrySearch();
+			editorState.setSelectionEmpty(true);
+			fireEvent.click(
+				document.querySelectorAll<HTMLInputElement>('input[name="linkType"]')[1],
+			);
+
+			fireEvent.click(await screen.findByText("משה רבנו"));
+
+			expect(editorState.chain.setLink).not.toHaveBeenCalled();
+		});
+
+		it("shows an existing encoded internal link decoded", () => {
+			renderEditorWithEntrySearch();
+			editorState.setActive("link");
+			editorState.setAttributes("link", {
+				href: "%D7%9E%D7%A9%D7%94-%D7%A8%D7%91%D7%A0%D7%95",
+				linkType: "internal",
+			});
+			act(() => editorState.emit("selectionUpdate"));
+
+			expect(screen.getByRole("textbox")).toHaveValue("משה-רבנו");
+		});
+
+		it("keeps a malformed encoded href editable", () => {
+			renderEditorWithEntrySearch();
+			editorState.setActive("link");
+			editorState.setAttributes("link", {
+				href: "%invalid",
+				linkType: "internal",
+			});
+			act(() => editorState.emit("selectionUpdate"));
+
+			expect(screen.getByRole("textbox")).toHaveValue("%invalid");
+		});
+
+		it("infers the type when an existing link has no explicit link metadata", () => {
+			renderEditorWithEntrySearch();
+			editorState.setActive("link");
+			editorState.setAttributes("link", { href: "#note-7" });
+			act(() => editorState.emit("selectionUpdate"));
+
+			expect(screen.getByRole("textbox")).toHaveValue("#note-7");
+			expect(
+				document.querySelectorAll<HTMLInputElement>('input[name="linkType"]')[2],
+			).toBeChecked();
+		});
 	});
 
 	it("does not add an image when the prompt is cancelled", () => {
 		vi.mocked(prompt).mockReturnValue(null);
 		renderEditor();
 
-		fireEvent.click(screen.getAllByRole("button")[14]);
+		fireEvent.click(screen.getByRole("button", { name: "תמונה" }));
 
 		expect(editorState.chain.setImage).not.toHaveBeenCalled();
 	});
@@ -385,7 +532,7 @@ describe("WysiwygEditor", () => {
 		renderEditor();
 
 		editorState.setSelectionEmpty(false);
-		fireEvent.click(screen.getAllByRole("button")[13]);
+		fireEvent.click(screen.getByRole("button", { name: "קישור חדש" }));
 		const linkTypeInputs = document.querySelectorAll<HTMLInputElement>(
 			'input[name="linkType"]',
 		);
@@ -398,7 +545,7 @@ describe("WysiwygEditor", () => {
 		fireEvent.change(hrefInput, {
 			target: { value: "https://example.com/plain" },
 		});
-		fireEvent.click(screen.getAllByRole("button")[16]);
+		fireEvent.click(screen.getByRole("button", { name: "עדכן קישור" }));
 
 		expect(editorState.chain.setLink).toHaveBeenLastCalledWith({
 			href: "https://example.com/plain",
@@ -416,65 +563,6 @@ describe("WysiwygEditor", () => {
 		expect(editorState.editor.view.posAtDOM).toHaveBeenCalledWith(link, 0);
 		expect(editorState.chain.setTextSelection).toHaveBeenCalledWith(4);
 		expect(editorState.chain.extendMarkRange).toHaveBeenCalledWith("link");
-	});
-
-	it("rejects invalid footnote slot numbers before mutating content", () => {
-		const html = '<p>Body</p><p id="note-1"><strong>a.</strong> old</p>';
-		editorState.setHtml(html);
-		renderEditor(vi.fn(), html);
-
-		fireEvent.click(screen.getAllByRole("button")[15]);
-		fireEvent.click(
-			document.querySelectorAll<HTMLInputElement>('input[name="fnplace"]')[1],
-		);
-		fireEvent.change(screen.getByRole("spinbutton"), {
-			target: { value: "4" },
-		});
-		clickFootnoteDialogAddButton();
-
-		expect(alert).toHaveBeenCalledWith(expect.stringContaining("1"));
-		expect(editorState.chain.insertContent).not.toHaveBeenCalled();
-	});
-
-	it("alerts when slot insertion cannot find the temporary marker", () => {
-		const html = '<p>Body</p><p id="note-1"><strong>a.</strong> old</p>';
-		editorState.setHtml(html);
-		renderEditor(vi.fn(), html);
-
-		fireEvent.click(screen.getAllByRole("button")[15]);
-		fireEvent.click(
-			document.querySelectorAll<HTMLInputElement>('input[name="fnplace"]')[1],
-		);
-		clickFootnoteDialogAddButton();
-
-		expect(editorState.chain.insertContent).toHaveBeenCalledWith(
-			"@@ADMIN_FN_ANCHOR_v1@@",
-		);
-		expect(alert).toHaveBeenCalledTimes(1);
-	});
-
-	it("inserts a footnote into a numbered slot when the marker is found", () => {
-		const html = '<p>Body</p><p id="note-1"><strong>a.</strong> old</p>';
-		editorState.setHtml(html);
-		editorState.editor.state.doc.descendants.mockImplementation((callback) => {
-			callback({ isText: true, text: "@@ADMIN_FN_ANCHOR_v1@@" }, 10);
-			return true;
-		});
-		renderEditor(vi.fn(), html);
-
-		fireEvent.click(screen.getAllByRole("button")[15]);
-		fireEvent.click(
-			document.querySelectorAll<HTMLInputElement>('input[name="fnplace"]')[1],
-		);
-		clickFootnoteDialogAddButton();
-
-		expect(editorState.chain.setTextSelection).toHaveBeenCalledWith({
-			from: 10,
-			to: 32,
-		});
-		expect(editorState.chain.insertContent).toHaveBeenLastCalledWith(
-			expect.stringContaining('id="noteref-2"'),
-		);
 	});
 
 	it("opens shortcut help and saves valid shortcut JSON", () => {
