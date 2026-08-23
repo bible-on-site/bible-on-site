@@ -1,4 +1,5 @@
 import { hebrewNumeral } from "./adminHebrew";
+import DOMPurify from "dompurify";
 
 /**
  * Legacy tanahpedia footnotes were hand-built HTML:
@@ -249,11 +250,11 @@ const BACKREF_SELECTOR = `a.${BACKREF_CLASS}, a[href^="#fnref:"]`;
 const BACKREF_LABEL = "↩";
 
 function parseFragment(html: string): Element | null {
-	const doc = new DOMParser().parseFromString(
-		`<div data-fragment-root="1">${html}</div>`,
-		"text/html",
-	);
-	return doc.querySelector("[data-fragment-root]");
+	const doc = document.implementation.createHTMLDocument("");
+	const root = doc.createElement("div");
+	const fragment = DOMPurify.sanitize(html, { RETURN_DOM_FRAGMENT: true });
+	root.appendChild(fragment);
+	return root;
 }
 
 /**
