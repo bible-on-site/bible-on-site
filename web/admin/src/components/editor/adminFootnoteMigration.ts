@@ -168,12 +168,9 @@ function buildReference(doc: Document, num: number, id: string): HTMLElement {
 export function migrateLegacyFootnotes(html: string): string {
 	if (!hasLegacyFootnotes(html)) return html;
 
-	const doc = new DOMParser().parseFromString(
-		`<div data-migration-root="1">${html}</div>`,
-		"text/html",
-	);
-	const root = doc.querySelector("[data-migration-root]");
+	const root = parseFragment(html);
 	if (!root) return html;
+	const doc = root.ownerDocument;
 
 	const anchors = Array.from(root.querySelectorAll("a[href]")).filter((a) =>
 		LEGACY_REF_HREF.test(a.getAttribute("href") ?? ""),
