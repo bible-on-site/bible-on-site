@@ -109,9 +109,9 @@ describe("migrateLegacyFootnotes", () => {
 		const doc = parse(migrated);
 
 		it("renumbers the references by their position in the text", () => {
-			const numbers = Array.from(
-				doc.querySelectorAll("a.footnote-ref"),
-			).map((a) => a.getAttribute("data-reference-number"));
+			const numbers = Array.from(doc.querySelectorAll("a.footnote-ref")).map(
+				(a) => a.getAttribute("data-reference-number"),
+			);
 			expect(numbers).toEqual(["1", "2"]);
 		});
 
@@ -123,9 +123,9 @@ describe("migrateLegacyFootnotes", () => {
 		});
 
 		it("renders the hebrew letter matching the new position", () => {
-			const letters = Array.from(
-				doc.querySelectorAll("a.footnote-ref"),
-			).map((a) => a.textContent);
+			const letters = Array.from(doc.querySelectorAll("a.footnote-ref")).map(
+				(a) => a.textContent,
+			);
 			expect(letters).toEqual(["א", "ב"]);
 		});
 	});
@@ -273,9 +273,9 @@ describe("migrateLegacyFootnotes", () => {
 				'<p>גוף<a href="#note-2" data-link-type="comment">ב</a></p>' +
 					'<ol><li><p>בראשית א א <a href="#noteref-2">↩</a></p></li></ol>',
 			);
-			expect(parse(migrated).querySelector("ol.footnotes li")?.textContent).toBe(
-				"בראשית א א",
-			);
+			expect(
+				parse(migrated).querySelector("ol.footnotes li")?.textContent,
+			).toBe("בראשית א א");
 		});
 
 		it("removes the emptied legacy list", () => {
@@ -283,9 +283,9 @@ describe("migrateLegacyFootnotes", () => {
 		});
 
 		it("renumbers the references from one", () => {
-			const numbers = Array.from(
-				doc.querySelectorAll("a.footnote-ref"),
-			).map((a) => a.getAttribute("data-reference-number"));
+			const numbers = Array.from(doc.querySelectorAll("a.footnote-ref")).map(
+				(a) => a.getAttribute("data-reference-number"),
+			);
 			expect(numbers).toEqual(["1", "2"]);
 		});
 	});
@@ -321,9 +321,9 @@ describe("toStoredFootnoteHtml", () => {
 				'<li id="fn:2" data-id="y"><p>שני</p></li></ol>',
 			);
 			const doc = parse(toStoredFootnoteHtml(twoItems));
-			const hrefs = Array.from(
-				doc.querySelectorAll("a.footnote-backref"),
-			).map((a) => a.getAttribute("href"));
+			const hrefs = Array.from(doc.querySelectorAll("a.footnote-backref")).map(
+				(a) => a.getAttribute("href"),
+			);
 			expect(hrefs).toEqual(["#fnref:1", "#fnref:2"]);
 		});
 

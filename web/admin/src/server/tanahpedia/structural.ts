@@ -2,14 +2,14 @@ import { randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import type { EntityType } from "~/lib/tanahpedia/labels";
 import { ADMIN_CREATABLE_ENTITY_TYPES } from "~/lib/tanahpedia/schema-registry";
+import { execute, query, queryOne } from "../db";
 import {
-	loadEntryStructuralContext,
 	type EntryStructuralContext,
 	type LinkedEntityStructural,
+	loadEntryStructuralContext,
 	type PersonSex,
 	type PlaceIdentificationRow,
 } from "./structural-loader.server";
-import { execute, query, queryOne } from "../db";
 
 const MAIN_NAME_TYPE = "MAIN";
 
@@ -176,7 +176,10 @@ const SIMPLE_SUBTYPE_TABLES: Partial<Record<EntityType, string>> = {
 
 /** Specialisations that also need a row of their parent type. */
 const DERIVED_SUBTYPES: Partial<
-	Record<EntityType, { table: string; parentTable: string; parentColumn: string }>
+	Record<
+		EntityType,
+		{ table: string; parentTable: string; parentColumn: string }
+	>
 > = {
 	WAR: {
 		table: "tanahpedia_war",
@@ -275,7 +278,9 @@ export interface EntitySearchResult {
 
 /** Existing entities to link, newest-relevant first; excludes ones already linked. */
 export const searchEntities = createServerFn({ method: "POST" })
-	.validator((data: { entryId: string; query: string; entityType?: EntityType }) => data)
+	.validator(
+		(data: { entryId: string; query: string; entityType?: EntityType }) => data,
+	)
 	.handler(async ({ data }): Promise<EntitySearchResult[]> => {
 		const term = `%${data.query.trim()}%`;
 		const params: unknown[] = [data.entryId, term];

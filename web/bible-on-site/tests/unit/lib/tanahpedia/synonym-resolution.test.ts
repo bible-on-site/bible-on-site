@@ -8,7 +8,9 @@ jest.mock("@/lib/tanahpedia/service", () => ({
 	getEntriesBySynonym: jest.fn(),
 }));
 
-const { getEntriesBySynonym } = jest.requireMock("@/lib/tanahpedia/service") as {
+const { getEntriesBySynonym } = jest.requireMock(
+	"@/lib/tanahpedia/service",
+) as {
 	getEntriesBySynonym: jest.Mock;
 };
 

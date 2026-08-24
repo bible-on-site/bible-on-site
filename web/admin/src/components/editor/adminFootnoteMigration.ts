@@ -1,5 +1,5 @@
-import { hebrewNumeral } from "./adminHebrew";
 import DOMPurify from "dompurify";
+import { hebrewNumeral } from "./adminHebrew";
 
 /**
  * Legacy tanahpedia footnotes were hand-built HTML:
@@ -14,8 +14,7 @@ import DOMPurify from "dompurify";
  * migrate the first time they are saved — no bulk data migration needed.
  */
 
-const LEGACY_MARKER =
-	/id=["']note(?:ref)?-\d+["']|href=["']#note-\d+["']/i;
+const LEGACY_MARKER = /id=["']note(?:ref)?-\d+["']|href=["']#note-\d+["']/i;
 const LEGACY_BODY_ID = /^note-(\d+)$/;
 const LEGACY_REF_HREF = /^#note-(\d+)$/;
 /** `א.` / `יא.` — the visible marker that used to be baked into the body. */
@@ -53,11 +52,7 @@ function isLegacyBodyMarker(node: ChildNode): boolean {
 }
 
 /** Moves the body's content into `target`, dropping the old `א.` prefix. */
-function moveBodyContent(
-	target: Element,
-	body: Element,
-	marker: string,
-): void {
+function moveBodyContent(target: Element, body: Element, marker: string): void {
 	/* `<a href="#noteref-1">↩</a>` was the manual jump-back link; the extension
 	   renders its own navigation, so the leftover arrow would be noise. */
 	for (const backLink of Array.from(
@@ -98,9 +93,10 @@ function moveBodyContent(
 	}
 	/* The removed back-link usually leaves a dangling space before the marker. */
 	if (target.lastChild?.nodeType === Node.TEXT_NODE) {
-		target.lastChild.textContent = (
-			target.lastChild.textContent ?? ""
-		).replace(/[\s\u00a0]+$/, "");
+		target.lastChild.textContent = (target.lastChild.textContent ?? "").replace(
+			/[\s\u00a0]+$/,
+			"",
+		);
 	}
 }
 

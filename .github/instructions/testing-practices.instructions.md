@@ -24,12 +24,20 @@ To find gaps — never hand-parse lcov or write ad-hoc scripts:
 3. Read each missed region and write a targeted test per real path. lcov line numbers can be off by one or duplicated (SWC sourcemap artifacts) — verify against the source before chasing a "missed" line existing tests clearly cover.
 4. Every gap in a file you touched is yours to close; there is no "pre-existing" exclusion. Truly dead defensive branches get an ignore comment with a reason instead of a contrived test.
 
+## Coverage (Data)
+
+Same gap workflow, module-specific commands:
+
+1. `cargo make coverage-unit` (in `data/`, writes `.coverage/unit/lcov.info`).
+2. `node devops/coverage-gaps.mjs [filter...]` prints missed lines/branches and an overall line percentage; `--lcov <path> --root <prefix>` points it at any module's report.
+
 ## Commands by Module
 
-| Module | Unit | E2E | Coverage |
-| ------ | -----|-----|----------|
-| Website | `npm run test:unit` | `npm run test:e2e` | `npm run coverage:unit` / `coverage:e2e` |
-| API | (cargo) | `cargo make test-e2e` | `cargo make coverage-e2e` |
-| App | `dotnet run --project devops -- TestUnit` | `dotnet run --project devops -- TestE2E` | `dotnet run --project devops -- CoverageUnit` |
+| Module  | Unit                                      | E2E                                      | Coverage                                                                              |
+| ------- | ----------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------- |
+| Website | `npm run test:unit`                       | `npm run test:e2e`                       | `npm run coverage:unit` / `coverage:e2e`                                              |
+| API     | (cargo)                                   | `cargo make test-e2e`                    | `cargo make coverage-e2e`                                                             |
+| App     | `dotnet run --project devops -- TestUnit` | `dotnet run --project devops -- TestE2E` | `dotnet run --project devops -- CoverageUnit`                                         |
+| Data    | `cargo make test-unit` (in `data/`)       | `cargo make test-integration`            | `cargo make coverage-unit` / `coverage-integration` + `node devops/coverage-gaps.mjs` |
 
 App integration tests are marked `[Trait("Category", "Integration")]` and need the API at `http://127.0.0.1:3003`.
