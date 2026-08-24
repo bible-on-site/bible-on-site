@@ -1,26 +1,31 @@
 /**
  * Prints per-file uncovered line/branch numbers from an lcov report.
  *
- * Usage: npm run coverage:gaps --prefix devops -- [--lcov <path>] [--root <strip>] [-- <path-substring> ...]
+ * Usage: npm run coverage:gaps --prefix devops -- [--module <name>] [-- <path-substring> ...]
  *
- * Defaults read data/.coverage/unit/lcov.info relative to the repo root and
- * strip the `data/` prefix, so the same script serves any module:
- *   devops:  npm run coverage:gaps -- --lcov ../web/admin/.coverage/unit/lcov.info --root web/admin
- *   data:    cd data && npm run coverage:gaps --prefix ../devops
+ * `--module` selects a fixed, known report location (default: data), so the
+ * script never touches user-supplied paths:
+ *   data:    node devops/coverage-gaps.mjs
+ *   admin:   node devops/coverage-gaps.mjs --module admin
  *
  * With no path filters, lists every file that has uncovered lines.
  */
 import fs from "node:fs";
-import { dirname, resolve, sep } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "..");
 
-function argValue(flag) {
-	const at = process.argv.indexOf(flag);
-	return at !== -1 ? process.argv[at + 1] : undefined;
-}
+/** Known module coverage reports; keys are the module directory names. */
+const MODULE_REPORTS = {
+	data: { lcov: "data/.coverage/unit/lcov.info", root: "data" },
+	admin: { lcov: "web/admin/.coverage/unit/lcov.info", root: "web/admin" },
+	website: {
+		lcov: "web/bible-on-site/.coverage/unit/lcov.info",
+		root: "web/bible-on-site",
+	},
+};
 
 /* npm run passes user args after a bare `--`; without npm, argv holds them directly. */
 const separatorAt = process.argv.indexOf("--");
@@ -29,20 +34,20 @@ const argv =
 		? process.argv.slice(separatorAt + 1)
 		: process.argv.slice(2);
 
-const lcovFlagAt = argv.indexOf("--lcov");
-const rootFlagAt = argv.indexOf("--root");
-/* Constrain the report path to the repository: this is a dev-only tool and
-   static analyzers flag unconstrained dynamic file access. */
-const lcovPath = resolve(
-	REPO_ROOT,
-	lcovFlagAt !== -1 ? argv[lcovFlagAt + 1] : "data/.coverage/unit/lcov.info",
-);
-if (!lcovPath.startsWith(REPO_ROOT + sep)) {
-	console.error(`--lcov must point inside the repository (${REPO_ROOT}).`);
+const moduleFlagAt = argv.indexOf("--module");
+const moduleName =
+	moduleFlagAt !== -1 ? argv[moduleFlagAt + 1] : "data";
+const report = MODULE_REPORTS[moduleName];
+if (!report) {
+	console.error(
+		`Unknown module "${moduleName}" — known modules: ${Object.keys(MODULE_REPORTS).join(", ")}.`,
+	);
 	process.exit(1);
 }
-const rootPrefix = rootFlagAt !== -1 ? argv[rootFlagAt + 1] : "data";
-const flagEnd = Math.max(lcovFlagAt, rootFlagAt);
+
+const lcovPath = resolve(REPO_ROOT, report.lcov);
+const rootPrefix = report.root;
+const flagEnd = moduleFlagAt;
 const filters = argv.slice(flagEnd === -1 ? 0 : flagEnd + 2);
 
 if (!fs.existsSync(lcovPath)) {

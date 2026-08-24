@@ -29,7 +29,7 @@ To find gaps — never hand-parse lcov or write ad-hoc scripts:
 Same gap workflow, module-specific commands:
 
 1. `cargo make coverage-unit` (in `data/`, writes `.coverage/unit/lcov.info`).
-2. `node devops/coverage-gaps.mjs [filter...]` prints missed lines/branches and an overall line percentage; `--lcov <path> --root <prefix>` points it at any module's report.
+2. `node devops/coverage-gaps.mjs [--module data|admin|website] [filter...]` prints missed lines/branches and an overall line percentage.
 
 ## Commands by Module
 
