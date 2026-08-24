@@ -165,7 +165,6 @@ export function migrateLegacyFootnotes(html: string): string {
 	if (!hasLegacyFootnotes(html)) return html;
 
 	const root = parseFragment(html);
-	if (!root) return html;
 	const doc = root.ownerDocument;
 
 	const anchors = Array.from(root.querySelectorAll("a[href]")).filter((a) =>
