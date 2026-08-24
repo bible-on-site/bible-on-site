@@ -294,6 +294,18 @@ describe("migrateLegacyFootnotes", () => {
                         ).map((a) => a.getAttribute("data-reference-number"));
                         expect(numbers).toEqual(["1", "2"]);
                 });
+
+                it("removes an emptied legacy ul container too", () => {
+                        const migrated = migrateLegacyFootnotes(
+                                '<p>גוף<a href="#note-4" data-link-type="comment">ד</a></p>' +
+                                        '<ul><li><p>ד במדבר <a href="#noteref-4">↩</a></p></li></ul>',
+                        );
+                        const doc = parse(migrated);
+                        expect(doc.querySelector("ul")).toBeNull();
+                        expect(doc.querySelector("ol.footnotes li")?.textContent).toBe(
+                                "במדבר",
+                        );
+                });
         });
 });
 
