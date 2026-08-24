@@ -361,7 +361,15 @@ describe("toStoredFootnoteHtml", () => {
 			const html = '<p>המילה footnotes בלבד</p>';
 			expect(toStoredFootnoteHtml(html)).toBe(html);
 		});
-	});
+
+                it("appends the back-link to an empty list item itself", () => {
+                        const emptyItem =
+                                '<p>גוף<sup id="fnref:1"><a class="footnote-ref" data-id="x" data-reference-number="1" href="#fn:1">א</a></sup></p><ol class="footnotes"><li id="fn:1" data-id="x"></li></ol>';
+                        const doc = parse(toStoredFootnoteHtml(emptyItem));
+                        const back = doc.querySelector("a.footnote-backref");
+                        expect(back?.parentElement?.tagName).toBe("LI");
+                });
+        });
 });
 
 describe("toEditorFootnoteHtml", () => {
