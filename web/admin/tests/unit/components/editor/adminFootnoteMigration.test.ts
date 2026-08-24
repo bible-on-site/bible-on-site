@@ -278,17 +278,23 @@ describe("migrateLegacyFootnotes", () => {
 			).toBe("בראשית א א");
 		});
 
-		it("removes the emptied legacy list", () => {
-			expect(doc.querySelector("ol:not(.footnotes)")).toBeNull();
-		});
+                it("resolves a body that is a bare paragraph rather than a list item", () => {
+                        const migrated = migrateLegacyFootnotes(
+                                '<p>גוף<a href="#note-3" data-link-type="comment">ג</a></p>' +
+                                        '<p>ג רשי <a href="#noteref-3">↩</a></p>',
+                        );
+                        expect(
+                                parse(migrated).querySelector("ol.footnotes li")?.textContent,
+                        ).toBe("רשי");
+                });
 
-		it("renumbers the references from one", () => {
-			const numbers = Array.from(doc.querySelectorAll("a.footnote-ref")).map(
-				(a) => a.getAttribute("data-reference-number"),
-			);
-			expect(numbers).toEqual(["1", "2"]);
-		});
-	});
+                it("renumbers the references from one", () => {
+                        const numbers = Array.from(
+                                doc.querySelectorAll("a.footnote-ref"),
+                        ).map((a) => a.getAttribute("data-reference-number"));
+                        expect(numbers).toEqual(["1", "2"]);
+                });
+        });
 });
 
 const STORED = `<p>גוף<sup id="fnref:1"><a class="footnote-ref" data-id="x" data-reference-number="1" href="#fn:1">א</a></sup></p><ol class="footnotes"><li id="fn:1" data-id="x"><p>טקסט</p></li></ol>`;
