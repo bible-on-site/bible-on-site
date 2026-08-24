@@ -338,6 +338,11 @@ describe("toStoredFootnoteHtml", () => {
 			const html = "<p>גוף בלבד</p>";
 			expect(toStoredFootnoteHtml(html)).toBe(html);
 		});
+
+		it("returns the html untouched when footnotes is mentioned but no list exists", () => {
+			const html = '<p>המילה footnotes בלבד</p>';
+			expect(toStoredFootnoteHtml(html)).toBe(html);
+		});
 	});
 });
 
