@@ -11,7 +11,7 @@
  * With no path filters, lists every file that has uncovered lines.
  */
 import fs from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -31,10 +31,16 @@ const argv =
 
 const lcovFlagAt = argv.indexOf("--lcov");
 const rootFlagAt = argv.indexOf("--root");
+/* Constrain the report path to the repository: this is a dev-only tool and
+   static analyzers flag unconstrained dynamic file access. */
 const lcovPath = resolve(
 	REPO_ROOT,
 	lcovFlagAt !== -1 ? argv[lcovFlagAt + 1] : "data/.coverage/unit/lcov.info",
 );
+if (!lcovPath.startsWith(REPO_ROOT + sep)) {
+	console.error(`--lcov must point inside the repository (${REPO_ROOT}).`);
+	process.exit(1);
+}
 const rootPrefix = rootFlagAt !== -1 ? argv[rootFlagAt + 1] : "data";
 const flagEnd = Math.max(lcovFlagAt, rootFlagAt);
 const filters = argv.slice(flagEnd === -1 ? 0 : flagEnd + 2);

@@ -242,7 +242,7 @@ const BACKREF_CLASS = "footnote-backref";
 const BACKREF_SELECTOR = `a.${BACKREF_CLASS}, a[href^="#fnref:"]`;
 const BACKREF_LABEL = "↩";
 
-function parseFragment(html: string): Element | null {
+function parseFragment(html: string): Element {
 	const doc = document.implementation.createHTMLDocument("");
 	const root = doc.createElement("div");
 	const fragment = DOMPurify.sanitize(html, { RETURN_DOM_FRAGMENT: true });
@@ -258,19 +258,18 @@ export function toEditorFootnoteHtml(html: string): string {
 	const migrated = migrateLegacyFootnotes(html);
 	if (!migrated.includes("#fnref:")) return migrated;
 	const root = parseFragment(migrated);
-	if (!root) return migrated;
-	for (const link of Array.from(root.querySelectorAll(BACKREF_SELECTOR))) {
-		link.remove();
-	}
-	return root.innerHTML;
+        for (const link of Array.from(root.querySelectorAll(BACKREF_SELECTOR))) {
+                link.remove();
+        }
+        return root.innerHTML;
 }
 
 /** Stored/published form: every footnote gets a link back to its reference. */
 export function toStoredFootnoteHtml(html: string): string {
 	if (!html.includes("footnotes")) return html;
 	const root = parseFragment(html);
-	const list = root?.querySelector("ol.footnotes");
-	if (!root || !list) return html;
+	const list = root.querySelector("ol.footnotes");
+	if (!list) return html;
 
 	Array.from(list.children).forEach((item, index) => {
 		for (const stale of Array.from(item.querySelectorAll(BACKREF_SELECTOR))) {
