@@ -306,6 +306,16 @@ describe("migrateLegacyFootnotes", () => {
                                 "במדבר",
                         );
                 });
+
+                it("keeps the whole body when its only paragraph is blank", () => {
+                        const migrated = migrateLegacyFootnotes(
+                                '<p>גוף<a href="#note-5" data-link-type="comment">ה</a></p>' +
+                                        '<ol><li><p></p>ה רשי <a href="#noteref-5">↩</a></li></ol>',
+                        );
+                        expect(
+                                parse(migrated).querySelector("ol.footnotes li")?.textContent,
+                        ).toBe("ה רשי");
+                });
         });
 });
 

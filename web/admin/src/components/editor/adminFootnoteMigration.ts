@@ -93,10 +93,8 @@ function moveBodyContent(target: Element, body: Element, marker: string): void {
 	}
 	/* The removed back-link usually leaves a dangling space before the marker. */
 	if (target.lastChild?.nodeType === Node.TEXT_NODE) {
-		target.lastChild.textContent = (target.lastChild.textContent ?? "").replace(
-			/[\s\u00a0]+$/,
-			"",
-		);
+		const textNode = target.lastChild as Text;
+		textNode.data = textNode.data.replace(/[\s\u00a0]+$/, "");
 	}
 }
 
