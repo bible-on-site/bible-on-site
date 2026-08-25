@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { ENTITY_TYPE_LABELS, type EntityType } from "~/lib/tanahpedia/labels";
 import {
-	ENTITY_TYPE_LABELS,
-	type EntityType,
-} from "~/lib/tanahpedia/labels";
-import { linkExistingEntityToEntry, searchEntities } from "~/server/tanahpedia/structural";
+	linkExistingEntityToEntry,
+	searchEntities,
+} from "~/server/tanahpedia/structural";
 
 interface ExistingEntityPickerProps {
 	entryId: string;
@@ -56,7 +56,9 @@ export function ExistingEntityPicker({
 			{error && (
 				<p className="text-xs text-red-700 mt-2">חיפוש היישויות נכשל.</p>
 			)}
-			{!error && isLoading && <p className="text-xs text-gray-500 mt-2">טוען…</p>}
+			{!error && isLoading && (
+				<p className="text-xs text-gray-500 mt-2">טוען…</p>
+			)}
 			{!error && !isLoading && (data?.length ?? 0) === 0 && (
 				<p className="text-xs text-gray-500 mt-2">לא נמצאו יישויות מתאימות.</p>
 			)}

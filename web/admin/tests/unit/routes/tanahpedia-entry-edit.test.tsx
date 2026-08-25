@@ -12,7 +12,9 @@ vi.mock("@tanstack/react-router", () => ({
 		...config,
 		useParams: () => ({ id: "entry-1" }),
 	}),
-	Link: ({ children }: { children: React.ReactNode }) => <a href="/">{children}</a>,
+	Link: ({ children }: { children: React.ReactNode }) => (
+		<a href="/">{children}</a>
+	),
 	useNavigate: () => vi.fn(),
 }));
 

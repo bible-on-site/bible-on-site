@@ -2,17 +2,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
+import { searchEntriesForLink } from "~/components/editor/entryLinkSearch";
 import { EntryStructuralPanel } from "~/components/tanahpedia/EntryStructuralPanel";
 import { TanahpediaLlmAssistantPanel } from "~/components/tanahpedia/TanahpediaLlmAssistantPanel";
 import { WysiwygEditor } from "~/components/WysiwygEditor";
-import { searchEntriesForLink } from "~/components/editor/entryLinkSearch";
-import { getLlmAssistantStatus } from "~/server/tanahpedia/llm-assistant";
 import {
 	createEntry,
 	deleteEntry,
 	getEntry,
 	updateEntry,
 } from "~/server/tanahpedia/entries";
+import { getLlmAssistantStatus } from "~/server/tanahpedia/llm-assistant";
 
 interface EntryFormData {
 	unique_name: string;

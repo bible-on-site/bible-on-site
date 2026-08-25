@@ -99,11 +99,7 @@ describe("createEntityAndLinkToEntry", () => {
 			["WAR", "tanahpedia_event", "tanahpedia_war"],
 			["TEMPLE_TOOL", "tanahpedia_object", "tanahpedia_temple_tool"],
 			["PROPHECY", "tanahpedia_saying", "tanahpedia_prophecy"],
-		])("creates the parent row before the %s row", async (
-			entityType,
-			parentTable,
-			table,
-		) => {
+		])("creates the parent row before the %s row", async (entityType, parentTable, table) => {
 			await createEntityAndLinkToEntry({
 				data: {
 					entryId: "entry-1",

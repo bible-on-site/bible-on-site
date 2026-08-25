@@ -1,5 +1,5 @@
-import { hebrewNumeral } from "./adminHebrew";
 import DOMPurify from "dompurify";
+import { hebrewNumeral } from "./adminHebrew";
 
 /**
  * Legacy tanahpedia footnotes were hand-built HTML:
@@ -14,8 +14,7 @@ import DOMPurify from "dompurify";
  * migrate the first time they are saved — no bulk data migration needed.
  */
 
-const LEGACY_MARKER =
-	/id=["']note(?:ref)?-\d+["']|href=["']#note-\d+["']/i;
+const LEGACY_MARKER = /id=["']note(?:ref)?-\d+["']|href=["']#note-\d+["']/i;
 const LEGACY_BODY_ID = /^note-(\d+)$/;
 const LEGACY_REF_HREF = /^#note-(\d+)$/;
 /** `א.` / `יא.` — the visible marker that used to be baked into the body. */
@@ -53,11 +52,7 @@ function isLegacyBodyMarker(node: ChildNode): boolean {
 }
 
 /** Moves the body's content into `target`, dropping the old `א.` prefix. */
-function moveBodyContent(
-	target: Element,
-	body: Element,
-	marker: string,
-): void {
+function moveBodyContent(target: Element, body: Element, marker: string): void {
 	/* `<a href="#noteref-1">↩</a>` was the manual jump-back link; the extension
 	   renders its own navigation, so the leftover arrow would be noise. */
 	for (const backLink of Array.from(
@@ -98,9 +93,8 @@ function moveBodyContent(
 	}
 	/* The removed back-link usually leaves a dangling space before the marker. */
 	if (target.lastChild?.nodeType === Node.TEXT_NODE) {
-		target.lastChild.textContent = (
-			target.lastChild.textContent ?? ""
-		).replace(/[\s\u00a0]+$/, "");
+		const textNode = target.lastChild as Text;
+		textNode.data = textNode.data.replace(/[\s\u00a0]+$/, "");
 	}
 }
 
@@ -169,7 +163,6 @@ export function migrateLegacyFootnotes(html: string): string {
 	if (!hasLegacyFootnotes(html)) return html;
 
 	const root = parseFragment(html);
-	if (!root) return html;
 	const doc = root.ownerDocument;
 
 	const anchors = Array.from(root.querySelectorAll("a[href]")).filter((a) =>
@@ -246,7 +239,7 @@ const BACKREF_CLASS = "footnote-backref";
 const BACKREF_SELECTOR = `a.${BACKREF_CLASS}, a[href^="#fnref:"]`;
 const BACKREF_LABEL = "↩";
 
-function parseFragment(html: string): Element | null {
+function parseFragment(html: string): Element {
 	const doc = document.implementation.createHTMLDocument("");
 	const root = doc.createElement("div");
 	const fragment = DOMPurify.sanitize(html, { RETURN_DOM_FRAGMENT: true });
@@ -262,19 +255,18 @@ export function toEditorFootnoteHtml(html: string): string {
 	const migrated = migrateLegacyFootnotes(html);
 	if (!migrated.includes("#fnref:")) return migrated;
 	const root = parseFragment(migrated);
-	if (!root) return migrated;
-	for (const link of Array.from(root.querySelectorAll(BACKREF_SELECTOR))) {
-		link.remove();
-	}
-	return root.innerHTML;
+        for (const link of Array.from(root.querySelectorAll(BACKREF_SELECTOR))) {
+                link.remove();
+        }
+        return root.innerHTML;
 }
 
 /** Stored/published form: every footnote gets a link back to its reference. */
 export function toStoredFootnoteHtml(html: string): string {
 	if (!html.includes("footnotes")) return html;
 	const root = parseFragment(html);
-	const list = root?.querySelector("ol.footnotes");
-	if (!root || !list) return html;
+	const list = root.querySelector("ol.footnotes");
+	if (!list) return html;
 
 	Array.from(list.children).forEach((item, index) => {
 		for (const stale of Array.from(item.querySelectorAll(BACKREF_SELECTOR))) {
