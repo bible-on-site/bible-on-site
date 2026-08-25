@@ -76,12 +76,16 @@ describe("getLlmAssistantStatus", () => {
 	describe("when no api key is configured", () => {
 		it("reports the assistant as disabled", async () => {
 			delete process.env.OPENAI_API_KEY;
-			await expect(getLlmAssistantStatus()).resolves.toEqual({ enabled: false });
+			await expect(getLlmAssistantStatus()).resolves.toEqual({
+				enabled: false,
+			});
 		});
 
 		it("treats a blank key as disabled", async () => {
 			process.env.OPENAI_API_KEY = "   ";
-			await expect(getLlmAssistantStatus()).resolves.toEqual({ enabled: false });
+			await expect(getLlmAssistantStatus()).resolves.toEqual({
+				enabled: false,
+			});
 		});
 	});
 
