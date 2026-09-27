@@ -1,10 +1,25 @@
 services:
+  # Older local volumes were created by the root-running upstream image. Only
+  # this one-shot helper needs root, to preserve them for the non-root server.
+  minio-permissions:
+    image: bible-on-site-minio-mc:dev
+    build:
+      context: ./minio
+      target: client
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-ec", "chown -R 10001:10001 /data"]
+    volumes:
+      - minio_data:/data
+
   minio:
     image: bible-on-site-minio:dev
     build:
       context: ./minio
       target: server
     container_name: bible-on-site-minio
+    depends_on:
+      minio-permissions:
+        condition: service_completed_successfully
     ports:
       - "127.0.0.1:4566:9000"
       - "127.0.0.1:9001:9001"

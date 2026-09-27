@@ -23,4 +23,7 @@ docker build --target client -t bible-on-site-minio-mc:ci devops/minio
 
 Local development builds these same targets through
 [`devops/docker-compose.yml`](../docker-compose.yml). Existing `minio_data` volumes
-are preserved; the initialization service fails if bucket setup fails.
+are preserved: a one-shot permissions helper changes ownership for the non-root
+server, without deleting or rewriting stored objects. The server and client run
+as UID 10001; only that volume-ownership helper runs as root. Initialization fails
+if bucket setup fails. Alpine package versions are pinned alongside the source.

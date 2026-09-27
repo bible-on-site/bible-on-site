@@ -9,7 +9,8 @@ Usage:
 
 Paths are resolved from the script location, independent of the working directory.
 SQL files live in the repository's data/mysql/ directory. perushim_data.sql is
-loaded from TEMP/perushim-sql/ (or /tmp/perushim-sql/), with a local SQL fallback.
+loaded from the system temporary directory's perushim-sql/ subdirectory, with a
+local SQL fallback.
 """
 
 import argparse
@@ -18,6 +19,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from tempfile import gettempdir
 
 
 # ---------------------------------------------------------------------------
@@ -170,7 +172,7 @@ def main():
         deploy_files = json.load(manifest_file)
 
     # perushim_data.sql comes from the artifact.
-    artifact_path = Path(os.environ.get("TEMP", "/tmp")) / "perushim-sql" / "perushim_data.sql"
+    artifact_path = Path(gettempdir()) / "perushim-sql" / "perushim_data.sql"
     local_perushim_path = data_dir / "perushim_data.sql"
 
     sql_files = []
