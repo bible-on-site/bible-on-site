@@ -1,6 +1,7 @@
 namespace BibleOnSite.Pages;
 
 using BibleOnSite.Behaviors;
+using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
@@ -16,7 +17,6 @@ public partial class PerekPage : ContentPage
     private readonly PerekViewModel _viewModel;
     private bool _isLoading;
     private DateTime _lastLongPressTime = DateTime.MinValue;
-    private DateTime _pointerPressedTime = DateTime.MinValue;
     private int _pressedPasukNum = -1;
     private CancellationTokenSource? _longPressTokenSource;
     private const int LongPressDurationMs = 600;
@@ -60,7 +60,6 @@ public partial class PerekPage : ContentPage
         ForwardSelectedArticleIdChanged();
         SetupFontSizeResources();
         SetupCarouselNavigation();
-        SetupGlobalTouchHandler();
         SetupExitButtonDragHandler();
     }
 
@@ -72,7 +71,6 @@ public partial class PerekPage : ContentPage
         ForwardSelectedArticleIdChanged();
         SetupFontSizeResources();
         SetupCarouselNavigation();
-        SetupGlobalTouchHandler();
         SetupExitButtonDragHandler();
     }
 
@@ -208,37 +206,63 @@ public partial class PerekPage : ContentPage
         NextPerekButton.Opacity = canNext ? 1.0 : 0.4;
     }
 
-    /// <summary>
-    /// Sets up a global touch handler to catch taps that CollectionView swallows.
-    /// </summary>
-    private void SetupGlobalTouchHandler()
-    {
 #if ANDROID
-        MainActivity.TapDetected += OnGlobalTapDetected;
-#endif
-    }
+    private readonly SwipeNavigationTracker _swipe = new();
 
-#if ANDROID
-    private void OnGlobalTapDetected(object? sender, (float X, float Y) position)
+    private void OnTouchStarted(object? sender, TouchPosition position)
     {
-        // Only process taps in selection mode
-        if (_viewModel.SelectedPasukNums.Count == 0)
+        _swipe.Cancel();
+        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || _isMenuOpen || _isShowingArticles ||
+            !ContainsTouch(PerekCarousel, position) || ContainsTouch(BottomBar, position) ||
+            ContainsTouch(ExitFullScreenButton, position))
+        {
             return;
-
-        // Note: With CarouselView, FindTappedPasuk is disabled as we can't directly access
-        // the inner CollectionView. Regular tap gestures on individual pasukim still work.
-        // If needed, this could be re-enabled by finding the current carousel item's CollectionView.
+        }
+        _swipe.Begin(position, PerekCarousel.Position);
     }
 
-    /// <summary>
-    /// Finds which pasuk was tapped by checking bounds of visible items.
-    /// Note: Disabled with CarouselView - tap gestures on pasukim work directly.
-    /// </summary>
-    private int FindTappedPasuk(float screenX, float screenY)
+    private static bool ContainsTouch(VisualElement element, TouchPosition position)
     {
-        return -1; // Disabled with CarouselView
+        if (!element.IsVisible || element.Handler?.PlatformView is not Android.Views.View view)
+            return false;
+        if (!view.IsShown)
+            return false;
+        var location = new int[2];
+        view.GetLocationOnScreen(location);
+        return position.X >= location[0] && position.X < location[0] + view.Width &&
+            position.Y >= location[1] && position.Y < location[1] + view.Height;
     }
+
+    private void OnTouchReleased(object? sender, TouchPosition position)
+    {
+        if (PerekCarousel.Handler?.PlatformView is not Android.Views.View view)
+            return;
+        var configuration = Android.Views.ViewConfiguration.Get(view.Context!);
+        var target = _swipe.End(position, view.Width, configuration?.ScaledTouchSlop ?? 12,
+            configuration?.ScaledMinimumFlingVelocity ?? 50,
+            view.LayoutDirection == Android.Views.LayoutDirection.Rtl, _viewModel.CarouselPerakim.Count);
+        if (target is int index)
+        {
+            // Run after native dispatch, so an intercepted Up/Cancel cannot stop
+            // the final snap. ScrollTo also resets MAUI's current snap target.
+            PerekCarousel.ScrollTo(index, position: ScrollToPosition.Center, animate: true);
+        }
+    }
+
+    private void OnTouchCancelled(object? sender, EventArgs e) => _swipe.Cancel();
 #endif
+
+    protected override void OnDisappearing()
+    {
+#if ANDROID
+        MainActivity.TouchStarted -= OnTouchStarted;
+        MainActivity.TouchReleased -= OnTouchReleased;
+        MainActivity.TouchCancelled -= OnTouchCancelled;
+        _swipe.Cancel();
+        LongPressBehavior.CancelAllPending();
+#endif
+        base.OnDisappearing();
+    }
 
     /// <summary>
     /// Tracks scroll events to prevent long-press during scroll.
@@ -275,6 +299,11 @@ public partial class PerekPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+#if ANDROID
+        MainActivity.TouchStarted += OnTouchStarted;
+        MainActivity.TouchReleased += OnTouchReleased;
+        MainActivity.TouchCancelled += OnTouchCancelled;
+#endif
 #if IOS
         ApplyBottomBarSafeArea();
         SizeChanged -= OnPageSizeChanged;
@@ -643,6 +672,12 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private void OnPasukPointerPressed(object? sender, PointerEventArgs e)
     {
+        // Android uses the native press lifecycle, including movement/cancellation.
+        if (OperatingSystem.IsAndroid())
+        {
+            return;
+        }
+
         // Don't start long-press detection if scrolling
         if (IsScrolling)
             return;
@@ -653,7 +688,6 @@ public partial class PerekPage : ContentPage
         if (sender is Border border && border.BindingContext is Pasuk pasuk)
         {
             _pressedPasukNum = pasuk.PasukNum;
-            _pointerPressedTime = DateTime.Now;
 
             // Start long-press detection
             _ = DetectLongPressAsync(pasuk.PasukNum, _longPressTokenSource.Token);
@@ -1505,6 +1539,10 @@ public partial class PerekPage : ContentPage
             Console.WriteLine($"[Carousel] OnChanged SKIPPED incoming={incomingId} vmPerek={_viewModel.PerekId}");
             return;
         }
+
+        LongPressBehavior.CancelAllPending();
+        _longPressTokenSource?.Cancel();
+        _pressedPasukNum = -1;
 
         var hasPasukim = perek.Pasukim != null && perek.Pasukim.Count > 0;
         Console.WriteLine($"[Carousel] OnChanged PROCESS incoming={incomingId} prev={previousId} vmPerek={_viewModel.PerekId} pos={_viewModel.CarouselPosition} hasPasukim={hasPasukim}");
