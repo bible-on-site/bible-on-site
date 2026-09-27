@@ -59,7 +59,7 @@ detected data deployment.
 3. Validate and run data migration scripts against production RDS
 
 Every SQL file in the deploy manifest must pass
-`python validate_lambda_parser.py --parse-only` in Data CI. Tanahpedia schema
+`python devops/deploy/data-deploy/validate_lambda_parser.py --parse-only` in Data CI. Tanahpedia schema
 changes are deployed and verified in a schema-only change before an API or website
 release starts querying the new schema.
 
