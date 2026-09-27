@@ -26,7 +26,9 @@ public class MainActivity : MauiAppCompatActivity
     public override bool DispatchTouchEvent(MotionEvent? e)
     {
         if (e == null)
+        {
             return base.DispatchTouchEvent(e);
+        }
 
         switch (e.ActionMasked)
         {
@@ -42,10 +44,14 @@ public class MainActivity : MauiAppCompatActivity
                 // History matters when a busy UI receives batched input: a finger
                 // may already have moved out of slop and returned to its origin.
                 for (var i = 0; i < e.HistorySize; i++)
+                {
                     _touch.Move(e.GetHistoricalX(i), e.GetHistoricalY(i), isScrolling: false);
+                }
                 _touch.Move(e.GetX(), e.GetY(), isScrolling: false);
                 if (wasActive && !_touch.TouchActive)
+                {
                     LongPressBehavior.CancelAllPending();
+                }
                 break;
 
             case MotionEventActions.Up:
@@ -61,6 +67,10 @@ public class MainActivity : MauiAppCompatActivity
                 LongPressBehavior.CancelAllPending();
                 TouchCancelled?.Invoke(this, EventArgs.Empty);
                 break;
+
+            default:
+                // Other motion actions retain the native dispatch behavior.
+                break;
         }
 
         // Copy release data before native handlers temporarily transform events.
@@ -72,7 +82,9 @@ public class MainActivity : MauiAppCompatActivity
         {
             LongPressBehavior.CancelAllPending();
             if (_singleTouchActive)
+            {
                 TouchReleased?.Invoke(this, position);
+            }
             _singleTouchActive = false;
         }
         return handled;

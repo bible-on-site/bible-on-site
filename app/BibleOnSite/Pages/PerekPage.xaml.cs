@@ -674,7 +674,9 @@ public partial class PerekPage : ContentPage
     {
         // Android uses the native press lifecycle, including movement/cancellation.
         if (OperatingSystem.IsAndroid())
+        {
             return;
+        }
 
         // Don't start long-press detection if scrolling
         if (IsScrolling)

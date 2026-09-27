@@ -59,7 +59,9 @@ public sealed class PressGestureTracker
         dispatch(() =>
         {
             if (pressId != PressId || !IsPressed || !TouchActive || LongPressFired || isScrolling())
+            {
                 return;
+            }
 
             LongPressFired = true;
             fire();

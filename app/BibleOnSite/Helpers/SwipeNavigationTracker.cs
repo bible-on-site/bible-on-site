@@ -19,23 +19,27 @@ public sealed class SwipeNavigationTracker
 
     public void Cancel() => _start = null;
 
-    public int? End(TouchPosition end, double pageWidth, double touchSlop,
+    public int? End(TouchPosition release, double pageWidth, double touchSlop,
         double minimumFlingVelocity, bool rightToLeft, int pageCount)
     {
         var start = _start;
         Cancel();
         if (start == null || pageWidth <= 0 || pageCount <= 0)
+        {
             return null;
+        }
 
-        var dx = end.X - start.Value.X;
-        var dy = end.Y - start.Value.Y;
+        var dx = release.X - start.Value.X;
+        var dy = release.Y - start.Value.Y;
         var distance = Math.Abs(dx);
         if (distance <= touchSlop || distance <= Math.Abs(dy) * 1.5)
+        {
             return null;
+        }
 
         // EventTime is the finger's timing, not the time the UI eventually
         // processed the input. A delayed fast swipe must still be a fling.
-        var duration = Math.Max(1, end.EventTime - start.Value.EventTime);
+        var duration = Math.Max(1, release.EventTime - start.Value.EventTime);
         var advances = distance >= pageWidth / 2 || distance * 1000 / duration >= minimumFlingVelocity;
         var direction = Math.Sign(dx) * (rightToLeft ? 1 : -1);
         return Math.Clamp(_startPosition + (advances ? direction : 0), 0, pageCount - 1);
