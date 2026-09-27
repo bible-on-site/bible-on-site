@@ -1,59 +1,38 @@
 services:
-  # Older local volumes were created by the root-running upstream image. Only
-  # this one-shot helper needs root, to preserve them for the non-root server.
-  minio-permissions:
-    image: bible-on-site-minio-mc:dev
-    build:
-      context: ./minio
-      target: client
-    user: "0:0"
-    entrypoint: ["/bin/sh", "-ec", "chown -R 10001:10001 /data"]
-    volumes:
-      - minio_data:/data
-
-  minio:
-    image: bible-on-site-minio:dev
-    build:
-      context: ./minio
-      target: server
-    container_name: bible-on-site-minio
-    depends_on:
-      minio-permissions:
-        condition: service_completed_successfully
+  rustfs:
+    # Pin the multi-platform manifest so local development and CI use one build.
+    image: rustfs/rustfs:1.0.0@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff
     ports:
       - "127.0.0.1:4566:9000"
       - "127.0.0.1:9001:9001"
     environment:
-      - MINIO_ROOT_USER=test
-      - MINIO_ROOT_PASSWORD=test_1234
-    command: server /data --console-address ":9001"
+      RUSTFS_ACCESS_KEY: test
+      RUSTFS_SECRET_KEY: test_1234
+      RUSTFS_CONSOLE_ENABLE: "true"
+    command: ["/data"]
     volumes:
-      - minio_data:/data
+      # Never mount the legacy minio_data volume into a different storage engine.
+      - rustfs_data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 10s
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/health/ready"]
+      interval: 2s
       timeout: 5s
-      retries: 5
+      retries: 60
 
-  minio-init:
-    image: bible-on-site-minio-mc:dev
+  rustfs-init:
+    profiles: ["init"]
+    image: bible-on-site-s3-init:dev
     build:
-      context: ./minio
-      target: client
-    container_name: bible-on-site-minio-init
+      context: .
+      dockerfile: rustfs/Dockerfile
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test_1234
+      AWS_EC2_METADATA_DISABLED: "true"
+      S3_ENDPOINT: http://rustfs:9000
     depends_on:
-      minio:
+      rustfs:
         condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      set -eu;
-      mc alias set local http://minio:9000 test test_1234;
-      mc mb --ignore-existing local/bible-on-site-assets-dev;
-      mc mb --ignore-existing local/bible-on-site-assets-test;
-      mc anonymous set download local/bible-on-site-assets-dev;
-      mc anonymous set download local/bible-on-site-assets-test;
-      echo 'MinIO S3 initialization complete!';
-      "
 
 volumes:
-  minio_data:
+  rustfs_data:

@@ -1,6 +1,6 @@
 {
 	"name": "admin",
-	"version": "0.1.92",
+	"version": "0.1.93",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -17,11 +17,12 @@
 		"test:all": "npm run test:unit && npm run test:e2e",
 		"test:unit": "vitest run",
 		"test:e2e": "playwright test",
+		"test:s3": "node scripts/check-local-s3.mjs",
 		"coverage:all": "npm run coverage:unit && npm run coverage:e2e && npm run coverage:merge",
 		"coverage:unit": "vitest run --coverage",
 		"coverage:e2e": "playwright test --reporter=html",
 		"coverage:merge": "node --import tsx ./tests/util/merge-coverage.mts",
-		"docker:up": "docker compose -f ../../devops/docker-compose.yml up -d",
+		"docker:up": "docker compose -f ../../devops/docker-compose.yml up -d --wait --wait-timeout 180 && docker compose -f ../../devops/docker-compose.yml run --build --rm --no-deps rustfs-init",
 		"docker:down": "docker compose -f ../../devops/docker-compose.yml down",
 		"db:populate:dev": "cd ../../data && cargo make mysql-populate-dev",
 		"db:populate:dev:test-articles": "cd ../../data && cargo make mysql-populate-dev-with-test-articles",
