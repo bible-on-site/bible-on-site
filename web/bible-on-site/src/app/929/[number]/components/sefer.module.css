@@ -10,6 +10,13 @@
   position: relative;
 }
 
+/* Hammer disables selection on the book; reading pages opt back in. */
+.pageContentPage,
+.pageBlank {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .page {
   background-color: white;
   padding: 15px;

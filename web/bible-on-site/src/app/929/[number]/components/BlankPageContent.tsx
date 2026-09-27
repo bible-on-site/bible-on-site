@@ -9,6 +9,7 @@ import { ArticlesSection } from "./ArticlesSection";
 import { PerushFullView } from "./PerushFullView";
 import { PerushimSection } from "./PerushimSection";
 import styles from "./sefer.module.css";
+import { selectableBookContentRef } from "./selectable-book-content";
 
 interface BlankPageContentProps {
 	articles?: ArticleSummary[];
@@ -116,6 +117,7 @@ export function BlankPageContent({
 	return (
 		<section
 			className={styles.pageBlank}
+			ref={selectableBookContentRef}
 			aria-label="עמוד ריק (פירושים ומאמרים)"
 		>
 			<div className={styles.blankPageDate}>{hebrewDateStr}</div>

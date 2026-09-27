@@ -1,3 +1,4 @@
+import { expect } from "@playwright/test";
 import { SeferPage } from "../../../util/playwright/page-objects/sefer-page";
 import { test } from "../../../util/playwright/test-fixture";
 
@@ -18,6 +19,49 @@ test.describe("Sefer view", () => {
 	// Skip all tests in this suite on mobile viewports - sefer view requires tablet+
 	test.beforeEach(({ skipOnNotWideEnough }) => {
 		void skipOnNotWideEnough;
+	});
+
+	test("Selects verse text without turning the page", async ({ page }) => {
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await seferPage.verifyPesukimAreVisible();
+		const text = page.locator(".he-book article:visible").first();
+		const indicator = page.locator(".flipbook-toolbar-indicator");
+		const initialPage = await indicator.inputValue();
+		const initialUrl = page.url();
+		const word = await text.evaluate((article) => {
+			const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT);
+			let node = walker.nextNode();
+			while (node && (node.textContent?.trim().length ?? 0) < 8) {
+				node = walker.nextNode();
+			}
+			if (!node) throw new Error("No verse text found");
+			const range = document.createRange();
+			range.selectNodeContents(node);
+			const rect = range.getBoundingClientRect();
+			return {
+				left: rect.left,
+				right: rect.right,
+				y: rect.top + rect.height / 2,
+			};
+		});
+		// Drag across an actual Hebrew word in reading order (right to left).
+		await page.mouse.move(word.right - 1, word.y);
+		await page.mouse.down();
+		await page.mouse.move(word.left + 1, word.y, { steps: 15 });
+		await page.mouse.up();
+		await expect
+			.poll(() =>
+				page.evaluate(() => window.getSelection()?.toString().length ?? 0),
+			)
+			.toBeGreaterThan(3);
+		await expect(indicator).toHaveValue(initialPage);
+		await expect(page).toHaveURL(initialUrl);
+		await expect(page.locator(".he-book .page--flipping")).toHaveCount(0);
+
+		// Navigation still works after a selection gesture.
+		await page.locator(".flipbook-toolbar-next").click();
+		await expect(indicator).not.toHaveValue(initialPage);
 	});
 
 	test.describe("Sefarim without additionals", () => {

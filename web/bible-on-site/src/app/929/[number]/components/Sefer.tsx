@@ -57,6 +57,7 @@ import {
 	toHebrewWithPunctuation,
 	wrapDownloadResult,
 } from "./sefer-page-utils";
+import { selectableBookContentRef } from "./selectable-book-content";
 import { TanahpediaLink } from "./TanahpediaLink";
 import "html-flip-book-react/styles.css";
 import "./sefer.css";
@@ -213,7 +214,10 @@ const Sefer = (props: {
 		const blankKey = `blank-${perekKeyBase}`;
 		return [
 			<React.Fragment key={perekKey}>
-				<section className={styles.pageContentPage}>
+				<section
+					className={styles.pageContentPage}
+					ref={selectableBookContentRef}
+				>
 					<div className={styles.pageHeaderRight}>
 						<div className={styles.pageHeaderRow}>
 							<span className={styles.pageHeaderSefer}>{perekObj.sefer}</span>
