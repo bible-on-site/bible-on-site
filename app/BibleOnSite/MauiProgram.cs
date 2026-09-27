@@ -60,18 +60,6 @@ public static class MauiProgram
 			}
 		});
 
-		// Prevent the outer CarouselView from intercepting primarily-vertical gestures.
-		// Each inner CollectionView (pasukim list) claims the gesture on ACTION_DOWN
-		// and only releases it when horizontal movement clearly dominates — the same
-		// pattern Flutter's gesture arena uses in the legacy app.
-		Microsoft.Maui.Controls.Handlers.Items.CollectionViewHandler.Mapper.AppendToMapping("SwipeSensitivity", (handler, _) =>
-		{
-			if (handler.PlatformView is AndroidX.RecyclerView.Widget.RecyclerView recyclerView)
-			{
-				recyclerView.AddOnItemTouchListener(
-					new BibleOnSite.Platforms.Android.Listeners.VerticalScrollPriorityListener());
-			}
-		});
 #endif
 
 #if IOS || MACCATALYST

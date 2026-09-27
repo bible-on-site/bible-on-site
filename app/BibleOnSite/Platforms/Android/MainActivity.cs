@@ -3,6 +3,7 @@ using Android.Content.PM;
 using Android.OS;
 using Android.Views;
 using BibleOnSite.Behaviors;
+using BibleOnSite.Helpers;
 namespace BibleOnSite;
 
 [Activity(Theme = "@style/Maui.SplashTheme", MainLauncher = true, LaunchMode = LaunchMode.SingleTop, ConfigurationChanges = ConfigChanges.ScreenSize | ConfigChanges.Orientation | ConfigChanges.UiMode | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.Density)]
@@ -15,51 +16,65 @@ public class MainActivity : MauiAppCompatActivity
         // For explicit init use Plugin.Firebase.Core CrossFirebase.Initialize(activity, settings) when needed.
     }
 
-    private float _downX, _downY;
-    private long _downTime;
-    private const float TapThreshold = 30f; // Max movement for tap
-    private const long TapTimeoutMs = 300; // Max duration for tap
+    private readonly PressGestureTracker _touch = new();
+    private bool _singleTouchActive;
 
-    /// <summary>
-    /// Event fired when a tap is detected. Used to notify selection mode.
-    /// </summary>
-    public static event EventHandler<(float X, float Y)>? TapDetected;
+    public static event EventHandler<TouchPosition>? TouchStarted;
+    public static event EventHandler<TouchPosition>? TouchReleased;
+    public static event EventHandler? TouchCancelled;
 
     public override bool DispatchTouchEvent(MotionEvent? e)
     {
-        var action = e?.Action & MotionEventActions.Mask;
+        if (e == null)
+            return base.DispatchTouchEvent(e);
 
-        switch (action)
+        switch (e.ActionMasked)
         {
             case MotionEventActions.Down:
-                _downX = e!.GetX();
-                _downY = e.GetY();
-                _downTime = e.EventTime;
+                LongPressBehavior.CancelAllPending();
+                _touch.Begin(e.GetX(), e.GetY(), ViewConfiguration.Get(this)?.ScaledTouchSlop ?? 12);
+                _singleTouchActive = true;
+                TouchStarted?.Invoke(this, new TouchPosition(e.RawX, e.RawY, e.EventTime));
+                break;
+
+            case MotionEventActions.Move:
+                var wasActive = _touch.TouchActive;
+                // History matters when a busy UI receives batched input: a finger
+                // may already have moved out of slop and returned to its origin.
+                for (var i = 0; i < e.HistorySize; i++)
+                    _touch.Move(e.GetHistoricalX(i), e.GetHistoricalY(i), isScrolling: false);
+                _touch.Move(e.GetX(), e.GetY(), isScrolling: false);
+                if (wasActive && !_touch.TouchActive)
+                    LongPressBehavior.CancelAllPending();
                 break;
 
             case MotionEventActions.Up:
-                LongPressBehavior.CancelAllPending();
-
-                // Check if this was a tap (quick, minimal movement)
-                if (e != null)
-                {
-                    var dx = Math.Abs(e.GetX() - _downX);
-                    var dy = Math.Abs(e.GetY() - _downY);
-                    var duration = e.EventTime - _downTime;
-
-                    if (dx < TapThreshold && dy < TapThreshold && duration < TapTimeoutMs)
-                    {
-                        TapDetected?.Invoke(this, (e.GetX(), e.GetY()));
-                    }
-                }
+                _touch.Move(e.GetX(), e.GetY(), isScrolling: false);
+                _touch.End();
                 break;
 
             case MotionEventActions.Cancel:
+            case MotionEventActions.PointerDown:
             case MotionEventActions.PointerUp:
+                _singleTouchActive = false;
+                _touch.Abort();
                 LongPressBehavior.CancelAllPending();
+                TouchCancelled?.Invoke(this, EventArgs.Empty);
                 break;
         }
 
-        return base.DispatchTouchEvent(e);
+        // Copy release data before native handlers temporarily transform events.
+        var released = e.ActionMasked == MotionEventActions.Up;
+        var position = new TouchPosition(e.RawX, e.RawY, e.EventTime);
+        // Let the verse process a genuine tap before clearing remaining timers.
+        var handled = base.DispatchTouchEvent(e);
+        if (released)
+        {
+            LongPressBehavior.CancelAllPending();
+            if (_singleTouchActive)
+                TouchReleased?.Invoke(this, position);
+            _singleTouchActive = false;
+        }
+        return handled;
     }
 }
