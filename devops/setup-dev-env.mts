@@ -578,7 +578,7 @@ async function runSyncFromProd(): Promise<void> {
 		// S3 sync (optional if buckets are set)
 		if (prodS3Bucket && devS3Bucket) {
 			if (!dryRun && s3Endpoint) {
-				ensureMinioRunning();
+				ensureRustfsRunning();
 			}
 			if (dryRun) {
 				console.info(
@@ -586,7 +586,7 @@ async function runSyncFromProd(): Promise<void> {
 				);
 				if (s3Endpoint) {
 					console.info(
-						`[dry-run] Would sync: AWS s3://${prodS3Bucket} → local temp → MinIO s3://${devS3Bucket}`,
+						`[dry-run] Would sync: AWS s3://${prodS3Bucket} → local temp → RustFS s3://${devS3Bucket}`,
 					);
 				} else {
 					console.info(
@@ -624,7 +624,7 @@ async function runSyncFromProd(): Promise<void> {
 				}
 
 				if (s3Endpoint) {
-					// Two-step sync: AWS prod → local temp dir → MinIO dev
+					// Two-step sync: AWS prod → local temp dir → RustFS dev
 					// Required because --endpoint-url applies to both source and dest
 					const tempS3Dir = path.join(projectDir, "data", ".s3-sync-temp");
 					fs.mkdirSync(tempS3Dir, { recursive: true });
@@ -655,7 +655,7 @@ async function runSyncFromProd(): Promise<void> {
 					} else {
 						console.info("  S3 download complete");
 						console.info(
-							`Uploading to MinIO (s3://${devS3Bucket}) at ${s3Endpoint}...`,
+							`Uploading to RustFS (s3://${devS3Bucket}) at ${s3Endpoint}...`,
 						);
 						const uploadResult = spawnSync(
 							"aws",
@@ -674,7 +674,7 @@ async function runSyncFromProd(): Promise<void> {
 								encoding: "utf-8",
 								env: {
 									...process.env,
-								AWS_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID || "test",
+									AWS_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID || "test",
 									AWS_SECRET_ACCESS_KEY:
 										process.env.S3_SECRET_ACCESS_KEY || "test_1234",
 								},
@@ -682,9 +682,9 @@ async function runSyncFromProd(): Promise<void> {
 						);
 						if (uploadResult.status !== 0) {
 							const stderr = uploadResult.stderr || "";
-							console.warn(`  Warning: MinIO upload failed: ${stderr}`);
+							console.warn(`  Warning: RustFS upload failed: ${stderr}`);
 						} else {
-							console.info("  MinIO upload complete");
+							console.info("  RustFS upload complete");
 						}
 					}
 
@@ -757,22 +757,46 @@ async function runSyncFromProd(): Promise<void> {
 	console.info("sync-from-prod finished.");
 }
 
-function ensureMinioRunning(): void {
+function ensureRustfsRunning(): void {
 	const dockerComposePath = path.resolve(devopsDir, "docker-compose.yml");
-	console.info("Ensuring MinIO is running via docker-compose...");
+	console.info("Ensuring RustFS is ready via docker-compose...");
 	const result = spawnSync(
 		"docker",
-		["compose", "-f", dockerComposePath, "up", "-d", "--wait"],
+		[
+			"compose",
+			"-f",
+			dockerComposePath,
+			"up",
+			"-d",
+			"--wait",
+			"--wait-timeout",
+			"180",
+		],
 		{ stdio: "inherit", shell: isWin },
 	);
 	if (result.status !== 0) {
-		console.warn(
-			"Warning: Failed to start MinIO via docker-compose. S3 asset sync may fail.",
+		throw new Error(
+			"RustFS startup failed. Make sure Docker Desktop is running.",
 		);
-		console.warn(
-			"  Make sure Docker Desktop is running, then retry or run manually:",
+	}
+	const init = spawnSync(
+		"docker",
+		[
+			"compose",
+			"-f",
+			dockerComposePath,
+			"run",
+			"--build",
+			"--rm",
+			"--no-deps",
+			"rustfs-init",
+		],
+		{ stdio: "inherit", shell: isWin },
+	);
+	if (init.status !== 0) {
+		throw new Error(
+			"RustFS bucket initialization failed; refusing to sync assets.",
 		);
-		console.warn(`  docker compose -f ${dockerComposePath} up -d`);
 	}
 }
 

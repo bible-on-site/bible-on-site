@@ -35,12 +35,8 @@ on:
   pull_request:
     branches: master
   merge_group:
+  # Use the dispatch's native branch/tag selector so execution and cache scope match.
   workflow_dispatch:
-    inputs:
-      ref:
-        description: "The branch or tag to run the workflow on"
-        required: true
-        default: "master"
 
 env:
   API_CARGO_FILE: web/api/Cargo.toml
@@ -135,7 +131,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
       - name: Get API Playwright version
         id: get_api_playwright_version
         working-directory: ${{ env.API_TESTS_DIRECTORY }}
@@ -386,7 +382,7 @@ jobs:
     with:
       module_directory: ${{ needs.setup_env.outputs.admin_directory }}
       module_name: ${{ needs.setup_env.outputs.admin_directory }}
-      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,devops/minio,devops/docker-compose.yml"
+      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,devops/rustfs,devops/docker-compose.yml,devops/package.json,devops/package-lock.json"
 
   determine_bulletin_changes:
     name: Determine Bulletin Changes
@@ -635,7 +631,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -683,7 +679,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -734,7 +730,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
 
       - name: Setup Node.js
         id: setup-node
@@ -903,7 +899,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
 
       - name: Setup Node.js
         id: setup-node
@@ -1102,7 +1098,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
 
       - name: Setup Node.js
         id: setup-node
@@ -1153,7 +1149,7 @@ jobs:
           overwrite: true
           if-no-files-found: ignore
 
-      # ============ MySQL and MinIO Setup for E2E Tests ============
+      # ============ MySQL and RustFS Setup for E2E Tests ============
       - name: Install and start MySQL
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
@@ -1163,38 +1159,20 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
-      - name: Build MinIO from pinned source
+      - name: Start RustFS and initialize S3 buckets
         working-directory: ${{ github.workspace }}
         run: |
-          docker build --target server -t bible-on-site-minio:ci devops/minio
-          docker build --target client -t bible-on-site-minio-mc:ci devops/minio
+          if ! docker compose -f devops/docker-compose.yml up -d --wait --wait-timeout 180; then
+            docker compose -f devops/docker-compose.yml logs
+            exit 1
+          fi
+          docker compose -f devops/docker-compose.yml run --build --rm --no-deps rustfs-init
 
-      - name: Start MinIO
-        run: |
-          docker run -d --name minio \
-            -p 127.0.0.1:4566:9000 \
-            -e MINIO_ROOT_USER=test \
-            -e MINIO_ROOT_PASSWORD=test_1234 \
-            bible-on-site-minio:ci server /data
-          # Wait for MinIO to be ready
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:4566/minio/health/live; then exit 0; fi
-            sleep 1
-          done
-          docker logs minio
-          echo "MinIO did not become ready within 30 seconds" >&2
-          exit 1
-
-      - name: Create S3 bucket in MinIO
-        run: |
-          docker run --rm --network host \
-            --entrypoint /bin/sh \
-            bible-on-site-minio-mc:ci \
-            -c "
-              mc alias set ci http://localhost:4566 test test_1234 &&
-              mc mb --ignore-existing ci/bible-on-site-assets-test &&
-              mc anonymous set download ci/bible-on-site-assets-test
-            "
+      - name: Verify local S3 compatibility
+        working-directory: ${{ env.ADMIN_DIRECTORY }}
+        env:
+          S3_ENDPOINT: http://localhost:4566
+        run: npm run test:s3
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -1277,7 +1255,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -1473,7 +1451,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
@@ -1612,7 +1590,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.sha }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
@@ -1690,7 +1668,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -1779,7 +1757,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
 
       # Free disk space EARLY - before Rust cache restore which can consume several GB
       # This ensures enough space for the ~5GB MongoDB Docker image later
@@ -1996,7 +1974,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
 
       - name: Free Disk Space
         uses: jlumbroso/free-disk-space@v1.3.1
@@ -2128,7 +2106,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
 
       - name: Restore Website JUnit Reports
         uses: actions/download-artifact@v8
@@ -2326,7 +2304,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
 
       - name: Restore Website Coverage Report
         uses: actions/download-artifact@v8
