@@ -386,7 +386,7 @@ jobs:
     with:
       module_directory: ${{ needs.setup_env.outputs.admin_directory }}
       module_name: ${{ needs.setup_env.outputs.admin_directory }}
-      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,devops/minio,devops/docker-compose.yml"
+      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,devops/rustfs,devops/docker-compose.yml,devops/package.json,devops/package-lock.json"
 
   determine_bulletin_changes:
     name: Determine Bulletin Changes
@@ -1153,7 +1153,7 @@ jobs:
           overwrite: true
           if-no-files-found: ignore
 
-      # ============ MySQL and MinIO Setup for E2E Tests ============
+      # ============ MySQL and RustFS Setup for E2E Tests ============
       - name: Install and start MySQL
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
@@ -1163,38 +1163,20 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
-      - name: Build MinIO from pinned source
+      - name: Start RustFS and initialize S3 buckets
         working-directory: ${{ github.workspace }}
         run: |
-          docker build --target server -t bible-on-site-minio:ci devops/minio
-          docker build --target client -t bible-on-site-minio-mc:ci devops/minio
+          if ! docker compose -f devops/docker-compose.yml up -d --wait --wait-timeout 180; then
+            docker compose -f devops/docker-compose.yml logs
+            exit 1
+          fi
+          docker compose -f devops/docker-compose.yml run --build --rm --no-deps rustfs-init
 
-      - name: Start MinIO
-        run: |
-          docker run -d --name minio \
-            -p 127.0.0.1:4566:9000 \
-            -e MINIO_ROOT_USER=test \
-            -e MINIO_ROOT_PASSWORD=test_1234 \
-            bible-on-site-minio:ci server /data
-          # Wait for MinIO to be ready
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:4566/minio/health/live; then exit 0; fi
-            sleep 1
-          done
-          docker logs minio
-          echo "MinIO did not become ready within 30 seconds" >&2
-          exit 1
-
-      - name: Create S3 bucket in MinIO
-        run: |
-          docker run --rm --network host \
-            --entrypoint /bin/sh \
-            bible-on-site-minio-mc:ci \
-            -c "
-              mc alias set ci http://localhost:4566 test test_1234 &&
-              mc mb --ignore-existing ci/bible-on-site-assets-test &&
-              mc anonymous set download ci/bible-on-site-assets-test
-            "
+      - name: Verify local S3 compatibility
+        working-directory: ${{ env.ADMIN_DIRECTORY }}
+        env:
+          S3_ENDPOINT: http://localhost:4566
+        run: npm run test:s3
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
