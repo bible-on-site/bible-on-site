@@ -35,12 +35,8 @@ on:
   pull_request:
     branches: master
   merge_group:
+  # Use the dispatch's native branch/tag selector so execution and cache scope match.
   workflow_dispatch:
-    inputs:
-      ref:
-        description: "The branch or tag to run the workflow on"
-        required: true
-        default: "master"
 
 env:
   API_CARGO_FILE: web/api/Cargo.toml
@@ -135,7 +131,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.head_ref }}
       - name: Get API Playwright version
         id: get_api_playwright_version
         working-directory: ${{ env.API_TESTS_DIRECTORY }}
@@ -635,7 +631,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.head_ref }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -683,7 +679,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.head_ref }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -734,7 +730,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.head_ref }}
 
       - name: Setup Node.js
         id: setup-node
@@ -903,7 +899,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.head_ref }}
 
       - name: Setup Node.js
         id: setup-node
@@ -1102,7 +1098,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.head_ref }}
 
       - name: Setup Node.js
         id: setup-node
@@ -1259,7 +1255,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.head_ref }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -1455,7 +1451,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.head_ref }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
@@ -1672,7 +1668,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.head_ref }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -1761,7 +1757,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.head_ref }}
 
       # Free disk space EARLY - before Rust cache restore which can consume several GB
       # This ensures enough space for the ~5GB MongoDB Docker image later
@@ -1978,7 +1974,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.head_ref }}
 
       - name: Free Disk Space
         uses: jlumbroso/free-disk-space@v1.3.1
@@ -2110,7 +2106,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.head_ref }}
 
       - name: Restore Website JUnit Reports
         uses: actions/download-artifact@v8
@@ -2308,7 +2304,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.head_ref }}
 
       - name: Restore Website Coverage Report
         uses: actions/download-artifact@v8
