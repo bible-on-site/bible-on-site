@@ -226,6 +226,7 @@
                         <Grid RowDefinitions="Auto,*">
                             <!-- Perek Header (Row 0) -->
                             <Label Grid.Row="0"
+                                   AutomationId="PerekHeader"
                                    Text="{Binding Header}"
                                    FontSize="22"
                                    FontAttributes="Bold"
