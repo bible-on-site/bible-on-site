@@ -30,9 +30,17 @@ Populates the production database with SQL files from the `data/mysql/` director
 
 **Commands:**
 ```bash
+# From the repository root, validate parser compatibility without changing a database
+python devops/deploy/data-deploy/validate_lambda_parser.py --parse-only
+
 cd devops
 npm run deploy:data
 ```
+
+The validator and deployer share `data-deploy/sql-files.json`. The validator resolves
+SQL paths from its own location, so it also works from other working directories.
+Without `--parse-only`, it executes SQL (including injected table/view drops): use
+that mode only with a disposable local database.
 
 **Required Environment Variables (set via OIDC in CI):**
 - `AWS_REGION` - AWS region (e.g., `il-central-1`)
@@ -57,5 +65,7 @@ deploy/
 │   └── website-deployer.mts   # Website-specific deployer
 └── data-deploy/        # Database deployment scripts
     ├── .env.example    # Template for environment variables
-    └── index.mts       # DataDeployer (extends DeployerBase)
+    ├── index.mts       # DataDeployer (extends DeployerBase)
+    ├── sql-files.json  # Shared production SQL deployment manifest
+    └── validate_lambda_parser.py  # Lambda-compatible SQL validation
 ```

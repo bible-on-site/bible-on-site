@@ -49,7 +49,7 @@ Never rediscover the write path from the UI or database schema: the canonical co
 Adding/renaming/dropping a column, table, or relationship in a `tanahpedia_*` MySQL table.
 
 1. Write an **idempotent** SQL script, safe to re-run. MySQL has no `ADD COLUMN IF NOT EXISTS` (MariaDB-only) — use the `information_schema` + `PREPARE`/`EXECUTE` idiom (`data/mysql/tanahpedia_alter_*.sql`). `ALTER TABLE` only: the production Lambda auto-injects `DROP TABLE/VIEW IF EXISTS` before any `CREATE`, destroying data. No semicolons or apostrophes inside `--` comments — the Lambda's splitter only tracks single-quoted strings and either corrupts parsing.
-2. Add the script to `devops/deploy/data-deploy/sql-files.json` in the same PR and run `python validate_lambda_parser.py --parse-only` (shared by deployer, validator, and Data CI).
+2. Add the script to `devops/deploy/data-deploy/sql-files.json` in the same PR and run `python devops/deploy/data-deploy/validate_lambda_parser.py --parse-only` (shared by deployer, validator, and Data CI).
 3. Merge and confirm the schema-only Data CD is green **before** merging any API/website reader of the new column; never rely on concurrent module releases for ordering.
 4. Extend the authenticated **write API**, then the **read API** (Rust GraphQL resolvers/DTOs in `web/api`).
 5. Populate locally and test end-to-end (e.g. `cargo make mysql-apply-tanahpedia-families` or the relevant `db-populator` task).
@@ -94,7 +94,7 @@ Do not infer data loss while a schema migration or reader deployment is incomple
 ## Deployment And Observability
 
 - Data release eligibility depends on Tanahpedia/data changes, not on an unrelated optional job (e.g. Perushim generation) — a skipped optional job must not suppress schema deployment.
-- Run `validate_lambda_parser.py` against the shared production manifest in Data CI; locally valid MySQL is not proof of Lambda-parser compatibility.
+- Run `devops/deploy/data-deploy/validate_lambda_parser.py` against the shared production manifest in Data CI; locally valid MySQL is not proof of Lambda-parser compatibility.
 - Log family-query failures with entry/entity context before degrading to no tree; never turn a database or schema exception into a silent empty graph.
 - Production smoke checks assert known graph content, not just HTTP 200, covering a known-good graph and the recovered graph.
 

@@ -386,7 +386,7 @@ jobs:
     with:
       module_directory: ${{ needs.setup_env.outputs.admin_directory }}
       module_name: ${{ needs.setup_env.outputs.admin_directory }}
-      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml"
+      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,devops/minio,devops/docker-compose.yml"
 
   determine_bulletin_changes:
     name: Determine Bulletin Changes
@@ -1163,24 +1163,33 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
+      - name: Build MinIO from pinned source
+        working-directory: ${{ github.workspace }}
+        run: |
+          docker build --target server -t bible-on-site-minio:ci devops/minio
+          docker build --target client -t bible-on-site-minio-mc:ci devops/minio
+
       - name: Start MinIO
         run: |
           docker run -d --name minio \
-            -p 4566:9000 \
+            -p 127.0.0.1:4566:9000 \
             -e MINIO_ROOT_USER=test \
             -e MINIO_ROOT_PASSWORD=test_1234 \
-            minio/minio:latest server /data
+            bible-on-site-minio:ci server /data
           # Wait for MinIO to be ready
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:4566/minio/health/live; then break; fi
+            if curl -sf http://localhost:4566/minio/health/live; then exit 0; fi
             sleep 1
           done
+          docker logs minio
+          echo "MinIO did not become ready within 30 seconds" >&2
+          exit 1
 
       - name: Create S3 bucket in MinIO
         run: |
           docker run --rm --network host \
             --entrypoint /bin/sh \
-            minio/mc:latest \
+            bible-on-site-minio-mc:ci \
             -c "
               mc alias set ci http://localhost:4566 test test_1234 &&
               mc mb --ignore-existing ci/bible-on-site-assets-test &&
@@ -1821,7 +1830,7 @@ jobs:
 
       - name: Validate Production SQL Parser Compatibility
         working-directory: ${{ github.workspace }}
-        run: python validate_lambda_parser.py --parse-only
+        run: python devops/deploy/data-deploy/validate_lambda_parser.py --parse-only
 
       - name: Unit Test
         id: unit-test

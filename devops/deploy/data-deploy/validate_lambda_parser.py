@@ -1,13 +1,16 @@
 """
-Local validation: simulate the Lambda's SQL parsing on all deployed SQL files
-(same order as the deployer) and verify every extracted statement is
-syntactically valid by executing it against a local MySQL instance.
+Validate deployed SQL files with the production Lambda's parser, in manifest order.
+Use --parse-only for the database-free compatibility check used in Data CI.
+Without --parse-only, execute the statements against a disposable local MySQL
+database (the parser injects DROP TABLE/VIEW statements).
 
 Usage:
-    python validate_lambda_parser.py [--db DB_URL] [--parse-only]
+    python devops/deploy/data-deploy/validate_lambda_parser.py [--db DB_URL] [--parse-only]
 
-The script locates the SQL files at data/mysql/ relative to itself.
-perushim_data.sql is expected in /tmp/perushim-sql/ (downloaded artifact).
+Paths are resolved from the script location, independent of the working directory.
+SQL files live in the repository's data/mysql/ directory. perushim_data.sql is
+loaded from the system temporary directory's perushim-sql/ subdirectory, with a
+local SQL fallback.
 """
 
 import argparse
@@ -15,6 +18,8 @@ import json
 import os
 import re
 import sys
+from pathlib import Path
+from tempfile import gettempdir
 
 
 # ---------------------------------------------------------------------------
@@ -158,25 +163,24 @@ def main():
     parser.add_argument("--parse-only", action="store_true")
     args = parser.parse_args()
 
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir = os.path.join(script_dir, "data", "mysql")
+    script_dir = Path(__file__).resolve().parent
+    repo_root = script_dir.parents[2]
+    data_dir = repo_root / "data" / "mysql"
 
-    manifest_path = os.path.join(
-        script_dir, "devops", "deploy", "data-deploy", "sql-files.json"
-    )
+    manifest_path = script_dir / "sql-files.json"
     with open(manifest_path, "r", encoding="utf-8") as manifest_file:
         deploy_files = json.load(manifest_file)
 
     # perushim_data.sql comes from the artifact.
-    artifact_path = os.path.join(os.environ.get("TEMP", "/tmp"), "perushim-sql", "perushim_data.sql")
-    local_perushim_path = os.path.join(data_dir, "perushim_data.sql")
+    artifact_path = Path(gettempdir()) / "perushim-sql" / "perushim_data.sql"
+    local_perushim_path = data_dir / "perushim_data.sql"
 
     sql_files = []
     for name in deploy_files:
         if name == "perushim_data.sql":
-            if os.path.isfile(artifact_path):
+            if artifact_path.is_file():
                 sql_files.append((name, artifact_path))
-            elif os.path.isfile(local_perushim_path):
+            elif local_perushim_path.is_file():
                 sql_files.append((name, local_perushim_path))
             else:
                 print(
@@ -184,11 +188,11 @@ def main():
                     f"{artifact_path} or {local_perushim_path}"
                 )
             continue
-        sql_files.append((name, os.path.join(data_dir, name)))
+        sql_files.append((name, data_dir / name))
 
     all_stmts = []
     for name, fpath in sql_files:
-        if not os.path.isfile(fpath):
+        if not fpath.is_file():
             print(f"SKIP: {name} not found at {fpath}")
             continue
         validate_lambda_safe_comments(fpath)
