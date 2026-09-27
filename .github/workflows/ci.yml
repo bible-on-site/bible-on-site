@@ -1821,7 +1821,7 @@ jobs:
 
       - name: Validate Production SQL Parser Compatibility
         working-directory: ${{ github.workspace }}
-        run: python validate_lambda_parser.py --parse-only
+        run: python devops/deploy/data-deploy/validate_lambda_parser.py --parse-only
 
       - name: Unit Test
         id: unit-test

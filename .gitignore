@@ -20,7 +20,7 @@ test-results/
 # Rust build artifacts
 **/target/
 
-# Python bytecode cache (e.g. from validate_lambda_parser.py)
+# Python bytecode cache
 __pycache__/
 
 # Raw data files (downloaded/generated locally, except tracked assets)
