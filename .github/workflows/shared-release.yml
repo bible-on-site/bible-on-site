@@ -46,6 +46,10 @@ permissions:
 jobs:
   trigger_cd:
     name: Trigger CD Workflow
+    needs: release
+    # A rerun or overlapping CI build may have packaged an already released
+    # version. Only deploy the artifact that actually created its release tag.
+    if: ${{ needs.release.outputs.released == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Build CD Payload
@@ -104,8 +108,8 @@ jobs:
     name: Release
     outputs:
       released: ${{ steps.mark_released.outputs.released }}
-    # Queue (don't cancel) concurrent releases for the same module so that an
-    # in-flight tag push is never orphaned without its version bump.
+    # Queue (don't cancel) concurrent releases for the same module so that
+    # checking and creating the version tag is serialized.
     concurrency:
       group: ${{ github.repository }}-release-${{ inputs.module_name }}
       cancel-in-progress: false
@@ -242,8 +246,9 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           files: ${{ steps.prepare_release.outputs.FILE_PATTERNS }}
 
-      # Note: Version bump is handled by the centralized bump_versions job in ci.yml
-      # to avoid race conditions when multiple modules are released in parallel
+      # Non-website module bumps are handled by the centralized bump_versions job.
+      # Website versions are reserved in their pull requests.
       - name: Mark Release Complete
         id: mark_released
+        if: steps.check_tag.outputs.TAG_EXISTS != 'true'
         run: echo "released=true" >> $GITHUB_OUTPUT

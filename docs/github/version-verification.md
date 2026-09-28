@@ -4,7 +4,7 @@ This document describes the automated version verification system that prevents 
 
 ## Overview
 
-The version verification system ensures that module versions are properly bumped before any release can occur. This prevents CD (Continuous Deployment) failures caused by attempting to release a version that has already been tagged.
+The version verification system ensures that module versions are properly bumped before any release can occur. For website pull requests and merge-queue checks, the version must exceed both the last released tag and the version on `master`. This reserves a distinct version even while an earlier release is still running.
 
 ## How It Works
 
@@ -30,6 +30,8 @@ The CI workflow includes version verification jobs that run when a module change
 - `Verify App Version` - Runs when `app` changes
 
 These jobs are conditional - they only run if the corresponding module has changes. If a module hasn't changed, version verification is skipped for that module.
+
+Website changes must bump `web/bible-on-site/package.json` and `package-lock.json` in the pull request. The release workflow does not bump the website version afterward. A later website pull request with the same version will fail verification against `master` and must choose the next version before merging.
 
 ### Cross Module CI Integration
 
@@ -100,6 +102,14 @@ This error means you need to bump the version before committing:
 1. **App**: Edit `app/BibleOnSite/BibleOnSite.csproj` and increment `ApplicationDisplayVersion`
 2. **API**: Edit `web/api/Cargo.toml` and increment `version`
 3. **Website**: Run `npm version patch` (or minor/major) in `web/bible-on-site`
+
+### "Website version X is NOT greater than origin/master version X"
+
+Another website change has already reserved that version. Bump the website version above the current `master` version in both package files. Rerunning CI on the same commit will not resolve the collision.
+
+### A deployment tries to publish an existing website version
+
+Check whether an earlier CD run already published that version. Rerunning a duplicate CD run cannot publish different code under the same version. Release the later website changes with a new version; the shared release workflow dispatches CD only after creating a new tag, so overlapping or rerun CI builds cannot dispatch the same release twice.
 
 ### Pre-commit hook not running
 
