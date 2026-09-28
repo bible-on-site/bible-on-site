@@ -27,6 +27,7 @@ test.describe("Sefer view", () => {
 		await seferPage.verifyPesukimAreVisible();
 		const text = page.locator(".he-book article:visible").first();
 		const indicator = page.locator(".flipbook-toolbar-indicator");
+		await expect(indicator).toHaveValue("א' / נ'");
 		const initialPage = await indicator.inputValue();
 		const initialUrl = page.url();
 		const word = await text.evaluate((article) => {
@@ -62,6 +63,109 @@ test.describe("Sefer view", () => {
 		// Navigation still works after a selection gesture.
 		await page.locator(".flipbook-toolbar-next").click();
 		await expect(indicator).not.toHaveValue(initialPage);
+	});
+
+	test("Slow drag across verse text still selects it", async ({ page }) => {
+		await page.setViewportSize({ width: 1440, height: 900 });
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await seferPage.verifyPesukimAreVisible();
+		const rect = await page
+			.locator(".he-book article:visible")
+			.first()
+			.boundingBox();
+		if (!rect) throw new Error("Verse text is not visible");
+		const x = rect.x + 60;
+		const y = rect.y + 45;
+		const indicator = page.locator(".flipbook-toolbar-indicator");
+		await expect(indicator).toHaveValue("א' / נ'");
+		await page.mouse.move(x, y);
+		await page.mouse.down();
+		await page.waitForTimeout(500);
+		await page.mouse.move(x + 200, y, { steps: 5 });
+		await page.mouse.up();
+		await expect
+			.poll(() =>
+				page.evaluate(() => window.getSelection()?.toString().length ?? 0),
+			)
+			.toBeGreaterThan(3);
+		await expect(indicator).toHaveValue("א' / נ'");
+	});
+
+	test("Fast mouse swipe over verse text turns the page", async ({ page }) => {
+		await page.setViewportSize({ width: 1440, height: 900 });
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await seferPage.verifyPesukimAreVisible();
+		const rect = await page
+			.locator(".he-book article:visible")
+			.first()
+			.boundingBox();
+		if (!rect) throw new Error("Verse text is not visible");
+		const x = rect.x + 60;
+		const y = rect.y + 45;
+		expect(
+			await page.evaluate(
+				({ x, y }) =>
+					document.elementFromPoint(x, y)?.closest("article") !== null,
+				{ x, y },
+			),
+		).toBe(true);
+		const indicator = page.locator(".flipbook-toolbar-indicator");
+		await expect(indicator).toHaveValue("א' / נ'");
+		const before = await indicator.inputValue();
+		await page.mouse.move(x, y);
+		await page.mouse.down();
+		await page.mouse.move(x + 600, y, { steps: 1 });
+		await page.mouse.up();
+		await expect(indicator).not.toHaveValue(before);
+		expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(
+			"",
+		);
+	});
+
+	test.describe("Touch swipe", () => {
+		test.use({ hasTouch: true });
+
+		test("Swiping verse text turns the page", async ({ page }) => {
+			await page.setViewportSize({ width: 1440, height: 900 });
+			const seferPage = new SeferPage(page);
+			await seferPage.openSeferViewForPerek(1);
+			await seferPage.verifyPesukimAreVisible();
+			const rect = await page
+				.locator(".he-book article:visible")
+				.first()
+				.boundingBox();
+			if (!rect) throw new Error("Verse text is not visible");
+			const x = Math.round(rect.x + 40);
+			const y = Math.round(rect.y + 45);
+			expect(
+				await page.evaluate(
+					({ x, y }) =>
+						document.elementFromPoint(x, y)?.closest("article") !== null,
+					{ x, y },
+				),
+			).toBe(true);
+			const indicator = page.locator(".flipbook-toolbar-indicator");
+			await expect(indicator).toHaveValue("א' / נ'");
+			const before = await indicator.inputValue();
+			const client = await page.context().newCDPSession(page);
+			await client.send("Input.dispatchTouchEvent", {
+				type: "touchStart",
+				touchPoints: [{ x, y }],
+			});
+			for (let step = 1; step <= 6; step++) {
+				await client.send("Input.dispatchTouchEvent", {
+					type: "touchMove",
+					touchPoints: [{ x: x + Math.round((step * 650) / 6), y }],
+				});
+			}
+			await client.send("Input.dispatchTouchEvent", {
+				type: "touchEnd",
+				touchPoints: [],
+			});
+			await expect(indicator).not.toHaveValue(before);
+		});
 	});
 
 	test.describe("Sefarim without additionals", () => {
