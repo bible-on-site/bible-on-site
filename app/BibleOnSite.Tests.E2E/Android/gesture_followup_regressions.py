@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import unicodedata
 import xml.etree.ElementTree as element_tree
 
 sys.stdout.reconfigure(encoding="utf-8")
@@ -334,7 +335,9 @@ def check_scroll_through():
 def check_scroll_burst():
     prepare_long_chapter()
     chapter, count, verses, nodes = ready(restart=True)
-    require(chapter == "untitled chapter",
+    first_plain = "".join(character for character in unicodedata.normalize("NFD", verses[0].get("text") or "")
+                          if not unicodedata.combining(character))
+    require(chapter == "untitled chapter" and first_plain.startswith("אשרי תמימי"),
             "Select Psalm 119 (chapter 686) before the long-chapter scroll test")
     if count:
         clear_selection(nodes)
