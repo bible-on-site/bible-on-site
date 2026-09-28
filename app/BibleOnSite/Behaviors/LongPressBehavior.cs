@@ -160,8 +160,9 @@ public class LongPressBehavior : Behavior<View>
                     ? Android.Views.ViewConfiguration.Get(context)?.ScaledTouchSlop ?? 12
                     : 12;
                 _press.Begin(motion.RawX, motion.RawY, touchSlop);
-                if (!Pages.PerekPage.IsScrolling)
-                    StartLongPressTimer();
+                // A new stationary press is independent of the previous scroll.
+                // Motion beyond touch slop cancels it in MainActivity.
+                StartLongPressTimer();
 
                 // Claim Down to receive Up. RecyclerView retains responsibility
                 // for intercepting horizontal swipes and vertical scrolls.
@@ -170,7 +171,7 @@ public class LongPressBehavior : Behavior<View>
 
             case Android.Views.MotionEventActions.Up:
                 // Also check the release coordinates if Android coalesced moves.
-                _press.Move(motion.RawX, motion.RawY, Pages.PerekPage.IsScrolling);
+                _press.Move(motion.RawX, motion.RawY, isScrolling: false);
                 var tapped = _press.End();
                 CleanupTimer();
                 if (tapped)
@@ -184,7 +185,7 @@ public class LongPressBehavior : Behavior<View>
                 break;
 
             case Android.Views.MotionEventActions.Move:
-                _press.Move(motion.RawX, motion.RawY, Pages.PerekPage.IsScrolling);
+                _press.Move(motion.RawX, motion.RawY, isScrolling: false);
                 if (!_press.IsPressed)
                     CleanupTimer();
                 break;
@@ -225,7 +226,7 @@ public class LongPressBehavior : Behavior<View>
             {
                 Command.Execute(param);
             }
-        }, () => Pages.PerekPage.IsScrolling);
+        }, () => false);
     }
 
     private void CleanupTimer()

@@ -60,8 +60,12 @@ def snapshot():
     return headers[-1] if headers and not loading else None, count, verses, nodes
 
 
-def swipe(x1, y1, x2, y2, duration):
+def raw_swipe(x1, y1, x2, y2, duration):
     adb("shell", "input", "swipe", round(x1 * WIDTH / 1080), round(y1 * HEIGHT / 2400), round(x2 * WIDTH / 1080), round(y2 * HEIGHT / 2400), duration)
+
+
+def swipe(x1, y1, x2, y2, duration):
+    raw_swipe(x1, y1, x2, y2, duration)
     time.sleep(0.8)
 
 
@@ -127,8 +131,26 @@ if not args.restart_only:
     require(count == 2, f"Scroll altered existing selection: {count}")
     print("PASS: scrolling preserved the two deliberate selections", flush=True)
     tap(next(n for n in nodes if n.get("resource-id", "").endswith("/SelectionBackButton")))
-    require(snapshot()[1] == 0, "Gesture regression failed")
+    _, count, verses, _ = snapshot()
+    require(count == 0, "Gesture regression failed")
     print("PASS: selection exit cleared the selection; emulator ready", flush=True)
+
+    # No dump or preliminary tap between vertical movement and the next hold.
+    # A previous scroll cooldown used to reject this first stationary press.
+    # Aim inside a visible verse; fixed screen coordinates can land in a verse gap.
+    target = max(
+        (v for v in verses if 450 < bounds(v)[1] and bounds(v)[3] < 1900),
+        key=lambda v: bounds(v)[3] - bounds(v)[1],
+    )
+    left, top, right, bottom = bounds(target)
+    hold_x, hold_y = (left + right) // 2, (top + bottom) // 2 - 80
+    raw_swipe(500, 1700, 500, 1620, 650)
+    adb("shell", "input", "swipe", hold_x, hold_y, hold_x, hold_y, 900)
+    _, count, _, nodes = snapshot()
+    require(count == 1, f"First hold after scrolling selected {count} verses")
+    print("PASS: first hold after vertical scroll entered multi-selection", flush=True)
+    tap(next(n for n in nodes if n.get("resource-id", "").endswith("/SelectionBackButton")))
+    require(snapshot()[1] == 0, "Selection exit after post-scroll hold failed")
 
 # Recreate the first-touch lag case, including both directions after a restart.
 for x1, x2 in [(850, 200), (200, 850)]:
