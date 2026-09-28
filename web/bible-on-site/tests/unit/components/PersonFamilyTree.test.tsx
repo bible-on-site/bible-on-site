@@ -121,6 +121,35 @@ describe("PersonFamilyTree", () => {
 		expect(container.firstChild).toBeNull();
 	});
 
+	it("only draws the focal spine upward when parents are linked", () => {
+		const rootSummary: PersonFamilySummary = {
+			...baseSummary,
+			focalDisplayName: "אדם",
+			spouses: [spouseEdge({ id: "eve", name: "חוה" })],
+		};
+		const { container, rerender } = render(
+			<PersonFamilyTree summary={rootSummary} />,
+		);
+		expect(container.querySelector('[class*="focalSpineRod"]')).not.toBeNull();
+		expect(container.querySelector("[data-has-parent-links]")).toBeNull();
+
+		rerender(
+			<PersonFamilyTree
+				summary={{
+					...rootSummary,
+					parents: [{
+						related: related("father", "אב"),
+						parentRole: "FATHER",
+						relationshipType: "BIOLOGICAL",
+						altGroupId: null,
+						sourceCitation: null,
+					}],
+				}}
+			/>,
+		);
+		expect(container.querySelector("[data-has-parent-links]")).not.toBeNull();
+	});
+
 	it("renders משפחה with parents children spouses siblings", () => {
 		const summary: PersonFamilySummary = {
 			...baseSummary,

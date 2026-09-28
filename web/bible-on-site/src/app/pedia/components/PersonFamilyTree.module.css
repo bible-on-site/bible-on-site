@@ -45,6 +45,30 @@
   text-align: center;
 }
 
+/* The plain children layout uses the same uninterrupted center line as the
+   spouse/children matrix. Keep each label's spacing inside its painted box so
+   the line reaches the first row without drawing through the child cards. */
+.childrenBranch {
+  width: 100%;
+}
+
+.childrenBranch :is(.connector, .verticalConnector, .tierLabel, .verticalTierLabel, .altGroupLabel, .coParentChildLabel) {
+  background-image: linear-gradient(#a5b4fc, #a5b4fc);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 2px 100%;
+}
+
+.childrenBranch :is(.tierLabel, .verticalTierLabel, .altGroupLabel, .coParentChildLabel) {
+  margin-bottom: 0;
+  padding-bottom: 8px;
+}
+
+.childrenBranch .connector {
+  height: 24px;
+  margin-bottom: 0;
+}
+
 /* תווית «הורים» מעל הקו האופקי שמתחת לכרטיסי ההורים */
 .tierLabelParentsAboveArm {
   margin: 0 auto 10px;
@@ -463,18 +487,22 @@
   flex-shrink: 0;
 }
 
-/* קו אנכי דרך הנושא — קו אחיד (בלי כפל עם מחבר ההורים) */
+/* קו אנכי דרך הנושא: ללא הורים מתחיל בתוך הכרטיס וממשיך רק כלפי מטה. */
 .focalSpineRod {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
   width: 2px;
-  top: -26px;
+  top: 50%;
   bottom: -20px;
   background: #a5b4fc;
   border-radius: 1px;
   z-index: 0;
   pointer-events: none;
+}
+
+.siblingGridFocal[data-has-parent-links] .focalSpineRod {
+  top: -26px;
 }
 
 .siblingCluster {
