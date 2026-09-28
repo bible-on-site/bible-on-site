@@ -2,6 +2,7 @@ using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 using FluentAssertions;
+using System.Reflection;
 
 namespace BibleOnSite.Tests.ViewModels;
 
@@ -112,6 +113,26 @@ public class PerekViewModelPerushimTests
     #endregion
 
     #region FillFilteredPerushContents
+
+    [Fact]
+    public void RefreshingWithNoCheckedPerushimDoesNotRebindEmptyVerseNotes()
+    {
+        var vm = CreateViewModelWithPerushimAndNotes();
+        var pasuk = vm.Perek!.Pasukim[0];
+        var original = pasuk.PerushNotes;
+        var changes = 0;
+        pasuk.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(Pasuk.PerushNotes)) changes++;
+        };
+
+        typeof(PerekViewModel)
+            .GetMethod("FillFilteredPerushContents", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(vm, null);
+
+        pasuk.PerushNotes.Should().BeSameAs(original);
+        changes.Should().Be(0);
+    }
 
     [Fact]
     public void ToggleCheckedPerush_ShouldPopulatePerushNotesOnPasukim()

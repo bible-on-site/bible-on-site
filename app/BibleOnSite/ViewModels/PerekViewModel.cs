@@ -439,6 +439,16 @@ public partial class PerekViewModel : ObservableObject
             return;
 
         var checkedSet = new HashSet<int>(CheckedPerushim);
+        if (checkedSet.Count == 0)
+        {
+            foreach (var pasuk in Perek.Pasukim)
+            {
+                if (pasuk.PerushNotes.Count > 0)
+                    pasuk.PerushNotes = new List<PerushNoteDisplay>();
+            }
+            return;
+        }
+
         var byPasuk = _perushNotesCache
             .Where(n => checkedSet.Contains(n.PerushId))
             .GroupBy(n => n.Pasuk)
@@ -458,7 +468,8 @@ public partial class PerekViewModel : ObservableObject
                     NoteContents = g.OrderBy(n => n.NoteIdx).Select(n => n.NoteContent).ToList()
                 })
                 .ToList();
-            pasuk.PerushNotes = groups;
+            if (groups.Count > 0 || pasuk.PerushNotes.Count > 0)
+                pasuk.PerushNotes = groups;
         }
     }
 

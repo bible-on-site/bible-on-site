@@ -1,5 +1,6 @@
 using BibleOnSite.Helpers;
 using CommunityToolkit.Mvvm.ComponentModel;
+using System.Text;
 
 namespace BibleOnSite.Models;
 
@@ -32,7 +33,19 @@ public partial class Pasuk : ObservableObject
     /// <summary>
     /// The segments that make up this pasuk (for rich rendering).
     /// </summary>
-    public List<PasukSegment> Segments { get; set; } = new();
+    private List<PasukSegment> _segments = new();
+    private WeakReference<FormattedString>? _formattedText;
+
+    public List<PasukSegment> Segments
+    {
+        get => _segments;
+        set
+        {
+            _segments = value;
+            _formattedText = null;
+            OnPropertyChanged(nameof(FormattedText));
+        }
+    }
 
     /// <summary>
     /// Perushim (commentaries) for this pasuk. Populated when perushim are loaded and filtered.
@@ -48,90 +61,114 @@ public partial class Pasuk : ObservableObject
     {
         get
         {
-            var formatted = new FormattedString();
+            if (_formattedText?.TryGetTarget(out var formatted) == true)
+                return formatted;
 
-            for (int i = 0; i < Segments.Count; i++)
-            {
-                var segment = Segments[i];
-                bool isLast = i == Segments.Count - 1;
-
-                switch (segment.Type)
-                {
-                    case SegmentType.Ktiv:
-                        // Ktiv: always show the written text
-                        if (!string.IsNullOrEmpty(segment.Value))
-                        {
-                            formatted.Spans.Add(new Span { Text = segment.Value });
-                        }
-                        break;
-
-                    case SegmentType.Qri:
-                        if (segment.IsQriDifferentThanKtiv)
-                        {
-                            // Qri differs from ktiv: show "(קְרִי: value)" with special styling
-                            formatted.Spans.Add(new Span
-                            {
-                                Text = "(קְרִי: ",
-                                TextColor = Color.FromArgb("#637598"),
-                                FontSize = 14
-                            });
-                            formatted.Spans.Add(new Span
-                            {
-                                Text = segment.Value,
-                                TextColor = Color.FromArgb("#637598")
-                            });
-                            formatted.Spans.Add(new Span
-                            {
-                                Text = ")",
-                                TextColor = Color.FromArgb("#637598"),
-                                FontSize = 14
-                            });
-                        }
-                        else
-                        {
-                            // Regular qri (same as ktiv): show normally
-                            if (!string.IsNullOrEmpty(segment.Value))
-                            {
-                                formatted.Spans.Add(new Span { Text = segment.Value });
-                            }
-                        }
-                        break;
-
-                    case SegmentType.Ptuha:
-                        formatted.Spans.Add(new Span
-                        {
-                            Text = " {פ} ",
-                            TextColor = Color.FromArgb("#9a92d1"),
-                            FontAttributes = FontAttributes.Bold
-                        });
-                        break;
-
-                    case SegmentType.Stuma:
-                        formatted.Spans.Add(new Span
-                        {
-                            Text = " {ס} ",
-                            TextColor = Color.FromArgb("#9a92d1"),
-                            FontAttributes = FontAttributes.Bold
-                        });
-                        break;
-                }
-
-                // Add space after segment unless:
-                // - It's the last segment
-                // - The segment ends with maqaf (Hebrew hyphen)
-                // - It's a parsha marker (already has spaces)
-                if (!isLast &&
-                    segment.Type != SegmentType.Ptuha &&
-                    segment.Type != SegmentType.Stuma &&
-                    !segment.EndsWithMaqaf &&
-                    !string.IsNullOrEmpty(segment.Value))
-                {
-                    formatted.Spans.Add(new Span { Text = " " });
-                }
-            }
-
+            formatted = BuildFormattedText();
+            // MAUI 10.0.90 Labels subscribe to a FormattedString. Retaining it
+            // strongly in a buffered perek can also retain recycled Labels.
+            _formattedText = new WeakReference<FormattedString>(formatted);
             return formatted;
         }
+    }
+
+    private FormattedString BuildFormattedText()
+    {
+        var formatted = new FormattedString();
+        var plain = new StringBuilder();
+
+        void FlushPlain()
+        {
+            if (plain.Length == 0) return;
+            formatted.Spans.Add(new Span { Text = plain.ToString() });
+            plain.Clear();
+        }
+
+        for (int i = 0; i < Segments.Count; i++)
+        {
+            var segment = Segments[i];
+            bool isLast = i == Segments.Count - 1;
+
+            switch (segment.Type)
+            {
+                case SegmentType.Ktiv:
+                    // Ktiv: always show the written text
+                    if (!string.IsNullOrEmpty(segment.Value))
+                    {
+                        plain.Append(segment.Value);
+                    }
+                    break;
+
+                case SegmentType.Qri:
+                    if (segment.IsQriDifferentThanKtiv)
+                    {
+                        // Qri differs from ktiv: show "(קְרִי: value)" with special styling
+                        FlushPlain();
+                        formatted.Spans.Add(new Span
+                        {
+                            Text = "(קְרִי: ",
+                            TextColor = Color.FromArgb("#637598"),
+                            FontSize = 14
+                        });
+                        formatted.Spans.Add(new Span
+                        {
+                            Text = segment.Value,
+                            TextColor = Color.FromArgb("#637598")
+                        });
+                        formatted.Spans.Add(new Span
+                        {
+                            Text = ")",
+                            TextColor = Color.FromArgb("#637598"),
+                            FontSize = 14
+                        });
+                    }
+                    else
+                    {
+                        // Regular qri (same as ktiv): show normally
+                        if (!string.IsNullOrEmpty(segment.Value))
+                        {
+                            plain.Append(segment.Value);
+                        }
+                    }
+                    break;
+
+                case SegmentType.Ptuha:
+                    FlushPlain();
+                    formatted.Spans.Add(new Span
+                    {
+                        Text = " {פ} ",
+                        TextColor = Color.FromArgb("#9a92d1"),
+                        FontAttributes = FontAttributes.Bold
+                    });
+                    break;
+
+                case SegmentType.Stuma:
+                    FlushPlain();
+                    formatted.Spans.Add(new Span
+                    {
+                        Text = " {ס} ",
+                        TextColor = Color.FromArgb("#9a92d1"),
+                        FontAttributes = FontAttributes.Bold
+                    });
+                    break;
+            }
+
+            // Add space after segment unless:
+            // - It's the last segment
+            // - The segment ends with maqaf (Hebrew hyphen)
+            // - It's a parsha marker (already has spaces)
+            if (!isLast &&
+                segment.Type != SegmentType.Ptuha &&
+                segment.Type != SegmentType.Stuma &&
+                !segment.EndsWithMaqaf &&
+                !string.IsNullOrEmpty(segment.Value))
+            {
+                plain.Append(' ');
+            }
+        }
+
+        FlushPlain();
+        return formatted;
     }
 }
 

@@ -221,6 +221,17 @@ public partial class PerekPage : ContentPage
         _swipe.Begin(position, PerekCarousel.Position);
     }
 
+    private void OnTouchDispatched(object? sender, TouchPosition position)
+    {
+        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || _isMenuOpen || _isShowingArticles ||
+            !ContainsTouch(PerekCarousel, position) || ContainsTouch(BottomBar, position) ||
+            ContainsTouch(ExitFullScreenButton, position) || ContainsTouch(CircularMenuButton, position) ||
+            ContainsTouch(SelectionBar, position))
+            return;
+
+        LongPressBehavior.BeginUnreceivedPress(position.X, position.Y, _viewModel.Perek);
+    }
+
     private static bool ContainsTouch(VisualElement element, TouchPosition position)
     {
         if (!element.IsVisible || element.Handler?.PlatformView is not Android.Views.View view)
@@ -256,6 +267,7 @@ public partial class PerekPage : ContentPage
     {
 #if ANDROID
         MainActivity.TouchStarted -= OnTouchStarted;
+        MainActivity.TouchDispatched -= OnTouchDispatched;
         MainActivity.TouchReleased -= OnTouchReleased;
         MainActivity.TouchCancelled -= OnTouchCancelled;
         _swipe.Cancel();
@@ -306,6 +318,7 @@ public partial class PerekPage : ContentPage
         base.OnAppearing();
 #if ANDROID
         MainActivity.TouchStarted += OnTouchStarted;
+        MainActivity.TouchDispatched += OnTouchDispatched;
         MainActivity.TouchReleased += OnTouchReleased;
         MainActivity.TouchCancelled += OnTouchCancelled;
 #endif
