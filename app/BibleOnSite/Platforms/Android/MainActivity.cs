@@ -20,6 +20,13 @@ public class MainActivity : MauiAppCompatActivity
     private bool _singleTouchActive;
 
     public static event EventHandler<TouchPosition>? TouchStarted;
+    private static EventHandler<TouchPosition>? _touchDispatched;
+
+    public static void SubscribeTouchDispatched(EventHandler<TouchPosition> handler) =>
+        _touchDispatched += handler;
+
+    public static void UnsubscribeTouchDispatched(EventHandler<TouchPosition> handler) =>
+        _touchDispatched -= handler;
     public static event EventHandler<TouchPosition>? TouchReleased;
     public static event EventHandler? TouchCancelled;
 
@@ -78,6 +85,12 @@ public class MainActivity : MauiAppCompatActivity
         var position = new TouchPosition(e.RawX, e.RawY, e.EventTime);
         // Let the verse process a genuine tap before clearing remaining timers.
         var handled = base.DispatchTouchEvent(e);
+        if (e.ActionMasked == MotionEventActions.Down)
+        {
+            // A settling RecyclerView may consume Down before a verse receives
+            // it. Give the page a chance to arm that still-stationary press.
+            _touchDispatched?.Invoke(this, position);
+        }
         if (released)
         {
             LongPressBehavior.CancelAllPending();

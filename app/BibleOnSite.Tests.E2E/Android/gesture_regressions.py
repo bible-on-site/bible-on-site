@@ -152,6 +152,43 @@ if not args.restart_only:
     tap(next(n for n in nodes if n.get("resource-id", "").endswith("/SelectionBackButton")))
     require(snapshot()[1] == 0, "Selection exit after post-scroll hold failed")
 
+    # A fast scroll can still be settling when the next stationary hold begins.
+    # Check several points because the verse rows move and have gaps between them.
+    valid_fling_holds = 0
+    for hold_y in (780, 900, 1000, 1200, 1500):
+        adb("shell", "am", "force-stop", "com.tanah.daily929")
+        adb("shell", "monkey", "-p", "com.tanah.daily929", "-c", "android.intent.category.LAUNCHER", 1)
+        deadline = time.monotonic() + 20
+        while True:
+            before, count, verses, nodes = snapshot()
+            if before is not None and verses:
+                break
+            require(time.monotonic() < deadline, "Chapter was not ready for fling-hold test")
+            time.sleep(0.2)
+        if count:
+            tap(next(n for n in nodes if n.get("resource-id", "").endswith("/SelectionBackButton")))
+        swipe(500, 550, 500, 1850, 700)
+        before, _, verses, _ = snapshot()
+        first_verse = verses[0].get("text")
+        raw_swipe(500, 1850, 500, 550, 120)
+        raw_swipe(500, hold_y, 500, hold_y, 900)
+        after, count, verses, _ = snapshot()
+        if after != before or not verses or verses[0].get("text") == first_verse:
+            continue
+        x, y = round(500 * WIDTH / 1080), round(hold_y * HEIGHT / 2400)
+        if not any(left < x < right and top < y < bottom
+                   for verse in verses for left, top, right, bottom in [bounds(verse)]):
+            continue
+        if count == 0:
+            raw_swipe(500, hold_y, 500, hold_y, 900)
+            if snapshot()[1] == 1:
+                raise AssertionError(f"First hold after fling was swallowed at y={hold_y}")
+            continue
+        require(count == 1, f"First hold after fling selected {count} verses")
+        valid_fling_holds += 1
+    require(valid_fling_holds > 0, "No fling-hold attempt landed inside a verse")
+    print(f"PASS: first hold during fling selected in {valid_fling_holds} valid attempts", flush=True)
+
 # Recreate the first-touch lag case, including both directions after a restart.
 for x1, x2 in [(850, 200), (200, 850)]:
     adb("shell", "am", "force-stop", "com.tanah.daily929")

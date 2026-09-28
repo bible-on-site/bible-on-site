@@ -1,6 +1,7 @@
 using System.Timers;
 using System.Windows.Input;
 using BibleOnSite.Helpers;
+using BibleOnSite.Models;
 
 namespace BibleOnSite.Behaviors;
 
@@ -129,6 +130,43 @@ public class LongPressBehavior : Behavior<View>
 
 #if ANDROID
     private Android.Views.View? _androidView;
+
+    /// <summary>
+    /// A settling RecyclerView can consume Down without dispatching it to the
+    /// verse. Arm that verse after native dispatch only if it did not receive
+    /// Down itself; the activity still cancels the press on movement or Up.
+    /// </summary>
+    public static void BeginUnreceivedPress(float rawX, float rawY, Perek? currentPerek)
+    {
+        if (currentPerek?.Pasukim is not { Count: > 0 } pasukim)
+            return;
+
+        lock (_lock)
+        {
+            foreach (var behavior in _activeBehaviors)
+            {
+                if (behavior._androidView is not { IsShown: true } view ||
+                    behavior._associatedView?.BindingContext is not Pasuk pasuk ||
+                    !pasukim.Contains(pasuk))
+                    continue;
+
+                var visibleBounds = new Android.Graphics.Rect();
+                if (!view.GetGlobalVisibleRect(visibleBounds) ||
+                    !visibleBounds.Contains((int)rawX, (int)rawY))
+                    continue;
+
+                if (!behavior._press.IsPressed)
+                {
+                    var touchSlop = view.Context is { } context
+                        ? Android.Views.ViewConfiguration.Get(context)?.ScaledTouchSlop ?? 12
+                        : 12;
+                    behavior._press.Begin(rawX, rawY, touchSlop);
+                    behavior.StartLongPressTimer();
+                }
+                return;
+            }
+        }
+    }
 
     private void AttachNativeEvents()
     {
