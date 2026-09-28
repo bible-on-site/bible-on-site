@@ -45,4 +45,14 @@ jobs:
 
       - name: Verify version
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        run: npm run verify-version -- --module ${{ inputs.module_name }}
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MODULE_NAME: ${{ inputs.module_name }}
+        run: |
+          args=(--module "$MODULE_NAME")
+          # A released tag can lag behind master while another release runs.
+          # PR and merge-queue checks must reserve a version above master too.
+          if [[ "$MODULE_NAME" == "website" ]] && [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "merge_group" ]]; then
+            args+=(--against-ref origin/master)
+          fi
+          npm run verify-version -- "${args[@]}"
