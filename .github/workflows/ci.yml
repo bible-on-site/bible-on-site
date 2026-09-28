@@ -1617,7 +1617,10 @@ jobs:
 
       - name: Select Xcode version
         run: |
-          XCODE_PATH=$(ls -d /Applications/Xcode_26.6*.app 2>/dev/null | sort -V | tail -1)
+          XCODE_PATH=/Applications/Xcode_26.6.app
+          if [ ! -d "$XCODE_PATH" ]; then
+            XCODE_PATH=""
+          fi
           if [ -z "$XCODE_PATH" ]; then
             XCODE_PATH=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
           fi
@@ -1627,6 +1630,7 @@ jobs:
           echo "Selecting Xcode: $XCODE_PATH"
           sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
           xcodebuild -version
+          xcrun --sdk macosx --show-sdk-path
 
       # TODO(#1401): iOS SDK forces IL stripping even for simulator builds.
       # We kill the process once the DLL is produced to skip IL stripping.

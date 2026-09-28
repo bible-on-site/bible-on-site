@@ -400,7 +400,10 @@ jobs:
           ls -la /Applications/ | grep -i xcode || true
 
           # The current MAUI iOS workload requires Xcode 26.6.
-          XCODE_PATH=$(ls -d /Applications/Xcode_26.6*.app 2>/dev/null | sort -V | tail -1)
+          XCODE_PATH=/Applications/Xcode_26.6.app
+          if [ ! -d "$XCODE_PATH" ]; then
+            XCODE_PATH=""
+          fi
           if [ -z "$XCODE_PATH" ]; then
             echo "Xcode 26.6 not found, trying the newest available 26.x"
             XCODE_PATH=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
