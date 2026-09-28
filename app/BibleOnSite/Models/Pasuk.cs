@@ -158,7 +158,8 @@ public partial class Pasuk : ObservableObject
                     break;
 
                 default:
-                    break;
+                    throw new ArgumentOutOfRangeException(nameof(segment.Type), segment.Type,
+                        "Unknown verse segment type");
             }
 
             // Add space after segment unless:

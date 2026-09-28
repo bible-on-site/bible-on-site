@@ -2,7 +2,6 @@
 
 import re
 import sys
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
@@ -10,9 +9,11 @@ PROJECT = Path("app/BibleOnSite/BibleOnSite.csproj")
 
 
 def check_version(path: Path) -> list[str]:
-    root = ET.parse(path).getroot()
-    display_versions = [element.text for element in root.iter("ApplicationDisplayVersion")]
-    if len(display_versions) != 1 or not display_versions[0]:
+    content = path.read_text(encoding="utf-8")
+    display_versions = re.findall(
+        r"<ApplicationDisplayVersion>([^<]+)</ApplicationDisplayVersion>", content
+    )
+    if len(display_versions) != 1:
         return ["Expected exactly one ApplicationDisplayVersion"]
 
     match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", display_versions[0])
@@ -28,8 +29,11 @@ def check_version(path: Path) -> list[str]:
         "other platforms": patch,
     }
     actual = {}
-    for element in root.iter("ApplicationVersion"):
-        condition = element.get("Condition", "")
+    versions = re.findall(
+        r'<ApplicationVersion\s+Condition="([^"]+)">(\d+)</ApplicationVersion>',
+        content,
+    )
+    for condition, value in versions:
         if "== 'android'" in condition:
             platform = "android"
         elif "!= 'android'" in condition:
@@ -38,7 +42,7 @@ def check_version(path: Path) -> list[str]:
             return [f"Unrecognized ApplicationVersion condition: {condition}"]
         if platform in actual:
             return [f"Duplicate ApplicationVersion for {platform}"]
-        actual[platform] = element.text
+        actual[platform] = value
 
     errors = []
     for platform, number in expected.items():

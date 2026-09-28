@@ -267,7 +267,7 @@ public partial class PerekPage : ContentPage
     {
 #if ANDROID
         MainActivity.TouchStarted -= OnTouchStarted;
-        MainActivity.TouchDispatched -= OnTouchDispatched;
+        MainActivity.UnsubscribeTouchDispatched(OnTouchDispatched);
         MainActivity.TouchReleased -= OnTouchReleased;
         MainActivity.TouchCancelled -= OnTouchCancelled;
         _swipe.Cancel();
@@ -318,7 +318,7 @@ public partial class PerekPage : ContentPage
         base.OnAppearing();
 #if ANDROID
         MainActivity.TouchStarted += OnTouchStarted;
-        MainActivity.TouchDispatched += OnTouchDispatched;
+        MainActivity.SubscribeTouchDispatched(OnTouchDispatched);
         MainActivity.TouchReleased += OnTouchReleased;
         MainActivity.TouchCancelled += OnTouchCancelled;
 #endif

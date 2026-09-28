@@ -20,7 +20,13 @@ public class MainActivity : MauiAppCompatActivity
     private bool _singleTouchActive;
 
     public static event EventHandler<TouchPosition>? TouchStarted;
-    public static event EventHandler<TouchPosition>? TouchDispatched; // NOSONAR: invoked after native Down dispatch
+    private static EventHandler<TouchPosition>? _touchDispatched;
+
+    public static void SubscribeTouchDispatched(EventHandler<TouchPosition> handler) =>
+        _touchDispatched += handler;
+
+    public static void UnsubscribeTouchDispatched(EventHandler<TouchPosition> handler) =>
+        _touchDispatched -= handler;
     public static event EventHandler<TouchPosition>? TouchReleased;
     public static event EventHandler? TouchCancelled;
 
@@ -83,7 +89,7 @@ public class MainActivity : MauiAppCompatActivity
         {
             // A settling RecyclerView may consume Down before a verse receives
             // it. Give the page a chance to arm that still-stationary press.
-            TouchDispatched?.Invoke(this, position);
+            _touchDispatched?.Invoke(this, position);
         }
         if (released)
         {
