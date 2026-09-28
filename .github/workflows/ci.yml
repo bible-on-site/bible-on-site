@@ -419,7 +419,8 @@ jobs:
 
   # Version Verification Jobs
   # These jobs run on PRs and master to verify that module versions are properly bumped
-  # before any release can occur. This prevents CD failures due to duplicate versions.
+  # before any release can occur. Website PRs must also exceed the current master
+  # version, since a released tag can lag behind an in-flight master build.
   verify_website_version:
     name: Verify Website Version
     needs: [setup_env, determine_website_changes]
@@ -2595,22 +2596,21 @@ jobs:
           client-payload: '{"ref": "${{ github.ref }}", "run_id": "${{ github.run_id }}"}'
 
   # ====================================================================================
-  # VERSION BUMP JOB - Consolidated version bumping to avoid race conditions
+  # VERSION BUMP JOB - Consolidated version bumping for non-website modules
   # ====================================================================================
-  # This job runs after all release jobs and bumps versions for all released modules
-  # in a single commit/push, avoiding the race conditions that occur when multiple
-  # release jobs try to push version bumps in parallel.
+  # Website changes reserve their version in the PR and keep it on master after
+  # release. Bumping it afterward let overlapping master runs package the same
+  # version. Other modules retain their existing centralized post-release bump.
   # ====================================================================================
   bump_versions:
     name: Bump Versions
-    needs: [setup_env, release_website, release_api, release_app, release_admin, release_bulletin]
+    needs: [setup_env, release_api, release_app, release_admin, release_bulletin]
     # Run if at least one module was released
     # Note: Using always() + result check as a workaround for reusable workflow result evaluation issues (see #1065)
     # For each release job, we check both result == 'success' AND outputs.released == 'true'
     if: >-
       ${{ always() && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' &&
-      ((needs.release_website.result == 'success' && needs.release_website.outputs.released == 'true') ||
-       (needs.release_api.result == 'success' && needs.release_api.outputs.released == 'true') ||
+      ((needs.release_api.result == 'success' && needs.release_api.outputs.released == 'true') ||
        (needs.release_app.result == 'success' && needs.release_app.outputs.released == 'true') ||
        (needs.release_admin.result == 'success' && needs.release_admin.outputs.released == 'true') ||
        (needs.release_bulletin.result == 'success' && needs.release_bulletin.outputs.released == 'true')) }}
@@ -2638,8 +2638,8 @@ jobs:
           ssh-private-key: ${{ secrets.DEPLOY_KEY }}
 
       # Setup toolchains for modules that need version bumps
-      - name: Setup Node.js (for Website/Admin/Bulletin)
-        if: ${{ needs.release_website.outputs.released == 'true' || needs.release_admin.outputs.released == 'true' || needs.release_bulletin.outputs.released == 'true' }}
+      - name: Setup Node.js (for Admin/Bulletin)
+        if: ${{ needs.release_admin.outputs.released == 'true' || needs.release_bulletin.outputs.released == 'true' }}
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
@@ -2679,13 +2679,6 @@ jobs:
         run: dotnet tool restore
 
       # Bump versions for each released module
-      - name: Bump Website Version
-        if: ${{ needs.release_website.outputs.released == 'true' }}
-        working-directory: ${{ needs.setup_env.outputs.website_directory }}
-        # Use --ignore-scripts to avoid running the 'version' script which requires cross-env-shell
-        # The version script just echoes the version and isn't needed during the bump
-        run: npm version patch --no-git-tag-version --ignore-scripts
-
       - name: Bump Admin Version
         if: ${{ needs.release_admin.outputs.released == 'true' }}
         working-directory: ${{ needs.setup_env.outputs.admin_directory }}
@@ -2713,12 +2706,6 @@ jobs:
 
           FILES_TO_ADD=""
           MODULES_BUMPED=""
-
-          if [ "${{ needs.release_website.outputs.released }}" = "true" ]; then
-            FILES_TO_ADD="$FILES_TO_ADD ${{ needs.setup_env.outputs.website_directory }}/package.json ${{ needs.setup_env.outputs.website_directory }}/package-lock.json"
-            WEBSITE_VERSION=$(node -e "const pkg = require('./${{ needs.setup_env.outputs.website_directory }}/package.json'); console.log(pkg.version)")
-            MODULES_BUMPED="${MODULES_BUMPED}website to ${WEBSITE_VERSION}, "
-          fi
 
           if [ "${{ needs.release_admin.outputs.released }}" = "true" ]; then
             FILES_TO_ADD="$FILES_TO_ADD ${{ needs.setup_env.outputs.admin_directory }}/package.json ${{ needs.setup_env.outputs.admin_directory }}/package-lock.json"
