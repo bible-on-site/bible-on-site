@@ -45,6 +45,30 @@
   text-align: center;
 }
 
+/* The plain children layout uses the same uninterrupted center line as the
+   spouse/children matrix. Keep each label's spacing inside its painted box so
+   the line reaches the first row without drawing through the child cards. */
+.childrenBranch {
+  width: 100%;
+}
+
+.childrenBranch :is(.connector, .verticalConnector, .tierLabel, .verticalTierLabel, .altGroupLabel, .coParentChildLabel) {
+  background-image: linear-gradient(#a5b4fc, #a5b4fc);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 2px 100%;
+}
+
+.childrenBranch :is(.tierLabel, .verticalTierLabel, .altGroupLabel, .coParentChildLabel) {
+  margin-bottom: 0;
+  padding-bottom: 8px;
+}
+
+.childrenBranch .connector {
+  height: 24px;
+  margin-bottom: 0;
+}
+
 /* תווית «הורים» מעל הקו האופקי שמתחת לכרטיסי ההורים */
 .tierLabelParentsAboveArm {
   margin: 0 auto 10px;
