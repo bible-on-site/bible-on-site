@@ -115,11 +115,7 @@ const Sefer = (props: {
 	const flipBookRef = useRef<FlipBookHandle>(null);
 	const bookWrapperRef = useRef<HTMLDivElement>(null);
 	const selectableContentRef = useMemo(
-		() =>
-			createSelectableBookContentRef((direction) => {
-				if (direction === "next") void flipBookRef.current?.flipNext();
-				else void flipBookRef.current?.flipPrev();
-			}),
+		() => createSelectableBookContentRef(),
 		[],
 	);
 	const seferColor = getSeferColor(perekObj.sefer);

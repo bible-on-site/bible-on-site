@@ -1,47 +1,59 @@
-type SwipeDirection = "next" | "previous";
+type MouseGesture = {
+	pointerId: number;
+	x: number;
+	y: number;
+	startedAt: number;
+	mode: "pending" | "select" | "flip";
+};
 
-/** Let text drags select, while fast mouse swipes and touch swipes turn pages. */
-export function createSelectableBookContentRef(
-	onSwipe: (direction: SwipeDirection) => void,
-) {
+/** Keep text selection native until a quick horizontal drag claims the book. */
+export function createSelectableBookContentRef() {
 	return (element: HTMLElement | null) => {
 		if (!element) return;
 
-		let start: { x: number; y: number; time: number } | null = null;
-		const stopPointerDown = (event: PointerEvent) => {
-			// The page padding still belongs to the flipbook. Touch gestures go to
-			// Hammer too, so horizontal swipes keep their normal drag animation.
-			if (event.target === element || event.pointerType === "touch") return;
-			event.stopPropagation();
-			if (event.button !== 0) return;
-			start = { x: event.clientX, y: event.clientY, time: performance.now() };
-			window.addEventListener("pointerup", finishPointer, true);
-			window.addEventListener("pointercancel", cancelPointer, true);
+		let gesture: MouseGesture | null = null;
+		const clearSelection = () => window.getSelection()?.removeAllRanges();
+		const stopTracking = () => {
+			gesture = null;
+			window.removeEventListener("pointermove", onPointerMove, true);
+			window.removeEventListener("pointerup", onPointerUp, true);
+			window.removeEventListener("pointercancel", stopTracking, true);
 		};
-		const stopMouseDown = (event: MouseEvent) => {
-			if (event.target !== element) event.stopPropagation();
-		};
-		const cancelPointer = () => {
-			start = null;
-			window.removeEventListener("pointerup", finishPointer, true);
-			window.removeEventListener("pointercancel", cancelPointer, true);
-		};
-		const finishPointer = (event: PointerEvent) => {
-			if (!start) return;
-			const dx = event.clientX - start.x;
-			const dy = event.clientY - start.y;
-			const duration = performance.now() - start.time;
-			cancelPointer();
-			if (
-				Math.abs(dx) < 120 ||
-				Math.abs(dx) < Math.abs(dy) * 1.5 ||
-				duration > 450
-			) {
+		const onPointerMove = (event: PointerEvent) => {
+			if (!gesture || event.pointerId !== gesture.pointerId) return;
+			if (gesture.mode === "select") {
+				event.stopPropagation();
 				return;
 			}
+			if (gesture.mode === "pending") {
+				const dx = event.clientX - gesture.x;
+				const dy = event.clientY - gesture.y;
+				if (
+					performance.now() - gesture.startedAt > 450 ||
+					Math.abs(dy) > Math.abs(dx)
+				) {
+					gesture.mode = "select";
+					event.stopPropagation();
+					return;
+				}
+				if (Math.abs(dx) < 120 || Math.abs(dx) < Math.abs(dy) * 1.5) {
+					event.stopPropagation();
+					return;
+				}
+				gesture.mode = "flip";
+			}
 
-			// A swipe is navigation, not a text selection or a link activation.
-			window.getSelection()?.removeAllRanges();
+			// Hammer receives this move and every later one, so the leaf follows
+			// the pointer. Suppress the browser's competing text selection.
+			event.preventDefault();
+			clearSelection();
+		};
+		const onPointerUp = (event: PointerEvent) => {
+			if (!gesture || event.pointerId !== gesture.pointerId) return;
+			const wasFlip = gesture.mode === "flip";
+			stopTracking();
+			if (!wasFlip) return;
+			clearSelection();
 			const suppressClick = (click: MouseEvent) => {
 				click.preventDefault();
 				click.stopImmediatePropagation();
@@ -50,19 +62,36 @@ export function createSelectableBookContentRef(
 				capture: true,
 				once: true,
 			});
-			setTimeout(
-				() => window.removeEventListener("click", suppressClick, true),
-				0,
-			);
-			onSwipe(dx > 0 ? "next" : "previous");
+			setTimeout(() => {
+				clearSelection();
+				window.removeEventListener("click", suppressClick, true);
+			}, 0);
+		};
+		const onPointerDown = (event: PointerEvent) => {
+			// Touch and page padding remain entirely owned by the flipbook.
+			if (
+				event.target === element ||
+				event.pointerType !== "mouse" ||
+				event.button !== 0
+			)
+				return;
+			stopTracking();
+			gesture = {
+				pointerId: event.pointerId,
+				x: event.clientX,
+				y: event.clientY,
+				startedAt: performance.now(),
+				mode: "pending",
+			};
+			window.addEventListener("pointermove", onPointerMove, true);
+			window.addEventListener("pointerup", onPointerUp, true);
+			window.addEventListener("pointercancel", stopTracking, true);
 		};
 
-		element.addEventListener("pointerdown", stopPointerDown);
-		element.addEventListener("mousedown", stopMouseDown);
+		element.addEventListener("pointerdown", onPointerDown);
 		return () => {
-			cancelPointer();
-			element.removeEventListener("pointerdown", stopPointerDown);
-			element.removeEventListener("mousedown", stopMouseDown);
+			stopTracking();
+			element.removeEventListener("pointerdown", onPointerDown);
 		};
 	};
 }

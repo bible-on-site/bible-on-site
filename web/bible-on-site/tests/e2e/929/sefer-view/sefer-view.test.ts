@@ -1,4 +1,4 @@
-import { expect } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 import { SeferPage } from "../../../util/playwright/page-objects/sefer-page";
 import { test } from "../../../util/playwright/test-fixture";
 
@@ -14,6 +14,18 @@ import { test } from "../../../util/playwright/test-fixture";
  * Sefer view is only available on tablet and larger viewports (>= 768px)
  * Tests use the skipOnMobile fixture to automatically skip on mobile viewports.
  */
+
+function activePageAngle(page: Page) {
+	return page.evaluate(() => {
+		const turningPage = Array.from(
+			document.querySelectorAll<HTMLElement>(".he-book .page"),
+		).find((page) => page.style.willChange === "transform");
+		const angle = turningPage?.style.transform.match(
+			/rotateY\((-?[\d.]+)deg\)/,
+		);
+		return angle ? Math.abs(Number(angle[1])) : 0;
+	});
+}
 
 test.describe("Sefer view", () => {
 	// Skip all tests in this suite on mobile viewports - sefer view requires tablet+
@@ -83,6 +95,15 @@ test.describe("Sefer view", () => {
 		await page.mouse.down();
 		await page.waitForTimeout(500);
 		await page.mouse.move(x + 200, y, { steps: 5 });
+		expect(
+			await page
+				.locator(".he-book .page")
+				.evaluateAll((pages) =>
+					pages.some(
+						(page) => (page as HTMLElement).style.willChange === "transform",
+					),
+				),
+		).toBe(false);
 		await page.mouse.up();
 		await expect
 			.poll(() =>
@@ -116,12 +137,56 @@ test.describe("Sefer view", () => {
 		const before = await indicator.inputValue();
 		await page.mouse.move(x, y);
 		await page.mouse.down();
-		await page.mouse.move(x + 600, y, { steps: 1 });
+		await page.mouse.move(x + 600, y, { steps: 6 });
 		await page.mouse.up();
 		await expect(indicator).not.toHaveValue(before);
 		expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(
 			"",
 		);
+	});
+
+	test("Dragging verse content holds and moves the page before release", async ({
+		page,
+	}) => {
+		await page.setViewportSize({ width: 1440, height: 900 });
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await seferPage.verifyPesukimAreVisible();
+		const rect = await page
+			.locator(".he-book article:visible")
+			.first()
+			.boundingBox();
+		if (!rect) throw new Error("Verse text is not visible");
+		const x = rect.x + 60;
+		const y = rect.y + 45;
+		expect(
+			await page.evaluate(
+				({ x, y }) =>
+					document.elementFromPoint(x, y)?.closest("article") !== null,
+				{ x, y },
+			),
+		).toBe(true);
+		const indicator = page.locator(".flipbook-toolbar-indicator");
+		await expect(indicator).toHaveValue("א' / נ'");
+		const turningAngle = () => activePageAngle(page);
+
+		await page.mouse.move(x, y);
+		await page.mouse.down();
+		await page.mouse.move(x + 300, y, { steps: 6 });
+		await expect.poll(turningAngle).toBeGreaterThan(10);
+		const heldAt = await turningAngle();
+		await page.waitForTimeout(250);
+		expect(await turningAngle()).toBeGreaterThan(10);
+		await page.mouse.move(x + 480, y, { steps: 4 });
+		await expect
+			.poll(async () => Math.abs((await turningAngle()) - heldAt))
+			.toBeGreaterThan(10);
+		await expect(indicator).toHaveValue("א' / נ'");
+		await page.mouse.move(x + 600, y, { steps: 3 });
+		await page.waitForTimeout(250);
+		await page.mouse.up();
+		await expect(indicator).toHaveValue("א' / נ'");
+		await expect.poll(turningAngle).toBe(0);
 	});
 
 	test("Mouse swipe over verse text turns back to the previous page", async ({
@@ -149,7 +214,7 @@ test.describe("Sefer view", () => {
 		await expect(indicator).toHaveValue("ב' / נ'");
 		await page.mouse.move(x, y);
 		await page.mouse.down();
-		await page.mouse.move(x - 600, y, { steps: 1 });
+		await page.mouse.move(x - 600, y, { steps: 6 });
 		await page.mouse.up();
 		await expect(indicator).toHaveValue("א' / נ'");
 	});
@@ -157,7 +222,7 @@ test.describe("Sefer view", () => {
 	test.describe("Touch swipe", () => {
 		test.use({ hasTouch: true });
 
-		test("Swiping verse text turns the page", async ({ page }) => {
+		test("Swiping verse text drags and turns the page", async ({ page }) => {
 			await page.setViewportSize({ width: 1440, height: 900 });
 			const seferPage = new SeferPage(page);
 			await seferPage.openSeferViewForPerek(1);
@@ -189,6 +254,11 @@ test.describe("Sefer view", () => {
 					type: "touchMove",
 					touchPoints: [{ x: x + Math.round((step * 650) / 6), y }],
 				});
+				if (step === 3) {
+					await expect.poll(() => activePageAngle(page)).toBeGreaterThan(10);
+					await page.waitForTimeout(150);
+					expect(await activePageAngle(page)).toBeGreaterThan(10);
+				}
 			}
 			await client.send("Input.dispatchTouchEvent", {
 				type: "touchEnd",
