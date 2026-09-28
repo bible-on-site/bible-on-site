@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import xml.etree.ElementTree as element_tree
 
@@ -70,12 +71,12 @@ def snapshot():
     def visible_verse(node):
         box = bounds(node)
         return len(box) == 4 and box[2]-box[0] > width * 0.5 and box[0] < width // 2 < box[2]
-    headers = [n for n in nodes if n.get("resource-id", "").endswith("/PerekHeader") and n.get("text") and centered(n)]
+    headers = [n for n in nodes if n.get("resource-id", "").endswith("/PerekHeader") and centered(n)]
     verses = [n for n in nodes if n.get("resource-id", "").endswith("/PasukText") and visible_verse(n)]
     count = next((int(n.get("text")) for n in nodes if n.get("resource-id", "").endswith("/SelectionCountLabel")), 0)
     loading = any(n.get("text") == "מתחבר לפרק..." and len(bounds(n)) == 4
                   and bounds(n)[2]-bounds(n)[0] > width * 0.1 for n in nodes)
-    return (headers[-1].get("text") if headers and not loading else None), count, verses, nodes
+    return ((headers[-1].get("text") or "untitled chapter") if headers and not loading else None), count, verses, nodes
 
 
 def ready(restart=False):
@@ -96,6 +97,36 @@ def clear_selection(nodes):
     if buttons:
         tap_bounds(buttons[0].get("bounds"))
         require(snapshot()[1] == 0, "Selection did not clear")
+
+
+def prepare_long_chapter():
+    """Select Psalm 119 on a debuggable emulator without changing app source."""
+    adb("shell", "am", "force-stop", package)
+    preferences = f"shared_prefs/{package}_preferences.xml"
+    try:
+        raw = adb("shell", "run-as", package, "cat", preferences)
+    except subprocess.CalledProcessError as error:
+        if b"not debuggable" in error.stderr:
+            return  # A Play build must be navigated to Psalm 119 in the UI.
+        raw = b"<map />"
+
+    root = element_tree.fromstring(raw)
+    for name, value in (("lastLearntPerek", "686"), ("perekToLoad", "1")):
+        setting = next((item for item in root if item.get("name") == name), None)
+        if setting is None:
+            setting = element_tree.SubElement(root, "int", name=name)
+        setting.set("value", value)
+
+    with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as temporary:
+        temporary.write(element_tree.tostring(root, encoding="utf-8", xml_declaration=True))
+        local_path = temporary.name
+    try:
+        remote_path = "/data/local/tmp/bible-on-site-test-preferences.xml"
+        adb("push", local_path, remote_path)
+        adb("shell", "run-as", package, "mkdir", "-p", "shared_prefs")
+        adb("shell", "run-as", package, "cp", remote_path, preferences)
+    finally:
+        os.unlink(local_path)
 
 
 def frames():
@@ -301,7 +332,10 @@ def check_scroll_through():
 
 
 def check_scroll_burst():
+    prepare_long_chapter()
     chapter, count, verses, nodes = ready(restart=True)
+    require(chapter == "untitled chapter",
+            "Select Psalm 119 (chapter 686) before the long-chapter scroll test")
     if count:
         clear_selection(nodes)
     first = verses[0].get("text")
