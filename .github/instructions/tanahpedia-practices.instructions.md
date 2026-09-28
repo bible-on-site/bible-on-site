@@ -1,6 +1,6 @@
 ---
 description: "Tanahpedia change classification (schema/data/UI) and required workflow per kind"
-applyTo: "data/mysql/tanahpedia_*, web/api/src/**/tanahpedia*/**, web/api/src/resolvers/tanahpedia_*, web/bible-on-site/src/**/tanahpedia/**, web/bible-on-site/src/lib/tanahpedia/**, web/admin/**/tanahpedia*/**, devops/deploy/data-deploy/**, docs/tanahpedia/**"
+applyTo: "data/mysql/tanahpedia_*, data/tanahpedia/ops/**, web/api/src/**/tanahpedia*/**, web/api/src/resolvers/tanahpedia_*, web/bible-on-site/src/**/tanahpedia/**, web/bible-on-site/src/lib/tanahpedia/**, web/admin/**/tanahpedia*/**, devops/deploy/data-deploy/**, docs/tanahpedia/**"
 ---
 
 # Tanahpedia Change Classification
@@ -31,18 +31,18 @@ Never rediscover the write path from the UI or database schema: the canonical co
 - The canonical local dataset is a **prod copy**: `npx tsx devops/setup-dev-env.mts sync-from-prod` (AWS SSO first) restores production into `tanah-dev` and applies the safe structure/baseline upgrade. Refresh by re-syncing — never hand-repair local content.
 - The demo family SQL scripts (`tanahpedia_family_*.sql`, `cargo make mysql-apply-tanahpedia-families`) are CI/edge-lab fixtures only — never the local seed, and never re-run over a prod-synced database: their fixed-UUID delete/re-insert overwrites API-authored rows.
 
-### Required local-first sequence
+### Required data-change sequence
 
 1. Fetch current `master` and inspect the checked-out schema/resolvers — a mutation on another branch or worktree is not deployed.
-2. Start the local API against a **prod-synced** database with an ephemeral revision key; confirm `/health` and one authenticated read before any write.
+2. Prefer the local API against a **prod-synced** database with an ephemeral revision key; confirm `/health` and one authenticated read before any write. If that environment is unavailable and the user explicitly authorizes a direct production data update, record the local blocker, run authenticated production read-only reconnaissance, and validate the operation file before applying it. Never substitute demo fixtures for a production copy.
 3. Query first with `tanahpediaFindEntities`, `tanahpediaFindPersons`, `tanahpediaPersonDetails`, `tanahpediaPersonUnions`, `tanahpediaPersonParentChild`; disambiguate name matches by stable IDs and entry associations.
 4. Per new entry: `submitEntryRevision`, inspect the `PENDING` result, `applyEntryRevision`, capture the `entryId`.
 5. Put the person node, then link the applied entry with `putTanahpediaEntryEntityLink` (input takes `entryUniqueName`, not the entry UUID).
 6. Put parent-child and union rows only once every referenced person exists, preserving every optional citation, order, date, end reason, and alternate-group field.
 7. Rerun the puts to prove idempotency, then reread every writable field and exact relationship count.
-8. Verify the rendered local entry and its related-node links — a successful mutation or HTTP 200 is not sufficient.
+8. Verify the rendered entry and its related-node links on the target environment — a successful mutation or HTTP 200 is not sufficient.
 9. Save the endpoint-independent operations, variables, stable IDs, and readback results for review; never the bearer token.
-10. Stop before production. Only after explicit approval, replay the reviewed operations with the production key, then repeat readback and rendered verification on both production domains.
+10. Stop before production unless the user has explicitly authorized this production data update. With authorization, apply the reviewed operation file using the production key, then repeat readback and rendered verification on both production domains. Report when local validation was unavailable.
 
 ## 1. Schema change
 
@@ -58,7 +58,7 @@ Adding/renaming/dropping a column, table, or relationship in a `tanahpedia_*` My
 
 ## 2. Data change
 
-Content edits (entries, citations, relationships) with no schema change: test locally, apply to production through the authenticated **write API** (never raw SQL), then reread through the API, compare every writable field, and verify the rendered result on both production domains.
+Content edits (entries, citations, relationships) with no schema change: follow the required data-change sequence above. Apply to production through the authenticated **write API** (never raw SQL), then reread through the API, compare every writable field, and verify the rendered result on both production domains.
 
 ## 3. UI change
 

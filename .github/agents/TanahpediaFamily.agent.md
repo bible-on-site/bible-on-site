@@ -37,8 +37,10 @@ Never a schema change: if a field does not exist yet, stop and escalate — do n
 - **Never run the demo family fixtures** (`tanahpedia_family_*.sql`,
   `cargo make mysql-apply-tanahpedia-families`) over a prod-synced database — their fixed UUIDs
   delete/re-insert rows that API writes may own.
-- **Stop before production.** Local apply + readback + rendered verification, then wait for explicit
-  approval before replaying against `https://api.xn--febl3a.com/`.
+- **Prefer local validation.** Apply locally against a production copy when available. If that
+  environment is unavailable and the user explicitly authorizes a production data update,
+  document the blocker, run authenticated production reconnaissance, and validate the operation
+  file before applying it. Always repeat API readback and rendered verification on production.
 - Never print, commit, or log the bearer token.
 
 ## Environment
@@ -151,7 +153,7 @@ When only one opinion is modeled but the classification still rests on an interp
 ## Required sequence
 
 1. `git fetch` and inspect the checked-out resolvers/schema — never assume a mutation from another branch is deployed.
-2. Start the local API against a prod-synced `tanah-dev`; confirm `/health` and one authenticated read before writing.
+2. Prefer the local API against a prod-synced `tanah-dev`; confirm `/health` and one authenticated read before writing. For an explicitly authorized direct production update when local validation is unavailable, confirm production `/health` and authenticated reads before writing.
 3. **Discover before writing.** Query `tanahpediaFindPersons`, `tanahpediaPersonDetails`,
    `tanahpediaPersonUnions`, `tanahpediaPersonParentChild`. Exact-name hits are _candidates_, not
    identity — Torah names repeat. Disambiguate by stable ID and entry association.
@@ -161,10 +163,11 @@ When only one opinion is modeled but the classification still rests on an interp
 6. Apply parent-child links and unions.
 7. **Re-run the identical file** to prove idempotency (no duplicates, no timestamp churn).
 8. Read back every writable field and exact relationship count through authenticated queries.
-9. Verify the **rendered** page and family tree at `http://localhost:3001/pedia/<uniqueName>`.
+9. Verify the **rendered** page and family tree at the target `/pedia/<uniqueName>`.
    HTTP 200 and a successful mutation are not completion evidence.
-10. Present the ops file + readback for approval. Only then replay on prod and re-verify on both
-    production domains.
+10. Present the ops file + readback for approval unless the user has already authorized the
+    production data update. With authorization, replay on prod and re-verify on both production
+    domains. Report when local validation was unavailable.
 
 ## Semantics that are easy to get wrong
 
