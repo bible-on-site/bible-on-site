@@ -1472,7 +1472,7 @@ jobs:
       - name: Verify Android NuGet restore
         run: |
           echo '{"sdk":{"version":"10.0.0","rollForward":"latestFeature"}}' > $GITHUB_WORKSPACE/global.json
-          dotnet workload install maui-android --skip-manifest-update
+          dotnet workload install maui-android
           dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android
           rm -f $GITHUB_WORKSPACE/global.json
 
@@ -1576,7 +1576,7 @@ jobs:
 
   app_ios_ci:
     name: App iOS CI
-    runs-on: macos-15
+    runs-on: macos-26
     needs: [setup_env, determine_app_changes, determine_baseline_availability, perushim_data]
     # Only on PRs — on master, Package iOS (IPA) already validates the full iOS build.
     if: ${{ github.event_name == 'pull_request' && always() && !cancelled() && !failure() && (needs.determine_app_changes.outputs.module_changed == 'true' || needs.determine_app_changes.outputs.ci_changed == 'true') }}
@@ -1607,7 +1607,7 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Install MAUI workload
-        run: dotnet workload install maui-ios --skip-manifest-update
+        run: dotnet workload install maui-ios
 
       - name: Restore perushim notes SQLite
         uses: actions/download-artifact@v8
@@ -1617,9 +1617,12 @@ jobs:
 
       - name: Select Xcode version
         run: |
-          XCODE_PATH=$(ls -d /Applications/Xcode_26.0*.app 2>/dev/null | sort -V | tail -1)
+          XCODE_PATH=/Applications/Xcode_26.6.app
+          if [ ! -d "$XCODE_PATH" ]; then
+            XCODE_PATH=""
+          fi
           if [ -z "$XCODE_PATH" ]; then
-            XCODE_PATH=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | head -1)
+            XCODE_PATH=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
           fi
           if [ -z "$XCODE_PATH" ]; then
             XCODE_PATH=$(xcode-select -p | sed 's|/Contents/Developer||')
@@ -1627,6 +1630,7 @@ jobs:
           echo "Selecting Xcode: $XCODE_PATH"
           sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
           xcodebuild -version
+          xcrun --sdk macosx --show-sdk-path
 
       # TODO(#1401): iOS SDK forces IL stripping even for simulator builds.
       # We kill the process once the DLL is produced to skip IL stripping.
@@ -1648,7 +1652,8 @@ jobs:
             fi
             sleep 2
           done
-          wait $PID; RC=$?
+          RC=0
+          wait $PID || RC=$?
           cat build.log
           exit $RC
 
