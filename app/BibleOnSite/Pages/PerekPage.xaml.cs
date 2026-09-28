@@ -272,7 +272,12 @@ public partial class PerekPage : ContentPage
         _lastScrollTime = DateTime.Now;
         _longPressTokenSource?.Cancel();
         _pressedPasukNum = -1;
+#if !ANDROID
+        // Android cancels the active press once its own touch moves beyond slop.
+        // A scroll event from a previous fling must not cancel a new hold, and
+        // walking every verse behavior on every scroll frame causes jank.
         LongPressBehavior.CancelAllPending();
+#endif
 #if IOS
         _scrollRefreshCts?.Cancel();
         _scrollRefreshCts = new CancellationTokenSource();
