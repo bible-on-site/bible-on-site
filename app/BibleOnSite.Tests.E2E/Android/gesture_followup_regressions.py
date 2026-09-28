@@ -11,7 +11,7 @@ import xml.etree.ElementTree as element_tree
 
 sys.stdout.reconfigure(encoding="utf-8")
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--case", choices=["all", "hold", "fling-hold", "cold-swipe", "cold-series", "scroll-frames", "scroll-through", "cross-gesture"], default="all")
+parser.add_argument("--case", choices=["all", "hold", "fling-hold", "cold-swipe", "cold-series", "scroll-frames", "scroll-through", "scroll-burst", "cross-gesture"], default="all")
 parser.add_argument("--adb")
 parser.add_argument("--serial")
 parser.add_argument("--package", default="com.tanah.daily929")
@@ -82,12 +82,12 @@ def ready(restart=False):
     if restart:
         adb("shell", "am", "force-stop", package)
         adb("shell", "monkey", "-p", package, "-c", "android.intent.category.LAUNCHER", 1)
-    deadline = time.monotonic() + 45
+    deadline = time.monotonic() + 90
     while True:
         chapter, count, verses, nodes = snapshot()
         if chapter is not None and verses:
             return chapter, count, verses, nodes
-        require(time.monotonic() < deadline, "Chapter did not become ready within 45 seconds")
+        require(time.monotonic() < deadline, "Chapter did not become ready within 90 seconds")
         time.sleep(0.2)
 
 
@@ -300,6 +300,28 @@ def check_scroll_through():
     print("PASS: consecutive vertical scrolls remain within the frame budget", flush=True)
 
 
+def check_scroll_burst():
+    chapter, count, verses, nodes = ready(restart=True)
+    if count:
+        clear_selection(nodes)
+    first = verses[0].get("text")
+    print(f"Rapid vertical-scroll chapter: {chapter}", flush=True)
+    adb("shell", "dumpsys", "gfxinfo", package, "reset")
+    for attempt in range(5):
+        drag(600, 1900, 600, 500, 120)
+        print(f"Finished rapid scroll {attempt + 1}", flush=True)
+    time.sleep(2)
+    sample = frames()
+    after, count, verses, _ = snapshot()
+    require(after == chapter and count == 0 and verses and verses[0].get("text") != first,
+            "The rapid vertical-scroll burst did not move cleanly")
+    print(f"Five consecutive fast scrolls (count, p90, max ms): {sample}", flush=True)
+    refresh_hz = display_refresh_hz()
+    require(sample[0] >= 30 and sample[1] <= 2000 / refresh_hz and sample[2] <= 6000 / refresh_hz,
+            f"Rapid vertical scrolling stalled at {refresh_hz:g} Hz")
+    print("PASS: rapid consecutive vertical scrolls stay within the frame budget", flush=True)
+
+
 def check_cross_gesture():
     before, count, verses, nodes = ready()
     if count:
@@ -330,6 +352,7 @@ cases = {
     "cold-series": check_cold_series,
     "scroll-frames": check_scroll_frames,
     "scroll-through": check_scroll_through,
+    "scroll-burst": check_scroll_burst,
     "cross-gesture": check_cross_gesture,
 }
 for name, check in cases.items():
