@@ -155,7 +155,7 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Install MAUI workload
-        run: dotnet workload install maui-windows --skip-manifest-update
+        run: dotnet workload install maui-windows
 
       - name: Decode signing certificate
         run: |
@@ -264,7 +264,7 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Install MAUI workload
-        run: dotnet workload install maui-android --skip-manifest-update
+        run: dotnet workload install maui-android
 
       - name: Restore perushim notes SQLite for AAB asset pack
         uses: actions/download-artifact@v8
@@ -389,7 +389,7 @@ jobs:
           # Show .NET SDK info to debug
           dotnet --info
           # Install the MAUI iOS workload
-          dotnet workload install maui-ios --skip-manifest-update
+          dotnet workload install maui-ios
           # Show installed workloads
           dotnet workload list
 
