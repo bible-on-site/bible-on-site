@@ -1648,7 +1648,8 @@ jobs:
             fi
             sleep 2
           done
-          wait $PID; RC=$?
+          RC=0
+          wait $PID || RC=$?
           cat build.log
           exit $RC
 
