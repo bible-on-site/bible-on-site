@@ -57,7 +57,7 @@ import {
 	toHebrewWithPunctuation,
 	wrapDownloadResult,
 } from "./sefer-page-utils";
-import { selectableBookContentRef } from "./selectable-book-content";
+import { createSelectableBookContentRef } from "./selectable-book-content";
 import { TanahpediaLink } from "./TanahpediaLink";
 import "html-flip-book-react/styles.css";
 import "./sefer.css";
@@ -114,6 +114,14 @@ const Sefer = (props: {
 	const sefer = getSeferByName(perekObj.sefer);
 	const flipBookRef = useRef<FlipBookHandle>(null);
 	const bookWrapperRef = useRef<HTMLDivElement>(null);
+	const selectableContentRef = useMemo(
+		() =>
+			createSelectableBookContentRef((direction) => {
+				if (direction === "next") void flipBookRef.current?.flipNext();
+				else void flipBookRef.current?.flipPrev();
+			}),
+		[],
+	);
 	const seferColor = getSeferColor(perekObj.sefer);
 	const [isBookshelfOpen, setIsBookshelfOpen] = useState(false);
 	const perakim =
@@ -214,10 +222,7 @@ const Sefer = (props: {
 		const blankKey = `blank-${perekKeyBase}`;
 		return [
 			<React.Fragment key={perekKey}>
-				<section
-					className={styles.pageContentPage}
-					ref={selectableBookContentRef}
-				>
+				<section className={styles.pageContentPage} ref={selectableContentRef}>
 					<div className={styles.pageHeaderRight}>
 						<div className={styles.pageHeaderRow}>
 							<span className={styles.pageHeaderSefer}>{perekObj.sefer}</span>
@@ -273,6 +278,7 @@ const Sefer = (props: {
 			</React.Fragment>,
 			<React.Fragment key={blankKey}>
 				<BlankPageContent
+					selectableContentRef={selectableContentRef}
 					articles={
 						perekIdx === currentPerekIdx
 							? articles
