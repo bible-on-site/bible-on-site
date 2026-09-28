@@ -1322,7 +1322,7 @@ function PersonFamilyTreeContent({
 						</>
 					) : null}
 					{nonMatrixChildrenBlocks ? (
-						<>
+						<div className={styles.childrenBranch}>
 							<div className={styles.verticalConnector} aria-hidden />
 							<div className={styles.verticalTierLabel}>
 								<span className={styles.familyTreeSectionLabel}>ילדים</span>
@@ -1330,7 +1330,7 @@ function PersonFamilyTreeContent({
 							<div className={styles.verticalChildren}>
 								{nonMatrixChildrenBlocks}
 							</div>
-						</>
+						</div>
 					) : null}
 				</div>
 			</section>
@@ -1379,7 +1379,10 @@ function PersonFamilyTreeContent({
 								<div className={styles.siblingTieCompact} aria-hidden />
 							) : null}
 						</div>
-						<div className={styles.siblingGridFocal}>
+						<div
+							className={styles.siblingGridFocal}
+							data-has-parent-links={parents.length > 0 ? "" : undefined}
+						>
 							{parents.length > 0 || spouses.length > 0 ? (
 								<div className={styles.focalSpineRod} aria-hidden />
 							) : null}
@@ -1708,13 +1711,13 @@ function PersonFamilyTreeContent({
 			</div>
 
 			{nonMatrixChildrenBlocks ? (
-				<>
+				<div className={styles.childrenBranch}>
 					<div className={styles.connector} aria-hidden />
 					<div className={styles.tierLabel}>
 						<span className={styles.familyTreeSectionLabel}>ילדים</span>
 					</div>
 					{nonMatrixChildrenBlocks}
-				</>
+				</div>
 			) : null}
 		</section>
 	);
