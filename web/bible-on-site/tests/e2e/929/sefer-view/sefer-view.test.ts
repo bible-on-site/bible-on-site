@@ -124,6 +124,36 @@ test.describe("Sefer view", () => {
 		);
 	});
 
+	test("Mouse swipe over verse text turns back to the previous page", async ({
+		page,
+	}) => {
+		await page.setViewportSize({ width: 1440, height: 900 });
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(2);
+		await seferPage.verifyPesukimAreVisible();
+		const rect = await page
+			.locator(".he-book .page.current-page article")
+			.first()
+			.boundingBox();
+		if (!rect) throw new Error("Verse text is not visible");
+		const x = rect.x + rect.width - 40;
+		const y = rect.y + 45;
+		expect(
+			await page.evaluate(
+				({ x, y }) =>
+					document.elementFromPoint(x, y)?.closest("article") !== null,
+				{ x, y },
+			),
+		).toBe(true);
+		const indicator = page.locator(".flipbook-toolbar-indicator");
+		await expect(indicator).toHaveValue("ב' / נ'");
+		await page.mouse.move(x, y);
+		await page.mouse.down();
+		await page.mouse.move(x - 600, y, { steps: 1 });
+		await page.mouse.up();
+		await expect(indicator).toHaveValue("א' / נ'");
+	});
+
 	test.describe("Touch swipe", () => {
 		test.use({ hasTouch: true });
 
