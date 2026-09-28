@@ -9,9 +9,9 @@ import { ArticlesSection } from "./ArticlesSection";
 import { PerushFullView } from "./PerushFullView";
 import { PerushimSection } from "./PerushimSection";
 import styles from "./sefer.module.css";
-import { selectableBookContentRef } from "./selectable-book-content";
 
 interface BlankPageContentProps {
+	selectableContentRef?: React.Ref<HTMLElement>;
 	articles?: ArticleSummary[];
 	perushim?: PerushSummary[];
 	perekId?: number;
@@ -26,6 +26,7 @@ interface BlankPageContentProps {
  * History state is pushed so the browser back button works.
  */
 export function BlankPageContent({
+	selectableContentRef,
 	articles = [],
 	perushim = [],
 	perekId = 0,
@@ -117,7 +118,7 @@ export function BlankPageContent({
 	return (
 		<section
 			className={styles.pageBlank}
-			ref={selectableBookContentRef}
+			ref={selectableContentRef}
 			aria-label="עמוד ריק (פירושים ומאמרים)"
 		>
 			<div className={styles.blankPageDate}>{hebrewDateStr}</div>
