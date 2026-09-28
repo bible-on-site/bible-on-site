@@ -34,6 +34,12 @@ repos:
       - id: actionlint
   - repo: local
     hooks:
+      - id: check-app-version
+        name: check-app-version
+        entry: python devops/check-app-version.py
+        language: system
+        files: ^app/BibleOnSite/BibleOnSite\.csproj$
+        pass_filenames: false
       - id: md-dead-link-check
         name: md-dead-link-check
         entry: python devops/md-dead-link-check-wrapper.py

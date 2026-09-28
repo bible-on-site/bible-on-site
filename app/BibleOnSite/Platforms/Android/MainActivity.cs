@@ -20,7 +20,7 @@ public class MainActivity : MauiAppCompatActivity
     private bool _singleTouchActive;
 
     public static event EventHandler<TouchPosition>? TouchStarted;
-    public static event EventHandler<TouchPosition>? TouchDispatched;
+    public static event EventHandler<TouchPosition>? TouchDispatched; // NOSONAR: invoked after native Down dispatch
     public static event EventHandler<TouchPosition>? TouchReleased;
     public static event EventHandler? TouchCancelled;
 

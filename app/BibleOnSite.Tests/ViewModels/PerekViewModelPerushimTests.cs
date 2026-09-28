@@ -123,7 +123,10 @@ public class PerekViewModelPerushimTests
         var changes = 0;
         pasuk.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(Pasuk.PerushNotes)) changes++;
+            if (e.PropertyName == nameof(Pasuk.PerushNotes))
+            {
+                changes++;
+            }
         };
 
         typeof(PerekViewModel)

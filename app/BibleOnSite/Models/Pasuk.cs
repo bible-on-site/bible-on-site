@@ -62,7 +62,9 @@ public partial class Pasuk : ObservableObject
         get
         {
             if (_formattedText?.TryGetTarget(out var formatted) == true)
+            {
                 return formatted;
+            }
 
             formatted = BuildFormattedText();
             // MAUI 10.0.90 Labels subscribe to a FormattedString. Retaining it
@@ -79,7 +81,10 @@ public partial class Pasuk : ObservableObject
 
         void FlushPlain()
         {
-            if (plain.Length == 0) return;
+            if (plain.Length == 0)
+            {
+                return;
+            }
             formatted.Spans.Add(new Span { Text = plain.ToString() });
             plain.Clear();
         }
@@ -150,6 +155,9 @@ public partial class Pasuk : ObservableObject
                         TextColor = Color.FromArgb("#9a92d1"),
                         FontAttributes = FontAttributes.Bold
                     });
+                    break;
+
+                default:
                     break;
             }
 

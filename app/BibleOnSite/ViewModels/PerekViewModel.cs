@@ -444,7 +444,9 @@ public partial class PerekViewModel : ObservableObject
             foreach (var pasuk in Perek.Pasukim)
             {
                 if (pasuk.PerushNotes.Count > 0)
+                {
                     pasuk.PerushNotes = new List<PerushNoteDisplay>();
+                }
             }
             return;
         }
@@ -469,7 +471,9 @@ public partial class PerekViewModel : ObservableObject
                 })
                 .ToList();
             if (groups.Count > 0 || pasuk.PerushNotes.Count > 0)
+            {
                 pasuk.PerushNotes = groups;
+            }
         }
     }
 
