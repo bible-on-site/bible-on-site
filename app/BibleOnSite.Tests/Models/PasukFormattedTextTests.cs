@@ -2,6 +2,7 @@ using BibleOnSite.Models;
 using FluentAssertions;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Graphics;
+using System.Runtime.CompilerServices;
 
 namespace BibleOnSite.Tests.Models;
 
@@ -13,11 +14,66 @@ public class PasukFormattedTextTests
     public class Pasuk_FormattedText
     {
         [Fact]
+        public void does_not_root_an_unused_formatted_string_for_the_lifetime_of_a_perek()
+        {
+            var pasuk = new Pasuk
+            {
+                PasukNum = 1, Text = "",
+                Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = "ב" }]
+            };
+            var weak = CreateFormattedWeakReference(pasuk);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            weak.TryGetTarget(out _).Should().BeFalse();
+            GC.KeepAlive(pasuk);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static WeakReference<FormattedString> CreateFormattedWeakReference(Pasuk pasuk)
+            => new(pasuk.FormattedText);
+
+        [Fact]
         public void returns_empty_string_when_segments_is_empty()
         {
             var pasuk = new Pasuk { PasukNum = 1, Text = "", Segments = [] };
 
             Flatten(pasuk.FormattedText).Should().BeEmpty();
+        }
+
+        [Fact]
+        public void reuses_formatted_spans_when_a_verse_is_bound_again()
+        {
+            var pasuk = new Pasuk
+            {
+                PasukNum = 1,
+                Text = "",
+                Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = "בְּרֵאשִׁית" }]
+            };
+
+            var first = pasuk.FormattedText;
+            var second = pasuk.FormattedText;
+
+            second.Should().BeSameAs(first);
+            Flatten(second).Should().Be("בְּרֵאשִׁית");
+        }
+
+        [Fact]
+        public void replacing_segments_refreshes_formatted_text()
+        {
+            var pasuk = new Pasuk
+            {
+                PasukNum = 1,
+                Text = "",
+                Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = "א" }]
+            };
+            _ = pasuk.FormattedText;
+
+            pasuk.Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = "ב" }];
+
+            Flatten(pasuk.FormattedText).Should().Be("ב");
         }
 
         [Fact]
@@ -35,6 +91,27 @@ public class PasukFormattedTextTests
             };
 
             Flatten(pasuk.FormattedText).Should().Be("בְּרֵאשִׁית בָּרָא");
+        }
+
+        [Fact]
+        public void coalesces_adjacent_plain_words_without_changing_their_text()
+        {
+            var pasuk = new Pasuk
+            {
+                PasukNum = 1,
+                Text = "",
+                Segments =
+                [
+                    new PasukSegment { Type = SegmentType.Ktiv, Value = "כָּל־" },
+                    new PasukSegment { Type = SegmentType.Ktiv, Value = "הָאָרֶץ" },
+                    new PasukSegment { Type = SegmentType.Qri, Value = "וְהַשָּׁמַיִם" }
+                ]
+            };
+
+            var formatted = pasuk.FormattedText;
+            Flatten(formatted).Should().Be("כָּל־הָאָרֶץ וְהַשָּׁמַיִם");
+            formatted.Spans.Should().ContainSingle()
+                .Which.Text.Should().Be("כָּל־הָאָרֶץ וְהַשָּׁמַיִם");
         }
 
         [Fact]
