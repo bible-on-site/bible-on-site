@@ -1379,7 +1379,10 @@ function PersonFamilyTreeContent({
 								<div className={styles.siblingTieCompact} aria-hidden />
 							) : null}
 						</div>
-						<div className={styles.siblingGridFocal}>
+						<div
+							className={styles.siblingGridFocal}
+							data-has-parent-links={parents.length > 0 ? "" : undefined}
+						>
 							{parents.length > 0 || spouses.length > 0 ? (
 								<div className={styles.focalSpineRod} aria-hidden />
 							) : null}
