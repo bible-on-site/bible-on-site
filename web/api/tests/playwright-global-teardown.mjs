@@ -2,7 +2,10 @@ import { execSync } from "node:child_process";
 import { mkdir, stat, watch } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { shouldMeasureCov } from "../../shared/tests-util/environment.mjs";
+
+// Playwright loads global teardown in a separate module context from the config.
+// Read this flag locally to avoid its .mjs transform changing the shared module's exports.
+const shouldMeasureCov = process.env.MEASURE_COV === "1";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

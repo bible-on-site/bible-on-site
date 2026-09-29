@@ -14,7 +14,7 @@ A React-based admin panel for managing articles and rabbis content.
 
 ### Prerequisites
 
-- Node.js >= 24.11.1
+- Node.js 26.10.0
 - MySQL database (same as web/bible-on-site)
 - AWS S3 bucket for rabbi images (optional)
 

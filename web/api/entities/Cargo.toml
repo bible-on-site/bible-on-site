@@ -8,8 +8,8 @@ name = "entities"
 path = "src/lib.rs"
 
 [dependencies]
-serde = { version = "1.0.228", features = ["derive"] }
-sea-orm = { version = "2.0.0", default-features = false, features = [
+serde = { version = "1.0.229", features = ["derive"] }
+sea-orm = { version = "2.0.4", default-features = false, features = [
     "macros",
     "sqlx-mysql",
     "runtime-tokio-native-tls",
@@ -19,4 +19,4 @@ sea-orm = { version = "2.0.0", default-features = false, features = [
 ] }
 
 [dev-dependencies]
-sea-orm = { version = "2.0.0", default-features = false, features = ["mock"] }
+sea-orm = { version = "2.0.4", default-features = false, features = ["mock"] }

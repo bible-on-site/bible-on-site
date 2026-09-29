@@ -11,7 +11,7 @@ To download necessary tools, clone the repository, and install dependencies, you
 You'll need the following tools:
 
 - [Git](https://git-scm.com)
-- [Node.js](https://nodejs.org), version == 24.11.1
+- [Node.js](https://nodejs.org), version == 26.10.0
   - If using `nvm`, consider updating your default Node installation with `nvm alias default <VERSION>`
 - [Python](https://www.python.org/downloads/) == [3.14.0, 3.14.2]
   - Make sure `python` can run from a command line prompt without error
@@ -20,7 +20,7 @@ You'll need the following tools:
 
 For API development, you'll also need:
 
-- [Rust](https://www.rust-lang.org/) == 1.84.1
+- [Rust](https://www.rust-lang.org/) == 1.98.1
 
 For App development, you'll also need:
 

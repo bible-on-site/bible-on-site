@@ -230,16 +230,28 @@ mod tests {
         assert!(group.get_document("_id").unwrap().contains_key("$switch"));
         assert!(group.get_document("name").unwrap().contains_key("$first"));
         assert_eq!(
-            group.get_document("pesukimCount").unwrap().get_str("$sum"),
-            Ok("$pesukimCount")
+            group
+                .get_document("pesukimCount")
+                .unwrap()
+                .get_str("$sum")
+                .unwrap(),
+            "$pesukimCount"
         );
         assert_eq!(
-            group.get_document("perekFrom").unwrap().get_str("$first"),
-            Ok("$perekFrom")
+            group
+                .get_document("perekFrom")
+                .unwrap()
+                .get_str("$first")
+                .unwrap(),
+            "$perekFrom"
         );
         assert_eq!(
-            group.get_document("perekTo").unwrap().get_str("$last"),
-            Ok("$perekTo")
+            group
+                .get_document("perekTo")
+                .unwrap()
+                .get_str("$last")
+                .unwrap(),
+            "$perekTo"
         );
     }
 
@@ -255,8 +267,8 @@ mod tests {
             .unwrap()
             .get_document("$cond")
             .unwrap();
-        assert_eq!(additionals_cond.get_str("then"), Ok("$$ROOT"));
-        assert_eq!(additionals_cond.get_str("else"), Ok("$$REMOVE"));
+        assert_eq!(additionals_cond.get_str("then").unwrap(), "$$ROOT");
+        assert_eq!(additionals_cond.get_str("else").unwrap(), "$$REMOVE");
 
         let perakim_cond = group
             .get_document("perakim")
@@ -265,7 +277,7 @@ mod tests {
             .unwrap()
             .get_document("$cond")
             .unwrap();
-        assert_eq!(perakim_cond.get_str("then"), Ok("$$REMOVE"));
-        assert_eq!(perakim_cond.get_str("else"), Ok("$perakim"));
+        assert_eq!(perakim_cond.get_str("then").unwrap(), "$$REMOVE");
+        assert_eq!(perakim_cond.get_str("else").unwrap(), "$perakim");
     }
 }

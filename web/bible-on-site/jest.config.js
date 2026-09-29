@@ -103,8 +103,8 @@ async function nextJestConfigPromise() {
 	];
 	// This cannot be set directly in the jest config because it is overridden by next/jest.
 	nextJestConfig.transformIgnorePatterns = [
-		// ESM modules that need to be transformed: gematry, temporal-polyfill, sunrise-sunset-js
-		"/node_modules/(?!(gematry|temporal-polyfill|sunrise-sunset-js)/)",
+		// ESM modules that need to be transformed for Jest's CommonJS runtime
+		"/node_modules/(?!(gematry|temporal-polyfill|temporal-utils|sunrise-sunset-js)/)",
 	];
 	// Avoid Haste module naming collision: .next/standalone/package.json vs root package.json
 	nextJestConfig.modulePathIgnorePatterns = [

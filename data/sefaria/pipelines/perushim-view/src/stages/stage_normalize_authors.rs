@@ -89,7 +89,7 @@ mod tests {
 
         assert_eq!(branches.len(), 8);
         assert!(branches.iter().any(|branch| {
-            branch.get_str("then") == Ok("abarbanel")
+            branch.get_str("then").ok() == Some("abarbanel")
                 && branch
                     .get_document("case")
                     .and_then(|case| case.get_array("$eq"))
@@ -99,7 +99,7 @@ mod tests {
         assert!(
             branches
                 .iter()
-                .any(|branch| branch.get_str("then") == Ok("chizkuni"))
+                .any(|branch| branch.get_str("then").ok() == Some("chizkuni"))
         );
     }
 
@@ -126,8 +126,8 @@ mod tests {
             .unwrap()
             .get_document("$map")
             .unwrap();
-        assert_eq!(map.get_str("input"), Ok("$authors"));
-        assert_eq!(map.get_str("as"), Ok("author"));
+        assert_eq!(map.get_str("input").unwrap(), "$authors");
+        assert_eq!(map.get_str("as").unwrap(), "author");
 
         let default = map
             .get_document("in")
@@ -140,8 +140,8 @@ mod tests {
             .unwrap()
             .get_document("$replaceAll")
             .unwrap();
-        assert_eq!(default.get_str("input"), Ok("$$author"));
-        assert_eq!(default.get_str("find"), Ok("-"));
-        assert_eq!(default.get_str("replacement"), Ok(" "));
+        assert_eq!(default.get_str("input").unwrap(), "$$author");
+        assert_eq!(default.get_str("find").unwrap(), "-");
+        assert_eq!(default.get_str("replacement").unwrap(), " ");
     }
 }

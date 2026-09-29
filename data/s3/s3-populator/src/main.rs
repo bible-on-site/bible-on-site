@@ -215,6 +215,12 @@ async fn build_s3_client(cli: &Cli) -> Result<Client> {
 
     if let Some(ref endpoint) = cli.endpoint {
         config_builder = config_builder.endpoint_url(endpoint).force_path_style(true);
+        if endpoint.starts_with("http://") {
+            // Local S3 endpoints do not need a TLS trust store. The default AWS
+            // client now loads native roots even when every request uses HTTP.
+            config_builder =
+                config_builder.http_client(aws_smithy_http_client::Builder::new().build_http());
+        }
     }
 
     let config = config_builder.build();
