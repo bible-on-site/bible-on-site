@@ -14,6 +14,89 @@
              Title="{Binding Source}"
              FlowDirection="RightToLeft">
 
+    <Shell.TitleView>
+        <Grid>
+            <Label x:Name="NormalNavigationTitle"
+                   Text="{Binding Source}"
+                   FontSize="20"
+                   TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}"
+                   VerticalOptions="Center"
+                   HorizontalOptions="Start"/>
+            <Grid
+                  x:Name="SelectionBar"
+                  AutomationId="SelectionBar"
+                  IsVisible="False"
+                  BackgroundColor="{StaticResource Primary}"
+                  Padding="4,5"
+                  ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+                <Grid.HeightRequest>
+                    <OnPlatform x:TypeArguments="x:Double" Default="48">
+                        <On Platform="Android,iOS" Value="56"/>
+                    </OnPlatform>
+                </Grid.HeightRequest>
+                <!-- Back button -->
+                <Button Grid.Column="0"
+                        x:Name="SelectionBackButton"
+                        AutomationId="SelectionBackButton"
+                        Text="{x:Static fonts:FluentUI.arrow_right_24_regular}"
+                        FontFamily="FluentIcons"
+                        FontSize="20"
+                        WidthRequest="36"
+                        HeightRequest="36"
+                        Padding="0"
+                        BackgroundColor="Transparent"
+                        TextColor="White"
+                        Clicked="OnSelectionBackClicked"/>
+                <!-- Badge with count -->
+                <Border Grid.Column="1"
+                        BackgroundColor="White"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="Transparent"
+                        Padding="8,2"
+                        MinimumWidthRequest="24"
+                        HeightRequest="24"
+                        VerticalOptions="Center"
+                        Margin="4,0">
+                    <Label x:Name="SelectionCountLabel"
+                           AutomationId="SelectionCountLabel"
+                           Text="0"
+                           FontSize="12"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource Primary}"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Center"/>
+                </Border>
+                <!-- Spacer (transparent) -->
+                <ContentView Grid.Column="2"/>
+                <!-- Share button -->
+                <Button Grid.Column="3"
+                        AutomationId="SelectionShareButton"
+                        Text="{x:Static fonts:FluentUI.share_24_regular}"
+                        FontFamily="FluentIcons"
+                        FontSize="20"
+                        WidthRequest="36"
+                        HeightRequest="36"
+                        Padding="0"
+                        BackgroundColor="Transparent"
+                        TextColor="White"
+                        Clicked="OnSelectionShareClicked"/>
+                <!-- Copy button -->
+                <Button Grid.Column="4"
+                        x:Name="SelectionCopyButton"
+                        AutomationId="SelectionCopyButton"
+                        Text="{x:Static fonts:FluentUI.copy_20_regular}"
+                        FontFamily="FluentIcons"
+                        FontSize="20"
+                        WidthRequest="36"
+                        HeightRequest="36"
+                        Padding="0"
+                        BackgroundColor="Transparent"
+                        TextColor="White"
+                        Clicked="OnSelectionCopyClicked"/>
+            </Grid>
+        </Grid>
+    </Shell.TitleView>
+
     <ContentPage.Resources>
         <ResourceDictionary>
             <Color x:Key="SelectedPasukBackground">#E3F2FD</Color>
@@ -113,80 +196,6 @@
         <Grid x:Name="ContentArea"
               ZIndex="0"
               RowDefinitions="Auto,Auto,*">
-
-            <!-- Selection Bar (Row 0 - hidden by default) -->
-            <Grid Grid.Row="0"
-                  x:Name="SelectionBar"
-                  AutomationId="SelectionBar"
-                  IsVisible="False"
-                  BackgroundColor="{StaticResource Primary}"
-                  Padding="4,5"
-                  ColumnDefinitions="Auto,Auto,*,Auto,Auto">
-                <Grid.HeightRequest>
-                    <OnPlatform x:TypeArguments="x:Double" Default="48">
-                        <On Platform="Android,iOS" Value="56"/>
-                    </OnPlatform>
-                </Grid.HeightRequest>
-                <!-- Back button -->
-                <Button Grid.Column="0"
-                        x:Name="SelectionBackButton"
-                        AutomationId="SelectionBackButton"
-                        Text="{x:Static fonts:FluentUI.arrow_right_24_regular}"
-                        FontFamily="FluentIcons"
-                        FontSize="20"
-                        WidthRequest="36"
-                        HeightRequest="36"
-                        Padding="0"
-                        BackgroundColor="Transparent"
-                        TextColor="White"
-                        Clicked="OnSelectionBackClicked"/>
-                <!-- Badge with count -->
-                <Border Grid.Column="1"
-                        BackgroundColor="White"
-                        StrokeShape="RoundRectangle 12"
-                        Stroke="Transparent"
-                        Padding="8,2"
-                        MinimumWidthRequest="24"
-                        HeightRequest="24"
-                        VerticalOptions="Center"
-                        Margin="4,0">
-                    <Label x:Name="SelectionCountLabel"
-                           AutomationId="SelectionCountLabel"
-                           Text="0"
-                           FontSize="12"
-                           FontAttributes="Bold"
-                           TextColor="{StaticResource Primary}"
-                           HorizontalTextAlignment="Center"
-                           VerticalTextAlignment="Center"/>
-                </Border>
-                <!-- Spacer (transparent) -->
-                <ContentView Grid.Column="2"/>
-                <!-- Share button -->
-                <Button Grid.Column="3"
-                        AutomationId="SelectionShareButton"
-                        Text="{x:Static fonts:FluentUI.share_24_regular}"
-                        FontFamily="FluentIcons"
-                        FontSize="20"
-                        WidthRequest="36"
-                        HeightRequest="36"
-                        Padding="0"
-                        BackgroundColor="Transparent"
-                        TextColor="White"
-                        Clicked="OnSelectionShareClicked"/>
-                <!-- Copy button -->
-                <Button Grid.Column="4"
-                        x:Name="SelectionCopyButton"
-                        AutomationId="SelectionCopyButton"
-                        Text="{x:Static fonts:FluentUI.copy_20_regular}"
-                        FontFamily="FluentIcons"
-                        FontSize="20"
-                        WidthRequest="36"
-                        HeightRequest="36"
-                        Padding="0"
-                        BackgroundColor="Transparent"
-                        TextColor="White"
-                        Clicked="OnSelectionCopyClicked"/>
-            </Grid>
 
             <!-- Loading overlay — shown while CarouselView initialises its 929-item
                  adapter.  Uses a native ActivityIndicator which animates on the GPU
