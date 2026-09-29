@@ -373,7 +373,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: ${{ steps.get_version.outputs.DOTNET_VERSION }}
+          dotnet-version: "10.0.401"
 
       - name: Cache NuGet packages
         uses: actions/cache@v6
@@ -388,8 +388,8 @@ jobs:
         run: |
           # Show .NET SDK info to debug
           dotnet --info
-          # Install the MAUI iOS workload
-          dotnet workload install maui-ios
+          # Pin the iOS 26.5 workload set compatible with Xcode 26.6.
+          dotnet workload install maui-ios --version 10.0.401
           # Show installed workloads
           dotnet workload list
 
