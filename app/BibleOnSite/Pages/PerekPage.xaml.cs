@@ -800,9 +800,9 @@ public partial class PerekPage : ContentPage
         Shell.SetNavBarIsVisible(this, true);
         Shell.SetFlyoutBehavior(this, isSelectionMode ? FlyoutBehavior.Disabled : FlyoutBehavior.Flyout);
         var shellBackground = isSelectionMode
-            ? (Color)Application.Current!.Resources["Primary"]
-            : Application.Current!.RequestedTheme == AppTheme.Dark
-                ? (Color)Application.Current.Resources["OffBlack"]
+            ? (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"]
+            : Microsoft.Maui.Controls.Application.Current!.RequestedTheme == AppTheme.Dark
+                ? (Color)Microsoft.Maui.Controls.Application.Current.Resources["OffBlack"]
                 : Colors.White;
         Shell.SetBackgroundColor(this, shellBackground);
         NormalNavigationTitle.IsVisible = !isSelectionMode;
