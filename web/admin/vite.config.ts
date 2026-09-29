@@ -3,7 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import { nitro } from "nitro/vite";
-import type { LoggingFunction, RollupLog } from "rollup";
+import type { LoggingFunction, RollupLog } from "rolldown";
 import { defineConfig } from "vitest/config";
 
 function handleRollupWarning(warning: RollupLog, warn: LoggingFunction) {
