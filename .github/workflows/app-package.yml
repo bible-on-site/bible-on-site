@@ -373,6 +373,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
+          # Keep in sync with the maui-ios workload below; see https://github.com/bible-on-site/bible-on-site/issues/1871
           dotnet-version: "10.0.401"
 
       - name: Cache NuGet packages
@@ -388,7 +389,7 @@ jobs:
         run: |
           # Show .NET SDK info to debug
           dotnet --info
-          # Pin the iOS 26.5 workload set compatible with Xcode 26.6.
+          # Pin the iOS 26.5 workload set for Xcode 26.6; see https://github.com/bible-on-site/bible-on-site/issues/1871
           dotnet workload install maui-ios --version 10.0.401
           # Show installed workloads
           dotnet workload list
