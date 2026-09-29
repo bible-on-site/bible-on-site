@@ -67,6 +67,14 @@
 			"allowedVersions": "<26"
 		},
 		{
+			"description": "Keep the iOS SDK pins aligned with the Xcode 26.6-compatible workload set; see https://github.com/bible-on-site/bible-on-site/issues/1871",
+			"matchManagers": ["github-actions"],
+			"matchPackageNames": ["dotnet-sdk"],
+			"matchFileNames": [".github/workflows/ci.yml", ".github/workflows/app-package.yml"],
+			"matchCurrentValue": "10.0.401",
+			"enabled": false
+		},
+		{
 			"description": "nitro-nightly bumps repeatedly break the admin build and introduce CVEs; nitro is dictated by @tanstack/react-start, so disable direct bumps; see https://github.com/bible-on-site/bible-on-site/issues/1748",
 			"matchPackageNames": ["nitro", "nitro-nightly"],
 			"enabled": false
