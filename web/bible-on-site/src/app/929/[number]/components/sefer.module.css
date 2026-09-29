@@ -10,11 +10,11 @@
   position: relative;
 }
 
-/* Hammer disables selection on the book; reading pages opt back in. */
+/* Mouse turning owns dragging by default; selection is an explicit mode. */
 .pageContentPage,
 .pageBlank {
-  -webkit-user-select: text;
-  user-select: text;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .page {
@@ -313,4 +313,16 @@
 .tanahpediaLink:hover {
   border-bottom-style: solid;
   border-bottom-color: #1552ac;
+}
+
+.mouseSelectMode .pageContentPage,
+.mouseSelectMode .pageBlank {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.mouseModeButton[aria-pressed="true"] {
+  background: rgb(255 255 255 / 0.25);
+  outline: 2px solid white;
+  outline-offset: -2px;
 }

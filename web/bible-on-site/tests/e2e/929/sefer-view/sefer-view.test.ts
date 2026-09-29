@@ -37,6 +37,12 @@ test.describe("Sefer view", () => {
 		const seferPage = new SeferPage(page);
 		await seferPage.openSeferViewForPerek(1);
 		await seferPage.verifyPesukimAreVisible();
+		const selectButton = page.getByRole("button", {
+			name: "בחירת טקסט עם העכבר",
+		});
+		await expect(selectButton).toHaveAttribute("aria-pressed", "false");
+		await selectButton.click();
+		await expect(selectButton).toHaveAttribute("aria-pressed", "true");
 		const text = page.locator(".he-book article:visible").first();
 		const indicator = page.locator(".flipbook-toolbar-indicator");
 		await expect(indicator).toHaveValue("א' / נ'");
@@ -82,6 +88,7 @@ test.describe("Sefer view", () => {
 		const seferPage = new SeferPage(page);
 		await seferPage.openSeferViewForPerek(1);
 		await seferPage.verifyPesukimAreVisible();
+		await page.getByRole("button", { name: "בחירת טקסט עם העכבר" }).click();
 		const rect = await page
 			.locator(".he-book article:visible")
 			.first()
@@ -172,6 +179,9 @@ test.describe("Sefer view", () => {
 
 		await page.mouse.move(x, y);
 		await page.mouse.down();
+		await page.waitForTimeout(550);
+		await page.mouse.move(x + 80, y, { steps: 8 });
+		await expect.poll(turningAngle).toBeGreaterThan(2);
 		await page.mouse.move(x + 300, y, { steps: 6 });
 		await expect.poll(turningAngle).toBeGreaterThan(10);
 		const heldAt = await turningAngle();
@@ -181,12 +191,48 @@ test.describe("Sefer view", () => {
 		await expect
 			.poll(async () => Math.abs((await turningAngle()) - heldAt))
 			.toBeGreaterThan(10);
+		const fartherAngle = await turningAngle();
+		await page.waitForTimeout(250);
+		await page.mouse.move(x + 200, y, { steps: 8 });
+		await expect
+			.poll(async () => Math.abs((await turningAngle()) - fartherAngle))
+			.toBeGreaterThan(10);
 		await expect(indicator).toHaveValue("א' / נ'");
 		await page.mouse.move(x + 600, y, { steps: 3 });
 		await page.waitForTimeout(250);
 		await page.mouse.up();
 		await expect(indicator).toHaveValue("א' / נ'");
 		await expect.poll(turningAngle).toBe(0);
+	});
+
+	test("Mouse selection mode can be toggled back to native page dragging", async ({
+		page,
+	}) => {
+		await page.setViewportSize({ width: 1440, height: 900 });
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await seferPage.verifyPesukimAreVisible();
+		const selectButton = page.getByRole("button", {
+			name: "בחירת טקסט עם העכבר",
+		});
+		await selectButton.click();
+		await expect(selectButton).toHaveAttribute("aria-pressed", "true");
+		await page.reload();
+		await expect(selectButton).toHaveAttribute("aria-pressed", "true");
+		await selectButton.click();
+		await expect(selectButton).toHaveAttribute("aria-pressed", "false");
+		const rect = await page
+			.locator(".he-book article:visible")
+			.first()
+			.boundingBox();
+		if (!rect) throw new Error("Verse text is not visible");
+		const x = rect.x + 60;
+		const y = rect.y + 45;
+		await page.mouse.move(x, y);
+		await page.mouse.down();
+		await page.mouse.move(x + 300, y, { steps: 8 });
+		await expect.poll(() => activePageAngle(page)).toBeGreaterThan(10);
+		await page.mouse.up();
 	});
 
 	test("Mouse swipe over verse text turns back to the previous page", async ({
