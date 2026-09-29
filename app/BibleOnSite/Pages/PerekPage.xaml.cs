@@ -797,7 +797,15 @@ public partial class PerekPage : ContentPage
         var count = _viewModel.SelectedPasukNums.Count;
         var isSelectionMode = count > 0;
 
-        Shell.SetNavBarIsVisible(this, !isSelectionMode);
+        Shell.SetNavBarIsVisible(this, true);
+        Shell.SetFlyoutBehavior(this, isSelectionMode ? FlyoutBehavior.Disabled : FlyoutBehavior.Flyout);
+        var shellBackground = isSelectionMode
+            ? (Color)Application.Current!.Resources["Primary"]
+            : Application.Current!.RequestedTheme == AppTheme.Dark
+                ? (Color)Application.Current.Resources["OffBlack"]
+                : Colors.White;
+        Shell.SetBackgroundColor(this, shellBackground);
+        NormalNavigationTitle.IsVisible = !isSelectionMode;
         SelectionBar.IsVisible = isSelectionMode;
         SelectionCountLabel.Text = count.ToString();
     }
