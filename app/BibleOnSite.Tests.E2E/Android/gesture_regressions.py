@@ -18,7 +18,9 @@ default_adb = Path(sdk_root) / "platform-tools" / ("adb.exe" if os.name == "nt" 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--adb", default=str(default_adb))
 parser.add_argument("--restart-only", action="store_true", help="Run only the first-swipe-after-restart checks")
+parser.add_argument("--layout-only", action="store_true", help="Check selection toolbar and floating menu geometry")
 parser.add_argument("--serial", help="Emulator serial (defaults to adb -e)")
+parser.add_argument("--package", default="com.tanah.daily929", help="Installed package for layout-only checks")
 args = parser.parse_args()
 ADB = args.adb
 DEVICE = ["-s", args.serial] if args.serial else ["-e"]
@@ -91,6 +93,79 @@ def wait_for_swipe(before, timeout=10):
                 return after, count, verses, nodes
         require(time.monotonic() < deadline, "Swipe did not change chapter and fully snap within 10 seconds")
         time.sleep(0.2)
+
+
+def check_selection_layout():
+    adb("shell", "am", "force-stop", args.package)
+    adb("shell", "monkey", "-p", args.package, "-c", "android.intent.category.LAUNCHER", 1)
+    deadline = time.monotonic() + 30
+    while True:
+        header, count, verses, nodes = snapshot()
+        if verses:
+            break
+        require(time.monotonic() < deadline, "Chapter was not ready for selection layout test")
+        time.sleep(0.2)
+
+    def menu_center(items):
+        menus = [n for n in items if n.get("text") == "☰"]
+        require(len(menus) == 1, "Expected one floating main menu")
+        left, top, right, bottom = bounds(menus[0])
+        return (left + right) // 2, (top + bottom) // 2
+
+    if count:
+        tap(next(n for n in nodes if n.get("resource-id", "").endswith("/SelectionBackButton")))
+        _, _, verses, nodes = snapshot()
+    initial_menu = menu_center(nodes)
+    require(any(n.get("content-desc") == "Open navigation drawer" for n in nodes),
+            "Normal navigation drawer is missing")
+    density = int(re.search(r"Physical density: (\d+)", adb("shell", "wm", "density").decode()).group(1))
+    status_bottom = round(24 * density / 160) - 3
+
+    def normal_title_right(items):
+        titles = [n for n in items if n.get("class") == "android.widget.TextView" and n.get("text")
+                  and status_bottom <= bounds(n)[1] and bounds(n)[3] < HEIGHT * .12]
+        require(len(titles) == 1, "Expected the normal chapter title in the navigation bar")
+        return bounds(titles[0])[2]
+
+    require(normal_title_right(nodes) >= WIDTH * .65,
+            "Normal chapter title shifted away from the drawer")
+
+    for attempt in range(3):
+        verse = next(v for v in verses if bounds(v)[1] > HEIGHT * .17 and bounds(v)[3] < HEIGHT * .75)
+        left, top, right, bottom = bounds(verse)
+        x, y = (left + right) // 2, (top + bottom) // 2
+        adb("shell", "input", "swipe", x, y, x, y, 900)
+        _, selected, _, selected_nodes = snapshot()
+        require(selected == 1, f"Hold did not select a verse on attempt {attempt + 1}")
+        toolbar = next(n for n in selected_nodes if n.get("resource-id", "").endswith("/SelectionBar"))
+        bar_left, bar_top, bar_right, _ = bounds(toolbar)
+        require(bar_top >= status_bottom, "Selection toolbar overlapped the status bar")
+        require(bar_right - bar_left >= WIDTH * .95, "Selection toolbar did not span the navigation area")
+        require(not any(n.get("content-desc") == "Open navigation drawer" for n in selected_nodes),
+                "Native drawer button remained next to selection actions")
+        selected_menu = menu_center(selected_nodes)
+        require(all(abs(a - b) <= 2 for a, b in zip(initial_menu, selected_menu)),
+                f"Floating main menu moved: {initial_menu} -> {selected_menu}")
+        other = next(v for v in verses if bounds(v)[1] > HEIGHT * .17 and bounds(v)[3] < HEIGHT * .75
+                     and v.get("text") != verse.get("text"))
+        tap(other)
+        _, selected, _, selected_nodes = snapshot()
+        require(selected == 2 and menu_center(selected_nodes) == initial_menu,
+                "Adding a second verse moved the main menu or failed selection")
+        tap(next(n for n in selected_nodes if n.get("resource-id", "").endswith("/SelectionBackButton")))
+        _, count, verses, nodes = snapshot()
+        require(count == 0 and menu_center(nodes) == initial_menu,
+                "Selection exit did not restore the floating main menu")
+        require(any(n.get("content-desc") == "Open navigation drawer" for n in nodes),
+                "Normal drawer did not return after selection")
+        require(normal_title_right(nodes) >= WIDTH * .65,
+                "Normal chapter title moved after selection")
+    print("PASS: selection toolbar stays below status bar; bottom menu stays fixed", flush=True)
+
+
+if args.layout_only:
+    check_selection_layout()
+    sys.exit(0)
 
 
 if not args.restart_only:
