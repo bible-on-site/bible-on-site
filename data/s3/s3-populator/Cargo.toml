@@ -8,6 +8,7 @@ description = "Populate S3 buckets with test data for development and testing"
 anyhow = "1.0"
 aws-config = { version = "1.12", features = ["behavior-version-latest"] }
 aws-sdk-s3 = "1.150"
+aws-smithy-http-client = "1.4.2"
 clap = { version = "4.6", features = ["derive", "env"] }
 crc32fast = "1.5"
 dotenvy = "0.15"

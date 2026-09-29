@@ -24,26 +24,10 @@
 			"automerge": true
 		},
 		{
-			"description": "0.0.33 fails the website Jest SWC transform; see https://github.com/bible-on-site/bible-on-site/issues/1874",
-			"matchPackageNames": ["swc-plugin-coverage-instrument"],
-			"enabled": false
-		},
-		{
 			"description": "macos-26 breaks the .NET MAUI iOS build (default Xcode 26); see https://github.com/bible-on-site/bible-on-site/issues/1627",
 			"matchManagers": ["github-actions"],
 			"matchPackageNames": ["macos"],
 			"allowedVersions": "<26"
-		},
-		{
-			"description": "nitro-nightly bumps repeatedly break the admin build and introduce CVEs; nitro is dictated by @tanstack/react-start, so disable direct bumps; see https://github.com/bible-on-site/bible-on-site/issues/1748",
-			"matchPackageNames": ["nitro", "nitro-nightly"],
-			"enabled": false
-		},
-		{
-			"description": "MongoDB 3 still uses BSON 2 document types; see https://github.com/bible-on-site/bible-on-site/issues/1873",
-			"matchManagers": ["cargo"],
-			"matchPackageNames": ["bson"],
-			"allowedVersions": "<3"
 		}
 	],
 	"bumpVersion": "patch",

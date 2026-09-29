@@ -29,6 +29,7 @@ fn clear_only_uses_the_local_s3_endpoint() {
                 }
                 Err(error) => return Err(error),
             };
+            stream.set_nonblocking(false)?;
             stream.set_read_timeout(Some(Duration::from_secs(3)))?;
             stream.set_write_timeout(Some(Duration::from_secs(3)))?;
             let mut headers = Vec::new();
@@ -77,13 +78,13 @@ fn clear_only_uses_the_local_s3_endpoint() {
         ])
         .output()
         .unwrap();
-    let requests = server.join().unwrap().unwrap();
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
         output.status.success(),
         "CLI failed: {stdout}\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
+    let requests = server.join().unwrap().unwrap();
     assert!(stdout.contains(&format!("Endpoint: {endpoint} (local S3 mode)")));
     assert!(stdout.contains("Bucket 'fixture' exists"));
     assert!(stdout.contains("Bucket cleared successfully (--clear-only mode)"));

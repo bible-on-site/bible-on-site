@@ -100,7 +100,7 @@ async fn fetch_from_mongodb(dump_name: &str) -> Result<Vec<Sefer>> {
     let mut results: Vec<Sefer> = Vec::new();
     while cursor.advance().await? {
         let doc = cursor.deserialize_current()?;
-        results.push(bson::from_document(doc)?);
+        results.push(bson::deserialize_from_document(doc)?);
     }
 
     println!("✅ Retrieved {} sefarim", results.len());

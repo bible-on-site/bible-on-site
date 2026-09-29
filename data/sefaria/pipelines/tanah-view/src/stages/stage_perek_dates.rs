@@ -166,7 +166,7 @@ mod tests {
         let perek_from = set.get_document("perekFrom").unwrap();
         let condition = perek_from.get_document("$cond").unwrap();
 
-        assert_eq!(condition.get_i32("then"), Ok(1));
+        assert_eq!(condition.get_i32("then").unwrap(), 1);
         assert_eq!(
             condition
                 .get_document("if")
@@ -192,7 +192,7 @@ mod tests {
             .get_document("$map")
             .unwrap();
 
-        assert_eq!(map.get_str("as"), Ok("index"));
+        assert_eq!(map.get_str("as").unwrap(), "index");
         assert!(
             map.get_document("input")
                 .unwrap()
