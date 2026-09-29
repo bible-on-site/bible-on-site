@@ -1,4 +1,3 @@
-// TODO: try to convert to ESM when Playwright supports it
 const { mkdirSync, writeFileSync } = require("node:fs");
 const { resolve } = require("node:path");
 
@@ -27,11 +26,9 @@ const WARMUP_ROUTES = [
  * which adds overhead that can cause timeouts on cold starts.
  */
 async function warmUpServer() {
-	// Dynamically import ESM module to get shouldMeasureCov flag  // TODO: import regularly when this file is ESM
-	const { shouldMeasureCov } = await import(
-		"../shared/tests-util/environment.mjs"
-	);
-	if (!shouldMeasureCov) {
+	// Playwright loads global setup through a separate transform from its config.
+	// Read the flag here so its ESM transform cannot change the shared module's exports.
+	if (process.env.MEASURE_COV !== "1") {
 		return;
 	}
 

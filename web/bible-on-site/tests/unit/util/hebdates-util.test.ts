@@ -39,11 +39,18 @@ describe("constructTsetAwareHDate", () => {
 	});
 	describe("when after tset", () => {
 		it("returns the next day", () => {
-			const date = parseKosherChristianDate("27/June/24", "23:59:59");
+			// 23:00 in Jerusalem on June 27, after that day's civil dusk.
+			const date = new Date("2024-06-27T20:00:00Z");
 			const actual = constructTsetAwareHDate(date);
 			expect(actual.toString()).toContain("22");
 			expect(actual.toString()).toContain("Sivan");
 			expect(actual.toString()).toContain("5784");
+		});
+
+		it("uses Jerusalem's next civil date after midnight there", () => {
+			const date = new Date("2024-06-27T23:59:59Z");
+			const actual = constructTsetAwareHDate(date);
+			expect(actual.toString()).toContain("22 Sivan 5784");
 		});
 	});
 });

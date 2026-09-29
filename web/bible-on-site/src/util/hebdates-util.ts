@@ -1,10 +1,11 @@
 import { toLetters } from "gematry";
 import { getTwilight } from "sunrise-sunset-js";
-import { Temporal } from "temporal-polyfill";
+import { Temporal } from "temporal-polyfill/full";
 
 // Jerusalem coordinates for tzeit calculation
 const JERUSALEM_LAT = 31.778;
 const JERUSALEM_LON = 35.235;
+const JERUSALEM_TIMEZONE = "Asia/Jerusalem";
 
 /**
  * Map from uniform month number (used in our date number format) to Temporal month code
@@ -257,7 +258,7 @@ export enum DateUnits {
  */
 function calculateTset(date: Date): Date {
 	const twilight = getTwilight(JERUSALEM_LAT, JERUSALEM_LON, date, {
-		timezoneId: "Asia/Jerusalem",
+		timezoneId: JERUSALEM_TIMEZONE,
 	});
 
 	/* istanbul ignore next: only happens in polar region, which Jerusalem is not */
@@ -274,7 +275,10 @@ function calculateTset(date: Date): Date {
  */
 export function constructTsetAwareHDate(date: Date): HebrewDate {
 	const tset = calculateTset(date);
-	const initialHDate = HebrewDate.fromGregorian(date);
+	const jerusalemDate = Temporal.Instant.fromEpochMilliseconds(date.getTime())
+		.toZonedDateTimeISO(JERUSALEM_TIMEZONE)
+		.toPlainDate();
+	const initialHDate = new HebrewDate(jerusalemDate);
 
 	if (date.getTime() > tset.getTime()) {
 		return initialHDate.next();

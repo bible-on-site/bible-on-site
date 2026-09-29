@@ -24,43 +24,6 @@
 			"automerge": true
 		},
 		{
-			"description": "See https://github.com/bible-on-site/bible-on-site/issues/528",
-			"matchPackageNames": ["swc-plugin-coverage-instrument"],
-			"enabled": false
-		},
-		{
-			"description": "See https://github.com/bible-on-site/bible-on-site/issues/1636",
-			"matchPackageNames": ["sunrise-sunset-js"],
-			"allowedVersions": "<3.2.1"
-		},
-		{
-			"description": "See https://github.com/bible-on-site/bible-on-site/issues/1699",
-			"matchPackageNames": ["temporal-polyfill"],
-			"allowedVersions": "<1.0.0"
-		},
-		{
-			"description": "See https://github.com/bible-on-site/bible-on-site/issues/1700",
-			"matchPackageNames": ["typst-pdf"],
-			"allowedVersions": "<0.15"
-		},
-		{
-			"description": "@playwright/test 1.61.1 mis-transpiles .mjs files (esbuild emits CommonJS `exports` in ESM scope) -> Website E2E exits 1 at shared/tests-util/environment.mjs; see https://github.com/bible-on-site/bible-on-site/issues/1726",
-			"matchPackageNames": ["@playwright/test", "playwright", "playwright-core"],
-			"allowedVersions": "<1.61.1"
-		},
-		{
-			"description": "See https://github.com/bible-on-site/bible-on-site/issues/985",
-			"matchPackageNames": ["node"],
-			"matchDepTypes": ["engines"],
-			"allowedVersions": ">=24.11.1 <24.12.0"
-		},
-		{
-			"description": "Keep .nvmrc / Docker node in sync with the held engines range; see https://github.com/bible-on-site/bible-on-site/issues/985",
-			"matchManagers": ["nvm", "dockerfile", "docker-compose"],
-			"matchPackageNames": ["node"],
-			"allowedVersions": ">=24.11.1 <24.12.0"
-		},
-		{
 			"description": "macos-26 breaks the .NET MAUI iOS build (default Xcode 26); see https://github.com/bible-on-site/bible-on-site/issues/1627",
 			"matchManagers": ["github-actions"],
 			"matchPackageNames": ["macos"],
@@ -73,32 +36,6 @@
 			"matchFileNames": [".github/workflows/ci.yml", ".github/workflows/app-package.yml"],
 			"matchCurrentValue": "10.0.401",
 			"enabled": false
-		},
-		{
-			"description": "nitro-nightly bumps repeatedly break the admin build and introduce CVEs; nitro is dictated by @tanstack/react-start, so disable direct bumps; see https://github.com/bible-on-site/bible-on-site/issues/1748",
-			"matchPackageNames": ["nitro", "nitro-nightly"],
-			"enabled": false
-		},
-		{
-			"description": "vite 8 switches to the rolldown bundler, which fails the admin build on a direct eval in a dependency; see https://github.com/bible-on-site/bible-on-site/issues/1739",
-			"matchPackageNames": ["vite"],
-			"allowedVersions": "<8"
-		},
-		{
-			"description": "@vitejs/plugin-react 6 peer-requires vite ^8 (held); see https://github.com/bible-on-site/bible-on-site/issues/1739",
-			"matchPackageNames": ["@vitejs/plugin-react"],
-			"allowedVersions": "<6"
-		},
-		{
-			"description": "typescript 6 is a major jump that fails CI; held until a coordinated migration; see https://github.com/bible-on-site/bible-on-site/issues/1740",
-			"matchPackageNames": ["typescript"],
-			"allowedVersions": "<6"
-		},
-		{
-			"description": "typst-as-lib 0.16 pulls typst-library 0.15 whose PagedDocument no longer implements Output, breaking the bulletin Rust build; see https://github.com/bible-on-site/bible-on-site/issues/1742",
-			"matchManagers": ["cargo"],
-			"matchPackageNames": ["typst-as-lib"],
-			"allowedVersions": "<0.16"
 		}
 	],
 	"bumpVersion": "patch",

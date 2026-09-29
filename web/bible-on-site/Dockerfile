@@ -1,7 +1,7 @@
 # Note: Using classic docker build (DOCKER_BUILDKIT=0) for network:host support
 # Do not add BuildKit-specific syntax directives
 
-FROM node:24-alpine AS base
+FROM node:26.10.0-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
