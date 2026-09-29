@@ -1596,6 +1596,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
+          # Keep in sync with the maui-ios workload below; see https://github.com/bible-on-site/bible-on-site/issues/1871
           dotnet-version: "10.0.401"
 
       - name: Cache NuGet packages
@@ -1609,7 +1610,7 @@ jobs:
 
       - name: Install MAUI workload
         # Workload set 10.0.401 uses the iOS 26.5 SDK compatible with Xcode 26.6.
-        # 10.0.401.1 selects an iOS 27 SDK and fails the Xcode version check.
+        # 10.0.401.1 selects an iOS 27 SDK and fails the Xcode version check; see https://github.com/bible-on-site/bible-on-site/issues/1871
         run: dotnet workload install maui-ios --version 10.0.401
 
       - name: Restore perushim notes SQLite
