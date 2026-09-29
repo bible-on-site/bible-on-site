@@ -755,6 +755,7 @@
   flex-direction: column;
   justify-content: flex-start;
   align-items: center;
+  background: linear-gradient(#a5b4fc, #a5b4fc) center / 2px 100% no-repeat;
   /* ממשיך את הקו האנכי עד לקו האופקי של בנות הזוג */
   margin-top: calc(-1 * var(--matrix-spouse-mid-px, 36px));
   padding-top: var(--matrix-spouse-mid-px, 36px);
