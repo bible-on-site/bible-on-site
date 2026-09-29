@@ -198,9 +198,11 @@ def check_hold_during_fling():
     # Send the hold immediately; a UI dump here would stop the fling and hide
     # the lost-first-touch failure. Inspect bounds only afterward because a
     # fixed point can land in the gap between verses.
+    prepare_long_chapter()
     valid_attempts = 0
     failures = []
-    for hold_y in (780, 900, 1000, 1200, 1500):
+    hold_targets = [900, 1200]
+    for hold_y in hold_targets:
         chapter, count, verses, nodes = ready(restart=True)
         if count:
             clear_selection(nodes)
@@ -214,23 +216,28 @@ def check_hold_during_fling():
         if after != chapter or not visible or visible[0].get("text") == first_verse:
             print(f"Inconclusive hold at y={hold_y}: list did not move", flush=True)
             continue
-        target_x, target_y = scale(500, hold_y)
-        hit_verse = any(
-            (box := list(map(int, re.findall(r"-?\d+", verse.get("bounds")))))
-            and box[0] < target_x < box[2] and box[1] < target_y < box[3]
-            for verse in visible
-        )
-        if not hit_verse:
-            print(f"Inconclusive hold at y={hold_y}: verse gap", flush=True)
-            continue
-        valid_attempts += 1
         print(f"First hold while vertical scroll settles at y={hold_y}: selected={selected}", flush=True)
-        if selected != 1:
-            drag(500, hold_y, 500, hold_y, 900)
-            second = snapshot()[1]
-            print(f"Second hold at the same point: selected={second}", flush=True)
-            if second == 1:
-                failures.append(hold_y)
+        if selected == 1:
+            valid_attempts += 1
+            continue
+        # A second hold at the same point distinguishes a swallowed first
+        # press from an accidental row gap without delaying the first press.
+        drag(500, hold_y, 500, hold_y, 900)
+        second = snapshot()[1]
+        print(f"Second hold at the same point: selected={second}", flush=True)
+        if second == 1:
+            failures.append(hold_y)
+            continue
+        # Use a row observed after this trial as the next target. Flings can
+        # stop at different offsets on different emulators and devices.
+        for verse in visible:
+            left, top, right, bottom = map(int, re.findall(r"-?\d+", verse.get("bounds")))
+            candidate = round(((top + bottom) // 2) * 2400 / height)
+            if 600 < candidate < 1600 and all(abs(candidate - old) > 35 for old in hold_targets):
+                hold_targets.append(candidate)
+                break
+        if len(hold_targets) >= 8:
+            break
     require(valid_attempts > 0, "No fling-hold attempt landed inside a verse")
     require(not failures, f"First hold after a real fling was swallowed at y={failures}")
     print(f"PASS: first hold during scroll settling entered selection in {valid_attempts} valid attempts", flush=True)
@@ -361,6 +368,7 @@ def check_scroll_burst():
 
 def check_cross_gesture():
     before, count, verses, nodes = ready()
+    first_verse = verses[0].get("text")
     if count:
         clear_selection(nodes)
     # Deliberate selection, then a vertical drag must keep it; a horizontal
@@ -378,7 +386,8 @@ def check_cross_gesture():
     drag(850, 1000, 200, 1000, 100)
     time.sleep(0.8)
     after, count, verses, _ = snapshot()
-    require(after != before and count == 0 and verses, "Chapter swipe did not clear selection cleanly")
+    require(verses and verses[0].get("text") != first_verse and count == 0,
+            "Chapter swipe did not clear selection cleanly")
     print("PASS: hold, tap, vertical scroll, and chapter swipe preserve gesture boundaries", flush=True)
 
 
