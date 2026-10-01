@@ -103,3 +103,23 @@ existing Pyflakes integration; no lint rules are disabled. See
 
 No test selection, coverage thresholds, retries, performance thresholds, build
 flags or release triggers are relaxed.
+
+## Validation on this change
+
+[PR run 36905961463](https://github.com/bible-on-site/bible-on-site/actions/runs/36905961463)
+passed all module checks, iOS, website production performance, coverage and the
+aggregate CI gate. Website CI took 4m36s and Website Performance 7m00s. These are
+single-run observations, not controlled before/after benchmarks.
+
+All eight baseline uploads started in the same second; the baseline job took
+39s compared with the historical 52s median. The Data image download took 170s
+and completed during lint/unit work, leaving the explicit wait at 0s.
+
+The first merge-queue run exposed an existing website hydration race. Local
+browser reproduction showed the initial URL effect hiding a book after a
+replayed user click had opened it. The fix preserves that user choice, with a
+regression test that fails before the fix. After the fix, all 986 website unit
+tests and 20 consecutive local open-and-swipe browser repetitions passed.
+Website E2E HTML/JUnit reports now
+upload on failures too, so future CI diagnoses retain their evidence. Test
+assertions, retries and timeouts remain unchanged.

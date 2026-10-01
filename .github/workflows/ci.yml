@@ -1009,6 +1009,7 @@ jobs:
         run: npm run coverage:e2e
 
       - name: Store Website E2E HTML Report
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: website-e2e-html-report-${{ github.run_id }}
@@ -1017,6 +1018,7 @@ jobs:
           overwrite: true
 
       - name: Store Website E2E JUnit Report
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_E2E_JUNIT_REPORT_ARTIFACT_NAME }}
