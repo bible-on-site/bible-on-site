@@ -83,6 +83,19 @@ export function rewriteWebsiteVersions(
 
 function run(): void {
 	const ref = process.argv[2] ?? "origin/master";
+	if (ref === "origin/master") {
+		execFileSync(
+			"git",
+			[
+				"fetch",
+				"--quiet",
+				"--tags",
+				"origin",
+				"+refs/heads/master:refs/remotes/origin/master",
+			],
+			{ cwd: repoRoot, stdio: "inherit" },
+		);
+	}
 	const packagePath = path.join(repoRoot, packageRelativePath);
 	const lockPath = path.join(repoRoot, lockRelativePath);
 	const packageText = readFileSync(packagePath, "utf8");
