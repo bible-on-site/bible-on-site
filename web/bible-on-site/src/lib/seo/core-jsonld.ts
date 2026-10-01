@@ -10,9 +10,11 @@ import {
 	buildGraph,
 	hasContent,
 	nodeId,
+	ORG_ID,
 	plainText,
 	WEBSITE_ID,
 } from "./jsonld";
+import { getPerekIllustration } from "./perek-illustrations";
 
 const HOME_LABEL = "בית";
 
@@ -84,6 +86,7 @@ export function buildPerekGraph(
 ): Graph {
 	const path = perekPath(perekObj.perekId);
 	const url = absUrl(path);
+	const illustration = getPerekIllustration(perekObj.perekId);
 	const chapterId = nodeId(path, "chapter");
 	const breadcrumb = breadcrumbNode(
 		[
@@ -98,6 +101,7 @@ export function buildPerekGraph(
 		name: perekObj.source,
 		inLanguage: "he",
 		isPartOf: { "@id": seferId(perekObj.sefer) },
+		...(illustration ? { image: absUrl(illustration.src) } : {}),
 	};
 	const webPage: Record<string, unknown> = {
 		"@type": "WebPage",
@@ -108,6 +112,17 @@ export function buildPerekGraph(
 		isPartOf: { "@id": WEBSITE_ID },
 		about: { "@id": chapterId },
 		breadcrumb: { "@id": breadcrumb["@id"] },
+		...(illustration
+			? {
+					primaryImageOfPage: {
+						"@type": "ImageObject",
+						contentUrl: absUrl(illustration.src),
+						caption: illustration.caption,
+						width: 1600,
+						height: 900,
+					},
+				}
+			: {}),
 	};
 	const audioId = nodeId(path, "recitation");
 	const audio: AudioObject | null =
@@ -176,6 +191,7 @@ export function buildArticleGraph(input: ArticleGraphInput): Graph {
 		url,
 		inLanguage: "he",
 		author: { "@id": authorNodeId },
+		publisher: { "@id": ORG_ID },
 		about: { "@id": chapterId },
 		isPartOf: { "@id": WEBSITE_ID },
 		mainEntityOfPage: url,
@@ -191,6 +207,7 @@ export function buildArticleGraph(input: ArticleGraphInput): Graph {
 		name: article.name,
 		inLanguage: "he",
 		isPartOf: { "@id": WEBSITE_ID },
+		mainEntity: { "@id": articleNode["@id"] },
 		breadcrumb: { "@id": breadcrumb["@id"] },
 	};
 	return buildGraph([
