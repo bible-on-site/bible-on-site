@@ -17,6 +17,10 @@ jest.mock("next/cache", () => ({
 	unstable_cache: (fn: (...args: never[]) => unknown) => fn,
 }));
 
+jest.mock("../../../src/lib/seo/perek-images-data", () => ({
+	getPerekImagesByChapter: jest.fn(async () => ({})),
+}));
+
 jest.mock("next/navigation", () => ({
 	notFound: jest.fn(() => {
 		throw new Error("NEXT_NOT_FOUND");
