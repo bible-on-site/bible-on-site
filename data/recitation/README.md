@@ -94,19 +94,45 @@ Import rechecks the real MP3 hash, canonical text hash, every word identity,
 complete coverage, and nonoverlapping in-range timestamps. It cannot approve a
 partial word list or a review of different audio/text.
 
-## Artifacts and playback
+## Pipeline boundary and storage
 
-- `web/bible-on-site/public/recitation/{perekId}.json`: versioned manifest with
-  audio/text SHA-256, duration, status, and every canonical word. Pending times are
-  `null`; candidate times in `needs_review` are not playable as word/verse clips.
-- `.outputs/recitation.sqlite`: atomically rebuilt sidecar database with
-  `recitation_track` and `recitation_word`. The track's `alignment_status` must be
-  `ready` before using timings. Existing qri/ktiv indices are foreign identities,
-  not regenerated word positions.
-- `.outputs/{id}.asr.json`, `{id}.review.json`: resumable recognition and review
-  evidence. Models, raw audio, caches, and SQLite exports are not committed.
-- `GET /api/recitation/{perekId}`: validates the word map against the canonical
-  JSON and resolves audio through the site's existing S3/RustFS environment.
+`data/recitation/recitation.sqlite` is the versioned intermediate database owned
+by the recitation pipeline. It stores one track record per recording and only
+approved word intervals keyed by `(perek_id, pasuk, segment)`. It does not copy
+Hebrew words. The canonical text SHA-256 includes word identities and vocalized
+text; the audio SHA-256 identifies the exact original MP3. SQLite schema version
+3 separates processing candidates from approved playback data.
+
+The Sefaria CLI automatically reads that database **after aggregation and before
+writing any output**. It adds `recitation` metadata to each recorded perek and
+fills the existing qri `recordingTimeFrame.from/to` fields with
+`HH:MM:SS.mmm` strings. A missing intermediate DB, changed canonical text, missing
+word, overlap, or out-of-range interval aborts the export before overwriting the
+previous output. `--recitation-db PATH` selects another intermediate database.
+Re-running Sefaria therefore cannot silently erase the approved timings.
+
+The recitation pipeline keeps resumable ASR results and candidate alignments in
+ignored `.outputs/` files. It atomically updates the intermediate DB at the end
+of a run, preserving tracks outside a partial run and existing approved timings
+when a rerun is unapproved. Review imports update the same intermediate DB.
+Candidates never become published word timings. Fresh checkouts can generate a
+review page directly from the merged perakim DB.
+
+The website reads `recitation` and `recordingTimeFrame` directly from its existing
+perakim JSON. `GET /api/recitation/{perekId}` validates the canonical text hash and
+complete word coverage, then resolves S3/RustFS playback URLs. There are no public
+recitation sidecar files or copied word databases.
+
+To merge the latest intermediate data into an existing perakim JSON without
+rerunning MongoDB aggregation:
+
+```powershell
+.venv/Scripts/python.exe publish.py
+```
+
+The Rust Sefaria merge and this Python merge share the same schema and hash
+contract. Regression tests recreate unaligned Sefaria output, restore the
+approved timing data, verify repeatability, and reject changed canonical text.
 
 The sefer reader places a small recitation-mode icon at the left of its second
 header row. Enabling it lazily loads the chapter manifest; clicking an existing

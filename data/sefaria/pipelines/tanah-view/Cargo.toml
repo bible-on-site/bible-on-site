@@ -17,6 +17,7 @@ dotenvy.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true
 rusqlite.workspace = true
+sha2 = "0.11"
 bson.workspace = true
 icu_calendar.workspace = true
 sunrise.workspace = true

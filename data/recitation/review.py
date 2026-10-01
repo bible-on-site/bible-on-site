@@ -6,6 +6,7 @@ from pathlib import Path
 
 from alignment import load_chapters, text_hash, validate_timings, words_for
 from recite import ROOT, audio_hash, export_database, write_json
+from publish import DATABASE, extract, publish
 
 
 def accept_review(manifest, corrections, words):
@@ -26,7 +27,7 @@ def accept_review(manifest, corrections, words):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--perek", required=True, type=int)
-    parser.add_argument("--manifests", type=Path, default=ROOT / "web/bible-on-site/public/recitation")
+    parser.add_argument("--manifests", type=Path, default=Path(__file__).parent / ".outputs/alignments")
     parser.add_argument("--output", type=Path, help="HTML review page to create")
     parser.add_argument("--corrections", type=Path, help="Reviewed JSON exported from the page")
     parser.add_argument("--recordings", type=Path, help="Required when importing corrections")
@@ -34,7 +35,10 @@ def main():
     if not 1 <= args.perek <= 929 or bool(args.output) == bool(args.corrections):
         parser.error("Specify a valid perek and exactly one of --output or --corrections")
     path = args.manifests / f"{args.perek}.json"
-    manifest = json.loads(path.read_text(encoding="utf-8"))
+    chapter = load_chapters(DATABASE)[args.perek]
+    manifest = json.loads(path.read_text(encoding="utf-8")) if path.exists() else extract(args.perek, chapter)
+    if manifest is None:
+        parser.error("No recording metadata for this chapter")
     words = words_for(load_chapters(ROOT / "web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json")[args.perek])
     if args.corrections:
         if not args.recordings:
@@ -43,7 +47,8 @@ def main():
             raise ValueError("Recording changed after alignment")
         reviewed = accept_review(manifest, json.loads(args.corrections.read_text(encoding="utf-8")), words)
         write_json(path, reviewed)
-        export_database(args.manifests, Path(__file__).parent / ".outputs/recitation.sqlite")
+        export_database(args.manifests, Path(__file__).parent / "recitation.sqlite")
+        publish(Path(__file__).parent / "recitation.sqlite")
         print(f"{args.perek}: published all {len(words)} reviewed word timings")
     else:
         template = Path(__file__).with_name("review.html").read_text(encoding="utf-8")

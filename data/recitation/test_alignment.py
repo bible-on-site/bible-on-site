@@ -81,6 +81,42 @@ class AlignmentTests(unittest.TestCase):
                 self.assertEqual(db.execute("SELECT COUNT(*) FROM recitation_word").fetchone()[0], 1)
                 self.assertEqual(db.execute("SELECT start_ms, end_ms FROM recitation_word").fetchone(), (100, 500))
 
+    def test_intermediate_database_survives_partial_runs_and_regeneration(self):
+        import copy
+        import json
+        from alignment import text_hash
+        from publish import extract, publish
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder)
+            cache = path / "cache"
+            perek = {"pesukim": [{"segments": [{"type": "qri", "value": "ברא",
+                "recordingTimeFrame": {"from": "00:00:00", "to": "00:00:00"}}]}]}
+            words = words_for(perek)
+            record = {"version": 1, "perekId": 1, "audioUrl": "https://example.com/recordings/1_record.mp3",
+                "audioSha256": "a" * 64, "textSha256": text_hash(words), "durationMs": 1000,
+                "alignmentStatus": "ready", "words": [{"pasuk": 1, "segment": 1, "text": "ברא", "startMs": 101, "endMs": 599}]}
+            write_json(cache / "1.json", record)
+            intermediate = path / "recitation.sqlite"
+            export_database(cache, intermediate)
+            # A partial processing directory must not wipe approved tracks.
+            (cache / "1.json").unlink()
+            export_database(cache, intermediate)
+            database = path / "perakim.json"
+            regenerated = [{"perekFrom": 1, "perakim": [perek]}]
+            for _ in range(2):
+                write_json(database, copy.deepcopy(regenerated))
+                publish(intermediate, database)
+                merged = json.loads(database.read_text(encoding="utf-8"))[0]["perakim"][0]
+                self.assertEqual(extract(1, merged), record)
+                self.assertNotIn("words", merged["recitation"])
+            # Stale text must fail before overwriting a regenerated output.
+            perek["pesukim"][0]["segments"][0]["value"] = "שונה"
+            write_json(database, regenerated)
+            before = database.read_bytes()
+            with self.assertRaisesRegex(ValueError, "Canonical words changed"):
+                publish(intermediate, database)
+            self.assertEqual(database.read_bytes(), before)
+
     def test_complete_chapter_cannot_drop_a_whole_verse(self):
         words = [Word(1, 1, "ברא"), Word(2, 1, "אלהים")]
         rows = [{"pasuk": 1, "segment": 1, "text": "ברא", "startMs": 100, "endMs": 500}]

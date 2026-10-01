@@ -12,10 +12,7 @@ export async function GET(
 	}
 	const perekId = Number(rawId);
 	try {
-		const data = await loadRecitation(
-			perekId,
-			getPerekByPerekId(perekId).pesukim,
-		);
+		const data = loadRecitation(getPerekByPerekId(perekId));
 		if (!data)
 			return Response.json({ error: "Recording unavailable" }, { status: 404 });
 		const bucket = process.env.S3_BUCKET || "bible-on-site-assets";
@@ -31,9 +28,6 @@ export async function GET(
 			},
 		);
 	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-			return Response.json({ error: "Recording unavailable" }, { status: 404 });
-		}
 		console.error("Recitation metadata could not be loaded", error);
 		return Response.json(
 			{ error: "Recording metadata unavailable" },

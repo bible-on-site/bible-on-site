@@ -47,6 +47,7 @@ mod tests {
             perek_to: 1,
             additionals: None,
             perakim: Some(vec![Perek {
+                recitation: None,
                 perek_id: 1,
                 header: "Header".to_string(),
                 date: vec![57750329],

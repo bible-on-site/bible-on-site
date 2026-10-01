@@ -7,6 +7,7 @@ import json
 import math
 from pathlib import Path
 import sqlite3
+import shutil
 import subprocess
 import time
 import tempfile
@@ -134,11 +135,13 @@ def align_track(audio, words, recognized, aligner, args):
 
 
 def export_database(output, database):
-    """Rebuild atomically so stale rows and older schema versions cannot survive."""
+    """Atomically update the durable intermediate DB; a partial run preserves other tracks."""
     database.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=database.parent, suffix=".sqlite", delete=False) as handle:
         temporary = Path(handle.name)
     try:
+        if database.exists():
+            shutil.copy2(database, temporary)
         _export_database(output, temporary)
         temporary.replace(database)
     finally:
@@ -147,37 +150,53 @@ def export_database(output, database):
 
 def _export_database(output, database):
     with closing(sqlite3.connect(database)) as db, db:
+        if db.execute("PRAGMA user_version").fetchone()[0] not in (0, 3):
+            raise ValueError("Unsupported recitation database version")
         db.executescript("""
             PRAGMA foreign_keys = ON;
-            PRAGMA user_version = 2;
+            PRAGMA user_version = 3;
             CREATE TABLE IF NOT EXISTS recitation_track (
               perek_id INTEGER PRIMARY KEY, audio_url TEXT NOT NULL,
               audio_sha256 TEXT NOT NULL, text_sha256 TEXT NOT NULL, duration_ms INTEGER NOT NULL,
-              alignment_status TEXT NOT NULL CHECK (alignment_status IN ('pending', 'needs_review', 'ready')));
+              alignment_status TEXT NOT NULL CHECK (alignment_status IN ('pending', 'needs_review', 'ready')),
+              provenance_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS recitation_word (
               perek_id INTEGER NOT NULL REFERENCES recitation_track(perek_id),
-              pasuk INTEGER NOT NULL, segment INTEGER NOT NULL, text TEXT NOT NULL,
-              start_ms INTEGER, end_ms INTEGER,
+              pasuk INTEGER NOT NULL, segment INTEGER NOT NULL,
+              start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL,
               PRIMARY KEY (perek_id, pasuk, segment),
-              CHECK ((start_ms IS NULL AND end_ms IS NULL) OR
-                     (start_ms IS NOT NULL AND end_ms IS NOT NULL AND start_ms >= 0 AND end_ms > start_ms)));
+              CHECK (start_ms >= 0 AND end_ms > start_ms));
         """)
+        core = {"version", "perekId", "audioUrl", "audioSha256", "textSha256", "durationMs", "alignmentStatus", "words"}
         for path in sorted(output.glob("[0-9]*.json")):
             manifest = json.loads(path.read_text(encoding="utf-8"))
             perek = manifest["perekId"]
-            db.execute("INSERT INTO recitation_track VALUES (?, ?, ?, ?, ?, ?)",
+            existing = db.execute("SELECT alignment_status,audio_sha256,text_sha256 FROM recitation_track WHERE perek_id=?", (perek,)).fetchone()
+            if existing == ("ready", manifest["audioSha256"], manifest["textSha256"]) and manifest["alignmentStatus"] != "ready":
+                continue
+            db.execute("DELETE FROM recitation_word WHERE perek_id=?", (perek,))
+            db.execute("""INSERT INTO recitation_track VALUES (?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(perek_id) DO UPDATE SET audio_url=excluded.audio_url,
+                       audio_sha256=excluded.audio_sha256,text_sha256=excluded.text_sha256,
+                       duration_ms=excluded.duration_ms,alignment_status=excluded.alignment_status,
+                       provenance_json=excluded.provenance_json""",
                        (perek, manifest["audioUrl"], manifest["audioSha256"],
-                        manifest["textSha256"], manifest["durationMs"], manifest["alignmentStatus"]))
-            db.executemany("INSERT INTO recitation_word VALUES (?, ?, ?, ?, ?, ?)",
-                           [(perek, w["pasuk"], w["segment"], w["text"], w["startMs"], w["endMs"])
-                            for w in manifest["words"]])
+                        manifest["textSha256"], manifest["durationMs"], manifest["alignmentStatus"],
+                        json.dumps({k: v for k, v in manifest.items() if k not in core}, ensure_ascii=False)))
+            if manifest["alignmentStatus"] == "ready":
+                from alignment import Word
+                words = [Word(w["pasuk"], w["segment"], w["text"]) for w in manifest["words"]]
+                validate_timings(words, manifest["words"], manifest["durationMs"], require_complete=True)
+                db.executemany("INSERT INTO recitation_word VALUES (?, ?, ?, ?, ?)",
+                               [(perek, w["pasuk"], w["segment"], w["startMs"], w["endMs"])
+                                for w in manifest["words"]])
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--recordings", type=Path, required=True)
     parser.add_argument("--text", type=Path, default=ROOT / "web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json")
-    parser.add_argument("--output", type=Path, default=ROOT / "web/bible-on-site/public/recitation")
+    parser.add_argument("--output", type=Path, default=Path(__file__).parent / ".outputs/alignments")
     parser.add_argument("--cache", type=Path, default=Path(__file__).parent / ".outputs")
     parser.add_argument("--audio-base-url", default="https://bible-on-site-assets.s3.il-central-1.amazonaws.com/recordings")
     parser.add_argument("--perek", type=int, nargs="+", help="Only process these 929 perek IDs")
@@ -195,6 +214,7 @@ def main():
             parser.error("Quality thresholds must be between zero and one")
     if args.perek and any(not 1 <= p <= 929 for p in args.perek):
         parser.error("Perek IDs must be between 1 and 929")
+    from publish import extract, publish
     chapters = load_chapters(args.text)
     files = sorted(args.recordings.glob("*_record.mp3"), key=lambda p: int(p.stem.split("_")[0]))
     if not files:
@@ -219,7 +239,7 @@ def main():
         fingerprint = audio_hash(path)
         output = args.output / f"{perek_id}.json"
         report = args.cache / f"{perek_id}.review.json"
-        existing = json.loads(output.read_text(encoding="utf-8")) if output.exists() else None
+        existing = json.loads(output.read_text(encoding="utf-8")) if output.exists() else extract(perek_id, chapters[perek_id])
         same = (existing and existing["audioSha256"] == fingerprint and existing["textSha256"] == text_hash(words)
                 and existing["audioUrl"] == f"{args.audio_base_url.rstrip('/')}/{path.name}")
         if same and existing.get("alignmentStatus") and (args.prepare_only or (existing.get("pipeline") == config and not args.force)):
@@ -265,7 +285,9 @@ def main():
             raise ValueError("Every database word must remain in pending and review outputs")
         write_json(output, manifest)
         print(f"{perek_id}: {len(manifest['words'])}/{len(words)} word identities; {manifest['alignmentStatus']}; {time.monotonic()-began:.1f}s", flush=True)
-    export_database(args.output, args.cache / "recitation.sqlite")
+    export_database(args.output, Path(__file__).parent / "recitation.sqlite")
+    from publish import publish
+    publish(Path(__file__).parent / "recitation.sqlite", args.text)
     write_json(args.cache / "failures.json", failures)
     if failures:
         raise SystemExit(1)
