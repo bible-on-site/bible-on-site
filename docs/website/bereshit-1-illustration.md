@@ -2,7 +2,7 @@
 
 The illustration is an editorial interpretation of Genesis 1. It does not depict God, claim to reconstruct a historical scene, or replace the chapter text and Tanahpedia references.
 
-Generated with the built-in imagegen tool, then visually inspected and encoded from the generated PNG. The displayed image has a Hebrew alt description, a visible interpretive caption, and a nearby textual summary.
+Generated with the built-in imagegen tool, then visually inspected and encoded from the generated PNG. The displayed image has a Hebrew alt description and a visible interpretive caption. The page metadata has a concise Hebrew description.
 
 ## Prompt
 
