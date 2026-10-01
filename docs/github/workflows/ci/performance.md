@@ -56,6 +56,34 @@ of total workflow speedup: another parallel job can become the critical path.
 API browser setup took about 19–24 seconds in the representative warm/cold runs,
 plus cache overhead. Rust savings depend strongly on cache state.
 
+## Native parallel steps
+
+[GitHub introduced native parallel steps on June 25, 2026](https://github.blog/changelog/2026-06-25-actions-steps-can-now-be-run-in-parallel/).
+This workflow uses two forms:
+
+- A `parallel` group uploads the eight restored baselines concurrently after all
+  downloads finish. Each reads a separate directory and writes a distinct
+  artifact. The group waits for every upload, preserving failure propagation and
+  downstream artifact availability. This overlaps the two large SQL/SQLite
+  uploads (11–16 seconds each in the representative runs) with each other and the
+  six small coverage uploads. Actual savings depend on compression and bandwidth.
+- Data CI starts the MongoDB image download with `background: true` after disk
+  cleanup and Cargo cache restoration. Lint, formatting, MySQL setup and unit
+  coverage run while it downloads to `/tmp`. An explicit `wait` precedes Docker
+  loading and integration tests, so download failures still fail the job. This
+  can hide part or all of the 105–180-second download in representative runs;
+  disk loading and integration tests remain sequential.
+
+The eight uploads stay below GitHub's ten-background-step limit. Benchmarks do
+not overlap with extra workload, and Cargo commands sharing one target directory
+and tests sharing a database remain sequential. No background step is allowed to
+outlive a dependent consumer.
+
+Upstream actionlint 1.7.12 rejects the new syntax. The pre-commit hook uses an
+immutable Astral fork revision with native syntax/reference validation and the
+existing Pyflakes integration; no lint rules are disabled. See
+[the pre-commit documentation](../../../devops/pre-commit.md).
+
 ## Remaining costs
 
 - Website production packaging is the longest release path. In run 36887111955,
@@ -69,9 +97,9 @@ plus cache overhead. Rust savings depend strongly on cache state.
 - Bulletin's warm CI is short; its cold run is mostly Rust compilation. App's
   dominant step is integration coverage (about 134–148 seconds in representative
   runs). These checks remain intact.
-- Baseline restoration copies both large perushim artifacts on every run.
-  Avoiding the copies needs coordination with consumers and baseline retention;
-  this change leaves that artifact contract intact.
+- Baseline restoration still copies both large perushim artifacts on every run,
+  with uploads now concurrent. Avoiding the copies needs coordination with
+  consumers and baseline retention; this change keeps that artifact contract.
 
 No test selection, coverage thresholds, retries, performance thresholds, build
 flags or release triggers are relaxed.
