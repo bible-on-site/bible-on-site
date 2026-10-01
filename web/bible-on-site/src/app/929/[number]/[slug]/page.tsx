@@ -25,6 +25,8 @@ import {
 	buildPerushGraph,
 } from "../../../../lib/seo/core-jsonld";
 import { SITE_NAME } from "../../../../lib/seo/jsonld";
+import { selectPerekImages } from "../../../../lib/seo/perek-illustrations";
+import { getPerekImagesByChapter } from "../../../../lib/seo/perek-images-data";
 import { fetchAllEntityRefs } from "../../../../lib/tanahpedia/perek-entity-refs";
 import { JsonLd } from "../../../components/JsonLd";
 import { ArticlesSection } from "../components/ArticlesSection";
@@ -220,6 +222,8 @@ export default async function ArticlePage({
 	const sefer = getSeferByName(perekObj.sefer);
 	const perekIds = getPerekIdsForSefer(sefer);
 	const entityRefsByPerek = await fetchAllEntityRefs(perekIds);
+	const imagesByPerek = await getPerekImagesByChapter();
+	const seferImages = selectPerekImages(imagesByPerek, perekIds);
 
 	if (isArticle) {
 		// Handle article view
@@ -280,6 +284,7 @@ export default async function ArticlePage({
 						perushim={perushim}
 						perekIds={perekIds}
 						entityRefsByPerek={entityRefsByPerek}
+						imagesByPerek={seferImages}
 						initialSlug={slug}
 					/>
 				</Suspense>
@@ -327,6 +332,7 @@ export default async function ArticlePage({
 					perushim={perushim}
 					perekIds={perekIds}
 					entityRefsByPerek={entityRefsByPerek}
+					imagesByPerek={seferImages}
 					initialSlug={slug}
 				/>
 			</Suspense>

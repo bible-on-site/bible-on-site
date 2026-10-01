@@ -99,13 +99,28 @@ describe("seo/core-jsonld", () => {
 
 	describe("buildPerekGraph", () => {
 		it("emits a Chapter in the Tanah → Sefer hierarchy + breadcrumb", () => {
-			const graph = buildPerekGraph(perekObj());
+			const graph = buildPerekGraph(perekObj(), [
+				{
+					id: 17,
+					src: "https://images.example.com/sample.webp",
+					width: 1600,
+					height: 900,
+					avifSrcSet: "",
+					socialSrc: "https://images.example.com/social.jpg",
+					socialWidth: 1600,
+					socialHeight: 900,
+					alt: "איור לדוגמה",
+					caption: "כיתוב לדוגמה",
+					description: null,
+					credit: null,
+				},
+			]);
 			const chapter = nodeByType(graph, "Chapter");
 			expect(chapter?.["@id"]).toBe(`${SITE_ORIGIN}/929/1#chapter`);
 			expect(chapter?.isPartOf).toEqual({ "@id": seferId("בראשית") });
-			expect(chapter?.image).toBe(
-				`${SITE_ORIGIN}/images/perakim/bereshit-1-creation.webp`,
-			);
+			expect(chapter?.image).toEqual([
+				"https://images.example.com/sample.webp",
+			]);
 			const books = nodesOf(graph).filter((n) => n["@type"] === "Book");
 			const tanah = books.find((b) => b["@id"] === TANAH_ID);
 			const sefer = books.find((b) => b["@id"] === seferId("בראשית"));
@@ -115,7 +130,7 @@ describe("seo/core-jsonld", () => {
 			const page = nodeByType(graph, "WebPage");
 			expect(page?.about).toEqual({ "@id": chapter?.["@id"] });
 			expect(page?.primaryImageOfPage).toMatchObject({
-				contentUrl: `${SITE_ORIGIN}/images/perakim/bereshit-1-creation.webp`,
+				contentUrl: "https://images.example.com/sample.webp",
 				width: 1600,
 				height: 900,
 			});

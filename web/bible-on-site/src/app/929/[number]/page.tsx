@@ -7,7 +7,8 @@ import { getArticleSummariesByPerekId } from "../../../lib/articles";
 import { getPerushimByPerekId } from "../../../lib/perushim";
 import { buildPerekGraph } from "../../../lib/seo/core-jsonld";
 import { absUrl } from "../../../lib/seo/jsonld";
-import { getPerekIllustration } from "../../../lib/seo/perek-illustrations";
+import { selectPerekImages } from "../../../lib/seo/perek-illustrations";
+import { getPerekImagesByChapter } from "../../../lib/seo/perek-images-data";
 import { fetchAllEntityRefs } from "../../../lib/tanahpedia/perek-entity-refs";
 import { JsonLd } from "../../components/JsonLd";
 import { ArticlesSection } from "./components/ArticlesSection";
@@ -61,7 +62,7 @@ export async function generateMetadata({
 	const { number } = await params;
 	const perekId = Number.parseInt(number, 10);
 	const perekObj = getPerekByPerekId(perekId);
-	const illustration = getPerekIllustration(perekId);
+	const illustration = (await getPerekImagesByChapter())[perekId]?.[0];
 	const title = `${perekObj.source} | תנ"ך על הפרק`;
 	const description =
 		illustration?.description ??
@@ -83,8 +84,8 @@ export async function generateMetadata({
 						images: [
 							{
 								url: absUrl(illustration.socialSrc),
-								width: 1600,
-								height: 900,
+								width: illustration.socialWidth,
+								height: illustration.socialHeight,
 								alt: illustration.alt,
 							},
 						],
@@ -110,10 +111,12 @@ export default async function Perek({
 	const articles = await getCachedArticleSummaries(perekId);
 	const perushim = await getCachedPerushim(perekId);
 	const entityRefsByPerek = await fetchAllEntityRefs(perekIds);
+	const imagesByPerek = await getPerekImagesByChapter();
+	const seferImages = selectPerekImages(imagesByPerek, perekIds);
 
 	return (
 		<>
-			<JsonLd data={buildPerekGraph(perekObj)} />
+			<JsonLd data={buildPerekGraph(perekObj, imagesByPerek[perekId] ?? [])} />
 			<Suspense>
 				<SeferComposite
 					perekObj={perekObj}
@@ -121,12 +124,13 @@ export default async function Perek({
 					perushim={perushim}
 					perekIds={perekIds}
 					entityRefsByPerek={entityRefsByPerek}
+					imagesByPerek={seferImages}
 				/>
 			</Suspense>
 			<div className={`${styles.perekContainer} seo-content`}>
 				<Breadcrumb perekObj={perekObj} />
 				<PerekHeading perekObj={perekObj} />
-				<PerekIntro perekObj={perekObj} />
+				<PerekIntro images={imagesByPerek[perekId] ?? []} />
 				<PerekText
 					perekObj={perekObj}
 					entityRefs={entityRefsByPerek[perekId] ?? []}

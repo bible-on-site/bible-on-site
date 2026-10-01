@@ -145,6 +145,11 @@ async function verifyTestDatabase(dbUrl: string): Promise<void> {
 		"perush",
 		"note",
 	];
+	// A perek may legitimately have no illustration, but the schema is required.
+	const optionalContentTables = [
+		"tanah_perek_image",
+		"tanah_perek_image_variant",
+	];
 
 	const missing: string[] = [];
 	const empty: string[] = [];
@@ -160,6 +165,13 @@ async function verifyTestDatabase(dbUrl: string): Promise<void> {
 				if (count === 0) {
 					empty.push(table);
 				}
+			} catch {
+				missing.push(table);
+			}
+		}
+		for (const table of optionalContentTables) {
+			try {
+				await connection.execute(`SELECT COUNT(*) FROM \`${table}\``);
 			} catch {
 				missing.push(table);
 			}

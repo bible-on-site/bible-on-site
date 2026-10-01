@@ -14,6 +14,10 @@ import {
 } from "@/app/sitemap";
 import { CATEGORY_SLUGS } from "@/lib/tanahpedia/category-slug";
 
+jest.mock("@/lib/seo/perek-images-data", () => ({
+	getPerekImagesByChapter: jest.fn(async () => ({})),
+}));
+
 /** `/pedia` landing entry plus one entry per Hebrew category slug. */
 const PEDIA_STATIC_COUNT = 1 + Object.keys(CATEGORY_SLUGS).length;
 
@@ -117,12 +121,14 @@ describe("sitemap", () => {
 		});
 
 		it("generates sequential perek URLs from 1 to 929", () => {
-			const result = generatePerekEntries(mockConfig);
+			const result = generatePerekEntries(mockConfig, {
+				1: [{ src: "https://images.example.com/sample.webp" } as never],
+			});
 
 			expect(result[0].url).toBe("https://example.com/929/1");
 			expect(result[928].url).toBe("https://example.com/929/929");
 			expect(result[0].images).toEqual([
-				"https://example.com/images/perakim/bereshit-1-creation.webp",
+				"https://images.example.com/sample.webp",
 			]);
 			expect(result[1].images).toBeUndefined();
 		});
