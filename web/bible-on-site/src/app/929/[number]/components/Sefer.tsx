@@ -43,7 +43,7 @@ import { getSeferColor } from "@/data/sefer-colors";
 import { getSeferByName } from "@/data/sefer-dto";
 import type { ArticleSummary } from "@/lib/articles";
 import type { PerushSummary } from "@/lib/perushim";
-import { getPerekIllustration } from "@/lib/seo/perek-illustrations";
+import type { PerekIllustration } from "@/lib/seo/perek-illustrations";
 import { buildEntityRefLookup } from "@/lib/tanahpedia/entity-ref-lookup";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
@@ -105,6 +105,7 @@ const Sefer = (props: {
 	perushim: PerushSummary[];
 	perekIds?: number[];
 	entityRefsByPerek?: Record<number, PerekEntityReference[]>;
+	imagesByPerek?: Record<number, PerekIllustration[]>;
 	initialSlug?: string;
 }) => {
 	const {
@@ -113,6 +114,7 @@ const Sefer = (props: {
 		perushim,
 		perekIds,
 		entityRefsByPerek,
+		imagesByPerek,
 		initialSlug,
 	} = props;
 	const sefer = getSeferByName(perekObj.sefer);
@@ -216,7 +218,7 @@ const Sefer = (props: {
 		const perekKeyBase = perekIds?.[perekIdx] ?? `idx-${perekIdx + 1}`;
 		const perekKey = `perek-${perekKeyBase}`;
 		const blankKey = `blank-${perekKeyBase}`;
-		const illustration = getPerekIllustration(perekIds?.[perekIdx] ?? -1);
+		const illustrations = imagesByPerek?.[perekIds?.[perekIdx] ?? -1] ?? [];
 		return [
 			<React.Fragment key={perekKey}>
 				<section className={styles.pageContentPage}>
@@ -232,27 +234,36 @@ const Sefer = (props: {
 						</div>
 					</div>
 					<div className={styles.perekTextScrollWrapper}>
-						{illustration && (
-							<figure className={styles.perekIllustrationFigure}>
+						{illustrations.map((illustration) => (
+							<figure
+								key={illustration.id}
+								className={styles.perekIllustrationFigure}
+							>
 								<picture>
-									<source
-										type="image/avif"
-										srcSet={illustration.avifSrcSet}
-										sizes="(max-width: 768px) 100vw, 420px"
-									/>
+									{illustration.avifSrcSet && (
+										<source
+											type="image/avif"
+											srcSet={illustration.avifSrcSet}
+											sizes="(max-width: 768px) 100vw, 420px"
+										/>
+									)}
 									<Image
 										src={illustration.src}
 										alt={illustration.alt}
-										width={1600}
-										height={900}
+										width={illustration.width}
+										height={illustration.height}
 										sizes="(max-width: 768px) 100vw, 420px"
 										loading="lazy"
+										unoptimized
 										className={styles.perekIllustration}
 									/>
 								</picture>
-								<figcaption>{illustration.caption}</figcaption>
+								<figcaption>
+									{illustration.caption}
+									{illustration.credit ? ` · ${illustration.credit}` : ""}
+								</figcaption>
 							</figure>
-						)}
+						))}
 						<article className={styles.perekText}>
 							{perek.pesukim.map((pasuk, pasukIdx) => {
 								const pasukKey = pasukIdx + 1;

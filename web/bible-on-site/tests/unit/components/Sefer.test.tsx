@@ -2,6 +2,7 @@
  * @jest-environment jsdom
  */
 import { fireEvent, render, screen } from "@testing-library/react";
+import { sampleImage } from "./perek-image-fixture";
 
 let capturedFlipBookProps: Record<string, unknown> = {};
 let capturedTocProps: Record<string, unknown> = {};
@@ -292,18 +293,20 @@ describe("Sefer component", () => {
 				articles={[]}
 				perushim={[]}
 				perekIds={[1]}
+				imagesByPerek={{ 1: [sampleImage] }}
 			/>,
 		);
 		expect(screen.getByTestId("blank-page")).toBeInTheDocument();
 		const source = container.querySelector('picture source[type="image/avif"]');
 		expect(source).toHaveAttribute(
 			"srcset",
-			expect.stringContaining("bereshit-1-creation-640.avif 640w"),
+			expect.stringContaining("sample-640.avif 640w"),
 		);
-		expect(
-			screen.getByRole("img", { name: /איור פרשני לבראשית א/ }),
-		).toHaveAttribute("loading", "lazy");
-		expect(screen.getByText(/איור פרשני לבראשית א:/)).toBeInTheDocument();
+		expect(screen.getByRole("img", { name: sampleImage.alt })).toHaveAttribute(
+			"loading",
+			"lazy",
+		);
+		expect(screen.getByText(sampleImage.caption)).toBeInTheDocument();
 	});
 
 	it("renders maqaf-ending segments without trailing space", () => {

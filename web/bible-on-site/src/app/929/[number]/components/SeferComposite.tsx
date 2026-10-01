@@ -18,6 +18,7 @@ import {
 	setStoredPerekViewMode,
 } from "@/lib/perek-view-preference";
 import type { PerushSummary } from "@/lib/perushim";
+import type { PerekIllustration } from "@/lib/seo/perek-illustrations";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import ReadModeToggler from "./ReadModeToggler";
 import styles from "./sefer-composite.module.css";
@@ -50,6 +51,7 @@ const ClientWrapper = (props: {
 	perushim: PerushSummary[];
 	perekIds?: number[];
 	entityRefsByPerek?: Record<number, PerekEntityReference[]>;
+	imagesByPerek?: Record<number, PerekIllustration[]>;
 	/** When set, the book view will auto-expand this article/perush on the current perek page */
 	initialSlug?: string;
 }) => {
@@ -101,7 +103,11 @@ const ClientWrapper = (props: {
 		appliedStoredPreference.current = true;
 		const stored = getStoredPerekViewMode();
 		if (stored === "book" && searchParams.get("book") == null) {
-			const next = pathnameWithBookQuery(pathname, searchParams.toString(), true);
+			const next = pathnameWithBookQuery(
+				pathname,
+				searchParams.toString(),
+				true,
+			);
 			router.replace(next, { scroll: false });
 		}
 	}, [isWideEnough, pathname, router, searchParams]);
@@ -164,18 +170,19 @@ const ClientWrapper = (props: {
 					currentlyToggled ? styles.visible : styles.hidden
 				}`}
 			>
-			{everToggled ? (
-				<Sefer
-					perekObj={props.perekObj}
-					articles={props.articles}
-					perushim={props.perushim}
-					perekIds={props.perekIds}
-					entityRefsByPerek={props.entityRefsByPerek}
-					initialSlug={props.initialSlug}
-				/>
-			) : currentlyToggled ? (
-				<SeferLoadingIndicator />
-			) : null}
+				{everToggled ? (
+					<Sefer
+						perekObj={props.perekObj}
+						articles={props.articles}
+						perushim={props.perushim}
+						perekIds={props.perekIds}
+						entityRefsByPerek={props.entityRefsByPerek}
+						imagesByPerek={props.imagesByPerek}
+						initialSlug={props.initialSlug}
+					/>
+				) : currentlyToggled ? (
+					<SeferLoadingIndicator />
+				) : null}
 			</div>
 		</>
 	);
