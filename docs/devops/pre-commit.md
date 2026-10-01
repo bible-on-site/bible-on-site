@@ -47,6 +47,12 @@ These checks run on all staged files regardless of module:
 | `actionlint` | Lints GitHub Actions workflows |
 | `md-dead-link-check` | Detects broken links in Markdown files |
 
+The workflow linter uses a pinned [Astral actionlint revision](https://github.com/astral-sh/actionlint/commit/9e5dcb067e7cdcfe44d3f015ba9f2be4583466cb)
+that validates GitHub's native `parallel`, `background` and `wait` steps, including
+references to preceding background steps. The pinned revision also retains
+Pyflakes integration. [Upstream support is still open](https://github.com/rhysd/actionlint/issues/693);
+workflow lint remains enabled without ignored syntax errors.
+
 ## Website Module
 
 **Trigger:** Changes in `web/bible-on-site/`
