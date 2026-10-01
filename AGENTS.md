@@ -2,7 +2,7 @@
 
 For repository change, build, or fix tasks, local-only work is not a completed delivery. Commit and push the finished, validated changes at minimum. When authorization and repository policy permit, carry the pull request through CI and merge it. Stop short only when the user explicitly requests review before publication or a hard blocker prevents pushing or merging; report that blocker and the exact remaining action.
 
-Own every failure that blocks delivery, regardless of whether the task's changes caused it. Investigate and fix or rerun failing checks, including unrelated tests and CI issues, until the pull request merges. Do not stop after attributing a failure to another cause; if a hard blocker remains, report the evidence and exact action still needed.
+Take responsibility for the overall quality of this project and every flaw encountered while working on it. Investigate and fix flaws whether they are related to the current request, predate the task, appear in another module, or are found by tests, CI, review, or direct inspection. Do not leave a known flaw merely because it does not block the pull request or was caused elsewhere. Validate and deliver each fix through the repository's normal commit, push, CI, and merge process. Stop with a known flaw unresolved only if the user explicitly defers it or a hard blocker prevents a fix; report the evidence and exact remaining action.
 
 For changes limited to README files, local test suites and CI are not required for validation. Commit and push, then request merge without waiting for optional checks. If repository policy requires CI or a merge queue, let those checks run and verify the final merge result.
 
