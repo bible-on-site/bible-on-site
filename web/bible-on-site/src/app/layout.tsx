@@ -46,7 +46,7 @@ export default function RootLayout({
 	children: React.ReactNode;
 }>) {
 	return (
-		<html lang="he" dir="rtl">
+		<html lang="he" dir="rtl" data-scroll-behavior="smooth">
 			<head>
 				<GoogleAnalytics />
 				<JsonLd data={siteJsonLd} />
@@ -57,8 +57,9 @@ export default function RootLayout({
 						<Image
 							src="/images/logos/logo-white-letters-69.webp"
 							alt='תנ"ך על הפרק'
-							width={72}
-							height={72}
+							width={69}
+							height={50}
+							style={{ width: 72, height: "auto" }}
 						/>
 					</Link>
 				</nav>

@@ -15,10 +15,12 @@ import type {
 	Additionals,
 	AdditionalsItem,
 	Pasuk,
+	RecitationRecording,
 	SefarimItemWithPerakim,
 } from "./db/tanah-view-types";
 import { getAllPerakim } from "./sefer-dto";
 export interface PerekObj {
+	recitation?: RecitationRecording;
 	perekId: number;
 	perekHeb: string;
 	header: string;
@@ -68,6 +70,7 @@ export function getPerekByPerekId(perekId: number): PerekObj {
 		perekId,
 		perekHeb,
 		header: perek.header,
+		recitation: perek.recitation,
 		pesukim: perek.pesukim,
 		helek: seferOrAdditional.helek,
 		sefer: sefer.name,

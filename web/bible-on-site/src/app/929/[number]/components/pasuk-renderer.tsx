@@ -4,6 +4,12 @@ import { isQriDifferentThanKtiv } from "@/data/db/tanah-view-types";
 import type { EntityRefLookup } from "@/lib/tanahpedia/entity-ref-lookup";
 import { getSegmentRuns } from "@/lib/tanahpedia/entity-ref-lookup";
 
+type WordWrapper = (
+	pasuk: number,
+	segment: number,
+	text: string,
+) => React.ReactNode;
+
 interface SegmentRangeResult {
 	content: React.ReactNode[];
 	trailingSpace: boolean;
@@ -17,6 +23,7 @@ export function renderSegmentRange(
 	ptuha: () => React.ReactNode,
 	stuma: () => React.ReactNode,
 	qriClassName: string,
+	wordWrapper?: WordWrapper,
 ): SegmentRangeResult {
 	const content: React.ReactNode[] = [];
 	for (let i = startIdx; i <= endIdx; i++) {
@@ -36,10 +43,12 @@ export function renderSegmentRange(
 						<>
 							{/* biome-ignore lint/a11y/noLabelWithoutControl: It'll take some time to validate this fix altogether with css rules */}
 							(<label />
-							{segment.value})
+							{wordWrapper?.(pasukIdx + 1, i + 1, segment.value) ??
+								segment.value}
+							)
 						</>
 					) : (
-						segment.value
+						(wordWrapper?.(pasukIdx + 1, i + 1, segment.value) ?? segment.value)
 					)
 				) : segment.type === "ptuha" ? (
 					ptuha()
@@ -50,8 +59,10 @@ export function renderSegmentRange(
 		);
 		const needsSpace =
 			i < segments.length - 1 &&
-			!((segment.type === "ktiv" || segment.type === "qri") &&
-				segment.value.at(segment.value.length - 1) === "־");
+			!(
+				(segment.type === "ktiv" || segment.type === "qri") &&
+				segment.value.at(segment.value.length - 1) === "־"
+			);
 		if (needsSpace && i < endIdx) {
 			content.push(<span key={`sp-${segmentKey}`}> </span>);
 		}
@@ -59,8 +70,10 @@ export function renderSegmentRange(
 	const lastSeg = segments[endIdx];
 	const trailingSpace =
 		endIdx < segments.length - 1 &&
-		!((lastSeg.type === "ktiv" || lastSeg.type === "qri") &&
-			lastSeg.value.at(lastSeg.value.length - 1) === "־");
+		!(
+			(lastSeg.type === "ktiv" || lastSeg.type === "qri") &&
+			lastSeg.value.at(lastSeg.value.length - 1) === "־"
+		);
 	return { content, trailingSpace };
 }
 
@@ -80,12 +93,9 @@ export function renderPasukWithEntityRefs(
 		children: React.ReactNode[],
 		key: string,
 	) => React.ReactNode,
+	wordWrapper?: WordWrapper,
 ): React.ReactNode[] {
-	const runs = getSegmentRuns(
-		entityRefLookup,
-		pasukIdx + 1,
-		segments.length,
-	);
+	const runs = getSegmentRuns(entityRefLookup, pasukIdx + 1, segments.length);
 	return runs.map((run) => {
 		const { content, trailingSpace } = renderSegmentRange(
 			segments,
@@ -95,6 +105,7 @@ export function renderPasukWithEntityRefs(
 			ptuha,
 			stuma,
 			qriClassName,
+			wordWrapper,
 		);
 		const trailSpan = trailingSpace ? (
 			<span key={`sp-trail-${pasukIdx + 1}-${run.endIdx + 1}`}> </span>
