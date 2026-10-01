@@ -65,25 +65,25 @@ commit that can merge.
 ## Native parallel steps
 
 [GitHub introduced native parallel steps on June 25, 2026](https://github.blog/changelog/2026-06-25-actions-steps-can-now-be-run-in-parallel/).
-This workflow uses two forms:
+Data CI uses `background: true` for its MongoDB image download after disk cleanup
+and Cargo cache restoration. Lint, formatting, MySQL setup and unit coverage run
+while the shell downloads to `/tmp`. An explicit `wait` precedes Docker loading
+and integration tests, so download failures still fail the job. This can hide
+part or all of the 105–180-second download in representative runs; disk loading
+and integration tests remain sequential.
 
-- A `parallel` group uploads the eight restored baselines concurrently after all
-  downloads finish. Each reads a separate directory and writes a distinct
-  artifact. The group waits for every upload, preserving failure propagation and
-  downstream artifact availability. This overlaps the two large SQL/SQLite
-  uploads (11–16 seconds each in the representative runs) with each other and the
-  six small coverage uploads. Actual savings depend on compression and bandwidth.
-- Data CI starts the MongoDB image download with `background: true` after disk
-  cleanup and Cargo cache restoration. Lint, formatting, MySQL setup and unit
-  coverage run while it downloads to `/tmp`. An explicit `wait` precedes Docker
-  loading and integration tests, so download failures still fail the job. This
-  can hide part or all of the 105–180-second download in representative runs;
-  disk loading and integration tests remain sequential.
+A native `parallel` group for the eight baseline uploads was tested, then
+rejected for reliability. It passed several runs but failed in
+[run 36917969213](https://github.com/bible-on-site/bible-on-site/actions/runs/36917969213)
+when `actions/upload-artifact` parsed an empty GitHub event payload. This matches
+[the open parallel-action startup race](https://github.com/actions/checkout/issues/2484)
+and [the pending toolkit fix](https://github.com/actions/toolkit/pull/2464).
+Uploads therefore remain sequential. The retained background shell uses `gh api`
+and does not read the runner's shared event payload through the Actions toolkit.
 
-The eight uploads stay below GitHub's ten-background-step limit. Benchmarks do
-not overlap with extra workload, and Cargo commands sharing one target directory
-and tests sharing a database remain sequential. No background step is allowed to
-outlive a dependent consumer.
+Benchmarks do not overlap with extra workload, and Cargo commands sharing one
+target directory and tests sharing a database remain sequential. No background
+step is allowed to outlive a dependent consumer.
 
 Upstream actionlint 1.7.12 rejects the new syntax. The pre-commit hook uses an
 immutable Astral fork revision with native syntax/reference validation and the
@@ -104,7 +104,7 @@ existing Pyflakes integration; no lint rules are disabled. See
   dominant step is integration coverage (about 134–148 seconds in representative
   runs). These checks remain intact.
 - Baseline restoration still copies both large perushim artifacts on every run,
-  with uploads now concurrent. Avoiding the copies needs coordination with
+  with uploads kept sequential. Avoiding the copies needs coordination with
   consumers and baseline retention; this change keeps that artifact contract.
 
 No test selection, coverage thresholds, retries, performance thresholds, build
@@ -117,8 +117,9 @@ passed all module checks, iOS, website production performance, coverage and the
 aggregate CI gate. Website CI took 4m36s and Website Performance 7m00s. These are
 single-run observations, not controlled before/after benchmarks.
 
-All eight baseline uploads started in the same second; the baseline job took
-39s compared with the historical 52s median. The Data image download took 170s
+The rejected upload-parallelism experiment took 39s compared with the historical
+52s baseline-job median, but its later startup race outweighed that saving.
+The retained Data image download took 170s
 and completed during lint/unit work, leaving the explicit wait at 0s.
 
 The first merge-queue run exposed an existing website hydration race. Local
