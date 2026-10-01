@@ -210,3 +210,15 @@ it("does not initialize Mapbox without a public token", () => {
 	render(<MapboxPlacesMapClient markers={[jerusalem]} />);
 	expect(mockMapConstructor).not.toHaveBeenCalled();
 });
+
+it("keeps an empty map at its default view without reloading the RTL plugin", async () => {
+	mockRTLStatus.mockReturnValue("loaded");
+	render(<MapboxPlacesMapClient markers={[]} />);
+	await waitFor(() => expect(mockMaps).toHaveLength(1));
+	const map = mockMaps[0];
+	expect(mockSetRTLTextPlugin).not.toHaveBeenCalled();
+	expect(map.setCenter).not.toHaveBeenCalled();
+	expect(map.fitBounds).not.toHaveBeenCalled();
+	act(() => map.handlers.load({}));
+	expect(map.addSource.mock.calls[0][1].data.features).toEqual([]);
+});

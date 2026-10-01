@@ -466,7 +466,7 @@ describe("pedia/[uniqueName] page", () => {
 				id: "entry-map-family",
 				uniqueName: "map-family",
 				title: "Map Family",
-				content: "<p>Body</p>",
+				content: null,
 				createdAt: "2024-01-01T00:00:00Z",
 				updatedAt: "2024-01-01T00:00:00Z",
 				entities: [
@@ -496,6 +496,7 @@ describe("pedia/[uniqueName] page", () => {
 			expect(
 				screen.getByText(/תנ"ך על הפרק משתמשים בספק מפות חיצוני/),
 			).toBeInTheDocument();
+			expect(screen.queryByText(/אין תוכן עדיין/)).not.toBeInTheDocument();
 			expect(
 				screen.getByText("\u05de\u05e9\u05e4\u05d7\u05d4"),
 			).toBeInTheDocument();
