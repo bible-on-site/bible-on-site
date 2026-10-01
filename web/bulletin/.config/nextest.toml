@@ -1,2 +1,2 @@
 [profile.ci]
-junit.path = "../.junit-report/unit/results.xml"
+junit.path = "../../../.junit-report/unit/results.xml"

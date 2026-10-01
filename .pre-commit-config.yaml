@@ -28,8 +28,11 @@ repos:
     rev: v1.0.3
     hooks:
       - id: check-json5
-  - repo: "https://github.com/rhysd/actionlint"
-    rev: v1.7.12
+  # Native parallel/background steps are not supported upstream yet:
+  # https://github.com/rhysd/actionlint/issues/693
+  # This Astral revision supports them and retains the existing Pyflakes checks.
+  - repo: "https://github.com/astral-sh/actionlint"
+    rev: 9e5dcb067e7cdcfe44d3f015ba9f2be4583466cb
     hooks:
       - id: actionlint
   - repo: local
