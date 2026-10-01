@@ -142,3 +142,11 @@ Transfer time remains variable: the first merge-queue Data run spent 12m32s in
 extraction in the earlier PR run. This was the same cached image artifact. The
 parallel step preserves the download and wait boundary; it cannot remove
 remote transfer variability.
+
+A final log audit found Website CI masking an LCOV post-processing failure with
+`continue-on-error`: Docker's root-owned output was not writable by the runner
+when Node added repository path prefixes. Run the LCOV container with the caller's
+UID/GID on POSIX hosts and require coverage merging to succeed. A Linux volume
+fixture reproduced `EACCES` with the original command and verified merging plus
+Node rewriting with the corrected ownership; Windows keeps Docker Desktop's
+existing bind-mount mapping.
