@@ -5,7 +5,7 @@ export interface PerekIllustration {
 	socialSrc: string;
 	alt: string;
 	caption: string;
-	summary: string;
+	description: string;
 }
 
 const illustrations: Partial<Record<number, PerekIllustration>> = {
@@ -20,9 +20,8 @@ const illustrations: Partial<Record<number, PerekIllustration>> = {
 		socialSrc: "/images/perakim/bereshit-1-creation-social.jpg",
 		alt: "איור פרשני לבראשית א: אור מעל המים, יבשה וצמחייה, מאורות, עופות ודגים",
 		caption:
-			"איור פרשני לבראשית א — אור, מים, יבשה, צמחייה ובעלי חיים בסיפור הבריאה.",
-		summary:
-			"בראשית א מתאר את בריאת העולם: אור וחושך, שמים וים, יבשה וצמחייה, מאורות, בעלי חיים ובריאת האדם.",
+			"איור פרשני לבראשית א: אור, מים, יבשה, צמחייה ובעלי חיים בסיפור הבריאה.",
+		description: "בראשית א: אור, חושך, מאורות, ארץ, שמים, מים וכל אשר בם.",
 	},
 };
 

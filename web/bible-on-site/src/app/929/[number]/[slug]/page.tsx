@@ -28,6 +28,7 @@ import { fetchAllEntityRefs } from "../../../../lib/tanahpedia/perek-entity-refs
 import { JsonLd } from "../../../components/JsonLd";
 import { ArticlesSection } from "../components/ArticlesSection";
 import Breadcrumb from "../components/Breadcrumb";
+import { PerekHeading } from "../components/PerekHeading";
 import { PerekText } from "../components/PerekText";
 import { PerushimSection } from "../components/PerushimSection";
 import SeferComposite from "../components/SeferComposite";
@@ -231,6 +232,7 @@ export default async function ArticlePage({
 				</Suspense>
 				<div className={perekStyles.perekContainer}>
 					<Breadcrumb perekObj={perekObj} />
+					<PerekHeading perekObj={perekObj} />
 
 					<PerekText
 						perekObj={perekObj}
@@ -313,6 +315,7 @@ export default async function ArticlePage({
 			</Suspense>
 			<div className={perekStyles.perekContainer}>
 				<Breadcrumb perekObj={perekObj} />
+				<PerekHeading perekObj={perekObj} />
 
 				<PerekText
 					perekObj={perekObj}

@@ -15,10 +15,7 @@ const perekObj: PerekObj = {
 it("offers responsive AVIF with a crawlable WebP image and visible context", () => {
 	const { container } = render(<PerekIntro perekObj={perekObj} />);
 
-	expect(
-		screen.getByRole("heading", { level: 1, name: "בראשית א" }),
-	).toBeInTheDocument();
-	expect(screen.getByText(/בראשית א מתאר את בריאת העולם/)).toBeInTheDocument();
+	expect(screen.queryByRole("heading")).toBeNull();
 	const source = container.querySelector('picture source[type="image/avif"]');
 	expect(source).toHaveAttribute(
 		"srcset",
@@ -34,15 +31,12 @@ it("offers responsive AVIF with a crawlable WebP image and visible context", () 
 		expect.stringContaining("bereshit-1-creation.webp"),
 	);
 	expect(image).toHaveAttribute("sizes", "(max-width: 768px) 100vw, 960px");
-	expect(screen.getByText(/איור פרשני לבראשית א —/)).toBeInTheDocument();
+	expect(screen.getByText(/איור פרשני לבראשית א:/)).toBeInTheDocument();
 });
 
-it("keeps other perakim text-only until an illustration exists", () => {
+it("adds no extra introduction to other perakim", () => {
 	const { container } = render(
 		<PerekIntro perekObj={{ ...perekObj, perekId: 2, source: "בראשית ב" }} />,
 	);
-	expect(
-		screen.getByRole("heading", { level: 1, name: "בראשית ב" }),
-	).toBeInTheDocument();
-	expect(container.querySelector("picture")).toBeNull();
+	expect(container).toBeEmptyDOMElement();
 });

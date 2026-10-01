@@ -12,6 +12,7 @@ import { fetchAllEntityRefs } from "../../../lib/tanahpedia/perek-entity-refs";
 import { JsonLd } from "../../components/JsonLd";
 import { ArticlesSection } from "./components/ArticlesSection";
 import Breadcrumb from "./components/Breadcrumb";
+import { PerekHeading } from "./components/PerekHeading";
 import { PerekIntro } from "./components/PerekIntro";
 import { PerekText } from "./components/PerekText";
 import { PerushimSection } from "./components/PerushimSection";
@@ -63,7 +64,7 @@ export async function generateMetadata({
 	const illustration = getPerekIllustration(perekId);
 	const title = `${perekObj.source} | תנ"ך על הפרק`;
 	const description =
-		illustration?.summary ??
+		illustration?.description ??
 		`קריאת ${perekObj.source} בתנ"ך, עם פירושים ומאמרים על הפרק.`;
 	return {
 		title,
@@ -124,6 +125,7 @@ export default async function Perek({
 			</Suspense>
 			<div className={`${styles.perekContainer} seo-content`}>
 				<Breadcrumb perekObj={perekObj} />
+				<PerekHeading perekObj={perekObj} />
 				<PerekIntro perekObj={perekObj} />
 				<PerekText
 					perekObj={perekObj}
