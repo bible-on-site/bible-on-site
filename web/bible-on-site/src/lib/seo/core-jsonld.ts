@@ -14,7 +14,7 @@ import {
 	plainText,
 	WEBSITE_ID,
 } from "./jsonld";
-import { getPerekIllustration } from "./perek-illustrations";
+import type { PerekIllustration } from "./perek-illustrations";
 
 const HOME_LABEL = "בית";
 
@@ -79,6 +79,7 @@ function tanahAndSeferNodes(seferName: string, helek: string): Thing[] {
  */
 export function buildPerekGraph(
 	perekObj: PerekObj,
+	images: PerekIllustration[] = [],
 	recitation?: Pick<
 		Recitation,
 		"perekId" | "audioUrl" | "durationMs" | "audioSha256"
@@ -86,7 +87,7 @@ export function buildPerekGraph(
 ): Graph {
 	const path = perekPath(perekObj.perekId);
 	const url = absUrl(path);
-	const illustration = getPerekIllustration(perekObj.perekId);
+	const illustration = images[0];
 	const chapterId = nodeId(path, "chapter");
 	const breadcrumb = breadcrumbNode(
 		[
@@ -101,7 +102,7 @@ export function buildPerekGraph(
 		name: perekObj.source,
 		inLanguage: "he",
 		isPartOf: { "@id": seferId(perekObj.sefer) },
-		...(illustration ? { image: absUrl(illustration.src) } : {}),
+		...(images.length ? { image: images.map((image) => image.src) } : {}),
 	};
 	const webPage: Record<string, unknown> = {
 		"@type": "WebPage",
@@ -118,8 +119,8 @@ export function buildPerekGraph(
 						"@type": "ImageObject",
 						contentUrl: absUrl(illustration.src),
 						caption: illustration.caption,
-						width: 1600,
-						height: 900,
+						width: illustration.width,
+						height: illustration.height,
 					},
 				}
 			: {}),

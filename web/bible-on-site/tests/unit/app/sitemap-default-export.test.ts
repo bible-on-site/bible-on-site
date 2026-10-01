@@ -25,6 +25,10 @@ jest.mock("@/lib/tanahpedia/service", () => ({
 	getAllEntryUniqueNames: jest.fn(),
 }));
 
+jest.mock("@/lib/seo/perek-images-data", () => ({
+	getPerekImagesByChapter: jest.fn(async () => ({})),
+}));
+
 import { headers } from "next/headers";
 import sitemapFn, { SITEMAP_SECTIONS, TOTAL_PERAKIM } from "@/app/sitemap";
 import { getAllArticlePerekIdPairs } from "@/lib/articles";
