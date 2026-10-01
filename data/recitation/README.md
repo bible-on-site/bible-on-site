@@ -46,8 +46,26 @@ Do not lower rejection thresholds just to increase accepted coverage.
 
 Python 3.12+, FFmpeg/ffprobe on PATH, and a compatible PyTorch CUDA build are
 required. On the tested RTX 4070 Laptop (8 GB), CUDA 12.6 works with driver 566.07.
-Full FP32 Whisper can use substantial GPU/shared memory; processing time is not
-an acceptance criterion.
+The full FP32 model stays on the GPU. `whisper_memory.py` bounds inference memory
+without quantization, fewer beams, shorter audio, or lower alignment thresholds:
+
+- Word timestamps use decoder cross-attention; retaining the unused encoder
+  attention maps alone costs 5.36 GiB for large-v3. The encoder still runs every
+  layer and attention computation, but those diagnostic maps are not retained.
+- Saved decoder attention and each layer's FP32 key/value cache live in system
+  RAM between uses. Word timestamp extraction uses the unchanged Transformers
+  DTW implementation on CPU and returns its result to the original device.
+- Explicit hooks cover cached cross-attention reads. Transformers 5.18's generic
+  offloaded cache does not prefetch those direct Whisper reads after token one.
+- Hooks and temporary method overrides are removed on success and failure.
+  A memory exhaustion stops the batch and immediately records `failures.json`;
+  it cannot trigger hundreds of subsequent retries in an exhausted CUDA process.
+
+Transfers may take longer; processing time is not an acceptance criterion.
+Native Whisper progress reports show audio already processed. CPU and CUDA
+regression tests compare tokens and word timestamps with ordinary full-precision
+inference, using a small random Whisper without downloading weights. Set
+`RECITATION_TEST_CUDA=1` to include CUDA validation locally. CI uses CPU Torch.
 
 From this directory in PowerShell:
 
@@ -207,8 +225,9 @@ From this directory:
 .venv/Scripts/python.exe audit.py
 ```
 
-CI runs those invariants, audits every manifest against the canonical JSON, and
-tests byte-range delivery through real RustFS without downloading GPU models.
+CI runs those invariants and numerical Whisper memory tests, audits the
+intermediate DB against canonical JSON, and tests byte-range delivery through
+real RustFS without downloading pretrained model weights.
 Website tests cover invalid/stale/partial maps, storage URL selection, exact
 selected intervals, playback cleanup, errors, and unpublished candidates.
 
