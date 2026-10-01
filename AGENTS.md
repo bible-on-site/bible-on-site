@@ -2,6 +2,8 @@
 
 For repository change, build, or fix tasks, local-only work is not a completed delivery. Commit and push the finished, validated changes at minimum. When authorization and repository policy permit, carry the pull request through CI and merge it. Stop short only when the user explicitly requests review before publication or a hard blocker prevents pushing or merging; report that blocker and the exact remaining action.
 
+Own every failure that blocks delivery, regardless of whether the task's changes caused it. Investigate and fix or rerun failing checks, including unrelated tests and CI issues, until the pull request merges. Do not stop after attributing a failure to another cause; if a hard blocker remains, report the evidence and exact action still needed.
+
 For changes limited to README files, local test suites and CI are not required for validation. Commit and push, then request merge without waiting for optional checks. If repository policy requires CI or a merge queue, let those checks run and verify the final merge result.
 
 # Task Permissions
