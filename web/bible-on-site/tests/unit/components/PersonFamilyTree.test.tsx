@@ -161,13 +161,15 @@ describe("PersonFamilyTree", () => {
 			<PersonFamilyTree
 				summary={{
 					...rootSummary,
-					parents: [{
-						related: related("father", "אב"),
-						parentRole: "FATHER",
-						relationshipType: "BIOLOGICAL",
-						altGroupId: null,
-						sourceCitation: null,
-					}],
+					parents: [
+						{
+							related: related("father", "אב"),
+							parentRole: "FATHER",
+							relationshipType: "BIOLOGICAL",
+							altGroupId: null,
+							sourceCitation: null,
+						},
+					],
 				}}
 			/>,
 		);
@@ -782,6 +784,7 @@ describe("PersonFamilyTree", () => {
 					unionStartDate: null,
 					unionEndDate: null,
 				},
+				spouseEdge({ id: "rachel", name: "רחל", unionOrder: 2 }),
 			],
 			children: [
 				{
@@ -1295,6 +1298,49 @@ describe("PersonFamilyTree", () => {
 		expect(screen.getByText(/1910-01-01/)).toBeInTheDocument();
 	});
 
+	it("keeps one-spouse children in a birth-ordered RTL row", () => {
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			focalDisplayName: "אדם",
+			focalSex: "MALE",
+			spouses: [spouseEdge({ id: "eve", name: "חוה" })],
+			children: [
+				childEdge({
+					id: "seth",
+					name: "שת",
+					birthOrder: 3,
+					coParentEntityId: "eve",
+					coParentDisplayName: "חוה",
+				}),
+				childEdge({
+					id: "cain",
+					name: "קין",
+					birthOrder: 1,
+					coParentEntityId: "eve",
+					coParentDisplayName: "חוה",
+				}),
+				childEdge({
+					id: "abel",
+					name: "הבל",
+					birthOrder: 2,
+					coParentEntityId: "eve",
+					coParentDisplayName: "חוה",
+				}),
+			],
+		};
+
+		const { container } = render(<PersonFamilyTree summary={summary} />);
+		const cards = screen.getAllByTestId("family-child-card");
+		expect(cards.map((card) => card.querySelector("a")?.textContent)).toEqual([
+			"קין",
+			"הבל",
+			"שת",
+		]);
+		expect(cards[0].parentElement).toHaveClass("childRowThree");
+		expect(container.querySelector("[data-matrix-spouse-card]")).toBeNull();
+		expect(container.querySelector("[data-matrix-mobile]")).toBeNull();
+	});
+
 	it("renders Jacob chronology swimlanes when enough known children are present", () => {
 		const leah = "\u05dc\u05d0\u05d4";
 		const rachel = "\u05e8\u05d7\u05dc";
@@ -1404,7 +1450,8 @@ describe("PersonFamilyTree", () => {
 						coParentEntityId: motherId,
 						coParentDisplayName:
 							mothers.find((mother) => mother.id === motherId)?.name ?? null,
-						coParentUnionOrder: mothers.findIndex((mother) => mother.id === motherId) + 1,
+						coParentUnionOrder:
+							mothers.findIndex((mother) => mother.id === motherId) + 1,
 					}),
 				)
 				.reverse(),
@@ -1418,9 +1465,16 @@ describe("PersonFamilyTree", () => {
 		);
 		expect(
 			cards.map((card) =>
-				Number(card.closest<HTMLElement>("[style*='grid-column']")?.style.gridColumn),
+				Number(
+					card.closest<HTMLElement>("[style*='grid-column']")?.style.gridColumn,
+				),
 			),
-		).toEqual(births.map(([, motherId]) => mothers.findIndex((mother) => mother.id === motherId) + 1));
+		).toEqual(
+			births.map(
+				([, motherId]) =>
+					mothers.findIndex((mother) => mother.id === motherId) + 1,
+			),
+		);
 		unmount();
 
 		Object.defineProperty(HTMLElement.prototype, "scrollWidth", {
@@ -1433,17 +1487,22 @@ describe("PersonFamilyTree", () => {
 		});
 		try {
 			const { container } = render(<PersonFamilyTree summary={summary} />);
-			const mobileColumns = container.querySelectorAll("[data-matrix-mobile] > div");
+			const mobileColumns = container.querySelectorAll(
+				"[data-matrix-mobile] > div",
+			);
 			expect(mobileColumns).toHaveLength(4);
 			expect(
 				Array.from(mobileColumns, (column) =>
-					Array.from(column.querySelectorAll("[data-testid='family-child-card']"),
+					Array.from(
+						column.querySelectorAll("[data-testid='family-child-card']"),
 						(card) => card.querySelector("a")?.textContent,
 					),
 				),
 			).toEqual(
 				mothers.map(({ id }) =>
-					births.filter(([, motherId]) => motherId === id).map(([name]) => name),
+					births
+						.filter(([, motherId]) => motherId === id)
+						.map(([name]) => name),
 				),
 			);
 		} finally {
@@ -1485,7 +1544,10 @@ describe("PersonFamilyTree", () => {
 		const summary: PersonFamilySummary = {
 			...baseSummary,
 			focalSex: "MALE",
-			spouses: [spouseEdge({ id: "leah", name: "\u05dc\u05d0\u05d4" })],
+			spouses: [
+				spouseEdge({ id: "leah", name: "\u05dc\u05d0\u05d4" }),
+				spouseEdge({ id: "rachel", name: "\u05e8\u05d7\u05dc", unionOrder: 2 }),
+			],
 			children: [
 				childEdge({
 					id: "mapped",
@@ -1515,7 +1577,14 @@ describe("PersonFamilyTree", () => {
 			const summary: PersonFamilySummary = {
 				...baseSummary,
 				focalSex: "MALE",
-				spouses: [spouseEdge({ id: "leah", name: "\u05dc\u05d0\u05d4" })],
+				spouses: [
+					spouseEdge({ id: "leah", name: "\u05dc\u05d0\u05d4" }),
+					spouseEdge({
+						id: "rachel",
+						name: "\u05e8\u05d7\u05dc",
+						unionOrder: 2,
+					}),
+				],
 				children: [
 					childEdge({
 						id: "mapped",
