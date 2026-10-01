@@ -13,10 +13,11 @@
 
 .perekHeading {
   max-width: 960px;
-  margin: 24px auto 16px;
+  margin: 16px auto 12px;
   padding: 0 16px;
   color: var(--pasuk-num-color, #1c2c5d);
-  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  font-size: clamp(1.15rem, 2.2vw, 1.4rem);
+  font-weight: 600;
   line-height: 1.3;
   text-align: right;
 }
