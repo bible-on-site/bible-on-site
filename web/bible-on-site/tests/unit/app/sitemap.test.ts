@@ -124,7 +124,7 @@ describe("sitemap", () => {
 			expect(result[0].images).toEqual([
 				"https://example.com/images/perakim/bereshit-1-creation.webp",
 			]);
-			expect(result[1].images).toBeUndefined();
+			expect(result.every((entry) => entry.images?.length === 1)).toBe(true);
 		});
 
 		it("sets monthly change frequency for perakim", () => {

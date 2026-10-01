@@ -34,9 +34,12 @@ it("offers responsive AVIF with a crawlable WebP image and visible context", () 
 	expect(screen.getByText(/איור פרשני לבראשית א:/)).toBeInTheDocument();
 });
 
-it("adds no extra introduction to other perakim", () => {
-	const { container } = render(
+it("shows a labeled benchmark illustration for another perek", () => {
+	render(
 		<PerekIntro perekObj={{ ...perekObj, perekId: 2, source: "בראשית ב" }} />,
 	);
-	expect(container).toBeEmptyDOMElement();
+	expect(
+		screen.getByRole("img", { name: "תמונת בדיקה לפרק 2" }),
+	).toBeInTheDocument();
+	expect(screen.getByText("תמונת בדיקה לפרק 2.")).toBeInTheDocument();
 });
