@@ -74,6 +74,8 @@ pub struct Pasuk {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Perek {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recitation: Option<serde_json::Value>,
     #[serde(rename = "perekId")]
     pub perek_id: i32,
     pub header: String,

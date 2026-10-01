@@ -7,8 +7,8 @@ function pasuk(segments: Pasuk["segments"]): Pasuk {
 
 function mockTimeframe() {
 	return {
-		from: { type: "string", pattern: "^\\d{2}:\\d{2}:\\d{2}$" },
-		to: { type: "string", pattern: "^\\d{2}:\\d{2}:\\d{2}$" },
+		from: "00:00:00",
+		to: "00:00:00",
 	} as const;
 }
 
@@ -65,9 +65,7 @@ describe("pasukPlainText", () => {
 
 	it("keeps orphan ktiv (qriOffset 0)", () => {
 		expect(
-			pasukPlainText(
-				pasuk([{ type: "ktiv", value: "יתום", qriOffset: 0 }]),
-			),
+			pasukPlainText(pasuk([{ type: "ktiv", value: "יתום", qriOffset: 0 }])),
 		).toBe("יתום");
 	});
 });

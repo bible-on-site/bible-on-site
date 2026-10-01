@@ -294,3 +294,41 @@ describe("seo/core-jsonld", () => {
 		});
 	});
 });
+
+test("recorded chapters link a Hebrew AudioObject to their canonical chapter", () => {
+	const recording = {
+		perekId: 829,
+		audioUrl:
+			"https://bible-on-site-assets.s3.il-central-1.amazonaws.com/recordings/829_record.mp3",
+		durationMs: 36885,
+		audioSha256: "a".repeat(64),
+	};
+	const graph = buildPerekGraph(
+		perekObj({ perekId: 829, source: "אסתר י", sefer: "אסתר" }),
+		recording,
+	);
+	const audio = nodeByType(graph, "AudioObject");
+	expect(audio).toMatchObject({
+		contentUrl: recording.audioUrl,
+		duration: "PT36.885S",
+		encodingFormat: "audio/mpeg",
+		inLanguage: "he",
+		isAccessibleForFree: true,
+		sha256: recording.audioSha256,
+	});
+	expect(audio?.encodesCreativeWork).toEqual({
+		"@id": nodeByType(graph, "Chapter")?.["@id"],
+	});
+	expect(nodeByType(graph, "Chapter")?.encoding).toEqual({
+		"@id": audio?.["@id"],
+	});
+	expect(nodeByType(graph, "WebPage")?.audio).toEqual({
+		"@id": audio?.["@id"],
+	});
+	expect(
+		nodeByType(buildPerekGraph(perekObj()), "AudioObject"),
+	).toBeUndefined();
+	expect(
+		nodeByType(buildPerekGraph(perekObj(), recording), "AudioObject"),
+	).toBeUndefined();
+});

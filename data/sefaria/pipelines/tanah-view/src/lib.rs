@@ -7,3 +7,5 @@ pub mod commands;
 pub mod data;
 pub mod models;
 pub mod stages;
+
+pub mod recitation;

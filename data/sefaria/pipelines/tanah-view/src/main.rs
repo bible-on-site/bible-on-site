@@ -12,6 +12,10 @@ use tanah_view::{aggregation, commands, models::Sefer};
 #[command(name = "tanah-view")]
 #[command(about = "Generate Tanah view from MongoDB Sefaria data")]
 struct Cli {
+    /// Durable recitation intermediate database (independent of Sefaria output)
+    #[arg(long)]
+    recitation_db: Option<std::path::PathBuf>,
+
     /// Output format
     #[arg(long, value_enum)]
     format: Option<OutputFormat>,
@@ -46,7 +50,15 @@ async fn main() -> Result<()> {
         .format
         .context("--format is required for json/sqlite output")?;
 
-    let sefarim = fetch_from_mongodb(&cli.dump_name).await?;
+    let mut sefarim = fetch_from_mongodb(&cli.dump_name).await?;
+    let default_recitation_db =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../recitation/recitation.sqlite");
+    tanah_view::recitation::merge(
+        &mut sefarim,
+        cli.recitation_db
+            .as_deref()
+            .unwrap_or(&default_recitation_db),
+    )?;
 
     // TODO: Validate sefarim against tanah_view.schema.json before generating output
     // This will ensure the aggregation pipeline output matches the expected schema
