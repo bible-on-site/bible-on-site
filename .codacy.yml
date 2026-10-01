@@ -16,6 +16,8 @@ exclude_paths:
   - "data/mysql/tanahpedia_alter_child_birth_order.sql"
   - "data/mysql/perushim_structure.sql"
   - "data/mysql/perushim_data.sql"
+  - "data/mysql/tanah_perek_images_structure.sql"
+  - "data/mysql/tanah_truncate.sql"
   - "data/sqlite/perushim_catalog_structure.sql"
   - "data/sqlite/perushim_notes_structure.sql"
   # CloudFormation Lambda scripts are infra reference code, not application code.
