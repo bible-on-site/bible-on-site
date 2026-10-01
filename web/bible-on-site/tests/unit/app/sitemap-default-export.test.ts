@@ -1,13 +1,8 @@
 /**
  * Tests for the default sitemap() export.
- * Isolated in a separate file because it requires mocking next/headers
- * and service modules — keeping mocks away from the pure-function tests.
+ * Isolated in a separate file because it mocks service modules, keeping
+ * those mocks away from the pure-function tests.
  */
-
-// Mock next/headers for the default sitemap() export
-jest.mock("next/headers", () => ({
-	headers: jest.fn(),
-}));
 
 jest.mock("@/lib/articles", () => ({
 	getAllArticlePerekIdPairs: jest.fn(),
@@ -25,11 +20,11 @@ jest.mock("@/lib/tanahpedia/service", () => ({
 	getAllEntryUniqueNames: jest.fn(),
 }));
 
-import { headers } from "next/headers";
 import sitemapFn, { SITEMAP_SECTIONS, TOTAL_PERAKIM } from "@/app/sitemap";
 import { getAllArticlePerekIdPairs } from "@/lib/articles";
 import { getAllAuthorSlugs } from "@/lib/authors";
 import { getPerushimByPerekId } from "@/lib/perushim";
+import { SITE_ORIGIN } from "@/lib/seo/jsonld";
 import { CATEGORY_SLUGS } from "@/lib/tanahpedia/category-slug";
 import { getAllEntryUniqueNames } from "@/lib/tanahpedia/service";
 
@@ -41,10 +36,7 @@ describe("sitemap default export", () => {
 		jest.clearAllMocks();
 	});
 
-	it("builds sitemap using host header and fetched dynamic data", async () => {
-		(headers as jest.Mock).mockResolvedValue({
-			get: (name: string) => (name === "host" ? "example.com" : null),
-		});
+	it("builds canonical sitemap using fetched dynamic data", async () => {
 		(getAllAuthorSlugs as jest.Mock).mockResolvedValue(["הרב א", "הרב ב"]);
 		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([
 			{ articleId: 10, perekId: 1 },
@@ -69,24 +61,21 @@ describe("sitemap default export", () => {
 			1;
 		expect(result).toHaveLength(expectedLength);
 
-		expect(urls[0]).toBe("https://example.com");
-		expect(urls).toContain("https://example.com/929/1/10");
-		expect(urls).toContain("https://example.com/929/authors");
+		expect(urls[0]).toBe(SITE_ORIGIN);
+		expect(urls).toContain(`${SITE_ORIGIN}/929/1/10`);
+		expect(urls).toContain(`${SITE_ORIGIN}/929/authors`);
 		expect(urls).toContain(
-			`https://example.com/929/authors/${encodeURIComponent("הרב א")}`,
+			`${SITE_ORIGIN}/929/authors/${encodeURIComponent("הרב א")}`,
 		);
 		expect(urls).toContain(
-			`https://example.com/929/authors/${encodeURIComponent("הרב ב")}`,
+			`${SITE_ORIGIN}/929/authors/${encodeURIComponent("הרב ב")}`,
 		);
 		expect(urls).toContain(
-			`https://example.com/pedia/${encodeURIComponent("יעקב")}`,
+			`${SITE_ORIGIN}/pedia/${encodeURIComponent("יעקב")}`,
 		);
 	});
 
-	it("falls back to xn--febl3a.co.il when host header is absent", async () => {
-		(headers as jest.Mock).mockResolvedValue({
-			get: () => null,
-		});
+	it("uses the same origin without a request host", async () => {
 		(getAllAuthorSlugs as jest.Mock).mockResolvedValue([]);
 		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([]);
 		(getPerushimByPerekId as jest.Mock).mockResolvedValue([]);
@@ -94,13 +83,10 @@ describe("sitemap default export", () => {
 
 		const result = await sitemapFn();
 
-		expect(result[0].url).toBe("https://xn--febl3a.co.il");
+		expect(result[0].url).toBe(SITE_ORIGIN);
 	});
 
 	it("fetches authors and articles in parallel", async () => {
-		(headers as jest.Mock).mockResolvedValue({
-			get: (name: string) => (name === "host" ? "test.com" : null),
-		});
 		(getAllAuthorSlugs as jest.Mock).mockResolvedValue([]);
 		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([]);
 		(getPerushimByPerekId as jest.Mock).mockResolvedValue([]);
@@ -114,9 +100,6 @@ describe("sitemap default export", () => {
 	});
 
 	it("includes perushim URLs in sitemap", async () => {
-		(headers as jest.Mock).mockResolvedValue({
-			get: (name: string) => (name === "host" ? "example.com" : null),
-		});
 		(getAllAuthorSlugs as jest.Mock).mockResolvedValue([]);
 		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([]);
 		(getAllEntryUniqueNames as jest.Mock).mockResolvedValue([]);
@@ -133,7 +116,7 @@ describe("sitemap default export", () => {
 
 		const urls = result.map((e) => e.url);
 		expect(urls).toContain(
-			`https://example.com/929/1/${encodeURIComponent('רש"י')}`,
+			`${SITE_ORIGIN}/929/1/${encodeURIComponent('רש"י')}`,
 		);
 		// root + sections + 929 index + 929 perakim + 0 articles + 1 perush + authors index + 0 authors
 		const expectedLength =
@@ -150,9 +133,6 @@ describe("sitemap default export", () => {
 	});
 
 	it("includes pedia entry URLs in sitemap", async () => {
-		(headers as jest.Mock).mockResolvedValue({
-			get: (name: string) => (name === "host" ? "example.com" : null),
-		});
 		(getAllAuthorSlugs as jest.Mock).mockResolvedValue([]);
 		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([]);
 		(getPerushimByPerekId as jest.Mock).mockResolvedValue([]);
@@ -162,10 +142,10 @@ describe("sitemap default export", () => {
 
 		const urls = result.map((e) => e.url);
 		expect(urls).toContain(
-			`https://example.com/pedia/${encodeURIComponent("יעקב")}`,
+			`${SITE_ORIGIN}/pedia/${encodeURIComponent("יעקב")}`,
 		);
 		expect(urls).toContain(
-			`https://example.com/pedia/${encodeURIComponent("שמשון")}`,
+			`${SITE_ORIGIN}/pedia/${encodeURIComponent("שמשון")}`,
 		);
 		// root + sections + 929 index + 929 perakim + 0 articles + 0 perushim + authors index + 0 authors + 2 pedias
 		const expectedLength =

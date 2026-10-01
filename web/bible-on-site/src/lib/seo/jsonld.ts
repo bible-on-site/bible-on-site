@@ -57,6 +57,7 @@ export function websiteNode(): WebSite {
 		"@type": "WebSite",
 		"@id": WEBSITE_ID,
 		name: SITE_NAME,
+		alternateName: ["תנ״ך על הפרק", "תנך.co.il"],
 		url: absUrl("/"),
 		inLanguage: "he",
 		publisher: { "@id": ORG_ID },

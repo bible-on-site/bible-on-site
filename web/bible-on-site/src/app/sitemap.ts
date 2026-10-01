@@ -1,9 +1,9 @@
 import type { MetadataRoute } from "next";
-import { headers } from "next/headers";
 import type { ArticlePerekPair } from "../lib/articles";
 import { getAllArticlePerekIdPairs } from "../lib/articles";
 import { getAllAuthorSlugs } from "../lib/authors";
 import { getPerushimByPerekId } from "../lib/perushim";
+import { SITE_ORIGIN } from "../lib/seo/jsonld";
 import { CATEGORY_SLUGS, categoryHref } from "../lib/tanahpedia/category-slug";
 import { getAllEntryUniqueNames } from "../lib/tanahpedia/service";
 import type { CategoryKey } from "../lib/tanahpedia/types";
@@ -223,11 +223,6 @@ export function generateSitemapEntries(
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-	const headersList = await headers();
-	/* istanbul ignore next: fallback for malformed requests without Host header */
-	const host = headersList.get("host") ?? "xn--febl3a.co.il";
-	const baseUrl = `https://${host}`;
-
 	// Fetch dynamic data for sitemap entries in parallel
 	const [authorSlugs, articles, pediaUniqueNames] = await Promise.all([
 		getAllAuthorSlugs(),
@@ -252,7 +247,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
 	return generateSitemapEntries(
 		{
-			baseUrl,
+			baseUrl: SITE_ORIGIN,
 			lastModified: new Date(),
 		},
 		authorSlugs,

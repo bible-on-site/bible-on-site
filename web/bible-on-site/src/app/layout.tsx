@@ -7,6 +7,7 @@ import Link from "next/link";
 import {
 	buildGraph,
 	organizationNode,
+	SITE_NAME,
 	SITE_ORIGIN,
 	websiteNode,
 } from "@/lib/seo/jsonld";
@@ -27,9 +28,14 @@ const geistMono = localFont({
 
 export const metadata: Metadata = {
 	metadataBase: new URL(SITE_ORIGIN),
-	title: 'תנ"ך על הפרק',
+	title: SITE_NAME,
+	applicationName: SITE_NAME,
 	description:
 		'לימוד יומי על הפרק. בתנ"ך על הפרק לומדים במקביל ללימוד של 929 - פרק ליום. הלימוד נעים, מעמיק ומחכים',
+	openGraph: {
+		siteName: SITE_NAME,
+		locale: "he_IL",
+	},
 };
 
 const siteJsonLd = buildGraph([organizationNode(), websiteNode()]);
