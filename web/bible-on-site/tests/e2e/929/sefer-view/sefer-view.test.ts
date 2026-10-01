@@ -172,17 +172,17 @@ test.describe("Sefer view", () => {
 			await page.mouse.up();
 		};
 		await dragLeafBackward(3);
-		await expect(page.locator('.he-book .page[data-page-index="1"]')).toHaveClass(
-			/current-page/,
-		);
+		await expect(
+			page.locator('.he-book .page[data-page-index="1"]'),
+		).toHaveClass(/current-page/);
 		await expect
 			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
 			.toBe("/929/בראשית/תוכן");
 		await expect(page.locator(".he-book .page--flipping")).toHaveCount(0);
 		await dragLeafBackward(1);
-		await expect(page.locator('.he-book .page[data-page-index="0"]')).toHaveClass(
-			/current-page/,
-		);
+		await expect(
+			page.locator('.he-book .page[data-page-index="0"]'),
+		).toHaveClass(/current-page/);
 		await expect
 			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
 			.toBe("/929/בראשית/כריכה");
