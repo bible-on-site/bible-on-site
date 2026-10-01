@@ -50,6 +50,9 @@ jest.mock(
 		FirstPageButton: () => <div />,
 		FullscreenButton: () => <div />,
 		LastPageButton: () => <div />,
+		MouseModeButton: () => (
+			<button type="button" aria-label="בחירת טקסט עם העכבר" />
+		),
 		NextButton: () => <div />,
 		PageIndicator: () => <div />,
 		PrevButton: () => <div />,
@@ -156,13 +159,10 @@ jest.mock("@/app/929/[number]/components/Stuma", () => ({
 }));
 
 import Sefer from "@/app/929/[number]/components/Sefer";
-import type { PerekObj } from "@/data/perek-dto";
 import type { QriSegment } from "@/data/db/tanah-view-types";
+import type { PerekObj } from "@/data/perek-dto";
 
-function timeframe(
-	from: string,
-	to: string,
-): QriSegment["recordingTimeFrame"] {
+function timeframe(from: string, to: string): QriSegment["recordingTimeFrame"] {
 	return { from, to } as unknown as QriSegment["recordingTimeFrame"];
 }
 
@@ -207,6 +207,12 @@ describe("Sefer component", () => {
 		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		expect(screen.getByTestId("mock-flipbook")).toBeInTheDocument();
 		expect(screen.getByTestId("mock-toc")).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: "בחירת טקסט עם העכבר" }),
+		).toBeInTheDocument();
+		expect(capturedFlipBookProps.mouseModeStorageKey).toBe(
+			"sefer-mouse-book-mode",
+		);
 	});
 
 	it("opens and closes bookshelf modal via toolbar button", () => {
