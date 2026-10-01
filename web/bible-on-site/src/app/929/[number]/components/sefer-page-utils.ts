@@ -5,12 +5,8 @@ const CONTENT_OFFSET = 3;
 const TOC_PAGE_INDEX = CONTENT_OFFSET - 1;
 const TOC_SPREAD_INDEX = TOC_PAGE_INDEX - 1;
 
-export function toHebrewWithPunctuation(num: number): string {
-	const letters = toLetters(num, { addQuotes: true });
-	if (!letters.includes('"') && letters.length === 1) {
-		return `${letters}'`;
-	}
-	return letters;
+export function toHebrewChapterNumber(num: number): string {
+	return toLetters(num);
 }
 
 export function buildPageSemantics(
@@ -24,7 +20,7 @@ export function buildPageSemantics(
 			if (adjusted % 2 !== 0) return "";
 			const perekNum = adjusted / 2 + 1;
 			if (perekNum > perakimLength) return "";
-			return toHebrewWithPunctuation(perekNum);
+			return toHebrewChapterNumber(perekNum);
 		},
 		semanticNameToIndex(semanticPageName: string): number | null {
 			const num = toNumber(semanticPageName);
@@ -39,7 +35,7 @@ export function buildPageSemantics(
 			const perekIdx = adjusted / 2;
 			if (perekIdx >= perakimLength) return "";
 			return (
-				perekHeaders[perekIdx] || `פרק ${toHebrewWithPunctuation(perekIdx + 1)}`
+				perekHeaders[perekIdx] || `פרק ${toHebrewChapterNumber(perekIdx + 1)}`
 			);
 		},
 	};

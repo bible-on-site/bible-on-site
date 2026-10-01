@@ -55,7 +55,7 @@ import {
 	buildPageSemantics,
 	CONTENT_OFFSET,
 	computeInitialTurnedLeaves,
-	toHebrewWithPunctuation,
+	toHebrewChapterNumber,
 	wrapDownloadResult,
 } from "./sefer-page-utils";
 import { TanahpediaLink } from "./TanahpediaLink";
@@ -224,7 +224,7 @@ const Sefer = (props: {
 						<div className={styles.pageHeaderRow}>
 							<span className={styles.pageHeaderSefer}>{perekObj.sefer}</span>
 							<span className={styles.pageHeaderPerek}>
-								{toLetters(perekIdx + 1, { addQuotes: true })}
+								{toHebrewChapterNumber(perekIdx + 1)}
 							</span>
 						</div>
 						<div className={styles.perekHeader} title={perek.header}>
@@ -338,7 +338,7 @@ const Sefer = (props: {
 						pageSemantics={hePageSemantics}
 						direction="rtl"
 						leavesBuffer={7}
-						of={toHebrewWithPunctuation(perakim.length)}
+						of={toHebrewChapterNumber(perakim.length)}
 						tocPageIndex={2}
 						coverConfig={{
 							hardCovers: true,

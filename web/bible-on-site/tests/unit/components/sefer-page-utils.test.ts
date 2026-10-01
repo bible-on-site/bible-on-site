@@ -3,21 +3,19 @@ import {
 	buildPageSemantics,
 	CONTENT_OFFSET,
 	computeInitialTurnedLeaves,
-	toHebrewWithPunctuation,
+	toHebrewChapterNumber,
 	wrapDownloadResult,
 } from "@/app/929/[number]/components/sefer-page-utils";
 
 describe("sefer-page-utils", () => {
-	describe("toHebrewWithPunctuation", () => {
-		it("adds geresh to single-letter numbers", () => {
-			expect(toHebrewWithPunctuation(1)).toBe("א'");
-			expect(toHebrewWithPunctuation(5)).toBe("ה'");
+	describe("toHebrewChapterNumber", () => {
+		it("uses plain Hebrew letters for single-letter numbers", () => {
+			expect(toHebrewChapterNumber(1)).toBe("א");
+			expect(toHebrewChapterNumber(5)).toBe("ה");
 		});
 
-		it("keeps gershaim for multi-letter numbers", () => {
-			const result = toHebrewWithPunctuation(11);
-			expect(result).toContain('"');
-			expect(result).not.toContain("'");
+		it("uses plain Hebrew letters for multi-letter numbers", () => {
+			expect(toHebrewChapterNumber(11)).toBe("יא");
 		});
 	});
 
@@ -38,8 +36,8 @@ describe("sefer-page-utils", () => {
 			});
 
 			it("returns hebrew numeral for content pages", () => {
-				expect(semantics.indexToSemanticName(CONTENT_OFFSET)).toBe("א'");
-				expect(semantics.indexToSemanticName(CONTENT_OFFSET + 2)).toBe("ב'");
+				expect(semantics.indexToSemanticName(CONTENT_OFFSET)).toBe("א");
+				expect(semantics.indexToSemanticName(CONTENT_OFFSET + 2)).toBe("ב");
 			});
 
 			it("returns empty for pages beyond perakim", () => {
@@ -77,7 +75,7 @@ describe("sefer-page-utils", () => {
 			});
 
 			it("falls back to פרק X when header is missing", () => {
-				expect(semantics.indexToTitle(CONTENT_OFFSET + 4)).toBe("פרק ג'");
+				expect(semantics.indexToTitle(CONTENT_OFFSET + 4)).toBe("פרק ג");
 			});
 
 			it("returns empty for pages beyond perakim", () => {

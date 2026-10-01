@@ -26,10 +26,7 @@ import {
 	unionEndReasonLabel,
 	unionTypeLabel,
 } from "@/lib/tanahpedia/person-family-labels";
-import {
-	hasTanachRef,
-	renderFamilyTreeCitationLine,
-} from "@/lib/tanahpedia/tanach-citation-links";
+import { renderFamilyTreeCitationLine } from "@/lib/tanahpedia/tanach-citation-links";
 import type {
 	PersonFamilyChildEdge,
 	PersonFamilyParentEdge,
@@ -93,8 +90,7 @@ function shouldShowCoParentSubtitles(
 	spouseUnits: SpouseUnit[],
 ): boolean {
 	if (buckets.length > 1) return true;
-	if (buckets.length === 0 || buckets[0].coParentEntityId == null)
-		return false;
+	if (buckets.length === 0 || buckets[0].coParentEntityId == null) return false;
 	return (
 		spouseUnits.length !== 1 ||
 		buckets[0].coParentEntityId !== spouseUnits[0].edges[0].related.entityId
@@ -429,10 +425,32 @@ function ParentCard({ edge }: { edge: PersonFamilyParentEdge }) {
 			>
 				<PersonSexMark sex={edge.related.sex} />
 				<PersonNameLink related={edge.related} />
-				{cardCitationBlock(edge.sourceCitation)}
 			</div>
 		</div>
 	);
+}
+
+/** Show relationship evidence once on the child, preferring a verse shared by both parents. */
+function parentSourceCitation(
+	parents: PersonFamilyParentEdge[],
+): string | null {
+	const sourceRoles = new Map<string, Set<string>>();
+	for (const parent of parents) {
+		for (const { line } of citationLines(parent.sourceCitation)) {
+			const roles = sourceRoles.get(line) ?? new Set<string>();
+			roles.add(parent.parentRole);
+			sourceRoles.set(line, roles);
+		}
+	}
+	const oneParentPerRole =
+		parents.filter((p) => p.parentRole === "FATHER").length === 1 &&
+		parents.filter((p) => p.parentRole === "MOTHER").length === 1;
+	const shared = oneParentPerRole
+		? [...sourceRoles].find(([, roles]) =>
+				roles.has("FATHER") && roles.has("MOTHER"),
+			)
+		: undefined;
+	return shared?.[0] ?? ([...sourceRoles.keys()].join("\n") || null);
 }
 
 function ParentRow({ parents }: { parents: PersonFamilyParentEdge[] }) {
@@ -684,10 +702,7 @@ function SpouseUnitNodes({
 			`${keyPrefix}-solo-${unit.edges[0].related.entityId}-${unit.edges[0].unionType}-${idx}`;
 		return (
 			<Fragment key={key}>
-				<SpouseUnitCardBlock
-					unit={unit}
-					showUnionOrder={units.length > 1}
-				/>
+				<SpouseUnitCardBlock unit={unit} showUnionOrder={units.length > 1} />
 			</Fragment>
 		);
 	});
@@ -1164,18 +1179,7 @@ function PersonFamilyTreeContent({
 			})
 		);
 
-	// The focal person's own source is their Tanah birth record. A non-Tanah source
-	// (e.g. חז"ל identifying a parent) attests that parent claim only, so it stays on
-	// the parent's card instead of being attributed to the focal person.
-	const focalSourceCitation =
-		[
-			...new Set(
-				parents
-					.map((p) => p.sourceCitation?.trim())
-					.filter((c): c is string => Boolean(c))
-					.filter(hasTanachRef),
-			),
-		].join("\n") || null;
+	const focalSourceCitation = parentSourceCitation(parents);
 
 	const focalCardNode = (
 		<div
@@ -1199,10 +1203,7 @@ function PersonFamilyTreeContent({
 						sortedGroup,
 						childEdgeCmp,
 					);
-					const showCoSub = shouldShowCoParentSubtitles(
-						buckets,
-						spouseUnits,
-					);
+					const showCoSub = shouldShowCoParentSubtitles(buckets, spouseUnits);
 					return (
 						<div key={key ?? "default"} className={styles.altGroupBlock}>
 							{key !== null ? (

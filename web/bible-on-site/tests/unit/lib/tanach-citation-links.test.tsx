@@ -35,6 +35,13 @@ describe("renderCitationWithTanachLinks", () => {
 		expect(a.getAttribute("href")).toMatch(/^\/929\/\d+#pasuk-32$/);
 	});
 
+	it("removes numeral punctuation from displayed scripture references", () => {
+		const nodes = renderCitationWithTanachLinks('בראשית י"א י"ח', "cite");
+		render(<div>{nodes}</div>);
+		const link = screen.getByRole("link", { name: "בראשית יא יח" });
+		expect(link.getAttribute("href")).toMatch(/^\/929\/\d+#pasuk-18$/);
+	});
+
 	it("anchors a pasuk range at its first pasuk", () => {
 		const nodes = renderCitationWithTanachLinks("בראשית ל ו-ח", "cite");
 		render(<div>{nodes}</div>);
@@ -178,6 +185,14 @@ describe("build929PerushHref", () => {
 });
 
 describe("renderFamilyTreeCitationLine", () => {
+	it("keeps punctuation in a commentator name while unquoting verse numerals", () => {
+		render(
+			<div>{renderFamilyTreeCitationLine('רש"י בראשית י״א י״ח', "cite")}</div>,
+		);
+		const link = screen.getByRole("link", { name: 'רש"י בראשית יא יח' });
+		expect(link.getAttribute("href")).toContain("pasuk=18");
+	});
+
 	it("falls back to ordinary Tanach links when the special citation has no pasuk", () => {
 		const nodes = renderFamilyTreeCitationLine(
 			"\u05d4\u05db\u05ea\u05d1 \u05d5\u05d4\u05e7\u05d1\u05dc\u05d4: \u05d1\u05e8\u05d0\u05e9\u05d9\u05ea \u05dc\u05d1",
