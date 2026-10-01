@@ -6,12 +6,9 @@ from model_versions import ALIGN_REVISION
 
 
 def ctc_spans(log_probs, tokens, blank_id):
-    """
-    Best CTC path including required blanks between repeated characters.
-
-    Allows leading/trailing silence. Returns token spans in emission frames.
-    Scores are acoustic likelihoods, not calibrated probabilities of correctness.
-    """
+    """Best CTC path including required blanks between repeated characters."""
+    # Allows leading/trailing silence. Returns token spans in emission frames.
+    # Scores are acoustic likelihoods, not calibrated probabilities of correctness.
     frames, _ = log_probs.shape
     if not tokens or frames < len(tokens):
         raise ValueError("Not enough audio frames for the transcript")

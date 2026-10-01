@@ -35,7 +35,8 @@ def audit():
             timings = list(db.execute("SELECT pasuk,segment,start_ms,end_ms FROM recitation_word WHERE perek_id=? ORDER BY pasuk,segment", (pid,)))
             if status == "ready":
                 validate_timings(words, data["words"], duration, require_complete=True)
-                require(timings == [(w["pasuk"],w["segment"],w["startMs"],w["endMs"]) for w in data["words"]], f"{pid}: word timings differ from intermediate DB")
+                expected_timings = [(w["pasuk"], w["segment"], w["startMs"], w["endMs"]) for w in data["words"]]
+                require(timings == expected_timings, f"{pid}: word timings differ from intermediate DB")
             else:
                 require(not timings, f"{pid}: unapproved timings in intermediate DB")
                 require(all(w["startMs"] is None and w["endMs"] is None for w in data["words"]), f"{pid}: unapproved timings in perakim DB")

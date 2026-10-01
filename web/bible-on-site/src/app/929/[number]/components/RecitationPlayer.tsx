@@ -242,7 +242,7 @@ export default function RecitationPlayer({
 	async function play(startMs?: number, endMs?: number, segment?: string) {
 		if (!data || !audio.current) return;
 		window.dispatchEvent(new CustomEvent(STOP_EVENT, { detail: id }));
-		const token = ++request.current;
+		const generation = ++request.current;
 		setMessage("");
 		setState("loading");
 		setActiveWord(segment ?? null);
@@ -254,7 +254,7 @@ export default function RecitationPlayer({
 					data.audioSha256,
 				);
 				const started = await precise.current.play(startMs, endMs, () => {
-					if (request.current === token) finish();
+					if (request.current === generation) finish();
 				});
 				if (!started) return;
 			} else {
@@ -262,9 +262,9 @@ export default function RecitationPlayer({
 				audio.current.currentTime = 0;
 				await audio.current.play();
 			}
-			if (request.current === token) setState("playing");
+			if (request.current === generation) setState("playing");
 		} catch {
-			if (request.current === token) fail();
+			if (request.current === generation) fail();
 		}
 	}
 
@@ -281,18 +281,18 @@ export default function RecitationPlayer({
 			return;
 		}
 		if (state === "paused") {
-			const token = request.current;
+			const generation = request.current;
 			setState("loading");
 			try {
 				if (kind.current === "clip") {
 					if (!(await precise.current?.resume())) {
-						if (request.current === token) finish();
+						if (request.current === generation) finish();
 						return;
 					}
 				} else await audio.current?.play();
-				if (request.current === token) setState("playing");
+				if (request.current === generation) setState("playing");
 			} catch {
-				if (request.current === token) fail();
+				if (request.current === generation) fail();
 			}
 			return;
 		}

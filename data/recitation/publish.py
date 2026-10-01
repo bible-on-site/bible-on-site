@@ -101,7 +101,8 @@ def publish(inputs, database=DATABASE):
     if not count:
         return 0
     with tempfile.NamedTemporaryFile(dir=database.parent, suffix=".tmp", delete=False) as handle:
-        temporary = Path(handle.name)
+        handle.flush()
+    temporary = Path(handle.name)
     try:
         temporary.write_text(json.dumps(books, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
         temporary.replace(database)

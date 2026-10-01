@@ -67,12 +67,9 @@ def similarity(left, right):
 
 
 def reconcile(canonical, recognized):
-    """
-    Global monotone alignment with insertions, deletions, and 1:2/2:1 joins.
-
-    Return one (recognized indices, similarity) per canonical word. Repeated
-    words remain separate positions. A missing word is never silently shifted.
-    """
+    """Global monotone alignment with insertions, deletions, and 1:2/2:1 joins."""
+    # Return one (recognized indices, similarity) per canonical word. Repeated
+    # words remain separate positions. A missing word is never silently shifted.
     n, m = len(canonical), len(recognized)
     costs = [[math.inf] * (m + 1) for _ in range(n + 1)]
     back = [[None] * (m + 1) for _ in range(n + 1)]

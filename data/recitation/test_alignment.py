@@ -7,11 +7,35 @@ import numpy as np
 
 from acoustic import ctc_spans
 from alignment import Word, normalize, reconcile, similarity, spoken, validate_timings, words_for
-from recite import cached_transcript, completed_alignment, export_database, write_json
+from recite import audio_hash, cached_transcript, completed_alignment, export_database, process_track, write_json
 from review import accept_review
 
 
 class AlignmentTests(unittest.TestCase):
+    def test_failed_rerun_preserves_approved_output_and_review_is_not_recomputed(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from alignment import text_hash
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            audio = root / "1_record.mp3"
+            audio.write_bytes(b"test recording")
+            chapter = {"pesukim": [{"segments": [{"type": "qri", "value": "ברא"}]}]}
+            accepted = {"version": 1, "perekId": 1, "audioUrl": "https://example.com/1_record.mp3",
+                "audioSha256": audio_hash(audio), "textSha256": text_hash(words_for(chapter)),
+                "durationMs": 1000, "alignmentStatus": "ready", "reviewMethod": "listening",
+                "words": [{"pasuk": 1, "segment": 1, "text": "ברא", "startMs": 100, "endMs": 500}]}
+            write_json(root / "1.json", accepted)
+            before = (root / "1.json").read_bytes()
+            args = SimpleNamespace(output=root, cache=root, audio_base_url="https://example.com",
+                                   force=False, prepare_only=False)
+            with patch("recite.align_manifest", side_effect=RuntimeError("GPU unavailable")) as align, patch("recite.duration", return_value=1000):
+                self.assertIsNone(process_track(audio, {1: chapter}, {"model": "updated"}, args))
+                align.assert_not_called()
+                args.force = True
+                self.assertEqual(process_track(audio, {1: chapter}, {}, args), "GPU unavailable")
+                self.assertEqual((root / "1.json").read_bytes(), before)
+
     def test_model_revisions_invalidate_asr_cache_but_preserve_human_review(self):
         cached = {"audioSha256": "audio", "model": "model", "revision": "old"}
         self.assertTrue(cached_transcript(cached, "audio", "model", "old"))

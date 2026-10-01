@@ -159,7 +159,8 @@ def export_database(output, database):
     """Atomically update the durable intermediate DB; a partial run preserves other tracks."""
     database.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=database.parent, suffix=".sqlite", delete=False) as handle:
-        temporary = Path(handle.name)
+        handle.flush()
+    temporary = Path(handle.name)
     try:
         if database.exists():
             shutil.copy2(database, temporary)
@@ -214,7 +215,7 @@ def _export_database(output, database):
         db.commit()
 
 
-def main():
+def parse_arguments():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--recordings", type=Path, required=True)
     parser.add_argument("--text", type=Path, default=ROOT / "web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json")
@@ -245,8 +246,10 @@ def main():
             parser.error("Quality thresholds must be between zero and one")
     if args.perek and any(not 1 <= p <= 929 for p in args.perek):
         parser.error("Perek IDs must be between 1 and 929")
-    from publish import extract, publish
-    chapters = load_chapters(args.text)
+    return parser, args
+
+
+def source_files(parser, args, chapters):
     files = sorted(args.recordings.glob("*_record.mp3"), key=lambda p: int(p.stem.split("_")[0]))
     if not files:
         parser.error("No *_record.mp3 recordings found")
@@ -254,69 +257,95 @@ def main():
         missing = set(args.perek) - {int(p.stem.split("_")[0]) for p in files}
         if missing:
             parser.error(f"No recording for requested perek IDs: {sorted(missing)}")
+    selected = [path for path in files if not args.perek or int(path.stem.split("_")[0]) in args.perek]
+    for path in selected:
+        if int(path.stem.split("_")[0]) not in chapters:
+            parser.error(f"Unknown perek filename: {path.name}")
+    return selected
+
+
+def source_matches(existing, fingerprint, words, url):
+    if existing is None:
+        return False
+    return (existing["audioSha256"] == fingerprint and existing["textSha256"] == text_hash(words)
+            and existing["audioUrl"] == url)
+
+
+def align_manifest(path, words, fingerprint, manifest, report, config, args):
+    perek_id = manifest["perekId"]
+    audio = decode(path)
+    asr_cache = args.cache / f"{perek_id}.asr.json"
+    cached = json.loads(asr_cache.read_text(encoding="utf-8")) if asr_cache.exists() else None
+    if cached_transcript(cached, fingerprint, args.asr_model, args.asr_revision):
+        print(f"{perek_id}: reusing matching full ASR result", flush=True)
+        recognized = cached["words"]
+    else:
+        recognized = transcribe(audio, args)
+        write_json(asr_cache, {"audioSha256": fingerprint, "model": args.asr_model, "revision": args.asr_revision, "words": recognized})
+    from acoustic import HebrewAligner
+    print(f"{perek_id}: aligning every canonical word with {args.align_model}", flush=True)
+    aligner = HebrewAligner(args.align_model, args.device, args.align_revision)
+    manifest["words"], reviews = align_track(audio, words, recognized, aligner, args)
+    del aligner
+    manifest["pipeline"] = config
+    manifest["alignmentStatus"] = "needs_review" if reviews else "ready"
+    write_json(report, {"perekId": perek_id, "audioSha256": fingerprint,
+                        "textSha256": manifest["textSha256"], "pipeline": config,
+                        "totalWords": len(words), "words": manifest["words"], "review": reviews})
+
+
+def process_track(path, chapters, config, args):
+    from publish import extract
+    perek_id = int(path.stem.split("_")[0])
+    began = time.monotonic()
+    print(f"{perek_id}: checking source audio and canonical words", flush=True)
+    words = words_for(chapters[perek_id])
+    fingerprint = audio_hash(path)
+    output = args.output / f"{perek_id}.json"
+    report = args.cache / f"{perek_id}.review.json"
+    existing = json.loads(output.read_text(encoding="utf-8")) if output.exists() else extract(perek_id, chapters[perek_id])
+    same = source_matches(existing, fingerprint, words, f"{args.audio_base_url.rstrip('/')}/{path.name}")
+    if same and existing.get("alignmentStatus") and (args.prepare_only or completed_alignment(existing, config, args.force)):
+        if existing["alignmentStatus"] == "ready":
+            validate_timings(words, existing["words"], existing["durationMs"], require_complete=True)
+        print(f"{perek_id}: already processed", flush=True)
+        return None
+    manifest = {"version": 1, "perekId": perek_id,
+                "audioUrl": f"{args.audio_base_url.rstrip('/')}/{path.name}",
+                "audioSha256": fingerprint, "textSha256": text_hash(words),
+                "durationMs": duration(path), "alignmentStatus": "pending",
+                "words": [{"pasuk": w.pasuk, "segment": w.segment, "text": w.text,
+                           "startMs": None, "endMs": None} for w in words]}
+    if not args.prepare_only:
+        try:
+            align_manifest(path, words, fingerprint, manifest, report, config, args)
+        except Exception as error:
+            print(f"{perek_id}: FAILED: {error}", flush=True)
+            # A failed rerun must not replace a previously validated artifact.
+            return str(error)
+    if manifest["alignmentStatus"] == "ready":
+        validate_timings(words, manifest["words"], manifest["durationMs"], require_complete=True)
+    elif len(manifest["words"]) != len(words):
+        raise ValueError("Every database word must remain in pending and review outputs")
+    write_json(output, manifest)
+    print(f"{perek_id}: {len(manifest['words'])}/{len(words)} word identities; {manifest['alignmentStatus']}; {time.monotonic()-began:.1f}s", flush=True)
+    return None
+
+
+def main():
+    from publish import publish
+    parser, args = parse_arguments()
+    chapters = load_chapters(args.text)
+    files = source_files(parser, args, chapters)
     config = {"version": PIPELINE_VERSION, "asrModel": args.asr_model, "alignModel": args.align_model,
               "asrRevision": args.asr_revision, "alignRevision": args.align_revision,
               "minTextScore": args.min_text_score, "minAcousticScore": args.min_acoustic_score,
               "minCoverage": args.min_coverage}
     failures = []
     for path in files:
-        perek_id = int(path.stem.split("_")[0])
-        if args.perek and perek_id not in args.perek:
-            continue
-        if perek_id not in chapters:
-            raise ValueError(f"Unknown perek filename: {path.name}")
-        began = time.monotonic()
-        print(f"{perek_id}: checking source audio and canonical words", flush=True)
-        words = words_for(chapters[perek_id])
-        fingerprint = audio_hash(path)
-        output = args.output / f"{perek_id}.json"
-        report = args.cache / f"{perek_id}.review.json"
-        existing = json.loads(output.read_text(encoding="utf-8")) if output.exists() else extract(perek_id, chapters[perek_id])
-        same = (existing and existing["audioSha256"] == fingerprint and existing["textSha256"] == text_hash(words)
-                and existing["audioUrl"] == f"{args.audio_base_url.rstrip('/')}/{path.name}")
-        if same and existing.get("alignmentStatus") and (args.prepare_only or completed_alignment(existing, config, args.force)):
-            if existing["alignmentStatus"] == "ready":
-                validate_timings(words, existing["words"], existing["durationMs"], require_complete=True)
-            print(f"{perek_id}: already processed", flush=True)
-            continue
-        manifest = {"version": 1, "perekId": perek_id,
-                    "audioUrl": f"{args.audio_base_url.rstrip('/')}/{path.name}",
-                    "audioSha256": fingerprint, "textSha256": text_hash(words),
-                    "durationMs": duration(path), "alignmentStatus": "pending",
-                    "words": [{"pasuk": w.pasuk, "segment": w.segment, "text": w.text,
-                               "startMs": None, "endMs": None} for w in words]}
-        if not args.prepare_only:
-            try:
-                audio = decode(path)
-                asr_cache = args.cache / f"{perek_id}.asr.json"
-                cached = json.loads(asr_cache.read_text(encoding="utf-8")) if asr_cache.exists() else None
-                if cached_transcript(cached, fingerprint, args.asr_model, args.asr_revision):
-                    print(f"{perek_id}: reusing matching full ASR result", flush=True)
-                    recognized = cached["words"]
-                else:
-                    recognized = transcribe(audio, args)
-                    write_json(asr_cache, {"audioSha256": fingerprint, "model": args.asr_model, "revision": args.asr_revision, "words": recognized})
-                from acoustic import HebrewAligner
-                print(f"{perek_id}: aligning every canonical word with {args.align_model}", flush=True)
-                aligner = HebrewAligner(args.align_model, args.device, args.align_revision)
-                manifest["words"], reviews = align_track(audio, words, recognized, aligner, args)
-                del aligner
-                manifest["pipeline"] = config
-                manifest["alignmentStatus"] = "needs_review" if reviews else "ready"
-                write_json(report, {"perekId": perek_id, "audioSha256": fingerprint,
-                                    "textSha256": manifest["textSha256"], "pipeline": config,
-                                    "totalWords": len(words), "words": manifest["words"], "review": reviews})
-            except Exception as error:
-                failures.append({"perekId": perek_id, "error": str(error)})
-                print(f"{perek_id}: FAILED: {error}", flush=True)
-                # A failed rerun must not replace a previously validated artifact.
-                continue
-        if manifest["alignmentStatus"] == "ready":
-            validate_timings(words, manifest["words"], manifest["durationMs"], require_complete=True)
-        elif len(manifest["words"]) != len(words):
-            raise ValueError("Every database word must remain in pending and review outputs")
-        write_json(output, manifest)
-        print(f"{perek_id}: {len(manifest['words'])}/{len(words)} word identities; {manifest['alignmentStatus']}; {time.monotonic()-began:.1f}s", flush=True)
+        error = process_track(path, chapters, config, args)
+        if error is not None:
+            failures.append({"perekId": int(path.stem.split("_")[0]), "error": error})
     export_database(args.output, Path(__file__).parent / "recitation.sqlite")
     publish(Path(__file__).parent / "recitation.sqlite", args.text)
     write_json(args.cache / "failures.json", failures)
