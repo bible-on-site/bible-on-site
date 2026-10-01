@@ -103,6 +103,9 @@ describe("seo/core-jsonld", () => {
 			const chapter = nodeByType(graph, "Chapter");
 			expect(chapter?.["@id"]).toBe(`${SITE_ORIGIN}/929/1#chapter`);
 			expect(chapter?.isPartOf).toEqual({ "@id": seferId("בראשית") });
+			expect(chapter?.image).toBe(
+				`${SITE_ORIGIN}/images/perakim/bereshit-1-creation.webp`,
+			);
 			const books = nodesOf(graph).filter((n) => n["@type"] === "Book");
 			const tanah = books.find((b) => b["@id"] === TANAH_ID);
 			const sefer = books.find((b) => b["@id"] === seferId("בראשית"));
@@ -111,6 +114,11 @@ describe("seo/core-jsonld", () => {
 			expect(sefer?.genre).toBe("תורה");
 			const page = nodeByType(graph, "WebPage");
 			expect(page?.about).toEqual({ "@id": chapter?.["@id"] });
+			expect(page?.primaryImageOfPage).toMatchObject({
+				contentUrl: `${SITE_ORIGIN}/images/perakim/bereshit-1-creation.webp`,
+				width: 1600,
+				height: 900,
+			});
 			const crumb = nodeByType(graph, "BreadcrumbList");
 			const crumbs = crumb?.itemListElement as Array<{ name: string }>;
 			expect(crumbs.map((c) => c.name)).toEqual(["בית", "בראשית א"]);
@@ -122,6 +130,14 @@ describe("seo/core-jsonld", () => {
 				(n) => n["@type"] === "Book" && n["@id"] === seferId("בראשית"),
 			);
 			expect(sefer?.genre).toBeUndefined();
+		});
+
+		it("does not advertise an illustration for an unillustrated perek", () => {
+			const graph = buildPerekGraph(
+				perekObj({ perekId: 2, perekHeb: "ב", source: "בראשית ב" }),
+			);
+			expect(nodeByType(graph, "Chapter")?.image).toBeUndefined();
+			expect(nodeByType(graph, "WebPage")?.primaryImageOfPage).toBeUndefined();
 		});
 	});
 

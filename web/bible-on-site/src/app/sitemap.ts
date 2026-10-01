@@ -4,6 +4,7 @@ import type { ArticlePerekPair } from "../lib/articles";
 import { getAllArticlePerekIdPairs } from "../lib/articles";
 import { getAllAuthorSlugs } from "../lib/authors";
 import { getPerushimByPerekId } from "../lib/perushim";
+import { getPerekIllustration } from "../lib/seo/perek-illustrations";
 import { CATEGORY_SLUGS, categoryHref } from "../lib/tanahpedia/category-slug";
 import { getAllEntryUniqueNames } from "../lib/tanahpedia/service";
 import type { CategoryKey } from "../lib/tanahpedia/types";
@@ -87,12 +88,18 @@ export function generate929IndexEntry(
 export function generatePerekEntries(
 	config: SitemapConfig,
 ): MetadataRoute.Sitemap {
-	return Array.from({ length: TOTAL_PERAKIM }, (_, i) => ({
-		url: `${config.baseUrl}/929/${i + 1}`,
-		lastModified: config.lastModified,
-		changeFrequency: "monthly" as const,
-		priority: 0.8,
-	}));
+	return Array.from({ length: TOTAL_PERAKIM }, (_, i) => {
+		const illustration = getPerekIllustration(i + 1);
+		return {
+			url: `${config.baseUrl}/929/${i + 1}`,
+			lastModified: config.lastModified,
+			changeFrequency: "monthly" as const,
+			priority: 0.8,
+			...(illustration
+				? { images: [`${config.baseUrl}${illustration.src}`] }
+				: {}),
+		};
+	});
 }
 
 /**

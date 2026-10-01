@@ -3,8 +3,7 @@ import { unstable_cache } from "next/cache";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import React, { Suspense } from "react";
-import { isQriDifferentThanKtiv } from "../../../../data/db/tanah-view-types";
+import { Suspense } from "react";
 import { getPerekByPerekId } from "../../../../data/perek-dto";
 import {
 	getPerekIdsForSefer,
@@ -26,13 +25,14 @@ import {
 	buildPerushGraph,
 } from "../../../../lib/seo/core-jsonld";
 import { SITE_NAME } from "../../../../lib/seo/jsonld";
+import { fetchAllEntityRefs } from "../../../../lib/tanahpedia/perek-entity-refs";
 import { JsonLd } from "../../../components/JsonLd";
 import { ArticlesSection } from "../components/ArticlesSection";
 import Breadcrumb from "../components/Breadcrumb";
+import { PerekHeading } from "../components/PerekHeading";
+import { PerekText } from "../components/PerekText";
 import { PerushimSection } from "../components/PerushimSection";
-import { Ptuah } from "../components/Ptuha";
 import SeferComposite from "../components/SeferComposite";
-import { Stuma } from "../components/Stuma";
 import perekStyles from "../page.module.css";
 import styles from "./page.module.css";
 import { ScrollToSlug } from "./ScrollToArticle";
@@ -219,6 +219,7 @@ export default async function ArticlePage({
 
 	const sefer = getSeferByName(perekObj.sefer);
 	const perekIds = getPerekIdsForSefer(sefer);
+	const entityRefsByPerek = await fetchAllEntityRefs(perekIds);
 
 	if (isArticle) {
 		// Handle article view
@@ -278,66 +279,18 @@ export default async function ArticlePage({
 						articles={articles}
 						perushim={perushim}
 						perekIds={perekIds}
+						entityRefsByPerek={entityRefsByPerek}
 						initialSlug={slug}
 					/>
 				</Suspense>
 				<div className={styles.articlePerekContainer}>
 					<Breadcrumb perekObj={perekObj} />
+					<PerekHeading perekObj={perekObj} />
 
-					<article className={perekStyles.perekText}>
-						{perekObj.pesukim.map((pasuk, pasukIdx) => {
-							const pasukKey = pasukIdx + 1;
-							const pasukNumElement = (
-								<span className={perekStyles.pasukNum}>
-									{toLetters(pasukIdx + 1)}
-								</span>
-							);
-							const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
-								const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
-								const isQriWithDifferentKtiv =
-									segment.type === "qri" && isQriDifferentThanKtiv(segment);
-								return (
-									<React.Fragment key={segmentKey}>
-										<span
-											className={isQriWithDifferentKtiv ? perekStyles.qri : ""}
-										>
-											{segment.type === "ktiv" ? (
-												segment.value
-											) : segment.type === "qri" ? (
-												isQriWithDifferentKtiv ? (
-													<>
-														{/* biome-ignore lint/a11y/noLabelWithoutControl: It'll take some time to validate this fix altogether with css rules */}
-														(<label />
-														{segment.value})
-													</>
-												) : (
-													segment.value
-												)
-											) : segment.type === "ptuha" ? (
-												Ptuah()
-											) : (
-												Stuma()
-											)}
-										</span>
-										{segmentIdx === pasuk.segments.length - 1 ||
-										((segment.type === "ktiv" || segment.type === "qri") &&
-											segment.value.at(segment.value.length - 1) ===
-												"־") ? null : (
-											<span> </span>
-										)}
-									</React.Fragment>
-								);
-							});
-							return (
-								<React.Fragment key={pasukKey}>
-									{pasukNumElement}
-									<span> </span>
-									{pasukElement}
-									<span> </span>
-								</React.Fragment>
-							);
-						})}
-					</article>
+					<PerekText
+						perekObj={perekObj}
+						entityRefs={entityRefsByPerek[perekId] ?? []}
+					/>
 
 					{/* Perushim section - commentaries carousel */}
 					<PerushimSection perekId={perekId} perushim={perushim} />
@@ -373,66 +326,18 @@ export default async function ArticlePage({
 					articles={articles}
 					perushim={perushim}
 					perekIds={perekIds}
+					entityRefsByPerek={entityRefsByPerek}
 					initialSlug={slug}
 				/>
 			</Suspense>
 			<div className={perekStyles.perekContainer}>
 				<Breadcrumb perekObj={perekObj} />
+				<PerekHeading perekObj={perekObj} />
 
-				<article className={perekStyles.perekText}>
-					{perekObj.pesukim.map((pasuk, pasukIdx) => {
-						const pasukKey = pasukIdx + 1;
-						const pasukNumElement = (
-							<span className={perekStyles.pasukNum}>
-								{toLetters(pasukIdx + 1)}
-							</span>
-						);
-						const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
-							const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
-							const isQriWithDifferentKtiv =
-								segment.type === "qri" && isQriDifferentThanKtiv(segment);
-							return (
-								<React.Fragment key={segmentKey}>
-									<span
-										className={isQriWithDifferentKtiv ? perekStyles.qri : ""}
-									>
-										{segment.type === "ktiv" ? (
-											segment.value
-										) : segment.type === "qri" ? (
-											isQriWithDifferentKtiv ? (
-												<>
-													{/* biome-ignore lint/a11y/noLabelWithoutControl: It'll take some time to validate this fix altogether with css rules */}
-													(<label />
-													{segment.value})
-												</>
-											) : (
-												segment.value
-											)
-										) : segment.type === "ptuha" ? (
-											Ptuah()
-										) : (
-											Stuma()
-										)}
-									</span>
-									{segmentIdx === pasuk.segments.length - 1 ||
-									((segment.type === "ktiv" || segment.type === "qri") &&
-										segment.value.at(segment.value.length - 1) ===
-											"־") ? null : (
-										<span> </span>
-									)}
-								</React.Fragment>
-							);
-						});
-						return (
-							<React.Fragment key={pasukKey}>
-								{pasukNumElement}
-								<span> </span>
-								{pasukElement}
-								<span> </span>
-							</React.Fragment>
-						);
-					})}
-				</article>
+				<PerekText
+					perekObj={perekObj}
+					entityRefs={entityRefsByPerek[perekId] ?? []}
+				/>
 
 				{/* Perushim section - commentaries carousel */}
 				<PerushimSection perekId={perekId} perushim={perushim} />
