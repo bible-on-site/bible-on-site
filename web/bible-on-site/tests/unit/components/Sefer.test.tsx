@@ -5,17 +5,27 @@ import { fireEvent, render, screen } from "@testing-library/react";
 
 let capturedFlipBookProps: Record<string, unknown> = {};
 let capturedTocProps: Record<string, unknown> = {};
+const mockRestorePage = jest.fn();
+const mockJumpToPage = jest.fn();
+const mockGetCurrentPageIndex = jest.fn().mockReturnValue(3);
 
 jest.mock("next/dynamic", () => {
+	const { forwardRef, useImperativeHandle } =
+		require("react") as typeof import("react");
 	return (_loader: unknown) =>
-		function MockFlipBook(props: Record<string, unknown>) {
+		forwardRef(function MockFlipBook(props: Record<string, unknown>, ref) {
 			capturedFlipBookProps = props;
+			useImperativeHandle(ref, () => ({
+				getCurrentPageIndex: mockGetCurrentPageIndex,
+				restorePage: mockRestorePage,
+				jumpToPage: mockJumpToPage,
+			}));
 			return (
 				<div data-testid="mock-flipbook">
 					{props.pages as React.ReactNode[]}
 				</div>
 			);
-		};
+		});
 });
 
 jest.mock(
@@ -201,6 +211,9 @@ describe("Sefer component", () => {
 		capturedTocProps = {};
 		mockDownloadSefer.mockReset();
 		mockDownloadPageRanges.mockReset();
+		mockRestorePage.mockReset();
+		mockJumpToPage.mockReset();
+		mockGetCurrentPageIndex.mockReset().mockReturnValue(3);
 	});
 
 	it("renders FlipBook and toolbar", () => {
@@ -230,8 +243,29 @@ describe("Sefer component", () => {
 		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		const onNavigate = capturedTocProps.onNavigate as (idx: number) => void;
 		expect(onNavigate).toBeDefined();
-		// flipBookRef.current is null in test, so optional chaining means no-op
-		expect(() => onNavigate(5)).not.toThrow();
+		onNavigate(5);
+		expect(mockJumpToPage).toHaveBeenCalledWith(5);
+	});
+
+	it("restores a router-selected cover in place without remounting", () => {
+		const originalUrl = window.location.href;
+		window.history.replaceState(null, "", "/929/בראשית/תוכן?book");
+		mockGetCurrentPageIndex.mockReturnValue(1);
+		try {
+			const props = {
+				perekObj: minimalPerek,
+				articles: [],
+				perushim: [],
+				perekIds: [1],
+			};
+			const { rerender } = render(<Sefer {...props} initialBookPage="toc" />);
+			expect(mockRestorePage).not.toHaveBeenCalled();
+			window.history.replaceState(null, "", "/929/בראשית/כריכה?book");
+			rerender(<Sefer {...props} initialBookPage="front" />);
+			expect(mockRestorePage).toHaveBeenCalledWith(0);
+		} finally {
+			window.history.replaceState(null, "", originalUrl);
+		}
 	});
 
 	it("TocPage filter excludes cover pages and empty titles", () => {

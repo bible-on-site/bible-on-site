@@ -186,7 +186,7 @@ const ClientWrapper = (props: {
 			>
 				{everToggled ? (
 					<Sefer
-						key={`${props.perekObj.sefer}:${props.perekObj.perekId}:${initialBookPage ?? "chapter"}`}
+						key={props.perekObj.sefer}
 						perekObj={props.perekObj}
 						articles={props.articles}
 						perushim={props.perushim}

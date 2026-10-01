@@ -131,7 +131,7 @@ describe("SeferComposite (wide screen)", () => {
 		expect(mockReplace).toHaveBeenCalledWith("/929/5", { scroll: false });
 	});
 
-	it("remounts at the requested spread when the router changes semantic paths", async () => {
+	it("passes a new requested spread without remounting the book", async () => {
 		mockGet.mockImplementation((name: string) => (name === "book" ? "" : null));
 		mockPathname = "/929/בראשית/תוכן";
 		const props = { perekObj: minimalPerek, articles: [], perushim: [] };
@@ -145,7 +145,7 @@ describe("SeferComposite (wide screen)", () => {
 		expect(screen.getByTestId("sefer").getAttribute("data-book-page")).toBe(
 			"front",
 		);
-		expect(screen.getByTestId("sefer").getAttribute("data-mount")).not.toBe(
+		expect(screen.getByTestId("sefer").getAttribute("data-mount")).toBe(
 			firstMount,
 		);
 	});

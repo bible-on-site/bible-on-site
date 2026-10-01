@@ -54,6 +54,7 @@ import { Stuma } from "./Stuma";
 import styles from "./sefer.module.css";
 import {
 	type BookPage,
+	bookPageRoute,
 	buildHistoryMapper,
 	buildPageSemantics,
 	CONTENT_OFFSET,
@@ -165,6 +166,21 @@ const Sefer = (props: {
 						: computeInitialTurnedLeaves(perekIds, perekObj.perekId),
 		[initialBookPage, perekIds, perekObj.perekId],
 	);
+
+	// Next can navigate to another book URL while retaining this Sefer instance.
+	// The flipbook itself handles its own Back/Forward entries; for a router
+	// navigation, move to the requested spread without pushing a duplicate entry.
+	useEffect(() => {
+		const book = flipBookRef.current;
+		if (!book || !historyMapper) return;
+		const route = initialBookPage
+			? bookPageRoute(perekObj.sefer, initialBookPage)
+			: `/929/${perekObj.perekId}?book`;
+		const requestedPage = historyMapper.routeToPage(route);
+		if (requestedPage != null && requestedPage !== book.getCurrentPageIndex()) {
+			book.restorePage(requestedPage);
+		}
+	}, [historyMapper, initialBookPage, perekObj.perekId, perekObj.sefer]);
 
 	const frontCover = (
 		<section

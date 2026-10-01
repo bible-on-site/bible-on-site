@@ -9,6 +9,10 @@ const FRONT_COVER_INDEX = 0;
 
 export type BookPage = keyof typeof bookPageSlugs;
 
+export function bookPageRoute(seferName: string, page: BookPage): string {
+	return `/929/${seferName}/${bookPageSlugs[page]}?book`;
+}
+
 export function bookPageFromQuery(value: string | null): BookPage | null {
 	if (!value) return null;
 	return (
@@ -79,18 +83,17 @@ export function buildHistoryMapper(
 	pageSemantics: PageSemantics,
 	seferName: string,
 ): HistoryMapper {
-	const bookRoute = (page: BookPage) =>
-		`/929/${seferName}/${bookPageSlugs[page]}?book`;
 	const backCoverIndex = CONTENT_OFFSET + (perekIds?.length ?? 0) * 2;
 	return {
 		pageToRoute: (pageIndex, _semantic) => {
 			if (!perekIds?.length) return null;
-			if (pageIndex === FRONT_COVER_INDEX) return bookRoute("front");
+			if (pageIndex === FRONT_COVER_INDEX)
+				return bookPageRoute(seferName, "front");
 			if (pageIndex === TOC_SPREAD_INDEX || pageIndex === TOC_PAGE_INDEX) {
-				return bookRoute("toc");
+				return bookPageRoute(seferName, "toc");
 			}
 			if (perekIds?.length && pageIndex === backCoverIndex)
-				return bookRoute("back");
+				return bookPageRoute(seferName, "back");
 			if (pageIndex < CONTENT_OFFSET) return null;
 			const perekIdx = Math.floor((pageIndex - CONTENT_OFFSET) / 2);
 			const clampedIdx = Math.min(perekIdx, (perekIds?.length ?? 1) - 1);
