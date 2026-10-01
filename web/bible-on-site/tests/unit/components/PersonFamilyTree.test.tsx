@@ -729,6 +729,8 @@ describe("PersonFamilyTree", () => {
 		expect(
 			screen.getByRole("group", { name: /ילדים מ.רחל/ }),
 		).toBeInTheDocument();
+		expect(screen.getByText("סדר 1")).toBeInTheDocument();
+		expect(screen.getByText("סדר 2")).toBeInTheDocument();
 	});
 
 	it("sorts parents by role and renders unlinked names with relationship labels", () => {
@@ -1339,6 +1341,8 @@ describe("PersonFamilyTree", () => {
 		expect(cards[0].parentElement).toHaveClass("childRowThree");
 		expect(container.querySelector("[data-matrix-spouse-card]")).toBeNull();
 		expect(container.querySelector("[data-matrix-mobile]")).toBeNull();
+		expect(screen.queryByText("ילדים מ־חוה")).not.toBeInTheDocument();
+		expect(screen.queryByText("סדר 1")).not.toBeInTheDocument();
 	});
 
 	it("renders Jacob chronology swimlanes when enough known children are present", () => {
