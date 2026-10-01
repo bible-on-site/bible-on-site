@@ -1683,6 +1683,7 @@ jobs:
           path: ${{ env.BULLETIN_DIRECTORY }}/.junit-report/unit/results.xml
           retention-days: 1
           overwrite: true
+          if-no-files-found: error
 
       - name: Publish Bulletin Unit Report To Codecov
         if: ${{ !cancelled() }}
@@ -1816,12 +1817,14 @@ jobs:
         run: cargo make coverage-unit
 
       - name: Store Data Unit JUnit Report
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.DATA_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.DATA_DIRECTORY }}/.junit-report/unit/results.xml
           retention-days: 1
           overwrite: true
+          if-no-files-found: error
 
       - name: Publish Data Unit Report To Codecov
         if: ${{ !cancelled() }}
@@ -1880,6 +1883,7 @@ jobs:
           path: ${{ env.DATA_DIRECTORY }}/.junit-report/integration/results.xml
           retention-days: 1
           overwrite: true
+          if-no-files-found: error
 
       - name: Publish Data Integration Report To Codecov
         if: ${{ !cancelled() }}

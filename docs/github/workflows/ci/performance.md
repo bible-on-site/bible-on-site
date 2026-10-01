@@ -123,3 +123,16 @@ tests and 20 consecutive local open-and-swipe browser repetitions passed.
 Website E2E HTML/JUnit reports now
 upload on failures too, so future CI diagnoses retain their evidence. Test
 assertions, retries and timeouts remain unchanged.
+
+The Data logs also exposed missing JUnit artifacts in Data and Bulletin: their
+nextest paths resolved under `target/nextest/.junit-report` rather than the module
+root. Correct the paths to match the already-correct API configuration, and fail
+artifact upload if an expected report is missing. An isolated nextest fixture
+reproduced the old location and verified both corrected Data profiles. See
+[nextest's JUnit path rules](https://nexte.st/docs/machine-readable/junit/).
+
+Transfer time remains variable: the first merge-queue Data run spent 12m32s in
+`gh api` before ZIP extraction started, versus the 170s combined transfer and
+extraction in the earlier PR run. This was the same cached image artifact. The
+parallel step preserves the download and wait boundary; it cannot remove
+remote transfer variability.
