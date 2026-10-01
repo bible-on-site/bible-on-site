@@ -56,6 +56,12 @@ of total workflow speedup: another parallel job can become the critical path.
 API browser setup took about 19–24 seconds in the representative warm/cold runs,
 plus cache overhead. Rust savings depend strongly on cache state.
 
+PR runs now cancel superseded runs of the same pull request, freeing runner
+capacity for its newest commit. Master, manual and merge-queue runs use their
+unique run IDs and are neither serialized nor cancelled by this rule. This
+reduces wasted work and queue pressure without removing validation of the
+commit that can merge.
+
 ## Native parallel steps
 
 [GitHub introduced native parallel steps on June 25, 2026](https://github.blog/changelog/2026-06-25-actions-steps-can-now-be-run-in-parallel/).
