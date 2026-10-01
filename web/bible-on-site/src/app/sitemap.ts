@@ -9,18 +9,6 @@ import { getAllEntryUniqueNames } from "../lib/tanahpedia/service";
 import type { CategoryKey } from "../lib/tanahpedia/types";
 
 /**
- * Static section paths for the sitemap
- */
-export const SITEMAP_SECTIONS = [
-	"dailyBulletin",
-	"whatsappGroup",
-	"tos",
-	"app",
-	"contact",
-	"donation",
-] as const;
-
-/**
  * Total number of perakim in the 929 cycle
  */
 export const TOTAL_PERAKIM = 929;
@@ -35,7 +23,8 @@ export interface PerushPerekPair {
 
 export interface SitemapConfig {
 	baseUrl: string;
-	lastModified: Date;
+	/** Set only when a page's actual last significant update is known. */
+	lastModified?: Date;
 }
 
 /**
@@ -50,20 +39,6 @@ export function generateRootEntry(
 		changeFrequency: "daily",
 		priority: 1,
 	};
-}
-
-/**
- * Generates section URL entries for the sitemap
- */
-export function generateSectionEntries(
-	config: SitemapConfig,
-): MetadataRoute.Sitemap {
-	return SITEMAP_SECTIONS.map((section) => ({
-		url: `${config.baseUrl}/${section}`,
-		lastModified: config.lastModified,
-		changeFrequency: "monthly" as const,
-		priority: 0.5,
-	}));
 }
 
 /**
@@ -209,7 +184,6 @@ export function generateSitemapEntries(
 ): MetadataRoute.Sitemap {
 	return [
 		generateRootEntry(config),
-		...generateSectionEntries(config),
 		generate929IndexEntry(config),
 		...generatePerekEntries(config),
 		...generateArticleEntries(config, articles),
@@ -248,7 +222,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 	return generateSitemapEntries(
 		{
 			baseUrl: SITE_ORIGIN,
-			lastModified: new Date(),
 		},
 		authorSlugs,
 		articles,

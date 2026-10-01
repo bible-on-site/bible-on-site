@@ -20,7 +20,7 @@ jest.mock("@/lib/tanahpedia/service", () => ({
 	getAllEntryUniqueNames: jest.fn(),
 }));
 
-import sitemapFn, { SITEMAP_SECTIONS, TOTAL_PERAKIM } from "@/app/sitemap";
+import sitemapFn, { TOTAL_PERAKIM } from "@/app/sitemap";
 import { getAllArticlePerekIdPairs } from "@/lib/articles";
 import { getAllAuthorSlugs } from "@/lib/authors";
 import { getPerushimByPerekId } from "@/lib/perushim";
@@ -48,20 +48,15 @@ describe("sitemap default export", () => {
 		const result = await sitemapFn();
 
 		const urls = result.map((e) => e.url);
-		// root + sections + 929 index + 929 perakim + 1 article + 0 perushim + authors index + 2 authors + 1 pedia
+		// Root, 929 index, perakim, article, authors, and pedia pages.
 		const expectedLength =
-			1 +
-			SITEMAP_SECTIONS.length +
-			1 +
-			TOTAL_PERAKIM +
-			1 +
-			1 +
-			2 +
-			PEDIA_STATIC_COUNT +
-			1;
+			1 + 1 + TOTAL_PERAKIM + 1 + 1 + 2 + PEDIA_STATIC_COUNT + 1;
 		expect(result).toHaveLength(expectedLength);
 
 		expect(urls[0]).toBe(SITE_ORIGIN);
+		expect(result.every((entry) => entry.lastModified === undefined)).toBe(
+			true,
+		);
 		expect(urls).toContain(`${SITE_ORIGIN}/929/1/10`);
 		expect(urls).toContain(`${SITE_ORIGIN}/929/authors`);
 		expect(urls).toContain(
@@ -118,17 +113,9 @@ describe("sitemap default export", () => {
 		expect(urls).toContain(
 			`${SITE_ORIGIN}/929/1/${encodeURIComponent('רש"י')}`,
 		);
-		// root + sections + 929 index + 929 perakim + 0 articles + 1 perush + authors index + 0 authors
+		// Root, 929 index, perakim, perush, authors index, and pedia pages.
 		const expectedLength =
-			1 +
-			SITEMAP_SECTIONS.length +
-			1 +
-			TOTAL_PERAKIM +
-			0 +
-			1 +
-			1 +
-			PEDIA_STATIC_COUNT +
-			0;
+			1 + 1 + TOTAL_PERAKIM + 0 + 1 + 1 + PEDIA_STATIC_COUNT + 0;
 		expect(result).toHaveLength(expectedLength);
 	});
 
@@ -147,18 +134,9 @@ describe("sitemap default export", () => {
 		expect(urls).toContain(
 			`${SITE_ORIGIN}/pedia/${encodeURIComponent("שמשון")}`,
 		);
-		// root + sections + 929 index + 929 perakim + 0 articles + 0 perushim + authors index + 0 authors + 2 pedias
+		// Root, 929 index, perakim, authors index, and pedia pages.
 		const expectedLength =
-			1 +
-			SITEMAP_SECTIONS.length +
-			1 +
-			TOTAL_PERAKIM +
-			0 +
-			0 +
-			1 +
-			PEDIA_STATIC_COUNT +
-			0 +
-			2;
+			1 + 1 + TOTAL_PERAKIM + 0 + 0 + 1 + PEDIA_STATIC_COUNT + 0 + 2;
 		expect(result).toHaveLength(expectedLength);
 	});
 });
