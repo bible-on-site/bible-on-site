@@ -92,6 +92,25 @@
   max-width: 100%;
 }
 
+.perekIllustrationFigure {
+  margin: 8px 10px 0;
+}
+
+.perekIllustration {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.perekIllustrationFigure figcaption {
+  margin-top: 4px;
+  color: #637598;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  text-align: right;
+}
+
 /* Left page (blank): flex column, Hebrew date at top, then articles carousel */
 .pageBlank {
   background-color: white;
