@@ -289,7 +289,7 @@ export default async function ArticlePage({
 						initialSlug={slug}
 					/>
 				</Suspense>
-				<div className={perekStyles.perekContainer}>
+				<div className={styles.articlePerekContainer}>
 					<Breadcrumb perekObj={perekObj} />
 
 					<article className={perekStyles.perekText}>
