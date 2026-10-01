@@ -31,6 +31,12 @@ test.describe("sitemap.xml", () => {
 		expect(body).toContain("<priority>1</priority>");
 	});
 
+	test("omits unsupported modification dates", async ({ request }) => {
+		const response = await request.get("/sitemap.xml");
+		const body = await response.text();
+		expect(body).not.toContain("<lastmod>");
+	});
+
 	test("contains all section URLs", async ({ request }) => {
 		const response = await request.get("/sitemap.xml");
 		const body = await response.text();

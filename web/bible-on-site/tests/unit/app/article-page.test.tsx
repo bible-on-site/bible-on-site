@@ -222,8 +222,15 @@ describe("[slug] page", () => {
 			});
 
 			expect(result).toEqual({
-				title: 'מאמר לדוגמא | הרב ישראל | תנ"ך באתר',
+				title: 'מאמר לדוגמא | הרב ישראל | תנ"ך על הפרק',
 				description: "תקציר המאמר",
+				openGraph: {
+					title: 'מאמר לדוגמא | הרב ישראל | תנ"ך על הפרק',
+					description: "תקציר המאמר",
+					siteName: 'תנ"ך על הפרק',
+					locale: "he_IL",
+					type: "article",
+				},
 			});
 		});
 
@@ -277,7 +284,7 @@ describe("[slug] page", () => {
 			});
 
 			expect(result).toEqual({
-				title: 'מאמר לא נמצא | תנ"ך באתר',
+				title: 'מאמר לא נמצא | תנ"ך על הפרק',
 			});
 		});
 
@@ -323,7 +330,8 @@ describe("[slug] page", () => {
 			});
 
 			expect(result.title).toContain('רש"י');
-			expect(result.title).toContain('תנ"ך באתר');
+			expect(result.title).toContain('תנ"ך על הפרק');
+			expect(result.openGraph?.siteName).toBe('תנ"ך על הפרק');
 		});
 
 		it("returns not-found metadata when perush name not found", async () => {
@@ -333,7 +341,7 @@ describe("[slug] page", () => {
 				params: Promise.resolve({ number: "5", slug: "unknown" }),
 			});
 
-			expect(result).toEqual({ title: 'פירוש לא נמצא | תנ"ך באתר' });
+			expect(result).toEqual({ title: 'פירוש לא נמצא | תנ"ך על הפרק' });
 		});
 	});
 
@@ -420,11 +428,20 @@ describe("[slug] page", () => {
 			const jsx = await ArticlePage({
 				params: Promise.resolve({ number: "5", slug: "42" }),
 			});
-			render(jsx);
+			const { container } = render(jsx);
 
 			expect(screen.getByText("מאמר לדוגמא")).toBeTruthy();
 			expect(screen.getByText("הרב ישראל")).toBeTruthy();
 			expect(screen.getByText("חזרה לפרק →")).toBeTruthy();
+			expect(container.querySelector("#article-view h1")?.textContent).toBe(
+				"מאמר לדוגמא",
+			);
+			const articleView = container.querySelector("#article-view") as Element;
+			const chapterText = container.querySelector(".perekText") as Element;
+			expect(
+				articleView.compareDocumentPosition(chapterText) &
+					Node.DOCUMENT_POSITION_FOLLOWING,
+			).toBeTruthy();
 		});
 
 		it("renders all segment types (ktiv, qri+different, ptuha, stuma, maqaf)", async () => {

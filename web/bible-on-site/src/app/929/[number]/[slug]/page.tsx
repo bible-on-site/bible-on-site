@@ -25,6 +25,7 @@ import {
 	buildArticleGraph,
 	buildPerushGraph,
 } from "../../../../lib/seo/core-jsonld";
+import { SITE_NAME } from "../../../../lib/seo/jsonld";
 import { JsonLd } from "../../../components/JsonLd";
 import { ArticlesSection } from "../components/ArticlesSection";
 import Breadcrumb from "../components/Breadcrumb";
@@ -139,7 +140,7 @@ export async function generateMetadata({
 		const article = await getCachedArticle(id);
 		if (!article) {
 			return {
-				title: 'מאמר לא נמצא | תנ"ך באתר',
+				title: `מאמר לא נמצא | ${SITE_NAME}`,
 			};
 		}
 
@@ -150,11 +151,20 @@ export async function generateMetadata({
 			prev = plainText;
 			plainText = plainText.replace(/<[^>]*>/g, "");
 		} while (plainText !== prev);
+		const title = `${article.name} | ${article.authorName} | ${SITE_NAME}`;
+		const description = plainText
+			? plainText.slice(0, 160)
+			: `מאמר מאת ${article.authorName}`;
 		return {
-			title: `${article.name} | ${article.authorName} | תנ"ך באתר`,
-			description: plainText
-				? plainText.slice(0, 160)
-				: `מאמר מאת ${article.authorName}`,
+			title,
+			description,
+			openGraph: {
+				title,
+				description,
+				siteName: SITE_NAME,
+				locale: "he_IL",
+				type: "article",
+			},
 		};
 	}
 
@@ -164,16 +174,25 @@ export async function generateMetadata({
 
 	if (!perush) {
 		return {
-			title: 'פירוש לא נמצא | תנ"ך באתר',
+			title: `פירוש לא נמצא | ${SITE_NAME}`,
 		};
 	}
 
 	const perekObj = getPerekByPerekId(perekId);
 	const sefer = getSeferByName(perekObj.sefer);
 
+	const title = `${perush.name} על ${sefer.name} ${perekObj.perekHeb} | ${SITE_NAME}`;
+	const description = `פירוש ${perush.name} מאת ${perush.parshanName} על ${sefer.name} פרק ${perekObj.perekHeb}`;
 	return {
-		title: `${perush.name} על ${sefer.name} ${perekObj.perekHeb} | תנ"ך באתר`,
-		description: `פירוש ${perush.name} מאת ${perush.parshanName} על ${sefer.name} פרק ${perekObj.perekHeb}`,
+		title,
+		description,
+		openGraph: {
+			title,
+			description,
+			siteName: SITE_NAME,
+			locale: "he_IL",
+			type: "article",
+		},
 	};
 }
 
@@ -219,6 +238,40 @@ export default async function ArticlePage({
 					})}
 				/>
 				<ScrollToSlug targetId="article-view" />
+				<section id="article-view" className={styles.expandedArticle}>
+					<header className={styles.articleHeader}>
+						<Link
+							href={`/929/authors/${authorNameToSlug(article.authorName)}`}
+							className={styles.authorLink}
+						>
+							<div className={styles.authorImage}>
+								<Image
+									src={article.authorImageUrl}
+									alt={article.authorName}
+									width={80}
+									height={80}
+									className={styles.authorImg}
+								/>
+							</div>
+							<span className={styles.authorName}>{article.authorName}</span>
+						</Link>
+						<h1 className={styles.articleTitle}>{article.name}</h1>
+					</header>
+
+					{article.content && (
+						<div
+							className={styles.articleBody}
+							// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
+							dangerouslySetInnerHTML={{ __html: article.content }}
+						/>
+					)}
+
+					<div className={styles.backToPerek}>
+						<Link href={`/929/${perekId}`} className={styles.backLink}>
+							חזרה לפרק →
+						</Link>
+					</div>
+				</section>
 				<Suspense>
 					<SeferComposite
 						perekObj={perekObj}
@@ -228,7 +281,7 @@ export default async function ArticlePage({
 						initialSlug={slug}
 					/>
 				</Suspense>
-				<div className={perekStyles.perekContainer}>
+				<div className={styles.articlePerekContainer}>
 					<Breadcrumb perekObj={perekObj} />
 
 					<article className={perekStyles.perekText}>
@@ -291,42 +344,6 @@ export default async function ArticlePage({
 
 					{/* Articles carousel */}
 					<ArticlesSection articles={articles} />
-
-					{/* Expanded article view */}
-					<section id="article-view" className={styles.expandedArticle}>
-						<header className={styles.articleHeader}>
-							<Link
-								href={`/929/authors/${authorNameToSlug(article.authorName)}`}
-								className={styles.authorLink}
-							>
-								<div className={styles.authorImage}>
-									<Image
-										src={article.authorImageUrl}
-										alt={article.authorName}
-										width={80}
-										height={80}
-										className={styles.authorImg}
-									/>
-								</div>
-								<span className={styles.authorName}>{article.authorName}</span>
-							</Link>
-							<h2 className={styles.articleTitle}>{article.name}</h2>
-						</header>
-
-						{article.content && (
-							<div
-								className={styles.articleBody}
-								// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
-								dangerouslySetInnerHTML={{ __html: article.content }}
-							/>
-						)}
-
-						<div className={styles.backToPerek}>
-							<Link href={`/929/${perekId}`} className={styles.backLink}>
-								חזרה לפרק →
-							</Link>
-						</div>
-					</section>
 				</div>
 			</>
 		);

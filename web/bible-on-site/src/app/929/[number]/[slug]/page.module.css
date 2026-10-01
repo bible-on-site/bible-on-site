@@ -1,3 +1,11 @@
+/* The article route keeps the chapter below the article in normal flow. */
+.articlePerekContainer {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  background-color: var(--surface-elevated, #fff);
+}
+
 /* Expanded article section within perek page */
 .expandedArticle {
   margin: 24px 16px;

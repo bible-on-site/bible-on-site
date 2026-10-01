@@ -9,6 +9,7 @@ import {
 	buildGraph,
 	hasContent,
 	nodeId,
+	ORG_ID,
 	plainText,
 	WEBSITE_ID,
 } from "./jsonld";
@@ -147,6 +148,7 @@ export function buildArticleGraph(input: ArticleGraphInput): Graph {
 		url,
 		inLanguage: "he",
 		author: { "@id": authorNodeId },
+		publisher: { "@id": ORG_ID },
 		about: { "@id": chapterId },
 		isPartOf: { "@id": WEBSITE_ID },
 		mainEntityOfPage: url,
@@ -162,6 +164,7 @@ export function buildArticleGraph(input: ArticleGraphInput): Graph {
 		name: article.name,
 		inLanguage: "he",
 		isPartOf: { "@id": WEBSITE_ID },
+		mainEntity: { "@id": articleNode["@id"] },
 		breadcrumb: { "@id": breadcrumb["@id"] },
 	};
 	return buildGraph([
