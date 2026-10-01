@@ -301,6 +301,12 @@ const Sefer = (props: {
 			onNavigate={(pageIndex) => flipBookRef.current?.jumpToPage(pageIndex)}
 			totalPages={totalPages}
 			pageSemantics={hePageSemantics}
+			getHref={(entry) =>
+				historyMapper?.pageToRoute(entry.pageIndex, {
+					semanticName: entry.semanticName,
+					title: entry.title,
+				})
+			}
 			heading="תוכן העניינים"
 			direction="rtl"
 			filter={(entry) =>

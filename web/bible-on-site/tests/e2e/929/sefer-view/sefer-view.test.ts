@@ -33,6 +33,40 @@ test.describe("Sefer view", () => {
 		void skipOnNotWideEnough;
 	});
 
+	test("TOC links open chapter routes with modifiers and turn pages on regular click", async ({
+		page,
+	}) => {
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await page.locator(".flipbook-toolbar-toc").click();
+		const chapter = page
+			.locator('.he-book .page[data-page-index="2"] .toc-link[href]')
+			.nth(1);
+		await expect(chapter).toBeVisible();
+		await expect(chapter).toHaveAttribute("href", "/929/2?book");
+		const originalUrl = page.url();
+
+		const ctrlPagePromise = page.context().waitForEvent("page");
+		await chapter.click({ modifiers: ["Control"] });
+		const ctrlPage = await ctrlPagePromise;
+		await expect(ctrlPage).toHaveURL(/\/929\/2\?book/);
+		await expect(page).toHaveURL(originalUrl);
+		await ctrlPage.close();
+
+		const shiftPagePromise = page.context().waitForEvent("page");
+		await chapter.click({ modifiers: ["Shift"] });
+		const shiftPage = await shiftPagePromise;
+		await expect(shiftPage).toHaveURL(/\/929\/2\?book/);
+		await expect(page).toHaveURL(originalUrl);
+		await shiftPage.close();
+
+		await chapter.click();
+		await expect(page).toHaveURL(/\/929\/2\?book/);
+		await expect(page.locator(".flipbook-toolbar-indicator")).toHaveValue(
+			"ב' / נ'",
+		);
+	});
+
 	test("Selects verse text without turning the page", async ({ page }) => {
 		const seferPage = new SeferPage(page);
 		await seferPage.openSeferViewForPerek(1);

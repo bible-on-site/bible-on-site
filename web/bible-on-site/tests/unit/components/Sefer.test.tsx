@@ -246,6 +246,26 @@ describe("Sefer component", () => {
 		expect(filter({ pageIndex: 5, title: "פרק א" })).toBe(true);
 	});
 
+	it("gives TOC entries the same chapter routes used by book history", () => {
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1]}
+			/>,
+		);
+		const getHref = capturedTocProps.getHref as (entry: {
+			pageIndex: number;
+			semanticName: string;
+			title: string;
+		}) => string | null;
+		expect(getHref({ pageIndex: 0, semanticName: "", title: "" })).toBeNull();
+		expect(
+			getHref({ pageIndex: 3, semanticName: "א", title: "בראשית א" }),
+		).toBe("/929/1?book");
+	});
+
 	it("onDownloadSefer wraps result from server action", async () => {
 		mockDownloadSefer.mockResolvedValue({ ext: "pdf", data: "base64data" });
 		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
