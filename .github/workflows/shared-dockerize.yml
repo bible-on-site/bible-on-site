@@ -14,6 +14,8 @@ on:
         required: false
       AWS_REGION:
         required: false
+      MAPBOX_PUBLIC_TOKEN:
+        required: false
     outputs:
       module_version:
         description: The version of the module.
@@ -186,6 +188,7 @@ jobs:
       - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
         env:
           DB_URL: ${{ steps.rds_creds.outputs.db_url || '' }}
+          MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
         run: |
           # Use raw docker build with --network=host to ensure RDS connectivity
           # Buildx with docker-container driver doesn't properly support network: host
@@ -193,6 +196,7 @@ jobs:
             --network=host \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             --build-arg DB_URL="${DB_URL}" \
+            --build-arg MAPBOX_PUBLIC_KEY="${MAPBOX_PUBLIC_TOKEN}" \
             -f ${{ inputs.module_directory }}/Dockerfile \
             -t ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }} \
             ${{ env.SHARED_ROOT_DIR }}
