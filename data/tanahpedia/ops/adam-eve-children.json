@@ -1,0 +1,101 @@
+{
+	"endpoint": "http://127.0.0.1:3003/",
+	"personNodes": [
+		{
+			"entityId": "f7035db5-bc0e-46f2-8dfb-80caca120441",
+			"personId": "d0604c5f-ec56-403b-8678-67f0de8ca234",
+			"sexId": "0ad78db9-30c9-4008-a06d-467bef72c126",
+			"displayName": "חוה",
+			"sex": "FEMALE"
+		},
+		{
+			"entityId": "e542205d-2a1d-4d69-8523-e85ee56bb091",
+			"personId": "8ae7f920-8cc9-4a51-95b3-d5f194432fec",
+			"sexId": "b37990ce-6109-413c-bb12-26ab1c11ec1f",
+			"displayName": "קין",
+			"sex": "MALE"
+		},
+		{
+			"entityId": "ac7c3a46-0d73-4493-91b1-1b8c46d0580a",
+			"personId": "3f1ace9f-6b5c-48c9-8de5-758c15628746",
+			"sexId": "1de174f3-c111-44a7-90d0-af976e3a3fdf",
+			"displayName": "הבל",
+			"sex": "MALE"
+		}
+	],
+	"entries": [
+		{
+			"uniqueName": "חוה",
+			"title": "חוה",
+			"content": "<p></p>",
+			"entityId": "f7035db5-bc0e-46f2-8dfb-80caca120441",
+			"linkId": "7fe5aed6-a843-4d37-8bc9-10bb6dfc7485"
+		},
+		{
+			"uniqueName": "קין",
+			"title": "קין",
+			"content": "<p></p>",
+			"entityId": "e542205d-2a1d-4d69-8523-e85ee56bb091",
+			"linkId": "05205ae7-e459-42a6-80f9-3dbb3327ebd6"
+		},
+		{
+			"uniqueName": "הבל",
+			"title": "הבל",
+			"content": "<p></p>",
+			"entityId": "ac7c3a46-0d73-4493-91b1-1b8c46d0580a",
+			"linkId": "2780a4bb-f2e6-44c5-95c7-51ed20090c5d"
+		}
+	],
+	"parentChildLinks": [
+		{
+			"id": "b97ee072-f97b-4862-b318-d6d2e405e3a3",
+			"parentPersonId": "f5aac5d4-7685-45cd-8cd4-2d86f8b01f78",
+			"childPersonId": "8ae7f920-8cc9-4a51-95b3-d5f194432fec",
+			"relationshipType": "BIOLOGICAL",
+			"parentRole": "FATHER",
+			"sourceCitation": "בראשית ד א"
+		},
+		{
+			"id": "29e1d3cc-1a7e-42dc-8269-e240001a0b53",
+			"parentPersonId": "f5aac5d4-7685-45cd-8cd4-2d86f8b01f78",
+			"childPersonId": "3f1ace9f-6b5c-48c9-8de5-758c15628746",
+			"relationshipType": "BIOLOGICAL",
+			"parentRole": "FATHER",
+			"sourceCitation": "בראשית ד ב"
+		},
+		{
+			"id": "2f50c6bb-7883-482f-ac9d-b55f1074f8e4",
+			"parentPersonId": "d0604c5f-ec56-403b-8678-67f0de8ca234",
+			"childPersonId": "8ae7f920-8cc9-4a51-95b3-d5f194432fec",
+			"relationshipType": "BIOLOGICAL",
+			"parentRole": "MOTHER",
+			"sourceCitation": "בראשית ד א"
+		},
+		{
+			"id": "4c03074c-5046-4a0f-9ca1-ae1121268a62",
+			"parentPersonId": "d0604c5f-ec56-403b-8678-67f0de8ca234",
+			"childPersonId": "3f1ace9f-6b5c-48c9-8de5-758c15628746",
+			"relationshipType": "BIOLOGICAL",
+			"parentRole": "MOTHER",
+			"sourceCitation": "בראשית ד ב"
+		},
+		{
+			"id": "da2a4bac-b2f7-4e92-a5c1-9b1333e692c6",
+			"parentPersonId": "d0604c5f-ec56-403b-8678-67f0de8ca234",
+			"childPersonId": "fcfc9322-5864-4aba-902f-deee96437d0c",
+			"relationshipType": "BIOLOGICAL",
+			"parentRole": "MOTHER",
+			"sourceCitation": "בראשית ד כה"
+		}
+	],
+	"unions": [
+		{
+			"id": "8b79a486-b36e-4577-b854-48bea7118498",
+			"person1Id": "f5aac5d4-7685-45cd-8cd4-2d86f8b01f78",
+			"person2Id": "d0604c5f-ec56-403b-8678-67f0de8ca234",
+			"unionType": "MARRIAGE",
+			"unionOrder": 1,
+			"personSourceCitation": "בראשית ד א"
+		}
+	]
+}

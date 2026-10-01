@@ -25,6 +25,19 @@ function childEdge(displayName: string): PersonFamilyChildEdge {
 }
 
 describe("person-family-chronology", () => {
+	it.each(["אדם", "חוה"])(
+		"orders %s's children Cain, Abel, then Seth",
+		(focal) => {
+			const edges = [childEdge("שת"), childEdge("הבל"), childEdge("קין")];
+			expect(shouldApplyChildBirthChronology(focal, edges)).toBe(true);
+			expect(
+				[...edges]
+					.sort((a, b) => compareChildEdgesChronology(a, b, focal))
+					.map((e) => e.related.displayName),
+			).toEqual(["קין", "הבל", "שת"]);
+		},
+	);
+
 	it("orders Jacob children by narrative birth sequence", () => {
 		const focal = "יעקב";
 		const edges = [

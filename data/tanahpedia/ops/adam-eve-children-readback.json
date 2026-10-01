@@ -1,0 +1,58 @@
+{
+	"verifiedAt": "2026-10-01T08:47:32Z",
+	"endpoint": "https://api.xn--febl3a.com/",
+	"entries": [
+		{
+			"uniqueName": "חוה",
+			"entryId": "99914acc-7cb0-421f-a913-629bf1b52dee"
+		},
+		{
+			"uniqueName": "קין",
+			"entryId": "967039f6-ac9d-4ab6-8abe-e152c3c74363"
+		},
+		{
+			"uniqueName": "הבל",
+			"entryId": "69ae21e3-442c-4b61-95e3-280a086ce294"
+		}
+	],
+	"newPersonCount": 3,
+	"newParentChildLinkCount": 5,
+	"marriageUnionId": "8b79a486-b36e-4577-b854-48bea7118498",
+	"relationshipCounts": {
+		"אדם": {
+			"parentChildLinks": 3,
+			"unions": 1
+		},
+		"חוה": {
+			"parentChildLinks": 3,
+			"unions": 1
+		},
+		"קין": {
+			"parentChildLinks": 2,
+			"unions": 0
+		},
+		"הבל": {
+			"parentChildLinks": 2,
+			"unions": 0
+		},
+		"שת": {
+			"parentChildLinks": 3,
+			"unions": 0
+		}
+	},
+	"idempotencyReplayCreatedEntries": 0,
+	"renderedVerification": {
+		"domains": [
+			"https://xn--febl3a.com",
+			"https://xn--febl3a.co.il"
+		],
+		"entryPages": [
+			"אדם",
+			"חוה",
+			"קין",
+			"הבל",
+			"שת"
+		],
+		"allPagesHttp200WithFamilyNamesAndLinkedTanachCitations": true
+	}
+}
