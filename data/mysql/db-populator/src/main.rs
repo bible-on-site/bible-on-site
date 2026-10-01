@@ -88,6 +88,10 @@ struct Cli {
     #[arg(long, default_value = "../tanahpedia_place_eretz_yisrael_data.sql")]
     tanahpedia_place_eretz_yisrael_script: String,
 
+    /// Add the first mapped city without replacing admin-edited content
+    #[arg(long, default_value = "../tanahpedia_place_jerusalem_data.sql")]
+    tanahpedia_place_jerusalem_script: String,
+
     #[arg(long, default_value = "../tanahpedia_entry_synonym_data.sql")]
     tanahpedia_entry_synonym_script: String,
 
@@ -219,6 +223,7 @@ async fn main() -> Result<()> {
     if cli.tanahpedia_baseline_only {
         apply_tanahpedia_safe_baseline(&mut conn, &tanahpedia_scripts, cli.ensure_tanahpedia_seed)
             .await?;
+        apply_jerusalem_place(&mut conn, &tanahpedia_scripts).await?;
         conn.close().await.context("Failed to close connection")?;
         println!("Tanahpedia baseline seed completed successfully");
         return Ok(());
@@ -232,6 +237,7 @@ async fn main() -> Result<()> {
             apply_tanahpedia_incremental_lookups(&mut conn, &tanahpedia_scripts).await?;
         }
         apply_tanahpedia_family_and_place_content(&mut conn, &tanahpedia_scripts, true).await?;
+        apply_jerusalem_place(&mut conn, &tanahpedia_scripts).await?;
         conn.close().await.context("Failed to close connection")?;
         println!("Tanahpedia family/place data completed successfully");
         return Ok(());
@@ -318,6 +324,7 @@ struct TanahpediaScripts {
     family_shimshon: std::path::PathBuf,
     family_jacob: std::path::PathBuf,
     place_eretz_yisrael: std::path::PathBuf,
+    place_jerusalem: std::path::PathBuf,
     entry_synonym: std::path::PathBuf,
     edge_lab: std::path::PathBuf,
 }
@@ -337,6 +344,7 @@ impl TanahpediaScripts {
             family_shimshon: base_path.join(&cli.tanahpedia_family_shimshon_script),
             family_jacob: base_path.join(&cli.tanahpedia_family_jacob_script),
             place_eretz_yisrael: base_path.join(&cli.tanahpedia_place_eretz_yisrael_script),
+            place_jerusalem: base_path.join(&cli.tanahpedia_place_jerusalem_script),
             entry_synonym: base_path.join(&cli.tanahpedia_entry_synonym_script),
             edge_lab: base_path.join(&cli.tanahpedia_edge_lab_script),
         }
@@ -418,7 +426,15 @@ async fn apply_tanahpedia_full_seed(
         execute_optional_script(conn, &scripts.legacy, "tanahpedia-legacy-migration").await?;
     }
 
-    apply_tanahpedia_family_and_place_content(conn, scripts, false).await
+    apply_tanahpedia_family_and_place_content(conn, scripts, false).await?;
+    apply_jerusalem_place(conn, scripts).await
+}
+
+async fn apply_jerusalem_place(
+    conn: &mut MySqlConnection,
+    scripts: &TanahpediaScripts,
+) -> Result<()> {
+    execute_optional_script(conn, &scripts.place_jerusalem, "tanahpedia-place-jerusalem").await
 }
 
 async fn apply_tanahpedia_family_and_place_content(
@@ -914,6 +930,10 @@ SELECT 1";
             PathBuf::from(
                 "/repo/data/mysql/db-populator/../tanahpedia_place_eretz_yisrael_data.sql",
             ),
+        );
+        assert_eq!(
+            scripts.place_jerusalem,
+            PathBuf::from("/repo/data/mysql/db-populator/../tanahpedia_place_jerusalem_data.sql",),
         );
     }
 

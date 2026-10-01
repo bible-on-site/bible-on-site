@@ -21,8 +21,11 @@ import { normalizedUniqueNameFromParam } from "@/lib/tanahpedia/unique-name-para
 import { PersonFamilyTree } from "../components/PersonFamilyTree";
 import { TanahpediaBreadcrumb } from "../components/TanahpediaBreadcrumb";
 import { TanahpediaPlacesMap } from "../components/TanahpediaPlacesMap";
-import { DisambiguationView, disambiguationMetadata } from "./disambiguation-view";
 import styles from "../page.module.css";
+import {
+	DisambiguationView,
+	disambiguationMetadata,
+} from "./disambiguation-view";
 
 /** Plain-text snippet for meta description (entry content may be HTML). */
 function metaDescriptionFromContent(html: string, maxLen: number): string {
@@ -184,9 +187,9 @@ export async function EntryView({ slug }: { slug: string }) {
 					dangerouslySetInnerHTML={{ __html: entry.content }}
 					className={styles.entryContent}
 				/>
-			) : (
+			) : placeMapMarkers.length === 0 ? (
 				<p className={styles.emptyContent}>אין תוכן עדיין לערך זה.</p>
-			)}
+			) : null}
 
 			<div className={styles.backLinkWrapper}>
 				<Link href="/pedia" className={styles.backLink}>

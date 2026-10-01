@@ -44,6 +44,10 @@ ENV DB_URL=$DB_URL
 ARG NEXT_PUBLIC_ENV=production
 ENV NEXT_PUBLIC_ENV=$NEXT_PUBLIC_ENV
 
+# The public Mapbox token is embedded into client bundles by Next.js at build time.
+ARG NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN
+ENV NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=$NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN
+
 RUN npm run build
 
 # Production image, copy all the files and run next
