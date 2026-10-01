@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { AppSection } from "../components/AppSection";
@@ -11,9 +10,6 @@ import styles from "./page.module.css";
 
 // sections are a closed list.
 export const dynamicParams = false;
-
-// These paths render the same homepage content with a different scroll target.
-export const metadata: Metadata = { alternates: { canonical: "/" } };
 
 // this reserverd function is a magic for caching
 /* istanbul ignore next: only runs during next build */

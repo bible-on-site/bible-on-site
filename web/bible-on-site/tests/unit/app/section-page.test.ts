@@ -1,12 +1,9 @@
 /**
  * @jest-environment node
  */
-import Home, { generateStaticParams, metadata } from "@/app/[section]/page";
+import Home, { generateStaticParams } from "@/app/[section]/page";
 
 describe("[section]/page", () => {
-	it("points homepage aliases to the root canonical URL", () => {
-		expect(metadata.alternates?.canonical).toBe("/");
-	});
 	describe("generateStaticParams", () => {
 		it("returns all section slugs", async () => {
 			const params = await generateStaticParams();
@@ -24,9 +21,7 @@ describe("[section]/page", () => {
 
 	describe("Home", () => {
 		it("resolves scrollTarget for contact, tos, app, tanah-sefarim", async () => {
-			const contact = await Home({
-				params: Promise.resolve({ section: "contact" }),
-			});
+			const contact = await Home({ params: Promise.resolve({ section: "contact" }) });
 			const tos = await Home({ params: Promise.resolve({ section: "tos" }) });
 			const app = await Home({ params: Promise.resolve({ section: "app" }) });
 			const tanah = await Home({

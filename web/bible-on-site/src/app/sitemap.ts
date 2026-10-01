@@ -1,12 +1,24 @@
 import type { MetadataRoute } from "next";
+import { headers } from "next/headers";
 import type { ArticlePerekPair } from "../lib/articles";
 import { getAllArticlePerekIdPairs } from "../lib/articles";
 import { getAllAuthorSlugs } from "../lib/authors";
 import { getPerushimByPerekId } from "../lib/perushim";
-import { SITE_ORIGIN } from "../lib/seo/jsonld";
 import { CATEGORY_SLUGS, categoryHref } from "../lib/tanahpedia/category-slug";
 import { getAllEntryUniqueNames } from "../lib/tanahpedia/service";
 import type { CategoryKey } from "../lib/tanahpedia/types";
+
+/**
+ * Static section paths for the sitemap
+ */
+export const SITEMAP_SECTIONS = [
+	"dailyBulletin",
+	"whatsappGroup",
+	"tos",
+	"app",
+	"contact",
+	"donation",
+] as const;
 
 /**
  * Total number of perakim in the 929 cycle
@@ -39,6 +51,20 @@ export function generateRootEntry(
 		changeFrequency: "daily",
 		priority: 1,
 	};
+}
+
+/**
+ * Generates section URL entries for the sitemap
+ */
+export function generateSectionEntries(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap {
+	return SITEMAP_SECTIONS.map((section) => ({
+		url: `${config.baseUrl}/${section}`,
+		lastModified: config.lastModified,
+		changeFrequency: "monthly" as const,
+		priority: 0.5,
+	}));
 }
 
 /**
@@ -184,6 +210,7 @@ export function generateSitemapEntries(
 ): MetadataRoute.Sitemap {
 	return [
 		generateRootEntry(config),
+		...generateSectionEntries(config),
 		generate929IndexEntry(config),
 		...generatePerekEntries(config),
 		...generateArticleEntries(config, articles),
@@ -197,6 +224,11 @@ export function generateSitemapEntries(
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+	const headersList = await headers();
+	/* istanbul ignore next: fallback for malformed requests without Host header */
+	const host = headersList.get("host") ?? "xn--febl3a.co.il";
+	const baseUrl = `https://${host}`;
+
 	// Fetch dynamic data for sitemap entries in parallel
 	const [authorSlugs, articles, pediaUniqueNames] = await Promise.all([
 		getAllAuthorSlugs(),
@@ -221,7 +253,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
 	return generateSitemapEntries(
 		{
-			baseUrl: SITE_ORIGIN,
+			baseUrl,
 		},
 		authorSlugs,
 		articles,

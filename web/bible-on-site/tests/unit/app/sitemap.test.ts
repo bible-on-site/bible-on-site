@@ -6,7 +6,9 @@ import {
 	generatePediaEntries,
 	generatePerekEntries,
 	generateRootEntry,
+	generateSectionEntries,
 	generateSitemapEntries,
+	SITEMAP_SECTIONS,
 	type SitemapConfig,
 	TOTAL_PERAKIM,
 } from "@/app/sitemap";
@@ -22,6 +24,17 @@ describe("sitemap", () => {
 	};
 
 	describe("constants", () => {
+		it("has correct sections defined", () => {
+			expect(SITEMAP_SECTIONS).toEqual([
+				"dailyBulletin",
+				"whatsappGroup",
+				"tos",
+				"app",
+				"contact",
+				"donation",
+			]);
+		});
+
 		it("has correct total perakim count", () => {
 			expect(TOTAL_PERAKIM).toBe(929);
 		});
@@ -48,6 +61,38 @@ describe("sitemap", () => {
 			const result = generateRootEntry(customConfig);
 
 			expect(result.url).toBe("https://xn--febl3a.co.il");
+		});
+	});
+
+	describe("generateSectionEntries", () => {
+		it("returns entries for all sections", () => {
+			const result = generateSectionEntries(mockConfig);
+
+			expect(result).toHaveLength(SITEMAP_SECTIONS.length);
+		});
+
+		it("generates correct URLs for each section", () => {
+			const result = generateSectionEntries(mockConfig);
+
+			SITEMAP_SECTIONS.forEach((section, index) => {
+				expect(result[index].url).toBe(`https://example.com/${section}`);
+			});
+		});
+
+		it("sets monthly change frequency for sections", () => {
+			const result = generateSectionEntries(mockConfig);
+
+			result.forEach((entry) => {
+				expect(entry.changeFrequency).toBe("monthly");
+			});
+		});
+
+		it("sets priority 0.5 for sections", () => {
+			const result = generateSectionEntries(mockConfig);
+
+			result.forEach((entry) => {
+				expect(entry.priority).toBe(0.5);
+			});
 		});
 	});
 
@@ -228,8 +273,14 @@ describe("sitemap", () => {
 		it("returns all entries combined", () => {
 			const result = generateSitemapEntries(mockConfig);
 
-			// Root, 929 index, perakim, authors index, and pedia pages.
-			const expectedLength = 1 + 1 + TOTAL_PERAKIM + 1 + PEDIA_STATIC_COUNT;
+			// 1 root + 6 sections + 1 929 index + 929 perakim + 1 authors index = 938
+			const expectedLength =
+				1 +
+				SITEMAP_SECTIONS.length +
+				1 +
+				TOTAL_PERAKIM +
+				1 +
+				PEDIA_STATIC_COUNT;
 			expect(result).toHaveLength(expectedLength);
 		});
 
@@ -240,24 +291,25 @@ describe("sitemap", () => {
 			expect(result[0].priority).toBe(1);
 		});
 
-		it("omits section aliases of the homepage", () => {
+		it("has section entries after root", () => {
 			const result = generateSitemapEntries(mockConfig);
-			const urls = result.map((entry) => entry.url);
-			expect(urls).not.toContain("https://example.com/contact");
-			expect(urls).not.toContain("https://example.com/tos");
+
+			SITEMAP_SECTIONS.forEach((section, index) => {
+				expect(result[1 + index].url).toBe(`https://example.com/${section}`);
+			});
 		});
 
-		it("has 929 index after root", () => {
+		it("has 929 index after sections", () => {
 			const result = generateSitemapEntries(mockConfig);
 
-			const indexPosition = 1;
+			const indexPosition = 1 + SITEMAP_SECTIONS.length;
 			expect(result[indexPosition].url).toBe("https://example.com/929");
 		});
 
 		it("has perek entries after 929 index", () => {
 			const result = generateSitemapEntries(mockConfig);
 
-			const perekStartPosition = 1 + 1;
+			const perekStartPosition = 1 + SITEMAP_SECTIONS.length + 1;
 			expect(result[perekStartPosition].url).toBe("https://example.com/929/1");
 			expect(result[perekStartPosition + TOTAL_PERAKIM - 1].url).toBe(
 				"https://example.com/929/929",
@@ -267,7 +319,8 @@ describe("sitemap", () => {
 		it("has authors index after perek entries when no articles", () => {
 			const result = generateSitemapEntries(mockConfig);
 
-			const authorsIndexPosition = 1 + 1 + TOTAL_PERAKIM;
+			const authorsIndexPosition =
+				1 + SITEMAP_SECTIONS.length + 1 + TOTAL_PERAKIM;
 			expect(result[authorsIndexPosition].url).toBe(
 				"https://example.com/929/authors",
 			);
@@ -280,7 +333,8 @@ describe("sitemap", () => {
 			];
 			const result = generateSitemapEntries(mockConfig, [], mockArticles);
 
-			const articleStartPosition = 1 + 1 + TOTAL_PERAKIM;
+			const articleStartPosition =
+				1 + SITEMAP_SECTIONS.length + 1 + TOTAL_PERAKIM;
 			expect(result[articleStartPosition].url).toBe(
 				"https://example.com/929/1/10",
 			);
@@ -298,8 +352,15 @@ describe("sitemap", () => {
 			const slugs = ["הרב א", "הרב ב", "הרב ג"];
 			const result = generateSitemapEntries(mockConfig, slugs);
 
-			// Root, 929 index, perakim, authors index, authors, and pedia pages.
-			const expectedLength = 1 + 1 + TOTAL_PERAKIM + 1 + 3 + PEDIA_STATIC_COUNT;
+			// 1 root + 6 sections + 1 929 index + 929 perakim + 1 authors index + 3 authors = 941
+			const expectedLength =
+				1 +
+				SITEMAP_SECTIONS.length +
+				1 +
+				TOTAL_PERAKIM +
+				1 +
+				3 +
+				PEDIA_STATIC_COUNT;
 			expect(result).toHaveLength(expectedLength);
 
 			// Author pages come right before the pedia landing/category block
@@ -323,9 +384,16 @@ describe("sitemap", () => {
 			const slugs = ["הרב א", "הרב ב"];
 			const result = generateSitemapEntries(mockConfig, slugs, mockArticles);
 
-			// Root, 929 index, perakim, articles, authors, and pedia pages.
+			// 1 root + 6 sections + 1 929 index + 929 perakim + 2 articles + 1 authors index + 2 authors = 942
 			const expectedLength =
-				1 + 1 + TOTAL_PERAKIM + 2 + 1 + 2 + PEDIA_STATIC_COUNT;
+				1 +
+				SITEMAP_SECTIONS.length +
+				1 +
+				TOTAL_PERAKIM +
+				2 +
+				1 +
+				2 +
+				PEDIA_STATIC_COUNT;
 			expect(result).toHaveLength(expectedLength);
 
 			// Check articles are present

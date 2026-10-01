@@ -224,11 +224,9 @@ describe("[slug] page", () => {
 			expect(result).toEqual({
 				title: 'מאמר לדוגמא | הרב ישראל | תנ"ך על הפרק',
 				description: "תקציר המאמר",
-				alternates: { canonical: "/929/5/42" },
 				openGraph: {
 					title: 'מאמר לדוגמא | הרב ישראל | תנ"ך על הפרק',
 					description: "תקציר המאמר",
-					url: "/929/5/42",
 					siteName: 'תנ"ך על הפרק',
 					locale: "he_IL",
 					type: "article",
@@ -333,9 +331,7 @@ describe("[slug] page", () => {
 
 			expect(result.title).toContain('רש"י');
 			expect(result.title).toContain('תנ"ך על הפרק');
-			expect(result.alternates).toEqual({
-				canonical: `/929/5/${encodeURIComponent('רש"י')}`,
-			});
+			expect(result.openGraph?.siteName).toBe('תנ"ך על הפרק');
 		});
 
 		it("returns not-found metadata when perush name not found", async () => {

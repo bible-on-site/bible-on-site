@@ -22,10 +22,8 @@ import {
 	getPerushimByPerekId,
 } from "../../../../lib/perushim";
 import {
-	articlePath,
 	buildArticleGraph,
 	buildPerushGraph,
-	perushPath,
 } from "../../../../lib/seo/core-jsonld";
 import { SITE_NAME } from "../../../../lib/seo/jsonld";
 import { JsonLd } from "../../../components/JsonLd";
@@ -157,15 +155,12 @@ export async function generateMetadata({
 		const description = plainText
 			? plainText.slice(0, 160)
 			: `מאמר מאת ${article.authorName}`;
-		const path = articlePath(article.perekId, article.id);
 		return {
 			title,
 			description,
-			alternates: { canonical: path },
 			openGraph: {
 				title,
 				description,
-				url: path,
 				siteName: SITE_NAME,
 				locale: "he_IL",
 				type: "article",
@@ -179,7 +174,7 @@ export async function generateMetadata({
 
 	if (!perush) {
 		return {
-				title: `פירוש לא נמצא | ${SITE_NAME}`,
+			title: `פירוש לא נמצא | ${SITE_NAME}`,
 		};
 	}
 
@@ -188,15 +183,12 @@ export async function generateMetadata({
 
 	const title = `${perush.name} על ${sefer.name} ${perekObj.perekHeb} | ${SITE_NAME}`;
 	const description = `פירוש ${perush.name} מאת ${perush.parshanName} על ${sefer.name} פרק ${perekObj.perekHeb}`;
-	const path = perushPath(perekId, perush.name);
 	return {
 		title,
 		description,
-		alternates: { canonical: path },
 		openGraph: {
 			title,
 			description,
-			url: path,
 			siteName: SITE_NAME,
 			locale: "he_IL",
 			type: "article",
@@ -268,9 +260,9 @@ export default async function ArticlePage({
 
 					{article.content && (
 						<div
-						className={styles.articleBody}
-						// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
-						dangerouslySetInnerHTML={{ __html: article.content }}
+							className={styles.articleBody}
+							// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
+							dangerouslySetInnerHTML={{ __html: article.content }}
 						/>
 					)}
 
@@ -352,7 +344,6 @@ export default async function ArticlePage({
 
 					{/* Articles carousel */}
 					<ArticlesSection articles={articles} />
-
 				</div>
 			</>
 		);
