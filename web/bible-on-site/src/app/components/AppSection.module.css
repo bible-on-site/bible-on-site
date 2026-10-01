@@ -5,7 +5,7 @@
   z-index: 2;
   /* White background creates contrast between al-haperek (blue) divider and TOS (gray).
      When daily bulletin is added back, this section can move after it and use #edf2f7 if needed. */
-  background-color: var(--surface-elevated, #fff);
+  background-color: var(--surface-muted, #fff);
   padding: 2em 1em;
   scroll-margin-top: 1em;
 }
