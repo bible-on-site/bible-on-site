@@ -10,6 +10,10 @@ For changes limited to README files, local test suites and CI are not required f
 
 For a task the user assigns, you may grant the local tool, Docker file-sharing, and workspace access permissions needed to complete and validate that task. Keep each grant scoped to the task and follow platform security prompts and repository policy. Do not ask the user to repeat this authorization.
 
+# Data Ownership
+
+Application content belongs in the database. Treat the Rust db-populator and local population scripts as temporary bootstrap and test tooling, not as a source of production content. Populate the local database from production with `sync-from-prod`; make lasting content changes through the database deployment or admin editing path. Do not add production place or article content to the Rust populator just to make it appear locally.
+
 # Dependency Upgrade Rule
 
 For a dependency upgrade task, refresh every dependency kind within the user's requested scope: direct packages, transitive packages and lockfiles, toolchains, build images, CI actions, and related configuration. Make the code and test changes needed to work with current releases. Defer an upgrade only when a concrete, substantial incompatibility in the current open-source ecosystem makes alignment impractical. For each deferral, create a follow-up issue and link it beside the pin and in the corresponding Renovate rule. Do not defer merely because the upgrade requires repository code changes.
