@@ -18,6 +18,7 @@ import {
 	setStoredPerekViewMode,
 } from "@/lib/perek-view-preference";
 import type { PerushSummary } from "@/lib/perushim";
+import type { PerekIllustration } from "@/lib/seo/perek-illustrations";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import ReadModeToggler from "./ReadModeToggler";
 import styles from "./sefer-composite.module.css";
@@ -50,6 +51,7 @@ const ClientWrapper = (props: {
 	perushim: PerushSummary[];
 	perekIds?: number[];
 	entityRefsByPerek?: Record<number, PerekEntityReference[]>;
+	imagesByPerek?: Record<number, PerekIllustration[]>;
 	/** When set, the book view will auto-expand this article/perush on the current perek page */
 	initialSlug?: string;
 }) => {
@@ -180,6 +182,7 @@ const ClientWrapper = (props: {
 						perushim={props.perushim}
 						perekIds={props.perekIds}
 						entityRefsByPerek={props.entityRefsByPerek}
+						imagesByPerek={props.imagesByPerek}
 						initialSlug={props.initialSlug}
 					/>
 				) : currentlyToggled ? (

@@ -263,6 +263,9 @@ async fn main() -> Result<()> {
         let dynamic_structure_path = base_path.join(&cli.dynamic_structure_script);
         execute_script(&mut conn, &dynamic_structure_path, "dynamic-structure").await?;
 
+        let perek_images_path = base_path.join("../tanah_perek_images_structure.sql");
+        execute_script(&mut conn, &perek_images_path, "perek-images-structure").await?;
+
         let perushim_structure_path = base_path.join(&cli.perushim_structure_script);
         if perushim_structure_path.exists() {
             execute_script(&mut conn, &perushim_structure_path, "perushim-structure").await?;
@@ -1020,6 +1023,12 @@ SELECT 1";
                 &mut conn,
                 &base_path.join(&cli.dynamic_structure_script),
                 "test-dynamic-structure",
+            )
+            .await?;
+            execute_script(
+                &mut conn,
+                &base_path.join("../tanah_perek_images_structure.sql"),
+                "test-perek-images-structure",
             )
             .await?;
             execute_script(
