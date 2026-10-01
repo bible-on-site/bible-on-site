@@ -60,6 +60,8 @@ import RecitationPlayer, {
 import { Stuma } from "./Stuma";
 import styles from "./sefer.module.css";
 import {
+	type BookPage,
+	bookPageRoute,
 	buildHistoryMapper,
 	buildPageSemantics,
 	CONTENT_OFFSET,
@@ -114,6 +116,7 @@ const Sefer = (props: {
 	perekIds?: number[];
 	entityRefsByPerek?: Record<number, PerekEntityReference[]>;
 	initialSlug?: string;
+	initialBookPage?: BookPage | null;
 }) => {
 	const {
 		perekObj,
@@ -122,6 +125,7 @@ const Sefer = (props: {
 		perekIds,
 		entityRefsByPerek,
 		initialSlug,
+		initialBookPage,
 	} = props;
 	const sefer = getSeferByName(perekObj.sefer);
 	const flipBookRef = useRef<FlipBookHandle>(null);
@@ -155,14 +159,36 @@ const Sefer = (props: {
 	);
 
 	const historyMapper: HistoryMapper | undefined = useMemo(
-		() => buildHistoryMapper(perekIds, hePageSemantics),
-		[perekIds, hePageSemantics],
+		() => buildHistoryMapper(perekIds, hePageSemantics, perekObj.sefer),
+		[perekIds, hePageSemantics, perekObj.sefer],
 	);
 
 	const initialTurnedLeaves = useMemo(
-		() => computeInitialTurnedLeaves(perekIds, perekObj.perekId),
-		[perekIds, perekObj.perekId],
+		() =>
+			initialBookPage === "front"
+				? []
+				: initialBookPage === "toc"
+					? [0]
+					: initialBookPage === "back" && perekIds
+						? Array.from({ length: perekIds.length + 2 }, (_, i) => i)
+						: computeInitialTurnedLeaves(perekIds, perekObj.perekId),
+		[initialBookPage, perekIds, perekObj.perekId],
 	);
+
+	// Next can navigate to another book URL while retaining this Sefer instance.
+	// The flipbook itself handles its own Back/Forward entries; for a router
+	// navigation, move to the requested spread without pushing a duplicate entry.
+	useEffect(() => {
+		const book = flipBookRef.current;
+		if (!book || !historyMapper) return;
+		const route = initialBookPage
+			? bookPageRoute(perekObj.sefer, initialBookPage)
+			: `/929/${perekObj.perekId}?book`;
+		const requestedPage = historyMapper.routeToPage(route);
+		if (requestedPage != null && requestedPage !== book.getCurrentPageIndex()) {
+			book.restorePage(requestedPage);
+		}
+	}, [historyMapper, initialBookPage, perekObj.perekId, perekObj.sefer]);
 
 	const frontCover = (
 		<section
@@ -350,6 +376,12 @@ const Sefer = (props: {
 			onNavigate={(pageIndex) => flipBookRef.current?.jumpToPage(pageIndex)}
 			totalPages={totalPages}
 			pageSemantics={hePageSemantics}
+			getHref={(entry) =>
+				historyMapper?.pageToRoute(entry.pageIndex, {
+					semanticName: entry.semanticName,
+					title: entry.title,
+				})
+			}
 			heading="תוכן העניינים"
 			direction="rtl"
 			filter={(entry) =>
