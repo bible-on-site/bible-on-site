@@ -277,7 +277,8 @@
 			"childPersonId": "fcfc9322-5864-4aba-902f-deee96437d0c",
 			"relationshipType": "BIOLOGICAL",
 			"parentRole": "FATHER",
-			"sourceCitation": "בראשית ה ג"
+			"sourceCitation": "בראשית ה ג",
+			"birthOrder": 3
 		},
 		{
 			"id": "29f818f2-4ded-4d7e-9e0f-3aff15c14a4d",

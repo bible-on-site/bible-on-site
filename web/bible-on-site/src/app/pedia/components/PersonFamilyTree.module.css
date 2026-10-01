@@ -60,7 +60,11 @@
   width: 100%;
 }
 
-.childrenBranch :is(.connector, .verticalConnector, .tierLabel, .verticalTierLabel, .altGroupLabel, .coParentChildLabel) {
+.childrenBranch :is(.connector, .verticalConnector) {
+  background: #a5b4fc;
+}
+
+.childrenBranch :is(.tierLabel, .verticalTierLabel, .altGroupLabel, .coParentChildLabel) {
   background-image: linear-gradient(#a5b4fc, #a5b4fc);
   background-position: center;
   background-repeat: no-repeat;
@@ -94,6 +98,27 @@
   margin-bottom: 16px;
   position: relative;
   z-index: 2;
+}
+
+.childRow {
+  direction: rtl;
+}
+
+@media (min-width: 768px) {
+  .childRowThree {
+    flex-wrap: nowrap;
+  }
+
+  .childRowThree > [data-testid="family-child-card"] {
+    flex: 0 1 220px;
+    min-width: 0;
+  }
+
+  .childRowThree .card {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+  }
 }
 
 .altGroupBlock {

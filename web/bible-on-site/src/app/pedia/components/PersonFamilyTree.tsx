@@ -105,18 +105,14 @@ function canUseSpouseChildMatrix(units: SpouseUnit[]): boolean {
 function buildPartnerChildColumns(
 	childEdges: PersonFamilyChildEdge[],
 	spouseUnits: SpouseUnit[],
-	focalDisplayName: string,
 ): {
 	columnChildren: Map<string, PersonFamilyChildEdge[]>;
 	looseChildren: PersonFamilyChildEdge[];
 } {
-	const chronology = shouldApplyChildBirthChronology(
-		focalDisplayName,
-		childEdges,
-	);
+	const chronology = shouldApplyChildBirthChronology(childEdges);
 	const cmp = (a: PersonFamilyChildEdge, b: PersonFamilyChildEdge) =>
 		chronology
-			? compareChildEdgesChronology(a, b, focalDisplayName)
+			? compareChildEdgesChronology(a, b)
 			: a.related.displayName.localeCompare(b.related.displayName, "he");
 	const spousePartnerIds = new Set(
 		spouseUnits.map((u) => u.edges[0].related.entityId),
@@ -835,21 +831,13 @@ function PersonFamilyTreeContent({
 		if (ak !== bk) return ak.localeCompare(bk);
 		return a.related.displayName.localeCompare(b.related.displayName, "he");
 	});
-	const sortedChildren = shouldApplyChildBirthChronology(
-		focalDisplayName,
-		sortedChildrenBase,
-	)
-		? [...sortedChildrenBase].sort((a, b) =>
-				compareChildEdgesChronology(a, b, focalDisplayName),
-			)
+	const sortedChildren = shouldApplyChildBirthChronology(sortedChildrenBase)
+		? [...sortedChildrenBase].sort((a, b) => compareChildEdgesChronology(a, b))
 		: sortedChildrenBase;
 
-	const childEdgeCmp = shouldApplyChildBirthChronology(
-		focalDisplayName,
-		sortedChildren,
-	)
+	const childEdgeCmp = shouldApplyChildBirthChronology(sortedChildren)
 		? (a: PersonFamilyChildEdge, b: PersonFamilyChildEdge) =>
-				compareChildEdgesChronology(a, b, focalDisplayName)
+				compareChildEdgesChronology(a, b)
 		: undefined;
 
 	const childGroups = groupByAltGroupId(sortedChildren);
@@ -879,7 +867,7 @@ function PersonFamilyTreeContent({
 
 	const partnerColumns =
 		spouses.length > 0 && sortedChildren.length > 0
-			? buildPartnerChildColumns(sortedChildren, spouseUnits, focalDisplayName)
+			? buildPartnerChildColumns(sortedChildren, spouseUnits)
 			: {
 					columnChildren: new Map<string, PersonFamilyChildEdge[]>(),
 					looseChildren: [] as PersonFamilyChildEdge[],
@@ -896,16 +884,10 @@ function PersonFamilyTreeContent({
 	const orderedSpouseUnits = spouseUnits;
 
 	const childTimelineLayout =
-		matrixEligible &&
-		shouldApplyChildBirthChronology(focalDisplayName, sortedChildren);
+		matrixEligible && shouldApplyChildBirthChronology(sortedChildren);
 
 	const spousePartnerIdsForSeq = new Set(
 		spouseUnits.map((u) => u.edges[0].related.entityId),
-	);
-	const timelineMappedChildren = sortedChildren.filter(
-		(c) =>
-			c.coParentEntityId != null &&
-			spousePartnerIdsForSeq.has(c.coParentEntityId),
 	);
 	const timelineLooseChildren = sortedChildren.filter(
 		(c) =>
@@ -916,16 +898,7 @@ function PersonFamilyTreeContent({
 	const showTimelineLooseTopCell =
 		childTimelineLayout && timelineLooseChildren.length > 0;
 
-	const globalChildTimeline = childTimelineLayout
-		? [
-				...[...timelineMappedChildren].sort((a, b) =>
-					compareChildEdgesChronology(a, b, focalDisplayName),
-				),
-				...[...timelineLooseChildren].sort((a, b) =>
-					compareChildEdgesChronology(a, b, focalDisplayName),
-				),
-			]
-		: [];
+	const globalChildTimeline = childTimelineLayout ? sortedChildren : [];
 
 	const matrixColCount = childTimelineLayout
 		? orderedSpouseUnits.length + (showTimelineLooseTopCell ? 1 : 0)
@@ -1226,7 +1199,9 @@ function PersonFamilyTreeContent({
 											</span>
 										</div>
 									) : null}
-									<div className={styles.row}>
+								<div
+									className={`${styles.row} ${styles.childRow} ${bucket.edges.length === 3 ? styles.childRowThree : ""}`}
+								>
 										{bucket.edges.map((edge) => (
 											<ChildCard
 												key={`${edge.related.entityId}-${edge.parentRole}-${edge.relationshipType}-${key ?? "d"}-${bucket.key}`}

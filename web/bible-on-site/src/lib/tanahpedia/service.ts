@@ -470,6 +470,7 @@ export async function getPersonFamilySummary(
 	const childSql = `SELECT ppc.alt_group_id AS altGroupId,
 			pr.name AS parentRole, pct.name AS relationshipType,
 			ppc.source_citation AS sourceCitation,
+			ppc.birth_order AS birthOrder,
 			child_p.id AS relatedPersonId, ${ce}.id AS relatedEntityId,
 			${ce}.name AS displayName,
 			${uqC} AS entryUniqueName, ${tqC} AS entryTitle,
@@ -553,6 +554,7 @@ export async function getPersonFamilySummary(
 					relationshipType: string;
 					sourceCitation: string | null;
 					coParentEntityId: string | null;
+					birthOrder: number | null;
 					coParentDisplayName: string | null;
 					coParentUnionOrder: number | null;
 				}
@@ -601,6 +603,7 @@ export async function getPersonFamilySummary(
 			relationshipType: r.relationshipType,
 			altGroupId: r.altGroupId,
 			sourceCitation: r.sourceCitation,
+			birthOrder: r.birthOrder != null ? Number(r.birthOrder) : null,
 			coParentEntityId: r.coParentEntityId ?? null,
 			coParentDisplayName: r.coParentDisplayName ?? null,
 			coParentUnionOrder:

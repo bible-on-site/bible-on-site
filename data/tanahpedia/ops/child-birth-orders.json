@@ -1,0 +1,204 @@
+{
+  "parentChildLinks": [
+    {
+      "id": "b97ee072-f97b-4862-b318-d6d2e405e3a3",
+      "parentPersonId": "f5aac5d4-7685-45cd-8cd4-2d86f8b01f78",
+      "childPersonId": "8ae7f920-8cc9-4a51-95b3-d5f194432fec",
+      "relationshipType": "BIOLOGICAL",
+      "parentRole": "FATHER",
+      "altGroupId": null,
+      "sourceCitation": "בראשית ד א",
+      "birthOrder": 1
+    },
+    {
+      "id": "29e1d3cc-1a7e-42dc-8269-e240001a0b53",
+      "parentPersonId": "f5aac5d4-7685-45cd-8cd4-2d86f8b01f78",
+      "childPersonId": "3f1ace9f-6b5c-48c9-8de5-758c15628746",
+      "relationshipType": "BIOLOGICAL",
+      "parentRole": "FATHER",
+      "altGroupId": null,
+      "sourceCitation": "בראשית ד ב",
+      "birthOrder": 2
+    },
+    {
+      "id": "05207c5a-d90d-4956-866f-5f8ae53e3371",
+      "parentPersonId": "f5aac5d4-7685-45cd-8cd4-2d86f8b01f78",
+      "childPersonId": "fcfc9322-5864-4aba-902f-deee96437d0c",
+      "relationshipType": "BIOLOGICAL",
+      "parentRole": "FATHER",
+      "altGroupId": null,
+      "sourceCitation": "בראשית ה ג",
+      "birthOrder": 3
+    },
+    {
+      "id": "2f50c6bb-7883-482f-ac9d-b55f1074f8e4",
+      "parentPersonId": "d0604c5f-ec56-403b-8678-67f0de8ca234",
+      "childPersonId": "8ae7f920-8cc9-4a51-95b3-d5f194432fec",
+      "relationshipType": "BIOLOGICAL",
+      "parentRole": "MOTHER",
+      "altGroupId": null,
+      "sourceCitation": "בראשית ד א",
+      "birthOrder": 1
+    },
+    {
+      "id": "4c03074c-5046-4a0f-9ca1-ae1121268a62",
+      "parentPersonId": "d0604c5f-ec56-403b-8678-67f0de8ca234",
+      "childPersonId": "3f1ace9f-6b5c-48c9-8de5-758c15628746",
+      "relationshipType": "BIOLOGICAL",
+      "parentRole": "MOTHER",
+      "altGroupId": null,
+      "sourceCitation": "בראשית ד ב",
+      "birthOrder": 2
+    },
+    {
+      "id": "da2a4bac-b2f7-4e92-a5c1-9b1333e692c6",
+      "parentPersonId": "d0604c5f-ec56-403b-8678-67f0de8ca234",
+      "childPersonId": "fcfc9322-5864-4aba-902f-deee96437d0c",
+      "relationshipType": "BIOLOGICAL",
+      "parentRole": "MOTHER",
+      "altGroupId": null,
+      "sourceCitation": "בראשית ד כה",
+      "birthOrder": 3
+    },
+    {
+      "id": "0d1f7f2e-3a54-4b8e-9c67-a1b2c3d4e531",
+      "parentPersonId": "0d1f7f2e-3a54-4b8e-9c67-a1b2c3d4e502",
+      "childPersonId": "067a4638-ac8a-4ca0-96d6-6c1ea4aed964",
+      "relationshipType": "BIOLOGICAL",
+      "parentRole": "FATHER",
+      "altGroupId": null,
+      "sourceCitation": "בראשית כא ב-ג",
+      "birthOrder": 2
+    },
+    {
+      "id": "3f6946b2-7ea5-430a-b5cb-cb7d0eec7145",
+      "parentPersonId": "cf5048a1-5609-4105-9e3f-dccb8e1e967d",
+      "childPersonId": "3079af2e-504d-4eee-a735-265bfc02517d",
+      "relationshipType": "BIOLOGICAL",
+      "parentRole": "FATHER",
+      "altGroupId": null,
+      "sourceCitation": "בראשית כט לב",
+      "birthOrder": 1
+    },
+    {
+      "id": "6e7982c6-879e-4f27-a5b1-b27d09deba4b",
+      "parentPersonId": "cf5048a1-5609-4105-9e3f-dccb8e1e967d",
+      "childPersonId": "eef9681a-a62b-4c58-88ea-869510b5ac79",
+      "relationshipType": "BIOLOGICAL",
+      "parentRole": "FATHER",
+      "altGroupId": null,
+      "sourceCitation": "בראשית כט לג",
+      "birthOrder": 2
+    },
+    {
+      "id": "13b2f9e5-21cd-4e9b-af4e-ed72617f8ea2",
+      "parentPersonId": "cf5048a1-5609-4105-9e3f-dccb8e1e967d",
+      "childPersonId": "0bd6b6b6-c235-4073-8018-82055a2e2251",
+      "relationshipType": "BIOLOGICAL",
+      "parentRole": "FATHER",
+      "altGroupId": null,
+      "sourceCitation": "בראשית כט לד",
+      "birthOrder": 3
+    },
+    {
+      "id": "1291b089-c45b-4439-ae15-39179260e9d1",
+      "parentPersonId": "cf5048a1-5609-4105-9e3f-dccb8e1e967d",
+      "childPersonId": "20cdfe5f-8ce5-4c8a-85d2-a739dda62bd9",
+      "relationshipType": "BIOLOGICAL",
+      "parentRole": "FATHER",
+      "altGroupId": null,
+      "sourceCitation": "בראשית כט לה",
+      "birthOrder": 4
+    },
+    {
+      "id": "4fac87d0-82c1-4009-b4bb-17700c1d3803",
+      "parentPersonId": "cf5048a1-5609-4105-9e3f-dccb8e1e967d",
+      "childPersonId": "4170a4c2-a974-4d8c-805f-3eb671a4e080",
+      "relationshipType": "BIOLOGICAL",
+      "parentRole": "FATHER",
+      "altGroupId": null,
+      "sourceCitation": "בראשית ל ו",
+      "birthOrder": 5
+    },
+    {
+      "id": "9b93b990-6bbc-4d66-86d9-ca4eb9653907",
+      "parentPersonId": "cf5048a1-5609-4105-9e3f-dccb8e1e967d",
+      "childPersonId": "e93143cf-a5fe-4f54-8e47-ba8a4624fc0f",
+      "relationshipType": "BIOLOGICAL",
+      "parentRole": "FATHER",
+      "altGroupId": null,
+      "sourceCitation": "בראשית ל ח",
+      "birthOrder": 6
+    },
+    {
+      "id": "d6cbc31d-ff85-4c9f-859f-f7752b47034f",
+      "parentPersonId": "cf5048a1-5609-4105-9e3f-dccb8e1e967d",
+      "childPersonId": "fc655da5-593e-462f-8276-c72a7c6003d9",
+      "relationshipType": "BIOLOGICAL",
+      "parentRole": "FATHER",
+      "altGroupId": null,
+      "sourceCitation": "בראשית ל יא",
+      "birthOrder": 7
+    },
+    {
+      "id": "44bbe514-ccea-4655-8ab7-c6a56e338464",
+      "parentPersonId": "cf5048a1-5609-4105-9e3f-dccb8e1e967d",
+      "childPersonId": "01ea5988-36d8-4479-84b1-dfb4cd6e7370",
+      "relationshipType": "BIOLOGICAL",
+      "parentRole": "FATHER",
+      "altGroupId": null,
+      "sourceCitation": "בראשית ל יג",
+      "birthOrder": 8
+    },
+    {
+      "id": "937d191e-1875-4338-a21d-e64111e8beb6",
+      "parentPersonId": "cf5048a1-5609-4105-9e3f-dccb8e1e967d",
+      "childPersonId": "5dd59ec6-7e29-46b9-a362-584250db6c19",
+      "relationshipType": "BIOLOGICAL",
+      "parentRole": "FATHER",
+      "altGroupId": null,
+      "sourceCitation": "בראשית ל יח",
+      "birthOrder": 9
+    },
+    {
+      "id": "1ceb7995-0d1a-489c-952a-307c1608b972",
+      "parentPersonId": "cf5048a1-5609-4105-9e3f-dccb8e1e967d",
+      "childPersonId": "6d0773be-c601-49ab-bdce-dcebac0aa3c8",
+      "relationshipType": "BIOLOGICAL",
+      "parentRole": "FATHER",
+      "altGroupId": null,
+      "sourceCitation": "בראשית ל כ",
+      "birthOrder": 10
+    },
+    {
+      "id": "fd798423-2a56-43b1-a2ec-1bd85e5636ea",
+      "parentPersonId": "cf5048a1-5609-4105-9e3f-dccb8e1e967d",
+      "childPersonId": "d870c145-5c18-4efd-bfd2-77d60666d0af",
+      "relationshipType": "BIOLOGICAL",
+      "parentRole": "FATHER",
+      "altGroupId": null,
+      "sourceCitation": "בראשית ל כא",
+      "birthOrder": 11
+    },
+    {
+      "id": "415f00cf-dae9-44a9-89df-e8c148accbde",
+      "parentPersonId": "cf5048a1-5609-4105-9e3f-dccb8e1e967d",
+      "childPersonId": "02b0b971-58c6-45e3-a8a2-a1fd4784663f",
+      "relationshipType": "BIOLOGICAL",
+      "parentRole": "FATHER",
+      "altGroupId": null,
+      "sourceCitation": "בראשית ל כד",
+      "birthOrder": 12
+    },
+    {
+      "id": "2c4d7efc-1a12-49af-b3f2-007c8f5950cc",
+      "parentPersonId": "cf5048a1-5609-4105-9e3f-dccb8e1e967d",
+      "childPersonId": "d6eb6b36-c07d-4aa8-93bc-8c7139e178be",
+      "relationshipType": "BIOLOGICAL",
+      "parentRole": "FATHER",
+      "altGroupId": null,
+      "sourceCitation": "בראשית לה יח",
+      "birthOrder": 13
+    }
+  ]
+}
