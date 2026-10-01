@@ -91,6 +91,7 @@ const ClientWrapper = (props: {
 						setDisplay("none");
 					}, 300);
 				}
+				window.dispatchEvent(new Event("recitation-stop"));
 				setCurrentlyToggled(false);
 			}
 		},

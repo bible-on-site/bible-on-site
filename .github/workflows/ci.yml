@@ -1716,6 +1716,34 @@ jobs:
           retention-days: 400
           overwrite: true
 
+  recitation_ci:
+    name: Recitation alignment and RustFS
+    runs-on: ubuntu-latest
+    needs: [setup_env, determine_data_changes, determine_website_changes]
+    if: ${{ always() && !cancelled() && needs.setup_env.result == 'success' && needs.determine_data_changes.result == 'success' && needs.determine_website_changes.result == 'success' && (needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_website_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true') }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "26.10.0"
+      - name: Test alignment invariants without downloading GPU models
+        run: |
+          python -m venv data/recitation/.venv
+          data/recitation/.venv/bin/python -m pip install numpy==2.5.3
+          cd data/recitation
+          .venv/bin/python -m unittest -v
+          .venv/bin/python audit.py
+      - name: Verify canonical text preprocessing
+        run: node --test data/sefaria/pipelines/tanah-view/tests/preprocessor.test.mjs
+      - name: Install storage test dependencies
+        run: npm ci --prefix devops
+      - name: Start RustFS
+        run: docker compose -f devops/docker-compose.yml up -d --wait --wait-timeout 180 rustfs
+      - name: Verify MP3 byte-range seeking
+        run: node data/recitation/check_storage.mjs
+
   data_ci:
     name: Data CI
     runs-on: ubuntu-latest
@@ -2149,6 +2177,7 @@ jobs:
         app_ios_ci,
         bulletin_ci,
         data_ci,
+        recitation_ci,
         perushim_data,
         build_lcov_docker,
         determine_baseline_availability,
@@ -2175,6 +2204,13 @@ jobs:
             [ "$DATA_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine data changes."
             echo "Overall status: failure"
             exit 1
+          fi
+
+          if [ "${{ needs.determine_data_changes.outputs.module_changed }}" = "true" ] || [ "${{ needs.determine_website_changes.outputs.module_changed }}" = "true" ] || [ "${{ needs.determine_data_changes.outputs.ci_changed }}" = "true" ]; then
+            if [ "${{ needs.recitation_ci.result }}" != "success" ]; then
+              echo "Recitation alignment and RustFS validation did not pass."
+              exit 1
+            fi
           fi
 
           # Version verification checks (only fail if the job ran and failed, not if skipped)

@@ -11,7 +11,11 @@ jest.mock("next/script", () => {
 		children?: string;
 		id?: string;
 	}) {
-		return <script data-testid={id}>{children}</script>;
+		return (
+			<pre data-testid={id} data-script>
+				{children}
+			</pre>
+		);
 	};
 });
 
@@ -43,7 +47,7 @@ describe("GoogleAnalytics", () => {
 		it("renders Google Analytics scripts for regular traffic", () => {
 			const result = GoogleAnalytics();
 			const { container } = renderResult(result);
-			const scripts = container.querySelectorAll("script");
+			const scripts = container.querySelectorAll("[data-script]");
 			expect(scripts.length).toBeGreaterThan(0);
 		});
 

@@ -113,7 +113,9 @@ describe("SeferComposite (wide screen)", () => {
 				// Hydration can replay a user's click before the URL initialization effect.
 				screen.getByRole("checkbox").click();
 			}, []);
-			return <SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />;
+			return (
+				<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />
+			);
 		}
 
 		await act(async () => {

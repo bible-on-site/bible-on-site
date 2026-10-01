@@ -12,8 +12,8 @@ jest.mock("next/link", () => ({
 }));
 
 const recordingTimeFrame = {
-	from: { type: "string" as const, pattern: "^\\d{2}:\\d{2}:\\d{2}$" as const },
-	to: { type: "string" as const, pattern: "^\\d{2}:\\d{2}:\\d{2}$" as const },
+	from: "00:00:00",
+	to: "00:00:00",
 };
 
 const perekObj: PerekObj = {

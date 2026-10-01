@@ -274,6 +274,7 @@ mod tests {
 
     fn perek(perek_id: i32, header: &str, star_rise: Vec<&str>) -> Perek {
         Perek {
+            recitation: None,
             perek_id,
             header: header.to_string(),
             date: vec![57750329, 57000132],
