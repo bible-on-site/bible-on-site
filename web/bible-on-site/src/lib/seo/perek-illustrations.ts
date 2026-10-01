@@ -28,5 +28,17 @@ const illustrations: Partial<Record<number, PerekIllustration>> = {
 export function getPerekIllustration(
 	perekId: number,
 ): PerekIllustration | undefined {
-	return illustrations[perekId];
+	if (perekId < 1 || perekId > 929) return undefined;
+	if (illustrations[perekId]) return illustrations[perekId];
+
+	// Benchmark branch only: reuse one asset to measure the SSG cost of image
+	// markup and metadata on every chapter, without adding 929 binary assets.
+	const sample = illustrations[1];
+	if (!sample) return undefined;
+	return {
+		...sample,
+		alt: `תמונת בדיקה לפרק ${perekId}`,
+		caption: `תמונת בדיקה לפרק ${perekId}.`,
+		description: `תמונת בדיקה לפרק ${perekId}.`,
+	};
 }

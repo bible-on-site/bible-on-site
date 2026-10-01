@@ -132,12 +132,16 @@ describe("seo/core-jsonld", () => {
 			expect(sefer?.genre).toBeUndefined();
 		});
 
-		it("does not advertise an illustration for an unillustrated perek", () => {
+		it("advertises the benchmark illustration for another perek", () => {
 			const graph = buildPerekGraph(
 				perekObj({ perekId: 2, perekHeb: "ב", source: "בראשית ב" }),
 			);
-			expect(nodeByType(graph, "Chapter")?.image).toBeUndefined();
-			expect(nodeByType(graph, "WebPage")?.primaryImageOfPage).toBeUndefined();
+			expect(nodeByType(graph, "Chapter")?.image).toBe(
+				`${SITE_ORIGIN}/images/perakim/bereshit-1-creation.webp`,
+			);
+			expect(nodeByType(graph, "WebPage")?.primaryImageOfPage).toMatchObject({
+				caption: "תמונת בדיקה לפרק 2.",
+			});
 		});
 	});
 
