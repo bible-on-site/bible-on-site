@@ -25,4 +25,4 @@ Constraints: no text, Hebrew letters, numbers, logos, watermarks, maps, timeline
 | HTML image fallback | WebP | 1600×900 | 228 KB |
 | Social preview | JPEG | 1600×900 | 291 KB |
 
-The page uses a `<picture>` element with AVIF sources and a responsive Next.js `<Image>` WebP fallback. The JPEG is used only for social preview metadata. The WebP URL is the image sitemap and structured data URL because it is also the fallback `<img>` source.
+The SEO page and book view use the same responsive AVIF sources with a Next.js `<Image>` WebP fallback. The book view loads its image lazily inside the chapter text scroller. The JPEG is used only for social preview metadata. The WebP URL is the image sitemap and structured data URL because it is also the fallback `<img>` source.
