@@ -74,8 +74,9 @@ const mockGetEntryByUniqueName = getEntryByUniqueName as jest.MockedFunction<
 const mockGetEntries = getEntries as jest.MockedFunction<typeof getEntries>;
 const mockGetEntriesByEntityType =
 	getEntriesByEntityType as jest.MockedFunction<typeof getEntriesByEntityType>;
-const mockGetEntriesBySynonym =
-	getEntriesBySynonym as jest.MockedFunction<typeof getEntriesBySynonym>;
+const mockGetEntriesBySynonym = getEntriesBySynonym as jest.MockedFunction<
+	typeof getEntriesBySynonym
+>;
 const mockGetPersonFamilySummary =
 	getPersonFamilySummary as jest.MockedFunction<typeof getPersonFamilySummary>;
 const mockGetPlaceMapMarkersForEntry =
@@ -346,7 +347,9 @@ describe("pedia/[uniqueName] page", () => {
 
 			render((await EntryView({ slug: "יעקב" })) as ReactElement);
 
-			expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("יעקב");
+			expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+				"יעקב",
+			);
 			expect(screen.getByText("יעקב אבינו")).toBeInTheDocument();
 			expect(screen.getByText("יעקב אחר")).toBeInTheDocument();
 			expect(screen.getByText(/אבי האומה/)).toBeInTheDocument();
@@ -463,7 +466,7 @@ describe("pedia/[uniqueName] page", () => {
 				id: "entry-map-family",
 				uniqueName: "map-family",
 				title: "Map Family",
-				content: "<p>Body</p>",
+				content: null,
 				createdAt: "2024-01-01T00:00:00Z",
 				updatedAt: "2024-01-01T00:00:00Z",
 				entities: [
@@ -491,8 +494,9 @@ describe("pedia/[uniqueName] page", () => {
 				screen.getByRole("heading", { level: 2, name: "\u05de\u05e4\u05d4" }),
 			).toBeInTheDocument();
 			expect(
-				screen.getByText(/docs\/tanahpedia\/places-map-plan\.md/),
+				screen.getByText(/תנ"ך על הפרק משתמשים בספק מפות חיצוני/),
 			).toBeInTheDocument();
+			expect(screen.queryByText(/אין תוכן עדיין/)).not.toBeInTheDocument();
 			expect(
 				screen.getByText("\u05de\u05e9\u05e4\u05d7\u05d4"),
 			).toBeInTheDocument();
