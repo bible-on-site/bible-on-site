@@ -592,6 +592,9 @@ pub async fn put_parent_child_link(
     let parent_role = required(input.parent_role, "parentRole", 50)?;
     let alt_group_id = optional(input.alt_group_id, "altGroupId", 36)?;
     let source_citation = optional(input.source_citation, "sourceCitation", 400)?;
+    if input.birth_order.is_some_and(|order| order < 1) {
+        return Err(ServiceError::bad_request("birthOrder must be positive"));
+    }
     if parent_id == child_id {
         return Err(ServiceError::bad_request(
             "a person cannot be their own parent",
@@ -608,6 +611,7 @@ pub async fn put_parent_child_link(
         parent_role_id: parent_role_id(conn, parent_role).await?,
         alt_group_id,
         source_citation,
+        birth_order: input.birth_order,
     };
 
     person_parent_child::Entity::insert(model.into_active_model())
@@ -620,6 +624,7 @@ pub async fn put_parent_child_link(
                     person_parent_child::Column::ParentRoleId,
                     person_parent_child::Column::AltGroupId,
                     person_parent_child::Column::SourceCitation,
+                    person_parent_child::Column::BirthOrder,
                 ])
                 .to_owned(),
         )
@@ -1036,6 +1041,7 @@ pub async fn get_person_parent_child(
             parent_role,
             alt_group_id: row.alt_group_id,
             source_citation: row.source_citation,
+            birth_order: row.birth_order,
             parent_id: row.parent_id,
             child_id: row.child_id,
             other_person_id,
@@ -1315,6 +1321,7 @@ mod tests {
             parent_role: "father".to_string(),
             alt_group_id: None,
             source_citation: Some("בראשית".to_string()),
+            birth_order: Some(1),
         }
     }
 
@@ -2083,6 +2090,18 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn put_parent_child_link_rejects_nonpositive_birth_order() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let mut input = parent_child_input();
+        input.birth_order = Some(0);
+
+        let err = put_parent_child_link(&db, input).await.unwrap_err();
+
+        assert!(matches!(err, ServiceError::BadRequest(_)));
+    }
+
+    #[tokio::test]
     async fn put_parent_child_link_resolves_lookups_and_upserts() {
         let mock_db = MockDatabase::new(DatabaseBackend::MySql)
             .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
@@ -2364,6 +2383,7 @@ mod tests {
             parent_role_id: "pr-father".to_string(),
             alt_group_id: Some("alt-parent".to_string()),
             source_citation: source_citation.map(str::to_string),
+            birth_order: Some(1),
         }
     }
 
@@ -2504,6 +2524,7 @@ mod tests {
         assert_eq!(links[0].relationship_type, "BIOLOGICAL");
         assert_eq!(links[0].parent_role, "FATHER");
         assert_eq!(links[0].alt_group_id.as_deref(), Some("alt-parent"));
+        assert_eq!(links[0].birth_order, Some(1));
         assert!(links[0].queried_is_parent);
         assert_eq!(links[0].other_person_id, "yosef");
         assert_eq!(links[0].other_display_name, "יוסף");

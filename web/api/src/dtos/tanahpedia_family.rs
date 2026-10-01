@@ -40,6 +40,7 @@ pub struct PutTanahpediaParentChildInput {
     pub parent_role: String,
     pub alt_group_id: Option<String>,
     pub source_citation: Option<String>,
+    pub birth_order: Option<i32>,
 }
 
 #[derive(InputObject, Debug, Clone)]
@@ -126,6 +127,7 @@ pub struct TanahpediaPersonParentChildSummary {
     pub parent_role: String,
     pub alt_group_id: Option<String>,
     pub source_citation: Option<String>,
+    pub birth_order: Option<i32>,
     pub parent_id: String,
     pub child_id: String,
     pub other_person_id: String,
