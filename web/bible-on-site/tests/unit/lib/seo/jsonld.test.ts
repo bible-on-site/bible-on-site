@@ -60,6 +60,7 @@ describe("seo/jsonld", () => {
 			const site = websiteNode() as unknown as Record<string, unknown>;
 			expect(site["@type"]).toBe("WebSite");
 			expect(site["@id"]).toBe(WEBSITE_ID);
+			expect(site.alternateName).toBe("תנ״ך על הפרק");
 			expect(site.inLanguage).toBe("he");
 			expect(site.publisher).toEqual({ "@id": ORG_ID });
 		});

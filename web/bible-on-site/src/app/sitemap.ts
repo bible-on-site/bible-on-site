@@ -36,7 +36,8 @@ export interface PerushPerekPair {
 
 export interface SitemapConfig {
 	baseUrl: string;
-	lastModified: Date;
+	/** Set only when a page's actual last significant update is known. */
+	lastModified?: Date;
 }
 
 /**
@@ -260,7 +261,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 	return generateSitemapEntries(
 		{
 			baseUrl,
-			lastModified: new Date(),
 		},
 		authorSlugs,
 		articles,

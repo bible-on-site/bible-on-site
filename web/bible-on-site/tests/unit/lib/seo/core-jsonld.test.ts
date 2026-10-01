@@ -159,6 +159,12 @@ describe("seo/core-jsonld", () => {
 			);
 			expect(person?.image).toBe("https://cdn.example/authors/high-res/7.jpg");
 			expect(node?.author).toEqual({ "@id": person?.["@id"] });
+			expect(node?.publisher).toEqual({
+				"@id": `${SITE_ORIGIN}/#organization`,
+			});
+			expect(nodeByType(graph, "WebPage")?.mainEntity).toEqual({
+				"@id": node?.["@id"],
+			});
 		});
 
 		it("omits description when the abstract and content are empty", () => {
