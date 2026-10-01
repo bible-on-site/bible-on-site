@@ -15,6 +15,7 @@ import {
 	FirstPageButton,
 	FullscreenButton,
 	LastPageButton,
+	MouseModeButton,
 	NextButton,
 	PageIndicator,
 	PrevButton,
@@ -57,10 +58,6 @@ import {
 	toHebrewWithPunctuation,
 	wrapDownloadResult,
 } from "./sefer-page-utils";
-import {
-	createSelectableBookContentRef,
-	type MouseBookMode,
-} from "./selectable-book-content";
 import { TanahpediaLink } from "./TanahpediaLink";
 import "html-flip-book-react/styles.css";
 import "./sefer.css";
@@ -89,6 +86,8 @@ type FlipBookProps = {
 	snapshotDuringFlip?: boolean;
 	/** Table of contents page index (book-level). Default: 4. */
 	tocPageIndex?: number;
+	/** Remember the flipbook's mouse interaction mode. */
+	mouseModeStorageKey?: string;
 };
 
 /** Dynamic FlipBook with ref forwarded (library uses forwardRef) */
@@ -117,22 +116,6 @@ const Sefer = (props: {
 	const sefer = getSeferByName(perekObj.sefer);
 	const flipBookRef = useRef<FlipBookHandle>(null);
 	const bookWrapperRef = useRef<HTMLDivElement>(null);
-	const [mouseBookMode, setMouseBookMode] = useState<MouseBookMode>("turn");
-	const selectableContentRef = useMemo(
-		() => createSelectableBookContentRef(mouseBookMode),
-		[mouseBookMode],
-	);
-	useEffect(() => {
-		if (localStorage.getItem("sefer-mouse-book-mode") === "select") {
-			setMouseBookMode("select");
-		}
-	}, []);
-	const toggleMouseBookMode = useCallback(() => {
-		const next = mouseBookMode === "turn" ? "select" : "turn";
-		setMouseBookMode(next);
-		localStorage.setItem("sefer-mouse-book-mode", next);
-		window.getSelection()?.removeAllRanges();
-	}, [mouseBookMode]);
 	const seferColor = getSeferColor(perekObj.sefer);
 	const [isBookshelfOpen, setIsBookshelfOpen] = useState(false);
 	const perakim =
@@ -233,7 +216,7 @@ const Sefer = (props: {
 		const blankKey = `blank-${perekKeyBase}`;
 		return [
 			<React.Fragment key={perekKey}>
-				<section className={styles.pageContentPage} ref={selectableContentRef}>
+				<section className={styles.pageContentPage}>
 					<div className={styles.pageHeaderRight}>
 						<div className={styles.pageHeaderRow}>
 							<span className={styles.pageHeaderSefer}>{perekObj.sefer}</span>
@@ -289,7 +272,6 @@ const Sefer = (props: {
 			</React.Fragment>,
 			<React.Fragment key={blankKey}>
 				<BlankPageContent
-					selectableContentRef={selectableContentRef}
 					articles={
 						perekIdx === currentPerekIdx
 							? articles
@@ -337,15 +319,12 @@ const Sefer = (props: {
 
 	return (
 		<>
-			<div
-				className={`${styles.bookWrapper} ${mouseBookMode === "select" ? styles.mouseSelectMode : ""}`}
-				dir="rtl"
-				ref={bookWrapperRef}
-			>
+			<div className={styles.bookWrapper} dir="rtl" ref={bookWrapperRef}>
 				<div className={styles.bookArea}>
 					<FlipBook
 						ref={flipBookRef}
 						className="he-book"
+						mouseModeStorageKey="sefer-mouse-book-mode"
 						pages={pages}
 						pageSemantics={hePageSemantics}
 						direction="rtl"
@@ -390,20 +369,7 @@ const Sefer = (props: {
 					<div className="flipbook-toolbar-start">
 						<FullscreenButton />
 						<TocButton />
-						<button
-							type="button"
-							className={`flipbook-toolbar-button ${styles.mouseModeButton}`}
-							aria-label="בחירת טקסט עם העכבר"
-							aria-pressed={mouseBookMode === "select"}
-							title={
-								mouseBookMode === "select"
-									? "בחירת טקסט — לחץ להפיכת דפים בעכבר"
-									: "הפיכת דפים — לחץ לבחירת טקסט בעכבר"
-							}
-							onClick={toggleMouseBookMode}
-						>
-							<span aria-hidden="true">Aa</span>
-						</button>
+						<MouseModeButton />
 						<ActionButton onClick={openBookshelf} ariaLabel={'ספרי התנ"ך'}>
 							<BookshelfIcon size={18} />
 						</ActionButton>

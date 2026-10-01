@@ -25,7 +25,9 @@ model: Claude Opus 5 (copilot)
 # Tanahpedia Family Agent
 
 Edits Tanahpedia family graphs (person nodes, parent-child links, unions) as **data changes**.
-Never a schema change: if a field does not exist yet, stop and escalate — do not invent columns.
+If a required field does not exist, implement the schema, API, and reader upgrades in the staged
+order documented in `tanahpedia-practices.instructions.md` before writing that field. Never
+invent an undeployed API field or database column.
 
 ## Hard rules
 
