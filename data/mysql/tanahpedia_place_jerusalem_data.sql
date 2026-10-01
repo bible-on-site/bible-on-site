@@ -35,7 +35,7 @@ WHERE NOT EXISTS (
 		AND latitude IS NOT NULL AND longitude IS NOT NULL
 );
 
--- Upgrade the first local draft's English URL without touching another entry.
+-- Upgrade the English URL from the first local draft without touching another entry.
 UPDATE tanahpedia_entry AS old_entry
 LEFT JOIN tanahpedia_entry AS hebrew_entry
 	ON hebrew_entry.unique_name = 'ירושלים'
@@ -52,7 +52,7 @@ WHERE NOT EXISTS (
 	SELECT 1 FROM tanahpedia_entry WHERE unique_name = 'ירושלים'
 );
 
--- Clear only the text from the first draft; preserve later editorial content.
+-- Clear the text from the first draft while preserving later editorial content.
 UPDATE tanahpedia_entry
 SET content = '', updated_at = NOW()
 WHERE id = 'ea500000-0000-4000-8000-000000000001'
