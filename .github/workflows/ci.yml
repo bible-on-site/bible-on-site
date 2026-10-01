@@ -117,7 +117,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       api_directory: ${{ env.API_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
-      api_playwright_version: ${{ steps.get_api_playwright_version.outputs.PLAYWRIGHT_VERSION }}
       app_directory: ${{ env.APP_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       admin_directory: ${{ env.ADMIN_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       bulletin_directory: ${{ env.BULLETIN_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
@@ -132,10 +131,6 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
-      - name: Get API Playwright version
-        id: get_api_playwright_version
-        working-directory: ${{ env.API_TESTS_DIRECTORY }}
-        run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./package.json').devDependencies['@playwright/test'])")" >> $GITHUB_OUTPUT
       - name: Get Website Playwright version
         id: get_website_playwright_version
         working-directory: ${{ env.WEBSITE_DIRECTORY }}
@@ -708,6 +703,7 @@ jobs:
 
   # ACTUAL JOBS
   website_performance:
+    # Owns the production build gate; Website CI uses the instrumented dev server.
     name: Website Performance
     runs-on: ubuntu-latest
     needs: [setup_env, determine_website_changes, determine_baseline_availability, perushim_data]
@@ -716,7 +712,7 @@ jobs:
         needs.setup_env.result == 'success' &&
         needs.determine_website_changes.result == 'success' &&
         needs.determine_baseline_availability.result == 'success' &&
-        (needs.determine_website_changes.outputs.module_changed == 'true' || needs.determine_website_changes.outputs.ci_changed == 'true')
+        (needs.determine_website_changes.outputs.module_changed == 'true' || needs.determine_website_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_website_master_coverage_available == 'false')
       }}
     defaults:
       run:
@@ -957,15 +953,6 @@ jobs:
           retention-days: 1
           overwrite: true
 
-      - name: Build cache
-        uses: actions/cache@v6
-        with:
-          path: ${{ env.WEBSITE_DIRECTORY }}/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles(format('{0}/package-lock.json', env.WEBSITE_DIRECTORY)) }}-${{ hashFiles(format('{0}/**/*.js', env.WEBSITE_DIRECTORY), format('{0}/**/*.jsx', env.WEBSITE_DIRECTORY), format('{0}/**/*.ts', env.WEBSITE_DIRECTORY), format('{0}/**/*.tsx', env.WEBSITE_DIRECTORY)) }}
-          # If source files changed but packages didn't, rebuild from a prior cache.
-          restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles(format('{0}/package-lock.json', env.WEBSITE_DIRECTORY)) }}-
-
       # ============ MySQL Setup for Articles ============
       - name: Install and start MySQL
         id: mysql
@@ -989,15 +976,14 @@ jobs:
         with:
           workspaces: ${{ env.DATA_DIRECTORY }}
 
-      # Pre-build the data crate to warm the cache before E2E tests
+      # Build only the seeder used by the E2E launcher, not every data pipeline.
       # This prevents timeout when launcher runs cargo make mysql-populate
       - name: Pre-build data crate for E2E tests
         working-directory: ${{ env.DATA_DIRECTORY }}
-        run: cargo build --release
+        run: cargo build --release -p db-populator
 
-      # ============ Populate MySQL before build (for SSG / generateStaticParams) ============
-      # Restore perushim SQL so `next build` can statically generate perush pages
-      # without DB errors. Prefers the current workflow's artifact over master baseline.
+      # The E2E launcher populates MySQL once before starting next dev. Restore
+      # its SQL input here, preferring this run's generated data over the baseline.
       - name: Download perushim SQL
         if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         uses: actions/download-artifact@v8
@@ -1005,21 +991,13 @@ jobs:
           name: ${{ needs.perushim_data.result == 'success' && 'perushim-data-sql' || env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
           path: ${{ env.DATA_DIRECTORY }}/mysql/perushim-sql-master
 
-      - name: Populate MySQL for build
+      - name: Prepare perushim SQL for E2E database population
         if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         working-directory: ${{ env.DATA_DIRECTORY }}
-        env:
-          DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
-        run: |
-          cp mysql/perushim-sql-master/perushim_data.sql mysql/perushim_data.sql
-          cargo make mysql-populate
+        run: cp mysql/perushim-sql-master/perushim_data.sql mysql/perushim_data.sql
 
-      - name: Build
-        id: npm-build
-        env:
-          DB_URL: ${{ (needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true') && 'mysql://root:test_123@127.0.0.1:3306/tanah_test' || '' }}
-        run: npm run build
-
+      # coverage:e2e starts next dev; the production build and standalone-server
+      # checks run in Website Performance, which remains a Cross Module CI gate.
       - name: E2E Test
         id: npm-e2e-test
         env:
@@ -1188,11 +1166,11 @@ jobs:
         with:
           workspaces: ${{ env.DATA_DIRECTORY }}
 
-      # Pre-build the data crates to warm the cache before E2E tests
+      # Build only the two seeders used by the E2E launcher.
       # This prevents timeout when the E2E launcher runs cargo make mysql-populate and s3-populate-test
       - name: Pre-build data crates for E2E tests
         working-directory: ${{ env.DATA_DIRECTORY }}
-        run: cargo build --release --workspace
+        run: cargo build --release -p db-populator -p s3-populator
 
       - name: E2E Test
         id: npm-e2e-test
@@ -1315,30 +1293,14 @@ jobs:
           cache-dependency-path: ${{ env.API_TESTS_NODE_CACHE_PATH }}
           cache: npm
 
-      - name: Cache playwright binaries
-        uses: actions/cache@v6
-        id: playwright-cache
-        with:
-          path: |
-            ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.api_playwright_version }}
-
       - name: Install Tests npm Dependencies
         id: tests_npm_ci
         working-directory: ${{ env.API_TESTS_DIRECTORY }}
         run: |
           npm ci --no-audit
 
-      - name: Install Playwright Browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        working-directory: ${{ env.API_TESTS_DIRECTORY }}
-        run: npx playwright install --with-deps chromium
-
-      - name: Install Playwright System Dependencies
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        working-directory: ${{ env.API_TESTS_DIRECTORY }}
-        run: npx playwright install-deps chromium
-
+      # API tests use Playwright's HTTP request fixture and node:http2 only;
+      # they do not launch a browser or need browser/system-dependency installs.
       - name: E2E Test
         id: api-e2e
         working-directory: ${{ env.API_DIRECTORY }}
@@ -2234,11 +2196,9 @@ jobs:
           WEBSITE_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_website_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
           if [ "$WEBSITE_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$WEBSITE_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             E2E_STATUS=$([ "${{ needs.website_e2e.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-              PERFORMANCE_STATUS=skipped
-              # No need to run performance tests if only the master coverage is available but no changes were made to niether the website nor the CI
-              if [ "$WEBSITE_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ]; then
-                PERFORMANCE_STATUS=$([ "${{ needs.website_performance.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-              fi
+            # The performance job owns production-build validation, including
+            # coverage-baseline recovery runs with no source changes.
+            PERFORMANCE_STATUS=$([ "${{ needs.website_performance.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$E2E_STATUS" = "failure" ] || [ "$PERFORMANCE_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
