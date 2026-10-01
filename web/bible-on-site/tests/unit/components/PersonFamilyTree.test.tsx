@@ -1410,7 +1410,7 @@ describe("PersonFamilyTree", () => {
 				.reverse(),
 		};
 
-		render(<PersonFamilyTree summary={summary} />);
+		const { unmount } = render(<PersonFamilyTree summary={summary} />);
 
 		const cards = screen.getAllByTestId("family-child-card");
 		expect(cards.map((card) => card.querySelector("a")?.textContent)).toEqual(
@@ -1421,6 +1421,35 @@ describe("PersonFamilyTree", () => {
 				Number(card.closest<HTMLElement>("[style*='grid-column']")?.style.gridColumn),
 			),
 		).toEqual(births.map(([, motherId]) => mothers.findIndex((mother) => mother.id === motherId) + 1));
+		unmount();
+
+		Object.defineProperty(HTMLElement.prototype, "scrollWidth", {
+			configurable: true,
+			get: () => 1000,
+		});
+		Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+			configurable: true,
+			get: () => 300,
+		});
+		try {
+			const { container } = render(<PersonFamilyTree summary={summary} />);
+			const mobileColumns = container.querySelectorAll("[data-matrix-mobile] > div");
+			expect(mobileColumns).toHaveLength(4);
+			expect(
+				Array.from(mobileColumns, (column) =>
+					Array.from(column.querySelectorAll("[data-testid='family-child-card']"),
+						(card) => card.querySelector("a")?.textContent,
+					),
+				),
+			).toEqual(
+				mothers.map(({ id }) =>
+					births.filter(([, motherId]) => motherId === id).map(([name]) => name),
+				),
+			);
+		} finally {
+			delete (HTMLElement.prototype as { scrollWidth?: number }).scrollWidth;
+			delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+		}
 	});
 
 	it("measures spouse matrix rows with ResizeObserver and disconnects on unmount", () => {
