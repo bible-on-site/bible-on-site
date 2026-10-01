@@ -4,7 +4,10 @@ import {
 } from "@/lib/tanahpedia/person-family-chronology";
 import type { PersonFamilyChildEdge } from "@/lib/tanahpedia/types";
 
-function childEdge(displayName: string): PersonFamilyChildEdge {
+function childEdge(
+	displayName: string,
+	birthOrder: number | null,
+): PersonFamilyChildEdge {
 	return {
 		related: {
 			personId: `p-${displayName}`,
@@ -18,109 +21,54 @@ function childEdge(displayName: string): PersonFamilyChildEdge {
 		relationshipType: "BIOLOGICAL",
 		altGroupId: null,
 		sourceCitation: null,
+		birthOrder,
 		coParentEntityId: null,
 		coParentDisplayName: null,
 		coParentUnionOrder: null,
 	};
 }
 
-describe("person-family-chronology", () => {
-	it("orders Jacob children by narrative birth sequence", () => {
-		const focal = "יעקב";
+describe("person-family chronology from relationship data", () => {
+	it("orders Adam's children by stored birth order", () => {
 		const edges = [
-			childEdge("בנימין"),
-			childEdge("ראובן"),
-			childEdge("דן"),
-			childEdge("יוסף"),
-		].sort((a, b) => compareChildEdgesChronology(a, b, focal));
-		expect(edges.map((e) => e.related.displayName)).toEqual([
-			"ראובן",
-			"דן",
-			"יוסף",
-			"בנימין",
+			childEdge("שת", 3),
+			childEdge("הבל", 2),
+			childEdge("קין", 1),
+		].sort(compareChildEdgesChronology);
+		expect(edges.map((edge) => edge.related.displayName)).toEqual([
+			"קין",
+			"הבל",
+			"שת",
 		]);
 	});
 
-	it("applies only for a registered focal person with enough known children", () => {
+	it("does not infer order from names and places unknown children last", () => {
+		const edges = [
+			childEdge("אב", null),
+			childEdge("ג", 2),
+			childEdge("ד", 1),
+			childEdge("בת", null),
+		].sort(compareChildEdgesChronology);
+		expect(edges.map((edge) => edge.related.displayName)).toEqual([
+			"ד",
+			"ג",
+			"אב",
+			"בת",
+		]);
+	});
+
+	it("uses the timeline only when relationship data supplies an order", () => {
 		expect(
-			shouldApplyChildBirthChronology("יעקב", [
-				childEdge("ראובן"),
-				childEdge("שמעון"),
-				childEdge("לוי"),
-				childEdge("יהודה"),
-			]),
-		).toBe(true);
-		expect(shouldApplyChildBirthChronology("יעקב", [childEdge("ראובן")])).toBe(
-			false,
-		);
-		expect(
-			shouldApplyChildBirthChronology("שמשון", [
-				childEdge("ראובן"),
-				childEdge("שמעון"),
-				childEdge("לוי"),
-				childEdge("יהודה"),
+			shouldApplyChildBirthChronology([
+				childEdge("קין", null),
+				childEdge("הבל", null),
 			]),
 		).toBe(false);
-	});
-
-	it("orders Avraham children: Yishmael, then Yitzhak, then Ketura's sons", () => {
-		const focal = "אברהם";
-		const edges = [
-			childEdge("שוח"),
-			childEdge("יצחק"),
-			childEdge("זמרן"),
-			childEdge("ישמעאל"),
-		].sort((a, b) => compareChildEdgesChronology(a, b, focal));
-		expect(edges.map((e) => e.related.displayName)).toEqual([
-			"ישמעאל",
-			"יצחק",
-			"זמרן",
-			"שוח",
-		]);
-		expect(shouldApplyChildBirthChronology(focal, edges)).toBe(true);
-	});
-
-	it("orders full Jacob swimlane timeline (interleaved mothers)", () => {
-		const focal = "יעקב";
-		const names = ["יוסף", "ראובן", "דן", "יהודה", "נפתלי", "יששכר", "גד"];
-		const edges = names.map((n) => childEdge(n));
-		const sorted = [...edges].sort((a, b) =>
-			compareChildEdgesChronology(a, b, focal),
-		);
-		expect(sorted.map((e) => e.related.displayName)).toEqual([
-			"ראובן",
-			"יהודה",
-			"דן",
-			"נפתלי",
-			"גד",
-			"יששכר",
-			"יוסף",
-		]);
-	});
-});
-
-describe("person-family-chronology fallback ordering", () => {
-	it("falls back to alphabetic order when chronology keys tie", () => {
-		const sorted = [childEdge("\u05d1\u05ea"), childEdge("\u05d0\u05d7")].sort(
-			(a, b) =>
-				compareChildEdgesChronology(a, b, "\u05e9\u05de\u05e9\u05d5\u05df"),
-		);
-
-		expect(sorted.map((e) => e.related.displayName)).toEqual([
-			"\u05d0\u05d7",
-			"\u05d1\u05ea",
-		]);
-	});
-
-	it("uses zero fallback for unknown Jacob child with empty display name", () => {
-		const edge = childEdge("   ");
-
 		expect(
-			compareChildEdgesChronology(
-				edge,
-				childEdge("\u05d6\u05e8"),
-				"\u05d9\u05e2\u05e7\u05d1",
-			),
-		).toBeLessThan(0);
+			shouldApplyChildBirthChronology([
+				childEdge("קין", 1),
+				childEdge("הבל", null),
+			]),
+		).toBe(true);
 	});
 });

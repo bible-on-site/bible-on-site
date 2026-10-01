@@ -89,6 +89,7 @@ function childEdge({
 	name,
 	altGroupId = null,
 	sourceCitation = null,
+	birthOrder = null,
 	coParentEntityId = null,
 	coParentDisplayName = null,
 	coParentUnionOrder = null,
@@ -98,6 +99,7 @@ function childEdge({
 	name: string;
 	altGroupId?: string | null;
 	sourceCitation?: string | null;
+	birthOrder?: number | null;
 	coParentEntityId?: string | null;
 	coParentDisplayName?: string | null;
 	coParentUnionOrder?: number | null;
@@ -109,6 +111,7 @@ function childEdge({
 		relationshipType,
 		altGroupId,
 		sourceCitation,
+		birthOrder,
 		coParentEntityId,
 		coParentDisplayName,
 		coParentUnionOrder,
@@ -119,6 +122,27 @@ describe("PersonFamilyTree", () => {
 	it("renders nothing when no edges", () => {
 		const { container } = render(<PersonFamilyTree summary={baseSummary} />);
 		expect(container.firstChild).toBeNull();
+	});
+
+	it("renders children in the order stored on their relationships", () => {
+		render(
+			<PersonFamilyTree
+				summary={{
+					...baseSummary,
+					focalDisplayName: "אדם",
+					children: [
+						childEdge({ id: "seth", name: "שת", birthOrder: 3 }),
+						childEdge({ id: "abel", name: "הבל", birthOrder: 2 }),
+						childEdge({ id: "cain", name: "קין", birthOrder: 1 }),
+					],
+				}}
+			/>,
+		);
+		expect(
+			screen
+				.getAllByTestId("family-child-card")
+				.map((card) => card.querySelector("a")?.textContent),
+		).toEqual(["קין", "הבל", "שת"]);
 	});
 
 	it("only draws the focal spine upward when parents are linked", () => {
@@ -825,6 +849,7 @@ describe("PersonFamilyTree", () => {
 			children: [
 				{
 					related: related("reuven", "ראובן", `entry-reuven`, "MALE"),
+					birthOrder: 1,
 					parentRole: "FATHER",
 					relationshipType: "BIOLOGICAL",
 					altGroupId: null,
@@ -835,6 +860,7 @@ describe("PersonFamilyTree", () => {
 				},
 				{
 					related: related("yosef", "יוסף", `entry-yosef`, "MALE"),
+					birthOrder: 11,
 					parentRole: "FATHER",
 					relationshipType: "BIOLOGICAL",
 					altGroupId: null,
@@ -1278,6 +1304,7 @@ describe("PersonFamilyTree", () => {
 				childEdge({
 					id: "yosef",
 					name: "\u05d9\u05d5\u05e1\u05e3",
+					birthOrder: 11,
 					coParentEntityId: "rachel",
 					coParentDisplayName: rachel,
 					coParentUnionOrder: 2,
@@ -1285,6 +1312,7 @@ describe("PersonFamilyTree", () => {
 				childEdge({
 					id: "shimon",
 					name: "\u05e9\u05de\u05e2\u05d5\u05df",
+					birthOrder: 2,
 					coParentEntityId: "leah",
 					coParentDisplayName: leah,
 					coParentUnionOrder: 1,
@@ -1292,6 +1320,7 @@ describe("PersonFamilyTree", () => {
 				childEdge({
 					id: "reuven",
 					name: "\u05e8\u05d0\u05d5\u05d1\u05df",
+					birthOrder: 1,
 					coParentEntityId: "leah",
 					coParentDisplayName: leah,
 					coParentUnionOrder: 1,
@@ -1299,6 +1328,7 @@ describe("PersonFamilyTree", () => {
 				childEdge({
 					id: "dan",
 					name: "\u05d3\u05df",
+					birthOrder: 5,
 					coParentEntityId: "bilhah",
 					coParentDisplayName: "\u05d1\u05dc\u05d4\u05d4",
 					coParentUnionOrder: null,
@@ -1306,6 +1336,7 @@ describe("PersonFamilyTree", () => {
 				childEdge({
 					id: "naftali",
 					name: "\u05e0\u05e4\u05ea\u05dc\u05d9",
+					birthOrder: 6,
 					coParentEntityId: "bilhah",
 					coParentDisplayName: "\u05d1\u05dc\u05d4\u05d4",
 					coParentUnionOrder: null,

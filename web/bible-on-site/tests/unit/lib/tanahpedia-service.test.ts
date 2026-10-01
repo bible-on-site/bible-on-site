@@ -706,6 +706,7 @@ describe("tanahpedia service", () => {
 					parentRole: "FATHER",
 					relationshipType: "BIOLOGICAL",
 					sourceCitation: "בראשית לה כד",
+					birthOrder: 11,
 					relatedPersonId: "p-yosef",
 					relatedEntityId: "e-yosef",
 					displayName: "יוסף",
@@ -823,6 +824,7 @@ describe("tanahpedia service", () => {
 			coParentEntityId: "e-rachel",
 			coParentDisplayName: "רחל",
 			coParentUnionOrder: 2,
+			birthOrder: 11,
 		});
 		expect(result?.spouses[0]).toMatchObject({
 			unionOrder: 2,
