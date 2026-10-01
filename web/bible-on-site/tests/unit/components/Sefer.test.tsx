@@ -287,13 +287,20 @@ describe("Sefer component", () => {
 	});
 
 	it("renders with perekIds and passes SSG data for current perek only", async () => {
+		const secondImage = {
+			...sampleImage,
+			id: 18,
+			alt: "איור שני",
+			avifSrcSet: "",
+			credit: "מאייר",
+		};
 		const { container } = render(
 			<Sefer
 				perekObj={minimalPerek}
 				articles={[]}
 				perushim={[]}
 				perekIds={[1]}
-				imagesByPerek={{ 1: [sampleImage] }}
+				imagesByPerek={{ 1: [sampleImage, secondImage] }}
 			/>,
 		);
 		expect(screen.getByTestId("blank-page")).toBeInTheDocument();
@@ -307,6 +314,9 @@ describe("Sefer component", () => {
 			"lazy",
 		);
 		expect(screen.getByText(sampleImage.caption)).toBeInTheDocument();
+		expect(screen.getByRole("img", { name: "איור שני" })).toBeInTheDocument();
+		expect(container.querySelectorAll("picture source")).toHaveLength(1);
+		expect(screen.getByText(/מאייר/)).toBeInTheDocument();
 	});
 
 	it("renders maqaf-ending segments without trailing space", () => {

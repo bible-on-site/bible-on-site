@@ -24,3 +24,21 @@ it("adds no extra introduction to other perakim", () => {
 	const { container } = render(<PerekIntro images={[]} />);
 	expect(container).toBeEmptyDOMElement();
 });
+
+it("renders multiple images with optional formats and credit", () => {
+	const second = {
+		...sampleImage,
+		id: 18,
+		alt: "איור שני",
+		avifSrcSet: "",
+		credit: "מאייר",
+	};
+	const { container } = render(<PerekIntro images={[sampleImage, second]} />);
+	expect(screen.getAllByRole("img")).toHaveLength(2);
+	expect(container.querySelectorAll("picture source")).toHaveLength(1);
+	expect(screen.getByRole("img", { name: "איור שני" })).toHaveAttribute(
+		"loading",
+		"lazy",
+	);
+	expect(screen.getByText(/מאייר/)).toBeInTheDocument();
+});
