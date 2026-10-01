@@ -7,6 +7,16 @@ import type { PersonFamilyChildEdge } from "@/lib/tanahpedia/types";
 const CHILD_BIRTH_SEQUENCES: Readonly<
 	Record<string, Readonly<Record<string, number>>>
 > = {
+	אדם: {
+		קין: 1,
+		הבל: 2,
+		שת: 3,
+	},
+	חוה: {
+		קין: 1,
+		הבל: 2,
+		שת: 3,
+	},
 	אברהם: {
 		ישמעאל: 1,
 		יצחק: 2,

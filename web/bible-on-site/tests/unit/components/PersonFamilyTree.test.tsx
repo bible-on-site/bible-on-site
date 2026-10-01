@@ -137,13 +137,15 @@ describe("PersonFamilyTree", () => {
 			<PersonFamilyTree
 				summary={{
 					...rootSummary,
-					parents: [{
-						related: related("father", "אב"),
-						parentRole: "FATHER",
-						relationshipType: "BIOLOGICAL",
-						altGroupId: null,
-						sourceCitation: null,
-					}],
+					parents: [
+						{
+							related: related("father", "אב"),
+							parentRole: "FATHER",
+							relationshipType: "BIOLOGICAL",
+							altGroupId: null,
+							sourceCitation: null,
+						},
+					],
 				}}
 			/>,
 		);
@@ -1682,6 +1684,34 @@ describe("PersonFamilyTree", () => {
 		expect(treeText.indexOf(firstChild)).toBeLessThan(
 			treeText.indexOf(secondChild),
 		);
+	});
+
+	it("shows Adam and Eve's children as Cain, Abel, then Seth", () => {
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			focalDisplayName: "אדם",
+			focalSex: "MALE",
+			spouses: [spouseEdge({ id: "eve", name: "חוה" })],
+			children: ["שת", "הבל", "קין"].map((name) =>
+				childEdge({
+					id: name,
+					name,
+					coParentEntityId: "eve",
+					coParentDisplayName: "חוה",
+					coParentUnionOrder: 1,
+				}),
+			),
+		};
+
+		render(<PersonFamilyTree summary={summary} />);
+
+		const childNames = screen
+			.getAllByTestId("family-child-card")
+			.map((card) => card.textContent ?? "");
+		expect(childNames).toHaveLength(3);
+		expect(childNames[0]).toContain("קין");
+		expect(childNames[1]).toContain("הבל");
+		expect(childNames[2]).toContain("שת");
 	});
 
 	it("renders single-spouse timeline blocks without order ribbons", () => {

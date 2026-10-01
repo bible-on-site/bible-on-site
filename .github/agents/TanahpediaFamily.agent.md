@@ -57,6 +57,12 @@ Never a schema change: if a field does not exist yet, stop and escalate — do n
 Auth fails closed: every write needs `Authorization: Bearer $TANAHPEDIA_REVISION_API_KEY`, and the
 server must have been started with the same value.
 
+When production access requires AWS SSO, the agent may initiate the existing CLI profile's
+`aws sso login --use-device-code` flow and open the device URL in the Codex browser. If the user
+has authorized agent sign-in, enter and approve the device code there. Ask the user to supply
+credentials in the browser when they are not available to the agent; never put credentials in
+chat, operation files, or the repository. Keep the API key in process memory only.
+
 ## Local data = production copy
 
 `npx tsx devops/setup-dev-env.mts sync-from-prod` (AWS SSO first) restores prod into `tanah-dev`.
