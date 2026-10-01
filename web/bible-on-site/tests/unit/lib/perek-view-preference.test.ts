@@ -1,6 +1,6 @@
 import {
-	PEREK_VIEW_MODE_STORAGE_KEY,
 	getStoredPerekViewMode,
+	PEREK_VIEW_MODE_STORAGE_KEY,
 	pathnameWithBookQuery,
 	setStoredPerekViewMode,
 } from "../../../src/lib/perek-view-preference";
@@ -33,7 +33,7 @@ describe("perek-view-preference", () => {
 	});
 
 	it("pathnameWithBookQuery removes book", () => {
-		expect(pathnameWithBookQuery("/929/5", "book=&x=2", false)).toBe(
+		expect(pathnameWithBookQuery("/929/5", "book=&toc=&x=2", false)).toBe(
 			"/929/5?x=2",
 		);
 	});

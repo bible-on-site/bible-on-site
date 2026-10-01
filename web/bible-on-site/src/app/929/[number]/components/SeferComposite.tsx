@@ -101,7 +101,11 @@ const ClientWrapper = (props: {
 		appliedStoredPreference.current = true;
 		const stored = getStoredPerekViewMode();
 		if (stored === "book" && searchParams.get("book") == null) {
-			const next = pathnameWithBookQuery(pathname, searchParams.toString(), true);
+			const next = pathnameWithBookQuery(
+				pathname,
+				searchParams.toString(),
+				true,
+			);
 			router.replace(next, { scroll: false });
 		}
 	}, [isWideEnough, pathname, router, searchParams]);
@@ -164,18 +168,19 @@ const ClientWrapper = (props: {
 					currentlyToggled ? styles.visible : styles.hidden
 				}`}
 			>
-			{everToggled ? (
-				<Sefer
-					perekObj={props.perekObj}
-					articles={props.articles}
-					perushim={props.perushim}
-					perekIds={props.perekIds}
-					entityRefsByPerek={props.entityRefsByPerek}
-					initialSlug={props.initialSlug}
-				/>
-			) : currentlyToggled ? (
-				<SeferLoadingIndicator />
-			) : null}
+				{everToggled ? (
+					<Sefer
+						perekObj={props.perekObj}
+						articles={props.articles}
+						perushim={props.perushim}
+						perekIds={props.perekIds}
+						entityRefsByPerek={props.entityRefsByPerek}
+						initialSlug={props.initialSlug}
+						initialToc={searchParams.get("toc") != null}
+					/>
+				) : currentlyToggled ? (
+					<SeferLoadingIndicator />
+				) : null}
 			</div>
 		</>
 	);

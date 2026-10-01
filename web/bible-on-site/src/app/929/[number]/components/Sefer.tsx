@@ -104,6 +104,7 @@ const Sefer = (props: {
 	perekIds?: number[];
 	entityRefsByPerek?: Record<number, PerekEntityReference[]>;
 	initialSlug?: string;
+	initialToc?: boolean;
 }) => {
 	const {
 		perekObj,
@@ -112,6 +113,7 @@ const Sefer = (props: {
 		perekIds,
 		entityRefsByPerek,
 		initialSlug,
+		initialToc,
 	} = props;
 	const sefer = getSeferByName(perekObj.sefer);
 	const flipBookRef = useRef<FlipBookHandle>(null);
@@ -150,8 +152,9 @@ const Sefer = (props: {
 	);
 
 	const initialTurnedLeaves = useMemo(
-		() => computeInitialTurnedLeaves(perekIds, perekObj.perekId),
-		[perekIds, perekObj.perekId],
+		() =>
+			initialToc ? [0] : computeInitialTurnedLeaves(perekIds, perekObj.perekId),
+		[initialToc, perekIds, perekObj.perekId],
 	);
 
 	const frontCover = (

@@ -1,7 +1,7 @@
 import {
-	CONTENT_OFFSET,
 	buildHistoryMapper,
 	buildPageSemantics,
+	CONTENT_OFFSET,
 	computeInitialTurnedLeaves,
 	toHebrewWithPunctuation,
 	wrapDownloadResult,
@@ -93,19 +93,28 @@ describe("sefer-page-utils", () => {
 		const mapper = buildHistoryMapper(perekIds, pageSemantics);
 
 		describe("pageToRoute", () => {
-			it("returns null for cover pages", () => {
+			it("returns null for the front cover", () => {
 				expect(mapper.pageToRoute(0, undefined)).toBeNull();
-				expect(mapper.pageToRoute(1, undefined)).toBeNull();
-				expect(mapper.pageToRoute(2, undefined)).toBeNull();
+			});
+
+			it("gives the TOC a shareable book route", () => {
+				expect(mapper.pageToRoute(1, undefined)).toBe("/929/100?book&toc");
+				expect(mapper.pageToRoute(2, undefined)).toBe("/929/100?book&toc");
 			});
 
 			it("returns route with ?book for content pages", () => {
-				expect(mapper.pageToRoute(CONTENT_OFFSET, undefined)).toBe("/929/100?book");
-				expect(mapper.pageToRoute(CONTENT_OFFSET + 2, undefined)).toBe("/929/101?book");
+				expect(mapper.pageToRoute(CONTENT_OFFSET, undefined)).toBe(
+					"/929/100?book",
+				);
+				expect(mapper.pageToRoute(CONTENT_OFFSET + 2, undefined)).toBe(
+					"/929/101?book",
+				);
 			});
 
 			it("clamps to last perekId for pages beyond range", () => {
-				expect(mapper.pageToRoute(CONTENT_OFFSET + 100, undefined)).toBe("/929/102?book");
+				expect(mapper.pageToRoute(CONTENT_OFFSET + 100, undefined)).toBe(
+					"/929/102?book",
+				);
 			});
 
 			it("returns null when perekIds is undefined", () => {
@@ -117,6 +126,11 @@ describe("sefer-page-utils", () => {
 		describe("routeToPage", () => {
 			it("resolves /929/{id}?book routes", () => {
 				expect(mapper.routeToPage("/929/101?book")).toBe(CONTENT_OFFSET + 2);
+			});
+
+			it("restores the TOC from its book route", () => {
+				expect(mapper.routeToPage("/929/100?book&toc")).toBe(1);
+				expect(mapper.routeToPage("/929/100?toc&book")).toBe(1);
 			});
 
 			it("returns null for routes without ?book and without /929/ pattern", () => {
@@ -154,6 +168,7 @@ describe("sefer-page-utils", () => {
 			it("returns null when perekIds is undefined and route is ?book", () => {
 				const noIds = buildHistoryMapper(undefined, pageSemantics);
 				expect(noIds.routeToPage("/929/100?book")).toBeNull();
+				expect(noIds.pageToRoute(2, undefined)).toBeNull();
 			});
 		});
 	});

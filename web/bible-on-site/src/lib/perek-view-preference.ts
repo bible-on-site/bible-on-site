@@ -41,6 +41,7 @@ export function pathnameWithBookQuery(
 		params.set("book", "");
 	} else {
 		params.delete("book");
+		params.delete("toc");
 	}
 	const q = params.toString();
 	return q.length > 0 ? `${pathname}?${q}` : pathname;

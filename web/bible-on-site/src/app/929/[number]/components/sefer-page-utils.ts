@@ -2,6 +2,8 @@ import { toLetters, toNumber } from "gematry";
 import type { HistoryMapper, PageSemantics } from "html-flip-book-react";
 
 const CONTENT_OFFSET = 3;
+const TOC_PAGE_INDEX = CONTENT_OFFSET - 1;
+const TOC_SPREAD_INDEX = TOC_PAGE_INDEX - 1;
 
 export function toHebrewWithPunctuation(num: number): string {
 	const letters = toLetters(num, { addQuotes: true });
@@ -37,8 +39,7 @@ export function buildPageSemantics(
 			const perekIdx = adjusted / 2;
 			if (perekIdx >= perakimLength) return "";
 			return (
-				perekHeaders[perekIdx] ||
-				`פרק ${toHebrewWithPunctuation(perekIdx + 1)}`
+				perekHeaders[perekIdx] || `פרק ${toHebrewWithPunctuation(perekIdx + 1)}`
 			);
 		},
 	};
@@ -50,23 +51,29 @@ export function buildHistoryMapper(
 ): HistoryMapper {
 	return {
 		pageToRoute: (pageIndex, _semantic) => {
+			if (pageIndex === TOC_SPREAD_INDEX || pageIndex === TOC_PAGE_INDEX) {
+				const firstPerekId = perekIds?.[0];
+				return firstPerekId == null ? null : `/929/${firstPerekId}?book&toc`;
+			}
 			if (pageIndex < CONTENT_OFFSET) return null;
 			const perekIdx = Math.floor((pageIndex - CONTENT_OFFSET) / 2);
-			const clampedIdx = Math.min(
-				perekIdx,
-				(perekIds?.length ?? 1) - 1,
-			);
+			const clampedIdx = Math.min(perekIdx, (perekIds?.length ?? 1) - 1);
 			const id = perekIds?.[clampedIdx];
 			if (id == null) return null;
 			return `/929/${id}?book`;
 		},
 		routeToPage: (route) => {
-			if (route.includes("?book")) {
+			const query = route.split("?")[1]?.split("#")[0] ?? "";
+			const params = new URLSearchParams(query);
+			if (params.has("book")) {
 				const m = route.match(/\/929\/(\d+)/);
 				if (m) {
 					const id = Number.parseInt(m[1], 10);
 					const idx = perekIds?.indexOf(id) ?? -1;
-					if (idx >= 0) return idx * 2 + CONTENT_OFFSET;
+					if (idx >= 0)
+						return params.has("toc")
+							? TOC_SPREAD_INDEX
+							: idx * 2 + CONTENT_OFFSET;
 				}
 			}
 			const perekOnlyMatch = route.match(/^\/929\/(\d+)$/);

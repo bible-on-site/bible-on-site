@@ -67,6 +67,58 @@ test.describe("Sefer view", () => {
 		);
 	});
 
+	test("browser Back restores a prior book page without reloading the document", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await page.evaluate(() => {
+			(
+				window as Window & { __bookHistoryMarker?: string }
+			).__bookHistoryMarker = "same-document";
+		});
+
+		await page.locator(".flipbook-toolbar-next").click();
+		await expect(page).toHaveURL(/\/929\/2\?book/);
+		await page.locator(".flipbook-toolbar-toc").click();
+		await expect(page).toHaveURL(/\/929\/1\?book&toc$/);
+		await page.goBack();
+		await expect(page).toHaveURL(/\/929\/2\?book/);
+		await page.goForward();
+		await expect(page).toHaveURL(/\/929\/1\?book&toc$/);
+		await page.goBack();
+		await expect(page).toHaveURL(/\/929\/2\?book/);
+		await page.goBack();
+		await expect(page).toHaveURL(/\/929\/1\?book=?$/);
+		expect(
+			await page.evaluate(
+				() =>
+					(window as Window & { __bookHistoryMarker?: string })
+						.__bookHistoryMarker,
+			),
+		).toBe("same-document");
+		await expect(page.locator(".flipbook-toolbar-indicator")).toHaveValue(
+			"א' / נ'",
+		);
+	});
+
+	test("TOC has a shareable URL that opens at the contents page", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await page.locator(".flipbook-toolbar-toc").click();
+		await expect(page).toHaveURL(/\/929\/1\?book&toc$/);
+		await page.reload();
+		await expect(
+			page
+				.locator('.he-book .page[data-page-index="2"] .toc-link[href]')
+				.first(),
+		).toBeVisible();
+	});
+
 	test("Selects verse text without turning the page", async ({ page }) => {
 		const seferPage = new SeferPage(page);
 		await seferPage.openSeferViewForPerek(1);

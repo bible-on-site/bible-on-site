@@ -266,6 +266,19 @@ describe("Sefer component", () => {
 		).toBe("/929/1?book");
 	});
 
+	it("opens a direct TOC route at the contents page", () => {
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1]}
+				initialToc
+			/>,
+		);
+		expect(capturedFlipBookProps.initialTurnedLeaves).toEqual([0]);
+	});
+
 	it("onDownloadSefer wraps result from server action", async () => {
 		mockDownloadSefer.mockResolvedValue({ ext: "pdf", data: "base64data" });
 		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
