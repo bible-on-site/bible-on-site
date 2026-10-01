@@ -58,6 +58,7 @@ const ClientWrapper = (props: {
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
 	const appliedStoredPreference = useRef(false);
+	const handledUserToggle = useRef(false);
 
 	// A better design is to control the toggling state from outside this
 	// component, but in that case the entire page rendering method is changed
@@ -120,6 +121,7 @@ const ClientWrapper = (props: {
 
 	const onToggleFromUser = useCallback(
 		(wantBook: boolean) => {
+			handledUserToggle.current = true;
 			setStoredPerekViewMode(wantBook ? "book" : "seo");
 			const next = pathnameWithBookQuery(
 				pathname,
@@ -133,7 +135,9 @@ const ClientWrapper = (props: {
 	);
 
 	useEffect(() => {
-		if (everToggled) return;
+		// Hydration can replay a click before this initial URL effect runs.
+		// The stale URL must not close a book the user has already opened.
+		if (everToggled || handledUserToggle.current) return;
 		const IMMEDIATELY = true;
 		handleToggle(toggled, IMMEDIATELY);
 	}, [toggled, handleToggle, everToggled]);

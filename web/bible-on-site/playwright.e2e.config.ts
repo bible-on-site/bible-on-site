@@ -9,7 +9,7 @@ import {
 const baseConfig = getBaseConfig(TestType.E2E);
 
 // Use launcher script that handles DB population then starts the server
-// Uses dev server when measuring coverage (needs instrumentation), otherwise production server
+// Uses next dev in both modes; production behavior is checked by the performance suite.
 const webServerCommand = `node --import tsx ./launch-e2e-server.mts ${shouldMeasureCov ? "--coverage" : ""}`;
 
 export default defineConfig({
