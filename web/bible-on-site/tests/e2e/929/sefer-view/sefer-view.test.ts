@@ -40,6 +40,13 @@ test.describe("Sefer view", () => {
 		const selectButton = page.getByRole("button", {
 			name: "בחירת טקסט עם העכבר",
 		});
+		await expect(selectButton).toContainText("אב");
+		await expect(
+			selectButton.locator(".flipbook-toolbar-mouse-mode-caret"),
+		).toBeVisible();
+		await expect(
+			selectButton.locator(".flipbook-toolbar-mouse-mode-caret"),
+		).toHaveCSS("mask-image", /data:image\/png;base64/);
 		await expect(selectButton).toHaveAttribute("aria-pressed", "false");
 		await selectButton.click();
 		await expect(selectButton).toHaveAttribute("aria-pressed", "true");
