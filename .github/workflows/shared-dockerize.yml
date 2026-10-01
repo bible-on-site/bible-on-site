@@ -196,7 +196,7 @@ jobs:
             --network=host \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             --build-arg DB_URL="${DB_URL}" \
-            --build-arg NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN="${MAPBOX_PUBLIC_TOKEN}" \
+            --build-arg MAPBOX_PUBLIC_KEY="${MAPBOX_PUBLIC_TOKEN}" \
             -f ${{ inputs.module_directory }}/Dockerfile \
             -t ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }} \
             ${{ env.SHARED_ROOT_DIR }}
