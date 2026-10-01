@@ -15,9 +15,12 @@ const mockPerushim = getPerushimByPerekId as jest.MockedFunction<
 const mockNotes = getPerushNotes as jest.MockedFunction<typeof getPerushNotes>;
 
 function requestFor(perekId: string, pasuk: string, query = "") {
-	return GET(new Request(`http://localhost/api/tanah/pasuk/${perekId}/${pasuk}${query}`), {
-		params: Promise.resolve({ perekId, pasuk }),
-	});
+	return GET(
+		new Request(`http://localhost/api/tanah/pasuk/${perekId}/${pasuk}${query}`),
+		{
+			params: Promise.resolve({ perekId, pasuk }),
+		},
+	);
 }
 
 describe("GET /api/tanah/pasuk/[perekId]/[pasuk]", () => {
@@ -30,7 +33,8 @@ describe("GET /api/tanah/pasuk/[perekId]/[pasuk]", () => {
 		expect(res.status).toBe(200);
 		const body = await res.json();
 		expect(body.reference).toContain("בראשית");
-		expect(body.reference).toContain('כ"ג');
+		expect(body.reference).toContain(" כג");
+		expect(body.reference).not.toMatch(/["״׳']/u);
 		expect(body.text).toContain("לֵאָ֣ה");
 		expect(body.noteHtml).toBeUndefined();
 	});
@@ -51,6 +55,7 @@ describe("GET /api/tanah/pasuk/[perekId]/[pasuk]", () => {
 		expect(res.status).toBe(200);
 		const body = await res.json();
 		expect(body.reference).toContain("הכתב והקבלה");
+		expect(body.reference).not.toMatch(/["״׳']/u);
 		expect(body.noteHtml).toContain("דברי הפירוש");
 		expect(body.noteHtml).not.toContain("אחר");
 		expect(mockNotes).toHaveBeenCalledWith(23, 32);

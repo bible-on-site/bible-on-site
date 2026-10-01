@@ -52,7 +52,7 @@ test.describe("Sefer view", () => {
 		await expect(selectButton).toHaveAttribute("aria-pressed", "true");
 		const text = page.locator(".he-book article:visible").first();
 		const indicator = page.locator(".flipbook-toolbar-indicator");
-		await expect(indicator).toHaveValue("א' / נ'");
+		await expect(indicator).toHaveValue("א / נ");
 		const initialPage = await indicator.inputValue();
 		const initialUrl = page.url();
 		const word = await text.evaluate((article) => {
@@ -104,7 +104,7 @@ test.describe("Sefer view", () => {
 		const x = rect.x + 60;
 		const y = rect.y + 45;
 		const indicator = page.locator(".flipbook-toolbar-indicator");
-		await expect(indicator).toHaveValue("א' / נ'");
+		await expect(indicator).toHaveValue("א / נ");
 		await page.mouse.move(x, y);
 		await page.mouse.down();
 		await page.waitForTimeout(500);
@@ -124,7 +124,7 @@ test.describe("Sefer view", () => {
 				page.evaluate(() => window.getSelection()?.toString().length ?? 0),
 			)
 			.toBeGreaterThan(3);
-		await expect(indicator).toHaveValue("א' / נ'");
+		await expect(indicator).toHaveValue("א / נ");
 	});
 
 	test("Fast mouse swipe over verse text turns the page", async ({ page }) => {
@@ -147,7 +147,7 @@ test.describe("Sefer view", () => {
 			),
 		).toBe(true);
 		const indicator = page.locator(".flipbook-toolbar-indicator");
-		await expect(indicator).toHaveValue("א' / נ'");
+		await expect(indicator).toHaveValue("א / נ");
 		const before = await indicator.inputValue();
 		await page.mouse.move(x, y);
 		await page.mouse.down();
@@ -181,7 +181,7 @@ test.describe("Sefer view", () => {
 			),
 		).toBe(true);
 		const indicator = page.locator(".flipbook-toolbar-indicator");
-		await expect(indicator).toHaveValue("א' / נ'");
+		await expect(indicator).toHaveValue("א / נ");
 		const turningAngle = () => activePageAngle(page);
 
 		await page.mouse.move(x, y);
@@ -204,11 +204,11 @@ test.describe("Sefer view", () => {
 		await expect
 			.poll(async () => Math.abs((await turningAngle()) - fartherAngle))
 			.toBeGreaterThan(10);
-		await expect(indicator).toHaveValue("א' / נ'");
+		await expect(indicator).toHaveValue("א / נ");
 		await page.mouse.move(x + 600, y, { steps: 3 });
 		await page.waitForTimeout(250);
 		await page.mouse.up();
-		await expect(indicator).toHaveValue("א' / נ'");
+		await expect(indicator).toHaveValue("א / נ");
 		await expect.poll(turningAngle).toBe(0);
 	});
 
@@ -264,12 +264,12 @@ test.describe("Sefer view", () => {
 			),
 		).toBe(true);
 		const indicator = page.locator(".flipbook-toolbar-indicator");
-		await expect(indicator).toHaveValue("ב' / נ'");
+		await expect(indicator).toHaveValue("ב / נ");
 		await page.mouse.move(x, y);
 		await page.mouse.down();
 		await page.mouse.move(x - 600, y, { steps: 6 });
 		await page.mouse.up();
-		await expect(indicator).toHaveValue("א' / נ'");
+		await expect(indicator).toHaveValue("א / נ");
 	});
 
 	test.describe("Touch swipe", () => {
@@ -295,7 +295,7 @@ test.describe("Sefer view", () => {
 				),
 			).toBe(true);
 			const indicator = page.locator(".flipbook-toolbar-indicator");
-			await expect(indicator).toHaveValue("א' / נ'");
+			await expect(indicator).toHaveValue("א / נ");
 			const before = await indicator.inputValue();
 			const client = await page.context().newCDPSession(page);
 			await client.send("Input.dispatchTouchEvent", {

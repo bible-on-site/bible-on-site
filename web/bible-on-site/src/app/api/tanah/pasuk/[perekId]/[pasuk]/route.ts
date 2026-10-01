@@ -47,7 +47,7 @@ export async function GET(
 	if (!pasuk) {
 		return NextResponse.json(null, { status: 404 });
 	}
-	const pasukLetters = toLetters(pasukNum, { addQuotes: true });
+	const pasukLetters = toLetters(pasukNum);
 	const perushName = new URL(request.url).searchParams.get("perush")?.trim();
 	if (perushName) {
 		const noteHtml = await perushNoteSnippet(perushName, perekId, pasukNum);
