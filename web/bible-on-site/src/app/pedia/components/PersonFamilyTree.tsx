@@ -88,10 +88,17 @@ function partitionChildrenByCoParent(
 	return buckets;
 }
 
-function shouldShowCoParentSubtitles(buckets: CoParentChildBucket[]): boolean {
+function shouldShowCoParentSubtitles(
+	buckets: CoParentChildBucket[],
+	spouseUnits: SpouseUnit[],
+): boolean {
 	if (buckets.length > 1) return true;
-	if (buckets.length === 1 && buckets[0].key !== "__none__") return true;
-	return false;
+	if (buckets.length === 0 || buckets[0].coParentEntityId == null)
+		return false;
+	return (
+		spouseUnits.length !== 1 ||
+		buckets[0].coParentEntityId !== spouseUnits[0].edges[0].related.entityId
+	);
 }
 
 /** מטריצת בן-זוג+ילדים — לא כשחלופי מחייב כמה ישויות שונות באותו בלוק */
@@ -472,12 +479,15 @@ function ChildCard({ edge }: { edge: PersonFamilyChildEdge }) {
 function SpouseCard({
 	edge,
 	matrixSpouseCardMark,
+	showUnionOrder,
 }: {
 	edge: PersonFamilySpouseEdge;
 	matrixSpouseCardMark?: boolean;
+	showUnionOrder: boolean;
 }) {
 	const u = unionTypeLabel(edge.unionType);
-	const orderOnly = edge.unionOrder != null ? `סדר ${edge.unionOrder}` : "";
+	const orderOnly =
+		showUnionOrder && edge.unionOrder != null ? `סדר ${edge.unionOrder}` : "";
 	const timelineBody = spouseTimelinePlain(edge);
 	return (
 		<div className={styles.personCardStack}>
@@ -513,9 +523,11 @@ function SpouseCard({
 function SpouseInterpretationsCard({
 	edges,
 	matrixSpouseCardMark,
+	showUnionOrder,
 }: {
 	edges: PersonFamilySpouseEdge[];
 	matrixSpouseCardMark?: boolean;
+	showUnionOrder: boolean;
 }) {
 	const sorted = sortEdgesForOpinions(edges);
 	const head = sorted[0];
@@ -532,7 +544,9 @@ function SpouseInterpretationsCard({
 		<div className={styles.personCardStack}>
 			{sorted.map((edge, i) => {
 				const orderOnly =
-					edge.unionOrder != null ? `סדר ${edge.unionOrder}` : "";
+					showUnionOrder && edge.unionOrder != null
+						? `סדר ${edge.unionOrder}`
+						: "";
 				const timelineBody = spouseTimelinePlain(edge);
 				return (
 					<div
@@ -611,9 +625,11 @@ function SiblingLabelBridge({ label }: { label: string }) {
 function SpouseUnitCardBlock({
 	unit,
 	matrixSpouseCardMark,
+	showUnionOrder,
 }: {
 	unit: SpouseUnit;
 	matrixSpouseCardMark?: boolean;
+	showUnionOrder: boolean;
 }) {
 	const nEnt = new Set(unit.edges.map((e) => e.related.entityId)).size;
 	const merged = unit.edges.length > 1 && nEnt === 1;
@@ -624,6 +640,7 @@ function SpouseUnitCardBlock({
 		<SpouseInterpretationsCard
 			edges={unit.edges}
 			matrixSpouseCardMark={matrixSpouseCardMark}
+			showUnionOrder={showUnionOrder}
 		/>
 	) : (
 		unit.edges.map((e) => (
@@ -631,6 +648,7 @@ function SpouseUnitCardBlock({
 				key={`${e.related.entityId}-${e.unionType}-${e.unionOrder ?? "x"}`}
 				edge={e}
 				matrixSpouseCardMark={matrixSpouseCardMark}
+				showUnionOrder={showUnionOrder}
 			/>
 		))
 	);
@@ -666,7 +684,10 @@ function SpouseUnitNodes({
 			`${keyPrefix}-solo-${unit.edges[0].related.entityId}-${unit.edges[0].unionType}-${idx}`;
 		return (
 			<Fragment key={key}>
-				<SpouseUnitCardBlock unit={unit} />
+				<SpouseUnitCardBlock
+					unit={unit}
+					showUnionOrder={units.length > 1}
+				/>
 			</Fragment>
 		);
 	});
@@ -759,7 +780,10 @@ function MobileMatrixStack({
 					className={styles.matrixMobileColumn}
 				>
 					<div className={styles.matrixMobileSpouse}>
-						<SpouseUnitCardBlock unit={unit} />
+						<SpouseUnitCardBlock
+							unit={unit}
+							showUnionOrder={columns.length > 1}
+						/>
 					</div>
 					{kids.length > 0 ? (
 						<>
@@ -1175,7 +1199,10 @@ function PersonFamilyTreeContent({
 						sortedGroup,
 						childEdgeCmp,
 					);
-					const showCoSub = shouldShowCoParentSubtitles(buckets);
+					const showCoSub = shouldShowCoParentSubtitles(
+						buckets,
+						spouseUnits,
+					);
 					return (
 						<div key={key ?? "default"} className={styles.altGroupBlock}>
 							{key !== null ? (
@@ -1444,6 +1471,7 @@ function PersonFamilyTreeContent({
 													<SpouseUnitCardBlock
 														unit={unit}
 														matrixSpouseCardMark
+														showUnionOrder={orderedSpouseUnits.length > 1}
 													/>
 												</div>
 											))}
@@ -1670,7 +1698,11 @@ function PersonFamilyTreeContent({
 													.join("_")}`}
 												className={styles.matrixSpouseCell}
 											>
-												<SpouseUnitCardBlock unit={unit} matrixSpouseCardMark />
+												<SpouseUnitCardBlock
+													unit={unit}
+													matrixSpouseCardMark
+													showUnionOrder={orderedSpouseUnits.length > 1}
+												/>
 											</div>
 										))}
 									</div>

@@ -85,6 +85,7 @@
 .tierLabelParentsAboveArm {
   margin: 0 auto 10px;
   text-align: center;
+  background: linear-gradient(#a5b4fc, #a5b4fc) center / 2px 100% no-repeat;
   position: relative;
   z-index: 2;
 }
@@ -336,7 +337,7 @@
   width: 2px;
   height: 32px;
   background: #a5b4fc;
-  margin: 0 auto 6px;
+  margin: 0 auto;
   border-radius: 1px;
   flex-shrink: 0;
 }
@@ -415,7 +416,7 @@
   align-items: start;
   column-gap: 12px;
   row-gap: 6px;
-  margin-bottom: 10px;
+  margin-bottom: 0;
   direction: rtl;
 }
 
@@ -647,6 +648,17 @@
   margin-top: 2px;
   overflow-x: auto;
   overflow-y: visible;
+}
+
+.spouseTierFullWidth[data-spouse-layout="cards"] {
+  background: linear-gradient(#a5b4fc, #a5b4fc) center / 2px 100% no-repeat;
+}
+
+.spouseTierFullWidth[data-spouse-layout="cards"] :is(.relationRibbon, .relationRibbonCitation, .spouseUnionTimelineRibbon) {
+  position: relative;
+  z-index: 2;
+  background: #f3f6fe;
+  border-radius: 6px;
 }
 
 .spouseTierCards {
