@@ -35,6 +35,32 @@ class AlignmentTests(unittest.TestCase):
                 args.force = True
                 self.assertEqual(process_track(audio, {1: chapter}, {}, args), "GPU unavailable")
                 self.assertEqual((root / "1.json").read_bytes(), before)
+                align.side_effect = RuntimeError("CUDA error: out of memory")
+                with self.assertRaisesRegex(MemoryError, "stopping the batch"):
+                    process_track(audio, {1: chapter}, {}, args)
+                self.assertEqual((root / "1.json").read_bytes(), before)
+
+    def test_memory_failure_aborts_batch_and_records_failure(self):
+        import json
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from recite import main
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            args = SimpleNamespace(text=root / "perakim.json", output=root, cache=root,
+                asr_model="asr", asr_revision="a", align_model="ctc", align_revision="b",
+                min_text_score=.6, min_acoustic_score=.5, min_coverage=.85)
+            with (patch("recite.parse_arguments", return_value=(None, args)),
+                  patch("recite.load_chapters", return_value={}),
+                  patch("recite.source_files", return_value=[root / "1_record.mp3", root / "2_record.mp3"]),
+                  patch("recite.process_track", side_effect=MemoryError("CUDA out of memory")) as process,
+                  patch("recite.export_database"), patch("publish.publish")):
+                with self.assertRaises(SystemExit) as failed:
+                    main()
+                self.assertEqual(failed.exception.code, 1)
+                self.assertEqual(process.call_count, 1)
+            failures = json.loads((root / "failures.json").read_text(encoding="utf-8"))
+            self.assertEqual(failures, [{"perekId": 1, "error": "CUDA out of memory"}])
 
     def test_model_revisions_invalidate_asr_cache_but_preserve_human_review(self):
         cached = {"audioSha256": "audio", "model": "model", "revision": "old"}
