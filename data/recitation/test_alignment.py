@@ -106,6 +106,7 @@ class AlignmentTests(unittest.TestCase):
             for _ in range(2):
                 write_json(database, copy.deepcopy(regenerated))
                 publish(intermediate, database)
+                self.assertNotIn(b"\r\n", database.read_bytes())
                 merged = json.loads(database.read_text(encoding="utf-8"))[0]["perakim"][0]
                 self.assertEqual(extract(1, merged), record)
                 self.assertNotIn("words", merged["recitation"])
