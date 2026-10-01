@@ -71,7 +71,10 @@ $env:PYTHONIOENCODING = "utf-8"
 
 Use `--device cpu` when no compatible GPU is available; there is no silent
 precision/model downgrade. `--force` reruns alignment while retaining an ASR cache
-whose model and audio hash match. A changed recording or canonical text
+whose model, exact revision, and audio hash match. Model snapshots are pinned in
+`model_versions.py`; custom models require an explicit `--asr-revision` or
+`--align-revision` commit. A model update preserves human-approved alignments
+unless `--force` is supplied. A changed recording or canonical text
 invalidates the relevant output. A processing exception never overwrites a prior
 artifact. Inspect `.outputs/failures.json` and `*.review.json`.
 

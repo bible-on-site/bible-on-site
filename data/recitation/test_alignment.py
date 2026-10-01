@@ -7,11 +7,21 @@ import numpy as np
 
 from acoustic import ctc_spans
 from alignment import Word, normalize, reconcile, similarity, spoken, validate_timings, words_for
-from recite import export_database, write_json
+from recite import cached_transcript, completed_alignment, export_database, write_json
 from review import accept_review
 
 
 class AlignmentTests(unittest.TestCase):
+    def test_model_revisions_invalidate_asr_cache_but_preserve_human_review(self):
+        cached = {"audioSha256": "audio", "model": "model", "revision": "old"}
+        self.assertTrue(cached_transcript(cached, "audio", "model", "old"))
+        self.assertFalse(cached_transcript(cached, "audio", "model", "new"))
+        self.assertFalse(cached_transcript({k: v for k, v in cached.items() if k != "revision"}, "audio", "model", "old"))
+        accepted = {"alignmentStatus": "ready", "pipeline": {"asrRevision": "old"}, "reviewMethod": "listening"}
+        self.assertTrue(completed_alignment(accepted, {"asrRevision": "new"}, False))
+        self.assertFalse(completed_alignment(accepted, {"asrRevision": "new"}, True))
+        self.assertFalse(completed_alignment({**accepted, "reviewMethod": None}, {"asrRevision": "new"}, False))
+
     def test_normalization_and_spoken_divine_names(self):
         self.assertEqual(normalize("אֶת־ הָאָֽרֶץ׃"), "אתהארץ")
         self.assertEqual(spoken("יְהוָה"), "אדני")

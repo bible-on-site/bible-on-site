@@ -5,18 +5,19 @@ from contextlib import closing
 import hashlib
 import json
 import math
+import re
 from pathlib import Path
 import sqlite3
 import shutil
-import subprocess
+import subprocess  # nosec B404: FFmpeg uses an argument vector with no shell.
 import time
 import tempfile
 
 from alignment import load_chapters, normalize, reconcile, text_hash, validate_timings, words_for
 
+from model_versions import ALIGN_MODEL, ALIGN_REVISION, ASR_MODEL, ASR_REVISION
+
 ROOT = Path(__file__).resolve().parents[2]
-ASR_MODEL = "ivrit-ai/whisper-large-v3"
-ALIGN_MODEL = "imvladikon/wav2vec2-xls-r-300m-hebrew"
 PIPELINE_VERSION = 2
 
 
@@ -32,11 +33,31 @@ def audio_hash(path):
         return hashlib.file_digest(handle, "sha256").hexdigest()
 
 
+def executable(name):
+    resolved = shutil.which(name)
+    if resolved is None:
+        raise FileNotFoundError(f"Required executable not found on PATH: {name}")
+    return str(Path(resolved).resolve())
+
+
+def cached_transcript(cached, fingerprint, model, revision):
+    return (cached is not None and cached.get("audioSha256") == fingerprint
+            and cached.get("model") == model and cached.get("revision") == revision)
+
+
+def completed_alignment(existing, config, force):
+    if not existing or force:
+        return False
+    # A model update must not silently replace a human-approved recording.
+    reviewed = existing.get("alignmentStatus") == "ready" and existing.get("reviewMethod")
+    return bool(reviewed or existing.get("pipeline") == config)
+
+
 def duration(path):
-    probe = json.loads(subprocess.check_output([
-        "ffprobe", "-v", "error", "-show_entries",
+    probe = json.loads(subprocess.check_output([  # nosec B603: fixed executable, argv only; source paths are absolute.
+        executable("ffprobe"), "-v", "error", "-show_entries",
         "format=duration:stream=codec_type,codec_name,sample_rate,channels",
-        "-of", "json", str(path),
+        "-of", "json", str(path.resolve()),
     ], text=True))
     streams = [s for s in probe["streams"] if s["codec_type"] == "audio"]
     if len(streams) != 1 or streams[0]["codec_name"] != "mp3":
@@ -49,8 +70,8 @@ def duration(path):
 
 def decode(path):
     import numpy as np
-    data = subprocess.check_output([
-        "ffmpeg", "-v", "error", "-i", str(path), "-f", "f32le",
+    data = subprocess.check_output([  # nosec B603: fixed executable, argv only; source paths are absolute.
+        executable("ffmpeg"), "-v", "error", "-i", str(path.resolve()), "-f", "f32le",
         "-ac", "1", "-ar", "16000", "-",
     ])
     return np.frombuffer(data, dtype=np.float32).copy()
@@ -64,7 +85,7 @@ def transcribe(audio, args):
     # Native long-form decoding avoids externally cutting words at chunk edges.
     print(f"Loading {args.asr_model} on {args.device} (float32)", flush=True)
     model = pipeline("automatic-speech-recognition", model=args.asr_model,
-                     device=args.device, dtype=torch.float32)
+                     device=args.device, dtype=torch.float32, revision=args.asr_revision)
     print(f"Transcribing {len(audio)/16000:.1f}s; beam search=5; word timestamps enabled", flush=True)
     result = model({"raw": audio, "sampling_rate": 16000}, return_timestamps="word",
                    generate_kwargs={"language": "he", "task": "transcribe", "num_beams": 5})
@@ -149,7 +170,7 @@ def export_database(output, database):
 
 
 def _export_database(output, database):
-    with closing(sqlite3.connect(database)) as db, db:
+    with closing(sqlite3.connect(database)) as db:
         if db.execute("PRAGMA user_version").fetchone()[0] not in (0, 3):
             raise ValueError("Unsupported recitation database version")
         db.executescript("""
@@ -190,6 +211,7 @@ def _export_database(output, database):
                 db.executemany("INSERT INTO recitation_word VALUES (?, ?, ?, ?, ?)",
                                [(perek, w["pasuk"], w["segment"], w["startMs"], w["endMs"])
                                 for w in manifest["words"]])
+        db.commit()
 
 
 def main():
@@ -204,11 +226,20 @@ def main():
     parser.add_argument("--device", choices=["cuda", "cpu"], default="cuda")
     parser.add_argument("--asr-model", default=ASR_MODEL)
     parser.add_argument("--align-model", default=ALIGN_MODEL)
+    parser.add_argument("--asr-revision", help="Exact model commit; required with a custom ASR model")
+    parser.add_argument("--align-revision", help="Exact model commit; required with a custom alignment model")
     parser.add_argument("--min-text-score", type=float, default=0.6)
     parser.add_argument("--min-acoustic-score", type=float, default=0.5)
     parser.add_argument("--min-coverage", type=float, default=0.85)
     parser.add_argument("--force", action="store_true", help="Recompute completed alignments")
     args = parser.parse_args()
+    for kind, default_model, default_revision in (("asr", ASR_MODEL, ASR_REVISION), ("align", ALIGN_MODEL, ALIGN_REVISION)):
+        revision = getattr(args, f"{kind}_revision")
+        if revision is None and getattr(args, f"{kind}_model") == default_model:
+            revision = default_revision
+        if revision is None or not re.fullmatch(r"[0-9a-f]{40}", revision):
+            parser.error(f"--{kind}-revision must identify an exact 40-character model commit")
+        setattr(args, f"{kind}_revision", revision)
     for value in (args.min_text_score, args.min_acoustic_score, args.min_coverage):
         if not math.isfinite(value) or not 0 <= value <= 1:
             parser.error("Quality thresholds must be between zero and one")
@@ -224,6 +255,7 @@ def main():
         if missing:
             parser.error(f"No recording for requested perek IDs: {sorted(missing)}")
     config = {"version": PIPELINE_VERSION, "asrModel": args.asr_model, "alignModel": args.align_model,
+              "asrRevision": args.asr_revision, "alignRevision": args.align_revision,
               "minTextScore": args.min_text_score, "minAcousticScore": args.min_acoustic_score,
               "minCoverage": args.min_coverage}
     failures = []
@@ -242,7 +274,7 @@ def main():
         existing = json.loads(output.read_text(encoding="utf-8")) if output.exists() else extract(perek_id, chapters[perek_id])
         same = (existing and existing["audioSha256"] == fingerprint and existing["textSha256"] == text_hash(words)
                 and existing["audioUrl"] == f"{args.audio_base_url.rstrip('/')}/{path.name}")
-        if same and existing.get("alignmentStatus") and (args.prepare_only or (existing.get("pipeline") == config and not args.force)):
+        if same and existing.get("alignmentStatus") and (args.prepare_only or completed_alignment(existing, config, args.force)):
             if existing["alignmentStatus"] == "ready":
                 validate_timings(words, existing["words"], existing["durationMs"], require_complete=True)
             print(f"{perek_id}: already processed", flush=True)
@@ -258,15 +290,15 @@ def main():
                 audio = decode(path)
                 asr_cache = args.cache / f"{perek_id}.asr.json"
                 cached = json.loads(asr_cache.read_text(encoding="utf-8")) if asr_cache.exists() else None
-                if cached and cached["audioSha256"] == fingerprint and cached["model"] == args.asr_model:
+                if cached_transcript(cached, fingerprint, args.asr_model, args.asr_revision):
                     print(f"{perek_id}: reusing matching full ASR result", flush=True)
                     recognized = cached["words"]
                 else:
                     recognized = transcribe(audio, args)
-                    write_json(asr_cache, {"audioSha256": fingerprint, "model": args.asr_model, "words": recognized})
+                    write_json(asr_cache, {"audioSha256": fingerprint, "model": args.asr_model, "revision": args.asr_revision, "words": recognized})
                 from acoustic import HebrewAligner
                 print(f"{perek_id}: aligning every canonical word with {args.align_model}", flush=True)
-                aligner = HebrewAligner(args.align_model, args.device)
+                aligner = HebrewAligner(args.align_model, args.device, args.align_revision)
                 manifest["words"], reviews = align_track(audio, words, recognized, aligner, args)
                 del aligner
                 manifest["pipeline"] = config
@@ -286,7 +318,6 @@ def main():
         write_json(output, manifest)
         print(f"{perek_id}: {len(manifest['words'])}/{len(words)} word identities; {manifest['alignmentStatus']}; {time.monotonic()-began:.1f}s", flush=True)
     export_database(args.output, Path(__file__).parent / "recitation.sqlite")
-    from publish import publish
     publish(Path(__file__).parent / "recitation.sqlite", args.text)
     write_json(args.cache / "failures.json", failures)
     if failures:

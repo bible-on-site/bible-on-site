@@ -67,7 +67,8 @@ def similarity(left, right):
 
 
 def reconcile(canonical, recognized):
-    """Global monotone alignment with insertions, deletions, and 1:2/2:1 joins.
+    """
+    Global monotone alignment with insertions, deletions, and 1:2/2:1 joins.
 
     Return one (recognized indices, similarity) per canonical word. Repeated
     words remain separate positions. A missing word is never silently shifted.
@@ -128,7 +129,7 @@ def validate_timings(words, timings, duration_ms, require_complete=False):
         start, end = item["startMs"], item["endMs"]
         if key in seen or expected.get(key) != item["text"]:
             raise ValueError(f"Unknown, duplicate, or stale segment: {key}")
-        if not all(type(t) is int for t in (start, end)) or not 0 <= start < end <= duration_ms:
+        if not all(isinstance(t, int) and not isinstance(t, bool) for t in (start, end)) or not 0 <= start < end <= duration_ms:
             raise ValueError(f"Invalid time interval: {key}")
         if start < previous_end:
             raise ValueError(f"Overlapping/nonmonotone interval: {key}")

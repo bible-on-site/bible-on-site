@@ -2,9 +2,12 @@
 
 import numpy as np
 
+from model_versions import ALIGN_REVISION
+
 
 def ctc_spans(log_probs, tokens, blank_id):
-    """Best CTC path including required blanks between repeated characters.
+    """
+    Best CTC path including required blanks between repeated characters.
 
     Allows leading/trailing silence. Returns token spans in emission frames.
     Scores are acoustic likelihoods, not calibrated probabilities of correctness.
@@ -46,14 +49,15 @@ def ctc_spans(log_probs, tokens, blank_id):
 
 
 class HebrewAligner:
-    def __init__(self, model_id, device):
+    def __init__(self, model_id, device, revision=ALIGN_REVISION):
+        """Load the pinned acoustic model and its matching processor."""
         import torch
         from transformers import AutoModelForCTC, AutoProcessor
 
         self.torch = torch
         self.device = device
-        self.processor = AutoProcessor.from_pretrained(model_id)
-        self.model = AutoModelForCTC.from_pretrained(model_id).to(device).eval()
+        self.processor = AutoProcessor.from_pretrained(model_id, revision=revision)
+        self.model = AutoModelForCTC.from_pretrained(model_id, revision=revision).to(device).eval()
         self.vocab = self.processor.tokenizer.get_vocab()
         self.blank = self.model.config.pad_token_id
 
