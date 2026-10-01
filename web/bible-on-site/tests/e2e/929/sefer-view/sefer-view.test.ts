@@ -134,9 +134,25 @@ test.describe("Sefer view", () => {
 	test("front and back covers have shareable URLs that reopen the same spread", async ({
 		page,
 	}) => {
+		test.setTimeout(90_000);
 		const seferPage = new SeferPage(page);
 		await seferPage.openSeferViewForPerek(1);
-		await page.locator(".flipbook-toolbar-first").click();
+		await page.locator(".flipbook-toolbar-toc").click();
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/תוכן");
+		// Turn the cover leaf itself; a toolbar jump does not exercise the
+		// drag-completion path used when flipping from the contents spread.
+		const coverInterior = await page
+			.locator('.he-book .page[data-page-index="1"]')
+			.boundingBox();
+		if (!coverInterior) throw new Error("Cover interior is not visible");
+		const x = coverInterior.x + coverInterior.width / 2;
+		const y = coverInterior.y + coverInterior.height / 2;
+		await page.mouse.move(x, y);
+		await page.mouse.down();
+		await page.mouse.move(x - coverInterior.width, y, { steps: 12 });
+		await page.mouse.up();
 		await expect
 			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
 			.toBe("/929/בראשית/כריכה");
@@ -152,6 +168,12 @@ test.describe("Sefer view", () => {
 		await expect(
 			page.locator('.he-book .page[data-page-index="103"]'),
 		).toBeVisible();
+		await page.locator(".flipbook-toolbar-prev").click();
+		await expect(page).toHaveURL(/\/929\/50\?book/);
+		await page.locator(".flipbook-toolbar-next").click();
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/גב");
 	});
 
 	test("Selects verse text without turning the page", async ({ page }) => {
