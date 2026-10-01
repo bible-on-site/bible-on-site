@@ -1199,7 +1199,9 @@ function PersonFamilyTreeContent({
 											</span>
 										</div>
 									) : null}
-									<div className={styles.row}>
+								<div
+									className={`${styles.row} ${styles.childRow} ${bucket.edges.length === 3 ? styles.childRowThree : ""}`}
+								>
 										{bucket.edges.map((edge) => (
 											<ChildCard
 												key={`${edge.related.entityId}-${edge.parentRole}-${edge.relationshipType}-${key ?? "d"}-${bucket.key}`}
