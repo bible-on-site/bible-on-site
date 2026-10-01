@@ -131,28 +131,52 @@ test.describe("Sefer view", () => {
 		).toBeVisible();
 	});
 
+	test("Shmuel semantic book routes load the requested spread", async ({
+		page,
+	}) => {
+		await page.goto("/929/שמואל/תוכן?book");
+		await expect(
+			page
+				.locator('.he-book .page[data-page-index="2"] .toc-link[href]')
+				.first(),
+		).toBeVisible();
+		await page.goto("/929/שמואל/כריכה?book");
+		await expect(
+			page.locator('.he-book section[aria-label="עטיפה קדמית"]'),
+		).toBeVisible();
+		await page.goto("/929/שמואל/גב?book");
+		await expect(
+			page.locator('.he-book section[aria-label="עטיפה אחורית"]'),
+		).toBeVisible();
+	});
+
 	test("front and back covers have shareable URLs that reopen the same spread", async ({
 		page,
 	}) => {
 		test.setTimeout(90_000);
 		const seferPage = new SeferPage(page);
 		await seferPage.openSeferViewForPerek(1);
-		await page.locator(".flipbook-toolbar-toc").click();
+		const dragLeafBackward = async (pageIndex: number) => {
+			const visiblePage = await page
+				.locator(`.he-book .page[data-page-index="${pageIndex}"]`)
+				.boundingBox();
+			if (!visiblePage) throw new Error(`Page ${pageIndex} is not visible`);
+			const x = visiblePage.x + visiblePage.width * 0.85;
+			const y = visiblePage.y + visiblePage.height / 2;
+			const bookWidth = await page
+				.locator(".he-book")
+				.evaluate((book) => book.clientWidth);
+			await page.mouse.move(x, y);
+			await page.mouse.down();
+			await page.mouse.move(x - bookWidth * 0.7, y, { steps: 15 });
+			await page.mouse.up();
+		};
+		await dragLeafBackward(3);
 		await expect
 			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
 			.toBe("/929/בראשית/תוכן");
-		// Turn the cover leaf itself; a toolbar jump does not exercise the
-		// drag-completion path used when flipping from the contents spread.
-		const coverInterior = await page
-			.locator('.he-book .page[data-page-index="1"]')
-			.boundingBox();
-		if (!coverInterior) throw new Error("Cover interior is not visible");
-		const x = coverInterior.x + coverInterior.width / 2;
-		const y = coverInterior.y + coverInterior.height / 2;
-		await page.mouse.move(x, y);
-		await page.mouse.down();
-		await page.mouse.move(x - coverInterior.width, y, { steps: 12 });
-		await page.mouse.up();
+		await expect(page.locator(".he-book .page--flipping")).toHaveCount(0);
+		await dragLeafBackward(1);
 		await expect
 			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
 			.toBe("/929/בראשית/כריכה");

@@ -1,5 +1,6 @@
 import {
 	bookPageFromPath,
+	bookPageFromQuery,
 	buildHistoryMapper,
 	buildPageSemantics,
 	CONTENT_OFFSET,
@@ -197,6 +198,13 @@ describe("sefer-page-utils", () => {
 		expect(bookPageFromPath("/929/1")).toBeNull();
 		expect(bookPageFromPath("/929/בראשית/תוכן", "שמות")).toBeNull();
 		expect(bookPageFromPath("/929/1/תוכן", "בראשית")).toBeNull();
+	});
+
+	it("recognizes semantic page keys supplied by rewrites", () => {
+		expect(bookPageFromQuery("front")).toBe("front");
+		expect(bookPageFromQuery("toc")).toBe("toc");
+		expect(bookPageFromQuery("back")).toBe("back");
+		expect(bookPageFromQuery("unknown")).toBeNull();
 	});
 
 	describe("computeInitialTurnedLeaves", () => {

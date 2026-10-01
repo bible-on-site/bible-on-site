@@ -21,7 +21,7 @@ import type { PerushSummary } from "@/lib/perushim";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import ReadModeToggler from "./ReadModeToggler";
 import styles from "./sefer-composite.module.css";
-import { bookPageFromPath } from "./sefer-page-utils";
+import { bookPageFromPath, bookPageFromQuery } from "./sefer-page-utils";
 
 // Lazy-load the heavy Sefer (FlipBook) component so its JS bundle is not
 // included in the initial page load.  When the user toggles book-view the
@@ -170,6 +170,10 @@ const ClientWrapper = (props: {
 	if (isWideEnough === false) {
 		return null;
 	}
+	const initialBookPage =
+		bookPageFromPath(pathname, props.perekObj.sefer) ??
+		bookPageFromQuery(searchParams.get("bookPage")) ??
+		(searchParams.get("toc") != null ? "toc" : null);
 
 	return (
 		<>
@@ -182,17 +186,14 @@ const ClientWrapper = (props: {
 			>
 				{everToggled ? (
 					<Sefer
+						key={`${props.perekObj.sefer}:${props.perekObj.perekId}:${initialBookPage ?? "chapter"}`}
 						perekObj={props.perekObj}
 						articles={props.articles}
 						perushim={props.perushim}
 						perekIds={props.perekIds}
 						entityRefsByPerek={props.entityRefsByPerek}
 						initialSlug={props.initialSlug}
-						initialBookPage={
-							bookPageFromPath(pathname, props.perekObj.sefer) ??
-							bookPageFromPath(`/${searchParams.get("bookPage") ?? ""}`) ??
-							(searchParams.get("toc") != null ? "toc" : null)
-						}
+						initialBookPage={initialBookPage}
 					/>
 				) : currentlyToggled ? (
 					<SeferLoadingIndicator />

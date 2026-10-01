@@ -1,18 +1,22 @@
 import { toLetters, toNumber } from "gematry";
 import type { HistoryMapper, PageSemantics } from "html-flip-book-react";
+import bookPageSlugs from "@/data/book-page-slugs.json";
 
 const CONTENT_OFFSET = 3;
 const TOC_PAGE_INDEX = CONTENT_OFFSET - 1;
 const TOC_SPREAD_INDEX = TOC_PAGE_INDEX - 1;
 const FRONT_COVER_INDEX = 0;
 
-export type BookPage = "front" | "toc" | "back";
+export type BookPage = keyof typeof bookPageSlugs;
 
-const bookPageSlugs: Record<BookPage, string> = {
-	front: "כריכה",
-	toc: "תוכן",
-	back: "גב",
-};
+export function bookPageFromQuery(value: string | null): BookPage | null {
+	if (!value) return null;
+	return (
+		(Object.keys(bookPageSlugs) as BookPage[]).find(
+			(page) => page === value || bookPageSlugs[page] === value,
+		) ?? null
+	);
+}
 
 export function bookPageFromPath(
 	pathname: string,
