@@ -133,7 +133,7 @@ export async function CategoryView({
 				/>
 			)}
 
-			{homepage?.layoutType === "MAP" && entityType === "PLACE" && (
+			{entityType === "PLACE" && placeMapMarkers.length > 0 && (
 				<TanahpediaPlacesMap markers={placeMapMarkers} />
 			)}
 

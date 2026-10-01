@@ -28,13 +28,16 @@ export function canonicalPediaTarget(url: URL): string | null {
 	if (root === "tanahpedia")
 		return pediaPathFromLegacy(second ?? null, filters);
 	if (!second) return null;
+	if (second === "jerusalem") return "/pedia/ירושלים";
 
 	const resolved = resolveCategoryRoute(second, filters);
 	if (!resolved) return null;
 
 	const hasFilters =
 		Boolean(filters.role) || Boolean(filters.kind) || Boolean(filters.purity);
-	return !resolved.isCanonicalSlug || hasFilters ? resolved.canonicalPath : null;
+	return !resolved.isCanonicalSlug || hasFilters
+		? resolved.canonicalPath
+		: null;
 }
 
 export async function proxy(

@@ -87,7 +87,7 @@ The db-populator runs `tanahpedia_family_shimshon_data.sql` after Tanahpedia see
 
 Before family demo SQL, the populator applies `tanahpedia_incremental_lookups.sql` (`INSERT IGNORE` for new lookup rows such as `FORBIDDEN_WITH_GENTILE`) so older DBs do not fail FK checks when running `cargo make mysql-apply-tanahpedia-families` only.
 
-After the יעקב script, `tanahpedia_place_eretz_yisrael_data.sql` adds the `eretz-yisrael` place entry (coordinates + category homepage `MAP` for `/tanahpedia/place`). Re-run `cargo make mysql-apply-tanahpedia-families` or full populate to apply it on an existing DB.
+The Jerusalem place is delivered as database content by `tanahpedia_place_jerusalem_data.sql` in the data deployment manifest. Local development gets that content through the production database sync, not through the Rust db-populator. The place map is shown whenever mapped places exist. The older `tanahpedia_place_eretz_yisrael_data.sql` remains a demo fixture; re-run `cargo make mysql-apply-tanahpedia-families` or full populate only on a disposable fixture DB to apply that demo.
 
 After that, when `tanahpedia_family_jacob_data.sql` is present, full populate applies the **יעקב** demo (Tanahpedia entry `יעקב`, parents, four wives including בלהה וזלפה as full wives per הכתב והקבלה בראשית לב כג, children, and brother עשו) only when the entry is missing. `mysql-apply-tanahpedia-families` forces the family/place demo scripts. The demo scripts use fixed UUIDs (`e200…` / `p200…` / `ea200…` — each script deletes only its own fixed demo rows before re-insert), so do not use the forced demo task as the normal content editing path after production content is edited remotely.
 
