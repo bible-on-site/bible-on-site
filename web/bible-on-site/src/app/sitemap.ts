@@ -4,7 +4,8 @@ import type { ArticlePerekPair } from "../lib/articles";
 import { getAllArticlePerekIdPairs } from "../lib/articles";
 import { getAllAuthorSlugs } from "../lib/authors";
 import { getPerushimByPerekId } from "../lib/perushim";
-import { getPerekIllustration } from "../lib/seo/perek-illustrations";
+import type { PerekIllustration } from "../lib/seo/perek-illustrations";
+import { getPerekImagesByChapter } from "../lib/seo/perek-images-data";
 import { CATEGORY_SLUGS, categoryHref } from "../lib/tanahpedia/category-slug";
 import { getAllEntryUniqueNames } from "../lib/tanahpedia/service";
 import type { CategoryKey } from "../lib/tanahpedia/types";
@@ -87,17 +88,16 @@ export function generate929IndexEntry(
  */
 export function generatePerekEntries(
 	config: SitemapConfig,
+	imagesByPerek: Record<number, PerekIllustration[]> = {},
 ): MetadataRoute.Sitemap {
 	return Array.from({ length: TOTAL_PERAKIM }, (_, i) => {
-		const illustration = getPerekIllustration(i + 1);
+		const images = imagesByPerek[i + 1] ?? [];
 		return {
 			url: `${config.baseUrl}/929/${i + 1}`,
 			lastModified: config.lastModified,
 			changeFrequency: "monthly" as const,
 			priority: 0.8,
-			...(illustration
-				? { images: [`${config.baseUrl}${illustration.src}`] }
-				: {}),
+			...(images.length ? { images: images.map((image) => image.src) } : {}),
 		};
 	});
 }
@@ -214,12 +214,13 @@ export function generateSitemapEntries(
 	articles: ArticlePerekPair[] = [],
 	perushim: PerushPerekPair[] = [],
 	pediaUniqueNames: string[] = [],
+	imagesByPerek: Record<number, PerekIllustration[]> = {},
 ): MetadataRoute.Sitemap {
 	return [
 		generateRootEntry(config),
 		...generateSectionEntries(config),
 		generate929IndexEntry(config),
-		...generatePerekEntries(config),
+		...generatePerekEntries(config, imagesByPerek),
 		...generateArticleEntries(config, articles),
 		...generatePerushEntries(config, perushim),
 		generateAuthorsIndexEntry(config),
@@ -237,11 +238,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 	const baseUrl = `https://${host}`;
 
 	// Fetch dynamic data for sitemap entries in parallel
-	const [authorSlugs, articles, pediaUniqueNames] = await Promise.all([
-		getAllAuthorSlugs(),
-		getAllArticlePerekIdPairs(),
-		getAllEntryUniqueNames(),
-	]);
+	const [authorSlugs, articles, pediaUniqueNames, imagesByPerek] =
+		await Promise.all([
+			getAllAuthorSlugs(),
+			getAllArticlePerekIdPairs(),
+			getAllEntryUniqueNames(),
+			getPerekImagesByChapter(),
+		]);
 
 	// Fetch all perushim for all perakim
 	const perushimPromises = Array.from({ length: TOTAL_PERAKIM }, (_, i) =>
@@ -266,5 +269,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 		articles,
 		perushPerekPairs,
 		pediaUniqueNames,
+		imagesByPerek,
 	);
 }

@@ -99,13 +99,38 @@ describe("seo/core-jsonld", () => {
 
 	describe("buildPerekGraph", () => {
 		it("emits a Chapter in the Tanah → Sefer hierarchy + breadcrumb", () => {
-			const graph = buildPerekGraph(perekObj());
+			const recording = {
+				perekId: 1,
+				audioUrl: "https://images.example.com/sample.mp3",
+				durationMs: 12000,
+				audioSha256: "b".repeat(64),
+			};
+			const graph = buildPerekGraph(
+				perekObj(),
+				[
+					{
+						id: 17,
+						src: "https://images.example.com/sample.webp",
+						width: 1600,
+						height: 900,
+						avifSrcSet: "",
+						socialSrc: "https://images.example.com/social.jpg",
+						socialWidth: 1600,
+						socialHeight: 900,
+						alt: "איור לדוגמה",
+						caption: "כיתוב לדוגמה",
+						description: null,
+						credit: null,
+					},
+				],
+				recording,
+			);
 			const chapter = nodeByType(graph, "Chapter");
 			expect(chapter?.["@id"]).toBe(`${SITE_ORIGIN}/929/1#chapter`);
 			expect(chapter?.isPartOf).toEqual({ "@id": seferId("בראשית") });
-			expect(chapter?.image).toBe(
-				`${SITE_ORIGIN}/images/perakim/bereshit-1-creation.webp`,
-			);
+			expect(chapter?.image).toEqual([
+				"https://images.example.com/sample.webp",
+			]);
 			const books = nodesOf(graph).filter((n) => n["@type"] === "Book");
 			const tanah = books.find((b) => b["@id"] === TANAH_ID);
 			const sefer = books.find((b) => b["@id"] === seferId("בראשית"));
@@ -115,9 +140,12 @@ describe("seo/core-jsonld", () => {
 			const page = nodeByType(graph, "WebPage");
 			expect(page?.about).toEqual({ "@id": chapter?.["@id"] });
 			expect(page?.primaryImageOfPage).toMatchObject({
-				contentUrl: `${SITE_ORIGIN}/images/perakim/bereshit-1-creation.webp`,
+				contentUrl: "https://images.example.com/sample.webp",
 				width: 1600,
 				height: 900,
+			});
+			expect(page?.audio).toEqual({
+				"@id": nodeByType(graph, "AudioObject")?.["@id"],
 			});
 			const crumb = nodeByType(graph, "BreadcrumbList");
 			const crumbs = crumb?.itemListElement as Array<{ name: string }>;
@@ -305,6 +333,7 @@ test("recorded chapters link a Hebrew AudioObject to their canonical chapter", (
 	};
 	const graph = buildPerekGraph(
 		perekObj({ perekId: 829, source: "אסתר י", sefer: "אסתר" }),
+		[],
 		recording,
 	);
 	const audio = nodeByType(graph, "AudioObject");
@@ -329,6 +358,6 @@ test("recorded chapters link a Hebrew AudioObject to their canonical chapter", (
 		nodeByType(buildPerekGraph(perekObj()), "AudioObject"),
 	).toBeUndefined();
 	expect(
-		nodeByType(buildPerekGraph(perekObj(), recording), "AudioObject"),
+		nodeByType(buildPerekGraph(perekObj(), [], recording), "AudioObject"),
 	).toBeUndefined();
 });
