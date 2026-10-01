@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 
 jest.mock("@/app/929/[number]/components/sefer-composite.module.css", () => ({
 	seferOverlay: "seferOverlay",
@@ -105,6 +105,23 @@ describe("SeferComposite (wide screen)", () => {
 
 		expect(mockReplace).toHaveBeenCalledWith("/929/5?book=", { scroll: false });
 		expect(await screen.findByTestId("sefer")).toBeTruthy();
+	});
+
+	it("keeps a book opened before the initial passive effects visible", async () => {
+		function OpenDuringHydration() {
+			useLayoutEffect(() => {
+				// Hydration can replay a user's click before the URL initialization effect.
+				screen.getByRole("checkbox").click();
+			}, []);
+			return <SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />;
+		}
+
+		await act(async () => {
+			render(<OpenDuringHydration />);
+		});
+
+		expect(mockReplace).toHaveBeenCalledWith("/929/5?book=", { scroll: false });
+		expect(await screen.findByTestId("sefer")).toBeVisible();
 	});
 
 	it("shows Sefer view immediately when ?book is in URL", async () => {
