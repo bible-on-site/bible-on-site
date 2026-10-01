@@ -34,7 +34,12 @@ function mergeCoverage(): void {
 	// Both unit and e2e tests now use swc-plugin-coverage-instrument for consistent branch line mappings.
 	// Inconsistent branch data (e.g. single-branch blocks from SWC ternary instrumentation) is fixed
 	// during normalization — see fixInconsistentBranches() in normalize-coverage.mts.
-	const cmd = `docker run --rm -t -v ${COVERAGE_DIR}:/.coverage lcov-cli:0.0.2 --rc branch_coverage=1 -a /.coverage/unit/lcov.normalized.info -a /.coverage/e2e/lcov.normalized.info -o /.coverage/merged/lcov.info`;
+	// Docker must create the report as the caller on Linux so the Node path
+	// normalization below can write it. Docker Desktop maps Windows bind mounts.
+	const dockerUser = process.getuid && process.getgid
+		? `--user ${process.getuid()}:${process.getgid()}`
+		: "";
+	const cmd = `docker run --rm -t ${dockerUser} -v "${COVERAGE_DIR}:/.coverage" lcov-cli:0.0.2 --rc branch_coverage=1 -a /.coverage/unit/lcov.normalized.info -a /.coverage/e2e/lcov.normalized.info -o /.coverage/merged/lcov.info`;
 
 	const out = runCommand(cmd);
 	if (out) console.log(formatOutput(out));
