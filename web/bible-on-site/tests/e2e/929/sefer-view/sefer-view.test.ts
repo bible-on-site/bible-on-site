@@ -33,6 +33,179 @@ test.describe("Sefer view", () => {
 		void skipOnNotWideEnough;
 	});
 
+	test("TOC links open chapter routes with modifiers and turn pages on regular click", async ({
+		page,
+	}) => {
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await page.locator(".flipbook-toolbar-toc").click();
+		const chapter = page
+			.locator('.he-book .page[data-page-index="2"] .toc-link[href]')
+			.nth(1);
+		await expect(chapter).toBeVisible();
+		await expect(chapter).toHaveAttribute("href", "/929/2?book");
+		const originalUrl = page.url();
+
+		const ctrlPagePromise = page.context().waitForEvent("page");
+		await chapter.click({ modifiers: ["Control"] });
+		const ctrlPage = await ctrlPagePromise;
+		await expect(ctrlPage).toHaveURL(/\/929\/2\?book/);
+		await expect(page).toHaveURL(originalUrl);
+		await ctrlPage.close();
+
+		const shiftPagePromise = page.context().waitForEvent("page");
+		await chapter.click({ modifiers: ["Shift"] });
+		const shiftPage = await shiftPagePromise;
+		await expect(shiftPage).toHaveURL(/\/929\/2\?book/);
+		await expect(page).toHaveURL(originalUrl);
+		await shiftPage.close();
+
+		await chapter.click();
+		await expect(page).toHaveURL(/\/929\/2\?book/);
+		await expect(page.locator(".flipbook-toolbar-indicator")).toHaveValue(
+			"ב / נ",
+		);
+	});
+
+	test("browser Back restores a prior book page without reloading the document", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await page.evaluate(() => {
+			(
+				window as Window & { __bookHistoryMarker?: string }
+			).__bookHistoryMarker = "same-document";
+			document
+				.querySelector(".he-book")
+				?.setAttribute("data-book-instance", "same-book");
+		});
+
+		await page.locator(".flipbook-toolbar-next").click();
+		await expect(page).toHaveURL(/\/929\/2\?book/);
+		await page.locator(".flipbook-toolbar-toc").click();
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/תוכן");
+		await page.goBack();
+		await expect(page).toHaveURL(/\/929\/2\?book/);
+		await page.goForward();
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/תוכן");
+		await page.goBack();
+		await expect(page).toHaveURL(/\/929\/2\?book/);
+		await page.goBack();
+		await expect(page).toHaveURL(/\/929\/1\?book=?$/);
+		expect(
+			await page.evaluate(
+				() =>
+					(window as Window & { __bookHistoryMarker?: string })
+						.__bookHistoryMarker,
+			),
+		).toBe("same-document");
+		await expect(
+			page.locator('.he-book[data-book-instance="same-book"]'),
+		).toHaveCount(1);
+		await expect(page.locator(".flipbook-toolbar-indicator")).toHaveValue(
+			"א / נ",
+		);
+	});
+
+	test("TOC has a shareable URL that opens at the contents page", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await page.locator(".flipbook-toolbar-toc").click();
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/תוכן");
+		await page.reload();
+		await expect(
+			page
+				.locator('.he-book .page[data-page-index="2"] .toc-link[href]')
+				.first(),
+		).toBeVisible();
+	});
+
+	test("Shmuel semantic book routes load the requested spread", async ({
+		page,
+	}) => {
+		await page.goto("/929/שמואל/תוכן?book");
+		await expect(
+			page
+				.locator('.he-book .page[data-page-index="2"] .toc-link[href]')
+				.first(),
+		).toBeVisible();
+		await page.goto("/929/שמואל/כריכה?book");
+		await expect(
+			page.locator('.he-book section[aria-label="עטיפה קדמית"]'),
+		).toBeVisible();
+		await page.goto("/929/שמואל/גב?book");
+		await expect(
+			page.locator('.he-book section[aria-label="עטיפה אחורית"]'),
+		).toBeVisible();
+	});
+
+	test("front and back covers have shareable URLs that reopen the same spread", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		const dragLeafBackward = async (pageIndex: number) => {
+			const visiblePage = await page
+				.locator(`.he-book .page[data-page-index="${pageIndex}"]`)
+				.boundingBox();
+			if (!visiblePage) throw new Error(`Page ${pageIndex} is not visible`);
+			const x = visiblePage.x + visiblePage.width * 0.85;
+			const y = visiblePage.y + visiblePage.height / 2;
+			const bookWidth = await page
+				.locator(".he-book")
+				.evaluate((book) => book.clientWidth);
+			await page.mouse.move(x, y);
+			await page.mouse.down();
+			await page.mouse.move(x - bookWidth * 0.7, y, { steps: 15 });
+			await page.mouse.up();
+		};
+		await dragLeafBackward(3);
+		await expect(
+			page.locator('.he-book .page[data-page-index="1"]'),
+		).toHaveClass(/current-page/);
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/תוכן");
+		await expect(page.locator(".he-book .page--flipping")).toHaveCount(0);
+		await dragLeafBackward(1);
+		await expect(
+			page.locator('.he-book .page[data-page-index="0"]'),
+		).toHaveClass(/current-page/);
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/כריכה");
+		await page.reload();
+		await expect(
+			page.locator('.he-book .page[data-page-index="0"]'),
+		).toBeVisible();
+		await page.locator(".flipbook-toolbar-last").click();
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/גב");
+		await page.reload();
+		await expect(
+			page.locator('.he-book .page[data-page-index="103"]'),
+		).toBeVisible();
+		await page.locator(".flipbook-toolbar-prev").click();
+		await expect(page).toHaveURL(/\/929\/50\?book/);
+		await page.locator(".flipbook-toolbar-next").click();
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/גב");
+	});
+
 	test("Selects verse text without turning the page", async ({ page }) => {
 		const seferPage = new SeferPage(page);
 		await seferPage.openSeferViewForPerek(1);
