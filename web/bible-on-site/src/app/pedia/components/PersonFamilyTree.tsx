@@ -858,7 +858,7 @@ function PersonFamilyTreeContent({
 	const spouseSectionLabel = spousesSectionLabel(focalSex);
 
 	const matrixEligible =
-		spouses.length > 0 &&
+		spouseUnits.length > 1 &&
 		sortedChildren.length > 0 &&
 		childKeys.length === 1 &&
 		childKeys[0] === null &&
@@ -1199,9 +1199,9 @@ function PersonFamilyTreeContent({
 											</span>
 										</div>
 									) : null}
-								<div
-									className={`${styles.row} ${styles.childRow} ${bucket.edges.length === 3 ? styles.childRowThree : ""}`}
-								>
+									<div
+										className={`${styles.row} ${styles.childRow} ${bucket.edges.length === 3 ? styles.childRowThree : ""}`}
+									>
 										{bucket.edges.map((edge) => (
 											<ChildCard
 												key={`${edge.related.entityId}-${edge.parentRole}-${edge.relationshipType}-${key ?? "d"}-${bucket.key}`}
