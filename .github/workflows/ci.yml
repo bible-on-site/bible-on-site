@@ -2440,7 +2440,7 @@ jobs:
               if [ "$HTTP_CODE" != "200" ]; then
                 echo "Codecov API returned HTTP $HTTP_CODE (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
               else
-                CI_PASSED=$(echo "$CODECOV_JSON" | jq -r '.ci_passed // "null"')
+                CI_PASSED=$(echo "$CODECOV_JSON" | jq -r 'if .ci_passed == null then "null" else .ci_passed end')
                 STATE=$(echo "$CODECOV_JSON" | jq -r '.state // "null"')
                 echo "Codecov ci_passed=$CI_PASSED state=$STATE (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
                 if [ "$CI_PASSED" = "true" ]; then

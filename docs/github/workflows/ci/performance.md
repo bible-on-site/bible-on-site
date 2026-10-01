@@ -150,3 +150,8 @@ UID/GID on POSIX hosts and require coverage merging to succeed. A Linux volume
 fixture reproduced `EACCES` with the original command and verified merging plus
 Node rewriting with the corrected ownership; Windows keeps Docker Desktop's
 existing bind-mount mapping.
+
+Also preserve explicit `false` in the Codecov status check: jq's `//` fallback
+previously converted both `false` and `null` into the unresolved state. The gate
+now distinguishes pass, fail and unresolved responses; null-handling policy is
+unchanged. Verified all three inputs with jq before and after the correction.
