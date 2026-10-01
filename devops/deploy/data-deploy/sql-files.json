@@ -5,6 +5,7 @@
 	"perushim_data.sql",
 	"tanahpedia_alter_source_citation.sql",
 	"tanahpedia_alter_person_source_citation.sql",
+	"tanahpedia_alter_child_birth_order.sql",
 	"tanahpedia_seed_data.sql",
 	"tanahpedia_incremental_lookups.sql"
 ]

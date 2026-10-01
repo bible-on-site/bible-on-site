@@ -60,6 +60,10 @@ struct Cli {
     #[arg(long, default_value = "../tanahpedia_alter_person_source_citation.sql")]
     tanahpedia_person_source_citation_upgrade_script: String,
 
+    /// Path to Tanahpedia child birth order upgrade SQL file
+    #[arg(long, default_value = "../tanahpedia_alter_child_birth_order.sql")]
+    tanahpedia_child_birth_order_upgrade_script: String,
+
     /// Path to Tanahpedia lookup seed SQL file
     #[arg(long, default_value = "../tanahpedia_seed_data.sql")]
     tanahpedia_seed_script: String,
@@ -307,6 +311,7 @@ struct TanahpediaScripts {
     structure: std::path::PathBuf,
     source_citation_upgrade: std::path::PathBuf,
     person_source_citation_upgrade: std::path::PathBuf,
+    child_birth_order_upgrade: std::path::PathBuf,
     seed: std::path::PathBuf,
     incremental_lookups: std::path::PathBuf,
     legacy: std::path::PathBuf,
@@ -324,6 +329,8 @@ impl TanahpediaScripts {
             source_citation_upgrade: base_path.join(&cli.tanahpedia_source_citation_upgrade_script),
             person_source_citation_upgrade: base_path
                 .join(&cli.tanahpedia_person_source_citation_upgrade_script),
+            child_birth_order_upgrade: base_path
+                .join(&cli.tanahpedia_child_birth_order_upgrade_script),
             seed: base_path.join(&cli.tanahpedia_seed_script),
             incremental_lookups: base_path.join(&cli.tanahpedia_incremental_lookups_script),
             legacy: base_path.join(&cli.tanahpedia_legacy_script),
@@ -385,7 +392,8 @@ async fn apply_tanahpedia_safe_upgrades(
     scripts: &TanahpediaScripts,
 ) -> Result<()> {
     apply_source_citation_upgrade(conn, &scripts.source_citation_upgrade).await?;
-    apply_person_source_citation_upgrade(conn, &scripts.person_source_citation_upgrade).await
+    apply_person_source_citation_upgrade(conn, &scripts.person_source_citation_upgrade).await?;
+    apply_child_birth_order_upgrade(conn, &scripts.child_birth_order_upgrade).await
 }
 
 async fn apply_tanahpedia_incremental_lookups(
@@ -474,6 +482,20 @@ async fn apply_person_source_citation_upgrade(
         "tanahpedia_person_union",
         "person_source_citation",
         "VARCHAR(400) NULL",
+    )
+    .await
+}
+
+async fn apply_child_birth_order_upgrade(
+    conn: &mut MySqlConnection,
+    script_path: &Path,
+) -> Result<()> {
+    apply_column_add_if_missing(
+        conn,
+        script_path,
+        "tanahpedia_person_parent_child",
+        "birth_order",
+        "INT NULL",
     )
     .await
 }
@@ -874,6 +896,12 @@ SELECT 1";
             ),
         );
         assert_eq!(
+            scripts.child_birth_order_upgrade,
+            PathBuf::from(
+                "/repo/data/mysql/db-populator/../tanahpedia_alter_child_birth_order.sql"
+            ),
+        );
+        assert_eq!(
             scripts.incremental_lookups,
             PathBuf::from("/repo/data/mysql/db-populator/../tanahpedia_incremental_lookups.sql"),
         );
@@ -1013,6 +1041,9 @@ SELECT 1";
                     "source_citation"
                 )
                 .await?
+            );
+            assert!(
+                column_exists(&mut conn, "tanahpedia_person_parent_child", "birth_order").await?
             );
             assert_eq!(table_count(&mut conn, "tanahpedia_god").await?, 1);
             assert_eq!(
