@@ -525,9 +525,9 @@ describe("PersonFamilyTree", () => {
 			],
 		};
 		render(<PersonFamilyTree summary={summary} />);
-		// Parent card and the focal card (own source derived from parent rows) both link it.
+		// The child's card is the single place for parent relationship evidence.
 		const links = screen.getAllByRole("link", { name: "בראשית כח" });
-		expect(links.length).toBe(2);
+		expect(links.length).toBe(1);
 		for (const link of links) {
 			expect(link.getAttribute("href")).toMatch(/^\/929\/\d+$/);
 		}
@@ -555,13 +555,13 @@ describe("PersonFamilyTree", () => {
 			],
 		};
 		render(<PersonFamilyTree summary={summary} />);
-		// Deduped: parent cards (2) + focal card (1); identical citation not repeated in focal.
+		// One shared verse supports both parents and appears once on the child.
 		expect(screen.getAllByRole("link", { name: "בראשית כה כו" }).length).toBe(
-			3,
+			1,
 		);
 	});
 
-	it("keeps a non-Tanach parent source on that parent's card only", () => {
+	it("shows distinct father and mother sources once each on the child", () => {
 		const summary: PersonFamilySummary = {
 			...baseSummary,
 			focalDisplayName: "אברהם",
@@ -583,12 +583,38 @@ describe("PersonFamilyTree", () => {
 			],
 		};
 		render(<PersonFamilyTree summary={summary} />);
-		// The aggadic source attests the motherhood claim, so it stays on the mother card.
+		// Both sources are needed when they support different parent links.
 		expect(screen.getAllByText('בבא בתרא צא ע"א').length).toBe(1);
-		// The Tanach birth record still reaches the focal card (mother card has none).
 		expect(screen.getAllByRole("link", { name: "בראשית יא כו" }).length).toBe(
-			2,
+			1,
 		);
+	});
+
+	it("prefers the shared verse when one parent also has another source", () => {
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			parents: [
+				{
+					related: related("p1", "יצחק", "entry-p1", "MALE"),
+					parentRole: "FATHER",
+					relationshipType: "BIOLOGICAL",
+					altGroupId: null,
+					sourceCitation: "בראשית כה כו\nבראשית כח",
+				},
+				{
+					related: related("p2", "רבקה", "entry-p2", "FEMALE"),
+					parentRole: "MOTHER",
+					relationshipType: "BIOLOGICAL",
+					altGroupId: null,
+					sourceCitation: "בראשית כה כו",
+				},
+			],
+		};
+		render(<PersonFamilyTree summary={summary} />);
+		expect(screen.getAllByRole("link", { name: "בראשית כה כו" })).toHaveLength(
+			1,
+		);
+		expect(screen.queryByRole("link", { name: "בראשית כח" })).toBeNull();
 	});
 
 	it("shows a sibling's source inside the sibling card", () => {

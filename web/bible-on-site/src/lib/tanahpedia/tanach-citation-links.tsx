@@ -16,8 +16,16 @@ interface TanachRefMatch {
 	pasukRaw?: string;
 }
 
-const HEBREW_REF_TOKEN = /^[א-ת][א-ת"׳']{0,4}$/u;
-const HEBREW_PASUK_TOKEN = /^[א-ת][א-ת"׳']{0,4}(?:[-־][א-ת][א-ת"׳']{0,4})?$/u;
+const HEBREW_REF_TOKEN = /^[א-ת][א-ת"״׳']{0,4}$/u;
+const HEBREW_PASUK_TOKEN = /^[א-ת][א-ת"״׳']{0,4}(?:[-־][א-ת][א-ת"״׳']{0,4})?$/u;
+
+function plainNumeral(raw: string): string {
+	return raw.replace(/["״׳']/gu, "");
+}
+
+function displayTanachRef(match: TanachRefMatch): string {
+	return `${match.seferCitation} ${plainNumeral(match.perekRaw)}${match.pasukRaw ? ` ${plainNumeral(match.pasukRaw)}` : ""}`;
+}
 
 /** ספר או כרך (למשל שמואל א) כפי שמופיע במקורות בטקסט */
 function resolveSeferVolume(
@@ -46,7 +54,7 @@ function perekIdsForVolume(
 
 function normalizePerekLetters(raw: string): string {
 	const first = raw.split(/[\s–—-]+/u)[0]?.trim() ?? raw;
-	return first.replace(/"/g, "'");
+	return plainNumeral(first);
 }
 
 let cachedNames: string[] | null = null;
@@ -151,7 +159,7 @@ function pasukLettersToPositiveInt(pasukRaw: string): number | null {
 			.split(/[\s–—-]+/u)[0]
 			?.trim() ?? "";
 	if (!first) return null;
-	const n = toNumber(first);
+	const n = toNumber(plainNumeral(first));
 	return n != null && n > 0 ? n : null;
 }
 
@@ -268,7 +276,7 @@ export function renderFamilyTreeCitationLine(
 			href={href}
 			className={linkClassName}
 		>
-			{line.slice(perushIdx, linkEnd)}
+			{line.slice(perushIdx, refMatch.index) + displayTanachRef(refMatch)}
 		</PasukPreviewLink>,
 	);
 	if (linkEnd < line.length) {
@@ -298,7 +306,7 @@ export function renderCitationWithTanachLinks(
 					href={href}
 					className={linkClassName}
 				>
-					{full}
+					{displayTanachRef(match)}
 				</PasukPreviewLink>,
 			);
 		} else {

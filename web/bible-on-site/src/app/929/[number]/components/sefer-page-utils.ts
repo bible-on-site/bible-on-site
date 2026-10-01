@@ -3,12 +3,8 @@ import type { HistoryMapper, PageSemantics } from "html-flip-book-react";
 
 const CONTENT_OFFSET = 3;
 
-export function toHebrewWithPunctuation(num: number): string {
-	const letters = toLetters(num, { addQuotes: true });
-	if (!letters.includes('"') && letters.length === 1) {
-		return `${letters}'`;
-	}
-	return letters;
+export function toHebrewChapterNumber(num: number): string {
+	return toLetters(num);
 }
 
 export function buildPageSemantics(
@@ -22,7 +18,7 @@ export function buildPageSemantics(
 			if (adjusted % 2 !== 0) return "";
 			const perekNum = adjusted / 2 + 1;
 			if (perekNum > perakimLength) return "";
-			return toHebrewWithPunctuation(perekNum);
+			return toHebrewChapterNumber(perekNum);
 		},
 		semanticNameToIndex(semanticPageName: string): number | null {
 			const num = toNumber(semanticPageName);
@@ -37,8 +33,7 @@ export function buildPageSemantics(
 			const perekIdx = adjusted / 2;
 			if (perekIdx >= perakimLength) return "";
 			return (
-				perekHeaders[perekIdx] ||
-				`פרק ${toHebrewWithPunctuation(perekIdx + 1)}`
+				perekHeaders[perekIdx] || `פרק ${toHebrewChapterNumber(perekIdx + 1)}`
 			);
 		},
 	};
@@ -52,10 +47,7 @@ export function buildHistoryMapper(
 		pageToRoute: (pageIndex, _semantic) => {
 			if (pageIndex < CONTENT_OFFSET) return null;
 			const perekIdx = Math.floor((pageIndex - CONTENT_OFFSET) / 2);
-			const clampedIdx = Math.min(
-				perekIdx,
-				(perekIds?.length ?? 1) - 1,
-			);
+			const clampedIdx = Math.min(perekIdx, (perekIds?.length ?? 1) - 1);
 			const id = perekIds?.[clampedIdx];
 			if (id == null) return null;
 			return `/929/${id}?book`;

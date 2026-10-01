@@ -19,7 +19,8 @@ When you commit, the root pre-commit hook runs and:
 
 1. **Detects changed files** using `git diff --cached`
 2. **Runs cross-module checks** if the devops Python venv is available
-3. **Delegates to module-specific hooks** based on which files changed
+3. **Bumps the website version** above the local `origin/master` and latest release when a website change needs it, updating and staging both package files
+4. **Delegates to module-specific hooks** based on which files changed
 
 ## Cross-Module Checks
 
