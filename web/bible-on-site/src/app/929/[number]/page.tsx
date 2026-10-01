@@ -3,6 +3,7 @@
 import { toLetters } from "gematry";
 import { unstable_cache } from "next/cache";
 import { Suspense } from "react";
+import { loadRecitation } from "@/lib/recitation-loader";
 import { getPerekByPerekId } from "../../../data/perek-dto";
 import { getPerekIdsForSefer, getSeferByName } from "../../../data/sefer-dto";
 import { getArticleSummariesByPerekId } from "../../../lib/articles";
@@ -94,6 +95,7 @@ export default async function Perek({
 	const { number } = await params;
 	const perekId = Number.parseInt(number, 10); // convert string to number
 	const perekObj = getPerekByPerekId(perekId);
+	const recitation = await loadRecitation(perekId, perekObj.pesukim);
 	const sefer = getSeferByName(perekObj.sefer);
 	const perekIds = getPerekIdsForSefer(sefer);
 	const articles = await getCachedArticleSummaries(perekId);
@@ -105,7 +107,7 @@ export default async function Perek({
 
 	return (
 		<>
-			<JsonLd data={buildPerekGraph(perekObj)} />
+			<JsonLd data={buildPerekGraph(perekObj, recitation)} />
 			<Suspense>
 				<SeferComposite
 					perekObj={perekObj}

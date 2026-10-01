@@ -1,0 +1,1544 @@
+{
+  "version": 1,
+  "perekId": 748,
+  "audioUrl": "https://bible-on-site-assets.s3.il-central-1.amazonaws.com/recordings/748_record.mp3",
+  "audioSha256": "258babdad0bd968bf25f9ed97d4d9fee02f2200b45c32bea5a9e83b2713ce24c",
+  "textSha256": "8b63c90bfbee6f220541206c1642bd1ef46ec90d65d578074cf4852d5569b79e",
+  "durationMs": 187925,
+  "alignmentStatus": "pending",
+  "words": [
+    {
+      "pasuk": 1,
+      "segment": 1,
+      "text": "דִּ֭בְרֵי",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 1,
+      "segment": 2,
+      "text": "לְמוּאֵ֣ל",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 1,
+      "segment": 3,
+      "text": "מֶ֑לֶךְ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 1,
+      "segment": 4,
+      "text": "מַ֝שָּׂ֗א",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 1,
+      "segment": 5,
+      "text": "אֲ‍ֽשֶׁר־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 1,
+      "segment": 6,
+      "text": "יִסְּרַ֥תּוּ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 1,
+      "segment": 7,
+      "text": "אִמּֽוֹ׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 2,
+      "segment": 1,
+      "text": "מַה־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 2,
+      "segment": 2,
+      "text": "בְּ֭רִי",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 2,
+      "segment": 3,
+      "text": "וּמַֽה־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 2,
+      "segment": 4,
+      "text": "בַּר־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 2,
+      "segment": 5,
+      "text": "בִּטְנִ֑י",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 2,
+      "segment": 6,
+      "text": "וּ֝מֶה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 2,
+      "segment": 7,
+      "text": "בַּר־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 2,
+      "segment": 8,
+      "text": "נְדָרָֽי׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 3,
+      "segment": 1,
+      "text": "אַל־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 3,
+      "segment": 2,
+      "text": "תִּתֵּ֣ן",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 3,
+      "segment": 3,
+      "text": "לַנָּשִׁ֣ים",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 3,
+      "segment": 4,
+      "text": "חֵילֶ֑ךָ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 3,
+      "segment": 5,
+      "text": "וּ֝דְרָכֶ֗יךָ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 3,
+      "segment": 6,
+      "text": "לַֽמְח֥וֹת",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 3,
+      "segment": 7,
+      "text": "מְלָכִֽין׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 4,
+      "segment": 1,
+      "text": "אַ֤ל",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 4,
+      "segment": 2,
+      "text": "לַֽמְלָכִ֨ים ׀",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 4,
+      "segment": 3,
+      "text": "לְֽמוֹאֵ֗ל",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 4,
+      "segment": 4,
+      "text": "אַ֣ל",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 4,
+      "segment": 5,
+      "text": "לַֽמְלָכִ֣ים",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 4,
+      "segment": 6,
+      "text": "שְׁתוֹ־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 4,
+      "segment": 7,
+      "text": "יָ֑יִן",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 4,
+      "segment": 8,
+      "text": "וּ֝לְרוֹזְנִ֗ים",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 4,
+      "segment": 10,
+      "text": "אֵ֣י",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 4,
+      "segment": 11,
+      "text": "שֵׁכָֽר׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 5,
+      "segment": 1,
+      "text": "פֶּן־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 5,
+      "segment": 2,
+      "text": "יִ֭שְׁתֶּה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 5,
+      "segment": 3,
+      "text": "וְיִשְׁכַּ֣ח",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 5,
+      "segment": 4,
+      "text": "מְחֻקָּ֑ק",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 5,
+      "segment": 5,
+      "text": "וִֽ֝ישַׁנֶּה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 5,
+      "segment": 6,
+      "text": "דִּ֣ין",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 5,
+      "segment": 7,
+      "text": "כָּל־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 5,
+      "segment": 8,
+      "text": "בְּנֵי־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 5,
+      "segment": 9,
+      "text": "עֹֽנִי׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 6,
+      "segment": 1,
+      "text": "תְּנוּ־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 6,
+      "segment": 2,
+      "text": "שֵׁכָ֣ר",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 6,
+      "segment": 3,
+      "text": "לְאוֹבֵ֑ד",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 6,
+      "segment": 4,
+      "text": "וְ֝יַיִן",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 6,
+      "segment": 5,
+      "text": "לְמָ֣רֵי",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 6,
+      "segment": 6,
+      "text": "נָֽפֶשׁ׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 7,
+      "segment": 1,
+      "text": "יִ֭שְׁתֶּה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 7,
+      "segment": 2,
+      "text": "וְיִשְׁכַּ֣ח",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 7,
+      "segment": 3,
+      "text": "רִישׁ֑וֹ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 7,
+      "segment": 4,
+      "text": "וַ֝עֲמָל֗וֹ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 7,
+      "segment": 5,
+      "text": "לֹ֣א",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 7,
+      "segment": 6,
+      "text": "יִזְכָּר־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 7,
+      "segment": 7,
+      "text": "עֽוֹד׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 8,
+      "segment": 1,
+      "text": "פְּתַח־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 8,
+      "segment": 2,
+      "text": "פִּ֥יךָ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 8,
+      "segment": 3,
+      "text": "לְאִלֵּ֑ם",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 8,
+      "segment": 4,
+      "text": "אֶל־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 8,
+      "segment": 5,
+      "text": "דִּ֝֗ין",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 8,
+      "segment": 6,
+      "text": "כָּל־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 8,
+      "segment": 7,
+      "text": "בְּנֵ֥י",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 8,
+      "segment": 8,
+      "text": "חֲלֽוֹף׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 9,
+      "segment": 1,
+      "text": "פְּתַח־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 9,
+      "segment": 2,
+      "text": "פִּ֥יךָ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 9,
+      "segment": 3,
+      "text": "שְׁפָט־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 9,
+      "segment": 4,
+      "text": "צֶ֑דֶק",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 9,
+      "segment": 5,
+      "text": "וְ֝דִ֗ין",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 9,
+      "segment": 6,
+      "text": "עָנִ֥י",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 9,
+      "segment": 7,
+      "text": "וְאֶבְיֽוֹן׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 10,
+      "segment": 1,
+      "text": "אֵֽשֶׁת־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 10,
+      "segment": 2,
+      "text": "חַ֭יִל",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 10,
+      "segment": 3,
+      "text": "מִ֣י",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 10,
+      "segment": 4,
+      "text": "יִמְצָ֑א",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 10,
+      "segment": 5,
+      "text": "וְרָחֹ֖ק",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 10,
+      "segment": 6,
+      "text": "מִפְּנִינִ֣ים",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 10,
+      "segment": 7,
+      "text": "מִכְרָֽהּ׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 11,
+      "segment": 1,
+      "text": "בָּ֣טַח",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 11,
+      "segment": 2,
+      "text": "בָּ֭הּ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 11,
+      "segment": 3,
+      "text": "לֵ֣ב",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 11,
+      "segment": 4,
+      "text": "בַּעְלָ֑הּ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 11,
+      "segment": 5,
+      "text": "וְ֝שָׁלָ֗ל",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 11,
+      "segment": 6,
+      "text": "לֹ֣א",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 11,
+      "segment": 7,
+      "text": "יֶחְסָֽר׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 12,
+      "segment": 1,
+      "text": "גְּמָלַ֣תְהוּ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 12,
+      "segment": 2,
+      "text": "ט֣וֹב",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 12,
+      "segment": 3,
+      "text": "וְלֹא־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 12,
+      "segment": 4,
+      "text": "רָ֑ע",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 12,
+      "segment": 5,
+      "text": "כֹּ֝֗ל",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 12,
+      "segment": 6,
+      "text": "יְמֵ֣י",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 12,
+      "segment": 7,
+      "text": "חַיֶּֽיה׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 13,
+      "segment": 1,
+      "text": "דָּ֭רְשָׁה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 13,
+      "segment": 2,
+      "text": "צֶ֣מֶר",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 13,
+      "segment": 3,
+      "text": "וּפִשְׁתִּ֑ים",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 13,
+      "segment": 4,
+      "text": "וַ֝תַּ֗עַשׂ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 13,
+      "segment": 5,
+      "text": "בְּחֵ֣פֶץ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 13,
+      "segment": 6,
+      "text": "כַּפֶּֽיהָ׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 14,
+      "segment": 1,
+      "text": "הָ֭יְתָה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 14,
+      "segment": 2,
+      "text": "כָּאֳנִיּ֣וֹת",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 14,
+      "segment": 3,
+      "text": "סוֹחֵ֑ר",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 14,
+      "segment": 4,
+      "text": "מִ֝מֶּרְחָ֗ק",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 14,
+      "segment": 5,
+      "text": "תָּבִ֥יא",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 14,
+      "segment": 6,
+      "text": "לַחְמָֽהּ׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 15,
+      "segment": 1,
+      "text": "וַתָּ֤קָם ׀",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 15,
+      "segment": 2,
+      "text": "בְּע֬וֹד",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 15,
+      "segment": 3,
+      "text": "לַ֗יְלָה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 15,
+      "segment": 4,
+      "text": "וַתִּתֵּ֣ן",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 15,
+      "segment": 5,
+      "text": "טֶ֣רֶף",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 15,
+      "segment": 6,
+      "text": "לְבֵיתָ֑הּ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 15,
+      "segment": 7,
+      "text": "וְ֝חֹ֗ק",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 15,
+      "segment": 8,
+      "text": "לְנַעֲרֹתֶֽיהָ׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 16,
+      "segment": 1,
+      "text": "זָמְמָ֣ה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 16,
+      "segment": 2,
+      "text": "שָׂ֭דֶה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 16,
+      "segment": 3,
+      "text": "וַתִּקָּחֵ֑הוּ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 16,
+      "segment": 4,
+      "text": "מִפְּרִ֥י",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 16,
+      "segment": 5,
+      "text": "כַ֝פֶּ֗יהָ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 16,
+      "segment": 7,
+      "text": "נָ֣טְעָה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 16,
+      "segment": 8,
+      "text": "כָּֽרֶם׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 17,
+      "segment": 1,
+      "text": "חָֽגְרָ֣ה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 17,
+      "segment": 2,
+      "text": "בְע֣וֹז",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 17,
+      "segment": 3,
+      "text": "מָתְנֶ֑יהָ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 17,
+      "segment": 4,
+      "text": "וַ֝תְּאַמֵּ֗ץ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 17,
+      "segment": 5,
+      "text": "זְרֹעוֹתֶֽיהָ׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 18,
+      "segment": 1,
+      "text": "טָ֭עֲמָה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 18,
+      "segment": 2,
+      "text": "כִּי־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 18,
+      "segment": 3,
+      "text": "ט֣וֹב",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 18,
+      "segment": 4,
+      "text": "סַחְרָ֑הּ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 18,
+      "segment": 5,
+      "text": "לֹֽא־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 18,
+      "segment": 6,
+      "text": "יִכְבֶּ֖ה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 18,
+      "segment": 8,
+      "text": "בַלַּ֣יְלָה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 18,
+      "segment": 9,
+      "text": "נֵרָֽהּ׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 19,
+      "segment": 1,
+      "text": "יָ֭דֶיהָ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 19,
+      "segment": 2,
+      "text": "שִׁלְּחָ֣ה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 19,
+      "segment": 3,
+      "text": "בַכִּישׁ֑וֹר",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 19,
+      "segment": 4,
+      "text": "וְ֝כַפֶּ֗יהָ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 19,
+      "segment": 5,
+      "text": "תָּ֣מְכוּ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 19,
+      "segment": 6,
+      "text": "פָֽלֶךְ׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 20,
+      "segment": 1,
+      "text": "כַּ֭פָּהּ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 20,
+      "segment": 2,
+      "text": "פָּרְשָׂ֣ה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 20,
+      "segment": 3,
+      "text": "לֶעָנִ֑י",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 20,
+      "segment": 4,
+      "text": "וְ֝יָדֶ֗יהָ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 20,
+      "segment": 5,
+      "text": "שִׁלְּחָ֥ה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 20,
+      "segment": 6,
+      "text": "לָֽאֶבְיֽוֹן׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 21,
+      "segment": 1,
+      "text": "לֹא־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 21,
+      "segment": 2,
+      "text": "תִירָ֣א",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 21,
+      "segment": 3,
+      "text": "לְבֵיתָ֣הּ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 21,
+      "segment": 4,
+      "text": "מִשָּׁ֑לֶג",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 21,
+      "segment": 5,
+      "text": "כִּ֥י",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 21,
+      "segment": 6,
+      "text": "כָל־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 21,
+      "segment": 7,
+      "text": "בֵּ֝יתָ֗הּ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 21,
+      "segment": 8,
+      "text": "לָבֻ֥שׁ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 21,
+      "segment": 9,
+      "text": "שָׁנִֽים׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 22,
+      "segment": 1,
+      "text": "מַרְבַדִּ֥ים",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 22,
+      "segment": 2,
+      "text": "עָֽשְׂתָה־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 22,
+      "segment": 3,
+      "text": "לָּ֑הּ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 22,
+      "segment": 4,
+      "text": "שֵׁ֖שׁ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 22,
+      "segment": 5,
+      "text": "וְאַרְגָּמָ֣ן",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 22,
+      "segment": 6,
+      "text": "לְבוּשָֽׁהּ׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 23,
+      "segment": 1,
+      "text": "נוֹדָ֣ע",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 23,
+      "segment": 2,
+      "text": "בַּשְּׁעָרִ֣ים",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 23,
+      "segment": 3,
+      "text": "בַּעְלָ֑הּ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 23,
+      "segment": 4,
+      "text": "בְּ֝שִׁבְתּ֗וֹ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 23,
+      "segment": 5,
+      "text": "עִם־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 23,
+      "segment": 6,
+      "text": "זִקְנֵי־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 23,
+      "segment": 7,
+      "text": "אָֽרֶץ׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 24,
+      "segment": 1,
+      "text": "סָדִ֣ין",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 24,
+      "segment": 2,
+      "text": "עָ֭שְׂתָה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 24,
+      "segment": 3,
+      "text": "וַתִּמְכֹּ֑ר",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 24,
+      "segment": 4,
+      "text": "וַ֝חֲג֗וֹר",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 24,
+      "segment": 5,
+      "text": "נָתְנָ֥ה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 24,
+      "segment": 6,
+      "text": "לַֽכְּנַעֲנִֽי׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 25,
+      "segment": 1,
+      "text": "עֹז־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 25,
+      "segment": 2,
+      "text": "וְהָדָ֥ר",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 25,
+      "segment": 3,
+      "text": "לְבוּשָׁ֑הּ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 25,
+      "segment": 4,
+      "text": "וַ֝תִּשְׂחַ֗ק",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 25,
+      "segment": 5,
+      "text": "לְי֣וֹם",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 25,
+      "segment": 6,
+      "text": "אַחֲרֽוֹן׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 26,
+      "segment": 1,
+      "text": "פִּ֭יהָ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 26,
+      "segment": 2,
+      "text": "פָּתְחָ֣ה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 26,
+      "segment": 3,
+      "text": "בְחָכְמָ֑ה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 26,
+      "segment": 4,
+      "text": "וְתֽוֹרַת־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 26,
+      "segment": 5,
+      "text": "חֶ֝֗סֶד",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 26,
+      "segment": 6,
+      "text": "עַל־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 26,
+      "segment": 7,
+      "text": "לְשׁוֹנָֽהּ׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 27,
+      "segment": 1,
+      "text": "צ֭וֹפִיָּה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 27,
+      "segment": 2,
+      "text": "הֲלִיכ֣וֹת",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 27,
+      "segment": 3,
+      "text": "בֵּיתָ֑הּ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 27,
+      "segment": 4,
+      "text": "וְלֶ֥חֶם",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 27,
+      "segment": 5,
+      "text": "עַ֝צְל֗וּת",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 27,
+      "segment": 6,
+      "text": "לֹ֣א",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 27,
+      "segment": 7,
+      "text": "תֹאכֵֽל׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 28,
+      "segment": 1,
+      "text": "קָ֣מוּ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 28,
+      "segment": 2,
+      "text": "בָ֭נֶיהָ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 28,
+      "segment": 3,
+      "text": "וַֽיְאַשְּׁר֑וּהָ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 28,
+      "segment": 4,
+      "text": "בַּ֝עְלָ֗הּ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 28,
+      "segment": 5,
+      "text": "וַֽיְהַֽלְלָהּ׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 29,
+      "segment": 1,
+      "text": "רַבּ֣וֹת",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 29,
+      "segment": 2,
+      "text": "בָּ֭נוֹת",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 29,
+      "segment": 3,
+      "text": "עָ֣שׂוּ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 29,
+      "segment": 4,
+      "text": "חָ֑יִל",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 29,
+      "segment": 5,
+      "text": "וְ֝אַ֗תְּ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 29,
+      "segment": 6,
+      "text": "עָלִ֥ית",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 29,
+      "segment": 7,
+      "text": "עַל־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 29,
+      "segment": 8,
+      "text": "כֻּלָּֽנָה׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 30,
+      "segment": 1,
+      "text": "שֶׁ֣קֶר",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 30,
+      "segment": 2,
+      "text": "הַ֭חֵן",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 30,
+      "segment": 3,
+      "text": "וְהֶ֣בֶל",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 30,
+      "segment": 4,
+      "text": "הַיֹּ֑פִי",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 30,
+      "segment": 5,
+      "text": "אִשָּׁ֥ה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 30,
+      "segment": 6,
+      "text": "יִרְאַת־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 30,
+      "segment": 7,
+      "text": "יְ֝הוָ֗ה",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 30,
+      "segment": 8,
+      "text": "הִ֣יא",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 30,
+      "segment": 9,
+      "text": "תִתְהַלָּֽל׃",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 31,
+      "segment": 1,
+      "text": "תְּנוּ־",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 31,
+      "segment": 2,
+      "text": "לָ֭הּ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 31,
+      "segment": 3,
+      "text": "מִפְּרִ֣י",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 31,
+      "segment": 4,
+      "text": "יָדֶ֑יהָ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 31,
+      "segment": 5,
+      "text": "וִֽיהַלְל֖וּהָ",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 31,
+      "segment": 6,
+      "text": "בַשְּׁעָרִ֣ים",
+      "startMs": null,
+      "endMs": null
+    },
+    {
+      "pasuk": 31,
+      "segment": 7,
+      "text": "מַעֲשֶֽׂיהָ׃",
+      "startMs": null,
+      "endMs": null
+    }
+  ]
+}

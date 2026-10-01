@@ -48,6 +48,13 @@ import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import { BlankPageContent } from "./BlankPageContent";
 import { Ptuah } from "./Ptuha";
 import { renderPasukWithEntityRefs } from "./pasuk-renderer";
+import RecitationPlayer, {
+	RecitationHeader,
+	RecitationLink,
+	RecitationPasukControl,
+	RecitationWordControl,
+	stopRecitation,
+} from "./RecitationPlayer";
 import { Stuma } from "./Stuma";
 import styles from "./sefer.module.css";
 import {
@@ -64,6 +71,7 @@ import "./sefer.css";
 
 /** Props we pass to FlipBook; matches html-flip-book-react FlipBookProps for typing dynamic() */
 type FlipBookProps = {
+	handlers?: { onPageFlipping?: () => void };
 	className: string;
 	pages: React.ReactNode[];
 	pageSemantics?: PageSemantics;
@@ -216,59 +224,76 @@ const Sefer = (props: {
 		const blankKey = `blank-${perekKeyBase}`;
 		return [
 			<React.Fragment key={perekKey}>
-				<section className={styles.pageContentPage}>
-					<div className={styles.pageHeaderRight}>
-						<div className={styles.pageHeaderRow}>
-							<span className={styles.pageHeaderSefer}>{perekObj.sefer}</span>
-							<span className={styles.pageHeaderPerek}>
-								{toHebrewChapterNumber(perekIdx + 1)}
-							</span>
+				<RecitationPlayer
+					perekId={perekIds?.[perekIdx] ?? 0}
+					pesukim={perek.pesukim}
+				>
+					<section className={styles.pageContentPage}>
+						<div className={styles.pageHeaderRight}>
+							<div className={styles.pageHeaderRow}>
+								<span className={styles.pageHeaderSefer}>{perekObj.sefer}</span>
+								<span className={styles.pageHeaderPerek}>
+									{toHebrewChapterNumber(perekIdx + 1)}
+								</span>
+							</div>
+							<RecitationHeader title={perek.header} />
 						</div>
-						<div className={styles.perekHeader} title={perek.header}>
-							{perek.header}
+						<div className={styles.perekTextScrollWrapper}>
+							<article className={styles.perekText}>
+								{perek.pesukim.map((pasuk, pasukIdx) => {
+									const pasukKey = pasukIdx + 1;
+									const pasukNumElement = (
+										<RecitationPasukControl pasuk={pasukIdx + 1}>
+											<span className={styles.pasukNum}>
+												{toLetters(pasukIdx + 1)}
+											</span>
+										</RecitationPasukControl>
+									);
+									const perekLookup =
+										entityRefLookupsByPerekIdx[perekIdx] ??
+										buildEntityRefLookup([]);
+									const pasukElement = renderPasukWithEntityRefs(
+										pasuk.segments,
+										pasukIdx,
+										perekLookup,
+										Ptuah,
+										Stuma,
+										styles.qri,
+										(entryUniqueName, children, key) => (
+											<RecitationLink
+												key={key}
+												link={
+													<TanahpediaLink
+														key={key}
+														entryUniqueName={entryUniqueName}
+														className={styles.tanahpediaLink}
+													>
+														{children}
+													</TanahpediaLink>
+												}
+											>
+												{children}
+											</RecitationLink>
+										),
+										(pasuk, segment, text) => (
+											<RecitationWordControl pasuk={pasuk} segment={segment}>
+												{text}
+											</RecitationWordControl>
+										),
+									);
+									return (
+										<React.Fragment key={pasukKey}>
+											{pasukNumElement}
+											<span> </span>
+											{pasukElement}
+											<span> </span>
+										</React.Fragment>
+									);
+								})}
+							</article>
 						</div>
-					</div>
-					<div className={styles.perekTextScrollWrapper}>
-						<article className={styles.perekText}>
-							{perek.pesukim.map((pasuk, pasukIdx) => {
-								const pasukKey = pasukIdx + 1;
-								const pasukNumElement = (
-									<span className={styles.pasukNum}>
-										{toLetters(pasukIdx + 1)}
-									</span>
-								);
-								const perekLookup =
-									entityRefLookupsByPerekIdx[perekIdx] ??
-									buildEntityRefLookup([]);
-								const pasukElement = renderPasukWithEntityRefs(
-									pasuk.segments,
-									pasukIdx,
-									perekLookup,
-									Ptuah,
-									Stuma,
-									styles.qri,
-									(entryUniqueName, children, key) => (
-										<TanahpediaLink
-											key={key}
-											entryUniqueName={entryUniqueName}
-											className={styles.tanahpediaLink}
-										>
-											{children}
-										</TanahpediaLink>
-									),
-								);
-								return (
-									<React.Fragment key={pasukKey}>
-										{pasukNumElement}
-										<span> </span>
-										{pasukElement}
-										<span> </span>
-									</React.Fragment>
-								);
-							})}
-						</article>
-					</div>
-				</section>
+					</section>
+				</RecitationPlayer>
 			</React.Fragment>,
 			<React.Fragment key={blankKey}>
 				<BlankPageContent
@@ -322,6 +347,7 @@ const Sefer = (props: {
 			<div className={styles.bookWrapper} dir="rtl" ref={bookWrapperRef}>
 				<div className={styles.bookArea}>
 					<FlipBook
+						handlers={{ onPageFlipping: stopRecitation }}
 						ref={flipBookRef}
 						className="he-book"
 						mouseModeStorageKey="sefer-mouse-book-mode"

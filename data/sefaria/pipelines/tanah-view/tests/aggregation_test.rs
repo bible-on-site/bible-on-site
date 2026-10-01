@@ -568,10 +568,10 @@ mod ktiv_qri_pairs {
                 }
             }
 
-            // We know from data analysis there are 11 קרי ולא כתיב cases
+            // Nine genuine קרי ולא כתיב cases, excluding editorial repetition notes.
             assert!(
                 (8..=15).contains(&qri_zero_count),
-                "Expected ~11 qri segments with ktivOffset=0 (קרי ולא כתיב), got {}. Examples: {:?}",
+                "Expected ~9 qri segments with ktivOffset=0 (קרי ולא כתיב), got {}. Examples: {:?}",
                 qri_zero_count,
                 qri_zero_examples
             );

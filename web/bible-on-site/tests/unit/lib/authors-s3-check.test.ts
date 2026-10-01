@@ -40,7 +40,7 @@ describe("checkS3Availability happy path", () => {
 		await new Promise((resolve) => setTimeout(resolve, 50));
 
 		expect(mockFetch).toHaveBeenCalledWith(
-			"http://localhost:4566/minio/health/live",
+			"http://localhost:4566/health/ready",
 			expect.objectContaining({ signal: expect.any(AbortSignal) }),
 		);
 

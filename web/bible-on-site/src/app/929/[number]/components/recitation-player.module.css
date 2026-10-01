@@ -1,0 +1,128 @@
+.headerRow {
+	display: flex;
+	align-items: center;
+	direction: rtl;
+	gap: 6px;
+	min-height: 32px;
+	margin-top: 2px;
+}
+.heading {
+	flex: 1;
+	min-width: 0;
+	border: 0;
+	border-radius: 5px;
+	padding: 5px 3px;
+	margin: 0;
+	color: #637598;
+	background: transparent;
+	font: inherit;
+	font-size: 0.9rem;
+	font-weight: 600;
+	text-align: start;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+button.heading {
+	cursor: pointer;
+}
+.headerRow:has([data-chapter-play]:hover) [data-chapter-play],
+.headerRow:has([data-chapter-play]:focus-visible) [data-chapter-play] {
+	background: #eaf0f8;
+	color: #264c88;
+}
+.controls {
+	direction: rtl;
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	position: relative;
+	gap: 2px;
+	color: #637598;
+	vertical-align: middle;
+}
+.notice {
+	position: absolute;
+	z-index: 5;
+	top: 100%;
+	inset-inline-end: 0;
+	width: max-content;
+	max-width: 250px;
+	padding: 6px 10px;
+	border: 1px solid #e4e8ef;
+	border-radius: 6px;
+	background: #fff;
+	box-shadow: 0 3px 10px #20396018;
+	color: #526789;
+	font:
+		0.75rem Arial,
+		sans-serif;
+}
+.srOnly {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+.toggle,
+.action {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.4rem;
+	min-height: 32px;
+	min-width: 32px;
+	border: 0;
+	border-radius: 20px;
+	padding: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+.toggle[aria-pressed="true"] {
+	color: #264c88;
+	background: #eaf0f8;
+}
+.toggle:hover,
+.action:hover:not(:disabled) {
+	background: #f0f3f8;
+}
+.action:disabled {
+	opacity: 0.35;
+	cursor: default;
+}
+.word,
+.pasuk {
+	display: inline;
+	border: 0;
+	padding: 0;
+	margin: 0;
+	border-radius: 3px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	line-height: inherit;
+	text-align: inherit;
+	cursor: pointer;
+}
+.word:hover,
+.word[aria-pressed="true"],
+.pasuk:hover {
+	color: #1c427b;
+	background: #e9eff8;
+	box-shadow: 0 2px 0 #a9bddb;
+}
+.pasuk {
+	min-width: 1.4em;
+}
+.toggle:focus-visible,
+.action:focus-visible,
+.word:focus-visible,
+.pasuk:focus-visible {
+	outline: 2px solid #547bb2;
+	outline-offset: 3px;
+}

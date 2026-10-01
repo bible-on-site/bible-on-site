@@ -1,8 +1,9 @@
-import type { Graph, Thing } from "schema-dts";
+import type { AudioObject, Graph, Thing } from "schema-dts";
 import type { PerekObj } from "@/data/perek-dto";
 import type { Article } from "@/lib/articles";
 import type { AuthorDetails } from "@/lib/authors";
 import type { PerushDetail } from "@/lib/perushim";
+import type { Recitation } from "@/lib/recitation";
 import {
 	absUrl,
 	breadcrumbNode,
@@ -74,7 +75,13 @@ function tanahAndSeferNodes(seferName: string, helek: string): Thing[] {
  * breadcrumb. The visible perek text is left in the page HTML (already
  * crawlable) rather than duplicated into an `articleBody`.
  */
-export function buildPerekGraph(perekObj: PerekObj): Graph {
+export function buildPerekGraph(
+	perekObj: PerekObj,
+	recitation?: Pick<
+		Recitation,
+		"perekId" | "audioUrl" | "durationMs" | "audioSha256"
+	> | null,
+): Graph {
 	const path = perekPath(perekObj.perekId);
 	const url = absUrl(path);
 	const chapterId = nodeId(path, "chapter");
@@ -102,7 +109,29 @@ export function buildPerekGraph(perekObj: PerekObj): Graph {
 		about: { "@id": chapterId },
 		breadcrumb: { "@id": breadcrumb["@id"] },
 	};
+	const audioId = nodeId(path, "recitation");
+	const audio: AudioObject | null =
+		recitation && recitation.perekId === perekObj.perekId
+			? {
+					"@type": "AudioObject",
+					"@id": audioId,
+					name: `הקראת ${perekObj.source}`,
+					contentUrl: recitation.audioUrl,
+					url: `${url}?book`,
+					encodingFormat: "audio/mpeg",
+					duration: `PT${recitation.durationMs / 1000}S`,
+					inLanguage: "he",
+					isAccessibleForFree: true,
+					sha256: recitation.audioSha256,
+					encodesCreativeWork: { "@id": chapterId },
+				}
+			: null;
+	if (audio) {
+		chapter.encoding = { "@id": audioId };
+		webPage.audio = { "@id": audioId };
+	}
 	return buildGraph([
+		...(audio ? [audio] : []),
 		webPage as unknown as Thing,
 		breadcrumb,
 		chapter as unknown as Thing,
