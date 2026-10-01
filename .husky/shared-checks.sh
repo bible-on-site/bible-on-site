@@ -27,6 +27,13 @@ esac
 echo "Running shared checks for $module_path (module: $module_name)..."
 
 # Version verification
+if [ "$module_name" = "website" ]; then
+    echo "  Bumping website version above origin/master when needed..."
+    cd ./devops
+    npm run auto-bump:website -- origin/master || exit 1
+    cd - >/dev/null
+fi
+
 echo "  Verifying version..."
 cd ./devops
 npm run verify-version -- --module "$module_name" --against-ref origin/master || exit 1

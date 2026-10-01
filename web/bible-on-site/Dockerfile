@@ -44,6 +44,12 @@ ENV DB_URL=$DB_URL
 ARG NEXT_PUBLIC_ENV=production
 ENV NEXT_PUBLIC_ENV=$NEXT_PUBLIC_ENV
 
+# The public Mapbox token is embedded into client bundles by Next.js at build time.
+# This argument is intentionally public, so the secret build-argument rule does not apply.
+# nosemgrep
+ARG MAPBOX_PUBLIC_KEY
+ENV NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=$MAPBOX_PUBLIC_KEY
+
 RUN npm run build
 
 # Production image, copy all the files and run next

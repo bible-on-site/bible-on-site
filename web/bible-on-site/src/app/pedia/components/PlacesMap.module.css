@@ -23,6 +23,48 @@
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
 }
 
+.mapboxPopup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 110px;
+  font: 0.95rem/1.4 inherit;
+  text-align: right;
+}
+
+.mapboxPlace {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mapboxPlace + .mapboxPlace {
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.mapboxPopup a {
+  color: #4338ca;
+  font-weight: 700;
+}
+
+.mapboxPopup span {
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.mapError {
+  display: grid;
+  place-items: center;
+  min-height: 280px;
+  padding: 24px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #475569;
+  text-align: center;
+}
+
 /* Leaflet overrides for RTL context */
 .mapRoot :global(.leaflet-popup-content) {
   direction: rtl;

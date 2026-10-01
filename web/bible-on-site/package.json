@@ -60,6 +60,7 @@
 		"html-flip-book-react": "0.0.0-alpha.38",
 		"isomorphic-dompurify": "4.4.0",
 		"leaflet": "1.9.4",
+		"mapbox-gl": "3.32.0",
 		"moment-timezone": "0.6.4",
 		"mysql2": "3.24.4",
 		"next": "16.4.0-canary.52",

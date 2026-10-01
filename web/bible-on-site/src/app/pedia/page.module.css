@@ -294,17 +294,9 @@
 .mapFootnote {
   font-size: 0.82rem;
   line-height: 1.5;
-  color: #64748b;
-  margin: 0 0 12px 0;
+  color: #6b7280;
+  margin: 12px 0 0;
   text-align: center;
-}
-
-.mapCode {
-  font-size: 0.78rem;
-  background: #f1f5f9;
-  padding: 2px 6px;
-  border-radius: 4px;
-  unicode-bidi: embed;
 }
 
 /* Entry page */
