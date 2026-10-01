@@ -860,7 +860,7 @@ describe("PersonFamilyTree", () => {
 				},
 				{
 					related: related("yosef", "יוסף", `entry-yosef`, "MALE"),
-					birthOrder: 11,
+					birthOrder: 12,
 					parentRole: "FATHER",
 					relationshipType: "BIOLOGICAL",
 					altGroupId: null,
@@ -871,6 +871,7 @@ describe("PersonFamilyTree", () => {
 				},
 				{
 					related: related("unknown", "ילד נוסף", null, "MALE"),
+					birthOrder: 2,
 					parentRole: "FATHER",
 					relationshipType: "BIOLOGICAL",
 					altGroupId: null,
@@ -888,6 +889,11 @@ describe("PersonFamilyTree", () => {
 		expect(screen.getByText("ראובן")).toBeInTheDocument();
 		expect(screen.getByText("יוסף")).toBeInTheDocument();
 		expect(screen.getByText("ילד נוסף")).toBeInTheDocument();
+		expect(
+			screen
+				.getAllByTestId("family-child-card")
+				.map((card) => card.textContent?.match(/ראובן|ילד נוסף|יוסף/)?.[0]),
+		).toEqual(["ראובן", "ילד נוסף", "יוסף"]);
 	});
 
 	it("collapses the matrix into a vertical mother-grouped stack when it overflows its container", () => {
@@ -1304,7 +1310,7 @@ describe("PersonFamilyTree", () => {
 				childEdge({
 					id: "yosef",
 					name: "\u05d9\u05d5\u05e1\u05e3",
-					birthOrder: 11,
+					birthOrder: 12,
 					coParentEntityId: "rachel",
 					coParentDisplayName: rachel,
 					coParentUnionOrder: 2,
@@ -1358,6 +1364,63 @@ describe("PersonFamilyTree", () => {
 		expect(
 			screen.getByText("\u05e0\u05e4\u05ea\u05dc\u05d9"),
 		).toBeInTheDocument();
+	});
+
+	it("keeps all thirteen of Jacob's children in birth order across four mothers", () => {
+		const mothers = [
+			{ id: "leah", name: "לאה" },
+			{ id: "rachel", name: "רחל" },
+			{ id: "bilhah", name: "בלהה" },
+			{ id: "zilpah", name: "זלפה" },
+		];
+		const births = [
+			["ראובן", "leah"],
+			["שמעון", "leah"],
+			["לוי", "leah"],
+			["יהודה", "leah"],
+			["דן", "bilhah"],
+			["נפתלי", "bilhah"],
+			["גד", "zilpah"],
+			["אשר", "zilpah"],
+			["יששכר", "leah"],
+			["זבולון", "leah"],
+			["דינה", "leah"],
+			["יוסף", "rachel"],
+			["בנימין", "rachel"],
+		] as const;
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			focalDisplayName: "יעקב",
+			focalSex: "MALE",
+			spouses: mothers.map(({ id, name }, index) =>
+				spouseEdge({ id, name, unionOrder: index + 1 }),
+			),
+			children: births
+				.map(([name, motherId], index) =>
+					childEdge({
+						id: name,
+						name,
+						birthOrder: index + 1,
+						coParentEntityId: motherId,
+						coParentDisplayName:
+							mothers.find((mother) => mother.id === motherId)?.name ?? null,
+						coParentUnionOrder: mothers.findIndex((mother) => mother.id === motherId) + 1,
+					}),
+				)
+				.reverse(),
+		};
+
+		render(<PersonFamilyTree summary={summary} />);
+
+		const cards = screen.getAllByTestId("family-child-card");
+		expect(cards.map((card) => card.querySelector("a")?.textContent)).toEqual(
+			births.map(([name]) => name),
+		);
+		expect(
+			cards.map((card) =>
+				Number(card.closest<HTMLElement>("[style*='grid-column']")?.style.gridColumn),
+			),
+		).toEqual(births.map(([, motherId]) => mothers.findIndex((mother) => mother.id === motherId) + 1));
 	});
 
 	it("measures spouse matrix rows with ResizeObserver and disconnects on unmount", () => {

@@ -889,11 +889,6 @@ function PersonFamilyTreeContent({
 	const spousePartnerIdsForSeq = new Set(
 		spouseUnits.map((u) => u.edges[0].related.entityId),
 	);
-	const timelineMappedChildren = sortedChildren.filter(
-		(c) =>
-			c.coParentEntityId != null &&
-			spousePartnerIdsForSeq.has(c.coParentEntityId),
-	);
 	const timelineLooseChildren = sortedChildren.filter(
 		(c) =>
 			c.coParentEntityId == null ||
@@ -903,16 +898,7 @@ function PersonFamilyTreeContent({
 	const showTimelineLooseTopCell =
 		childTimelineLayout && timelineLooseChildren.length > 0;
 
-	const globalChildTimeline = childTimelineLayout
-		? [
-				...[...timelineMappedChildren].sort((a, b) =>
-					compareChildEdgesChronology(a, b),
-				),
-				...[...timelineLooseChildren].sort((a, b) =>
-					compareChildEdgesChronology(a, b),
-				),
-			]
-		: [];
+	const globalChildTimeline = childTimelineLayout ? sortedChildren : [];
 
 	const matrixColCount = childTimelineLayout
 		? orderedSpouseUnits.length + (showTimelineLooseTopCell ? 1 : 0)
