@@ -11,6 +11,7 @@ pub struct Model {
     pub parent_role_id: String,
     pub alt_group_id: Option<String>,
     pub source_citation: Option<String>,
+    pub birth_order: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

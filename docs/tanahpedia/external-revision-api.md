@@ -170,6 +170,7 @@ query PersonParentChild($personId: String!) {
     parentRole
     altGroupId
     sourceCitation
+    birthOrder
     parentId
     childId
     otherPersonId
@@ -270,7 +271,9 @@ mutation DeleteUnion($id: String!) {
 
 `PutTanahpediaParentChildInput` requires `id`, `parentPersonId`, `childPersonId`,
 `relationshipType`, and `parentRole`; it optionally accepts `altGroupId` and
-`sourceCitation`. `PutTanahpediaPersonUnionInput` requires `id`, `person1Id`, `person2Id`,
+`sourceCitation` and a positive, one-based `birthOrder`. The order is stored on each
+parent-child link; omit it when the order is unknown. As with other optional put fields,
+omission clears a previously stored order. `PutTanahpediaPersonUnionInput` requires `id`, `person1Id`, `person2Id`,
 and `unionType`; it optionally accepts `unionOrder`, `startDate`, `endDate`, `endReason`,
 `altGroupId`, `sourceCitation`, and `personSourceCitation`.
 
