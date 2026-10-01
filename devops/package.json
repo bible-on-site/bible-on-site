@@ -16,6 +16,7 @@
 		"setup_dev_env": "node --import tsx ./setup-dev-env.mts",
 		"tanahpedia:apply": "node ./tanahpedia-apply.mjs",
 		"verify-version": "node --import tsx ./github/ci/is-version-newer-than-baseline.ts",
+		"auto-bump:website": "node --import tsx ./github/ci/auto-bump-website-version.ts",
 		"deploy": "echo 'Use deploy:ecr, deploy:data, or deploy:bulletin' && exit 1",
 		"deploy:ecr": "node --import tsx ./deploy/ecr-deploy/index.mts",
 		"deploy:data": "node --import tsx ./deploy/data-deploy/index.mts",
