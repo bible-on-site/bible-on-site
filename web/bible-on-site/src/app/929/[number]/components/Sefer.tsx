@@ -23,6 +23,7 @@ import {
 	Toolbar,
 } from "html-flip-book-react/toolbar";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import React, {
 	useCallback,
 	useEffect,
@@ -42,6 +43,7 @@ import { getSeferColor } from "@/data/sefer-colors";
 import { getSeferByName } from "@/data/sefer-dto";
 import type { ArticleSummary } from "@/lib/articles";
 import type { PerushSummary } from "@/lib/perushim";
+import { getPerekIllustration } from "@/lib/seo/perek-illustrations";
 import { buildEntityRefLookup } from "@/lib/tanahpedia/entity-ref-lookup";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
@@ -224,6 +226,7 @@ const Sefer = (props: {
 		const perekKeyBase = perekIds?.[perekIdx] ?? `idx-${perekIdx + 1}`;
 		const perekKey = `perek-${perekKeyBase}`;
 		const blankKey = `blank-${perekKeyBase}`;
+		const illustration = getPerekIllustration(perekIds?.[perekIdx] ?? -1);
 		return [
 			<React.Fragment key={perekKey}>
 				<section className={styles.pageContentPage}>
@@ -239,6 +242,27 @@ const Sefer = (props: {
 						</div>
 					</div>
 					<div className={styles.perekTextScrollWrapper}>
+						{illustration && (
+							<figure className={styles.perekIllustrationFigure}>
+								<picture>
+									<source
+										type="image/avif"
+										srcSet={illustration.avifSrcSet}
+										sizes="(max-width: 768px) 100vw, 420px"
+									/>
+									<Image
+										src={illustration.src}
+										alt={illustration.alt}
+										width={1600}
+										height={900}
+										sizes="(max-width: 768px) 100vw, 420px"
+										loading="lazy"
+										className={styles.perekIllustration}
+									/>
+								</picture>
+								<figcaption>{illustration.caption}</figcaption>
+							</figure>
+						)}
 						<article className={styles.perekText}>
 							{perek.pesukim.map((pasuk, pasukIdx) => {
 								const pasukKey = pasukIdx + 1;

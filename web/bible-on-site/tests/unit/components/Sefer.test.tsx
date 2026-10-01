@@ -344,7 +344,7 @@ describe("Sefer component", () => {
 	});
 
 	it("renders with perekIds and passes SSG data for current perek only", async () => {
-		render(
+		const { container } = render(
 			<Sefer
 				perekObj={minimalPerek}
 				articles={[]}
@@ -353,6 +353,15 @@ describe("Sefer component", () => {
 			/>,
 		);
 		expect(screen.getByTestId("blank-page")).toBeInTheDocument();
+		const source = container.querySelector('picture source[type="image/avif"]');
+		expect(source).toHaveAttribute(
+			"srcset",
+			expect.stringContaining("bereshit-1-creation-640.avif 640w"),
+		);
+		expect(
+			screen.getByRole("img", { name: /איור פרשני לבראשית א/ }),
+		).toHaveAttribute("loading", "lazy");
+		expect(screen.getByText(/איור פרשני לבראשית א:/)).toBeInTheDocument();
 	});
 
 	it("renders maqaf-ending segments without trailing space", () => {

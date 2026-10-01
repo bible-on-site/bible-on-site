@@ -1,6 +1,4 @@
-// import Image from "next/image";
-
-import { toLetters } from "gematry";
+import type { Metadata } from "next";
 import { unstable_cache } from "next/cache";
 import { Suspense } from "react";
 import { getPerekByPerekId } from "../../../data/perek-dto";
@@ -8,18 +6,17 @@ import { getPerekIdsForSefer, getSeferByName } from "../../../data/sefer-dto";
 import { getArticleSummariesByPerekId } from "../../../lib/articles";
 import { getPerushimByPerekId } from "../../../lib/perushim";
 import { buildPerekGraph } from "../../../lib/seo/core-jsonld";
-import { buildEntityRefLookup } from "../../../lib/tanahpedia/entity-ref-lookup";
-import type { PerekEntityReference } from "../../../lib/tanahpedia/service";
-import { getEntityReferencesForPerek } from "../../../lib/tanahpedia/service";
+import { absUrl } from "../../../lib/seo/jsonld";
+import { getPerekIllustration } from "../../../lib/seo/perek-illustrations";
+import { fetchAllEntityRefs } from "../../../lib/tanahpedia/perek-entity-refs";
 import { JsonLd } from "../../components/JsonLd";
 import { ArticlesSection } from "./components/ArticlesSection";
 import Breadcrumb from "./components/Breadcrumb";
+import { PerekHeading } from "./components/PerekHeading";
+import { PerekIntro } from "./components/PerekIntro";
+import { PerekText } from "./components/PerekText";
 import { PerushimSection } from "./components/PerushimSection";
-import { Ptuah } from "./components/Ptuha";
-import { renderPasukWithEntityRefs } from "./components/pasuk-renderer";
 import SeferComposite from "./components/SeferComposite";
-import { Stuma } from "./components/Stuma";
-import { TanahpediaLink } from "./components/TanahpediaLink";
 import styles from "./page.module.css";
 // perakim are a closed list — no fallback rendering for unknown IDs.
 export const dynamicParams = false;
@@ -56,36 +53,50 @@ const getCachedPerushim = unstable_cache(
 		revalidate: false,
 	},
 );
-/** Cache entity references for tanahpedia links in pasuk text. */
-const getCachedEntityRefs = unstable_cache(
-	async (perekId: number) => getEntityReferencesForPerek(perekId),
-	["tanahpedia-entity-refs"],
-	{
-		tags: ["tanahpedia-entity-refs"],
-		revalidate: false,
-	},
-);
-
-/**
- * Fetch entity references for all perekIds in a sefer.
- * Returns a serializable record (perekId → refs[]) for passing to client components.
- */
-async function fetchAllEntityRefs(
-	perekIds: number[],
-): Promise<Record<number, PerekEntityReference[]>> {
-	const allRefs = await Promise.all(
-		perekIds.map((id) => getCachedEntityRefs(id)),
-	);
-	const result: Record<number, PerekEntityReference[]> = {};
-	for (let i = 0; i < perekIds.length; i++) {
-		if (allRefs[i].length > 0) {
-			result[perekIds[i]] = allRefs[i];
-		}
-	}
-	return result;
+export async function generateMetadata({
+	params,
+}: {
+	params: Promise<{ number: string }>;
+}): Promise<Metadata> {
+	const { number } = await params;
+	const perekId = Number.parseInt(number, 10);
+	const perekObj = getPerekByPerekId(perekId);
+	const illustration = getPerekIllustration(perekId);
+	const title = `${perekObj.source} | תנ"ך על הפרק`;
+	const description =
+		illustration?.description ??
+		`קריאת ${perekObj.source} בתנ"ך, עם פירושים ומאמרים על הפרק.`;
+	return {
+		title,
+		description,
+		alternates: { canonical: `/929/${perekId}` },
+		...(illustration
+			? {
+					robots: {
+						googleBot: { "max-image-preview": "large" as const },
+					},
+					openGraph: {
+						title,
+						description,
+						url: `/929/${perekId}`,
+						locale: "he_IL",
+						images: [
+							{
+								url: absUrl(illustration.socialSrc),
+								width: 1600,
+								height: 900,
+								alt: illustration.alt,
+							},
+						],
+					},
+					twitter: {
+						card: "summary_large_image" as const,
+						images: [absUrl(illustration.socialSrc)],
+					},
+				}
+			: {}),
+	};
 }
-
-// TODO: figure out if need to use generateMetadata
 export default async function Perek({
 	params,
 }: {
@@ -99,9 +110,6 @@ export default async function Perek({
 	const articles = await getCachedArticleSummaries(perekId);
 	const perushim = await getCachedPerushim(perekId);
 	const entityRefsByPerek = await fetchAllEntityRefs(perekIds);
-	const entityRefLookup = buildEntityRefLookup(
-		entityRefsByPerek[perekId] ?? [],
-	);
 
 	return (
 		<>
@@ -117,40 +125,12 @@ export default async function Perek({
 			</Suspense>
 			<div className={`${styles.perekContainer} seo-content`}>
 				<Breadcrumb perekObj={perekObj} />
-
-				<article className={styles.perekText}>
-					{perekObj.pesukim.map((pasuk, pasukIdx) => {
-						const pasukKey = pasukIdx + 1;
-						const pasukNumElement = (
-							<span className={styles.pasukNum}>{toLetters(pasukIdx + 1)}</span>
-						);
-						const pasukElement = renderPasukWithEntityRefs(
-							pasuk.segments,
-							pasukIdx,
-							entityRefLookup,
-							Ptuah,
-							Stuma,
-							styles.qri,
-							(entryUniqueName, children, key) => (
-								<TanahpediaLink
-									key={key}
-									entryUniqueName={entryUniqueName}
-									className={styles.tanahpediaLink}
-								>
-									{children}
-								</TanahpediaLink>
-							),
-						);
-						return (
-							<span key={pasukKey} id={`pasuk-${pasukKey}`}>
-								{pasukNumElement}
-								<span> </span>
-								{pasukElement}
-								<span> </span>
-							</span>
-						);
-					})}
-				</article>
+				<PerekHeading perekObj={perekObj} />
+				<PerekIntro perekObj={perekObj} />
+				<PerekText
+					perekObj={perekObj}
+					entityRefs={entityRefsByPerek[perekId] ?? []}
+				/>
 
 				{/* Perushim section - commentaries carousel */}
 				<PerushimSection perekId={perekId} perushim={perushim} />
