@@ -544,6 +544,8 @@ export interface PersonFamilyChildEdge {
 	relationshipType: string;
 	altGroupId: string | null;
 	sourceCitation: string | null;
+	/** Positive, one-based birth order from the parent-child relationship. */
+	birthOrder?: number | null;
 	/** הורה נוסף בצמד (למשל האם כשהמוקד אב) — לקיבוץ ילדים לפי בת זוג */
 	coParentEntityId: string | null;
 	coParentDisplayName: string | null;

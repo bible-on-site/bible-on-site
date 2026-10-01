@@ -1082,6 +1082,14 @@ SELECT 1";
             .context("Failed to insert Shimshon test person")?;
             apply_tanahpedia_family_and_place_content(&mut conn, &scripts, true).await?;
             assert!(tanahpedia_person_exists(&mut conn, "שמשון").await?);
+            let jacob_birth_orders: Vec<i32> = query_scalar(
+                "SELECT birth_order FROM tanahpedia_person_parent_child \
+                 WHERE parent_id = 'p2000000-0000-4000-8000-000000000001' \
+                 ORDER BY birth_order",
+            )
+            .fetch_all(&mut conn)
+            .await?;
+            assert_eq!(jacob_birth_orders, (1..=13).collect::<Vec<_>>());
 
             raw_sql(
                 "INSERT INTO tanahpedia_entry (id, unique_name, title) \
