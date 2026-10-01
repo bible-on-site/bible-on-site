@@ -1,6 +1,7 @@
 """Resumable local GPU recitation pipeline. Run --help for usage."""
 
 import argparse
+import gc
 from contextlib import closing
 import hashlib
 import json
@@ -80,25 +81,46 @@ def decode(path):
 def transcribe(audio, args):
     import torch
     from transformers import pipeline
+    from transformers.utils import logging
+    from whisper_memory import bounded_whisper_memory
 
-    # Full large-v3, no quantization or speed-oriented distilled/turbo model.
-    # Native long-form decoding avoids externally cutting words at chunk edges.
-    print(f"Loading {args.asr_model} on {args.device} (float32)", flush=True)
-    model = pipeline("automatic-speech-recognition", model=args.asr_model,
-                     device=args.device, dtype=torch.float32, revision=args.asr_revision)
-    print(f"Transcribing {len(audio)/16000:.1f}s; beam search=5; word timestamps enabled", flush=True)
-    result = model({"raw": audio, "sampling_rate": 16000}, return_timestamps="word",
-                   generate_kwargs={"language": "he", "task": "transcribe", "num_beams": 5})
-    recognized = []
-    for chunk in result["chunks"]:
-        start, end = chunk["timestamp"]
-        text = normalize(chunk["text"])
-        if text and start is not None and end is not None and 0 <= start < end:
-            recognized.append({"text": text, "start": float(start), "end": float(end)})
-    del model
-    if args.device == "cuda":
-        torch.cuda.empty_cache()
-    return recognized
+    logging.disable_progress_bar()
+    model = None
+    try:
+        # Full large-v3, FP32, native long-form decoding, and five beams throughout.
+        print(f"Loading {args.asr_model} on {args.device} (float32)", flush=True)
+        model = pipeline("automatic-speech-recognition", model=args.asr_model,
+                         device=args.device, dtype=torch.float32, revision=args.asr_revision)
+        options = {"language": "he", "task": "transcribe", "num_beams": 5,
+                   "monitor_progress": report_asr_progress}
+        if args.device == "cuda":
+            # Whisper reads cross-attention cache layers directly after the first
+            # token. Our hooks handle both caches, including those direct reads.
+            options["cache_implementation"] = "dynamic"
+            torch.cuda.reset_peak_memory_stats()
+        print(f"Transcribing {len(audio)/16000:.1f}s; beam search=5; word timestamps enabled", flush=True)
+        with bounded_whisper_memory(model.model):
+            result = model({"raw": audio, "sampling_rate": 16000}, return_timestamps="word",
+                           generate_kwargs=options)
+        recognized = []
+        for chunk in result["chunks"]:
+            start, end = chunk["timestamp"]
+            text = normalize(chunk["text"])
+            if text and start is not None and end is not None and 0 <= start < end:
+                recognized.append({"text": text, "start": float(start), "end": float(end)})
+        if args.device == "cuda":
+            print(f"Peak CUDA allocation: {torch.cuda.max_memory_allocated()/1024**3:.2f} GiB", flush=True)
+        return recognized
+    finally:
+        model = None
+        gc.collect()
+        if args.device == "cuda":
+            torch.cuda.empty_cache()
+
+
+def report_asr_progress(progress):
+    frames = progress.detach().cpu().tolist()
+    print("ASR progress: " + ", ".join(f"{done/100:.1f}/{total/100:.1f}s" for done, total in frames), flush=True)
 
 
 def align_track(audio, words, recognized, aligner, args):
@@ -321,6 +343,8 @@ def process_track(path, chapters, config, args):
             align_manifest(path, words, fingerprint, manifest, report, config, args)
         except Exception as error:
             print(f"{perek_id}: FAILED: {error}", flush=True)
+            if isinstance(error, MemoryError) or "out of memory" in str(error).lower():
+                raise MemoryError(f"Perek {perek_id}: inference ran out of memory; stopping the batch without reducing quality") from error
             # A failed rerun must not replace a previously validated artifact.
             return str(error)
     if manifest["alignmentStatus"] == "ready":
@@ -343,9 +367,15 @@ def main():
               "minCoverage": args.min_coverage}
     failures = []
     for path in files:
-        error = process_track(path, chapters, config, args)
+        try:
+            error = process_track(path, chapters, config, args)
+        except MemoryError as error:
+            failures.append({"perekId": int(path.stem.split("_")[0]), "error": str(error)})
+            write_json(args.cache / "failures.json", failures)
+            break
         if error is not None:
             failures.append({"perekId": int(path.stem.split("_")[0]), "error": error})
+            write_json(args.cache / "failures.json", failures)
     export_database(args.output, Path(__file__).parent / "recitation.sqlite")
     publish(Path(__file__).parent / "recitation.sqlite", args.text)
     write_json(args.cache / "failures.json", failures)

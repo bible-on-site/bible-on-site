@@ -1731,7 +1731,8 @@ jobs:
       - name: Test alignment invariants without downloading GPU models
         run: |
           python -m venv data/recitation/.venv
-          data/recitation/.venv/bin/python -m pip install numpy==2.5.3
+          data/recitation/.venv/bin/python -m pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
+          data/recitation/.venv/bin/python -m pip install numpy==2.5.3 transformers==5.18.0
           cd data/recitation
           .venv/bin/python -m unittest -v
           .venv/bin/python audit.py
