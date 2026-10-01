@@ -3,16 +3,12 @@
 import os
 import unittest
 
-try:
-    import torch
-    from transformers import WhisperConfig, WhisperForConditionalGeneration
-except ImportError:
-    torch = None
+import torch
+from transformers import WhisperConfig, WhisperForConditionalGeneration
 
 from whisper_memory import bounded_whisper_memory
 
 
-@unittest.skipIf(torch is None, "Install torch and transformers to test Whisper memory handling")
 class WhisperMemoryTests(unittest.TestCase):
     def compare(self, device):
         torch.manual_seed(17)
