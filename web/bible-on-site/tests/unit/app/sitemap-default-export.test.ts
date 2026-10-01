@@ -70,6 +70,9 @@ describe("sitemap default export", () => {
 		expect(result).toHaveLength(expectedLength);
 
 		expect(urls[0]).toBe("https://example.com");
+		expect(result.every((entry) => entry.lastModified === undefined)).toBe(
+			true,
+		);
 		expect(urls).toContain("https://example.com/929/1/10");
 		expect(urls).toContain("https://example.com/929/authors");
 		expect(urls).toContain(
