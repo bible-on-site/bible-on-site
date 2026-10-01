@@ -762,3 +762,30 @@ mod additionals {
         }
     }
 }
+
+/// Verify the real Sefaria aggregation still matches the independent recording identities.
+#[test]
+#[cfg_attr(not(feature = "integration"), ignore)]
+fn regenerated_sefaria_accepts_recitation_intermediate_database() {
+    let mut books: Vec<tanah_view::models::Sefer> =
+        serde_json::from_value(Value::Array(get_tanah_view())).unwrap();
+    let intermediate =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../recitation/recitation.sqlite");
+    tanah_view::recitation::merge(&mut books, &intermediate)
+        .expect("Fresh Sefaria aggregation must retain canonical recording word identities");
+    let esther = books.iter().find(|book| book.name == "אסתר").unwrap();
+    let chapter = esther.perakim.as_ref().unwrap().last().unwrap();
+    assert_eq!(chapter.perek_id, 829);
+    assert_eq!(
+        chapter.recitation.as_ref().unwrap()["alignmentStatus"],
+        "ready"
+    );
+    assert_eq!(
+        chapter.pesukim[0].segments[0]
+            .recording_time_frame
+            .as_ref()
+            .unwrap()
+            .from,
+        "00:00:00.641"
+    );
+}
