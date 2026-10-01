@@ -828,6 +828,7 @@ CREATE TABLE `tanahpedia_person_parent_child` (
     `parent_role_id` char(36) NOT NULL,
     `alt_group_id` char(36) DEFAULT NULL,
     `source_citation` varchar(400) DEFAULT NULL,
+    `birth_order` int DEFAULT NULL,
     PRIMARY KEY (`id`),
     KEY `idx_parent_child_parent` (`parent_id`),
     KEY `idx_parent_child_child` (`child_id`),
