@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 const KB = 1024;
@@ -7,6 +8,15 @@ const isProduction = process.env.NODE_ENV === "production";
 const productionBulletinClient = path.resolve(
 	import.meta.dirname,
 	"src/lib/download/bulletin-client-local.production.ts",
+);
+const sefarimForBookRoutes = JSON.parse(
+	readFileSync(
+		path.resolve(
+			import.meta.dirname,
+			"src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json",
+		),
+		"utf8",
+	),
 );
 
 /** @type {import('next').NextConfig} */
@@ -81,14 +91,21 @@ const nextConfig = {
 	cacheMaxMemorySize: 256 * MB,
 
 	async rewrites() {
-		return [
-			// /929/rabbis → /929/authors alias
-			{ source: "/929/rabbis", destination: "/929/authors" },
-			{
-				source: "/929/rabbis/:authorParam*",
-				destination: "/929/authors/:authorParam*",
-			},
-		];
+		return {
+			beforeFiles: sefarimForBookRoutes.map((sefer) => ({
+				source: `/929/${sefer.name}/:bookPage(תוכן|כריכה|גב)`,
+				destination: `/929/${sefer.perekFrom ?? sefer.additionals[0].perekFrom}?book&bookPage=:bookPage`,
+			})),
+			afterFiles: [
+				// /929/rabbis → /929/authors alias
+				{ source: "/929/rabbis", destination: "/929/authors" },
+				{
+					source: "/929/rabbis/:authorParam*",
+					destination: "/929/authors/:authorParam*",
+				},
+			],
+			fallback: [],
+		};
 	},
 
 	async redirects() {

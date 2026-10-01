@@ -4,6 +4,35 @@ import type { HistoryMapper, PageSemantics } from "html-flip-book-react";
 const CONTENT_OFFSET = 3;
 const TOC_PAGE_INDEX = CONTENT_OFFSET - 1;
 const TOC_SPREAD_INDEX = TOC_PAGE_INDEX - 1;
+const FRONT_COVER_INDEX = 0;
+
+export type BookPage = "front" | "toc" | "back";
+
+const bookPageSlugs: Record<BookPage, string> = {
+	front: "כריכה",
+	toc: "תוכן",
+	back: "גב",
+};
+
+export function bookPageFromPath(
+	pathname: string,
+	seferName?: string,
+): BookPage | null {
+	const segments = decodeURIComponent(pathname).split("/").filter(Boolean);
+	if (
+		seferName &&
+		(segments.length !== 3 ||
+			segments[0] !== "929" ||
+			segments[1] !== seferName)
+	)
+		return null;
+	const slug = segments.at(-1);
+	return (
+		(Object.keys(bookPageSlugs) as BookPage[]).find(
+			(page) => bookPageSlugs[page] === slug,
+		) ?? null
+	);
+}
 
 export function toHebrewChapterNumber(num: number): string {
 	return toLetters(num);
@@ -44,13 +73,20 @@ export function buildPageSemantics(
 export function buildHistoryMapper(
 	perekIds: number[] | undefined,
 	pageSemantics: PageSemantics,
+	seferName: string,
 ): HistoryMapper {
+	const bookRoute = (page: BookPage) =>
+		`/929/${seferName}/${bookPageSlugs[page]}?book`;
+	const backCoverIndex = CONTENT_OFFSET + (perekIds?.length ?? 0) * 2;
 	return {
 		pageToRoute: (pageIndex, _semantic) => {
+			if (!perekIds?.length) return null;
+			if (pageIndex === FRONT_COVER_INDEX) return bookRoute("front");
 			if (pageIndex === TOC_SPREAD_INDEX || pageIndex === TOC_PAGE_INDEX) {
-				const firstPerekId = perekIds?.[0];
-				return firstPerekId == null ? null : `/929/${firstPerekId}?book&toc`;
+				return bookRoute("toc");
 			}
+			if (perekIds?.length && pageIndex === backCoverIndex)
+				return bookRoute("back");
 			if (pageIndex < CONTENT_OFFSET) return null;
 			const perekIdx = Math.floor((pageIndex - CONTENT_OFFSET) / 2);
 			const clampedIdx = Math.min(perekIdx, (perekIds?.length ?? 1) - 1);
@@ -59,9 +95,14 @@ export function buildHistoryMapper(
 			return `/929/${id}?book`;
 		},
 		routeToPage: (route) => {
-			const query = route.split("?")[1]?.split("#")[0] ?? "";
+			if (!perekIds?.length) return null;
+			const [pathname, query = ""] = route.split("?");
 			const params = new URLSearchParams(query);
 			if (params.has("book")) {
+				const bookPage = bookPageFromPath(pathname, seferName);
+				if (bookPage === "front") return FRONT_COVER_INDEX;
+				if (bookPage === "toc") return TOC_SPREAD_INDEX;
+				if (bookPage === "back") return backCoverIndex;
 				const m = route.match(/\/929\/(\d+)/);
 				if (m) {
 					const id = Number.parseInt(m[1], 10);

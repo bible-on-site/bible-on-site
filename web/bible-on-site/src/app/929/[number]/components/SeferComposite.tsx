@@ -21,6 +21,7 @@ import type { PerushSummary } from "@/lib/perushim";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import ReadModeToggler from "./ReadModeToggler";
 import styles from "./sefer-composite.module.css";
+import { bookPageFromPath } from "./sefer-page-utils";
 
 // Lazy-load the heavy Sefer (FlipBook) component so its JS bundle is not
 // included in the initial page load.  When the user toggles book-view the
@@ -120,15 +121,26 @@ const ClientWrapper = (props: {
 	const onToggleFromUser = useCallback(
 		(wantBook: boolean) => {
 			setStoredPerekViewMode(wantBook ? "book" : "seo");
+			const togglePath =
+				!wantBook && bookPageFromPath(pathname, props.perekObj.sefer)
+					? `/929/${props.perekObj.perekId}`
+					: pathname;
 			const next = pathnameWithBookQuery(
-				pathname,
+				togglePath,
 				searchParams.toString(),
 				wantBook,
 			);
 			router.replace(next, { scroll: false });
 			handleToggle(wantBook, wantBook);
 		},
-		[handleToggle, pathname, router, searchParams],
+		[
+			handleToggle,
+			pathname,
+			props.perekObj.perekId,
+			props.perekObj.sefer,
+			router,
+			searchParams,
+		],
 	);
 
 	useEffect(() => {
@@ -176,7 +188,11 @@ const ClientWrapper = (props: {
 						perekIds={props.perekIds}
 						entityRefsByPerek={props.entityRefsByPerek}
 						initialSlug={props.initialSlug}
-						initialToc={searchParams.get("toc") != null}
+						initialBookPage={
+							bookPageFromPath(pathname, props.perekObj.sefer) ??
+							bookPageFromPath(`/${searchParams.get("bookPage") ?? ""}`) ??
+							(searchParams.get("toc") != null ? "toc" : null)
+						}
 					/>
 				) : currentlyToggled ? (
 					<SeferLoadingIndicator />

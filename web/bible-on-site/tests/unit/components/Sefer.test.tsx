@@ -260,7 +260,9 @@ describe("Sefer component", () => {
 			semanticName: string;
 			title: string;
 		}) => string | null;
-		expect(getHref({ pageIndex: 0, semanticName: "", title: "" })).toBeNull();
+		expect(getHref({ pageIndex: 0, semanticName: "", title: "" })).toBe(
+			"/929/בראשית/כריכה?book",
+		);
 		expect(
 			getHref({ pageIndex: 3, semanticName: "א", title: "בראשית א" }),
 		).toBe("/929/1?book");
@@ -273,10 +275,33 @@ describe("Sefer component", () => {
 				articles={[]}
 				perushim={[]}
 				perekIds={[1]}
-				initialToc
+				initialBookPage="toc"
 			/>,
 		);
 		expect(capturedFlipBookProps.initialTurnedLeaves).toEqual([0]);
+	});
+
+	it("opens cover routes at the first and last leaf", () => {
+		const { rerender } = render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1]}
+				initialBookPage="front"
+			/>,
+		);
+		expect(capturedFlipBookProps.initialTurnedLeaves).toEqual([]);
+		rerender(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1]}
+				initialBookPage="back"
+			/>,
+		);
+		expect(capturedFlipBookProps.initialTurnedLeaves).toEqual([0, 1, 2]);
 	});
 
 	it("onDownloadSefer wraps result from server action", async () => {

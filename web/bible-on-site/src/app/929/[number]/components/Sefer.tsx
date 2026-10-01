@@ -51,6 +51,7 @@ import { renderPasukWithEntityRefs } from "./pasuk-renderer";
 import { Stuma } from "./Stuma";
 import styles from "./sefer.module.css";
 import {
+	type BookPage,
 	buildHistoryMapper,
 	buildPageSemantics,
 	CONTENT_OFFSET,
@@ -104,7 +105,7 @@ const Sefer = (props: {
 	perekIds?: number[];
 	entityRefsByPerek?: Record<number, PerekEntityReference[]>;
 	initialSlug?: string;
-	initialToc?: boolean;
+	initialBookPage?: BookPage | null;
 }) => {
 	const {
 		perekObj,
@@ -113,7 +114,7 @@ const Sefer = (props: {
 		perekIds,
 		entityRefsByPerek,
 		initialSlug,
-		initialToc,
+		initialBookPage,
 	} = props;
 	const sefer = getSeferByName(perekObj.sefer);
 	const flipBookRef = useRef<FlipBookHandle>(null);
@@ -147,14 +148,20 @@ const Sefer = (props: {
 	);
 
 	const historyMapper: HistoryMapper | undefined = useMemo(
-		() => buildHistoryMapper(perekIds, hePageSemantics),
-		[perekIds, hePageSemantics],
+		() => buildHistoryMapper(perekIds, hePageSemantics, perekObj.sefer),
+		[perekIds, hePageSemantics, perekObj.sefer],
 	);
 
 	const initialTurnedLeaves = useMemo(
 		() =>
-			initialToc ? [0] : computeInitialTurnedLeaves(perekIds, perekObj.perekId),
-		[initialToc, perekIds, perekObj.perekId],
+			initialBookPage === "front"
+				? []
+				: initialBookPage === "toc"
+					? [0]
+					: initialBookPage === "back" && perekIds
+						? Array.from({ length: perekIds.length + 2 }, (_, i) => i)
+						: computeInitialTurnedLeaves(perekIds, perekObj.perekId),
+		[initialBookPage, perekIds, perekObj.perekId],
 	);
 
 	const frontCover = (

@@ -1,4 +1,5 @@
 import {
+	bookPageFromPath,
 	buildHistoryMapper,
 	buildPageSemantics,
 	CONTENT_OFFSET,
@@ -88,16 +89,17 @@ describe("sefer-page-utils", () => {
 	describe("buildHistoryMapper", () => {
 		const perekIds = [100, 101, 102];
 		const pageSemantics = buildPageSemantics(3, ["a", "b", "c"]);
-		const mapper = buildHistoryMapper(perekIds, pageSemantics);
+		const mapper = buildHistoryMapper(perekIds, pageSemantics, "בראשית");
 
 		describe("pageToRoute", () => {
-			it("returns null for the front cover", () => {
-				expect(mapper.pageToRoute(0, undefined)).toBeNull();
+			it("gives both covers shareable book routes", () => {
+				expect(mapper.pageToRoute(0, undefined)).toBe("/929/בראשית/כריכה?book");
+				expect(mapper.pageToRoute(9, undefined)).toBe("/929/בראשית/גב?book");
 			});
 
 			it("gives the TOC a shareable book route", () => {
-				expect(mapper.pageToRoute(1, undefined)).toBe("/929/100?book&toc");
-				expect(mapper.pageToRoute(2, undefined)).toBe("/929/100?book&toc");
+				expect(mapper.pageToRoute(1, undefined)).toBe("/929/בראשית/תוכן?book");
+				expect(mapper.pageToRoute(2, undefined)).toBe("/929/בראשית/תוכן?book");
 			});
 
 			it("returns route with ?book for content pages", () => {
@@ -116,7 +118,7 @@ describe("sefer-page-utils", () => {
 			});
 
 			it("returns null when perekIds is undefined", () => {
-				const noIds = buildHistoryMapper(undefined, pageSemantics);
+				const noIds = buildHistoryMapper(undefined, pageSemantics, "בראשית");
 				expect(noIds.pageToRoute(CONTENT_OFFSET, undefined)).toBeNull();
 			});
 		});
@@ -127,8 +129,20 @@ describe("sefer-page-utils", () => {
 			});
 
 			it("restores the TOC from its book route", () => {
+				expect(mapper.routeToPage("/929/בראשית/תוכן?book")).toBe(1);
+				expect(
+					mapper.routeToPage(
+						"/929/%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA/%D7%AA%D7%95%D7%9B%D7%9F?book",
+					),
+				).toBe(1);
 				expect(mapper.routeToPage("/929/100?book&toc")).toBe(1);
 				expect(mapper.routeToPage("/929/100?toc&book")).toBe(1);
+			});
+
+			it("restores the front and back cover routes", () => {
+				expect(mapper.routeToPage("/929/בראשית/כריכה?book")).toBe(0);
+				expect(mapper.routeToPage("/929/בראשית/גב?book")).toBe(9);
+				expect(mapper.routeToPage("/929/שמות/גב?book")).toBeNull();
 			});
 
 			it("returns null for routes without ?book and without /929/ pattern", () => {
@@ -164,11 +178,25 @@ describe("sefer-page-utils", () => {
 			});
 
 			it("returns null when perekIds is undefined and route is ?book", () => {
-				const noIds = buildHistoryMapper(undefined, pageSemantics);
+				const noIds = buildHistoryMapper(undefined, pageSemantics, "בראשית");
 				expect(noIds.routeToPage("/929/100?book")).toBeNull();
 				expect(noIds.pageToRoute(2, undefined)).toBeNull();
 			});
 		});
+	});
+
+	it("recognizes semantic page slugs in decoded and encoded paths", () => {
+		expect(bookPageFromPath("/929/בראשית/כריכה")).toBe("front");
+		expect(bookPageFromPath("/929/בראשית/תוכן")).toBe("toc");
+		expect(bookPageFromPath("/929/בראשית/גב")).toBe("back");
+		expect(
+			bookPageFromPath(
+				"/929/%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA/%D7%AA%D7%95%D7%9B%D7%9F",
+			),
+		).toBe("toc");
+		expect(bookPageFromPath("/929/1")).toBeNull();
+		expect(bookPageFromPath("/929/בראשית/תוכן", "שמות")).toBeNull();
+		expect(bookPageFromPath("/929/1/תוכן", "בראשית")).toBeNull();
 	});
 
 	describe("computeInitialTurnedLeaves", () => {

@@ -33,9 +33,9 @@ describe("perek-view-preference", () => {
 	});
 
 	it("pathnameWithBookQuery removes book", () => {
-		expect(pathnameWithBookQuery("/929/5", "book=&toc=&x=2", false)).toBe(
-			"/929/5?x=2",
-		);
+		expect(
+			pathnameWithBookQuery("/929/5", "book=&toc=&bookPage=תוכן&x=2", false),
+		).toBe("/929/5?x=2");
 	});
 
 	it("pathnameWithBookQuery omits ? when empty", () => {

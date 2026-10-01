@@ -77,16 +77,23 @@ test.describe("Sefer view", () => {
 			(
 				window as Window & { __bookHistoryMarker?: string }
 			).__bookHistoryMarker = "same-document";
+			document
+				.querySelector(".he-book")
+				?.setAttribute("data-book-instance", "same-book");
 		});
 
 		await page.locator(".flipbook-toolbar-next").click();
 		await expect(page).toHaveURL(/\/929\/2\?book/);
 		await page.locator(".flipbook-toolbar-toc").click();
-		await expect(page).toHaveURL(/\/929\/1\?book&toc$/);
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/תוכן");
 		await page.goBack();
 		await expect(page).toHaveURL(/\/929\/2\?book/);
 		await page.goForward();
-		await expect(page).toHaveURL(/\/929\/1\?book&toc$/);
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/תוכן");
 		await page.goBack();
 		await expect(page).toHaveURL(/\/929\/2\?book/);
 		await page.goBack();
@@ -98,6 +105,9 @@ test.describe("Sefer view", () => {
 						.__bookHistoryMarker,
 			),
 		).toBe("same-document");
+		await expect(
+			page.locator('.he-book[data-book-instance="same-book"]'),
+		).toHaveCount(1);
 		await expect(page.locator(".flipbook-toolbar-indicator")).toHaveValue(
 			"א / נ",
 		);
@@ -110,12 +120,37 @@ test.describe("Sefer view", () => {
 		const seferPage = new SeferPage(page);
 		await seferPage.openSeferViewForPerek(1);
 		await page.locator(".flipbook-toolbar-toc").click();
-		await expect(page).toHaveURL(/\/929\/1\?book&toc$/);
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/תוכן");
 		await page.reload();
 		await expect(
 			page
 				.locator('.he-book .page[data-page-index="2"] .toc-link[href]')
 				.first(),
+		).toBeVisible();
+	});
+
+	test("front and back covers have shareable URLs that reopen the same spread", async ({
+		page,
+	}) => {
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await page.locator(".flipbook-toolbar-first").click();
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/כריכה");
+		await page.reload();
+		await expect(
+			page.locator('.he-book .page[data-page-index="0"]'),
+		).toBeVisible();
+		await page.locator(".flipbook-toolbar-last").click();
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/גב");
+		await page.reload();
+		await expect(
+			page.locator('.he-book .page[data-page-index="103"]'),
 		).toBeVisible();
 	});
 
