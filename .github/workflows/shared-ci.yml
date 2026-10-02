@@ -51,7 +51,12 @@ jobs:
           echo "BASE_SHA: $BASE_SHA"
           echo "Changed files:"
           git diff --name-only $BASE_SHA HEAD
-          MODULE_CHANGED=$(git diff --name-only $BASE_SHA HEAD | grep -q -E "^${{ inputs.module_name }}/" && echo "true" || echo "false")
+          MODULE_PATTERN="^${{ inputs.module_name }}/"
+          if [ "${{ inputs.module_directory }}" = "web/bible-on-site" ]; then
+            # Approved timing changes must package/release the website too.
+            MODULE_PATTERN="$MODULE_PATTERN|^data/recitation/recitation\.sqlite$"
+          fi
+          MODULE_CHANGED=$(git diff --name-only $BASE_SHA HEAD | grep -q -E "$MODULE_PATTERN" && echo "true" || echo "false")
           # Convert comma-separated paths to regex pattern
           CI_PATHS=$(echo "${{ inputs.ci_path }}" | sed 's/,/\\|/g' | sed 's/\./\\./g')
           echo "Raw CI paths: ${{ inputs.ci_path }}"

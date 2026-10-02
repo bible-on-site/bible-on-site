@@ -739,6 +739,11 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
+      - name: Merge and audit approved recitation timings
+        run: |
+          python ../../data/recitation/publish.py
+          python ../../data/recitation/audit.py
+
       - name: Setup Node.js
         id: setup-node
         uses: actions/setup-node@v7
@@ -907,6 +912,11 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
+
+      - name: Merge and audit approved recitation timings
+        run: |
+          python ../../data/recitation/publish.py
+          python ../../data/recitation/audit.py
 
       - name: Setup Node.js
         id: setup-node
@@ -1735,11 +1745,15 @@ jobs:
           data/recitation/.venv/bin/python -m pip install numpy==2.5.3 transformers==5.18.0
           cd data/recitation
           .venv/bin/python -m unittest -v
+          .venv/bin/python publish.py
           .venv/bin/python audit.py
       - name: Verify canonical text preprocessing
         run: node --test data/sefaria/pipelines/tanah-view/tests/preprocessor.test.mjs
       - name: Install storage test dependencies
         run: npm ci --prefix devops
+      - name: Verify repeatable deployment recovery
+        working-directory: devops
+        run: node --import tsx --test deploy/ecr-deploy/resume-image.test.mts
       - name: Start RustFS
         run: docker compose -f devops/docker-compose.yml up -d --wait --wait-timeout 180 rustfs
       - name: Verify MP3 byte-range seeking

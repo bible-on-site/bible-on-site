@@ -1,5 +1,6 @@
 import { getPerekByPerekId } from "@/data/perek-dto";
 import { loadRecitation } from "@/lib/recitation-loader";
+import packageJson from "../../../../../package.json";
 
 /** Resolve audio through the same S3/RustFS settings as the rest of the site. */
 export async function GET(
@@ -24,7 +25,10 @@ export async function GET(
 		return Response.json(
 			{ ...data, audioUrl: `${base}/recordings/${perekId}_record.mp3` },
 			{
-				headers: { "Cache-Control": "public, max-age=300" },
+				headers: {
+					"Cache-Control": "public, max-age=300",
+					"X-Website-Version": packageJson.version,
+				},
 			},
 		);
 	} catch (error) {

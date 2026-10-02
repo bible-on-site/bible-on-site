@@ -126,3 +126,43 @@ button.heading {
 	outline: 2px solid #547bb2;
 	outline-offset: 3px;
 }
+
+.toggle {
+	position: relative;
+}
+.progress {
+	position: absolute;
+	inset: 0;
+	width: 32px;
+	height: 32px;
+	pointer-events: none;
+}
+.progressTrack,
+.progressValue {
+	fill: none;
+	stroke-width: 2;
+}
+.progressTrack {
+	stroke: #e4e8ef;
+}
+.progressValue {
+	stroke: #264c88;
+	stroke-linecap: round;
+	transition: stroke-dashoffset 150ms ease;
+}
+.progress[data-indeterminate="true"] {
+	animation: recitation-spin 1s linear infinite;
+}
+@keyframes recitation-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.progress[data-indeterminate="true"] {
+		animation: none;
+	}
+	.progressValue {
+		transition: none;
+	}
+}
