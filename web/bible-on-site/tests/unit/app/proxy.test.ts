@@ -102,6 +102,8 @@ describe("proxy", () => {
 				`/pedia/${encodeURIComponent("טהורים")}`,
 			],
 			["/tanahpedia/nonsense", "/pedia"],
+			["/tanahpedia/jerusalem", `/pedia/${encodeURIComponent("ירושלים")}`],
+			["/pedia/jerusalem", `/pedia/${encodeURIComponent("ירושלים")}`],
 			["/pedia/person", `/pedia/${encodeURIComponent("אישים")}`],
 			["/pedia/person?role=prophet", `/pedia/${encodeURIComponent("נביאים")}`],
 			[

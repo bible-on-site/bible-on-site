@@ -274,3 +274,16 @@ test("a broken download releases its reader and can be prepared again", async ()
 	expect(decode).toHaveBeenCalledWith(bytes);
 	player.dispose();
 });
+
+test("dispose tolerates a rejected audio-context close and prevents later playback", async () => {
+	close.mockRejectedValueOnce(new Error("context already closed"));
+	const player = new RecitationAudio("/audio.mp3", hash);
+	player.dispose();
+	await Promise.resolve();
+	player.dispose();
+	expect(close).toHaveBeenCalledTimes(1);
+	await expect(player.play(100, 200, jest.fn())).rejects.toThrow(
+		"Player disposed",
+	);
+	expect(sources).toHaveLength(0);
+});

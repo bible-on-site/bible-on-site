@@ -21,6 +21,10 @@ jest.mock("../../../src/lib/seo/perek-images-data", () => ({
 	getPerekImagesByChapter: jest.fn(async () => ({})),
 }));
 
+jest.mock("../../../src/lib/tanahpedia/perek-entity-refs", () => ({
+	fetchAllEntityRefs: jest.fn(async () => ({})),
+}));
+
 jest.mock("next/navigation", () => ({
 	notFound: jest.fn(() => {
 		throw new Error("NEXT_NOT_FOUND");

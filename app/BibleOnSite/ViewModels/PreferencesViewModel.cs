@@ -12,6 +12,9 @@ public partial class PreferencesViewModel : ObservableObject
 {
     private readonly PreferencesService _preferencesService;
     private readonly PerushimNotesService _perushimNotesService;
+    private readonly IFileSystem _fileSystem;
+    private readonly IShare _share;
+    private readonly IAppNavigator _navigator;
 
     public PreferencesViewModel() : this(PreferencesService.Instance, PerushimNotesService.Instance)
     {
@@ -23,9 +26,24 @@ public partial class PreferencesViewModel : ObservableObject
     }
 
     public PreferencesViewModel(PreferencesService preferencesService, PerushimNotesService perushimNotesService)
+        : this(preferencesService, perushimNotesService, FileSystem.Current, Share.Default)
+    {
+    }
+
+    public PreferencesViewModel(PreferencesService preferencesService, PerushimNotesService perushimNotesService,
+        IFileSystem fileSystem, IShare share)
+        : this(preferencesService, perushimNotesService, fileSystem, share, ShellAppNavigator.Instance)
+    {
+    }
+
+    public PreferencesViewModel(PreferencesService preferencesService, PerushimNotesService perushimNotesService,
+        IFileSystem fileSystem, IShare share, IAppNavigator navigator)
     {
         _preferencesService = preferencesService;
         _perushimNotesService = perushimNotesService;
+        _fileSystem = fileSystem;
+        _share = share;
+        _navigator = navigator;
         _preferencesService.PreferencesChanged += OnPreferencesChanged;
     }
 
@@ -157,9 +175,9 @@ public partial class PreferencesViewModel : ObservableObject
         {
             var progress = new Progress<double>(p => PerushimDownloadProgress = Math.Clamp(p, 0, 1));
             var ok = await _perushimNotesService.TryDownloadNotesAsync(progress);
-            if (!ok && Application.Current?.Windows?.Count > 0 && Application.Current.Windows[0].Page is Page page)
+            if (!ok)
             {
-                await page.DisplayAlertAsync("שגיאה", "לא ניתן להוריד את חבילת הפירושים. נסו שוב מאוחר יותר.", "אישור");
+                await _navigator.DisplayAlertAsync("שגיאה", "לא ניתן להוריד את חבילת הפירושים. נסו שוב מאוחר יותר.", "אישור");
             }
         }
         finally
@@ -183,9 +201,9 @@ public partial class PreferencesViewModel : ObservableObject
         {
             var report = await _perushimNotesService.GetDiagnosticsAsync();
             var fileName = $"perushim_diagnostics_{DateTime.UtcNow:yyyyMMdd_HHmmss}.txt";
-            var path = Path.Combine(FileSystem.CacheDirectory, fileName);
+            var path = Path.Combine(_fileSystem.CacheDirectory, fileName);
             await File.WriteAllTextAsync(path, report);
-            await Share.Default.RequestAsync(new ShareFileRequest
+            await _share.RequestAsync(new ShareFileRequest
             {
                 Title = "ייצוא לוגים — פירושים",
                 File = new ShareFile(path),
@@ -194,8 +212,7 @@ public partial class PreferencesViewModel : ObservableObject
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Export perushim logs failed: {ex.Message}");
-            if (Application.Current?.Windows?.Count > 0 && Application.Current.Windows[0].Page is Page page)
-                await page.DisplayAlertAsync("שגיאה", $"לא ניתן לייצא לוגים: {ex.Message}", "אישור");
+            await _navigator.DisplayAlertAsync("שגיאה", $"לא ניתן לייצא לוגים: {ex.Message}", "אישור");
         }
     }
 
