@@ -225,7 +225,10 @@ export default function RecitationPlayer({
 		preparing.current = true;
 		setMessage(LOADING_MESSAGE);
 		setDownloadProgress(null);
-		fetch(`/api/recitation/${perekId}`, { signal: controller.signal })
+		fetch(`/api/recitation/${perekId}`, {
+			signal: controller.signal,
+			cache: "no-store",
+		})
 			.then(async (response) => {
 				if (controller.signal.aborted) return;
 				if (response.status === 404) {
