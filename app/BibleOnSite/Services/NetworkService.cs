@@ -37,7 +37,10 @@ public class NetworkService : IDisposable
     /// </summary>
     public void StartMonitoring()
     {
-        if (_disposed || _monitoring) return;
+        if (_disposed || _monitoring)
+        {
+            return;
+        }
         _monitoring = true;
         _connectivity.ConnectivityChanged += OnConnectivityChanged;
         Console.WriteLine($"[Network] Monitoring started. Online={_connectivity.NetworkAccess == NetworkAccess.Internet}");

@@ -25,7 +25,7 @@ public class DiagnosticsExportTests
         share.Setup(s => s.RequestAsync(It.IsAny<ShareFileRequest>())).Callback<ShareFileRequest>(r => files.Add(r.File!.FullPath));
         var settings = new PreferencesViewModel(preferences, notes, storage.FileSystem.Object, share.Object);
         await settings.ExportPerushimLogsCommand.ExecuteAsync(null);
-        var chapter = new PerekViewModel(preferences, null, notesService: notes, fileSystem: storage.FileSystem.Object, share: share.Object);
+        var chapter = new PerekViewModel(preferences, null, null, null, notes, null, storage.FileSystem.Object, share.Object);
         await chapter.ExportPerushimLogsCommand.ExecuteAsync(null);
         files.Should().HaveCount(2);
         foreach (var path in files)
@@ -48,8 +48,8 @@ public class DiagnosticsExportTests
         var navigator = new Mock<IAppNavigator>();
         var settings = new PreferencesViewModel(preferences, notes, storage.FileSystem.Object, share.Object, navigator.Object);
         await settings.ExportPerushimLogsAsync();
-        var chapter = new PerekViewModel(preferences, null, notesService: notes, navigator: navigator.Object,
-            fileSystem: storage.FileSystem.Object, share: share.Object);
+        var chapter = new PerekViewModel(preferences, null, null, null, notes, navigator.Object,
+            storage.FileSystem.Object, share.Object);
         await chapter.ExportPerushimLogsAsync();
         navigator.Verify(n => n.DisplayAlertAsync("שגיאה", It.Is<string>(m => m.Contains("share unavailable")), "אישור"), Times.Exactly(2));
     }

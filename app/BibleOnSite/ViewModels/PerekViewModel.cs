@@ -111,10 +111,15 @@ public partial class PerekViewModel : ObservableObject
     {
     }
 
+    public PerekViewModel(PreferencesService preferencesService, Func<int, Perek?>? perekLoader)
+        : this(preferencesService, perekLoader, null, null, null, null, null, null)
+    {
+    }
+
     public PerekViewModel(PreferencesService preferencesService, Func<int, Perek?>? perekLoader,
-        PerekDataService? perekDataService = null, PerushimCatalogService? catalogService = null,
-        PerushimNotesService? notesService = null, IAppNavigator? navigator = null,
-        IFileSystem? fileSystem = null, IShare? share = null)
+        PerekDataService? perekDataService, PerushimCatalogService? catalogService,
+        PerushimNotesService? notesService, IAppNavigator? navigator,
+        IFileSystem? fileSystem, IShare? share)
     {
         _preferencesService = preferencesService;
         _perekLoader = perekLoader ?? DefaultPerekLoader;

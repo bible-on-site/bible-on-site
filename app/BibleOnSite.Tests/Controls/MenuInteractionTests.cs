@@ -35,11 +35,26 @@ public class MenuInteractionTests
             var handler = new Mock<IViewHandler>();
             handler.SetupGet(h => h.MauiContext).Returns(_context.Object);
             view.Handler = handler.Object;
-            if (view is ContentView content && content.Content != null) Attach(content.Content);
-            if (view is Layout layout) foreach (var child in layout.Children.OfType<View>()) Attach(child);
+            if (view is ContentView content && content.Content != null)
+            {
+                Attach(content.Content);
+            }
+            if (view is Layout layout)
+            {
+                foreach (var child in layout.Children.OfType<View>())
+                {
+                    Attach(child);
+                }
+            }
         }
 
-        public void FinishDelayed() { while (Delayed.TryDequeue(out var action)) action(); }
+        public void FinishDelayed()
+        {
+            while (Delayed.TryDequeue(out var action))
+            {
+                action();
+            }
+        }
     }
 
     [Fact]

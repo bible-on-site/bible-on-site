@@ -33,8 +33,18 @@ public class PerushimNotesService
     private bool _initialized;
     private bool _notesMissing = true;
 
-    public PerushimNotesService(IPadDeliveryService padService, IFileSystem? fileSystem = null,
-        IDeviceInfo? deviceInfo = null, IAppInfo? appInfo = null)
+    public PerushimNotesService(IPadDeliveryService padService)
+        : this(padService, null, null, null)
+    {
+    }
+
+    public PerushimNotesService(IPadDeliveryService padService, IFileSystem fileSystem)
+        : this(padService, fileSystem, null, null)
+    {
+    }
+
+    public PerushimNotesService(IPadDeliveryService padService, IFileSystem? fileSystem,
+        IDeviceInfo? deviceInfo, IAppInfo? appInfo)
     {
         _padService = padService;
         _fileSystem = fileSystem ?? FileSystem.Current;

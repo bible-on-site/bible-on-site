@@ -12,7 +12,7 @@ boundaries accept MAUI interfaces, while tests exercise the real GraphQL client,
 temporary files, SQLite databases, controls, and view models.
 
 The app's Codecov project gate is **99%**. The expanded Release unit suite reaches
-**99.31% line coverage (2,594 of 2,612 application lines)** and **94.67% branch
+**99.31% line coverage (2,607 of 2,625 application lines)** and **94.66% branch
 coverage** with 800 passing tests.
 The `app` flag selects application sources; test-source coverage is not part of
 this figure. No additional coverage exclusions were introduced.

@@ -11,6 +11,7 @@ public class AtomicFileTests
     {
         public override async Task CopyToAsync(Stream destination, int bufferSize, CancellationToken cancellationToken)
         {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(bufferSize);
             await destination.WriteAsync(Encoding.UTF8.GetBytes("partial"), cancellationToken);
             throw new IOException("interrupted transfer");
         }
@@ -22,12 +23,21 @@ public class AtomicFileTests
     {
         await using var storage = new TestStorage();
         var destination = Path.Combine(storage.Root, "data.sqlite");
-        if (exists) await File.WriteAllTextAsync(destination, "original");
+        if (exists)
+        {
+            await File.WriteAllTextAsync(destination, "original");
+        }
         await using var stream = new BrokenReadStream();
         await FluentActions.Awaiting(() => AtomicFile.CopyAsync(stream, destination))
             .Should().ThrowAsync<IOException>().WithMessage("interrupted transfer");
-        if (exists) (await File.ReadAllTextAsync(destination)).Should().Be("original");
-        else File.Exists(destination).Should().BeFalse();
+        if (exists)
+        {
+            (await File.ReadAllTextAsync(destination)).Should().Be("original");
+        }
+        else
+        {
+            File.Exists(destination).Should().BeFalse();
+        }
         Directory.GetFiles(storage.Root, "*.tmp").Should().BeEmpty();
     }
 

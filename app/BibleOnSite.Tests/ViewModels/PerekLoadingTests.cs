@@ -22,7 +22,8 @@ public class PerekLoadingTests
             Data = new PerekDataService(new LocalDatabaseService(Storage.FileSystem.Object));
             Model = new PerekViewModel(PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()), null,
                 Data, new PerushimCatalogService(Storage.FileSystem.Object),
-                new PerushimNotesService(NotesDeliveryTests.Pad().Object, Storage.FileSystem.Object), Navigator.Object);
+                new PerushimNotesService(NotesDeliveryTests.Pad().Object, Storage.FileSystem.Object), Navigator.Object,
+                Storage.FileSystem.Object, null);
         }
 
         public async Task Initialize(bool notes = true, bool allChapters = false)

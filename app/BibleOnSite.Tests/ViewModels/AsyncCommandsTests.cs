@@ -95,7 +95,7 @@ public class AsyncCommandsTests
     {
         var navigator = new Mock<IAppNavigator>();
         var vm = new PerekViewModel(PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()), null,
-            navigator: navigator.Object);
+            null, null, null, navigator.Object, null, null);
         await vm.GoToArticlesAsync();
         navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Never);
         vm.Perek = new Perek { PerekId = 2, SeferName = "בראשית", PerekNumber = 2,

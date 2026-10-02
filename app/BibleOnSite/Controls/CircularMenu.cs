@@ -151,7 +151,10 @@ public partial class CircularMenu : ContentView
 
     private void SetupMenuItems(IList<CircularMenuItem> items)
     {
-        foreach (var oldItem in _menuItems) _container.Remove(oldItem);
+        foreach (var oldItem in _menuItems)
+        {
+            _container.Remove(oldItem);
+        }
         _menuItems.Clear();
         _menuItems.AddRange(items);
 
@@ -251,7 +254,10 @@ public partial class CircularMenu : ContentView
                 // Hide after animation
                 Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(200), () =>
                 {
-                    if (!_isExpanded) item.IsVisible = false;
+                    if (!_isExpanded)
+                    {
+                        item.IsVisible = false;
+                    }
                 });
             }
         }

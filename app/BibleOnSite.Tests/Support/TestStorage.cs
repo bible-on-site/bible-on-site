@@ -29,21 +29,32 @@ public sealed class TestStorage : IAsyncDisposable
         _connections.Add(connection);
         // sqlite-net pools read-only and writable connections separately.
         _connections.Add(new SQLiteAsyncConnection(path, SQLiteOpenFlags.ReadOnly));
-        foreach (var statement in statements) await connection.ExecuteAsync(statement);
+        foreach (var statement in statements)
+        {
+            await connection.ExecuteAsync(statement);
+        }
         return connection;
     }
 
     public async Task BundleDatabaseAsync(string name, params string[] statements)
     {
-        var connection = await CreateDatabaseAsync(name, statements);
+        var fileName = Path.GetFileName(name);
+        if (fileName != name)
+        {
+            throw new ArgumentException("A package database must have a plain file name.", nameof(name));
+        }
+        var connection = await CreateDatabaseAsync(fileName, statements);
         await connection.CloseAsync();
-        PackageFiles[name] = await File.ReadAllBytesAsync(Path.Combine(Root, name));
-        File.Delete(Path.Combine(Root, name));
+        PackageFiles[fileName] = await File.ReadAllBytesAsync(Path.Combine(Root, fileName));
+        File.Delete(Path.Combine(Root, fileName));
     }
 
     public async ValueTask DisposeAsync()
     {
-        foreach (var connection in _connections) await connection.CloseAsync();
+        foreach (var connection in _connections)
+        {
+            await connection.CloseAsync();
+        }
         Directory.Delete(Root, true);
     }
 }

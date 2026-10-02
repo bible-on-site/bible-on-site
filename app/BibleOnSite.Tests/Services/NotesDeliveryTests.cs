@@ -37,8 +37,14 @@ public class NotesDeliveryTests
         await storage.BundleDatabaseAsync(DbName, "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
             "INSERT INTO note VALUES (1,1,1,0,'bundled note')");
         var service = Create(storage);
-        if (download) (await service.TryDownloadNotesAsync()).Should().BeTrue();
-        else await service.InitializeAsync();
+        if (download)
+        {
+            (await service.TryDownloadNotesAsync()).Should().BeTrue();
+        }
+        else
+        {
+            await service.InitializeAsync();
+        }
         service.IsAvailable.Should().BeTrue();
         var notes = await service.LoadNotesForPerekAsync(1, new Dictionary<int, Perush>());
         notes.Single().NoteContent.Should().Be("bundled note");
@@ -91,7 +97,10 @@ public class NotesDeliveryTests
         await local.CreateDatabaseAsync(DbName, "CREATE TABLE _metadata (key TEXT, value TEXT)",
             "INSERT INTO _metadata VALUES ('build_timestamp','100')", "CREATE TABLE note (perush_id INTEGER)");
         var remoteDb = await remote.CreateDatabaseAsync(DbName, "CREATE TABLE _metadata (key TEXT, value TEXT)");
-        if (timestamp != null) await remoteDb.ExecuteAsync("INSERT INTO _metadata VALUES ('build_timestamp',?)", timestamp);
+        if (timestamp != null)
+        {
+            await remoteDb.ExecuteAsync("INSERT INTO _metadata VALUES ('build_timestamp',?)", timestamp);
+        }
         var pad = Pad();
         pad.Setup(p => p.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(remote.Root);
         var service = Create(local, pad);

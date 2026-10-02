@@ -11,9 +11,11 @@ public class IntEqualityConverter : IMultiValueConverter
 	public object Convert(object[]? values, Type targetType, object? parameter, CultureInfo culture)
 	{
 		if (values is not { Length: >= 2 })
+		{
 			return false;
-        var a = values[0] is int i ? i : (values[0] is long l ? l : (long?)null);
-        var b = values[1] is int j ? j : (values[1] is long m ? m : (long?)null);
+		}
+		var a = values[0] is int i ? i : (values[0] is long l ? l : (long?)null);
+		var b = values[1] is int j ? j : (values[1] is long m ? m : (long?)null);
 		return a.HasValue && b.HasValue && a.Value == b.Value;
 	}
 

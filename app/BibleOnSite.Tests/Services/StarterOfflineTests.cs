@@ -62,7 +62,10 @@ public class StarterOfflineTests
     public async Task Startup_WithoutUsableApiOrCache_LeavesSafeEmptyState(string? cache)
     {
         await using var storage = new TestStorage();
-        if (cache != null) await File.WriteAllTextAsync(Path.Combine(storage.Root, "starter_cache.json"), cache);
+        if (cache != null)
+        {
+            await File.WriteAllTextAsync(Path.Combine(storage.Root, "starter_cache.json"), cache);
+        }
         using var http = new GraphQLTransport();
         var service = new StarterService(http.Client, storage.FileSystem.Object);
         await service.LoadWithRetryAsync();

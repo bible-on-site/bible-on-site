@@ -72,9 +72,14 @@ public class BindingConverterTests
         var converter = new IntEqualityConverter();
         object[][] invalid = [[], [1], [null!, 1], [1, null!], [1.0, 1], [1, 2], [4294967297L, 1], [1, 4294967297L]];
         converter.Convert(null, typeof(bool), null, Culture).Should().Be(false);
-        foreach (var values in invalid) converter.Convert(values, typeof(bool), null, Culture).Should().Be(false);
+        foreach (var values in invalid)
+        {
+            converter.Convert(values, typeof(bool), null, Culture).Should().Be(false);
+        }
         foreach (var values in new object[][] { [1, 1], [1L, 1], [1, 1L], [1L, 1L], [long.MaxValue, long.MaxValue] })
+        {
             converter.Convert(values, typeof(bool), null, Culture).Should().Be(true);
+        }
     }
 
     [Fact]
@@ -103,8 +108,10 @@ public class BindingConverterTests
         Microsoft.Maui.Controls.IValueConverter[] converters =
         [new FontFactorToSizeConverter(), new NotNullConverter(), new StringNotEmptyConverter(), new ZeroToTrueConverter()];
         foreach (var converter in converters)
+        {
             FluentActions.Invoking(() => converter.ConvertBack(null, typeof(object), null, Culture))
                 .Should().Throw<NotImplementedException>();
+        }
         FluentActions.Invoking(() => new IntEqualityConverter().ConvertBack(null, [], null, Culture))
             .Should().Throw<NotImplementedException>();
         FluentActions.Invoking(() => new PerushCheckedConverter().ConvertBack(null, [], null, Culture))

@@ -12,7 +12,11 @@ public sealed class GraphQLTransport : HttpMessageHandler
     public Func<CancellationToken, Task<HttpResponseMessage>> Respond { get; set; }
     public GraphQLHttpClient Client { get; }
 
-    public GraphQLTransport(string json = "{\"data\":null}")
+    public GraphQLTransport() : this("{\"data\":null}")
+    {
+    }
+
+    public GraphQLTransport(string json)
     {
         Respond = _ => Task.FromResult(JsonResponse(json));
         Client = new GraphQLHttpClient(new GraphQLHttpClientOptions

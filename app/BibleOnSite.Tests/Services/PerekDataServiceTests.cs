@@ -82,8 +82,14 @@ public class PerekDataServiceTests
     {
         string[] leap = ["תשרי", "חשוון", "כסלו", "טבת", "שבט", "אדר ב", "ניסן", "אייר", "סיון", "תמוז", "אב", "אלול", "אדר א", "אדר ב"];
         string[] common = ["תשרי", "חשוון", "כסלו", "טבת", "שבט", "אדר", "ניסן", "אייר", "סיון", "תמוז", "אב", "אלול"];
-        for (var month = 1; month <= leap.Length; month++) yield return [$"5784{month:00}01", $"א {leap[month - 1]} תשפד", int.Parse($"5784{month:00}01")];
-        for (var month = 1; month <= common.Length; month++) yield return [$"5785{month:00}01", $"א {common[month - 1]} תשפה", int.Parse($"5785{month:00}01")];
+        for (var month = 1; month <= leap.Length; month++)
+        {
+            yield return [$"5784{month:00}01", $"א {leap[month - 1]} תשפד", int.Parse($"5784{month:00}01")];
+        }
+        for (var month = 1; month <= common.Length; month++)
+        {
+            yield return [$"5785{month:00}01", $"א {common[month - 1]} תשפה", int.Parse($"5785{month:00}01")];
+        }
         yield return ["57841501", "57841501", 57841501];
         yield return ["57851301", "57851301", 57851301];
         yield return ["nonnumer", "nonnumer", 0];

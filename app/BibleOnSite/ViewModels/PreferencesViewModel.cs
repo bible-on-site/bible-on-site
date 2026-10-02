@@ -31,13 +31,19 @@ public partial class PreferencesViewModel : ObservableObject
     }
 
     public PreferencesViewModel(PreferencesService preferencesService, PerushimNotesService perushimNotesService,
-        IFileSystem fileSystem, IShare share, IAppNavigator? navigator = null)
+        IFileSystem fileSystem, IShare share)
+        : this(preferencesService, perushimNotesService, fileSystem, share, ShellAppNavigator.Instance)
+    {
+    }
+
+    public PreferencesViewModel(PreferencesService preferencesService, PerushimNotesService perushimNotesService,
+        IFileSystem fileSystem, IShare share, IAppNavigator navigator)
     {
         _preferencesService = preferencesService;
         _perushimNotesService = perushimNotesService;
         _fileSystem = fileSystem;
         _share = share;
-        _navigator = navigator ?? ShellAppNavigator.Instance;
+        _navigator = navigator;
         _preferencesService.PreferencesChanged += OnPreferencesChanged;
     }
 
