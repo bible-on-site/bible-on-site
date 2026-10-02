@@ -15,6 +15,7 @@ exclude_paths:
   - "data/mysql/tanahpedia_alter_source_citation.sql"
   - "data/mysql/tanahpedia_alter_child_birth_order.sql"
   - "data/mysql/tanahpedia_place_jerusalem_data.sql"
+  - "data/mysql/tanahpedia_jerusalem_occurrences_data.sql"
   - "data/mysql/perushim_structure.sql"
   - "data/mysql/perushim_data.sql"
   - "data/mysql/tanah_perek_images_structure.sql"

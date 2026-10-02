@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const KB = 1024;
 const MB = KB * KB;
@@ -41,6 +42,16 @@ const nextConfig = {
 			: {}),
 	},
 	webpack(config) {
+		// The package exports only ESM entry points; coverage instrumentation can
+		// turn its imports into require calls. Resolve those exports as ESM first.
+		for (const entry of [
+			"html-flip-book-react",
+			"html-flip-book-react/toolbar",
+		]) {
+			config.resolve.alias[`${entry}$`] = fileURLToPath(
+				import.meta.resolve(entry),
+			);
+		}
 		if (isProduction) {
 			config.resolve.alias["@/lib/download/bulletin-client-local"] =
 				productionBulletinClient;
