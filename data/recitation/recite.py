@@ -243,6 +243,9 @@ def parse_arguments():
     parser.add_argument("--text", type=Path, default=ROOT / "web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json")
     parser.add_argument("--output", type=Path, default=Path(__file__).parent / ".outputs/alignments")
     parser.add_argument("--cache", type=Path, default=Path(__file__).parent / ".outputs")
+    parser.add_argument("--database", type=Path, default=Path(__file__).parent / "recitation.sqlite",
+                        help="Intermediate database checkpointed after each track")
+    parser.add_argument("--shortest-first", action="store_true", help="Process shorter chapters first without changing inference")
     parser.add_argument("--audio-base-url", default="https://bible-on-site-assets.s3.il-central-1.amazonaws.com/recordings")
     parser.add_argument("--perek", type=int, nargs="+", help="Only process these 929 perek IDs")
     parser.add_argument("--prepare-only", action="store_true", help="Catalog chapter playback without guessing word timings")
@@ -283,6 +286,8 @@ def source_files(parser, args, chapters):
     for path in selected:
         if int(path.stem.split("_")[0]) not in chapters:
             parser.error(f"Unknown perek filename: {path.name}")
+    if args.shortest_first:
+        selected.sort(key=lambda p: chapters[int(p.stem.split("_")[0])].get("recitation", {}).get("durationMs", math.inf))
     return selected
 
 
@@ -366,6 +371,8 @@ def main():
               "minTextScore": args.min_text_score, "minAcousticScore": args.min_acoustic_score,
               "minCoverage": args.min_coverage}
     failures = []
+    # Recover completed cache artifacts even when the previous run was interrupted.
+    export_database(args.output, args.database)
     for path in files:
         try:
             error = process_track(path, chapters, config, args)
@@ -373,11 +380,12 @@ def main():
             failures.append({"perekId": int(path.stem.split("_")[0]), "error": str(error)})
             write_json(args.cache / "failures.json", failures)
             break
+        # Save durable progress before starting another expensive inference.
+        export_database(args.output, args.database)
         if error is not None:
             failures.append({"perekId": int(path.stem.split("_")[0]), "error": error})
             write_json(args.cache / "failures.json", failures)
-    export_database(args.output, Path(__file__).parent / "recitation.sqlite")
-    publish(Path(__file__).parent / "recitation.sqlite", args.text)
+    publish(args.database, args.text)
     write_json(args.cache / "failures.json", failures)
     if failures:
         raise SystemExit(1)

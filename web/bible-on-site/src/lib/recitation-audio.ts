@@ -14,7 +14,48 @@ export class RecitationAudio {
 	constructor(
 		private url: string,
 		private sha256: string,
+		private onProgress: (percent: number | null) => void = () => {},
 	) {}
+
+	private async recordingBytes(response: Response): Promise<ArrayBuffer> {
+		const total = Number(response.headers.get("content-length"));
+		const knownSize = Number.isFinite(total) && total > 0;
+		this.onProgress(knownSize ? 0 : null);
+		if (!response.body) {
+			const bytes = await response.arrayBuffer();
+			this.onProgress(100);
+			return bytes;
+		}
+		const reader = response.body.getReader();
+		const chunks: Uint8Array[] = [];
+		let received = 0;
+		try {
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+				chunks.push(value);
+				received += value.byteLength;
+				this.onProgress(
+					knownSize ? Math.min(100, (received / total) * 100) : null,
+				);
+			}
+		} finally {
+			reader.releaseLock();
+		}
+		const bytes = new Uint8Array(received);
+		let offset = 0;
+		for (const chunk of chunks) {
+			bytes.set(chunk, offset);
+			offset += chunk.byteLength;
+		}
+		this.onProgress(100);
+		return bytes.buffer;
+	}
+
+	async prepare(): Promise<void> {
+		if (this.disposed) throw new Error("Player disposed");
+		await this.load();
+	}
 
 	private load(): Promise<AudioBuffer> {
 		if (!this.buffer) {
@@ -23,7 +64,7 @@ export class RecitationAudio {
 					signal: this.controller.signal,
 				});
 				if (!response.ok) throw new Error("Unable to download recording");
-				const bytes = await response.arrayBuffer();
+				const bytes = await this.recordingBytes(response);
 				const hash = Array.from(
 					new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)),
 					(value) => value.toString(16).padStart(2, "0"),

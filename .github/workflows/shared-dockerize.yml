@@ -185,6 +185,12 @@ jobs:
           timeout 30 bash -c "until nc -z $DB_HOST 3306; do echo 'Waiting for RDS...'; sleep 2; done" || echo "Warning: Could not verify RDS connectivity"
           echo "✓ RDS connectivity verified"
       # --- End RDS Access Setup ---
+      - name: Merge and audit approved recitation timings
+        if: ${{ env.IS_NPM == 'true' }}
+        run: |
+          python data/recitation/publish.py
+          python data/recitation/audit.py
+
       - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
         env:
           DB_URL: ${{ steps.rds_creds.outputs.db_url || '' }}
@@ -200,6 +206,14 @@ jobs:
             -f ${{ inputs.module_directory }}/Dockerfile \
             -t ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }} \
             ${{ env.SHARED_ROOT_DIR }}
+
+      - name: Verify recitation in the packaged website
+        if: ${{ env.IS_NPM == 'true' }}
+        run: |
+          CONTAINER=$(docker run -d -p 127.0.0.1:3000:3000 "${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }}")
+          trap 'docker logs "$CONTAINER"; docker rm -f "$CONTAINER"' EXIT
+          python data/recitation/deployment.py --origin http://127.0.0.1:3000 \
+            --version "${{ steps.get_module_version.outputs.MODULE_VERSION }}" --attempts 12 --interval 5
 
       - name: Export Docker Image to tarball
         run: |

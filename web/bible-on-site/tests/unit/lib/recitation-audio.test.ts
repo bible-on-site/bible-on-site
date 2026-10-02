@@ -27,10 +27,12 @@ beforeEach(() => {
 		value: webcrypto,
 		configurable: true,
 	});
-	global.fetch = jest.fn().mockImplementation(async () => ({
-		ok: true,
-		arrayBuffer: async () => bytes.slice(0),
-	}));
+	global.fetch = jest
+		.fn()
+		.mockImplementation(
+			async () =>
+				new Response(bytes.slice(0), { headers: { "content-length": "3" } }),
+		);
 	global.AudioContext = jest.fn().mockImplementation(() => ({
 		get currentTime() {
 			return audioClock;
@@ -116,7 +118,7 @@ test("dispose aborts a pending download and suppresses later playback", async ()
 	const signal = (global.fetch as jest.Mock).mock.calls[0][1].signal;
 	player.dispose();
 	expect(signal.aborted).toBe(true);
-	resolve({ ok: true, arrayBuffer: async () => bytes.slice(0) });
+	resolve(new Response(bytes.slice(0)));
 	await expect(pending).rejects.toThrow("disposed");
 	expect(sources).toHaveLength(0);
 });
@@ -186,6 +188,90 @@ test("late ended callbacks from a replaced source cannot finish its successor", 
 	expect(latestEnded).not.toHaveBeenCalled();
 	sources[1].onended?.();
 	expect(latestEnded).toHaveBeenCalledTimes(1);
+	player.dispose();
+});
+
+test("preparation reports actual received bytes and reuses the verified audio for playback", async () => {
+	const progress = jest.fn();
+	const stream = new ReadableStream<Uint8Array>({
+		start(controller) {
+			controller.enqueue(new Uint8Array([1]));
+			controller.enqueue(new Uint8Array([2, 3]));
+			controller.close();
+		},
+	});
+	(global.fetch as jest.Mock).mockResolvedValueOnce(
+		new Response(stream, { headers: { "content-length": "3" } }),
+	);
+	const player = new RecitationAudio("/audio.mp3", hash, progress);
+	await player.prepare();
+	expect(progress.mock.calls.map(([value]) => value)).toEqual([
+		0,
+		expect.closeTo(100 / 3),
+		100,
+		100,
+	]);
+	expect(decode).toHaveBeenCalledWith(bytes);
+	expect(sources).toHaveLength(0);
+	await player.play(100, 200, jest.fn());
+	expect(global.fetch).toHaveBeenCalledTimes(1);
+	expect(decode).toHaveBeenCalledTimes(1);
+	player.dispose();
+	await expect(player.prepare()).rejects.toThrow("disposed");
+});
+
+test.each([undefined, "bad", "0"])(
+	"a missing or invalid content length (%s) remains indeterminate until download finishes",
+	async (length) => {
+		const progress = jest.fn();
+		(global.fetch as jest.Mock).mockResolvedValueOnce(
+			new Response(bytes.slice(0), {
+				headers: length === undefined ? {} : { "content-length": length },
+			}),
+		);
+		const player = new RecitationAudio("/audio.mp3", hash, progress);
+		await player.prepare();
+		expect(progress.mock.calls.map(([value]) => value)).toEqual([
+			null,
+			null,
+			100,
+		]);
+		expect(decode).toHaveBeenCalledTimes(1);
+		player.dispose();
+	},
+);
+
+test("browsers without a response stream finish preparation using the complete bytes", async () => {
+	const progress = jest.fn();
+	(global.fetch as jest.Mock).mockResolvedValueOnce({
+		ok: true,
+		headers: new Headers(),
+		body: null,
+		arrayBuffer: async () => bytes.slice(0),
+	});
+	const player = new RecitationAudio("/audio.mp3", hash, progress);
+	await player.prepare();
+	expect(progress.mock.calls.map(([value]) => value)).toEqual([null, 100]);
+	expect(decode).toHaveBeenCalledWith(bytes);
+	player.dispose();
+});
+
+test("a broken download releases its reader and can be prepared again", async () => {
+	const reader = {
+		read: jest.fn().mockRejectedValue(new Error("interrupted stream")),
+		releaseLock: jest.fn(),
+	};
+	(global.fetch as jest.Mock).mockResolvedValueOnce({
+		ok: true,
+		headers: new Headers(),
+		body: { getReader: () => reader },
+	});
+	const player = new RecitationAudio("/audio.mp3", hash);
+	await expect(player.prepare()).rejects.toThrow("interrupted stream");
+	expect(reader.releaseLock).toHaveBeenCalledTimes(1);
+	expect(decode).not.toHaveBeenCalled();
+	await player.prepare();
+	expect(decode).toHaveBeenCalledWith(bytes);
 	player.dispose();
 });
 
