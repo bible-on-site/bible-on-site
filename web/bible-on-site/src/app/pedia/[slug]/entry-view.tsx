@@ -9,6 +9,7 @@ import {
 	getEntries,
 	getEntriesByEntityType,
 	getEntryByUniqueName,
+	getEntryOccurrences,
 	getPersonFamilySummary,
 	getPlaceMapMarkersForEntry,
 } from "@/lib/tanahpedia/service";
@@ -18,6 +19,7 @@ import {
 } from "@/lib/tanahpedia/synonym-resolution";
 import type { CategoryKey, EntityType } from "@/lib/tanahpedia/types";
 import { normalizedUniqueNameFromParam } from "@/lib/tanahpedia/unique-name-param";
+import { EntryOccurrencesTable } from "../components/EntryOccurrencesTable";
 import { PersonFamilyTree } from "../components/PersonFamilyTree";
 import { TanahpediaBreadcrumb } from "../components/TanahpediaBreadcrumb";
 import { TanahpediaPlacesMap } from "../components/TanahpediaPlacesMap";
@@ -130,6 +132,16 @@ export async function EntryView({ slug }: { slug: string }) {
 	}
 
 	const primaryEntity = entry.entities[0] ?? null;
+	let occurrences: Awaited<ReturnType<typeof getEntryOccurrences>> = [];
+	try {
+		occurrences = await getEntryOccurrences(entry.id);
+	} catch (error) {
+		console.error(
+			"[tanahpedia] entry occurrences load failed",
+			entry.uniqueName,
+			error,
+		);
+	}
 	const entryGraph = buildEntryGraph({
 		entry,
 		personFamily,
@@ -187,9 +199,11 @@ export async function EntryView({ slug }: { slug: string }) {
 					dangerouslySetInnerHTML={{ __html: entry.content }}
 					className={styles.entryContent}
 				/>
-			) : placeMapMarkers.length === 0 ? (
+			) : placeMapMarkers.length === 0 && occurrences.length === 0 ? (
 				<p className={styles.emptyContent}>אין תוכן עדיין לערך זה.</p>
 			) : null}
+
+			<EntryOccurrencesTable occurrences={occurrences} />
 
 			<div className={styles.backLinkWrapper}>
 				<Link href="/pedia" className={styles.backLink}>

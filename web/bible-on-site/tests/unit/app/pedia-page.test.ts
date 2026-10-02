@@ -41,6 +41,7 @@ jest.mock("../../../src/lib/tanahpedia/service", () => ({
 	getEntries: jest.fn(),
 	getEntriesByEntityType: jest.fn(),
 	getEntryByUniqueName: jest.fn(),
+	getEntryOccurrences: jest.fn().mockResolvedValue([]),
 	getPersonFamilySummary: jest.fn().mockResolvedValue(null),
 	getPlaceMapMarkersForEntry: jest.fn().mockResolvedValue([]),
 	ENTITY_TYPE_LABELS: {
@@ -62,6 +63,7 @@ import {
 	getEntriesByEntityType,
 	getEntriesBySynonym,
 	getEntryByUniqueName,
+	getEntryOccurrences,
 	getPersonFamilySummary,
 	getPlaceMapMarkersForEntry,
 } from "../../../src/lib/tanahpedia/service";
@@ -70,6 +72,9 @@ const mockGetAllEntryUniqueNames =
 	getAllEntryUniqueNames as jest.MockedFunction<typeof getAllEntryUniqueNames>;
 const mockGetEntryByUniqueName = getEntryByUniqueName as jest.MockedFunction<
 	typeof getEntryByUniqueName
+>;
+const mockGetEntryOccurrences = getEntryOccurrences as jest.MockedFunction<
+	typeof getEntryOccurrences
 >;
 const mockGetEntries = getEntries as jest.MockedFunction<typeof getEntries>;
 const mockGetEntriesByEntityType =
@@ -88,6 +93,7 @@ describe("pedia/[uniqueName] page", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockGetEntriesBySynonym.mockResolvedValue([]);
+		mockGetEntryOccurrences.mockResolvedValue([]);
 	});
 
 	describe("generateStaticParams", () => {
@@ -251,6 +257,72 @@ describe("pedia/[uniqueName] page", () => {
 	describe("EntryView", () => {
 		afterEach(() => {
 			jest.restoreAllMocks();
+		});
+
+		it.each(["PERSON", "PLACE", "OBJECT"] as const)(
+			"shows the shared occurrences table on a %s entry",
+			async (entityType) => {
+				mockGetEntriesByEntityType.mockResolvedValue([]);
+				mockGetPersonFamilySummary.mockResolvedValue(null);
+				mockGetPlaceMapMarkersForEntry.mockResolvedValue([]);
+				mockGetEntryByUniqueName.mockResolvedValue({
+					id: "entry-with-occurrences",
+					uniqueName: "ערך",
+					title: "ערך",
+					content: null,
+					createdAt: "",
+					updatedAt: "",
+					entities: [
+						{
+							id: "ee",
+							entryId: "entry-with-occurrences",
+							entityId: "entity",
+							entityName: "ערך",
+							entityType,
+						},
+					],
+				});
+				mockGetEntryOccurrences.mockResolvedValue([
+					{ perekId: 197, pasukNumber: 1, segmentStart: 5, segmentEnd: 5 },
+				]);
+				render((await EntryView({ slug: "ערך" })) as ReactElement);
+				expect(
+					screen.getByRole("columnheader", { name: "מקור" }),
+				).toBeVisible();
+				expect(
+					screen.getByRole("columnheader", { name: "ציטוט" }),
+				).toBeVisible();
+				expect(mockGetEntryOccurrences).toHaveBeenCalledWith(
+					"entry-with-occurrences",
+				);
+				expect(screen.queryByText("אין תוכן עדיין לערך זה.")).toBeNull();
+			},
+		);
+
+		it("keeps entry content available when occurrence loading fails", async () => {
+			const consoleError = jest.spyOn(console, "error").mockImplementation();
+			mockGetEntries.mockResolvedValue([]);
+			mockGetPlaceMapMarkersForEntry.mockResolvedValue([]);
+			mockGetEntryOccurrences.mockRejectedValueOnce(
+				new Error("sources unavailable"),
+			);
+			mockGetEntryByUniqueName.mockResolvedValue({
+				id: "entry-source-error",
+				uniqueName: "מקורות",
+				title: "מקורות",
+				content: "<p>תוכן הערך נשמר</p>",
+				createdAt: "",
+				updatedAt: "",
+				entities: [],
+			});
+			render((await EntryView({ slug: "מקורות" })) as ReactElement);
+			expect(screen.getByText("תוכן הערך נשמר")).toBeVisible();
+			expect(screen.queryByRole("table")).toBeNull();
+			expect(consoleError).toHaveBeenCalledWith(
+				"[tanahpedia] entry occurrences load failed",
+				"מקורות",
+				expect.any(Error),
+			);
 		});
 
 		it("renders entry and logs when family loading fails", async () => {

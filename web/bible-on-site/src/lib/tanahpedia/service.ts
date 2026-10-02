@@ -789,7 +789,8 @@ export async function getEntriesBySynonym(
 	const byEntry = new Map<string, SynonymTarget>();
 	for (const row of rows) {
 		const current = byEntry.get(row.entryId);
-		if (!current || (!current.label && row.label)) byEntry.set(row.entryId, row);
+		if (!current || (!current.label && row.label))
+			byEntry.set(row.entryId, row);
 	}
 	return [...byEntry.values()];
 }
@@ -856,6 +857,31 @@ export interface PerekEntityReference {
 	pasukNumber: number;
 	segmentStart: number | null;
 	segmentEnd: number | null;
+}
+
+export interface EntryTanahOccurrence {
+	perekId: number;
+	pasukNumber: number;
+	segmentStart: number | null;
+	segmentEnd: number | null;
+}
+
+/** Verse references for every entity linked to an entry, regardless of type. */
+export async function getEntryOccurrences(
+	entryId: string,
+): Promise<EntryTanahOccurrence[]> {
+	return query<EntryTanahOccurrence>(
+		`SELECT DISTINCT
+		   ets.perek_id AS perekId,
+		   ets.pasuk_number AS pasukNumber,
+		   ets.segment_start AS segmentStart,
+		   ets.segment_end AS segmentEnd
+		 FROM tanahpedia_entity_tanah_source ets
+		 JOIN tanahpedia_entry_entity ee ON ee.entity_id = ets.entity_id
+		 WHERE ee.entry_id = ?
+		 ORDER BY ets.perek_id, ets.pasuk_number, ets.segment_start, ets.segment_end`,
+		[entryId],
+	);
 }
 
 export async function getEntityReferencesForPerek(
