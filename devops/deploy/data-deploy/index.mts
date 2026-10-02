@@ -29,9 +29,8 @@ import {
 } from "@aws-sdk/client-s3";
 import * as dotenv from "dotenv";
 import { DeployerBase } from "../deployer-base.mjs";
-import sqlFiles from "./sql-files.json" with {
-	type: "json",
-};
+import { invokeWithRestorationRetry } from "./lambda-invocation.mjs";
+import sqlFiles from "./sql-files.json" with { type: "json" };
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -84,7 +83,11 @@ class DataDeployer extends DeployerBase {
 
 	protected override async coreDeploy(): Promise<void> {
 		const s3Client = new S3Client({ region: this.region });
-		const lambdaClient = new LambdaClient({ region: this.region });
+		// Only the explicit pre-execution restoration rejection is safe to retry.
+		const lambdaClient = new LambdaClient({
+			region: this.region,
+			maxAttempts: 1,
+		});
 
 		try {
 			// Upload SQL files to S3
@@ -129,26 +132,31 @@ class DataDeployer extends DeployerBase {
 			s3_prefix: this.s3Prefix,
 		};
 
-		const response = await lambdaClient
-			.send(
-				new InvokeCommand({
-					FunctionName: LAMBDA_FUNCTION_NAME,
-					Payload: Buffer.from(JSON.stringify(payload)),
-					LogType: "Tail",
-				}),
-			)
-			.catch((err: unknown) => {
-				const status = (err as { $metadata?: { httpStatusCode?: number } })
-					?.$metadata?.httpStatusCode;
-				const reason = err instanceof Error ? err.message : String(err);
-				// A 5xx is a service-side fault thrown before any response/tail-log
-				// is available: the Lambda runtime itself failed to run (bad
-				// package, init crash, deprecated runtime, OOM). Its code is
-				// maintained outside this repo, so point at CloudWatch. Other
-				// errors (4xx: AccessDenied, ResourceNotFound, invalid params) are
-				// caller/config issues where the function never ran.
-				const isServerFault = status !== undefined && status >= 500;
-				const guidance = isServerFault
+		const response = await invokeWithRestorationRetry(
+			() =>
+				lambdaClient.send(
+					new InvokeCommand({
+						FunctionName: LAMBDA_FUNCTION_NAME,
+						Payload: Buffer.from(JSON.stringify(payload)),
+						LogType: "Tail",
+					}),
+				),
+			(message) => this.info(message),
+		).catch((err: unknown) => {
+			const status = (err as { $metadata?: { httpStatusCode?: number } })
+				?.$metadata?.httpStatusCode;
+			const reason = err instanceof Error ? err.message : String(err);
+			// Invocation API failures have no response/tail logs. Distinguish
+			// exhausted VPC restoration from other service/runtime failures and
+			// caller/configuration failures to direct diagnosis correctly.
+			const isRestoring =
+				(err as { name?: string } | null)?.name === "ResourceNotReadyException";
+			const isServerFault = status !== undefined && status >= 500;
+			const guidance = isRestoring
+				? ` Lambda resources did not become ready after 30 restoration retries. ` +
+					`Inspect the function's VPC configuration and CloudWatch Logs ` +
+					`(/aws/lambda/${LAMBDA_FUNCTION_NAME}).`
+				: isServerFault
 					? ` This is a Lambda runtime/service fault, not a data error. ` +
 						`Inspect the function's CloudWatch Logs ` +
 						`(/aws/lambda/${LAMBDA_FUNCTION_NAME}) and verify it is deployed ` +
@@ -156,13 +164,13 @@ class DataDeployer extends DeployerBase {
 					: ` The invocation request itself failed (likely a permissions, ` +
 						`configuration, or missing-function issue); the function may ` +
 						`never have run.`;
-				throw new Error(
-					`Failed to invoke Lambda '${LAMBDA_FUNCTION_NAME}'` +
-						(status ? ` (HTTP ${status})` : "") +
-						`: ${reason}.${guidance}`,
-					{ cause: err },
-				);
-			});
+			throw new Error(
+				`Failed to invoke Lambda '${LAMBDA_FUNCTION_NAME}'` +
+					(status ? ` (HTTP ${status})` : "") +
+					`: ${reason}.${guidance}`,
+				{ cause: err },
+			);
+		});
 
 		// Decode and log the Lambda logs
 		if (response.LogResult) {
