@@ -70,12 +70,13 @@ import {
 	wrapDownloadResult,
 } from "./sefer-page-utils";
 import { TanahpediaLink } from "./TanahpediaLink";
+import { useSeferContentNavigation } from "./useSeferContentNavigation";
 import "html-flip-book-react/styles.css";
 import "./sefer.css";
 
 /** Props we pass to FlipBook; matches html-flip-book-react FlipBookProps for typing dynamic() */
 type FlipBookProps = {
-	handlers?: { onPageFlipping?: () => void };
+	handlers?: { onPageFlipping?: () => void; onPageFlipped?: () => void };
 	className: string;
 	pages: React.ReactNode[];
 	pageSemantics?: PageSemantics;
@@ -134,6 +135,10 @@ const Sefer = (props: {
 	const bookWrapperRef = useRef<HTMLDivElement>(null);
 	const seferColor = getSeferColor(perekObj.sefer);
 	const [isBookshelfOpen, setIsBookshelfOpen] = useState(false);
+	const contentNavigation = useSeferContentNavigation(
+		perekObj.perekId,
+		initialSlug,
+	);
 	const perakim =
 		"perakim" in sefer
 			? sefer.perakim
@@ -171,10 +176,10 @@ const Sefer = (props: {
 				? []
 				: initialBookPage === "toc"
 					? [0]
-					: initialBookPage === "back" && perekIds
-						? Array.from({ length: perekIds.length + 2 }, (_, i) => i)
+					: initialBookPage === "back"
+						? Array.from({ length: perakim.length + 2 }, (_, i) => i)
 						: computeInitialTurnedLeaves(perekIds, perekObj.perekId),
-		[initialBookPage, perekIds, perekObj.perekId],
+		[initialBookPage, perakim.length, perekIds, perekObj.perekId],
 	);
 
 	// Next can navigate to another book URL while retaining this Sefer instance.
@@ -242,21 +247,26 @@ const Sefer = (props: {
 		if (idsToFetch.length === 0) return;
 		getPerekSummariesBatch(idsToFetch)
 			.then(setBatchSummaries)
-			.catch(() => {});
-	}, [perekIds, perekObj.perekId]);
+			.catch((error) => {
+				console.error("Failed to load book summaries", {
+					sefer: perekObj.sefer, perekIds: idsToFetch, error,
+				});
+			});
+	}, [perekIds, perekObj.perekId, perekObj.sefer]);
 
 	const contentPages = perakim.flatMap((perek, perekIdx) => {
+		const pagePerekId = perekIds?.[perekIdx];
 		// Prefer a stable perek id for keys; fall back to index only when the id
 		// isn't available, so React state stays attached to the right page even
 		// if the perakim order ever changes.
-		const perekKeyBase = perekIds?.[perekIdx] ?? `idx-${perekIdx + 1}`;
+		const perekKeyBase = pagePerekId ?? `idx-${perekIdx + 1}`;
 		const perekKey = `perek-${perekKeyBase}`;
 		const blankKey = `blank-${perekKeyBase}`;
 		const illustrations = imagesByPerek?.[perekIds?.[perekIdx] ?? -1] ?? [];
 		return [
 			<React.Fragment key={perekKey}>
 				<RecitationPlayer
-					perekId={perekIds?.[perekIdx] ?? 0}
+					perekId={pagePerekId ?? 0}
 					pesukim={perek.pesukim}
 				>
 					<section className={styles.pageContentPage}>
@@ -371,7 +381,15 @@ const Sefer = (props: {
 					perekId={perekIds?.[perekIdx] ?? 0}
 					hebrewDateStr={hebrewDateStr}
 					initialSlug={
-						perekIds?.[perekIdx] === perekObj.perekId ? initialSlug : undefined
+						contentNavigation.content &&
+						pagePerekId === contentNavigation.content.perekId
+							? contentNavigation.content.slug
+							: undefined
+					}
+					onNavigate={
+						pagePerekId == null
+							? undefined
+							: (slug) => contentNavigation.navigate(pagePerekId, slug)
 					}
 				/>
 			</React.Fragment>,
@@ -414,7 +432,10 @@ const Sefer = (props: {
 			<div className={styles.bookWrapper} dir="rtl" ref={bookWrapperRef}>
 				<div className={styles.bookArea}>
 					<FlipBook
-						handlers={{ onPageFlipping: stopRecitation }}
+						handlers={{
+							onPageFlipping: stopRecitation,
+							onPageFlipped: contentNavigation.onPageFlipped,
+						}}
 						ref={flipBookRef}
 						className="he-book"
 						mouseModeStorageKey="sefer-mouse-book-mode"

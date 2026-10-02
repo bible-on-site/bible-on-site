@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { sampleImage } from "./perek-image-fixture";
 
 let capturedFlipBookProps: Record<string, unknown> = {};
@@ -175,6 +175,7 @@ jest.mock("@/app/929/[number]/components/Stuma", () => ({
 import Sefer from "@/app/929/[number]/components/Sefer";
 import type { QriSegment } from "@/data/db/tanah-view-types";
 import type { PerekObj } from "@/data/perek-dto";
+import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 
 function timeframe(from: string, to: string): QriSegment["recordingTimeFrame"] {
 	return { from, to } as unknown as QriSegment["recordingTimeFrame"];
@@ -218,6 +219,48 @@ describe("Sefer component", () => {
 		mockRestorePage.mockReset();
 		mockJumpToPage.mockReset();
 		mockGetCurrentPageIndex.mockReset().mockReturnValue(3);
+	});
+
+	it("opens content on the requested chapter and clears it after a page flip", async () => {
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} perekIds={[1]} initialSlug="42" />);
+		const blankProps = () => {
+			const pages = capturedFlipBookProps.pages as React.ReactElement<{ children: React.ReactElement<{ initialSlug?: string; onNavigate: (slug?: string) => void }> }>[];
+			return pages[4].props.children.props;
+		};
+		expect(blankProps().initialSlug).toBe("42");
+		act(() => blankProps().onNavigate('רש"י'));
+		expect(blankProps().initialSlug).toBe('רש"י');
+		act(() => blankProps().onNavigate());
+		expect(blankProps().initialSlug).toBeUndefined();
+		const handlers = capturedFlipBookProps.handlers as { onPageFlipped: () => void };
+		await act(async () => handlers.onPageFlipped());
+		await act(async () => {
+			handlers.onPageFlipped();
+			history.replaceState(history.state, "", "/929/2?book");
+		});
+		expect(blankProps().initialSlug).toBeUndefined();
+	});
+
+	it("keeps entity links on the correct chapter when other chapters have no references", async () => {
+		const reference: PerekEntityReference = {
+			entityId: "creation", entityName: "בריאה", entityType: "OBJECT",
+			entryUniqueName: "בריאה", pasukNumber: 1, segmentStart: 0, segmentEnd: 0,
+		};
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} perekIds={[1, 2, 3]} entityRefsByPerek={{ 1: [reference], 2: [] }} />);
+		await act(async () => {});
+		expect(screen.getByRole("link", { name: /בְּרֵאשִׁית/ })).toHaveAttribute("href", expect.stringContaining("/pedia/"));
+	});
+
+	it("logs a failed batch with the book and requested chapters", async () => {
+		const error = jest.spyOn(console, "error").mockImplementation(() => {});
+		mockGetPerekSummariesBatch.mockRejectedValueOnce(new Error("summaries unavailable"));
+		try {
+			render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} perekIds={[1, 2]} />);
+			await act(async () => {});
+			expect(error).toHaveBeenCalledWith("Failed to load book summaries", expect.objectContaining({ sefer: "בראשית", perekIds: [2] }));
+		} finally {
+			error.mockRestore();
+		}
 	});
 
 	it("renders FlipBook and toolbar", () => {
@@ -374,6 +417,7 @@ describe("Sefer component", () => {
 					perekIds={perekIds}
 				/>,
 			);
+			await act(async () => {});
 			const config = capturedFlipBookProps.downloadConfig as {
 				onDownloadSefer: () => Promise<unknown>;
 			};
