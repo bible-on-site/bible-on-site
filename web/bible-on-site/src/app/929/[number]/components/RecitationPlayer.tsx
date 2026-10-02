@@ -24,6 +24,7 @@ import { RecitationAudio } from "@/lib/recitation-audio";
 import styles from "./recitation-player.module.css";
 
 const STOP_EVENT = "recitation-stop";
+const LOADING_MESSAGE = "טעינה על הפרק...";
 export function stopRecitation() {
 	window.dispatchEvent(new Event(STOP_EVENT));
 }
@@ -156,6 +157,7 @@ export default function RecitationPlayer({
 	const [open, setOpen] = useState(false);
 	const [data, setData] = useState<Recitation | null>(null);
 	const [message, setMessage] = useState("");
+	const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
 	const [activeWord, setActiveWord] = useState<string | null>(null);
 	const [state, setState] = useState<"idle" | "loading" | "playing" | "paused">(
 		"idle",
@@ -166,6 +168,7 @@ export default function RecitationPlayer({
 		audio.current = element;
 	}, []);
 	const precise = useRef<RecitationAudio | null>(null);
+	const preparing = useRef(false);
 	const request = useRef(0);
 	const kind = useRef<"chapter" | "clip" | null>(null);
 
@@ -183,10 +186,16 @@ export default function RecitationPlayer({
 	}, []);
 
 	useEffect(() => {
-		const onStop = (event: Event) =>
-			stop((event as CustomEvent<string>).detail !== id);
+		const onStop = (event: Event) => {
+			const release = (event as CustomEvent<string>).detail !== id;
+			if (release && preparing.current) setOpen(false);
+			stop(release);
+		};
 		const onVisibility = () => {
-			if (document.hidden) stop(true);
+			if (document.hidden) {
+				if (preparing.current) setOpen(false);
+				stop(true);
+			}
 		};
 		window.addEventListener(STOP_EVENT, onStop);
 		document.addEventListener("visibilitychange", onVisibility);
@@ -201,8 +210,11 @@ export default function RecitationPlayer({
 		stop(true);
 		setData(null);
 		if (!open) return;
+		window.dispatchEvent(new CustomEvent(STOP_EVENT, { detail: id }));
 		const controller = new AbortController();
-		setMessage("טוען הקלטה…");
+		preparing.current = true;
+		setMessage(LOADING_MESSAGE);
+		setDownloadProgress(null);
 		fetch(`/api/recitation/${perekId}`, { signal: controller.signal })
 			.then(async (response) => {
 				if (controller.signal.aborted) return;
@@ -217,18 +229,33 @@ export default function RecitationPlayer({
 					pesukim,
 				);
 				if (controller.signal.aborted) return;
+				const player = new RecitationAudio(
+					recitation.audioUrl,
+					recitation.audioSha256,
+					(percent) => {
+						if (!controller.signal.aborted) setDownloadProgress(percent);
+					},
+				);
+				precise.current = player;
+				await player.prepare();
+				if (controller.signal.aborted || precise.current !== player) return;
+				preparing.current = false;
 				setData(recitation);
 				setMessage("");
 			})
 			.catch(() => {
 				if (!controller.signal.aborted)
 					setMessage("לא ניתן לטעון את ההקלטה. נסו לפתוח שוב.");
+			})
+			.finally(() => {
+				if (!controller.signal.aborted) preparing.current = false;
 			});
 		return () => {
+			preparing.current = false;
 			controller.abort();
 			stop(true);
 		};
-	}, [open, perekId, pesukim, stop]);
+	}, [open, perekId, pesukim, stop, id]);
 
 	function finish() {
 		setState("idle");
@@ -300,19 +327,18 @@ export default function RecitationPlayer({
 	}
 
 	const alignedWords = useMemo(() => playableWords(data), [data]);
+	const loading = open && (message === LOADING_MESSAGE || state === "loading");
 	const status =
 		message ||
 		(state === "loading"
-			? "טוען שמע…"
+			? LOADING_MESSAGE
 			: state === "playing"
 				? "משמיע…"
 				: state === "paused"
 					? "מושהה"
-					: data && alignedWords.length === 0
-						? "זמינה הקראת הפרק המלא"
-						: data
-							? "בחרו אות פסוק או מילה להקראה"
-							: "");
+					: data && alignedWords.length > 0
+						? "בחרו אות פסוק או מילה להקראה"
+						: "");
 	const controls = perekId > 0 && (
 		<span className={styles.controls}>
 			{open && data && (
@@ -351,22 +377,42 @@ export default function RecitationPlayer({
 				data-flipbook-no-flip
 				type="button"
 				className={styles.toggle}
-				aria-pressed={open}
+				aria-pressed={open && data !== null}
+				aria-busy={loading}
 				aria-label="מצב הקראה"
-				title={
-					open ? "כיבוי מצב הקראה" : "מצב הקראה: לחצו על אות פסוק או על מילה"
-				}
 				onClick={() => setOpen((value) => !value)}
 			>
 				<ListenIcon />
+				{loading && (
+					<svg
+						className={styles.progress}
+						viewBox="0 0 36 36"
+						role="progressbar"
+						aria-label={LOADING_MESSAGE}
+						aria-valuemin={0}
+						aria-valuemax={100}
+						aria-valuenow={downloadProgress ?? undefined}
+						data-indeterminate={downloadProgress === null}
+					>
+						<circle className={styles.progressTrack} cx="18" cy="18" r="16" />
+						<circle
+							className={styles.progressValue}
+							cx="18"
+							cy="18"
+							r="16"
+							pathLength="100"
+							strokeDasharray={downloadProgress === null ? "25 75" : "100"}
+							strokeDashoffset={
+								downloadProgress === null ? 0 : 100 - downloadProgress
+							}
+							transform="rotate(-90 18 18)"
+						/>
+					</svg>
+				)}
 			</button>
 			{open && (
 				<span
-					className={
-						message || (data && alignedWords.length === 0)
-							? styles.notice
-							: styles.srOnly
-					}
+					className={message || loading ? styles.notice : styles.srOnly}
 					role="status"
 					aria-live="polite"
 				>
