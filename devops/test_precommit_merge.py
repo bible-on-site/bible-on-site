@@ -22,7 +22,7 @@ class PrecommitMergeTests(unittest.TestCase):
 
             def git(*args):
                 # All arguments below are fixed fixture commands; resolve the executable.
-                subprocess.run(  # nosec B603: fixed fixture argv, no shell.
+                subprocess.run(  # nosec B603: fixed fixture argv, no shell.  # nosemgrep
                     [GIT, *args], cwd=repo, check=True, capture_output=True
                 )
 
