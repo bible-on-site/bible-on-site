@@ -1,0 +1,30 @@
+name: Data Deployment Tests
+
+on:
+  pull_request:
+    paths:
+      - devops/deploy/data-deploy/**
+      - devops/package.json
+      - .github/workflows/ci-data-deploy.yml
+  push:
+    branches: [master]
+    paths:
+      - devops/deploy/data-deploy/**
+      - devops/package.json
+      - .github/workflows/ci-data-deploy.yml
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Lambda restoration recovery
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+      - name: Test data deployment recovery without AWS or database writes
+        run: npm run test:deploy-data --prefix devops

@@ -42,6 +42,15 @@ SQL paths from its own location, so it also works from other working directories
 Without `--parse-only`, it executes SQL (including injected table/view drops): use
 that mode only with a disposable local database.
 
+An idle VPC Lambda can reject its first invocation with `ResourceNotReadyException`
+while AWS restores its resources. The deployer retries only that pre-execution
+rejection, allowing 30 waits of 10 seconds before failing. SQL uploads stay in S3
+throughout recovery and are cleaned up after invocation completes or fails. Other
+invocation errors and function execution failures still fail the deployment.
+See [AWS Lambda function states](https://docs.aws.amazon.com/lambda/latest/dg/functions-states.html).
+Run `npm run test:deploy-data` from `devops/` to validate recovery without AWS access
+or database changes.
+
 **Required Environment Variables (set via OIDC in CI):**
 - `AWS_REGION` - AWS region (e.g., `il-central-1`)
 
