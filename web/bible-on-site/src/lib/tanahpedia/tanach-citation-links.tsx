@@ -85,7 +85,13 @@ function readToken(
 	start: number,
 ): { token: string; end: number } {
 	let end = start;
-	while (end < text.length && !/[\s,;:.()[\]{}]/u.test(text[end])) end++;
+	while (
+		end < text.length &&
+		!isWhitespace(text[end]) &&
+		!",;:.()[]{}".includes(text[end])
+	) {
+		end++;
+	}
 	return { token: text.slice(start, end), end };
 }
 
@@ -95,7 +101,8 @@ function findTanachRefAt(text: string, start: number): TanachRefMatch | null {
 
 		let cursor = start + seferName.length;
 		// Older citations may quote the book's volume letter, e.g. שמואל א'.
-		if (/["״׳']/u.test(text[cursor] ?? "")) cursor++;
+		const volumeQuote = text[cursor];
+		if (volumeQuote && '"״׳\''.includes(volumeQuote)) cursor++;
 		if (!isWhitespace(text[cursor])) continue;
 		while (isWhitespace(text[cursor])) cursor++;
 

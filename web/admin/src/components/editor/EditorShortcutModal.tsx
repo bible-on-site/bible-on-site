@@ -4,6 +4,8 @@ import {
 	SHORTCUT_SECTIONS,
 } from "./adminEditorShortcuts";
 
+const LINK_SHORTCUT_EXAMPLE = "Mod-Shift-k";
+
 interface EditorShortcutModalProps {
 	open: boolean;
 	onClose: () => void;
@@ -107,7 +109,7 @@ export function EditorShortcutModal({
 						</summary>
 						<p className="text-xs text-gray-600 mt-2 mb-1">
 							מפתח = צירוף TipTap (למשל{" "}
-							<code className="bg-white px-1">Mod-Shift-k</code>
+							<code className="bg-white px-1">{LINK_SHORTCUT_EXAMPLE}</code>
 							), ערך = פקודה:
 						</p>
 						<p className="text-xs text-gray-500 mb-2 font-mono break-all">
