@@ -146,3 +146,45 @@ test("pause and resume preserve the audio-clock position and original clip end",
 	expect(ended).toHaveBeenCalledTimes(1);
 	player.dispose();
 });
+
+test("pausing after the audio clock reaches the clip end completes it exactly once", async () => {
+	const player = new RecitationAudio("/audio.mp3", hash);
+	const ended = jest.fn();
+	expect(player.pause()).toBe(false);
+	await expect(player.resume()).resolves.toBe(false);
+	await player.play(1200, 2300, ended);
+	audioClock = 12;
+	expect(player.pause()).toBe(false);
+	expect(ended).toHaveBeenCalledTimes(1);
+	expect(sources[0].stop).toHaveBeenCalledTimes(1);
+	expect(sources[0].onended).toBeNull();
+	await expect(player.resume()).resolves.toBe(false);
+	player.dispose();
+});
+
+test("disposed players reject new playback and close their context only once", async () => {
+	const player = new RecitationAudio("/audio.mp3", hash);
+	player.dispose();
+	player.dispose();
+	await expect(player.play(100, 200, jest.fn())).rejects.toThrow(
+		"Player disposed",
+	);
+	expect(close).toHaveBeenCalledTimes(1);
+	expect(global.fetch).not.toHaveBeenCalled();
+	expect(sources).toHaveLength(0);
+});
+
+test("late ended callbacks from a replaced source cannot finish its successor", async () => {
+	const player = new RecitationAudio("/audio.mp3", hash);
+	const firstEnded = jest.fn();
+	const latestEnded = jest.fn();
+	await player.play(100, 200, firstEnded);
+	const staleCallback = sources[0].onended;
+	await player.play(300, 400, latestEnded);
+	staleCallback?.();
+	expect(firstEnded).not.toHaveBeenCalled();
+	expect(latestEnded).not.toHaveBeenCalled();
+	sources[1].onended?.();
+	expect(latestEnded).toHaveBeenCalledTimes(1);
+	player.dispose();
+});

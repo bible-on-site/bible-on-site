@@ -11,6 +11,7 @@ import RecitationPlayer, {
 	RecitationLink,
 	RecitationPasukControl,
 	RecitationWordControl,
+	stopRecitation,
 } from "@/app/929/[number]/components/RecitationPlayer";
 import { RecitationAudio } from "@/lib/recitation-audio";
 
@@ -48,6 +49,16 @@ const manifest = {
 };
 let play: jest.SpyInstance;
 let pause: jest.SpyInstance;
+
+function deferred<T>() {
+	let resolve: (value: T) => void = () => {};
+	let reject: (reason: Error) => void = () => {};
+	const promise = new Promise<T>((accept, decline) => {
+		resolve = accept;
+		reject = decline;
+	});
+	return { promise, resolve, reject };
+}
 
 beforeEach(() => {
 	clipPause.mockReturnValue(true);
@@ -247,4 +258,245 @@ test("chapter pause preserves the native audio position for resume", async () =>
 	await screen.findByText("משמיע…");
 	expect(element.currentTime).toBe(4.2);
 	expect(play).toHaveBeenCalledTimes(2);
+});
+
+test("a finished clip cannot be paused or resumed", async () => {
+	clipPause.mockReturnValueOnce(false);
+	await openPlayer();
+	fireEvent.click(screen.getByRole("button", { name: "השמעת פסוק א" }));
+	await screen.findByText("משמיע…");
+	fireEvent.click(screen.getByRole("button", { name: "השהיית ההקראה" }));
+	expect(screen.getByRole("button", { name: "השמעת כל הפרק" })).toBeEnabled();
+	expect(screen.queryByText("מושהה")).toBeNull();
+	expect(clipResume).not.toHaveBeenCalled();
+});
+
+test("resume returning false resets the clip controls", async () => {
+	clipResume.mockResolvedValueOnce(false);
+	await openPlayer();
+	fireEvent.click(screen.getByRole("button", { name: "השמעת המילה בָּרָא" }));
+	await screen.findByText("משמיע…");
+	fireEvent.click(screen.getByRole("button", { name: "השהיית ההקראה" }));
+	fireEvent.click(screen.getByRole("button", { name: "המשך ההקראה" }));
+	await screen.findByText("בחרו אות פסוק או מילה להקראה");
+	expect(screen.getByRole("button", { name: "השמעת כל הפרק" })).toBeEnabled();
+	expect(
+		screen.getByRole("button", { name: "השמעת המילה בָּרָא" }),
+	).toHaveAttribute("aria-pressed", "false");
+});
+
+test("a rejected resume reports an error and permits fresh playback", async () => {
+	clipResume.mockRejectedValueOnce(new Error("resume failed"));
+	await openPlayer();
+	fireEvent.click(screen.getByRole("button", { name: "השמעת פסוק א" }));
+	await screen.findByText("משמיע…");
+	fireEvent.click(screen.getByRole("button", { name: "השהיית ההקראה" }));
+	fireEvent.click(screen.getByRole("button", { name: "המשך ההקראה" }));
+	await screen.findByText("ההקלטה לא נטענה. נסו שוב.");
+	fireEvent.click(screen.getByRole("button", { name: "השמעת פסוק א" }));
+	await screen.findByText("משמיע…");
+	expect(clipPlay).toHaveBeenCalledTimes(2);
+});
+
+test("native chapter completion and media errors update the controls", async () => {
+	const view = await openPlayer();
+	const audio = view.container.querySelector("audio") as HTMLAudioElement;
+	fireEvent.click(screen.getByRole("button", { name: "השמעת כל הפרק" }));
+	await screen.findByText("משמיע…");
+	fireEvent.ended(audio);
+	expect(screen.getByRole("button", { name: "השמעת כל הפרק" })).toBeEnabled();
+	fireEvent.click(screen.getByRole("button", { name: "השמעת כל הפרק" }));
+	await screen.findByText("משמיע…");
+	fireEvent.error(audio);
+	expect(screen.getByText("ההקלטה לא נטענה. נסו שוב.")).toBeVisible();
+});
+
+test("hiding the page stops and releases its selected clip", async () => {
+	await openPlayer();
+	fireEvent.click(screen.getByRole("button", { name: "השמעת המילה בָּרָא" }));
+	await screen.findByText("משמיע…");
+	jest.spyOn(document, "hidden", "get").mockReturnValue(true);
+	fireEvent(document, new Event("visibilitychange"));
+	expect(clipDispose).toHaveBeenCalledTimes(1);
+	expect(screen.getByRole("button", { name: "השמעת כל הפרק" })).toBeEnabled();
+	expect(
+		screen.getByRole("button", { name: "השמעת המילה בָּרָא" }),
+	).toHaveAttribute("aria-pressed", "false");
+});
+
+test("visibility events keep a visible page's clip playing", async () => {
+	await openPlayer();
+	fireEvent.click(screen.getByRole("button", { name: "השמעת פסוק א" }));
+	await screen.findByText("משמיע…");
+	jest.spyOn(document, "hidden", "get").mockReturnValue(false);
+	fireEvent(document, new Event("visibilitychange"));
+	expect(clipDispose).not.toHaveBeenCalled();
+	expect(screen.getByRole("button", { name: "השהיית ההקראה" })).toBeEnabled();
+});
+
+test("a chapter play rejection arriving after navigation cannot display an error", async () => {
+	const pending = deferred<void>();
+	play.mockReturnValueOnce(pending.promise);
+	await openPlayer();
+	fireEvent.click(screen.getByRole("button", { name: "השמעת כל הפרק" }));
+	act(() => stopRecitation());
+	await act(async () => pending.reject(new Error("cancelled chapter")));
+	expect(screen.queryByText("ההקלטה לא נטענה. נסו שוב.")).toBeNull();
+	expect(screen.getByRole("button", { name: "השמעת כל הפרק" })).toBeEnabled();
+});
+
+test("failed manifest loads can be retried by reopening listening mode", async () => {
+	(global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 503 });
+	render(
+		<RecitationPlayer perekId={1} pesukim={pesukim}>
+			<RecitationHeader title="בריאת העולם" />
+		</RecitationPlayer>,
+	);
+	fireEvent.click(screen.getByRole("button", { name: "מצב הקראה" }));
+	await screen.findByText("לא ניתן לטעון את ההקלטה. נסו לפתוח שוב.");
+	expect(screen.queryByRole("button", { name: "השמעת כל הפרק" })).toBeNull();
+	fireEvent.click(screen.getByRole("button", { name: "מצב הקראה" }));
+	fireEvent.click(screen.getByRole("button", { name: "מצב הקראה" }));
+	await screen.findByRole("button", { name: "השמעת כל הפרק" });
+	expect(global.fetch).toHaveBeenCalledTimes(2);
+});
+
+test("navigation stops playback through the shared recitation stop event", async () => {
+	await openPlayer();
+	fireEvent.click(screen.getByRole("button", { name: "השמעת פסוק א" }));
+	await screen.findByText("משמיע…");
+	act(() => stopRecitation());
+	expect(clipDispose).toHaveBeenCalledTimes(1);
+	expect(screen.getByRole("button", { name: "השמעת כל הפרק" })).toBeEnabled();
+});
+
+test("closing listening mode aborts the manifest request and ignores its late response", async () => {
+	const pending = deferred<Partial<Response>>();
+	(global.fetch as jest.Mock).mockReturnValueOnce(pending.promise);
+	const view = render(
+		<RecitationPlayer perekId={1} pesukim={pesukim}>
+			<RecitationHeader title="בריאת העולם" />
+		</RecitationPlayer>,
+	);
+	fireEvent.click(screen.getByRole("button", { name: "מצב הקראה" }));
+	const signal = (global.fetch as jest.Mock).mock.calls[0][1]
+		.signal as AbortSignal;
+	fireEvent.click(screen.getByRole("button", { name: "מצב הקראה" }));
+	expect(signal.aborted).toBe(true);
+	const json = jest.fn().mockResolvedValue(manifest);
+	await act(async () => pending.resolve({ ok: true, json }));
+	expect(json).not.toHaveBeenCalled();
+	expect(view.container.querySelector("audio")).toBeNull();
+});
+
+test("changing chapters while manifest JSON loads cannot display the old recording", async () => {
+	const pending = deferred<typeof manifest>();
+	(global.fetch as jest.Mock).mockResolvedValueOnce({
+		ok: true,
+		json: () => pending.promise,
+	});
+	const view = render(
+		<RecitationPlayer perekId={1} pesukim={pesukim}>
+			<RecitationHeader title="בריאת העולם" />
+		</RecitationPlayer>,
+	);
+	fireEvent.click(screen.getByRole("button", { name: "מצב הקראה" }));
+	await act(async () => {});
+	(global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 404 });
+	view.rerender(
+		<RecitationPlayer perekId={2} pesukim={pesukim}>
+			<RecitationHeader title="פרק חדש" />
+		</RecitationPlayer>,
+	);
+	await screen.findByText("עדיין אין הקלטה לפרק זה.");
+	await act(async () => pending.resolve(manifest));
+	expect(view.container.querySelector("audio")).toBeNull();
+	expect(screen.getByText("עדיין אין הקלטה לפרק זה.")).toBeVisible();
+});
+
+test("aborting a manifest request does not replace a newer chapter's status with an error", async () => {
+	const pending = deferred<Response>();
+	(global.fetch as jest.Mock).mockReturnValueOnce(pending.promise);
+	const view = render(
+		<RecitationPlayer perekId={1} pesukim={pesukim}>
+			<RecitationHeader title="פרק" />
+		</RecitationPlayer>,
+	);
+	fireEvent.click(screen.getByRole("button", { name: "מצב הקראה" }));
+	(global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 404 });
+	view.rerender(
+		<RecitationPlayer perekId={2} pesukim={pesukim}>
+			<RecitationHeader title="פרק" />
+		</RecitationPlayer>,
+	);
+	await screen.findByText("עדיין אין הקלטה לפרק זה.");
+	await act(async () => pending.reject(new Error("aborted")));
+	expect(
+		screen.queryByText("לא ניתן לטעון את ההקלטה. נסו לפתוח שוב."),
+	).toBeNull();
+});
+
+test("the heading cannot start another chapter while audio is loading", async () => {
+	const pending = deferred<void>();
+	play.mockReturnValueOnce(pending.promise);
+	await openPlayer();
+	const heading = screen.getByRole("button", {
+		name: "הקראת הפרק: בריאת העולם",
+	});
+	fireEvent.click(heading);
+	fireEvent.click(heading);
+	expect(play).toHaveBeenCalledTimes(1);
+	await act(async () => pending.resolve());
+	expect(screen.getByText("משמיע…")).toBeInTheDocument();
+});
+
+test.each([false, true])(
+	"a clip that finishes loading after navigation cannot change playback state (%s)",
+	async (started) => {
+		const pending = deferred<boolean>();
+		clipPlay.mockReturnValueOnce(pending.promise);
+		await openPlayer();
+		fireEvent.click(screen.getByRole("button", { name: "השמעת פסוק א" }));
+		act(() => stopRecitation());
+		await act(async () => pending.resolve(started));
+		expect(screen.queryByText("משמיע…")).toBeNull();
+		expect(screen.getByRole("button", { name: "השמעת כל הפרק" })).toBeEnabled();
+	},
+);
+
+test.each(["resolve", "reject", "started"] as const)(
+	"a pending resume cannot overwrite a navigation stop when it later %s s",
+	async (outcome) => {
+		const pending = deferred<boolean>();
+		clipResume.mockReturnValueOnce(pending.promise);
+		await openPlayer();
+		fireEvent.click(screen.getByRole("button", { name: "השמעת פסוק א" }));
+		await screen.findByText("משמיע…");
+		fireEvent.click(screen.getByRole("button", { name: "השהיית ההקראה" }));
+		fireEvent.click(screen.getByRole("button", { name: "המשך ההקראה" }));
+		act(() => stopRecitation());
+		await act(async () =>
+			outcome === "reject"
+				? pending.reject(new Error("cancelled resume"))
+				: pending.resolve(outcome === "started"),
+		);
+		expect(screen.queryByText("משמיע…")).toBeNull();
+		expect(screen.queryByText("ההקלטה לא נטענה. נסו שוב.")).toBeNull();
+		expect(screen.getByRole("button", { name: "השמעת כל הפרק" })).toBeEnabled();
+	},
+);
+
+test("native media events do not interrupt an active precise clip", async () => {
+	const view = await openPlayer();
+	fireEvent.click(screen.getByRole("button", { name: "השמעת פסוק א" }));
+	await screen.findByText("משמיע…");
+	const audio = view.container.querySelector("audio") as HTMLAudioElement;
+	fireEvent.ended(audio);
+	fireEvent.error(audio);
+	expect(screen.getByRole("button", { name: "השהיית ההקראה" })).toBeEnabled();
+	expect(screen.queryByText("ההקלטה לא נטענה. נסו שוב.")).toBeNull();
+	const staleEnded = clipEnded;
+	act(() => stopRecitation());
+	act(() => staleEnded());
+	expect(screen.getByRole("button", { name: "השמעת כל הפרק" })).toBeEnabled();
 });

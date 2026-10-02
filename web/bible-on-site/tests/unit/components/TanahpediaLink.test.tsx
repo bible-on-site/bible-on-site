@@ -70,10 +70,7 @@ describe("TanahpediaLink", () => {
 		);
 
 		const link = screen.getByRole("link", { name: linkLabel });
-		expect(link).toHaveAttribute(
-			"href",
-			"/pedia/moshe%20rabbeinu",
-		);
+		expect(link).toHaveAttribute("href", "/pedia/moshe%20rabbeinu");
 		expect(link).toHaveClass("entity-link");
 
 		await hoverLink(link, { clientX: 32, clientY: 48 });
@@ -143,7 +140,9 @@ describe("TanahpediaLink", () => {
 		unmount();
 
 		render(
-			<TanahpediaLink entryUniqueName="aharon">{secondLinkLabel}</TanahpediaLink>,
+			<TanahpediaLink entryUniqueName="aharon">
+				{secondLinkLabel}
+			</TanahpediaLink>,
 		);
 		await hoverLink(screen.getByRole("link", { name: secondLinkLabel }));
 
@@ -214,5 +213,47 @@ describe("TanahpediaLink", () => {
 		unmount();
 
 		expect(clearTimeoutSpy).toHaveBeenCalled();
+	});
+
+	it("keeps the tooltip open when the reader returns to the link before the hide delay", async () => {
+		const linkText = "Return";
+		jest.useFakeTimers();
+		const fetchMock = mockFetch({
+			ok: true,
+			json: async () => ({ title: "Returning hover", snippet: "Preview text" }),
+		});
+		render(
+			<TanahpediaLink entryUniqueName="returning-hover">
+				{linkText}
+			</TanahpediaLink>,
+		);
+		const link = screen.getByRole("link", { name: linkText });
+		await hoverLink(link);
+		fireEvent.mouseLeave(link);
+		act(() => jest.advanceTimersByTime(100));
+		await hoverLink(link, { clientX: 70, clientY: 90 });
+		act(() => jest.advanceTimersByTime(200));
+		expect(screen.getByRole("tooltip")).toHaveStyle({
+			left: "70px",
+			top: "90px",
+		});
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		fireEvent.mouseLeave(link);
+		act(() => jest.advanceTimersByTime(200));
+		expect(screen.queryByRole("tooltip")).toBeNull();
+	});
+
+	it("keeps a tooltip entered directly while no hide timer is pending", async () => {
+		const label = "Direct hover";
+		mockFetch({
+			ok: true,
+			json: async () => ({ title: label, snippet: "Preview" }),
+		});
+		render(
+			<TanahpediaLink entryUniqueName="direct-hover">{label}</TanahpediaLink>,
+		);
+		await hoverLink(screen.getByRole("link", { name: label }));
+		fireEvent.mouseEnter(screen.getByRole("tooltip"));
+		expect(screen.getByRole("tooltip")).toBeVisible();
 	});
 });

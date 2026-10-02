@@ -90,7 +90,10 @@ jest.mock(
 
 const mockDownloadSefer = jest.fn();
 const mockDownloadPageRanges = jest.fn();
+const mockGetPerekSummariesBatch = jest.fn().mockResolvedValue({});
 jest.mock("@/app/929/[number]/actions", () => ({
+	getPerekSummariesBatch: (...args: unknown[]) =>
+		mockGetPerekSummariesBatch(...args),
 	downloadSefer: (...args: unknown[]) => mockDownloadSefer(...args),
 	downloadPageRanges: (...args: unknown[]) => mockDownloadPageRanges(...args),
 }));
@@ -359,6 +362,32 @@ describe("Sefer component", () => {
 		expect(await config.onDownloadSefer()).toBeNull();
 	});
 
+	it.each([undefined, [], [1, 2]])(
+		"downloads the available chapters with IDs %s",
+		async (perekIds) => {
+			mockDownloadSefer.mockResolvedValue({ ext: "pdf", data: "chapters" });
+			render(
+				<Sefer
+					perekObj={minimalPerek}
+					articles={[]}
+					perushim={[]}
+					perekIds={perekIds}
+				/>,
+			);
+			const config = capturedFlipBookProps.downloadConfig as {
+				onDownloadSefer: () => Promise<unknown>;
+			};
+			expect(await config.onDownloadSefer()).toEqual({
+				ext: "pdf",
+				data: "chapters",
+			});
+			expect(mockDownloadSefer).toHaveBeenCalledWith({
+				seferName: minimalPerek.sefer,
+				perekIds: perekIds?.length ? perekIds : [minimalPerek.perekId],
+			});
+		},
+	);
+
 	it("onDownloadPageRange wraps result from server action", async () => {
 		mockDownloadPageRanges.mockResolvedValue({ ext: "zip", data: "zipdata" });
 		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
@@ -376,6 +405,19 @@ describe("Sefer component", () => {
 	it("renders without optional per-perek props (covers ?? fallbacks)", () => {
 		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		expect(screen.getByTestId("blank-page")).toBeInTheDocument();
+	});
+
+	it("does not attach chapter illustrations without the chapter-to-page ID mapping", () => {
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				imagesByPerek={{ 1: [sampleImage] }}
+			/>,
+		);
+		expect(screen.queryByRole("img", { name: sampleImage.alt })).toBeNull();
+		expect(screen.getByTestId("mock-flipbook")).toBeVisible();
 	});
 
 	it("renders with perekIds and passes SSG data for current perek only", async () => {

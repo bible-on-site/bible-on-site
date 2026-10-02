@@ -55,6 +55,11 @@ describe("constructTsetAwareHDate", () => {
 	});
 });
 describe("hebcalDateToNumber", () => {
+	it("rejects unspecific Adar in a leap year instead of silently choosing an Adar", () => {
+		expect(() => parseNumericalDateToHebcalDate(57840601)).toThrow(
+			"Invalid uniform month: 6",
+		);
+	});
 	describe("when leap year", () => {
 		describe("when 1 Sh'vat 5784", () => {
 			it("returns month 05", () => {
@@ -254,10 +259,10 @@ describe("HebrewDate", () => {
 				18,
 			);
 			const result = hDate.toTraditionalHebrewString();
-			expect(result).toContain("י\"ח");
+			expect(result).toContain('י"ח');
 			expect(result).toContain("שבט");
 			expect(result).toContain("ה'");
-			expect(result).toContain("תשפ\"ד");
+			expect(result).toContain('תשפ"ד');
 		});
 
 		it("returns year without ה' prefix for year < 5000", () => {
@@ -281,7 +286,7 @@ describe("HebrewDate", () => {
 			);
 			const result = hDate.toTraditionalHebrewString();
 			// Day 18 = י"ח
-			expect(result).toContain("י\"ח");
+			expect(result).toContain('י"ח');
 			expect(result).toContain("שבט");
 		});
 	});

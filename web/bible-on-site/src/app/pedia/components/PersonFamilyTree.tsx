@@ -179,15 +179,12 @@ function buildSpouseUnits(spouses: PersonFamilySpouseEdge[]): SpouseUnit[] {
 	}
 
 	const byAlt = groupByAltGroupId(withAlt);
-	const altKeys = [...byAlt.keys()].sort((a, b) => {
-		if (a === b) return 0;
-		if (a === null) return -1;
-		if (b === null) return 1;
-		return String(a).localeCompare(String(b));
-	});
+	// withAlt contains only non-null keys; iterate entries so every group is present.
+	const altGroups = [...byAlt.entries()].sort(([a], [b]) =>
+		String(a).localeCompare(String(b)),
+	);
 
-	for (const key of altKeys) {
-		const group = byAlt.get(key) ?? [];
+	for (const [key, group] of altGroups) {
 		const byEntity = new Map<string, PersonFamilySpouseEdge[]>();
 		for (const edge of group) {
 			const id = edge.related.entityId;
@@ -446,8 +443,8 @@ function parentSourceCitation(
 		parents.filter((p) => p.parentRole === "FATHER").length === 1 &&
 		parents.filter((p) => p.parentRole === "MOTHER").length === 1;
 	const shared = oneParentPerRole
-		? [...sourceRoles].find(([, roles]) =>
-				roles.has("FATHER") && roles.has("MOTHER"),
+		? [...sourceRoles].find(
+				([, roles]) => roles.has("FATHER") && roles.has("MOTHER"),
 			)
 		: undefined;
 	return shared?.[0] ?? ([...sourceRoles.keys()].join("\n") || null);
@@ -850,8 +847,8 @@ function PersonFamilyTreeContent({
 	} = summary;
 
 	const parentGroups = groupByAltGroupId(parents);
-	const parentKeys = [...parentGroups.keys()].sort((a, b) => {
-		if (a === b) return 0;
+	const orderedParentGroups = [...parentGroups.entries()].sort(([a], [b]) => {
+		// Map entries have distinct keys; null is the default relationship group.
 		if (a === null) return -1;
 		if (b === null) return 1;
 		return a.localeCompare(b);
@@ -880,12 +877,12 @@ function PersonFamilyTreeContent({
 		: undefined;
 
 	const childGroups = groupByAltGroupId(sortedChildren);
-	const childKeys = [...childGroups.keys()].sort((a, b) => {
-		if (a === b) return 0;
+	const orderedChildGroups = [...childGroups.entries()].sort(([a], [b]) => {
 		if (a === null) return -1;
 		if (b === null) return 1;
 		return a.localeCompare(b);
 	});
+	const childKeys = orderedChildGroups.map(([key]) => key);
 
 	const siblingLayout = partitionSiblingsForFamilyTree(
 		siblings,
@@ -1148,11 +1145,10 @@ function PersonFamilyTreeContent({
 		: [];
 
 	const parentsRows =
-		parentKeys.length <= 1 && parentKeys[0] === null ? (
+		orderedParentGroups.length === 1 && orderedParentGroups[0][0] === null ? (
 			<ParentRow parents={sortedParentsGlobal} />
 		) : (
-			parentKeys.map((key) => {
-				const group = parentGroups.get(key) ?? [];
+			orderedParentGroups.map(([key, group]) => {
 				const sorted = [...group].sort((a, b) => {
 					const rk =
 						parentRoleSortKey(a.parentRole) - parentRoleSortKey(b.parentRole);
@@ -1194,8 +1190,7 @@ function PersonFamilyTreeContent({
 
 	const nonMatrixChildrenBlocks =
 		sortedChildren.length > 0 && !matrixEligible
-			? childKeys.map((key) => {
-					const group = childGroups.get(key) ?? [];
+			? orderedChildGroups.map(([key, group]) => {
 					const sortedGroup = [...group].sort((a, b) =>
 						a.related.displayName.localeCompare(b.related.displayName, "he"),
 					);

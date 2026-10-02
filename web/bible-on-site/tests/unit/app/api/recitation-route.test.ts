@@ -88,3 +88,14 @@ test("ready chapters cannot contain unaligned placeholders", async () => {
 	(getPerekByPerekId as jest.Mock).mockReturnValue(data);
 	expect((await request()).status).toBe(500);
 });
+
+test.each(["00:60:00", "00:00:60", "1:02:03", "00:00:01.44", "invalid"])(
+	"invalid canonical recording timestamp %s returns a safe server error",
+	async (timestamp) => {
+		jest.spyOn(console, "error").mockImplementation(() => {});
+		const data = chapter();
+		data.pesukim[0].segments[0].recordingTimeFrame.from = timestamp;
+		(getPerekByPerekId as jest.Mock).mockReturnValue(data);
+		expect((await request()).status).toBe(500);
+	},
+);

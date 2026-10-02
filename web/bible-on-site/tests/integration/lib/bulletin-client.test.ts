@@ -278,6 +278,15 @@ describe("bulletin-client", () => {
 			);
 		});
 
+		it("reports a Lambda failure even when the response omits its body", async () => {
+			mockSend.mockResolvedValue({
+				Payload: Buffer.from(JSON.stringify({ statusCode: 503 })),
+			});
+			await expect(generatePdfViaBulletin([1])).rejects.toThrow(
+				"Bulletin Lambda returned status 503: ",
+			);
+		});
+
 		it("throws when Lambda returns too few bytes", async () => {
 			mockSend.mockResolvedValue({
 				Payload: Buffer.from(
@@ -367,11 +376,9 @@ describe("bulletin-client", () => {
 			const handler = createBulletinPageRangesHandler();
 
 			await expect(
-				handler(
-					[0],
-					[{ pageIndex: 0, semanticName: "א", title: "פרק א'" }],
-					{ seferName: "בראשית" },
-				),
+				handler([0], [{ pageIndex: 0, semanticName: "א", title: "פרק א'" }], {
+					seferName: "בראשית",
+				}),
 			).rejects.toThrow("No content pages in selected range");
 		});
 

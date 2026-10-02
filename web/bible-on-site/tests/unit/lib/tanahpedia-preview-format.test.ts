@@ -11,8 +11,7 @@ import {
 describe("tanahpedia/preview-format", () => {
 	describe("toPreviewHtml", () => {
 		it("strips superscripts and flattens paragraphs to br", () => {
-			const html =
-				"<p>א</p><sup><a href=\"#n\">א</a></sup><p>ב</p><hr><p>ג</p>";
+			const html = '<p>א</p><sup><a href="#n">א</a></sup><p>ב</p><hr><p>ג</p>';
 			expect(toPreviewHtml(html)).toBe("א<br>ב<br>ג");
 		});
 
@@ -38,6 +37,9 @@ describe("tanahpedia/preview-format", () => {
 	});
 
 	describe("truncatePreviewSnippet", () => {
+		it("counts an unterminated tag as text when truncating malformed snippets", () => {
+			expect(truncatePreviewSnippet("ab<cd", 3)).toBe("ab<…");
+		});
 		it("returns unchanged when text under limit", () => {
 			const s = "<h2>א</h2>ב";
 			expect(truncatePreviewSnippet(s, 100)).toBe(s);

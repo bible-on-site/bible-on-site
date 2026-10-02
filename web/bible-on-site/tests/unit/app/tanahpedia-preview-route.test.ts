@@ -65,4 +65,24 @@ describe("GET /api/tanahpedia/preview/[uniqueName]", () => {
 		expect(json.snippet.length).toBeLessThan(longText.length + 50);
 		expect(json.snippet).toContain("…");
 	});
+
+	it.each([null, ""])(
+		"returns an empty snippet for content %s",
+		async (content) => {
+			mockGetEntry.mockResolvedValue({
+				id: "empty",
+				uniqueName: "empty",
+				title: "Empty",
+				content,
+				createdAt: "",
+				updatedAt: "",
+				entities: [],
+			});
+			const response = await GET(new Request("http://localhost"), {
+				params: Promise.resolve({ uniqueName: "empty" }),
+			});
+			expect(response.status).toBe(200);
+			expect(await response.json()).toEqual({ title: "Empty", snippet: "" });
+		},
+	);
 });
