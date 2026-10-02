@@ -119,6 +119,103 @@ function childEdge({
 }
 
 describe("PersonFamilyTree", () => {
+	it("preserves all sources when several undated union opinions include a forbidden relationship", () => {
+		render(
+			<PersonFamilyTree
+				summary={{
+					...baseSummary,
+					spouses: [
+						spouseEdge({
+							id: "partner",
+							name: "בת זוג",
+							unionOrder: null,
+							altGroupId: "a",
+							sourceCitation: "מקור ראשון",
+						}),
+						spouseEdge({
+							id: "partner",
+							name: "בת זוג",
+							unionOrder: null,
+							altGroupId: "b",
+							sourceCitation: "מקור שני",
+						}),
+						spouseEdge({
+							id: "partner",
+							name: "בת זוג",
+							unionOrder: null,
+							unionType: "FORBIDDEN_WITH_GENTILE",
+							altGroupId: "c",
+							sourceCitation: "מקור שלישי",
+						}),
+					],
+				}}
+			/>,
+		);
+		expect(screen.getAllByTestId("family-spouse-card")).toHaveLength(2);
+		for (const source of ["מקור ראשון", "מקור שני", "מקור שלישי"])
+			expect(screen.getByText(source)).toBeVisible();
+	});
+
+	it("keeps chronological children with an unknown co-parent in the loose swimlane", () => {
+		const { container } = render(
+			<PersonFamilyTree
+				summary={{
+					...baseSummary,
+					spouses: [
+						spouseEdge({ id: "one", name: "ראשונה" }),
+						spouseEdge({ id: "two", name: "שנייה" }),
+					],
+					children: [
+						childEdge({
+							id: "one-child",
+							name: "ראשון",
+							birthOrder: 1,
+							coParentEntityId: "one",
+						}),
+						childEdge({ id: "loose", name: "שני", birthOrder: 2 }),
+						childEdge({
+							id: "two-child",
+							name: "שלישי",
+							birthOrder: 3,
+							coParentEntityId: "two",
+						}),
+					],
+				}}
+			/>,
+		);
+		expect(
+			container.querySelector("[data-matrix-column-trunk]"),
+		).not.toBeNull();
+		expect(
+			screen
+				.getAllByTestId("family-child-card")
+				.map((card) => card.querySelector("a")?.textContent),
+		).toEqual(["ראשון", "שני", "שלישי"]);
+	});
+
+	it("orders the default child group before an alternate group even when birth order differs", () => {
+		render(
+			<PersonFamilyTree
+				summary={{
+					...baseSummary,
+					children: [
+						childEdge({ id: "default", name: "ילד רגיל", birthOrder: 2 }),
+						childEdge({
+							id: "alternate",
+							name: "ילד חלופי",
+							birthOrder: 1,
+							altGroupId: "a",
+						}),
+					],
+				}}
+			/>,
+		);
+		expect(
+			screen
+				.getAllByTestId("family-child-card")
+				.map((card) => card.querySelector("a")?.textContent),
+		).toEqual(["ילד רגיל", "ילד חלופי"]);
+	});
 	it("renders nothing when no edges", () => {
 		const { container } = render(<PersonFamilyTree summary={baseSummary} />);
 		expect(container.firstChild).toBeNull();

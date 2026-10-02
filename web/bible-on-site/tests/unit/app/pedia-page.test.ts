@@ -421,6 +421,27 @@ describe("pedia/[uniqueName] page", () => {
 			expect(mockGetEntries).toHaveBeenCalledWith(500, 0);
 		});
 
+		it("renders entry content when place-map loading fails", async () => {
+			mockGetPlaceMapMarkersForEntry.mockRejectedValueOnce(
+				new Error("map unavailable"),
+			);
+			mockGetEntryByUniqueName.mockResolvedValue({
+				id: "entry-map-error",
+				uniqueName: "map-error",
+				title: "Map unavailable entry",
+				content: "<p>Entry content survives</p>",
+				createdAt: "",
+				updatedAt: "",
+				entities: [],
+			});
+			render((await EntryView({ slug: "map-error" })) as ReactElement);
+			expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+				"Map unavailable entry",
+			);
+			expect(screen.getByText("Entry content survives")).toBeVisible();
+			expect(screen.queryByRole("heading", { name: "מפה" })).toBeNull();
+		});
+
 		it("renders place maps and person family sections when available", async () => {
 			mockGetEntriesByEntityType.mockResolvedValue([]);
 			mockGetPersonFamilySummary.mockResolvedValue({

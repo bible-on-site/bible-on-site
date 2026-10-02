@@ -216,15 +216,18 @@ describe("TanahpediaLink", () => {
 	});
 
 	it("keeps the tooltip open when the reader returns to the link before the hide delay", async () => {
+		const linkText = "Return";
 		jest.useFakeTimers();
 		const fetchMock = mockFetch({
 			ok: true,
 			json: async () => ({ title: "Returning hover", snippet: "Preview text" }),
 		});
 		render(
-			<TanahpediaLink entryUniqueName="returning-hover">Return</TanahpediaLink>,
+			<TanahpediaLink entryUniqueName="returning-hover">
+				{linkText}
+			</TanahpediaLink>,
 		);
-		const link = screen.getByRole("link", { name: "Return" });
+		const link = screen.getByRole("link", { name: linkText });
 		await hoverLink(link);
 		fireEvent.mouseLeave(link);
 		act(() => jest.advanceTimersByTime(100));
@@ -238,5 +241,19 @@ describe("TanahpediaLink", () => {
 		fireEvent.mouseLeave(link);
 		act(() => jest.advanceTimersByTime(200));
 		expect(screen.queryByRole("tooltip")).toBeNull();
+	});
+
+	it("keeps a tooltip entered directly while no hide timer is pending", async () => {
+		const label = "Direct hover";
+		mockFetch({
+			ok: true,
+			json: async () => ({ title: label, snippet: "Preview" }),
+		});
+		render(
+			<TanahpediaLink entryUniqueName="direct-hover">{label}</TanahpediaLink>,
+		);
+		await hoverLink(screen.getByRole("link", { name: label }));
+		fireEvent.mouseEnter(screen.getByRole("tooltip"));
+		expect(screen.getByRole("tooltip")).toBeVisible();
 	});
 });

@@ -47,11 +47,13 @@ describe("entity-ref-lookup", () => {
 	describe("getSegmentRuns", () => {
 		it("retains the first whole-verse reference when several references have no segment bounds", () => {
 			const first = ref({
+				pasukNumber: 1,
 				entityId: "first",
 				segmentStart: null,
 				segmentEnd: null,
 			});
 			const second = ref({
+				pasukNumber: 1,
 				entityId: "second",
 				segmentStart: null,
 				segmentEnd: null,
@@ -66,8 +68,18 @@ describe("entity-ref-lookup", () => {
 		});
 
 		it("merges distinct reference rows for the same entity and range start", () => {
-			const first = ref({ entityId: "same", segmentStart: 0, segmentEnd: 0 });
-			const second = ref({ entityId: "same", segmentStart: 0, segmentEnd: 2 });
+			const first = ref({
+				pasukNumber: 1,
+				entityId: "same",
+				segmentStart: 0,
+				segmentEnd: 0,
+			});
+			const second = ref({
+				pasukNumber: 1,
+				entityId: "same",
+				segmentStart: 0,
+				segmentEnd: 2,
+			});
 			expect(
 				getSegmentRuns(
 					buildEntityRefLookup([first, second]),

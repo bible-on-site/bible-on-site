@@ -324,6 +324,27 @@ test("hiding the page stops and releases its selected clip", async () => {
 	).toHaveAttribute("aria-pressed", "false");
 });
 
+test("visibility events keep a visible page's clip playing", async () => {
+	await openPlayer();
+	fireEvent.click(screen.getByRole("button", { name: "השמעת פסוק א" }));
+	await screen.findByText("משמיע…");
+	jest.spyOn(document, "hidden", "get").mockReturnValue(false);
+	fireEvent(document, new Event("visibilitychange"));
+	expect(clipDispose).not.toHaveBeenCalled();
+	expect(screen.getByRole("button", { name: "השהיית ההקראה" })).toBeEnabled();
+});
+
+test("a chapter play rejection arriving after navigation cannot display an error", async () => {
+	const pending = deferred<void>();
+	play.mockReturnValueOnce(pending.promise);
+	await openPlayer();
+	fireEvent.click(screen.getByRole("button", { name: "השמעת כל הפרק" }));
+	act(() => stopRecitation());
+	await act(async () => pending.reject(new Error("cancelled chapter")));
+	expect(screen.queryByText("ההקלטה לא נטענה. נסו שוב.")).toBeNull();
+	expect(screen.getByRole("button", { name: "השמעת כל הפרק" })).toBeEnabled();
+});
+
 test("failed manifest loads can be retried by reopening listening mode", async () => {
 	(global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 503 });
 	render(
@@ -443,7 +464,7 @@ test.each([false, true])(
 	},
 );
 
-test.each(["resolve", "reject"] as const)(
+test.each(["resolve", "reject", "started"] as const)(
 	"a pending resume cannot overwrite a navigation stop when it later %s s",
 	async (outcome) => {
 		const pending = deferred<boolean>();
@@ -455,9 +476,9 @@ test.each(["resolve", "reject"] as const)(
 		fireEvent.click(screen.getByRole("button", { name: "המשך ההקראה" }));
 		act(() => stopRecitation());
 		await act(async () =>
-			outcome === "resolve"
-				? pending.resolve(false)
-				: pending.reject(new Error("cancelled resume")),
+			outcome === "reject"
+				? pending.reject(new Error("cancelled resume"))
+				: pending.resolve(outcome === "started"),
 		);
 		expect(screen.queryByText("משמיע…")).toBeNull();
 		expect(screen.queryByText("ההקלטה לא נטענה. נסו שוב.")).toBeNull();

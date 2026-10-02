@@ -20,7 +20,6 @@ jest.mock("@/lib/tanahpedia/service", () => ({
 const counts = Object.fromEntries(
 	Object.keys(CATEGORY_LABELS).map((key) => [key, 3]),
 ) as Record<CategoryKey, number>;
-const originalNodeEnv = process.env.NODE_ENV;
 
 beforeEach(() => {
 	jest.useFakeTimers().setSystemTime(new Date("2026-10-02T12:00:00+03:00"));
@@ -31,7 +30,6 @@ beforeEach(() => {
 
 afterEach(() => {
 	jest.useRealTimers();
-	process.env.NODE_ENV = originalNodeEnv;
 	jest.restoreAllMocks();
 });
 
@@ -111,7 +109,7 @@ test.each([
 ])(
 	"shows a safe fallback when a database request fails: %s",
 	async (failure) => {
-		process.env.NODE_ENV = "production";
+		jest.replaceProperty(process.env, "NODE_ENV", "production");
 		jest.mocked(getCategoryCounts).mockRejectedValueOnce(failure);
 		render(await TanahpediaLandingPage());
 		const alert = screen.getByRole("alert");
@@ -126,7 +124,7 @@ test.each([
 );
 
 test("logs the original development failure and offers diagnostic details", async () => {
-	process.env.NODE_ENV = "development";
+	jest.replaceProperty(process.env, "NODE_ENV", "development");
 	const failure = new Error("MySQL connection refused");
 	const log = jest.spyOn(console, "error").mockImplementation(() => {});
 	jest.mocked(getRecentEntries).mockRejectedValueOnce(failure);

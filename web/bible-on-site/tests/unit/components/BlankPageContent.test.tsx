@@ -165,6 +165,28 @@ describe("BlankPageContent", () => {
 		});
 	});
 
+	it("returns an expanded article to its chapter's book route", async () => {
+		mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
+		const push = jest.spyOn(history, "pushState");
+		try {
+			render(
+				<BlankPageContent
+					articles={mockArticles}
+					perekId={615}
+					hebrewDateStr="י׳ בשבט"
+					initialSlug="1"
+				/>,
+			);
+			await screen.findByText("חזרה למאמרים →");
+			push.mockClear();
+			fireEvent.click(screen.getByText("חזרה למאמרים →"));
+			expect(push).toHaveBeenCalledWith(null, "", "/929/615?book");
+			expect(screen.getByText("הרב ישראל")).toBeVisible();
+		} finally {
+			push.mockRestore();
+		}
+	});
+
 	it("pushes correct history URL when clicking article (includes perekId)", async () => {
 		const fullArticle: Article = {
 			...mockArticles[0],
@@ -323,6 +345,31 @@ describe("BlankPageContent", () => {
 	});
 
 	describe("initialSlug", () => {
+		it("finds a deep-linked commentary after other commentaries and returns without a chapter history entry", async () => {
+			mockGetPerushNotesForPage.mockResolvedValue([]);
+			const historySpy = jest.spyOn(history, "pushState");
+			try {
+				render(
+					<BlankPageContent
+						articles={[]}
+						perushim={[
+							...mockPerushim,
+							{ id: 2, name: "רמב״ן", parshanName: "רמב״ן", noteCount: 1 },
+						]}
+						hebrewDateStr="י׳ בשבט"
+						initialSlug="רמב״ן"
+					/>,
+				);
+				await screen.findByText("→ חזרה לפרשנים");
+				expect(mockGetPerushNotesForPage).toHaveBeenCalledWith(2, 0);
+				historySpy.mockClear();
+				fireEvent.click(screen.getByText("→ חזרה לפרשנים"));
+				expect(historySpy).not.toHaveBeenCalled();
+				expect(screen.getByText("פרשנים על הפרק")).toBeVisible();
+			} finally {
+				historySpy.mockRestore();
+			}
+		});
 		it("leaves an unknown commentary slug at the carousel without requesting notes", () => {
 			render(
 				<BlankPageContent
