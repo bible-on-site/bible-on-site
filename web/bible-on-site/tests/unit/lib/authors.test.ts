@@ -286,6 +286,12 @@ describe("authors service", () => {
 	});
 
 	describe("getAuthorByName", () => {
+		it("returns a matched author with empty details", async () => {
+			mockQuery.mockResolvedValue([{ id: 1, name: "מחבר", details: null }]);
+			expect(await getAuthorByName("מחבר")).toEqual(
+				expect.objectContaining({ id: 1, details: "" }),
+			);
+		});
 		it("returns author when normalised name matches", async () => {
 			const mockRows = [
 				{ id: 1, name: 'הרב לדוגמא שליט"א', details: "תיאור" },
@@ -303,9 +309,7 @@ describe("authors service", () => {
 		});
 
 		it("matches even when input has quotes and DB name has quotes", async () => {
-			const mockRows = [
-				{ id: 1, name: 'הרב לדוגמא שליט"א', details: "תיאור" },
-			];
+			const mockRows = [{ id: 1, name: 'הרב לדוגמא שליט"א', details: "תיאור" }];
 			mockQuery.mockResolvedValue(mockRows);
 			process.env.S3_ENDPOINT = "http://localhost:4566";
 
@@ -315,9 +319,7 @@ describe("authors service", () => {
 		});
 
 		it("returns null when no name matches", async () => {
-			const mockRows = [
-				{ id: 1, name: 'הרב לדוגמא שליט"א', details: "" },
-			];
+			const mockRows = [{ id: 1, name: 'הרב לדוגמא שליט"א', details: "" }];
 			mockQuery.mockResolvedValue(mockRows);
 
 			const result = await getAuthorByName("הרב לא קיים");

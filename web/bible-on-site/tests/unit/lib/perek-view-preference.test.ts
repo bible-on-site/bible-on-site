@@ -10,6 +10,25 @@ describe("perek-view-preference", () => {
 		localStorage.clear();
 	});
 
+	afterEach(() => jest.restoreAllMocks());
+
+	it("falls back safely when private-mode storage cannot be read or written", () => {
+		jest.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+			throw new DOMException("Access denied", "SecurityError");
+		});
+		jest.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+			throw new DOMException("Quota exceeded", "QuotaExceededError");
+		});
+		expect(getStoredPerekViewMode()).toBeNull();
+		expect(() => setStoredPerekViewMode("book")).not.toThrow();
+	});
+
+	it("accepts query strings prefixed with a question mark", () => {
+		expect(pathnameWithBookQuery("/929/1", "?book=&x=2", false)).toBe(
+			"/929/1?x=2",
+		);
+	});
+
 	it("setStoredPerekViewMode and getStoredPerekViewMode roundtrip", () => {
 		expect(getStoredPerekViewMode()).toBeNull();
 		setStoredPerekViewMode("book");
@@ -22,32 +41,6 @@ describe("perek-view-preference", () => {
 	it("getStoredPerekViewMode returns null for unknown values", () => {
 		localStorage.setItem(PEREK_VIEW_MODE_STORAGE_KEY, "other");
 		expect(getStoredPerekViewMode()).toBeNull();
-	});
-
-	it("returns no stored mode when privacy settings deny localStorage access", () => {
-		const read = jest
-			.spyOn(Storage.prototype, "getItem")
-			.mockImplementation(() => {
-				throw new DOMException("Storage access denied", "SecurityError");
-			});
-		try {
-			expect(getStoredPerekViewMode()).toBeNull();
-		} finally {
-			read.mockRestore();
-		}
-	});
-
-	it("keeps view switching usable when localStorage quota is exhausted", () => {
-		const write = jest
-			.spyOn(Storage.prototype, "setItem")
-			.mockImplementation(() => {
-				throw new DOMException("Storage quota exhausted", "QuotaExceededError");
-			});
-		try {
-			expect(() => setStoredPerekViewMode("book")).not.toThrow();
-		} finally {
-			write.mockRestore();
-		}
 	});
 
 	it("pathnameWithBookQuery adds book and preserves other params", () => {

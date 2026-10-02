@@ -118,6 +118,14 @@ describe("sefer-page-utils", () => {
 				);
 			});
 
+			it("ignores a page index before the book", () => {
+				expect(mapper.pageToRoute(-1, undefined)).toBeNull();
+			});
+
+			it("does not create a route from a malformed saved page index", () => {
+				expect(mapper.pageToRoute(Number.NaN, undefined)).toBeNull();
+			});
+
 			it("returns null when perekIds is undefined", () => {
 				const noIds = buildHistoryMapper(undefined, pageSemantics, "בראשית");
 				expect(noIds.pageToRoute(CONTENT_OFFSET, undefined)).toBeNull();
@@ -164,6 +172,13 @@ describe("sefer-page-utils", () => {
 
 			it("returns null for unknown perekId", () => {
 				expect(mapper.routeToPage("/929/999?book")).toBeNull();
+				expect(mapper.routeToPage("/929/999")).toBeNull();
+			});
+
+			it("does not map routes or pages for an empty book", () => {
+				const empty = buildHistoryMapper([], pageSemantics, "בראשית");
+				expect(empty.routeToPage("/929/100")).toBeNull();
+				expect(empty.pageToRoute(CONTENT_OFFSET, undefined)).toBeNull();
 			});
 
 			it("handles hash-based bookmarks", () => {

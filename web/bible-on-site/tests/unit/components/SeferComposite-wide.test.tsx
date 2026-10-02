@@ -136,6 +136,32 @@ describe("SeferComposite (wide screen)", () => {
 		expect(await screen.findByTestId("sefer")).toBeTruthy();
 	});
 
+	it("reopens an already mounted book after closing it", async () => {
+		jest.useFakeTimers();
+		try {
+			render(
+				<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
+			);
+			const toggle = screen.getByRole("checkbox");
+			await act(async () => {
+				fireEvent.click(toggle);
+			});
+			const book = await screen.findByTestId("sefer");
+			const mount = book.getAttribute("data-mount");
+			fireEvent.click(toggle);
+			act(() => jest.advanceTimersByTime(1000));
+			await act(async () => {
+				fireEvent.click(toggle);
+			});
+			expect(screen.getByTestId("sefer")).toBeVisible();
+			expect(screen.getByTestId("sefer").getAttribute("data-mount")).toBe(
+				mount,
+			);
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
 	it("leaves a semantic book route through its chapter page", async () => {
 		mockPathname = "/929/בראשית/תוכן";
 		mockGet.mockImplementation((name: string) => (name === "book" ? "" : null));

@@ -49,7 +49,7 @@ public class BottomNavigationBar : ContentView
         typeof(double),
         typeof(BottomNavigationBar),
         32.0,
-        propertyChanged: OnNotchRadiusChanged);
+        propertyChanged: (bindable, _, value) => OnNotchRadiusChanged((BottomNavigationBar)bindable, (double)value));
 
     /// <summary>
     /// Bindable property for the bar background color.
@@ -203,10 +203,9 @@ public class BottomNavigationBar : ContentView
         }
     }
 
-    private static void OnNotchRadiusChanged(BindableObject bindable, object oldValue, object newValue)
+    private static void OnNotchRadiusChanged(BottomNavigationBar bar, double radius)
     {
-        var bar = (BottomNavigationBar)bindable;
-        bar._background.NotchRadius = (float)(double)newValue;
+        bar._background.NotchRadius = (float)radius;
         bar._background.InvalidateDrawable();
     }
 }

@@ -11,8 +11,12 @@ public class NavigationBoundaryTests
 {
     private sealed class TestApplication(Page? page) : Application
     {
-        protected override Window CreateWindow(IActivationState? _) =>
-            page == null ? new Window() : new Window(page);
+        protected override Window CreateWindow(IActivationState? activationState)
+        {
+            // MAUI requires this override parameter; the fixture owns its window.
+            _ = activationState;
+            return page == null ? new Window() : new Window(page);
+        }
     }
 
     [Theory]
