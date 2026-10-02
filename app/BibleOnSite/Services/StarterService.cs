@@ -1,5 +1,7 @@
 using System.Text.Json;
 using BibleOnSite.Models;
+using GraphQL.Client.Http;
+using BibleOnSite.Helpers;
 
 namespace BibleOnSite.Services;
 
@@ -18,7 +20,14 @@ public class StarterService : BaseGraphQLService
 
     private const string CacheFileName = "starter_cache.json";
 
-    private StarterService() { }
+    private readonly IFileSystem _fileSystem;
+
+    private StarterService() { _fileSystem = FileSystem.Current; }
+
+    public StarterService(GraphQLHttpClient client, IFileSystem fileSystem) : base(client)
+    {
+        _fileSystem = fileSystem;
+    }
 
     /// <summary>
     /// List of all authors loaded from the API.
@@ -107,8 +116,9 @@ public class StarterService : BaseGraphQLService
         IsFromCache = false;
         IsLoaded = true;
 
-        // Persist to local cache in background (fire-and-forget)
-        _ = Task.Run(() => SaveCacheAsync(response));
+        // Finish persisting before reporting a completed load, so immediate offline
+        // restarts can use the response and tests can observe the durable result.
+        await SaveCacheAsync(response);
     }
 
     /// <summary>
@@ -242,15 +252,15 @@ public class StarterService : BaseGraphQLService
 
     #region Local cache
 
-    private static string CachePath =>
-        Path.Combine(FileSystem.AppDataDirectory, CacheFileName);
+    private string CachePath =>
+        Path.Combine(_fileSystem.AppDataDirectory, CacheFileName);
 
-    private static async Task SaveCacheAsync(StarterResponse response)
+    private async Task SaveCacheAsync(StarterResponse response)
     {
         try
         {
             var json = JsonSerializer.Serialize(response, StarterJsonContext.Default.StarterResponse);
-            await File.WriteAllTextAsync(CachePath, json);
+            await AtomicFile.WriteAllTextAsync(CachePath, json);
         }
         catch (Exception ex)
         {

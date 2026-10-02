@@ -25,10 +25,10 @@ export function canonicalPediaTarget(url: URL): string | null {
 		purity: search.get("purity") ?? undefined,
 	};
 
+	if (second === "jerusalem") return "/pedia/ירושלים";
 	if (root === "tanahpedia")
 		return pediaPathFromLegacy(second ?? null, filters);
 	if (!second) return null;
-	if (second === "jerusalem") return "/pedia/ירושלים";
 
 	const resolved = resolveCategoryRoute(second, filters);
 	if (!resolved) return null;

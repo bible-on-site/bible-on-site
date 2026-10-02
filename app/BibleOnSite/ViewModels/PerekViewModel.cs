@@ -15,6 +15,12 @@ public partial class PerekViewModel : ObservableObject
 {
     private readonly PreferencesService _preferencesService;
     private readonly Func<int, Perek?> _perekLoader;
+    private readonly PerekDataService _perekDataService;
+    private readonly PerushimCatalogService _catalogService;
+    private readonly PerushimNotesService _notesService;
+    private readonly IAppNavigator _navigator;
+    private readonly IFileSystem _fileSystem;
+    private readonly IShare _share;
 
     // Using fields with [ObservableProperty] - the MVVMTK0045 warnings are acceptable
     // as we're not targeting AOT scenarios for WinRT marshalling.
@@ -106,9 +112,23 @@ public partial class PerekViewModel : ObservableObject
     }
 
     public PerekViewModel(PreferencesService preferencesService, Func<int, Perek?>? perekLoader)
+        : this(preferencesService, perekLoader, null, null, null, null, null, null)
+    {
+    }
+
+    public PerekViewModel(PreferencesService preferencesService, Func<int, Perek?>? perekLoader,
+        PerekDataService? perekDataService, PerushimCatalogService? catalogService,
+        PerushimNotesService? notesService, IAppNavigator? navigator,
+        IFileSystem? fileSystem, IShare? share)
     {
         _preferencesService = preferencesService;
         _perekLoader = perekLoader ?? DefaultPerekLoader;
+        _perekDataService = perekDataService ?? PerekDataService.Instance;
+        _catalogService = catalogService ?? PerushimCatalogService.Instance;
+        _notesService = notesService ?? PerushimNotesService.Instance;
+        _navigator = navigator ?? ShellAppNavigator.Instance;
+        _fileSystem = fileSystem ?? FileSystem.Current;
+        _share = share ?? Share.Default;
 
         // Sync FontFactor from preferences and listen for changes
         _fontFactor = _preferencesService.FontFactor;
@@ -222,16 +242,16 @@ public partial class PerekViewModel : ObservableObject
     public async Task LoadByPerekIdAsync(int perekId)
     {
         // Ensure data service is loaded
-        if (!PerekDataService.Instance.IsLoaded)
+        if (!_perekDataService.IsLoaded)
         {
-            await PerekDataService.Instance.LoadAsync();
+            await _perekDataService.LoadAsync();
         }
 
-        var perek = PerekDataService.Instance.GetPerek(perekId);
+        var perek = _perekDataService.GetPerek(perekId);
         if (perek != null)
         {
             // Load pasukim
-            perek.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(perekId);
+            perek.Pasukim = await _perekDataService.LoadPasukimAsync(perekId);
             SetPerek(perek);
             await LoadPerushimAsync(perekId);
             await InitializeCarouselAsync();
@@ -245,11 +265,11 @@ public partial class PerekViewModel : ObservableObject
     /// </summary>
     public async Task LoadPerushimAsync(int perekId)
     {
-        await PerushimCatalogService.Instance.InitializeAsync();
-        await PerushimNotesService.Instance.InitializeAsync();
+        await _catalogService.InitializeAsync();
+        await _notesService.InitializeAsync();
 
-        PerushimCatalogAvailable = PerushimCatalogService.Instance.IsAvailable;
-        PerushimNotesAvailable = PerushimNotesService.Instance.IsAvailable;
+        PerushimCatalogAvailable = _catalogService.IsAvailable;
+        PerushimNotesAvailable = _notesService.IsAvailable;
         OnPropertyChanged(nameof(PerushimEmptyMessage));
         OnPropertyChanged(nameof(ShowDownloadPerushimButton));
 
@@ -285,7 +305,7 @@ public partial class PerekViewModel : ObservableObject
         }
         else
         {
-            perushIds = await PerushimNotesService.Instance.GetPerushIdsForPerekAsync(perekId);
+            perushIds = await _notesService.GetPerushIdsForPerekAsync(perekId);
             if (perushIds.Count == 0)
             {
                 _perushNotesCache = new List<PerekPerushNote>();
@@ -294,8 +314,8 @@ public partial class PerekViewModel : ObservableObject
                 FillFilteredPerushContents();
                 return;
             }
-            perushById = await PerushimCatalogService.Instance.GetPerushimByIdsAsync(perushIds);
-            notes = await PerushimNotesService.Instance.LoadNotesForPerekAsync(perekId, perushById);
+            perushById = await _catalogService.GetPerushimByIdsAsync(perushIds);
+            notes = await _notesService.LoadNotesForPerekAsync(perekId, perushById);
         }
 
         if (perushIds.Count == 0)
@@ -362,12 +382,12 @@ public partial class PerekViewModel : ObservableObject
     public async Task LoadTodayAsync()
     {
         // Ensure data is loaded before getting today's perek
-        if (!PerekDataService.Instance.IsLoaded)
+        if (!_perekDataService.IsLoaded)
         {
-            await PerekDataService.Instance.LoadAsync();
+            await _perekDataService.LoadAsync();
         }
 
-        var todayPerekId = PerekDataService.Instance.GetTodaysPerekId();
+        var todayPerekId = _perekDataService.GetTodaysPerekId();
         if (todayPerekId != PerekId)
         {
             await NavigateToPerekAsync(todayPerekId);
@@ -390,7 +410,7 @@ public partial class PerekViewModel : ObservableObject
     {
         if (CarouselPerakim != null && CarouselPerakim.Count == 929)
         {
-            var targetPerek = PerekDataService.Instance.GetPerek(perekId);
+            var targetPerek = _perekDataService.GetPerek(perekId);
             if (targetPerek != null)
             {
                 await EnsurePasukimLoadedAsync(targetPerek);
@@ -532,7 +552,7 @@ public partial class PerekViewModel : ObservableObject
             var result = new List<Perek>(929);
             for (var id = 1; id <= 929; id++)
             {
-                var p = id == perekId ? perek : PerekDataService.Instance.GetPerek(id);
+                var p = id == perekId ? perek : _perekDataService.GetPerek(id);
                 if (p != null) result.Add(p);
             }
 
@@ -541,10 +561,10 @@ public partial class PerekViewModel : ObservableObject
             var bufferEnd = Math.Min(929, perekId + PasukimBufferHalf);
             for (var id = bufferStart; id <= bufferEnd; id++)
             {
-                var p = PerekDataService.Instance.GetPerek(id);
+                var p = _perekDataService.GetPerek(id);
                 if (p != null && (p.Pasukim == null || p.Pasukim.Count == 0))
                 {
-                    p.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(id);
+                    p.Pasukim = await _perekDataService.LoadPasukimAsync(id);
                 }
             }
 
@@ -574,7 +594,7 @@ public partial class PerekViewModel : ObservableObject
         if (perek.Pasukim != null && perek.Pasukim.Count > 0) return;
 
         Console.WriteLine($"[Carousel] EnsurePasukimLoaded perekId={perek.PerekId}");
-        perek.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(perek.PerekId);
+        perek.Pasukim = await _perekDataService.LoadPasukimAsync(perek.PerekId);
     }
 
     /// <summary>
@@ -593,10 +613,10 @@ public partial class PerekViewModel : ObservableObject
         {
             for (var id = start; id <= end; id++)
             {
-                var p = PerekDataService.Instance.GetPerek(id);
+                var p = _perekDataService.GetPerek(id);
                 if (p != null && (p.Pasukim == null || p.Pasukim.Count == 0))
                 {
-                    p.Pasukim = await PerekDataService.Instance.LoadPasukimAsync(id);
+                    p.Pasukim = await _perekDataService.LoadPasukimAsync(id);
                 }
             }
 
@@ -614,7 +634,7 @@ public partial class PerekViewModel : ObservableObject
     /// </summary>
     private async Task PreloadAdjacentPerushimAsync(int start, int end)
     {
-        if (!PerushimNotesService.Instance.IsAvailable || !PerushimCatalogService.Instance.IsAvailable)
+        if (!_notesService.IsAvailable || !_catalogService.IsAvailable)
             return;
 
         for (var id = start; id <= end; id++)
@@ -628,7 +648,7 @@ public partial class PerekViewModel : ObservableObject
 
             try
             {
-                var perushIds = await PerushimNotesService.Instance.GetPerushIdsForPerekAsync(id);
+                var perushIds = await _notesService.GetPerushIdsForPerekAsync(id);
                 if (perushIds.Count == 0)
                 {
                     lock (_perushimPreloadCache)
@@ -639,8 +659,8 @@ public partial class PerekViewModel : ObservableObject
                     continue;
                 }
 
-                var perushById = await PerushimCatalogService.Instance.GetPerushimByIdsAsync(perushIds);
-                var notes = await PerushimNotesService.Instance.LoadNotesForPerekAsync(id, perushById);
+                var perushById = await _catalogService.GetPerushimByIdsAsync(perushIds);
+                var notes = await _notesService.LoadNotesForPerekAsync(id, perushById);
 
                 lock (_perushimPreloadCache)
                 {
@@ -688,12 +708,12 @@ public partial class PerekViewModel : ObservableObject
         try
         {
             var encodedTitle = Uri.EscapeDataString(Source);
-            await Shell.Current.GoToAsync($"ArticlesPage?perekId={PerekId}&perekTitle={encodedTitle}");
+            await _navigator.GoToAsync($"ArticlesPage?perekId={PerekId}&perekTitle={encodedTitle}");
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Navigation to ArticlesPage failed: {ex}");
-            await Shell.Current.DisplayAlertAsync("שגיאה", $"לא ניתן לטעון מאמרים: {ex.Message}", "אישור");
+            await _navigator.DisplayAlertAsync("שגיאה", $"לא ניתן לטעון מאמרים: {ex.Message}", "אישור");
         }
     }
 
@@ -705,12 +725,12 @@ public partial class PerekViewModel : ObservableObject
     {
         try
         {
-            await Shell.Current.GoToAsync("AuthorsPage");
+            await _navigator.GoToAsync("AuthorsPage");
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Navigation to AuthorsPage failed: {ex}");
-            await Shell.Current.DisplayAlertAsync("שגיאה", $"לא ניתן לטעון רבנים: {ex.Message}", "אישור");
+            await _navigator.DisplayAlertAsync("שגיאה", $"לא ניתן לטעון רבנים: {ex.Message}", "אישור");
         }
     }
 
@@ -722,11 +742,11 @@ public partial class PerekViewModel : ObservableObject
     {
         try
         {
-            var report = await PerushimNotesService.Instance.GetDiagnosticsAsync();
+            var report = await _notesService.GetDiagnosticsAsync();
             var fileName = $"perushim_diagnostics_{DateTime.UtcNow:yyyyMMdd_HHmmss}.txt";
-            var path = Path.Combine(FileSystem.CacheDirectory, fileName);
+            var path = Path.Combine(_fileSystem.CacheDirectory, fileName);
             await File.WriteAllTextAsync(path, report);
-            await Share.Default.RequestAsync(new ShareFileRequest
+            await _share.RequestAsync(new ShareFileRequest
             {
                 Title = "ייצוא לוגים — פירושים",
                 File = new ShareFile(path),
@@ -735,7 +755,7 @@ public partial class PerekViewModel : ObservableObject
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Export perushim logs failed: {ex.Message}");
-            await Shell.Current.DisplayAlertAsync("שגיאה", $"לא ניתן לייצא לוגים: {ex.Message}", "אישור");
+            await _navigator.DisplayAlertAsync("שגיאה", $"לא ניתן לייצא לוגים: {ex.Message}", "אישור");
         }
     }
 

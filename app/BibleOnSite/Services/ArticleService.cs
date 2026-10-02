@@ -22,6 +22,10 @@ public class ArticleService : BaseGraphQLService
     {
     }
 
+    public ArticleService(GraphQLHttpClient client) : base(client)
+    {
+    }
+
     /// <summary>
     /// Fetches all articles for a specific perek.
     /// </summary>

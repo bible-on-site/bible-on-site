@@ -13,7 +13,16 @@ public sealed class AppConfig
 
         public static AppConfig Instance => _instance.Value;
 
-        private AppConfig() { }
+        private readonly IFileSystem _fileSystem;
+        private readonly IDeviceInfo _deviceInfo;
+
+        private AppConfig() : this(FileSystem.Current, DeviceInfo.Current) { }
+
+        public AppConfig(IFileSystem fileSystem, IDeviceInfo deviceInfo)
+        {
+                _fileSystem = fileSystem;
+                _deviceInfo = deviceInfo;
+        }
 
         /// <summary>
         /// The remote API host domain.
@@ -54,7 +63,7 @@ public sealed class AppConfig
 
                 try
                 {
-                        using var stream = await FileSystem.OpenAppPackageFileAsync("api-config.txt");
+                        using var stream = await _fileSystem.OpenAppPackageFileAsync("api-config.txt");
                         using var reader = new StreamReader(stream);
                         var content = await reader.ReadToEndAsync();
                         _apiUrlOverride = string.IsNullOrWhiteSpace(content) ? null : content.Trim();
@@ -91,7 +100,7 @@ public sealed class AppConfig
                 // Only use DevApiUrl on emulators/simulators - real devices should use production API
                 // because 10.0.2.2 (Android) or localhost is not accessible from real devices
 #if MAUI
-                if (DeviceInfo.Current.DeviceType == DeviceType.Virtual)
+                if (_deviceInfo.DeviceType == DeviceType.Virtual)
                 {
                         return DevApiUrl;
                 }

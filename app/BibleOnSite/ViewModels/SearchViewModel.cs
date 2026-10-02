@@ -11,6 +11,7 @@ namespace BibleOnSite.ViewModels;
 /// </summary>
 public partial class SearchViewModel : ObservableObject
 {
+    private readonly Services.PerekDataService _perekDataService;
     private const string SearchPhraseAll = "*";
 
     private readonly HashSet<SearchFilter> _enabledFilters;
@@ -32,8 +33,11 @@ public partial class SearchViewModel : ObservableObject
     private ObservableCollection<SearchResult> _searchResults = new();
 #pragma warning restore MVVMTK0045
 
-    public SearchViewModel()
+    public SearchViewModel() : this(Services.PerekDataService.Instance) { }
+
+    public SearchViewModel(Services.PerekDataService perekDataService)
     {
+        _perekDataService = perekDataService;
         // Initialize all filters as enabled
         _enabledFilters = new HashSet<SearchFilter>(Enum.GetValues<SearchFilter>());
 
@@ -221,10 +225,15 @@ public partial class SearchViewModel : ObservableObject
 
     private async Task<List<PerekSearchResult>> GetPerekResultsAsync()
     {
-        // This would search perakim by source name
-        // For now, return empty - full implementation would use PerekDataService
-        await Task.CompletedTask;
-        return new List<PerekSearchResult>();
+        await _perekDataService.LoadAsync();
+        var phrase = OptimizedSearchPhrase;
+        return _perekDataService.Perakim!.Values
+            .Where(p => IsSeferFilterEnabled(p.SeferId) &&
+                (_perekDataService.GetPerekSource(p.PerekId)?.Contains(phrase, StringComparison.OrdinalIgnoreCase) == true))
+            .OrderBy(p => p.PerekId)
+            .Take(ResultsLimit)
+            .Select(p => new PerekSearchResult(p, phrase))
+            .ToList();
     }
 #endif
 

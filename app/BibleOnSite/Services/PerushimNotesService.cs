@@ -1,5 +1,6 @@
 using BibleOnSite.Models;
 using SQLite;
+using BibleOnSite.Helpers;
 
 namespace BibleOnSite.Services;
 
@@ -19,6 +20,9 @@ public class PerushimNotesService
 
     private readonly IPadDeliveryService _padService;
     private readonly string? _dataDirectoryOverride;
+    private readonly IFileSystem _fileSystem;
+    private readonly IDeviceInfo _deviceInfo;
+    private readonly IAppInfo _appInfo;
 
     private static readonly Lazy<PerushimNotesService> _instance =
         new(() => new PerushimNotesService(PadDeliveryService.Instance));
@@ -30,8 +34,22 @@ public class PerushimNotesService
     private bool _notesMissing = true;
 
     public PerushimNotesService(IPadDeliveryService padService)
+        : this(padService, null, null, null)
+    {
+    }
+
+    public PerushimNotesService(IPadDeliveryService padService, IFileSystem fileSystem)
+        : this(padService, fileSystem, null, null)
+    {
+    }
+
+    public PerushimNotesService(IPadDeliveryService padService, IFileSystem? fileSystem,
+        IDeviceInfo? deviceInfo, IAppInfo? appInfo)
     {
         _padService = padService;
+        _fileSystem = fileSystem ?? FileSystem.Current;
+        _deviceInfo = deviceInfo ?? DeviceInfo.Current;
+        _appInfo = appInfo ?? AppInfo.Current;
     }
 
     /// <summary>
@@ -42,13 +60,12 @@ public class PerushimNotesService
         return new PerushimNotesService(padService, dataDirectory);
     }
 
-    private PerushimNotesService(IPadDeliveryService padService, string dataDirectory)
+    private PerushimNotesService(IPadDeliveryService padService, string dataDirectory) : this(padService)
     {
-        _padService = padService;
         _dataDirectoryOverride = dataDirectory;
     }
 
-    private string DataDirectory => _dataDirectoryOverride ?? FileSystem.AppDataDirectory;
+    private string DataDirectory => _dataDirectoryOverride ?? _fileSystem.AppDataDirectory;
 
     /// <summary>Whether the notes database is available (from PAD or HTTP download).</summary>
     public bool IsAvailable => _initialized && !_notesMissing && _connection != null;
@@ -68,8 +85,8 @@ public class PerushimNotesService
         {
             "=== Perushim notes diagnostics ===",
             $"Time: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}Z",
-            $"Platform: {DeviceInfo.Platform} ({DeviceInfo.VersionString})",
-            $"App: {AppInfo.VersionString} build {AppInfo.BuildString}",
+            $"Platform: {_deviceInfo.Platform} ({_deviceInfo.VersionString})",
+            $"App: {_appInfo.VersionString} build {_appInfo.BuildString}",
             "",
             $"IsAvailable: {IsAvailable}",
             $"Initialized: {_initialized}",
@@ -113,11 +130,11 @@ public class PerushimNotesService
         return string.Join(Environment.NewLine, lines);
     }
 
-    private static async Task<bool> AppPackageHasNotesAsync()
+    private async Task<bool> AppPackageHasNotesAsync()
     {
         try
         {
-            await using var s = await FileSystem.OpenAppPackageFileAsync(NotesDbName);
+            await using var s = await _fileSystem.OpenAppPackageFileAsync(NotesDbName);
             return s != null;
         }
         catch
@@ -243,7 +260,8 @@ public class PerushimNotesService
                     await _connection.CloseAsync();
                     _connection = null;
                 }
-                await Task.Run(() => File.Copy(padDbPath, localDbPath, overwrite: true));
+                await using var source = File.OpenRead(padDbPath);
+                await AtomicFile.CopyAsync(source, localDbPath);
                 Console.WriteLine($"Perushim notes upgraded from PAD (local={localTs}, pad={padTs})");
             }
         }
@@ -287,7 +305,8 @@ public class PerushimNotesService
             return false;
         try
         {
-            await Task.Run(() => File.Copy(srcPath, dbPath, overwrite: true));
+            await using var source = File.OpenRead(srcPath);
+            await AtomicFile.CopyAsync(source, dbPath);
             return true;
         }
         catch (Exception ex)
@@ -300,13 +319,12 @@ public class PerushimNotesService
     /// <summary>
     /// Copies the notes DB from the app package when bundled (e.g. Android Debug MauiAsset fallback).
     /// </summary>
-    private static async Task<bool> TryCopyFromAppPackageAsync(string dbPath)
+    private async Task<bool> TryCopyFromAppPackageAsync(string dbPath)
     {
         try
         {
-            await using var source = await FileSystem.OpenAppPackageFileAsync(NotesDbName);
-            await using var target = File.Create(dbPath);
-            await source.CopyToAsync(target);
+            await using var source = await _fileSystem.OpenAppPackageFileAsync(NotesDbName);
+            await AtomicFile.CopyAsync(source, dbPath);
             return true;
         }
         catch (FileNotFoundException)

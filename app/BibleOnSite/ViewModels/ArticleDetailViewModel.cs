@@ -9,6 +9,16 @@ namespace BibleOnSite.ViewModels;
 /// </summary>
 public partial class ArticleDetailViewModel : ObservableObject
 {
+    private readonly Services.IAppNavigator _navigator;
+    private readonly IShare _share;
+
+    public ArticleDetailViewModel() : this(Services.ShellAppNavigator.Instance, Share.Default) { }
+
+    public ArticleDetailViewModel(Services.IAppNavigator navigator, IShare share)
+    {
+        _navigator = navigator;
+        _share = share;
+    }
 #pragma warning disable MVVMTK0045
     [ObservableProperty]
     private Article? _article;
@@ -142,7 +152,7 @@ public partial class ArticleDetailViewModel : ObservableObject
         if (Article == null)
             return;
 
-        await Share.RequestAsync(new ShareTextRequest
+        await _share.RequestAsync(new ShareTextRequest
         {
             Text = $"{ArticleName} - {AuthorName}",
             Uri = ShareUrl,
@@ -156,7 +166,7 @@ public partial class ArticleDetailViewModel : ObservableObject
     [RelayCommand]
     public async Task GoBackAsync()
     {
-        await Shell.Current.GoToAsync("..");
+        await _navigator.GoToAsync("..");
     }
 
     /// <summary>
@@ -170,7 +180,7 @@ public partial class ArticleDetailViewModel : ObservableObject
 
         var authorId = Article.Author.Id;
         var authorName = Uri.EscapeDataString(Article.Author.Name);
-        await Shell.Current.GoToAsync($"ArticlesPage?authorId={authorId}&authorName={authorName}");
+        await _navigator.GoToAsync($"ArticlesPage?authorId={authorId}&authorName={authorName}");
     }
 #endif
 }

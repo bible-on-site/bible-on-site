@@ -6,12 +6,15 @@ namespace BibleOnSite.Controls;
 /// </summary>
 public class BottomBarDrawable : IDrawable
 {
+    public Color? BarColor { get; set; }
+    public float NotchRadius { get; set; } = 32f;
+
     public void Draw(ICanvas canvas, RectF dirtyRect)
     {
         var width = dirtyRect.Width;
         var height = dirtyRect.Height;
-        var notchRadius = 44f; // Wider notch with more spacing around FAB
-        var notchDepth = 68f; // Extra deep notch - bottom at ~30% of bar height
+        var notchRadius = NotchRadius + 12f; // Leave spacing around the center button
+        var notchDepth = 68f; // Leave space below the floating button
         var edgeCurveHeight = 18f; // Height of the curved edges
         var centerX = width / 2f;
 
@@ -21,7 +24,7 @@ public class BottomBarDrawable : IDrawable
 
         // Determine if dark mode
         var isDarkMode = Application.Current?.RequestedTheme == AppTheme.Dark;
-        var barColor = isDarkMode ? Color.FromArgb("#1C1C1E") : Colors.White;
+        var barColor = BarColor ?? (isDarkMode ? Color.FromArgb("#1C1C1E") : Colors.White);
 
         // Create path for the bar with curved edges and deep notch
         var path = new PathF();
