@@ -122,6 +122,21 @@ public class NotesDeliveryTests
     }
 
     [Fact]
+    public async Task Upgrade_WhenPackDirectoryHasNoDatabase_KeepsLocalNotes()
+    {
+        await using var local = new TestStorage();
+        await using var remote = new TestStorage();
+        await local.CreateDatabaseAsync(DbName, "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
+            "INSERT INTO note VALUES (1,1,1,0,'local note')");
+        var pad = Pad();
+        pad.Setup(p => p.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(remote.Root);
+        var service = Create(local, pad);
+        var notes = await service.LoadNotesForPerekAsync(1, new Dictionary<int, Perush>());
+        notes.Single().NoteContent.Should().Be("local note");
+        service.IsAvailable.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Initialize_CopiesAlreadyDeliveredDatabaseFromAssetsSubfolder()
     {
         await using var storage = new TestStorage();

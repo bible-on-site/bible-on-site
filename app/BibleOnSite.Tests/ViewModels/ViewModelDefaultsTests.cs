@@ -26,6 +26,14 @@ public class ViewModelDefaultsTests
             vm.NextPerekId.Should().Be(0);
             vm.PreviousPerekId.Should().Be(0);
             vm.PerekNumber.Should().Be(0);
+            vm.PerekHeb.Should().BeEmpty();
+            vm.CanGoToNextPerek.Should().BeFalse();
+            vm.ShowDownloadPerushimButton.Should().BeFalse();
+            vm.SaveLastLearntPerek();
+            settings.IsPerushimDownloading = true;
+            settings.ShowPerushimDownloadButton.Should().BeFalse();
+            settings.PerushimDownloadProgress = 0.42;
+            settings.PerushimDownloadStatusText.Should().Be("מוריד… 42%");
             vm.SeferId.Should().Be(0);
             vm.SeferName.Should().BeEmpty();
             vm.ToggleBookmark();

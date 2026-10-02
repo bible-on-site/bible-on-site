@@ -24,6 +24,32 @@ describe("perek-view-preference", () => {
 		expect(getStoredPerekViewMode()).toBeNull();
 	});
 
+	it("returns no stored mode when privacy settings deny localStorage access", () => {
+		const read = jest
+			.spyOn(Storage.prototype, "getItem")
+			.mockImplementation(() => {
+				throw new DOMException("Storage access denied", "SecurityError");
+			});
+		try {
+			expect(getStoredPerekViewMode()).toBeNull();
+		} finally {
+			read.mockRestore();
+		}
+	});
+
+	it("keeps view switching usable when localStorage quota is exhausted", () => {
+		const write = jest
+			.spyOn(Storage.prototype, "setItem")
+			.mockImplementation(() => {
+				throw new DOMException("Storage quota exhausted", "QuotaExceededError");
+			});
+		try {
+			expect(() => setStoredPerekViewMode("book")).not.toThrow();
+		} finally {
+			write.mockRestore();
+		}
+	});
+
 	it("pathnameWithBookQuery adds book and preserves other params", () => {
 		const href = pathnameWithBookQuery("/929/5", "foo=1", true);
 		expect(href.startsWith("/929/5?")).toBe(true);

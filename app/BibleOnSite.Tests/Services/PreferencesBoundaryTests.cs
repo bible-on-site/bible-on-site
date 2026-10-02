@@ -36,4 +36,17 @@ public class PreferencesBoundaryTests
         service.ToggleBookmark(5);
         service.IsBookmarked(5).Should().BeFalse();
     }
+
+    [Fact]
+    public void RemovingMissingBookmark_DoesNotPersistOrNotify()
+    {
+        var storage = new Mock<IPreferencesStorage>();
+        var service = PreferencesService.CreateForTesting(storage.Object);
+        var changes = 0;
+        service.PreferencesChanged += (_, _) => changes++;
+        service.RemoveBookmark(5);
+        service.BookmarkedPerakim.Should().BeEmpty();
+        changes.Should().Be(0);
+        storage.Verify(s => s.Set("bookmarkedPerakim", It.IsAny<string>()), Times.Never);
+    }
 }

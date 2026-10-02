@@ -15,6 +15,16 @@ public class CoverageEdgeCasesTests
         tracker.End(new TouchPosition(100, 0, 100), 400, 10, 100, false, 0).Should().BeNull();
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Swipe_BeforeLayoutHasPositiveWidth_DoesNotNavigate(double width)
+    {
+        var tracker = new SwipeNavigationTracker();
+        tracker.Begin(new TouchPosition(0, 0, 0), 0);
+        tracker.End(new TouchPosition(100, 0, 100), width, 10, 100, false, 929).Should().BeNull();
+    }
+
     [Fact]
     public void MissingBookPart_ReturnsEmptyMetadata()
     {
@@ -34,6 +44,13 @@ public class CoverageEdgeCasesTests
     {
         var segments = HtmlMediaExtractor.ExtractSegments("<br><audio src='https://example.test/audio.mp3'></audio><br/>");
         segments.Should().ContainSingle().Which.Kind.Should().Be(SegmentKind.Media);
+    }
+
+    [Fact]
+    public void MediaExtraction_DropsTrailingXhtmlBreak()
+    {
+        HtmlMediaExtractor.ExtractSegments("<audio src='https://example.test/audio.mp3'></audio><br/>")
+            .Should().ContainSingle().Which.Kind.Should().Be(SegmentKind.Media);
     }
 
     [Fact]

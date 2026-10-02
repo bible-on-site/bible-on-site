@@ -91,6 +91,9 @@ public class PerekLoadingTests
         vm.CarouselPerakim.Should().HaveCount(929);
         vm.CurrentCarouselPerek.Should().BeSameAs(vm.Perek);
         var collection = vm.CarouselPerakim;
+        await vm.NavigateToPerekAsync(2);
+        vm.PerekId.Should().Be(2, "navigation also works before a page subscribes to carousel requests");
+        await vm.NavigateToPerekAsync(1);
         var requests = new List<int>();
         vm.NavigationRequested += (_, id) => requests.Add(id);
         await vm.LoadNextAsync();
@@ -109,6 +112,22 @@ public class PerekLoadingTests
         await vm.PreloadAdjacentPasukimAsync(929);
         await vm.EnsurePasukimLoadedAsync(fixture.Data.GetPerek(3)!);
         fixture.Data.GetPerek(3)!.Pasukim.Single().Text.Should().Be("שלישי");
+    }
+
+    [Fact]
+    public void SavingUnloadedChapterMetadata_DoesNotReplaceLastLearntChapter()
+    {
+        var preferences = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
+        preferences.LastLearntPerek = 12;
+        var model = new PerekViewModel(preferences, null)
+        {
+            Perek = new BibleOnSite.Models.Perek
+            {
+                PerekId = 0, Date = "", HebDate = "", SeferName = "", SeferTanahUsName = "", Tseit = ""
+            }
+        };
+        model.SaveLastLearntPerek();
+        preferences.LastLearntPerek.Should().Be(12);
     }
 
     [Fact]

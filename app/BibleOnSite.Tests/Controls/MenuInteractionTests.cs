@@ -131,6 +131,16 @@ public class MenuInteractionTests
     }
 
     [Fact]
+    public void Item_AnUnsubscribedTapIsSafe()
+    {
+        var item = new CircularMenuItem();
+        var gesture = item.GestureRecognizers.OfType<TapGestureRecognizer>().Single();
+        FluentActions.Invoking(() => typeof(TapGestureRecognizer)
+            .GetMethod("SendTapped", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(gesture, [item, null])).Should().NotThrow();
+    }
+
+    [Fact]
     public void NavigationBar_ReplacesBothContents_AndRemovesPreviousMenu()
     {
         var bar = new BottomNavigationBar();
@@ -140,6 +150,7 @@ public class MenuInteractionTests
         bar.LeftContent.Should().BeSameAs(first);
         bar.BarHeight = 100;
         bar.BarHeight.Should().Be(100);
+        bar.HeightRequest.Should().Be(100);
         bar.LeftContent = second;
         bar.RightContent = first;
         bar.RightContent.Should().BeSameAs(first);
@@ -155,7 +166,19 @@ public class MenuInteractionTests
         bar.BarColor.Should().Be(Colors.Red);
         bar.NotchRadius = 40;
         bar.NotchRadius.Should().Be(40);
-        ((AbsoluteLayout)bar.Content).Children.OfType<BottomBarBackground>().Single().BarColor.Should().Be(Colors.Red);
+        var background = ((AbsoluteLayout)bar.Content).Children.OfType<BottomBarBackground>().Single();
+        background.BarColor.Should().Be(Colors.Red);
+        background.NotchRadius.Should().Be(40);
+        var drawable = (BottomBarDrawable)background.Drawable;
+        drawable.NotchRadius.Should().Be(40);
+        var canvas = new Mock<ICanvas>();
+        PathF? path = null;
+        canvas.Setup(c => c.FillPath(It.IsAny<PathF>(), It.IsAny<WindingMode>()))
+            .Callback<PathF, WindingMode>((p, _) => path = p);
+        var bounds = new RectF(0, 0, 400, 100);
+        drawable.Draw(canvas.Object, bounds);
+        canvas.Verify(c => c.SetFillPaint(It.Is<SolidPaint>(p => p.Color.Equals(Colors.Red)), bounds), Times.Once);
+        path!.Points.Should().Contain(new PointF(128, 0), "the notch must use the configured radius plus button spacing");
     }
 
     [Fact]

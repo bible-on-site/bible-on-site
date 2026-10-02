@@ -146,3 +146,32 @@ test("pause and resume preserve the audio-clock position and original clip end",
 	expect(ended).toHaveBeenCalledTimes(1);
 	player.dispose();
 });
+
+test("pause after the audio clock reaches the clip end completes once and cannot resume", async () => {
+	const player = new RecitationAudio("/audio.mp3", hash);
+	const ended = jest.fn();
+	await player.play(1200, 2300, ended);
+	audioClock = 11.5;
+	expect(player.pause()).toBe(false);
+	expect(ended).toHaveBeenCalledTimes(1);
+	expect(sources[0].stop).toHaveBeenCalledTimes(1);
+	expect(await player.resume()).toBe(false);
+	expect(player.pause()).toBe(false);
+	expect(ended).toHaveBeenCalledTimes(1);
+	player.dispose();
+});
+
+test("an idle player cannot pause or resume and dispose tolerates a rejected context close", async () => {
+	close.mockRejectedValueOnce(new Error("context already closed"));
+	const player = new RecitationAudio("/audio.mp3", hash);
+	expect(player.pause()).toBe(false);
+	expect(await player.resume()).toBe(false);
+	player.dispose();
+	await Promise.resolve();
+	player.dispose();
+	expect(close).toHaveBeenCalledTimes(1);
+	await expect(player.play(100, 200, jest.fn())).rejects.toThrow(
+		"Player disposed",
+	);
+	expect(sources).toHaveLength(0);
+});
