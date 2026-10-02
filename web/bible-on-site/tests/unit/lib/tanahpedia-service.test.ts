@@ -19,6 +19,7 @@ import {
 	getEntriesByEntityType,
 	getEntriesBySynonym,
 	getEntryByUniqueName,
+	getEntryOccurrences,
 	getPersonFamilySummary,
 	getPlaceIdentifications,
 	getPlaceMapMarkers,
@@ -237,26 +238,29 @@ describe("tanahpedia service", () => {
 	it.each([
 		["kind" as const, "BEHEMA", "tanahpedia_animal_kind", "kind"],
 		["purity" as const, "TAHOR", "tanahpedia_animal_purity", "purity"],
-	])("groups animal entities by %s classification", async (classType, value, table, column) => {
-		mockQuery.mockResolvedValueOnce([
-			{
-				entityId: "entity-animal",
-				entityName: "שור",
-				entryId: "entry-ox",
-				entryUniqueName: "שור",
-				entryTitle: "שור",
-			},
-			{
-				entityId: "entity-animal-empty",
-				entityName: "ראם",
-				entryId: null,
-				entryUniqueName: null,
-				entryTitle: null,
-			},
-		]);
+	])(
+		"groups animal entities by %s classification",
+		async (classType, value, table, column) => {
+			mockQuery.mockResolvedValueOnce([
+				{
+					entityId: "entity-animal",
+					entityName: "שור",
+					entryId: "entry-ox",
+					entryUniqueName: "שור",
+					entryTitle: "שור",
+				},
+				{
+					entityId: "entity-animal-empty",
+					entityName: "ראם",
+					entryId: null,
+					entryUniqueName: null,
+					entryTitle: null,
+				},
+			]);
 
-		await expect(getAnimalsByClassification(classType, value)).resolves.toEqual(
-			[
+			await expect(
+				getAnimalsByClassification(classType, value),
+			).resolves.toEqual([
 				{
 					entityType: "ANIMAL",
 					entityId: "entity-animal",
@@ -269,17 +273,17 @@ describe("tanahpedia service", () => {
 					entityName: "ראם",
 					linkedEntries: [],
 				},
-			],
-		);
-		expect(mockQuery).toHaveBeenCalledWith(
-			expect.stringContaining(`FROM ${table} ac`),
-			[value],
-		);
-		expect(mockQuery).toHaveBeenCalledWith(
-			expect.stringContaining(`WHERE ac.${column} = ?`),
-			[value],
-		);
-	});
+			]);
+			expect(mockQuery).toHaveBeenCalledWith(
+				expect.stringContaining(`FROM ${table} ac`),
+				[value],
+			);
+			expect(mockQuery).toHaveBeenCalledWith(
+				expect.stringContaining(`WHERE ac.${column} = ?`),
+				[value],
+			);
+		},
+	);
 
 	it("merges duplicate animal classification rows", async () => {
 		mockQuery.mockResolvedValueOnce([
@@ -540,7 +544,10 @@ describe("tanahpedia service", () => {
 			expect.objectContaining({ entryId: "entry-1", label: "אבי האומה" }),
 			expect.objectContaining({ entryId: "entry-2", label: null }),
 		]);
-		expect(mockQuery).toHaveBeenCalledWith(expect.any(String), ["יעקב", "יעקב"]);
+		expect(mockQuery).toHaveBeenCalledWith(expect.any(String), [
+			"יעקב",
+			"יעקב",
+		]);
 	});
 
 	it("normalizes invalid focal birth dates when family rows exist", async () => {
@@ -593,6 +600,21 @@ describe("tanahpedia service", () => {
 			{ entityId: "event-1", startDate: 701 },
 		]);
 		expect(mockQuery).toHaveBeenCalledWith(expect.any(String), ["701"]);
+	});
+
+	it("loads occurrences through all entities attached to an entry", async () => {
+		const occurrences = [
+			{ perekId: 197, pasukNumber: 1, segmentStart: 5, segmentEnd: 5 },
+			{ perekId: 197, pasukNumber: 1, segmentStart: 9, segmentEnd: 9 },
+		];
+		mockQuery.mockResolvedValueOnce(occurrences);
+		await expect(getEntryOccurrences("entry-id")).resolves.toEqual(occurrences);
+		expect(mockQuery).toHaveBeenCalledWith(
+			expect.stringContaining("ee.entry_id = ?"),
+			["entry-id"],
+		);
+		expect(mockQuery.mock.calls[0][0]).toContain("SELECT DISTINCT");
+		expect(mockQuery.mock.calls[0][0]).not.toContain("entity_type");
 	});
 
 	it("returns entity references for a perek", async () => {
