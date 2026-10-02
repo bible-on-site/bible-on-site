@@ -89,6 +89,12 @@ Before family demo SQL, the populator applies `tanahpedia_incremental_lookups.sq
 
 The Jerusalem place is delivered as database content by `tanahpedia_place_jerusalem_data.sql` in the data deployment manifest. Local development gets that content through the production database sync, not through the Rust db-populator. The place map is shown whenever mapped places exist. The older `tanahpedia_place_eretz_yisrael_data.sql` remains a demo fixture; re-run `cargo make mysql-apply-tanahpedia-families` or full populate only on a disposable fixture DB to apply that demo.
 
+Jerusalem word links and the reverse occurrences table share the persisted `tanahpedia_entity_tanah_source` records. `tanahpedia_jerusalem_occurrences_data.sql` adds the exact segment references through database deployment. Regenerate it from the canonical corpus with the command below; add `--check` to verify it without writing. The generator is a migration maintenance tool and is not part of local population.
+
+```bash
+node data/mysql/scripts/generate-tanahpedia-occurrences.mjs --entry ירושלים --entity-type PLACE --spellings ירושלם,ירושלים,ירושליים,ירושלמה,ירושלימה --output data/mysql/tanahpedia_jerusalem_occurrences_data.sql
+```
+
 After that, when `tanahpedia_family_jacob_data.sql` is present, full populate applies the **יעקב** demo (Tanahpedia entry `יעקב`, parents, four wives including בלהה וזלפה as full wives per הכתב והקבלה בראשית לב כג, children, and brother עשו) only when the entry is missing. `mysql-apply-tanahpedia-families` forces the family/place demo scripts. The demo scripts use fixed UUIDs (`e200…` / `p200…` / `ea200…` — each script deletes only its own fixed demo rows before re-insert), so do not use the forced demo task as the normal content editing path after production content is edited remotely.
 
 **יעקב** does **not** come from `tanahpedia_legacy_migration.sql`; if the DB was filled without running the full data phase (e.g. prod sync only), run the family scripts explicitly (see below).

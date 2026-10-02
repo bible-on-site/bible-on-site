@@ -58,3 +58,38 @@ it("links each recorded occurrence in perek text", () => {
 	}
 	expect(screen.getByText("בין").closest("a")).toBeNull();
 });
+
+it("links all Jerusalem spellings to the canonical Hebrew entry without changing their text", () => {
+	const spellings = ["יְרוּשָׁלִַם", "בִּירוּשָׁלַיִם", "ירושליים"];
+	render(
+		<PerekText
+			perekObj={{
+				...perekObj,
+				pesukim: [
+					{
+						segments: spellings.map((value) => ({
+							type: "qri",
+							value,
+							recordingTimeFrame,
+						})),
+					},
+				],
+			}}
+			entityRefs={spellings.map((_, index) => ({
+				entityId: "jerusalem",
+				entityName: "ירושלים",
+				entityType: "PLACE",
+				entryUniqueName: "ירושלים",
+				pasukNumber: 1,
+				segmentStart: index,
+				segmentEnd: index,
+			}))}
+		/>,
+	);
+	for (const spelling of spellings) {
+		expect(screen.getByRole("link", { name: spelling })).toHaveAttribute(
+			"href",
+			`/pedia/${encodeURIComponent("ירושלים")}`,
+		);
+	}
+});
