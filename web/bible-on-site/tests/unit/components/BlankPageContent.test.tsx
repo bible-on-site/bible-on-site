@@ -151,6 +151,25 @@ describe("BlankPageContent", () => {
 		}
 	});
 
+	it.each(["article", "perush"])("allows retrying the same %s after a request failure", async (kind) => {
+		const error = jest.spyOn(console, "error").mockImplementation(() => {});
+		mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
+		mockGetPerushNotesForPage.mockResolvedValue([]);
+		const request = kind === "article" ? mockGetArticleForBook : mockGetPerushNotesForPage;
+		request.mockRejectedValueOnce(new Error("temporary failure"));
+		try {
+			render(<BlankPageContent perekId={1} articles={mockArticles} perushim={mockPerushim} hebrewDateStr="date" />);
+			const name = kind === "article" ? /הרב ישראל/ : /רש"י/;
+			await act(async () => fireEvent.click(screen.getByRole("button", { name })));
+			expect(request).toHaveBeenCalledTimes(1);
+			await act(async () => fireEvent.click(screen.getByRole("button", { name })));
+			expect(request).toHaveBeenCalledTimes(2);
+			expect(screen.getByText(kind === "article" ? "חזרה למאמרים →" : "→ חזרה לפרשנים")).toBeVisible();
+		} finally {
+			error.mockRestore();
+		}
+	});
+
 	it("renders date string", () => {
 		render(
 			<BlankPageContent articles={mockArticles} hebrewDateStr="י׳ בשבט" />,

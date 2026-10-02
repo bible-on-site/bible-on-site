@@ -58,12 +58,16 @@ export function BlankPageContent({
 			setArticleLoading(true);
 			getArticleForBook(article.id)
 				.then((full) => {
-					if (!cancelled) setSelectedArticle(full);
+					if (!cancelled) {
+						setSelectedArticle(full);
+						if (!full) setSlug(undefined);
+					}
 				})
 				.catch((error) => {
 					console.error("Failed to load book article", {
 						perekId, articleId: article.id, error,
 					});
+					if (!cancelled) setSlug(undefined);
 				})
 				.finally(() => {
 					if (!cancelled) setArticleLoading(false);
@@ -78,6 +82,7 @@ export function BlankPageContent({
 					console.error("Failed to load book commentary", {
 						perekId, perushId: perush.id, error,
 					});
+					if (!cancelled) setSlug(undefined);
 				})
 				.finally(() => {
 					if (!cancelled) setPerushLoading(false);
