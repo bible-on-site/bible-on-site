@@ -61,4 +61,29 @@ describe("checkS3Availability happy path", () => {
 		// fetch should not be called — checkS3Availability returns early
 		expect(mockFetch).not.toHaveBeenCalled();
 	});
+
+	it("aborts a stalled health check after one second and warns only once", async () => {
+		jest.useFakeTimers();
+		process.env.S3_ENDPOINT = "http://localhost:9000";
+		process.env.NODE_ENV = "development";
+		global.fetch = jest.fn(
+			(_url, options) =>
+				new Promise((_resolve, reject) => {
+					options?.signal?.addEventListener("abort", () =>
+						reject(new Error("aborted")),
+					);
+				}),
+		);
+		try {
+			getAuthorImageUrl(1);
+			await jest.advanceTimersByTimeAsync(999);
+			expect(console.warn).not.toHaveBeenCalled();
+			await jest.advanceTimersByTimeAsync(1);
+			expect(console.warn).toHaveBeenCalledTimes(1);
+			getAuthorImageUrl(2);
+			expect(global.fetch).toHaveBeenCalledTimes(1);
+		} finally {
+			jest.useRealTimers();
+		}
+	});
 });

@@ -5,7 +5,8 @@ import {
 } from "../../../src/lib/tanahpedia/entity-ref-lookup";
 
 function ref(
-	over: Partial<PerekEntityReference> & Pick<PerekEntityReference, "pasukNumber">,
+	over: Partial<PerekEntityReference> &
+		Pick<PerekEntityReference, "pasukNumber">,
 ): PerekEntityReference {
 	return {
 		entityId: "e1",
@@ -44,6 +45,37 @@ describe("entity-ref-lookup", () => {
 	});
 
 	describe("getSegmentRuns", () => {
+		it("retains the first whole-verse reference when several references have no segment bounds", () => {
+			const first = ref({
+				entityId: "first",
+				segmentStart: null,
+				segmentEnd: null,
+			});
+			const second = ref({
+				entityId: "second",
+				segmentStart: null,
+				segmentEnd: null,
+			});
+			expect(
+				getSegmentRuns(
+					buildEntityRefLookup([first, second]),
+					first.pasukNumber,
+					3,
+				),
+			).toEqual([{ startIdx: 0, endIdx: 2, ref: first }]);
+		});
+
+		it("merges distinct reference rows for the same entity and range start", () => {
+			const first = ref({ entityId: "same", segmentStart: 0, segmentEnd: 0 });
+			const second = ref({ entityId: "same", segmentStart: 0, segmentEnd: 2 });
+			expect(
+				getSegmentRuns(
+					buildEntityRefLookup([first, second]),
+					first.pasukNumber,
+					3,
+				),
+			).toEqual([{ startIdx: 0, endIdx: 2, ref: first }]);
+		});
 		it("returns single plain run when no refs for pasuk", () => {
 			const lookup = new Map<number, PerekEntityReference[]>();
 			expect(getSegmentRuns(lookup, 1, 5)).toEqual([

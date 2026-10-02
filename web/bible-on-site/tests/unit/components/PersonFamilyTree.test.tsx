@@ -2234,3 +2234,164 @@ describe("shouldCollapseSpouseMatrix", () => {
 		).toBe(false);
 	});
 });
+
+describe("family tree incomplete and alternate relationships", () => {
+	afterEach(() => {
+		delete (window as { matchMedia?: unknown }).matchMedia;
+		jest.restoreAllMocks();
+	});
+
+	it.each([false, true])(
+		"sorts unnamed co-parents safely in either insertion order (%s)",
+		(reverse) => {
+			const children = [
+				childEdge({ id: "one", name: "א", coParentEntityId: "unnamed-one" }),
+				childEdge({ id: "two", name: "ב", coParentEntityId: "unnamed-two" }),
+				childEdge({ id: "loose", name: "ת" }),
+			];
+			if (reverse) children.reverse();
+			render(<PersonFamilyTree summary={{ ...baseSummary, children }} />);
+			const cards = screen.getAllByTestId("family-child-card");
+			expect(cards).toHaveLength(3);
+			expect(cards[2]).toHaveTextContent("ת");
+		},
+	);
+
+	it("orders default and alternate parent and child groups without losing relationships", () => {
+		const parent = (
+			id: string,
+			parentRole: string,
+			altGroupId: string | null,
+		) => ({
+			related: related(id, id),
+			parentRole,
+			relationshipType: "BIOLOGICAL",
+			altGroupId,
+			sourceCitation: null,
+		});
+		render(
+			<PersonFamilyTree
+				summary={{
+					...baseSummary,
+					parents: [
+						parent("default", "FATHER", null),
+						parent("alt-father", "FATHER", "a"),
+						parent("alt-mother", "MOTHER", "a"),
+						parent("other", "MOTHER", "b"),
+					],
+					children: [
+						childEdge({ id: "default-child", name: "א" }),
+						childEdge({ id: "alternate-child", name: "ב", altGroupId: "a" }),
+						childEdge({ id: "other-child", name: "ג", altGroupId: "b" }),
+					],
+				}}
+			/>,
+		);
+		expect(screen.getByText("default")).toBeVisible();
+		expect(screen.getByText("alt-father")).toBeVisible();
+		expect(screen.getByText("alt-mother")).toBeVisible();
+		expect(screen.getAllByTestId("family-child-card")).toHaveLength(3);
+	});
+
+	it("shows a union end reason even when its date is unknown", () => {
+		render(
+			<PersonFamilyTree
+				summary={{
+					...baseSummary,
+					spouses: [
+						spouseEdge({
+							id: "ended",
+							name: "בת זוג",
+							unionEndReason: "DIVORCE",
+						}),
+					],
+				}}
+			/>,
+		);
+		expect(screen.getByRole("region", { name: /משפחה/ })).toHaveTextContent(
+			"גירושין",
+		);
+	});
+
+	it("sorts same-type spouse opinions by their distinct union orders", () => {
+		render(
+			<PersonFamilyTree
+				summary={{
+					...baseSummary,
+					spouses: [
+						spouseEdge({
+							id: "partner",
+							name: "בת זוג",
+							unionType: "MARRIAGE",
+							unionOrder: 2,
+							altGroupId: "opinion",
+							sourceCitation: "דעה שנייה",
+						}),
+						spouseEdge({
+							id: "partner",
+							name: "בת זוג",
+							unionType: "MARRIAGE",
+							unionOrder: 1,
+							altGroupId: "opinion",
+							sourceCitation: "דעה ראשונה",
+						}),
+					],
+				}}
+			/>,
+		);
+		const text =
+			screen.getByRole("region", { name: /משפחה/ }).textContent ?? "";
+		expect(text.indexOf("דעה ראשונה")).toBeLessThan(text.indexOf("דעה שנייה"));
+	});
+
+	it("renders narrow children without requiring spouse data or modern media-query listeners", () => {
+		Object.defineProperty(window, "matchMedia", {
+			configurable: true,
+			value: jest.fn(() => ({ matches: true })),
+		});
+		const { container } = render(
+			<PersonFamilyTree
+				summary={{
+					...baseSummary,
+					children: [childEdge({ id: "only", name: "ילד" })],
+				}}
+			/>,
+		);
+		expect(container.querySelector("[data-family-vertical]")).not.toBeNull();
+		expect(screen.getByTestId("family-child-card")).toHaveTextContent("ילד");
+		expect(screen.queryByTestId("family-spouse-card")).toBeNull();
+	});
+
+	it("renders a narrow spouse column with no children beside a populated one", () => {
+		Object.defineProperty(window, "matchMedia", {
+			configurable: true,
+			value: jest.fn(() => ({
+				matches: true,
+				addEventListener: jest.fn(),
+				removeEventListener: jest.fn(),
+			})),
+		});
+		const { container } = render(
+			<PersonFamilyTree
+				summary={{
+					...baseSummary,
+					spouses: [
+						spouseEdge({ id: "one", name: "ראשונה" }),
+						spouseEdge({ id: "two", name: "שנייה" }),
+					],
+					children: [
+						childEdge({
+							id: "child",
+							name: "ילד",
+							coParentEntityId: "one",
+							coParentDisplayName: "ראשונה",
+						}),
+					],
+				}}
+			/>,
+		);
+		expect(container.querySelector("[data-matrix-mobile]")).not.toBeNull();
+		expect(screen.getAllByTestId("family-spouse-card")).toHaveLength(2);
+		expect(screen.getAllByTestId("family-child-card")).toHaveLength(1);
+	});
+});

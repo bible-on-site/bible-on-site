@@ -323,6 +323,19 @@ describe("BlankPageContent", () => {
 	});
 
 	describe("initialSlug", () => {
+		it("leaves an unknown commentary slug at the carousel without requesting notes", () => {
+			render(
+				<BlankPageContent
+					articles={mockArticles}
+					perushim={mockPerushim}
+					perekId={1}
+					hebrewDateStr="י׳ בשבט"
+					initialSlug="unknown-commentary"
+				/>,
+			);
+			expect(mockGetPerushNotesForPage).not.toHaveBeenCalled();
+			expect(screen.getByText("פרשנים על הפרק")).toBeVisible();
+		});
 		it("auto-expands article when initialSlug is numeric (article ID)", async () => {
 			const fullArticle: Article = {
 				...mockArticles[0],

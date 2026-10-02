@@ -81,3 +81,24 @@ test("rejects a whole missing verse, including in pending output", () => {
 		).toThrow();
 	}
 });
+
+test.each([
+	"http://localhost:9000/assets/recordings/1_record.mp3",
+	"http://127.0.0.1:9000/assets/recordings/1_record.mp3",
+])("permits local object-storage recording URLs: %s", (audioUrl) => {
+	expect(parseRecitation({ ...manifest, audioUrl }, 1, pesukim).audioUrl).toBe(
+		audioUrl,
+	);
+});
+
+test.each([
+	"not a URL",
+	"http://example.com/recordings/1_record.mp3",
+	"https://user:password@example.com/recordings/1_record.mp3",
+	`${manifest.audioUrl}?token=secret`,
+	`${manifest.audioUrl}#fragment`,
+])("rejects unsafe or malformed recording URLs: %s", (audioUrl) => {
+	expect(() => parseRecitation({ ...manifest, audioUrl }, 1, pesukim)).toThrow(
+		"Invalid recitation manifest",
+	);
+});
