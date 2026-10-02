@@ -2,7 +2,7 @@
 
 import os
 import shutil
-import subprocess
+import subprocess  # nosec B404: fixed test fixture commands, argument vectors, no shell.
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,17 +11,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 GIT_BASH = Path("C:/Program Files/Git/bin/bash.exe")
 BASH = str(GIT_BASH) if GIT_BASH.exists() else shutil.which("bash")
+GIT = shutil.which("git")
 
 
-@unittest.skipUnless(BASH and shutil.which("git"), "Git and Bash are required")
+@unittest.skipUnless(BASH and GIT, "Git and Bash are required")
 class PrecommitMergeTests(unittest.TestCase):
     def test_merge_checks_only_changes_to_the_target_branch(self):
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory)
 
             def git(*args):
-                subprocess.run(
-                    ["git", *args], cwd=repo, check=True, capture_output=True
+                # All arguments below are fixed fixture commands; resolve the executable.
+                subprocess.run(  # nosec B603: fixed fixture argv, no shell.
+                    [GIT, *args], cwd=repo, check=True, capture_output=True
                 )
 
             def write(name, content):
@@ -56,7 +58,10 @@ class PrecommitMergeTests(unittest.TestCase):
             (repo / "bin/npm").chmod(0o755)
             env = os.environ.copy()
             env["PATH"] = str(repo / "bin") + os.pathsep + env["PATH"]
-            subprocess.run([BASH, ".husky/pre-commit"], cwd=repo, env=env, check=True)
+            # Execute only the copied repository hook, with no user-supplied command.
+            subprocess.run(  # nosec B603: fixed fixture hook, no shell.  # nosemgrep
+                [BASH, ".husky/pre-commit"], cwd=repo, env=env, check=True
+            )
             self.assertEqual(["app"], (repo / "checked-modules").read_text().splitlines())
 
 
