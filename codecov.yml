@@ -22,7 +22,7 @@ coverage:
         flags:
           - app
       website:
-        target: 96%
+        target: 99%
         threshold: 0%
         flags:
           - website

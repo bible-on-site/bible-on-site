@@ -245,4 +245,19 @@ describe("PasukPreviewLink", () => {
 		);
 		jest.useRealTimers();
 	});
+
+	it("keeps a preview entered directly without a pending hide timer", async () => {
+		const label = "בראשית לז א";
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({ reference: label, text: "פסוק" }),
+		} as Response);
+		render(<PasukPreviewLink href="/929/37#pasuk-1">{label}</PasukPreviewLink>);
+		await act(async () => {
+			fireEvent.mouseEnter(screen.getByRole("link", { name: label }));
+		});
+		const tooltip = await screen.findByRole("tooltip");
+		fireEvent.mouseEnter(tooltip);
+		expect(tooltip).toBeVisible();
+	});
 });

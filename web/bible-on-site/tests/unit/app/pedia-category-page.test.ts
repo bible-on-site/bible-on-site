@@ -190,24 +190,27 @@ describe("pedia/[slug] category route", () => {
 		it.each([
 			["kind", { kind: "חיות" }, "kind", "CHAYA"],
 			["purity", { purity: "טהורים" }, "purity", "TAHOR"],
-		] as const)("uses animal %s classification loading when requested", async (_label, searchParams, classificationType, classificationValue) => {
-			mockGetAnimalsByClassification.mockResolvedValue([
-				{
-					entityType: "ANIMAL",
-					entityId: "animal-1",
-					entityName: "Animal one",
-					linkedEntries: [],
-				},
-			]);
+		] as const)(
+			"uses animal %s classification loading when requested",
+			async (_label, searchParams, classificationType, classificationValue) => {
+				mockGetAnimalsByClassification.mockResolvedValue([
+					{
+						entityType: "ANIMAL",
+						entityId: "animal-1",
+						entityName: "Animal one",
+						linkedEntries: [],
+					},
+				]);
 
-			const result = await renderCategory("בעלי-חיים", searchParams);
+				const result = await renderCategory("בעלי-חיים", searchParams);
 
-			expect(result).toBeDefined();
-			expect(mockGetAnimalsByClassification).toHaveBeenCalledWith(
-				classificationType,
-				classificationValue,
-			);
-		});
+				expect(result).toBeDefined();
+				expect(mockGetAnimalsByClassification).toHaveBeenCalledWith(
+					classificationType,
+					classificationValue,
+				);
+			},
+		);
 
 		it("loads place map markers when the place homepage uses map layout", async () => {
 			mockGetCategoryHomepage.mockResolvedValue({
@@ -253,6 +256,22 @@ describe("pedia/[slug] category route", () => {
 				value: oldNodeEnv,
 				configurable: true,
 			});
+		});
+
+		it("hides details of a non-Error database rejection in production", async () => {
+			jest.replaceProperty(process.env, "NODE_ENV", "production");
+			const log = jest.spyOn(console, "error").mockImplementation(() => {});
+			mockGetEntitiesWithEntries.mockRejectedValueOnce(
+				"private connection details",
+			);
+			try {
+				render((await renderCategory("אישים")) as ReactElement);
+				expect(screen.getByRole("alert")).toBeVisible();
+				expect(screen.queryByText(/private connection details/)).toBeNull();
+				expect(log).not.toHaveBeenCalled();
+			} finally {
+				jest.restoreAllMocks();
+			}
 		});
 	});
 

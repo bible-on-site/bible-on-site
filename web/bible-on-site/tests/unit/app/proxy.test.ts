@@ -96,20 +96,14 @@ describe("proxy", () => {
 				"/tanahpedia/person?role=prophet",
 				`/pedia/${encodeURIComponent("נביאים")}`,
 			],
-			[
-				"/tanahpedia/animal?kind=chaya",
-				`/pedia/${encodeURIComponent("חיות")}`,
-			],
+			["/tanahpedia/animal?kind=chaya", `/pedia/${encodeURIComponent("חיות")}`],
 			[
 				"/tanahpedia/animal?purity=tahor",
 				`/pedia/${encodeURIComponent("טהורים")}`,
 			],
 			["/tanahpedia/nonsense", "/pedia"],
 			["/pedia/person", `/pedia/${encodeURIComponent("אישים")}`],
-			[
-				"/pedia/person?role=prophet",
-				`/pedia/${encodeURIComponent("נביאים")}`,
-			],
+			["/pedia/person?role=prophet", `/pedia/${encodeURIComponent("נביאים")}`],
 			[
 				`/pedia/${encodeURIComponent("אישים")}?role=${encodeURIComponent("נביאים")}`,
 				`/pedia/${encodeURIComponent("נביאים")}`,
@@ -148,6 +142,23 @@ describe("proxy", () => {
 	});
 
 	describe("BOT_BLOCKING_ENABLED", () => {
+		it("allows a blocked crawler when bot blocking is disabled", async () => {
+			jest.replaceProperty(process, "env", {
+				...process.env,
+				BOT_BLOCKING_ENABLED: "false",
+			});
+			let configuredProxy: typeof proxy = proxy;
+			jest.isolateModules(() => {
+				configuredProxy = require("@/proxy").proxy;
+			});
+			try {
+				expect(
+					await configuredProxy(makeRequest("/929/1", { ua: "Bytespider" })),
+				).toBeUndefined();
+			} finally {
+				jest.restoreAllMocks();
+			}
+		});
 		it("blocks bots by default (env var not set)", async () => {
 			const result = await proxy(makeRequest("/929/1", { ua: "Bytespider" }));
 			expect(result?.status).toBe(403);

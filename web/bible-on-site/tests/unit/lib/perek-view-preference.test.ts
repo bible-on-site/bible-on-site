@@ -10,6 +10,25 @@ describe("perek-view-preference", () => {
 		localStorage.clear();
 	});
 
+	afterEach(() => jest.restoreAllMocks());
+
+	it("falls back safely when private-mode storage cannot be read or written", () => {
+		jest.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+			throw new DOMException("Access denied", "SecurityError");
+		});
+		jest.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+			throw new DOMException("Quota exceeded", "QuotaExceededError");
+		});
+		expect(getStoredPerekViewMode()).toBeNull();
+		expect(() => setStoredPerekViewMode("book")).not.toThrow();
+	});
+
+	it("accepts query strings prefixed with a question mark", () => {
+		expect(pathnameWithBookQuery("/929/1", "?book=&x=2", false)).toBe(
+			"/929/1?x=2",
+		);
+	});
+
 	it("setStoredPerekViewMode and getStoredPerekViewMode roundtrip", () => {
 		expect(getStoredPerekViewMode()).toBeNull();
 		setStoredPerekViewMode("book");

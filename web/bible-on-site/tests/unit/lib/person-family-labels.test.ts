@@ -202,6 +202,24 @@ describe("person-family-labels", () => {
 				postLabel: null,
 			});
 		});
+
+		it("retains same-day and non-finite birth dates in the unknown-age cluster", () => {
+			const result = partitionSiblingsForFamilyTree(
+				[
+					sibling("older", "א", 10000101),
+					sibling("same", "ב", 10000102),
+					sibling("younger", "ג", 10000103),
+					sibling("invalid", "ד", Number.NaN),
+				],
+				10000102,
+			);
+			expect(result.preCluster.map((s) => s.entityId)).toEqual(["older"]);
+			expect(result.postCluster.map((s) => s.entityId)).toEqual([
+				"same",
+				"younger",
+				"invalid",
+			]);
+		});
 	});
 
 	describe("childGroupByCoParentLabel", () => {

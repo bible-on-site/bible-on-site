@@ -44,6 +44,12 @@ describe("PerushimSection", () => {
 		expect(screen.getByText("אין פרשנות לפרק זה")).toBeTruthy();
 	});
 
+	it("shows an empty carousel when the database supplies null commentaries", () => {
+		render(<PerushimSection perekId={1} perushim={null} />);
+		expect(screen.getByText("אין פרשנות לפרק זה")).toBeVisible();
+		expect(mockGetPerushNotesForPage).not.toHaveBeenCalled();
+	});
+
 	it("renders carousel links when perushim provided (SEO mode)", () => {
 		const perushim: PerushSummary[] = [
 			{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 55 },

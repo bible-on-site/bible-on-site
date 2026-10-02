@@ -71,6 +71,17 @@ describe("ScrollToSlug", () => {
 
 		expect(document.getElementById("nonexistent")).toBeNull();
 	});
+
+	it("cancels pending scrolling when navigation unmounts the component", () => {
+		const div = document.createElement("div");
+		div.id = "article-view";
+		div.scrollIntoView = jest.fn();
+		document.body.appendChild(div);
+		const { unmount } = render(<ScrollToSlug />);
+		unmount();
+		jest.advanceTimersByTime(100);
+		expect(div.scrollIntoView).not.toHaveBeenCalled();
+	});
 });
 
 describe("ScrollToArticle (backward-compat)", () => {

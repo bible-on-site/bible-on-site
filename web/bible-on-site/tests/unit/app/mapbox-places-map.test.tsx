@@ -38,9 +38,15 @@ const mockMapConstructor = jest.fn().mockImplementation(() => {
 		setZoom: jest.fn(),
 		fitBounds: jest.fn(),
 		remove: jest.fn(),
-		on: jest.fn((event: string, layerOrHandler: string | MapHandler, handler?: MapHandler) => {
-			map.handlers[event] = handler ?? (layerOrHandler as MapHandler);
-		}),
+		on: jest.fn(
+			(
+				event: string,
+				layerOrHandler: string | MapHandler,
+				handler?: MapHandler,
+			) => {
+				map.handlers[event] = handler ?? (layerOrHandler as MapHandler);
+			},
+		),
 	};
 	mockMaps.push(map);
 	return map;
@@ -221,4 +227,25 @@ it("keeps an empty map at its default view without reloading the RTL plugin", as
 	expect(map.fitBounds).not.toHaveBeenCalled();
 	act(() => map.handlers.load({}));
 	expect(map.addSource.mock.calls[0][1].data.features).toEqual([]);
+});
+
+it("ignores incomplete click features without opening a popup", async () => {
+	render(<MapboxPlacesMapClient markers={[jerusalem]} />);
+	await waitFor(() => expect(mockMaps).toHaveLength(1));
+	for (const event of [
+		{},
+		{ features: [] },
+		{ features: [{}] },
+		{ features: [{ properties: {} }] },
+	]) {
+		act(() => mockMaps[0].handlers.click(event));
+	}
+	expect(mockPopups).toHaveLength(0);
+});
+
+it("cancels initialization when unmounted before the Mapbox import resolves", async () => {
+	const view = render(<MapboxPlacesMapClient markers={[jerusalem]} />);
+	view.unmount();
+	await act(async () => {});
+	expect(mockMapConstructor).not.toHaveBeenCalled();
 });
