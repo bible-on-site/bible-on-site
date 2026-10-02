@@ -25,7 +25,7 @@ test("groups references under the requested chapters and omits empty chapters", 
 	const reference: PerekEntityReference = {
 		entityId: "test-person",
 		entityName: "Test person",
-		entityType: "person",
+		entityType: "PERSON",
 		entryUniqueName: "test_person",
 		pasukNumber: 2,
 		segmentStart: 0,
