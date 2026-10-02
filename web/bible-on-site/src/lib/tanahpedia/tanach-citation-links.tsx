@@ -17,10 +17,11 @@ interface TanachRefMatch {
 }
 
 const HEBREW_REF_TOKEN = /^[א-ת][א-ת"״׳']{0,4}$/u;
-const HEBREW_PASUK_TOKEN = /^[א-ת][א-ת"״׳']{0,4}(?:[-־][א-ת][א-ת"״׳']{0,4})?$/u;
+const HEBREW_PASUK_TOKEN =
+	/^[א-ת][א-ת"״׳']{0,4}(?:[-־–—][א-ת][א-ת"״׳']{0,4})?$/u;
 
 function plainNumeral(raw: string): string {
-	return raw.replace(/["״׳']/gu, "");
+	return raw.replace(/["״׳']/gu, "").replace(/[־–—]/gu, "-");
 }
 
 function displayTanachRef(match: TanachRefMatch): string {
@@ -53,7 +54,7 @@ function perekIdsForVolume(
 }
 
 function normalizePerekLetters(raw: string): string {
-	const first = raw.split(/[\s–—-]+/u)[0]?.trim() ?? raw;
+	const first = raw.split(/[\s־–—-]+/u)[0]?.trim() ?? raw;
 	return plainNumeral(first);
 }
 
@@ -84,7 +85,13 @@ function readToken(
 	start: number,
 ): { token: string; end: number } {
 	let end = start;
-	while (end < text.length && !isWhitespace(text[end])) end++;
+	while (
+		end < text.length &&
+		!isWhitespace(text[end]) &&
+		!",;:.()[]{}".includes(text[end])
+	) {
+		end++;
+	}
 	return { token: text.slice(start, end), end };
 }
 
@@ -93,6 +100,9 @@ function findTanachRefAt(text: string, start: number): TanachRefMatch | null {
 		if (!text.startsWith(seferName, start)) continue;
 
 		let cursor = start + seferName.length;
+		// Older citations may quote the book's volume letter, e.g. שמואל א'.
+		const volumeQuote = text[cursor];
+		if (volumeQuote && '"״׳\''.includes(volumeQuote)) cursor++;
 		if (!isWhitespace(text[cursor])) continue;
 		while (isWhitespace(text[cursor])) cursor++;
 
@@ -102,8 +112,9 @@ function findTanachRefAt(text: string, start: number): TanachRefMatch | null {
 
 		let pasukRaw: string | undefined;
 		let end = cursor;
-		if (isWhitespace(text[cursor])) {
+		if (isWhitespace(text[cursor]) || text[cursor] === ",") {
 			let pasukStart = cursor;
+			if (text[pasukStart] === ",") pasukStart++;
 			while (isWhitespace(text[pasukStart])) pasukStart++;
 			const pasuk = readToken(text, pasukStart);
 			if (HEBREW_PASUK_TOKEN.test(pasuk.token)) {
@@ -156,7 +167,7 @@ function pasukLettersToPositiveInt(pasukRaw: string): number | null {
 	const first =
 		pasukRaw
 			.trim()
-			.split(/[\s–—-]+/u)[0]
+			.split(/[\s־–—-]+/u)[0]
 			?.trim() ?? "";
 	if (!first) return null;
 	const n = toNumber(plainNumeral(first));
@@ -165,7 +176,7 @@ function pasukLettersToPositiveInt(pasukRaw: string): number | null {
 
 /**
  * קישור לפרק בתנ"ך לפי מקור (ספר+פרק[+פסוק]). `/929/{number}#pasuk-{number}`
- * עוגן הפסוק משתמש בגלילה המובנית של הדפדפן וב־`:target` לסימון ללא JavaScript.
+ * עוגן הפסוק נתמך גם בטעינה ישירה וגם בניווט באמצעות Next.js.
  */
 function tryTanachHref(
 	seferCitation: string,

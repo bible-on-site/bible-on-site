@@ -533,7 +533,7 @@ export function WysiwygEditor({
 									: "bg-white border"
 							}`}
 						>
-							א׳ עברית
+							א' עברית
 						</button>
 						<button
 							type="button"
@@ -563,7 +563,7 @@ export function WysiwygEditor({
 							onMouseDown={keepCaret}
 							onClick={removeFootnote}
 							disabled={!canRemoveFootnote(editor)}
-							title="מוחקת את ההערה שהסמן עליה — האזכור והפריט ברשימה גם יחד"
+							title="מוחקת את ההערה שהסמן עליה - האזכור והפריט ברשימה גם יחד"
 							className="px-2 py-1 rounded text-sm bg-white border border-amber-200 text-amber-900 disabled:opacity-40"
 						>
 							− הערה

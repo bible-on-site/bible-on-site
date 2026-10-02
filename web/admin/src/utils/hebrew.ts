@@ -25,7 +25,7 @@ const TENS_AND_ONES: ReadonlyArray<readonly [number, string]> = [
 	[1, "א"],
 ];
 
-function toHebrewLetters(num: number): string {
+export function toHebrewLetters(num: number): string {
 	if (num <= 0) return "";
 
 	let remaining = Math.floor(num);
@@ -56,22 +56,16 @@ function toHebrewLetters(num: number): string {
 	return letters;
 }
 
-export function toHebrewWithPunctuation(num: number): string {
-	const letters = toHebrewLetters(num);
-	if (letters.length <= 1) return letters ? `${letters}'` : "";
-	return `${letters.slice(0, -1)}"${letters.at(-1)}`;
-}
-
 /**
  * Format perek display label.
- * Non-additionals: "א'" / "כ'"
- * With additionals: "א א'" / "א כ'"
+ * Non-additionals: א / כ
+ * With additionals: א א / א כ
  */
 export function formatPerekLabel(
 	perekInContext: number,
 	additionalLetter: string | null,
 ): string {
-	const perekHeb = toHebrewWithPunctuation(perekInContext);
+	const perekHeb = toHebrewLetters(perekInContext);
 	if (additionalLetter) {
 		return `${additionalLetter} ${perekHeb}`;
 	}

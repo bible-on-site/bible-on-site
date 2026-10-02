@@ -59,7 +59,7 @@ export function PerushFullView({
 				{canonicalPath && (
 					<ShareButton
 						canonicalPath={canonicalPath}
-						title={`${perush.name} — ${perush.parshanName}`}
+						title={`${perush.name} - ${perush.parshanName}`}
 					/>
 				)}
 			</header>

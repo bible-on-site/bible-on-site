@@ -79,7 +79,7 @@ export default function RabbisBlessingPage() {
 				<article className={styles.videoCard}>
 					<ImageLightbox
 						src={posterUrl}
-						alt={'דורש ציון – ברכה לתנ"ך על הפרק'}
+						alt={'דורש ציון - ברכה לתנ"ך על הפרק'}
 						width={924}
 						height={577}
 					/>
