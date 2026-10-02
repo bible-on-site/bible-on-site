@@ -99,6 +99,10 @@ short listening samples while processing every track with identical settings.
 `--database PATH` checkpoints to a separate intermediate DB for a background run;
 `--text PATH` can select a working copy of the canonical JSON.
 
+Overlapping verse windows are re-aligned together as one CTC sequence within
+the existing 45-second acoustic limit. The shared acoustic path determines the
+transition. Unresolved overlaps remain in review and cannot be published.
+
 ## Review
 
 ```powershell
@@ -159,7 +163,9 @@ before consuming the canonical JSON. Changes to the intermediate SQLite file
 trigger website CI, version validation, packaging, and release. A repeated merge
 preserves the same approved intervals; the GPU/models are never needed in CD.
 Packaging boots the actual Docker image and compares all approved API word rows
-and an unapproved chapter against the database. CD checks out the immutable
+and an unapproved chapter against the database. Recitation mode requests fresh
+metadata when opened, so approved timings do not remain cached as chapter-only.
+CD checks out the immutable
 release commit, waits for its website version, then verifies those rows and each
 approved MP3's public CORS download, MIME type, and SHA-256. Missing/stale timings
 or unavailable/different audio fail deployment verification rather than reporting

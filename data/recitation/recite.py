@@ -19,7 +19,7 @@ from alignment import load_chapters, normalize, reconcile, text_hash, validate_t
 from model_versions import ALIGN_MODEL, ALIGN_REVISION, ASR_MODEL, ASR_REVISION
 
 ROOT = Path(__file__).resolve().parents[2]
-PIPELINE_VERSION = 2
+PIPELINE_VERSION = 3
 
 
 def write_json(path, data):
@@ -123,9 +123,64 @@ def report_asr_progress(progress):
     print("ASR progress: " + ", ".join(f"{done/100:.1f}/{total/100:.1f}s" for done, total in frames), flush=True)
 
 
+def joint_verse_overlaps(audio, words, matches, candidates, windows, aligner, args, reviews):
+    """Resolve competing verse windows with one acoustic path, never timestamp padding."""
+    tried = set()
+    for _ in range(len(windows)):
+        rows = [candidates[w.pasuk, w.segment] for w in words]
+        conflict = next(((left, right) for left, right in zip(rows, rows[1:])
+            if left["endMs"] is not None and right["startMs"] is not None
+            and left["endMs"] > right["startMs"]
+            and (left["pasuk"], right["pasuk"]) not in tried), None)
+        if conflict is None:
+            break
+        pair = (conflict[0]["pasuk"], conflict[1]["pasuk"])
+        tried.add(pair)
+        indices = [i for i, word in enumerate(words) if word.pasuk in pair]
+        if len(set(pair)) != 2 or any(pasuk not in windows for pasuk in pair):
+            continue
+        start = min(windows[pasuk][0] for pasuk in pair)
+        end = max(windows[pasuk][1] for pasuk in pair)
+        if end - start > 45:
+            reviews.append({"pasuk": pair[1], "reason": "overlapping verse windows exceed the joint 45-second limit"})
+            continue
+        try:
+            aligned = aligner.align(audio[int(start * 16000):int(end * 16000)],
+                                    [words[i].speech for i in indices])
+            revised = [{"pasuk": words[i].pasuk, "segment": words[i].segment, "text": words[i].text,
+                "startMs": round((start + left) * 1000), "endMs": round((start + right) * 1000),
+                "acousticScore": round(score, 4), "textScore": round(matches[i][1], 4)}
+                for i, (left, right, score) in zip(indices, aligned, strict=True)]
+            validate_timings([words[i] for i in indices], revised, round(len(audio) / 16), require_complete=True)
+        except ValueError as error:
+            reviews.append({"pasuk": pair[1], "reason": f"joint verse alignment failed: {error}"})
+            continue
+        for row in revised:
+            candidates[row["pasuk"], row["segment"]] = row
+        reviews[:] = [review for review in reviews if review["pasuk"] not in pair]
+        for pasuk in pair:
+            verse = [row for row in revised if row["pasuk"] == pasuk]
+            suspect = suspect_rows(verse, args)
+            if suspect:
+                coverage = sum(bool(matches[i][0]) and matches[i][1] >= args.min_text_score
+                    for i in indices if words[i].pasuk == pasuk) / len(verse)
+                reviews.append({"pasuk": pasuk, "reason": "low acoustic score or implausible word duration",
+                    "anchorCoverage": coverage, "suspectWords": suspect, "candidateWords": verse})
+    rows = [candidates[w.pasuk, w.segment] for w in words]
+    for left, right in zip(rows, rows[1:]):
+        if left["endMs"] is not None and right["startMs"] is not None and left["endMs"] > right["startMs"]:
+            reviews.append({"pasuk": right["pasuk"], "reason": "verse timings still overlap after joint alignment"})
+
+
+def suspect_rows(rows, args):
+    return [row for row in rows if row["acousticScore"] < args.min_acoustic_score or
+            row["endMs"] - row["startMs"] < 40 or row["endMs"] - row["startMs"] > 3000]
+
+
 def align_track(audio, words, recognized, aligner, args):
     matches = reconcile([w.speech for w in words], [w["text"] for w in recognized])
     reviews = []
+    windows = {}
     candidates = {(w.pasuk, w.segment): {"pasuk": w.pasuk, "segment": w.segment,
                   "text": w.text, "startMs": None, "endMs": None} for w in words}
     verses = sorted({w.pasuk for w in words})
@@ -150,6 +205,7 @@ def align_track(audio, words, recognized, aligner, args):
         if end - start > 45 or end <= start:
             reviews.append({"pasuk": pasuk, "reason": "verse window outside supported 0–45 seconds"})
             continue
+        windows[pasuk] = (start, end)
         try:
             aligned = aligner.align(audio[int(start * 16000):int(end * 16000)],
                                     [words[i].speech for i in indices])
@@ -161,9 +217,7 @@ def align_track(audio, words, recognized, aligner, args):
                              "endMs": round((start + right) * 1000),
                              "acousticScore": round(score, 4),
                              "textScore": round(matches[i][1], 4)})
-            suspect = [row for row in rows if row["acousticScore"] < args.min_acoustic_score or
-                   row["endMs"] - row["startMs"] < 40 or
-                   row["endMs"] - row["startMs"] > 3000]
+            suspect = suspect_rows(rows, args)
             for row in rows:
                 candidates[row["pasuk"], row["segment"]] = row
             if suspect:
@@ -174,6 +228,7 @@ def align_track(audio, words, recognized, aligner, args):
             previous_end = rows[-1]["endMs"]
         except ValueError as error:
             reviews.append({"pasuk": pasuk, "reason": str(error), "anchorCoverage": coverage})
+    joint_verse_overlaps(audio, words, matches, candidates, windows, aligner, args, reviews)
     return list(candidates.values()), reviews
 
 
