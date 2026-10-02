@@ -59,7 +59,7 @@ jobs:
 
           # Start with base payload
           PAYLOAD=$(jq -n \
-            --arg ref "${{ github.ref }}" \
+            --arg ref "${{ github.sha }}" \
             --arg module_name "${{ inputs.module_name }}" \
             --arg module_directory "${{ inputs.module_directory }}" \
             --arg module_version "${{ inputs.module_version }}" \

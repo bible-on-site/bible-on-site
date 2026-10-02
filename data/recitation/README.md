@@ -94,7 +94,10 @@ whose model, exact revision, and audio hash match. Model snapshots are pinned in
 `--align-revision` commit. A model update preserves human-approved alignments
 unless `--force` is supplied. A changed recording or canonical text
 invalidates the relevant output. A processing exception never overwrites a prior
-artifact. Inspect `.outputs/failures.json` and `*.review.json`.
+artifact. Inspect `.outputs/failures.json` and `*.review.json`. `--shortest-first` prioritizes
+short listening samples while processing every track with identical settings.
+`--database PATH` checkpoints to a separate intermediate DB for a background run;
+`--text PATH` can select a working copy of the canonical JSON.
 
 ## Review
 
@@ -133,8 +136,8 @@ previous output. `--recitation-db PATH` selects another intermediate database.
 Re-running Sefaria therefore cannot silently erase the approved timings.
 
 The recitation pipeline keeps resumable ASR results and candidate alignments in
-ignored `.outputs/` files. It atomically updates the intermediate DB at the end
-of a run, preserving tracks outside a partial run and existing approved timings
+ignored `.outputs/` files. It atomically checkpoints the intermediate DB before
+starting inference and after each completed track, preserving tracks outside a partial run and existing approved timings
 when a rerun is unapproved. Review imports update the same intermediate DB.
 Candidates never become published word timings. Fresh checkouts can generate a
 review page directly from the merged perakim DB.
@@ -151,19 +154,32 @@ rerunning MongoDB aggregation:
 .venv/Scripts/python.exe publish.py
 ```
 
+Website CI and release packaging automatically merge and audit this database
+before consuming the canonical JSON. Changes to the intermediate SQLite file
+trigger website CI, version validation, packaging, and release. A repeated merge
+preserves the same approved intervals; the GPU/models are never needed in CD.
+Packaging boots the actual Docker image and compares all approved API word rows
+and an unapproved chapter against the database. CD checks out the immutable
+release commit, waits for its website version, then verifies those rows and each
+approved MP3's public CORS download, MIME type, and SHA-256. Missing/stale timings
+or unavailable/different audio fail deployment verification rather than reporting
+success after only an ECR push.
+
 The Rust Sefaria merge and this Python merge share the same schema and hash
 contract. Regression tests recreate unaligned Sefaria output, restore the
 approved timing data, verify repeatability, and reject changed canonical text.
 
 The sefer reader places a small recitation-mode icon at the left of its second
-header row. Enabling it lazily loads the chapter manifest; clicking an existing
+header row. Enabling it lazily loads the chapter manifest and downloads, verifies,
+and decodes the original MP3. A circular indicator follows received bytes; the
+mode becomes active automatically after preparation finishes. Clicking an existing
 pasuk letter or spoken qri word plays that interval. Entity links and ordinary
 reading return when the mode is disabled. The adjacent play/pause icon and perek
 heading control playback; pause retains the audio-clock position for resume.
 Basic view has no playback controls. Chapter playback streams the original
-MP3; pasuk and word playback download and decode that chapter once, verify its
-SHA-256 against the alignment source, and schedule exact offsets and durations
-with `AudioBufferSourceNode.start`. No timestamp padding or stop timer is used.
+MP3; pasuk and word playback reuse the prepared chapter, verified by SHA-256
+against the alignment source, and schedule exact offsets and durations with
+`AudioBufferSourceNode.start`. No timestamp padding or stop timer is used.
 Only the active player's decoded chapter is retained. Disabling recitation mode, changing
 chapter/player, hiding the document, or unmounting cancels playback and releases
 its audio context. Rapid clicks cannot revive an older download/play request.
