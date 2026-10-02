@@ -7,7 +7,7 @@ import tempfile
 from threading import Thread
 import unittest
 
-from deployment import verify
+from deployment import http_response, verify
 from publish import extract
 
 
@@ -67,6 +67,12 @@ class DeploymentTests(unittest.TestCase):
         for _ in range(2):
             verify(self.origin, "0.2.433", self.database, check_audio=True)
         self.assertEqual(self.database.read_bytes(), before)
+
+    def test_file_custom_and_credential_urls_cannot_read_files_or_connect(self):
+        for url in (self.database.as_uri(), "ftp://127.0.0.1/recording.mp3", "http://user:password@127.0.0.1/"):
+            with self.subTest(url=url), self.assertRaisesRegex(ValueError, "public HTTP"):
+                with http_response(url):
+                    self.fail("Forbidden scheme reached a response")
 
     def test_old_running_container_is_not_a_successful_deployment(self):
         self.version = "0.2.432"

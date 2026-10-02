@@ -1,15 +1,35 @@
 """Verify a built/deployed website exposes approved timings and playable source audio."""
 import argparse
+from contextlib import contextmanager
+from http.client import HTTPConnection, HTTPSConnection, HTTPException
 import hashlib
 import json
 from pathlib import Path
 import time
-from urllib.error import URLError
 from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
 
 from alignment import load_chapters
 from publish import DATABASE, extract
+
+
+
+@contextmanager
+def http_response(url, headers=None, timeout=20):
+    # Use protocol-specific clients: file/custom schemes and redirects cannot
+    # become local file reads, including URLs returned by a broken deployment.
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname or parts.username or parts.password:
+        raise ValueError("Deployment verification only supports public HTTP(S) URLs")
+    client = (HTTPSConnection if parts.scheme == "https" else HTTPConnection)(
+        parts.hostname, parts.port, timeout=timeout)
+    try:
+        client.request("GET", (parts.path or "/") + (f"?{parts.query}" if parts.query else ""), headers=headers or {})
+        response = client.getresponse()
+        if response.status != 200:
+            raise ValueError(f"Deployment HTTP request returned {response.status}")
+        yield response
+    finally:
+        client.close()
 
 
 def verify(origin, version, database=DATABASE, check_audio=False):
@@ -22,9 +42,8 @@ def verify(origin, version, database=DATABASE, check_audio=False):
     # Check every approved chapter plus a chapter that must remain chapter-only.
     for expected in approved + ([unapproved] if unapproved else []):
         pid = expected["perekId"]
-        request = Request(f"{origin.rstrip('/')}/api/recitation/{pid}?deployment={version}",
-                          headers={"Cache-Control": "no-cache"})
-        with urlopen(request, timeout=20) as response:
+        url = f"{origin.rstrip('/')}/api/recitation/{pid}?deployment={version}"
+        with http_response(url, {"Cache-Control": "no-cache"}) as response:
             if response.headers.get("X-Website-Version") != version:
                 raise ValueError(f"{pid}: expected website {version} is not serving yet")
             actual = json.load(response)
@@ -36,7 +55,7 @@ def verify(origin, version, database=DATABASE, check_audio=False):
             raise ValueError(f"{pid}: invalid recording URL")
         if check_audio and expected["alignmentStatus"] == "ready":
             # This follows the browser's full CORS download, not native MP3 seeking.
-            with urlopen(Request(audio_url, headers={"Origin": origin}), timeout=30) as response:
+            with http_response(audio_url, {"Origin": origin}, timeout=30) as response:
                 if response.headers.get("Access-Control-Allow-Origin") not in ("*", origin):
                     raise ValueError(f"{pid}: MP3 download CORS does not permit this website")
                 if response.headers.get_content_type() != "audio/mpeg":
@@ -65,7 +84,7 @@ def main():
         try:
             verify(args.origin.rstrip('/'), args.version, args.database, args.check_audio)
             return
-        except (ValueError, URLError, TimeoutError) as error:
+        except (ValueError, OSError, HTTPException) as error:
             if attempt + 1 == args.attempts:
                 raise SystemExit(str(error)) from error
             print(f"Waiting for deployment ({attempt+1}/{args.attempts}): {error}", flush=True)

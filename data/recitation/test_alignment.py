@@ -63,7 +63,6 @@ class AlignmentTests(unittest.TestCase):
             self.assertEqual(failures, [{"perekId": 1, "error": "CUDA out of memory"}])
 
     def test_completed_checkpoint_survives_interruption_before_next_track(self):
-        import json
         import sqlite3
         from types import SimpleNamespace
         from unittest.mock import patch
