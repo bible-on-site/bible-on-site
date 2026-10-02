@@ -315,6 +315,56 @@ describe("Sefer component", () => {
 		}
 	});
 
+	it("keeps the flipped chapter when unchanged router data gets fresh references", async () => {
+		const perek = { ...minimalPerek, perekId: 2 };
+		mockGetCurrentPageIndex.mockReturnValue(5);
+		const { rerender } = render(<Sefer perekObj={perek} articles={[]} perushim={[]} perekIds={[1, 2]} />);
+		await act(async () => {});
+		mockRestorePage.mockClear();
+		// The user has turned back to chapter 1 while a same-route router refresh finishes.
+		mockGetCurrentPageIndex.mockReturnValue(3);
+		await act(async () => rerender(<Sefer perekObj={{ ...perek }} articles={[]} perushim={[]} perekIds={[1, 2]} />));
+		expect(mockRestorePage).not.toHaveBeenCalled();
+		// A genuinely different router destination must still restore its chapter.
+		mockGetCurrentPageIndex.mockReturnValue(5);
+		await act(async () => rerender(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} perekIds={[1, 2]} />));
+		expect(mockRestorePage).toHaveBeenCalledWith(3);
+	});
+
+	it.each(["42", 'רש"י'])("opens content %s in a book with parts without undoing the page turn", async (slug) => {
+		const { getSeferByName } = jest.requireMock("@/data/sefer-dto") as { getSeferByName: jest.Mock };
+		const originalSefer = getSeferByName();
+		getSeferByName.mockReturnValue({ additionals: [
+			{ perakim: originalSefer.perakim }, { perakim: originalSefer.perakim },
+		] });
+		try {
+			mockGetCurrentPageIndex.mockReturnValue(5);
+			const { unmount } = render(<Sefer perekObj={{ ...minimalPerek, perekId: 2 }} articles={[]} perushim={[]} perekIds={[1, 2]} />);
+			await act(async () => {});
+			mockRestorePage.mockClear();
+			mockGetCurrentPageIndex.mockReturnValue(3);
+			const handlers = capturedFlipBookProps.handlers as { onPageFlipped: () => void };
+			await act(async () => {
+				handlers.onPageFlipped();
+				history.replaceState(history.state, "", "/929/1?book");
+			});
+			const blankProps = () => {
+				const pages = capturedFlipBookProps.pages as React.ReactElement<{ children: React.ReactElement<{ initialSlug?: string; onNavigate: (slug?: string) => void }> }>[];
+				return pages[4].props.children.props;
+			};
+			act(() => blankProps().onNavigate(slug));
+			expect(blankProps().initialSlug).toBe(slug);
+			expect(mockRestorePage).not.toHaveBeenCalled();
+			expect(decodeURIComponent(location.pathname)).toBe(`/929/1/${slug}`);
+			act(() => blankProps().onNavigate());
+			expect(blankProps().initialSlug).toBeUndefined();
+			expect(mockRestorePage).not.toHaveBeenCalled();
+			unmount();
+		} finally {
+			getSeferByName.mockReturnValue(originalSefer);
+		}
+	});
+
 	it("TocPage filter excludes cover pages and empty titles", () => {
 		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		const filter = capturedTocProps.filter as (entry: {

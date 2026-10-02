@@ -61,7 +61,7 @@ export class SeferPage {
 	/**
 	 * Verify that the sefer overlay is visible and the FlipBook has mounted.
 	 * The overlay displays immediately but the FlipBook is lazy-loaded inside
-	 * a React startTransition, so we must wait for bookWrapper before checking
+	 * a React startTransition, so we must wait for the actual book before checking
 	 * any nested content (articles, qri spans, etc.).
 	 */
 	async verifySeferViewIsOpen(): Promise<void> {
@@ -78,6 +78,10 @@ export class SeferPage {
 			timeout: flipBookMountTimeoutMs,
 		});
 		await expect(bookWrapper).toBeVisible({
+			timeout: flipBookMountTimeoutMs,
+		});
+		// The wrapper can precede the dynamically imported FlipBook itself.
+		await expect(seferOverlay.locator(".he-book.flipbook")).toBeVisible({
 			timeout: flipBookMountTimeoutMs,
 		});
 	}
