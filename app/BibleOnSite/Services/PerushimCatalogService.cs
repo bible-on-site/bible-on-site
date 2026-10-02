@@ -21,6 +21,7 @@ public class PerushimCatalogService
     private SQLiteAsyncConnection? _connection;
     private bool _isInitialized;
     private bool _catalogMissing;
+    private readonly SemaphoreSlim _initializeLock = new(1, 1);
 
     private readonly IFileSystem _fileSystem;
 
@@ -45,20 +46,20 @@ public class PerushimCatalogService
     }
 
     /// <summary>
-    /// Initializes by copying the catalog from app package to AppDataDirectory if needed.
+    /// Refreshes the catalog from the installed app before resolving note IDs.
+    /// Generated IDs can change between releases, so a copy from an older app is unsafe.
     /// </summary>
     public async Task InitializeAsync()
     {
-        if (_isInitialized)
-            return;
-
-        var dbPath = Path.Combine(_fileSystem.AppDataDirectory, CatalogDbName);
-
-        if (!File.Exists(dbPath))
+        await _initializeLock.WaitAsync();
+        try
         {
+            if (_isInitialized)
+                return;
+            var dbPath = Path.Combine(_fileSystem.AppDataDirectory, CatalogDbName);
             try
             {
-                await CopyCatalogFromAssetsAsync(dbPath);
+                await PackagedDatabase.RefreshAsync(_fileSystem, CatalogDbName);
             }
             catch (FileNotFoundException)
             {
@@ -66,16 +67,11 @@ public class PerushimCatalogService
                 _isInitialized = true;
                 return;
             }
+
+            _connection = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
+            _isInitialized = true;
         }
-
-        _connection = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
-        _isInitialized = true;
-    }
-
-    private async Task CopyCatalogFromAssetsAsync(string targetPath)
-    {
-        await using var sourceStream = await _fileSystem.OpenAppPackageFileAsync(CatalogDbName);
-        await AtomicFile.CopyAsync(sourceStream, targetPath);
+        finally { _initializeLock.Release(); }
     }
 
     /// <summary>

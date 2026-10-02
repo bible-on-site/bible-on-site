@@ -36,8 +36,10 @@ public class PerekLoadingTests
             if (notes)
             {
                 await Storage.CreateDatabaseAsync("sefaria-dump-5784-sivan-4.perushim_catalog.sqlite",
-                    "CREATE TABLE perush (id INTEGER, name TEXT, priority INTEGER)", "INSERT INTO perush VALUES (1,'Rashi',2),(2,'Targum',1)");
+                    "CREATE TABLE perush (id INTEGER, name TEXT, priority INTEGER)", "INSERT INTO perush VALUES (1,'Rashi',2),(2,'Targum',1)",
+                    "CREATE TABLE _metadata (key TEXT,value TEXT)", "INSERT INTO _metadata VALUES ('build_timestamp','100')");
                 await Storage.CreateDatabaseAsync("sefaria-dump-5784-sivan-4.perushim_notes.sqlite",
+                    "CREATE TABLE _metadata (key TEXT,value TEXT)", "INSERT INTO _metadata VALUES ('build_timestamp','100')",
                     "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
                     "INSERT INTO note VALUES (1,1,1,0,'first'),(2,1,1,0,'second'),(1,2,1,0,'next'),(99,2,1,0,'unknown')");
             }
