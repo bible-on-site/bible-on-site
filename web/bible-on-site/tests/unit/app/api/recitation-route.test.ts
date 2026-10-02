@@ -4,6 +4,7 @@ jest.mock("@/data/perek-dto", () => ({ getPerekByPerekId: jest.fn() }));
 import { createHash } from "node:crypto";
 import { GET } from "@/app/api/recitation/[perekId]/route";
 import { getPerekByPerekId } from "@/data/perek-dto";
+import packageJson from "../../../../package.json";
 
 const originalEnv = process.env;
 const chapter = () => ({
@@ -46,7 +47,9 @@ afterEach(() => {
 });
 
 test("uses canonical segment timestamps without public sidecar files", async () => {
-	const data = await (await request()).json();
+	const response = await request();
+	expect(response.headers.get("X-Website-Version")).toBe(packageJson.version);
+	const data = await response.json();
 	expect(data.audioUrl).toBe(chapter().recitation.audioUrl);
 	expect(data.words).toEqual([
 		{ pasuk: 1, segment: 1, text: "בראשית", startMs: 1442, endMs: 2144 },

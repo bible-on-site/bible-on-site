@@ -171,6 +171,16 @@ export default function RecitationPlayer({
 	const preparing = useRef(false);
 	const request = useRef(0);
 	const kind = useRef<"chapter" | "clip" | null>(null);
+	const createAudio = useCallback((recitation: Recitation) => {
+		const player: RecitationAudio = new RecitationAudio(
+			recitation.audioUrl,
+			recitation.audioSha256,
+			(percent) => {
+				if (precise.current === player) setDownloadProgress(percent);
+			},
+		);
+		return player;
+	}, []);
 
 	const stop = useCallback((release = false) => {
 		request.current++;
@@ -229,13 +239,7 @@ export default function RecitationPlayer({
 					pesukim,
 				);
 				if (controller.signal.aborted) return;
-				const player = new RecitationAudio(
-					recitation.audioUrl,
-					recitation.audioSha256,
-					(percent) => {
-						if (!controller.signal.aborted) setDownloadProgress(percent);
-					},
-				);
+				const player = createAudio(recitation);
 				precise.current = player;
 				await player.prepare();
 				if (controller.signal.aborted || precise.current !== player) return;
@@ -255,7 +259,7 @@ export default function RecitationPlayer({
 			controller.abort();
 			stop(true);
 		};
-	}, [open, perekId, pesukim, stop, id]);
+	}, [open, perekId, pesukim, stop, id, createAudio]);
 
 	function finish() {
 		setState("idle");
@@ -272,14 +276,12 @@ export default function RecitationPlayer({
 		const generation = ++request.current;
 		setMessage("");
 		setState("loading");
+		setDownloadProgress(null);
 		setActiveWord(segment ?? null);
 		try {
 			if (startMs !== undefined && endMs !== undefined) {
 				kind.current = "clip";
-				precise.current ??= new RecitationAudio(
-					data.audioUrl,
-					data.audioSha256,
-				);
+				precise.current ??= createAudio(data);
 				const started = await precise.current.play(startMs, endMs, () => {
 					if (request.current === generation) finish();
 				});

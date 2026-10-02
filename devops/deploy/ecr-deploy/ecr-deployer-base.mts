@@ -13,6 +13,8 @@ import {
 	withRetry,
 } from "./ecr-client.mjs";
 
+import { resumePublishedImage } from "./resume-image.mjs";
+
 export enum Diff {
 	LocalNewer = "LocalNewer",
 	RemoteNewer = "RemoteNewer",
@@ -22,6 +24,7 @@ export enum Diff {
 export abstract class ECRDeployerBase extends DeployerBase {
 	protected wrappedLocalVersion?: string;
 	protected dockerImagePath?: string;
+	private alreadyPublished = false;
 
 	constructor(
 		moduleName: string,
@@ -116,7 +119,8 @@ export abstract class ECRDeployerBase extends DeployerBase {
 		this.info("Checking preconditions for deployment...");
 		try {
 			const diff = await this.localRemoteVersionDiff();
-			if (diff !== Diff.LocalNewer) {
+			this.alreadyPublished = diff === Diff.LocalRemoteSame;
+			if (diff === Diff.RemoteNewer) {
 				throw new Error("Local version is not newer than remote version.");
 			}
 		} catch (error) {
@@ -165,6 +169,16 @@ export abstract class ECRDeployerBase extends DeployerBase {
 			this.ecrRepositoryName,
 		);
 		this.info(`Using ECR repository: ${repositoryUri}`);
+
+		if (this.alreadyPublished) {
+			await resumePublishedImage(
+				this.client,
+				this.ecrRepositoryName,
+				`v${await this.getLocalVersion()}`,
+			);
+			this.info("Resumed the published version without replacing its image.");
+			return;
+		}
 
 		// Authenticate Docker with ECR
 		await this.authenticateDocker();

@@ -608,3 +608,19 @@ test("chapter-only recordings show no persistent availability notice", async () 
 	expect(screen.queryByText("זמינה הקראת הפרק המלא")).toBeNull();
 	expect(screen.getByRole("status")).toBeEmptyDOMElement();
 });
+
+test("reloading precise audio after its context was released reports current download progress", async () => {
+	await openPlayer();
+	jest.spyOn(document, "hidden", "get").mockReturnValue(true);
+	fireEvent(document, new Event("visibilitychange"));
+	const pending = deferred<boolean>();
+	clipPlay.mockReturnValueOnce(pending.promise);
+	fireEvent.click(screen.getByRole("button", { name: "השמעת המילה בָּרָא" }));
+	act(() => downloadProgress(60));
+	expect(
+		screen.getByRole("progressbar", { name: "טעינה על הפרק..." }),
+	).toHaveAttribute("aria-valuenow", "60");
+	await act(async () => pending.resolve(true));
+	expect(screen.queryByRole("progressbar")).toBeNull();
+	expect(screen.getByRole("button", { name: "השהיית ההקראה" })).toBeEnabled();
+});

@@ -86,3 +86,12 @@ jobs:
             --docker-image "${{ github.workspace }}/${{ steps.prepare_docker_restore.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}"
         # Note: ECS deployment is automatically triggered by EventBridge when
         # the 'latest' tag is pushed to ECR. See: ecr-ecs-auto-deploy.yaml
+
+      - name: Verify website recitation after ECS rollout
+        if: ${{ env.MODULE_NAME == 'website' }}
+        run: |
+          # Recreate the overlay from the exact release SHA. Repeated runs are safe.
+          python data/recitation/publish.py
+          python data/recitation/audit.py
+          python data/recitation/deployment.py --origin https://xn--febl3a.co.il \
+            --version "$MODULE_VERSION" --check-audio --attempts 30 --interval 20

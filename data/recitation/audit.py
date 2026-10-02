@@ -1,4 +1,6 @@
 """Validate the durable intermediate DB and the merged canonical perakim data."""
+import argparse
+from pathlib import Path
 from collections import Counter
 from contextlib import closing
 import json
@@ -15,11 +17,10 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def audit():
-    chapters = load_chapters(DATABASE)
+def audit(intermediate=ROOT / "data/recitation/recitation.sqlite", database=DATABASE):
+    chapters = load_chapters(database)
     counts = Counter()
     total = 0
-    intermediate = ROOT / "data/recitation/recitation.sqlite"
     with closing(sqlite3.connect(f"{intermediate.resolve().as_uri()}?mode=ro", uri=True)) as db:
         require(db.execute("PRAGMA user_version").fetchone()[0] == 3, "Unsupported recitation database version")
         ids = set()
@@ -48,4 +49,8 @@ def audit():
 
 
 if __name__ == "__main__":
-    audit()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--input", type=Path, default=ROOT / "data/recitation/recitation.sqlite")
+    parser.add_argument("--database", type=Path, default=DATABASE)
+    args = parser.parse_args()
+    audit(args.input, args.database)

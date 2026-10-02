@@ -47,7 +47,7 @@ class AlignmentTests(unittest.TestCase):
         from recite import main
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            args = SimpleNamespace(text=root / "perakim.json", output=root, cache=root,
+            args = SimpleNamespace(text=root / "perakim.json", output=root, cache=root, database=root / "recitation.sqlite",
                 asr_model="asr", asr_revision="a", align_model="ctc", align_revision="b",
                 min_text_score=.6, min_acoustic_score=.5, min_coverage=.85)
             with (patch("recite.parse_arguments", return_value=(None, args)),
@@ -61,6 +61,51 @@ class AlignmentTests(unittest.TestCase):
                 self.assertEqual(process.call_count, 1)
             failures = json.loads((root / "failures.json").read_text(encoding="utf-8"))
             self.assertEqual(failures, [{"perekId": 1, "error": "CUDA out of memory"}])
+
+    def test_completed_checkpoint_survives_interruption_before_next_track(self):
+        import json
+        import sqlite3
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from recite import main
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            args = SimpleNamespace(text=root / "perakim.json", output=root / "cache", cache=root,
+                database=root / "recitation.sqlite", asr_model="asr", asr_revision="a",
+                align_model="ctc", align_revision="b", min_text_score=.6, min_acoustic_score=.5, min_coverage=.85)
+            manifest = {"perekId": 1, "audioUrl": "https://example.com/1_record.mp3", "audioSha256": "a",
+                "textSha256": "b", "durationMs": 1000, "alignmentStatus": "ready",
+                "words": [{"pasuk": 1, "segment": 1, "text": "ברא", "startMs": 101, "endMs": 599}]}
+
+            def process(path, *_):
+                if path.name == "2_record.mp3":
+                    raise KeyboardInterrupt()
+                write_json(args.output / "1.json", manifest)
+
+            with (patch("recite.parse_arguments", return_value=(None, args)),
+                  patch("recite.load_chapters", return_value={}),
+                  patch("recite.source_files", return_value=[root / "1_record.mp3", root / "2_record.mp3"]),
+                  patch("recite.process_track", side_effect=process), patch("publish.publish") as publication):
+                with self.assertRaises(KeyboardInterrupt):
+                    main()
+                publication.assert_not_called()
+            with closing(sqlite3.connect(args.database)) as db:
+                self.assertEqual(db.execute("SELECT start_ms,end_ms FROM recitation_word").fetchall(), [(101, 599)])
+
+    def test_short_samples_are_prioritized_without_dropping_tracks(self):
+        from types import SimpleNamespace
+        from recite import source_files
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for pid in (1, 2, 3):
+                (root / f"{pid}_record.mp3").touch()
+            args = SimpleNamespace(recordings=root, perek=None, shortest_first=True)
+            chapters = {1: {"recitation": {"durationMs": 5000}}, 2: {"recitation": {"durationMs": 1000}}, 3: {}}
+            self.assertEqual([p.name for p in source_files(None, args, chapters)],
+                             ["2_record.mp3", "1_record.mp3", "3_record.mp3"])
+            args.shortest_first = False
+            self.assertEqual([p.name for p in source_files(None, args, chapters)],
+                             ["1_record.mp3", "2_record.mp3", "3_record.mp3"])
 
     def test_model_revisions_invalidate_asr_cache_but_preserve_human_review(self):
         cached = {"audioSha256": "audio", "model": "model", "revision": "old"}
