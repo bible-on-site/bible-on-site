@@ -478,8 +478,8 @@ describe("PersonFamilyTree", () => {
 		};
 		render(<PersonFamilyTree summary={summary} />);
 		expect(screen.getByText("דלילה")).toBeInTheDocument();
-		expect(screen.getByText("שיטה א׳")).toBeInTheDocument();
-		expect(screen.getByText("שיטה ב׳")).toBeInTheDocument();
+		expect(screen.getByText("שיטה א'")).toBeInTheDocument();
+		expect(screen.getByText("שיטה ב'")).toBeInTheDocument();
 		expect(screen.getByText("משנה תורה")).toBeInTheDocument();
 		expect(screen.getByText('רש"י')).toBeInTheDocument();
 		expect(screen.queryByText("חלופי")).not.toBeInTheDocument();
@@ -516,7 +516,7 @@ describe("PersonFamilyTree", () => {
 		};
 		render(<PersonFamilyTree summary={summary} />);
 		expect(screen.getAllByText("דלילה").length).toBe(1);
-		expect(screen.getByText("שיטה א׳")).toBeInTheDocument();
+		expect(screen.getByText("שיטה א'")).toBeInTheDocument();
 	});
 
 	it("shows the shared personal source on a merged multi-opinion spouse card", () => {
@@ -1464,7 +1464,7 @@ describe("PersonFamilyTree", () => {
 		expect(cards[0].parentElement).toHaveClass("childRowThree");
 		expect(container.querySelector("[data-matrix-spouse-card]")).toBeNull();
 		expect(container.querySelector("[data-matrix-mobile]")).toBeNull();
-		expect(screen.queryByText("ילדים מ־חוה")).not.toBeInTheDocument();
+		expect(screen.queryByText("ילדים מ-חוה")).not.toBeInTheDocument();
 		expect(screen.queryByText("סדר 1")).not.toBeInTheDocument();
 	});
 

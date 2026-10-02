@@ -748,7 +748,7 @@ public partial class PerekViewModel : ObservableObject
             await File.WriteAllTextAsync(path, report);
             await _share.RequestAsync(new ShareFileRequest
             {
-                Title = "ייצוא לוגים — פירושים",
+                Title = "ייצוא לוגים - פירושים",
                 File = new ShareFile(path),
             });
         }

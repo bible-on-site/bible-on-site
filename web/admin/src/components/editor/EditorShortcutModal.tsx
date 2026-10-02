@@ -70,7 +70,7 @@ export function EditorShortcutModal({
 						dir="rtl"
 					/>
 					<p className="text-xs text-gray-500">
-						במק/Meta מופיע כ־Ctrl בטבלה; בפועל השתמש ב־⌘ במק.
+						במק/Meta מופיע כ-Ctrl בטבלה; בפועל השתמש ב-⌘ במק.
 					</p>
 				</div>
 
@@ -106,11 +106,13 @@ export function EditorShortcutModal({
 							מתקדם: קיצורים נוספים (JSON)
 						</summary>
 						<p className="text-xs text-gray-600 mt-2 mb-1">
-							מפתח = צירוף TipTap (למשל <code className="bg-white px-1">Mod-Shift-k</code>
+							מפתח = צירוף TipTap (למשל{" "}
+							<code className="bg-white px-1">Mod-Shift-k</code>
 							), ערך = פקודה:
 						</p>
 						<p className="text-xs text-gray-500 mb-2 font-mono break-all">
-							link | bold | italic | bulletList | orderedList | heading:1 … heading:6
+							link | bold | italic | bulletList | orderedList | heading:1 …
+							heading:6
 						</p>
 						<pre className="text-xs bg-white p-2 rounded mb-2 overflow-x-auto border">
 							{SHORTCUT_EXTRAS_JSON_EXAMPLE}

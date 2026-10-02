@@ -45,7 +45,10 @@ it("groups repeated mentions in one verse and highlights only their recorded ran
 		<EntryOccurrencesTable occurrences={[reference(1), reference(3, 4)]} />,
 	);
 	expect(screen.getAllByRole("row")).toHaveLength(2);
-	expect(screen.getByRole("link", { name: "שמואל ב ה, א" })).toHaveAttribute(
+	expect(
+		screen.getByRole("heading", { name: 'מופעים בתנ"ך' }),
+	).toBeInTheDocument();
+	expect(screen.getByRole("link", { name: "שמואל ב ה א" })).toHaveAttribute(
 		"href",
 		"/929/268#pasuk-1",
 	);

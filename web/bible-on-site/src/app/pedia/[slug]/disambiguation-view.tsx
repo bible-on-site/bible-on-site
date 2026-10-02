@@ -33,7 +33,7 @@ export function DisambiguationView({ name, targets }: DisambiguationViewProps) {
 							{target.title}
 						</Link>
 						{target.label && (
-							<span className={styles.entityName}> — {target.label}</span>
+							<span className={styles.entityName}> - {target.label}</span>
 						)}
 					</li>
 				))}

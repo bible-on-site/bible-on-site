@@ -14,6 +14,12 @@ For a task the user assigns, you may grant the local tool, Docker file-sharing, 
 
 Application content belongs in the database. Treat the Rust db-populator and local population scripts as temporary bootstrap and test tooling, not as a source of production content. Populate the local database from production with `sync-from-prod`; make lasting content changes through the database deployment or admin editing path. Do not add production place or article content to the Rust populator just to make it appear locally.
 
+# Hebrew Text and Source Formatting
+
+Use plain Hebrew letters in source references, separated by spaces, with no commas, geresh, or gershayim: `יהושע י א`, `יהושע כג א`, `שמואל ב ה ו`. Use the regular ASCII hyphen `-` for source ranges, such as `בראשית ל ו-ח`. Apply this consistently across the website, admin, native app, previews, and exports.
+
+Use the regular ASCII double quote `"` in Hebrew UI text and abbreviations, such as `תנ"ך`, rather than typographic quotes or Hebrew gershayim `״`. Use the regular ASCII apostrophe `'` when an apostrophe is needed. Use the regular ASCII hyphen `-` rather than Hebrew maqaf `־` or typographic dashes in authored text. Preserve the biblical maqaf `־` in canonical scripture with taamim, and preserve database content at rest; accept legacy punctuation when parsing existing references and normalize their display.
+
 # Dependency Upgrade Rule
 
 For a dependency upgrade task, refresh every dependency kind within the user's requested scope: direct packages, transitive packages and lockfiles, toolchains, build images, CI actions, and related configuration. Make the code and test changes needed to work with current releases. Defer an upgrade only when a concrete, substantial incompatibility in the current open-source ecosystem makes alignment impractical. For each deferral, create a follow-up issue and link it beside the pin and in the corresponding Renovate rule. Do not defer merely because the upgrade requires repository code changes.
