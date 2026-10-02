@@ -21,6 +21,11 @@ public abstract class BaseGraphQLService
 
     protected GraphQLHttpClient Client => _client.Value;
 
+    protected BaseGraphQLService(GraphQLHttpClient client)
+    {
+        _client = new Lazy<GraphQLHttpClient>(() => client);
+    }
+
     /// <summary>
     /// Executes a GraphQL query and returns the typed response.
     /// </summary>

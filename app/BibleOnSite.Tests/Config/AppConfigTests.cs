@@ -1,11 +1,23 @@
 using BibleOnSite.Config;
 using FluentAssertions;
 using System.Reflection;
+using Microsoft.Maui.Devices;
+using Microsoft.Maui.Storage;
 
 namespace BibleOnSite.Tests.Config;
 
+[Collection("App configuration")]
 public class AppConfigTests
 {
+    private static AppConfig CreateConfig()
+    {
+        var device = new Mock<IDeviceInfo>();
+        device.SetupGet(d => d.DeviceType).Returns(DeviceType.Virtual);
+        var files = new Mock<IFileSystem>();
+        files.Setup(f => f.OpenAppPackageFileAsync(It.IsAny<string>()))
+            .ThrowsAsync(new FileNotFoundException());
+        return new AppConfig(files.Object, device.Object);
+    }
     private static readonly object ApiUrlEnvLock = new();
 
     private static void WithApiUrl(string? value, Action action)
@@ -88,8 +100,10 @@ public class AppConfigTests
 #endif
     }
 
+    [Collection("App configuration")]
     public class GetApiUrl
     {
+        private readonly AppConfig _config = CreateConfig();
         public GetApiUrl()
         {
             ResetCachedApiOverride();
@@ -100,7 +114,7 @@ public class AppConfigTests
         {
             WithApiUrl("http://127.0.0.1:9999", () =>
             {
-                AppConfig.Instance.GetApiUrl().Should().Be("http://127.0.0.1:9999");
+                _config.GetApiUrl().Should().Be("http://127.0.0.1:9999");
             });
         }
 
@@ -110,9 +124,9 @@ public class AppConfigTests
             WithApiUrl(null, () =>
             {
 #if DEBUG
-                AppConfig.Instance.GetApiUrl().Should().Be(AppConfig.Instance.DevApiUrl);
+                _config.GetApiUrl().Should().Be(_config.DevApiUrl);
 #else
-                AppConfig.Instance.GetApiUrl().Should().Be(AppConfig.Instance.ApiUrl);
+                _config.GetApiUrl().Should().Be(_config.ApiUrl);
 #endif
             });
         }
@@ -123,9 +137,9 @@ public class AppConfigTests
             WithApiUrl("", () =>
             {
 #if DEBUG
-                AppConfig.Instance.GetApiUrl().Should().Be(AppConfig.Instance.DevApiUrl);
+                _config.GetApiUrl().Should().Be(_config.DevApiUrl);
 #else
-                AppConfig.Instance.GetApiUrl().Should().Be(AppConfig.Instance.ApiUrl);
+                _config.GetApiUrl().Should().Be(_config.ApiUrl);
 #endif
             });
         }
@@ -137,7 +151,7 @@ public class AppConfigTests
             {
                 SetCachedApiOverride("https://override.example.test");
 
-                AppConfig.Instance.GetApiUrl().Should().Be("https://override.example.test");
+                _config.GetApiUrl().Should().Be("https://override.example.test");
             });
         }
 
@@ -147,36 +161,36 @@ public class AppConfigTests
             WithApiUrl(null, () => { });
             ResetCachedApiOverride();
 
-            await AppConfig.Instance.InitializeAsync();
+            await _config.InitializeAsync();
 
             WithApiUrl(null, () =>
             {
 #if DEBUG
-                AppConfig.Instance.GetApiUrl().Should().Be(AppConfig.Instance.DevApiUrl);
+                _config.GetApiUrl().Should().Be(_config.DevApiUrl);
 #else
-                AppConfig.Instance.GetApiUrl().Should().Be(AppConfig.Instance.ApiUrl);
+                _config.GetApiUrl().Should().Be(_config.ApiUrl);
 #endif
             });
         }
 
-        private static void SetCachedApiOverride(string? value)
+        private void SetCachedApiOverride(string? value)
         {
             typeof(AppConfig)
                 .GetField("_apiUrlOverride", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .SetValue(AppConfig.Instance, value);
+                .SetValue(_config, value);
             typeof(AppConfig)
                 .GetField("_apiUrlOverrideLoaded", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .SetValue(AppConfig.Instance, true);
+                .SetValue(_config, true);
         }
 
-        private static void ResetCachedApiOverride()
+        private void ResetCachedApiOverride()
         {
             typeof(AppConfig)
                 .GetField("_apiUrlOverride", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .SetValue(AppConfig.Instance, null);
+                .SetValue(_config, null);
             typeof(AppConfig)
                 .GetField("_apiUrlOverrideLoaded", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .SetValue(AppConfig.Instance, false);
+                .SetValue(_config, false);
         }
     }
 }
