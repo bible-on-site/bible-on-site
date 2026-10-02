@@ -151,6 +151,7 @@ public partial class CircularMenu : ContentView
 
     private void SetupMenuItems(IList<CircularMenuItem> items)
     {
+        foreach (var oldItem in _menuItems) _container.Remove(oldItem);
         _menuItems.Clear();
         _menuItems.AddRange(items);
 
@@ -163,7 +164,7 @@ public partial class CircularMenu : ContentView
             _container.Insert(0, item); // Add behind toggle button
         }
 
-        PositionMenuItems(false);
+        PositionMenuItems(_isExpanded);
     }
 
     private void OnToggleClicked(object? sender, EventArgs e)
@@ -248,9 +249,9 @@ public partial class CircularMenu : ContentView
                 item.ScaleToAsync(0, 200, Easing.CubicIn);
 
                 // Hide after animation
-                _ = Task.Delay(200).ContinueWith(_ =>
+                Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(200), () =>
                 {
-                    MainThread.BeginInvokeOnMainThread(() => item.IsVisible = false);
+                    if (!_isExpanded) item.IsVisible = false;
                 });
             }
         }

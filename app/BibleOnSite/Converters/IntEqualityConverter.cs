@@ -12,8 +12,8 @@ public class IntEqualityConverter : IMultiValueConverter
 	{
 		if (values is not { Length: >= 2 })
 			return false;
-		var a = values[0] is int i ? i : (values[0] is long l ? (int)l : (int?)null);
-		var b = values[1] is int j ? j : (values[1] is long m ? (int)m : (int?)null);
+        var a = values[0] is int i ? i : (values[0] is long l ? l : (long?)null);
+        var b = values[1] is int j ? j : (values[1] is long m ? m : (long?)null);
 		return a.HasValue && b.HasValue && a.Value == b.Value;
 	}
 

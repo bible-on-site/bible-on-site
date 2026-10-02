@@ -4,6 +4,25 @@
 
 The App module (`app/`) uses Coverlet for .NET coverage instrumentation. Coverage is collected during unit and integration test runs using the `XPlat Code Coverage` data collector, then converted to LCOV format using ReportGenerator.
 
+The test project defines `MAUI`, just as the app does, so chapter loading,
+carousel preloading, commentary selection, search, navigation commands, and
+sharing commands are included. It also links all binding converters and the
+local database, chapter data, connectivity, and analytics services. Platform
+boundaries accept MAUI interfaces, while tests exercise the real GraphQL client,
+temporary files, SQLite databases, controls, and view models.
+
+The app's Codecov project gate is **99%**. The expanded Release unit suite reaches
+**99.31% line coverage (2,594 of 2,612 application lines)** and **94.67% branch
+coverage** with 800 passing tests.
+The `app` flag selects application sources; test-source coverage is not part of
+this figure. No additional coverage exclusions were introduced.
+
+This is coverage of the linked application sources in the portable test build.
+XAML-generated pages and platform-specific Android/iOS implementations still
+require device tests. The remaining uncovered lines include native singleton
+adapters, platform fallbacks, defensive paths, and asynchronous disposal sequence
+points. A high portable coverage percentage does not establish device coverage.
+
 ## Architecture
 
 Each coverage target runs tests and generates LCOV internally:
@@ -166,11 +185,11 @@ This produces a combined LCOV file at `.coverage/lcov.info` that includes TypeSc
 In CI ([.github/workflows/ci.yml](../../../../.github/workflows/ci.yml)), the `app_ci` job:
 
 1. Checks out the repository
-2. Sets up .NET 9.0
+2. Sets up .NET 10.0
 3. Restores dotnet tools and dependencies
 4. Runs unit tests with coverage via `CoverageUnit` target (generates LCOV directly)
-5. Copies coverage to merged location for artifact upload
-6. Uploads coverage artifact for cross-module merge
+5. Runs integration tests against the API and merges the coverage reports
+6. Uploads the merged coverage artifact for cross-module merge and Codecov
 
 The coverage is then:
 - Uploaded to Codecov with the `app` flag

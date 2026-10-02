@@ -1,4 +1,5 @@
 using SQLite;
+using BibleOnSite.Helpers;
 
 namespace BibleOnSite.Services;
 
@@ -19,7 +20,11 @@ public class LocalDatabaseService
     private SQLiteAsyncConnection? _database;
     private bool _isInitialized;
 
-    private LocalDatabaseService() { }
+    private readonly IFileSystem _fileSystem;
+
+    private LocalDatabaseService() : this(FileSystem.Current) { }
+
+    public LocalDatabaseService(IFileSystem fileSystem) { _fileSystem = fileSystem; }
 
     /// <summary>
     /// Gets the database connection, initializing it if necessary.
@@ -41,7 +46,7 @@ public class LocalDatabaseService
         if (_isInitialized)
             return;
 
-        var dbPath = Path.Combine(FileSystem.AppDataDirectory, DbName);
+        var dbPath = Path.Combine(_fileSystem.AppDataDirectory, DbName);
 
         // Copy database from app package to writable location if it doesn't exist
         if (!File.Exists(dbPath))
@@ -53,13 +58,12 @@ public class LocalDatabaseService
         _isInitialized = true;
     }
 
-    private static async Task CopyDatabaseFromAssetsAsync(string targetPath)
+    private async Task CopyDatabaseFromAssetsAsync(string targetPath)
     {
         try
         {
-            await using var sourceStream = await FileSystem.OpenAppPackageFileAsync(DbName);
-            await using var targetStream = File.Create(targetPath);
-            await sourceStream.CopyToAsync(targetStream);
+            await using var sourceStream = await _fileSystem.OpenAppPackageFileAsync(DbName);
+            await AtomicFile.CopyAsync(sourceStream, targetPath);
         }
         catch (Exception ex)
         {

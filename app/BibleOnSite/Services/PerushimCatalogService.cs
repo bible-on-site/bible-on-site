@@ -1,5 +1,6 @@
 using BibleOnSite.Models;
 using SQLite;
+using BibleOnSite.Helpers;
 
 namespace BibleOnSite.Services;
 
@@ -21,7 +22,11 @@ public class PerushimCatalogService
     private bool _isInitialized;
     private bool _catalogMissing;
 
-    private PerushimCatalogService() { }
+    private readonly IFileSystem _fileSystem;
+
+    private PerushimCatalogService() : this(FileSystem.Current) { }
+
+    public PerushimCatalogService(IFileSystem fileSystem) { _fileSystem = fileSystem; }
 
     /// <summary>Whether the catalog database is available.</summary>
     public bool IsAvailable => _isInitialized && !_catalogMissing && _connection != null;
@@ -47,7 +52,7 @@ public class PerushimCatalogService
         if (_isInitialized)
             return;
 
-        var dbPath = Path.Combine(FileSystem.AppDataDirectory, CatalogDbName);
+        var dbPath = Path.Combine(_fileSystem.AppDataDirectory, CatalogDbName);
 
         if (!File.Exists(dbPath))
         {
@@ -67,11 +72,10 @@ public class PerushimCatalogService
         _isInitialized = true;
     }
 
-    private static async Task CopyCatalogFromAssetsAsync(string targetPath)
+    private async Task CopyCatalogFromAssetsAsync(string targetPath)
     {
-        await using var sourceStream = await FileSystem.OpenAppPackageFileAsync(CatalogDbName);
-        await using var targetStream = File.Create(targetPath);
-        await sourceStream.CopyToAsync(targetStream);
+        await using var sourceStream = await _fileSystem.OpenAppPackageFileAsync(CatalogDbName);
+        await AtomicFile.CopyAsync(sourceStream, targetPath);
     }
 
     /// <summary>
