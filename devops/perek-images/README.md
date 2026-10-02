@@ -21,7 +21,7 @@ The tool creates these derivatives from one consistent crop:
 | HTML fallback | WebP | 1600×900 | 82 |
 | Social preview | JPEG | 1600×900 | 85 |
 
-It applies EXIF orientation, converts to sRGB, flattens transparency on white, and strips embedded metadata. Smaller masters retain their native resolution, with larger derivatives omitted and a warning for social images below 1200 pixels wide. Sources must fit at least 640×360. These quality settings aim for a practical balance; file size varies with visual detail.
+It applies EXIF orientation, converts to sRGB, flattens transparency on white, and strips embedded metadata. Masters one pixel short of 1600×900 are normalized to that standard size. Smaller masters retain their native resolution, with larger derivatives omitted and a warning for social images below 1200 pixels wide. Sources must fit at least 640×360. These quality settings aim for a practical balance; file size varies with visual detail.
 
 Images with a different aspect ratio use a centre crop. Review the JPEG before publishing. If the crop cuts off a subject, rerun with `--position north`, `northeast`, `east`, `southeast`, `south`, `southwest`, `west`, or `northwest`.
 
