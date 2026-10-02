@@ -51,9 +51,12 @@ export async function prepareImage({
 		);
 	}
 	const { width: sourceWidth, height: sourceHeight } = metadata.autoOrient;
-	// Multiples of 16 give exact 16:9 dimensions without ever enlarging the source.
-	const width =
-		Math.floor(Math.min(1600, sourceWidth, (sourceHeight * 16) / 9) / 16) * 16;
+	// Keep standard exports aligned when a master is just one pixel short.
+	const useFullSize = sourceWidth >= 1599 && sourceHeight >= 899;
+	const width = useFullSize
+		? 1600
+		: Math.floor(Math.min(1600, sourceWidth, (sourceHeight * 16) / 9) / 16) *
+			16;
 	const height = (width * 9) / 16;
 	if (width < 640) {
 		throw new Error(
@@ -91,7 +94,11 @@ export async function prepareImage({
 		.autoOrient()
 		.toColourspace("srgb")
 		.flatten({ background: "#ffffff" })
-		.resize(width, height, { fit: "cover", position, withoutEnlargement: true })
+		.resize(width, height, {
+			fit: "cover",
+			position,
+			withoutEnlargement: !useFullSize,
+		})
 		.png()
 		.toBuffer();
 	const avifWidths = [
@@ -161,7 +168,8 @@ const usage = `Usage: npm run images:prepare -- <master.png> [--perek 1] [--outp
 
 One image is enough. Prefer a 1600x900 or larger PNG; other aspect ratios are cropped.
 Creates responsive AVIF, WebP fallback, social JPEG, and manifest.json locally.
-Smaller sources are never upscaled. No AWS or database credentials are needed.`;
+Masters one pixel short are aligned to 1600x900; smaller sources are not upscaled.
+No AWS or database credentials are needed.`;
 
 async function main() {
 	const { values, positionals } = parseArgs({

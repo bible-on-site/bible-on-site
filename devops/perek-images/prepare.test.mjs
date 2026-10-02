@@ -126,6 +126,40 @@ test("the CLI encodes six valid assets with accurate, immutable upload metadata"
 	assert.ok(pixel[0] > pixel[2] * 2);
 });
 
+test("masters one pixel short produce the standard six variants", async (t) => {
+	const directory = await workspace(t);
+	for (const [width, height] of [
+		[1599, 900],
+		[1600, 899],
+		[1599, 899],
+	]) {
+		const input = join(directory, `${width}x${height}.png`);
+		await sharp({
+			create: { width, height, channels: 3, background: "#3399cc" },
+		})
+			.png()
+			.toFile(input);
+		const { manifest, outputDirectory } = await prepareImage({
+			input,
+			output: join(directory, `${width}x${height}`),
+		});
+		assert.equal(manifest.master.width, 1600);
+		assert.equal(manifest.master.height, 900);
+		assert.deepEqual(manifest.warnings, []);
+		assert.deepEqual(
+			manifest.variants.map(({ width }) => width),
+			[640, 960, 1280, 1600, 1600, 1600],
+		);
+		for (const variant of manifest.variants) {
+			const metadata = await sharp(
+				await readFile(join(outputDirectory, variant.file)),
+			).metadata();
+			assert.equal(metadata.width, variant.width);
+			assert.equal(metadata.height, variant.height);
+		}
+	}
+});
+
 test("small masters retain native resolution and warn about search preview size", async (t) => {
 	const directory = await workspace(t);
 	const input = join(directory, "small.png");
