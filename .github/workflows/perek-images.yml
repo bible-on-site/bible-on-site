@@ -1,0 +1,35 @@
+name: Perek Image Tools
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - "devops/perek-images/**"
+      - "package.json"
+      - ".github/workflows/perek-images.yml"
+  push:
+    branches: [master]
+    paths:
+      - "devops/perek-images/**"
+      - "package.json"
+      - ".github/workflows/perek-images.yml"
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare-images:
+    name: Encode and validate images
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: devops/perek-images/package.json
+          cache: npm
+          cache-dependency-path: devops/perek-images/package-lock.json
+      - run: npm ci --prefix devops/perek-images --no-audit
+      - run: npm test --prefix devops/perek-images
