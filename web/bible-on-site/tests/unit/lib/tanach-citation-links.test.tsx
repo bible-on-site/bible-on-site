@@ -55,6 +55,21 @@ describe("renderCitationWithTanachLinks", () => {
 		expect(link.getAttribute("href")).toMatch(/^\/929\/\d+#pasuk-18$/);
 	});
 
+	it.each([
+		["(יהושע י״א, י״ח).", "יהושע יא יח", "#pasuk-18"],
+		["שמואל א׳ ג׳, ד׳", "שמואל א ג ד", "#pasuk-4"],
+		["בראשית ל, ו־ח", "בראשית ל ו-ח", "#pasuk-6"],
+		["בראשית ל ו–ח", "בראשית ל ו-ח", "#pasuk-6"],
+	])("normalizes legacy citation punctuation in %s", (text, label, anchor) => {
+		render(<div>{renderCitationWithTanachLinks(text, "cite")}</div>);
+		expect(
+			screen
+				.getByRole("link", { name: label })
+				.getAttribute("href")
+				?.endsWith(anchor),
+		).toBe(true);
+	});
+
 	it("anchors a pasuk range at its first pasuk", () => {
 		const nodes = renderCitationWithTanachLinks("בראשית ל ו-ח", "cite");
 		render(<div>{nodes}</div>);

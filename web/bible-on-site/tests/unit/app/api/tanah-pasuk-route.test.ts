@@ -39,6 +39,11 @@ describe("GET /api/tanah/pasuk/[perekId]/[pasuk]", () => {
 		expect(body.noteHtml).toBeUndefined();
 	});
 
+	it("preserves the book volume in an unpunctuated source", async () => {
+		const res = await requestFor("268", "6");
+		expect((await res.json()).reference).toBe("שמואל ב ה ו");
+	});
+
 	it("includes the perush note when a perush is given and has a note", async () => {
 		mockPerushim.mockResolvedValue([
 			{ id: 23, name: "הכתב והקבלה", parshanName: "רימ", noteCount: 1 },

@@ -84,6 +84,17 @@ describe("SeferComposite (wide screen)", () => {
 		mockReplace.mockClear();
 		mockSeferMountCount = 0;
 		localStorage.clear();
+		window.history.replaceState(null, "", "/929/5");
+	});
+
+	it("keeps a verse citation visible despite a saved book preference", () => {
+		localStorage.setItem("perekViewMode", "book");
+		window.history.replaceState(null, "", "/929/5#pasuk-3");
+		render(
+			<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
+		);
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(screen.queryByTestId("sefer")).toBeNull();
 	});
 
 	it("renders ReadModeToggler when wide enough", () => {

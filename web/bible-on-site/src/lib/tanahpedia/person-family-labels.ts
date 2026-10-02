@@ -66,7 +66,7 @@ export function spousesSectionLabel(focalSex: string | null): string {
 	return "זיווגים";
 }
 
-const OPINION_ORDINALS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳"];
+const OPINION_ORDINALS = ["א'", "ב'", "ג'", "ד'", "ה'"];
 
 /**
  * כותרת בלוק דעה כשיש כמה שיטות לטיב הקשר עם אותה בת זוג.
@@ -217,7 +217,7 @@ export function childGroupByCoParentLabel(
 	hasNamedCoParent: boolean,
 ): string {
 	if (hasNamedCoParent && coParentDisplayName) {
-		return `ילדים מ־${coParentDisplayName}`;
+		return `ילדים מ-${coParentDisplayName}`;
 	}
 	return "ילדים (בת זוג לא מזוהה בנתונים)";
 }

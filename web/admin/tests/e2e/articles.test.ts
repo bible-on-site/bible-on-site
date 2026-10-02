@@ -52,8 +52,8 @@ test.describe("Articles Management", () => {
 
 		// Expand בראשית (first sefer, no additionals)
 		await page.getByRole("button", { name: /בראשית/ }).click();
-		await expect(page.getByRole("link", { name: "א'" }).first()).toBeVisible();
-		await expect(page.getByRole("link", { name: "נ'" })).toBeVisible();
+		await expect(page.getByRole("link", { name: "א", exact: true }).first()).toBeVisible();
+		await expect(page.getByRole("link", { name: "נ", exact: true })).toBeVisible();
 	});
 
 	test("sefarim with additionals show additional letter prefix", async ({
@@ -65,11 +65,11 @@ test.describe("Articles Management", () => {
 		await page.getByRole("button", { name: /שמואל/ }).click();
 		// First perek of שמואל א
 		await expect(
-			page.getByRole("link", { name: "א א'" }).first(),
+			page.getByRole("link", { name: "א א", exact: true }).first(),
 		).toBeVisible();
 		// First perek of שמואל ב
 		await expect(
-			page.getByRole("link", { name: "ב א'" }).first(),
+			page.getByRole("link", { name: "ב א", exact: true }).first(),
 		).toBeVisible();
 	});
 });

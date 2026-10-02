@@ -1,10 +1,12 @@
 import { toLetters } from "gematry";
+import { Suspense } from "react";
 import type { PerekObj } from "@/data/perek-dto";
 import { buildEntityRefLookup } from "@/lib/tanahpedia/entity-ref-lookup";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import styles from "../page.module.css";
 import { Ptuah } from "./Ptuha";
 import { renderPasukWithEntityRefs } from "./pasuk-renderer";
+import { ScrollToPasuk } from "./ScrollToPasuk";
 import { Stuma } from "./Stuma";
 import { TanahpediaLink } from "./TanahpediaLink";
 
@@ -18,6 +20,9 @@ export function PerekText({
 	const entityRefLookup = buildEntityRefLookup(entityRefs);
 	return (
 		<article className={styles.perekText}>
+			<Suspense>
+				<ScrollToPasuk perekId={perekObj.perekId} />
+			</Suspense>
 			{perekObj.pesukim.map((pasuk, pasukIdx) => {
 				const pasukNumber = pasukIdx + 1;
 				return (

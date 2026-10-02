@@ -65,7 +65,7 @@ export function EntryOccurrencesTable({
 			aria-labelledby="entry-occurrences-heading"
 		>
 			<h2 id="entry-occurrences-heading" className={styles.heading}>
-				מופעים בתנ״ך
+				מופעים בתנ"ך
 			</h2>
 			<table className={styles.table}>
 				<thead>
@@ -82,7 +82,7 @@ export function EntryOccurrencesTable({
 									href={`/929/${perek.perekId}#pasuk-${pasukNumber}`}
 									prefetch={false}
 								>
-									{perek.source}, {toLetters(pasukNumber)}
+									{perek.source} {toLetters(pasukNumber)}
 								</Link>
 							</td>
 							<td className={styles.citation}>

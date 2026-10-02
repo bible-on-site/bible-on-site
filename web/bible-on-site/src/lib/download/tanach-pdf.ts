@@ -309,8 +309,8 @@ export async function buildTanachPdfForPerekRange(
 
 		// ── Combined title + header (like TOC: "במדבר א — header") ──
 		const titleText = perek.header
-			? `${perek.sefer} ${perek.perekHeb} — ${perek.header}`
-			: `${perek.sefer} ${perek.perekHeb}`;
+			? `${perek.source} - ${perek.header}`
+			: perek.source;
 		drawRtlWrapped(ctx, titleText, boldFont, TITLE_SIZE, TITLE_LINE_HEIGHT);
 
 		ctx.y -= BODY_LINE_HEIGHT * 0.5; // spacing
@@ -342,7 +342,7 @@ export async function buildTanachPdfForPerekRange(
 
 				for (const p of perushim) {
 					ensureSpace(ctx, SMALL_LINE_HEIGHT);
-					const label = `• ${p.name} (${p.parshanName}) — ${p.noteCount} הערות`;
+					const label = `• ${p.name} (${p.parshanName}) - ${p.noteCount} הערות`;
 					drawRtlLine(
 						ctx,
 						label,

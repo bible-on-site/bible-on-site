@@ -51,7 +51,7 @@ export function ArticleFullView({
 				<h2 className={articleStyles.articleTitle}>{article.name}</h2>
 				<ShareButton
 					canonicalPath={canonicalPath}
-					title={`${article.name} — ${article.authorName}`}
+					title={`${article.name} - ${article.authorName}`}
 				/>
 			</header>
 

@@ -216,7 +216,7 @@ describe("WysiwygEditor", () => {
 		fireEvent.click(screen.getByRole("button", { name: "H1" }));
 		fireEvent.click(screen.getByRole("button", { name: "• תבליטים" }));
 		fireEvent.click(screen.getByRole("button", { name: "1. מספרים" }));
-		fireEvent.click(screen.getByRole("button", { name: "א׳ עברית" }));
+		fireEvent.click(screen.getByRole("button", { name: "א' עברית" }));
 
 		expect(editorState.chain.toggleBold).toHaveBeenCalledTimes(1);
 		expect(editorState.chain.toggleItalic).toHaveBeenCalledTimes(1);
@@ -425,7 +425,9 @@ describe("WysiwygEditor", () => {
 			renderEditorWithEntrySearch();
 			editorState.setSelectionEmpty(false);
 			fireEvent.click(
-				document.querySelectorAll<HTMLInputElement>('input[name="linkType"]')[1],
+				document.querySelectorAll<HTMLInputElement>(
+					'input[name="linkType"]',
+				)[1],
 			);
 
 			fireEvent.click(await screen.findByText("משה רבנו"));
@@ -441,7 +443,9 @@ describe("WysiwygEditor", () => {
 			renderEditorWithEntrySearch();
 			editorState.setSelectionEmpty(false);
 			fireEvent.click(
-				document.querySelectorAll<HTMLInputElement>('input[name="linkType"]')[1],
+				document.querySelectorAll<HTMLInputElement>(
+					'input[name="linkType"]',
+				)[1],
 			);
 
 			fireEvent.click(await screen.findByText("ארץ ישראל"));
@@ -474,7 +478,9 @@ describe("WysiwygEditor", () => {
 			renderEditorWithEntrySearch();
 			editorState.setSelectionEmpty(true);
 			fireEvent.click(
-				document.querySelectorAll<HTMLInputElement>('input[name="linkType"]')[1],
+				document.querySelectorAll<HTMLInputElement>(
+					'input[name="linkType"]',
+				)[1],
 			);
 
 			fireEvent.click(await screen.findByText("משה רבנו"));
@@ -514,7 +520,9 @@ describe("WysiwygEditor", () => {
 
 			expect(screen.getByRole("textbox")).toHaveValue("#note-7");
 			expect(
-				document.querySelectorAll<HTMLInputElement>('input[name="linkType"]')[2],
+				document.querySelectorAll<HTMLInputElement>(
+					'input[name="linkType"]',
+				)[2],
 			).toBeChecked();
 		});
 	});
@@ -614,7 +622,9 @@ describe("WysiwygEditor", () => {
 		fireEvent.change(textarea, {
 			target: { value: "   " },
 		});
-		fireEvent.click(within(screen.getByRole("dialog")).getAllByRole("button")[2]);
+		fireEvent.click(
+			within(screen.getByRole("dialog")).getAllByRole("button")[2],
+		);
 
 		expect(localStorage.getItem("admin-editor-shortcut-extras")).toBeNull();
 

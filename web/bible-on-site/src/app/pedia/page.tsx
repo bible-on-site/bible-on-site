@@ -71,7 +71,7 @@ export default async function TanahpediaLandingPage() {
 						<>
 							<p className={styles.dbLoadWarningText}>
 								ודאו ש-MySQL פעיל, ש-DB_URL ב-.dev.env מצביע על אותה מסד שמולא
-								ב־
+								ב-
 								<code className={styles.dbLoadWarningCode}>
 									cargo make mysql-populate-dev
 								</code>

@@ -11,6 +11,10 @@ jest.mock("next/link", () => ({
 	},
 }));
 
+jest.mock("../../../src/app/929/[number]/components/ScrollToPasuk", () => ({
+	ScrollToPasuk: () => null,
+}));
+
 const recordingTimeFrame = {
 	from: "00:00:00",
 	to: "00:00:00",

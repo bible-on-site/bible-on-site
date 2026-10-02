@@ -53,14 +53,14 @@ export async function GET(
 		const noteHtml = await perushNoteSnippet(perushName, perekId, pasukNum);
 		if (noteHtml) {
 			return NextResponse.json({
-				reference: `${perushName} ${perek.sefer} ${perek.perekHeb} ${pasukLetters}`,
+				reference: `${perushName} ${perek.source} ${pasukLetters}`,
 				text: pasukPlainText(pasuk),
 				noteHtml,
 			});
 		}
 	}
 	return NextResponse.json({
-		reference: `${perek.sefer} ${perek.perekHeb} ${pasukLetters}`,
+		reference: `${perek.source} ${pasukLetters}`,
 		text: pasukPlainText(pasuk),
 	});
 }

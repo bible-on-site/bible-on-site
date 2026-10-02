@@ -3,7 +3,7 @@ import { getTanahpediaSchemaSummaryForLlm } from "~/lib/tanahpedia/schema-regist
 import { loadTanahpediaEntryById } from "./entry-loader.server";
 import { loadEntryStructuralContext } from "./structural-loader.server";
 
-/** פלט מוצע בלבד — ללא הרצת SQL או כתיבה ל־DB על ידי המודל */
+/** פלט מוצע בלבד - ללא הרצת SQL או כתיבה ל־DB על ידי המודל */
 export interface TanahpediaLlmProposal {
 	entry?: {
 		title?: string;
@@ -72,7 +72,7 @@ export function buildTanahpediaAssistantSystemPrompt(): string {
 						},
 					},
 				],
-				notesForEditor: "string? — short rationale in Hebrew or English",
+				notesForEditor: "string? - short rationale in Hebrew or English",
 			},
 			null,
 			2,
@@ -96,7 +96,7 @@ async function callOpenAiJson(params: {
 	const apiKey = process.env.OPENAI_API_KEY?.trim();
 	if (!apiKey) {
 		throw new Error(
-			"OPENAI_API_KEY אינו מוגדר — הגדר במשתני סביבה (שרת אדמין בלבד)",
+			"OPENAI_API_KEY אינו מוגדר - הגדר במשתני סביבה (שרת אדמין בלבד)",
 		);
 	}
 	const model = process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";

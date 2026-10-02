@@ -102,6 +102,10 @@ jest.mock("../../../src/app/929/[number]/[slug]/ScrollToPerushPasuk", () => ({
 	ScrollToPerushPasukNote: () => null,
 }));
 
+jest.mock("../../../src/app/929/[number]/components/ScrollToPasuk", () => ({
+	ScrollToPasuk: () => null,
+}));
+
 jest.mock("../../../src/app/929/[number]/components/Ptuha", () => ({
 	Ptuah: () => <span data-testid="ptuha" />,
 }));

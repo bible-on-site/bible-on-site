@@ -171,7 +171,7 @@ function PersonCard({
 					onChange={(e) => setSex(e.target.value as PersonSex | "")}
 					className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
 				>
-					<option value="">—</option>
+					<option value="">-</option>
 					<option value="MALE">MALE</option>
 					<option value="FEMALE">FEMALE</option>
 					<option value="UNKNOWN">UNKNOWN</option>
@@ -441,7 +441,7 @@ function GenericEntityCard({
 				שמור שם יישות
 			</button>
 			<p className="text-xs text-amber-800 bg-amber-50 rounded p-2">
-				עריכת שדות מורחבת לסוג זה תתווסף בהמשך — כרגע רק שם בישות הבסיס.
+				עריכת שדות מורחבת לסוג זה תתווסף בהמשך - כרגע רק שם בישות הבסיס.
 			</p>
 		</div>
 	);

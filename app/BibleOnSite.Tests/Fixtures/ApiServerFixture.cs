@@ -18,6 +18,8 @@ public class ApiServerFixture : IAsyncLifetime
     private Process? _apiProcess;
     private readonly HttpClient _httpClient = new();
     private readonly DatabasePopulatorFixture _dbPopulator = new();
+    private string? _previousApiUrl;
+    private bool _apiUrlOverridden;
 
     public const string ApiUrl = "http://127.0.0.1:3003";
     public const int StartupTimeoutSeconds = 120;
@@ -31,7 +33,9 @@ public class ApiServerFixture : IAsyncLifetime
         await _dbPopulator.InitializeAsync();
 
         // Set API_URL for tests to use local server (AppConfig.GetApiUrl() reads this)
+        _previousApiUrl = Environment.GetEnvironmentVariable("API_URL");
         Environment.SetEnvironmentVariable("API_URL", ApiUrl);
+        _apiUrlOverridden = true;
 
         // Check if API is already running - DO NOT reuse it!
         // An existing API server may be running with dev database, not test database.
@@ -78,6 +82,10 @@ public class ApiServerFixture : IAsyncLifetime
         }
 
         _httpClient.Dispose();
+        if (_apiUrlOverridden)
+        {
+            Environment.SetEnvironmentVariable("API_URL", _previousApiUrl);
+        }
     }
 
     private async Task<bool> IsApiRunning()
@@ -208,7 +216,7 @@ public class ApiServerFixture : IAsyncLifetime
 /// Collection definition for tests that need the API server.
 /// The ApiServerFixture internally handles database population before starting the API.
 /// </summary>
-[CollectionDefinition("ApiServer")]
+[CollectionDefinition("ApiServer", DisableParallelization = true)]
 public class ApiServerCollection : ICollectionFixture<ApiServerFixture>
 {
     // This class has no code, and is never created. Its purpose is simply

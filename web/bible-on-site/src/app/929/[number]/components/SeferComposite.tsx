@@ -104,6 +104,8 @@ const ClientWrapper = (props: {
 	useEffect(() => {
 		if (isWideEnough !== true || appliedStoredPreference.current) return;
 		appliedStoredPreference.current = true;
+		// A verse citation takes the reader to its visible anchor in the text view.
+		if (/^#pasuk-[1-9]\d*$/.test(window.location.hash)) return;
 		const stored = getStoredPerekViewMode();
 		if (stored === "book" && searchParams.get("book") == null) {
 			const next = pathnameWithBookQuery(

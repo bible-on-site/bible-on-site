@@ -324,7 +324,9 @@ export default async function ArticlePage({
 		<>
 			<JsonLd data={buildPerushGraph({ perush: perushDetail, perekObj })} />
 			<ScrollToSlug targetId="perush-view" />
-			<ScrollToPerushPasukNote />
+			<Suspense fallback={null}>
+				<ScrollToPerushPasukNote />
+			</Suspense>
 			<Suspense>
 				<SeferComposite
 					perekObj={perekObj}
