@@ -34,4 +34,4 @@ Regression tests first reproduced the wrong בכור שור label, acceptance of
 packs, inability to replace incompatible local notes, stale Bible text, and differing
 web/app mappings. Tests cover compatible independent generations, legacy mismatch,
 pack roots and `assets` subdirectories, incompatible downloads, and the committed
-artifact mapping. The app release is bumped to 5.0.100 to deliver the fix.
+artifact mapping. The app release is bumped to 5.0.102 to deliver the fix.

@@ -1,11 +1,11 @@
 /**
- * מיפוי תיעודי של סכמת תנכפדיה (MySQL) לעורך האדמין ול־LLM.
+ * מיפוי תיעודי של סכמת תנכפדיה (MySQL) לעורך האדמין ול-LLM.
  * מקור אמת: `data/mysql/tanahpedia_structure.sql`, `tanahpedia_seed_data.sql`.
  */
 
 import type { EntityType } from "./labels";
 
-/** סוגי יישות שניתן ליצור כרגע מהאדמין (תואם enum ב־MySQL). */
+/** סוגי יישות שניתן ליצור כרגע מהאדמין (תואם enum ב-MySQL). */
 export const ADMIN_CREATABLE_ENTITY_TYPES: Exclude<
 	EntityType,
 	"TANAH_SEFER"
@@ -99,7 +99,7 @@ export const TANAH_MEDIA_PERSON_TABLES: SchemaTableDoc[] = [
 	},
 	{
 		table: "tanahpedia_person_name",
-		purpose: "שמות (סוג מ־lookup; MAIN = שם ראשי ללא חלופות)",
+		purpose: "שמות (סוג מ-lookup; MAIN = שם ראשי ללא חלופות)",
 		columns: [
 			{ column: "id", sqlType: "char(36) PK", nullable: false },
 			{ column: "person_id", sqlType: "char(36) FK → person", nullable: false },
@@ -139,7 +139,7 @@ export const TANAH_MEDIA_PERSON_TABLES: SchemaTableDoc[] = [
 export const TANAH_MEDIA_PLACE_TABLES: SchemaTableDoc[] = [
 	{
 		table: "tanahpedia_place",
-		purpose: "הרחבת PLACE; שם התצוגה ב־tanahpedia_entity.name",
+		purpose: "הרחבת PLACE; שם התצוגה ב-tanahpedia_entity.name",
 		columns: [
 			{ column: "id", sqlType: "char(36) PK", nullable: false },
 			{
@@ -167,7 +167,7 @@ function formatTableDoc(t: SchemaTableDoc): string {
 	const cols = t.columns
 		.map(
 			(c) =>
-				`    - ${c.column}: ${c.sqlType}${c.nullable ? "" : " NOT NULL"}${c.notes ? ` — ${c.notes}` : ""}`,
+				`    - ${c.column}: ${c.sqlType}${c.nullable ? "" : " NOT NULL"}${c.notes ? ` - ${c.notes}` : ""}`,
 		)
 		.join("\n");
 	const fks = t.fks?.length
@@ -191,7 +191,7 @@ export function getTanahpediaSchemaSummaryForLlm(): string {
 		"",
 		"Rules:",
 		"- Every concrete entity has exactly one tanahpedia_entity row; type-specific row links via entity_id.",
-		"- PLACE has no name column on tanahpedia_place — use tanahpedia_entity.name.",
+		"- PLACE has no name column on tanahpedia_place - use tanahpedia_entity.name.",
 		"- LLM must NOT assume direct DB writes; output JSON proposals only.",
 	].join("\n");
 }

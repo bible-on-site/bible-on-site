@@ -27,7 +27,9 @@ public static class PackagedDatabase
                 var existingHash = await SHA256.HashDataAsync(existing);
                 var packagedHash = await SHA256.HashDataAsync(contents);
                 if (existingHash.AsSpan().SequenceEqual(packagedHash))
+                {
                     return;
+                }
             }
             contents.Position = 0;
             await AtomicFile.CopyAsync(contents, destination);

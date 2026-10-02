@@ -605,12 +605,18 @@ mod tests {
         let archive = fs::File::open(root.join(
             "app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz"
         )).unwrap();
-        let path = std::env::temp_dir().join(format!(
+        let output = Path::new(env!("CARGO_MANIFEST_DIR")).join(".output");
+        fs::create_dir_all(&output).unwrap();
+        let path = output.join(format!(
             "perushim-attribution-{}.sqlite",
             std::process::id()
         ));
         {
-            let mut file = fs::File::create(&path).unwrap();
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+                .unwrap();
             std::io::copy(&mut GzDecoder::new(archive), &mut file).unwrap();
         }
         let notes =

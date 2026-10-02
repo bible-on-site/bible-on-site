@@ -184,7 +184,9 @@ public class PerushimAttributionTests
             "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)");
         await db.ExecuteAsync("INSERT INTO _metadata VALUES ('build_timestamp',?)", timestamp);
         if (mapping != null)
+        {
             await db.ExecuteAsync("INSERT INTO _metadata VALUES ('perush_catalog',?)", JsonSerializer.Serialize(mapping));
+        }
         await db.ExecuteAsync("INSERT INTO note VALUES (13,4,3,0,?)", ModernNote);
         await db.CloseAsync();
     }

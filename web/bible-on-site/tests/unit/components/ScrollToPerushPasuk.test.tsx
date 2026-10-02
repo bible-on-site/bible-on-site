@@ -4,6 +4,10 @@
 import { render } from "@testing-library/react";
 import { ScrollToPerushPasukNote } from "@/app/929/[number]/[slug]/ScrollToPerushPasuk";
 
+jest.mock("next/navigation", () => ({
+	useSearchParams: () => new URLSearchParams(window.location.search),
+}));
+
 describe("ScrollToPerushPasukNote", () => {
 	beforeEach(() => {
 		jest.useFakeTimers();
@@ -59,5 +63,33 @@ describe("ScrollToPerushPasukNote", () => {
 		jest.advanceTimersByTime(120);
 
 		expect(document.getElementById("perush-pasuk-23")).toBeNull();
+	});
+
+	it("moves the highlight when navigation changes the selected pasuk", () => {
+		const notes = [3, 23].map((pasuk) => {
+			const note = document.createElement("div");
+			note.id = `perush-pasuk-${pasuk}`;
+			note.dataset.perushPasuk = String(pasuk);
+			note.scrollIntoView = jest.fn();
+			document.body.appendChild(note);
+			return note;
+		});
+		window.history.replaceState(null, "", "/929/32/perush?pasuk=23");
+		const { rerender, unmount } = render(<ScrollToPerushPasukNote />);
+		window.history.pushState(null, "", "/929/32/perush?pasuk=3");
+		rerender(<ScrollToPerushPasukNote />);
+		jest.advanceTimersByTime(120);
+		expect(notes[1]).not.toHaveClass("noteHighlight");
+		expect(notes[1].scrollIntoView).not.toHaveBeenCalled();
+		expect(notes[0]).toHaveClass("noteHighlight");
+		expect(notes[0].scrollIntoView).toHaveBeenCalled();
+		unmount();
+		expect(notes[0]).not.toHaveClass("noteHighlight");
+	});
+
+	it("rejects a partially numeric pasuk", () => {
+		window.history.replaceState(null, "", "/929/32/perush?pasuk=23abc");
+		render(<ScrollToPerushPasukNote />);
+		expect(jest.getTimerCount()).toBe(0);
 	});
 });

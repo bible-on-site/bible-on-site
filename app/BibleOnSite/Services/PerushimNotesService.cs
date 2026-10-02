@@ -217,7 +217,9 @@ public class PerushimNotesService
         {
             await InitializeCoreAsync();
             if (IsAvailable)
+            {
                 return true;
+            }
         }
 
         // Try PAD/ODR path if already available
@@ -228,7 +230,9 @@ public class PerushimNotesService
             _notesMissing = false;
             _initialized = true;
             if (await ValidateLocalNotesAsync())
+            {
                 return true;
+            }
         }
 
         // Try on-demand fetch (downloads from store)
@@ -241,7 +245,9 @@ public class PerushimNotesService
                 _notesMissing = false;
                 _initialized = true;
                 if (await ValidateLocalNotesAsync())
+                {
                     return true;
+                }
             }
         }
 
@@ -252,7 +258,9 @@ public class PerushimNotesService
             _notesMissing = false;
             _initialized = true;
             if (await ValidateLocalNotesAsync())
+            {
                 return true;
+            }
         }
 
         Console.Error.WriteLine("Perushim notes not available via on-demand delivery. Ensure the perushim_notes asset pack (Android) or ODR tag (iOS) is included in the build.");
@@ -267,16 +275,22 @@ public class PerushimNotesService
     private async Task<bool> ValidateLocalNotesAsync()
     {
         if (_connection == null)
+        {
             return false;
+        }
         if (_catalog == null)
+        {
             return true;
+        }
         try
         {
             var catalogConnection = await _catalog.GetConnectionAsync();
             // Without a catalog the UI cannot display commentaries. Raw note access
             // remains useful for diagnostics, but there are no names to misattribute.
             if (catalogConnection == null)
+            {
                 return true;
+            }
 
             string? snapshot = null;
             try
@@ -302,7 +316,9 @@ public class PerushimNotesService
                 compatible = notesTimestamp > 0 && notesTimestamp == catalogTimestamp;
             }
             if (compatible)
+            {
                 return true;
+            }
         }
         catch (Exception ex)
         {
