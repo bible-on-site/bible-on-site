@@ -23,18 +23,20 @@ test.describe("Sefer commentary navigation", () => {
 				);
 				await page.evaluate(() => document.fonts.ready);
 				const rect = await page
-					.locator(".he-book .page.current-page article")
-					.first()
+					.locator('.he-book .page[data-page-index="6"]')
 					.boundingBox();
-				if (!rect) throw new Error("Verse text is not visible");
-				const x = Math.round(rect.x + rect.width - 40);
-				const y = Math.round(rect.y + 45);
+				if (!rect) throw new Error("Chapter 2 content page is not visible");
+				const x = Math.round(rect.x + rect.width - 24);
+				const y = Math.round(rect.y + rect.height * 0.7);
+				const distance = await page
+					.locator(".he-book")
+					.evaluate((book) => book.clientWidth * 0.75);
 				expect(
 					await page.evaluate(
 						({ x, y }) => {
 							const target = document.elementFromPoint(x, y);
 							return (
-								!!target?.closest("article") &&
+								!!target?.closest('.page[data-page-index="6"]') &&
 								!target.closest("[data-flipbook-no-flip]")
 							);
 						},
@@ -46,12 +48,12 @@ test.describe("Sefer commentary navigation", () => {
 					type: "touchStart",
 					touchPoints: [{ x, y }],
 				});
-				for (let step = 1; step <= 6; step++) {
+				for (let step = 1; step <= 12; step++) {
 					await client.send("Input.dispatchTouchEvent", {
 						type: "touchMove",
-						touchPoints: [{ x: x - Math.round((step * 650) / 6), y }],
+						touchPoints: [{ x: x - Math.round((step * distance) / 12), y }],
 					});
-					if (step === 3) {
+					if (step === 6) {
 						await expect
 							.poll(() =>
 								page
@@ -67,6 +69,9 @@ test.describe("Sefer commentary navigation", () => {
 							.toBe(true);
 					}
 				}
+				// Complete the held turn by distance, independent of CI's input speed.
+				// Flick velocity has separate mouse/touch gesture coverage.
+				await page.waitForTimeout(200);
 				await client.send("Input.dispatchTouchEvent", {
 					type: "touchEnd",
 					touchPoints: [],
