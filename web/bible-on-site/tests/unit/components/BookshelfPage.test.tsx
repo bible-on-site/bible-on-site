@@ -20,6 +20,7 @@ jest.mock("@/app/components/Bookshelf", () => ({
 
 jest.mock("@/app/bookshelf/page.module.css", () => ({
 	page: "page",
+	srOnly: "srOnly",
 }));
 
 const mockPush = jest.fn();
@@ -44,6 +45,13 @@ describe("BookshelfPage", () => {
 	it("renders bookshelf component", () => {
 		render(<BookshelfPage />);
 		expect(screen.getByTestId("mock-bookshelf")).toBeInTheDocument();
+	});
+
+	it("renders an accessible page heading", () => {
+		render(<BookshelfPage />);
+		expect(
+			screen.getByRole("heading", { level: 1, name: 'ספרי התנ"ך' }),
+		).toBeInTheDocument();
 	});
 
 	it("navigates to today's perek when clicking today's sefer (narrow)", () => {
