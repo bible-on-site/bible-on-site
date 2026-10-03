@@ -206,6 +206,18 @@ fn create_notes_db(
     let tx = conn.transaction()?;
 
     insert_metadata(&tx, dump_name, build_timestamp, generated_at)?;
+    // These IDs are assigned during extraction and may move between generations.
+    // Carry their names with the independently delivered notes pack so clients can
+    // verify the entire mapping before joining it to a bundled catalog.
+    let mapping: std::collections::BTreeMap<String, &str> = extracted
+        .perushim
+        .iter()
+        .map(|p| (p.id.to_string(), p.name.as_str()))
+        .collect();
+    tx.execute(
+        "INSERT INTO _metadata (key,value) VALUES ('perush_catalog',?1)",
+        [serde_json::to_string(&mapping)?],
+    )?;
     insert_notes(&tx, &extracted.notes)?;
 
     tx.commit()?;
@@ -520,7 +532,118 @@ mod tests {
             .unwrap();
         assert_eq!(ts, "1700000000");
 
+        let snapshot: String = conn
+            .query_row(
+                "SELECT value FROM _metadata WHERE key = 'perush_catalog'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let mapping: std::collections::BTreeMap<String, String> =
+            serde_json::from_str(&snapshot).unwrap();
+        assert_eq!(
+            mapping,
+            extracted
+                .perushim
+                .iter()
+                .map(|p| (p.id.to_string(), p.name.clone()))
+                .collect()
+        );
+
         fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn committed_web_and_app_catalogs_use_the_same_id_mapping() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../..");
+        let catalog = Connection::open_with_flags(
+            root.join(
+                "app/BibleOnSite/Resources/Raw/sefaria-dump-5784-sivan-4.perushim_catalog.sqlite",
+            ),
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )
+        .unwrap();
+        let web: Vec<serde_json::Value> = serde_json::from_str(
+            &fs::read_to_string(
+                root.join("web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.perushim.json"),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let app: std::collections::BTreeMap<i64, String> = catalog
+            .prepare("SELECT id,name FROM perush")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        let web_mapping: std::collections::BTreeMap<i64, String> = web
+            .iter()
+            .map(|p| {
+                (
+                    p["id"].as_i64().unwrap(),
+                    p["name"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            app, web_mapping,
+            "Web and app must not assign different names to the same perush ID"
+        );
+    }
+
+    #[test]
+    fn committed_notes_record_the_matching_catalog() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../..");
+        let catalog = Connection::open_with_flags(
+            root.join(
+                "app/BibleOnSite/Resources/Raw/sefaria-dump-5784-sivan-4.perushim_catalog.sqlite",
+            ),
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )
+        .unwrap();
+        let archive = fs::File::open(root.join(
+            "app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz"
+        )).unwrap();
+        let output = Path::new(env!("CARGO_MANIFEST_DIR")).join(".output");
+        fs::create_dir_all(&output).unwrap();
+        let path = output.join(format!(
+            "perushim-attribution-{}.sqlite",
+            std::process::id()
+        ));
+        {
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+                .unwrap();
+            std::io::copy(&mut GzDecoder::new(archive), &mut file).unwrap();
+        }
+        let notes =
+            Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+        let snapshot: Option<String> = notes
+            .query_row(
+                "SELECT value FROM _metadata WHERE key='perush_catalog'",
+                [],
+                |r| r.get(0),
+            )
+            .ok();
+        let mapping: std::collections::BTreeMap<String, String> = catalog
+            .prepare("SELECT id,name FROM perush")
+            .unwrap()
+            .query_map([], |r| Ok((r.get::<_, i64>(0)?.to_string(), r.get(1)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        drop(notes);
+        fs::remove_file(path).unwrap();
+        assert_eq!(
+            snapshot.and_then(|s| {
+                serde_json::from_str::<std::collections::BTreeMap<String, String>>(&s).ok()
+            }),
+            Some(mapping),
+            "The delivered notes must prove their complete ID mapping"
+        );
     }
 
     #[test]

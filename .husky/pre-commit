@@ -1,5 +1,11 @@
-## compare against their staged version (begin with not --name-only? sound complicated)
-changed_files=$(git diff --cached --name-only --diff-filter=ACM HEAD)
+# During a branch sync, validate our changes relative to the incoming target.
+# Comparing with HEAD would instead validate changes already published on that target.
+comparison_ref=HEAD
+merge_head=$(git rev-parse --verify --quiet MERGE_HEAD || true)
+if [ -n "$merge_head" ]; then
+    comparison_ref="$merge_head"
+fi
+changed_files=$(git diff --cached --name-only --diff-filter=ACM "$comparison_ref")
 
 # Check for Windows "nul" files (common artifact on Windows)
 nul_files=$(echo "$changed_files" | grep -E '(^|/)nul$' || true)

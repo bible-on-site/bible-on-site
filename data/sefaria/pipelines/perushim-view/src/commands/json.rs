@@ -77,6 +77,31 @@ pub fn generate(
     fs::write(&perushim_path, json)?;
     println!("📁 Perushim written to: {}", perushim_path.display());
 
+    // Citation recognition uses a client-safe projection. Generate it from the
+    // same catalog so newly added/removed works cannot leave this list stale.
+    let names_path = perushim_path
+        .parent()
+        .unwrap()
+        .join(if output_to_dependant_modules {
+            "perush-names.ts".to_string()
+        } else {
+            format!("{dump_name}.perush-names.ts")
+        });
+    let mut names: Vec<&str> = extracted.perushim.iter().map(|p| p.name.as_str()).collect();
+    names.sort_by(|a, b| {
+        b.chars()
+            .count()
+            .cmp(&a.chars().count())
+            .then_with(|| a.cmp(b))
+    });
+    fs::write(
+        names_path,
+        format!(
+            "/** Generated client-safe names-only projection of the perushim catalog. */\nexport const perushNames = {} as const;\n",
+            serde_json::to_string_pretty(&names)?
+        ),
+    )?;
+
     Ok(())
 }
 
@@ -135,6 +160,7 @@ mod tests {
         let output_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join(".output");
         let parshanim_path = output_dir.join(format!("{dump_name}.parshanim.json"));
         let perushim_path = output_dir.join(format!("{dump_name}.perushim.json"));
+        let names_path = output_dir.join(format!("{dump_name}.perush-names.ts"));
         let _ = fs::remove_file(&parshanim_path);
         let _ = fs::remove_file(&perushim_path);
 
@@ -154,7 +180,14 @@ mod tests {
         assert!(perushim[0].get("pubDate").is_none());
         assert_eq!(perushim[1]["pubDate"], "1200");
 
+        let names = fs::read_to_string(&names_path).unwrap();
+        assert!(names.contains("export const perushNames ="));
+        for p in sample_extracted().perushim {
+            assert!(names.contains(&serde_json::to_string(&p.name).unwrap()));
+        }
+
         let _ = fs::remove_file(parshanim_path);
         let _ = fs::remove_file(perushim_path);
+        let _ = fs::remove_file(names_path);
     }
 }
