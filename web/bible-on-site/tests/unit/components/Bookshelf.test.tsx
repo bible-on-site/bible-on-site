@@ -222,7 +222,9 @@ describe("Bookshelf", () => {
 					configurable: true,
 				});
 				const container = document.createElement("div");
-				container.innerHTML = html;
+				container.append(
+					...new DOMParser().parseFromString(html, "text/html").body.childNodes,
+				);
 				document.body.appendChild(container);
 				const onRecoverableError = jest.fn();
 				const consoleError = jest
