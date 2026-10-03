@@ -2,7 +2,7 @@
 
 import argparse
 from contextlib import contextmanager
-import ctypes
+import ctypes.wintypes
 import sys
 
 CONTINUOUS = 0x80000000
@@ -10,16 +10,15 @@ SYSTEM_REQUIRED = 0x00000001
 
 
 def windows_api():
-    from ctypes import wintypes
     api = ctypes.WinDLL("kernel32", use_last_error=True)
-    api.SetThreadExecutionState.argtypes = [wintypes.DWORD]
-    api.SetThreadExecutionState.restype = wintypes.DWORD
-    api.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
-    api.OpenProcess.restype = wintypes.HANDLE
-    api.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
-    api.WaitForSingleObject.restype = wintypes.DWORD
-    api.CloseHandle.argtypes = [wintypes.HANDLE]
-    api.CloseHandle.restype = wintypes.BOOL
+    api.SetThreadExecutionState.argtypes = [ctypes.wintypes.DWORD]
+    api.SetThreadExecutionState.restype = ctypes.wintypes.DWORD
+    api.OpenProcess.argtypes = [ctypes.wintypes.DWORD, ctypes.wintypes.BOOL, ctypes.wintypes.DWORD]
+    api.OpenProcess.restype = ctypes.wintypes.HANDLE
+    api.WaitForSingleObject.argtypes = [ctypes.wintypes.HANDLE, ctypes.wintypes.DWORD]
+    api.WaitForSingleObject.restype = ctypes.wintypes.DWORD
+    api.CloseHandle.argtypes = [ctypes.wintypes.HANDLE]
+    api.CloseHandle.restype = ctypes.wintypes.BOOL
     return api
 
 

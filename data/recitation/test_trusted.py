@@ -145,12 +145,13 @@ class AwakeTests(unittest.TestCase):
         for fail in (False, True):
             api = Mock()
             api.SetThreadExecutionState.return_value = 1
-            try:
-                with keep_awake(api):
-                    if fail:
+            if fail:
+                with self.assertRaisesRegex(RuntimeError, "inference failed"):
+                    with keep_awake(api):
                         raise RuntimeError("inference failed")
-            except RuntimeError:
-                pass
+            else:
+                with keep_awake(api):
+                    self.assertEqual(api.SetThreadExecutionState.call_count, 1)
             self.assertEqual([call.args[0] for call in api.SetThreadExecutionState.call_args_list],
                              [CONTINUOUS | SYSTEM_REQUIRED, CONTINUOUS])
 
