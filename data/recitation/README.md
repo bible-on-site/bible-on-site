@@ -39,8 +39,10 @@ separation; newer [FALCON results](https://mlspeech.github.io/FALCON/) also show
 that even dedicated Hebrew aligners do not guarantee perfect boundaries.
 
 Acoustic scores are uncalibrated CTC likelihoods, **not probabilities that a cut
-is correct**. The Esther 10 pilot received chapter-level listening approval after correcting browser seeking. Other chapters still pass the same quality gates.
-Do not lower rejection thresholds just to increase accepted coverage.
+is correct**. The Esther 10 pilot received chapter-level listening approval after
+correcting browser seeking. The owner subsequently approved the same pinned
+process for incremental publication of the collection. This does not imply that
+each automatically accepted chapter has been listened to.
 
 ## Install and run
 
@@ -102,6 +104,38 @@ short listening samples while processing every track with identical settings.
 Overlapping verse windows are re-aligned together as one CTC sequence within
 the existing 45-second acoustic limit. The shared acoustic path determines the
 transition. Unresolved overlaps remain in review and cannot be published.
+
+### Incremental publication after process approval
+
+`trusted.py` is an explicit publication step for the approved version 3 process.
+It verifies the original MP3 hash and duration, current canonical word identities,
+exact model snapshots and thresholds, matching diagnostic and ASR cache artifacts,
+ASR coverage and both boundary anchors in every verse, and complete, ordered,
+nonoverlapping intervals. Durations outside 40-3000 ms, missing scores, unknown
+warnings, or unresolved failures hold the entire chapter. Only low, uncalibrated
+acoustic-score warnings may pass; their scores and diagnostic rows are preserved.
+No timestamp is padded, clamped, inferred, or changed during acceptance.
+
+Accepted chapters have `reviewMethod: "trusted-process"` and versioned acceptance
+diagnostics. They never acquire a false word-level `reviewed` flag. Previously
+published chapters are preserved. Only artifacts validated in the current run
+are overlaid into the durable SQLite DB; leftover staging files cannot publish
+another chapter. Run this while the independent GPU batch continues:
+
+```powershell
+.venv/Scripts/python.exe trusted.py --recordings C:/Users/Dorad/git/tanah-s3/recordings
+.venv/Scripts/python.exe publish.py
+.venv/Scripts/python.exe audit.py
+```
+
+Commit the intermediate DB and canonical JSON together, bump the website version,
+and deliver through CI/CD, which verifies every ready chapter against the running
+deployment. A pending or held chapter retains full-chapter playback only.
+
+On Windows, the batch requests system wakefulness for its lifetime and releases
+that request on completion or error. It does not alter global power settings or
+keep the display on. For a worker started before this support was added,
+`awake.py --pid PROCESS_ID` holds the same request until that exact process exits.
 
 ## Review
 
