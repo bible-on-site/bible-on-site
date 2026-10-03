@@ -95,7 +95,7 @@ afterEach(() => {
 
 async function openPlayer() {
 	const view = render(
-		<RecitationPlayer perekId={1} pesukim={pesukim}>
+		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
 			<RecitationHeader title="בריאת העולם" />
 			<RecitationPasukControl pasuk={1}>א</RecitationPasukControl>
 			<RecitationLink link={<a href="/pedia/example">בראשית</a>}>
@@ -142,6 +142,25 @@ test("unmount stops audio and pending playback callbacks", async () => {
 	expect(clipDispose).toHaveBeenCalled();
 });
 
+test("inline scripture controls support Enter and Space without scrolling", async () => {
+	await openPlayer();
+	const word = screen.getByRole("button", { name: "השמעת המילה בָּרָא" });
+	expect(word).toHaveAttribute("tabindex", "0");
+	fireEvent.keyDown(word, { key: "Enter" });
+	await screen.findByText("משמיע…");
+	expect(clipPlay).toHaveBeenLastCalledWith(1900, 2300, expect.any(Function));
+	clipPlay.mockClear();
+	const letter = screen.getByRole("button", { name: "השמעת פסוק א" });
+	expect(fireEvent.keyDown(letter, { key: " " })).toBe(false);
+	expect(clipPlay).not.toHaveBeenCalled();
+	fireEvent.keyUp(letter, { key: " " });
+	await screen.findByText("משמיע…");
+	expect(clipPlay).toHaveBeenLastCalledWith(1200, 2300, expect.any(Function));
+	clipPlay.mockClear();
+	fireEvent.keyDown(word, { key: "ArrowRight" });
+	expect(clipPlay).not.toHaveBeenCalled();
+});
+
 test("media errors are shown and playback can be retried", async () => {
 	play.mockRejectedValueOnce(new Error("network"));
 	await openPlayer();
@@ -154,7 +173,7 @@ test("media errors are shown and playback can be retried", async () => {
 test("missing recording shows availability instead of a broken audio control", async () => {
 	(global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 404 });
 	const view = render(
-		<RecitationPlayer perekId={1} pesukim={pesukim}>
+		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
 			<RecitationHeader title="בריאת העולם" />
 			<RecitationPasukControl pasuk={1}>א</RecitationPasukControl>
 			<RecitationLink link={<a href="/pedia/example">בראשית</a>}>
@@ -170,6 +189,50 @@ test("missing recording shows availability instead of a broken audio control", a
 	fireEvent.click(screen.getByRole("button", { name: "מצב הקראה" }));
 	await screen.findByText("עדיין אין הקלטה לפרק זה.");
 	expect(view.container.querySelector("audio")).toBeNull();
+});
+
+test("chapters without recording metadata are disabled before any request", () => {
+	const view = render(
+		<RecitationPlayer perekId={1} pesukim={pesukim} hasRecording={false}>
+			<RecitationHeader title="בריאת העולם" />
+			<RecitationPasukControl pasuk={1}>א</RecitationPasukControl>
+		</RecitationPlayer>,
+	);
+	const toggle = screen.getByRole("button", { name: "מצב הקראה" });
+	expect(toggle).toBeDisabled();
+	expect(toggle).toHaveAttribute("title", "אין הקלטה לפרק זה");
+	fireEvent.click(toggle);
+	expect(toggle).toHaveAttribute("aria-pressed", "false");
+	expect(global.fetch).not.toHaveBeenCalled();
+	expect(prepare).not.toHaveBeenCalled();
+	expect(view.container.querySelector("audio")).toBeNull();
+});
+
+test("changing to a chapter without a recording cancels preparation and closes mode", async () => {
+	const pending = deferred<void>();
+	prepare.mockReturnValueOnce(pending.promise);
+	const view = render(
+		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
+			<RecitationHeader title="בריאת העולם" />
+		</RecitationPlayer>,
+	);
+	fireEvent.click(screen.getByRole("button", { name: "מצב הקראה" }));
+	await waitFor(() => expect(prepare).toHaveBeenCalled());
+	view.rerender(
+		<RecitationPlayer hasRecording={false} perekId={142} pesukim={pesukim}>
+			<RecitationHeader title="פרק ללא הקלטה" />
+		</RecitationPlayer>,
+	);
+	await act(async () => pending.resolve());
+	const toggle = screen.getByRole("button", { name: "מצב הקראה" });
+	expect(toggle).toBeDisabled();
+	expect(toggle).toHaveAttribute("aria-pressed", "false");
+	expect(toggle).toHaveAttribute("aria-busy", "false");
+	expect(screen.queryByRole("progressbar")).toBeNull();
+	expect(screen.queryByRole("status")).toBeNull();
+	expect(view.container.querySelector("audio")).toBeNull();
+	expect(clipDispose).toHaveBeenCalled();
+	expect(global.fetch).toHaveBeenCalledTimes(1);
 });
 
 test("unapproved candidates never expose verse or word playback", async () => {
@@ -355,7 +418,7 @@ test("a chapter play rejection arriving after navigation cannot display an error
 test("failed manifest loads can be retried by reopening listening mode", async () => {
 	(global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 503 });
 	render(
-		<RecitationPlayer perekId={1} pesukim={pesukim}>
+		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
 			<RecitationHeader title="בריאת העולם" />
 		</RecitationPlayer>,
 	);
@@ -381,7 +444,7 @@ test("closing listening mode aborts the manifest request and ignores its late re
 	const pending = deferred<Partial<Response>>();
 	(global.fetch as jest.Mock).mockReturnValueOnce(pending.promise);
 	const view = render(
-		<RecitationPlayer perekId={1} pesukim={pesukim}>
+		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
 			<RecitationHeader title="בריאת העולם" />
 		</RecitationPlayer>,
 	);
@@ -403,7 +466,7 @@ test("changing chapters while manifest JSON loads cannot display the old recordi
 		json: () => pending.promise,
 	});
 	const view = render(
-		<RecitationPlayer perekId={1} pesukim={pesukim}>
+		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
 			<RecitationHeader title="בריאת העולם" />
 		</RecitationPlayer>,
 	);
@@ -411,7 +474,7 @@ test("changing chapters while manifest JSON loads cannot display the old recordi
 	await act(async () => {});
 	(global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 404 });
 	view.rerender(
-		<RecitationPlayer perekId={2} pesukim={pesukim}>
+		<RecitationPlayer hasRecording perekId={2} pesukim={pesukim}>
 			<RecitationHeader title="פרק חדש" />
 		</RecitationPlayer>,
 	);
@@ -425,14 +488,14 @@ test("aborting a manifest request does not replace a newer chapter's status with
 	const pending = deferred<Response>();
 	(global.fetch as jest.Mock).mockReturnValueOnce(pending.promise);
 	const view = render(
-		<RecitationPlayer perekId={1} pesukim={pesukim}>
+		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
 			<RecitationHeader title="פרק" />
 		</RecitationPlayer>,
 	);
 	fireEvent.click(screen.getByRole("button", { name: "מצב הקראה" }));
 	(global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 404 });
 	view.rerender(
-		<RecitationPlayer perekId={2} pesukim={pesukim}>
+		<RecitationPlayer hasRecording perekId={2} pesukim={pesukim}>
 			<RecitationHeader title="פרק" />
 		</RecitationPlayer>,
 	);
@@ -512,7 +575,7 @@ test("download progress surrounds the inactive toggle and activates mode once au
 	const pending = deferred<void>();
 	prepare.mockReturnValueOnce(pending.promise);
 	render(
-		<RecitationPlayer perekId={1} pesukim={pesukim}>
+		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
 			<RecitationHeader title="בריאת העולם" />
 			<RecitationWordControl pasuk={1} segment={1}>
 				בְּרֵאשִׁית
@@ -554,7 +617,7 @@ test.each(["toggle", "navigation", "hidden"])(
 		const pending = deferred<void>();
 		prepare.mockReturnValueOnce(pending.promise);
 		render(
-			<RecitationPlayer perekId={1} pesukim={pesukim}>
+			<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
 				<RecitationHeader title="פרק" />
 			</RecitationPlayer>,
 		);
@@ -579,7 +642,7 @@ test.each(["toggle", "navigation", "hidden"])(
 test("preparation errors stay off and allow a fresh attempt", async () => {
 	prepare.mockRejectedValueOnce(new Error("download failed"));
 	render(
-		<RecitationPlayer perekId={1} pesukim={pesukim}>
+		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
 			<RecitationHeader title="פרק" />
 		</RecitationPlayer>,
 	);
