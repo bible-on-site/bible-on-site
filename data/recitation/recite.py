@@ -417,6 +417,12 @@ def process_track(path, chapters, config, args):
 
 
 def main():
+    from awake import keep_awake
+    with keep_awake():
+        run_batch()
+
+
+def run_batch():
     from publish import publish
     parser, args = parse_arguments()
     chapters = load_chapters(args.text)
