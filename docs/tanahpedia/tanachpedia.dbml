@@ -581,6 +581,7 @@ Table tanahpedia_saying {
   id char(36) [pk]
   entity_id char(36) [ref: - tanahpedia_entity.id, note: '1:1 with entity base']
   content text
+  saying_date int [note: 'YYYYMMDD format, see header']
 }
 
 Table tanahpedia_saying_location {
