@@ -21,6 +21,14 @@ test.describe("Perek breadcrumb selectors", () => {
 		await expect(perek).toHaveAttribute("aria-expanded", "true");
 		await expect(sefer).toHaveAttribute("aria-expanded", "false");
 		await expect(seferOptions).toBeHidden();
+		const grid = await breadcrumb
+			.getByRole("link", { name: "ב", exact: true })
+			.locator("xpath=ancestor::div[1]")
+			.boundingBox();
+		expect(grid?.x).toBeGreaterThanOrEqual(0);
+		expect((grid?.x ?? 0) + (grid?.width ?? 0)).toBeLessThanOrEqual(
+			page.viewportSize()?.width ?? 0,
+		);
 
 		await page.keyboard.press("Escape");
 		await expect(perek).toHaveAttribute("aria-expanded", "false");

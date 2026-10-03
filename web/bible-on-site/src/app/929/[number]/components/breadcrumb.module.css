@@ -222,6 +222,20 @@
   .small {
     margin-right: 2px;
   }
+
+  /* The wide perek grid would overflow the left edge from the end-side button, so anchor it to the breadcrumb row. */
+  .breadcrumb {
+    position: relative;
+  }
+
+  .drop-container:has(> .perek-grid) {
+    position: static;
+  }
+
+  .perek-grid {
+    max-width: calc(100vw - 16px);
+    overflow: auto;
+  }
 }
 
 .perek-grid {
