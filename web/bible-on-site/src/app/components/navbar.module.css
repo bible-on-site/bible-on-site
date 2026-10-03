@@ -9,10 +9,7 @@
   transition: all 0.2s;
   cursor: pointer;
   pointer-events: none;
-}
-
-.hamburgerMenu .menuToggle {
-  display: none;
+  z-index: 0;
 }
 
 .menuBtn {
@@ -25,23 +22,18 @@
   z-index: 10000;
   background-color: transparent;
   border: 0;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: opacity 0.15s linear;
 }
 
-.hamburgerMenu .menuToggle:checked + .menuBtn {
+.open .menuBtn {
   opacity: 0;
-  transition: opacity 0.15s linear;
 }
 
-.hamburgerMenu .menuToggle:not(:checked) + .menuBtn {
-  opacity: 1;
-  transition: opacity 0.15s linear;
-}
-
-.hamburgerMenu .menuToggle:checked ~ .overlay {
+.open .overlay {
   opacity: 0.3;
   z-index: 10000;
   transition: opacity 0.25s ease-in-out;
@@ -75,23 +67,19 @@
   list-style: none;
 }
 
-.hamburgerMenu .menuToggle:checked ~ .menuBox {
+.open .menuBox {
   right: 0;
   z-index: 10001;
   transition: right 0.25s ease-in-out;
-}
-
-.hamburgerMenu .menuToggle:not(:checked) ~ .overlay {
-  opacity: 0;
-  z-index: 0;
 }
 
 .menuBtn:hover {
   opacity: 0.7;
 }
 
-.menuBtn:focus {
-  outline: none;
+.menuBtn:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 0.375rem;
 }
 
 .menuIcon,

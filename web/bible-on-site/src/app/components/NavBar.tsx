@@ -1,21 +1,72 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import packageJson from "../../../package.json";
 import { appPlatforms } from "./appPlatforms";
 import styles from "./navbar.module.css";
 
 export const NavBar = () => {
+	const [open, setOpen] = useState(false);
+	const pathname = usePathname();
+	const [lastPathname, setLastPathname] = useState(pathname);
+	const triggerRef = useRef<HTMLButtonElement>(null);
+
+	if (pathname !== lastPathname) {
+		setLastPathname(pathname);
+		setOpen(false);
+	}
+
+	const closeAndFocusTrigger = () => {
+		setOpen(false);
+		triggerRef.current?.focus();
+	};
+
+	useEffect(() => {
+		if (!open) return;
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") {
+				setOpen(false);
+				triggerRef.current?.focus();
+			}
+		};
+		document.addEventListener("keydown", onKeyDown);
+		return () => document.removeEventListener("keydown", onKeyDown);
+	}, [open]);
+
 	return (
-		<div className={styles.hamburgerMenu}>
-			<input type="checkbox" className={styles.menuToggle} id="menu-toggle" />
-			<label className={styles.menuBtn} htmlFor="menu-toggle">
+		<div className={`${styles.hamburgerMenu} ${open ? styles.open : ""}`}>
+			<button
+				ref={triggerRef}
+				type="button"
+				className={styles.menuBtn}
+				aria-label="תפריט ראשי"
+				aria-expanded={open}
+				aria-controls="main-menu"
+				onClick={() => setOpen(!open)}
+			>
 				<span className={styles.menuIcon} />
-			</label>
+			</button>
 
-			{/* biome-ignore lint/a11y/noLabelWithoutControl: this is a hack nonetheless. Maybe need to better implement and then lint error won't be relevant */}
-			<label className={styles.overlay} htmlFor="menu-toggle" />
+			<div
+				className={styles.overlay}
+				aria-hidden="true"
+				onClick={closeAndFocusTrigger}
+			/>
 
-			<nav className={styles.menuBox}>
+			{/* Same-page links don't change the pathname, so close on any link click too. */}
+			{/* biome-ignore lint/a11y/useKeyWithClickEvents: delegated link clicks; Enter on a link fires click too */}
+			<nav
+				id="main-menu"
+				aria-label="תפריט ראשי"
+				className={styles.menuBox}
+				inert={!open}
+				onClick={(event) => {
+					if ((event.target as Element).closest("a")) setOpen(false);
+				}}
+			>
 				<header className={styles.sidebarTopBar}>
 					<Link href="/">
 						<Image
