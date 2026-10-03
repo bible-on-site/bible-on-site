@@ -128,16 +128,24 @@ export function Carousel({
 
 	function scrollByCard(step: 1 | -1) {
 		const el = ref.current;
-		const card = el?.firstElementChild as HTMLElement | null | undefined;
-		if (!el || !card) return;
-		const style = getComputedStyle(el);
-		const gap = Number.parseFloat(style.columnGap) || 0;
-		const towardEnd = style.direction === "rtl" ? -1 : 1;
+		if (!el) return;
+		const box = el.getBoundingClientRect();
+		const rtl = getComputedStyle(el).direction === "rtl";
+		// Distance from the scroller's inline-start edge to a card's start edge.
+		const offset = (item: Element) => {
+			const r = item.getBoundingClientRect();
+			return rtl ? box.right - r.right : r.left - box.left;
+		};
+		const items = Array.from(el.children);
+		const current = items.findIndex((item) => offset(item) >= -TOLERANCE_PX);
+		const target = items[current + step];
+		if (current === -1 || !target) return;
+		const delta = offset(target);
 		const reduceMotion = window.matchMedia?.(
 			"(prefers-reduced-motion: reduce)",
 		).matches;
 		el.scrollBy({
-			left: step * towardEnd * (card.offsetWidth + gap),
+			left: rtl ? -delta : delta,
 			behavior: reduceMotion ? "auto" : "smooth",
 		});
 	}

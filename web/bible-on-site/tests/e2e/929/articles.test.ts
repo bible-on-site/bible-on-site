@@ -79,6 +79,17 @@ test.describe("Articles Section", () => {
 		await expect(position).toHaveText(/^2 \/ 4$/);
 		await expect(prev).toBeEnabled();
 
+		await next.click();
+		await expect(position).toHaveText(/^3 \/ 4$/);
+		await next.click();
+		await expect(position).toHaveText(/^4 \/ 4$/);
+		await expect(next).toBeDisabled();
+
+		// From the end, prev must land on the partly hidden card 3, not skip it.
+		await prev.click();
+		await expect(position).toHaveText(/^3 \/ 4$/);
+		await prev.click();
+		await expect(position).toHaveText(/^2 \/ 4$/);
 		await prev.click();
 		await expect(position).toHaveText(/^1 \/ 4$/);
 		await expect(prev).toBeDisabled();

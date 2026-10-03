@@ -97,4 +97,17 @@ describe("Carousel", () => {
 			"4-5 / 5",
 		);
 	});
+
+	it("prev from the end aligns the partially hidden card instead of skipping it", () => {
+		const scroller = renderCarousel(5);
+		// End position: card 3 is half hidden, cards 4-5 fully visible.
+		layout(scroller, 5, -(5 * CARD_WIDTH - VIEWPORT_WIDTH));
+		scroller.scrollBy = jest.fn();
+		fireEvent.scroll(scroller);
+
+		fireEvent.click(screen.getByRole("button", { name: "פרשן קודם" }));
+		expect(scroller.scrollBy).toHaveBeenCalledWith(
+			expect.objectContaining({ left: CARD_WIDTH / 2 }),
+		);
+	});
 });
