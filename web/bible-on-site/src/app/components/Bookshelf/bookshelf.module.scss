@@ -286,6 +286,72 @@ button.block {
   outline: none;
 }
 
+// Below tablet width the 3D shelf is replaced by a 2D list of sefarim
+.mobileGrid {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .root .mobileGrid {
+    display: block;
+    direction: rtl;
+    text-align: right;
+    padding: 16px;
+  }
+
+  .root > .shelfWrapper,
+  .multiShelfContainer {
+    display: none;
+  }
+}
+
+.root .gridLabel {
+  font-size: 1rem;
+  font-weight: bold;
+  color: #441e12;
+  margin: 16px 0 8px;
+}
+
+.root section:first-child > .gridLabel {
+  margin-top: 0;
+}
+
+.grid {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.root .gridButton {
+  position: relative;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 32px 8px 12px;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: bold;
+  line-height: 1.2;
+  text-align: right;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 3px solid #1d4ed8;
+    outline-offset: 2px;
+  }
+
+  .bookmarkRibbon {
+    left: 12px;
+    width: 14px;
+    height: 24px;
+  }
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;

@@ -1,7 +1,9 @@
 /**
  * @jest-environment jsdom
  */
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { hydrateRoot } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 
 jest.mock("@/app/components/Bookshelf/bookshelf.module.scss", () => ({
 	root: "root",
@@ -24,6 +26,10 @@ jest.mock("@/app/components/Bookshelf/bookshelf.module.scss", () => ({
 	coverTitle: "coverTitle",
 	coverSubtitle: "coverSubtitle",
 	shelfLabel: "shelfLabel",
+	mobileGrid: "mobileGrid",
+	gridLabel: "gridLabel",
+	grid: "grid",
+	gridButton: "gridButton",
 }));
 
 // Minimal sefarim covering all helek groups (Torah, Neviim Rishonim, Trei Asar, Ketuvim)
@@ -77,14 +83,20 @@ describe("Bookshelf", () => {
 
 		it("renders per-helek shelf labels", () => {
 			render(<Bookshelf />);
-			expect(screen.getByText("תורה")).toBeInTheDocument();
 			expect(
-				screen.getByText("נביאים: ראשונים + גדולים"),
+				screen.getByText("תורה", { selector: ".shelfLabel" }),
 			).toBeInTheDocument();
 			expect(
-				screen.getByText("נביאים (המשך): תרי עשר"),
+				screen.getByText("נביאים: ראשונים + גדולים", {
+					selector: ".shelfLabel",
+				}),
 			).toBeInTheDocument();
-			expect(screen.getByText("כתובים")).toBeInTheDocument();
+			expect(
+				screen.getByText("נביאים (המשך): תרי עשר", { selector: ".shelfLabel" }),
+			).toBeInTheDocument();
+			expect(
+				screen.getByText("כתובים", { selector: ".shelfLabel" }),
+			).toBeInTheDocument();
 		});
 
 		it("sizes each shelf from its grouped book count", () => {
@@ -104,9 +116,9 @@ describe("Bookshelf", () => {
 			const onSeferClick = jest.fn();
 			render(<Bookshelf onSeferClick={onSeferClick} />);
 			// Find the שמות book (not today's sefer)
-			const shmotButtons = screen.getAllByRole("button").filter((btn) =>
-				btn.textContent?.includes("שמות"),
-			);
+			const shmotButtons = screen
+				.getAllByRole("button")
+				.filter((btn) => btn.textContent?.includes("שמות"));
 			fireEvent.click(shmotButtons[0]);
 			expect(onSeferClick).toHaveBeenCalledTimes(1);
 			// Non-today sefer should receive perekFrom (51 for שמות)
@@ -117,9 +129,9 @@ describe("Bookshelf", () => {
 			const onSeferClick = jest.fn();
 			render(<Bookshelf onSeferClick={onSeferClick} />);
 			// Find the בראשית book (today's sefer, perekId=5)
-			const bereshitButtons = screen.getAllByRole("button").filter((btn) =>
-				btn.textContent?.includes("בראשית"),
-			);
+			const bereshitButtons = screen
+				.getAllByRole("button")
+				.filter((btn) => btn.textContent?.includes("בראשית"));
 			fireEvent.click(bereshitButtons[0]);
 			expect(onSeferClick).toHaveBeenCalledTimes(1);
 			// Today's sefer should receive todaysPerekId (5), not perekFrom (1)
@@ -153,9 +165,15 @@ describe("Bookshelf", () => {
 		it("renders combined helek labels (נביאים without sub-group suffix)", () => {
 			render(<Bookshelf />);
 			// Single-shelf mode has simple helek labels
-			expect(screen.getByText("נביאים")).toBeInTheDocument();
-			expect(screen.getByText("תורה")).toBeInTheDocument();
-			expect(screen.getByText("כתובים")).toBeInTheDocument();
+			expect(
+				screen.getByText("נביאים", { selector: ".shelfLabel" }),
+			).toBeInTheDocument();
+			expect(
+				screen.getByText("תורה", { selector: ".shelfLabel" }),
+			).toBeInTheDocument();
+			expect(
+				screen.getByText("כתובים", { selector: ".shelfLabel" }),
+			).toBeInTheDocument();
 		});
 	});
 
@@ -168,7 +186,9 @@ describe("Bookshelf", () => {
 
 		render(<Bookshelf />);
 		// Initially wide → single shelf → "נביאים" label (no sub-group suffix)
-		expect(screen.getByText("נביאים")).toBeInTheDocument();
+		expect(
+			screen.getByText("נביאים", { selector: ".shelfLabel" }),
+		).toBeInTheDocument();
 
 		act(() => {
 			Object.defineProperty(window, "innerWidth", {
@@ -181,7 +201,83 @@ describe("Bookshelf", () => {
 
 		// After resize → narrow → multi-shelf labels appear
 		expect(
-			screen.getByText("נביאים: ראשונים + גדולים"),
+			screen.getByText("נביאים: ראשונים + גדולים", { selector: ".shelfLabel" }),
 		).toBeInTheDocument();
+	});
+
+	describe("hydration", () => {
+		it.each([390, 800])(
+			"hydrates server HTML without mismatch at %ipx",
+			async (width) => {
+				// The server has no window; it used to fall back to a 1200px layout
+				Object.defineProperty(window, "innerWidth", {
+					value: 1200,
+					writable: true,
+					configurable: true,
+				});
+				const html = renderToString(<Bookshelf />);
+				Object.defineProperty(window, "innerWidth", {
+					value: width,
+					writable: true,
+					configurable: true,
+				});
+				const container = document.createElement("div");
+				container.innerHTML = html;
+				document.body.appendChild(container);
+				const onRecoverableError = jest.fn();
+				const consoleError = jest
+					.spyOn(console, "error")
+					.mockImplementation(() => {});
+
+				await act(async () => {
+					hydrateRoot(container, <Bookshelf />, { onRecoverableError });
+				});
+
+				expect(onRecoverableError).not.toHaveBeenCalled();
+				expect(consoleError).not.toHaveBeenCalled();
+				consoleError.mockRestore();
+				container.remove();
+			},
+		);
+
+		it("server-renders only the mobile grid (3D shelf renders after mount)", () => {
+			const html = renderToString(<Bookshelf />);
+			expect(html).toContain("gridButton");
+			expect(html).not.toContain("surface");
+			expect(html).not.toContain("bookmarkRibbon");
+		});
+	});
+
+	describe("mobile grid", () => {
+		const getGrid = (container: HTMLElement) =>
+			container.querySelector(".mobileGrid") as HTMLElement;
+
+		it("groups sefarim under helek headings", () => {
+			const { container } = render(<Bookshelf />);
+			const grid = within(getGrid(container));
+			expect(
+				grid.getAllByRole("heading", { level: 2 }).map((h) => h.textContent),
+			).toEqual([
+				"תורה",
+				"נביאים: ראשונים + גדולים",
+				"נביאים (המשך): תרי עשר",
+				"כתובים",
+			]);
+			expect(grid.getAllByRole("button")).toHaveLength(5);
+		});
+
+		it("navigates to perekFrom, or today's perek for today's sefer", () => {
+			const onSeferClick = jest.fn();
+			const { container } = render(<Bookshelf onSeferClick={onSeferClick} />);
+			const grid = within(getGrid(container));
+
+			fireEvent.click(grid.getByRole("button", { name: "שמות" }));
+			expect(onSeferClick).toHaveBeenLastCalledWith("שמות", 51);
+
+			const today = grid.getByRole("button", { name: "בראשית" });
+			expect(today).toHaveAttribute("aria-current", "date");
+			fireEvent.click(today);
+			expect(onSeferClick).toHaveBeenLastCalledWith("בראשית", 5);
+		});
 	});
 });

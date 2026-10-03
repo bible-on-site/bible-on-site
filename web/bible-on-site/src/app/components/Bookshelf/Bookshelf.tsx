@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { sefarim } from "@/data/db/sefarim";
 import { getTodaysPerekId } from "@/data/perek-dto";
 import { isTreiAsar } from "@/data/sefer-colors";
@@ -51,9 +51,7 @@ function generateSpectrumColor(
 }
 
 function lightenColor(hslColor: string, amount: number): string {
-	const match = hslColor.match(
-		/hsl\(([^,]+),\s*([^,]+)%,\s*([^)]+)%\)/,
-	);
+	const match = hslColor.match(/hsl\(([^,]+),\s*([^,]+)%,\s*([^)]+)%\)/);
 	if (!match) return hslColor;
 	const [, h, s, l] = match;
 	const newL = Math.min(100, Number.parseFloat(l) + amount);
@@ -474,13 +472,14 @@ function SingleShelf({
 					/>
 					{positions.map(({ sefer, x }) => (
 						<BookBlock
-						key={sefer.name}
-						sefer={sefer}
-						x={x}
-						sqSize={sqSize}
+							key={sefer.name}
+							sefer={sefer}
+							x={x}
+							sqSize={sqSize}
 							onClick={() => {
 								const isToday = sefer.name === todaySeferName;
-								const targetPerek = isToday && todaysPerekId ? todaysPerekId : sefer.perekFrom;
+								const targetPerek =
+									isToday && todaysPerekId ? todaysPerekId : sefer.perekFrom;
 								onSeferClick?.(sefer.name, targetPerek);
 							}}
 							isToday={sefer.name === todaySeferName}
@@ -492,20 +491,31 @@ function SingleShelf({
 	);
 }
 
-// Hook to detect window width
-function useWindowWidth(): number {
-	const [width, setWidth] = useState(
-		/* istanbul ignore next -- SSR fallback; tests and browser always have window */
-		typeof window !== "undefined" ? window.innerWidth : 1200,
-	);
+// Window width, undefined until mounted so SSR and the first client render match
+function useWindowWidth(): number | undefined {
+	const [width, setWidth] = useState<number>();
 
 	useEffect(() => {
 		const handleResize = () => setWidth(window.innerWidth);
+		handleResize();
 		window.addEventListener("resize", handleResize);
 		return () => window.removeEventListener("resize", handleResize);
 	}, []);
 
 	return width;
+}
+
+// Today's perek depends on the client's date, so resolve it after mount
+function useToday(): { todaySeferName: string; todaysPerekId?: number } {
+	const [todaysPerekId, setTodaysPerekId] = useState<number>();
+	useEffect(() => setTodaysPerekId(getTodaysPerekId()), []);
+	const sefer =
+		todaysPerekId === undefined
+			? undefined
+			: sefarim.find(
+					(s) => s.perekFrom <= todaysPerekId && s.perekTo >= todaysPerekId,
+				);
+	return { todaySeferName: sefer?.name ?? "", todaysPerekId };
 }
 
 // Calculate responsive sqSize based on available width and required shelf width
@@ -522,18 +532,79 @@ function calculateSqSize(
 	return Math.max(MIN_SQ_SIZE, Math.min(DEFAULT_SQ_SIZE, idealSqSize));
 }
 
+const mobileGroups: Array<{ label: string; sefarim: SeferInfo[] }> = [
+	{ label: "תורה", sefarim: helekGroups.תורה },
+	{ label: "נביאים: ראשונים + גדולים", sefarim: helekGroups.neviimRishonim },
+	{ label: "נביאים (המשך): תרי עשר", sefarim: helekGroups.treiAsar },
+	{ label: "כתובים", sefarim: helekGroups.כתובים },
+];
+
+type MobileGridProps = {
+	onSeferClick?: (seferName: string, perekFrom: number) => void;
+	todaySeferName: string;
+	todaysPerekId?: number;
+};
+
+// Flat, tappable list shown instead of the 3D shelf below tablet width (CSS-driven)
+function MobileGrid({
+	onSeferClick,
+	todaySeferName,
+	todaysPerekId,
+}: MobileGridProps) {
+	return (
+		<div className={styles.mobileGrid}>
+			{mobileGroups.map(({ label, sefarim: groupSefarim }) => (
+				<section key={label} aria-label={label}>
+					<h2 className={styles.gridLabel}>{label}</h2>
+					<ul className={styles.grid}>
+						{groupSefarim.map((sefer) => {
+							const isToday = sefer.name === todaySeferName;
+							return (
+								<li key={sefer.name}>
+									<button
+										type="button"
+										className={styles.gridButton}
+										style={{ backgroundColor: seferColors.get(sefer.name) }}
+										aria-current={isToday ? "date" : undefined}
+										onClick={() =>
+											onSeferClick?.(
+												sefer.name,
+												isToday && todaysPerekId
+													? todaysPerekId
+													: sefer.perekFrom,
+											)
+										}
+									>
+										{sefer.displayName}
+										{isToday && <span className={styles.bookmarkRibbon} />}
+									</button>
+								</li>
+							);
+						})}
+					</ul>
+				</section>
+			))}
+		</div>
+	);
+}
+
 export function Bookshelf({ onSeferClick }: BookshelfProps) {
 	const windowWidth = useWindowWidth();
-	const useMultiShelf = windowWidth < MULTI_SHELF_BREAKPOINT;
+	const { todaySeferName, todaysPerekId } = useToday();
+	const mobileGrid = (
+		<MobileGrid
+			onSeferClick={onSeferClick}
+			todaySeferName={todaySeferName}
+			todaysPerekId={todaysPerekId}
+		/>
+	);
 
-	// Compute today's perek/sefer once per mount for the bookmark ribbon & navigation
-	const { todaySeferName, todaysPerekId } = useMemo(() => {
-		const perekId = getTodaysPerekId();
-		const sefer = sefarim.find(
-			(s) => s.perekFrom <= perekId && s.perekTo >= perekId,
-		);
-		return { todaySeferName: sefer?.name ?? "", todaysPerekId: perekId };
-	}, []);
+	// 3D geometry depends on the real viewport width, so it renders after mount
+	if (windowWidth === undefined) {
+		return <div className={styles.root}>{mobileGrid}</div>;
+	}
+
+	const useMultiShelf = windowWidth < MULTI_SHELF_BREAKPOINT;
 
 	if (useMultiShelf) {
 		// Four separate shelves (RTL order: Torah on top)
@@ -555,48 +626,49 @@ export function Bookshelf({ onSeferClick }: BookshelfProps) {
 
 		return (
 			<div className={styles.root}>
+				{mobileGrid}
 				<div className={styles.multiShelfContainer}>
-				<SingleShelf
-					positions={torahData.positions}
-					shelfWidth={torahData.totalWidth}
-					sqSize={sqSize}
-					shelfStartX={torahData.shelfStartX}
-					onSeferClick={onSeferClick}
-					label="תורה"
-					todaySeferName={todaySeferName}
-					todaysPerekId={todaysPerekId}
-				/>
-				<SingleShelf
-					positions={neviimRishonimData.positions}
-					shelfWidth={neviimRishonimData.totalWidth}
-					sqSize={sqSize}
-					shelfStartX={neviimRishonimData.shelfStartX}
-					onSeferClick={onSeferClick}
-					label="נביאים: ראשונים + גדולים"
-					todaySeferName={todaySeferName}
-					todaysPerekId={todaysPerekId}
-				/>
-				<SingleShelf
-					positions={treiAsarData.positions}
-					shelfWidth={treiAsarData.totalWidth}
-					sqSize={sqSize}
-					shelfStartX={treiAsarData.shelfStartX}
-					onSeferClick={onSeferClick}
-					label="נביאים (המשך): תרי עשר"
-					todaySeferName={todaySeferName}
-					todaysPerekId={todaysPerekId}
-				/>
-				<SingleShelf
-					positions={ketuvimData.positions}
-					shelfWidth={ketuvimData.totalWidth}
-					sqSize={sqSize}
-					shelfStartX={ketuvimData.shelfStartX}
-					onSeferClick={onSeferClick}
-					label="כתובים"
-					todaySeferName={todaySeferName}
-					todaysPerekId={todaysPerekId}
-				/>
-			</div>
+					<SingleShelf
+						positions={torahData.positions}
+						shelfWidth={torahData.totalWidth}
+						sqSize={sqSize}
+						shelfStartX={torahData.shelfStartX}
+						onSeferClick={onSeferClick}
+						label="תורה"
+						todaySeferName={todaySeferName}
+						todaysPerekId={todaysPerekId}
+					/>
+					<SingleShelf
+						positions={neviimRishonimData.positions}
+						shelfWidth={neviimRishonimData.totalWidth}
+						sqSize={sqSize}
+						shelfStartX={neviimRishonimData.shelfStartX}
+						onSeferClick={onSeferClick}
+						label="נביאים: ראשונים + גדולים"
+						todaySeferName={todaySeferName}
+						todaysPerekId={todaysPerekId}
+					/>
+					<SingleShelf
+						positions={treiAsarData.positions}
+						shelfWidth={treiAsarData.totalWidth}
+						sqSize={sqSize}
+						shelfStartX={treiAsarData.shelfStartX}
+						onSeferClick={onSeferClick}
+						label="נביאים (המשך): תרי עשר"
+						todaySeferName={todaySeferName}
+						todaysPerekId={todaysPerekId}
+					/>
+					<SingleShelf
+						positions={ketuvimData.positions}
+						shelfWidth={ketuvimData.totalWidth}
+						sqSize={sqSize}
+						shelfStartX={ketuvimData.shelfStartX}
+						onSeferClick={onSeferClick}
+						label="כתובים"
+						todaySeferName={todaySeferName}
+						todaysPerekId={todaysPerekId}
+					/>
+				</div>
 			</div>
 		);
 	}
@@ -607,16 +679,17 @@ export function Bookshelf({ onSeferClick }: BookshelfProps) {
 
 	return (
 		<div className={styles.root}>
-		<SingleShelf
-			positions={allBooksData.positions}
-			shelfWidth={allBooksData.totalWidth}
-			sqSize={sqSize}
-			shelfStartX={allBooksData.shelfStartX}
-			onSeferClick={onSeferClick}
-			helekLabels={allBooksData.helekLabels}
-			todaySeferName={todaySeferName}
-			todaysPerekId={todaysPerekId}
-		/>
+			{mobileGrid}
+			<SingleShelf
+				positions={allBooksData.positions}
+				shelfWidth={allBooksData.totalWidth}
+				sqSize={sqSize}
+				shelfStartX={allBooksData.shelfStartX}
+				onSeferClick={onSeferClick}
+				helekLabels={allBooksData.helekLabels}
+				todaySeferName={todaySeferName}
+				todaysPerekId={todaysPerekId}
+			/>
 		</div>
 	);
 }

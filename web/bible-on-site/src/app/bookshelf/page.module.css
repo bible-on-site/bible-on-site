@@ -6,3 +6,21 @@
   align-items: stretch;
   justify-content: stretch;
 }
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Keep the mobile sefarim grid clear of the overlaid top nav */
+@media (max-width: 767px) {
+  .page {
+    box-sizing: border-box;
+    padding-top: 72px;
+    background: #d8ebff;
+  }
+}
