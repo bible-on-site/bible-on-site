@@ -635,6 +635,7 @@ CREATE TABLE `tanahpedia_saying` (
     `id` char(36) NOT NULL,
     `entity_id` char(36) NOT NULL,
     `content` text,
+    `saying_date` int DEFAULT NULL COMMENT 'YYYYMMDD Hebrew date; 00 for unknown components',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_saying_entity` (`entity_id`),
     CONSTRAINT `fk_saying_entity` FOREIGN KEY (`entity_id`) REFERENCES `tanahpedia_entity` (`id`) ON DELETE CASCADE
