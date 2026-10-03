@@ -213,41 +213,11 @@
         </DataTemplate>
     </Shell.FlyoutContentTemplate>
 
-    <!-- Hidden routes for navigation -->
+    <!-- The only Shell root besides LoadingPage: flyout pages are pushed above it (AppRoutes.FlyoutPage) so back always returns here -->
     <FlyoutItem FlyoutItemIsVisible="False">
         <ShellContent
             ContentTemplate="{DataTemplate pages:PerekPage}"
             Route="PerekPage"/>
-    </FlyoutItem>
-
-    <FlyoutItem FlyoutItemIsVisible="False">
-        <ShellContent
-            ContentTemplate="{DataTemplate pages:AuthorsPage}"
-            Route="AuthorsPage"/>
-    </FlyoutItem>
-
-    <FlyoutItem FlyoutItemIsVisible="False">
-        <ShellContent
-            ContentTemplate="{DataTemplate pages:ContactPage}"
-            Route="ContactPage"/>
-    </FlyoutItem>
-
-    <FlyoutItem FlyoutItemIsVisible="False">
-        <ShellContent
-            ContentTemplate="{DataTemplate pages:DonationsPage}"
-            Route="DonationsPage"/>
-    </FlyoutItem>
-
-    <FlyoutItem FlyoutItemIsVisible="False">
-        <ShellContent
-            ContentTemplate="{DataTemplate pages:TosPage}"
-            Route="TosPage"/>
-    </FlyoutItem>
-
-    <FlyoutItem FlyoutItemIsVisible="False">
-        <ShellContent
-            ContentTemplate="{DataTemplate pages:PreferencesPage}"
-            Route="PreferencesPage"/>
     </FlyoutItem>
 
 </Shell>
