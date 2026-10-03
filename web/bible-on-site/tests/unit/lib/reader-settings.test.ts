@@ -86,6 +86,24 @@ describe("reader-settings", () => {
 		).toBe(String(PEREK_LINE_HEIGHTS[1]));
 	});
 
+	it("bootstrap literal stays in sync with the exported constants", () => {
+		expect(READER_SETTINGS_BOOTSTRAP).toContain(
+			JSON.stringify(READER_SETTINGS_STORAGE_KEY),
+		);
+		expect(READER_SETTINGS_BOOTSTRAP).toContain(
+			JSON.stringify(PEREK_FONT_SCALES),
+		);
+		expect(READER_SETTINGS_BOOTSTRAP).toContain(
+			JSON.stringify(PEREK_LINE_HEIGHTS),
+		);
+		expect(READER_SETTINGS_BOOTSTRAP).toContain(
+			`s.fontStep==null?${DEFAULT_READER_SETTINGS.fontStep}`,
+		);
+		expect(READER_SETTINGS_BOOTSTRAP).toContain(
+			`s.lineStep==null?${DEFAULT_READER_SETTINGS.lineStep}`,
+		);
+	});
+
 	it("bootstrap script applies stored settings synchronously before paint", () => {
 		localStorage.setItem(
 			READER_SETTINGS_STORAGE_KEY,

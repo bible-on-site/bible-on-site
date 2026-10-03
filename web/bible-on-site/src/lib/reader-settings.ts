@@ -87,5 +87,10 @@ export function applyReaderSettings(
  * Inline bootstrap that re-applies stored settings before first paint so
  * returning readers see no font-size / line-height flash. Rendered as a raw
  * <script> at the top of the perek layout; kept dependency-free on purpose.
+ *
+ * Deliberately a static literal: building this string by interpolating the
+ * constants above trips static-analysis code-construction rules, so the
+ * storage key, arrays and default indices are duplicated here verbatim. The
+ * reader-settings unit test asserts they stay in sync.
  */
-export const READER_SETTINGS_BOOTSTRAP = `(function(){try{var s=JSON.parse(localStorage.getItem(${JSON.stringify(READER_SETTINGS_STORAGE_KEY)})||"null")||{};var f=${JSON.stringify(PEREK_FONT_SCALES)},l=${JSON.stringify(PEREK_LINE_HEIGHTS)};function c(v,m){return isFinite(v)?Math.min(Math.max(Math.round(v),0),m):0}var e=document.documentElement;e.style.setProperty("--perek-font-scale",String(f[s.fontStep==null?${DEFAULT_READER_SETTINGS.fontStep}:c(s.fontStep,f.length-1)]));e.style.setProperty("--perek-line-height",String(l[s.lineStep==null?${DEFAULT_READER_SETTINGS.lineStep}:c(s.lineStep,l.length-1)]))}catch(e){}})();`;
+export const READER_SETTINGS_BOOTSTRAP = `(function(){try{var s=JSON.parse(localStorage.getItem("perekReaderSettings")||"null")||{};var f=[0.85,0.92,1,1.15,1.3],l=[1.5,1.75,2];function c(v,m){return isFinite(v)?Math.min(Math.max(Math.round(v),0),m):0}var e=document.documentElement;e.style.setProperty("--perek-font-scale",String(f[s.fontStep==null?2:c(s.fontStep,f.length-1)]));e.style.setProperty("--perek-line-height",String(l[s.lineStep==null?0:c(s.lineStep,l.length-1)]))}catch(e){}})();`;

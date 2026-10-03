@@ -27,10 +27,10 @@ describe("ReaderSettings", () => {
 			screen.getByRole("group", { name: "הגדרות קריאה" }),
 		).toBeInTheDocument();
 		expect(
-			screen.getByRole("button", { name: "הקטנת גופן" }),
+			screen.getByRole("button", { name: /הקטנת גופן/ }),
 		).toBeInTheDocument();
 		expect(
-			screen.getByRole("button", { name: "הגדלת גופן" }),
+			screen.getByRole("button", { name: /הגדלת גופן/ }),
 		).toBeInTheDocument();
 		expect(
 			screen.getByRole("button", { name: /ריווח שורות/ }),
@@ -39,8 +39,8 @@ describe("ReaderSettings", () => {
 
 	it("increases and decreases the font scale and persists it", () => {
 		render(<ReaderSettings />);
-		const increase = screen.getByRole("button", { name: "הגדלת גופן" });
-		const decrease = screen.getByRole("button", { name: "הקטנת גופן" });
+		const increase = screen.getByRole("button", { name: /הגדלת גופן/ });
+		const decrease = screen.getByRole("button", { name: /הקטנת גופן/ });
 
 		fireEvent.click(increase);
 		expect(fontScaleVar()).toBe(String(PEREK_FONT_SCALES[3]));
@@ -54,8 +54,8 @@ describe("ReaderSettings", () => {
 
 	it("disables A+ at the maximum and A- at the minimum step", () => {
 		render(<ReaderSettings />);
-		const increase = screen.getByRole("button", { name: "הגדלת גופן" });
-		const decrease = screen.getByRole("button", { name: "הקטנת גופן" });
+		const increase = screen.getByRole("button", { name: /הגדלת גופן/ });
+		const decrease = screen.getByRole("button", { name: /הקטנת גופן/ });
 
 		for (let i = 0; i < PEREK_FONT_SCALES.length; i++) {
 			fireEvent.click(increase);
@@ -88,7 +88,7 @@ describe("ReaderSettings", () => {
 		);
 		render(<ReaderSettings />);
 		expect(
-			screen.getByRole("button", { name: "הגדלת גופן" }),
+			screen.getByRole("button", { name: /הגדלת גופן/ }),
 		).toBeDisabled();
 	});
 });

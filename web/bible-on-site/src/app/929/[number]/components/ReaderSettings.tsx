@@ -51,7 +51,7 @@ export default function ReaderSettings() {
 				className={styles.button}
 				onClick={() => update({ fontStep: settings.fontStep - 1 })}
 				disabled={fontAtMin}
-				aria-label="הקטנת גופן"
+				aria-label="א- הקטנת גופן"
 				data-testid="reader-font-decrease"
 			>
 				א-
@@ -61,7 +61,7 @@ export default function ReaderSettings() {
 				className={styles.button}
 				onClick={() => update({ fontStep: settings.fontStep + 1 })}
 				disabled={fontAtMax}
-				aria-label="הגדלת גופן"
+				aria-label="א+ הגדלת גופן"
 				data-testid="reader-font-increase"
 			>
 				א+
