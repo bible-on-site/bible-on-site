@@ -17,7 +17,7 @@
 }
 
 .sectionIcon {
-  font-size: 18px;
+  flex-shrink: 0;
 }
 
 .sectionTitle {
@@ -89,8 +89,8 @@
 }
 
 .perushIcon {
-  font-size: 28px;
   margin-bottom: 2px;
+  opacity: 0.7;
 }
 
 .perushName {

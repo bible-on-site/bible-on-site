@@ -1,9 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import type { PerushDetail, PerushSummary } from "@/lib/perushim";
 import { getPerushNotesForPage } from "../actions";
+import { Carousel } from "./Carousel";
 import { PerushFullView } from "./PerushFullView";
 import styles from "./perushim-section.module.css";
 
@@ -75,11 +77,22 @@ export function PerushimSection({
 			aria-busy={loading}
 		>
 			<header className={styles.sectionHeader}>
-				<span className={styles.sectionIcon}>📖</span>
+				<Image
+					src="/icons/open-book.svg"
+					alt=""
+					aria-hidden="true"
+					width={18}
+					height={18}
+					className={styles.sectionIcon}
+				/>
 				<h2 className={styles.sectionTitle}>פרשנים על הפרק</h2>
 			</header>
 
-			<div className={styles.carousel}>
+			<Carousel
+				className={styles.carousel}
+				prevLabel="פרשן קודם"
+				nextLabel="פרשן הבא"
+			>
 				{safePerushim.length === 0 ? (
 					<p className={styles.emptyMessage}>אין פרשנות לפרק זה</p>
 				) : loading ? (
@@ -93,7 +106,14 @@ export function PerushimSection({
 								className={styles.carouselItem}
 								onClick={() => handlePerushClick(perush)}
 							>
-								<div className={styles.perushIcon}>📜</div>
+								<Image
+									src="/icons/note.svg"
+									alt=""
+									aria-hidden="true"
+									width={28}
+									height={28}
+									className={styles.perushIcon}
+								/>
 								<span className={styles.perushName}>{perush.name}</span>
 								<span className={styles.parshanName}>{perush.parshanName}</span>
 								<span className={styles.noteCount}>
@@ -110,7 +130,14 @@ export function PerushimSection({
 									handlePerushClick(perush);
 								}}
 							>
-								<div className={styles.perushIcon}>📜</div>
+								<Image
+									src="/icons/note.svg"
+									alt=""
+									aria-hidden="true"
+									width={28}
+									height={28}
+									className={styles.perushIcon}
+								/>
 								<span className={styles.perushName}>{perush.name}</span>
 								<span className={styles.parshanName}>{perush.parshanName}</span>
 								<span className={styles.noteCount}>
@@ -120,7 +147,7 @@ export function PerushimSection({
 						),
 					)
 				)}
-			</div>
+			</Carousel>
 		</section>
 	);
 }

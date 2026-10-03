@@ -140,7 +140,14 @@ export default async function AuthorPage({
 			{articles.length > 0 && (
 				<section className={styles.articlesSection}>
 					<header className={styles.sectionHeader}>
-						<span className={styles.sectionIcon}>📚</span>
+						<Image
+							src="/icons/book.svg"
+							alt=""
+							aria-hidden="true"
+							width={24}
+							height={24}
+							className={styles.sectionIcon}
+						/>
 						<h2 className={styles.sectionTitle}>מאמרים ({articles.length})</h2>
 					</header>
 

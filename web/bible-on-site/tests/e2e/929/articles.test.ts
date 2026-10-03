@@ -36,8 +36,8 @@ test.describe("Articles Section", () => {
 
 		await expect(articlesSection).toBeVisible();
 
-		// Check for author image
-		const authorImage = articlesSection.locator("img");
+		// Check for author image (the section icon is decorative, alt="")
+		const authorImage = articlesSection.locator('img:not([alt=""])');
 		await expect(authorImage.first()).toBeVisible();
 	});
 
@@ -55,6 +55,52 @@ test.describe("Articles Section", () => {
 		await expect(articleLink).toBeVisible();
 		const href = await articleLink.getAttribute("href");
 		expect(href).toMatch(/^\/929\/\d+\/\d+$/);
+	});
+
+	test("carousel prev/next buttons scroll one card at a time", async ({
+		page,
+	}) => {
+		// Perek 1 has 4 test articles; they overflow a phone-width carousel.
+		await page.setViewportSize({ width: 390, height: 844 });
+		await page.goto("/929/1");
+
+		const articlesSection = page.locator("section").filter({
+			has: page.locator("text=מאמרים על הפרק"),
+		});
+		const prev = articlesSection.getByRole("button", { name: "מאמר קודם" });
+		const next = articlesSection.getByRole("button", { name: "מאמר הבא" });
+		const position = articlesSection.getByTestId("carousel-position");
+
+		await expect(next).toBeEnabled();
+		await expect(prev).toBeDisabled();
+		await expect(position).toHaveText(/^1 \/ 4$/);
+
+		await next.click();
+		await expect(position).toHaveText(/^2 \/ 4$/);
+		await expect(prev).toBeEnabled();
+
+		await prev.click();
+		await expect(position).toHaveText(/^1 \/ 4$/);
+		await expect(prev).toBeDisabled();
+	});
+
+	test("carousel controls stay hidden when every card fits", async ({
+		page,
+	}) => {
+		// 4 test articles fit side by side at desktop width.
+		await page.setViewportSize({ width: 1366, height: 850 });
+		await page.goto("/929/1");
+
+		const articlesSection = page.locator("section").filter({
+			has: page.locator("text=מאמרים על הפרק"),
+		});
+		await expect(articlesSection.locator("a").first()).toBeVisible();
+		await expect(
+			articlesSection.getByRole("button", { name: "מאמר הבא" }),
+		).toBeHidden();
+		await expect(articlesSection.getByTestId("carousel-position")).toHaveCount(
+			0,
+		);
 	});
 
 	test("does not display articles section when no articles exist", async ({
