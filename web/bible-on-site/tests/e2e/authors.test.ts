@@ -31,7 +31,7 @@ test.describe("/929/authors page", () => {
 		await page.goto("/");
 
 		// Open the hamburger menu
-		await page.click('label[for="menu-toggle"]');
+		await page.getByRole("button", { name: "תפריט ראשי" }).click();
 
 		// Find the authors link in the menu
 		const authorsLink = page.locator('a[href="/929/authors"]');
@@ -43,7 +43,7 @@ test.describe("/929/authors page", () => {
 		await page.goto("/");
 
 		// Open the hamburger menu
-		await page.click('label[for="menu-toggle"]');
+		await page.getByRole("button", { name: "תפריט ראשי" }).click();
 
 		// Click the authors link
 		await page.click('a[href="/929/authors"]');
