@@ -54,6 +54,9 @@ export default async function TanahpediaLandingPage() {
 		todayEvents = [];
 	}
 
+	// A failed load zeroes every count; only a real zero means "coming soon".
+	const isComingSoon = (key: CategoryKey) => !loadError && counts[key] === 0;
+
 	return (
 		<div className={styles.tanahpediaPage}>
 			<JsonLd data={buildLandingGraph()} />
@@ -123,13 +126,17 @@ export default async function TanahpediaLandingPage() {
 						<div key={cat.type} className={styles.categoryGroup}>
 							<Link
 								href={categoryHref(cat.type)}
-								className={styles.categoryCard}
+								className={`${styles.categoryCard} ${isComingSoon(cat.type) ? styles.categoryCardEmpty : ""}`}
 							>
 								<div className={styles.categoryName}>
 									{CATEGORY_LABELS[cat.type]}
 								</div>
 								<div className={styles.categoryCount}>
-									{counts[cat.type]} ערכים
+									{isComingSoon(cat.type) ? (
+										<span className={styles.comingSoonBadge}>בקרוב</span>
+									) : (
+										`${counts[cat.type]} ערכים`
+									)}
 								</div>
 							</Link>
 							{cat.children && cat.children.length > 0 && (
@@ -138,14 +145,18 @@ export default async function TanahpediaLandingPage() {
 										<Link
 											key={sub}
 											href={categoryHref(sub)}
-											className={styles.subcategoryCard}
+											className={`${styles.subcategoryCard} ${isComingSoon(sub) ? styles.subcategoryCardEmpty : ""}`}
 										>
 											<span className={styles.subcategoryName}>
 												{labelForCategoryKey(sub)}
 											</span>
-											<span className={styles.subcategoryCount}>
-												{counts[sub]}
-											</span>
+											{isComingSoon(sub) ? (
+												<span className={styles.comingSoonBadge}>בקרוב</span>
+											) : (
+												<span className={styles.subcategoryCount}>
+													{counts[sub]}
+												</span>
+											)}
 										</Link>
 									))}
 								</div>

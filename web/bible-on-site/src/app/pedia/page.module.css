@@ -123,6 +123,27 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
 }
 
+.categoryCardEmpty {
+  background: #f9fafb;
+  box-shadow: none;
+  border: 1px dashed #d1d5db;
+}
+
+.categoryCardEmpty:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.comingSoonBadge {
+  display: inline-block;
+  padding: 1px 10px;
+  border-radius: 12px;
+  background: #e5e7eb;
+  color: #4b5563;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
 .subcategoryList {
   display: flex;
   flex-direction: column;
@@ -148,6 +169,15 @@
   background: #dce6fa;
 }
 
+.subcategoryCardEmpty {
+  background: #f9fafb;
+  border-right-color: #d1d5db;
+}
+
+.subcategoryCardEmpty:hover {
+  background: #f3f4f6;
+}
+
 .subcategoryName {
   font-size: 0.85rem;
   font-weight: 500;
@@ -170,6 +200,11 @@
   font-size: 0.85rem;
   color: #6b7280;
   margin: 0;
+}
+
+.categoryCardEmpty .categoryName,
+.subcategoryCardEmpty .subcategoryName {
+  color: #6b7280;
 }
 
 .recentList {
@@ -369,6 +404,39 @@
 
 .entityBadge:hover {
   background: #d2e3fc;
+}
+
+.emptyState {
+  max-width: 40rem;
+  margin: 8px auto 0;
+  padding: 24px;
+  border-radius: 12px;
+  background: #f8f9ff;
+  border: 1px solid #c7d2fe;
+  text-align: center;
+}
+
+.emptyStateTitle {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #1c2c5d;
+  margin: 0 0 8px 0;
+}
+
+.emptyStateText {
+  margin: 0 0 16px 0;
+  color: #4b5563;
+  line-height: 1.6;
+}
+
+.emptyStateLinks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
 
 .emptyContent {

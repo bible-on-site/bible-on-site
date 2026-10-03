@@ -29,19 +29,24 @@ jest.mock("../../../src/lib/tanahpedia/service", () => ({
 	getEntitiesWithEntries: jest.fn(),
 	getEntitiesWithEntriesByRole: jest.fn(),
 	getAnimalsByClassification: jest.fn(),
+	getCategoryCounts: jest.fn(),
 	getCategoryHomepage: jest.fn(),
 	getPlaceMapMarkers: jest.fn().mockResolvedValue([]),
 }));
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { CategoryView } from "../../../src/app/pedia/[slug]/category-view";
 import PediaSlugPage, {
 	generateMetadata,
 } from "../../../src/app/pedia/[slug]/page";
-import { resolveCategoryRoute } from "../../../src/lib/tanahpedia/category-slug";
+import {
+	CATEGORY_SLUGS,
+	resolveCategoryRoute,
+} from "../../../src/lib/tanahpedia/category-slug";
 import {
 	getAnimalsByClassification,
+	getCategoryCounts,
 	getCategoryHomepage,
 	getEntitiesWithEntries,
 	getEntitiesWithEntriesByRole,
@@ -236,6 +241,46 @@ describe("pedia/[slug] category route", () => {
 
 			expect(result).toBeDefined();
 			expect(mockGetPlaceMapMarkers).toHaveBeenCalledTimes(1);
+		});
+
+		function emptyStatePanel(): HTMLElement {
+			const heading = screen.getByRole("heading", {
+				name: "עדיין אין ערכים בקטגוריה זו",
+			});
+			expect(heading).toBeVisible();
+			return heading.closest("section") as HTMLElement;
+		}
+
+		it("renders a Hebrew empty state linking to populated categories", async () => {
+			jest.mocked(getCategoryCounts).mockResolvedValue({
+				...Object.fromEntries(
+					Object.keys(CATEGORY_SLUGS).map((key) => [key, 0]),
+				),
+				PERSON: 5,
+				KING: 2,
+			} as Awaited<ReturnType<typeof getCategoryCounts>>);
+
+			render((await renderCategory("גרמי-שמיים")) as ReactElement);
+
+			const panel = emptyStatePanel();
+			expect(screen.queryByText(/^0 /)).toBeNull();
+			expect(
+				within(panel).getByText(/בינתיים אפשר לעיין בקטגוריות אחרות/),
+			).toBeVisible();
+			const links = within(panel)
+				.getAllByRole("listitem")
+				.map((li) => li.textContent);
+			expect(links).toEqual(["אישים", "מלכים"]);
+		});
+
+		it("omits the suggestion list when no category has entries", async () => {
+			jest.mocked(getCategoryCounts).mockRejectedValue(new Error("down"));
+
+			render((await renderCategory("גרמי-שמיים")) as ReactElement);
+
+			const panel = emptyStatePanel();
+			expect(within(panel).queryByText(/בינתיים/)).toBeNull();
+			expect(within(panel).queryAllByRole("listitem")).toHaveLength(0);
 		});
 
 		it("renders a database warning when category loading fails", async () => {

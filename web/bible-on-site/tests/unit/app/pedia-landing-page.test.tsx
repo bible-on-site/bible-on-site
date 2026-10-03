@@ -45,6 +45,27 @@ test("shows category counts without empty event or recent-entry sections", async
 	).toHaveAttribute("href", "/");
 });
 
+test("mutes zero-entry categories with a coming-soon label but keeps them linked", async () => {
+	jest.mocked(getCategoryCounts).mockResolvedValue({
+		...counts,
+		OBJECT: 0,
+		ASTRONOMICAL_OBJECT: 0,
+	});
+	render(await TanahpediaLandingPage());
+	const emptyCard = screen.getByRole("link", { name: /^חפצים/ });
+	expect(emptyCard).toHaveTextContent("בקרוב");
+	expect(emptyCard).not.toHaveTextContent("0 ערכים");
+	expect(emptyCard).toHaveClass("categoryCardEmpty");
+	expect(emptyCard).toHaveAttribute("href", "/pedia/חפצים");
+	const emptySub = screen.getByRole("link", { name: /^גרמי שמיים/ });
+	expect(emptySub).toHaveTextContent("בקרוב");
+	expect(emptySub).toHaveClass("subcategoryCardEmpty");
+	const populatedCard = screen.getByRole("link", { name: /^אישים/ });
+	expect(populatedCard).toHaveTextContent("3 ערכים");
+	expect(populatedCard).not.toHaveClass("categoryCardEmpty");
+	expect(screen.queryByText("0 ערכים")).toBeNull();
+});
+
 test("uses today's Hebrew date and renders linked and unlinked events and recent entries", async () => {
 	const today = HebrewDate.fromGregorian(new Date());
 	jest.mocked(getTodayInTanahEvents).mockResolvedValue([
@@ -117,6 +138,7 @@ test.each([
 		expect(alert).toHaveTextContent("נסו לרענן את העמוד מאוחר יותר");
 		expect(alert).not.toHaveTextContent("private");
 		expect(screen.getAllByText("0 ערכים").length).toBeGreaterThan(0);
+		expect(screen.queryByText("בקרוב")).toBeNull();
 		expect(
 			screen.queryByRole("heading", { name: "עודכנו לאחרונה" }),
 		).toBeNull();
