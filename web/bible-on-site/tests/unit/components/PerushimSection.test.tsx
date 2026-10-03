@@ -66,6 +66,20 @@ describe("PerushimSection", () => {
 		expect(screen.getByText("55 פסוקים")).toBeTruthy();
 	});
 
+	it("renders decorative SVG icons instead of emoji", () => {
+		const perushim: PerushSummary[] = [
+			{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 55 },
+		];
+		const { container } = render(
+			<PerushimSection perekId={1} perushim={perushim} />,
+		);
+		expect(container.textContent).not.toMatch(/\p{Extended_Pictographic}/u);
+		for (const src of ["/icons/open-book.svg", "/icons/note.svg"]) {
+			const icon = container.querySelector(`img[src*="${src}"]`);
+			expect(icon?.getAttribute("aria-hidden")).toBe("true");
+		}
+	});
+
 	it("renders links with correct href for SEO", () => {
 		const perushim: PerushSummary[] = [
 			{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 55 },

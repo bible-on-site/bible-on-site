@@ -1,0 +1,68 @@
+.wrapper {
+  position: relative;
+}
+
+.navButton {
+  appearance: none;
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  color: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.navButton[hidden] {
+  display: none;
+}
+
+.navButton:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.navButton:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.prev {
+  inset-inline-start: -12px;
+}
+
+.next {
+  inset-inline-end: -12px;
+}
+
+/* Chevron path points left; mirror so each arrow points toward its scroll direction. */
+.nextIcon {
+  transform: scaleX(-1);
+}
+
+:global([dir="rtl"]) .prevIcon {
+  transform: scaleX(-1);
+}
+
+:global([dir="rtl"]) .nextIcon {
+  transform: none;
+}
+
+.position {
+  position: absolute;
+  bottom: 100%;
+  inset-inline-end: 0;
+  font-size: 0.75rem;
+  line-height: 1;
+  opacity: 0.75;
+}
