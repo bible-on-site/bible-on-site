@@ -433,7 +433,6 @@ jobs:
     uses: ./.github/workflows/shared-verify-version.yml
     with:
       module_name: website
-      ref: ${{ github.head_ref || github.ref }}
 
   verify_api_version:
     name: Verify API Version
@@ -442,7 +441,6 @@ jobs:
     uses: ./.github/workflows/shared-verify-version.yml
     with:
       module_name: api
-      ref: ${{ github.head_ref || github.ref }}
 
   verify_app_version:
     name: Verify App Version
@@ -451,7 +449,6 @@ jobs:
     uses: ./.github/workflows/shared-verify-version.yml
     with:
       module_name: app
-      ref: ${{ github.head_ref || github.ref }}
 
   verify_bulletin_version:
     name: Verify Bulletin Version
@@ -460,7 +457,6 @@ jobs:
     uses: ./.github/workflows/shared-verify-version.yml
     with:
       module_name: bulletin
-      ref: ${{ github.head_ref || github.ref }}
 
   verify_admin_version:
     name: Verify Admin Version
@@ -469,7 +465,6 @@ jobs:
     uses: ./.github/workflows/shared-verify-version.yml
     with:
       module_name: admin
-      ref: ${{ github.head_ref || github.ref }}
 
   package_website:
     name: Package Website
