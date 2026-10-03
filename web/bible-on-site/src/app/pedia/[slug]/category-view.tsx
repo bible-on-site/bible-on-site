@@ -2,11 +2,19 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { JsonLd } from "@/app/components/JsonLd";
 import { buildCategoryGraph } from "@/lib/seo/tanahpedia-jsonld";
-import type { ResolvedCategoryRoute } from "@/lib/tanahpedia/category-slug";
+import {
+	CATEGORY_HIERARCHY,
+	labelForCategoryKey,
+} from "@/lib/tanahpedia/category-hierarchy";
+import {
+	categoryHref,
+	type ResolvedCategoryRoute,
+} from "@/lib/tanahpedia/category-slug";
 import {
 	CATEGORY_LABELS,
 	ENTITY_TYPE_LABELS,
 	getAnimalsByClassification,
+	getCategoryCounts,
 	getCategoryHomepage,
 	getEntitiesWithEntries,
 	getEntitiesWithEntriesByRole,
@@ -55,6 +63,21 @@ function loadEntities(
 	return getEntitiesWithEntries(entityType);
 }
 
+/** Other categories that have entries, in landing-page order, for the empty state. */
+async function loadPopulatedCategories(
+	current: CategoryKey,
+): Promise<CategoryKey[]> {
+	try {
+		const counts = await getCategoryCounts();
+		return CATEGORY_HIERARCHY.flatMap((cat) => [
+			cat.type,
+			...(cat.children ?? []),
+		]).filter((key) => key !== current && counts[key] > 0);
+	} catch {
+		return [];
+	}
+}
+
 export async function CategoryView({
 	resolved,
 }: {
@@ -89,6 +112,11 @@ export async function CategoryView({
 
 	const label = categoryLabel(resolved);
 	const currentCategory: CategoryKey = sub ?? entityType;
+
+	const isEmpty = !listLoadError && entities.length === 0;
+	const populatedCategories = isEmpty
+		? await loadPopulatedCategories(currentCategory)
+		: [];
 
 	const listItems = entities.flatMap((entity) =>
 		entity.linkedEntries.map((le) => ({
@@ -137,16 +165,41 @@ export async function CategoryView({
 				<TanahpediaPlacesMap markers={placeMapMarkers} />
 			)}
 
-			<section>
-				<h2 className={styles.sectionTitle}>
-					{entities.length} {label}
-				</h2>
-				<ul className={styles.entityList}>
-					{entities.map((entity) => (
-						<EntityListItem key={entity.entityId} entity={entity} />
-					))}
-				</ul>
-			</section>
+			{isEmpty ? (
+				<section className={styles.emptyState}>
+					<h2 className={styles.emptyStateTitle}>
+						עדיין אין ערכים בקטגוריה זו
+					</h2>
+					<p className={styles.emptyStateText}>
+						ערכים בנושא {label} יתווספו לתנכפדיה בקרוב.
+						{populatedCategories.length > 0
+							? " בינתיים אפשר לעיין בקטגוריות אחרות:"
+							: null}
+					</p>
+					{populatedCategories.length > 0 ? (
+						<ul className={styles.emptyStateLinks}>
+							{populatedCategories.map((key) => (
+								<li key={key}>
+									<Link href={categoryHref(key)} className={styles.entityBadge}>
+										{labelForCategoryKey(key)}
+									</Link>
+								</li>
+							))}
+						</ul>
+					) : null}
+				</section>
+			) : (
+				<section>
+					<h2 className={styles.sectionTitle}>
+						{entities.length} {label}
+					</h2>
+					<ul className={styles.entityList}>
+						{entities.map((entity) => (
+							<EntityListItem key={entity.entityId} entity={entity} />
+						))}
+					</ul>
+				</section>
+			)}
 
 			<div className={styles.backLinkWrapper}>
 				<Link href="/pedia" className={styles.backLink}>
