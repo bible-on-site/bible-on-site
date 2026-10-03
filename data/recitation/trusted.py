@@ -28,8 +28,7 @@ def valid_score(value):
             and math.isfinite(value) and 0 <= value <= 1)
 
 
-def accept_trusted(manifest, report, cached, words, recording, duration_ms):
-    """Do not imply listening approval or modify a single acoustic boundary."""
+def verify_source(manifest, words, recording, duration_ms):
     if manifest.get("pipeline") != TRUSTED_PIPELINE:
         raise ValueError("Alignment does not use the approved pinned process")
     if manifest.get("alignmentStatus") not in ("ready", "needs_review"):
@@ -42,6 +41,9 @@ def accept_trusted(manifest, report, cached, words, recording, duration_ms):
         raise ValueError("Playback URL does not refer to the verified recording")
     if manifest.get("durationMs") != duration_ms:
         raise ValueError("Recording duration changed after alignment")
+
+
+def verify_evidence(manifest, report, cached, words, duration_ms):
     for key in ("perekId", "audioSha256", "textSha256", "pipeline", "words"):
         if report.get(key) != manifest.get(key):
             raise ValueError(f"Diagnostic report differs from alignment: {key}")
@@ -56,7 +58,9 @@ def accept_trusted(manifest, report, cached, words, recording, duration_ms):
             raise ValueError(f"Implausible word duration: {(row['pasuk'], row['segment'])}")
         if not all(valid_score(row.get(key)) for key in ("acousticScore", "textScore")):
             raise ValueError("Missing or invalid alignment evidence")
-    recognized = cached["words"]
+
+
+def verify_anchors(rows, words, recognized):
     matches = reconcile([word.speech for word in words], [word["text"] for word in recognized])
     for pasuk in sorted({word.pasuk for word in words}):
         indices = [i for i, word in enumerate(words) if word.pasuk == pasuk]
@@ -67,7 +71,10 @@ def accept_trusted(manifest, report, cached, words, recording, duration_ms):
         for i in indices:
             if rows[i]["textScore"] != round(matches[i][1], 4):
                 raise ValueError("Text evidence differs from the verified ASR result")
-    for warning in report["review"]:
+
+
+def verify_warnings(rows, warnings):
+    for warning in warnings:
         if warning.get("reason") != SOFT_WARNING:
             raise ValueError(f"Unresolved alignment failure: {warning.get('reason')}")
         verse = [row for row in rows if row["pasuk"] == warning.get("pasuk")]
@@ -77,6 +84,14 @@ def accept_trusted(manifest, report, cached, words, recording, duration_ms):
                 or not valid_score(warning.get("anchorCoverage"))
                 or warning["anchorCoverage"] < TRUSTED_PIPELINE["minCoverage"]):
             raise ValueError("Diagnostic warning contains more than a low acoustic score")
+
+
+def approve_alignment(manifest, report, cached, words, recording, duration_ms):
+    """Do not imply listening approval or modify a single acoustic boundary."""
+    verify_source(manifest, words, recording, duration_ms)
+    verify_evidence(manifest, report, cached, words, duration_ms)
+    verify_anchors(manifest["words"], words, cached["words"])
+    verify_warnings(manifest["words"], report["review"])
     accepted = deepcopy(manifest)
     accepted.update(alignmentStatus="ready", reviewMethod="trusted-process",
                     acceptancePolicy={"version": POLICY_VERSION, "diagnostics": deepcopy(report["review"])})
@@ -104,7 +119,7 @@ def stage_completed(manifests, reports, recordings, text, output, database):
                 recording = recordings / f"{pid}_record.mp3"
                 report = json.loads((reports / f"{pid}.review.json").read_text(encoding="utf-8"))
                 cached = json.loads((reports / f"{pid}.asr.json").read_text(encoding="utf-8"))
-                accepted = accept_trusted(manifest, report, cached, words_for(chapters[pid]), recording, duration(recording))
+                accepted = approve_alignment(manifest, report, cached, words_for(chapters[pid]), recording, duration(recording))
             except (ValueError, KeyError, TypeError, OSError) as error:
                 summary["held"].append({"perekId": pid, "reason": str(error)})
                 continue

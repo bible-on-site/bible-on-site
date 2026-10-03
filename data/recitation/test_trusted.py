@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 from alignment import text_hash, words_for
 from awake import CONTINUOUS, SYSTEM_REQUIRED, keep_awake
 from recite import audio_hash, export_database, write_json
-from trusted import AUDIO_BASE, SOFT_WARNING, TRUSTED_PIPELINE, accept_trusted, stage_completed
+from trusted import AUDIO_BASE, SOFT_WARNING, TRUSTED_PIPELINE, approve_alignment, stage_completed
 
 
 class TrustedTests(unittest.TestCase):
@@ -42,7 +42,7 @@ class TrustedTests(unittest.TestCase):
                 {"text": "בראשית", "start": .1, "end": .45}, {"text": "ברא", "start": .5, "end": .9}]}
 
     def accept(self):
-        return accept_trusted(self.manifest, self.report, self.cached, self.words, self.audio, 1000)
+        return approve_alignment(self.manifest, self.report, self.cached, self.words, self.audio, 1000)
 
     def test_low_score_is_preserved_without_implying_listening_or_changing_boundaries(self):
         before = deepcopy(self.manifest)
