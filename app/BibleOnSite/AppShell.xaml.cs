@@ -57,36 +57,36 @@ public partial class AppShell : Shell
 	private async void OnAlHaperekTapped(object? sender, TappedEventArgs e)
 	{
 		FlyoutIsPresented = false;
-		await GoToAsync("//PerekPage");
+		await GoToAsync(AppRoutes.FlyoutPage("PerekPage"));
 	}
 
 	private async void OnAuthorsTapped(object? sender, TappedEventArgs e)
 	{
 		FlyoutIsPresented = false;
-		await GoToAsync("//AuthorsPage");
+		await GoToAsync(AppRoutes.FlyoutPage("AuthorsPage"));
 	}
 
 	private async void OnTermsTapped(object? sender, TappedEventArgs e)
 	{
 		FlyoutIsPresented = false;
-		await GoToAsync("//TosPage");
+		await GoToAsync(AppRoutes.FlyoutPage("TosPage"));
 	}
 
 	private async void OnPreferencesTapped(object? sender, TappedEventArgs e)
 	{
 		FlyoutIsPresented = false;
-		await GoToAsync("PreferencesPage");
+		await GoToAsync(AppRoutes.FlyoutPage("PreferencesPage"));
 	}
 
 	private async void OnContactTapped(object? sender, TappedEventArgs e)
 	{
 		FlyoutIsPresented = false;
-		await GoToAsync("//ContactPage");
+		await GoToAsync(AppRoutes.FlyoutPage("ContactPage"));
 	}
 
 	private async void OnDonationsTapped(object? sender, TappedEventArgs e)
 	{
 		FlyoutIsPresented = false;
-		await GoToAsync("//DonationsPage");
+		await GoToAsync(AppRoutes.FlyoutPage("DonationsPage"));
 	}
 }

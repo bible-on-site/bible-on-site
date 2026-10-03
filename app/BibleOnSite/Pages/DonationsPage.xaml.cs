@@ -9,6 +9,6 @@ public partial class DonationsPage : ContentPage
 
     private async void OnContactTapped(object? sender, TappedEventArgs e)
     {
-        await Shell.Current.GoToAsync("//ContactPage");
+        await Shell.Current.GoToAsync("ContactPage");
     }
 }

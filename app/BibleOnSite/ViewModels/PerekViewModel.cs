@@ -273,9 +273,6 @@ public partial class PerekViewModel : ObservableObject
         OnPropertyChanged(nameof(PerushimEmptyMessage));
         OnPropertyChanged(nameof(ShowDownloadPerushimButton));
 
-        // Remember which perushim the user had checked so we can preserve them
-        var previouslyChecked = new HashSet<int>(CheckedPerushim);
-
         if (!PerushimNotesAvailable || !PerushimCatalogAvailable)
         {
             _perushNotesCache = new List<PerekPerushNote>();
@@ -306,17 +303,12 @@ public partial class PerekViewModel : ObservableObject
         else
         {
             perushIds = await _notesService.GetPerushIdsForPerekAsync(perekId);
-            if (perushIds.Count == 0)
-            {
-                _perushNotesCache = new List<PerekPerushNote>();
-                CheckedPerushim = new List<int>();
-                Perushim = new List<Perush>();
-                FillFilteredPerushContents();
-                return;
-            }
-            perushById = await _catalogService.GetPerushimByIdsAsync(perushIds);
-            notes = await _notesService.LoadNotesForPerekAsync(perekId, perushById);
+            perushById = perushIds.Count == 0 ? new() : await _catalogService.GetPerushimByIdsAsync(perushIds);
+            notes = perushIds.Count == 0 ? new() : await _notesService.LoadNotesForPerekAsync(perekId, perushById);
         }
+
+        if (IsStalePerushimLoad(perekId))
+            return;
 
         if (perushIds.Count == 0)
         {
@@ -341,13 +333,19 @@ public partial class PerekViewModel : ObservableObject
         // Set CheckedPerushim BEFORE Perushim so the CollectionView binding
         // sees the correct checked state when it re-renders items.
         var availableIds = new HashSet<int>(perushIds);
-        CheckedPerushim = previouslyChecked.Where(id => availableIds.Contains(id)).ToList();
+        CheckedPerushim = CheckedPerushim.Where(id => availableIds.Contains(id)).ToList();
         Perushim = orderedPerushim;
 
         FillFilteredPerushContents();
         OnPropertyChanged(nameof(PerushimEmptyMessage));
         OnPropertyChanged(nameof(ShowDownloadPerushimButton));
     }
+
+    /// <summary>
+    /// Swiping fires a LoadPerushimAsync per perek without awaiting it; a slower, older load
+    /// must not overwrite the perushim and inline notes of the perek now on screen.
+    /// </summary>
+    private bool IsStalePerushimLoad(int perekId) => Perek != null && Perek.PerekId != perekId;
 
     /// <summary>
     /// Loads the next perek in sequence.
@@ -556,30 +554,20 @@ public partial class PerekViewModel : ObservableObject
                 if (p != null) result.Add(p);
             }
 
-            // Pre-load pasukim for a small buffer around the current perek
-            var bufferStart = Math.Max(1, perekId - PasukimBufferHalf);
-            var bufferEnd = Math.Min(929, perekId + PasukimBufferHalf);
-            for (var id = bufferStart; id <= bufferEnd; id++)
-            {
-                var p = _perekDataService.GetPerek(id);
-                if (p != null && (p.Pasukim == null || p.Pasukim.Count == 0))
-                {
-                    p.Pasukim = await _perekDataService.LoadPasukimAsync(id);
-                }
-            }
+            // Pre-load pasukim (and perushim notes) for a small buffer around the current perek
+            var loaded = await LoadMissingPasukimAsync(
+                Math.Max(1, perekId - PasukimBufferHalf), Math.Min(929, perekId + PasukimBufferHalf));
 
-            // Also preload perushim notes for the buffer so swipe is instant
-            await PreloadAdjacentPerushimAsync(bufferStart, bufferEnd);
-
-            return result;
+            return (result, loaded);
         });
+        AssignLoadedPasukim(list.loaded);
 
-        Console.WriteLine($"[Carousel] InitializeCarouselAsync built list: {list.Count} items");
+        Console.WriteLine($"[Carousel] InitializeCarouselAsync built list: {list.result.Count} items");
 
         // Assign collection on the main thread.
         // NOTE: CarouselView resets Position to 0 when ItemsSource changes — the
         // code-behind ScrollTo(targetPos, animate:false) corrects this immediately.
-        CarouselPerakim = new System.Collections.ObjectModel.ObservableCollection<Perek>(list);
+        CarouselPerakim = new System.Collections.ObjectModel.ObservableCollection<Perek>(list.result);
         CurrentCarouselPerek = perek;
 
         Console.WriteLine($"[Carousel] InitializeCarouselAsync DONE perekId={perekId}");
@@ -602,29 +590,52 @@ public partial class PerekViewModel : ObservableObject
     /// so the next swipe is instant (no two-step flash).
     /// Runs in the background — never blocks the UI.
     /// </summary>
-    public Task PreloadAdjacentPasukimAsync(int centerPerekId)
+    public async Task PreloadAdjacentPasukimAsync(int centerPerekId)
     {
         var start = Math.Max(1, centerPerekId - PasukimBufferHalf);
         var end = Math.Min(929, centerPerekId + PasukimBufferHalf);
 
-        // Run entirely on a background thread so the main thread stays
-        // responsive while we hit SQLite for each adjacent perek.
-        return Task.Run(async () =>
+        // Hit SQLite on a background thread so the main thread stays responsive.
+        var loaded = await Task.Run(() => LoadMissingPasukimAsync(start, end));
+        AssignLoadedPasukim(loaded);
+
+        Console.WriteLine($"[Carousel] PreloadAdjacent [{start}..{end}] center={centerPerekId}");
+    }
+
+    /// <summary>
+    /// Loads pasukim for perakim in [start..end] that have none yet, plus their perushim notes
+    /// into the preload cache. Does not touch the bound <see cref="Perek.Pasukim"/>.
+    /// </summary>
+    private async Task<List<(Perek Perek, List<Pasuk> Pasukim)>> LoadMissingPasukimAsync(int start, int end)
+    {
+        var loaded = new List<(Perek, List<Pasuk>)>();
+        for (var id = start; id <= end; id++)
         {
-            for (var id = start; id <= end; id++)
+            var p = _perekDataService.GetPerek(id);
+            if (p != null && p.Pasukim.Count == 0)
             {
-                var p = _perekDataService.GetPerek(id);
-                if (p != null && (p.Pasukim == null || p.Pasukim.Count == 0))
-                {
-                    p.Pasukim = await _perekDataService.LoadPasukimAsync(id);
-                }
+                loaded.Add((p, await _perekDataService.LoadPasukimAsync(id)));
             }
+        }
 
-            // Also preload perushim notes into the cache
-            await PreloadAdjacentPerushimAsync(start, end);
+        await PreloadAdjacentPerushimAsync(start, end);
+        return loaded;
+    }
 
-            Console.WriteLine($"[Carousel] PreloadAdjacent [{start}..{end}] center={centerPerekId}");
-        });
+    /// <summary>
+    /// Perek.Pasukim is bound to realized carousel cells; setting it from a background
+    /// thread updates native list views off the UI thread (a UIKit crash on iOS).
+    /// Call from the UI context, i.e. after awaiting the background load.
+    /// </summary>
+    private static void AssignLoadedPasukim(List<(Perek Perek, List<Pasuk> Pasukim)> loaded)
+    {
+        foreach (var (perek, pasukim) in loaded)
+        {
+            if (perek.Pasukim.Count == 0)
+            {
+                perek.Pasukim = pasukim;
+            }
+        }
     }
 
     /// <summary>

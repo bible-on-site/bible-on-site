@@ -136,16 +136,14 @@ public partial class PerekPage : ContentPage
 #if IOS
     /// <summary>
     /// Walks the visual tree and forces re-measurement. For HtmlView controls,
-    /// also nudges the FontSize property to ensure the handler re-renders
+    /// re-maps FontSize so the handler re-renders if the size changed
     /// (DynamicResource in deeply nested templates can fail to propagate on iOS).
     /// </summary>
     private static void RefreshDescendantViews(IView root)
     {
         if (root is Controls.HtmlView htmlView)
         {
-            var current = htmlView.FontSize;
-            htmlView.FontSize = current + 0.001;
-            htmlView.FontSize = current;
+            htmlView.Handler?.UpdateValue(nameof(Controls.HtmlView.FontSize));
         }
         else if (root is Microsoft.Maui.Controls.VisualElement ve)
         {
@@ -154,7 +152,8 @@ public partial class PerekPage : ContentPage
 
         if (root is IVisualTreeElement treeElement)
         {
-            foreach (var child in treeElement.GetVisualChildren())
+            // Snapshot: re-rendering HTML can spin the run loop and let bindings change the children.
+            foreach (var child in treeElement.GetVisualChildren().ToList())
             {
                 if (child is IView view)
                 {
@@ -272,6 +271,9 @@ public partial class PerekPage : ContentPage
         MainActivity.TouchCancelled -= OnTouchCancelled;
         _swipe.Cancel();
         LongPressBehavior.CancelAllPending();
+#endif
+#if IOS
+        _scrollRefreshCts?.Cancel();
 #endif
         base.OnDisappearing();
     }
