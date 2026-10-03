@@ -22,7 +22,7 @@ public sealed class ShellAppNavigator : IAppNavigator
 
 public static class AppRoutes
 {
-    public const string Perek = "PerekPage";
+    public static string Perek => "PerekPage";
 
     /// <summary>
     /// Flyout pages are pushed above the perek page (never swapped in as Shell roots)

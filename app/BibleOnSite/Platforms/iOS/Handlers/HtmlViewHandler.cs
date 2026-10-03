@@ -25,8 +25,8 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         [nameof(HtmlView.H3FontSizeMultiplier)] = MapHeaderStyles
     };
 
-    // The NSHTML import below runs WebKit synchronously and spins the main run loop;
-    // skip it when nothing that affects the output changed (e.g. layout-driven refreshes).
+    // NSHTML import runs WebKit synchronously and spins the main run loop, so it is
+    // skipped when nothing that affects the output changed (e.g. layout-driven refreshes).
     private string? _renderedHtml;
 
     public HtmlViewHandler() : base(PropertyMapper)
@@ -88,7 +88,9 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         var styledHtml = WrapWithStyles(html);
         var renderKey = $"{VirtualView.TextAlignment}|{styledHtml}";
         if (renderKey == _renderedHtml)
+        {
             return;
+        }
         _renderedHtml = renderKey;
 
         try

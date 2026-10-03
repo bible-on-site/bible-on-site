@@ -207,7 +207,10 @@ public class PerekLoadingTests
         SynchronizationContext? assignedOn = null;
         adjacent.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(Perek.Pasukim)) assignedOn = SynchronizationContext.Current;
+            if (e.PropertyName == nameof(Perek.Pasukim))
+            {
+                assignedOn = SynchronizationContext.Current;
+            }
         };
 
         var previous = SynchronizationContext.Current;
