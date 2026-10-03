@@ -22,12 +22,21 @@ test.describe("Sefer commentary navigation", () => {
 					"ב / נ",
 				);
 				await page.evaluate(() => document.fonts.ready);
-				const rect = await page
+				const { x, y } = await page
 					.locator('.he-book .page[data-page-index="6"]')
-					.boundingBox();
-				if (!rect) throw new Error("Chapter 2 content page is not visible");
-				const x = Math.round(rect.x + rect.width - 24);
-				const y = Math.round(rect.y + rect.height * 0.7);
+					.getByRole("region", { name: "עמוד ריק (פירושים ומאמרים)" })
+					.evaluate((contentPage) => {
+						const rect = contentPage.getBoundingClientRect();
+						// Carousels may fill the page in the full dataset. Start in its
+						// padding, where dragging is allowed regardless of their height.
+						const padding = Number.parseFloat(
+							getComputedStyle(contentPage).paddingRight,
+						);
+						return {
+							x: Math.round(rect.right - padding / 2),
+							y: Math.round(rect.top + rect.height * 0.7),
+						};
+					});
 				const distance = await page
 					.locator(".he-book")
 					.evaluate((book) => book.clientWidth * 0.75);
