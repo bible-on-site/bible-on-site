@@ -2409,7 +2409,7 @@ jobs:
           path: ${{ env.ADMIN_MERGED_COVERAGE_DIRECTORY }}
 
       - name: Publish Admin Coverage To Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
@@ -2424,7 +2424,7 @@ jobs:
           path: ${{ env.DATA_MERGED_COVERAGE_DIRECTORY }}
 
       - name: Publish Data Coverage To Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.DATA_COVERAGE_REPORT }}
