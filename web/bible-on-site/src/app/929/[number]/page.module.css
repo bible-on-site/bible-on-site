@@ -58,11 +58,14 @@
   font-weight: 700;
   text-decoration: underline;
 }
-.perekText > [id^="pasuk-"]:target {
+.perekText > [id^="pasuk-"] {
+  scroll-margin-block-start: calc((100vh - 72px) / 2);
+}
+.perekText:not([data-pasuk-navigation-ready]) > [id^="pasuk-"]:target,
+.perekText > [data-pasuk-highlight] {
   background: rgba(254, 243, 199, 0.95);
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
   border-radius: 3px;
-  scroll-margin-block-start: calc((100vh - 72px) / 2);
 }
 .qri label::before {
   color: #637598;

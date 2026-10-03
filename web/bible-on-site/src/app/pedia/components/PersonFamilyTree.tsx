@@ -1611,7 +1611,7 @@ function PersonFamilyTreeContent({
 															className={styles.matrixKidsCell}
 														>
 															<legend className={styles.marriageColumnLegend}>
-																{`ילדים מ־${partnerName}`}
+																{`ילדים מ-${partnerName}`}
 															</legend>
 															<div
 																className={styles.marriageColumnTrunk}

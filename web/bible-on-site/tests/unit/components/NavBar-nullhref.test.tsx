@@ -3,6 +3,10 @@
  */
 import { render, screen } from "@testing-library/react";
 
+jest.mock("next/navigation", () => ({
+	usePathname: () => "/",
+}));
+
 jest.mock("next/image", () => ({
 	__esModule: true,
 	default: (props: Record<string, unknown>) => (
@@ -15,9 +19,10 @@ jest.mock("next/link", () => ({
 	default: ({
 		children,
 		href,
-	}: { children: React.ReactNode; href: string }) => (
-		<a href={href}>{children}</a>
-	),
+	}: {
+		children: React.ReactNode;
+		href: string;
+	}) => <a href={href}>{children}</a>,
 }));
 
 // Mock appPlatforms with a null-href platform (coming soon)

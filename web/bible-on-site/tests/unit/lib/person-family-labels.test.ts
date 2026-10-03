@@ -98,8 +98,8 @@ describe("person-family-labels", () => {
 
 	describe("spouseOpinionOrdinalTitle", () => {
 		it("returns Hebrew ordinals for the first opinions", () => {
-			expect(spouseOpinionOrdinalTitle(0)).toBe("שיטה א׳");
-			expect(spouseOpinionOrdinalTitle(1)).toBe("שיטה ב׳");
+			expect(spouseOpinionOrdinalTitle(0)).toBe("שיטה א'");
+			expect(spouseOpinionOrdinalTitle(1)).toBe("שיטה ב'");
 		});
 
 		it("falls back to a numeric ordinal beyond the Hebrew list", () => {
@@ -224,7 +224,7 @@ describe("person-family-labels", () => {
 
 	describe("childGroupByCoParentLabel", () => {
 		it("labels child groups by co-parent when available", () => {
-			expect(childGroupByCoParentLabel("רחל", true)).toBe("ילדים מ־רחל");
+			expect(childGroupByCoParentLabel("רחל", true)).toBe("ילדים מ-רחל");
 			expect(childGroupByCoParentLabel(null, false)).toBe(
 				"ילדים (בת זוג לא מזוהה בנתונים)",
 			);
