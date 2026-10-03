@@ -101,8 +101,7 @@ export function Carousel({
 	const [state, setState] = useState(INITIAL_STATE);
 
 	const update = useCallback(() => {
-		if (!ref.current) return;
-		const next = measure(ref.current);
+		const next = measure(ref.current as HTMLDivElement);
 		setState((prev) => (sameState(prev, next) ? prev : next));
 	}, []);
 
@@ -110,8 +109,7 @@ export function Carousel({
 	useEffect(update);
 
 	useEffect(() => {
-		const el = ref.current;
-		if (!el) return;
+		const el = ref.current as HTMLDivElement;
 		el.addEventListener("scroll", update, { passive: true });
 		const observer =
 			typeof ResizeObserver === "undefined"
@@ -127,8 +125,7 @@ export function Carousel({
 	}, [update]);
 
 	function scrollByCard(step: 1 | -1) {
-		const el = ref.current;
-		if (!el) return;
+		const el = ref.current as HTMLDivElement;
 		const box = el.getBoundingClientRect();
 		const rtl = getComputedStyle(el).direction === "rtl";
 		// Distance from the scroller's inline-start edge to a card's start edge.
@@ -138,8 +135,9 @@ export function Carousel({
 		};
 		const items = Array.from(el.children);
 		const current = items.findIndex((item) => offset(item) >= -TOLERANCE_PX);
-		const target = items[current + step];
-		if (current === -1 || !target) return;
+		// Buttons are disabled at the ends, so clamping only guards odd layouts.
+		const target =
+			items[Math.min(Math.max(current + step, 0), items.length - 1)];
 		const delta = offset(target);
 		const reduceMotion = window.matchMedia?.(
 			"(prefers-reduced-motion: reduce)",
