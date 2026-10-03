@@ -46,7 +46,15 @@ export default function RootLayout({
 	children: React.ReactNode;
 }>) {
 	return (
-		<html lang="he" dir="rtl" data-scroll-behavior="smooth">
+		<html
+			lang="he"
+			dir="rtl"
+			data-scroll-behavior="smooth"
+			/* The perek layout's inline bootstrap applies stored reader settings
+			   (CSS vars) to <html> before first paint — suppress the resulting
+			   hydration-mismatch warning on this element's attributes. */
+			suppressHydrationWarning
+		>
 			<head>
 				<GoogleAnalytics />
 				<JsonLd data={siteJsonLd} />
