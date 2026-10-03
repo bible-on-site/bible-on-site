@@ -45,10 +45,10 @@ test.describe("Section pages", () => {
 			await page.goto(`/${section}`);
 			await expect(page).not.toHaveTitle('תנ"ך על הפרק');
 			await expect(page).toHaveTitle(/ \| תנ"ך על הפרק$/);
-			await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
-				"href",
-				new RegExp(`/${section}$`),
-			);
+			const canonical = await page
+				.locator('link[rel="canonical"]')
+				.getAttribute("href");
+			expect(new URL(canonical ?? "", page.url()).pathname).toBe(`/${section}`);
 			await expect(page.locator("#contact")).toBeInViewport();
 		});
 	}
