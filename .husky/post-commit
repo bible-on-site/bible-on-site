@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eu
 
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root/web/bible-on-site"

@@ -282,9 +282,13 @@
 
 .perekText {
   direction: rtl;
+  /* Self-hosted Hebrew webfont (Noto Serif Hebrew) with full nikud/taamim
+     coverage; reader settings scale it via CSS vars (#reader-settings). */
+  font-family: var(--font-tanakh), "Times New Roman", serif;
+  font-size: calc(1em * var(--perek-font-scale, 1));
   letter-spacing: 0.04em;
   word-spacing: 0.12em;
-  line-height: 1.5em;
+  line-height: var(--perek-line-height, 1.5);
   padding: 8px 10px 10px;
   text-align: justify;
   -moz-text-align-last: right;
