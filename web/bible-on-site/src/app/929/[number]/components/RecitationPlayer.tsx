@@ -283,7 +283,13 @@ export default function RecitationPlayer({
 	useEffect(() => {
 		stop(true);
 		setData(null);
-		if (!open || !hasRecording) return;
+		if (!hasRecording) {
+			setOpen(false);
+			setMessage("");
+			setDownloadProgress(null);
+			return;
+		}
+		if (!open) return;
 		window.dispatchEvent(new CustomEvent(STOP_EVENT, { detail: id }));
 		const controller = new AbortController();
 		preparing.current = true;

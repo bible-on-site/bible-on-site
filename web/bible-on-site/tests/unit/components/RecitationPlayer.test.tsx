@@ -208,6 +208,33 @@ test("chapters without recording metadata are disabled before any request", () =
 	expect(view.container.querySelector("audio")).toBeNull();
 });
 
+test("changing to a chapter without a recording cancels preparation and closes mode", async () => {
+	const pending = deferred<void>();
+	prepare.mockReturnValueOnce(pending.promise);
+	const view = render(
+		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
+			<RecitationHeader title="בריאת העולם" />
+		</RecitationPlayer>,
+	);
+	fireEvent.click(screen.getByRole("button", { name: "מצב הקראה" }));
+	await waitFor(() => expect(prepare).toHaveBeenCalled());
+	view.rerender(
+		<RecitationPlayer hasRecording={false} perekId={142} pesukim={pesukim}>
+			<RecitationHeader title="פרק ללא הקלטה" />
+		</RecitationPlayer>,
+	);
+	await act(async () => pending.resolve());
+	const toggle = screen.getByRole("button", { name: "מצב הקראה" });
+	expect(toggle).toBeDisabled();
+	expect(toggle).toHaveAttribute("aria-pressed", "false");
+	expect(toggle).toHaveAttribute("aria-busy", "false");
+	expect(screen.queryByRole("progressbar")).toBeNull();
+	expect(screen.queryByRole("status")).toBeNull();
+	expect(view.container.querySelector("audio")).toBeNull();
+	expect(clipDispose).toHaveBeenCalled();
+	expect(global.fetch).toHaveBeenCalledTimes(1);
+});
+
 test("unapproved candidates never expose verse or word playback", async () => {
 	(global.fetch as jest.Mock).mockResolvedValue({
 		ok: true,
