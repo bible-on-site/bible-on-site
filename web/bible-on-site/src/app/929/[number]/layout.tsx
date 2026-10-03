@@ -26,11 +26,9 @@ export default function PerekLayout({
 }) {
 	return (
 		<div className={`perek-layout ${hebrewSerif.variable}`}>
-			{/* Re-apply stored reader settings before first paint (no flash). */}
-			<script
-				// biome-ignore lint/security/noDangerouslySetInnerHtml: static bootstrap string, no user input
-				dangerouslySetInnerHTML={{ __html: READER_SETTINGS_BOOTSTRAP }}
-			/>
+			{/* Re-apply stored reader settings before first paint (no flash):
+			    inline scripts execute during HTML parse, before perek content paints. */}
+			<script>{READER_SETTINGS_BOOTSTRAP}</script>
 			<ReaderSettings />
 			{children}
 		</div>

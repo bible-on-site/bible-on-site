@@ -1,3 +1,4 @@
+/** @jest-environment-options {"runScripts": "dangerously"} */
 import {
 	applyReaderSettings,
 	DEFAULT_READER_SETTINGS,
@@ -8,6 +9,15 @@ import {
 	READER_SETTINGS_STORAGE_KEY,
 	setStoredReaderSettings,
 } from "../../../src/lib/reader-settings";
+
+// Executes the real bootstrap the same way the browser does: as a <script>
+// element. Requires runScripts: "dangerously" (pragma at top of file).
+function runBootstrap() {
+	const script = document.createElement("script");
+	script.textContent = READER_SETTINGS_BOOTSTRAP;
+	document.body.appendChild(script);
+	document.body.removeChild(script);
+}
 
 describe("reader-settings", () => {
 	beforeEach(() => {
@@ -81,8 +91,7 @@ describe("reader-settings", () => {
 			READER_SETTINGS_STORAGE_KEY,
 			JSON.stringify({ fontStep: 0, lineStep: 2 }),
 		);
-		// biome-ignore lint/security/noGlobalEval: executing the real bootstrap is the point of this test
-		eval(READER_SETTINGS_BOOTSTRAP);
+		runBootstrap();
 		expect(
 			document.documentElement.style.getPropertyValue("--perek-font-scale"),
 		).toBe(String(PEREK_FONT_SCALES[0]));
@@ -93,8 +102,7 @@ describe("reader-settings", () => {
 
 	it("bootstrap script tolerates broken storage and still uses defaults", () => {
 		localStorage.setItem(READER_SETTINGS_STORAGE_KEY, "{broken");
-		// biome-ignore lint/security/noGlobalEval: executing the real bootstrap is the point of this test
-		eval(READER_SETTINGS_BOOTSTRAP);
+		runBootstrap();
 		// Defaults applied (or vars simply unset) — must not throw.
 		expect(
 			Number.parseFloat(
