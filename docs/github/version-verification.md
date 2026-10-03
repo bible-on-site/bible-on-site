@@ -4,7 +4,7 @@ This document describes the automated version verification system that prevents 
 
 ## Overview
 
-The version verification system ensures that module versions are properly bumped before any release can occur. For website pull requests and merge-queue checks, the version must exceed both the last released tag and the version on `master`. This reserves a distinct version even while an earlier release is still running.
+The version verification system ensures that module versions are properly bumped before any release can occur. For pull requests and merge-queue checks of every module, the version must exceed both the last released tag and the version it merges onto: `master` for pull requests, and the merge-queue base (which includes PRs queued ahead) for merge-queue checks. This reserves a distinct version even while an earlier release is still running.
 
 ## How It Works
 
@@ -29,7 +29,7 @@ The CI workflow includes version verification jobs that run when a module change
 - `Verify API Version` - Runs when `web/api` changes
 - `Verify App Version` - Runs when `app` changes
 
-These jobs are conditional - they only run if the corresponding module has changes. If a module hasn't changed, version verification is skipped for that module.
+These jobs are conditional: they only run if the corresponding module has changes. Merge-queue checks detect changes against the merge-queue base, so a PR queued behind another one still has its own changes verified.
 
 Website changes must bump `web/bible-on-site/package.json` and `package-lock.json` in the pull request. The release workflow does not bump the website version afterward. A later website pull request with the same version will fail verification against `master` and must choose the next version before merging.
 
@@ -106,6 +106,10 @@ This error means you need to bump the version before committing:
 ### "Website version X is NOT greater than origin/master version X"
 
 Another website change has already reserved that version. Bump the website version above the current `master` version in both package files. Rerunning CI on the same commit will not resolve the collision.
+
+### "Tag X was released from another commit"
+
+The release job found an existing tag for this version that does not contain the pushed commit, so the commit's changes would never deploy. Release them by bumping the module version in a follow-up PR.
 
 ### A deployment tries to publish an existing website version
 

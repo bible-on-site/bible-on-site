@@ -133,7 +133,14 @@ jobs:
           TAG_NAME="${{ inputs.module_name }}-v${{ inputs.module_version }}"
           echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_OUTPUT
           if git ls-remote --tags origin "refs/tags/${TAG_NAME}" | grep -q "${TAG_NAME}"; then
-            echo "::notice::Tag ${TAG_NAME} already exists on remote — skipping tag/release creation"
+            # A rerun or slower overlapping build is already part of the tag.
+            # Any other commit reused the version and would never deploy.
+            STATUS=$(gh api "repos/${{ github.repository }}/compare/${TAG_NAME}...${{ github.sha }}" --jq .status)
+            if [ "$STATUS" != "identical" ] && [ "$STATUS" != "behind" ]; then
+              echo "::error::${TAG_NAME} was released from another commit, so ${{ github.sha }} (${STATUS} of it) would never deploy its ${{ inputs.module_name }} changes. Bump the ${{ inputs.module_name }} version in a follow-up PR."
+              exit 1
+            fi
+            echo "::notice::Tag ${TAG_NAME} already exists on remote and contains this commit — skipping tag/release creation"
             echo "TAG_EXISTS=true" >> $GITHUB_OUTPUT
           else
             echo "TAG_EXISTS=false" >> $GITHUB_OUTPUT

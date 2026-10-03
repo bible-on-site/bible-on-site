@@ -45,6 +45,9 @@ jobs:
               BASE_SHA=${{ github.event.pull_request.base.sha }}
           elif [[ ${{ github.event_name }} == 'push' ]]; then
               BASE_SHA=${{ github.event.before }}
+          elif [[ ${{ github.event_name }} == 'merge_group' ]]; then
+              # Exclude changes of PRs queued ahead; origin/master lacks them.
+              BASE_SHA=${{ github.event.merge_group.base_sha }}
           else
               BASE_SHA=$(git rev-parse origin/master)
           fi
