@@ -14,6 +14,7 @@ import {
 	updateEntityDisplayName,
 	updatePersonMainName,
 	updatePersonSex,
+	updateSayingDate,
 } from "~/server/tanahpedia/structural";
 import { ExistingEntityPicker } from "./ExistingEntityPicker";
 
@@ -391,9 +392,15 @@ function GenericEntityCard({
 	onSaved: () => void;
 }) {
 	const [displayName, setDisplayName] = useState(row.displayName);
+	const [sayingDate, setSayingDate] = useState(
+		row.saying?.sayingDate?.toString() ?? "",
+	);
 	useEffect(() => {
 		setDisplayName(row.displayName);
 	}, [row.displayName]);
+	useEffect(() => {
+		setSayingDate(row.saying?.sayingDate?.toString() ?? "");
+	}, [row.saying?.sayingDate]);
 
 	const mutEntity = useMutation({
 		mutationFn: () =>
@@ -406,7 +413,20 @@ function GenericEntityCard({
 		mutationFn: () => removeEntity({ data: row.linkId }),
 		onSuccess: onSaved,
 	});
-	const busy = mutEntity.isPending || mutRemove.isPending;
+	const mutSayingDate = useMutation({
+		mutationFn: () => {
+			if (!row.saying) throw new Error("אמרה חסרה");
+			return updateSayingDate({
+				data: {
+					sayingId: row.saying.sayingId,
+					sayingDate: sayingDate.trim() === "" ? null : Number(sayingDate),
+				},
+			});
+		},
+		onSuccess: onSaved,
+	});
+	const busy =
+		mutEntity.isPending || mutRemove.isPending || mutSayingDate.isPending;
 	const label = ENTITY_TYPE_LABELS[row.entityType] ?? row.entityType;
 
 	return (
@@ -440,9 +460,41 @@ function GenericEntityCard({
 			>
 				שמור שם יישות
 			</button>
-			<p className="text-xs text-amber-800 bg-amber-50 rounded p-2">
-				עריכת שדות מורחבת לסוג זה תתווסף בהמשך - כרגע רק שם בישות הבסיס.
-			</p>
+			{row.saying ? (
+				<div>
+					<label htmlFor={`sd-${row.entityId}`} className="block text-sm">
+						תאריך האמרה
+					</label>
+					<p className="text-xs text-gray-500">
+						שנה, חודש ויום עבריים בשמונה ספרות, למשל 24480906. כתבו 00 לרכיב
+						שאינו ידוע, או השאירו ריק לתאריך לא ידוע.
+					</p>
+					<input
+						id={`sd-${row.entityId}`}
+						inputMode="numeric"
+						value={sayingDate}
+						onChange={(e) => setSayingDate(e.target.value)}
+						className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+					/>
+					<button
+						type="button"
+						disabled={busy}
+						onClick={() => mutSayingDate.mutate()}
+						className="mt-2 text-sm text-blue-600"
+					>
+						שמור תאריך אמרה
+					</button>
+					{mutSayingDate.error && (
+						<p role="alert" className="text-sm text-red-600">
+							{mutSayingDate.error.message}
+						</p>
+					)}
+				</div>
+			) : (
+				<p className="text-xs text-amber-800 bg-amber-50 rounded p-2">
+					עריכת שדות מורחבת לסוג זה תתווסף בהמשך - כרגע רק שם בישות הבסיס.
+				</p>
+			)}
 		</div>
 	);
 }

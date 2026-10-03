@@ -29,6 +29,10 @@ export interface LinkedEntityStructural {
 		placeId: string;
 		identifications: PlaceIdentificationRow[];
 	};
+	saying?: {
+		sayingId: string;
+		sayingDate: number | null;
+	};
 }
 
 export interface EntryStructuralContext {
@@ -133,6 +137,19 @@ export async function loadEntryStructuralContext(
 						latitude: toNum(i.latitude),
 						longitude: toNum(i.longitude),
 					})),
+				};
+			}
+		}
+
+		if (row.entityType === "SAYING" || row.entityType === "PROPHECY") {
+			const saying = await queryOne<{ id: string; saying_date: number | null }>(
+				"SELECT id, saying_date FROM tanahpedia_saying WHERE entity_id = ? LIMIT 1",
+				[row.entityId],
+			);
+			if (saying) {
+				base.saying = {
+					sayingId: saying.id,
+					sayingDate: saying.saying_date,
 				};
 			}
 		}
