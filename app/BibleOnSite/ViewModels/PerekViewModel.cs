@@ -303,18 +303,8 @@ public partial class PerekViewModel : ObservableObject
         else
         {
             perushIds = await _notesService.GetPerushIdsForPerekAsync(perekId);
-            if (IsStalePerushimLoad(perekId))
-                return;
-            if (perushIds.Count == 0)
-            {
-                _perushNotesCache = new List<PerekPerushNote>();
-                CheckedPerushim = new List<int>();
-                Perushim = new List<Perush>();
-                FillFilteredPerushContents();
-                return;
-            }
-            perushById = await _catalogService.GetPerushimByIdsAsync(perushIds);
-            notes = await _notesService.LoadNotesForPerekAsync(perekId, perushById);
+            perushById = perushIds.Count == 0 ? new() : await _catalogService.GetPerushimByIdsAsync(perushIds);
+            notes = perushIds.Count == 0 ? new() : await _notesService.LoadNotesForPerekAsync(perekId, perushById);
         }
 
         if (IsStalePerushimLoad(perekId))
@@ -622,7 +612,7 @@ public partial class PerekViewModel : ObservableObject
         for (var id = start; id <= end; id++)
         {
             var p = _perekDataService.GetPerek(id);
-            if (p != null && (p.Pasukim == null || p.Pasukim.Count == 0))
+            if (p != null && p.Pasukim.Count == 0)
             {
                 loaded.Add((p, await _perekDataService.LoadPasukimAsync(id)));
             }
@@ -641,8 +631,10 @@ public partial class PerekViewModel : ObservableObject
     {
         foreach (var (perek, pasukim) in loaded)
         {
-            if (perek.Pasukim == null || perek.Pasukim.Count == 0)
+            if (perek.Pasukim.Count == 0)
+            {
                 perek.Pasukim = pasukim;
+            }
         }
     }
 

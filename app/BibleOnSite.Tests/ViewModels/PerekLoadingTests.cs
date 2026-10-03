@@ -188,6 +188,17 @@ public class PerekLoadingTests
         vm.Perek!.Pasukim.Single().PerushNotes.Single().NoteContents.Should().Equal("next");
     }
 
+    [Fact]
+    public async Task LoadPerushim_BeforeAnyPerekIsShown_IsNotTreatedAsStale()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+
+        await fixture.Model.LoadPerushimAsync(1);
+
+        fixture.Model.Perushim.Select(p => p.Name).Should().Equal("Targum", "Rashi");
+    }
+
     private sealed class UiContext : SynchronizationContext
     {
         public override void Post(SendOrPostCallback d, object? state) => ThreadPool.QueueUserWorkItem(_ =>
