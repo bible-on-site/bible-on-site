@@ -19,6 +19,7 @@ public class LocalDatabaseService
 
     private SQLiteAsyncConnection? _database;
     private bool _isInitialized;
+    private readonly SemaphoreSlim _initializeLock = new(1, 1);
 
     private readonly IFileSystem _fileSystem;
 
@@ -39,36 +40,20 @@ public class LocalDatabaseService
     }
 
     /// <summary>
-    /// Initializes the database by copying from app assets if needed.
+    /// Refreshes generated Bible text from the installed app before opening it.
     /// </summary>
     public async Task InitializeAsync()
     {
-        if (_isInitialized)
-            return;
-
-        var dbPath = Path.Combine(_fileSystem.AppDataDirectory, DbName);
-
-        // Copy database from app package to writable location if it doesn't exist
-        if (!File.Exists(dbPath))
-        {
-            await CopyDatabaseFromAssetsAsync(dbPath);
-        }
-
-        _database = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
-        _isInitialized = true;
-    }
-
-    private async Task CopyDatabaseFromAssetsAsync(string targetPath)
-    {
+        await _initializeLock.WaitAsync();
         try
         {
-            await using var sourceStream = await _fileSystem.OpenAppPackageFileAsync(DbName);
-            await AtomicFile.CopyAsync(sourceStream, targetPath);
+            if (_isInitialized)
+                return;
+            await PackagedDatabase.RefreshAsync(_fileSystem, DbName);
+            var dbPath = Path.Combine(_fileSystem.AppDataDirectory, DbName);
+            _database = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
+            _isInitialized = true;
         }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Failed to copy database from assets: {ex.Message}");
-            throw;
-        }
+        finally { _initializeLock.Release(); }
     }
 }

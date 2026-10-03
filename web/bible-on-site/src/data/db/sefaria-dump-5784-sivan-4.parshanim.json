@@ -1,386 +1,386 @@
 [
   {
+    "birthYear": 1089,
+    "hasPic": false,
     "id": 1,
-    "name": "אבן עזרא",
-    "hasPic": false,
-    "birthYear": 1089
+    "name": "אבן עזרא"
   },
   {
+    "birthYear": 1437,
+    "hasPic": false,
     "id": 2,
-    "name": "אברבנאל",
-    "hasPic": false,
-    "birthYear": 1437
+    "name": "אברבנאל"
   },
   {
+    "birthYear": 1545,
+    "hasPic": false,
     "id": 3,
-    "name": "ר' שמואל די אוזידה",
-    "hasPic": false,
-    "birthYear": 1545
+    "name": "ר' שמואל די אוזידה"
   },
   {
+    "birthYear": 1720,
+    "hasPic": false,
     "id": 4,
-    "name": "אליהו בן שלומו זלמן מווילנה",
-    "hasPic": false,
-    "birthYear": 1720
+    "name": "אליהו בן שלומו זלמן מווילנה"
   },
   {
+    "birthYear": 1690,
+    "hasPic": false,
     "id": 5,
-    "name": "יהונתן אייבשיץ",
-    "hasPic": false,
-    "birthYear": 1690
+    "name": "יהונתן אייבשיץ"
   },
   {
+    "birthYear": 1741,
+    "hasPic": false,
     "id": 6,
-    "name": "ר' יעקב קרנץ",
-    "hasPic": false,
-    "birthYear": 1741
+    "name": "ר' יעקב קרנץ"
   },
   {
+    "birthYear": 1696,
+    "hasPic": false,
     "id": 7,
-    "name": "חיים בן עטר",
-    "hasPic": false,
-    "birthYear": 1696
+    "name": "חיים בן עטר"
   },
   {
+    "birthYear": 1520,
+    "hasPic": false,
     "id": 8,
-    "name": "מהר\"ל",
-    "hasPic": false,
-    "birthYear": 1520
+    "name": "מהר\"ל"
   },
   {
+    "birthYear": 1809,
+    "hasPic": false,
     "id": 9,
-    "name": "מלבי\"ם",
-    "hasPic": false,
-    "birthYear": 1809
+    "name": "מלבי\"ם"
   },
   {
+    "birthYear": 1440,
+    "hasPic": false,
     "id": 10,
-    "name": "אברהם סבע",
-    "hasPic": false,
-    "birthYear": 1440
+    "name": "אברהם סבע"
   },
   {
+    "birthYear": 1937,
+    "hasPic": false,
     "id": 11,
-    "name": "יוסף בכור שור",
-    "hasPic": false,
-    "birthYear": 1140
+    "name": "עדין שטיינזלץ"
   },
   {
+    "birthYear": 1140,
+    "hasPic": false,
     "id": 12,
-    "name": "יעקב בן אשר",
-    "hasPic": false,
-    "birthYear": 1250
+    "name": "יוסף בכור שור"
   },
   {
+    "birthYear": 1250,
+    "hasPic": false,
     "id": 13,
-    "name": "אשר וסרטיל",
-    "hasPic": false,
-    "birthYear": 1921
+    "name": "יעקב בן אשר"
   },
   {
+    "birthYear": 1921,
+    "hasPic": false,
     "id": 14,
-    "name": "ר' יוסף אבן כספי",
-    "hasPic": false,
-    "birthYear": 1280
+    "name": "אשר וסרטיל"
   },
   {
+    "birthYear": 1280,
+    "hasPic": false,
     "id": 15,
-    "name": "דוד הלוי סגל",
-    "hasPic": false,
-    "birthYear": 1586
+    "name": "ר' יוסף אבן כספי"
   },
   {
+    "birthYear": 1586,
+    "hasPic": false,
     "id": 16,
-    "name": "אלשיך",
-    "hasPic": false,
-    "birthYear": 1507
+    "name": "דוד הלוי סגל"
   },
   {
+    "birthYear": 1507,
+    "hasPic": false,
     "id": 17,
-    "name": "תוספות",
-    "hasPic": false,
-    "birthYear": 1150
+    "name": "אלשיך"
   },
   {
+    "birthYear": 1150,
+    "hasPic": false,
     "id": 18,
-    "name": "יעקב צבי מקלנבורג",
-    "hasPic": false,
-    "birthYear": 1785
+    "name": "תוספות"
   },
   {
+    "birthYear": 1785,
+    "hasPic": false,
     "id": 19,
-    "name": "נפתלי צבי יהודה ברלין",
-    "hasPic": false,
-    "birthYear": 1816
+    "name": "יעקב צבי מקלנבורג"
   },
   {
+    "birthYear": 1816,
+    "hasPic": false,
     "id": 20,
-    "name": "ר' חיים יוסף דוד אזולאי",
-    "hasPic": false,
-    "birthYear": 1724
+    "name": "נפתלי צבי יהודה ברלין"
   },
   {
+    "birthYear": 1724,
+    "hasPic": false,
     "id": 21,
-    "name": "חזקוני",
-    "hasPic": false,
-    "birthYear": 1210
+    "name": "ר' חיים יוסף דוד אזולאי"
   },
   {
+    "birthYear": 1210,
+    "hasPic": false,
     "id": 22,
-    "name": "יוסף אבן יחייא",
-    "hasPic": false,
-    "birthYear": 1494
+    "name": "חזקוני"
   },
   {
+    "birthYear": 1494,
+    "hasPic": false,
     "id": 23,
-    "name": "מהרש\"ל",
-    "hasPic": false,
-    "birthYear": 1510
+    "name": "יוסף אבן יחייא"
   },
   {
+    "birthYear": 1510,
+    "hasPic": false,
     "id": 24,
-    "name": "אברהם בן יצחק צהלון",
-    "hasPic": false,
-    "birthYear": 1560
+    "name": "מהרש\"ל"
   },
   {
+    "birthYear": 1560,
+    "hasPic": false,
     "id": 25,
-    "name": "מאיר דן רפאל פְּלוֹצְקִי",
-    "hasPic": false,
-    "birthYear": 1866
+    "name": "אברהם בן יצחק צהלון"
   },
   {
+    "birthYear": 1866,
+    "hasPic": false,
     "id": 26,
-    "name": "שלמה אפרים מלונטשיץ",
-    "hasPic": false,
-    "birthYear": 1550
+    "name": "מאיר דן רפאל פְּלוֹצְקִי"
   },
   {
+    "birthYear": 1550,
+    "hasPic": false,
     "id": 27,
-    "name": "ר' מרדכי יפה",
-    "hasPic": false,
-    "birthYear": 1530
+    "name": "שלמה אפרים מלונטשיץ"
   },
   {
+    "birthYear": 1530,
+    "hasPic": false,
     "id": 28,
-    "name": "המאירי",
-    "hasPic": false,
-    "birthYear": 1249
+    "name": "ר' מרדכי יפה"
   },
   {
+    "birthYear": 1249,
+    "hasPic": false,
     "id": 29,
-    "name": "יעקב בן יעקב משה מליסא",
-    "hasPic": false,
-    "birthYear": 1760
+    "name": "המאירי"
   },
   {
+    "birthYear": 1760,
+    "hasPic": false,
     "id": 30,
-    "name": "נתן נטע שפירא",
-    "hasPic": false,
-    "birthYear": 1585
+    "name": "יעקב בן יעקב משה מליסא"
   },
   {
+    "birthYear": 1585,
+    "hasPic": false,
     "id": 31,
-    "name": "אליהו בן אברהם מזרחי",
-    "hasPic": false,
-    "birthYear": 1445
+    "name": "נתן נטע שפירא"
   },
   {
+    "birthYear": 1445,
+    "hasPic": false,
     "id": 32,
-    "name": "משה בן ישראל איסרלישׂ",
-    "hasPic": false,
-    "birthYear": 1520
+    "name": "אליהו בן אברהם מזרחי"
   },
   {
+    "birthYear": 1520,
+    "hasPic": false,
     "id": 33,
-    "name": "ישעיה פיק ברלין",
-    "hasPic": false,
-    "birthYear": 1725
+    "name": "משה בן ישראל איסרלישׂ"
   },
   {
+    "birthYear": 1725,
+    "hasPic": false,
     "id": 34,
-    "name": "שלמה הלוי אלקבץ",
-    "hasPic": false,
-    "birthYear": 1505
+    "name": "ישעיה פיק ברלין"
   },
   {
+    "birthYear": 1505,
+    "hasPic": false,
     "id": 35,
-    "name": "יעקב אטלינגר",
-    "hasPic": false,
-    "birthYear": 1798
+    "name": "שלמה הלוי אלקבץ"
   },
   {
+    "birthYear": 1560,
+    "hasPic": false,
     "id": 36,
-    "name": "ידידיה שלמה רפאל נורצי",
-    "hasPic": false,
-    "birthYear": 1560
+    "name": "ידידיה שלמה רפאל נורצי"
   },
   {
+    "birthYear": 1687,
+    "hasPic": false,
     "id": 37,
-    "name": "רבי דוד אלטשולר",
-    "hasPic": false,
-    "birthYear": 1687
+    "name": "רבי דוד אלטשולר"
   },
   {
+    "birthYear": 1719,
+    "hasPic": false,
     "id": 38,
-    "name": "דוד פארדו",
-    "hasPic": false,
-    "birthYear": 1719
+    "name": "דוד פארדו"
   },
   {
+    "birthYear": 1803,
+    "hasPic": false,
     "id": 39,
-    "name": "הרב נתן מרקוס אדלר",
-    "hasPic": false,
-    "birthYear": 1803
+    "name": "הרב נתן מרקוס אדלר"
   },
   {
+    "birthYear": 1470,
+    "hasPic": false,
     "id": 40,
-    "name": "ספורנו",
-    "hasPic": false,
-    "birthYear": 1470
+    "name": "ספורנו"
   },
   {
+    "birthYear": 1835,
+    "hasPic": false,
     "id": 41,
-    "name": "יוסף חיים",
-    "hasPic": false,
-    "birthYear": 1835
+    "name": "יוסף חיים"
   },
   {
+    "birthYear": 1160,
+    "hasPic": false,
     "id": 42,
-    "name": "ר' עזרא בן שלמה מגירונה",
-    "hasPic": false,
-    "birthYear": 1160
+    "name": "ר' עזרא בן שלמה מגירונה"
   },
   {
+    "birthYear": 1265,
+    "hasPic": false,
     "id": 43,
-    "name": "עמנואל הרומי",
-    "hasPic": false,
-    "birthYear": 1265
+    "name": "עמנואל הרומי"
   },
   {
+    "birthYear": 1445,
+    "hasPic": false,
     "id": 44,
-    "name": "לא ידוע",
-    "hasPic": false,
-    "birthYear": 1445
+    "name": "לא ידוע"
   },
   {
+    "birthYear": 1843,
+    "hasPic": false,
     "id": 45,
-    "name": "דוד צבי הופמן",
-    "hasPic": false,
-    "birthYear": 1843
+    "name": "דוד צבי הופמן"
   },
   {
+    "birthYear": 1550,
+    "hasPic": false,
     "id": 46,
-    "name": "ר' יעקב בן יצחק אשכנזי",
-    "hasPic": false,
-    "birthYear": 1550
+    "name": "ר' יעקב בן יצחק אשכנזי"
   },
   {
+    "birthYear": 1858,
+    "hasPic": false,
     "id": 47,
-    "name": "יוסף רוזין",
-    "hasPic": false,
-    "birthYear": 1858
+    "name": "יוסף רוזין"
   },
   {
+    "birthYear": 882,
+    "hasPic": false,
     "id": 48,
-    "name": "סעדיה גאון",
-    "hasPic": false,
-    "birthYear": 882
+    "name": "סעדיה גאון"
   },
   {
+    "birthYear": 1250,
+    "hasPic": false,
     "id": 49,
-    "name": "רא\"ש",
-    "hasPic": false,
-    "birthYear": 1250
+    "name": "רא\"ש"
   },
   {
+    "birthYear": 965,
+    "hasPic": false,
     "id": 50,
-    "name": "רבנו חננאל",
-    "hasPic": false,
-    "birthYear": 965
+    "name": "רבנו חננאל"
   },
   {
+    "birthYear": 1160,
+    "hasPic": false,
     "id": 51,
-    "name": "רד\"ק",
-    "hasPic": false,
-    "birthYear": 1160
+    "name": "רד\"ק"
   },
   {
+    "birthYear": 1300,
+    "hasPic": false,
     "id": 52,
-    "name": "יהודה בן אליעזר",
-    "hasPic": false,
-    "birthYear": 1300
+    "name": "יהודה בן אליעזר"
   },
   {
+    "birthYear": 1288,
+    "hasPic": false,
     "id": 53,
-    "name": "רלב\"ג",
-    "hasPic": false,
-    "birthYear": 1288
+    "name": "רלב\"ג"
   },
   {
+    "birthYear": 1194,
+    "hasPic": false,
     "id": 54,
-    "name": "רמב\"ן",
-    "hasPic": false,
-    "birthYear": 1194
+    "name": "רמב״ן"
   },
   {
+    "birthYear": 1040,
+    "hasPic": false,
     "id": 55,
-    "name": "רש\"י",
-    "hasPic": false,
-    "birthYear": 1040
+    "name": "רש״י"
   },
   {
+    "birthYear": 1085,
+    "hasPic": false,
     "id": 56,
-    "name": "רשב\"ם",
-    "hasPic": false,
-    "birthYear": 1085
+    "name": "רשב״ם"
   },
   {
+    "birthYear": 1560,
+    "hasPic": false,
     "id": 57,
-    "name": "יצחק בן מרדכי גרשון",
-    "hasPic": false,
-    "birthYear": 1560
+    "name": "יצחק בן מרדכי גרשון"
   },
   {
+    "birthYear": 1641,
+    "hasPic": false,
     "id": 58,
-    "name": "שבתי בס",
-    "hasPic": false,
-    "birthYear": 1641
+    "name": "שבתי בס"
   },
   {
+    "birthYear": 1458,
+    "hasPic": false,
     "id": 59,
-    "name": "יצחק בן יוסף קארו",
-    "hasPic": false,
-    "birthYear": 1458
+    "name": "יצחק בן יוסף קארו"
   },
   {
+    "birthYear": 1860,
+    "hasPic": false,
     "id": 60,
-    "name": "הרב ברוך הלוי אפשטיין",
-    "hasPic": false,
-    "birthYear": 1860
+    "name": "הרב ברוך הלוי אפשטיין"
   },
   {
+    "birthYear": 1968,
+    "hasPic": false,
     "id": 61,
-    "name": "שמואל נבון",
-    "hasPic": false,
-    "birthYear": 1968
+    "name": "שמואל נבון"
   },
   {
+    "birthYear": 0,
+    "hasPic": false,
     "id": 62,
-    "name": "רבותינו זכרונם לברכה",
-    "hasPic": false,
-    "birthYear": 0
+    "name": "רבותינו זכרונם לברכה"
   },
   {
+    "birthYear": 35,
+    "hasPic": false,
     "id": 63,
-    "name": "אונקלוס",
-    "hasPic": false,
-    "birthYear": 35
+    "name": "אונקלוס"
   },
   {
-    "id": 64,
-    "name": "יונתן בן עוזיאל",
+    "birthYear": 60,
     "hasPic": false,
-    "birthYear": 60
+    "id": 64,
+    "name": "יונתן בן עוזיאל"
   }
 ]

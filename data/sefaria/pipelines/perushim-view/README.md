@@ -59,12 +59,20 @@ Since note text data is very large, it should **not** be bundled with the mobile
 
 2. **Package notes as Play Asset Delivery (PAD)** — Use on-demand asset pack. Google hosts the notes for free. Pipeline outputs to `app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/`.
 
-3. **HTTP fallback** — When PAD is not available (sideloaded APK, emulator, or non-Android), app downloads from S3 when user taps "להוריד פירושים".
+3. **iOS ODR and debug fallback** — iOS uses Apple On-Demand Resources. Android debug APKs can bundle the notes database as an app asset.
 
-4. **Download on-demand** — When notes are not available (PAD not yet fetched or HTTP fallback):
+4. **Download on-demand** — When notes are not available:
    - Show "להוריד פירושים" button in perushim panel and in Settings.
-   - If using S3: download from `bible-on-site-assets.s3.il-central-1.amazonaws.com/perushim/...`
+   - Fetch the matching notes pack through PAD/ODR, or copy a bundled debug asset.
    - Save to `FileSystem.AppDataDirectory` and open as read-only SQLite.
+
+The bundled catalog is refreshed on app startup. Notes include the complete
+`perush_catalog` ID-to-name mapping in `_metadata`; clients verify it before
+resolving IDs against their catalog. Legacy packs require an identical nonzero
+catalog/notes build timestamp. A mismatch offers the download action even when
+an older local file exists. See the [attribution RCA](../../../../docs/app/commentary-attribution.md).
+
+JSON generation also refreshes the client-safe `perush-names.ts` citation projection.
 
 ## Aggregation Pipeline
 

@@ -23,6 +23,15 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
 
     private PadDeliveryService() { }
 
+    internal static string OdrCacheDirectory(IFileSystem fileSystem, IAppInfo appInfo, string packName)
+    {
+        // Extracted ODR data belongs to this app build, just like the store resource.
+        var generation = $"{appInfo.VersionString}-{appInfo.BuildString}";
+        var dir = Path.Combine(fileSystem.CacheDirectory, "odr_assets", generation, packName);
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
     /// <inheritdoc />
     public Task<string?> TryGetAssetPathAsync(string packName, CancellationToken cancellationToken = default)
     {
@@ -255,9 +264,7 @@ partial class PadDeliveryService
 
     private static string OdrCacheDir(string packName)
     {
-        var dir = Path.Combine(FileSystem.CacheDirectory, "odr_assets", packName);
-        Directory.CreateDirectory(dir);
-        return dir;
+        return OdrCacheDirectory(FileSystem.Current, AppInfo.Current, packName);
     }
 
     private static async Task<string?> TryGetAssetPathIosAsync(string packName, CancellationToken ct)
