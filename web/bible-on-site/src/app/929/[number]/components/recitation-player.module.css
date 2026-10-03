@@ -36,6 +36,8 @@ button.heading {
 	flex-shrink: 0;
 	display: inline-flex;
 	align-items: center;
+	justify-content: flex-end;
+	min-width: 66px;
 	position: relative;
 	gap: 2px;
 	color: #637598;
@@ -87,11 +89,12 @@ button.heading {
 	color: #264c88;
 	background: #eaf0f8;
 }
-.toggle:hover,
+.toggle:hover:not(:disabled),
 .action:hover:not(:disabled) {
 	background: #f0f3f8;
 }
-.action:disabled {
+.action:disabled,
+.toggle:disabled {
 	opacity: 0.35;
 	cursor: default;
 }
@@ -106,18 +109,26 @@ button.heading {
 	color: inherit;
 	font: inherit;
 	line-height: inherit;
+	letter-spacing: inherit;
+	word-spacing: inherit;
 	text-align: inherit;
+}
+.word[role="button"],
+.pasuk[role="button"] {
 	cursor: pointer;
 }
-.word:hover,
+.word[role="button"]:hover,
 .word[aria-pressed="true"],
-.pasuk:hover {
+.pasuk[role="button"]:hover {
 	color: #1c427b;
 	background: #e9eff8;
 	box-shadow: 0 2px 0 #a9bddb;
 }
-.pasuk {
-	min-width: 1.4em;
+.verse:has(.pasuk[role="button"]:hover),
+.verse:has(.pasuk:focus-visible) {
+	background: #e9eff8;
+	-webkit-box-decoration-break: clone;
+	box-decoration-break: clone;
 }
 .toggle:focus-visible,
 .action:focus-visible,

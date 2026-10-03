@@ -54,6 +54,7 @@ import RecitationPlayer, {
 	RecitationHeader,
 	RecitationLink,
 	RecitationPasukControl,
+	RecitationVerse,
 	RecitationWordControl,
 	stopRecitation,
 } from "./RecitationPlayer";
@@ -192,7 +193,11 @@ const Sefer = (props: {
 	);
 	useEffect(() => {
 		const book = flipBookRef.current;
-		if (book && requestedPage != null && requestedPage !== book.getCurrentPageIndex()) {
+		if (
+			book &&
+			requestedPage != null &&
+			requestedPage !== book.getCurrentPageIndex()
+		) {
 			book.restorePage(requestedPage);
 		}
 		// Fresh data references for the same route must not undo a user's flip.
@@ -250,7 +255,9 @@ const Sefer = (props: {
 			.then(setBatchSummaries)
 			.catch((error) => {
 				console.error("Failed to load book summaries", {
-					sefer: perekObj.sefer, perekIds: idsToFetch, error,
+					sefer: perekObj.sefer,
+					perekIds: idsToFetch,
+					error,
 				});
 			});
 	}, [perekIds, perekObj.perekId, perekObj.sefer]);
@@ -269,6 +276,7 @@ const Sefer = (props: {
 				<RecitationPlayer
 					perekId={pagePerekId ?? 0}
 					pesukim={perek.pesukim}
+					hasRecording={Boolean(perek.recitation)}
 				>
 					<section className={styles.pageContentPage}>
 						<div className={styles.pageHeaderRight}>
@@ -354,12 +362,12 @@ const Sefer = (props: {
 										),
 									);
 									return (
-										<React.Fragment key={pasukKey}>
+										<RecitationVerse key={pasukKey}>
 											{pasukNumElement}
 											<span> </span>
 											{pasukElement}
 											<span> </span>
-										</React.Fragment>
+										</RecitationVerse>
 									);
 								})}
 							</article>
