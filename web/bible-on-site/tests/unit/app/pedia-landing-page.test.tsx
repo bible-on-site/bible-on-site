@@ -4,17 +4,17 @@ import {
 	CATEGORY_LABELS,
 	getCategoryCounts,
 	getRecentEntries,
-	getTodayInTanahEvents,
+	getTodayInTanahEntities,
 } from "@/lib/tanahpedia/service";
 import type { CategoryKey } from "@/lib/tanahpedia/types";
-import { HebrewDate } from "@/util/hebdates-util";
+import { constructTsetAwareHDate } from "@/util/hebdates-util";
 
 jest.mock("next/cache", () => ({ unstable_cache: (fn: unknown) => fn }));
 jest.mock("@/lib/tanahpedia/service", () => ({
 	...jest.requireActual("@/lib/tanahpedia/service"),
 	getCategoryCounts: jest.fn(),
 	getRecentEntries: jest.fn(),
-	getTodayInTanahEvents: jest.fn(),
+	getTodayInTanahEntities: jest.fn(),
 }));
 
 const counts = Object.fromEntries(
@@ -25,7 +25,7 @@ beforeEach(() => {
 	jest.useFakeTimers().setSystemTime(new Date("2026-10-02T12:00:00+03:00"));
 	jest.mocked(getCategoryCounts).mockResolvedValue(counts);
 	jest.mocked(getRecentEntries).mockResolvedValue([]);
-	jest.mocked(getTodayInTanahEvents).mockResolvedValue([]);
+	jest.mocked(getTodayInTanahEntities).mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -33,7 +33,7 @@ afterEach(() => {
 	jest.restoreAllMocks();
 });
 
-test("shows category counts without empty event or recent-entry sections", async () => {
+test("shows category counts without empty anniversary or recent-entry sections", async () => {
 	render(await TanahpediaLandingPage());
 	expect(screen.getByRole("heading", { name: "תנכפדיה" })).toBeVisible();
 	expect(screen.getAllByText("3 ערכים").length).toBeGreaterThan(0);
@@ -66,29 +66,29 @@ test("mutes zero-entry categories with a coming-soon label but keeps them linked
 	expect(screen.queryByText("0 ערכים")).toBeNull();
 });
 
-test("uses today's Hebrew date and renders linked and unlinked events and recent entries", async () => {
-	const today = HebrewDate.fromGregorian(new Date());
-	jest.mocked(getTodayInTanahEvents).mockResolvedValue([
+test("uses today's Hebrew date and renders events, sayings, people, and recent entries", async () => {
+	const today = constructTsetAwareHDate(new Date());
+	jest.mocked(getTodayInTanahEntities).mockResolvedValue([
 		{
 			entityId: "1",
+			entityType: "EVENT",
 			entityName: "אירוע ראשון",
-			entryUniqueName: "אירוע-ראשון",
-			entryTitle: "כותרת האירוע",
-			startDate: null,
+			linkedEntries: [
+				{ id: "entry-1", uniqueName: "אירוע-ראשון", title: "כותרת האירוע" },
+				{ id: "entry-2", uniqueName: "אירוע-שני", title: "אירוע שני" },
+			],
 		},
 		{
 			entityId: "2",
-			entityName: "אירוע שני",
-			entryUniqueName: "אירוע-שני",
-			entryTitle: null,
-			startDate: null,
+			entityType: "SAYING",
+			entityName: "אמרה ללא ערך",
+			linkedEntries: [],
 		},
 		{
 			entityId: "3",
-			entityName: "אירוע ללא ערך",
-			entryUniqueName: null,
-			entryTitle: null,
-			startDate: null,
+			entityType: "PERSON",
+			entityName: "איש ללא ערך",
+			linkedEntries: [],
 		},
 	]);
 	jest.mocked(getRecentEntries).mockResolvedValue([
@@ -102,7 +102,7 @@ test("uses today's Hebrew date and renders linked and unlinked events and recent
 		},
 	]);
 	render(await TanahpediaLandingPage());
-	expect(getTodayInTanahEvents).toHaveBeenCalledWith(
+	expect(getTodayInTanahEntities).toHaveBeenCalledWith(
 		today.getUniformMonth(),
 		today.day,
 	);
@@ -116,8 +116,14 @@ test("uses today's Hebrew date and renders linked and unlinked events and recent
 		"href",
 		`/pedia/${encodeURIComponent("אירוע-שני")}`,
 	);
-	expect(screen.getByText("אירוע ללא ערך").tagName).toBe("STRONG");
-	expect(screen.queryByRole("link", { name: "אירוע ללא ערך" })).toBeNull();
+	expect(screen.getByText("אמרה ללא ערך").tagName).toBe("STRONG");
+	expect(screen.getByText("איש ללא ערך")).toBeVisible();
+	const section = screen
+		.getByRole("heading", { name: 'היום בתנ"ך' })
+		.closest("section");
+	if (!section) throw new Error("Today's section is missing");
+	expect(within(section).getAllByRole("listitem")).toHaveLength(3);
+	expect(screen.queryByRole("link", { name: "אמרה ללא ערך" })).toBeNull();
 	expect(screen.getByRole("link", { name: "ערך חדש" })).toHaveAttribute(
 		"href",
 		`/pedia/${encodeURIComponent("ערך-חדש")}`,
@@ -158,3 +164,15 @@ test("logs the original development failure and offers diagnostic details", asyn
 	expect(screen.getByRole("alert")).toHaveTextContent(failure.message);
 	expect(screen.getByRole("alert")).toHaveTextContent("npm run dev");
 });
+
+test.each([
+	["2026-10-02T22:30:00Z", 22],
+	["2026-10-03T17:00:00Z", 23],
+])(
+	"uses the Jerusalem Hebrew date at %s, including nightfall rollover",
+	async (instant, expectedDay) => {
+		jest.setSystemTime(new Date(instant));
+		render(await TanahpediaLandingPage());
+		expect(getTodayInTanahEntities).toHaveBeenCalledWith(1, expectedDay);
+	},
+);

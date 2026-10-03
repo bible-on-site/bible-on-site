@@ -6,6 +6,8 @@
 	"tanahpedia_alter_source_citation.sql",
 	"tanahpedia_alter_person_source_citation.sql",
 	"tanahpedia_alter_child_birth_order.sql",
+	"tanahpedia_alter_saying_date.sql",
+	"tanahpedia_remove_simchat_torah_placeholder.sql",
 	"tanahpedia_seed_data.sql",
 	"tanahpedia_incremental_lookups.sql",
 	"tanahpedia_place_jerusalem_data.sql",

@@ -16,6 +16,7 @@ const {
 	updateEntityDisplayNameMock,
 	updatePersonMainNameMock,
 	updatePersonSexMock,
+	updateSayingDateMock,
 } = vi.hoisted(() => ({
 	createEntityMock: vi.fn(),
 	getEntryStructuralContextMock: vi.fn(),
@@ -24,6 +25,7 @@ const {
 	updateEntityDisplayNameMock: vi.fn(),
 	updatePersonMainNameMock: vi.fn(),
 	updatePersonSexMock: vi.fn(),
+	updateSayingDateMock: vi.fn(),
 }));
 
 vi.mock("~/server/tanahpedia/structural", () => ({
@@ -32,6 +34,7 @@ vi.mock("~/server/tanahpedia/structural", () => ({
 	updateEntityDisplayName: updateEntityDisplayNameMock,
 	updatePersonMainName: updatePersonMainNameMock,
 	updatePersonSex: updatePersonSexMock,
+	updateSayingDate: updateSayingDateMock,
 	replacePlaceIdentifications: replacePlaceIdentificationsMock,
 	searchEntities: vi.fn().mockResolvedValue([]),
 	linkExistingEntityToEntry: vi.fn(),
@@ -69,6 +72,7 @@ describe("EntryStructuralPanel", () => {
 			updateEntityDisplayNameMock,
 			updatePersonMainNameMock,
 			updatePersonSexMock,
+			updateSayingDateMock,
 		]) {
 			mock.mockReset().mockResolvedValue({ ok: true });
 		}
@@ -343,5 +347,41 @@ describe("EntryStructuralPanel", () => {
 				),
 			).toBeInTheDocument();
 		});
+	});
+	it("edits and clears a saying date", async () => {
+		getEntryStructuralContextMock.mockResolvedValue({
+			entryId: "entry-1",
+			linkedEntities: [
+				{
+					linkId: "link",
+					entityId: "entity",
+					entityType: "SAYING",
+					displayName: "אמרה",
+					saying: { sayingId: "saying-1", sayingDate: 24480906 },
+				},
+			],
+		});
+		renderPanel();
+		const input = await screen.findByLabelText("תאריך האמרה");
+		expect(input).toHaveValue("24480906");
+		fireEvent.change(input, { target: { value: "24480907" } });
+		fireEvent.click(screen.getByRole("button", { name: "שמור תאריך אמרה" }));
+		await waitFor(() =>
+			expect(updateSayingDateMock).toHaveBeenCalledWith({
+				data: { sayingId: "saying-1", sayingDate: 24480907 },
+			}),
+		);
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "שמור תאריך אמרה" }),
+			).toBeEnabled(),
+		);
+		fireEvent.change(input, { target: { value: "" } });
+		fireEvent.click(screen.getByRole("button", { name: "שמור תאריך אמרה" }));
+		await waitFor(() =>
+			expect(updateSayingDateMock).toHaveBeenLastCalledWith({
+				data: { sayingId: "saying-1", sayingDate: null },
+			}),
+		);
 	});
 });
