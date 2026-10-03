@@ -384,4 +384,29 @@ describe("EntryStructuralPanel", () => {
 			}),
 		);
 	});
+	it("starts an undated saying empty and preserves input when saving fails", async () => {
+		getEntryStructuralContextMock.mockResolvedValue({
+			entryId: "entry-1",
+			linkedEntities: [
+				{
+					linkId: "link",
+					entityId: "entity",
+					entityType: "SAYING",
+					displayName: "אמרה",
+					saying: { sayingId: "saying-1", sayingDate: null },
+				},
+			],
+		});
+		updateSayingDateMock.mockRejectedValue(new Error("תאריך עברי לא תקין"));
+		renderPanel();
+		const input = await screen.findByLabelText("תאריך האמרה");
+		expect(input).toHaveValue("");
+		fireEvent.change(input, { target: { value: "24480931" } });
+		fireEvent.click(screen.getByRole("button", { name: "שמור תאריך אמרה" }));
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"תאריך עברי לא תקין",
+		);
+		expect(input).toHaveValue("24480931");
+		expect(screen.getByRole("button", { name: "שמור תאריך אמרה" })).toBeEnabled();
+	});
 });

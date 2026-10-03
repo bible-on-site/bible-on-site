@@ -227,6 +227,18 @@ describe("saying dates", () => {
 		queryMock.mockReset();
 		queryOneMock.mockReset();
 	});
+	it("keeps other entity types without fetching a saying date", async () => {
+		const row = {
+			linkId: "link",
+			entityId: "event",
+			entityType: "EVENT",
+			displayName: "אירוע",
+		};
+		queryMock.mockResolvedValue([row]);
+		const result = await getEntryStructuralContext({ data: "entry-1" });
+		expect(result.linkedEntities).toEqual([row]);
+		expect(queryOneMock).not.toHaveBeenCalled();
+	});
 	it.each([24480906, 906, 24480900, 24480000, 0, null])(
 		"saves or clears the date %s",
 		async (date) => {
@@ -265,6 +277,29 @@ describe("saying dates", () => {
 				sayingId: "saying-1",
 				sayingDate: 24480906,
 			});
+		},
+	);
+	it.each(["SAYING", "PROPHECY"])(
+		"omits date editing when %s has no subtype row",
+		async (type) => {
+			queryMock.mockResolvedValue([
+				{
+					linkId: "link",
+					entityId: "entity",
+					entityType: type,
+					displayName: "אמרה",
+				},
+			]);
+			queryOneMock.mockResolvedValue(null);
+			const result = await getEntryStructuralContext({ data: "entry-1" });
+			expect(result.linkedEntities).toEqual([
+				{
+					linkId: "link",
+					entityId: "entity",
+					entityType: type,
+					displayName: "אמרה",
+				},
+			]);
 		},
 	);
 });

@@ -124,6 +124,17 @@ test("returns each entity once across multiple matching dates and preserves ever
 	]);
 });
 
+test("keeps the entity name when a linked legacy article has no title", async () => {
+	saying("saying-today", 24490701);
+	db.exec(`
+		INSERT INTO tanahpedia_entry VALUES ('legacy', 'legacy-saying', NULL);
+		INSERT INTO tanahpedia_entry_entity VALUES ('saying-today', 'legacy');
+	`);
+	expect((await getTodayInTanahEntities(7, 1))[0].linkedEntries).toEqual([
+		{ id: "legacy", uniqueName: "legacy-saying", title: "saying-today" },
+	]);
+});
+
 test("excludes incomplete dates and the unknown, not-yet, and forever sentinels", async () => {
 	for (const [index, date] of [
 		null,
