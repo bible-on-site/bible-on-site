@@ -667,7 +667,7 @@ jobs:
       # Free disk space for the MongoDB Docker image build (~10GB+ needed for mongorestore)
       # Enable large-packages and docker-images to maximize available space
       - name: Free Disk Space
-        uses: jlumbroso/free-disk-space@v1.3.1
+        uses: jlumbroso/free-disk-space@v2.0.0
         with:
           tool-cache: false
           android: true
@@ -1784,7 +1784,7 @@ jobs:
       # This ensures enough space for the ~5GB MongoDB Docker image later
       # Note: swap-storage must be true to match build_sefaria_mongo_docker job settings
       - name: Free Disk Space
-        uses: jlumbroso/free-disk-space@v1.3.1
+        uses: jlumbroso/free-disk-space@v2.0.0
         with:
           tool-cache: false
           android: true
@@ -2007,7 +2007,7 @@ jobs:
           ref: ${{ github.sha }}
 
       - name: Free Disk Space
-        uses: jlumbroso/free-disk-space@v1.3.1
+        uses: jlumbroso/free-disk-space@v2.0.0
         with:
           tool-cache: false
           android: true
