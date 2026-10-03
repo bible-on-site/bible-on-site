@@ -133,8 +133,22 @@
   min-width: 150px;
 }
 
-.drop-container:hover .drop {
+.drop-container > [aria-expanded="true"] + .drop {
   display: block;
+}
+
+/* Hover previews stay mouse-only (touch keeps sticky :hover) and yield to an open selector. */
+@media (hover: hover) {
+  .drop-container:hover .drop {
+    display: block;
+  }
+
+  .breadcrumb:has([aria-expanded="true"])
+    .drop-container:hover
+    > [aria-expanded="false"]
+    + .drop {
+    display: none;
+  }
 }
 
 .drop-container {
@@ -207,6 +221,20 @@
 
   .small {
     margin-right: 2px;
+  }
+
+  /* Dropdowns opened from end-side buttons would overflow the left edge, so anchor them to the breadcrumb row. */
+  .breadcrumb {
+    position: relative;
+  }
+
+  .drop-container {
+    position: static;
+  }
+
+  .drop {
+    max-width: calc(100vw - 16px);
+    overflow: auto;
   }
 }
 

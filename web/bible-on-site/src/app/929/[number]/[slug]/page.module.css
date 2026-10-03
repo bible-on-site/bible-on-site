@@ -6,9 +6,11 @@
   background-color: var(--surface-elevated, #fff);
 }
 
-/* Expanded article section within perek page */
+/* Expanded article section within perek page. It opens the route in normal
+   flow, so clear the 72px top nav at rest and when ScrollToSlug scrolls to it. */
 .expandedArticle {
-  margin: 24px 16px;
+  margin: calc(72px + 24px) 16px 24px;
+  scroll-margin-top: calc(72px + 24px);
   padding: 24px;
   background: transparent;
   border-radius: 12px;
@@ -184,7 +186,8 @@ button.backLink {
 
 @media (max-width: 640px) {
   .expandedArticle {
-    margin: 16px 8px;
+    margin: calc(72px + 16px) 8px 16px;
+    scroll-margin-top: calc(72px + 16px);
     padding: 16px;
   }
 

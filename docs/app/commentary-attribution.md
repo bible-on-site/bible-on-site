@@ -16,6 +16,12 @@ therefore join new notes to the original catalog indefinitely. The same copy-onc
 behavior prevented corrections to the bundled Bible text from reaching existing
 installations.
 
+The iOS ODR extraction cache also reused an unversioned directory across app
+updates, hiding newer store resources behind its existing notes file. It now uses
+the app version and build as its cache generation, including the diagnostic path.
+Tests reject both prior-build files and the legacy unversioned cache, while
+preserving reuse within the same build.
+
 The fix refreshes both bundled databases at initialization, atomically replacing
 only changed files. Initialization and copies are serialized. Generated notes now
 carry the complete `perush_catalog` ID-to-name mapping in `_metadata`. Before any
