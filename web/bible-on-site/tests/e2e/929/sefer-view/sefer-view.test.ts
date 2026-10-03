@@ -425,6 +425,8 @@ test.describe("Sefer view", () => {
 	test("Mouse selection mode can be toggled back to native page dragging", async ({
 		page,
 	}) => {
+		// Reload mounts the lazy book a second time before the drag assertions.
+		test.setTimeout(60_000);
 		await page.setViewportSize({ width: 1440, height: 900 });
 		const seferPage = new SeferPage(page);
 		await seferPage.openSeferViewForPerek(1);
