@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ArticleSummary } from "@/lib/articles";
 import styles from "./articles-section.module.css";
+import { Carousel } from "./Carousel";
 
 interface ArticlesSectionProps {
 	articles?: ArticleSummary[] | null;
@@ -29,11 +30,22 @@ export function ArticlesSection({
 			aria-busy={loading}
 		>
 			<header className={styles.sectionHeader}>
-				<span className={styles.sectionIcon}>📚</span>
+				<Image
+					src="/icons/book.svg"
+					alt=""
+					aria-hidden="true"
+					width={18}
+					height={18}
+					className={styles.sectionIcon}
+				/>
 				<h2 className={styles.sectionTitle}>מאמרים על הפרק</h2>
 			</header>
 
-			<div className={styles.carousel}>
+			<Carousel
+				className={styles.carousel}
+				prevLabel="מאמר קודם"
+				nextLabel="מאמר הבא"
+			>
 				{safeArticles.length === 0 ? (
 					<p className={styles.emptyMessage}>אין מאמרים לפרק זה</p>
 				) : loading ? (
@@ -94,7 +106,7 @@ export function ArticlesSection({
 						),
 					)
 				)}
-			</div>
+			</Carousel>
 		</section>
 	);
 }

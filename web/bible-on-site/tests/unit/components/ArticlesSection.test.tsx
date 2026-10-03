@@ -40,9 +40,11 @@ describe("ArticlesSection", () => {
 
 	describe("when articles are provided", () => {
 		it("renders the section header with icon and title", () => {
-			render(<ArticlesSection articles={mockArticles} />);
+			const { container } = render(<ArticlesSection articles={mockArticles} />);
 
-			expect(screen.getByText("📚")).toBeTruthy();
+			const icon = container.querySelector('img[src*="/icons/book.svg"]');
+			expect(icon?.getAttribute("aria-hidden")).toBe("true");
+			expect(icon?.getAttribute("alt")).toBe("");
 			expect(screen.getByText("מאמרים על הפרק")).toBeTruthy();
 		});
 

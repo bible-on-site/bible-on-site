@@ -118,7 +118,7 @@
 }
 
 .sectionIcon {
-  font-size: 24px;
+  flex-shrink: 0;
 }
 
 .sectionTitle {
