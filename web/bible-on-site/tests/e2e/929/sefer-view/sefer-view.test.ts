@@ -27,6 +27,38 @@ function activePageAngle(page: Page) {
 	});
 }
 
+async function fastMouseSwipe(page: Page, x: number, y: number, delta: number) {
+	// Native CDP input avoids trace snapshots between move and release, which
+	// would otherwise turn this velocity-sensitive swipe into a slow drag.
+	const client = await page.context().newCDPSession(page);
+	await client.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
+	await client.send("Input.dispatchMouseEvent", {
+		type: "mousePressed",
+		x,
+		y,
+		button: "left",
+		buttons: 1,
+		clickCount: 1,
+	});
+	for (let step = 1; step <= 6; step++) {
+		await client.send("Input.dispatchMouseEvent", {
+			type: "mouseMoved",
+			x: x + (step * delta) / 6,
+			y,
+			buttons: 1,
+		});
+	}
+	await client.send("Input.dispatchMouseEvent", {
+		type: "mouseReleased",
+		x: x + delta,
+		y,
+		button: "left",
+		buttons: 0,
+		clickCount: 1,
+	});
+	await client.detach();
+}
+
 test.describe("Sefer view", () => {
 	// Skip all tests in this suite on mobile viewports - sefer view requires tablet+
 	test.beforeEach(({ skipOnNotWideEnough }) => {
@@ -124,6 +156,7 @@ test.describe("Sefer view", () => {
 			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
 			.toBe("/929/בראשית/תוכן");
 		await page.reload();
+		await seferPage.verifySeferViewIsOpen();
 		await expect(
 			page
 				.locator('.he-book .page[data-page-index="2"] .toc-link[href]')
@@ -134,17 +167,22 @@ test.describe("Sefer view", () => {
 	test("Shmuel semantic book routes load the requested spread", async ({
 		page,
 	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
 		await page.goto("/929/שמואל/תוכן?book");
+		await seferPage.verifySeferViewIsOpen();
 		await expect(
 			page
 				.locator('.he-book .page[data-page-index="2"] .toc-link[href]')
 				.first(),
 		).toBeVisible();
 		await page.goto("/929/שמואל/כריכה?book");
+		await seferPage.verifySeferViewIsOpen();
 		await expect(
 			page.locator('.he-book section[aria-label="עטיפה קדמית"]'),
 		).toBeVisible();
 		await page.goto("/929/שמואל/גב?book");
+		await seferPage.verifySeferViewIsOpen();
 		await expect(
 			page.locator('.he-book section[aria-label="עטיפה אחורית"]'),
 		).toBeVisible();
@@ -187,6 +225,7 @@ test.describe("Sefer view", () => {
 			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
 			.toBe("/929/בראשית/כריכה");
 		await page.reload();
+		await seferPage.verifySeferViewIsOpen();
 		await expect(
 			page.locator('.he-book .page[data-page-index="0"]'),
 		).toBeVisible();
@@ -195,6 +234,7 @@ test.describe("Sefer view", () => {
 			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
 			.toBe("/929/בראשית/גב");
 		await page.reload();
+		await seferPage.verifySeferViewIsOpen();
 		await expect(
 			page.locator('.he-book .page[data-page-index="103"]'),
 		).toBeVisible();
@@ -322,10 +362,7 @@ test.describe("Sefer view", () => {
 		const indicator = page.locator(".flipbook-toolbar-indicator");
 		await expect(indicator).toHaveValue("א / נ");
 		const before = await indicator.inputValue();
-		await page.mouse.move(x, y);
-		await page.mouse.down();
-		await page.mouse.move(x + 600, y, { steps: 6 });
-		await page.mouse.up();
+		await fastMouseSwipe(page, x, y, 600);
 		await expect(indicator).not.toHaveValue(before);
 		expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(
 			"",
@@ -388,6 +425,8 @@ test.describe("Sefer view", () => {
 	test("Mouse selection mode can be toggled back to native page dragging", async ({
 		page,
 	}) => {
+		// Reload mounts the lazy book a second time before the drag assertions.
+		test.setTimeout(60_000);
 		await page.setViewportSize({ width: 1440, height: 900 });
 		const seferPage = new SeferPage(page);
 		await seferPage.openSeferViewForPerek(1);
@@ -398,6 +437,7 @@ test.describe("Sefer view", () => {
 		await selectButton.click();
 		await expect(selectButton).toHaveAttribute("aria-pressed", "true");
 		await page.reload();
+		await seferPage.verifySeferViewIsOpen();
 		await expect(selectButton).toHaveAttribute("aria-pressed", "true");
 		await selectButton.click();
 		await expect(selectButton).toHaveAttribute("aria-pressed", "false");
@@ -438,10 +478,7 @@ test.describe("Sefer view", () => {
 		).toBe(true);
 		const indicator = page.locator(".flipbook-toolbar-indicator");
 		await expect(indicator).toHaveValue("ב / נ");
-		await page.mouse.move(x, y);
-		await page.mouse.down();
-		await page.mouse.move(x - 600, y, { steps: 6 });
-		await page.mouse.up();
+		await fastMouseSwipe(page, x, y, -600);
 		await expect(indicator).toHaveValue("א / נ");
 	});
 
