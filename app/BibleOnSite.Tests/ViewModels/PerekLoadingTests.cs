@@ -170,4 +170,59 @@ public class PerekLoadingTests
         fixture.Model.PerekId.Should().Be(1);
         fixture.Model.CarouselPerakim.Should().HaveCount(4);
     }
+
+    [Fact]
+    public async Task StalePerushimLoad_ForAPerekAlreadyLeft_DoesNotOverwriteCurrentPerek()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        var vm = fixture.Model;
+        await vm.LoadByPerekIdAsync(2);
+        vm.CheckedPerushim = [1];
+        await vm.LoadPerushimAsync(2);
+
+        // A swipe away from perek 1 left its load in flight; it completes after perek 2 is on screen.
+        await vm.LoadPerushimAsync(1);
+
+        vm.Perushim.Select(p => p.Id).Should().Equal(1);
+        vm.Perek!.Pasukim.Single().PerushNotes.Single().NoteContents.Should().Equal("next");
+    }
+
+    private sealed class UiContext : SynchronizationContext
+    {
+        public override void Post(SendOrPostCallback d, object? state) => ThreadPool.QueueUserWorkItem(_ =>
+        {
+            SetSynchronizationContext(this);
+            d(state);
+        });
+    }
+
+    [Fact]
+    public async Task PreloadAdjacentPasukim_AssignsBoundPasukimOnTheCallersContext()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize(allChapters: true);
+        await fixture.Data.LoadAsync();
+        var adjacent = fixture.Data.GetPerek(3)!;
+        SynchronizationContext? assignedOn = null;
+        adjacent.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(Perek.Pasukim)) assignedOn = SynchronizationContext.Current;
+        };
+
+        var previous = SynchronizationContext.Current;
+        var ui = new UiContext();
+        SynchronizationContext.SetSynchronizationContext(ui);
+        try
+        {
+            await fixture.Model.PreloadAdjacentPasukimAsync(2);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        adjacent.Pasukim.Single().Text.Should().Be("שלישי");
+        assignedOn.Should().BeSameAs(ui, "carousel cells bind Pasukim, so it must not change on a background thread");
+    }
 }

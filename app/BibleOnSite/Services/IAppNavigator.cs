@@ -19,3 +19,14 @@ public sealed class ShellAppNavigator : IAppNavigator
         return page?.DisplayAlertAsync(title, message, cancel) ?? Task.CompletedTask;
     }
 }
+
+public static class AppRoutes
+{
+    public const string Perek = "PerekPage";
+
+    /// <summary>
+    /// Flyout pages are pushed above the perek page (never swapped in as Shell roots)
+    /// so the nav-bar back button and iOS swipe-back always lead back to the perek.
+    /// </summary>
+    public static string FlyoutPage(string route) => route == Perek ? $"//{Perek}" : $"//{Perek}/{route}";
+}
