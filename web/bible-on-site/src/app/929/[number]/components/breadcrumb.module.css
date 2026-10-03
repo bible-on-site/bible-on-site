@@ -133,8 +133,22 @@
   min-width: 150px;
 }
 
-.drop-container:hover .drop {
+.drop-container > [aria-expanded="true"] + .drop {
   display: block;
+}
+
+/* Hover previews stay mouse-only (touch keeps sticky :hover) and yield to an open selector. */
+@media (hover: hover) {
+  .drop-container:hover .drop {
+    display: block;
+  }
+
+  .breadcrumb:has([aria-expanded="true"])
+    .drop-container:hover
+    > [aria-expanded="false"]
+    + .drop {
+    display: none;
+  }
 }
 
 .drop-container {
