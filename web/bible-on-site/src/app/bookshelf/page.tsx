@@ -23,6 +23,7 @@ const BookshelfPage = () => {
 
 	return (
 		<div className={styles.page}>
+			<h1 className={styles.srOnly}>ספרי התנ&quot;ך</h1>
 			<Bookshelf onSeferClick={handleSeferClick} />
 		</div>
 	);

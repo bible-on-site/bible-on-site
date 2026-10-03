@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { sefarim } from "@/data/db/sefarim";
 import { getTodaysPerekId } from "@/data/perek-dto";
 import { isTreiAsar } from "@/data/sefer-colors";
@@ -492,15 +492,13 @@ function SingleShelf({
 	);
 }
 
-// Hook to detect window width
+// Window width; starts at a fixed default so SSR and the first client render match
 function useWindowWidth(): number {
-	const [width, setWidth] = useState(
-		/* istanbul ignore next -- SSR fallback; tests and browser always have window */
-		typeof window !== "undefined" ? window.innerWidth : 1200,
-	);
+	const [width, setWidth] = useState(1200);
 
 	useEffect(() => {
 		const handleResize = () => setWidth(window.innerWidth);
+		handleResize();
 		window.addEventListener("resize", handleResize);
 		return () => window.removeEventListener("resize", handleResize);
 	}, []);
@@ -526,14 +524,15 @@ export function Bookshelf({ onSeferClick }: BookshelfProps) {
 	const windowWidth = useWindowWidth();
 	const useMultiShelf = windowWidth < MULTI_SHELF_BREAKPOINT;
 
-	// Compute today's perek/sefer once per mount for the bookmark ribbon & navigation
-	const { todaySeferName, todaysPerekId } = useMemo(() => {
-		const perekId = getTodaysPerekId();
-		const sefer = sefarim.find(
-			(s) => s.perekFrom <= perekId && s.perekTo >= perekId,
-		);
-		return { todaySeferName: sefer?.name ?? "", todaysPerekId: perekId };
-	}, []);
+	// Today's perek depends on the client's date, so resolve it after mount
+	const [todaysPerekId, setTodaysPerekId] = useState<number>();
+	useEffect(() => setTodaysPerekId(getTodaysPerekId()), []);
+	const todaySeferName =
+		todaysPerekId === undefined
+			? ""
+			: (sefarim.find(
+					(s) => s.perekFrom <= todaysPerekId && s.perekTo >= todaysPerekId,
+				)?.name ?? "");
 
 	if (useMultiShelf) {
 		// Four separate shelves (RTL order: Torah on top)

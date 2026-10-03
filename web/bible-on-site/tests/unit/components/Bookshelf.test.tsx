@@ -2,6 +2,8 @@
  * @jest-environment jsdom
  */
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { hydrateRoot } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 
 jest.mock("@/app/components/Bookshelf/bookshelf.module.scss", () => ({
 	root: "root",
@@ -78,12 +80,8 @@ describe("Bookshelf", () => {
 		it("renders per-helek shelf labels", () => {
 			render(<Bookshelf />);
 			expect(screen.getByText("תורה")).toBeInTheDocument();
-			expect(
-				screen.getByText("נביאים: ראשונים + גדולים"),
-			).toBeInTheDocument();
-			expect(
-				screen.getByText("נביאים (המשך): תרי עשר"),
-			).toBeInTheDocument();
+			expect(screen.getByText("נביאים: ראשונים + גדולים")).toBeInTheDocument();
+			expect(screen.getByText("נביאים (המשך): תרי עשר")).toBeInTheDocument();
 			expect(screen.getByText("כתובים")).toBeInTheDocument();
 		});
 
@@ -104,9 +102,9 @@ describe("Bookshelf", () => {
 			const onSeferClick = jest.fn();
 			render(<Bookshelf onSeferClick={onSeferClick} />);
 			// Find the שמות book (not today's sefer)
-			const shmotButtons = screen.getAllByRole("button").filter((btn) =>
-				btn.textContent?.includes("שמות"),
-			);
+			const shmotButtons = screen
+				.getAllByRole("button")
+				.filter((btn) => btn.textContent?.includes("שמות"));
 			fireEvent.click(shmotButtons[0]);
 			expect(onSeferClick).toHaveBeenCalledTimes(1);
 			// Non-today sefer should receive perekFrom (51 for שמות)
@@ -117,9 +115,9 @@ describe("Bookshelf", () => {
 			const onSeferClick = jest.fn();
 			render(<Bookshelf onSeferClick={onSeferClick} />);
 			// Find the בראשית book (today's sefer, perekId=5)
-			const bereshitButtons = screen.getAllByRole("button").filter((btn) =>
-				btn.textContent?.includes("בראשית"),
-			);
+			const bereshitButtons = screen
+				.getAllByRole("button")
+				.filter((btn) => btn.textContent?.includes("בראשית"));
 			fireEvent.click(bereshitButtons[0]);
 			expect(onSeferClick).toHaveBeenCalledTimes(1);
 			// Today's sefer should receive todaysPerekId (5), not perekFrom (1)
@@ -180,8 +178,44 @@ describe("Bookshelf", () => {
 		});
 
 		// After resize → narrow → multi-shelf labels appear
-		expect(
-			screen.getByText("נביאים: ראשונים + גדולים"),
-		).toBeInTheDocument();
+		expect(screen.getByText("נביאים: ראשונים + גדולים")).toBeInTheDocument();
 	});
+
+	it.each([390, 800])(
+		"hydrates server HTML without mismatch at %ipx",
+		async (width) => {
+			// The server has no window; it renders the default 1200px layout
+			Object.defineProperty(window, "innerWidth", {
+				value: 1200,
+				writable: true,
+				configurable: true,
+			});
+			const html = renderToString(<Bookshelf />);
+			Object.defineProperty(window, "innerWidth", {
+				value: width,
+				writable: true,
+				configurable: true,
+			});
+			const container = document.createElement("div");
+			container.append(
+				...new DOMParser().parseFromString(html, "text/html").body.childNodes,
+			);
+			document.body.appendChild(container);
+			const onRecoverableError = jest.fn();
+			const consoleError = jest
+				.spyOn(console, "error")
+				.mockImplementation(() => {});
+
+			await act(async () => {
+				hydrateRoot(container, <Bookshelf />, { onRecoverableError });
+			});
+
+			expect(onRecoverableError).not.toHaveBeenCalled();
+			expect(consoleError).not.toHaveBeenCalled();
+			consoleError.mockRestore();
+			// After mount the real (narrow) width switches to multi-shelf
+			expect(container.textContent).toContain("נביאים: ראשונים + גדולים");
+			container.remove();
+		},
+	);
 });
