@@ -1,0 +1,54 @@
+/* Reader settings: fixed in the top nav strip (72px) so it never covers
+   the perek text on mobile. Desktop sits right next to ReadModeToggler
+   (110px wide at left:20px); on mobile the toggler is hidden so the
+   controls can use its spot. */
+.container {
+	position: fixed;
+	top: 15px;
+	left: 12px;
+	z-index: 10000;
+	display: flex;
+	gap: 4px;
+	align-items: center;
+	margin: 0;
+	padding: 0;
+	border: none;
+}
+
+@media (min-width: 768px) {
+	.container {
+		left: 140px;
+	}
+}
+
+.button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 40px;
+	height: 40px;
+	padding: 0 8px;
+	border: none;
+	border-radius: 9999px;
+	background: #fff;
+	color: #1c2c5d;
+	font-size: 1.1rem;
+	font-weight: 700;
+	cursor: pointer;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+	transition: background-color 200ms;
+}
+
+.button:hover:not(:disabled) {
+	background-color: #e0f2fe;
+}
+
+.button:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.button:focus-visible {
+	outline: 2px solid #1552ac;
+	outline-offset: 2px;
+}
