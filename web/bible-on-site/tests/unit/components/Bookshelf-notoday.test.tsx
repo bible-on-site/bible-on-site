@@ -24,14 +24,12 @@ jest.mock("@/app/components/Bookshelf/bookshelf.module.scss", () => ({
 	coverTitle: "coverTitle",
 	coverSubtitle: "coverSubtitle",
 	shelfLabel: "shelfLabel",
-	mobileGrid: "mobileGrid",
-	gridLabel: "gridLabel",
-	grid: "grid",
-	gridButton: "gridButton",
 }));
 
 jest.mock("@/data/db/sefarim", () => ({
-	sefarim: [{ name: "בראשית", helek: "תורה", perekFrom: 1, perekTo: 50 }],
+	sefarim: [
+		{ name: "בראשית", helek: "תורה", perekFrom: 1, perekTo: 50 },
+	],
 }));
 
 // Return a perek ID that doesn't match any sefer range → todaySeferName = ""
@@ -68,14 +66,9 @@ describe("Bookshelf (no today sefer)", () => {
 		const onSeferClick = jest.fn();
 		render(<Bookshelf onSeferClick={onSeferClick} />);
 
-		// Both the mobile grid and the 3D shelf render a button per sefer
-		const buttons = screen.getAllByRole("button");
-		expect(buttons).toHaveLength(2);
-		fireEvent.click(buttons[0]);
-		fireEvent.click(buttons[1]);
+		fireEvent.click(screen.getByRole("button"));
 
-		expect(onSeferClick).toHaveBeenCalledTimes(2);
-		expect(onSeferClick).toHaveBeenNthCalledWith(1, "בראשית", 1);
-		expect(onSeferClick).toHaveBeenNthCalledWith(2, "בראשית", 1);
+		expect(onSeferClick).toHaveBeenCalledTimes(1);
+		expect(onSeferClick).toHaveBeenCalledWith("בראשית", 1);
 	});
 });
