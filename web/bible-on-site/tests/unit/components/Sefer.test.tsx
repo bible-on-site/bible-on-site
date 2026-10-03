@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { sampleImage } from "./perek-image-fixture";
 
 let capturedFlipBookProps: Record<string, unknown> = {};
@@ -377,6 +377,7 @@ describe("Sefer component", () => {
 			const config = capturedFlipBookProps.downloadConfig as {
 				onDownloadSefer: () => Promise<unknown>;
 			};
+			await act(async () => {});
 			expect(await config.onDownloadSefer()).toEqual({
 				ext: "pdf",
 				data: "chapters",
@@ -437,6 +438,7 @@ describe("Sefer component", () => {
 				imagesByPerek={{ 1: [sampleImage, secondImage] }}
 			/>,
 		);
+		await act(async () => {});
 		expect(screen.getByTestId("blank-page")).toBeInTheDocument();
 		const source = container.querySelector('picture source[type="image/avif"]');
 		expect(source).toHaveAttribute(

@@ -1,6 +1,7 @@
-/** Client-safe names-only projection of the perushim catalog. */
+/** Generated client-safe names-only projection of the perushim catalog. */
 export const perushNames = [
 	"שיעורים במנהיגות; מהדורה עברית",
+	'ביאור שטיינזלץ, הקדמות לתנ"ך',
 	"אבן עזרא מהדורא תניינא",
 	"שיג ושיח; מהדורה עברית",
 	"צרור המור (לורברבוים)",
@@ -11,6 +12,7 @@ export const perushNames = [
 	"תורה תמימה (נבון)",
 	"קיצור בעל הטורים",
 	"תורת משה (אלשיך)",
+	"ביאור שטיינזלץ",
 	"דברים ניחומים",
 	"יוסף אבן יחיא",
 	"מראות הצובאות",
@@ -79,7 +81,6 @@ export const perushNames = [
 	"כלי חמדה",
 	"לחם דמעה",
 	"מחיר יין",
-	"מנחת עני",
 	"משאת משה",
 	"עיני משה",
 	"פלגי מים",

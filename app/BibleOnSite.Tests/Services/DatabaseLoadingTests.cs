@@ -23,13 +23,13 @@ public class DatabaseLoadingTests
     }
 
     [Fact]
-    public async Task BibleDatabase_UsesExistingDatabaseWithoutOpeningPackage()
+    public async Task BibleDatabase_WithMissingPackage_RetainsOfflineCopy()
     {
         await using var storage = new TestStorage();
         await storage.CreateDatabaseAsync(BibleDb, "CREATE TABLE sample (value TEXT)", "INSERT INTO sample VALUES ('existing')");
         var db = await new LocalDatabaseService(storage.FileSystem.Object).GetDatabaseAsync();
         (await db.ExecuteScalarAsync<string>("SELECT value FROM sample")).Should().Be("existing");
-        storage.FileSystem.Verify(f => f.OpenAppPackageFileAsync(It.IsAny<string>()), Times.Never);
+        storage.FileSystem.Verify(f => f.OpenAppPackageFileAsync(BibleDb), Times.Once);
     }
 
     [Fact]
@@ -72,13 +72,24 @@ public class DatabaseLoadingTests
     }
 
     [Fact]
-    public async Task Catalog_WithExistingFile_DoesNotOpenPackage()
+    public async Task Catalog_WithExistingFileAndMissingPackage_RetainsOfflineCopy()
     {
         await using var storage = new TestStorage();
         await storage.CreateDatabaseAsync(CatalogDb, "CREATE TABLE perush (id INTEGER, name TEXT, priority INTEGER)");
         var service = new PerushimCatalogService(storage.FileSystem.Object);
         (await service.GetAllPerushimAsync()).Should().BeEmpty();
         service.IsAvailable.Should().BeTrue();
-        storage.FileSystem.Verify(f => f.OpenAppPackageFileAsync(It.IsAny<string>()), Times.Never);
+        storage.FileSystem.Verify(f => f.OpenAppPackageFileAsync(CatalogDb), Times.Once);
+    }
+
+    [Fact]
+    public async Task BibleDatabase_RefreshesExistingTextFromUpdatedPackage()
+    {
+        await using var storage = new TestStorage();
+        await storage.BundleDatabaseAsync(BibleDb, "CREATE TABLE sample (value TEXT)", "INSERT INTO sample VALUES ('corrected')");
+        var old = await storage.CreateDatabaseAsync(BibleDb, "CREATE TABLE sample (value TEXT)", "INSERT INTO sample VALUES ('old')");
+        await old.CloseAsync();
+        var db = await new LocalDatabaseService(storage.FileSystem.Object).GetDatabaseAsync();
+        (await db.ExecuteScalarAsync<string>("SELECT value FROM sample")).Should().Be("corrected");
     }
 }
