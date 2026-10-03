@@ -10,6 +10,9 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import * as semver from "semver";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
@@ -148,6 +151,27 @@ function verifyModule(
 	return true;
 }
 
+/**
+ * Ref whose module version a CI event's changes must exceed. A merge-queue
+ * group is built on top of the PRs queued ahead of it, which origin/master
+ * does not contain yet, so only the group's base reveals a reused version.
+ */
+export function againstRefForEvent(
+	eventName: string | undefined,
+	event: { merge_group?: { base_sha?: string } },
+): string | undefined {
+	if (eventName === "pull_request") return "origin/master";
+	if (eventName !== "merge_group") return undefined;
+	const baseSha = event.merge_group?.base_sha;
+	if (!baseSha) throw new Error("merge_group event has no base_sha");
+	return baseSha;
+}
+
+function readGitHubEvent(): { merge_group?: { base_sha?: string } } {
+	const eventPath = process.env.GITHUB_EVENT_PATH;
+	return eventPath ? JSON.parse(readFileSync(eventPath, "utf8")) : {};
+}
+
 async function main() {
 	const argv = await yargs(hideBin(process.argv))
 		.option("module", {
@@ -180,9 +204,13 @@ async function main() {
 	console.log("🔍 Version Verification");
 	console.log("========================");
 
+	const againstRef =
+		argv.againstRef ??
+		againstRefForEvent(process.env.GITHUB_EVENT_NAME, readGitHubEvent());
+
 	let allPassed = true;
 	for (const modulePath of modulePaths) {
-		if (!verifyModule(modulePath, argv.againstRef)) {
+		if (!verifyModule(modulePath, againstRef)) {
 			allPassed = false;
 		}
 	}
@@ -197,4 +225,9 @@ async function main() {
 	}
 }
 
-main();
+if (
+	process.argv[1] &&
+	path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+	main();
+}
