@@ -136,6 +136,37 @@ describe("BlankPageContent", () => {
 		expect(screen.getByText("פרשנים על הפרק")).toBeVisible();
 	});
 
+	it.each(["article", "perush"])("keeps the newer selection when an old %s request fails", async (kind) => {
+		let rejectRequest: (error: Error) => void = () => {};
+		mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
+		mockGetPerushNotesForPage.mockResolvedValue([]);
+		if (kind === "article") {
+			mockGetArticleForBook.mockReturnValueOnce(new Promise((_, reject) => { rejectRequest = reject; }));
+		} else {
+			mockGetPerushNotesForPage.mockReturnValueOnce(new Promise((_, reject) => { rejectRequest = reject; }));
+		}
+		const error = jest.spyOn(console, "error").mockImplementation(() => {});
+		try {
+			const props = { perekId: 1, articles: mockArticles, perushim: mockPerushim, hebrewDateStr: "date" };
+			const oldSlug = kind === "article" ? "1" : 'רש"י';
+			const newSlug = kind === "article" ? 'רש"י' : "1";
+			const { rerender } = render(<BlankPageContent {...props} initialSlug={oldSlug} />);
+			rerender(<BlankPageContent {...props} initialSlug={newSlug} />);
+			const currentBack = kind === "article" ? "→ חזרה לפרשנים" : "חזרה למאמרים →";
+			await screen.findByText(currentBack);
+			const failure = new Error("old request failed after navigation");
+			await act(async () => rejectRequest(failure));
+			expect(screen.getByText(currentBack)).toBeVisible();
+			expect(screen.queryByText(kind === "article" ? "חזרה למאמרים →" : "→ חזרה לפרשנים")).toBeNull();
+			expect(error).toHaveBeenCalledWith(
+				kind === "article" ? "Failed to load book article" : "Failed to load book commentary",
+				expect.objectContaining({ perekId: 1, error: failure }),
+			);
+		} finally {
+			error.mockRestore();
+		}
+	});
+
 	it("delegates clicks to book navigation and logs article failures", async () => {
 		const onNavigate = jest.fn();
 		const error = jest.spyOn(console, "error").mockImplementation(() => {});
