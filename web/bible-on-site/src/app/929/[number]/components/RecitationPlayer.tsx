@@ -25,6 +25,7 @@ import styles from "./recitation-player.module.css";
 
 const STOP_EVENT = "recitation-stop";
 const LOADING_MESSAGE = "טעינה על הפרק...";
+const NO_RECORDING_MESSAGE = "אין הקלטה לפרק זה";
 export function stopRecitation() {
 	window.dispatchEvent(new Event(STOP_EVENT));
 }
@@ -76,19 +77,20 @@ export function RecitationWordControl({
 	const word = context?.enabled
 		? context.words.find((w) => w.pasuk === pasuk && w.segment === segment)
 		: undefined;
-	if (!word || !context) return <>{children}</>;
 	const key = `${pasuk}:${segment}`;
 	return (
-		<button
-			data-flipbook-no-flip
-			type="button"
+		<InlineRecitationControl
 			className={styles.word}
-			aria-label={`השמעת המילה ${word.text}`}
-			aria-pressed={context.activeWord === key}
-			onClick={() => context.play(word.startMs, word.endMs, key)}
+			label={word ? `השמעת המילה ${word.text}` : undefined}
+			pressed={context?.activeWord === key}
+			onActivate={
+				word && context
+					? () => context.play(word.startMs, word.endMs, key)
+					: undefined
+			}
 		>
 			{children}
-		</button>
+		</InlineRecitationControl>
 	);
 }
 
@@ -101,19 +103,79 @@ export function RecitationPasukControl({
 }) {
 	const context = useContext(RecitationContext);
 	const range = context?.enabled ? verseRange(context.words, pasuk) : null;
-	if (!range || !context) return <>{children}</>;
+	const label = `השמעת פסוק ${toLetters(pasuk)}`;
 	return (
-		<button
-			data-flipbook-no-flip
-			type="button"
+		<InlineRecitationControl
 			className={styles.pasuk}
-			aria-label={`השמעת פסוק ${toLetters(pasuk)}`}
-			title={`השמעת פסוק ${toLetters(pasuk)}`}
-			onClick={() => context.play(range.startMs, range.endMs)}
+			label={range ? label : undefined}
+			title={range ? label : undefined}
+			onActivate={
+				range && context
+					? () => context.play(range.startMs, range.endMs)
+					: undefined
+			}
 		>
 			{children}
-		</button>
+		</InlineRecitationControl>
 	);
+}
+
+/** Native buttons form atomic text boxes and change Hebrew spacing and wrapping. */
+function InlineRecitationControl({
+	children,
+	className,
+	label,
+	title,
+	pressed,
+	onActivate,
+}: {
+	children: ReactNode;
+	className: string;
+	label?: string;
+	title?: string;
+	pressed?: boolean;
+	onActivate?: () => void;
+}) {
+	return (
+		// biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useAriaPropsSupportedByRole: The button role, ARIA, focus and keyboard handlers activate together while preserving inline Hebrew typography.
+		<span
+			className={className}
+			data-flipbook-no-flip={onActivate ? true : undefined}
+			role={onActivate ? "button" : undefined}
+			tabIndex={onActivate ? 0 : undefined}
+			aria-label={label}
+			aria-pressed={onActivate ? pressed : undefined}
+			title={title}
+			onClick={onActivate}
+			onKeyDown={
+				onActivate
+					? (event) => {
+							if (event.key === " ") event.preventDefault();
+							if (event.key === "Enter") {
+								event.preventDefault();
+								onActivate();
+							}
+						}
+					: undefined
+			}
+			onKeyUp={
+				onActivate
+					? (event) => {
+							if (event.key === " ") {
+								event.preventDefault();
+								onActivate();
+							}
+						}
+					: undefined
+			}
+		>
+			{children}
+		</span>
+	);
+}
+
+export function RecitationVerse({ children }: { children: ReactNode }) {
+	return <span className={styles.verse}>{children}</span>;
 }
 
 /** Keep entity links out of listening mode so interactive elements never nest. */
@@ -147,10 +209,12 @@ function ListenIcon() {
 export default function RecitationPlayer({
 	perekId,
 	pesukim,
+	hasRecording,
 	children,
 }: {
 	perekId: number;
 	pesukim: Pasuk[];
+	hasRecording: boolean;
 	children?: ReactNode;
 }) {
 	const id = useId();
@@ -219,7 +283,7 @@ export default function RecitationPlayer({
 	useEffect(() => {
 		stop(true);
 		setData(null);
-		if (!open) return;
+		if (!open || !hasRecording) return;
 		window.dispatchEvent(new CustomEvent(STOP_EVENT, { detail: id }));
 		const controller = new AbortController();
 		preparing.current = true;
@@ -262,7 +326,7 @@ export default function RecitationPlayer({
 			controller.abort();
 			stop(true);
 		};
-	}, [open, perekId, pesukim, stop, id, createAudio]);
+	}, [open, hasRecording, perekId, pesukim, stop, id, createAudio]);
 
 	function finish() {
 		setState("idle");
@@ -385,6 +449,8 @@ export default function RecitationPlayer({
 				aria-pressed={open && data !== null}
 				aria-busy={loading}
 				aria-label="מצב הקראה"
+				disabled={!hasRecording}
+				title={hasRecording ? undefined : NO_RECORDING_MESSAGE}
 				onClick={() => setOpen((value) => !value)}
 			>
 				<ListenIcon />
