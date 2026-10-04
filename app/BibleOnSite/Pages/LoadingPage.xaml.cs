@@ -48,7 +48,7 @@ public partial class LoadingPage : ContentPage
         // Start monitoring connectivity changes so we can refresh when back online
         NetworkService.Instance.StartMonitoring();
 
-        // Always navigate — the app works without articles/authors
+        // Always open the reader — the app works without articles/authors
         await NavigateToMainPageAsync();
     }
 
@@ -71,9 +71,8 @@ public partial class LoadingPage : ContentPage
 
     private static async Task NavigateToMainPageAsync()
     {
-        // Navigate to the main PerekPage
-        Console.WriteLine("[Startup] Navigating to PerekPage");
-        await Shell.Current.GoToAsync("//PerekPage");
-        Console.WriteLine("[Startup] PerekPage navigation completed");
+        Console.WriteLine("[Startup] Opening PerekPage in the existing ShellContent");
+        await MainThread.InvokeOnMainThreadAsync(() => ((AppShell)Shell.Current).CompleteStartup());
+        Console.WriteLine("[Startup] PerekPage startup completed");
     }
 }

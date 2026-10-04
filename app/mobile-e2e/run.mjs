@@ -57,11 +57,11 @@ async function sampleIosApp() {
       if (error.code === 1) return;
       throw error;
     }
-    for (const pid of processes.stdout.trim().split(/\s+/)) {
+    for (const pid of processes.stdout.trim().split("\n")) {
       if (!pid || sampledProcesses.has(pid)) continue;
       sampledProcesses.add(pid);
       await execute("sample", [pid, "2", "1", "-mayDie", "-file", resolve(artifacts, `native-stack-${pid}.txt`)],
-        { timeout: 15000 });
+        { timeout: 120000 });
     }
   } catch (error) {
     diagnosticsFailed = true;

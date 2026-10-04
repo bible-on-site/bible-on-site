@@ -69,6 +69,8 @@ partial class Build
                 .SetConfiguration("Debug")
                 .SetProperty("RestoreLockedMode", "true")
                 .SetFilter($"Category=MobileE2E&(Platform=Shared|Platform={(MobileIsAndroid ? "Android" : "iOS")})")
+                .SetBlameHangTimeout("6m")
+                .SetBlameHangDumpType("mini")
                 .SetResultsDirectory(Path.Join(artifacts, "results"))
                 .SetLoggers("trx;LogFileName=mobile-e2e.trx", "junit;LogFilePath=" + Path.Join(artifacts, "results", "mobile-e2e.xml")));
         });
