@@ -194,9 +194,14 @@ public sealed class RecitationService
     public Task<string> PrepareAudioAsync(int perekId, IReadOnlyList<Pasuk> pasukim, IReadOnlyList<(double Start, double End)> ranges, IRecitationAudioDecoder decoder) =>
         PrepareAudioAsync(perekId, pasukim, null, null, CancellationToken.None, ranges, decoder);
 
+    public Task<string> PrepareAudioAsync(int perekId, IReadOnlyList<Pasuk> pasukim,
+        double? startMs, double? endMs, CancellationToken cancellationToken,
+        IReadOnlyList<(double Start, double End)>? ranges, IRecitationAudioDecoder? decoder) =>
+        PrepareAudioAsync(perekId, pasukim, startMs, endMs, cancellationToken, ranges, decoder, 0);
+
     public async Task<string> PrepareAudioAsync(int perekId, IReadOnlyList<Pasuk> pasukim,
         double? startMs, double? endMs, CancellationToken cancellationToken,
-        IReadOnlyList<(double Start, double End)>? ranges, IRecitationAudioDecoder? decoder, double pauseMs = 0)
+        IReadOnlyList<(double Start, double End)>? ranges, IRecitationAudioDecoder? decoder, double pauseMs)
     {
         await _gate.WaitAsync(cancellationToken);
         try
@@ -251,9 +256,9 @@ public sealed class RecitationService
             {
                 throw new InvalidDataException("Invalid verse pause.");
             }
-            var pcm = pauseMs == 0
-                ? await decoder.CreateClipAsync(mp3, intervals!, cancellationToken)
-                : await decoder.CreateClipAsync(mp3, intervals!, cancellationToken, pauseMs);
+            var pcm = pauseMs > 0
+                ? await decoder.CreateClipAsync(mp3, intervals!, cancellationToken, pauseMs)
+                : await decoder.CreateClipAsync(mp3, intervals!, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             await File.WriteAllBytesAsync(clip, pcm, cancellationToken);
             return clip;

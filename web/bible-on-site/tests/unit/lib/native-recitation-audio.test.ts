@@ -31,10 +31,8 @@ test("the shipped native PCM decoder inserts silence only between exact sample r
 			},
 		},
 	};
-	const api = runInNewContext(
-		`${html.split("<script>")[1].split("</script>")[0]};recitation`,
-		context,
-	);
+	runInNewContext(html.split("<script>")[1].split("</script>")[0], context);
+	const api = Reflect.get(context, "recitation");
 	api.load("AA==");
 	await Promise.resolve();
 	await Promise.resolve();

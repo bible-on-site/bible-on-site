@@ -14,7 +14,10 @@ import RecitationPlayer, {
 	stopRecitation,
 } from "@/app/929/[number]/components/RecitationPlayer";
 import { RecitationAudio } from "@/lib/recitation-audio";
-import { saveRecitationSettings } from "@/lib/recitation-settings";
+import {
+	RECITATION_SETTINGS_KEY,
+	saveRecitationSettings,
+} from "@/lib/recitation-settings";
 
 jest.mock("@/lib/recitation-audio");
 const clipPlay = jest.fn();
@@ -377,6 +380,13 @@ test("chapter-only recordings use the same volume, speed and resumable audio eng
 		saveRecitationSettings({ speed: 0.75, volume: 0.6, versePauseMs: 1000 }),
 	);
 	expect(setOptions).toHaveBeenLastCalledWith(0.75, 0.6);
+	localStorage.setItem(
+		RECITATION_SETTINGS_KEY,
+		JSON.stringify({ speed: 2, volume: 0.2, versePauseMs: 1000 }),
+	);
+	fireEvent(window, new Event("storage"));
+	expect(setOptions).toHaveBeenLastCalledWith(2, 0.2);
+	expect(chapterPlay).toHaveBeenCalledTimes(1);
 });
 
 test("a finished clip cannot be paused or resumed", async () => {

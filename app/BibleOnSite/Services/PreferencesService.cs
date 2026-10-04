@@ -112,7 +112,7 @@ public class PreferencesService
         double.IsFinite(value) ? Math.Clamp(value, min, max) : fallback;
     private void SetRecitationValue(ref double field, string key, double value)
     {
-        if (field == value) { return; }
+        if (Math.Abs(field - value) < 0.000001) { return; }
         field = value;
         _storage.Set(key, value);
         OnPreferencesChanged();

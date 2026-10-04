@@ -11,7 +11,11 @@ public sealed class RecitationTimeline
     {
     }
 
-    public RecitationTimeline(RecitationTrack? track, IReadOnlyList<(double Start, double End)>? ranges, double pauseMs = 0)
+    public RecitationTimeline(RecitationTrack? track, IReadOnlyList<(double Start, double End)>? ranges) : this(track, ranges, 0)
+    {
+    }
+
+    public RecitationTimeline(RecitationTrack? track, IReadOnlyList<(double Start, double End)>? ranges, double pauseMs)
     {
         if (track?.AlignmentStatus != "ready")
         {

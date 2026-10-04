@@ -98,3 +98,34 @@ test("Escape closes the modal and cross-tab preferences update its controls", ()
 	expect(screen.queryByRole("dialog")).toBeNull();
 	expect(button).toHaveFocus();
 });
+
+test.each([
+	[50, 150],
+	[350, 150],
+	[150, 50],
+	[150, 350],
+])(
+	"backdrop click at (%i, %i) closes settings while clicks inside keep them open",
+	(clientX, clientY) => {
+		render(<ReaderSettings />);
+		const button = screen.getByRole("button", { name: "הגדרות קריאה" });
+		fireEvent.click(button);
+		const dialog = screen.getByRole("dialog");
+		jest.spyOn(dialog, "getBoundingClientRect").mockReturnValue({
+			left: 100,
+			top: 100,
+			right: 300,
+			bottom: 300,
+			width: 200,
+			height: 200,
+			x: 100,
+			y: 100,
+			toJSON: () => ({}),
+		});
+		fireEvent.click(dialog, { clientX: 150, clientY: 150 });
+		expect(dialog).toBeVisible();
+		fireEvent.click(dialog, { clientX, clientY });
+		expect(screen.queryByRole("dialog")).toBeNull();
+		expect(button).toHaveFocus();
+	},
+);
