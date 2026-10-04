@@ -2033,7 +2033,7 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     needs: [website_e2e, website_performance]
-    if: ${{ always() && (needs.website_e2e.result != 'skipped' || needs.website_performance.result != 'skipped') }}
+    if: ${{ always() && !cancelled() && (needs.website_e2e.result != 'skipped' || needs.website_performance.result != 'skipped') }}
     steps:
       - name: Checkout
         id: checkout
@@ -2091,7 +2091,8 @@ jobs:
         determine_baseline_availability,
         determine_docker_image_availability,
       ]
-    if: ${{ always() }}
+    # Evaluate failures, but release the PR concurrency slot when replaced.
+    if: ${{ always() && !cancelled() }}
     steps:
       - name: Check Prerequisites
         id: check_prerequisites
