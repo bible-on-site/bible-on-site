@@ -381,17 +381,29 @@ public partial class PerekPage
         UpdateSelectionBar();
         try
         {
+            var preferences = PreferencesService.Instance;
+            var track = RecitationService.Instance.GetTrack(perek.PerekId);
+            if (ranges == null && start == null && preferences.RecitationVersePauseMs >= 0 && track?.AlignmentStatus == "ready")
+            {
+                ranges = track.Words.GroupBy(w => w.Pasuk).OrderBy(g => g.Key)
+                    .Select(g => (g.First().StartMs!.Value, g.Last().EndMs!.Value)).ToList();
+            }
+            // MediaElement's position is in source time; scale generated silence so
+            // the user's pause retains its wall-clock length at every speed.
+            var pauseMs = ranges is { Count: > 1 } && preferences.RecitationVersePauseMs >= 0
+                ? preferences.RecitationVersePauseMs * preferences.RecitationSpeed : 0;
             _audioDecoder ??= new MpegRecitationAudioDecoder(RecitationDecoderView);
-            var path = await RecitationService.Instance.PrepareAudioAsync(perek.PerekId, perek.Pasukim, start, end, request.Token, ranges, _audioDecoder);
+            var path = await RecitationService.Instance.PrepareAudioAsync(perek.PerekId, perek.Pasukim, start, end, request.Token, ranges, _audioDecoder, pauseMs);
             if (request.IsCancellationRequested || _viewModel.Perek != perek || !RecitationEnabled)
             {
                 return;
             }
 
             _playingKey = key;
-            var track = RecitationService.Instance.GetTrack(perek.PerekId);
             _recitationTimeline = track?.AlignmentStatus == "ready"
-                ? new RecitationTimeline(track, ranges ?? (start.HasValue && end.HasValue ? [(start.Value, end.Value)] : null)) : null;
+                ? new RecitationTimeline(track, ranges ?? (start.HasValue && end.HasValue ? [(start.Value, end.Value)] : null), pauseMs) : null;
+            RecitationPlayer.Speed = preferences.RecitationSpeed;
+            RecitationPlayer.Volume = preferences.RecitationVolume;
             _playWhenOpened = true;
             RecitationPlayer.Source = MediaSource.FromFile(path);
         }

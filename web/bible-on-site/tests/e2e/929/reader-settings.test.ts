@@ -1,81 +1,85 @@
 import { expect, test } from "../../util/playwright/test-fixture";
 
-const BASE_URL = "/929";
-
-const perekText = (page: import("@playwright/test").Page) =>
-	page.getByRole("article").first();
-
-async function fontScaleVar(page: import("@playwright/test").Page) {
-	return page.evaluate(() =>
-		document.documentElement.style.getPropertyValue("--perek-font-scale"),
+test("display settings independently change font and both spacing directions, persisting across reload", async ({
+	page,
+}) => {
+	await page.goto("/929/1");
+	await page.getByRole("article").first().waitFor({ state: "visible" });
+	const button = page.getByRole("button", {
+		name: "הגדרות קריאה",
+		exact: true,
+	});
+	const settingsBox = await button.boundingBox();
+	const articleBox = await page.getByRole("article").first().boundingBox();
+	expect(
+		settingsBox &&
+			articleBox &&
+			settingsBox.y + settingsBox.height <= articleBox.y + 1,
+	).toBe(true);
+	await button.click();
+	const dialog = page.getByRole("dialog", { name: "הגדרות קריאה" });
+	await expect(dialog).toBeVisible();
+	await page.getByRole("slider", { name: "גודל גופן" }).fill("3");
+	await page.getByRole("slider", { name: "ריווח אופקי" }).fill("2");
+	await page.getByRole("slider", { name: "ריווח אנכי" }).fill("2");
+	expect(
+		await page
+			.getByRole("article")
+			.first()
+			.evaluate((e) => {
+				const s = getComputedStyle(e);
+				return [s.wordSpacing, s.lineHeight, s.fontSize];
+			}),
+	).not.toContain("normal");
+	await page.keyboard.press("Escape");
+	await expect(dialog).not.toBeVisible();
+	await expect(button).toBeFocused();
+	await page.reload();
+	await page.getByRole("article").first().waitFor({ state: "visible" });
+	expect(
+		await page.evaluate(() => ({
+			font: document.documentElement.style.getPropertyValue(
+				"--perek-font-scale",
+			),
+			horizontal: document.documentElement.style.getPropertyValue(
+				"--perek-word-spacing",
+			),
+			vertical: document.documentElement.style.getPropertyValue(
+				"--perek-line-height",
+			),
+		})),
+	).toEqual({ font: "1.15", horizontal: "0.28em", vertical: "2" });
+	await button.click();
+	await expect(page.getByRole("slider", { name: "גודל גופן" })).toHaveValue(
+		"3",
 	);
-}
-
-async function lineHeightVar(page: import("@playwright/test").Page) {
-	return page.evaluate(() =>
-		document.documentElement.style.getPropertyValue("--perek-line-height"),
-	);
-}
-
-test.describe("Reader settings", () => {
-	test("A+ increases the perek text font size and persists across reload", async ({
-		page,
-	}) => {
-		await page.goto(`${BASE_URL}/1`);
-		await perekText(page).waitFor({ state: "visible" });
-
-		const increase = page.getByTestId("reader-font-increase");
-		await increase.click();
-		expect(await fontScaleVar(page)).toBe("1.15");
-
-		await page.reload();
-		await perekText(page).waitFor({ state: "visible" });
-		// Bootstrap script re-applies the stored setting before paint.
-		expect(await fontScaleVar(page)).toBe("1.15");
-	});
-
-	test("line spacing control cycles through the steps", async ({ page }) => {
-		await page.goto(`${BASE_URL}/1`);
-		await perekText(page).waitFor({ state: "visible" });
-
-		const spacing = page.getByTestId("reader-line-spacing");
-		await spacing.click();
-		expect(await lineHeightVar(page)).toBe("1.75");
-		await spacing.click();
-		expect(await lineHeightVar(page)).toBe("2");
-		await spacing.click();
-		expect(await lineHeightVar(page)).toBe("1.5");
-	});
-
-	test("controls stay in the top strip and do not cover the perek text", async ({
-		page,
-	}) => {
-		await page.goto(`${BASE_URL}/1`);
-		const article = perekText(page);
-		await article.waitFor({ state: "visible" });
-
-		const settings = page.getByTestId("reader-settings");
-		await expect(settings).toBeVisible();
-		const settingsBox = await settings.boundingBox();
-		const articleBox = await article.boundingBox();
-		expect(settingsBox).not.toBeNull();
-		expect(articleBox).not.toBeNull();
-		// biome-ignore lint/style/noNonNullAssertion: checked with toBeNull above
-		expect(settingsBox!.y + settingsBox!.height).toBeLessThanOrEqual(
-			// biome-ignore lint/style/noNonNullAssertion: checked with toBeNull above
-			articleBox!.y + 1,
-		);
-	});
-
-	test("A- decreases until disabled at the minimum step", async ({ page }) => {
-		await page.goto(`${BASE_URL}/1`);
-		await perekText(page).waitFor({ state: "visible" });
-
-		const decrease = page.getByTestId("reader-font-decrease");
-		await decrease.click();
-		expect(await fontScaleVar(page)).toBe("0.92");
-		await decrease.click();
-		expect(await fontScaleVar(page)).toBe("0.85");
-		await expect(decrease).toBeDisabled();
-	});
+	await page.getByRole("button", { name: "קריינות", exact: true }).click();
+	await expect(page.getByRole("slider", { name: "מהירות" })).toBeFocused();
+	await page.getByRole("slider", { name: "מהירות" }).fill("1.5");
+	await page.getByRole("slider", { name: "עוצמה" }).fill("0.4");
+	await page
+		.getByRole("combobox", { name: "אורך הפסקה בין פסוקים" })
+		.selectOption("1000");
+	await page.getByRole("button", { name: "סגירת הגדרות" }).click();
+	await page.reload();
+	await button.click();
+	await page.getByRole("button", { name: "קריינות", exact: true }).click();
+	await expect(page.getByRole("slider", { name: "מהירות" })).toHaveValue("1.5");
+	await expect(page.getByRole("slider", { name: "עוצמה" })).toHaveValue("0.4");
+	await expect(
+		page.getByRole("combobox", { name: "אורך הפסקה בין פסוקים" }),
+	).toHaveValue("1000");
+	const bounds = await dialog.boundingBox();
+	const viewport = page.viewportSize();
+	expect(
+		bounds &&
+			viewport &&
+			bounds.x >= 0 &&
+			bounds.y >= 0 &&
+			bounds.x + bounds.width <= viewport.width &&
+			bounds.y + bounds.height <= viewport.height,
+	).toBe(true);
+	// Clicking outside the dropdown closes the native modal.
+	await page.mouse.click((viewport?.width ?? 1000) - 5, 5);
+	await expect(dialog).not.toBeVisible();
 });

@@ -163,12 +163,12 @@ test.describe("Recitation in the book reader", () => {
 		await reader.getByRole("button", { name: "השהיית ההקראה" }).click();
 		const paused = await text
 			.locator('[data-recitation-active="true"]')
-			.textContent();
-		expect(paused).toBeTruthy();
+			.allTextContents();
+		// A pause can land in recorded silence; freeze that empty state too.
 		await page.waitForTimeout(250);
 		expect(
-			await text.locator('[data-recitation-active="true"]').textContent(),
-		).toBe(paused);
+			await text.locator('[data-recitation-active="true"]').allTextContents(),
+		).toEqual(paused);
 		const highlighted = await characterPositions(text);
 		for (let i = 0; i < original.length; i++) {
 			for (const metric of ["x", "y", "width", "height"] as const) {
@@ -209,4 +209,213 @@ test.describe("Recitation in the book reader", () => {
 		await expect(toggle).toHaveAttribute("aria-pressed", "false");
 		expect(requests).toEqual([]);
 	});
+});
+
+test("chapter settings shortcut focuses narration and schedules exact verses with chosen speed and pauses", async ({
+	page,
+}) => {
+	await page.addInitScript(() => {
+		const starts: {
+			when: number;
+			offset: number;
+			duration: number;
+			rate: number;
+		}[] = [];
+		Object.assign(window, { recitationStarts: starts });
+		const create = AudioContext.prototype.createBufferSource;
+		AudioContext.prototype.createBufferSource = function () {
+			const source = create.call(this);
+			const start = source.start.bind(source);
+			source.start = (when = 0, offset = 0, duration = 0) => {
+				starts.push({
+					when,
+					offset,
+					duration,
+					rate: source.playbackRate.value,
+				});
+				start(when, offset, duration);
+			};
+			return source;
+		};
+	});
+	const response = await page.request.get("/api/recitation/829");
+	expect(response.ok()).toBe(true);
+	const manifest = await response.json();
+	await page.route("**/api/recitation/829", (route) =>
+		route.fulfill({
+			response,
+			json: {
+				...manifest,
+				audioSha256: createHash("sha256").update(recording).digest("hex"),
+			},
+		}),
+	);
+	await page.route("**/recordings/829_record.mp3", (route) =>
+		route.fulfill({
+			body: recording,
+			contentType: "audio/mpeg",
+			headers: { "content-length": String(recording.length) },
+		}),
+	);
+	const { toggle, reader } = await chapterReader(page, 829, "י");
+	await expect(
+		reader.getByRole("button", { name: "הגדרות קריינות" }),
+	).toHaveCount(0);
+	await toggle.click();
+	await expect(toggle).toHaveAttribute("aria-pressed", "true");
+	const settings = reader.getByRole("button", { name: "הגדרות קריינות" });
+	const play = reader.getByRole("button", { name: "השמעת כל הפרק" });
+	const boxes = await Promise.all([
+		toggle.boundingBox(),
+		settings.boundingBox(),
+		play.boundingBox(),
+	]);
+	expect(
+		boxes[0] &&
+			boxes[1] &&
+			boxes[2] &&
+			boxes[0].x < boxes[1].x &&
+			boxes[1].x < boxes[2].x,
+	).toBe(true);
+	await settings.click();
+	const settingsBox = await settings.boundingBox();
+	const panelBox = await page
+		.getByRole("dialog", { name: "הגדרות קריאה" })
+		.boundingBox();
+	expect(
+		settingsBox && panelBox && Math.abs(panelBox.x - settingsBox.x) < 1,
+	).toBe(true);
+	await expect(page.getByRole("slider", { name: "מהירות" })).toBeFocused();
+	await page.getByRole("slider", { name: "מהירות" }).fill("2");
+	await page.getByRole("slider", { name: "עוצמה" }).fill("0.4");
+	await page
+		.getByRole("combobox", { name: "אורך הפסקה בין פסוקים" })
+		.selectOption("1000");
+	await page.keyboard.press("Escape");
+	await expect(settings).toBeFocused();
+	await play.click();
+	await expect(
+		reader.getByRole("button", { name: "השהיית ההקראה" }),
+	).toBeVisible();
+	const scheduled = await page.evaluate(
+		() =>
+			(
+				window as unknown as {
+					recitationStarts: {
+						when: number;
+						offset: number;
+						duration: number;
+						rate: number;
+					}[];
+				}
+			).recitationStarts,
+	);
+	expect(scheduled).toHaveLength(3);
+	const words = manifest.words as {
+		pasuk: number;
+		startMs: number;
+		endMs: number;
+	}[];
+	for (let i = 0; i < scheduled.length; i++) {
+		const verse = words.filter((w) => w.pasuk === i + 1);
+		expect(scheduled[i].offset).toBe(verse[0].startMs / 1000);
+		expect(scheduled[i].duration).toBe(
+			(verse[verse.length - 1].endMs - verse[0].startMs) / 1000,
+		);
+		expect(scheduled[i].rate).toBe(2);
+	}
+	expect(
+		scheduled[2].when - scheduled[1].when - scheduled[1].duration / 2,
+	).toBeCloseTo(1, 5);
+	await expect(
+		reader.locator('[data-recitation-active="true"]').first(),
+	).toBeVisible();
+	await reader.getByRole("button", { name: "השהיית ההקראה" }).click();
+	await expect(
+		reader.getByRole("button", { name: "המשך ההקראה" }),
+	).toBeVisible();
+});
+
+test("chapter-only recordings honor volume and speed through Web Audio, retaining original pauses", async ({
+	page,
+}) => {
+	await page.addInitScript(() => {
+		localStorage.setItem(
+			"perekRecitationSettings",
+			JSON.stringify({ speed: 1.5, volume: 0.4, versePauseMs: 1000 }),
+		);
+		const sources: AudioBufferSourceNode[] = [];
+		const gains: GainNode[] = [];
+		Object.assign(window, { chapterSources: sources, chapterGains: gains });
+		const createSource = AudioContext.prototype.createBufferSource;
+		AudioContext.prototype.createBufferSource = function () {
+			const source = createSource.call(this);
+			sources.push(source);
+			return source;
+		};
+		const createGain = AudioContext.prototype.createGain;
+		AudioContext.prototype.createGain = function () {
+			const gain = createGain.call(this);
+			gains.push(gain);
+			return gain;
+		};
+	});
+	const response = await page.request.get("/api/recitation/829");
+	expect(response.ok()).toBe(true);
+	const manifest = await response.json();
+	await page.route("**/api/recitation/829", (route) =>
+		route.fulfill({
+			response,
+			json: {
+				...manifest,
+				alignmentStatus: "pending",
+				words: manifest.words.map((word: Record<string, unknown>) => ({
+					...word,
+					startMs: null,
+					endMs: null,
+				})),
+				audioSha256: createHash("sha256").update(recording).digest("hex"),
+			},
+		}),
+	);
+	await page.route("**/recordings/829_record.mp3", (route) =>
+		route.fulfill({
+			body: recording,
+			contentType: "audio/mpeg",
+			headers: { "content-length": String(recording.length) },
+		}),
+	);
+	const { toggle, reader } = await chapterReader(page, 829, "י");
+	await toggle.click();
+	await expect(toggle).toHaveAttribute("aria-pressed", "true");
+	await reader.getByRole("button", { name: "השמעת כל הפרק" }).click();
+	await expect(
+		reader.getByRole("button", { name: "השהיית ההקראה" }),
+	).toBeVisible();
+	const playback = await page.evaluate(() => {
+		const state = window as unknown as {
+			chapterSources: AudioBufferSourceNode[];
+			chapterGains: GainNode[];
+		};
+		return {
+			count: state.chapterSources.length,
+			rate: state.chapterSources[0].playbackRate.value,
+			volume: state.chapterGains[0].gain.value,
+		};
+	});
+	expect(playback.count).toBe(1);
+	expect(playback.rate).toBe(1.5);
+	expect(playback.volume).toBeCloseTo(0.4, 6);
+	await expect(reader.getByRole("button", { name: /^השמעת פסוק/ })).toHaveCount(
+		0,
+	);
+	await expect(reader.locator("audio")).toHaveCount(0);
+	await expect(reader.locator('[data-recitation-active="true"]')).toHaveCount(
+		0,
+	);
+	await reader.getByRole("button", { name: "השהיית ההקראה" }).click();
+	await reader.getByRole("button", { name: "המשך ההקראה" }).click();
+	await expect(
+		reader.getByRole("button", { name: "השהיית ההקראה" }),
+	).toBeVisible();
 });

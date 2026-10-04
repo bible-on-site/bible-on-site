@@ -31,8 +31,11 @@ public sealed class MpegRecitationAudioDecoder : IRecitationAudioDecoder
         finally { _gate.Release(); }
     }
 
+    public Task<byte[]> CreateClipAsync(string mp3, IReadOnlyList<(double Start, double End)> ranges,
+        CancellationToken cancellationToken) => CreateClipAsync(mp3, ranges, cancellationToken, 0);
+
     public async Task<byte[]> CreateClipAsync(string mp3, IReadOnlyList<(double Start, double End)> ranges,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, double pauseMs)
     {
         await _gate.WaitAsync(cancellationToken);
         try
@@ -89,7 +92,7 @@ public sealed class MpegRecitationAudioDecoder : IRecitationAudioDecoder
             }
             cancellationToken.ThrowIfCancellationRequested();
             var json = JsonSerializer.Serialize(ranges.Select(r => new RecitationClipRange(r.Start, r.End)).ToList(), RecitationJsonContext.Default.ClipRanges);
-            using var result = ParseResult(await view.EvaluateJavaScriptAsync($"recitation.clip({json})"));
+            using var result = ParseResult(await view.EvaluateJavaScriptAsync($"recitation.clip({json},{pauseMs.ToString(System.Globalization.CultureInfo.InvariantCulture)})"));
             var length = result.RootElement.GetProperty("length").GetInt32();
             using var wave = new MemoryStream(length);
             for (var offset = 0; offset < length; offset += 49152)

@@ -42,6 +42,19 @@ public class RecitationTimelineTests
     }
 
     [Fact]
+    public void custom_verse_pause_has_no_highlight_and_preserves_original_word_intervals()
+    {
+        // At 2x, two source seconds of silence produce one real second of pause.
+        var timeline = new RecitationTimeline(Track(), [(1200, 2300), (5000, 5500)], 2000);
+        timeline.WordAt(700).Should().BeSameAs(Second);
+        timeline.WordAt(1100).Should().BeNull();
+        timeline.WordAt(3099.9).Should().BeNull();
+        timeline.WordAt(3100).Should().BeSameAs(Last);
+        timeline.WordAt(3600).Should().BeNull();
+        Last.StartMs.Should().Be(5000);
+    }
+
+    [Fact]
     public void a_word_clip_starts_at_zero_and_unapproved_chapters_never_highlight()
     {
         new RecitationTimeline(Track(), [(1900, 2300)]).WordAt(0).Should().BeSameAs(Second);

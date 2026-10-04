@@ -38,6 +38,29 @@ public class PasukFormattedTextTests
         }
 
         [Fact]
+        public void repeated_spoken_word_updates_keep_the_highlight_without_rebuilding_or_notifying()
+        {
+            var pasuk = new Pasuk
+            {
+                PasukNum = 1, Text = "", Segments = [
+                    new() { Type = SegmentType.Qri, Value = "וַיַּעַן" },
+                    new() { Type = SegmentType.Qri, Value = "בִּלְדַּד" }]
+            };
+            pasuk.RecitingSegment = 1;
+            var highlighted = pasuk.FormattedText;
+            var notifications = new List<string?>();
+            pasuk.PropertyChanged += (_, e) => notifications.Add(e.PropertyName);
+            pasuk.PropertyChanging += (_, e) => notifications.Add(e.PropertyName);
+
+            pasuk.RecitingSegment = 1;
+
+            pasuk.RecitingSegment.Should().Be(1);
+            pasuk.FormattedText.Should().BeSameAs(highlighted);
+            highlighted.Spans.Single(s => s.BackgroundColor != null).Text.Should().Be("וַיַּעַן");
+            notifications.Should().BeEmpty();
+        }
+
+        [Fact]
         public void spoken_word_highlighting_preserves_text_and_clears_without_stale_spans()
         {
             var pasuk = new Pasuk

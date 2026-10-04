@@ -841,6 +841,7 @@ jobs:
             --threshold-measure count --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 10.00 --threshold-lower-boundary _ \
 
       - name: Store Website Perf HTML Report
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: website-perf-html-report-${{ github.run_id }}
@@ -849,6 +850,7 @@ jobs:
           overwrite: true
 
       - name: Store Website Perf JUnit Report
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_PERF_JUNIT_REPORT_ARTIFACT_NAME }}
@@ -1430,11 +1432,24 @@ jobs:
       - name: Restore dotnet tools
         run: dotnet tool restore
 
-      - name: Verify Android NuGet restore
+      - name: Setup Java for Android release validation
+        uses: actions/setup-java@v6
+        with:
+          distribution: "microsoft"
+          java-version: "17"
+
+      - name: Verify Android release package
         run: |
           echo '{"sdk":{"version":"10.0.0","rollForward":"latestFeature"}}' > $GITHUB_WORKSPACE/global.json
           dotnet workload install maui-android
-          dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android
+          dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android -p:RuntimeIdentifiers=android-arm64 -r android-arm64
+          # Compile with the checked-in notes fixture; store packages use the paired release artifact.
+          NOTES_GZ="BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz"
+          if [ -f "$NOTES_GZ" ] && [ ! -f "${NOTES_GZ%.gz}" ]; then
+            gzip -dc "$NOTES_GZ" > "${NOTES_GZ%.gz}"
+          fi
+          # Exercise D8 and release linking before merging, without store signing keys.
+          dotnet build BibleOnSite/BibleOnSite.csproj --no-restore -c Release -f net10.0-android -r android-arm64 -p:RuntimeIdentifiers=android-arm64 -p:AndroidPackageFormats=aab
           rm -f $GITHUB_WORKSPACE/global.json
 
       - name: Verify native canonical recitation word identities

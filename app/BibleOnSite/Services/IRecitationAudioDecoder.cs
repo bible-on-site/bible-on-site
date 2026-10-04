@@ -5,4 +5,6 @@ public interface IRecitationAudioDecoder
 {
     Task<byte[]> CreateClipAsync(string mp3, IReadOnlyList<(double Start, double End)> ranges,
         CancellationToken cancellationToken);
+    Task<byte[]> CreateClipAsync(string mp3, IReadOnlyList<(double Start, double End)> ranges,
+        CancellationToken cancellationToken, double pauseMs);
 }
