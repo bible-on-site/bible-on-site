@@ -4,7 +4,9 @@
 // Local decoder only. Playback remains native; no browser autoplay permission is needed.
 globalThis.recitation = (() => {
     let buffer, upload = [], wave, status = { state: "idle" }, generation = 0;
-    const result = value => JSON.stringify(value);
+    // Return objects: MAUI trims string-result quotes without unescaping them.
+    // Each native handler serializes this object once for the C# JSON parser.
+    const result = value => value;
     function reset() {
         generation++;
         buffer = null;
