@@ -156,4 +156,18 @@ describe("reader-settings", () => {
 			),
 		).toBe(PEREK_FONT_SCALES[DEFAULT_READER_SETTINGS.fontStep]);
 	});
+
+	it.each(["3", true, [2], {}, -8, 99, 1.7, null])(
+		"bootstrap and hydrated settings agree for stored index %j",
+		(value) => {
+			localStorage.setItem(
+				READER_SETTINGS_STORAGE_KEY,
+				JSON.stringify({ fontStep: value, lineStep: value, wordStep: value }),
+			);
+			runBootstrap();
+			const beforePaint = document.documentElement.style.cssText;
+			applyReaderSettings(getStoredReaderSettings());
+			expect(document.documentElement.style.cssText).toBe(beforePaint);
+		},
+	);
 });
