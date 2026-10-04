@@ -126,10 +126,10 @@ const SHARED_FILES = [
 ];
 
 describe("baseRevision", () => {
-	test("uses the pull request base", () => {
+	test("uses the tested PR merge parent even when the event base is stale", () => {
 		assert.deepEqual(
 			baseRevision("pull_request", { pull_request: { base: { sha: "a1" } } }),
-			{ kind: "sha", sha: "a1" },
+			{ kind: "merge-parent" },
 		);
 	});
 
@@ -182,7 +182,8 @@ describe("main", () => {
 
 	/**
 	 * Builds origin history `base -> (api change) -> (website change)` on master,
-	 * then runs `main` in a depth-1 clone of HEAD, like actions/checkout.
+	 * then runs `main` in a depth-1 clone of HEAD, like actions/checkout. PRs
+	 * use a synthetic merge whose first parent has newer release-only bumps.
 	 */
 	function run(
 		eventName: string,
@@ -203,7 +204,24 @@ describe("main", () => {
 			const replaced = commit(work, "web/admin/src/main.tsx");
 			git(work, "checkout", "--quiet", "master");
 			const base = commit(work, "web/api/src/main.rs");
-			commit(work, "web/bible-on-site/src/page.tsx");
+			if (eventName === "pull_request") {
+				git(work, "checkout", "--quiet", "-b", "feature");
+				commit(work, "web/bible-on-site/src/page.tsx");
+				git(work, "checkout", "--quiet", "master");
+				commit(work, "web/admin/package.json");
+				commit(work, "web/bulletin/Cargo.toml");
+				git(
+					work,
+					"merge",
+					"--no-ff",
+					"--quiet",
+					"feature",
+					"-m",
+					"Tested PR merge",
+				);
+			} else {
+				commit(work, "web/bible-on-site/src/page.tsx");
+			}
 			git(directory, "clone", "--quiet", "--bare", work, origin);
 			// A force push leaves the replaced commit unreachable from any ref.
 			git(origin, "branch", "--quiet", "-D", "replaced");
@@ -254,7 +272,7 @@ describe("main", () => {
 			["website", "api"],
 		);
 
-	test("pull_request fetches the base into a shallow clone", () => {
+	test("pull_request excludes newer master-only version bumps in a shallow tested merge", () => {
 		const { changes, output } = run("pull_request", ({ base }) => ({
 			pull_request: { base: { sha: base } },
 		}));
@@ -262,6 +280,8 @@ describe("main", () => {
 		assert.match(output, /^website_module_changed=true$/m);
 		assert.match(output, /^api_module_changed=false$/m);
 		assert.match(output, /^website_ci_changed=false$/m);
+		assert.match(output, /^admin_module_changed=false$/m);
+		assert.match(output, /^bulletin_module_changed=false$/m);
 	});
 
 	test("push compares with the commit before the push", () => {

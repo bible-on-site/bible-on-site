@@ -23,6 +23,46 @@ public class PreferencesServiceTests : IDisposable
     }
 
     [Fact]
+    public void NarrationDefaultsAndIndependentChoicesSurviveRestart()
+    {
+        _service.Load();
+        _service.RecitationSpeed.Should().Be(1);
+        _service.RecitationVolume.Should().Be(1);
+        _service.RecitationVersePauseMs.Should().Be(-1);
+        _service.RecitationSpeed = 1.5;
+        _service.RecitationVolume = 0.4;
+        _service.RecitationVersePauseMs = 1500;
+        var restored = PreferencesService.CreateForTesting(_storage);
+        restored.Load();
+        restored.RecitationSpeed.Should().Be(1.5);
+        restored.RecitationVolume.Should().Be(0.4);
+        restored.RecitationVersePauseMs.Should().Be(1500);
+        restored.RecitationEnabled.Should().BeFalse();
+        restored.FontFactor.Should().Be(1);
+        restored.RecitationVersePauseMs = -1;
+        _service.Load();
+        _service.RecitationVersePauseMs.Should().Be(-1);
+    }
+
+    [Fact]
+    public void NarrationRejectsNonfiniteValuesAndClampsPersistedOrChangedValues()
+    {
+        _storage.Set("recitationSpeed", double.NaN);
+        _storage.Set("recitationVolume", 3.0);
+        _storage.Set("recitationVersePauseMs", 99999.0);
+        _service.Load();
+        _service.RecitationSpeed.Should().Be(1);
+        _service.RecitationVolume.Should().Be(1);
+        _service.RecitationVersePauseMs.Should().Be(5000);
+        _service.RecitationSpeed = 0;
+        _service.RecitationVolume = double.PositiveInfinity;
+        _service.RecitationVersePauseMs = double.NaN;
+        _service.RecitationSpeed.Should().Be(0.5);
+        _service.RecitationVolume.Should().Be(1);
+        _service.RecitationVersePauseMs.Should().Be(-1);
+    }
+
+    [Fact]
     public void FontFactor_WhenSet_PersistsToStorage()
     {
         // Arrange

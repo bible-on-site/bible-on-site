@@ -167,7 +167,8 @@ sequenceDiagram
 The website verifies and fully decodes the original MP3 once, then schedules
 approved offsets and durations on an `AudioBufferSourceNode`. Aligned chapter
 playback uses that same gapless buffer and AudioContext clock. Unaligned chapters
-can still stream. This avoids the imprecise MP3 seek path found during the pilot;
+use the same engine for the full recording, so speed and gain controls work
+consistently, including on iOS browsers. This avoids the imprecise MP3 seek path found during the pilot;
 the original timing values are unchanged.
 
 The app plays precise word/verse clips as decoded PCM and reads the native
@@ -196,3 +197,11 @@ and spacing.
 | Website playback clock and word lookup | [recitation-audio.ts](../../web/bible-on-site/src/lib/recitation-audio.ts), [recitation.ts](../../web/bible-on-site/src/lib/recitation.ts) |
 | Native clip timeline and reader | [RecitationTimeline.cs](../../app/BibleOnSite/Helpers/RecitationTimeline.cs), [PerekPage.Recitation.cs](../../app/BibleOnSite/Pages/PerekPage.Recitation.cs) |
 | Native extension and verified audio | [RecitationService.cs](../../app/BibleOnSite/Services/RecitationService.cs) |
+
+## Reader settings and verse playlists
+
+The website keeps display and narration preferences in one settings dropdown. Horizontal spacing changes the gap between words without changing letters or niqqud. Font size and vertical spacing retain the reader's existing choices. The chapter shortcut opens the same dropdown directly at narration settings. The native app exposes narration controls only while its independent recitation extension is enabled.
+
+Speed and volume apply to both full recordings and precise clips. Original recorded pauses remain the default. A custom pause is available only for chapters with approved verse boundaries: the website schedules the original PCM verse ranges on the Web Audio clock, and the app joins the same decoded ranges into a WAV with explicit silence between verses. The silence is a playback preference; published word intervals and audio hashes stay unchanged. Custom pause lengths are wall-clock durations, including at non-default playback speeds.
+
+Word highlighting maps playback back to the canonical recording timeline. It clears during custom silence, survives pause/resume, and continues from the original source position after a website speed change. Opening settings does not stop playback. Custom verse-pause changes apply the next time a chapter is played.

@@ -124,8 +124,6 @@
 	     XAAMM0000 manifest collisions with Plugin.Firebase are suppressed in NoWarn above. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<PackageReference Include="Xamarin.Google.Android.Play.Asset.Delivery" Version="2.3.0.8" />
-		<!-- Fragment 1.9 includes the Kotlin extensions; align Ktx so its older AAR does not duplicate them. -->
-		<PackageReference Include="Xamarin.AndroidX.Fragment.Ktx" Version="1.9.0" />
 	</ItemGroup>
 
 	<!-- D8 duplicate-class workaround: PAD + Firebase transitively pull in AndroidX
@@ -136,6 +134,10 @@
 	     a target strips the duplicate .aar from @(AndroidAarLibrary) before extraction. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<PackageReference Include="Xamarin.AndroidX.Compose.Runtime.Annotation.Jvm" Version="1.12.1" ExcludeAssets="all" />
+		<!-- Fragment 1.9 merges Kotlin extensions into the main artifact. Keep Ktx
+		     aligned so Firebase's older transitive Ktx does not duplicate those classes.
+		     https://developer.android.com/jetpack/androidx/releases/fragment#1.9.0-alpha01 -->
+		<PackageReference Include="Xamarin.AndroidX.Fragment.Ktx" Version="1.9.0" />
 	</ItemGroup>
 	<Target Name="_RemoveDuplicateAndroidXAars" BeforeTargets="_ResolveAars;_ExtractAar;_GetLibraryImports" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<ItemGroup>
