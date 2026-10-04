@@ -1,13 +1,13 @@
 import json
-from contextlib import closing
+from contextlib import closing, redirect_stderr, redirect_stdout
+from io import StringIO
 from pathlib import Path
 import sqlite3
-import subprocess
-import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
-from prepare_perushim_assets import CATALOG, NOTES, NOTES_DIRECTORIES, prepare_assets, validate_pair
+from prepare_perushim_assets import CATALOG, NOTES, NOTES_DIRECTORIES, main, prepare_assets, validate_pair
 
 
 class PreparePerushimAssetsTests(unittest.TestCase):
@@ -19,23 +19,26 @@ class PreparePerushimAssetsTests(unittest.TestCase):
         self.source.mkdir()
         self.app = self.root / "app"
         self.mapping = {"13": "ביאור שטיינזלץ", "15": "בכור שור"}
-        with closing(sqlite3.connect(self.source / CATALOG)) as db, db:
-            db.execute("CREATE TABLE perush (id INTEGER PRIMARY KEY, name TEXT)")
-            db.executemany("INSERT INTO perush VALUES (?, ?)", self.mapping.items())
-            db.execute("CREATE TABLE _metadata (key TEXT PRIMARY KEY, value TEXT)")
-            db.execute("INSERT INTO _metadata VALUES ('build_timestamp', '200')")
-        with closing(sqlite3.connect(self.source / NOTES)) as db, db:
-            db.execute("CREATE TABLE note (perush_id INTEGER)")
-            db.execute("INSERT INTO note VALUES (13)")
-            db.execute("CREATE TABLE _metadata (key TEXT PRIMARY KEY, value TEXT)")
-            db.executemany("INSERT INTO _metadata VALUES (?, ?)",
-                           [("build_timestamp", "200"), ("perush_catalog", json.dumps(self.mapping))])
+        with closing(sqlite3.connect(self.source / CATALOG)) as db:
+            with db:
+                db.execute("CREATE TABLE perush (id INTEGER PRIMARY KEY, name TEXT)")
+                db.executemany("INSERT INTO perush VALUES (?, ?)", self.mapping.items())
+                db.execute("CREATE TABLE _metadata (key TEXT PRIMARY KEY, value TEXT)")
+                db.execute("INSERT INTO _metadata VALUES ('build_timestamp', '200')")
+        with closing(sqlite3.connect(self.source / NOTES)) as db:
+            with db:
+                db.execute("CREATE TABLE note (perush_id INTEGER)")
+                db.execute("INSERT INTO note VALUES (13)")
+                db.execute("CREATE TABLE _metadata (key TEXT PRIMARY KEY, value TEXT)")
+                db.executemany("INSERT INTO _metadata VALUES (?, ?)",
+                               [("build_timestamp", "200"), ("perush_catalog", json.dumps(self.mapping))])
 
     def metadata(self, key, value):
-        with closing(sqlite3.connect(self.source / NOTES)) as db, db:
-            db.execute("DELETE FROM _metadata WHERE key = ?", (key,))
-            if value is not None:
-                db.execute("INSERT INTO _metadata VALUES (?, ?)", (key, value))
+        with closing(sqlite3.connect(self.source / NOTES)) as db:
+            with db:
+                db.execute("DELETE FROM _metadata WHERE key = ?", (key,))
+                if value is not None:
+                    db.execute("INSERT INTO _metadata VALUES (?, ?)", (key, value))
 
     def test_prepares_both_platforms_with_the_delivered_catalog(self):
         for platform, directory in NOTES_DIRECTORIES.items():
@@ -76,8 +79,9 @@ class PreparePerushimAssetsTests(unittest.TestCase):
                     validate_pair(self.source)
 
     def test_notes_cannot_reference_unknown_ids(self):
-        with closing(sqlite3.connect(self.source / NOTES)) as db, db:
-            db.execute("INSERT INTO note VALUES (999)")
+        with closing(sqlite3.connect(self.source / NOTES)) as db:
+            with db:
+                db.execute("INSERT INTO note VALUES (999)")
         with self.assertRaisesRegex(ValueError, "IDs absent from the catalog"):
             validate_pair(self.source)
 
@@ -97,15 +101,16 @@ class PreparePerushimAssetsTests(unittest.TestCase):
             validate_pair(self.source)
 
     def test_cli_prepares_valid_pair_and_fails_for_stale_pair(self):
-        command = [sys.executable, str(Path(__file__).with_name("prepare_perushim_assets.py")),
+        arguments = ["prepare_perushim_assets.py",
                    "--source", str(self.source), "--app-directory", str(self.app), "--platform", "iOS"]
-        result = subprocess.run(command, capture_output=True, text=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("matching catalog and notes", result.stdout)
+        output, errors = StringIO(), StringIO()
+        with patch("sys.argv", arguments), redirect_stdout(output), redirect_stderr(errors):
+            self.assertEqual(main(), 0)
+        self.assertIn("matching catalog and notes", output.getvalue())
         self.metadata("perush_catalog", None)
-        result = subprocess.run(command, capture_output=True, text=True)
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("regenerate the paired", result.stderr)
+        with patch("sys.argv", arguments), redirect_stdout(output), redirect_stderr(errors):
+            self.assertEqual(main(), 1)
+        self.assertIn("regenerate the paired", errors.getvalue())
 
 
 if __name__ == "__main__":
