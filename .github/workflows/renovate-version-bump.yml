@@ -1,0 +1,52 @@
+name: Renovate Version Bump
+
+# Mend-hosted Renovate cannot run repo scripts (postUpgradeTasks need a
+# self-hosted allowedCommands list), and its bumpVersion skips the app and Cargo
+# modules. Bump every module a Renovate branch changes so Verify * Version passes.
+# renovate.json ignores this commit author, so Renovate keeps rebasing the branch
+# and this job re-bumps after each rebase.
+on:
+  push:
+    branches:
+      - renovate/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: renovate-version-bump-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bump_changed_module_versions:
+    name: Bump Changed Module Versions
+    # Skip branch deletions and this job's own bump commits.
+    if: ${{ !github.event.deleted && github.event.head_commit.author.email != 'actions@github.com' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          # Deploy-key pushes trigger CI on the bumped head; GITHUB_TOKEN pushes would not.
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+          cache-dependency-path: devops/package-lock.json
+          cache: npm
+      - name: Install devops dependencies
+        working-directory: devops
+        run: npm ci --no-audit --no-fund
+      - name: Bump changed module versions
+        working-directory: devops
+        run: npm run bump:changed-modules
+      - name: Commit and push version bumps
+        run: |
+          if git diff --quiet; then
+            echo "All changed modules are already ahead of master and their releases"
+            exit 0
+          fi
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git commit --all -m "chore(deps): bump versions of updated modules"
+          git push origin "HEAD:$GITHUB_REF_NAME"

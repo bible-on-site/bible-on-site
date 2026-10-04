@@ -33,6 +33,12 @@ These jobs are conditional: they only run if the corresponding module has change
 
 Website changes must bump `web/bible-on-site/package.json` and `package-lock.json` in the pull request. The release workflow does not bump the website version afterward. A later website pull request with the same version will fail verification against `master` and must choose the next version before merging.
 
+### Renovate Branches
+
+Renovate updates dependencies without bumping the modules they belong to. The `Renovate Version Bump` workflow (`.github/workflows/renovate-version-bump.yml`) runs on every push to `renovate/**`, finds the modules the branch changes against `origin/master`, and commits a patch bump above both `master` and the latest release with `npm run bump:changed-modules` (`devops/github/ci/bump-changed-module-versions.ts`). It pushes with the deploy key so the PR checks rerun on the bumped head. `renovate.json` lists the bump commit's author in `gitIgnoredAuthors`, so Renovate still treats the branch as its own and keeps rebasing it; each rebase drops the bump and the workflow adds it again.
+
+Renovate `postUpgradeTasks` would avoid the extra commit, but the Mend-hosted Renovate app only runs commands its administrator allows, so this repo cannot rely on them.
+
 ### Cross Module CI Integration
 
 The `cross_module_ci` job validates version verification results:
