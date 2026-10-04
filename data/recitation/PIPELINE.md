@@ -7,6 +7,21 @@ finds the boundaries of the already known words. Neither model rewrites the Bibl
 This guide describes the implemented version 3 process. See the
 [runbook](README.md) for installation, commands, review and storage checks.
 
+## The stack at a glance
+
+These 16:9 vector diagrams can be used directly in presentations. The GPU model,
+software versions, offloading strategy and test harness describe the actual
+implementation and validated local setup. Model stages run sequentially on the
+same GPU; the layout does not imply concurrent inference.
+
+![Layered segmentation architecture: canonical sources, CUDA inference, CPU/RAM harness and publication gate](diagrams/segmentation-stack.svg)
+
+[Open the segmentation stack at full size](diagrams/segmentation-stack.svg).
+
+![Layered validation and delivery architecture, with the native emulator and website/app playback stack](diagrams/delivery-harness.svg)
+
+[Open the delivery and test harness at full size](diagrams/delivery-harness.svg).
+
 ## From two sources to one timing per word
 
 ```mermaid
