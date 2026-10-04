@@ -10,6 +10,7 @@ public sealed record MobileTestConfiguration(
     MobilePlatform Platform, string AppPath, string DeviceId, string ArtifactDirectory, Uri Server)
 {
     public string? PlatformVersion { get; init; }
+    public string? PrebuiltWdaPath { get; init; }
 
     public static MobilePlatform ParsePlatform(string? value) => value?.ToLowerInvariant() switch
     {
@@ -31,7 +32,8 @@ public sealed record MobileTestConfiguration(
             Path.GetFullPath(Required("MOBILE_E2E_ARTIFACTS")),
             new Uri(Environment.GetEnvironmentVariable("APPIUM_SERVER") ?? "http://127.0.0.1:4723"))
         {
-            PlatformVersion = Environment.GetEnvironmentVariable("MOBILE_OS_VERSION")
+            PlatformVersion = Environment.GetEnvironmentVariable("MOBILE_OS_VERSION"),
+            PrebuiltWdaPath = platform == MobilePlatform.IOS ? Required("MOBILE_WDA_PATH") : null
         };
     }
 

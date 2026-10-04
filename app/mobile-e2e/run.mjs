@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { createServer } from "node:net";
 import { get } from "node:http";
+import { prepareWda } from "./prepare-wda.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const platform = process.env.MOBILE_PLATFORM?.toLowerCase();
@@ -17,6 +18,7 @@ const appPath = process.env.MOBILE_APP_PATH ?? resolve(directory,
     ? "../BibleOnSite/bin/Debug/net10.0-android/android-x64/com.tanah.daily929-Signed.apk"
     : "../BibleOnSite/bin/Debug/net10.0-ios/iossimulator-arm64/BibleOnSite.app");
 if (!existsSync(appPath)) throw new Error(`Build the app with npm run build:app first: ${appPath}`);
+const wdaPath = platform === "ios" ? (process.env.MOBILE_WDA_PATH ?? prepareWda()) : undefined;
 // Refuse an existing listener so a local run cannot accidentally use somebody
 // else's Appium session. CI assigns a whole runner to each matrix entry.
 await new Promise((resolvePort, reject) => {
@@ -75,7 +77,8 @@ try {
   if (!ready) throw new Error(`Appium did not become ready. See ${artifacts}/appium.log`);
   test = spawn("dotnet", ["run", "--project", "devops", "--", "TestMobileE2E", "--configuration", "Debug"], {
     cwd: resolve(directory, ".."), windowsHide: true, stdio: "inherit",
-    env: { ...process.env, MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts, APPIUM_SERVER: "http://127.0.0.1:4723" },
+    env: { ...process.env, MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts,
+      ...(wdaPath ? { MOBILE_WDA_PATH: wdaPath } : {}), APPIUM_SERVER: "http://127.0.0.1:4723" },
   });
   process.exitCode = await new Promise((resolveExit, reject) => {
     test.on("error", reject);

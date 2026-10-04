@@ -27,7 +27,8 @@ public sealed class ConfigurationTests
     {
         var configuration = new MobileTestConfiguration(platform, "/test/app", "specific-device", "/test/artifacts", new("http://localhost:4723"))
         {
-            PlatformVersion = version
+            PlatformVersion = version,
+            PrebuiltWdaPath = "/test/WebDriverAgentRunner-Runner.app"
         };
         var options = MobilePlatformAdapter.For(platform).CreateOptions(configuration).ToDictionary();
         Assert.Equal(automation, options["appium:automationName"]);
@@ -39,6 +40,13 @@ public sealed class ConfigurationTests
         if (platform == MobilePlatform.IOS)
         {
             Assert.Equal(true, options["appium:enforceAppInstall"]);
+            Assert.Equal(true, options["appium:usePreinstalledWDA"]);
+            Assert.Equal("/test/WebDriverAgentRunner-Runner.app", options["appium:prebuiltWDAPath"]);
+            Assert.Equal(1, options["appium:wdaStartupRetries"]);
+        }
+        else
+        {
+            Assert.False(options.ContainsKey("appium:prebuiltWDAPath"));
         }
         Assert.False(options.ContainsKey($"appium:{otherPlatformKey}"));
     }

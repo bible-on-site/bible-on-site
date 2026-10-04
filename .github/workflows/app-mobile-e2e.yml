@@ -84,7 +84,9 @@ jobs:
         run: dotnet workload install ${{ matrix.workload }} --version 10.0.401
 
       - name: Build complete simulator app
-        run: npm run build:app --prefix app/mobile-e2e
+        run: |
+          mkdir -p "$MOBILE_E2E_ARTIFACTS"
+          npm run build:app --prefix app/mobile-e2e 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/build.log"
 
       - name: Enable Android hardware acceleration
         if: matrix.platform == 'Android'
@@ -105,6 +107,10 @@ jobs:
           emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-snapshot
           script: npm test --prefix app/mobile-e2e
 
+      - name: Prepare prebuilt iOS automation agent
+        if: matrix.platform == 'iOS'
+        run: npm run ios:wda --prefix app/mobile-e2e
+
       - name: Boot iPhone simulator
         if: matrix.platform == 'iOS'
         run: npm run ios:boot --prefix app/mobile-e2e
@@ -120,5 +126,7 @@ jobs:
           name: appium-${{ matrix.artifact }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             app/.artifacts/mobile-e2e/${{ matrix.artifact }}/
-            app/.nuke/temp/build.log
+            app/.nuke/temp/build*.log
           retention-days: 14
+          # Only the explicit diagnostics paths above are included.
+          include-hidden-files: true

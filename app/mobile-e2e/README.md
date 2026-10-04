@@ -6,6 +6,10 @@ CI creates one independent runner per matrix entry (`app-mobile-e2e.yml`), with
 on an individual device run sequentially and start with a freshly reset app.
 Android uses a full app reset. iOS reinstalls the app without erasing the booted
 simulator, and Appium operates the simulator headlessly.
+Before iOS tests, Appium downloads the official simulator WebDriverAgent matching
+the locked driver dependency and launches it directly. This keeps cold Xcode
+compilation outside session startup; `npm test` also prepares the agent locally.
+See the [Appium prebuilt-agent guide](https://appium.github.io/appium-xcuitest-driver/latest/guides/run-prebuilt-wda/).
 
 The pilot covers packaged scripture and bottom navigation, adjacent perek
 navigation with matching source **and** pesukim, and native flyout/preferences

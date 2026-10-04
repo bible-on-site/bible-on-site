@@ -51,6 +51,10 @@ public abstract class MobilePlatformAdapter
             options.AddAdditionalAppiumOption("enforceAppInstall", true);
             options.AddAdditionalAppiumOption("isHeadless", true);
             options.AddAdditionalAppiumOption("showXcodeLog", true);
+            options.AddAdditionalAppiumOption("usePreinstalledWDA", true);
+            options.AddAdditionalAppiumOption("prebuiltWDAPath", configuration.PrebuiltWdaPath
+                ?? throw new ArgumentException("npm test must prepare MOBILE_WDA_PATH for iOS."));
+            options.AddAdditionalAppiumOption("wdaStartupRetries", 1);
             options.AddAdditionalAppiumOption("wdaLaunchTimeout", 180000);
         }
         return options;
@@ -82,5 +86,6 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
     public override By FlyoutButton => By.XPath("//XCUIElementTypeNavigationBar/XCUIElementTypeButton[1]");
     public override void GoBack(AppiumDriver driver) => driver.FindElement(FlyoutButton).Click();
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
-        new IOSDriver(server, options, TimeSpan.FromMinutes(4));
+        // Cover simulator/app preparation plus one bounded WDA startup attempt.
+        new IOSDriver(server, options, TimeSpan.FromMinutes(7));
 }
