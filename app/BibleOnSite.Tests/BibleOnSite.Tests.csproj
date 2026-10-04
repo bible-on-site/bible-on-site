@@ -8,6 +8,8 @@
     <IsTestProject>true</IsTestProject>
     <!-- Exercise the same view-model commands as the application build. -->
     <DefineConstants>$(DefineConstants);MAUI</DefineConstants>
+    <!-- Catch JSON failures that otherwise appear only in trimmed native releases. -->
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>
 
   <ItemGroup>
