@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { gunzipSync } from "node:zlib";
-import { expect } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 import { test } from "../../../util/playwright/test-fixture";
 
 const root = resolve(process.cwd(), "../..");
@@ -51,6 +51,16 @@ if (
 	originalMetadata.sha256
 )
 	throw new Error("Original recording fixture changed");
+
+async function nativeResult<T>(page: Page, expression: string): Promise<T> {
+	// Native Android/WebView2 serialize the evaluated value; MAUI's Apple
+	// script wrapper uses JSON.stringify. Controls then trims outer quotes
+	// without unescaping. Exercise that transport before parsing in C#.
+	// https://github.com/dotnet/maui/blob/10.0.110/src/Controls/src/Core/WebView/WebView.cs
+	const value = await page.evaluate(expression);
+	const result = JSON.stringify(value).replace(/^"+|"+$/g, "");
+	return JSON.parse(result) as T;
+}
 
 for (const fixture of [
 	{
@@ -118,24 +128,28 @@ for (const fixture of [
 		await page.evaluate("recitation.finish()");
 		await expect
 			.poll(async () => {
-				const status = await page.evaluate<{ state: string; error?: string }>(
-					"JSON.parse(recitation.status())",
+				const status = await nativeResult<{ state: string; error?: string }>(
+					page,
+					"recitation.status()",
 				);
 				if (status.error) throw new Error(status.error);
 				return status.state;
 			})
 			.toBe("ready");
-		expect(await page.evaluate("JSON.parse(recitation.status()).frames")).toBe(
-			fixture.frames,
-		);
+		expect(
+			(await nativeResult<{ frames: number }>(page, "recitation.status()"))
+				.frames,
+		).toBe(fixture.frames);
 		for (const { ranges, expected } of fixture.selections) {
-			const result = await page.evaluate<{ length: number }>(
-				`JSON.parse(recitation.clip(${JSON.stringify(ranges)}))`,
+			const result = await nativeResult<{ length: number }>(
+				page,
+				`recitation.clip(${JSON.stringify(ranges)})`,
 			);
 			const parts: Buffer[] = [];
 			for (let offset = 0; offset < result.length; offset += 49152) {
-				const chunk = await page.evaluate<{ data: string }>(
-					`JSON.parse(recitation.chunk(${offset},49152))`,
+				const chunk = await nativeResult<{ data: string }>(
+					page,
+					`recitation.chunk(${offset},49152)`,
 				);
 				parts.push(Buffer.from(chunk.data, "base64"));
 			}
@@ -173,8 +187,9 @@ for (const fixture of [
 			).rejects.toThrow();
 		}
 		await page.evaluate("recitation.reset()");
-		expect(await page.evaluate("JSON.parse(recitation.status()).state")).toBe(
-			"idle",
-		);
+		expect(
+			(await nativeResult<{ state: string }>(page, "recitation.status()"))
+				.state,
+		).toBe("idle");
 	});
 }
