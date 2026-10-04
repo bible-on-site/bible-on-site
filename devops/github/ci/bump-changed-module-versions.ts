@@ -11,7 +11,6 @@ import { fileURLToPath } from "node:url";
 import {
 	getAllModulePaths,
 	type ModuleConfig,
-	type ModuleName,
 	type ModulePath,
 	resolveModule,
 } from "../../get-module-version.ts";
@@ -32,13 +31,13 @@ export function changedModules(files: string[]): ModulePath[] {
 	);
 }
 
+/** `search` must be a global regex literal. */
 function replaceOnce(
 	text: string,
 	search: RegExp,
 	replacement: string,
 ): string {
-	const matches = text.match(new RegExp(search.source, `${search.flags}g`));
-	if (matches?.length !== 1) {
+	if (text.match(search)?.length !== 1) {
 		throw new Error(`Expected exactly one match for ${search}`);
 	}
 	return text.replace(search, replacement);
@@ -56,12 +55,14 @@ export function rewriteCargoVersions(
 		/^version\s*=\s*"[^"]+"/m,
 		`version = "${nextVersion}"`,
 	);
-	const lock = replaceOnce(
-		lockText,
-		new RegExp(
-			`^name = "${name}"\\nversion = "${currentVersion.replaceAll(".", "\\.")}"$`,
-			"m",
-		),
+	const lockEntry = `name = "${name}"\nversion = "${currentVersion}"`;
+	if (lockText.split(lockEntry).length !== 2) {
+		throw new Error(
+			`Expected exactly one ${name} ${currentVersion} lock entry`,
+		);
+	}
+	const lock = lockText.replace(
+		lockEntry,
 		`name = "${name}"\nversion = "${nextVersion}"`,
 	);
 	return { tomlText: toml, lockText: lock };
@@ -75,17 +76,17 @@ export function rewriteAppVersions(
 	const [major, minor, patch] = nextVersion.split(".").map(Number);
 	let text = replaceOnce(
 		csprojText,
-		/<ApplicationDisplayVersion>[^<]+<\/ApplicationDisplayVersion>/,
-		`<ApplicationDisplayVersion>${nextVersion}</ApplicationDisplayVersion>`,
+		/(<ApplicationDisplayVersion>)[^<]+(<\/ApplicationDisplayVersion>)/g,
+		`$1${nextVersion}$2`,
 	);
 	text = replaceOnce(
 		text,
-		/(<ApplicationVersion Condition="[^"]*== 'android'">)\d+(<\/ApplicationVersion>)/,
+		/(<ApplicationVersion Condition="[^"]*== 'android'">)\d+(<\/ApplicationVersion>)/g,
 		`$1${major * 10_000_000 + minor * 100_000 + patch}$2`,
 	);
 	return replaceOnce(
 		text,
-		/(<ApplicationVersion Condition="[^"]*!= 'android'">)\d+(<\/ApplicationVersion>)/,
+		/(<ApplicationVersion Condition="[^"]*!= 'android'">)\d+(<\/ApplicationVersion>)/g,
 		`$1${patch}$2`,
 	);
 }
@@ -103,17 +104,6 @@ function writeVersion(
 	currentVersion: string,
 	nextVersion: string,
 ): void {
-	const writers: Record<ModuleName, () => void> = {
-		website: writePackage,
-		admin: writePackage,
-		api: writeCargo,
-		bulletin: writeCargo,
-		app: () =>
-			write(
-				module.versionFile,
-				rewriteAppVersions(read(module.versionFile), nextVersion),
-			),
-	};
 	function writePackage(): void {
 		const lockFile = `${module.path}/package-lock.json`;
 		const updated = rewritePackageVersions(
@@ -135,7 +125,22 @@ function writeVersion(
 		write(module.versionFile, updated.tomlText);
 		write(lockFile, updated.lockText);
 	}
-	writers[module.name]();
+	switch (module.name) {
+		case "website":
+		case "admin":
+			writePackage();
+			break;
+		case "api":
+		case "bulletin":
+			writeCargo();
+			break;
+		case "app":
+			write(
+				module.versionFile,
+				rewriteAppVersions(read(module.versionFile), nextVersion),
+			);
+			break;
+	}
 }
 
 function git(...args: string[]): string {
