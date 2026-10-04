@@ -34,7 +34,7 @@ public class RecitationServiceTests
                 return Handler(request, cancellationToken);
             }
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = path == "/api/recitation"
-                ? new StringContent(JsonSerializer.Serialize(Package, RecitationPackage.JsonOptions), Encoding.UTF8, "application/json")
+                ? new StringContent(JsonSerializer.Serialize(Package, RecitationJsonContext.Default.RecitationPackage), Encoding.UTF8, "application/json")
                 : new ByteArrayContent(Audio[path]) });
         }
     }
@@ -147,6 +147,8 @@ public class RecitationServiceTests
         var restored = new RecitationService(storage.FileSystem.Object, http);
         await restored.InitializeAsync();
         restored.IsInstalled.Should().BeTrue();
+        restored.Tracks.Select(t => t.PerekId).Should().BeEquivalentTo([1, 2],
+            "the offline catalog retains chapters whose audio has not been downloaded");
         var path = await restored.PrepareAudioAsync(1, Canonical());
         (await File.ReadAllBytesAsync(path)).Should().Equal(audio);
         Directory.Exists(Path.Combine(storage.Root, "extensions", "recitation")).Should().BeTrue();
@@ -255,7 +257,7 @@ public class RecitationServiceTests
             if (stage == "audio" && request.RequestUri!.AbsolutePath == "/api/recitation")
             {
                 return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(
-                    JsonSerializer.Serialize(server.Package, RecitationPackage.JsonOptions), Encoding.UTF8, "application/json") };
+                    JsonSerializer.Serialize(server.Package, RecitationJsonContext.Default.RecitationPackage), Encoding.UTF8, "application/json") };
             }
             entered.SetResult();
             await Task.Delay(Timeout.Infinite, cancellation);
