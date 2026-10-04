@@ -1,6 +1,7 @@
 import { execFileSync, spawn } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, openSync, writeFileSync } from "node:fs";
+import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { createServer } from "node:net";
@@ -8,6 +9,7 @@ import { get } from "node:http";
 import { prepareWda } from "./prepare-wda.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
+const runStarted = Date.now();
 const platform = process.env.MOBILE_PLATFORM?.toLowerCase();
 if (!["android", "ios"].includes(platform)) throw new Error("Set MOBILE_PLATFORM to Android or iOS.");
 if (!process.env.MOBILE_UDID) throw new Error("Set MOBILE_UDID to the emulator/simulator identifier.");
@@ -18,6 +20,9 @@ const appPath = process.env.MOBILE_APP_PATH ?? resolve(directory,
     ? "../BibleOnSite/bin/Debug/net10.0-android/android-x64/com.tanah.daily929-Signed.apk"
     : "../BibleOnSite/bin/Debug/net10.0-ios/iossimulator-arm64/BibleOnSite.app");
 if (!existsSync(appPath)) throw new Error(`Build the app with npm run build:app first: ${appPath}`);
+if (platform === "ios" && !existsSync(resolve(appPath, "GoogleService-Info.plist"))) {
+  throw new Error("The iOS app is missing its root Firebase configuration resource.");
+}
 const wdaPath = platform === "ios" ? (process.env.MOBILE_WDA_PATH ?? prepareWda()) : undefined;
 // Refuse an existing listener so a local run cannot accidentally use somebody
 // else's Appium session. CI assigns a whole runner to each matrix entry.
@@ -92,6 +97,26 @@ try {
       ? execFileSync(adb, ["-s", process.env.MOBILE_UDID, "logcat", "-d"], { encoding: "utf8", timeout: 30000, maxBuffer: 20 * 1024 * 1024, windowsHide: true })
       : execFileSync("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID, "log", "show", "--style", "compact", "--last", "10m", "--predicate", 'process == "BibleOnSite"'], { encoding: "utf8", timeout: 30000, maxBuffer: 20 * 1024 * 1024 });
     writeFileSync(resolve(artifacts, "device.log"), nativeLog);
+    if (platform === "ios") {
+      const lifecycleLog = execFileSync("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
+        "log", "show", "--style", "compact", "--last", "10m", "--predicate",
+        '(process == "SpringBoard" OR process == "runningboardd" OR process == "ReportCrash") AND (eventMessage CONTAINS[c] "daily929" OR eventMessage CONTAINS[c] "BibleOnSite")'],
+      { encoding: "utf8", timeout: 30000, maxBuffer: 20 * 1024 * 1024 });
+      writeFileSync(resolve(artifacts, "app-lifecycle.log"), lifecycleLog);
+      const reportDirectories = [resolve(homedir(), "Library/Logs/DiagnosticReports"),
+        resolve(homedir(), "Library/Developer/CoreSimulator/Devices", process.env.MOBILE_UDID,
+          "data/Library/Logs/CrashReporter")];
+      for (const [index, reports] of reportDirectories.entries()) {
+        if (!existsSync(reports)) continue;
+        for (const report of readdirSync(reports)) {
+          const source = resolve(reports, report);
+          const metadata = statSync(source);
+          if (report.startsWith("BibleOnSite") && metadata.isFile() && metadata.mtimeMs >= runStarted) {
+            copyFileSync(source, resolve(artifacts, `crash-${index}-${report}`));
+          }
+        }
+      }
+    }
   } catch (error) {
     writeFileSync(resolve(artifacts, "device-log-error.txt"), String(error));
     console.error("Could not export native device logs:", error);

@@ -84,6 +84,8 @@ jobs:
         run: dotnet workload install ${{ matrix.workload }} --version 10.0.401
 
       - name: Build complete simulator app
+        # Explicit bash enables pipefail, preserving npm failures through tee.
+        shell: bash
         run: |
           mkdir -p "$MOBILE_E2E_ARTIFACTS"
           npm run build:app --prefix app/mobile-e2e 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/build.log"
