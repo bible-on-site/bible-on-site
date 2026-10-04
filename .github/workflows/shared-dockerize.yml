@@ -1,12 +1,12 @@
 name: Shared Dockerize Flow
 on:
-  # Build-only comparison on trusted PRs; this workflow cannot release or deploy.
-  pull_request:
-    branches: [master]
-    paths:
-      - .github/workflows/shared-dockerize.yml
-      - web/bible-on-site/Dockerfile
-      - devops/github/ci/verify-website-docker-cache.mts
+  # Explicit build-only comparison; this workflow cannot release or deploy.
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: Git ref for the legacy-builder baseline Dockerfile
+        type: string
+        default: master
   workflow_call:
     inputs:
       module_directory:
@@ -45,7 +45,6 @@ env:
 
 jobs:
   setup_env:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     name: Setup Environment Variables
     runs-on: ubuntu-latest
     outputs:
@@ -198,14 +197,14 @@ jobs:
           python data/recitation/audit.py
 
       - name: Dockerize Website (legacy baseline, no release)
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ inputs.baseline_ref }}
           DB_URL: ${{ steps.rds_creds.outputs.db_url }}
           MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
         run: |
-          git fetch --depth=1 origin "$BASE_SHA"
-          git show "$BASE_SHA:web/bible-on-site/Dockerfile" > "$RUNNER_TEMP/website-baseline.Dockerfile"
+          git fetch --depth=1 origin -- "$BASE_SHA"
+          git show FETCH_HEAD:web/bible-on-site/Dockerfile > "$RUNNER_TEMP/website-baseline.Dockerfile"
           DOCKER_BUILDKIT=0 docker build --network=host \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             --build-arg DB_URL="$DB_URL" --build-arg MAPBOX_PUBLIC_KEY="$MAPBOX_PUBLIC_TOKEN" \
@@ -227,7 +226,7 @@ jobs:
             "${CACHE_ARGS[@]}" -f web/bible-on-site/Dockerfile -t "$CACHE_REF" web
 
       - name: Simulate a fresh runner with the dependency image
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
           CACHE_REF: ${{ steps.deps_cache.outputs.ref }}
         run: |
@@ -243,7 +242,7 @@ jobs:
           DB_URL: ${{ steps.rds_creds.outputs.db_url || '' }}
           MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
           CACHE_REF: ${{ steps.deps_cache.outputs.ref }}
-          BENCHMARK: ${{ github.event_name == 'pull_request' }}
+          BENCHMARK: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           CACHE_ARGS=()
           BUILD_COMMAND=(env DOCKER_BUILDKIT=0 docker build)
@@ -266,7 +265,7 @@ jobs:
             ${{ env.SHARED_ROOT_DIR }} 2>&1 | tee "$RUNNER_TEMP/docker-build.log"
 
       - name: Verify website cache boundaries and release version reuse
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: node devops/github/ci/verify-website-docker-cache.mts "$RUNNER_TEMP/docker-build.log" localhost:5000/website-deps:cache
 
       - name: Verify recitation in the packaged website
