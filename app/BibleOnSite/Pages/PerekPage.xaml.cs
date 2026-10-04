@@ -56,7 +56,9 @@ public partial class PerekPage : ContentPage
     {
         Console.WriteLine("[Startup] PerekPage InitializeComponent");
         InitializeComponent();
+#if IOS
         InitializeBottomBarDebugControls();
+#endif
         Console.WriteLine("[Startup] PerekPage binding context");
         _viewModel = new PerekViewModel();
         BindingContext = _viewModel;
@@ -71,7 +73,9 @@ public partial class PerekPage : ContentPage
     public PerekPage(PerekViewModel viewModel)
     {
         InitializeComponent();
+#if IOS
         InitializeBottomBarDebugControls();
+#endif
         _viewModel = viewModel;
         BindingContext = _viewModel;
         ForwardSelectedArticleIdChanged();
@@ -659,7 +663,6 @@ public partial class PerekPage : ContentPage
         }
     }
 #else
-    private void InitializeBottomBarDebugControls() { }
     private void OnDebugToggleTapped(object? sender, TappedEventArgs e) { }
 #endif
 
