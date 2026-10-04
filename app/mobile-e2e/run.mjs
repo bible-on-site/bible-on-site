@@ -41,25 +41,21 @@ const server = spawn(process.execPath, [resolve(directory, "node_modules/appium/
 let serverExit;
 server.on("exit", (code, signal) => { serverExit = `code ${code}, signal ${signal}`; });
 let test;
-let sampleTimer;
-let pendingSample = Promise.resolve();
 let diagnosticsFailed = false;
-const sampledProcesses = new Set();
 const execute = promisify(execFile);
 
 async function sampleIosApp() {
   try {
-    // pgrep returns 1 normally between scenarios while the app is uninstalled.
+    // A failed session may already have terminated the app; pgrep returns 1 then.
     let processes;
     try {
-      processes = await execute("pgrep", ["-x", "BibleOnSite"], { timeout: 5000 });
+      processes = await execute("pgrep", ["-x", "BibleOnSite"], { timeout: 30000 });
     } catch (error) {
       if (error.code === 1) return;
       throw error;
     }
     for (const pid of processes.stdout.trim().split("\n")) {
-      if (!pid || sampledProcesses.has(pid)) continue;
-      sampledProcesses.add(pid);
+      if (!pid) continue;
       await execute("sample", [pid, "2", "1", "-mayDie", "-file", resolve(artifacts, `native-stack-${pid}.txt`)],
         { timeout: 120000 });
     }
@@ -114,18 +110,16 @@ try {
     env: { ...process.env, MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts,
       ...(wdaPath ? { MOBILE_WDA_PATH: wdaPath } : {}), APPIUM_SERVER: "http://127.0.0.1:4723" },
   });
-  if (platform === "ios") {
-    // One short native sample per app launch makes main-thread hangs diagnosable
-    // even when XCTest itself cannot retrieve a view tree from the frozen app.
-    sampleTimer = setInterval(() => { pendingSample = pendingSample.then(sampleIosApp); }, 60000);
-  }
   process.exitCode = await new Promise((resolveExit, reject) => {
     test.on("error", reject);
     test.on("exit", (code) => resolveExit(code ?? 1));
   });
 } finally {
-  clearInterval(sampleTimer);
-  await pendingSample;
+  if (platform === "ios" && process.exitCode !== 0) {
+    // Symbolication can consume substantial resources on simulator runners.
+    // Sample surviving failed/hung apps after tests, never alongside healthy runs.
+    await sampleIosApp();
+  }
   if (diagnosticsFailed) process.exitCode ||= 1;
   try {
     const androidSdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT;

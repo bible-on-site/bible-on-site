@@ -59,6 +59,7 @@ configuration and device capabilities without a device or mobile workload.
 
 Screenshots and native view trees are captured for each scenario, alongside
 Appium and device logs, TRX and JUnit reports, under `app/.artifacts/mobile-e2e/<platform>`.
-iOS also exports app lifecycle logs, fresh app crash reports and one short native
-stack sample per app launch when a scenario runs for more than a minute.
+iOS also exports app lifecycle logs and fresh app crash reports. Failed runs
+collect a short native stack sample if the app is still running, without
+competing with healthy tests for simulator resources.
 CI uploads a separate artifact for each platform even on test failures.
