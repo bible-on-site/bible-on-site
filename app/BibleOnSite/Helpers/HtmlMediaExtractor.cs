@@ -46,7 +46,8 @@ public static class HtmlMediaExtractor
             mediaMap[placeholder] = (sourceUrl, type);
 
             var placeholderNode = HtmlNode.CreateNode(placeholder);
-            mediaNode.ParentNode.ReplaceChild(placeholderNode, mediaNode);
+            // These nodes come from Descendants(), so each has a parent.
+            mediaNode.ParentNode!.ReplaceChild(placeholderNode, mediaNode);
         }
 
         var resultHtml = doc.DocumentNode.InnerHtml;
