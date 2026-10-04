@@ -19,6 +19,7 @@ import {
 	type Recitation,
 	type RecitationWord,
 	verseRange,
+	wordAtPosition,
 } from "@/lib/recitation";
 import { RecitationAudio } from "@/lib/recitation-audio";
 import styles from "./recitation-player.module.css";
@@ -35,7 +36,7 @@ const RecitationContext = createContext<{
 	enabled: boolean;
 	words: RecitationWord[];
 	activeWord: string | null;
-	play: (start: number, end: number, word?: string) => void;
+	play: (start: number, end: number) => void;
 } | null>(null);
 
 export function RecitationHeader({ title }: { title: string }) {
@@ -85,7 +86,7 @@ export function RecitationWordControl({
 			pressed={context?.activeWord === key}
 			onActivate={
 				word && context
-					? () => context.play(word.startMs, word.endMs, key)
+					? () => context.play(word.startMs, word.endMs)
 					: undefined
 			}
 		>
@@ -145,6 +146,8 @@ function InlineRecitationControl({
 			tabIndex={onActivate ? 0 : undefined}
 			aria-label={label}
 			aria-pressed={onActivate ? pressed : undefined}
+			aria-current={pressed ? "true" : undefined}
+			data-recitation-active={pressed || undefined}
 			title={title}
 			onClick={onActivate}
 			onKeyDown={
@@ -343,21 +346,27 @@ export default function RecitationPlayer({
 		setMessage("ההקלטה לא נטענה. נסו שוב.");
 	}
 
-	async function play(startMs?: number, endMs?: number, segment?: string) {
+	async function play(startMs?: number, endMs?: number) {
 		if (!data || !audio.current) return;
 		window.dispatchEvent(new CustomEvent(STOP_EVENT, { detail: id }));
 		const generation = ++request.current;
 		setMessage("");
 		setState("loading");
 		setDownloadProgress(null);
-		setActiveWord(segment ?? null);
+		setActiveWord(null);
 		try {
-			if (startMs !== undefined && endMs !== undefined) {
+			if (
+				(startMs !== undefined && endMs !== undefined) ||
+				data.alignmentStatus === "ready"
+			) {
 				kind.current = "clip";
 				precise.current ??= createAudio(data);
-				const started = await precise.current.play(startMs, endMs, () => {
+				const ended = () => {
 					if (request.current === generation) finish();
-				});
+				};
+				const started = await (startMs !== undefined && endMs !== undefined
+					? precise.current.play(startMs, endMs, ended)
+					: precise.current.playChapter(ended));
 				if (!started) return;
 			} else {
 				kind.current = "chapter";
@@ -402,6 +411,20 @@ export default function RecitationPlayer({
 	}
 
 	const alignedWords = useMemo(() => playableWords(data), [data]);
+	useEffect(() => {
+		if (state !== "playing" || alignedWords.length === 0) return;
+		let frame = 0;
+		const update = () => {
+			const word = wordAtPosition(
+				alignedWords,
+				precise.current?.positionMs ?? null,
+			);
+			setActiveWord(word ? `${word.pasuk}:${word.segment}` : null);
+			frame = requestAnimationFrame(update);
+		};
+		update();
+		return () => cancelAnimationFrame(frame);
+	}, [state, alignedWords]);
 	const loading = open && (message === LOADING_MESSAGE || state === "loading");
 	const status =
 		message ||
@@ -506,7 +529,7 @@ export default function RecitationPlayer({
 				enabled: open && alignedWords.length > 0,
 				words: alignedWords,
 				activeWord,
-				play: (start, end, word) => void play(start, end, word),
+				play: (start, end) => void play(start, end),
 			}}
 		>
 			{open && data && (
