@@ -107,9 +107,8 @@ for (const fixture of [
 				}
 			};
 		});
-		await page.setContent(
-			html.replace("<!--recitation-mp3-->", `<script>${gapless}</script>`),
-		);
+		await page.setContent(html);
+		await page.addScriptTag({ content: gapless });
 		await page.evaluate("recitation.begin()");
 		const encoded = fixture.recording.toString("base64");
 		for (let offset = 0; offset < encoded.length; offset += 32768) {
