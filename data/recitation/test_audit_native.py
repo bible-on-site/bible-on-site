@@ -1,4 +1,5 @@
 import json
+from contextlib import closing
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -14,7 +15,7 @@ class NativeAuditTests(unittest.TestCase):
             canonical.write_text(json.dumps([{"perekFrom": 1, "perakim": [{"pesukim": [{"segments": [
                 {"type": "qri", "value": "ברא"}, {"type": "stuma", "value": ""},
                 {"type": "qri", "value": "אור"}]}]}]}]), encoding="utf-8")
-            with sqlite3.connect(native) as db:
+            with closing(sqlite3.connect(native)) as db, db:
                 db.executescript("CREATE TABLE tanah_pasuk_segment(id INTEGER,perek_id INTEGER,pasuk_id INTEGER,segment_type TEXT);"
                                  "CREATE TABLE tanah_pasuk_segment_value(id INTEGER,value TEXT);"
                                  "INSERT INTO tanah_pasuk_segment VALUES(10,1,1,'qri'),(20,1,1,'stuma'),(30,1,1,'qri');")
@@ -22,7 +23,7 @@ class NativeAuditTests(unittest.TestCase):
             before = native.read_bytes()
             audit_native(canonical, native)
             self.assertEqual(before, native.read_bytes())
-            with sqlite3.connect(native) as db:
+            with closing(sqlite3.connect(native)) as db, db:
                 db.execute("UPDATE tanah_pasuk_segment_value SET value=? WHERE id=30", ("אור<small>[הערה]</small>",))
             with self.assertRaisesRegex(ValueError, "native canonical word identities differ"):
                 audit_native(canonical, native)

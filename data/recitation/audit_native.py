@@ -1,5 +1,6 @@
 """Reject native Bible databases whose spoken identities differ from canonical JSON."""
 import argparse
+from contextlib import closing
 from pathlib import Path
 import sqlite3
 
@@ -11,7 +12,7 @@ NATIVE = Path(__file__).resolve().parents[2] / "app/BibleOnSite/Resources/Raw/se
 
 def audit_native(database=DATABASE, native=NATIVE):
     chapters = load_chapters(database)
-    with sqlite3.connect(f"{native.resolve().as_uri()}?mode=ro", uri=True) as connection:
+    with closing(sqlite3.connect(f"{native.resolve().as_uri()}?mode=ro", uri=True)) as connection:
         for pid, chapter in chapters.items():
             rows = connection.execute(
                 "SELECT s.pasuk_id,s.segment_type,v.value FROM tanah_pasuk_segment s "
