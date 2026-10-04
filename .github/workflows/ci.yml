@@ -108,9 +108,11 @@ env:
   DATA_UNIT_JUNIT_REPORT_ARTIFACT_NAME: data-unit-junit-report-${{ github.run_id }}
   DATA_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME: data-integration-junit-report-${{ github.run_id }}
   PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER: perushim-data-sql.master
-  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-notes-sqlite.master
-  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_WF: perushim-notes-sqlite.${{ github.run_id }}
+  # v2 carries a catalog/notes pair; old notes-only baselines cannot be reused.
+  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-sqlite-v2.master
+  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_WF: perushim-sqlite-v2.${{ github.run_id }}
   PERUSHIM_NOTES_SQLITE_FILENAME: sefaria-dump-5784-sivan-4.perushim_notes.sqlite
+  PERUSHIM_CATALOG_SQLITE_FILENAME: sefaria-dump-5784-sivan-4.perushim_catalog.sqlite
   PERUSHIM_NOTES_ANDROID_ASSET_RELDIR: Platforms/Android/AssetPacks/perushim_notes
   PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR: Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset
   PERUSHIM_PIPELINE_DIRECTORY: data/sefaria/pipelines/perushim-view
@@ -468,7 +470,7 @@ jobs:
     uses: ./.github/workflows/app-package.yml
     with:
       platform: All
-      perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-notes-sqlite.{0}', github.run_id) || 'perushim-notes-sqlite.master' }}
+      perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2.{0}', github.run_id) || 'perushim-sqlite-v2.master' }}
 
   package_bulletin:
     name: Package Bulletin
@@ -1438,6 +1440,9 @@ jobs:
       - name: Verify native canonical recitation word identities
         run: python3 ../data/recitation/audit_native.py
 
+      - name: Test paired Perushim release assets
+        run: python3 -m unittest discover -s devops -p test_prepare_perushim_assets.py
+
       - name: Run Unit Tests with Coverage
         run: dotnet run --project devops -- CoverageUnit --configuration Release
 
@@ -1994,12 +1999,16 @@ jobs:
           SQLITE_DIR="${GITHUB_WORKSPACE}/${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output"
           mv "$SQLITE_DIR/${DUMP_NAME}.perushim_notes.sqlite" \
              "$SQLITE_DIR/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}"
+          mv "$SQLITE_DIR/${DUMP_NAME}.perushim_catalog.sqlite" \
+             "$SQLITE_DIR/${{ env.PERUSHIM_CATALOG_SQLITE_FILENAME }}"
 
       - name: Upload Perushim Notes SQLite Artifact
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_WF }}
-          path: ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}
+          path: |
+            ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}
+            ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_CATALOG_SQLITE_FILENAME }}
           retention-days: 30
           overwrite: true
 
@@ -2008,7 +2017,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
-          path: ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}
+          path: |
+            ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}
+            ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_CATALOG_SQLITE_FILENAME }}
           retention-days: 90
           overwrite: true
 
