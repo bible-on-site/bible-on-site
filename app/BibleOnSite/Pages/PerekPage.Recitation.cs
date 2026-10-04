@@ -128,8 +128,7 @@ public partial class PerekPage
             return;
         }
 
-        // StatusUpdated reads the platform player's clock. The timer only schedules painting;
-        // extrapolating elapsed wall time would drift during buffering or after a seek.
+        // Refresh the platform player's reported position before painting the word.
         RecitationPlayer.Handler?.Invoke("StatusUpdated", null);
         SetRecitingWord(_recitationTimeline?.WordAt(RecitationPlayer.Position.TotalMilliseconds));
     }

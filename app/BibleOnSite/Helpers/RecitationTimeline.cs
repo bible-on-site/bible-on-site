@@ -7,7 +7,11 @@ public sealed class RecitationTimeline
 {
     private readonly List<(RecitationWord Word, double Start, double End)> _words = [];
 
-    public RecitationTimeline(RecitationTrack? track, IReadOnlyList<(double Start, double End)>? ranges = null)
+    public RecitationTimeline(RecitationTrack? track) : this(track, null)
+    {
+    }
+
+    public RecitationTimeline(RecitationTrack? track, IReadOnlyList<(double Start, double End)>? ranges)
     {
         if (track?.AlignmentStatus != "ready")
         {

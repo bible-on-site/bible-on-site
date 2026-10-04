@@ -20,13 +20,20 @@ public partial class Pasuk : ObservableObject
     [ObservableProperty]
     private bool _isSelected;
 
-    [ObservableProperty]
     private int? _recitingSegment;
 
-    partial void OnRecitingSegmentChanged(int? value)
+    public int? RecitingSegment
     {
-        _formattedText = null;
-        OnPropertyChanged(nameof(FormattedText));
+        get => _recitingSegment;
+        set
+        {
+            if (_recitingSegment == value) return;
+            OnPropertyChanging(nameof(RecitingSegment));
+            _recitingSegment = value;
+            _formattedText = null;
+            OnPropertyChanged(nameof(FormattedText));
+            OnPropertyChanged(nameof(RecitingSegment));
+        }
     }
 
     /// <summary>
