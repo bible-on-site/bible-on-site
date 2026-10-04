@@ -2,7 +2,7 @@
 
 /**
  * Bump every module a branch changes above both its latest release and the base ref.
- * Used on Renovate branches, whose dependency updates touch modules without bumping them.
+ * Run on branch pushes by .github/workflows/auto-bump-versions.yml.
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";

@@ -1,20 +1,22 @@
-name: Renovate Version Bump
+name: Auto Bump Versions
 
-# Mend-hosted Renovate cannot run repo scripts (postUpgradeTasks need a
-# self-hosted allowedCommands list), and its bumpVersion skips the app and Cargo
-# modules. Bump every module a Renovate branch changes so Verify * Version passes.
-# renovate.json ignores this commit author, so Renovate keeps rebasing the branch
-# and this job re-bumps after each rebase.
+# Bump every module a branch changes above both master and its latest release,
+# so Verify * Version passes on branches that forgot to (Renovate never bumps
+# the app or Cargo modules). Renovate cannot run this itself: Mend-hosted
+# postUpgradeTasks need a self-hosted allowedCommands list. renovate.json ignores
+# this commit author, so Renovate keeps rebasing its branches and this job
+# re-bumps after each rebase. Fork branches are out of reach of the deploy key.
 on:
   push:
-    branches:
-      - renovate/**
+    branches-ignore:
+      - master
+      - gh-readonly-queue/**
 
 permissions:
   contents: read
 
 concurrency:
-  group: renovate-version-bump-${{ github.ref }}
+  group: auto-bump-versions-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -48,5 +50,5 @@ jobs:
           fi
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
-          git commit --all -m "chore(deps): bump versions of updated modules"
+          git commit --all -m "chore: bump versions of changed modules"
           git push origin "HEAD:$GITHUB_REF_NAME"
