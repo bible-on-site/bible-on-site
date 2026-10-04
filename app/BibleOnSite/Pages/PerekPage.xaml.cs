@@ -986,9 +986,6 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private async Task OpenCircularMenuAsync()
     {
-        // Android hit testing skips the overlay's children while its parent is transparent.
-        // Keep the closed overlay transparent, and accept taps when satellites are shown.
-        FloatingMenuContainer.InputTransparent = false;
         var buttons = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
 
         // Set prev/next enabled state before animating
@@ -1050,7 +1047,6 @@ public partial class PerekPage : ContentPage
         {
             button.InputTransparent = true;
         }
-        FloatingMenuContainer.InputTransparent = true;
     }
 
     /// <summary>
