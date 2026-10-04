@@ -19,7 +19,7 @@ export function nugetDependencyHash(appDirectory) {
 		.filter(
 			(path) => path.endsWith(".csproj") && !/(^|[\\/])(bin|obj)[\\/]/.test(path),
 		)
-		.map((path) => path.replaceAll("\\", "/"))
+		.map((path) => path.replace(/\\/g, "/"))
 		.sort();
 	for (const project of projects) {
 		const content = readFileSync(join(appDirectory, project), "utf8")

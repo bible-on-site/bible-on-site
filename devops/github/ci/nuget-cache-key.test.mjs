@@ -5,16 +5,21 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { nugetDependencyHash } from "./nuget-cache-key.mjs";
 
-const project = (version, packageVersion) => `<Project>
+const PROJECT = `<Project>
 	<PropertyGroup>
-		<ApplicationDisplayVersion>${version}</ApplicationDisplayVersion>
-		<ApplicationVersion Condition="'$(TargetFramework)' == 'android'">${version.replaceAll(".", "")}</ApplicationVersion>
+		<ApplicationDisplayVersion>DISPLAY_VERSION</ApplicationDisplayVersion>
+		<ApplicationVersion Condition="'$(TargetFramework)' == 'android'">BUILD_VERSION</ApplicationVersion>
 	</PropertyGroup>
 	<ItemGroup>
-		<PackageReference Include="Example" Version="${packageVersion}" />
+		<PackageReference Include="Example" Version="PACKAGE_VERSION" />
 	</ItemGroup>
 </Project>
 `;
+
+const project = (version, packageVersion) =>
+	PROJECT.replace("DISPLAY_VERSION", version)
+		.replace("BUILD_VERSION", version.replace(/\./g, ""))
+		.replace("PACKAGE_VERSION", packageVersion);
 
 const hashOf = (files) => {
 	const app = mkdtempSync(join(tmpdir(), "nuget-cache-key-"));
