@@ -15,6 +15,7 @@ public class DoubleTapTrackerTests
         tracker.Tap(203, 2, 300).Should().BeFalse();
         tracker.Tap(204, 2, 320).Should().BeFalse();
         tracker.Tap(204, 2, 900).Should().BeFalse();
+        tracker.Tap(204, 2, 899).Should().BeFalse("a regressing clock cannot qualify as a rapid second tap");
         tracker.Reset();
         tracker.Tap(204, 2, 950).Should().BeFalse();
     }

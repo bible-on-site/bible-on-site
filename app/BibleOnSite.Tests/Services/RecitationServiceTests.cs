@@ -23,11 +23,16 @@ public class RecitationServiceTests
         public RecitationPackage Package { get; set; } = new(1, []);
         public Dictionary<string, byte[]> Audio { get; } = [];
         public List<string> Requests { get; } = [];
+        public Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? Handler { get; set; }
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var path = request.RequestUri!.AbsolutePath;
             Requests.Add(path);
+            if (Handler != null)
+            {
+                return Handler(request, cancellationToken);
+            }
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = path == "/api/recitation"
                 ? new StringContent(JsonSerializer.Serialize(Package, RecitationPackage.JsonOptions), Encoding.UTF8, "application/json")
                 : new ByteArrayContent(Audio[path]) });
@@ -59,6 +64,9 @@ public class RecitationServiceTests
         model.Books[0].IsSelected = true;
         await model.DownloadSelectedAsync();
         model.Enabled.Should().BeTrue();
+        model.Enabled = false;
+        model.Enabled.Should().BeFalse();
+        model.Enabled = true;
         service.HasAudio(1).Should().BeTrue(); service.HasAudio(2).Should().BeTrue();
         service.HasAudio(3).Should().BeFalse();
         model.Books[0].Status.Should().Be("2 מתוך 2 הקלטות מותקנות");
@@ -81,11 +89,15 @@ public class RecitationServiceTests
         server.Audio["/recordings/1_record.mp3"] = audio;
         using var http = new HttpClient(server);
         var service = new RecitationService(storage.FileSystem.Object, http, new("https://example.com/api/recitation"));
+        var changes = 0;
+        service.Changed += (_, _) => changes++;
+        service.RequestPlaybackStop();
         await service.InitializeAsync();
         service.IsInstalled.Should().BeFalse();
         await service.UpdateAsync();
         await service.DownloadAsync([1]);
         await service.DownloadAsync([1]);
+        changes.Should().Be(3, "catalog refresh and completed downloads notify the reader");
         service.HasAudio(1).Should().BeTrue(); service.HasAudio(2).Should().BeFalse();
         server.Requests.Count(p => p == "/recordings/1_record.mp3").Should().Be(1);
         server.Requests.Should().NotContain("/recordings/2_record.mp3");
@@ -147,7 +159,8 @@ public class RecitationServiceTests
             .ReturnsAsync("PCM WAV"u8.ToArray());
         var word = await service.PrepareAudioAsync(1, Canonical(), 100, 800, decoder: decoder.Object);
         (await File.ReadAllBytesAsync(word)).Should().Equal("PCM WAV"u8.ToArray());
-        decoder.Verify(d => d.CreateClipAsync(It.IsAny<string>(), It.Is<IReadOnlyList<(double Start, double End)>>(r => r.Count == 1 && r[0].Start == 100 && r[0].End == 800), It.IsAny<CancellationToken>()), Times.Once);
+        (double Start, double End)[] approved = [(100, 800)];
+        decoder.Verify(d => d.CreateClipAsync(It.IsAny<string>(), It.Is<IReadOnlyList<(double Start, double End)>>(r => r.SequenceEqual(approved)), It.IsAny<CancellationToken>()), Times.Once);
         await service.Invoking(s => s.PrepareAudioAsync(1, Canonical(), 0, 800, decoder: decoder.Object)).Should().ThrowAsync<InvalidDataException>();
         var changed = Canonical(); changed[0].Segments[0].Value = "בדא";
         await service.Invoking(s => s.PrepareAudioAsync(1, changed, 100, 800, decoder: decoder.Object)).Should().ThrowAsync<InvalidDataException>();
@@ -167,5 +180,166 @@ public class RecitationServiceTests
         await service.UpdateAsync(); await service.DownloadAsync([1]);
         File.Exists(await service.PrepareAudioAsync(1, Canonical())).Should().BeTrue();
         await service.Invoking(s => s.PrepareAudioAsync(1, Canonical(), 100, 800)).Should().ThrowAsync<InvalidDataException>();
+    }
+
+    private static async Task<RecitationPreferencesViewModel> PreferencesAsync(TestStorage storage, RecitationService service)
+    {
+        var db = await storage.CreateDatabaseAsync("sefaria-dump-5784-sivan-4.tanah_view.sqlite", PerekDataServiceTests.Schema);
+        await db.ExecuteAsync("INSERT INTO tanah_sefer VALUES (1,'בראשית','Genesis',1,1),(2,'שמות','Exodus',2,2)");
+        await db.ExecuteAsync("INSERT INTO tanah_perek VALUES (1,1,NULL),(2,1,NULL)");
+        var model = new RecitationPreferencesViewModel(service, PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()),
+            new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)));
+        await model.LoadAsync();
+        return model;
+    }
+
+    [Theory]
+    [InlineData("metadata")]
+    [InlineData("audio")]
+    public async Task Preferences_CancellationReleasesDownload_AndAllowsRetry(string stage)
+    {
+        await using var storage = new TestStorage();
+        using var server = new Server(); using var http = new HttpClient(server);
+        var audio = "original MP3"u8.ToArray();
+        server.Package = new(1, [Track(1, audio)]); server.Audio["/recordings/1_record.mp3"] = audio;
+        var service = new RecitationService(storage.FileSystem.Object, http, new("https://example.com/api/recitation"));
+        var model = await PreferencesAsync(storage, service);
+        await model.DownloadSelectedAsync(); model.Status.Should().Contain("בחרו");
+        model.Books[0].IsSelected = true;
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        server.Handler = async (request, cancellation) =>
+        {
+            if (stage == "audio" && request.RequestUri!.AbsolutePath == "/api/recitation")
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(
+                    JsonSerializer.Serialize(server.Package, RecitationPackage.JsonOptions), Encoding.UTF8, "application/json") };
+            }
+            entered.SetResult();
+            await Task.Delay(Timeout.Infinite, cancellation);
+            throw new InvalidOperationException("Cancelled request unexpectedly continued");
+        };
+        var downloading = model.DownloadSelectedAsync();
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        model.IsDownloading.Should().BeTrue(); model.IsIdle.Should().BeFalse();
+        await model.DownloadSelectedAsync(); await model.UpdateTimingsAsync();
+        server.Requests.Should().HaveCount(stage == "audio" ? 2 : 1, "busy commands must not start duplicate requests");
+        model.CancelDownloadCommand.Execute(null); await downloading;
+        model.IsIdle.Should().BeTrue(); service.HasAudio(1).Should().BeFalse();
+        model.CancelDownloadCommand.Execute(null);
+        model.Status.Should().Contain("הופסקה");
+        Directory.EnumerateFiles(storage.Root, "*.download", SearchOption.AllDirectories).Should().BeEmpty();
+        server.Handler = null;
+        await model.DownloadSelectedAsync();
+        service.HasAudio(1).Should().BeTrue(); model.Enabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Preferences_TimingRefreshPreservesAudio_OnFailureAndCancellation()
+    {
+        await using var storage = new TestStorage();
+        using var server = new Server(); using var http = new HttpClient(server);
+        var audio = "original MP3"u8.ToArray();
+        server.Package = new(1, [Track(1, audio, "pending")]); server.Audio["/recordings/1_record.mp3"] = audio;
+        var service = new RecitationService(storage.FileSystem.Object, http, new("https://example.com/api/recitation"));
+        await service.UpdateAsync(); await service.DownloadAsync([1]);
+        var model = await PreferencesAsync(storage, service);
+        await model.LoadAsync(); model.Books.Should().HaveCount(2); model.Books[0].IsSelected.Should().BeTrue();
+        model.Books[1].Status.Should().Be("אין הקלטות זמינות");
+        server.Package = new(1, [Track(1, audio)]);
+        await model.UpdateTimingsAsync();
+        service.GetTrack(1)!.AlignmentStatus.Should().Be("ready"); model.Status.Should().Contain("מעודכנת");
+        server.Handler = (_, _) => Task.FromException<HttpResponseMessage>(new HttpRequestException("offline"));
+        await model.UpdateTimingsAsync(); model.Status.Should().Contain("לא הצליח");
+        await model.DownloadSelectedAsync(); model.Status.Should().Contain("לא ניתן להשלים");
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        server.Handler = async (_, cancellation) =>
+        {
+            entered.SetResult(); await Task.Delay(Timeout.Infinite, cancellation);
+            throw new InvalidOperationException("Cancelled request unexpectedly continued");
+        };
+        var refresh = model.UpdateTimingsAsync();
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        model.CancelDownloadCommand.Execute(null); await refresh;
+        model.Status.Should().Contain("העדכון הופסק");
+        service.HasAudio(1).Should().BeTrue(); service.GetTrack(1)!.AlignmentStatus.Should().Be("ready");
+    }
+
+    [Fact]
+    public async Task Preferences_DamagedExtensionCanBeReinstalled()
+    {
+        await using var storage = new TestStorage();
+        var directory = Path.Combine(storage.Root, "extensions", "recitation");
+        Directory.CreateDirectory(directory);
+        await File.WriteAllTextAsync(Path.Combine(directory, "recitation.sqlite"), "not SQLite");
+        using var server = new Server(); using var http = new HttpClient(server);
+        var service = new RecitationService(storage.FileSystem.Object, http, new("https://example.com/api/recitation"));
+        var model = await PreferencesAsync(storage, service);
+        model.Status.Should().Contain("לא ניתן לטעון");
+        server.Package = new(1, [Track(1, "audio"u8.ToArray())]);
+        await model.UpdateTimingsAsync(); await model.LoadAsync();
+        service.IsInstalled.Should().BeTrue(); model.Books.Should().HaveCount(2);
+        await service.InitializeAsync(); await service.InitializeAsync();
+    }
+
+    [Fact]
+    public async Task StaleExtensionRefreshesDaily_WithOfflineBackoff_WithoutTouchingAudio()
+    {
+        await using var storage = new TestStorage();
+        using var server = new Server(); using var http = new HttpClient(server);
+        var audio = "original MP3"u8.ToArray();
+        server.Package = new(1, [Track(1, audio, "pending")]); server.Audio["/recordings/1_record.mp3"] = audio;
+        var service = new RecitationService(storage.FileSystem.Object, http, new("https://example.com/api/recitation"));
+        await service.RefreshIfStaleAsync(); server.Requests.Should().BeEmpty();
+        await service.UpdateAsync(); await service.DownloadAsync([1]);
+        await service.RefreshIfStaleAsync(); server.Requests.Should().HaveCount(2);
+        var path = Path.Combine(storage.Root, "extensions", "recitation", "recitation.sqlite");
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddDays(-2));
+        server.Package = new(1, [Track(1, audio)]);
+        await service.RefreshIfStaleAsync(); service.GetTrack(1)!.AlignmentStatus.Should().Be("ready");
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddDays(-2));
+        await service.RefreshIfStaleAsync(); server.Requests.Should().HaveCount(3, "refresh attempts are throttled");
+        var restored = new RecitationService(storage.FileSystem.Object, http, new("https://example.com/api/recitation"));
+        await restored.InitializeAsync();
+        server.Handler = (_, _) => Task.FromException<HttpResponseMessage>(new HttpRequestException("offline"));
+        await restored.RefreshIfStaleAsync(); await restored.RefreshIfStaleAsync();
+        server.Requests.Should().HaveCount(4); restored.HasAudio(1).Should().BeTrue();
+        var stops = 0; restored.PlaybackStopRequested += (_, _) => stops++;
+        restored.RequestPlaybackStop(); stops.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task PlaybackRejectsMissingDecoder_Download_OrIncompleteIntervals()
+    {
+        await using var storage = new TestStorage();
+        using var server = new Server(); using var http = new HttpClient(server);
+        var audio = "original MP3"u8.ToArray();
+        server.Package = new(1, [Track(1, audio)]); server.Audio["/recordings/1_record.mp3"] = audio;
+        var service = new RecitationService(storage.FileSystem.Object, http, new("https://example.com/api/recitation"));
+        await service.UpdateAsync();
+        await service.Invoking(s => s.DownloadAsync([929])).Should().ThrowAsync<InvalidOperationException>();
+        await service.Invoking(s => s.PrepareAudioAsync(929, Canonical())).Should().ThrowAsync<InvalidOperationException>();
+        await service.Invoking(s => s.PrepareAudioAsync(1, Canonical())).Should().ThrowAsync<InvalidDataException>();
+        await service.DownloadAsync([1]);
+        await service.Invoking(s => s.PrepareAudioAsync(1, Canonical(), 100, null, CancellationToken.None, null, null))
+            .Should().ThrowAsync<InvalidDataException>();
+        await service.Invoking(s => s.PrepareAudioAsync(1, Canonical(), null, 800, CancellationToken.None, null, null))
+            .Should().ThrowAsync<InvalidDataException>();
+        await service.Invoking(s => s.PrepareAudioAsync(1, Canonical(), 100, 800)).Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task MissingServerCatalogRetainsInstalledExtension_WithoutNotifyingAChange()
+    {
+        await using var storage = new TestStorage();
+        using var server = new Server(); using var http = new HttpClient(server);
+        server.Package = new(1, [Track(1, "audio"u8.ToArray())]);
+        var service = new RecitationService(storage.FileSystem.Object, http, new("https://example.com/api/recitation"));
+        var changes = 0; service.Changed += (_, _) => changes++;
+        await service.UpdateAsync();
+        server.Handler = (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("null", Encoding.UTF8, "application/json") });
+        await service.Invoking(s => s.UpdateAsync()).Should().ThrowAsync<InvalidDataException>();
+        changes.Should().Be(1); service.IsInstalled.Should().BeTrue();
+        var restored = new RecitationService(storage.FileSystem.Object, http);
+        await restored.InitializeAsync(); restored.GetTrack(1).Should().BeEquivalentTo(server.Package.Tracks[0]);
     }
 }

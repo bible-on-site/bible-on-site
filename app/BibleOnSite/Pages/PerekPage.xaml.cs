@@ -865,7 +865,7 @@ public partial class PerekPage : ContentPage
             ? Fonts.FluentUI.pause_24_regular : RecitationPlayer.CurrentState == CommunityToolkit.Maui.Core.MediaElementState.Paused
                 ? Fonts.FluentUI.play_24_regular : Fonts.FluentUI.headphones_24_regular;
         var hint = _recitationBusy ? "טוען את הקלטת הפרק..." : track == null ? "אין הקלטה לפרק זה" :
-            perek != null && !RecitationService.Instance.HasAudio(perek.PerekId) ? "הורידו את הקלטות הספר בהעדפות" :
+            !RecitationService.Instance.HasAudio(track.PerekId) ? "הורידו את הקלטות הספר בהעדפות" :
             !_chapterRecitationSelection && track.AlignmentStatus != "ready" ? "הקראת מילים ופסוקים עדיין בהכנה" :
             SelectionRecitationButton.IsEnabled ? "הקראה" : "ההקלטה אינה תואמת לטקסט המותקן";
         ToolTipProperties.SetText(SelectionRecitationButton, hint);

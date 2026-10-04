@@ -93,16 +93,26 @@ public sealed class RecitationService
         try
         {
             Directory.CreateDirectory(DirectoryPath);
-            using var db = new SQLiteConnection(Path.Combine(DirectoryPath, "recitation.sqlite"));
-            db.CreateTable<TrackRow>();
-            db.RunInTransaction(() =>
+            var destination = Path.Combine(DirectoryPath, "recitation.sqlite");
+            var temporary = destination + ".download";
+            try
             {
-                db.DeleteAll<TrackRow>();
-                foreach (var track in package.Tracks)
+                File.Delete(temporary);
+                using (var db = new SQLiteConnection(temporary))
                 {
-                    db.Insert(new TrackRow { PerekId = track.PerekId, Payload = JsonSerializer.Serialize(track, RecitationJsonContext.Default.RecitationTrack) });
+                    db.CreateTable<TrackRow>();
+                    db.RunInTransaction(() =>
+                    {
+                        foreach (var track in package.Tracks)
+                        {
+                            db.Insert(new TrackRow { PerekId = track.PerekId, Payload = JsonSerializer.Serialize(track, RecitationJsonContext.Default.RecitationTrack) });
+                        }
+                    });
                 }
-            });
+                cancellationToken.ThrowIfCancellationRequested();
+                File.Move(temporary, destination, true);
+            }
+            finally { File.Delete(temporary); }
             _tracks = package.Tracks.ToDictionary(t => t.PerekId);
             _initialized = true;
         }
