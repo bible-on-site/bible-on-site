@@ -54,7 +54,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output) : IAsyncLifetime
         _page.WaitFor(forward, element => element.Enabled).Click();
         _page.WaitFor("PerekSource", element => element.Text != source);
         _page.WaitFor("PasukText", element => !string.IsNullOrWhiteSpace(element.Text) && element.Text != pasuk);
-        _page.OpenCircularMenu();
+        // Satellite navigation keeps the menu open for further chapter changes.
         _page.WaitFor(backward, element => element.Enabled).Click();
         _page.WaitFor("PerekSource", element => element.Text == source);
         _page.WaitFor("PasukText", element => element.Text == pasuk);
