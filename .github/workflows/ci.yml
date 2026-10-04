@@ -156,11 +156,14 @@ jobs:
         if: ${{ github.event_name == 'push' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          BASELINE_ARTIFACT_NAMES: >-
-            ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }} ${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
-            ${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }} ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
-            ${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }} ${{ env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}
-            ${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }} ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+          BASELINE_PRODUCERS: >-
+            {"Website CI": ["${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}"],
+            "API CI": ["${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}"],
+            "App CI": ["${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}"],
+            "Admin CI": ["${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}"],
+            "Bulletin CI": ["${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}"],
+            "Data CI": ["${{ env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}"],
+            "Perushim Data": ["${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}", "${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}"]}
         run: node devops/github/ci/find-validated-merge-group-run.ts
 
   determine_baseline_availability:

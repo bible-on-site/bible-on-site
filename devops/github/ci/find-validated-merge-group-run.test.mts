@@ -1,143 +1,205 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import {
+	type Artifact,
+	type BaselineProducers,
 	type GitHubGet,
-	baselineCopies,
-	findValidatedMergeGroupRun,
+	type Job,
+	findReusableMergeGroupRun,
 	queueBaseSha,
+	requiredBaselineCopies,
 } from "./find-validated-merge-group-run.ts";
 
 // Recorded from push run 37208863885, which re-tested what merge_group run 37207817990 had passed.
 const sha = "21e328ab6121871262a59749cee39f84e95dbd60";
 const before = "9b067db7149ff7b20f4092217345fbeaa5127a5c";
+const runId = 37207817990;
 const queueRun = {
-	id: 37207817990,
+	id: runId,
 	event: "merge_group",
 	head_sha: sha,
 	head_branch: `gh-readonly-queue/master/pr-1938-${before}`,
 	status: "completed",
 	conclusion: "success",
 };
-const masterNames = [
-	"website-coverage.master",
-	"api-coverage.master",
-	"app-coverage.master",
-	"admin-coverage.master",
-	"bulletin-coverage.master",
-	"data-coverage.master",
-	"perushim-data-sql.master",
-	"perushim-notes-sqlite.master",
+const producers: BaselineProducers = {
+	"Website CI": ["website-coverage.master"],
+	"API CI": ["api-coverage.master"],
+	"App CI": ["app-coverage.master"],
+	"Admin CI": ["admin-coverage.master"],
+	"Bulletin CI": ["bulletin-coverage.master"],
+	"Data CI": ["data-coverage.master"],
+	"Perushim Data": ["perushim-data-sql.master", "perushim-notes-sqlite.master"],
+};
+const recordedJobs: Job[] = [
+	{ name: "API CI", conclusion: "success" },
+	{ name: "Admin CI", conclusion: "success" },
+	{ name: "Bulletin CI", conclusion: "success" },
+	{ name: "Data CI", conclusion: "success" },
+	{ name: "App CI", conclusion: "success" },
+	{ name: "Website CI", conclusion: "success" },
+	{ name: "Website Performance", conclusion: "success" },
+	{ name: "Perushim Data", conclusion: "skipped" },
+	{ name: "Cross Module CI", conclusion: "success" },
 ];
+const recordedArtifacts: Artifact[] = [
+	"app-coverage.37207817990",
+	"api-coverage.master",
+	"perushim-data-sql.master",
+	"bulletin-coverage.37207817990",
+	"website-coverage.37207817990",
+	"admin-coverage.37207817990",
+	"api-coverage.37207817990",
+	"website-coverage.master",
+	"data-coverage.37207817990",
+	"perushim-notes-sqlite.master",
+	"api-unit-junit-report-37207817990",
+].map((name) => ({ name, expired: false }));
+const recordedCopies = ["api", "admin", "bulletin", "data", "app", "website"].map((module) => ({
+	source: `${module}-coverage.${runId}`,
+	target: `${module}-coverage.master`,
+}));
 
-function api(runs: object[], gate = "success"): { get: GitHubGet; paths: string[] } {
+function api(
+	runs: object[],
+	jobs: Job[] = recordedJobs,
+	artifacts: Artifact[] = recordedArtifacts,
+): { get: GitHubGet; paths: string[] } {
 	const paths: string[] = [];
 	const get: GitHubGet = async (apiPath) => {
 		paths.push(apiPath);
 		if (apiPath.startsWith("actions/workflows/")) return { workflow_runs: runs };
-		return {
-			jobs: [
-				{ name: "Website CI", conclusion: "success" },
-				{ name: "Cross Module CI", conclusion: gate },
-			],
-		};
+		if (apiPath.includes("/jobs?")) return { jobs };
+		return { artifacts };
 	};
 	return { get, paths };
 }
 
-const lookup = (get: GitHubGet, eventName: string | undefined = "push", headBefore = before) =>
-	findValidatedMergeGroupRun({ eventName, sha, before: headBefore, workflowFile: "ci.yml", get });
+const lookup = (get: GitHubGet, eventName: string | undefined, headBefore = before) =>
+	findReusableMergeGroupRun({
+		eventName,
+		sha,
+		before: headBefore,
+		workflowFile: "ci.yml",
+		producers,
+		get,
+	});
 
-describe("findValidatedMergeGroupRun", () => {
-	it("finds the merge-queue run that fast-forwarded master", async () => {
+const withJob = (name: string, conclusion: string): Job[] =>
+	recordedJobs.map((job) => (job.name === name ? { name, conclusion } : job));
+
+describe("findReusableMergeGroupRun", () => {
+	it("reuses the successful queue run that tested this exact fast-forward", async () => {
 		const { get, paths } = api([queueRun]);
-		assert.equal(await lookup(get), 37207817990);
-		assert.deepEqual(paths, [
-			`actions/workflows/ci.yml/runs?event=merge_group&head_sha=${sha}&per_page=100&page=1`,
-			"actions/runs/37207817990/jobs?filter=latest&per_page=100&page=1",
-		]);
-	});
-
-	it("runs the tests when the queue run failed, is still running or was cancelled", async () => {
-		for (const run of [
-			{ ...queueRun, conclusion: "failure" },
-			{ ...queueRun, status: "in_progress", conclusion: null },
-			{ ...queueRun, conclusion: "cancelled" },
-		]) {
-			assert.equal(await lookup(api([run]).get), undefined);
-		}
-	});
-
-	it("runs the tests when the queue run's gate did not pass", async () => {
-		assert.equal(await lookup(api([queueRun], "skipped").get), undefined);
-	});
-
-	it("runs the tests when the queue run tested the commit on another base", async () => {
-		assert.equal(await lookup(api([queueRun]).get, "push", "0".repeat(40)), undefined);
-	});
-
-	it("runs the tests when no queue run exists", async () => {
-		assert.equal(await lookup(api([]).get), undefined);
-	});
-
-	it("never skips outside of push events", async () => {
-		const { get, paths } = api([queueRun]);
-		for (const eventName of ["workflow_dispatch", "merge_group", "pull_request"]) {
-			assert.equal(await lookup(get, eventName), undefined);
-		}
+		assert.deepEqual(await lookup(get, "push"), { runId, copies: recordedCopies });
 		assert.equal(
-			await findValidatedMergeGroupRun({ eventName: undefined, sha, before, workflowFile: "ci.yml", get }),
-			undefined,
+			paths[0],
+			`actions/workflows/ci.yml/runs?event=merge_group&head_sha=${sha}&per_page=100&page=1`,
 		);
-		assert.deepEqual(paths, []);
+	});
+
+	for (const [status, conclusion] of [
+		["completed", "failure"],
+		["completed", "cancelled"],
+		["in_progress", null],
+	]) {
+		it(`does not reuse a ${status}/${conclusion} queue run`, async () => {
+			assert.ok("reason" in (await lookup(api([{ ...queueRun, status, conclusion }]).get, "push")));
+		});
+	}
+
+	it("does not reuse a run whose Cross Module CI did not pass", async () => {
+		assert.ok("reason" in (await lookup(api([queueRun], withJob("Cross Module CI", "failure")).get, "push")));
+	});
+
+	it("does not reuse a queue run built on a different master", async () => {
+		assert.ok("reason" in (await lookup(api([queueRun]).get, "push", "0".repeat(40))));
+	});
+
+	it("does not reuse when no queue run exists", async () => {
+		assert.ok("reason" in (await lookup(api([]).get, "push")));
+	});
+
+	it("does not reuse when more than one successful queue run matches", async () => {
+		const result = await lookup(api([queueRun, { ...queueRun, id: runId + 1 }]).get, "push");
+		assert.deepEqual(result, { reason: `2 successful merge-queue runs match ${sha} on ${before}` });
+	});
+
+	it("does not reuse when a job that ran left no fresh output", async () => {
+		const artifacts = recordedArtifacts.filter((a) => a.name !== `data-coverage.${runId}`);
+		const result = await lookup(api([queueRun], recordedJobs, artifacts).get, "push");
+		assert.deepEqual(result, {
+			reason: `merge-queue run ${runId} has no unexpired Data CI output for data-coverage.master`,
+		});
+	});
+
+	it("does not reuse when a job's fresh output expired", async () => {
+		const artifacts = recordedArtifacts.map((a) =>
+			a.name === `app-coverage.${runId}` ? { ...a, expired: true } : a,
+		);
+		assert.ok("reason" in (await lookup(api([queueRun], recordedJobs, artifacts).get, "push")));
+	});
+
+	it("does not reuse when Perushim Data ran but its notes are unavailable", async () => {
+		const jobs = withJob("Perushim Data", "success");
+		const artifacts = [...recordedArtifacts, { name: "perushim-data-sql", expired: false }];
+		const result = await lookup(api([queueRun], jobs, artifacts).get, "push");
+		assert.deepEqual(result, {
+			reason: `merge-queue run ${runId} has no unexpired Perushim Data output for perushim-notes-sqlite.master`,
+		});
+	});
+
+	it("does not query the API for other events", async () => {
+		for (const event of ["pull_request", "merge_group", "workflow_dispatch", undefined]) {
+			const { get, paths } = api([queueRun]);
+			assert.ok("reason" in (await lookup(get, event)));
+			assert.deepEqual(paths, []);
+		}
 	});
 });
 
-describe("baselineCopies", () => {
-	it("copies the queue run's workflow artifacts under the master baseline names", () => {
-		// Artifact names recorded from merge_group run 37207817990.
+describe("requiredBaselineCopies", () => {
+	it("copies both fresh perushim outputs when Perushim Data ran", () => {
 		const artifacts = [
-			"website-coverage.37207817990",
-			"website-coverage.master",
-			"api-coverage.37207817990",
-			"app-coverage.37207817990",
-			"admin-coverage.37207817990",
-			"bulletin-coverage.37207817990",
-			"data-coverage.37207817990",
-			"perushim-data-sql",
-			"perushim-notes-sqlite.37207817990",
-			"website-e2e-report",
-		].map((name) => ({ name, expired: false }));
-		assert.deepEqual(baselineCopies(37207817990, artifacts, masterNames), [
-			{ source: "website-coverage.37207817990", target: "website-coverage.master" },
-			{ source: "api-coverage.37207817990", target: "api-coverage.master" },
-			{ source: "app-coverage.37207817990", target: "app-coverage.master" },
-			{ source: "admin-coverage.37207817990", target: "admin-coverage.master" },
-			{ source: "bulletin-coverage.37207817990", target: "bulletin-coverage.master" },
-			{ source: "data-coverage.37207817990", target: "data-coverage.master" },
-			{ source: "perushim-data-sql", target: "perushim-data-sql.master" },
-			{ source: "perushim-notes-sqlite.37207817990", target: "perushim-notes-sqlite.master" },
-		]);
-	});
-
-	it("keeps the restored baseline for modules the queue run did not test", () => {
-		const artifacts = [
-			{ name: "api-coverage.1", expired: false },
-			{ name: "app-coverage.1", expired: true },
+			{ name: "perushim-data-sql", expired: false },
+			{ name: `perushim-notes-sqlite.${runId}`, expired: false },
 		];
-		assert.deepEqual(baselineCopies(1, artifacts, masterNames), [
-			{ source: "api-coverage.1", target: "api-coverage.master" },
+		const jobs = [{ name: "Perushim Data", conclusion: "success" }];
+		assert.deepEqual(requiredBaselineCopies(runId, jobs, artifacts, producers), [
+			{ source: "perushim-data-sql", target: "perushim-data-sql.master" },
+			{ source: `perushim-notes-sqlite.${runId}`, target: "perushim-notes-sqlite.master" },
 		]);
 	});
 
-	it("rejects names that are not master baselines", () => {
-		assert.throws(() => baselineCopies(1, [], ["api-coverage.123"]), /not a \.master baseline/);
+	it("carries forward baselines of jobs that did not run", () => {
+		const jobs = [{ name: "Admin CI", conclusion: "skipped" }];
+		assert.deepEqual(requiredBaselineCopies(runId, jobs, [], producers), []);
+	});
+
+	it("rejects non-master baseline names", () => {
+		const jobs = [{ name: "Website CI", conclusion: "success" }];
+		assert.throws(() => requiredBaselineCopies(runId, jobs, [], { "Website CI": ["x.pr"] }));
 	});
 });
 
 describe("queueBaseSha", () => {
-	it("reads the base commit from merge-queue branches only", () => {
+	it("reads the base sha from a merge-queue branch", () => {
 		assert.equal(queueBaseSha(queueRun.head_branch), before);
+	});
+
+	it("ignores other branches", () => {
 		assert.equal(queueBaseSha("master"), undefined);
 		assert.equal(queueBaseSha(null), undefined);
+	});
+});
+
+describe("ci.yml BASELINE_PRODUCERS", () => {
+	it("names jobs that exist in ci.yml", () => {
+		const ci = readFileSync(new URL("../../../.github/workflows/ci.yml", import.meta.url), "utf8");
+		const block = ci.slice(ci.indexOf("BASELINE_PRODUCERS:"), ci.indexOf("run: node devops/github/ci/find-validated"));
+		const names = [...block.matchAll(/"([^"$]+)":/g)].map((m) => m[1]);
+		assert.deepEqual(names.sort(), Object.keys(producers).sort());
+		for (const name of names) assert.match(ci, new RegExp(`^    name: ${name}$`, "m"));
 	});
 });
