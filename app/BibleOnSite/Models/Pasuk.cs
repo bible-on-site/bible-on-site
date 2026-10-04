@@ -20,6 +20,15 @@ public partial class Pasuk : ObservableObject
     [ObservableProperty]
     private bool _isSelected;
 
+    [ObservableProperty]
+    private int? _recitingSegment;
+
+    partial void OnRecitingSegmentChanged(int? value)
+    {
+        _formattedText = null;
+        OnPropertyChanged(nameof(FormattedText));
+    }
+
     /// <summary>
     /// The verse number in Hebrew letters (e.g., א, ב, ג).
     /// </summary>
@@ -118,7 +127,8 @@ public partial class Pasuk : ObservableObject
                         formatted.Spans.Add(new Span
                         {
                             Text = segment.Value,
-                            TextColor = Color.FromArgb("#637598")
+                            TextColor = Color.FromArgb(RecitingSegment == i + 1 ? "#1c427b" : "#637598"),
+                            BackgroundColor = RecitingSegment == i + 1 ? Color.FromArgb("#e9eff8") : null
                         });
                         formatted.Spans.Add(new Span
                         {
@@ -132,7 +142,20 @@ public partial class Pasuk : ObservableObject
                         // Regular qri (same as ktiv): show normally
                         if (!string.IsNullOrEmpty(segment.Value))
                         {
-                            plain.Append(segment.Value);
+                            if (RecitingSegment == i + 1)
+                            {
+                                FlushPlain();
+                                formatted.Spans.Add(new Span
+                                {
+                                    Text = segment.Value,
+                                    TextColor = Color.FromArgb("#1c427b"),
+                                    BackgroundColor = Color.FromArgb("#e9eff8")
+                                });
+                            }
+                            else
+                            {
+                                plain.Append(segment.Value);
+                            }
                         }
                     }
                     break;
