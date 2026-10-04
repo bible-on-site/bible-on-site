@@ -14,7 +14,7 @@ import { test } from "node:test";
 const workflow = readFileSync(
 	new URL("../../../.github/workflows/shared-ci.yml", import.meta.url),
 	"utf8",
-).replaceAll("\r\n", "\n");
+).replace(/\r\n/g, "\n");
 const runBlock = workflow.split("        run: |\n")[1];
 assert.ok(
 	runBlock,
@@ -66,12 +66,12 @@ function changes(path, module, event = "pull_request") {
 		writeFileSync(scriptPath, rendered);
 		execFileSync(
 			shell,
-			["-e", "-o", "pipefail", scriptPath.replaceAll("\\", "/")],
+			["-e", "-o", "pipefail", scriptPath.replace(/\\/g, "/")],
 			{
 				cwd: directory,
 				env: {
 					...process.env,
-					GITHUB_OUTPUT: outputPath.replaceAll("\\", "/"),
+					GITHUB_OUTPUT: outputPath.replace(/\\/g, "/"),
 				},
 			},
 		);
