@@ -400,78 +400,37 @@ jobs:
             echo "is_sefaria_mongo_available=false" >> $GITHUB_OUTPUT
           fi
 
-  determine_website_changes:
-    name: Determine Website Changes
-    needs: setup_env
-    secrets: inherit
-    uses: ./.github/workflows/shared-ci.yml
-    with:
-      module_directory: ${{ needs.setup_env.outputs.website_directory }}
-      module_name: ${{ needs.setup_env.outputs.website_directory }}
-      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
-
-  determine_api_changes:
-    name: Determine API Changes
-    needs: setup_env
-    secrets: inherit
-    uses: ./.github/workflows/shared-ci.yml
-    with:
-      module_directory: ${{ needs.setup_env.outputs.api_directory }}
-      module_name: ${{ needs.setup_env.outputs.api_directory }}
-      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
-
-  determine_app_changes:
-    name: Determine App Changes
-    needs: setup_env
-    secrets: inherit
-    uses: ./.github/workflows/shared-ci.yml
-    with:
-      module_directory: ${{ needs.setup_env.outputs.app_directory }}
-      module_name: ${{ needs.setup_env.outputs.app_directory }}
-      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
-
-  determine_admin_changes:
-    name: Determine Admin Changes
-    needs: setup_env
-    secrets: inherit
-    uses: ./.github/workflows/shared-ci.yml
-    with:
-      module_directory: ${{ needs.setup_env.outputs.admin_directory }}
-      module_name: ${{ needs.setup_env.outputs.admin_directory }}
-      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,devops/rustfs,devops/docker-compose.yml,devops/package.json,devops/package-lock.json"
-
-  determine_bulletin_changes:
-    name: Determine Bulletin Changes
-    needs: setup_env
-    secrets: inherit
-    uses: ./.github/workflows/shared-ci.yml
-    with:
-      module_directory: ${{ needs.setup_env.outputs.bulletin_directory }}
-      module_name: ${{ needs.setup_env.outputs.bulletin_directory }}
-      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
-
-  determine_data_changes:
-    name: Determine Data Changes
-    needs: setup_env
-    secrets: inherit
-    uses: ./.github/workflows/shared-ci.yml
-    with:
-      module_directory: ${{ needs.setup_env.outputs.data_directory }}
-      module_name: ${{ needs.setup_env.outputs.data_directory }}
-      # Include the data-deploy tooling so that changes to how data is deployed
-      # to production (e.g. the SQL_FILES manifest in devops/deploy/data-deploy)
-      # re-trigger the data CD and re-populate the production database.
-      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,devops/deploy/data-deploy"
-
-  determine_perushim_pipeline_changes:
-    name: Determine Perushim Pipeline Changes
-    needs: setup_env
-    secrets: inherit
-    uses: ./.github/workflows/shared-ci.yml
-    with:
-      module_directory: data/sefaria/pipelines/perushim-view
-      module_name: data/sefaria/pipelines/perushim-view
-      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml"
+  determine_changes:
+    name: Determine Changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      website_module_changed: ${{ steps.determine.outputs.website_module_changed }}
+      website_ci_changed: ${{ steps.determine.outputs.website_ci_changed }}
+      api_module_changed: ${{ steps.determine.outputs.api_module_changed }}
+      api_ci_changed: ${{ steps.determine.outputs.api_ci_changed }}
+      app_module_changed: ${{ steps.determine.outputs.app_module_changed }}
+      app_ci_changed: ${{ steps.determine.outputs.app_ci_changed }}
+      admin_module_changed: ${{ steps.determine.outputs.admin_module_changed }}
+      admin_ci_changed: ${{ steps.determine.outputs.admin_ci_changed }}
+      bulletin_module_changed: ${{ steps.determine.outputs.bulletin_module_changed }}
+      bulletin_ci_changed: ${{ steps.determine.outputs.bulletin_ci_changed }}
+      data_module_changed: ${{ steps.determine.outputs.data_module_changed }}
+      data_ci_changed: ${{ steps.determine.outputs.data_ci_changed }}
+      perushim_pipeline_module_changed: ${{ steps.determine.outputs.perushim_pipeline_module_changed }}
+      perushim_pipeline_ci_changed: ${{ steps.determine.outputs.perushim_pipeline_ci_changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
+      - name: Determine module changes
+        id: determine
+        run: node devops/github/ci/determine-changes.ts
 
   # Version Verification Jobs
   # These jobs run on PRs and master to verify that module versions are properly bumped
@@ -479,48 +438,48 @@ jobs:
   # version, since a released tag can lag behind an in-flight master build.
   verify_website_version:
     name: Verify Website Version
-    needs: [setup_env, determine_website_changes]
-    if: ${{ needs.determine_website_changes.outputs.module_changed == 'true' }}
+    needs: [setup_env, determine_changes]
+    if: ${{ needs.determine_changes.outputs.website_module_changed == 'true' }}
     uses: ./.github/workflows/shared-verify-version.yml
     with:
       module_name: website
 
   verify_api_version:
     name: Verify API Version
-    needs: [setup_env, determine_api_changes]
-    if: ${{ needs.determine_api_changes.outputs.module_changed == 'true' }}
+    needs: [setup_env, determine_changes]
+    if: ${{ needs.determine_changes.outputs.api_module_changed == 'true' }}
     uses: ./.github/workflows/shared-verify-version.yml
     with:
       module_name: api
 
   verify_app_version:
     name: Verify App Version
-    needs: [setup_env, determine_app_changes]
-    if: ${{ needs.determine_app_changes.outputs.module_changed == 'true' }}
+    needs: [setup_env, determine_changes]
+    if: ${{ needs.determine_changes.outputs.app_module_changed == 'true' }}
     uses: ./.github/workflows/shared-verify-version.yml
     with:
       module_name: app
 
   verify_bulletin_version:
     name: Verify Bulletin Version
-    needs: [setup_env, determine_bulletin_changes]
-    if: ${{ needs.determine_bulletin_changes.outputs.module_changed == 'true' }}
+    needs: [setup_env, determine_changes]
+    if: ${{ needs.determine_changes.outputs.bulletin_module_changed == 'true' }}
     uses: ./.github/workflows/shared-verify-version.yml
     with:
       module_name: bulletin
 
   verify_admin_version:
     name: Verify Admin Version
-    needs: [setup_env, determine_admin_changes]
-    if: ${{ needs.determine_admin_changes.outputs.module_changed == 'true' }}
+    needs: [setup_env, determine_changes]
+    if: ${{ needs.determine_changes.outputs.admin_module_changed == 'true' }}
     uses: ./.github/workflows/shared-verify-version.yml
     with:
       module_name: admin
 
   package_website:
     name: Package Website
-    needs: [setup_env, determine_website_changes]
-    if: ${{ needs.determine_website_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_changes]
+    if: ${{ needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -532,8 +491,8 @@ jobs:
 
   package_api:
     name: Package API
-    needs: [setup_env, determine_api_changes]
-    if: ${{ needs.determine_api_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_changes]
+    if: ${{ needs.determine_changes.outputs.api_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -547,8 +506,8 @@ jobs:
     name: Package App
     # Wait for perushim_data so the app is packaged with up-to-date perushim notes
     # when both app and perushim pipeline change in the same commit.
-    needs: [setup_env, determine_app_changes, perushim_data, restore_validated_baselines]
-    if: ${{ always() && !cancelled() && !failure() && needs.determine_app_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_changes, perushim_data, restore_validated_baselines]
+    if: ${{ always() && !cancelled() && !failure() && needs.determine_changes.outputs.app_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
       actions: read
@@ -560,8 +519,8 @@ jobs:
 
   package_bulletin:
     name: Package Bulletin
-    needs: [setup_env, determine_bulletin_changes]
-    if: ${{ needs.determine_bulletin_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_changes]
+    if: ${{ needs.determine_changes.outputs.bulletin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
       actions: read
@@ -620,8 +579,8 @@ jobs:
 
   package_admin:
     name: Package Admin
-    needs: [setup_env, determine_admin_changes]
-    if: ${{ needs.determine_admin_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_changes]
+    if: ${{ needs.determine_changes.outputs.admin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
       actions: read
@@ -711,8 +670,8 @@ jobs:
 
   build_sefaria_mongo_docker:
     name: Build Sefaria MongoDB Docker Image
-    needs: [setup_env, determine_data_changes, determine_docker_image_availability]
-    if: ${{ needs.setup_env.outputs.validated_run_id == '' && needs.determine_docker_image_availability.outputs.is_sefaria_mongo_available != 'true' && (needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true') }}
+    needs: [setup_env, determine_changes, determine_docker_image_availability]
+    if: ${{ needs.setup_env.outputs.validated_run_id == '' && needs.determine_docker_image_availability.outputs.is_sefaria_mongo_available != 'true' && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') }}
     runs-on: ubuntu-latest
     steps:
       # Free disk space for the MongoDB Docker image build (~10GB+ needed for mongorestore)
@@ -762,14 +721,14 @@ jobs:
     # Owns the production build gate; Website CI uses the instrumented dev server.
     name: Website Performance
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_website_changes, determine_baseline_availability, perushim_data]
+    needs: [setup_env, determine_changes, determine_baseline_availability, perushim_data]
     if: >-
       ${{ always() && !cancelled() &&
         needs.setup_env.result == 'success' &&
-        needs.determine_website_changes.result == 'success' &&
+        needs.determine_changes.result == 'success' &&
         needs.determine_baseline_availability.result == 'success' &&
         needs.setup_env.outputs.validated_run_id == '' &&
-        (needs.determine_website_changes.outputs.module_changed == 'true' || needs.determine_website_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_website_master_coverage_available == 'false')
+        (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_website_master_coverage_available == 'false')
       }}
     defaults:
       run:
@@ -935,7 +894,7 @@ jobs:
     needs:
       [
         setup_env,
-        determine_website_changes,
+        determine_changes,
         determine_baseline_availability,
         determine_docker_image_availability,
         build_lcov_docker,
@@ -944,12 +903,12 @@ jobs:
     if: >-
       ${{ always() && !cancelled() &&
         needs.setup_env.result == 'success' &&
-        needs.determine_website_changes.result == 'success' &&
+        needs.determine_changes.result == 'success' &&
         needs.determine_baseline_availability.result == 'success' &&
         (needs.determine_docker_image_availability.result == 'success' || needs.determine_docker_image_availability.result == 'skipped') &&
         (needs.build_lcov_docker.result == 'success' || needs.build_lcov_docker.result == 'skipped') &&
         needs.setup_env.outputs.validated_run_id == '' &&
-        (needs.determine_website_changes.outputs.module_changed == 'true' || needs.determine_website_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_website_master_coverage_available == 'false')
+        (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_website_master_coverage_available == 'false')
       }}
     defaults:
       run:
@@ -1136,8 +1095,8 @@ jobs:
   admin_ci:
     name: Admin CI
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_admin_changes, determine_baseline_availability]
-    if: ${{ needs.setup_env.outputs.validated_run_id == '' && (needs.determine_admin_changes.outputs.module_changed == 'true' || needs.determine_admin_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_admin_master_coverage_available == 'false') }}
+    needs: [setup_env, determine_changes, determine_baseline_availability]
+    if: ${{ needs.setup_env.outputs.validated_run_id == '' && (needs.determine_changes.outputs.admin_module_changed == 'true' || needs.determine_changes.outputs.admin_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_admin_master_coverage_available == 'false') }}
     defaults:
       run:
         working-directory: ${{ env.ADMIN_DIRECTORY }}
@@ -1292,12 +1251,12 @@ jobs:
     needs:
       [
         setup_env,
-        determine_api_changes,
+        determine_changes,
         determine_baseline_availability,
         determine_docker_image_availability,
         build_lcov_docker,
       ]
-    if: ${{ always() && !cancelled() && !failure() && needs.setup_env.outputs.validated_run_id == '' && (needs.determine_api_changes.outputs.module_changed == 'true' || needs.determine_api_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_api_master_coverage_available == 'false') }}
+    if: ${{ always() && !cancelled() && !failure() && needs.setup_env.outputs.validated_run_id == '' && (needs.determine_changes.outputs.api_module_changed == 'true' || needs.determine_changes.outputs.api_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_api_master_coverage_available == 'false') }}
     permissions:
       contents: read
 
@@ -1469,12 +1428,12 @@ jobs:
     needs:
       [
         setup_env,
-        determine_app_changes,
+        determine_changes,
         determine_baseline_availability,
         determine_docker_image_availability,
         build_lcov_docker,
       ]
-    if: ${{ always() && !cancelled() && !failure() && needs.setup_env.outputs.validated_run_id == '' && (needs.determine_app_changes.outputs.module_changed == 'true' || needs.determine_app_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_app_master_coverage_available == 'false') }}
+    if: ${{ always() && !cancelled() && !failure() && needs.setup_env.outputs.validated_run_id == '' && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_app_master_coverage_available == 'false') }}
     defaults:
       run:
         working-directory: ${{ env.APP_DIRECTORY }}
@@ -1615,9 +1574,9 @@ jobs:
   app_ios_ci:
     name: App iOS CI
     runs-on: macos-26
-    needs: [setup_env, determine_app_changes, determine_baseline_availability, perushim_data]
+    needs: [setup_env, determine_changes, determine_baseline_availability, perushim_data]
     # Only on PRs — on master, Package iOS (IPA) already validates the full iOS build.
-    if: ${{ github.event_name == 'pull_request' && always() && !cancelled() && !failure() && (needs.determine_app_changes.outputs.module_changed == 'true' || needs.determine_app_changes.outputs.ci_changed == 'true') }}
+    if: ${{ github.event_name == 'pull_request' && always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
     defaults:
       run:
         working-directory: ${{ env.APP_DIRECTORY }}
@@ -1713,8 +1672,8 @@ jobs:
   bulletin_ci:
     name: Bulletin CI
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_bulletin_changes, determine_baseline_availability]
-    if: ${{ needs.setup_env.outputs.validated_run_id == '' && (needs.determine_bulletin_changes.outputs.module_changed == 'true' || needs.determine_bulletin_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_bulletin_master_coverage_available == 'false') }}
+    needs: [setup_env, determine_changes, determine_baseline_availability]
+    if: ${{ needs.setup_env.outputs.validated_run_id == '' && (needs.determine_changes.outputs.bulletin_module_changed == 'true' || needs.determine_changes.outputs.bulletin_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_bulletin_master_coverage_available == 'false') }}
     defaults:
       run:
         working-directory: ${{ env.BULLETIN_DIRECTORY }}
@@ -1795,8 +1754,8 @@ jobs:
   recitation_ci:
     name: Recitation alignment and RustFS
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_data_changes, determine_website_changes]
-    if: ${{ always() && !cancelled() && needs.setup_env.result == 'success' && needs.determine_data_changes.result == 'success' && needs.determine_website_changes.result == 'success' && needs.setup_env.outputs.validated_run_id == '' && (needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_website_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true') }}
+    needs: [setup_env, determine_changes]
+    if: ${{ always() && !cancelled() && needs.setup_env.result == 'success' && needs.determine_changes.result == 'success' && needs.setup_env.outputs.validated_run_id == '' && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') }}
     permissions:
       contents: read
     steps:
@@ -1816,7 +1775,7 @@ jobs:
       - name: Verify canonical text preprocessing
         run: node --test data/sefaria/pipelines/tanah-view/tests/preprocessor.test.mjs
       - name: Verify module release and shared decoder check routing
-        run: node --test devops/github/ci/determine-changes.test.mjs devops/github/ci/auto-create-pr.test.mjs devops/github/ci/find-validated-merge-group-run.test.mts
+        run: node --test devops/github/ci/determine-changes.test.ts devops/github/ci/auto-create-pr.test.mjs devops/github/ci/find-validated-merge-group-run.test.mts
       - name: Install storage test dependencies
         run: npm ci --prefix devops
       - name: Verify repeatable deployment recovery
@@ -1833,13 +1792,13 @@ jobs:
     needs:
       [
         setup_env,
-        determine_data_changes,
+        determine_changes,
         determine_docker_image_availability,
         build_sefaria_mongo_docker,
         build_lcov_docker,
         determine_baseline_availability,
       ]
-    if: ${{ always() && !cancelled() && !failure() && needs.setup_env.outputs.validated_run_id == '' && (needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_data_master_coverage_available == 'false') }}
+    if: ${{ always() && !cancelled() && !failure() && needs.setup_env.outputs.validated_run_id == '' && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_data_master_coverage_available == 'false') }}
     defaults:
       run:
         working-directory: ${{ env.DATA_DIRECTORY }}
@@ -2056,14 +2015,14 @@ jobs:
     needs:
       [
         setup_env,
-        determine_perushim_pipeline_changes,
+        determine_changes,
         determine_baseline_availability,
         determine_docker_image_availability,
         build_sefaria_mongo_docker,
       ]
     if: >-
       ${{ always() && !cancelled() && !failure() && needs.setup_env.outputs.validated_run_id == '' && (
-        needs.determine_perushim_pipeline_changes.outputs.module_changed == 'true' ||
+        needs.determine_changes.outputs.perushim_pipeline_module_changed == 'true' ||
         needs.determine_baseline_availability.outputs.is_perushim_data_sql_available != 'true' ||
         needs.determine_baseline_availability.outputs.is_perushim_notes_sqlite_available != 'true'
       ) }}
@@ -2242,13 +2201,7 @@ jobs:
       [
         setup_env,
         restore_validated_baselines,
-        determine_website_changes,
-        determine_api_changes,
-        determine_app_changes,
-        determine_admin_changes,
-        determine_bulletin_changes,
-        determine_data_changes,
-        determine_perushim_pipeline_changes,
+        determine_changes,
         verify_website_version,
         verify_api_version,
         verify_app_version,
@@ -2273,25 +2226,13 @@ jobs:
       - name: Check Prerequisites
         id: check_prerequisites
         run: |
-          WEBSITE_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_website_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-          API_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_api_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-          APP_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_app_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-          ADMIN_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_admin_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-          BULLETIN_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_bulletin_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-          DATA_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_data_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-          if [ "$WEBSITE_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$API_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$APP_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$ADMIN_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$BULLETIN_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$DATA_CHANGES_DETERMINATION_STATUS" = "failure" ]; then
+          if [ "${{ needs.determine_changes.result }}" != "success" ]; then
             echo "Could not determine module changes."
-            [ "$WEBSITE_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine website changes."
-            [ "$API_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine API changes."
-            [ "$APP_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine app changes."
-            [ "$ADMIN_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine admin changes."
-            [ "$BULLETIN_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine bulletin changes."
-            [ "$DATA_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine data changes."
             echo "Overall status: failure"
             exit 1
           fi
 
-          if [ "${{ needs.determine_data_changes.outputs.module_changed }}" = "true" ] || [ "${{ needs.determine_website_changes.outputs.module_changed }}" = "true" ] || [ "${{ needs.determine_data_changes.outputs.ci_changed }}" = "true" ]; then
+          if [ "${{ needs.determine_changes.outputs.data_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.data_ci_changed }}" = "true" ]; then
             if [ -z "${{ needs.setup_env.outputs.validated_run_id }}" ] && [ "${{ needs.recitation_ci.result }}" != "success" ]; then
               echo "Recitation alignment and RustFS validation did not pass."
               exit 1
@@ -2299,35 +2240,35 @@ jobs:
           fi
 
           # Version verification checks (only fail if the job ran and failed, not if skipped)
-          WEBSITE_MODULE_CHANGED=$([ "${{ needs.determine_website_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          WEBSITE_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           if [ "$WEBSITE_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_website_version.result }}" = "failure" ]; then
             echo "Website version verification failed."
             echo "Overall status: failure"
             exit 1
           fi
 
-          API_MODULE_CHANGED=$([ "${{ needs.determine_api_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          API_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.api_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           if [ "$API_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_api_version.result }}" = "failure" ]; then
             echo "API version verification failed."
             echo "Overall status: failure"
             exit 1
           fi
 
-          APP_MODULE_CHANGED=$([ "${{ needs.determine_app_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          APP_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.app_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           if [ "$APP_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_app_version.result }}" = "failure" ]; then
             echo "App version verification failed."
             echo "Overall status: failure"
             exit 1
           fi
 
-          BULLETIN_MODULE_CHANGED=$([ "${{ needs.determine_bulletin_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          BULLETIN_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.bulletin_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           if [ "$BULLETIN_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_bulletin_version.result }}" = "failure" ]; then
             echo "Bulletin version verification failed."
             echo "Overall status: failure"
             exit 1
           fi
 
-          ADMIN_MODULE_CHANGED=$([ "${{ needs.determine_admin_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          ADMIN_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.admin_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           if [ "$ADMIN_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_admin_version.result }}" = "failure" ]; then
             echo "Admin version verification failed."
             echo "Overall status: failure"
@@ -2345,7 +2286,7 @@ jobs:
             exit 0
           fi
 
-          CI_CHANGED=$([ "${{ needs.determine_website_changes.outputs.ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          CI_CHANGED=$([ "${{ needs.determine_changes.outputs.website_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           WEBSITE_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_website_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
           if [ "$WEBSITE_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$WEBSITE_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             E2E_STATUS=$([ "${{ needs.website_e2e.result }}" = "success" ] && echo "success" || echo "failure") # Generated
@@ -2358,7 +2299,7 @@ jobs:
             fi
           fi
 
-          API_MODULE_CHANGED=$([ "${{ needs.determine_api_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          API_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.api_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           API_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_api_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
           if [ "$API_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$API_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             API_STATUS=$([ "${{ needs.api_e2e.result }}" = "success" ] && echo "success" || echo "failure") # Generated
@@ -2368,7 +2309,7 @@ jobs:
             fi
           fi
 
-          APP_MODULE_CHANGED=$([ "${{ needs.determine_app_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          APP_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.app_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           APP_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_app_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
           if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$APP_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             APP_STATUS=$([ "${{ needs.app_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
@@ -2388,7 +2329,7 @@ jobs:
             fi
           fi
 
-          BULLETIN_MODULE_CHANGED=$([ "${{ needs.determine_bulletin_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          BULLETIN_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.bulletin_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           BULLETIN_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_bulletin_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
           if [ "$BULLETIN_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$BULLETIN_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             BULLETIN_STATUS=$([ "${{ needs.bulletin_ci.result }}" = "failure" ] && echo "failure" || echo "success") # Generated
@@ -2398,7 +2339,7 @@ jobs:
             fi
           fi
 
-          ADMIN_MODULE_CHANGED=$([ "${{ needs.determine_admin_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          ADMIN_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.admin_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           ADMIN_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_admin_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
           if [ "$ADMIN_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$ADMIN_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             ADMIN_STATUS=$([ "${{ needs.admin_ci.result }}" = "failure" ] && echo "failure" || echo "success") # Generated
@@ -2408,7 +2349,7 @@ jobs:
             fi
           fi
 
-          DATA_MODULE_CHANGED=$([ "${{ needs.determine_data_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          DATA_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.data_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           DATA_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_data_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
           if [ "$DATA_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$DATA_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             # Only fail if data_ci or perushim_data explicitly failed (not if skipped)
@@ -2601,10 +2542,10 @@ jobs:
 
   release_website:
     name: Release Website
-    needs: [setup_env, determine_website_changes, cross_module_ci, package_website]
+    needs: [setup_env, determine_changes, cross_module_ci, package_website]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_website passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_website.result == 'success' && needs.package_website.outputs.module_version != '' && needs.determine_website_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_website.result == 'success' && needs.package_website.outputs.module_version != '' && needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -2619,10 +2560,10 @@ jobs:
 
   release_api:
     name: Release API
-    needs: [setup_env, determine_api_changes, cross_module_ci, package_api]
+    needs: [setup_env, determine_changes, cross_module_ci, package_api]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_api passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_api.result == 'success' && needs.package_api.outputs.module_version != '' && needs.determine_api_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_api.result == 'success' && needs.package_api.outputs.module_version != '' && needs.determine_changes.outputs.api_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -2637,10 +2578,10 @@ jobs:
 
   release_app:
     name: Release App
-    needs: [setup_env, determine_app_changes, cross_module_ci, package_app]
+    needs: [setup_env, determine_changes, cross_module_ci, package_app]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_app passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_app.result == 'success' && needs.package_app.outputs.module_version != '' && needs.determine_app_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_app.result == 'success' && needs.package_app.outputs.module_version != '' && needs.determine_changes.outputs.app_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -2660,10 +2601,10 @@ jobs:
 
   release_bulletin:
     name: Release Bulletin
-    needs: [setup_env, determine_bulletin_changes, cross_module_ci, package_bulletin]
+    needs: [setup_env, determine_changes, cross_module_ci, package_bulletin]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_bulletin passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_bulletin.result == 'success' && needs.package_bulletin.outputs.module_version != '' && needs.determine_bulletin_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_bulletin.result == 'success' && needs.package_bulletin.outputs.module_version != '' && needs.determine_changes.outputs.bulletin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -2678,8 +2619,8 @@ jobs:
 
   release_admin:
     name: Release Admin
-    needs: [setup_env, determine_admin_changes, cross_module_ci, package_admin]
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_admin.result == 'success' && needs.package_admin.outputs.module_version != '' && needs.determine_admin_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_changes, cross_module_ci, package_admin]
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_admin.result == 'success' && needs.package_admin.outputs.module_version != '' && needs.determine_changes.outputs.admin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -2694,11 +2635,11 @@ jobs:
 
   release_data:
     name: Release Data
-    needs: [setup_env, determine_data_changes, cross_module_ci, data_ci, perushim_data]
+    needs: [setup_env, determine_changes, cross_module_ci, data_ci, perushim_data]
     # Note: Using always() as a workaround for reusable workflow result evaluation issues (see #1065)
     # Perushim generation is intentionally skipped for Tanahpedia/schema-only changes;
     # Data CD falls back to the always-present master artifact in that case.
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && (needs.data_ci.result == 'success' || (needs.data_ci.result == 'skipped' && needs.setup_env.outputs.validated_run_id != '')) && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true') && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && (needs.data_ci.result == 'success' || (needs.data_ci.result == 'skipped' && needs.setup_env.outputs.validated_run_id != '')) && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
     runs-on: ubuntu-latest
