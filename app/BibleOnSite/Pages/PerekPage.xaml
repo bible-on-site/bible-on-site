@@ -155,19 +155,19 @@
             <Label Text="Bottom Bar Fix" FontSize="11" FontAttributes="Bold"
                    TextColor="{AppThemeBinding Light=Black, Dark=White}" FlowDirection="LeftToRight"/>
             <RadioButton x:Name="DebugFix0" Content="0: No fix (baseline)" FontSize="10" FlowDirection="LeftToRight"
-                         CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug"/>
+                         GroupName="BottomBarDebug"/>
             <RadioButton x:Name="DebugFix3" Content="3: Bar margin=-N" FontSize="10" FlowDirection="LeftToRight"
-                         CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug"/>
+                         GroupName="BottomBarDebug"/>
             <RadioButton x:Name="DebugFix4" Content="4: TranslationY +N (default)" FontSize="10" FlowDirection="LeftToRight"
-                         CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug" IsChecked="True"/>
+                         GroupName="BottomBarDebug" IsChecked="True"/>
             <RadioButton x:Name="DebugFix11" Content="11: Page padding=-N" FontSize="10" FlowDirection="LeftToRight"
-                         CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug"/>
+                         GroupName="BottomBarDebug"/>
             <RadioButton x:Name="DebugFix15" Content="15: TranslationY + bar margin=-N" FontSize="10" FlowDirection="LeftToRight"
-                         CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug"/>
+                         GroupName="BottomBarDebug"/>
             <RadioButton x:Name="DebugFix16" Content="16: TranslationY + page padding=-N" FontSize="10" FlowDirection="LeftToRight"
-                         CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug"/>
+                         GroupName="BottomBarDebug"/>
             <RadioButton x:Name="DebugFix17" Content="17: TranslationY (half) + margin" FontSize="10" FlowDirection="LeftToRight"
-                         CheckedChanged="OnDebugFixChanged" GroupName="BottomBarDebug"/>
+                         GroupName="BottomBarDebug"/>
             <Label x:Name="DebugFixInfo" Text="" FontSize="10" FlowDirection="LeftToRight"
                    TextColor="{AppThemeBinding Light=Gray, Dark=#AAA}"/>
         </VerticalStackLayout>

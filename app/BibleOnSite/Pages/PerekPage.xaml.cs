@@ -56,6 +56,7 @@ public partial class PerekPage : ContentPage
     {
         Console.WriteLine("[Startup] PerekPage InitializeComponent");
         InitializeComponent();
+        InitializeBottomBarDebugControls();
         Console.WriteLine("[Startup] PerekPage binding context");
         _viewModel = new PerekViewModel();
         BindingContext = _viewModel;
@@ -70,6 +71,7 @@ public partial class PerekPage : ContentPage
     public PerekPage(PerekViewModel viewModel)
     {
         InitializeComponent();
+        InitializeBottomBarDebugControls();
         _viewModel = viewModel;
         BindingContext = _viewModel;
         ForwardSelectedArticleIdChanged();
@@ -488,6 +490,16 @@ public partial class PerekPage : ContentPage
     }
 
 #if IOS
+    private void InitializeBottomBarDebugControls()
+    {
+        // XAML sets the default selection while constructing the page. Hook up
+        // changes only after all controls touched by the handler exist.
+        foreach (var choice in new[] { DebugFix0, DebugFix3, DebugFix4, DebugFix11, DebugFix15, DebugFix16, DebugFix17 })
+        {
+            choice.CheckedChanged += OnDebugFixChanged;
+        }
+    }
+
     private void OnPageSizeChanged(object? sender, EventArgs e) => ApplyBottomBarSafeArea();
     private int _currentDebugFix = 4; // Default: TranslationY (confirmed best by tester)
     private double _bottomInset;
@@ -647,7 +659,7 @@ public partial class PerekPage : ContentPage
         }
     }
 #else
-    private void OnDebugFixChanged(object? sender, CheckedChangedEventArgs e) { }
+    private void InitializeBottomBarDebugControls() { }
     private void OnDebugToggleTapped(object? sender, TappedEventArgs e) { }
 #endif
 
