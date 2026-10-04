@@ -38,6 +38,8 @@ on:
   # Use the dispatch's native branch/tag selector so execution and cache scope match.
   workflow_dispatch:
 
+# Security note: jobs that download/load executable artifacts are gated to avoid
+# running in workflow_dispatch context (default-branch cache scope).
 # Only the latest commit of a PR needs validation. Keep master, dispatched and
 # merge-queue runs independent so publication and queue validation are preserved.
 concurrency:
@@ -2048,6 +2050,7 @@ jobs:
           shared-key: "data-rust"
 
       # Download sefaria mongo docker image (same pattern as data_ci)
+      # NOTE: This job is guarded at job-level to skip on workflow_dispatch.
       - name: Download Sefaria MongoDB Docker Image
         env:
           GH_TOKEN: ${{ github.token }}
