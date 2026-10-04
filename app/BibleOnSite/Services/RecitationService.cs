@@ -196,7 +196,7 @@ public sealed class RecitationService
 
     public async Task<string> PrepareAudioAsync(int perekId, IReadOnlyList<Pasuk> pasukim,
         double? startMs, double? endMs, CancellationToken cancellationToken,
-        IReadOnlyList<(double Start, double End)>? ranges, IRecitationAudioDecoder? decoder)
+        IReadOnlyList<(double Start, double End)>? ranges, IRecitationAudioDecoder? decoder, double pauseMs = 0)
     {
         await _gate.WaitAsync(cancellationToken);
         try
@@ -247,7 +247,13 @@ public sealed class RecitationService
                 throw new InvalidOperationException("A precise audio decoder is required.");
             }
 
-            var pcm = await decoder.CreateClipAsync(mp3, intervals!, cancellationToken);
+            if (!double.IsFinite(pauseMs) || pauseMs < 0 || pauseMs > 10000)
+            {
+                throw new InvalidDataException("Invalid verse pause.");
+            }
+            var pcm = pauseMs == 0
+                ? await decoder.CreateClipAsync(mp3, intervals!, cancellationToken)
+                : await decoder.CreateClipAsync(mp3, intervals!, cancellationToken, pauseMs);
             cancellationToken.ThrowIfCancellationRequested();
             await File.WriteAllBytesAsync(clip, pcm, cancellationToken);
             return clip;

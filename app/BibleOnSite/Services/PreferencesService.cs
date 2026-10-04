@@ -89,6 +89,35 @@ public class PreferencesService
         }
     }
 
+    private double _recitationSpeed = 1;
+    private double _recitationVolume = 1;
+    private double _recitationVersePauseMs = -1;
+    // A negative pause preserves the original recording; custom pauses are wall-clock milliseconds.
+    public double RecitationSpeed
+    {
+        get => _recitationSpeed;
+        set => SetRecitationValue(ref _recitationSpeed, "recitationSpeed", Normalize(value, 1, 0.5, 2));
+    }
+    public double RecitationVolume
+    {
+        get => _recitationVolume;
+        set => SetRecitationValue(ref _recitationVolume, "recitationVolume", Normalize(value, 1, 0, 1));
+    }
+    public double RecitationVersePauseMs
+    {
+        get => _recitationVersePauseMs;
+        set => SetRecitationValue(ref _recitationVersePauseMs, "recitationVersePauseMs", Normalize(value, -1, -1, 5000));
+    }
+    private static double Normalize(double value, double fallback, double min, double max) =>
+        double.IsFinite(value) ? Math.Clamp(value, min, max) : fallback;
+    private void SetRecitationValue(ref double field, string key, double value)
+    {
+        if (field == value) { return; }
+        field = value;
+        _storage.Set(key, value);
+        OnPreferencesChanged();
+    }
+
     private readonly IPreferencesStorage _storage;
     private double _fontFactor = 1.0;
     private int? _lastLearntPerek;
@@ -177,6 +206,9 @@ public class PreferencesService
     public void Load()
     {
         _recitationEnabled = _storage.Get(RecitationEnabledKey, false);
+        _recitationSpeed = Normalize(_storage.Get("recitationSpeed", 1.0), 1, 0.5, 2);
+        _recitationVolume = Normalize(_storage.Get("recitationVolume", 1.0), 1, 0, 1);
+        _recitationVersePauseMs = Normalize(_storage.Get("recitationVersePauseMs", -1.0), -1, -1, 5000);
         _fontFactor = _storage.Get(FontFactorKey, 1.0);
 
         var lastLearnt = _storage.Get(LastLearntPerekKey, -1);

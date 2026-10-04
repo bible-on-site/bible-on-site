@@ -139,11 +139,33 @@
             <Border Padding="16" StrokeShape="RoundRectangle 8"
                     BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
                 <VerticalStackLayout BindingContext="{Binding Recitation}" x:DataType="viewmodels:RecitationPreferencesViewModel" Spacing="12">
-                    <Label Text="הקראה" FontSize="20" FontAttributes="Bold" TextColor="{StaticResource Primary}"/>
+                    <Label Text="קריינות" FontSize="20" FontAttributes="Bold" TextColor="{StaticResource Primary}"/>
                     <Grid ColumnDefinitions="*,Auto">
                         <Label Text="הפעלת הקראה" VerticalOptions="Center"/>
                         <Switch Grid.Column="1" IsToggled="{Binding Enabled}" IsEnabled="{Binding IsInstalled}" AutomationId="RecitationEnabledSwitch"/>
                     </Grid>
+                    <VerticalStackLayout IsVisible="{Binding Enabled}" Spacing="8" AutomationId="RecitationPlaybackSettings">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Text="מהירות"/>
+                            <Label Grid.Column="1" Text="{Binding Speed, StringFormat='{0:0.##}×'}"/>
+                        </Grid>
+                        <Slider Minimum="0.5" Maximum="2" Value="{Binding Speed}" AutomationId="RecitationSpeedSlider" SemanticProperties.Description="מהירות"/>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Text="אורך הפסקה בין פסוקים"/>
+                            <Label Grid.Column="1" Text="{Binding PauseSeconds, StringFormat='{0:0.#} שניות'}" IsVisible="{Binding CustomPauses}"/>
+                        </Grid>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Text="לפי ההקלטה" VerticalOptions="Center"/>
+                            <Switch Grid.Column="1" IsToggled="{Binding OriginalPauses}" AutomationId="RecitationOriginalPausesSwitch"/>
+                        </Grid>
+                        <Slider Minimum="0" Maximum="5" Value="{Binding PauseSeconds}" IsVisible="{Binding CustomPauses}" AutomationId="RecitationPauseSlider" SemanticProperties.Description="אורך הפסקה בין פסוקים"/>
+                        <Label Text="הפסקה מותאמת זמינה בפרקים עם חלוקה לפסוקים" FontSize="12" TextColor="{StaticResource Gray500}"/>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Text="עוצמה"/>
+                            <Label Grid.Column="1" Text="{Binding Volume, StringFormat='{0:P0}'}"/>
+                        </Grid>
+                        <Slider Minimum="0" Maximum="1" Value="{Binding Volume}" AutomationId="RecitationVolumeSlider" SemanticProperties.Description="עוצמה"/>
+                    </VerticalStackLayout>
                     <Label Text="חבילה נפרדת מהפירושים. בחרו ספרים לשימוש ללא אינטרנט, או את כל הספרים (כ-935 MB)." LineBreakMode="WordWrap"/>
                     <Label Text="{Binding Status}" AutomationId="RecitationPackageStatus" LineBreakMode="WordWrap"/>
                     <Button Text="כל הספרים" Command="{Binding SelectAllCommand}" IsEnabled="{Binding IsIdle}" AutomationId="RecitationSelectAllButton"/>

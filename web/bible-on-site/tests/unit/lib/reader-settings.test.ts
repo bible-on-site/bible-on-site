@@ -5,6 +5,7 @@ import {
 	getStoredReaderSettings,
 	PEREK_FONT_SCALES,
 	PEREK_LINE_HEIGHTS,
+	PEREK_WORD_SPACINGS,
 	READER_SETTINGS_BOOTSTRAP,
 	READER_SETTINGS_STORAGE_KEY,
 	setStoredReaderSettings,
@@ -33,8 +34,32 @@ describe("reader-settings", () => {
 	});
 
 	it("roundtrips settings through localStorage", () => {
-		setStoredReaderSettings({ fontStep: 4, lineStep: 2 });
-		expect(getStoredReaderSettings()).toEqual({ fontStep: 4, lineStep: 2 });
+		setStoredReaderSettings({ fontStep: 4, lineStep: 2, wordStep: 0 });
+		expect(getStoredReaderSettings()).toEqual({
+			fontStep: 4,
+			lineStep: 2,
+			wordStep: 0,
+		});
+	});
+
+	it("migrates existing font/line choices and restores independent horizontal spacing before paint", () => {
+		localStorage.setItem(
+			READER_SETTINGS_STORAGE_KEY,
+			JSON.stringify({ fontStep: 3, lineStep: 1 }),
+		);
+		expect(getStoredReaderSettings()).toEqual({
+			fontStep: 3,
+			lineStep: 1,
+			wordStep: 0,
+		});
+		setStoredReaderSettings({ fontStep: 3, lineStep: 1, wordStep: 4 });
+		runBootstrap();
+		expect(
+			document.documentElement.style.getPropertyValue("--perek-word-spacing"),
+		).toBe(`${PEREK_WORD_SPACINGS[4]}em`);
+		expect(READER_SETTINGS_BOOTSTRAP).toContain(
+			JSON.stringify(PEREK_WORD_SPACINGS),
+		);
 	});
 
 	it("returns defaults on malformed stored JSON", () => {
@@ -50,6 +75,7 @@ describe("reader-settings", () => {
 		expect(getStoredReaderSettings()).toEqual({
 			fontStep: PEREK_FONT_SCALES.length - 1,
 			lineStep: 0,
+			wordStep: 0,
 		});
 	});
 
@@ -60,6 +86,7 @@ describe("reader-settings", () => {
 		expect(JSON.parse(stored!)).toEqual({
 			fontStep: 0,
 			lineStep: PEREK_LINE_HEIGHTS.length - 1,
+			wordStep: 0,
 		});
 	});
 
@@ -107,7 +134,7 @@ describe("reader-settings", () => {
 	it("bootstrap script applies stored settings synchronously before paint", () => {
 		localStorage.setItem(
 			READER_SETTINGS_STORAGE_KEY,
-			JSON.stringify({ fontStep: 0, lineStep: 2 }),
+			JSON.stringify({ fontStep: 0, lineStep: 2, wordStep: 0 }),
 		);
 		runBootstrap();
 		expect(
@@ -124,9 +151,8 @@ describe("reader-settings", () => {
 		// Defaults applied (or vars simply unset) — must not throw.
 		expect(
 			Number.parseFloat(
-				document.documentElement.style.getPropertyValue(
-					"--perek-font-scale",
-				) || String(PEREK_FONT_SCALES[DEFAULT_READER_SETTINGS.fontStep]),
+				document.documentElement.style.getPropertyValue("--perek-font-scale") ||
+					String(PEREK_FONT_SCALES[DEFAULT_READER_SETTINGS.fontStep]),
 			),
 		).toBe(PEREK_FONT_SCALES[DEFAULT_READER_SETTINGS.fontStep]);
 	});

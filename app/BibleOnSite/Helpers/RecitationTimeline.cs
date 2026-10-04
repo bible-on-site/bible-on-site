@@ -11,7 +11,7 @@ public sealed class RecitationTimeline
     {
     }
 
-    public RecitationTimeline(RecitationTrack? track, IReadOnlyList<(double Start, double End)>? ranges)
+    public RecitationTimeline(RecitationTrack? track, IReadOnlyList<(double Start, double End)>? ranges, double pauseMs = 0)
     {
         if (track?.AlignmentStatus != "ready")
         {
@@ -31,7 +31,7 @@ public sealed class RecitationTimeline
             {
                 _words.Add((word, cursor + word.StartMs!.Value - range.Start, cursor + word.EndMs!.Value - range.Start));
             }
-            cursor += range.End - range.Start;
+            cursor += range.End - range.Start + pauseMs;
         }
     }
 

@@ -77,6 +77,7 @@ function deferred<T>() {
 }
 
 beforeEach(() => {
+	localStorage.clear();
 	positionMs = null;
 	frames.clear();
 	jest.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
@@ -105,6 +106,8 @@ beforeEach(() => {
 			prepare,
 			play: clipPlay,
 			playChapter: chapterPlay,
+			setOptions: jest.fn(),
+			playRanges: jest.fn().mockResolvedValue(true),
 			get positionMs() {
 				return positionMs;
 			},
@@ -339,7 +342,7 @@ test("the chapter heading plays the same chapter as its adjacent play icon", asy
 	expect(view.container.querySelector("audio")?.currentTime).toBe(0);
 	const toggle = screen.getByRole("button", { name: "מצב הקראה" });
 	const controls = toggle.parentElement;
-	expect(controls?.querySelectorAll("button")[1]).toBe(toggle);
+	expect(controls?.querySelectorAll("button")[2]).toBe(toggle);
 });
 
 test("one button pauses and resumes the selected clip without restarting it", async () => {
