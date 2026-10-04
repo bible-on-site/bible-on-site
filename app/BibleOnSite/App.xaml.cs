@@ -20,7 +20,9 @@ public partial class App : Application
 	{
 		try
 		{
-			return new Window(new AppShell());
+			var window = new Window(new AppShell());
+			window.Stopped += (_, _) => Services.RecitationService.Instance.RequestPlaybackStop();
+			return window;
 		}
 		catch (Exception ex)
 		{

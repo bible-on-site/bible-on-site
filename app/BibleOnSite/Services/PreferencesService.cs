@@ -70,6 +70,20 @@ public class PreferencesService
     private const string LastLearntPerekKey = "lastLearntPerek";
     private const string PerekToLoadKey = "perekToLoad";
     private const string BookmarkedPerakimKey = "bookmarkedPerakim";
+    private const string RecitationEnabledKey = "recitationEnabled";
+    private bool _recitationEnabled;
+
+    public bool RecitationEnabled
+    {
+        get => _recitationEnabled;
+        set
+        {
+            if (_recitationEnabled == value) return;
+            _recitationEnabled = value;
+            _storage.Set(RecitationEnabledKey, value);
+            OnPreferencesChanged();
+        }
+    }
 
     private readonly IPreferencesStorage _storage;
     private double _fontFactor = 1.0;
@@ -146,6 +160,7 @@ public class PreferencesService
     /// </summary>
     public void Load()
     {
+        _recitationEnabled = _storage.Get(RecitationEnabledKey, false);
         _fontFactor = _storage.Get(FontFactorKey, 1.0);
 
         var lastLearnt = _storage.Get(LastLearntPerekKey, -1);

@@ -84,6 +84,7 @@ public partial class PerekPage : ContentPage
     {
         _viewModel.NavigationRequested += (_, perekId) =>
         {
+            ResetRecitationContext();
             var targetIndex = perekId - 1;
             // Guard: suppress OnCarouselItemChanged while we reposition
             _carouselInitializing = true;
@@ -211,7 +212,7 @@ public partial class PerekPage : ContentPage
     private void OnTouchStarted(object? sender, TouchPosition position)
     {
         _swipe.Cancel();
-        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || _isMenuOpen || _isShowingArticles ||
+        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || _isMenuOpen || _isShowingArticles || _focusedPasuk != null ||
             !ContainsTouch(PerekCarousel, position) || ContainsTouch(BottomBar, position) ||
             ContainsTouch(ExitFullScreenButton, position))
         {
@@ -222,7 +223,7 @@ public partial class PerekPage : ContentPage
 
     private void OnTouchDispatched(object? sender, TouchPosition position)
     {
-        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || _isMenuOpen || _isShowingArticles ||
+        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || _isMenuOpen || _isShowingArticles || _focusedPasuk != null ||
             !ContainsTouch(PerekCarousel, position) || ContainsTouch(BottomBar, position) ||
             ContainsTouch(ExitFullScreenButton, position) || ContainsTouch(CircularMenuButton, position) ||
             ContainsTouch(SelectionBar, position))
@@ -264,6 +265,10 @@ public partial class PerekPage : ContentPage
 
     protected override void OnDisappearing()
     {
+        ResetRecitationContext();
+        PreferencesService.Instance.PreferencesChanged -= OnRecitationPreferencesChanged;
+        RecitationService.Instance.Changed -= OnRecitationPackageChanged;
+        RecitationService.Instance.PlaybackStopRequested -= OnPlaybackStopRequested;
 #if ANDROID
         MainActivity.TouchStarted -= OnTouchStarted;
         MainActivity.UnsubscribeTouchDispatched(OnTouchDispatched);
@@ -283,6 +288,7 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private void OnPasukimScrolled(object? sender, ItemsViewScrolledEventArgs e)
     {
+        _doubleTap.Reset();
         _lastScrollTime = DateTime.Now;
         _longPressTokenSource?.Cancel();
         _pressedPasukNum = -1;
@@ -318,6 +324,8 @@ public partial class PerekPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        SubscribeRecitation();
+        await InitializeRecitationAsync();
 #if ANDROID
         MainActivity.TouchStarted += OnTouchStarted;
         MainActivity.SubscribeTouchDispatched(OnTouchDispatched);
@@ -633,11 +641,8 @@ public partial class PerekPage : ContentPage
         if (e.Parameter is int pasukNum)
         {
             // If in selection mode, tap toggles selection
-            if (_viewModel.SelectedPasukNums.Count > 0)
-            {
-                _viewModel.ToggleSelectedPasuk(pasukNum);
-                UpdatePasukSelection(sender, pasukNum);
-            }
+            if (_viewModel.Perek?.Pasukim.FirstOrDefault(p => p.PasukNum == pasukNum) is { } pasuk)
+                HandlePasukTap(pasuk, sender);
         }
 #endif
     }
@@ -658,11 +663,7 @@ public partial class PerekPage : ContentPage
         if (sender is LongPressBehavior behavior &&
             behavior.AssociatedView?.BindingContext is Pasuk pasuk)
         {
-            if (_viewModel.SelectedPasukNums.Count > 0)
-            {
-                _viewModel.ToggleSelectedPasuk(pasuk.PasukNum);
-                UpdatePasukSelection(behavior.AssociatedView, pasuk.PasukNum);
-            }
+            HandlePasukTap(pasuk, behavior.AssociatedView);
         }
     }
 
@@ -675,6 +676,7 @@ public partial class PerekPage : ContentPage
         if (e.Parameter is int pasukNum)
         {
             // Don't set _lastLongPressTime - right-click doesn't need debounce
+            ResetRecitationContext();
             var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
             _viewModel.ToggleSelectedPasuk(pasukNum);
             UpdatePasukSelection(sender, pasukNum);
@@ -692,8 +694,8 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private void OnPasukPointerPressed(object? sender, PointerEventArgs e)
     {
-        // Android uses the native press lifecycle, including movement/cancellation.
-        if (OperatingSystem.IsAndroid())
+        // Mobile platforms use native long-press recognition.
+        if (OperatingSystem.IsAndroid() || OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst())
         {
             return;
         }
@@ -738,6 +740,7 @@ public partial class PerekPage : ContentPage
             {
                 _lastLongPressTime = DateTime.Now;
 
+                ResetRecitationContext();
                 var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
                 _viewModel.ToggleSelectedPasuk(pasukNum);
 
@@ -764,13 +767,14 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private void OnPasukLongPressed(object? sender, EventArgs e)
     {
-#if ANDROID
+#if ANDROID || IOS || MACCATALYST
         _lastLongPressTime = DateTime.Now;
 
         // The sender is the LongPressBehavior - get the Pasuk from the associated view's BindingContext
         if (sender is LongPressBehavior behavior &&
             behavior.AssociatedView?.BindingContext is Pasuk pasuk)
         {
+            ResetRecitationContext();
             var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
             _viewModel.ToggleSelectedPasuk(pasuk.PasukNum);
             UpdateSelectionBar();
@@ -796,8 +800,28 @@ public partial class PerekPage : ContentPage
 
     private void UpdateSelectionBar()
     {
+        if (_viewModel == null) return;
         var count = _viewModel.SelectedPasukNums.Count;
-        var isSelectionMode = count > 0;
+        var isSelectionMode = count > 0 || _chapterRecitationSelection || _focusedPasuk != null;
+        var ordinarySelection = count > 0 && !_chapterRecitationSelection && _focusedPasuk == null;
+        SelectionCountBadge.IsVisible = ordinarySelection;
+        SelectionShareButton.IsVisible = ordinarySelection;
+        SelectionCopyButton.IsVisible = ordinarySelection;
+        SelectionRecitationButton.IsVisible = RecitationEnabled;
+        var perek = _viewModel.Perek;
+        var track = perek == null ? null : RecitationService.Instance.GetTrack(perek.PerekId);
+        SelectionRecitationButton.IsEnabled = !_recitationBusy && perek != null && RecitationService.Instance.HasAudio(perek.PerekId) &&
+            track != null && track.Matches(perek.Pasukim) && (_chapterRecitationSelection || track.AlignmentStatus == "ready");
+        SelectionRecitationButton.Opacity = SelectionRecitationButton.IsEnabled ? 1 : 0.4;
+        SelectionRecitationButton.Text = RecitationPlayer.CurrentState == CommunityToolkit.Maui.Core.MediaElementState.Playing
+            ? Fonts.FluentUI.pause_24_regular : RecitationPlayer.CurrentState == CommunityToolkit.Maui.Core.MediaElementState.Paused
+                ? Fonts.FluentUI.play_24_regular : Fonts.FluentUI.headphones_24_regular;
+        var hint = _recitationBusy ? "טוען את הקלטת הפרק..." : track == null ? "אין הקלטה לפרק זה" :
+            perek != null && !RecitationService.Instance.HasAudio(perek.PerekId) ? "הורידו את הקלטות הספר בהעדפות" :
+            !_chapterRecitationSelection && track.AlignmentStatus != "ready" ? "הקראת מילים ופסוקים עדיין בהכנה" :
+            SelectionRecitationButton.IsEnabled ? "הקראה" : "ההקלטה אינה תואמת לטקסט המותקן";
+        ToolTipProperties.SetText(SelectionRecitationButton, hint);
+        SemanticProperties.SetDescription(SelectionRecitationButton, hint);
 
         Shell.SetNavBarIsVisible(this, true);
         Shell.SetFlyoutBehavior(this, isSelectionMode ? FlyoutBehavior.Disabled : FlyoutBehavior.Flyout);
@@ -814,6 +838,7 @@ public partial class PerekPage : ContentPage
 
     private void ClearAllSelections()
     {
+        ResetRecitationContext();
         _viewModel.ClearSelected();
         UpdateSelectionBar();
     }
@@ -1571,6 +1596,8 @@ public partial class PerekPage : ContentPage
         LongPressBehavior.CancelAllPending();
         _longPressTokenSource?.Cancel();
         _pressedPasukNum = -1;
+
+        ResetRecitationContext();
 
         var hasPasukim = perek.Pasukim != null && perek.Pasukim.Count > 0;
         Console.WriteLine($"[Carousel] OnChanged PROCESS incoming={incomingId} prev={previousId} vmPerek={_viewModel.PerekId} pos={_viewModel.CarouselPosition} hasPasukim={hasPasukim}");

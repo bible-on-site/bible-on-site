@@ -57,7 +57,7 @@ jobs:
           MODULE_PATTERN="^${{ inputs.module_name }}/"
           if [ "${{ inputs.module_directory }}" = "web/bible-on-site" ]; then
             # Approved timing changes must package/release the website too.
-            MODULE_PATTERN="$MODULE_PATTERN|^data/recitation/recitation\.sqlite$"
+            MODULE_PATTERN="$MODULE_PATTERN|^data/recitation/recitation\.sqlite$|^app/BibleOnSite/Resources/Raw/recitation-audio\.html$"
           fi
           MODULE_CHANGED=$(git diff --name-only $BASE_SHA HEAD | grep -q -E "$MODULE_PATTERN" && echo "true" || echo "false")
           # Convert comma-separated paths to regex pattern

@@ -27,6 +27,7 @@ __pycache__/
 app/BibleOnSite/Resources/Raw/*
 !app/BibleOnSite/Resources/Raw/*.sqlite
 !app/BibleOnSite/Resources/Raw/AboutAssets.txt
+!app/BibleOnSite/Resources/Raw/recitation-audio.html
 **/.raw/
 **/.outputs/
 app/.artifacts/

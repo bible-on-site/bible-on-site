@@ -21,10 +21,11 @@ public partial class PreferencesPage : ContentPage
         BindingContext = _viewModel;
     }
 
-    protected override void OnAppearing()
+    protected override async void OnAppearing()
     {
         base.OnAppearing();
         _viewModel.Load();
+        await _viewModel.Recitation.LoadAsync();
     }
 
     private void OnPerekToLoadRadioChanged(object? sender, CheckedChangedEventArgs e)

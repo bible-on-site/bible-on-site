@@ -2,6 +2,10 @@ using FlaUI.Core.Conditions;
 using System.Diagnostics;
 using System.Net.Http;
 using System.Net.Sockets;
+using System.Drawing;
+using System.Runtime.InteropServices;
+using FlaUI.Core.Input;
+using FlaUI.Core.WindowsAPI;
 
 namespace BibleOnSite.Tests.E2E.Fixtures;
 
@@ -17,6 +21,7 @@ public class AppFixture : IAsyncLifetime
     private Process? _appProcess;
     private Process? _apiProcess;
     private bool _weStartedApi;
+    private DateTime _apiStartedAt;
 
     private const string ApiUrl = "http://localhost:3003";
 
@@ -60,7 +65,7 @@ public class AppFixture : IAsyncLifetime
     /// <summary>
     /// Path to the built MAUI Windows executable.
     /// From: app\BibleOnSite.Tests.E2E\bin\Debug\net10.0-windows10.0.19041.0\win-x64\
-    /// To:   app\BibleOnSite\bin\Debug\net10.0-windows10.0.19041.0\win10-x64\
+    /// To:   app\BibleOnSite\bin\Debug\net10.0-windows10.0.19041.0\win-x64\
     /// </summary>
     private static string AppPath
     {
@@ -70,7 +75,7 @@ public class AppFixture : IAsyncLifetime
                 ?? throw new InvalidOperationException("Cannot determine assembly location");
 
             // Navigate from test output to app output (go up to app/, then into BibleOnSite/bin/...)
-            var appDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "BibleOnSite", "bin", "Debug", "net10.0-windows10.0.19041.0", "win10-x64"));
+            var appDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "BibleOnSite", "bin", "Debug", "net10.0-windows10.0.19041.0", "win-x64"));
             var exePath = Path.Combine(appDir, "BibleOnSite.exe");
 
             if (!File.Exists(exePath))
@@ -131,6 +136,7 @@ public class AppFixture : IAsyncLifetime
 
         Console.WriteLine($"Starting API server from {ApiDirectory}...");
         _weStartedApi = true;
+        _apiStartedAt = DateTime.UtcNow;
 
         // Use cmd.exe /c to run cargo make in a shell context (ensures PATH is available)
         var startInfo = new ProcessStartInfo
@@ -138,8 +144,9 @@ public class AppFixture : IAsyncLifetime
             FileName = "cmd.exe",
             Arguments = "/c cargo make run-api-test",
             WorkingDirectory = ApiDirectory,
-            UseShellExecute = true,
-            CreateNoWindow = false,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WindowStyle = ProcessWindowStyle.Hidden,
         };
 
         _apiProcess = Process.Start(startInfo);
@@ -176,10 +183,15 @@ public class AppFixture : IAsyncLifetime
         // Ensure API is running first (reuse if already running)
         await EnsureApiRunningAsync();
 
-        // Kill any existing BibleOnSite processes to ensure clean start
+        // Only clean up this checkout's test app, never another running checkout.
         foreach (var proc in Process.GetProcessesByName("BibleOnSite"))
         {
-            try { proc.Kill(); proc.WaitForExit(2000); } catch { }
+            try
+            {
+                if (string.Equals(proc.MainModule?.FileName, AppPath, StringComparison.OrdinalIgnoreCase))
+                { proc.Kill(); proc.WaitForExit(2000); }
+            }
+            catch { }
         }
         await Task.Delay(1000); // Give time for processes to fully terminate
 
@@ -191,7 +203,8 @@ public class AppFixture : IAsyncLifetime
             Arguments = "run -f net10.0-windows10.0.19041.0 --no-build",
             WorkingDirectory = projectDir,
             UseShellExecute = false,
-            CreateNoWindow = false,
+            CreateNoWindow = true,
+            WindowStyle = ProcessWindowStyle.Hidden,
             RedirectStandardOutput = false,
             RedirectStandardError = false,
         };
@@ -222,6 +235,7 @@ public class AppFixture : IAsyncLifetime
             try
             {
                 proc.Refresh();
+                if (!string.Equals(proc.MainModule?.FileName, AppPath, StringComparison.OrdinalIgnoreCase)) continue;
                 if (proc.MainWindowHandle != IntPtr.Zero)
                 {
                     Console.WriteLine($"Process {proc.Id} has a main window");
@@ -243,6 +257,7 @@ public class AppFixture : IAsyncLifetime
                 try
                 {
                     proc.Refresh();
+                    if (!string.Equals(proc.MainModule?.FileName, AppPath, StringComparison.OrdinalIgnoreCase)) continue;
                     if (!proc.HasExited)
                     {
                         Console.WriteLine($"Using process {proc.Id} (no window handle but still running)");
@@ -317,7 +332,7 @@ public class AppFixture : IAsyncLifetime
 
             if (_appProcess != null && !_appProcess.HasExited)
             {
-                _appProcess.Kill();
+                _appProcess.Kill(entireProcessTree: true);
                 await _appProcess.WaitForExitAsync();
             }
 
@@ -325,8 +340,26 @@ public class AppFixture : IAsyncLifetime
             if (_weStartedApi && _apiProcess != null && !_apiProcess.HasExited)
             {
                 Console.WriteLine("Stopping API server (we started it)...");
-                _apiProcess.Kill();
+                _apiProcess.Kill(entireProcessTree: true);
                 await _apiProcess.WaitForExitAsync();
+            }
+            // Cargo can detach its API child before the launcher exits.
+            if (_weStartedApi)
+            {
+                var executable = Path.Combine(ApiDirectory, "target", "debug", "api.exe");
+                foreach (var process in Process.GetProcessesByName("api"))
+                {
+                    using (process)
+                    {
+                        try
+                        {
+                            if (process.StartTime.ToUniversalTime() >= _apiStartedAt &&
+                                string.Equals(process.MainModule?.FileName, executable, StringComparison.OrdinalIgnoreCase))
+                            { process.Kill(entireProcessTree: true); await process.WaitForExitAsync(); }
+                        }
+                        catch (InvalidOperationException) { }
+                    }
+                }
             }
         }
         catch
@@ -339,6 +372,32 @@ public class AppFixture : IAsyncLifetime
             _appProcess?.Dispose();
             _apiProcess?.Dispose();
         }
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(Point point);
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+
+    private void AssertOwnedWindow(IntPtr window)
+    {
+        GetWindowThreadProcessId(window, out var processId);
+        if (processId != App.ProcessId)
+            throw new InvalidOperationException("Native gesture tests require an isolated desktop with BibleOnSite in the foreground. No input was sent.");
+    }
+
+    public void AssertForeground() => AssertOwnedWindow(GetForegroundWindow());
+
+    /// <summary>Fail before synthetic input if another app covers the test window.</summary>
+    public void Click(AutomationElement element, MouseButton button = MouseButton.Left, bool doubleClick = false)
+    {
+        AssertForeground();
+        var point = element.GetClickablePoint();
+        AssertOwnedWindow(WindowFromPoint(point));
+        if (doubleClick) Mouse.DoubleClick(point);
+        else Mouse.Click(point, button);
     }
 
     /// <summary>
