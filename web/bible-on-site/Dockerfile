@@ -1,7 +1,10 @@
-# Note: Using classic docker build (DOCKER_BUILDKIT=0) for network:host support
-# Do not add BuildKit-specific syntax directives
-
 FROM node:26.10.0-alpine AS base
+
+# Version-only releases must not invalidate the dependency layer.
+FROM base AS manifests
+WORKDIR /app
+COPY bible-on-site/package.json bible-on-site/package-lock.json ./
+RUN node -e 'const fs = require("node:fs"); for (const file of ["package.json", "package-lock.json"]) { const json = JSON.parse(fs.readFileSync(file)); delete json.version; if (json.packages) delete json.packages[""].version; fs.writeFileSync(file, JSON.stringify(json)); }'
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -11,7 +14,7 @@ WORKDIR /app
 
 # Install dependencies based on the preferred package manager
 # Build context is web/, so bible-on-site is a subdirectory
-COPY bible-on-site/package.json bible-on-site/package-lock.json ./
+COPY --from=manifests /app/package.json /app/package-lock.json ./
 COPY bible-on-site/.npmrc* ./
 # Install ALL dependencies (including dev like sass) needed for the build step.
 # The final runner stage uses Next.js standalone output, so dev deps don't end up in production.

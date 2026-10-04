@@ -27,6 +27,7 @@ permissions:
   contents: write
   id-token: write # Required for AWS OIDC authentication
 env:
+  MODULE_DIRECTORY: ${{ inputs.module_directory }}
   IS_NPM: ${{ inputs.module_directory == 'web/bible-on-site' }}
   IS_CARGO: ${{ inputs.module_directory == 'web/api' }}
   SHARED_ROOT_DIR: web
@@ -57,7 +58,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       # Free disk space before build - the Website SSG build generates 1000+ static pages
-      # and the classic Docker build (non-BuildKit) keeps all intermediate layers on disk
+      # and retains sizeable build/dependency layers on disk
       - name: Free Disk Space
         uses: jlumbroso/free-disk-space@v2.0.0
         with:
@@ -73,13 +74,13 @@ jobs:
         if: ${{ env.IS_NPM == 'true' }}
         uses: actions/setup-node@v7
         with:
-          node-version-file: ${{ inputs.MODULE_DIRECTORY }}/package.json
-          cache-dependency-path: ${{ inputs.MODULE_DIRECTORY }}/package-lock.json
+          node-version-file: ${{ env.MODULE_DIRECTORY }}/package.json
+          cache-dependency-path: ${{ env.MODULE_DIRECTORY }}/package-lock.json
           cache: npm
 
       - name: Install NPM Dev Dependencies
         if: ${{ env.IS_NPM == 'true' }}
-        working-directory: ${{ inputs.module_directory }}
+        working-directory: ${{ env.MODULE_DIRECTORY }}
         id: npm_ci
         run: |
           npm ci --include=dev --no-audit
@@ -95,7 +96,7 @@ jobs:
 
       - name: Get Module Version
         id: get_module_version
-        working-directory: ${{ inputs.module_directory }}
+        working-directory: ${{ env.MODULE_DIRECTORY }}
         run: |
           if [ "${{ env.MODULE_NAME }}" = "website" ]; then
             MODULE_VERSION=$(npm run version | tail -1)
@@ -120,7 +121,7 @@ jobs:
           echo "DOCKER_ARTIFACT_NAME=${DOCKER_ARTIFACT_NAME}" >> $GITHUB_OUTPUT
 
       - name: Debug - Print module tree
-        working-directory: ${{ inputs.module_directory }}
+        working-directory: ${{ env.MODULE_DIRECTORY }}
         run: |
           echo "Module directory structure:"
           tree -L 5
@@ -128,16 +129,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
         with:
-          driver-opts: |
-            network=host
-            image=moby/buildkit:v0.22.0
+          driver: docker
 
       # --- RDS Access for SSG Build (Website only) ---
       # Fetches DB_URL from SSM Parameter Store and dynamically whitelists runner IP
       - name: Configure AWS Credentials for RDS Access
         if: ${{ env.IS_NPM == 'true' }}
         id: aws_creds
-        continue-on-error: true
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
@@ -171,7 +169,7 @@ jobs:
             --group-id ${{ steps.rds_creds.outputs.rds_sg }} \
             --protocol tcp --port 3306 \
             --cidr ${{ steps.runner_ip.outputs.ip }}/32 \
-            --tag-specifications 'ResourceType=security-group-rule,Tags=[{Key=Source,Value=github-actions-build},{Key=RunId,Value=${{ github.run_id }}}]' || true
+            --tag-specifications 'ResourceType=security-group-rule,Tags=[{Key=Source,Value=github-actions-build},{Key=RunId,Value=${{ github.run_id }}}]'
 
       - name: Test RDS connectivity
         if: ${{ env.IS_NPM == 'true' && steps.rds_creds.outputs.rds_sg != '' }}
@@ -182,7 +180,7 @@ jobs:
           DB_HOST=$(echo "${{ steps.rds_creds.outputs.db_url }}" | sed -E 's|mysql://[^@]+@([^:]+):.*|\1|')
           echo "Testing connectivity to $DB_HOST:3306..."
           # Test TCP connection
-          timeout 30 bash -c "until nc -z $DB_HOST 3306; do echo 'Waiting for RDS...'; sleep 2; done" || echo "Warning: Could not verify RDS connectivity"
+          timeout 30 bash -c "until nc -z $DB_HOST 3306; do echo 'Waiting for RDS...'; sleep 2; done"
           echo "✓ RDS connectivity verified"
       # --- End RDS Access Setup ---
       - name: Merge and audit approved recitation timings
@@ -191,19 +189,41 @@ jobs:
           python data/recitation/publish.py
           python data/recitation/audit.py
 
+      - name: Prepare website dependency cache
+        if: ${{ env.IS_NPM == 'true' }}
+        id: deps_cache
+        run: |
+          REPOSITORY=$(aws ecr describe-repositories --repository-names bible-on-site --query 'repositories[0].repositoryUri' --output text)
+          aws ecr get-login-password | docker login --username AWS --password-stdin "${REPOSITORY%%/*}"
+          CACHE_REF="$REPOSITORY:deps-cache"
+          echo "ref=$CACHE_REF" >> "$GITHUB_OUTPUT"
+          CACHE_ARGS=()
+          CACHE_TAG=$(aws ecr describe-images --repository-name bible-on-site --filter tagStatus=TAGGED --query 'imageDetails[?contains(imageTags, `deps-cache`)].imageDigest | [0]' --output text)
+          if [ "$CACHE_TAG" != None ]; then CACHE_ARGS+=(--cache-from "type=registry,ref=$CACHE_REF"); fi
+          docker buildx build --builder default --network=host --progress=plain \
+            --target deps --build-arg BUILDKIT_INLINE_CACHE=1 --load \
+            "${CACHE_ARGS[@]}" -f web/bible-on-site/Dockerfile -t "$CACHE_REF" web
+
       - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
+        shell: bash
         env:
           DB_URL: ${{ steps.rds_creds.outputs.db_url || '' }}
           MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
         run: |
-          # Use raw docker build with --network=host to ensure RDS connectivity
-          # Buildx with docker-container driver doesn't properly support network: host
-          DOCKER_BUILDKIT=0 docker build \
+          CACHE_ARGS=()
+          BUILD_COMMAND=(env DOCKER_BUILDKIT=0 docker build)
+          if [ "$IS_NPM" = true ]; then
+            # The deps image retains npm ci; the standalone runner image does not.
+            CACHE_ARGS+=(--no-cache-filter builder)
+            BUILD_COMMAND=(docker buildx build --builder default --load --progress=plain)
+          fi
+          "${BUILD_COMMAND[@]}" \
             --network=host \
+            "${CACHE_ARGS[@]}" \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             --build-arg DB_URL="${DB_URL}" \
             --build-arg MAPBOX_PUBLIC_KEY="${MAPBOX_PUBLIC_TOKEN}" \
-            -f ${{ inputs.module_directory }}/Dockerfile \
+            -f ${{ env.MODULE_DIRECTORY }}/Dockerfile \
             -t ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }} \
             ${{ env.SHARED_ROOT_DIR }}
 
@@ -214,6 +234,12 @@ jobs:
           trap 'docker logs "$CONTAINER"; docker rm -f "$CONTAINER"' EXIT
           python data/recitation/deployment.py --origin http://127.0.0.1:3000 \
             --version "${{ steps.get_module_version.outputs.MODULE_VERSION }}" --attempts 12 --interval 5
+
+      - name: Publish website dependency cache (not a release image)
+        if: ${{ env.IS_NPM == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+        env:
+          CACHE_REF: ${{ steps.deps_cache.outputs.ref }}
+        run: docker push "$CACHE_REF"
 
       - name: Export Docker Image to tarball
         run: |
@@ -228,7 +254,7 @@ jobs:
           aws ec2 revoke-security-group-ingress \
             --group-id ${{ steps.rds_creds.outputs.rds_sg }} \
             --protocol tcp --port 3306 \
-            --cidr ${{ steps.runner_ip.outputs.ip }}/32 || true
+            --cidr ${{ steps.runner_ip.outputs.ip }}/32
       # --- End RDS Cleanup ---
       - name: GZip Docker Image
         working-directory: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}

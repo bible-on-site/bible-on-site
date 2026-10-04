@@ -4,6 +4,7 @@ Tracks researched tools. Check before first use, update after research.
 
 | Tool | Version | Date | Key Learnings |
 |------|---------|------|---------------|
+| Docker BuildKit | docker driver (Buildx) | 2026-10-04 | The default `docker` driver supports host networking and inline image cache. Export the `deps` target separately: standalone multi-stage output does not retain the `npm ci` layer. Import with `type=registry,ref=...`, not a local image loaded by `docker load`. Use `--no-cache-filter builder` for fresh RDS-backed SSG. Normalize only root manifest versions to retain dependency hits across releases. [Inline cache](https://docs.docker.com/build/cache/backends/inline/), [stage cache filter](https://docs.docker.com/reference/cli/docker/buildx/build/#no-cache-filter). |
 | Node.js | 26.10.0 | 2026-09-29 | Current release; use the same version in `.nvmrc`, npm engine ranges, Docker images, and CI lockfile checks. The official Windows zip provides a portable npm 11.19.1 for local validation. [Release](https://nodejs.org/en/blog/release/v26.10.0). |
 | Rust | 1.98.1 | 2026-09-29 | Stable point release fixes a 1.98.0 vtable miscompilation; use it for API and bulletin Docker builds and Rust workspace checks. [Release](https://blog.rust-lang.org/2026/09/03/Rust-1.98.1/). |
 | TypeScript | 7.0.2 | 2026-09-29 | Admin and website type checks pass after regenerating stale Next route types; the admin bundler warning types now come from Rolldown. |
