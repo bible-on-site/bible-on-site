@@ -34,12 +34,13 @@ public class ArticlesNavigationTests
 
         if (menuButton != null)
         {
-            menuButton.Click();
+            _fixture.Click(menuButton);
             await Task.Delay(500);
         }
         else
         {
             // Try keyboard shortcut or swipe from left
+            _fixture.AssertForeground();
             Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.ALT);
             await Task.Delay(100);
             Keyboard.Release(FlaUI.Core.WindowsAPI.VirtualKeyShort.ALT);
@@ -53,7 +54,7 @@ public class ArticlesNavigationTests
 
         if (authorsMenuItem != null)
         {
-            authorsMenuItem.Click();
+            _fixture.Click(authorsMenuItem);
             await Task.Delay(1000);
         }
     }
@@ -75,7 +76,7 @@ public class ArticlesNavigationTests
             var items = authorsCollection.FindAllChildren();
             if (items.Length > 0)
             {
-                items[0].Click();
+                _fixture.Click(items[0]);
                 await Task.Delay(2000);
             }
         }
@@ -134,7 +135,7 @@ public class ArticlesNavigationTests
             var items = articlesCollection.FindAllChildren();
             if (items.Length > 0)
             {
-                items[0].Click();
+                _fixture.Click(items[0]);
                 await Task.Delay(2000);
 
                 // Assert - Article detail page should show content (not the "no content" label)

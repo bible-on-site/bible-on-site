@@ -145,9 +145,9 @@ public class LongPressBehavior : Behavior<View>
         {
             foreach (var behavior in _activeBehaviors)
             {
+                var bindingContext = behavior._associatedView?.BindingContext;
                 if (behavior._androidView is not { IsShown: true } view ||
-                    behavior._associatedView?.BindingContext is not Pasuk pasuk ||
-                    !pasukim.Contains(pasuk))
+                    !(bindingContext is Pasuk pasuk && pasukim.Contains(pasuk) || ReferenceEquals(bindingContext, currentPerek)))
                     continue;
 
                 var visibleBounds = new Android.Graphics.Rect();
@@ -230,6 +230,26 @@ public class LongPressBehavior : Behavior<View>
         }
         e.Handled = false;
     }
+#elif IOS || MACCATALYST
+    private UIKit.UIView? _appleView;
+    private UIKit.UILongPressGestureRecognizer? _applePress;
+    private void AttachNativeEvents()
+    {
+        if (_associatedView?.Handler?.PlatformView is not UIKit.UIView view) return;
+        _appleView = view;
+        _applePress = new UIKit.UILongPressGestureRecognizer(gesture =>
+        {
+            if (gesture.State == UIKit.UIGestureRecognizerState.Began)
+                LongPressed?.Invoke(this, EventArgs.Empty);
+        }) { MinimumPressDuration = LongPressDuration / 1000.0, CancelsTouchesInView = false };
+        view.UserInteractionEnabled = true;
+        view.AddGestureRecognizer(_applePress);
+    }
+    private void DetachNativeEvents()
+    {
+        if (_applePress != null) { _appleView?.RemoveGestureRecognizer(_applePress); _applePress.Dispose(); }
+        _applePress = null; _appleView = null;
+    }
 #else
     private void AttachNativeEvents() { }
     private void DetachNativeEvents() { }
@@ -249,6 +269,9 @@ public class LongPressBehavior : Behavior<View>
 
     private void CancelLongPressTimer()
     {
+#if IOS || MACCATALYST
+        if (_applePress != null) { _applePress.Enabled = false; _applePress.Enabled = true; }
+#endif
         _press.Cancel();
         CleanupTimer();
     }

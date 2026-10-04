@@ -1,5 +1,6 @@
 import { getPerekByPerekId } from "@/data/perek-dto";
 import { loadRecitation } from "@/lib/recitation-loader";
+import { recordingUrl } from "@/lib/recitation-package";
 import packageJson from "../../../../../package.json";
 
 /** Resolve audio through the same S3/RustFS settings as the rest of the site. */
@@ -16,14 +17,8 @@ export async function GET(
 		const data = loadRecitation(getPerekByPerekId(perekId));
 		if (!data)
 			return Response.json({ error: "Recording unavailable" }, { status: 404 });
-		const bucket = process.env.S3_BUCKET || "bible-on-site-assets";
-		const region = process.env.S3_REGION || "il-central-1";
-		const endpoint = process.env.S3_ENDPOINT;
-		const base = endpoint
-			? `${endpoint.replace(/\/$/, "")}/${bucket}`
-			: `https://${bucket}.s3.${region}.amazonaws.com`;
 		return Response.json(
-			{ ...data, audioUrl: `${base}/recordings/${perekId}_record.mp3` },
+			{ ...data, audioUrl: recordingUrl(perekId) },
 			{
 				headers: {
 					"Cache-Control": "public, max-age=300",

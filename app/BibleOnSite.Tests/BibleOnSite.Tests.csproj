@@ -43,6 +43,9 @@
     -->
     <Compile Include="..\BibleOnSite\Config\*.cs" Link="Config\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Converters\*.cs" Link="Converters\%(Filename)%(Extension)" />
+    <Compile Include="..\BibleOnSite\Services\IRecitationAudioDecoder.cs" Link="Services\IRecitationAudioDecoder.cs" />
+    <Compile Include="..\BibleOnSite\Services\RecitationService.cs" Link="Services\RecitationService.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\RecitationPreferencesViewModel.cs" Link="ViewModels\RecitationPreferencesViewModel.cs" />
     <!-- Exclude XAML code-behind files as they require MAUI XAML compilation -->
     <Compile Include="..\BibleOnSite\Controls\*.cs" Exclude="..\BibleOnSite\Controls\*.xaml.cs" Link="Controls\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Data\*.cs" Link="Data\%(Filename)%(Extension)" />

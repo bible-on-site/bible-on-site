@@ -28,7 +28,7 @@
                   IsVisible="False"
                   BackgroundColor="{StaticResource Primary}"
                   Padding="4,5"
-                  ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+                  ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto">
                 <Grid.HeightRequest>
                     <OnPlatform x:TypeArguments="x:Double" Default="48">
                         <On Platform="Android,iOS" Value="56"/>
@@ -49,6 +49,7 @@
                         Clicked="OnSelectionBackClicked"/>
                 <!-- Badge with count -->
                 <Border Grid.Column="1"
+                        x:Name="SelectionCountBadge"
                         BackgroundColor="White"
                         StrokeShape="RoundRectangle 12"
                         Stroke="Transparent"
@@ -70,6 +71,15 @@
                 <ContentView Grid.Column="2"/>
                 <!-- Share button -->
                 <Button Grid.Column="3"
+                        x:Name="SelectionRecitationButton"
+                        AutomationId="SelectionRecitationButton"
+                        Text="{x:Static fonts:FluentUI.headphones_24_regular}"
+                        FontFamily="FluentIcons" FontSize="20"
+                        WidthRequest="40" HeightRequest="36" Padding="0"
+                        BackgroundColor="Transparent" TextColor="White"
+                        IsVisible="False" Clicked="OnSelectionRecitationClicked"/>
+                <Button Grid.Column="4"
+                        x:Name="SelectionShareButton"
                         AutomationId="SelectionShareButton"
                         Text="{x:Static fonts:FluentUI.share_24_regular}"
                         FontFamily="FluentIcons"
@@ -81,7 +91,7 @@
                         TextColor="White"
                         Clicked="OnSelectionShareClicked"/>
                 <!-- Copy button -->
-                <Button Grid.Column="4"
+                <Button Grid.Column="5"
                         x:Name="SelectionCopyButton"
                         AutomationId="SelectionCopyButton"
                         Text="{x:Static fonts:FluentUI.copy_20_regular}"
@@ -241,7 +251,14 @@
                                    FontAttributes="Bold"
                                    HorizontalTextAlignment="Center"
                                    Padding="16,12"
-                                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
+                                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}">
+                                <Label.GestureRecognizers>
+                                    <PointerGestureRecognizer PointerPressed="OnHeaderPointerPressed" PointerReleased="OnHeaderPointerReleased" PointerMoved="OnHeaderPointerMoved"/>
+                                </Label.GestureRecognizers>
+                                <Label.Behaviors>
+                                    <behaviors:LongPressBehavior LongPressDuration="600" LongPressed="OnHeaderLongPressed"/>
+                                </Label.Behaviors>
+                            </Label>
 
                             <!-- Perek Text - Pasukim List (Row 1) with perushim inline -->
                             <CollectionView Grid.Row="1"
@@ -274,6 +291,8 @@
                                             </Border.Triggers>
                                             <Border.GestureRecognizers>
                                                 <TapGestureRecognizer Tapped="OnPasukTapped"
+                                                                      CommandParameter="{Binding PasukNum}"/>
+                                                <TapGestureRecognizer Tapped="OnPasukDoubleTapped" NumberOfTapsRequired="2"
                                                                       CommandParameter="{Binding PasukNum}"/>
                                                 <TapGestureRecognizer Tapped="OnPasukRightClicked"
                                                                       CommandParameter="{Binding PasukNum}"
@@ -696,6 +715,34 @@
         </AbsoluteLayout>
 
         <!-- Perek Picker Popup Overlay -->
+        <Grid x:Name="FocusedPasukOverlay" IsVisible="False" ZIndex="150"
+              AutomationId="FocusedPasukOverlay" BackgroundColor="{AppThemeBinding Light=White, Dark=#1C1C1E}">
+            <ScrollView>
+                <VerticalStackLayout Padding="20,16" Spacing="16">
+                    <Label x:Name="FocusedSourceLabel" FontSize="18" FontAttributes="Bold" TextColor="{StaticResource Primary}"/>
+                    <Label x:Name="FocusedPasukText" AutomationId="FocusedPasukText"
+                           FontSize="{DynamicResource PasukFontSize}" FlowDirection="RightToLeft" LineHeight="1.4"/>
+                    <Label x:Name="FocusedRecitationHint" FontSize="14" TextColor="{StaticResource Gray500}"/>
+                    <VerticalStackLayout x:Name="FocusedPerushim" Spacing="12">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="models:PerushNoteDisplay">
+                                <VerticalStackLayout Spacing="4">
+                                    <Label Text="{Binding PerushName}" FontSize="{DynamicResource PerushNameFontSize}"
+                                           FontAttributes="Bold" TextColor="{StaticResource Primary}"/>
+                                    <controls:HtmlView HtmlContent="{Binding DisplayContent}" FontSize="{DynamicResource PerushContentFontSize}"
+                                                       TextAlignment="Justify" TextDirection="Rtl" LineHeight="1.4"/>
+                                </VerticalStackLayout>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </ScrollView>
+        </Grid>
+        <WebView x:Name="RecitationDecoderView" WidthRequest="1" HeightRequest="1" Opacity="0" InputTransparent="True"/>
+        <toolkit:MediaElement x:Name="RecitationPlayer" WidthRequest="1" HeightRequest="1" Opacity="0"
+                              InputTransparent="True" ShouldAutoPlay="False" ShouldShowPlaybackControls="False"
+                              MediaOpened="OnRecitationMediaOpened" MediaEnded="OnRecitationMediaEnded"
+                              MediaFailed="OnRecitationMediaFailed" StateChanged="OnRecitationStateChanged"/>
         <controls:PerekPickerPopup x:Name="PerekPickerPopup"
                                    ZIndex="200"
                                    PerekSelected="OnPerekPickerSelected"/>

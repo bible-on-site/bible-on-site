@@ -429,8 +429,16 @@ public partial class PerekViewModel : ObservableObject
 #endif
 
     /// <summary>
-    /// Toggles a perush in the checked list. When checked, its notes appear inline with the text.
+    /// All available commentary for focused verse reading, independent of inline filters.
     /// </summary>
+    public List<PerushNoteDisplay> GetPerushimForPasuk(int pasukNum) => _perushNotesCache
+        .Where(n => n.Pasuk == pasukNum)
+        .GroupBy(n => (n.PerushId, n.PerushName))
+        .OrderBy(g => Perushim.FindIndex(p => p.Id == g.Key.PerushId))
+        .Select(g => new PerushNoteDisplay { PerushName = g.Key.PerushName,
+            NoteContents = g.OrderBy(n => n.NoteIdx).Select(n => n.NoteContent).ToList() }).ToList();
+
+    /// <summary>Toggles commentary in the inline reader.</summary>
     [RelayCommand]
     public void ToggleCheckedPerush(int perushId)
     {

@@ -72,7 +72,28 @@ export class RecitationAudio {
 				if (hash !== this.sha256)
 					throw new Error("Recording differs from aligned source");
 				if (this.disposed) throw new Error("Player disposed");
-				return this.context.decodeAudioData(bytes);
+				// The same pinned decoder runs in the app. Platform MP3 decoders
+				// disagree about the sample origin even when their lengths agree.
+				const { MPEGDecoderWebWorker } = await import("mpg123-decoder");
+				const decoder = new MPEGDecoderWebWorker();
+				try {
+					await decoder.ready;
+					const pcm = await decoder.decode(new Uint8Array(bytes));
+					if (pcm.errors.length || !pcm.samplesDecoded)
+						throw new Error("Recording could not be decoded accurately");
+					if (this.disposed) throw new Error("Player disposed");
+					const buffer = this.context.createBuffer(
+						pcm.channelData.length,
+						pcm.samplesDecoded,
+						pcm.sampleRate,
+					);
+					pcm.channelData.forEach((samples, channel) => {
+						buffer.getChannelData(channel).set(samples);
+					});
+					return buffer;
+				} finally {
+					await decoder.free();
+				}
 			})().catch((error) => {
 				this.buffer = null;
 				throw error;

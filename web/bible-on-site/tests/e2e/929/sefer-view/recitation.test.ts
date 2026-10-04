@@ -1,25 +1,13 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { expect, type Locator, type Page } from "@playwright/test";
 import { test } from "../../../util/playwright/test-fixture";
 
-/** Exercise real decoding without an external audio download. */
-function silentRecording(durationMs: number) {
-	const samples = Math.ceil((durationMs / 1000) * 8000);
-	const bytes = Buffer.alloc(44 + samples * 2);
-	bytes.write("RIFF", 0);
-	bytes.writeUInt32LE(bytes.length - 8, 4);
-	bytes.write("WAVEfmt ", 8);
-	bytes.writeUInt32LE(16, 16);
-	bytes.writeUInt16LE(1, 20);
-	bytes.writeUInt16LE(1, 22);
-	bytes.writeUInt32LE(8000, 24);
-	bytes.writeUInt32LE(16000, 28);
-	bytes.writeUInt16LE(2, 32);
-	bytes.writeUInt16LE(16, 34);
-	bytes.write("data", 36);
-	bytes.writeUInt32LE(samples * 2, 40);
-	return bytes;
-}
+/** Exercise the real MP3 decoder without an external audio download. */
+const recording = readFileSync(
+	resolve(process.cwd(), "../../data/recitation/fixtures/silence-120s.mp3"),
+);
 
 async function chapterReader(page: Page, perekId: number, chapter: string) {
 	await page.goto(`/929/${perekId}?book`);
@@ -76,7 +64,7 @@ test.describe("Recitation in the book reader", () => {
 			const response = await page.request.get(`/api/recitation/${perekId}`);
 			expect(response.ok()).toBe(true);
 			const manifest = await response.json();
-			const recording = silentRecording(manifest.durationMs);
+			expect(manifest.durationMs).toBeLessThanOrEqual(120000);
 			await page.route(`**/api/recitation/${perekId}`, async (route) => {
 				await route.fulfill({
 					response,
@@ -89,7 +77,7 @@ test.describe("Recitation in the book reader", () => {
 			await page.route(`**/recordings/${perekId}_record.mp3`, (route) =>
 				route.fulfill({
 					body: recording,
-					contentType: "audio/wav",
+					contentType: "audio/mpeg",
 					headers: { "content-length": String(recording.length) },
 				}),
 			);
