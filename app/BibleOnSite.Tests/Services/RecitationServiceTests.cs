@@ -276,7 +276,7 @@ public class RecitationServiceTests
         var model = await PreferencesAsync(storage, service);
         model.Status.Should().Contain("לא ניתן לטעון");
         server.Package = new(1, [Track(1, "audio"u8.ToArray())]);
-        await model.UpdateTimingsAsync(); await model.LoadAsync();
+        await model.UpdateTimingsAsync();
         service.IsInstalled.Should().BeTrue(); model.Books.Should().HaveCount(2);
         await service.InitializeAsync(); await service.InitializeAsync();
     }
