@@ -36,5 +36,8 @@
 		"dotenv": "18.0.4",
 		"semver": "7.8.5",
 		"yargs": "18.2.0"
+	},
+	"allowScripts": {
+		"esbuild@0.28.1": true
 	}
 }

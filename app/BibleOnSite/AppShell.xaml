@@ -139,6 +139,7 @@
                                Margin="0,0,12,0"/>
                         <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
                             <Label Text="העדפות"
+                                   AutomationId="FlyoutPreferences"
                                    FontSize="16"
                                    TextColor="{StaticResource Gray900}"/>
                             <Label Text="הגדרות משתמש"
