@@ -278,6 +278,13 @@ test("chapter settings shortcut focuses narration and schedules exact verses wit
 			boxes[1].x < boxes[2].x,
 	).toBe(true);
 	await settings.click();
+	const settingsBox = await settings.boundingBox();
+	const panelBox = await page
+		.getByRole("dialog", { name: "הגדרות קריאה" })
+		.boundingBox();
+	expect(
+		settingsBox && panelBox && Math.abs(panelBox.x - settingsBox.x) < 1,
+	).toBe(true);
 	await expect(page.getByRole("slider", { name: "מהירות" })).toBeFocused();
 	await page.getByRole("slider", { name: "מהירות" }).fill("2");
 	await page.getByRole("slider", { name: "עוצמה" }).fill("0.4");

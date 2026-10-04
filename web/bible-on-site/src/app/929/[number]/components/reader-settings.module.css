@@ -31,6 +31,8 @@
 }
 .panel {
 	position: fixed;
+	right: auto;
+	bottom: auto;
 	margin: 0;
 	width: min(340px, calc(100vw - 24px));
 	max-height: calc(100dvh - 24px);
