@@ -46,19 +46,33 @@ export function isValidatedRun(run: WorkflowRun, sha: string, before: string): b
 	);
 }
 
-/** Maps each `<prefix>.master` baseline to the queue run's `<prefix>.<runId>` (or unsuffixed `<prefix>`) artifact. */
-export function baselineCopies(
+/** Baseline (`*.master`) artifacts each queue-run job publishes when it runs, by job name. */
+export type BaselineProducers = Record<string, string[]>;
+export type Reuse = { runId: number; copies: BaselineCopy[] } | { reason: string };
+
+/**
+ * Every job that ran in the queue run must have left its fresh outputs, `<prefix>.<runId>`
+ * (or unsuffixed `<prefix>`) for each `<prefix>.master` it produces. Baselines of jobs that
+ * did not run carry forward as restored by determine_baseline_availability.
+ */
+export function requiredBaselineCopies(
 	runId: number,
+	jobs: Job[],
 	artifacts: Artifact[],
-	masterNames: string[],
-): BaselineCopy[] {
+	producers: BaselineProducers,
+): BaselineCopy[] | { missing: string } {
 	const available = new Set(artifacts.filter((a) => !a.expired).map((a) => a.name));
-	return masterNames.flatMap((target) => {
-		if (!target.endsWith(".master")) throw new Error(`${target} is not a .master baseline`);
-		const prefix = target.slice(0, -".master".length);
-		const source = [`${prefix}.${runId}`, prefix].find((name) => available.has(name));
-		return source ? [{ source, target }] : [];
-	});
+	const copies: BaselineCopy[] = [];
+	for (const job of jobs.filter((j) => j.conclusion === "success")) {
+		for (const target of producers[job.name] ?? []) {
+			if (!target.endsWith(".master")) throw new Error(`${target} is not a .master baseline`);
+			const prefix = target.slice(0, -".master".length);
+			const source = [`${prefix}.${runId}`, prefix].find((name) => available.has(name));
+			if (!source) return { missing: `${job.name} output for ${target}` };
+			copies.push({ source, target });
+		}
+	}
+	return copies;
 }
 
 async function getAll<T>(get: GitHubGet, apiPath: string, key: string): Promise<T[]> {
@@ -70,27 +84,38 @@ async function getAll<T>(get: GitHubGet, apiPath: string, key: string): Promise<
 	}
 }
 
-export async function findValidatedMergeGroupRun(options: {
+export async function findReusableMergeGroupRun(options: {
 	eventName: string | undefined;
 	sha: string;
 	before: string | undefined;
 	workflowFile: string;
+	producers: BaselineProducers;
 	get: GitHubGet;
-}): Promise<number | undefined> {
-	const { eventName, sha, before, workflowFile, get } = options;
-	if (eventName !== "push" || !before) return undefined;
+}): Promise<Reuse> {
+	const { eventName, sha, before, workflowFile, producers, get } = options;
+	if (eventName !== "push" || !before) return { reason: `${eventName} event` };
 	const runs = await getAll<WorkflowRun>(
 		get,
 		`actions/workflows/${workflowFile}/runs?event=merge_group&head_sha=${sha}`,
 		"workflow_runs",
 	);
+	const validated: { run: WorkflowRun; jobs: Job[] }[] = [];
 	for (const run of runs.filter((r) => isValidatedRun(r, sha, before))) {
 		const jobs = await getAll<Job>(get, `actions/runs/${run.id}/jobs?filter=latest`, "jobs");
 		if (jobs.some((job) => job.name === GATE_JOB_NAME && job.conclusion === "success")) {
-			return run.id;
+			validated.push({ run, jobs });
 		}
 	}
-	return undefined;
+	if (validated.length !== 1) {
+		return { reason: `${validated.length} successful merge-queue runs match ${sha} on ${before}` };
+	}
+	const [{ run, jobs }] = validated;
+	const artifacts = await getAll<Artifact>(get, `actions/runs/${run.id}/artifacts?`, "artifacts");
+	const copies = requiredBaselineCopies(run.id, jobs, artifacts, producers);
+	if ("missing" in copies) {
+		return { reason: `merge-queue run ${run.id} has no unexpired ${copies.missing}` };
+	}
+	return { runId: run.id, copies };
 }
 
 function requireEnv(name: string): string {
@@ -117,29 +142,22 @@ async function main(): Promise<void> {
 	const event = JSON.parse(readFileSync(requireEnv("GITHUB_EVENT_PATH"), "utf8")) as {
 		before?: string;
 	};
-	const runId = await findValidatedMergeGroupRun({
+	const reuse = await findReusableMergeGroupRun({
 		eventName: process.env.GITHUB_EVENT_NAME,
 		sha: requireEnv("GITHUB_SHA"),
 		before: event.before,
 		workflowFile: path.basename(requireEnv("GITHUB_WORKFLOW_REF").split("@")[0]),
+		producers: JSON.parse(requireEnv("BASELINE_PRODUCERS")) as BaselineProducers,
 		get,
 	});
-	const copies = runId
-		? baselineCopies(
-				runId,
-				await getAll<Artifact>(get, `actions/runs/${runId}/artifacts?`, "artifacts"),
-				requireEnv("BASELINE_ARTIFACT_NAMES").split(/\s+/).filter(Boolean),
-			)
-		: [];
+	const [runId, copies] = "runId" in reuse ? [reuse.runId, reuse.copies] : ["", []];
 	console.log(
-		runId
+		"runId" in reuse
 			? `Merge-queue run ${runId} already validated ${process.env.GITHUB_SHA}; baselines to copy: ${JSON.stringify(copies)}`
-			: "No successful merge-queue run validated this commit; running module tests.",
+			: `Running module tests: ${reuse.reason}.`,
 	);
 	const output = process.env.GITHUB_OUTPUT;
-	if (output) {
-		appendFileSync(output, `run_id=${runId ?? ""}\nbaseline_copies=${JSON.stringify(copies)}\n`);
-	}
+	if (output) appendFileSync(output, `run_id=${runId}\nbaseline_copies=${JSON.stringify(copies)}\n`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
