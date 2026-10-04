@@ -104,7 +104,7 @@ export class RecitationAudio {
 
 	async play(
 		startMs: number,
-		endMs: number,
+		endMs: number | undefined,
 		ended: () => void,
 	): Promise<boolean> {
 		if (this.disposed) throw new Error("Player disposed");
@@ -113,12 +113,13 @@ export class RecitationAudio {
 		// Resume during the click gesture, before awaiting the download (mobile autoplay).
 		const [buffer] = await Promise.all([this.load(), this.context.resume()]);
 		if (this.disposed || generation !== this.generation) return false;
+		const stopMs = endMs === undefined ? buffer.duration * 1000 : endMs;
 		if (
 			!Number.isFinite(startMs) ||
-			!Number.isFinite(endMs) ||
+			!Number.isFinite(stopMs) ||
 			startMs < 0 ||
-			endMs <= startMs ||
-			endMs / 1000 > buffer.duration
+			stopMs <= startMs ||
+			stopMs / 1000 > buffer.duration
 		) {
 			throw new Error("Clip outside decoded recording");
 		}
@@ -135,13 +136,28 @@ export class RecitationAudio {
 		this.source = source;
 		this.activeClip = {
 			startMs,
-			endMs,
+			endMs: stopMs,
 			ended,
 			startedAt: this.context.currentTime,
 		};
 		// Duration is scheduled by the audio clock, never a JavaScript stop timer.
-		source.start(0, startMs / 1000, (endMs - startMs) / 1000);
+		source.start(0, startMs / 1000, (stopMs - startMs) / 1000);
 		return true;
+	}
+
+	playChapter(ended: () => void): Promise<boolean> {
+		return this.play(0, undefined, ended);
+	}
+
+	/** Original recording position, including the clip offset and paused position. */
+	get positionMs(): number | null {
+		const clip = this.activeClip;
+		return clip
+			? Math.min(
+					clip.endMs,
+					clip.startMs + (this.context.currentTime - clip.startedAt) * 1000,
+				)
+			: (this.pausedClip?.startMs ?? null);
 	}
 
 	pause(): boolean {
