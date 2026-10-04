@@ -119,4 +119,17 @@ public class PasukComponentTests
         component.Type.Should().Be(PasukComponentType.Text);
         component.Content.Should().Be("בראשית");
     }
+
+    [Fact]
+    public void RecitingSegment_ShouldNotifyOnlyWhenChanged()
+    {
+        var pasuk = new Pasuk { PasukNum = 1, Text = "Test" };
+        var changes = 0;
+        pasuk.PropertyChanged += (_, e) => changes += e.PropertyName == nameof(Pasuk.RecitingSegment) ? 1 : 0;
+
+        pasuk.RecitingSegment = 1;
+        pasuk.RecitingSegment = 1;
+
+        changes.Should().Be(1);
+    }
 }

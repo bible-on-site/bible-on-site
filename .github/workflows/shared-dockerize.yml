@@ -1,12 +1,5 @@
 name: Shared Dockerize Flow
 on:
-  # Explicit build-only comparison; this workflow cannot release or deploy.
-  workflow_dispatch:
-    inputs:
-      baseline_ref:
-        description: Git ref for the legacy-builder baseline Dockerfile
-        type: string
-        default: master
   workflow_call:
     inputs:
       module_directory:
@@ -34,14 +27,14 @@ permissions:
   contents: write
   id-token: write # Required for AWS OIDC authentication
 env:
-  MODULE_DIRECTORY: ${{ inputs.module_directory || 'web/bible-on-site' }}
-  IS_NPM: ${{ (inputs.module_directory || 'web/bible-on-site') == 'web/bible-on-site' }}
+  MODULE_DIRECTORY: ${{ inputs.module_directory }}
+  IS_NPM: ${{ inputs.module_directory == 'web/bible-on-site' }}
   IS_CARGO: ${{ inputs.module_directory == 'web/api' }}
   SHARED_ROOT_DIR: web
-  MODULE_NAME: ${{ (inputs.module_directory || 'web/bible-on-site') == 'web/bible-on-site' && 'website' || 'api' }}
-  MODULE_NAME_CAPITALIZED: ${{ (inputs.module_directory || 'web/bible-on-site') == 'web/bible-on-site' && 'Website' || 'API' }}
-  DOCKER_IMAGE_NAME: ${{ (inputs.module_directory || 'web/bible-on-site') == 'web/bible-on-site' && 'bible-on-site' || 'bible-on-site-api' }}
-  DOCKER_IMAGE_OUTPUT_DIR: ${{ inputs.module_directory || 'web/bible-on-site' }}/.release
+  MODULE_NAME: ${{ inputs.module_directory == 'web/bible-on-site' && 'website' || 'api' }}
+  MODULE_NAME_CAPITALIZED: ${{ inputs.module_directory == 'web/bible-on-site' && 'Website' || 'API' }}
+  DOCKER_IMAGE_NAME: ${{ inputs.module_directory == 'web/bible-on-site' && 'bible-on-site' || 'bible-on-site-api' }}
+  DOCKER_IMAGE_OUTPUT_DIR: ${{ inputs.module_directory }}/.release
 
 jobs:
   setup_env:
@@ -196,20 +189,6 @@ jobs:
           python data/recitation/publish.py
           python data/recitation/audit.py
 
-      - name: Dockerize Website (legacy baseline, no release)
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        env:
-          BASE_SHA: ${{ inputs.baseline_ref }}
-          DB_URL: ${{ steps.rds_creds.outputs.db_url }}
-          MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
-        run: |
-          git fetch --depth=1 origin -- "$BASE_SHA"
-          git show FETCH_HEAD:web/bible-on-site/Dockerfile > "$RUNNER_TEMP/website-baseline.Dockerfile"
-          DOCKER_BUILDKIT=0 docker build --network=host \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
-            --build-arg DB_URL="$DB_URL" --build-arg MAPBOX_PUBLIC_KEY="$MAPBOX_PUBLIC_TOKEN" \
-            -f "$RUNNER_TEMP/website-baseline.Dockerfile" -t bible-on-site:legacy web
-
       - name: Prepare website dependency cache
         if: ${{ env.IS_NPM == 'true' }}
         id: deps_cache
@@ -225,33 +204,17 @@ jobs:
             --target deps --build-arg BUILDKIT_INLINE_CACHE=1 --load \
             "${CACHE_ARGS[@]}" -f web/bible-on-site/Dockerfile -t "$CACHE_REF" web
 
-      - name: Simulate a fresh runner with the dependency image
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        env:
-          CACHE_REF: ${{ steps.deps_cache.outputs.ref }}
-        run: |
-          docker run -d --name deps-registry -p 127.0.0.1:5000:5000 registry:3.0.0@sha256:6c5666b861f3505b116bb9aa9b25175e71210414bd010d92035ff64018f9457e
-          docker tag "$CACHE_REF" localhost:5000/website-deps:cache
-          docker push localhost:5000/website-deps:cache
-          docker image rm "$CACHE_REF" localhost:5000/website-deps:cache
-          docker builder prune --all --force
-
       - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
         shell: bash
         env:
           DB_URL: ${{ steps.rds_creds.outputs.db_url || '' }}
           MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
-          CACHE_REF: ${{ steps.deps_cache.outputs.ref }}
-          BENCHMARK: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           CACHE_ARGS=()
           BUILD_COMMAND=(env DOCKER_BUILDKIT=0 docker build)
           if [ "$IS_NPM" = true ]; then
             # The deps image retains npm ci; the standalone runner image does not.
             CACHE_ARGS+=(--no-cache-filter builder)
-            if [ "$BENCHMARK" = true ]; then
-              CACHE_ARGS+=(--cache-from type=registry,ref=localhost:5000/website-deps:cache)
-            fi
             BUILD_COMMAND=(docker buildx build --builder default --load --progress=plain)
           fi
           "${BUILD_COMMAND[@]}" \
@@ -262,11 +225,7 @@ jobs:
             --build-arg MAPBOX_PUBLIC_KEY="${MAPBOX_PUBLIC_TOKEN}" \
             -f ${{ env.MODULE_DIRECTORY }}/Dockerfile \
             -t ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }} \
-            ${{ env.SHARED_ROOT_DIR }} 2>&1 | tee "$RUNNER_TEMP/docker-build.log"
-
-      - name: Verify website cache boundaries and release version reuse
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        run: node devops/github/ci/verify-website-docker-cache.mts "$RUNNER_TEMP/docker-build.log" localhost:5000/website-deps:cache
+            ${{ env.SHARED_ROOT_DIR }}
 
       - name: Verify recitation in the packaged website
         if: ${{ env.IS_NPM == 'true' }}
