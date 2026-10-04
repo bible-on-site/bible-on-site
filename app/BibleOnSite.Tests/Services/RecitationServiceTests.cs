@@ -104,6 +104,8 @@ public class RecitationServiceTests
         var restored = new RecitationService(storage.FileSystem.Object, http);
         await restored.InitializeAsync();
         restored.IsInstalled.Should().BeTrue();
+        restored.Tracks.Select(t => t.PerekId).Should().BeEquivalentTo([1, 2],
+            "the offline catalog retains chapters whose audio has not been downloaded");
         var path = await restored.PrepareAudioAsync(1, Canonical());
         (await File.ReadAllBytesAsync(path)).Should().Equal(audio);
         Directory.Exists(Path.Combine(storage.Root, "extensions", "recitation")).Should().BeTrue();
