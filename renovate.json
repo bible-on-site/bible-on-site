@@ -39,6 +39,7 @@
 		}
 	],
 	"bumpVersion": "patch",
+	"gitIgnoredAuthors": ["actions@github.com"],
 	"vulnerabilityAlerts": {
 		"automerge": true,
 		"labels": ["security"],
