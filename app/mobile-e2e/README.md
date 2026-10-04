@@ -50,10 +50,12 @@ Set both for local iOS runs; CI exports them automatically.
 `MOBILE_APP_PATH` can select another compatible build. Each local
 run owns an Appium server on `127.0.0.1:4723`; keep that port free.
 
-`npm run test:unit` checks simulator selection without a device.
+`npm run test:unit` checks simulator selection and the locked driver module's
+ESM loading without a device.
 From `app/`, `dotnet run --project devops -- TestMobileE2EUnit` checks platform
 configuration and device capabilities without a device or mobile workload.
 
 Screenshots and native view trees are captured for each scenario, alongside
 Appium and device logs, TRX and JUnit reports, under `app/.artifacts/mobile-e2e/<platform>`.
+iOS also exports app lifecycle logs and fresh app crash reports.
 CI uploads a separate artifact for each platform even on test failures.

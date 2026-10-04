@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { selectSimulator } from "./simulator.mjs";
+import { loadIosSimulatorDriver, selectSimulator } from "./simulator.mjs";
+
+test("loads the locked iOS simulator driver with its ESM-only export before booting a device", async () => {
+  const driver = await loadIosSimulatorDriver();
+  assert.equal(typeof driver.getSimulator, "function");
+});
 
 test("chooses the newest available iPhone runtime compatible with Xcode, not a newer incompatible runtime", () => {
   const device = (name, udid, isAvailable = true) => ({ name, udid, isAvailable });

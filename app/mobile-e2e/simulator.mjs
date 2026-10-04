@@ -24,3 +24,16 @@ export function selectSimulator(devices, sdkVersion) {
     .sort((left, right) => compare(version(right.version), version(left.version))
       || left.name.localeCompare(right.name))[0];
 }
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+
+export async function loadIosSimulatorDriver() {
+  // Resolve from the locked driver so npm may nest or hoist its dependency.
+  // The simulator exports only an ESM entry; resolve its public metadata first.
+  const driverRequire = createRequire(import.meta.resolve("appium-xcuitest-driver"));
+  const metadataPath = driverRequire.resolve("appium-ios-simulator/package.json");
+  const metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
+  return import(pathToFileURL(resolve(dirname(metadataPath), metadata.main)).href);
+}
