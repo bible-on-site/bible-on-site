@@ -20,6 +20,11 @@ public partial class PerekPage
     private bool _playWhenOpened;
     private string? _playingKey;
     private MpegRecitationAudioDecoder? _audioDecoder;
+    private IDispatcherTimer? _recitationFrameTimer;
+    private RecitationTimeline? _recitationTimeline;
+    private Pasuk? _recitingPasuk;
+    private RecitationWord? _recitingWord;
+    private readonly Dictionary<int, Span> _focusedWordSpans = [];
     private bool RecitationEnabled => PreferencesService.Instance.RecitationEnabled && RecitationService.Instance.IsInstalled;
 
     private void SubscribeRecitation()
@@ -64,6 +69,7 @@ public partial class PerekPage
 
     private void StopRecitation()
     {
+        ClearRecitationHighlight();
         _recitationRequest?.Cancel();
         _playWhenOpened = false;
         _playingKey = null;
@@ -76,6 +82,57 @@ public partial class PerekPage
         RecitationPlayer.Source = null;
     }
 
+    private void ClearRecitationHighlight()
+    {
+        _recitationFrameTimer?.Stop();
+        _recitationTimeline = null;
+        SetRecitingWord(null);
+    }
+
+    private void SetRecitingWord(RecitationWord? word)
+    {
+        if (_recitingWord == word)
+        {
+            return;
+        }
+
+        var nextPasuk = word == null ? null : _viewModel.Perek?.Pasukim.FirstOrDefault(p => p.PasukNum == word.Pasuk);
+        if (_recitingPasuk != null && _recitingPasuk != nextPasuk)
+        {
+            _recitingPasuk.RecitingSegment = null;
+        }
+        if (_recitingWord != null && _focusedPasuk?.PasukNum == _recitingWord.Pasuk &&
+            _focusedWordSpans.TryGetValue(_recitingWord.Segment, out var previous))
+        {
+            previous.BackgroundColor = null;
+            previous.TextColor = Color.FromArgb("#637598");
+        }
+
+        _recitingWord = word;
+        _recitingPasuk = nextPasuk;
+        if (_recitingPasuk != null)
+        {
+            _recitingPasuk.RecitingSegment = word!.Segment;
+        }
+        if (word != null && _focusedPasuk?.PasukNum == word.Pasuk && _focusedWordSpans.TryGetValue(word.Segment, out var current))
+        {
+            current.BackgroundColor = Color.FromArgb("#e9eff8");
+            current.TextColor = Color.FromArgb("#1c427b");
+        }
+    }
+
+    private void UpdateRecitationHighlight(object? sender, EventArgs e)
+    {
+        if (_playingKey == null || RecitationPlayer.CurrentState != MediaElementState.Playing)
+        {
+            return;
+        }
+
+        // Refresh the platform player's reported position before painting the word.
+        RecitationPlayer.Handler?.Invoke("StatusUpdated", null);
+        SetRecitingWord(_recitationTimeline?.WordAt(RecitationPlayer.Position.TotalMilliseconds));
+    }
+
     private void ResetRecitationContext()
     {
         StopRecitation();
@@ -83,6 +140,7 @@ public partial class PerekPage
         _headerPress?.Cancel();
         _chapterRecitationSelection = false;
         _focusedPasuk = null;
+        _focusedWordSpans.Clear();
         FocusedPasukOverlay.IsVisible = false;
         PerekCarousel.InputTransparent = false;
         AutomationProperties.SetExcludedWithChildren(PerekCarousel, false);
@@ -203,6 +261,7 @@ public partial class PerekPage
 
     private void RefreshFocusedRecitation()
     {
+        _focusedWordSpans.Clear();
         if (_focusedPasuk is not { } pasuk || _viewModel.Perek is not { } perek)
         {
             return;
@@ -232,7 +291,9 @@ public partial class PerekPage
             var word = track!.Words.FirstOrDefault(w => w.Pasuk == pasuk.PasukNum && w.Segment == i + 1);
             if (word != null)
             {
-                span.TextColor = Color.FromArgb("#637598");
+                _focusedWordSpans[word.Segment] = span;
+                span.TextColor = Color.FromArgb(_recitingWord == word ? "#1c427b" : "#637598");
+                span.BackgroundColor = _recitingWord == word ? Color.FromArgb("#e9eff8") : null;
                 var tap = new TapGestureRecognizer();
                 tap.Tapped += async (_, _) => await PlayRecitationAsync($"word:{perek.PerekId}:{word.Pasuk}:{word.Segment}", word.StartMs, word.EndMs);
                 span.GestureRecognizers.Add(tap);
@@ -328,6 +389,9 @@ public partial class PerekPage
             }
 
             _playingKey = key;
+            var track = RecitationService.Instance.GetTrack(perek.PerekId);
+            _recitationTimeline = track?.AlignmentStatus == "ready"
+                ? new RecitationTimeline(track, ranges ?? (start.HasValue && end.HasValue ? [(start.Value, end.Value)] : null)) : null;
             _playWhenOpened = true;
             RecitationPlayer.Source = MediaSource.FromFile(path);
         }
@@ -350,8 +414,32 @@ public partial class PerekPage
     {
         if (_playWhenOpened && RecitationEnabled) { _playWhenOpened = false; RecitationPlayer.Play(); }
     }
-    private void OnRecitationMediaEnded(object? sender, EventArgs e) { _playingKey = null; UpdateSelectionBar(); }
-    private void OnRecitationStateChanged(object? sender, MediaStateChangedEventArgs e) => UpdateSelectionBar();
+    private void OnRecitationMediaEnded(object? sender, EventArgs e)
+    {
+        _playingKey = null;
+        ClearRecitationHighlight();
+        UpdateSelectionBar();
+    }
+    private void OnRecitationStateChanged(object? sender, MediaStateChangedEventArgs e)
+    {
+        _recitationFrameTimer?.Stop();
+        if (_playingKey != null && _recitationTimeline != null && RecitationPlayer.CurrentState == MediaElementState.Playing)
+        {
+            if (_recitationFrameTimer == null)
+            {
+                _recitationFrameTimer = Dispatcher.CreateTimer();
+                _recitationFrameTimer.Interval = TimeSpan.FromMilliseconds(25);
+                _recitationFrameTimer.Tick += UpdateRecitationHighlight;
+            }
+            UpdateRecitationHighlight(this, EventArgs.Empty);
+            _recitationFrameTimer.Start();
+        }
+        else if (RecitationPlayer.CurrentState is MediaElementState.Stopped or MediaElementState.None or MediaElementState.Failed)
+        {
+            SetRecitingWord(null);
+        }
+        UpdateSelectionBar();
+    }
     private async void OnRecitationMediaFailed(object? sender, MediaFailedEventArgs e)
     {
         if (_playingKey == null)
