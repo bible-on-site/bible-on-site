@@ -101,6 +101,17 @@ class DeploymentTests(unittest.TestCase):
                     verify(self.origin, "0.2.433", self.database, check_audio=True)
                 setattr(self, attribute, original)
 
+    def test_bundler_rounding_reports_the_exact_changed_diagnostic(self):
+        policy = {"diagnostics": [{"anchorCoverage": 0.9523809523809523}]}
+        self.chapter["recitation"]["acceptancePolicy"] = policy
+        self.database.write_text(json.dumps([{"perekFrom": 1, "perakim": [self.chapter]}]), encoding="utf-8")
+        self.records[1] = extract(1, self.chapter)
+        changed_policy = copy.deepcopy(policy)
+        changed_policy["diagnostics"][0]["anchorCoverage"] = 0.9523809523809524
+        self.records[1]["acceptancePolicy"] = changed_policy
+        with self.assertRaisesRegex(ValueError, r"acceptancePolicy\.diagnostics\[0\]\.anchorCoverage"):
+            verify(self.origin, "0.2.433", self.database)
+
 
 if __name__ == "__main__":
     unittest.main()

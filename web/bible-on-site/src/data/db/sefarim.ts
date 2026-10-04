@@ -1,4 +1,4 @@
-import * as tanah from "./sefaria-dump-5784-sivan-4.tanah_view.json";
+import tanah from "./sefaria-dump-5784-sivan-4.tanah_view.json";
 import type { Sefarim } from "./tanah-view-types";
 
 const sefarim: Sefarim = Array.from(
@@ -7,7 +7,10 @@ const sefarim: Sefarim = Array.from(
 			(eval(
 				"require('./sefaria-dump-5784-sivan-4.tanah_view.json')",
 			) as Sefarim)
-		: /* istanbul ignore next: will never be reached in testing env */ (tanah as Sefarim),
+		: /* istanbul ignore next: will never be reached in testing env */ ((typeof tanah ===
+			"string"
+				? JSON.parse(tanah)
+				: tanah) as Sefarim),
 );
 
 export { sefarim };

@@ -71,11 +71,13 @@ test.describe("Recitation in the book reader", () => {
 			page,
 		}) => {
 			test.setTimeout(90_000);
-			let recording: Buffer;
+			// Prepare the real canonical manifest before measuring the interaction;
+			// a cold development route compilation can outlast the UI assertion.
+			const response = await page.request.get(`/api/recitation/${perekId}`);
+			expect(response.ok()).toBe(true);
+			const manifest = await response.json();
+			const recording = silentRecording(manifest.durationMs);
 			await page.route(`**/api/recitation/${perekId}`, async (route) => {
-				const response = await route.fetch();
-				const manifest = await response.json();
-				recording = silentRecording(manifest.durationMs);
 				await route.fulfill({
 					response,
 					json: {
