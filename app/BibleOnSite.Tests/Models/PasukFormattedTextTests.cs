@@ -13,6 +13,30 @@ public class PasukFormattedTextTests
 
     public class Pasuk_FormattedText
     {
+        [Theory]
+        [InlineData(null)]
+        [InlineData(1)]
+        public void repeated_playback_position_preserves_spans_and_does_not_notify_again(int? segment)
+        {
+            var pasuk = new Pasuk
+            {
+                PasukNum = 1, Text = "אור",
+                Segments = [new() { Type = SegmentType.Qri, Value = "אור" }],
+                RecitingSegment = segment
+            };
+            var formatted = pasuk.FormattedText;
+            var changed = new List<string?>();
+            var changing = new List<string?>();
+            pasuk.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+            pasuk.PropertyChanging += (_, e) => changing.Add(e.PropertyName);
+
+            pasuk.RecitingSegment = segment;
+
+            pasuk.FormattedText.Should().BeSameAs(formatted);
+            changed.Should().BeEmpty();
+            changing.Should().BeEmpty();
+        }
+
         [Fact]
         public void spoken_word_highlighting_preserves_text_and_clears_without_stale_spans()
         {

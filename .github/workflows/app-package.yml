@@ -71,7 +71,7 @@ permissions:
 
 env:
   APP_DIRECTORY: app
-  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-notes-sqlite.master
+  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-sqlite-v2.master
   PERUSHIM_NOTES_ANDROID_ASSET_RELDIR: Platforms/Android/AssetPacks/perushim_notes
   PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR: Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset
 
@@ -287,7 +287,10 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.perushim_notes_sqlite_artifact || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
-          path: ${{ env.APP_DIRECTORY }}/BibleOnSite/${{ env.PERUSHIM_NOTES_ANDROID_ASSET_RELDIR }}
+          path: ${{ runner.temp }}/perushim-sqlite
+
+      - name: Prepare matching Perushim catalog and Android notes
+        run: python3 app/devops/prepare_perushim_assets.py --source "${{ runner.temp }}/perushim-sqlite" --app-directory app/BibleOnSite --platform Android
 
       - name: Verify perushim SQLite present (required for PAD asset pack in AAB)
         run: |
@@ -503,7 +506,10 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.perushim_notes_sqlite_artifact || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
-          path: ${{ env.APP_DIRECTORY }}/BibleOnSite/${{ env.PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR }}
+          path: ${{ runner.temp }}/perushim-sqlite
+
+      - name: Prepare matching Perushim catalog and iOS notes
+        run: python3 app/devops/prepare_perushim_assets.py --source "${{ runner.temp }}/perushim-sqlite" --app-directory app/BibleOnSite --platform iOS
 
       - name: Restore dotnet tools
         working-directory: ${{ env.APP_DIRECTORY }}

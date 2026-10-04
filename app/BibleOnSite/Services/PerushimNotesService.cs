@@ -34,6 +34,7 @@ public class PerushimNotesService
     private SQLiteAsyncConnection? _connection;
     private bool _initialized;
     private bool _notesMissing = true;
+    private string _notesValidationStatus = "Notes database unavailable";
     private readonly SemaphoreSlim _operationLock = new(1, 1);
 
     public PerushimNotesService(IPadDeliveryService padService)
@@ -82,9 +83,19 @@ public class PerushimNotesService
     /// </summary>
     public async Task<string> GetDiagnosticsAsync()
     {
-        await InitializeAsync();
+        var diagnosticErrors = new List<string>();
+        try { await InitializeAsync(); }
+        catch (Exception ex)
+        {
+            diagnosticErrors.Add($"Initialization error: {ex.GetType().Name}: {ex.Message}");
+        }
         var dbPath = Path.Combine(DataDirectory, NotesDbName);
-        var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName);
+        string? padPath = null;
+        try { padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName); }
+        catch (Exception ex)
+        {
+            diagnosticErrors.Add($"PAD/ODR path error: {ex.GetType().Name}: {ex.Message}");
+        }
         var appPackageHasFile = await AppPackageHasNotesAsync();
 
         var lines = new List<string>
@@ -97,11 +108,14 @@ public class PerushimNotesService
             $"IsAvailable: {IsAvailable}",
             $"Initialized: {_initialized}",
             $"NotesMissing: {_notesMissing}",
+            $"Notes validation: {_notesValidationStatus}",
+            $"JSON reflection enabled by default: {JsonSerializer.IsReflectionEnabledByDefault}",
             $"Local DB path: {dbPath}",
             $"Local DB exists: {File.Exists(dbPath)}",
             $"PAD/ODR path: {(padPath ?? "(null)")}",
             $"App package has notes file: {appPackageHasFile}",
         };
+        lines.AddRange(diagnosticErrors);
         if (padPath != null)
         {
             var atRoot = File.Exists(Path.Combine(padPath, NotesDbName));
@@ -280,6 +294,7 @@ public class PerushimNotesService
         }
         if (_catalog == null)
         {
+            _notesValidationStatus = "Catalog validation skipped for raw-note tests";
             return true;
         }
         try
@@ -289,6 +304,7 @@ public class PerushimNotesService
             // remains useful for diagnostics, but there are no names to misattribute.
             if (catalogConnection == null)
             {
+                _notesValidationStatus = "Catalog unavailable; attribution cannot be checked";
                 return true;
             }
 
@@ -303,10 +319,13 @@ public class PerushimNotesService
             bool compatible;
             if (snapshot != null)
             {
-                var expected = JsonSerializer.Deserialize<Dictionary<int, string>>(snapshot);
+                var expected = JsonSerializer.Deserialize(snapshot, AppJsonContext.Default.PerushCatalog);
                 var current = await _catalog.GetAllPerushimAsync();
                 compatible = expected != null && expected.Count == current.Count &&
                     current.All(p => expected.TryGetValue(p.Id, out var name) && name == p.Name);
+                _notesValidationStatus = compatible
+                    ? $"Compatible catalog mapping ({current.Count} entries)"
+                    : $"Catalog mapping mismatch (notes={expected?.Count ?? 0}, catalog={current.Count})";
             }
             else
             {
@@ -314,6 +333,9 @@ public class PerushimNotesService
                 var catalogTimestamp = await GetBuildTimestampAsync(Path.Combine(_fileSystem.AppDataDirectory,
                     "sefaria-dump-5784-sivan-4.perushim_catalog.sqlite"));
                 compatible = notesTimestamp > 0 && notesTimestamp == catalogTimestamp;
+                _notesValidationStatus = compatible
+                    ? $"Compatible legacy build ({notesTimestamp})"
+                    : $"Legacy build mismatch (notes={notesTimestamp}, catalog={catalogTimestamp}); matching notes pack required";
             }
             if (compatible)
             {
@@ -322,6 +344,7 @@ public class PerushimNotesService
         }
         catch (Exception ex)
         {
+            _notesValidationStatus = $"Validation error: {ex.GetType().Name}: {ex.Message}";
             Console.Error.WriteLine($"Could not verify perushim attribution: {ex.Message}");
         }
 
