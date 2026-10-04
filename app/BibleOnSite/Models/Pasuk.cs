@@ -27,7 +27,10 @@ public partial class Pasuk : ObservableObject
         get => _recitingSegment;
         set
         {
-            if (_recitingSegment == value) return;
+            if (_recitingSegment == value)
+            {
+                return;
+            }
             OnPropertyChanging(nameof(RecitingSegment));
             _recitingSegment = value;
             _formattedText = null;
