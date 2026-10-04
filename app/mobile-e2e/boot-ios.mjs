@@ -14,5 +14,6 @@ if (!device) throw new Error(`No available iPhone simulator runtime compatible w
 console.log(`Booting ${device.name}, iOS ${device.version}, ${device.udid}`);
 if (device.state !== "Booted") run("simctl", "boot", device.udid);
 process.stdout.write(run("simctl", "bootstatus", device.udid, "-b"));
-if (process.env.GITHUB_ENV) appendFileSync(process.env.GITHUB_ENV, `MOBILE_UDID=${device.udid}\n`);
+if (process.env.GITHUB_ENV) appendFileSync(process.env.GITHUB_ENV, `MOBILE_UDID=${device.udid}\nMOBILE_OS_VERSION=${device.version}\n`);
 console.log(`MOBILE_UDID=${device.udid}`);
+console.log(`MOBILE_OS_VERSION=${device.version}`);

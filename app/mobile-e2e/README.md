@@ -4,6 +4,8 @@ The shared C# suite in `../BibleOnSite.Tests.MobileE2E` runs on Android and iOS.
 CI creates one independent runner per matrix entry (`app-mobile-e2e.yml`), with
 `fail-fast: false`, and requires both results through the main CI gate. Tests
 on an individual device run sequentially and start with a freshly reset app.
+Android uses a full app reset. iOS reinstalls the app without erasing the booted
+simulator, and Appium operates the simulator headlessly.
 
 The pilot covers packaged scripture and bottom navigation, adjacent perek
 navigation with matching source **and** pesukim, and native flyout/preferences
@@ -39,8 +41,9 @@ APK and completes the iOS arm64 simulator `.app` build.
 
 Set `MOBILE_UDID` to a running device's identifier, then run `npm test` here.
 On macOS, `npm run ios:boot` selects an available iPhone runtime no newer than
-the selected Xcode SDK, boots it, and prints the identifier. CI also exports it
-automatically. `MOBILE_APP_PATH` can select another compatible build. Each local
+the selected Xcode SDK, boots it, and prints the identifier and `MOBILE_OS_VERSION`.
+Set both for local iOS runs; CI exports them automatically.
+`MOBILE_APP_PATH` can select another compatible build. Each local
 run owns an Appium server on `127.0.0.1:4723`; keep that port free.
 
 `npm run test:unit` checks simulator selection without a device.

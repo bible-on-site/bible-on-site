@@ -27,8 +27,14 @@ public abstract class MobilePlatformAdapter
             App = configuration.AppPath
         };
         options.AddAdditionalAppiumOption("udid", configuration.DeviceId);
+        if (!string.IsNullOrWhiteSpace(configuration.PlatformVersion))
+        {
+            options.PlatformVersion = configuration.PlatformVersion;
+        }
         options.AddAdditionalAppiumOption("noReset", false);
-        options.AddAdditionalAppiumOption("fullReset", true);
+        // XCUITest fullReset erases the whole simulator. Reinstall only the app
+        // on iOS so every scenario has clean data while the device stays booted.
+        options.AddAdditionalAppiumOption("fullReset", android);
         options.AddAdditionalAppiumOption("newCommandTimeout", 120);
         if (android)
         {
@@ -42,6 +48,9 @@ public abstract class MobilePlatformAdapter
         {
             options.AddAdditionalAppiumOption("bundleId", "com.tanah.daily929");
             options.AddAdditionalAppiumOption("autoAcceptAlerts", true);
+            options.AddAdditionalAppiumOption("enforceAppInstall", true);
+            options.AddAdditionalAppiumOption("isHeadless", true);
+            options.AddAdditionalAppiumOption("showXcodeLog", true);
             options.AddAdditionalAppiumOption("wdaLaunchTimeout", 180000);
         }
         return options;

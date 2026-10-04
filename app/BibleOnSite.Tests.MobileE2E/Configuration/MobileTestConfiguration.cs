@@ -9,6 +9,8 @@ public enum MobilePlatform
 public sealed record MobileTestConfiguration(
     MobilePlatform Platform, string AppPath, string DeviceId, string ArtifactDirectory, Uri Server)
 {
+    public string? PlatformVersion { get; init; }
+
     public static MobilePlatform ParsePlatform(string? value) => value?.ToLowerInvariant() switch
     {
         "android" => MobilePlatform.Android,
@@ -27,7 +29,10 @@ public sealed record MobileTestConfiguration(
 
         return new(platform, appPath, Required("MOBILE_UDID"),
             Path.GetFullPath(Required("MOBILE_E2E_ARTIFACTS")),
-            new Uri(Environment.GetEnvironmentVariable("APPIUM_SERVER") ?? "http://127.0.0.1:4723"));
+            new Uri(Environment.GetEnvironmentVariable("APPIUM_SERVER") ?? "http://127.0.0.1:4723"))
+        {
+            PlatformVersion = Environment.GetEnvironmentVariable("MOBILE_OS_VERSION")
+        };
     }
 
     private static string Required(string name) =>

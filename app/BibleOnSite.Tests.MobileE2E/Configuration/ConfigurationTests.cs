@@ -20,17 +20,26 @@ public sealed class ConfigurationTests
         Assert.Throws<ArgumentException>(() => MobileTestConfiguration.ParsePlatform(value));
 
     [Theory]
-    [InlineData(MobilePlatform.Android, "UiAutomator2", "appPackage", "bundleId")]
-    [InlineData(MobilePlatform.IOS, "XCUITest", "bundleId", "appPackage")]
+    [InlineData(MobilePlatform.Android, "UiAutomator2", "appPackage", "bundleId", "36")]
+    [InlineData(MobilePlatform.IOS, "XCUITest", "bundleId", "appPackage", "26.5")]
     public void CreatesIsolatedCapabilitiesForEachDevice(
-        MobilePlatform platform, string automation, string appIdKey, string otherPlatformKey)
+        MobilePlatform platform, string automation, string appIdKey, string otherPlatformKey, string version)
     {
-        var configuration = new MobileTestConfiguration(platform, "/test/app", "specific-device", "/test/artifacts", new("http://localhost:4723"));
+        var configuration = new MobileTestConfiguration(platform, "/test/app", "specific-device", "/test/artifacts", new("http://localhost:4723"))
+        {
+            PlatformVersion = version
+        };
         var options = MobilePlatformAdapter.For(platform).CreateOptions(configuration).ToDictionary();
         Assert.Equal(automation, options["appium:automationName"]);
         Assert.Equal("specific-device", options["appium:udid"]);
+        Assert.Equal(version, options["appium:platformVersion"]);
         Assert.Equal("com.tanah.daily929", options[$"appium:{appIdKey}"]);
-        Assert.Equal(true, options["appium:fullReset"]);
+        Assert.Equal(false, options["appium:noReset"]);
+        Assert.Equal(platform == MobilePlatform.Android, options["appium:fullReset"]);
+        if (platform == MobilePlatform.IOS)
+        {
+            Assert.Equal(true, options["appium:enforceAppInstall"]);
+        }
         Assert.False(options.ContainsKey($"appium:{otherPlatformKey}"));
     }
 }
