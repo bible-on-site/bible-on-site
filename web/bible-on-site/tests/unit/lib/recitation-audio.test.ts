@@ -322,3 +322,33 @@ test("dispose tolerates a rejected audio-context close and prevents later playba
 	);
 	expect(sources).toHaveLength(0);
 });
+
+test("reported position follows the audio clock and retains its exact offset across pause and resume", async () => {
+	const player = new RecitationAudio("/audio.mp3", hash);
+	expect(player.positionMs).toBeNull();
+	await player.play(1200, 2300, jest.fn());
+	expect(player.positionMs).toBe(1200);
+	audioClock = 10.25;
+	expect(player.positionMs).toBe(1450);
+	player.pause();
+	audioClock = 20;
+	expect(player.positionMs).toBe(1450);
+	await player.resume();
+	expect(sources[1].start).toHaveBeenCalledWith(0, 1.45, 0.85);
+	audioClock = 20.1;
+	expect(player.positionMs).toBeCloseTo(1550);
+	sources[1].onended?.();
+	expect(player.positionMs).toBeNull();
+	player.dispose();
+});
+
+test("full chapter uses actual decoded duration and the same playback clock as clips", async () => {
+	const player = new RecitationAudio("/audio.mp3", hash);
+	await player.playChapter(jest.fn());
+	expect(sources[0].start).toHaveBeenCalledWith(0, 0, 10);
+	audioClock = 11.2;
+	expect(player.positionMs).toBeCloseTo(1200);
+	player.stop();
+	expect(player.positionMs).toBeNull();
+	player.dispose();
+});
