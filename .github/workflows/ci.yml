@@ -1645,6 +1645,18 @@ jobs:
           cat build.log
           exit $RC
 
+      - name: Setup Node for native audio precision checks
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: web/bible-on-site/package.json
+
+      - name: Verify native audio time origin on Chromium and Apple WebKit
+        working-directory: web/bible-on-site
+        run: |
+          npm ci --ignore-scripts --no-audit
+          npx playwright install chromium webkit
+          npx playwright test --config playwright.recitation.config.ts
+
   bulletin_ci:
     name: Bulletin CI
     runs-on: ubuntu-latest

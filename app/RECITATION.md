@@ -9,3 +9,5 @@ Chapter playback uses the original local MP3. Words and verses use complete-trac
 Website CD verifies the complete app extension against the canonical DB as well as checking approved chapter APIs and audio. Decoder changes trigger website CI's independent FFmpeg-reference browser regression. The recitation service tests cover partial installation, offline use, resume, integrity failures, rejected updates, canonical mismatches, and pending chapter restrictions.
 
 App CI compares all 929 native chapters' spoken word identities with the alignment database, including segment positions across null-valued nonspoken markers. The bundled native DB includes the same repaired Eikhah 5:22 and Kohelet 12:14 words as the website. The existing packaged-database refresh installs corrected text for users upgrading from older app versions.
+
+The macOS iOS CI runner also verifies the decoder against independent FFmpeg PCM on Chromium and Apple WebKit. The browser test needs no server or database; Playwright's Windows WebKit port cannot perform this check because it omits Web Audio.

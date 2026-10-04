@@ -21,9 +21,18 @@ const reference = gunzipSync(
 test("app decoder preserves gapless time origin and exact original word/verse sample ranges", async ({
 	page,
 }) => {
-	await page.goto("/api/health");
+	await page.route("**/recitation-decoder", (route) =>
+		route.fulfill({
+			contentType: "text/html",
+			body: "<!doctype html><html><body></body></html>",
+		}),
+	);
+	await page.goto("/recitation-decoder");
 	await page.evaluate(() => {
-		const Original = window.AudioContext;
+		const Original =
+			window.AudioContext ||
+			(window as unknown as { webkitAudioContext: typeof AudioContext })
+				.webkitAudioContext;
 		window.AudioContext = class extends Original {
 			constructor() {
 				super({ sampleRate: 44100 });
