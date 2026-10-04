@@ -3,7 +3,8 @@ import { resolve } from "node:path";
 import { buildSync } from "esbuild";
 
 // Use the identical locked ESM implementation in browsers and the offline app.
-// ASCII output preserves embedded WASM strings across native UTF-8 bridges.
+// Compressed WASM template strings must remain byte-for-byte unchanged.
+// The native bridge evaluates the UTF-8 asset directly, without HTML parsing.
 export function nativeRecitationDecoder() {
 	return buildSync({
 		stdin: {
