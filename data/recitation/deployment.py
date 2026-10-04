@@ -50,7 +50,8 @@ def verify(origin, version, database=DATABASE, check_audio=False):
         audio_url = actual.pop("audioUrl", None)
         reference = {k: v for k, v in expected.items() if k != "audioUrl"}
         if actual != reference:
-            raise ValueError(f"{pid}: deployed metadata or canonical word intervals differ")
+            raise ValueError(f"{pid}: deployed metadata or canonical word intervals differ at "
+                             f"{difference_path(reference, actual)}")
         if not isinstance(audio_url, str) or urlsplit(audio_url).path.rsplit('/', 1)[-1] != f"{pid}_record.mp3":
             raise ValueError(f"{pid}: invalid recording URL")
         if check_audio and expected["alignmentStatus"] == "ready":
@@ -64,6 +65,23 @@ def verify(origin, version, database=DATABASE, check_audio=False):
                 if digest != expected["audioSha256"]:
                     raise ValueError(f"{pid}: deployed recording hash differs from approved audio")
     print(f"Website {version}: {len(approved)} approved chapters have exact deployed word timings")
+
+
+def difference_path(expected, actual, path="manifest"):
+    """Identify the first changed field without dumping the entire timing map."""
+    if isinstance(expected, dict) and isinstance(actual, dict):
+        for key in sorted(expected.keys() | actual.keys()):
+            if key not in expected or key not in actual:
+                return f"{path}.{key} (missing field)"
+            if expected[key] != actual[key]:
+                return difference_path(expected[key], actual[key], f"{path}.{key}")
+    elif isinstance(expected, list) and isinstance(actual, list):
+        if len(expected) != len(actual):
+            return f"{path}.length ({len(expected)} != {len(actual)})"
+        for index, (left, right) in enumerate(zip(expected, actual)):
+            if left != right:
+                return difference_path(left, right, f"{path}[{index}]")
+    return f"{path} ({expected!r} != {actual!r})"
 
 
 def main():

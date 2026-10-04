@@ -830,6 +830,9 @@ jobs:
           DB_URL: ${{ (needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true') && 'mysql://root:test_123@127.0.0.1:3306/tanah_test' || '' }}
         run: npm run build
 
+      - name: Verify approved recitation in the production build
+        run: node scripts/verify-recitation-build.mjs
+
       - name: Perf Test
         id: npm-perf-test
         run: npm run test:perf

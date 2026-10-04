@@ -32,6 +32,11 @@ const nextConfig = {
 	transpilePackages: ["html-flip-book-react"],
 	turbopack: {
 		root: import.meta.dirname,
+		// Preserve the canonical JSON number literals: Turbopack's JSON parser
+		// can change the last digit of alignment diagnostics during bundling.
+		rules: {
+			"sefaria-dump-5784-sivan-4.tanah_view.json": { type: "text" },
+		},
 		...(isProduction
 			? {
 					resolveAlias: {
@@ -42,6 +47,10 @@ const nextConfig = {
 			: {}),
 	},
 	webpack(config) {
+		config.module.rules.push({
+			test: /sefaria-dump-5784-sivan-4\.tanah_view\.json$/,
+			type: "asset/source",
+		});
 		// The package exports only ESM entry points; coverage instrumentation can
 		// turn its imports into require calls. Resolve those exports as ESM first.
 		for (const entry of [
