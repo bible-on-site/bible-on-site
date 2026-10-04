@@ -1,10 +1,10 @@
 <?xml version="1.0" ?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
-  
+
 
   <title id="title">Two sources. One canonical timeline.</title>
   <desc id="desc">The words stay fixed. The recording supplies the boundaries. Full quality at every inference step.</desc>
-  
+
 
   <defs>
     <linearGradient id="bg" x2="1" y2="1">
@@ -19,11 +19,11 @@
       <path d="M0 0L10 5L0 10" fill="#7892b5"/>
     </marker>
   </defs>
-  
+
 
   <rect width="1600" height="900" fill="url(#bg)"/>
   <ellipse cx="920" cy="300" rx="690" ry="480" fill="url(#glow)"/>
-  
+
 
   <g font-family="Segoe UI,Arial,sans-serif">
     <text x="48" y="52" fill="#7ad4e8" font-size="15" font-weight="700">TANAH / RECITATION ENGINEERING</text>
