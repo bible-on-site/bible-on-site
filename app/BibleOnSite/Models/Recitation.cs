@@ -97,4 +97,6 @@ public sealed record RecitationClipRange(double Start, double End);
 [JsonSerializable(typeof(RecitationTrack))]
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(List<RecitationClipRange>), TypeInfoPropertyName = "ClipRanges")]
-public partial class RecitationJsonContext : JsonSerializerContext; // NOSONAR: System.Text.Json source generation supplies the implementation.
+#pragma warning disable S2333 // System.Text.Json source generation supplies this partial implementation.
+public partial class RecitationJsonContext : JsonSerializerContext;
+#pragma warning restore S2333

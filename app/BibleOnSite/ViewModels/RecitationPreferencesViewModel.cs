@@ -5,7 +5,8 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BibleOnSite.ViewModels;
 
-public partial class RecitationBookChoice : ObservableObject // NOSONAR: ObservableProperty generates the other partial declaration.
+#pragma warning disable S2333 // ObservableProperty and RelayCommand generate partial implementations.
+public partial class RecitationBookChoice : ObservableObject
 {
     public required string Name { get; init; }
     public required List<int> PerekIds { get; init; }
@@ -13,7 +14,7 @@ public partial class RecitationBookChoice : ObservableObject // NOSONAR: Observa
     [ObservableProperty] private string _status = "";
 }
 
-public partial class RecitationPreferencesViewModel : ObservableObject // NOSONAR: ObservableProperty and RelayCommand require a partial declaration.
+public partial class RecitationPreferencesViewModel : ObservableObject
 {
     private readonly RecitationService _recitation;
     private readonly PreferencesService _preferences;
@@ -118,3 +119,4 @@ public partial class RecitationPreferencesViewModel : ObservableObject // NOSONA
         finally { _download = null; IsDownloading = false; Refresh(); }
     }
 }
+#pragma warning restore S2333

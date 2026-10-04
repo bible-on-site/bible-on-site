@@ -7,7 +7,9 @@ using CommunityToolkit.Maui.Views;
 
 namespace BibleOnSite.Pages;
 
-public partial class PerekPage // NOSONAR: the page and its controls are also generated from MAUI XAML.
+#pragma warning disable S2333 // MAUI XAML supplies the other partial declaration and controls.
+public partial class PerekPage
+#pragma warning restore S2333
 {
     private readonly DoubleTapTracker _doubleTap = new();
     private bool _chapterRecitationSelection;
@@ -130,7 +132,7 @@ public partial class PerekPage // NOSONAR: the page and its controls are also ge
                 EnterChapterRecitation();
             }
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException) { /* Release, movement, or navigation cancels the pending long press. */ }
         finally { if (_headerPress == request)
             {
                 _headerPress = null;

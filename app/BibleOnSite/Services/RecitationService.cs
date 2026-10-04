@@ -19,8 +19,11 @@ public sealed class RecitationService
     private Dictionary<int, RecitationTrack> _tracks = new();
     private bool _initialized;
     private DateTime _lastRefreshAttempt;
-    public event EventHandler? Changed; // NOSONAR: invoked after installation, updates, and downloads below.
-    public event EventHandler? PlaybackStopRequested; // NOSONAR: invoked by RequestPlaybackStop and observed by visible reader pages.
+    // The analyzer misses null-conditional event invocation; both events are invoked below.
+#pragma warning disable S3264
+    public event EventHandler? Changed;
+    public event EventHandler? PlaybackStopRequested;
+#pragma warning restore S3264
     public void RequestPlaybackStop() => PlaybackStopRequested?.Invoke(this, EventArgs.Empty);
     public bool IsInstalled => _tracks.Count > 0;
     public IReadOnlyCollection<RecitationTrack> Tracks => _tracks.Values;
