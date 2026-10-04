@@ -839,6 +839,7 @@ jobs:
             --threshold-measure count --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 10.00 --threshold-lower-boundary _ \
 
       - name: Store Website Perf HTML Report
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: website-perf-html-report-${{ github.run_id }}
@@ -847,6 +848,7 @@ jobs:
           overwrite: true
 
       - name: Store Website Perf JUnit Report
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_PERF_JUNIT_REPORT_ARTIFACT_NAME }}
