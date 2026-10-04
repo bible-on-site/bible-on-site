@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { createServer } from "node:net";
+import { get } from "node:http";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const platform = process.env.MOBILE_PLATFORM?.toLowerCase();
@@ -35,18 +36,40 @@ let test;
 const stop = () => { test?.kill(); server.kill(); };
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
+
+function serverIsReady() {
+  return new Promise((resolveReady, reject) => {
+    const request = get({ hostname: "127.0.0.1", port: 4723, path: "/status", timeout: 1000 }, (response) => {
+      let body = "";
+      response.setEncoding("utf8");
+      response.on("error", reject);
+      response.on("data", (chunk) => { body += chunk; });
+      response.on("end", () => {
+        try {
+          resolveReady(response.statusCode === 200 && JSON.parse(body).value?.ready === true);
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+    request.on("timeout", () => request.destroy(Object.assign(new Error("Appium readiness timed out"), { code: "ETIMEDOUT" })));
+    request.on("error", (error) => {
+      if (["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT"].includes(error.code)) {
+        // The owned loopback service is still loading its driver.
+        resolveReady(false);
+      } else {
+        reject(error);
+      }
+    });
+  });
+}
+
 try {
   const deadline = Date.now() + 60000;
   let ready = false;
   while (Date.now() < deadline) {
     if (serverExit) throw new Error(`Appium exited (${serverExit}). See ${artifacts}/appium.log`);
-    try {
-      const response = await fetch("http://127.0.0.1:4723/status", { signal: AbortSignal.timeout(1000) });
-      if (response.ok && (await response.json()).value?.ready) { ready = true; break; }
-    } catch (error) {
-      if (!error.cause?.code && error.name !== "TimeoutError") throw error;
-      // Connection refusal is expected until the server finishes loading its driver.
-    }
+    if (await serverIsReady()) { ready = true; break; }
     await delay(250);
   }
   if (!ready) throw new Error(`Appium did not become ready. See ${artifacts}/appium.log`);

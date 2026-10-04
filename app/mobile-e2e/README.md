@@ -18,7 +18,8 @@ Keep user flows and business assertions shared in the C# tests and page objects.
 `MobilePlatformAdapter` owns driver capabilities, native navigation and layout
 expectations; `AndroidPlatformAdapter` and `IosPlatformAdapter` are the extension
 points for native selectors, safe-area differences and other intended platform
-behavior. Override `Layout` for a documented platform difference rather than
+behavior. The adapters map MAUI automation IDs to Android resource IDs and iOS
+accessibility identifiers. Override `Layout` for a documented platform difference rather than
 branching or skipping an entire shared scenario. Shared classes use
 `[Trait("Platform", "Shared")]`. Platform-only classes use
 `[Trait("Platform", "Android")]` or `[Trait("Platform", "iOS")]` alongside

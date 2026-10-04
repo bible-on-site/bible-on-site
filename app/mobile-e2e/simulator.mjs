@@ -12,10 +12,14 @@ export function selectSimulator(devices, sdkVersion) {
   };
   return Object.entries(devices)
     .flatMap(([runtime, entries]) => {
-      const match = runtime.match(/SimRuntime\.iOS-(\d+(?:-\d+)*)$/);
-      if (!match || compare(version(match[1]), sdk) > 0) return [];
+      const prefix = "com.apple.CoreSimulator.SimRuntime.iOS-";
+      if (!runtime.startsWith(prefix)) return [];
+      const parts = runtime.slice(prefix.length).split("-");
+      if (parts.some((part) => !/^[0-9]+$/.test(part))) return [];
+      const runtimeVersion = parts.join(".");
+      if (compare(version(runtimeVersion), sdk) > 0) return [];
       return entries.filter((device) => device.isAvailable && device.name.startsWith("iPhone"))
-        .map((device) => ({ ...device, version: match[1].replaceAll("-", ".") }));
+        .map((device) => ({ ...device, version: runtimeVersion }));
     })
     .sort((left, right) => compare(version(right.version), version(left.version))
       || left.name.localeCompare(right.name))[0];

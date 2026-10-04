@@ -91,7 +91,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output) : IAsyncLifetime
 
     private void SaveDiagnostics(string name, string outcome)
     {
-        var prefix = Path.Combine(_configuration.ArtifactDirectory, $"{name}-{outcome}");
+        var prefix = Path.Join(_configuration.ArtifactDirectory, $"{name}-{outcome}");
         Directory.CreateDirectory(_configuration.ArtifactDirectory);
         try
         {
@@ -103,7 +103,10 @@ public sealed class PerekPilotTests(ITestOutputHelper output) : IAsyncLifetime
             // Preserve the scenario failure when a crashed app prevents diagnostics.
             File.WriteAllText(prefix + "-diagnostics-error.txt", exception.ToString());
             output.WriteLine($"Could not capture device diagnostics: {exception}");
-            if (outcome == "passed") throw;
+            if (outcome == "passed")
+            {
+                throw;
+            }
         }
         output.WriteLine($"{_configuration.Platform}: {name} {outcome}; artifacts: {prefix}");
     }

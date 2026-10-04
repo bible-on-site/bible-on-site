@@ -7,10 +7,14 @@ namespace BibleOnSite.Tests.MobileE2E.Pages;
 
 public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platform)
 {
-    public AppiumElement WaitFor(string automationId, Func<AppiumElement, bool>? condition = null) =>
-        WaitFor(MobileBy.AccessibilityId(automationId), condition);
+    public AppiumElement WaitFor(string automationId) => WaitFor(automationId, _ => true);
 
-    public AppiumElement WaitFor(By locator, Func<AppiumElement, bool>? condition = null)
+    public AppiumElement WaitFor(string automationId, Func<AppiumElement, bool> condition) =>
+        WaitFor(platform.AutomationId(automationId), condition);
+
+    public AppiumElement WaitFor(By locator) => WaitFor(locator, _ => true);
+
+    public AppiumElement WaitFor(By locator, Func<AppiumElement, bool> condition)
     {
         var deadline = DateTime.UtcNow.AddSeconds(45);
         while (DateTime.UtcNow < deadline)
@@ -19,8 +23,11 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             {
                 var element = driver.FindElements(locator)
                     .FirstOrDefault(element => element.Displayed && HasVisibleCenter(element)
-                        && (condition?.Invoke(element) ?? true));
-                if (element != null) return element;
+                        && condition(element));
+                if (element != null)
+                {
+                    return element;
+                }
             }
             catch (StaleElementReferenceException)
             {

@@ -11,6 +11,7 @@ namespace BibleOnSite.Tests.MobileE2E.Platforms;
 public abstract class MobilePlatformAdapter
 {
     public virtual LayoutExpectations Layout => new();
+    public abstract By AutomationId(string id);
     public abstract By FlyoutButton { get; }
     public abstract void GoBack(AppiumDriver driver);
     public abstract AppiumDriver CreateDriver(Uri server, AppiumOptions options);
@@ -58,6 +59,8 @@ public sealed record LayoutExpectations(double MinimumButtonExtent = 44, double 
 
 public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
 {
+    // MAUI maps AutomationId to Android resource-id, preserving screen-reader text.
+    public override By AutomationId(string id) => By.Id($"com.tanah.daily929:id/{id}");
     public override By FlyoutButton => By.XPath("//android.widget.ImageButton[@content-desc='Open navigation drawer']");
     public override void GoBack(AppiumDriver driver) => driver.Navigate().Back();
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
@@ -66,6 +69,7 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
 
 public sealed class IosPlatformAdapter : MobilePlatformAdapter
 {
+    public override By AutomationId(string id) => MobileBy.AccessibilityId(id);
     public override By FlyoutButton => By.XPath("//XCUIElementTypeNavigationBar/XCUIElementTypeButton[1]");
     public override void GoBack(AppiumDriver driver) => driver.FindElement(FlyoutButton).Click();
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>

@@ -31,12 +31,18 @@ partial class Build : NukeBuild
     [Parameter("Configuration to build - Default is 'Debug' (local) or 'Release' (server)")]
     readonly string Configuration = IsLocalBuild ? "Debug" : "Release";
 
+    [Parameter("Mobile E2E platform: Android or iOS")]
+    readonly string MobilePlatform = Environment.GetEnvironmentVariable("MOBILE_PLATFORM") ?? "";
+
+    bool MobileIsAndroid => MobilePlatform.Equals("Android", StringComparison.OrdinalIgnoreCase);
+
     [Solution("bible-on-site.slnx")] readonly Solution Solution = null!;
 
     // ============ Project Paths (derived from solution) ============
     AbsolutePath MainProject => Solution.GetProject("BibleOnSite").Path;
     AbsolutePath TestProject => Solution.GetProject("BibleOnSite.Tests").Path;
     AbsolutePath E2ETestProject => Solution.GetProject("BibleOnSite.Tests.E2E").Path;
+    AbsolutePath MobileE2ETestProject => Solution.GetProject("BibleOnSite.Tests.MobileE2E").Path;
     AbsolutePath CoreProject => Solution.GetProject("BibleOnSite.Core").Path;
 
     AbsolutePath SourceDirectory => MainProject.Parent;

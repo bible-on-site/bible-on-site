@@ -18,3 +18,12 @@ test("reports no compatible device rather than silently choosing an unsupported 
     { name: "iPhone 18", udid: "too-new", isAvailable: true },
   ] }, "26.5"), undefined);
 });
+
+test("ignores malformed runtime identifiers and other Apple platforms", () => {
+  const devices = [{ name: "iPhone", udid: "invalid", isAvailable: true }];
+  assert.equal(selectSimulator({
+    "com.apple.CoreSimulator.SimRuntime.iOS-26--5": devices,
+    "com.apple.CoreSimulator.SimRuntime.iOS-26-5-invalid": devices,
+    "com.apple.CoreSimulator.SimRuntime.tvOS-26-5": devices,
+  }, "26.5"), undefined);
+});

@@ -57,4 +57,27 @@ partial class Build
                 .EnableNoRestore()
                 .EnableNoBuild());
         });
+
+    Target TestMobileE2E => _ => _
+        .Description("Run Appium mobile E2E tests against the explicit device and app")
+        .Executes(() =>
+        {
+            var artifacts = Environment.GetEnvironmentVariable("MOBILE_E2E_ARTIFACTS")
+                ?? throw new ArgumentException("Set MOBILE_E2E_ARTIFACTS (npm test prepares it).");
+            DotNetTest(s => s
+                .SetProjectFile(MobileE2ETestProject)
+                .SetConfiguration("Debug")
+                .SetProperty("RestoreLockedMode", "true")
+                .SetFilter($"Category=MobileE2E&(Platform=Shared|Platform={(MobileIsAndroid ? "Android" : "iOS")})")
+                .SetResultsDirectory(Path.Join(artifacts, "results"))
+                .SetLoggers("trx;LogFileName=mobile-e2e.trx", "junit;LogFilePath=" + Path.Join(artifacts, "results", "mobile-e2e.xml")));
+        });
+
+    Target TestMobileE2EUnit => _ => _
+        .Description("Validate mobile E2E configuration without a device or MAUI workload")
+        .Executes(() => DotNetTest(s => s
+            .SetProjectFile(MobileE2ETestProject)
+            .SetConfiguration("Debug")
+            .SetProperty("RestoreLockedMode", "true")
+            .SetFilter("Category=Unit")));
 }
