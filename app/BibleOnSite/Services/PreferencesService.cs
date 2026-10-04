@@ -70,6 +70,24 @@ public class PreferencesService
     private const string LastLearntPerekKey = "lastLearntPerek";
     private const string PerekToLoadKey = "perekToLoad";
     private const string BookmarkedPerakimKey = "bookmarkedPerakim";
+    private const string RecitationEnabledKey = "recitationEnabled";
+    private bool _recitationEnabled;
+
+    public bool RecitationEnabled
+    {
+        get => _recitationEnabled;
+        set
+        {
+            if (_recitationEnabled == value)
+            {
+                return;
+            }
+
+            _recitationEnabled = value;
+            _storage.Set(RecitationEnabledKey, value);
+            OnPreferencesChanged();
+        }
+    }
 
     private readonly IPreferencesStorage _storage;
     private double _fontFactor = 1.0;
@@ -92,7 +110,11 @@ public class PreferencesService
         get => _fontFactor;
         set
         {
-            if (Math.Abs(_fontFactor - value) < 0.001) return;
+            if (Math.Abs(_fontFactor - value) < 0.001)
+            {
+                return;
+            }
+
             _fontFactor = value;
             _storage.Set(FontFactorKey, value);
             OnPreferencesChanged();
@@ -107,7 +129,11 @@ public class PreferencesService
         get => _lastLearntPerek;
         set
         {
-            if (_lastLearntPerek == value) return;
+            if (_lastLearntPerek == value)
+            {
+                return;
+            }
+
             _lastLearntPerek = value;
             if (value.HasValue)
             {
@@ -129,7 +155,11 @@ public class PreferencesService
         get => _perekToLoad;
         set
         {
-            if (_perekToLoad == value) return;
+            if (_perekToLoad == value)
+            {
+                return;
+            }
+
             _perekToLoad = value;
             _storage.Set(PerekToLoadKey, (int)value);
             OnPreferencesChanged();
@@ -146,6 +176,7 @@ public class PreferencesService
     /// </summary>
     public void Load()
     {
+        _recitationEnabled = _storage.Get(RecitationEnabledKey, false);
         _fontFactor = _storage.Get(FontFactorKey, 1.0);
 
         var lastLearnt = _storage.Get(LastLearntPerekKey, -1);

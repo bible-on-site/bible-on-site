@@ -28,6 +28,7 @@ class DeploymentTests(unittest.TestCase):
         pending["pesukim"][0]["segments"][0]["recordingTimeFrame"] = {"from": "00:00:00", "to": "00:00:00"}
         self.database.write_text(json.dumps([{"perekFrom": 1, "perakim": [self.chapter, pending]}]), encoding="utf-8")
         self.records = {1: extract(1, self.chapter), 2: extract(2, pending)}
+        self.extension_mutation = lambda package: package
         fixture = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -36,7 +37,15 @@ class DeploymentTests(unittest.TestCase):
 
             def do_GET(self):
                 self.send_response(200)
-                if self.path.startswith("/api/recitation/"):
+                if self.path.startswith("/api/recitation?"):
+                    self.send_header("X-Website-Version", fixture.version)
+                    self.send_header("Content-Type", "application/json")
+                    fields = ("perekId", "audioSha256", "textSha256", "durationMs", "alignmentStatus")
+                    package = {"version": 1, "tracks": [{**{k: r[k] for k in fields},
+                        "audioUrl": f"{fixture.origin}/recordings/{r['perekId']}_record.mp3",
+                        "words": r["words"] if r["alignmentStatus"] == "ready" else []} for r in fixture.records.values()]}
+                    body = json.dumps(fixture.extension_mutation(copy.deepcopy(package))).encode()
+                elif self.path.startswith("/api/recitation/"):
                     pid = int(self.path.split("/")[-1].split("?")[0])
                     self.send_header("X-Website-Version", fixture.version)
                     self.send_header("Content-Type", "application/json")
@@ -111,6 +120,36 @@ class DeploymentTests(unittest.TestCase):
         self.records[1]["acceptancePolicy"] = changed_policy
         with self.assertRaisesRegex(ValueError, r"acceptancePolicy\.diagnostics\[0\]\.anchorCoverage"):
             verify(self.origin, "0.2.433", self.database)
+
+    def test_app_extension_rejects_missing_changed_or_unapproved_intervals(self):
+        def missing(package):
+            package["tracks"].pop()
+            return package
+
+        def changed(package):
+            package["tracks"][0]["words"][0]["startMs"] += 1
+            return package
+
+        def unapproved(package):
+            package["tracks"][1]["words"] = package["tracks"][0]["words"]
+            return package
+        for mutation in (missing, changed, unapproved):
+            with self.subTest(mutation=mutation.__name__):
+                self.extension_mutation = mutation
+                with self.assertRaisesRegex(ValueError, "extension differs"):
+                    verify(self.origin, "0.2.433", self.database)
+
+    def test_app_extension_requires_playable_public_recording_urls(self):
+        for url in ("file:///recordings/1_record.mp3", "ftp://example.com/recordings/1_record.mp3",
+                    "https://user:password@example.com/recordings/1_record.mp3",
+                    "https://example.com/recordings/1_record.mp3?token=bad"):
+            def mutate(package):
+                package["tracks"][0]["audioUrl"] = url
+                return package
+            with self.subTest(url=url):
+                self.extension_mutation = mutate
+                with self.assertRaisesRegex(ValueError, "invalid recording URL"):
+                    verify(self.origin, "0.2.433", self.database)
 
 
 if __name__ == "__main__":

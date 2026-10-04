@@ -12,6 +12,8 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
+        # Compressed WASM strings in this generated asset are data, not source whitespace.
+        exclude: ^app/BibleOnSite/Resources/Raw/recitation-mpeg\.min\.js$
       - id: check-yaml
         exclude: ^docs/aws/cloudformation/
       - id: check-ast
@@ -23,7 +25,9 @@ repos:
       - id: check-illegal-windows-names
       - id: check-merge-conflict
       - id: trailing-whitespace
+        exclude: ^app/BibleOnSite/Resources/Raw/recitation-mpeg\.min\.js$
       - id: mixed-line-ending
+        exclude: ^app/BibleOnSite/Resources/Raw/recitation-mpeg\.min\.js$
   - repo: "https://github.com/doradsoft/json5-pre-commit-hook"
     rev: v1.0.3
     hooks:

@@ -136,6 +136,36 @@
                 </Border>
             </VerticalStackLayout>
 
+            <Border Padding="16" StrokeShape="RoundRectangle 8"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+                <VerticalStackLayout BindingContext="{Binding Recitation}" x:DataType="viewmodels:RecitationPreferencesViewModel" Spacing="12">
+                    <Label Text="הקראה" FontSize="20" FontAttributes="Bold" TextColor="{StaticResource Primary}"/>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="הפעלת הקראה" VerticalOptions="Center"/>
+                        <Switch Grid.Column="1" IsToggled="{Binding Enabled}" IsEnabled="{Binding IsInstalled}" AutomationId="RecitationEnabledSwitch"/>
+                    </Grid>
+                    <Label Text="חבילה נפרדת מהפירושים. בחרו ספרים לשימוש ללא אינטרנט, או את כל הספרים (כ-935 MB)." LineBreakMode="WordWrap"/>
+                    <Label Text="{Binding Status}" AutomationId="RecitationPackageStatus" LineBreakMode="WordWrap"/>
+                    <Button Text="כל הספרים" Command="{Binding SelectAllCommand}" IsEnabled="{Binding IsIdle}" AutomationId="RecitationSelectAllButton"/>
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Books}" IsEnabled="{Binding IsIdle}">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="viewmodels:RecitationBookChoice">
+                                <Grid ColumnDefinitions="Auto,*" Padding="0,4">
+                                    <CheckBox IsChecked="{Binding IsSelected}" SemanticProperties.Description="{Binding Name}"/>
+                                    <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
+                                        <Label Text="{Binding Name}"/>
+                                        <Label Text="{Binding Status}" FontSize="12" TextColor="{StaticResource Gray500}"/>
+                                    </VerticalStackLayout>
+                                </Grid>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                    <ProgressBar Progress="{Binding Progress}" IsVisible="{Binding IsDownloading}" ProgressColor="{StaticResource Primary}"/>
+                    <Button Text="הורדת הספרים שנבחרו" Command="{Binding DownloadSelectedCommand}" IsEnabled="{Binding IsIdle}" AutomationId="RecitationDownloadButton"/>
+                    <Button Text="עדכון זמינות ההקראה" Command="{Binding UpdateTimingsCommand}" IsEnabled="{Binding IsIdle}"/>
+                    <Button Text="ביטול ההורדה" Command="{Binding CancelDownloadCommand}" IsVisible="{Binding IsDownloading}"/>
+                </VerticalStackLayout>
+            </Border>
         </VerticalStackLayout>
     </ScrollView>
 </ContentPage>

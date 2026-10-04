@@ -15,6 +15,7 @@ public partial class PreferencesViewModel : ObservableObject
     private readonly IFileSystem _fileSystem;
     private readonly IShare _share;
     private readonly IAppNavigator _navigator;
+    public RecitationPreferencesViewModel Recitation { get; }
 
     public PreferencesViewModel() : this(PreferencesService.Instance, PerushimNotesService.Instance)
     {
@@ -44,6 +45,7 @@ public partial class PreferencesViewModel : ObservableObject
         _fileSystem = fileSystem;
         _share = share;
         _navigator = navigator;
+        Recitation = new RecitationPreferencesViewModel(RecitationService.Instance, preferencesService, PerekDataService.Instance);
         _preferencesService.PreferencesChanged += OnPreferencesChanged;
     }
 
