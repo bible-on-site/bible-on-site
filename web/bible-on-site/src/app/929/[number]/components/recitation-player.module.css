@@ -118,7 +118,7 @@ button.heading {
 	cursor: pointer;
 }
 .word[role="button"]:hover,
-.word[aria-pressed="true"],
+.word[data-recitation-active="true"],
 .pasuk[role="button"]:hover {
 	color: #1c427b;
 	background: #e9eff8;
