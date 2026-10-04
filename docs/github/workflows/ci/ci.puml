@@ -26,15 +26,7 @@ fork again
 end fork
 
 |#FFF8E1|Change Detection|
-fork
-  :Determine Website Changes;
-fork again
-  :Determine API Changes;
-fork again
-  :Determine App Changes;
-fork again
-  :Determine Data Changes;
-end fork
+:Determine Changes;
 
 |#E8F5E9|Module CI (Conditional)|
 note
