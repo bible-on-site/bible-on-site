@@ -234,6 +234,7 @@ jobs:
           docker run -d --name deps-registry -p 127.0.0.1:5000:5000 registry:3.0.0@sha256:6c5666b861f3505b116bb9aa9b25175e71210414bd010d92035ff64018f9457e
           docker tag "$CACHE_REF" localhost:5000/website-deps:cache
           docker push localhost:5000/website-deps:cache
+          docker image rm "$CACHE_REF" localhost:5000/website-deps:cache
           docker builder prune --all --force
 
       - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
