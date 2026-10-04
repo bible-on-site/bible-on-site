@@ -118,6 +118,77 @@ test.describe("Recitation in the book reader", () => {
 		});
 	}
 
+	test("spoken words advance with real decoded audio, retain hover styling and never reflow scripture", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const response = await page.request.get("/api/recitation/829");
+		expect(response.ok()).toBe(true);
+		const manifest = await response.json();
+		await page.route("**/api/recitation/829", (route) =>
+			route.fulfill({
+				response,
+				json: {
+					...manifest,
+					audioSha256: createHash("sha256").update(recording).digest("hex"),
+				},
+			}),
+		);
+		await page.route("**/recordings/829_record.mp3", (route) =>
+			route.fulfill({
+				body: recording,
+				contentType: "audio/mpeg",
+				headers: { "content-length": String(recording.length) },
+			}),
+		);
+		const { toggle, reader, text } = await chapterReader(page, 829, "י");
+		await toggle.click();
+		await expect(toggle).toHaveAttribute("aria-pressed", "true");
+		const original = await characterPositions(text);
+		const first = reader.getByRole("button", {
+			name: `השמעת המילה ${manifest.words[0].text}`,
+			exact: true,
+		});
+		const second = reader.getByRole("button", {
+			name: `השמעת המילה ${manifest.words[1].text}`,
+			exact: true,
+		});
+		await reader
+			.getByRole("button", { name: "השמעת פסוק א", exact: true })
+			.click();
+		await expect(first).toHaveAttribute("aria-current", "true");
+		await expect(first).toHaveCSS("background-color", "rgb(233, 239, 248)");
+		await expect(second).toHaveAttribute("aria-current", "true");
+		await expect(first).not.toHaveAttribute("aria-current", "true");
+		await reader.getByRole("button", { name: "השהיית ההקראה" }).click();
+		const paused = await text
+			.locator('[data-recitation-active="true"]')
+			.textContent();
+		expect(paused).toBeTruthy();
+		await page.waitForTimeout(250);
+		expect(
+			await text.locator('[data-recitation-active="true"]').textContent(),
+		).toBe(paused);
+		const highlighted = await characterPositions(text);
+		for (let i = 0; i < original.length; i++) {
+			for (const metric of ["x", "y", "width", "height"] as const) {
+				expect(
+					Math.abs(highlighted[i][metric] - original[i][metric]),
+				).toBeLessThan(0.05);
+			}
+		}
+		await reader.getByRole("button", { name: "המשך ההקראה" }).click();
+		await expect(
+			reader.getByRole("button", { name: "השמעת כל הפרק" }),
+		).toBeVisible({ timeout: 30_000 });
+		await expect(text.locator('[data-recitation-active="true"]')).toHaveCount(
+			0,
+			{ timeout: 12_000 },
+		);
+		await toggle.click();
+		expect(await characterPositions(text)).toEqual(original);
+	});
+
 	test("a chapter without a recording is gray, explains availability on hover and never requests audio", async ({
 		page,
 	}) => {

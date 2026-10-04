@@ -1,5 +1,8 @@
 # Recitation alignment
 
+See [the illustrated pipeline guide](PIPELINE.md) for the source-of-truth model,
+segmentation and acceptance gates, durable storage, delivery and live word highlighting.
+
 The perakim JSON is the text authority. Whisper supplies acoustic landmarks; it
 never replaces, inserts, deletes, or merges the canonical words in the output.
 The identity of a spoken word is the existing **1-based perek ID, pasuk, segment**.
@@ -216,10 +219,13 @@ mode becomes active automatically after preparation finishes. Clicking an existi
 pasuk letter or spoken qri word plays that interval. Entity links and ordinary
 reading return when the mode is disabled. The adjacent play/pause icon and perek
 heading control playback; pause retains the audio-clock position for resume.
-Basic view has no playback controls. Chapter playback streams the original
-MP3; pasuk and word playback reuse the prepared chapter, verified by SHA-256
+Basic view has no playback controls. Aligned chapter playback and pasuk/word
+playback reuse the prepared chapter, verified by SHA-256
 against the alignment source, and schedule exact offsets and durations with
 `AudioBufferSourceNode.start`. No timestamp padding or stop timer is used.
+Chapters awaiting segmentation stream the original MP3. On ready chapters, the
+spoken word follows the playback clock with the existing hover colors, without
+changing text layout. Silence clears the highlight; pause preserves it for resume.
 Only the active player's decoded chapter is retained. Disabling recitation mode, changing
 chapter/player, hiding the document, or unmounting cancels playback and releases
 its audio context. Rapid clicks cannot revive an older download/play request.

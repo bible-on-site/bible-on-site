@@ -14,6 +14,52 @@ public class PasukFormattedTextTests
     public class Pasuk_FormattedText
     {
         [Fact]
+        public void spoken_word_highlighting_preserves_text_and_clears_without_stale_spans()
+        {
+            var pasuk = new Pasuk
+            {
+                PasukNum = 1, Text = "",
+                Segments = [new() { Type = SegmentType.Qri, Value = "וְעַל־" },
+                    new() { Type = SegmentType.Qri, Value = "מִי" },
+                    new() { Type = SegmentType.Qri, Value = "אוֹרֵהוּ׃" }]
+            };
+            var original = Flatten(pasuk.FormattedText);
+            var notifications = new List<string?>();
+            pasuk.PropertyChanged += (_, e) => notifications.Add(e.PropertyName);
+            foreach (var segment in new[] { 1, 2, 3 })
+            {
+                pasuk.RecitingSegment = segment;
+                Flatten(pasuk.FormattedText).Should().Be(original);
+                var active = pasuk.FormattedText.Spans.Single(s => s.BackgroundColor != null);
+                active.Text.Should().Be(pasuk.Segments[segment - 1].Value);
+                active.BackgroundColor.Should().Be(Color.FromArgb("#e9eff8"));
+                active.TextColor.Should().Be(Color.FromArgb("#1c427b"));
+            }
+            pasuk.RecitingSegment = null;
+            Flatten(pasuk.FormattedText).Should().Be(original);
+            pasuk.FormattedText.Spans.Should().ContainSingle();
+            notifications.Count(n => n == nameof(Pasuk.FormattedText)).Should().Be(4);
+        }
+
+        [Fact]
+        public void only_spoken_qri_is_highlighted_and_variant_marker_keeps_its_font()
+        {
+            var pasuk = new Pasuk
+            {
+                PasukNum = 1, Text = "", Segments = [
+                    new() { Type = SegmentType.Ktiv, Value = "כתיב", PairedOffset = 1 },
+                    new() { Type = SegmentType.Qri, Value = "קרי", PairedOffset = -1 }]
+            };
+            var original = Flatten(pasuk.FormattedText);
+            pasuk.RecitingSegment = 1;
+            pasuk.FormattedText.Spans.Should().OnlyContain(s => s.BackgroundColor == null);
+            pasuk.RecitingSegment = 2;
+            Flatten(pasuk.FormattedText).Should().Be(original);
+            pasuk.FormattedText.Spans.Single(s => s.BackgroundColor != null).Text.Should().Be("קרי");
+            pasuk.FormattedText.Spans.Single(s => s.Text == "(קְרִי: ").FontSize.Should().Be(14);
+        }
+
+        [Fact]
         public void does_not_root_an_unused_formatted_string_for_the_lifetime_of_a_perek()
         {
             var pasuk = new Pasuk
