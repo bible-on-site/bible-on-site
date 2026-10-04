@@ -1,94 +1,131 @@
-/**
- * @jest-environment jsdom
- */
-import { fireEvent, render, screen } from "@testing-library/react";
+/** @jest-environment jsdom */
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import ReaderSettings from "@/app/929/[number]/components/ReaderSettings";
+import { READER_SETTINGS_STORAGE_KEY } from "@/lib/reader-settings";
 import {
-	PEREK_FONT_SCALES,
-	PEREK_LINE_HEIGHTS,
-	READER_SETTINGS_STORAGE_KEY,
-} from "@/lib/reader-settings";
+	getRecitationSettings,
+	openReaderSettings,
+} from "@/lib/recitation-settings";
 
-describe("ReaderSettings", () => {
-	beforeEach(() => {
-		localStorage.clear();
-		document.documentElement.style.removeProperty("--perek-font-scale");
-		document.documentElement.style.removeProperty("--perek-line-height");
+beforeAll(() => {
+	HTMLDialogElement.prototype.showModal = function () {
+		this.setAttribute("open", "");
+	};
+	HTMLDialogElement.prototype.close = function () {
+		this.removeAttribute("open");
+	};
+});
+beforeEach(() => {
+	localStorage.clear();
+	document.documentElement.removeAttribute("style");
+});
+test("one settings button opens display controls and preserves existing preferences", () => {
+	localStorage.setItem(
+		READER_SETTINGS_STORAGE_KEY,
+		JSON.stringify({ fontStep: 3, lineStep: 1 }),
+	);
+	render(<ReaderSettings />);
+	expect(screen.queryByRole("dialog")).toBeNull();
+	fireEvent.click(screen.getByRole("button", { name: "הגדרות קריאה" }));
+	expect(screen.getByRole("slider", { name: "גודל גופן" })).toHaveValue("3");
+	expect(screen.getByRole("slider", { name: "ריווח אנכי" })).toHaveValue("1");
+	fireEvent.change(screen.getByRole("slider", { name: "ריווח אופקי" }), {
+		target: { value: "4" },
 	});
-
-	const fontScaleVar = () =>
-		document.documentElement.style.getPropertyValue("--perek-font-scale");
-	const lineHeightVar = () =>
-		document.documentElement.style.getPropertyValue("--perek-line-height");
-
-	it("renders the accessible control group with three buttons", () => {
-		render(<ReaderSettings />);
-		expect(
-			screen.getByRole("group", { name: "הגדרות קריאה" }),
-		).toBeInTheDocument();
-		expect(
-			screen.getByRole("button", { name: /הקטנת גופן/ }),
-		).toBeInTheDocument();
-		expect(
-			screen.getByRole("button", { name: /הגדלת גופן/ }),
-		).toBeInTheDocument();
-		expect(
-			screen.getByRole("button", { name: /ריווח שורות/ }),
-		).toBeInTheDocument();
+	expect(
+		document.documentElement.style.getPropertyValue("--perek-word-spacing"),
+	).toBe("0.44em");
+	fireEvent.change(screen.getByRole("slider", { name: "גודל גופן" }), {
+		target: { value: "4" },
 	});
-
-	it("increases and decreases the font scale and persists it", () => {
-		render(<ReaderSettings />);
-		const increase = screen.getByRole("button", { name: /הגדלת גופן/ });
-		const decrease = screen.getByRole("button", { name: /הקטנת גופן/ });
-
-		fireEvent.click(increase);
-		expect(fontScaleVar()).toBe(String(PEREK_FONT_SCALES[3]));
-		fireEvent.click(decrease);
-		fireEvent.click(decrease);
-		expect(fontScaleVar()).toBe(String(PEREK_FONT_SCALES[1]));
-		expect(localStorage.getItem(READER_SETTINGS_STORAGE_KEY)).toBe(
-			JSON.stringify({ fontStep: 1, lineStep: 0 }),
-		);
+	fireEvent.change(screen.getByRole("slider", { name: "ריווח אנכי" }), {
+		target: { value: "2" },
 	});
-
-	it("disables A+ at the maximum and A- at the minimum step", () => {
-		render(<ReaderSettings />);
-		const increase = screen.getByRole("button", { name: /הגדלת גופן/ });
-		const decrease = screen.getByRole("button", { name: /הקטנת גופן/ });
-
-		for (let i = 0; i < PEREK_FONT_SCALES.length; i++) {
-			fireEvent.click(increase);
-		}
-		expect(increase).toBeDisabled();
-		expect(decrease).not.toBeDisabled();
-		expect(fontScaleVar()).toBe(
-			String(PEREK_FONT_SCALES[PEREK_FONT_SCALES.length - 1]),
-		);
+	expect(
+		JSON.parse(localStorage.getItem(READER_SETTINGS_STORAGE_KEY) ?? "null"),
+	).toEqual({ fontStep: 4, lineStep: 2, wordStep: 4 });
+});
+test("chapter shortcut opens the same modal focused on narration and returns focus on close", () => {
+	render(<ReaderSettings />);
+	const opener = document.createElement("button");
+	document.body.append(opener);
+	act(() => openReaderSettings("recitation", opener));
+	expect(screen.getByRole("slider", { name: "מהירות" })).toHaveFocus();
+	expect(screen.queryByRole("slider", { name: "גודל גופן" })).toBeNull();
+	fireEvent.change(screen.getByRole("slider", { name: "מהירות" }), {
+		target: { value: "1.5" },
 	});
-
-	it("cycles line spacing and persists it", () => {
-		render(<ReaderSettings />);
-		const spacing = screen.getByRole("button", { name: /ריווח שורות/ });
-		fireEvent.click(spacing);
-		expect(lineHeightVar()).toBe(String(PEREK_LINE_HEIGHTS[1]));
-		fireEvent.click(spacing);
-		expect(lineHeightVar()).toBe(String(PEREK_LINE_HEIGHTS[2]));
-		fireEvent.click(spacing);
-		expect(lineHeightVar()).toBe(String(PEREK_LINE_HEIGHTS[0]));
+	fireEvent.change(screen.getByRole("slider", { name: "עוצמה" }), {
+		target: { value: "0.4" },
 	});
-
-	it("initializes button state from stored settings after mount", () => {
+	fireEvent.change(
+		screen.getByRole("combobox", { name: "אורך הפסקה בין פסוקים" }),
+		{ target: { value: "1000" } },
+	);
+	expect(getRecitationSettings()).toEqual({
+		speed: 1.5,
+		volume: 0.4,
+		versePauseMs: 1000,
+	});
+	fireEvent.change(
+		screen.getByRole("combobox", { name: "אורך הפסקה בין פסוקים" }),
+		{ target: { value: "original" } },
+	);
+	expect(getRecitationSettings().versePauseMs).toBeNull();
+	fireEvent.click(screen.getByRole("button", { name: "תצוגה" }));
+	expect(screen.getByRole("slider", { name: "גודל גופן" })).toHaveFocus();
+	fireEvent.click(screen.getByRole("button", { name: "סגירת הגדרות" }));
+	expect(screen.queryByRole("dialog")).toBeNull();
+	expect(opener).toHaveFocus();
+	opener.remove();
+});
+test("Escape closes the modal and cross-tab preferences update its controls", () => {
+	render(<ReaderSettings />);
+	const button = screen.getByRole("button", { name: "הגדרות קריאה" });
+	fireEvent.click(button);
+	act(() => {
 		localStorage.setItem(
 			READER_SETTINGS_STORAGE_KEY,
-			JSON.stringify({
-				fontStep: PEREK_FONT_SCALES.length - 1,
-				lineStep: 0,
-			}),
+			JSON.stringify({ fontStep: 0, lineStep: 2, wordStep: 1 }),
 		);
-		render(<ReaderSettings />);
-		expect(
-			screen.getByRole("button", { name: /הגדלת גופן/ }),
-		).toBeDisabled();
+		window.dispatchEvent(new Event("storage"));
 	});
+	expect(screen.getByRole("slider", { name: "גודל גופן" })).toHaveValue("0");
+	fireEvent(
+		screen.getByRole("dialog"),
+		new Event("cancel", { bubbles: true, cancelable: true }),
+	);
+	expect(screen.queryByRole("dialog")).toBeNull();
+	expect(button).toHaveFocus();
 });
+
+test.each([
+	[50, 150],
+	[350, 150],
+	[150, 50],
+	[150, 350],
+])(
+	"backdrop click at (%i, %i) closes settings while clicks inside keep them open",
+	(clientX, clientY) => {
+		render(<ReaderSettings />);
+		const button = screen.getByRole("button", { name: "הגדרות קריאה" });
+		fireEvent.click(button);
+		const dialog = screen.getByRole("dialog");
+		jest.spyOn(dialog, "getBoundingClientRect").mockReturnValue({
+			left: 100,
+			top: 100,
+			right: 300,
+			bottom: 300,
+			width: 200,
+			height: 200,
+			x: 100,
+			y: 100,
+			toJSON: () => ({}),
+		});
+		fireEvent.click(dialog, { clientX: 150, clientY: 150 });
+		expect(dialog).toBeVisible();
+		fireEvent.click(dialog, { clientX, clientY });
+		expect(screen.queryByRole("dialog")).toBeNull();
+		expect(button).toHaveFocus();
+	},
+);
