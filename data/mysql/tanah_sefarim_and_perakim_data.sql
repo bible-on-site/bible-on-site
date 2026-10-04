@@ -1054,12 +1054,12 @@ VALUES (
         179,
         179,
         'מקרא בכורים, ודוי מעשר, אזהרת משה ללכת בדרך ה\'');
-INSERT INTO tanah_perek (id, perek, header) VALUES (180, 180, ' צווי על קיום מעמד ברכה וקללה בהר גרזים והר עיבל ');
-INSERT INTO tanah_perek (id, perek, header) VALUES (181, 181, ' ברית בערבות מואב / ברכות ותוכחות ');
-INSERT INTO tanah_perek (id, perek, header) VALUES (182, 182, ' ברית ערבות,
-        אזהרה על האלה,
-        המכות - על עזיבת ה\''
-    );
+INSERT INTO tanah_perek (id, perek, header)
+VALUES (180, 180, 'צווי על קיום מעמד ברכה וקללה בהר גרזים והר עיבל');
+INSERT INTO tanah_perek (id, perek, header)
+VALUES (181, 181, 'ברית בערבות מואב / ברכות ותוכחות');
+INSERT INTO tanah_perek (id, perek, header)
+VALUES (182, 182, 'ברית ערבות, אזהרה על האלה, המכות - על עזיבת ה\'');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (183, 183, 'פרשת התשובה, משה מזהיר לבחור בחיים');
 INSERT INTO tanah_perek (id, perek, header)
@@ -1923,11 +1923,11 @@ VALUES (346, 346, 'שירת הודאה על כל הטוב מפרק י"א');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (347, 347, 'משא בבל');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (348, 348, '');
+VALUES (348, 348, 'נבואת נחמה על הגאולה, משא על אחרית בבל, שבועת ה\' על קיום דבריו, משא פלשתים');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (349, 349, '');
+VALUES (349, 349, 'משא מואב');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (350, 350, '');
+VALUES (350, 350, 'נבואת זעם על מואב');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (351, 351, '');
 INSERT INTO tanah_perek (id, perek, header)

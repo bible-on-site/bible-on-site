@@ -1853,3 +1853,18 @@
   perek: 13
   header: משא בבל
   qualified: false
+- id: 348
+  sefer: ישעיה
+  perek: 14
+  header: נבואת נחמה על הגאולה, משא על אחרית בבל, שבועת ה' על קיום דבריו, משא פלשתים
+  qualified: false
+- id: 349
+  sefer: ישעיה
+  perek: 15
+  header: משא מואב
+  qualified: false
+- id: 350
+  sefer: ישעיה
+  perek: 16
+  header: נבואת זעם על מואב
+  qualified: false
