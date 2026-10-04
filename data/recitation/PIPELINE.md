@@ -167,7 +167,8 @@ sequenceDiagram
 The website verifies and fully decodes the original MP3 once, then schedules
 approved offsets and durations on an `AudioBufferSourceNode`. Aligned chapter
 playback uses that same gapless buffer and AudioContext clock. Unaligned chapters
-can still stream. This avoids the imprecise MP3 seek path found during the pilot;
+use the same engine for the full recording, so speed and gain controls work
+consistently, including on iOS browsers. This avoids the imprecise MP3 seek path found during the pilot;
 the original timing values are unchanged.
 
 The app plays precise word/verse clips as decoded PCM and reads the native

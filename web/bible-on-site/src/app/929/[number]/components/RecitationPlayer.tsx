@@ -236,11 +236,6 @@ export default function RecitationPlayer({
 	const [state, setState] = useState<"idle" | "loading" | "playing" | "paused">(
 		"idle",
 	);
-	const audio = useRef<HTMLAudioElement | null>(null);
-	const attachAudio = useCallback((element: HTMLAudioElement | null) => {
-		audio.current?.pause();
-		audio.current = element;
-	}, []);
 	const precise = useRef<RecitationAudio | null>(null);
 	const settings = useRef<RecitationSettings>(getRecitationSettings());
 	const preparing = useRef(false);
@@ -248,10 +243,6 @@ export default function RecitationPlayer({
 		const apply = (next: RecitationSettings) => {
 			settings.current = next;
 			precise.current?.setOptions(next.speed, next.volume);
-			if (audio.current) {
-				audio.current.playbackRate = next.speed;
-				audio.current.volume = next.volume;
-			}
 		};
 		apply(getRecitationSettings());
 		const changed = (event: Event) =>
@@ -265,7 +256,6 @@ export default function RecitationPlayer({
 		};
 	}, []);
 	const request = useRef(0);
-	const kind = useRef<"chapter" | "clip" | null>(null);
 	const createAudio = useCallback((recitation: Recitation) => {
 		const player: RecitationAudio = new RecitationAudio(
 			recitation.audioUrl,
@@ -279,8 +269,6 @@ export default function RecitationPlayer({
 
 	const stop = useCallback((release = false) => {
 		request.current++;
-		kind.current = null;
-		audio.current?.pause();
 		precise.current?.stop();
 		if (release) {
 			precise.current?.dispose();
@@ -375,7 +363,7 @@ export default function RecitationPlayer({
 	}
 
 	async function play(startMs?: number, endMs?: number) {
-		if (!data || !audio.current) return;
+		if (!data) return;
 		window.dispatchEvent(new CustomEvent(STOP_EVENT, { detail: id }));
 		const generation = ++request.current;
 		setMessage("");
@@ -383,42 +371,31 @@ export default function RecitationPlayer({
 		setDownloadProgress(null);
 		setActiveWord(null);
 		try {
-			if (
-				(startMs !== undefined && endMs !== undefined) ||
-				data.alignmentStatus === "ready"
-			) {
-				kind.current = "clip";
-				precise.current ??= createAudio(data);
-				precise.current.setOptions(
-					settings.current.speed,
-					settings.current.volume,
-				);
-				const ended = () => {
-					if (request.current === generation) finish();
-				};
-				const started = await (startMs !== undefined && endMs !== undefined
-					? precise.current.play(startMs, endMs, ended)
-					: settings.current.versePauseMs !== null
-						? precise.current.playRanges(
-								[...new Set(data.words.map((w) => w.pasuk))].map(
-									(pasuk) =>
-										verseRange(playableWords(data), pasuk) as {
-											startMs: number;
-											endMs: number;
-										},
-								),
-								settings.current.versePauseMs,
-								ended,
-							)
-						: precise.current.playChapter(ended));
-				if (!started) return;
-			} else {
-				kind.current = "chapter";
-				audio.current.currentTime = 0;
-				audio.current.playbackRate = settings.current.speed;
-				audio.current.volume = settings.current.volume;
-				await audio.current.play();
-			}
+			precise.current ??= createAudio(data);
+			precise.current.setOptions(
+				settings.current.speed,
+				settings.current.volume,
+			);
+			const ended = () => {
+				if (request.current === generation) finish();
+			};
+			const started = await (startMs !== undefined && endMs !== undefined
+				? precise.current.play(startMs, endMs, ended)
+				: data.alignmentStatus === "ready" &&
+						settings.current.versePauseMs !== null
+					? precise.current.playRanges(
+							[...new Set(data.words.map((w) => w.pasuk))].map(
+								(pasuk) =>
+									verseRange(playableWords(data), pasuk) as {
+										startMs: number;
+										endMs: number;
+									},
+							),
+							settings.current.versePauseMs,
+							ended,
+						)
+					: precise.current.playChapter(ended));
+			if (!started) return;
 			if (request.current === generation) setState("playing");
 		} catch {
 			if (request.current === generation) fail();
@@ -428,12 +405,10 @@ export default function RecitationPlayer({
 	async function togglePlayback() {
 		if (state === "loading") return;
 		if (state === "playing") {
-			if (kind.current === "clip") {
-				if (!precise.current?.pause()) {
-					finish();
-					return;
-				}
-			} else audio.current?.pause();
+			if (!precise.current?.pause()) {
+				finish();
+				return;
+			}
 			setState("paused");
 			return;
 		}
@@ -441,12 +416,10 @@ export default function RecitationPlayer({
 			const generation = request.current;
 			setState("loading");
 			try {
-				if (kind.current === "clip") {
-					if (!(await precise.current?.resume())) {
-						if (request.current === generation) finish();
-						return;
-					}
-				} else await audio.current?.play();
+				if (!(await precise.current?.resume())) {
+					if (request.current === generation) finish();
+					return;
+				}
 				if (request.current === generation) setState("playing");
 			} catch {
 				if (request.current === generation) fail();
@@ -592,20 +565,6 @@ export default function RecitationPlayer({
 				play: (start, end) => void play(start, end),
 			}}
 		>
-			{open && data && (
-				// biome-ignore lint/a11y/useMediaCaption: The visible scripture is the transcript.
-				<audio
-					ref={attachAudio}
-					src={data.audioUrl}
-					preload="none"
-					onEnded={() => {
-						if (kind.current === "chapter") finish();
-					}}
-					onError={() => {
-						if (kind.current === "chapter") fail();
-					}}
-				/>
-			)}
 			{children}
 		</RecitationContext.Provider>
 	);
