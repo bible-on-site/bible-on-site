@@ -31,6 +31,8 @@ branching or skipping an entire shared scenario. Shared classes use
 `[Trait("Platform", "Android")]` or `[Trait("Platform", "iOS")]` alongside
 `[Trait("Category", "MobileE2E")]`; the Nuke target automatically selects shared
 tests plus the current platform, leaving platform-only behavior easy to add.
+Use `[Collection("Mobile device")]` on every mobile test class to serialize
+scenarios that own the same device.
 
 The pilot matrix deliberately covers Android and iOS. Existing Windows FlaUI
 tests and Android gesture regressions remain separate. Additional device/OS
@@ -57,5 +59,6 @@ configuration and device capabilities without a device or mobile workload.
 
 Screenshots and native view trees are captured for each scenario, alongside
 Appium and device logs, TRX and JUnit reports, under `app/.artifacts/mobile-e2e/<platform>`.
-iOS also exports app lifecycle logs and fresh app crash reports.
+iOS also exports app lifecycle logs, fresh app crash reports and one short native
+stack sample per app launch when a scenario runs for more than a minute.
 CI uploads a separate artifact for each platform even on test failures.

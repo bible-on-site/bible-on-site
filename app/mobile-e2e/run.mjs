@@ -1,10 +1,11 @@
-import { execFileSync, spawn } from "node:child_process";
+import { execFile, execFileSync, spawn } from "node:child_process";
 import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { createServer } from "node:net";
+import { promisify } from "node:util";
 import { get } from "node:http";
 import { prepareWda } from "./prepare-wda.mjs";
 
@@ -40,6 +41,34 @@ const server = spawn(process.execPath, [resolve(directory, "node_modules/appium/
 let serverExit;
 server.on("exit", (code, signal) => { serverExit = `code ${code}, signal ${signal}`; });
 let test;
+let sampleTimer;
+let pendingSample = Promise.resolve();
+let diagnosticsFailed = false;
+const sampledProcesses = new Set();
+const execute = promisify(execFile);
+
+async function sampleIosApp() {
+  try {
+    // pgrep returns 1 normally between scenarios while the app is uninstalled.
+    let processes;
+    try {
+      processes = await execute("pgrep", ["-x", "BibleOnSite"], { timeout: 5000 });
+    } catch (error) {
+      if (error.code === 1) return;
+      throw error;
+    }
+    for (const pid of processes.stdout.trim().split(/\s+/)) {
+      if (!pid || sampledProcesses.has(pid)) continue;
+      sampledProcesses.add(pid);
+      await execute("sample", [pid, "2", "1", "-mayDie", "-file", resolve(artifacts, `native-stack-${pid}.txt`)],
+        { timeout: 15000 });
+    }
+  } catch (error) {
+    diagnosticsFailed = true;
+    writeFileSync(resolve(artifacts, "native-stack-error.txt"), String(error));
+    console.error("Could not sample the iOS app:", error);
+  }
+}
 const stop = () => { test?.kill(); server.kill(); };
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
@@ -85,17 +114,25 @@ try {
     env: { ...process.env, MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts,
       ...(wdaPath ? { MOBILE_WDA_PATH: wdaPath } : {}), APPIUM_SERVER: "http://127.0.0.1:4723" },
   });
+  if (platform === "ios") {
+    // One short native sample per app launch makes main-thread hangs diagnosable
+    // even when XCTest itself cannot retrieve a view tree from the frozen app.
+    sampleTimer = setInterval(() => { pendingSample = pendingSample.then(sampleIosApp); }, 60000);
+  }
   process.exitCode = await new Promise((resolveExit, reject) => {
     test.on("error", reject);
     test.on("exit", (code) => resolveExit(code ?? 1));
   });
 } finally {
+  clearInterval(sampleTimer);
+  await pendingSample;
+  if (diagnosticsFailed) process.exitCode ||= 1;
   try {
     const androidSdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT;
     const adb = androidSdk ? resolve(androidSdk, "platform-tools", process.platform === "win32" ? "adb.exe" : "adb") : "adb";
     const nativeLog = platform === "android"
       ? execFileSync(adb, ["-s", process.env.MOBILE_UDID, "logcat", "-d"], { encoding: "utf8", timeout: 30000, maxBuffer: 20 * 1024 * 1024, windowsHide: true })
-      : execFileSync("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID, "log", "show", "--style", "compact", "--last", "10m", "--predicate", 'process == "BibleOnSite"'], { encoding: "utf8", timeout: 30000, maxBuffer: 20 * 1024 * 1024 });
+      : execFileSync("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID, "log", "show", "--style", "compact", "--last", `${Math.ceil((Date.now() - runStarted) / 1000)}s`, "--predicate", 'process == "BibleOnSite"'], { encoding: "utf8", timeout: 30000, maxBuffer: 20 * 1024 * 1024 });
     writeFileSync(resolve(artifacts, "device.log"), nativeLog);
     if (platform === "ios") {
       const lifecycleLog = execFileSync("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,

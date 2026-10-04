@@ -72,6 +72,8 @@ public partial class LoadingPage : ContentPage
     private static async Task NavigateToMainPageAsync()
     {
         // Navigate to the main PerekPage
+        Console.WriteLine("[Startup] Navigating to PerekPage");
         await Shell.Current.GoToAsync("//PerekPage");
+        Console.WriteLine("[Startup] PerekPage navigation completed");
     }
 }

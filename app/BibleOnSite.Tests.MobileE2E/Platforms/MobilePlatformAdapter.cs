@@ -56,6 +56,7 @@ public abstract class MobilePlatformAdapter
                 ?? throw new ArgumentException("npm test must prepare MOBILE_WDA_PATH for iOS."));
             options.AddAdditionalAppiumOption("wdaStartupRetries", 1);
             options.AddAdditionalAppiumOption("wdaLaunchTimeout", 180000);
+            options.AddAdditionalAppiumOption("wdaConnectionTimeout", 90000);
         }
         return options;
     }
@@ -87,5 +88,5 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
     public override void GoBack(AppiumDriver driver) => driver.FindElement(FlyoutButton).Click();
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
         // Cover simulator/app preparation plus one bounded WDA startup attempt.
-        new IOSDriver(server, options, TimeSpan.FromMinutes(7));
+        new IOSDriver(server, options, TimeSpan.FromMinutes(4));
 }

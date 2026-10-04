@@ -54,13 +54,17 @@ public partial class PerekPage : ContentPage
 
     public PerekPage()
     {
+        Console.WriteLine("[Startup] PerekPage InitializeComponent");
         InitializeComponent();
+        Console.WriteLine("[Startup] PerekPage binding context");
         _viewModel = new PerekViewModel();
         BindingContext = _viewModel;
+        Console.WriteLine("[Startup] PerekPage resources and navigation");
         ForwardSelectedArticleIdChanged();
         SetupFontSizeResources();
         SetupCarouselNavigation();
         SetupExitButtonDragHandler();
+        Console.WriteLine("[Startup] PerekPage constructed");
     }
 
     public PerekPage(PerekViewModel viewModel)
@@ -347,9 +351,11 @@ public partial class PerekPage : ContentPage
 
     protected override async void OnAppearing()
     {
+        Console.WriteLine("[Startup] PerekPage appearing");
         base.OnAppearing();
         SubscribeRecitation();
         await InitializeRecitationAsync();
+        Console.WriteLine("[Startup] PerekPage recitation initialized");
 #if ANDROID
         MainActivity.TouchStarted += OnTouchStarted;
         MainActivity.SubscribeTouchDispatched(OnTouchDispatched);
