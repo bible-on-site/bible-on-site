@@ -744,11 +744,17 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.WEBSITE_NODE_CACHE_PATH }}
-          cache: npm
 
-      - name: Cache playwright binaries
-        uses: actions/cache@v6
+      - name: Restore npm cache
+        id: npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-website-${{ hashFiles(env.WEBSITE_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-npm-website-
+
+      - name: Restore playwright binaries
+        uses: actions/cache/restore@v6
         id: playwright-cache
         with:
           path: |
@@ -760,16 +766,31 @@ jobs:
         run: |
           npm ci --no-audit
 
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
+
       - name: Install Playwright Browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
+
+      - name: Save playwright binaries
+        if: ${{ github.ref == 'refs/heads/master' && steps.playwright-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
 
       - name: Install Playwright System Dependencies
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
-      - name: Build cache
-        uses: actions/cache@v6
+      - name: Restore Next.js build cache
+        id: nextjs-cache
+        uses: actions/cache/restore@v6
         with:
           path: ${{ env.WEBSITE_DIRECTORY }}/.next/cache
           key: ${{ runner.os }}-nextjs-${{ hashFiles(format('{0}/package-lock.json', env.WEBSITE_DIRECTORY)) }}-${{ hashFiles(format('{0}/**/*.js', env.WEBSITE_DIRECTORY), format('{0}/**/*.jsx', env.WEBSITE_DIRECTORY), format('{0}/**/*.ts', env.WEBSITE_DIRECTORY), format('{0}/**/*.tsx', env.WEBSITE_DIRECTORY)) }}
@@ -813,6 +834,7 @@ jobs:
         if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
 
       - name: Populate MySQL for build
@@ -829,6 +851,13 @@ jobs:
         env:
           DB_URL: ${{ (needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true') && 'mysql://root:test_123@127.0.0.1:3306/tanah_test' || '' }}
         run: npm run build
+
+      - name: Save Next.js build cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.nextjs-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.WEBSITE_DIRECTORY }}/.next/cache
+          key: ${{ steps.nextjs-cache.outputs.cache-primary-key }}
 
       - name: Verify approved recitation in the production build
         run: node scripts/verify-recitation-build.mjs
@@ -921,11 +950,17 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.WEBSITE_NODE_CACHE_PATH }}
-          cache: npm
 
-      - name: Cache playwright binaries
-        uses: actions/cache@v6
+      - name: Restore npm cache
+        id: npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-website-${{ hashFiles(env.WEBSITE_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-npm-website-
+
+      - name: Restore playwright binaries
+        uses: actions/cache/restore@v6
         id: playwright-cache
         with:
           path: |
@@ -937,6 +972,13 @@ jobs:
         run: |
           node --version && npm --version
           npm ci --no-audit
+
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
 
       - name: Verify Lockfile Sync With Packaging npm
         id: npm_lockfile_packaging_check
@@ -950,6 +992,13 @@ jobs:
       - name: Install Playwright Browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
+
+      - name: Save playwright binaries
+        if: ${{ github.ref == 'refs/heads/master' && steps.playwright-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
 
       - name: Install Playwright System Dependencies
         if: steps.playwright-cache.outputs.cache-hit == 'true'
@@ -992,6 +1041,7 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
 
       # Build only the seeder used by the E2E launcher, not every data pipeline.
@@ -1103,12 +1153,25 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.ADMIN_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.ADMIN_NODE_CACHE_PATH }}
-          cache: npm
+
+      - name: Restore npm cache
+        id: npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-admin-${{ hashFiles(env.ADMIN_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-npm-admin-
 
       - name: Install npm Dependencies
         id: npm_ci
         run: npm ci --no-audit
+
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
 
       - name: Verify Lockfile Sync With Packaging npm
         id: npm_lockfile_packaging_check
@@ -1183,6 +1246,7 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
 
       # Build only the two seeders used by the E2E launcher.
@@ -1267,6 +1331,7 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: |
             ${{ env.API_DIRECTORY }}
             ${{ env.DATA_DIRECTORY }}
@@ -1286,14 +1351,27 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
-          cache: npm
+
+      - name: Restore npm cache
+        id: devops-npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-devops-${{ hashFiles(env.DEVOPS_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-npm-devops-
 
       - name: Install devops npm Dependencies
         id: devops_npm_ci
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           npm ci --no-audit
+
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.devops-npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.devops-npm-cache.outputs.cache-primary-key }}
 
       - name: Install and start MySQL
         id: mysql
@@ -1309,14 +1387,27 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.API_TESTS_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.API_TESTS_NODE_CACHE_PATH }}
-          cache: npm
+
+      - name: Restore npm cache
+        id: tests-npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-api-tests-${{ hashFiles(env.API_TESTS_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-npm-api-tests-
 
       - name: Install Tests npm Dependencies
         id: tests_npm_ci
         working-directory: ${{ env.API_TESTS_DIRECTORY }}
         run: |
           npm ci --no-audit
+
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.tests-npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.tests-npm-cache.outputs.cache-primary-key }}
 
       # API tests use Playwright's HTTP request fixture and node:http2 only;
       # they do not launch a browser or need browser/system-dependency installs.
@@ -1440,11 +1531,16 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Cache NuGet packages
-        uses: actions/cache@v6
+      - name: Hash NuGet dependency inputs
+        id: nuget-key
+        run: node ${{ github.workspace }}/devops/github/ci/nuget-cache-key.mjs
+
+      - name: Restore NuGet packages
+        id: nuget-cache
+        uses: actions/cache/restore@v6
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/BibleOnSite.Tests.csproj', '**/BibleOnSite.csproj') }}
+          key: ${{ runner.os }}-nuget-${{ steps.nuget-key.outputs.hash }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 
@@ -1463,6 +1559,13 @@ jobs:
 
       - name: Run Unit Tests with Coverage
         run: dotnet run --project devops -- CoverageUnit --configuration Release
+
+      - name: Save NuGet packages
+        if: ${{ github.ref == 'refs/heads/master' && steps.nuget-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
 
       - name: Store App Unit JUnit Report
         uses: actions/upload-artifact@v7
@@ -1492,6 +1595,7 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: |
             ${{ env.API_DIRECTORY }}
             ${{ env.DATA_DIRECTORY }}
@@ -1583,11 +1687,16 @@ jobs:
           # Keep in sync with the maui-ios workload below; see https://github.com/bible-on-site/bible-on-site/issues/1871
           dotnet-version: "10.0.401"
 
-      - name: Cache NuGet packages
-        uses: actions/cache@v6
+      - name: Hash NuGet dependency inputs
+        id: nuget-key
+        run: node ${{ github.workspace }}/devops/github/ci/nuget-cache-key.mjs
+
+      # PR-only job: Package iOS (IPA) saves this key on master.
+      - name: Restore NuGet packages
+        uses: actions/cache/restore@v6
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-maui-ios-${{ hashFiles('app/**/*.csproj') }}
+          key: ${{ runner.os }}-nuget-maui-ios-${{ steps.nuget-key.outputs.hash }}
           restore-keys: |
             ${{ runner.os }}-nuget-maui-ios-
             ${{ runner.os }}-nuget-
@@ -1687,6 +1796,7 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.BULLETIN_DIRECTORY }}
           cache-on-failure: true
           shared-key: "bulletin-rust"
@@ -1763,7 +1873,7 @@ jobs:
       - name: Verify canonical text preprocessing
         run: node --test data/sefaria/pipelines/tanah-view/tests/preprocessor.test.mjs
       - name: Verify module release and shared decoder check routing
-        run: node --test devops/github/ci/determine-changes.test.mjs devops/github/ci/auto-create-pr.test.mjs
+        run: node --test devops/github/ci/determine-changes.test.mjs devops/github/ci/auto-create-pr.test.mjs devops/github/ci/nuget-cache-key.test.mjs
       - name: Install storage test dependencies
         run: npm ci --prefix devops
       - name: Verify repeatable deployment recovery
@@ -1826,6 +1936,7 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
           cache-on-failure: true
           shared-key: "data-rust"
@@ -2043,6 +2154,7 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
           cache-on-failure: true
           shared-key: "data-rust"
@@ -2466,14 +2578,27 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
-          cache: npm
+
+      - name: Restore npm cache
+        id: devops-npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-devops-${{ hashFiles(env.DEVOPS_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-npm-devops-
 
       - name: Install devops npm Dependencies
         id: devops_npm_ci
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           npm ci --no-audit
+
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.devops-npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.devops-npm-cache.outputs.cache-primary-key }}
 
       - name: Merge Test Coverage (Website + API)
         run: npm run coverage:merge
