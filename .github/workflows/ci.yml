@@ -1458,6 +1458,9 @@ jobs:
           dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android
           rm -f $GITHUB_WORKSPACE/global.json
 
+      - name: Verify native canonical recitation word identities
+        run: python3 ../data/recitation/audit_native.py
+
       - name: Run Unit Tests with Coverage
         run: dotnet run --project devops -- CoverageUnit --configuration Release
 
