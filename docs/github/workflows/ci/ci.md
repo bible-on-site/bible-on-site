@@ -16,6 +16,7 @@
   - Downloads and re-uploads master artifacts to make them available in current run (website, API, app, bulletin, **admin**)
 - **Determine Changes**: One job ([`determine-changes.ts`](../../../../devops/github/ci/determine-changes.ts)) outputs `<module>_module_changed` / `<module>_ci_changed` for every module
 - **Build LCOV Docker Image**: Prepare coverage tooling
+- **Build Sefaria MongoDB Docker Image**: Publish the Data integration-test MongoDB image to GHCR, tagged by the git tree hash of `data/sefaria/mongodb-docker`, only when that tag is missing
 
 ### 2. CI Jobs (Conditional)
 Each module CI runs only if: module changed OR CI files changed OR baseline unavailable
