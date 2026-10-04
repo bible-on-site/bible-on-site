@@ -1,3 +1,5 @@
+import "../../../shared/recitation/mp3-gapless.js";
+
 type Clip = { startMs: number; endMs: number; ended: () => void };
 
 /** Play exact decoded sample ranges; HTMLMediaElement MP3 seeks can start late. */
@@ -72,7 +74,13 @@ export class RecitationAudio {
 				if (hash !== this.sha256)
 					throw new Error("Recording differs from aligned source");
 				if (this.disposed) throw new Error("Player disposed");
-				return this.context.decodeAudioData(bytes);
+				const gapless = globalThis.recitationMp3.read(bytes);
+				const decoded = await this.context.decodeAudioData(bytes);
+				return globalThis.recitationMp3.normalize(
+					decoded,
+					gapless,
+					this.context,
+				);
 			})().catch((error) => {
 				this.buffer = null;
 				throw error;

@@ -1,5 +1,5 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head><body>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><!--recitation-mp3--></head><body>
 <script>
 // Local decoder only. Playback remains native; no browser autoplay permission is needed.
 globalThis.recitation = (() => {
@@ -21,10 +21,11 @@ globalThis.recitation = (() => {
         context = new (globalThis.AudioContext || globalThis.webkitAudioContext)();
         const binary = atob(base64);
         const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+        const gapless = recitationMp3.read(bytes);
         context.decodeAudioData(bytes.buffer).then(decoded => {
             if (current !== generation) return;
-            buffer = decoded;
-            status = { state: "ready", sampleRate: decoded.sampleRate, frames: decoded.length };
+            buffer = recitationMp3.normalize(decoded, gapless, context);
+            status = { state: "ready", sampleRate: buffer.sampleRate, frames: buffer.length };
         }).catch(() => { if (current === generation) status = { state: "error" }; });
         return result(status);
     }

@@ -41,12 +41,16 @@ public sealed class WebAudioRecitationDecoder : IRecitationAudioDecoder
             {
                 using var input = await FileSystem.Current.OpenAppPackageFileAsync("recitation-audio.html");
                 using var reader = new StreamReader(input);
+                using var gaplessInput = await FileSystem.Current.OpenAppPackageFileAsync("recitation-mp3.js");
+                using var gaplessReader = new StreamReader(gaplessInput);
+                var gapless = await gaplessReader.ReadToEndAsync(cancellationToken);
                 var loaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 void Navigated(object? sender, WebNavigatedEventArgs e) => loaded.TrySetResult();
                 view.Navigated += Navigated;
                 try
                 {
-                    view.Source = new HtmlWebViewSource { Html = await reader.ReadToEndAsync(cancellationToken) };
+                    var html = await reader.ReadToEndAsync(cancellationToken);
+                    view.Source = new HtmlWebViewSource { Html = html.Replace("<!--recitation-mp3-->", "<script>" + gapless + "</script>", StringComparison.Ordinal) };
                     await loaded.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
                     _initialized = true;
                 }

@@ -59,6 +59,9 @@ jobs:
             # Approved timing changes must package/release the website too.
             MODULE_PATTERN="$MODULE_PATTERN|^data/recitation/recitation\.sqlite$|^app/BibleOnSite/Resources/Raw/recitation-audio\.html$"
           fi
+          if [ "${{ inputs.module_directory }}" = "app" ]; then
+            MODULE_PATTERN="$MODULE_PATTERN|^web/shared/recitation/"
+          fi
           MODULE_CHANGED=$(git diff --name-only $BASE_SHA HEAD | grep -q -E "$MODULE_PATTERN" && echo "true" || echo "false")
           # Convert comma-separated paths to regex pattern
           CI_PATHS=$(echo "${{ inputs.ci_path }}" | sed 's/,/\\|/g' | sed 's/\./\\./g')
