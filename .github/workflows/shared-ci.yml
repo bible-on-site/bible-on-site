@@ -59,10 +59,6 @@ jobs:
             # Approved timing changes must package/release the website too.
             MODULE_PATTERN="$MODULE_PATTERN|^data/recitation/recitation\.sqlite$|^app/BibleOnSite/Resources/Raw/recitation-audio\.html$"
           fi
-          if [ "${{ inputs.module_directory }}" = "app" ]; then
-            # Decoder upgrades must also validate the matching packaged app copy.
-            MODULE_PATTERN="$MODULE_PATTERN|^web/bible-on-site/(package(-lock)?\.json|src/lib/recitation-audio\.ts)$"
-          fi
           MODULE_CHANGED=$(git diff --name-only $BASE_SHA HEAD | grep -q -E "$MODULE_PATTERN" && echo "true" || echo "false")
           # Convert comma-separated paths to regex pattern
           CI_PATHS=$(echo "${{ inputs.ci_path }}" | sed 's/,/\\|/g' | sed 's/\./\\./g')
@@ -89,6 +85,15 @@ jobs:
           fi
           echo "Final CI paths pattern: ${CI_PATHS}"
           CI_CHANGED=$(git diff --name-only $BASE_SHA HEAD | grep -q -E "${CI_PATHS}" && echo "true" || echo "false")
+          if [ "${{ inputs.module_directory }}" = "app" ]; then
+            # Shared decoder changes need native checks. Only changes to the
+            # packaged app itself need an app version, package and release.
+            # Website timing batches also change their package version files.
+            DECODER_PATTERN='^web/bible-on-site/(package(-lock)?\.json|src/lib/recitation-audio\.ts)$'
+            if git diff --name-only $BASE_SHA HEAD | grep -q -E "$DECODER_PATTERN"; then
+              CI_CHANGED="true"
+            fi
+          fi
           echo "Module directory being checked: ${{ inputs.module_name }}"
           echo "CI paths being checked: ${{ inputs.ci_path }}"
           echo "MODULE_CHANGED: $MODULE_CHANGED"
