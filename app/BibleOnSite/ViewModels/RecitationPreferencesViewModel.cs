@@ -121,7 +121,7 @@ public partial class RecitationPreferencesViewModel : ObservableObject
         IsDownloading = true;
         using var cancellation = new CancellationTokenSource();
         _download = cancellation;
-        try { await _recitation.UpdateAsync(cancellation.Token); Status = "חבילת ההקראה מעודכנת."; }
+        try { await _recitation.UpdateAsync(cancellation.Token); await LoadAsync(); Status = "חבילת ההקראה מעודכנת."; }
         catch (OperationCanceledException) { Status = "העדכון הופסק. החבילה המותקנת נשארה זמינה."; }
         catch (Exception) { Status = "העדכון לא הצליח. החבילה המותקנת נשארה זמינה."; }
         finally { _download = null; IsDownloading = false; Refresh(); }
