@@ -329,7 +329,7 @@ jobs:
         with:
           name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp/${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
       - name: Check Sefaria MongoDB image availability
@@ -619,7 +619,7 @@ jobs:
         with:
           name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp/lcov-docker-image.tar
-          retention-days: 400
+          retention-days: 90
 
   build_sefaria_mongo_docker:
     name: Build Sefaria MongoDB Docker Image
@@ -1044,7 +1044,7 @@ jobs:
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
           if-no-files-found: error
 
@@ -1054,7 +1054,7 @@ jobs:
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
   admin_ci:
@@ -1188,7 +1188,7 @@ jobs:
         with:
           name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
           if-no-files-found: error
 
@@ -1198,7 +1198,7 @@ jobs:
         with:
           name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
       - name: Store Admin E2E HTML Report
@@ -1375,7 +1375,7 @@ jobs:
         with:
           name: ${{ env.API_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.API_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
       - name: Store API Coverage Report (master)
@@ -1384,7 +1384,7 @@ jobs:
         with:
           name: ${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.API_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
   app_ci:
@@ -1523,7 +1523,7 @@ jobs:
         with:
           name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.APP_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
           if-no-files-found: error
 
@@ -1533,7 +1533,7 @@ jobs:
         with:
           name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.APP_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
   app_mobile_e2e:
@@ -1645,7 +1645,7 @@ jobs:
         with:
           name: ${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.BULLETIN_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
   recitation_ci:
@@ -1862,7 +1862,7 @@ jobs:
         with:
           name: ${{ env.DATA_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.DATA_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
       - name: Store Data Coverage Report (master)
@@ -1871,7 +1871,7 @@ jobs:
         with:
           name: ${{ env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.DATA_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
       - name: Stop MongoDB Container

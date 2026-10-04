@@ -34,7 +34,10 @@ public partial class AppShell : Shell
 
 	internal void CompleteStartup()
 	{
-		if (ReaderContent.Content is PerekPage) return;
+		if (ReaderContent.Content is PerekPage)
+		{
+			return;
+		}
 
 		// Reuse the startup ShellContent instead of creating a second native root.
 		// Clear the template first so MAUI replaces its cached loading page too.
