@@ -1,15 +1,18 @@
-/** @jest-environment node */
+/** @jest-environment jsdom */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { runInNewContext } from "node:vm";
 
 test("the shipped native PCM decoder inserts silence only between exact sample ranges", async () => {
-	const html = readFileSync(
-		resolve(
-			process.cwd(),
-			"../../app/BibleOnSite/Resources/Raw/recitation-audio.html",
+	const document = new DOMParser().parseFromString(
+		readFileSync(
+			resolve(
+				process.cwd(),
+				"../../app/BibleOnSite/Resources/Raw/recitation-audio.html",
+			),
+			"utf8",
 		),
-		"utf8",
+		"text/html",
 	);
 	const context = {
 		atob: (value: string) => Buffer.from(value, "base64").toString("binary"),
@@ -31,7 +34,9 @@ test("the shipped native PCM decoder inserts silence only between exact sample r
 			},
 		},
 	};
-	runInNewContext(html.split("<script>")[1].split("</script>")[0], context);
+	const script = document.querySelector("script")?.textContent;
+	expect(script).toBeTruthy();
+	runInNewContext(script ?? "", context);
 	const api = Reflect.get(context, "recitation");
 	api.load("AA==");
 	await Promise.resolve();
