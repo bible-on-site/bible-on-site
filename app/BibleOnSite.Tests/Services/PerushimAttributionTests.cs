@@ -2,6 +2,8 @@ using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.Tests.Support;
 using System.Text.Json;
+using Microsoft.Maui.ApplicationModel;
+using Microsoft.Maui.Devices;
 
 namespace BibleOnSite.Tests.Services;
 
@@ -63,6 +65,96 @@ public class PerushimAttributionTests
 
         (await service.GetPerushIdsForPerekAsync(4)).Should().Equal(13);
         service.IsAvailable.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task NativeRelease_WithJsonReflectionDisabled_ValidatesAndDisplaysMatchingNotes()
+    {
+        JsonSerializer.IsReflectionEnabledByDefault.Should().BeFalse();
+        await using var storage = new TestStorage();
+        await BundleCatalogAsync(storage);
+        await CreateNotesAsync(storage, "999", CurrentMapping);
+        var service = DiagnosticService(storage);
+        var catalog = new PerushimCatalogService(storage.FileSystem.Object);
+
+        var notes = await service.LoadNotesForPerekAsync(4, await catalog.GetPerushimByIdsAsync([13]));
+
+        notes.Should().ContainSingle().Which.PerushName.Should().Be("ביאור שטיינזלץ");
+        notes.Single().NoteContent.Should().Be(ModernNote);
+        var report = await service.GetDiagnosticsAsync();
+        report.Should().Contain("IsAvailable: True")
+            .And.Contain("Notes validation: Compatible catalog mapping (2 entries)")
+            .And.Contain("JSON reflection enabled by default: False");
+    }
+
+    [Fact]
+    public async Task Diagnostics_ExplainsReportedLegacyPackMismatch_WhenOdrFileExists()
+    {
+        await using var storage = new TestStorage();
+        await using var delivered = new TestStorage();
+        await BundleCatalogAsync(storage);
+        await CreateNotesAsync(storage, "1790678024");
+        await CreateNotesAsync(delivered, "1790678024");
+        var pad = NotesDeliveryTests.Pad();
+        pad.Setup(p => p.TryGetAssetPathAsync("perushim_notes", It.IsAny<CancellationToken>())).ReturnsAsync(delivered.Root);
+        var service = DiagnosticService(storage, pad);
+
+        var report = await service.GetDiagnosticsAsync();
+
+        report.Should().Contain("Platform: iOS")
+            .And.Contain("Local DB exists: True").And.Contain("PAD file at root: True")
+            .And.Contain("IsAvailable: False")
+            .And.Contain("Legacy build mismatch (notes=1790678024, catalog=200)");
+        (await service.TryDownloadNotesAsync()).Should().BeFalse();
+        (await service.GetPerushIdsForPerekAsync(4)).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("{\"13\":\"בכור שור\"}", "Catalog mapping mismatch (notes=1, catalog=2)")]
+    [InlineData("null", "Catalog mapping mismatch (notes=0, catalog=2)")]
+    [InlineData("invalid JSON", "Validation error: JsonException:")]
+    public async Task Diagnostics_RetainsValidationFailureReason(string snapshot, string reason)
+    {
+        await using var storage = new TestStorage();
+        await BundleCatalogAsync(storage);
+        await CreateNotesAsync(storage, "200");
+        var db = await storage.CreateDatabaseAsync(NotesDb);
+        await db.ExecuteAsync("INSERT INTO _metadata VALUES ('perush_catalog',?)", snapshot);
+        await db.CloseAsync();
+        var service = DiagnosticService(storage);
+
+        await service.InitializeAsync();
+
+        (await service.GetDiagnosticsAsync()).Should().Contain("IsAvailable: False").And.Contain(reason);
+    }
+
+    [Fact]
+    public async Task Download_RecoversFromRejectedPackWithEqualTimestampAndUpdatesDiagnosticStatus()
+    {
+        await using var storage = new TestStorage();
+        await using var delivered = new TestStorage();
+        await BundleCatalogAsync(storage);
+        await CreateNotesAsync(storage, "300", new() { [13] = "בכור שור" });
+        await CreateNotesAsync(delivered, "300", CurrentMapping);
+        var pad = NotesDeliveryTests.Pad();
+        pad.Setup(p => p.TryGetAssetPathAsync("perushim_notes", It.IsAny<CancellationToken>())).ReturnsAsync(delivered.Root);
+        var service = DiagnosticService(storage, pad);
+        await service.InitializeAsync();
+        service.IsAvailable.Should().BeFalse();
+
+        (await service.TryDownloadNotesAsync()).Should().BeTrue();
+
+        service.IsAvailable.Should().BeTrue();
+        (await service.GetDiagnosticsAsync()).Should().Contain("Compatible catalog mapping (2 entries)");
+        pad.Verify(p => p.FetchAsync(It.IsAny<string>(), It.IsAny<IProgress<double>?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    private static PerushimNotesService DiagnosticService(TestStorage storage, Mock<IPadDeliveryService>? pad = null)
+    {
+        var device = new Mock<IDeviceInfo>();
+        device.SetupGet(d => d.Platform).Returns(DevicePlatform.iOS);
+        return new PerushimNotesService((pad ?? NotesDeliveryTests.Pad()).Object, storage.FileSystem.Object,
+            device.Object, Mock.Of<IAppInfo>());
     }
 
     [Theory]
@@ -185,7 +277,8 @@ public class PerushimAttributionTests
         await db.ExecuteAsync("INSERT INTO _metadata VALUES ('build_timestamp',?)", timestamp);
         if (mapping != null)
         {
-            await db.ExecuteAsync("INSERT INTO _metadata VALUES ('perush_catalog',?)", JsonSerializer.Serialize(mapping));
+            await db.ExecuteAsync("INSERT INTO _metadata VALUES ('perush_catalog',?)",
+                JsonSerializer.Serialize(mapping, AppJsonContext.Default.PerushCatalog));
         }
         await db.ExecuteAsync("INSERT INTO note VALUES (13,4,3,0,?)", ModernNote);
         await db.CloseAsync();

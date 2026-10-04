@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace BibleOnSite.Models;
@@ -74,7 +73,6 @@ public sealed record RecitationTrack(int PerekId, string AudioUrl, string AudioS
 
 public sealed record RecitationPackage(int Version, List<RecitationTrack> Tracks)
 {
-    public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     public void Validate()
     {
         if (Version != 1 || Tracks is not { Count: > 0 } || Tracks.Select(t => t.PerekId).Distinct().Count() != Tracks.Count)

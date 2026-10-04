@@ -109,6 +109,22 @@ public class PreferencesServiceTests : IDisposable
     }
 
     [Fact]
+    public void Bookmarks_WithJsonReflectionDisabled_PersistAcrossServiceReloads()
+    {
+        System.Text.Json.JsonSerializer.IsReflectionEnabledByDefault.Should().BeFalse();
+        _storage.Set("bookmarkedPerakim", "[1,2,3]");
+        _service.Load();
+        _service.BookmarkedPerakim.Should().BeEquivalentTo([1, 2, 3]);
+
+        _service.AddBookmark(4);
+        _service.RemoveBookmark(2);
+        var reloaded = PreferencesService.CreateForTesting(_storage);
+        reloaded.Load();
+
+        reloaded.BookmarkedPerakim.Should().BeEquivalentTo([1, 3, 4]);
+    }
+
+    [Fact]
     public void AddBookmark_WhenAlreadyBookmarked_DoesNotRaiseEvent()
     {
         // Arrange

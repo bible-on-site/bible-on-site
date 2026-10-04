@@ -79,6 +79,30 @@ public class NotesDeliveryTests
         (await service.GetPerushIdsForPerekAsync(1)).Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Diagnostics_WhenDeliveryPathThrows_StillProducesSupportReport(bool localDatabaseExists)
+    {
+        await using var storage = new TestStorage();
+        if (localDatabaseExists)
+        {
+            await storage.CreateDatabaseAsync(DbName, "CREATE TABLE note (perush_id INTEGER)");
+        }
+        var pad = Pad();
+        pad.Setup(p => p.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new IOException("store unavailable"));
+
+        var report = await Create(storage, pad).GetDiagnosticsAsync();
+
+        report.Should().Contain("PAD/ODR path error: IOException: store unavailable")
+            .And.Contain("delivery status").And.Contain($"IsAvailable: {localDatabaseExists}");
+        if (!localDatabaseExists)
+        {
+            report.Should().Contain("Initialization error: IOException: store unavailable");
+        }
+    }
+
     [Fact]
     public async Task Diagnostics_RecognizesBundledNotes_AndLegacyMissingMetadata()
     {

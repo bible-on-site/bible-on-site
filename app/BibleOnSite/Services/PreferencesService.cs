@@ -1,3 +1,5 @@
+using BibleOnSite.Models;
+
 namespace BibleOnSite.Services;
 
 /// <summary>
@@ -189,7 +191,7 @@ public class PreferencesService
         {
             try
             {
-                var bookmarks = System.Text.Json.JsonSerializer.Deserialize<int[]>(bookmarksJson);
+                var bookmarks = System.Text.Json.JsonSerializer.Deserialize(bookmarksJson, AppJsonContext.Default.BookmarkedPerakim);
                 _bookmarkedPerakim = bookmarks != null ? new HashSet<int>(bookmarks) : new HashSet<int>();
             }
             catch (Exception)
@@ -251,7 +253,7 @@ public class PreferencesService
 
     private void SaveBookmarks()
     {
-        var json = System.Text.Json.JsonSerializer.Serialize(_bookmarkedPerakim.ToArray());
+        var json = System.Text.Json.JsonSerializer.Serialize(_bookmarkedPerakim.ToArray(), AppJsonContext.Default.BookmarkedPerakim);
         _storage.Set(BookmarkedPerakimKey, json);
     }
 
