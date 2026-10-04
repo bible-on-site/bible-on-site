@@ -29,6 +29,8 @@ Each module CI runs only if: module changed OR CI files changed OR baseline unav
 | App CI | `app` | Lint, Unit, Integration |
 | Data CI | `data` | Lint, Unit |
 
+**Master pushes the merge queue already validated** skip the module test jobs. The merge queue fast-forwards master, so the `push` run would re-test the commit its `merge_group` run passed. [`find-validated-merge-group-run.ts`](../../../../devops/github/ci/find-validated-merge-group-run.ts) (in *Setup Environment Variables*) looks for a completed, successful `merge_group` run of this workflow whose head is `github.sha`, whose queue base is `github.event.before`, and whose *Cross Module CI* passed. When found, *Restore Validated Baselines* republishes that run's coverage and perushim artifacts under the `*.master` names, so Codecov, packaging, Data CD and later baselines use the validated results. Direct pushes, other events and pushes without such a run test as before.
+
 ### 3. Cross Module CI
 - Restores coverage from module CIs (or master baseline if skipped)
 - Publishes coverage to Codecov (per-module flags: `website`, `api`, `app`, `bulletin`, `admin`, …)
