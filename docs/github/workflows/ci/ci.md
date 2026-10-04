@@ -3,7 +3,6 @@
 | Workflow | Purpose |
 |----------|---------|
 | [`ci.yml`](../../../../.github/workflows/ci.yml) | Main CI pipeline (test, build, package, release) |
-| [`shared-ci.yml`](../../../../.github/workflows/shared-ci.yml) | Shared change detection logic |
 | [`shared-dockerize.yml`](../../../../.github/workflows/shared-dockerize.yml) | Docker image packaging |
 | [`app-package.yml`](../../../../.github/workflows/app-package.yml) | App packaging (MSIX, AAB) |
 | [`shared-release.yml`](../../../../.github/workflows/shared-release.yml) | Release automation (tag, GitHub Release, trigger CD) |
@@ -15,8 +14,9 @@
 - **Setup Environment Variables**: Extract Playwright versions, set env vars
 - **Determine Baseline Availability**: Check if master coverage artifacts exist (cross-workflow)
   - Downloads and re-uploads master artifacts to make them available in current run (website, API, app, bulletin, **admin**)
-- **Determine Changes**: Per-module change detection (Website, API, App, Data)
+- **Determine Changes**: One job ([`determine-changes.ts`](../../../../devops/github/ci/determine-changes.ts)) outputs `<module>_module_changed` / `<module>_ci_changed` for every module
 - **Build LCOV Docker Image**: Prepare coverage tooling
+- **Build Sefaria MongoDB Docker Image**: Publish the Data integration-test MongoDB image to GHCR, tagged by the git tree hash of `data/sefaria/mongodb-docker`, only when that tag is missing
 
 ### 2. CI Jobs (Conditional)
 Each module CI runs only if: module changed OR CI files changed OR baseline unavailable
@@ -78,10 +78,10 @@ if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_w
 ```yaml
 release_new_module:
   name: Release New Module
-  needs: [setup_env, determine_new_module_changes, cross_module_ci, package_new_module]
+  needs: [setup_env, determine_changes, cross_module_ci, package_new_module]
   # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
   # Also verify cross_module_ci and package_new_module passed to ensure quality gate
-  if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_new_module.result == 'success' && needs.package_new_module.outputs.module_version != '' && needs.determine_new_module_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+  if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_new_module.result == 'success' && needs.package_new_module.outputs.module_version != '' && needs.determine_changes.outputs.new_module_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
 ```
 
 **Affected Jobs:** `release_website`, `release_api`, `release_app`
