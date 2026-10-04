@@ -99,7 +99,6 @@
 
 		<!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
 		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
-		<MauiAsset Include="..\..\web\shared\recitation\mp3-gapless.js" LogicalName="recitation-mp3.js" />
 	</ItemGroup>
 
 	<!-- Firebase: google-services.json for Android (same Firebase project as legacy app: tanah-al-haperek) -->

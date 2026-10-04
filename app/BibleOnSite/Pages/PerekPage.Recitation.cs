@@ -19,7 +19,7 @@ public partial class PerekPage
     private bool _recitationBusy;
     private bool _playWhenOpened;
     private string? _playingKey;
-    private WebAudioRecitationDecoder? _audioDecoder;
+    private MpegRecitationAudioDecoder? _audioDecoder;
     private bool RecitationEnabled => PreferencesService.Instance.RecitationEnabled && RecitationService.Instance.IsInstalled;
 
     private void SubscribeRecitation()
@@ -320,7 +320,7 @@ public partial class PerekPage
         UpdateSelectionBar();
         try
         {
-            _audioDecoder ??= new WebAudioRecitationDecoder(RecitationDecoderView);
+            _audioDecoder ??= new MpegRecitationAudioDecoder(RecitationDecoderView);
             var path = await RecitationService.Instance.PrepareAudioAsync(perek.PerekId, perek.Pasukim, start, end, request.Token, ranges, _audioDecoder);
             if (request.IsCancellationRequested || _viewModel.Perek != perek || !RecitationEnabled)
             {

@@ -12,6 +12,18 @@ const sources: {
 	onended: null | (() => void);
 }[] = [];
 const decode = jest.fn();
+const free = jest.fn();
+const pcm = {
+	channelData: [new Float32Array(1000)],
+	samplesDecoded: 1000,
+	sampleRate: 100,
+	errors: [],
+};
+jest.mock("mpg123-decoder", () => ({
+	MPEGDecoderWebWorker: jest
+		.fn()
+		.mockImplementation(() => ({ ready: Promise.resolve(), decode, free })),
+}));
 const close = jest.fn();
 const resume = jest.fn();
 const originalContext = global.AudioContext;
@@ -20,7 +32,8 @@ const originalFetch = global.fetch;
 beforeEach(() => {
 	sources.length = 0;
 	audioClock = 10;
-	decode.mockResolvedValue({ duration: 10 });
+	decode.mockResolvedValue(pcm);
+	free.mockResolvedValue(undefined);
 	close.mockResolvedValue(undefined);
 	resume.mockResolvedValue(undefined);
 	Object.defineProperty(global, "crypto", {
@@ -37,7 +50,10 @@ beforeEach(() => {
 		get currentTime() {
 			return audioClock;
 		},
-		decodeAudioData: decode,
+		createBuffer: () => ({
+			duration: 10,
+			getChannelData: () => new Float32Array(1000),
+		}),
 		resume,
 		close,
 		destination: {},
@@ -83,8 +99,27 @@ test("rejects changed audio before decoding or playback", async () => {
 	player.dispose();
 });
 
+test.each([
+	{ ...pcm, errors: [{ message: "invalid MP3 frame" }] },
+	{ ...pcm, samplesDecoded: 0 },
+])(
+	"rejects incomplete decoding, frees the worker and allows a clean retry",
+	async (invalid) => {
+		decode.mockResolvedValueOnce(invalid);
+		const player = new RecitationAudio("/audio.mp3", hash);
+		await expect(player.play(100, 200, jest.fn())).rejects.toThrow(
+			"accurately",
+		);
+		expect(sources).toHaveLength(0);
+		expect(free).toHaveBeenCalledTimes(1);
+		await expect(player.play(100, 200, jest.fn())).resolves.toBe(true);
+		expect(free).toHaveBeenCalledTimes(2);
+		player.dispose();
+	},
+);
+
 test("a stop during decoding prevents delayed playback; newest request wins", async () => {
-	let resolve: (value: { duration: number }) => void = () => {};
+	let resolve: (value: typeof pcm) => void = () => {};
 	decode.mockImplementationOnce(
 		() =>
 			new Promise((done) => {
@@ -97,7 +132,7 @@ test("a stop during decoding prevents delayed playback; newest request wins", as
 		await new Promise((done) => setTimeout(done, 0));
 	player.stop();
 	const latest = player.play(300, 700, jest.fn());
-	resolve({ duration: 10 });
+	resolve(pcm);
 	expect(await first).toBe(false);
 	expect(await latest).toBe(true);
 	expect(sources).toHaveLength(1);
@@ -211,7 +246,7 @@ test("preparation reports actual received bytes and reuses the verified audio fo
 		100,
 		100,
 	]);
-	expect(decode).toHaveBeenCalledWith(bytes);
+	expect(decode).toHaveBeenCalledWith(new Uint8Array(bytes));
 	expect(sources).toHaveLength(0);
 	await player.play(100, 200, jest.fn());
 	expect(global.fetch).toHaveBeenCalledTimes(1);
@@ -252,7 +287,7 @@ test("browsers without a response stream finish preparation using the complete b
 	const player = new RecitationAudio("/audio.mp3", hash, progress);
 	await player.prepare();
 	expect(progress.mock.calls.map(([value]) => value)).toEqual([null, 100]);
-	expect(decode).toHaveBeenCalledWith(bytes);
+	expect(decode).toHaveBeenCalledWith(new Uint8Array(bytes));
 	player.dispose();
 });
 
@@ -271,7 +306,7 @@ test("a broken download releases its reader and can be prepared again", async ()
 	expect(reader.releaseLock).toHaveBeenCalledTimes(1);
 	expect(decode).not.toHaveBeenCalled();
 	await player.prepare();
-	expect(decode).toHaveBeenCalledWith(bytes);
+	expect(decode).toHaveBeenCalledWith(new Uint8Array(bytes));
 	player.dispose();
 });
 

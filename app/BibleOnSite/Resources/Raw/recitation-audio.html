@@ -1,9 +1,9 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><!--recitation-mp3--></head><body>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head><body>
 <script>
 // Local decoder only. Playback remains native; no browser autoplay permission is needed.
 globalThis.recitation = (() => {
-    let context, buffer, upload = [], wave, status = { state: "idle" }, generation = 0;
+    let buffer, upload = [], wave, status = { state: "idle" }, generation = 0;
     const result = value => JSON.stringify(value);
     function reset() {
         generation++;
@@ -11,36 +11,35 @@ globalThis.recitation = (() => {
         wave = null;
         upload = [];
         status = { state: "idle" };
-        context?.close();
-        context = null;
     }
     function load(base64) {
         reset();
         const current = generation;
         status = { state: "loading" };
-        context = new (globalThis.AudioContext || globalThis.webkitAudioContext)();
         const binary = atob(base64);
         const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
-        const gapless = recitationMp3.read(bytes);
-        context.decodeAudioData(bytes.buffer).then(decoded => {
+        const decoder = new globalThis.recitationMpeg.MPEGDecoder();
+        decoder.ready.then(() => {
             if (current !== generation) return;
-            buffer = recitationMp3.normalize(decoded, gapless, context);
-            status = { state: "ready", sampleRate: buffer.sampleRate, frames: buffer.length };
-        }).catch(() => { if (current === generation) status = { state: "error" }; });
+            const decoded = decoder.decode(bytes);
+            if (decoded.errors.length || !decoded.samplesDecoded) throw new Error("Invalid decoded recording");
+            buffer = decoded;
+            status = { state: "ready", sampleRate: buffer.sampleRate, frames: buffer.samplesDecoded };
+        }).finally(() => decoder.free()).catch(error => { if (current === generation) status = { state: "error", error: String(error) }; });
         return result(status);
     }
     function clip(ranges) {
         if (!buffer) throw new Error("Audio is not decoded");
         if (!Array.isArray(ranges) || !ranges.length) throw new Error("Empty selection");
         const cuts = ranges.map(({ start, end }) => {
-            if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end * buffer.sampleRate / 1000 > buffer.length)
+            if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end * buffer.sampleRate / 1000 > buffer.samplesDecoded)
                 throw new Error("Invalid original interval");
             const from = Math.round(start * buffer.sampleRate / 1000);
             const to = Math.round(end * buffer.sampleRate / 1000);
             if (to <= from) throw new Error("Empty word");
             return { from, to };
         });
-        const channels = buffer.numberOfChannels;
+        const channels = buffer.channelData.length;
         const frames = cuts.reduce((n, c) => n + c.to - c.from, 0);
         const bytes = new Uint8Array(44 + frames * channels * 2);
         const view = new DataView(bytes.buffer);
@@ -50,7 +49,7 @@ globalThis.recitation = (() => {
         view.setUint32(24, buffer.sampleRate, true); view.setUint32(28, buffer.sampleRate * channels * 2, true);
         view.setUint16(32, channels * 2, true); view.setUint16(34, 16, true);
         text(36, "data"); view.setUint32(40, bytes.length - 44, true);
-        const pcm = Array.from({ length: channels }, (_, i) => buffer.getChannelData(i));
+        const pcm = buffer.channelData;
         let offset = 44;
         for (const { from, to } of cuts) for (let frame = from; frame < to; frame++) for (let ch = 0; ch < channels; ch++) {
             view.setInt16(offset, Math.max(-32768, Math.min(32767, Math.round(pcm[ch][frame] * 32768))), true);

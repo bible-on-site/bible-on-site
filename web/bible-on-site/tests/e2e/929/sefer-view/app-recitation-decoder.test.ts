@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -6,10 +7,19 @@ import { expect } from "@playwright/test";
 import { test } from "../../../util/playwright/test-fixture";
 
 const root = resolve(process.cwd(), "../..");
-const gapless = readFileSync(
-	resolve(root, "web/shared/recitation/mp3-gapless.js"),
+const decoderScript = readFileSync(
+	resolve(root, "app/BibleOnSite/Resources/Raw/recitation-mpeg.min.js"),
 	"utf8",
 );
+if (
+	decoderScript !==
+	execFileSync(
+		process.execPath,
+		["scripts/build-native-recitation-decoder.mjs", "--stdout"],
+		{ encoding: "utf8" },
+	)
+)
+	throw new Error("App and website MPEG decoder versions differ");
 const html = readFileSync(
 	resolve(root, "app/BibleOnSite/Resources/Raw/recitation-audio.html"),
 	"utf8",
@@ -96,19 +106,8 @@ for (const fixture of [
 			}),
 		);
 		await page.goto("/recitation-decoder");
-		await page.evaluate(() => {
-			const Original =
-				window.AudioContext ||
-				(window as unknown as { webkitAudioContext: typeof AudioContext })
-					.webkitAudioContext;
-			window.AudioContext = class extends Original {
-				constructor() {
-					super({ sampleRate: 44100 });
-				}
-			};
-		});
 		await page.setContent(html);
-		await page.addScriptTag({ content: gapless });
+		await page.evaluate(decoderScript);
 		await page.evaluate("recitation.begin()");
 		const encoded = fixture.recording.toString("base64");
 		for (let offset = 0; offset < encoded.length; offset += 32768) {
@@ -118,7 +117,13 @@ for (const fixture of [
 		}
 		await page.evaluate("recitation.finish()");
 		await expect
-			.poll(() => page.evaluate("JSON.parse(recitation.status()).state"))
+			.poll(async () => {
+				const status = await page.evaluate<{ state: string; error?: string }>(
+					"JSON.parse(recitation.status())",
+				);
+				if (status.error) throw new Error(status.error);
+				return status.state;
+			})
 			.toBe("ready");
 		expect(await page.evaluate("JSON.parse(recitation.status()).frames")).toBe(
 			fixture.frames,
@@ -137,14 +142,18 @@ for (const fixture of [
 			const wave = Buffer.concat(parts);
 			expect(wave.toString("ascii", 0, 4)).toBe("RIFF");
 			expect(wave.readUInt32LE(24)).toBe(44100);
-			expect(wave.length - 44).toBe(expected.length);
+			const channels = wave.readUInt16LE(22);
+			expect(channels).toBe(2);
+			expect(wave.length - 44).toBe(expected.length * channels);
 			let squaredError = 0;
 			let squaredSignal = 0;
 			for (let i = 0; i < expected.length; i += 2) {
-				const actual = wave.readInt16LE(i + 44),
-					correct = expected.readInt16LE(i);
-				squaredError += (actual - correct) ** 2;
-				squaredSignal += correct ** 2;
+				const correct = expected.readInt16LE(i);
+				for (let channel = 0; channel < channels; channel++) {
+					const actual = wave.readInt16LE(i * channels + channel * 2 + 44);
+					squaredError += (actual - correct) ** 2;
+					squaredSignal += correct ** 2;
+				}
 			}
 			// Independent FFmpeg decoding: codec rounding is allowed; a timing shift is not.
 			expect(Math.sqrt(squaredError / squaredSignal)).toBeLessThan(0.001);

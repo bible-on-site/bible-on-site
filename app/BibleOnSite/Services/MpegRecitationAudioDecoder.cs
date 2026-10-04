@@ -3,11 +3,11 @@ using BibleOnSite.Models;
 
 namespace BibleOnSite.Services;
 
-/// <summary>Use the website's gapless decoder; native playback receives sample-exact PCM.</summary>
-public sealed class WebAudioRecitationDecoder : IRecitationAudioDecoder
+/// <summary>Use the same pinned MPEG decoder as the website; native playback receives exact PCM ranges.</summary>
+public sealed class MpegRecitationAudioDecoder : IRecitationAudioDecoder
 {
     private readonly WebView view;
-    public WebAudioRecitationDecoder(WebView view)
+    public MpegRecitationAudioDecoder(WebView view)
     {
         this.view = view;
         view.HandlerChanged += (_, _) => { _source = null; _initialized = false; };
@@ -41,17 +41,20 @@ public sealed class WebAudioRecitationDecoder : IRecitationAudioDecoder
             {
                 using var input = await FileSystem.Current.OpenAppPackageFileAsync("recitation-audio.html");
                 using var reader = new StreamReader(input);
-                using var gaplessInput = await FileSystem.Current.OpenAppPackageFileAsync("recitation-mp3.js");
-                using var gaplessReader = new StreamReader(gaplessInput);
-                var gapless = await gaplessReader.ReadToEndAsync(cancellationToken);
+                using var decoderInput = await FileSystem.Current.OpenAppPackageFileAsync("recitation-mpeg.min.js");
+                using var decoderReader = new StreamReader(decoderInput);
+                var decoderScript = await decoderReader.ReadToEndAsync(cancellationToken);
                 var loaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 void Navigated(object? sender, WebNavigatedEventArgs e) => loaded.TrySetResult();
                 view.Navigated += Navigated;
                 try
                 {
                     var html = await reader.ReadToEndAsync(cancellationToken);
-                    view.Source = new HtmlWebViewSource { Html = html.Replace("<!--recitation-mp3-->", "<script>" + gapless + "</script>", StringComparison.Ordinal) };
+                    view.Source = new HtmlWebViewSource { Html = html };
                     await loaded.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
+                    // Evaluate the trusted local asset directly. Its compressed WASM
+                    // string contains characters that HTML script parsing would alter.
+                    await view.EvaluateJavaScriptAsync(decoderScript);
                     _initialized = true;
                 }
                 finally { view.Navigated -= Navigated; }
