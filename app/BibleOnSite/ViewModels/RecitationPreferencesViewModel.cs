@@ -93,7 +93,15 @@ public partial class RecitationPreferencesViewModel : ObservableObject
             Status = "מעדכן את חבילת ההקראה...";
             await _recitation.UpdateAsync(cancellation.Token);
             Status = "מוריד הקלטות...";
-            await _recitation.DownloadAsync(ids, new Progress<double>(p => { Progress = p; Status = $"מוריד הקלטות... {p:P0}"; }), cancellation.Token);
+            await _recitation.DownloadAsync(ids, new Progress<double>(p =>
+            {
+                // Queued progress must not replace the completed or cancelled status.
+                if (_download != cancellation || !IsDownloading)
+                {
+                    return;
+                }
+                Progress = p; Status = $"מוריד הקלטות... {p:P0}";
+            }), cancellation.Token);
             Enabled = true;
             Status = "ההקלטות מותקנות וזמינות גם ללא אינטרנט.";
         }
