@@ -25,6 +25,7 @@ public class RecitationServiceTests
         public List<string> Requests { get; } = [];
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var path = request.RequestUri!.AbsolutePath;
             Requests.Add(path);
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = path == "/api/recitation"
@@ -43,7 +44,11 @@ public class RecitationServiceTests
         using var server = new Server(); using var http = new HttpClient(server);
         var tracks = Enumerable.Range(1, 3).Select(id => Track(id, Encoding.UTF8.GetBytes($"audio {id}"))).ToList();
         server.Package = new(1, tracks);
-        foreach (var track in tracks) server.Audio[$"/recordings/{track.PerekId}_record.mp3"] = Encoding.UTF8.GetBytes($"audio {track.PerekId}");
+        foreach (var track in tracks)
+        {
+            server.Audio[$"/recordings/{track.PerekId}_record.mp3"] = Encoding.UTF8.GetBytes($"audio {track.PerekId}");
+        }
+
         var service = new RecitationService(storage.FileSystem.Object, http, new("https://example.com/api/recitation"));
         var preferences = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
         var model = new RecitationPreferencesViewModel(service, preferences, new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)));
@@ -61,7 +66,9 @@ public class RecitationServiceTests
         await model.DownloadSelectedAsync();
         service.HasAudio(3).Should().BeTrue();
         foreach (var id in Enumerable.Range(1, 3))
+        {
             server.Requests.Count(p => p == $"/recordings/{id}_record.mp3").Should().Be(1, "completed books are reused");
+        }
     }
 
     [Fact]

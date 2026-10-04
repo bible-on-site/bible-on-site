@@ -5,7 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BibleOnSite.ViewModels;
 
-public partial class RecitationBookChoice : ObservableObject
+public partial class RecitationBookChoice : ObservableObject // NOSONAR: ObservableProperty generates the other partial declaration.
 {
     public required string Name { get; init; }
     public required List<int> PerekIds { get; init; }
@@ -13,7 +13,7 @@ public partial class RecitationBookChoice : ObservableObject
     [ObservableProperty] private string _status = "";
 }
 
-public partial class RecitationPreferencesViewModel : ObservableObject
+public partial class RecitationPreferencesViewModel : ObservableObject // NOSONAR: ObservableProperty and RelayCommand require a partial declaration.
 {
     private readonly RecitationService _recitation;
     private readonly PreferencesService _preferences;
@@ -43,9 +43,14 @@ public partial class RecitationPreferencesViewModel : ObservableObject
             await _recitation.InitializeAsync();
             await _perakim.LoadAsync();
             if (Books.Count == 0 && _perakim.Perakim is { } chapters)
+            {
                 foreach (var group in chapters.Values.GroupBy(p => p.SeferId).OrderBy(g => g.Key))
+                {
                     Books.Add(new RecitationBookChoice { Name = group.First().SeferName, PerekIds = group.Select(p => p.PerekId).ToList(),
                         IsSelected = group.Any(p => _recitation.HasAudio(p.PerekId)) });
+                }
+            }
+
             Refresh();
         }
         catch (Exception) { Status = "לא ניתן לטעון את חבילת ההקראה. נסו להתקין אותה שוב."; }
@@ -62,13 +67,21 @@ public partial class RecitationPreferencesViewModel : ObservableObject
         OnPropertyChanged(nameof(IsInstalled)); OnPropertyChanged(nameof(Enabled));
     }
 
-    [RelayCommand] private void SelectAll() { foreach (var book in Books) book.IsSelected = true; }
+    [RelayCommand] private void SelectAll() { foreach (var book in Books)
+        {
+            book.IsSelected = true;
+        }
+    }
     [RelayCommand] private void CancelDownload() => _download?.Cancel();
 
     [RelayCommand]
     public async Task DownloadSelectedAsync()
     {
-        if (IsDownloading) return;
+        if (IsDownloading)
+        {
+            return;
+        }
+
         var ids = Books.Where(b => b.IsSelected).SelectMany(b => b.PerekIds).ToArray();
         if (ids.Length == 0) { Status = "בחרו ספר אחד לפחות, או את כל הספרים."; return; }
         IsDownloading = true; Progress = 0;
@@ -91,7 +104,11 @@ public partial class RecitationPreferencesViewModel : ObservableObject
     [RelayCommand]
     public async Task UpdateTimingsAsync()
     {
-        if (IsDownloading) return;
+        if (IsDownloading)
+        {
+            return;
+        }
+
         IsDownloading = true;
         using var cancellation = new CancellationTokenSource();
         _download = cancellation;

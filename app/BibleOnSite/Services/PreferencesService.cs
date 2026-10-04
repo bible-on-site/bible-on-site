@@ -78,7 +78,11 @@ public class PreferencesService
         get => _recitationEnabled;
         set
         {
-            if (_recitationEnabled == value) return;
+            if (_recitationEnabled == value)
+            {
+                return;
+            }
+
             _recitationEnabled = value;
             _storage.Set(RecitationEnabledKey, value);
             OnPreferencesChanged();
@@ -106,7 +110,11 @@ public class PreferencesService
         get => _fontFactor;
         set
         {
-            if (Math.Abs(_fontFactor - value) < 0.001) return;
+            if (Math.Abs(_fontFactor - value) < 0.001)
+            {
+                return;
+            }
+
             _fontFactor = value;
             _storage.Set(FontFactorKey, value);
             OnPreferencesChanged();
@@ -121,7 +129,11 @@ public class PreferencesService
         get => _lastLearntPerek;
         set
         {
-            if (_lastLearntPerek == value) return;
+            if (_lastLearntPerek == value)
+            {
+                return;
+            }
+
             _lastLearntPerek = value;
             if (value.HasValue)
             {
@@ -143,7 +155,11 @@ public class PreferencesService
         get => _perekToLoad;
         set
         {
-            if (_perekToLoad == value) return;
+            if (_perekToLoad == value)
+            {
+                return;
+            }
+
             _perekToLoad = value;
             _storage.Set(PerekToLoadKey, (int)value);
             OnPreferencesChanged();

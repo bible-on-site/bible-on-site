@@ -15,16 +15,18 @@ class NativeAuditTests(unittest.TestCase):
             canonical.write_text(json.dumps([{"perekFrom": 1, "perakim": [{"pesukim": [{"segments": [
                 {"type": "qri", "value": "ברא"}, {"type": "stuma", "value": ""},
                 {"type": "qri", "value": "אור"}]}]}]}]), encoding="utf-8")
-            with closing(sqlite3.connect(native)) as db, db:
+            with closing(sqlite3.connect(native)) as db:
                 db.executescript("CREATE TABLE tanah_pasuk_segment(id INTEGER,perek_id INTEGER,pasuk_id INTEGER,segment_type TEXT);"
                                  "CREATE TABLE tanah_pasuk_segment_value(id INTEGER,value TEXT);"
                                  "INSERT INTO tanah_pasuk_segment VALUES(10,1,1,'qri'),(20,1,1,'stuma'),(30,1,1,'qri');")
                 db.executemany("INSERT INTO tanah_pasuk_segment_value VALUES(?,?)", [(10, "ברא"), (30, "אור")])
+                db.commit()
             before = native.read_bytes()
             audit_native(canonical, native)
             self.assertEqual(before, native.read_bytes())
-            with closing(sqlite3.connect(native)) as db, db:
+            with closing(sqlite3.connect(native)) as db:
                 db.execute("UPDATE tanah_pasuk_segment_value SET value=? WHERE id=30", ("אור<small>[הערה]</small>",))
+                db.commit()
             with self.assertRaisesRegex(ValueError, "native canonical word identities differ"):
                 audit_native(canonical, native)
 

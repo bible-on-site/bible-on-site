@@ -125,9 +125,11 @@ class DeploymentTests(unittest.TestCase):
         def missing(package):
             package["tracks"].pop()
             return package
+
         def changed(package):
             package["tracks"][0]["words"][0]["startMs"] += 1
             return package
+
         def unapproved(package):
             package["tracks"][1]["words"] = package["tracks"][0]["words"]
             return package

@@ -7,7 +7,7 @@ using CommunityToolkit.Maui.Views;
 
 namespace BibleOnSite.Pages;
 
-public partial class PerekPage
+public partial class PerekPage // NOSONAR: the page and its controls are also generated from MAUI XAML.
 {
     private readonly DoubleTapTracker _doubleTap = new();
     private bool _chapterRecitationSelection;
@@ -35,9 +35,21 @@ public partial class PerekPage
 
     private void OnRecitationPreferencesChanged(object? sender, EventArgs e)
     {
-        if (!RecitationEnabled) StopRecitation();
-        if (!RecitationEnabled && _audioDecoder != null) _ = _audioDecoder.ReleaseAsync();
-        if (!RecitationEnabled && _chapterRecitationSelection) _chapterRecitationSelection = false;
+        if (!RecitationEnabled)
+        {
+            StopRecitation();
+        }
+
+        if (!RecitationEnabled && _audioDecoder != null)
+        {
+            _ = _audioDecoder.ReleaseAsync();
+        }
+
+        if (!RecitationEnabled && _chapterRecitationSelection)
+        {
+            _chapterRecitationSelection = false;
+        }
+
         RefreshFocusedRecitation();
         UpdateSelectionBar();
     }
@@ -54,7 +66,11 @@ public partial class PerekPage
         _playWhenOpened = false;
         _playingKey = null;
         _recitationBusy = false;
-        if (RecitationPlayer.Source != null) RecitationPlayer.Stop();
+        if (RecitationPlayer.Source != null)
+        {
+            RecitationPlayer.Stop();
+        }
+
         RecitationPlayer.Source = null;
     }
 
@@ -68,13 +84,20 @@ public partial class PerekPage
         FocusedPasukOverlay.IsVisible = false;
         PerekCarousel.InputTransparent = false;
         AutomationProperties.SetExcludedWithChildren(PerekCarousel, false);
-        if (_audioDecoder != null) _ = _audioDecoder.ReleaseAsync();
+        if (_audioDecoder != null)
+        {
+            _ = _audioDecoder.ReleaseAsync();
+        }
     }
 
     private void OnHeaderLongPressed(object? sender, EventArgs e)
     {
         if (!RecitationEnabled || sender is not LongPressBehavior behavior ||
-            behavior.AssociatedView?.BindingContext is not Perek perek || perek != _viewModel.Perek) return;
+            behavior.AssociatedView?.BindingContext is not Perek perek || perek != _viewModel.Perek)
+        {
+            return;
+        }
+
         EnterChapterRecitation();
     }
 
@@ -90,7 +113,11 @@ public partial class PerekPage
 
     private async void OnHeaderPointerPressed(object? sender, PointerEventArgs e)
     {
-        if (OperatingSystem.IsAndroid() || OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst() || !RecitationEnabled) return;
+        if (OperatingSystem.IsAndroid() || OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst() || !RecitationEnabled)
+        {
+            return;
+        }
+
         _headerPress?.Cancel();
         using var request = new CancellationTokenSource();
         _headerPress = request;
@@ -98,15 +125,22 @@ public partial class PerekPage
         try
         {
             await Task.Delay(600, request.Token);
-            if (perek != null && perek == _viewModel.Perek) EnterChapterRecitation();
+            if (perek != null && perek == _viewModel.Perek)
+            {
+                EnterChapterRecitation();
+            }
         }
         catch (OperationCanceledException) { }
-        finally { if (_headerPress == request) _headerPress = null; }
+        finally { if (_headerPress == request)
+            {
+                _headerPress = null;
+            }
+        }
     }
     private void OnHeaderPointerReleased(object? sender, PointerEventArgs e) => _headerPress?.Cancel();
     private void OnHeaderPointerMoved(object? sender, PointerEventArgs e) => _headerPress?.Cancel();
 
-    private async void HandlePasukTap(Pasuk pasuk, object? view)
+    private async Task HandlePasukTapAsync(Pasuk pasuk, object? view)
     {
         if (_viewModel.SelectedPasukNums.Count > 0)
         {
@@ -116,7 +150,11 @@ public partial class PerekPage
             UpdatePasukSelection(view, pasuk.PasukNum);
             return;
         }
-        if (!_doubleTap.Tap(_viewModel.PerekId, pasuk.PasukNum, Environment.TickCount64)) return;
+        if (!_doubleTap.Tap(_viewModel.PerekId, pasuk.PasukNum, Environment.TickCount64))
+        {
+            return;
+        }
+
         await OpenFocusedPasukAsync(pasuk);
     }
 
@@ -125,7 +163,9 @@ public partial class PerekPage
 #if !ANDROID
         if (_viewModel.SelectedPasukNums.Count == 0 && e.Parameter is int number &&
             _viewModel.Perek?.Pasukim.FirstOrDefault(p => p.PasukNum == number) is { } pasuk)
+        {
             await OpenFocusedPasukAsync(pasuk);
+        }
 #else
         await Task.CompletedTask;
 #endif
@@ -133,7 +173,11 @@ public partial class PerekPage
 
     private async Task OpenFocusedPasukAsync(Pasuk pasuk)
     {
-        if (_focusedPasuk == pasuk) return;
+        if (_focusedPasuk == pasuk)
+        {
+            return;
+        }
+
         ResetRecitationContext();
         _focusedPasuk = pasuk;
         FocusedSourceLabel.Text = $"{_viewModel.Source} {pasuk.PasukNumHeb}";
@@ -148,14 +192,20 @@ public partial class PerekPage
             var perekId = _viewModel.PerekId;
             await _viewModel.LoadPerushimAsync(perekId);
             if (_focusedPasuk == pasuk && _viewModel.PerekId == perekId)
+            {
                 BindableLayout.SetItemsSource(FocusedPerushim, _viewModel.GetPerushimForPasuk(pasuk.PasukNum));
+            }
         }
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Focused commentaries: {ex.Message}"); }
     }
 
     private void RefreshFocusedRecitation()
     {
-        if (_focusedPasuk is not { } pasuk || _viewModel.Perek is not { } perek) return;
+        if (_focusedPasuk is not { } pasuk || _viewModel.Perek is not { } perek)
+        {
+            return;
+        }
+
         var track = RecitationService.Instance.GetTrack(perek.PerekId);
         var canPlayWords = RecitationEnabled && RecitationService.Instance.HasAudio(perek.PerekId) &&
             track?.AlignmentStatus == "ready" && track.Matches(perek.Pasukim);
@@ -168,7 +218,11 @@ public partial class PerekPage
         for (var i = 0; i < pasuk.Segments.Count; i++)
         {
             var segment = pasuk.Segments[i];
-            if (segment.IsQriDifferentThanKtiv) formatted.Spans.Add(new Span { Text = "(קְרִי: ", TextColor = Color.FromArgb("#637598") });
+            if (segment.IsQriDifferentThanKtiv)
+            {
+                formatted.Spans.Add(new Span { Text = "(קְרִי: ", TextColor = Color.FromArgb("#637598") });
+            }
+
             var span = new Span { Text = segment.Type switch
             {
                 SegmentType.Ptuha => " {פ} ", SegmentType.Stuma => " {ס} ", _ => segment.Value
@@ -182,9 +236,15 @@ public partial class PerekPage
                 span.GestureRecognizers.Add(tap);
             }
             formatted.Spans.Add(span);
-            if (segment.IsQriDifferentThanKtiv) formatted.Spans.Add(new Span { Text = ")", TextColor = Color.FromArgb("#637598") });
+            if (segment.IsQriDifferentThanKtiv)
+            {
+                formatted.Spans.Add(new Span { Text = ")", TextColor = Color.FromArgb("#637598") });
+            }
+
             if (i < pasuk.Segments.Count - 1 && segment.Type is not (SegmentType.Ptuha or SegmentType.Stuma) && !segment.EndsWithMaqaf)
+            {
                 formatted.Spans.Add(new Span { Text = " " });
+            }
         }
         FocusedPasukText.FormattedText = formatted;
     }
@@ -193,11 +253,22 @@ public partial class PerekPage
     {
         if (_playingKey != null && RecitationPlayer.CurrentState is MediaElementState.Playing or MediaElementState.Paused)
         {
-            if (RecitationPlayer.CurrentState == MediaElementState.Playing) RecitationPlayer.Pause();
-            else RecitationPlayer.Play();
+            if (RecitationPlayer.CurrentState == MediaElementState.Playing)
+            {
+                RecitationPlayer.Pause();
+            }
+            else
+            {
+                RecitationPlayer.Play();
+            }
+
             return;
         }
-        if (_viewModel.Perek is not { } perek) return;
+        if (_viewModel.Perek is not { } perek)
+        {
+            return;
+        }
+
         var track = RecitationService.Instance.GetTrack(perek.PerekId);
         if (_chapterRecitationSelection)
         {
@@ -205,20 +276,39 @@ public partial class PerekPage
             return;
         }
         var numbers = _focusedPasuk != null ? new[] { _focusedPasuk.PasukNum } : _viewModel.SelectedPasukNums.Order().ToArray();
-        if (track?.AlignmentStatus != "ready" || numbers.Length == 0) return;
+        if (track?.AlignmentStatus != "ready" || numbers.Length == 0)
+        {
+            return;
+        }
+
         var ranges = numbers.Select(n => track.Words.Where(w => w.Pasuk == n).ToList()).ToList();
-        if (ranges.Any(r => r.Count == 0)) return;
+        if (ranges.Any(r => r.Count == 0))
+        {
+            return;
+        }
+
         await PlayRecitationAsync($"verses:{perek.PerekId}:{string.Join(',', numbers)}", ranges: ranges.Select(r => (r[0].StartMs!.Value, r[^1].EndMs!.Value)).ToList());
     }
 
     private async Task PlayRecitationAsync(string key, double? start = null, double? end = null,
         IReadOnlyList<(double Start, double End)>? ranges = null)
     {
-        if (!RecitationEnabled || _viewModel.Perek is not { } perek) return;
+        if (!RecitationEnabled || _viewModel.Perek is not { } perek)
+        {
+            return;
+        }
+
         if (_playingKey == key && RecitationPlayer.CurrentState is MediaElementState.Playing or MediaElementState.Paused)
         {
-            if (RecitationPlayer.CurrentState == MediaElementState.Playing) RecitationPlayer.Pause();
-            else RecitationPlayer.Play();
+            if (RecitationPlayer.CurrentState == MediaElementState.Playing)
+            {
+                RecitationPlayer.Pause();
+            }
+            else
+            {
+                RecitationPlayer.Play();
+            }
+
             return;
         }
         StopRecitation();
@@ -230,17 +320,23 @@ public partial class PerekPage
         {
             _audioDecoder ??= new WebAudioRecitationDecoder(RecitationDecoderView);
             var path = await RecitationService.Instance.PrepareAudioAsync(perek.PerekId, perek.Pasukim, start, end, request.Token, ranges, _audioDecoder);
-            if (request.IsCancellationRequested || _viewModel.Perek != perek || !RecitationEnabled) return;
+            if (request.IsCancellationRequested || _viewModel.Perek != perek || !RecitationEnabled)
+            {
+                return;
+            }
+
             _playingKey = key;
             _playWhenOpened = true;
             RecitationPlayer.Source = MediaSource.FromFile(path);
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException) { /* Navigation or another selection cancels the old request. */ }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Recitation playback: {ex}");
             if (!request.IsCancellationRequested)
+            {
                 await DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה. בדקו את חבילת ההקראה בהעדפות.", "אישור");
+            }
         }
         finally
         {
@@ -256,7 +352,11 @@ public partial class PerekPage
     private void OnRecitationStateChanged(object? sender, MediaStateChangedEventArgs e) => UpdateSelectionBar();
     private async void OnRecitationMediaFailed(object? sender, MediaFailedEventArgs e)
     {
-        if (_playingKey == null) return;
+        if (_playingKey == null)
+        {
+            return;
+        }
+
         StopRecitation(); UpdateSelectionBar();
         await DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה במכשיר זה.", "אישור");
     }

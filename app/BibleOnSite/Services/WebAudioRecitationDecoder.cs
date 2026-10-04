@@ -22,7 +22,10 @@ public sealed class WebAudioRecitationDecoder : IRecitationAudioDecoder
         try
         {
             _source = null;
-            if (_initialized) await view.EvaluateJavaScriptAsync("recitation.reset()");
+            if (_initialized)
+            {
+                await view.EvaluateJavaScriptAsync("recitation.reset()");
+            }
         }
         catch (Exception) { _initialized = false; }
         finally { _gate.Release(); }
@@ -68,7 +71,11 @@ public sealed class WebAudioRecitationDecoder : IRecitationAudioDecoder
                 cancellationToken.ThrowIfCancellationRequested();
                 using var state = ParseResult(await view.EvaluateJavaScriptAsync("recitation.status()"));
                 var status = state.RootElement.GetProperty("state").GetString();
-                if (status == "ready") break;
+                if (status == "ready")
+                {
+                    break;
+                }
+
                 if (status == "error" || DateTime.UtcNow > deadline)
                 { _source = null; throw new InvalidDataException("Recording could not be decoded."); }
                 await Task.Delay(50, cancellationToken);
@@ -84,7 +91,11 @@ public sealed class WebAudioRecitationDecoder : IRecitationAudioDecoder
                 using var chunk = ParseResult(await view.EvaluateJavaScriptAsync($"recitation.chunk({offset},49152)"));
                 wave.Write(Convert.FromBase64String(chunk.RootElement.GetProperty("data").GetString()!));
             }
-            if (wave.Length != length) throw new InvalidDataException("Truncated decoded recording.");
+            if (wave.Length != length)
+            {
+                throw new InvalidDataException("Truncated decoded recording.");
+            }
+
             return wave.ToArray();
         }
         finally { _gate.Release(); }
@@ -93,7 +104,11 @@ public sealed class WebAudioRecitationDecoder : IRecitationAudioDecoder
     private static JsonDocument ParseResult(string value)
     {
         // MAUI handlers differ in whether a JavaScript string is JSON-quoted.
-        for (var i = 0; i < 2 && value.StartsWith('"'); i++) value = JsonSerializer.Deserialize(value, RecitationJsonContext.Default.String)!;
+        for (var i = 0; i < 2 && value.StartsWith('"'); i++)
+        {
+            value = JsonSerializer.Deserialize(value, RecitationJsonContext.Default.String)!;
+        }
+
         return JsonDocument.Parse(value);
     }
 }

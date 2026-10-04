@@ -191,7 +191,7 @@ public class AppFixture : IAsyncLifetime
                 if (string.Equals(proc.MainModule?.FileName, AppPath, StringComparison.OrdinalIgnoreCase))
                 { proc.Kill(); proc.WaitForExit(2000); }
             }
-            catch { }
+            catch { /* A process that exits during enumeration needs no further cleanup. */ }
         }
         await Task.Delay(1000); // Give time for processes to fully terminate
 
@@ -235,7 +235,11 @@ public class AppFixture : IAsyncLifetime
             try
             {
                 proc.Refresh();
-                if (!string.Equals(proc.MainModule?.FileName, AppPath, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!string.Equals(proc.MainModule?.FileName, AppPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
                 if (proc.MainWindowHandle != IntPtr.Zero)
                 {
                     Console.WriteLine($"Process {proc.Id} has a main window");
@@ -257,7 +261,11 @@ public class AppFixture : IAsyncLifetime
                 try
                 {
                     proc.Refresh();
-                    if (!string.Equals(proc.MainModule?.FileName, AppPath, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (!string.Equals(proc.MainModule?.FileName, AppPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
                     if (!proc.HasExited)
                     {
                         Console.WriteLine($"Using process {proc.Id} (no window handle but still running)");
@@ -357,7 +365,7 @@ public class AppFixture : IAsyncLifetime
                                 string.Equals(process.MainModule?.FileName, executable, StringComparison.OrdinalIgnoreCase))
                             { process.Kill(entireProcessTree: true); await process.WaitForExitAsync(); }
                         }
-                        catch (InvalidOperationException) { }
+                        catch (InvalidOperationException) { /* The owned API process exited during cleanup. */ }
                     }
                 }
             }
@@ -385,19 +393,31 @@ public class AppFixture : IAsyncLifetime
     {
         GetWindowThreadProcessId(window, out var processId);
         if (processId != App.ProcessId)
+        {
             throw new InvalidOperationException("Native gesture tests require an isolated desktop with BibleOnSite in the foreground. No input was sent.");
+        }
     }
 
     public void AssertForeground() => AssertOwnedWindow(GetForegroundWindow());
 
     /// <summary>Fail before synthetic input if another app covers the test window.</summary>
-    public void Click(AutomationElement element, MouseButton button = MouseButton.Left, bool doubleClick = false)
+    public void Click(AutomationElement element) => Click(element, MouseButton.Left, false);
+    public void Click(AutomationElement element, MouseButton button) => Click(element, button, false);
+    public void Click(AutomationElement element, bool doubleClick) => Click(element, MouseButton.Left, doubleClick);
+
+    public void Click(AutomationElement element, MouseButton button, bool doubleClick)
     {
         AssertForeground();
         var point = element.GetClickablePoint();
         AssertOwnedWindow(WindowFromPoint(point));
-        if (doubleClick) Mouse.DoubleClick(point);
-        else Mouse.Click(point, button);
+        if (doubleClick)
+        {
+            Mouse.DoubleClick(point);
+        }
+        else
+        {
+            Mouse.Click(point, button);
+        }
     }
 
     /// <summary>
