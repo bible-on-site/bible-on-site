@@ -120,7 +120,12 @@ export function checkDeployment(
 						);
 					newer = comparisons.get(deployment.sha) === "ahead";
 				}
-				if (!newer) continue;
+				const alreadyDelivered =
+					artifactId !== undefined &&
+					deployment.sha === ref &&
+					String(deployment.payload?.ci_run_id) === String(runId) &&
+					String(deployment.payload?.sql_artifact_id) === String(artifactId);
+				if (!newer && !alreadyDelivered) continue;
 				const [status] = request(
 					`${root}/deployments/${deployment.id}/statuses?per_page=1`,
 				);
@@ -128,7 +133,9 @@ export function checkDeployment(
 					return {
 						deploy: false,
 						ref,
-						reason: `Superseded by successful data deployment ${deployment.id}`,
+						reason: alreadyDelivered
+							? `SQL archive ${artifactId} already deployed successfully`
+							: `Superseded by successful data deployment ${deployment.id}`,
 					};
 			}
 			if (deployments.length < 100) break;

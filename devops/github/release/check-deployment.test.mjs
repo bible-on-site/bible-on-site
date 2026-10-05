@@ -416,3 +416,23 @@ test("pinned SQL keeps its original passing attempt when a later rebuild fails",
 	assert.equal(result.artifactId, "90");
 	assert.equal(result.runAttempt, 1);
 });
+
+test("a completed SQL dispatch is a no-op even after its archive expires", () => {
+	const result = checkDeployment(
+		{ ...input, moduleName: "data", artifactId: "90" },
+		(url) => {
+			if (url.endsWith("/actions/runs/10")) return source;
+			if (url.includes("/deployments?"))
+				return [
+					{ id: 22, sha, payload: { ci_run_id: "10", sql_artifact_id: "90" } },
+				];
+			if (url.includes("/deployments/22/statuses"))
+				return [{ state: "success" }];
+			throw new Error(
+				"An expired completed artifact must not be downloaded or checked again",
+			);
+		},
+	);
+	assert.equal(result.deploy, false);
+	assert.match(result.reason, /already deployed/);
+});
