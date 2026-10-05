@@ -4,10 +4,17 @@ on:
   repository_dispatch:
     types: [deploy-aws]
 
+# Keep every dispatch; never interrupt a production write.
+concurrency:
+  group: ${{ github.repository }}-cd-${{ github.event.client_payload.module_name }}
+  cancel-in-progress: false
+  queue: max
+
 jobs:
   deploy:
     permissions:
       contents: read
+      actions: read
       id-token: write # Required for OIDC authentication with AWS
     runs-on: ubuntu-latest
 
@@ -27,13 +34,27 @@ jobs:
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
 
     steps:
-      - name: Checkout
+      - name: Checkout deployment automation
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.client_payload.ref }}
+          ref: ${{ github.sha }}
+
+      - name: Check deployment source and freshness
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_MODULE: ${{ github.event.client_payload.module_name }}
+        run: node devops/github/release/check-deployment.mjs
+
+      - name: Checkout artifact source
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.guard.outputs.ref }}
 
       - name: Setup Node.js
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: setup-node
         uses: actions/setup-node@v7
         with:
@@ -42,25 +63,30 @@ jobs:
           cache: npm
 
       - name: Install npm Dependencies
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: npm_ci
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           npm ci --no-audit
 
       - name: Configure AWS Credentials (OIDC)
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup crane
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: imjasonh/setup-crane@v0.7
 
       - name: Login to ECR
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         run: |
           aws ecr get-login-password --region ${{ env.AWS_REGION }} | crane auth login --username AWS --password-stdin ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
 
       - name: Prepare Docker Restore
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: prepare_docker_restore
         run: |
           mkdir -p "$DOCKER_IMAGE_OUTPUT_DIR"
@@ -69,6 +95,7 @@ jobs:
           echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
 
       - name: Restore Docker Image
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: actions/download-artifact@v8
         with:
           name: ${{ env.RELEASED_ARTIFACT_NAME }}
@@ -77,6 +104,7 @@ jobs:
           github-token: ${{ secrets.BOT_PAT }}
 
       - name: Deploy to ECR
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: deploy
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
@@ -88,7 +116,7 @@ jobs:
         # the 'latest' tag is pushed to ECR. See: ecr-ecs-auto-deploy.yaml
 
       - name: Verify website recitation after ECS rollout
-        if: ${{ env.MODULE_NAME == 'website' }}
+        if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'website' }}
         run: |
           # Recreate the overlay from the exact release SHA. Repeated runs are safe.
           python data/recitation/publish.py
