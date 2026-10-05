@@ -331,7 +331,7 @@ jobs:
         with:
           name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp/${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
       - name: Check Sefaria MongoDB image availability
@@ -621,7 +621,7 @@ jobs:
         with:
           name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp/lcov-docker-image.tar
-          retention-days: 400
+          retention-days: 90
 
   build_sefaria_mongo_docker:
     name: Build Sefaria MongoDB Docker Image
@@ -870,6 +870,7 @@ jobs:
             --threshold-measure count --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 10.00 --threshold-lower-boundary _ \
 
       - name: Store Website Perf HTML Report
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: website-perf-html-report-${{ github.run_id }}
@@ -878,6 +879,7 @@ jobs:
           overwrite: true
 
       - name: Store Website Perf JUnit Report
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_PERF_JUNIT_REPORT_ARTIFACT_NAME }}
@@ -1096,7 +1098,7 @@ jobs:
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
           if-no-files-found: error
 
@@ -1106,7 +1108,7 @@ jobs:
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
   admin_ci:
@@ -1254,7 +1256,7 @@ jobs:
         with:
           name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
           if-no-files-found: error
 
@@ -1264,7 +1266,7 @@ jobs:
         with:
           name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
       - name: Store Admin E2E HTML Report
@@ -1468,7 +1470,7 @@ jobs:
         with:
           name: ${{ env.API_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.API_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
       - name: Store API Coverage Report (master)
@@ -1477,7 +1479,7 @@ jobs:
         with:
           name: ${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.API_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
   app_ci:
@@ -1526,11 +1528,24 @@ jobs:
       - name: Restore dotnet tools
         run: dotnet tool restore
 
-      - name: Verify Android NuGet restore
+      - name: Setup Java for Android release validation
+        uses: actions/setup-java@v6
+        with:
+          distribution: "microsoft"
+          java-version: "17"
+
+      - name: Verify Android release package
         run: |
           echo '{"sdk":{"version":"10.0.0","rollForward":"latestFeature"}}' > $GITHUB_WORKSPACE/global.json
           dotnet workload install maui-android
-          dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android
+          dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android -p:RuntimeIdentifiers=android-arm64 -r android-arm64
+          # Compile with the checked-in notes fixture; store packages use the paired release artifact.
+          NOTES_GZ="BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz"
+          if [ -f "$NOTES_GZ" ] && [ ! -f "${NOTES_GZ%.gz}" ]; then
+            gzip -dc "$NOTES_GZ" > "${NOTES_GZ%.gz}"
+          fi
+          # Exercise D8 and release linking before merging, without store signing keys.
+          dotnet build BibleOnSite/BibleOnSite.csproj --no-restore -c Release -f net10.0-android -r android-arm64 -p:RuntimeIdentifiers=android-arm64 -p:AndroidPackageFormats=aab
           rm -f $GITHUB_WORKSPACE/global.json
 
       - name: Verify native canonical recitation word identities
@@ -1632,7 +1647,7 @@ jobs:
         with:
           name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.APP_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
           if-no-files-found: error
 
@@ -1642,102 +1657,26 @@ jobs:
         with:
           name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.APP_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
+  app_mobile_e2e:
+    name: App Mobile E2E
+    needs: [setup_env, determine_changes]
+    if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
+    uses: ./.github/workflows/app-mobile-e2e.yml
+
   app_ios_ci:
-    name: App iOS CI
+    name: App iOS native audio CI
     runs-on: macos-26
-    needs: [setup_env, determine_changes, determine_baseline_availability, perushim_data]
+    needs: [setup_env, determine_changes]
     # Only on PRs — on master, Package iOS (IPA) already validates the full iOS build.
     if: ${{ github.event_name == 'pull_request' && always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
-    defaults:
-      run:
-        working-directory: ${{ env.APP_DIRECTORY }}
     permissions:
       contents: read
-
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-        with:
-          ref: ${{ github.sha }}
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v6
-        with:
-          # Keep in sync with the maui-ios workload below; see https://github.com/bible-on-site/bible-on-site/issues/1871
-          dotnet-version: "10.0.401"
-
-      - name: Hash NuGet dependency inputs
-        id: nuget-key
-        run: node ${{ github.workspace }}/devops/github/ci/nuget-cache-key.mjs
-
-      # PR-only job: Package iOS (IPA) saves this key on master.
-      - name: Restore NuGet packages
-        uses: actions/cache/restore@v6
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-maui-ios-${{ steps.nuget-key.outputs.hash }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-maui-ios-
-            ${{ runner.os }}-nuget-
-
-      - name: Install MAUI workload
-        # Workload set 10.0.401 uses the iOS 26.5 SDK compatible with Xcode 26.6.
-        # 10.0.401.1 selects an iOS 27 SDK and fails the Xcode version check; see https://github.com/bible-on-site/bible-on-site/issues/1871
-        run: dotnet workload install maui-ios --version 10.0.401
-
-      - name: Restore perushim notes SQLite
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ needs.perushim_data.result != 'skipped' && env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_WF || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
-          path: ${{ runner.temp }}/perushim-sqlite
-
-      - name: Prepare matching Perushim catalog and iOS notes
-        run: python3 devops/prepare_perushim_assets.py --source "${{ runner.temp }}/perushim-sqlite" --app-directory BibleOnSite --platform iOS
-
-      - name: Select Xcode version
-        run: |
-          XCODE_PATH=/Applications/Xcode_26.6.app
-          if [ ! -d "$XCODE_PATH" ]; then
-            XCODE_PATH=""
-          fi
-          if [ -z "$XCODE_PATH" ]; then
-            XCODE_PATH=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
-          fi
-          if [ -z "$XCODE_PATH" ]; then
-            XCODE_PATH=$(xcode-select -p | sed 's|/Contents/Developer||')
-          fi
-          echo "Selecting Xcode: $XCODE_PATH"
-          sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
-          xcodebuild -version
-          xcrun --sdk macosx --show-sdk-path
-
-      # TODO(#1401): iOS SDK forces IL stripping even for simulator builds.
-      # We kill the process once the DLL is produced to skip IL stripping.
-      - name: Build iOS target
-        run: |
-          dotnet build BibleOnSite/BibleOnSite.csproj -c Release \
-            -p:TargetFrameworks=net10.0-ios \
-            -p:ErrorOnDuplicatePublishOutputFiles=false > build.log 2>&1 &
-          PID=$!
-          while kill -0 $PID 2>/dev/null; do
-            if grep -q "BibleOnSite -> .*BibleOnSite\.dll" build.log 2>/dev/null; then
-              cat build.log
-              if grep -q ": error " build.log; then
-                echo "Errors found in build output"
-                wait $PID; exit 1
-              fi
-              echo "Build succeeded (DLL produced) — skipping IL stripping"
-              kill $PID 2>/dev/null; wait $PID 2>/dev/null; exit 0
-            fi
-            sleep 2
-          done
-          RC=0
-          wait $PID || RC=$?
-          cat build.log
-          exit $RC
 
       - name: Setup Node for native audio precision checks
         uses: actions/setup-node@v7
@@ -1831,7 +1770,7 @@ jobs:
         with:
           name: ${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.BULLETIN_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
   recitation_ci:
@@ -2049,7 +1988,7 @@ jobs:
         with:
           name: ${{ env.DATA_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.DATA_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
       - name: Store Data Coverage Report (master)
@@ -2058,7 +1997,7 @@ jobs:
         with:
           name: ${{ env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.DATA_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
       - name: Stop MongoDB Container
@@ -2216,7 +2155,7 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     needs: [website_e2e, website_performance]
-    if: ${{ always() && (needs.website_e2e.result != 'skipped' || needs.website_performance.result != 'skipped') }}
+    if: ${{ always() && !cancelled() && (needs.website_e2e.result != 'skipped' || needs.website_performance.result != 'skipped') }}
     steps:
       - name: Checkout
         id: checkout
@@ -2265,6 +2204,7 @@ jobs:
         app_ci,
         admin_ci,
         app_ios_ci,
+        app_mobile_e2e,
         bulletin_ci,
         data_ci,
         recitation_ci,
@@ -2273,7 +2213,8 @@ jobs:
         determine_baseline_availability,
         determine_docker_image_availability,
       ]
-    if: ${{ always() }}
+    # Evaluate failures, but release the PR concurrency slot when replaced.
+    if: ${{ always() && !cancelled() }}
     steps:
       - name: Check Prerequisites
         id: check_prerequisites
@@ -2361,8 +2302,12 @@ jobs:
           fi
 
           if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ]; then
+            if [ "${{ needs.app_mobile_e2e.result }}" != "success" ]; then
+              echo "Appium mobile E2E matrix failed or did not run"
+              exit 1
+            fi
             APP_IOS_RESULT="${{ needs.app_ios_ci.result }}"
-            # App iOS CI only runs on PRs; on master it's skipped (Package iOS covers it)
+            # Native audio precision runs on PRs; mobile E2E runs on every relevant CI event.
             if [ "$APP_IOS_RESULT" != "success" ] && [ "$APP_IOS_RESULT" != "skipped" ]; then
               echo "App iOS CI failed"
               echo "Overall status: failure"

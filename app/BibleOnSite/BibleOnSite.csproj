@@ -48,11 +48,11 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.0.115</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>5.0.118</ApplicationDisplayVersion>
 		<!-- Windows MSIX requires each version component ≤65535, so we use a separate incrementing value -->
 		<!-- Android versionCode can be large, continuing from Play Store's 40000017 -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000115</ApplicationVersion>
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">115</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000118</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">118</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<!-- WindowsPackageType None = unpackaged (fixes "Class not registered" when running from CLI). MSIX for Store: /p:WindowsPackageType=MSIX -->
@@ -92,6 +92,8 @@
 
 		<!-- Images -->
 		<MauiImage Include="Resources\Images\*" />
+		<!-- Launcher icons are not runtime images on iOS; bundle the same artwork for the loading page. -->
+		<MauiImage Include="Resources\AppIcon\appicon.svg" Link="loading_logo.svg" BaseSize="150,150" />
 		<MauiImage Update="Resources\Images\dotnet_bot.png" Resize="True" BaseSize="300,185" />
 
 		<!-- Custom Fonts -->
@@ -108,10 +110,10 @@
 
 	<!-- Firebase: GoogleService-Info.plist for iOS (same Firebase project: tanah-al-haperek) -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
-		<BundleResource Include="Platforms\iOS\GoogleService-Info.plist" />
+		<BundleResource Include="Platforms\iOS\GoogleService-Info.plist" LogicalName="GoogleService-Info.plist" />
 	</ItemGroup>
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
-		<BundleResource Include="Platforms\iOS\GoogleService-Info.plist" />
+		<BundleResource Include="Platforms\iOS\GoogleService-Info.plist" LogicalName="GoogleService-Info.plist" />
 	</ItemGroup>
 
 	<!-- ============================================================
@@ -132,6 +134,10 @@
 	     a target strips the duplicate .aar from @(AndroidAarLibrary) before extraction. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<PackageReference Include="Xamarin.AndroidX.Compose.Runtime.Annotation.Jvm" Version="1.12.1" ExcludeAssets="all" />
+		<!-- Fragment 1.9 merges Kotlin extensions into the main artifact. Keep Ktx
+		     aligned so Firebase's older transitive Ktx does not duplicate those classes.
+		     https://developer.android.com/jetpack/androidx/releases/fragment#1.9.0-alpha01 -->
+		<PackageReference Include="Xamarin.AndroidX.Fragment.Ktx" Version="1.9.0" />
 	</ItemGroup>
 	<Target Name="_RemoveDuplicateAndroidXAars" BeforeTargets="_ResolveAars;_ExtractAar;_GetLibraryImports" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<ItemGroup>
@@ -155,15 +161,15 @@
 	     After decompression, explicitly add the .sqlite as an ImageAsset so actool compiles it
 	     into Assets.car. MSBuild globs evaluate at project load — before the file exists —
 	     so auto-discovery misses it. -->
-	<Target Name="DecompressPerushimNotesIos" BeforeTargets="Build;_CompileImageAssets" Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND&#xD;&#xA;			!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')">
+	<Target Name="DecompressPerushimNotesIos" BeforeTargets="Build;_BeforeCoreCompileImageAssets;_CollectPackLibraryResources" Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND&#xD;&#xA;			!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')">
 		<MakeDir Directories="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset" />
 		<Exec Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz' &gt; '$(MSBuildProjectDirectory)/Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset/sefaria-dump-5784-sivan-4.perushim_notes.sqlite'" />
 	</Target>
 
-	<!-- Unconditionally ensure the .sqlite is in the ImageAsset list for actool.
-	     Runs before _CompileImageAssets regardless of whether decompression was needed this build.
+	<!-- Ensure the .sqlite is in the ImageAsset list before the SDK's core compilation dependencies.
+	     BeforeTargets=_CompileImageAssets runs too late: its dependencies already invoke actool.
 	     The Condition on the item (Exists) prevents errors if the file is absent (e.g. Windows dev). -->
-	<Target Name="_IncludePerushimNotesImageAsset" BeforeTargets="_CompileImageAssets" DependsOnTargets="DecompressPerushimNotesIos" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+	<Target Name="_IncludePerushimNotesImageAsset" BeforeTargets="_RemoveProcessedImageAssets;_BeforeCoreCompileImageAssets;_CollectPackLibraryResources" DependsOnTargets="DecompressPerushimNotesIos" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
 		<ItemGroup>
 			<ImageAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" Condition="Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')" Link="Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
 		</ItemGroup>

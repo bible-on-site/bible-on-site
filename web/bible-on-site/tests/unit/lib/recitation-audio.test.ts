@@ -24,6 +24,7 @@ jest.mock("mpg123-decoder", () => ({
 		.fn()
 		.mockImplementation(() => ({ ready: Promise.resolve(), decode, free })),
 }));
+const gain = { gain: { value: 1 }, connect: jest.fn(), disconnect: jest.fn() };
 const close = jest.fn();
 const resume = jest.fn();
 const originalContext = global.AudioContext;
@@ -57,9 +58,11 @@ beforeEach(() => {
 		resume,
 		close,
 		destination: {},
+		createGain: () => gain,
 		createBufferSource: () => {
 			const source = {
 				start: jest.fn(),
+				playbackRate: { value: 1 },
 				stop: jest.fn(),
 				connect: jest.fn(),
 				disconnect: jest.fn(),
@@ -350,5 +353,85 @@ test("full chapter uses actual decoded duration and the same playback clock as c
 	expect(player.positionMs).toBeCloseTo(1200);
 	player.stop();
 	expect(player.positionMs).toBeNull();
+	player.dispose();
+});
+
+test("rate changes preserve the source position and gain changes apply without restarting", async () => {
+	const player = new RecitationAudio("/audio.mp3", hash);
+	const ended = jest.fn();
+	player.setOptions(2, 0.4);
+	await player.play(1000, 5000, ended);
+	audioClock = 10.5;
+	expect(player.positionMs).toBe(2000);
+	expect(gain.gain.value).toBe(0.4);
+	player.setOptions(1, 0.2);
+	expect(player.positionMs).toBe(2000);
+	expect(sources[0].stop).toHaveBeenCalled();
+	expect(sources[1].start).toHaveBeenCalledWith(0, 2, 3);
+	audioClock = 11;
+	expect(player.positionMs).toBe(2500);
+	player.setOptions(1, 0);
+	expect(sources).toHaveLength(2);
+	expect(gain.gain.value).toBe(0);
+	player.pause();
+	player.setOptions(0.5, 1);
+	audioClock = 20;
+	await player.resume();
+	audioClock = 21;
+	expect(player.positionMs).toBe(3000);
+	player.dispose();
+});
+test("approved verses have wall-clock gaps at every speed and pause/resume retains remaining silence", async () => {
+	const player = new RecitationAudio("/audio.mp3", hash);
+	const ended = jest.fn();
+	player.setOptions(2, 1);
+	await player.playRanges(
+		[
+			{ startMs: 1000, endMs: 3000 },
+			{ startMs: 5000, endMs: 7000 },
+		],
+		1000,
+		ended,
+	);
+	expect(sources[0].start).toHaveBeenCalledWith(0, 1, 2);
+	expect(sources[1].start).toHaveBeenCalledWith(12, 5, 2);
+	audioClock = 11.25;
+	expect(player.positionMs).toBeNull();
+	expect(player.pause()).toBe(true);
+	expect(sources.every((s) => s.stop.mock.calls.length === 1)).toBe(true);
+	audioClock = 20;
+	await player.resume();
+	expect(sources[2].start).toHaveBeenCalledWith(20.75, 5, 2);
+	audioClock = 20.5;
+	expect(player.positionMs).toBeNull();
+	audioClock = 21;
+	expect(player.positionMs).toBe(5500);
+	sources[2].onended?.();
+	expect(ended).toHaveBeenCalledTimes(1);
+	expect(player.positionMs).toBeNull();
+	player.dispose();
+});
+test("speed changes during a verse gap preserve remaining silence; stop cancels all scheduled verses", async () => {
+	const player = new RecitationAudio("/audio.mp3", hash);
+	const ended = jest.fn();
+	await player.playRanges(
+		[
+			{ startMs: 0, endMs: 1000 },
+			{ startMs: 2000, endMs: 3000 },
+		],
+		500,
+		ended,
+	);
+	const staleEnded = sources[1].onended;
+	audioClock = 11.2;
+	player.setOptions(2, 0.5);
+	expect(player.positionMs).toBeNull();
+	expect(sources[2].start.mock.calls[0][0]).toBeCloseTo(11.5);
+	player.stop();
+	staleEnded?.();
+	expect(ended).not.toHaveBeenCalled();
+	expect(sources[2].stop).toHaveBeenCalled();
+	await expect(player.playRanges([], 0, ended)).rejects.toThrow("outside");
+	expect(() => player.setOptions(Number.NaN, 1)).toThrow("settings");
 	player.dispose();
 });

@@ -1,15 +1,28 @@
-type Clip = { startMs: number; endMs: number; ended: () => void };
+type Range = { startMs: number; endMs: number };
+type Plan = {
+	ranges: Range[];
+	pauseMs: number;
+	leadMs: number;
+	ended: () => void;
+};
+type ScheduledRange = Range & { startsAt: number; endsAt: number };
 
 /** Play exact decoded sample ranges; HTMLMediaElement MP3 seeks can start late. */
 export class RecitationAudio {
 	private context = new AudioContext();
 	private controller = new AbortController();
 	private buffer: Promise<AudioBuffer> | null = null;
-	private source: AudioBufferSourceNode | null = null;
+	private sources: AudioBufferSourceNode[] = [];
+	private gain: GainNode | null = null;
+	private decoded: AudioBuffer | null = null;
+	private speed = 1;
+	private volume = 1;
 	private generation = 0;
 	private disposed = false;
-	private activeClip: (Clip & { startedAt: number }) | null = null;
-	private pausedClip: Clip | null = null;
+	private activePlan:
+		| (Plan & { scheduled: ScheduledRange[]; speed: number })
+		| null = null;
+	private pausedPlan: Plan | null = null;
 
 	constructor(
 		private url: string,
@@ -90,6 +103,7 @@ export class RecitationAudio {
 					pcm.channelData.forEach((samples, channel) => {
 						buffer.getChannelData(channel).set(samples);
 					});
+					this.decoded = buffer;
 					return buffer;
 				} finally {
 					await decoder.free();
@@ -102,97 +116,187 @@ export class RecitationAudio {
 		return this.buffer;
 	}
 
+	/** Apply speed/volume without losing the original source position. */
+	setOptions(speed: number, volume: number) {
+		if (
+			!Number.isFinite(speed) ||
+			speed < 0.5 ||
+			speed > 2 ||
+			!Number.isFinite(volume) ||
+			volume < 0 ||
+			volume > 1
+		)
+			throw new Error("Invalid playback settings");
+		this.volume = volume;
+		if (this.gain) this.gain.gain.value = volume;
+		if (speed === this.speed) return;
+		const remaining = this.remainingPlan();
+		this.speed = speed;
+		if (this.activePlan && remaining && this.decoded) {
+			this.stopSources();
+			this.schedule(this.decoded, remaining);
+		}
+	}
+
 	async play(
 		startMs: number,
 		endMs: number | undefined,
 		ended: () => void,
 	): Promise<boolean> {
+		return this.playRanges([{ startMs, endMs }], 0, ended);
+	}
+
+	async playRanges(
+		ranges: { startMs: number; endMs?: number }[],
+		pauseMs: number,
+		ended: () => void,
+	): Promise<boolean> {
 		if (this.disposed) throw new Error("Player disposed");
 		this.stop();
 		const generation = this.generation;
-		// Resume during the click gesture, before awaiting the download (mobile autoplay).
+		// Resume in the user gesture, before the download (mobile autoplay).
 		const [buffer] = await Promise.all([this.load(), this.context.resume()]);
 		if (this.disposed || generation !== this.generation) return false;
-		const stopMs = endMs === undefined ? buffer.duration * 1000 : endMs;
+		const intervals = ranges.map((r) => ({
+			startMs: r.startMs,
+			endMs: r.endMs ?? buffer.duration * 1000,
+		}));
 		if (
-			!Number.isFinite(startMs) ||
-			!Number.isFinite(stopMs) ||
-			startMs < 0 ||
-			stopMs <= startMs ||
-			stopMs / 1000 > buffer.duration
-		) {
+			!intervals.length ||
+			!Number.isFinite(pauseMs) ||
+			pauseMs < 0 ||
+			pauseMs > 5000 ||
+			intervals.some(
+				(r) =>
+					!Number.isFinite(r.startMs) ||
+					!Number.isFinite(r.endMs) ||
+					r.startMs < 0 ||
+					r.endMs <= r.startMs ||
+					r.endMs / 1000 > buffer.duration,
+			)
+		)
 			throw new Error("Clip outside decoded recording");
-		}
-		const source = this.context.createBufferSource();
-		source.buffer = buffer;
-		source.connect(this.context.destination);
-		source.onended = () => {
-			if (this.source !== source) return;
-			this.source = null;
-			this.activeClip = null;
-			source.disconnect();
-			ended();
-		};
-		this.source = source;
-		this.activeClip = {
-			startMs,
-			endMs: stopMs,
-			ended,
-			startedAt: this.context.currentTime,
-		};
-		// Duration is scheduled by the audio clock, never a JavaScript stop timer.
-		source.start(0, startMs / 1000, (stopMs - startMs) / 1000);
+		this.schedule(buffer, { ranges: intervals, pauseMs, leadMs: 0, ended });
 		return true;
+	}
+
+	private schedule(buffer: AudioBuffer, plan: Plan) {
+		this.gain ??= this.context.createGain();
+		this.gain.gain.value = this.volume;
+		this.gain.disconnect();
+		this.gain.connect(this.context.destination);
+		const generation = this.generation;
+		let cursor = this.context.currentTime + plan.leadMs / 1000;
+		const scheduled: ScheduledRange[] = [];
+		this.sources = plan.ranges.map((range, index) => {
+			const source = this.context.createBufferSource();
+			source.buffer = buffer;
+			source.playbackRate.value = this.speed;
+			source.connect(this.gain as GainNode);
+			const startsAt = cursor;
+			const endsAt =
+				startsAt + (range.endMs - range.startMs) / 1000 / this.speed;
+			scheduled.push({ ...range, startsAt, endsAt });
+			cursor = endsAt + plan.pauseMs / 1000;
+			source.onended = () => {
+				source.disconnect();
+				if (index !== plan.ranges.length - 1 || generation !== this.generation)
+					return;
+				this.sources = [];
+				this.activePlan = null;
+				plan.ended();
+			};
+			// Both boundaries and inter-verse gaps are scheduled by the audio clock.
+			source.start(
+				index === 0 && plan.leadMs === 0 ? 0 : startsAt,
+				range.startMs / 1000,
+				(range.endMs - range.startMs) / 1000,
+			);
+			return source;
+		});
+		this.activePlan = { ...plan, scheduled, speed: this.speed };
 	}
 
 	playChapter(ended: () => void): Promise<boolean> {
 		return this.play(0, undefined, ended);
 	}
 
-	/** Original recording position, including the clip offset and paused position. */
+	/** Original recording position, or null during a deliberate verse pause. */
 	get positionMs(): number | null {
-		const clip = this.activeClip;
-		return clip
-			? Math.min(
-					clip.endMs,
-					clip.startMs + (this.context.currentTime - clip.startedAt) * 1000,
-				)
-			: (this.pausedClip?.startMs ?? null);
+		const plan = this.activePlan;
+		if (!plan)
+			return this.pausedPlan && this.pausedPlan.leadMs === 0
+				? this.pausedPlan.ranges[0].startMs
+				: null;
+		const now = this.context.currentTime;
+		const range = plan.scheduled.find(
+			(r) => now >= r.startsAt && now < r.endsAt,
+		);
+		return range
+			? range.startMs + (now - range.startsAt) * 1000 * plan.speed
+			: null;
+	}
+
+	private remainingPlan(): Plan | null {
+		const plan = this.activePlan;
+		if (!plan) return null;
+		const now = this.context.currentTime;
+		const index = plan.scheduled.findIndex((r) => now < r.endsAt);
+		if (index < 0) return null;
+		const range = plan.scheduled[index];
+		const startMs =
+			now > range.startsAt
+				? range.startMs + (now - range.startsAt) * 1000 * plan.speed
+				: range.startMs;
+		return {
+			ranges: [
+				{ startMs, endMs: range.endMs },
+				...plan.ranges.slice(index + 1),
+			],
+			leadMs: Math.max(0, (range.startsAt - now) * 1000),
+			pauseMs: plan.pauseMs,
+			ended: plan.ended,
+		};
 	}
 
 	pause(): boolean {
-		const clip = this.activeClip;
-		if (!clip || !this.source) return false;
-		const startMs = Math.min(
-			clip.endMs,
-			clip.startMs + (this.context.currentTime - clip.startedAt) * 1000,
-		);
+		const plan = this.activePlan;
+		const remaining = this.remainingPlan();
+		if (!plan) return false;
 		this.stop();
-		if (startMs >= clip.endMs) {
-			clip.ended();
+		if (!remaining) {
+			plan.ended();
 			return false;
 		}
-		this.pausedClip = { startMs, endMs: clip.endMs, ended: clip.ended };
+		this.pausedPlan = remaining;
 		return true;
 	}
 
-	resume(): Promise<boolean> {
-		const clip = this.pausedClip;
-		return clip
-			? this.play(clip.startMs, clip.endMs, clip.ended)
-			: Promise.resolve(false);
+	async resume(): Promise<boolean> {
+		const plan = this.pausedPlan;
+		if (!plan) return false;
+		this.stop();
+		const generation = this.generation;
+		const [buffer] = await Promise.all([this.load(), this.context.resume()]);
+		if (this.disposed || generation !== this.generation) return false;
+		this.schedule(buffer, plan);
+		return true;
+	}
+
+	private stopSources() {
+		this.generation++;
+		for (const source of this.sources) {
+			source.onended = null;
+			source.stop();
+			source.disconnect();
+		}
+		this.sources = [];
+		this.activePlan = null;
 	}
 
 	stop() {
-		this.activeClip = null;
-		this.pausedClip = null;
-		this.generation++;
-		if (this.source) {
-			this.source.onended = null;
-			this.source.stop();
-			this.source.disconnect();
-			this.source = null;
-		}
+		this.stopSources();
+		this.pausedPlan = null;
 	}
 
 	dispose() {
@@ -201,6 +305,8 @@ export class RecitationAudio {
 		this.stop();
 		this.controller.abort();
 		this.buffer = null;
+		this.decoded = null;
+		this.gain?.disconnect();
 		void this.context.close().catch(() => {});
 	}
 }
