@@ -7,6 +7,7 @@ import tempfile
 import json
 from pathlib import Path
 import re
+import time
 
 from alignment import text_hash, validate_timings, words_for
 
@@ -70,8 +71,21 @@ def apply_alignment(perek, data):
     perek["recitation"] = {key: value for key, value in data.items() if key not in ("perekId", "words")}
 
 
+def replace_snapshot(temporary, database):
+    """Keep replacement atomic while Windows readers briefly hold the old file."""
+    for attempt in range(8):
+        try:
+            temporary.replace(database)
+            return
+        except PermissionError as error:
+            if getattr(error, "winerror", None) not in (5, 32, 33) or attempt == 7:
+                raise
+            time.sleep(min(.05 * 2 ** attempt, .5))
+
+
 def publish(inputs, database=DATABASE):
-    books = json.loads(database.read_text(encoding="utf-8"))
+    original = database.read_bytes()
+    books = json.loads(original)
     chapters = chapters_in(books)
     count = 0
     with closing(sqlite3.connect(f"{inputs.resolve().as_uri()}?mode=ro", uri=True)) as db:
@@ -100,12 +114,17 @@ def publish(inputs, database=DATABASE):
         count += 1
     if not count:
         return 0
+    content = (json.dumps(books, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    # Validation above still runs on repeated publication. Avoid replacing an
+    # identical snapshot, triggering readers or racing their Windows file handles.
+    if content == original:
+        return count
     with tempfile.NamedTemporaryFile(dir=database.parent, suffix=".tmp", delete=False) as handle:
         handle.flush()
     temporary = Path(handle.name)
     try:
-        temporary.write_text(json.dumps(books, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
-        temporary.replace(database)
+        temporary.write_bytes(content)
+        replace_snapshot(temporary, database)
     finally:
         temporary.unlink(missing_ok=True)
     return count
