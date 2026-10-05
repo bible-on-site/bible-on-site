@@ -5,9 +5,12 @@
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  height: calc(100vh - 72px);
+  /* Follow the visible viewport when the mobile browser toolbar changes size. */
+  height: calc(100dvh - 72px);
   overflow-x: hidden;
   overflow-y: auto;
+  /* Keep bottom/top bounce inside the reader, preserving the header controls. */
+  overscroll-behavior-y: contain;
   background-color: var(--surface-elevated, #fff);
 }
 
@@ -63,7 +66,7 @@
   text-decoration: underline;
 }
 .perekText > [id^="pasuk-"] {
-  scroll-margin-block-start: calc((100vh - 72px) / 2);
+  scroll-margin-block-start: calc((100dvh - 72px) / 2);
 }
 .perekText:not([data-pasuk-navigation-ready]) > [id^="pasuk-"]:target,
 .perekText > [data-pasuk-highlight] {

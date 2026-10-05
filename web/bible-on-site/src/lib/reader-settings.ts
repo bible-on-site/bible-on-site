@@ -99,7 +99,8 @@ export function applyReaderSettings(
 /**
  * Inline bootstrap that re-applies stored settings before first paint so
  * returning readers see no font-size / line-height flash. Rendered as a raw
- * <script> at the top of the perek layout; kept dependency-free on purpose.
+ * <script> in the root layout's head, including visits that reach the reader
+ * through client-side navigation; kept dependency-free on purpose.
  *
  * Deliberately a static literal: building this string by interpolating the
  * constants above trips static-analysis code-construction rules, so the

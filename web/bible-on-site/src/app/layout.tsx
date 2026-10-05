@@ -4,6 +4,7 @@ import "./globals.css";
 
 import Image from "next/image";
 import Link from "next/link";
+import { READER_SETTINGS_BOOTSTRAP } from "@/lib/reader-settings";
 import {
 	buildGraph,
 	organizationNode,
@@ -50,12 +51,15 @@ export default function RootLayout({
 			lang="he"
 			dir="rtl"
 			data-scroll-behavior="smooth"
-			/* The perek layout's inline bootstrap applies stored reader settings
+			/* The root layout's inline bootstrap applies stored reader settings
 			   (CSS vars) to <html> before first paint — suppress the resulting
 			   hydration-mismatch warning on this element's attributes. */
 			suppressHydrationWarning
 		>
 			<head>
+				{/* Run on the initial document so client-side chapter navigation
+				    inherits saved settings too, before the reader's first paint. */}
+				<script>{READER_SETTINGS_BOOTSTRAP}</script>
 				<GoogleAnalytics />
 				<JsonLd data={siteJsonLd} />
 			</head>

@@ -1,5 +1,36 @@
 import { expect, test } from "../../util/playwright/test-fixture";
 
+test("saved display settings apply when entering the reader from another page", async ({
+	page,
+}) => {
+	await page.addInitScript(() => {
+		localStorage.setItem(
+			"perekReaderSettings",
+			JSON.stringify({ fontStep: 3, wordStep: 2, lineStep: 2 }),
+		);
+	});
+	await page.goto("/");
+	await page.getByRole("button", { name: "תפריט ראשי", exact: true }).click();
+	await page
+		.getByRole("navigation", { name: "תפריט ראשי", exact: true })
+		.getByRole("link", { name: "על הפרק", exact: true })
+		.click();
+	await expect(page).toHaveURL(/\/929\/[1-9]\d*$/);
+	await expect(page.getByRole("article")).toBeVisible();
+	await expect
+		.poll(() =>
+			page.evaluate(() => {
+				const style = document.documentElement.style;
+				return [
+					style.getPropertyValue("--perek-font-scale"),
+					style.getPropertyValue("--perek-word-spacing"),
+					style.getPropertyValue("--perek-line-height"),
+				];
+			}),
+		)
+		.toEqual(["1.15", "0.28em", "2"]);
+});
+
 test("display settings independently change font and both spacing directions, persisting across reload", async ({
 	page,
 }) => {

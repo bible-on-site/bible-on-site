@@ -6,6 +6,10 @@ test.describe("Perek breadcrumb selectors", () => {
 		page,
 	}) => {
 		await page.goto("/929/1");
+		await expect(page.getByRole("article")).toHaveAttribute(
+			"data-pasuk-navigation-ready",
+			"",
+		);
 		const breadcrumb = page.getByTestId("perek-breadcrumb-1");
 		const sefer = breadcrumb.getByRole("button", { name: /ספר נוכחי/ });
 		const perek = breadcrumb.getByRole("button", { name: /פרק נוכחי/ });
