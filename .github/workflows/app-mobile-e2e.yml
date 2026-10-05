@@ -106,7 +106,7 @@ jobs:
           profile: pixel_7
           avd-name: mobile_e2e
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-snapshot
+          emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-snapshot -no-metrics
           script: npm test --prefix app/mobile-e2e
 
       - name: Prepare prebuilt iOS automation agent
