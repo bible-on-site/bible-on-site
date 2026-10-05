@@ -42,7 +42,12 @@ at the element's viewport center, with a 100 ms pause between down and up. This
 exercises the real touch target of rounded floating controls while avoiding
 XCTest's automatic hit-point selection. Native device logs record menu press,
 release, click and completed animations to diagnose touch delivery. Android uses
-native element clicks. UI assertions and the 45-second readiness deadline remain shared.
+native element clicks. UI assertions and readiness deadlines remain shared.
+After session creation, allow two minutes for the first reader snapshot: a cold
+iOS lookup can take longer than 45 seconds and return the earlier loading tree
+even though the reader has appeared. This startup gate requires a visible,
+nonempty perek source and captures failure diagnostics. Subsequent scenario
+lookups and navigation retain their 45-second deadlines.
 iOS keeps XCTest idle checks enabled with a one-second `waitForIdleTimeout`, so
 repeated internal idle waits during startup do not exhaust the page object's
 readiness polling. See the [Appium idle-wait capability](https://appium.github.io/appium-xcuitest-driver/latest/reference/capabilities/).
