@@ -39,11 +39,16 @@ jobs:
           # Keep aligned with Xcode 26.6 and the iOS packaging workload; see #1871.
           dotnet-version: "10.0.401"
 
-      - name: Cache NuGet packages
-        uses: actions/cache@v6
+      - name: Hash NuGet dependency inputs
+        id: nuget-key
+        run: node ${{ github.workspace }}/devops/github/ci/nuget-cache-key.mjs
+
+      - name: Restore NuGet packages
+        id: nuget-cache
+        uses: actions/cache/restore@v6
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-mobile-e2e-${{ matrix.platform }}-${{ hashFiles('app/**/*.csproj', 'app/**/packages.lock.json') }}
+          key: ${{ runner.os }}-mobile-e2e-${{ matrix.platform }}-${{ steps.nuget-key.outputs.hash }}
           restore-keys: |
             ${{ runner.os }}-mobile-e2e-${{ matrix.platform }}-
             ${{ runner.os }}-nuget-
@@ -52,15 +57,26 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: devops/package.json
-          cache: npm
-          cache-dependency-path: |
-            devops/package-lock.json
-            app/mobile-e2e/package-lock.json
+
+      - name: Restore npm cache
+        id: npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-mobile-e2e-${{ hashFiles('devops/package-lock.json', 'app/mobile-e2e/package-lock.json') }}
+          restore-keys: ${{ runner.os }}-npm-mobile-e2e-
 
       - name: Install build and Appium dependencies
         run: |
           npm ci --prefix devops --no-audit
           npm ci --prefix app/mobile-e2e --no-audit
+
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
 
       - name: Validate the test harness
         working-directory: app
@@ -70,7 +86,7 @@ jobs:
 
       - name: Setup Java
         if: matrix.platform == 'Android'
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: microsoft
           java-version: "21"
@@ -89,6 +105,13 @@ jobs:
         run: |
           mkdir -p "$MOBILE_E2E_ARTIFACTS"
           npm run build:app --prefix app/mobile-e2e 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/build.log"
+
+      - name: Save NuGet packages
+        if: ${{ github.ref == 'refs/heads/master' && steps.nuget-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
 
       - name: Enable Android hardware acceleration
         if: matrix.platform == 'Android'
