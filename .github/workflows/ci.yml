@@ -1528,16 +1528,8 @@ jobs:
           retention-days: 1
           overwrite: true
 
-      - name: Publish App Unit Report To Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v7
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
-          flags: app
-          report_type: test_results
-
       # ============ Integration Tests Setup ============
+      # rust-cache hashes CC_* env vars; keep it before codecov-action, which exports CC_SHA.
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -1552,6 +1544,15 @@ jobs:
           workspaces: |
             ${{ env.API_DIRECTORY }}
             ${{ env.DATA_DIRECTORY }}
+
+      - name: Publish App Unit Report To Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
+          flags: app
+          report_type: test_results
 
       - name: Install and start MySQL
         id: mysql
@@ -1800,13 +1801,14 @@ jobs:
         with:
           tool: cargo-make, cargo-llvm-cov, cargo-nextest
 
+      # Per-job key: rust-cache never overwrites an existing key, so a shared key is owned by whichever job saves first.
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
           cache-on-failure: true
-          shared-key: "data-rust"
+          shared-key: "data-ci-rust"
 
       # Overlap the image pull with lint/unit coverage; integration tests wait below.
       - name: Pull Sefaria MongoDB Docker Image
@@ -2006,7 +2008,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
           cache-on-failure: true
-          shared-key: "data-rust"
+          shared-key: "perushim-data-rust"
 
       - name: Pull Sefaria MongoDB Docker Image
         env:
