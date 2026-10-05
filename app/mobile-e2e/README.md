@@ -77,5 +77,9 @@ collect a short native stack sample if the app is still running, without
 competing with healthy tests for simulator resources.
 The independent log export allows iOS to disable Appium's duplicate live system
 log stream with `skipLogCapture`, avoiding its cold-start overhead. Session setup
-has a five-minute client budget inside the six-minute test-host hang guard.
+has a five-minute client budget inside a ten-minute iOS test-host hang guard.
+The guard includes test initialization, scenario assertions, diagnostic capture
+and session teardown. A six-minute guard could terminate a successful startup
+scenario while it captured its view tree after a cold simulator session.
+Android retains its six-minute guard; readiness deadlines remain 45 seconds.
 CI uploads a separate artifact for each platform even on test failures.
