@@ -561,3 +561,170 @@
   border-bottom-style: solid;
   border-bottom-color: #3730a3;
 }
+
+@media (prefers-color-scheme: dark) {
+  .pageTitle,
+  .sectionTitle,
+  .subcategoryName,
+  .categoryName,
+  .entityName,
+  .emptyStateTitle {
+    color: #a8b9ff;
+  }
+
+  .pageSubtitle,
+  .breadcrumb,
+  .subcategoryCount,
+  .categoryCount,
+  .mapFootnote,
+  .mapPlaceholder {
+    color: #9aa0a6;
+  }
+
+  .dbLoadWarning {
+    background: #3a2f10;
+    border-color: #92600b;
+  }
+
+  .dbLoadWarningTitle {
+    color: #fbbf24;
+  }
+
+  .dbLoadWarningText {
+    color: #fcd34d;
+  }
+
+  .dbLoadWarningCode {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .dbLoadWarningPre {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .breadcrumbLink,
+  .entityEntryLink,
+  .recentLink {
+    color: #7eb0ff;
+  }
+
+  .categoryCard {
+    background: #1a1f2e;
+  }
+
+  .categoryCardEmpty {
+    background: #12151c;
+    border-color: #3b4256;
+  }
+
+  .comingSoonBadge {
+    background: #2d3548;
+    color: #9aa0a6;
+  }
+
+  .subcategoryCard {
+    background: #1a2030;
+    border-right-color: #7eb0ff;
+  }
+
+  .subcategoryCard:hover {
+    background: #232a45;
+  }
+
+  .subcategoryCardEmpty {
+    background: #12151c;
+    border-right-color: #3b4256;
+  }
+
+  .subcategoryCardEmpty:hover {
+    background: #1a1f2e;
+  }
+
+  .recentLink:hover {
+    background: #232a45;
+  }
+
+  .backLink {
+    background: #a8b9ff;
+    color: #16213d;
+  }
+
+  .backLink:hover {
+    background: #c7d2fe;
+  }
+
+  .entityItem {
+    border-bottom-color: #2d3548;
+  }
+
+  .mapPlaceholder {
+    background: #1a1f2e;
+  }
+
+  .mapLoading {
+    background: #12151c;
+    border-color: #3b4370;
+    color: #9aa0a6;
+  }
+
+  .entryContent ol:global(.footnotes) {
+    color: #d7dae0;
+  }
+
+  .entryContent a:global(.footnote-backref) {
+    color: #9aa0a6;
+  }
+
+  .entityBadge {
+    background: #232a45;
+    color: #a5b4fc;
+  }
+
+  .entityBadge:hover {
+    background: #2d3a5c;
+  }
+
+  .emptyState {
+    background: #161b2a;
+    border-color: #3b4370;
+  }
+
+  .emptyStateText {
+    color: #b8c2d9;
+  }
+
+  .emptyContent {
+    color: #9aa0a6;
+  }
+
+  .todaySection {
+    background: linear-gradient(135deg, #161b2a 0%, #1a1f36 100%);
+    border-color: #3b4370;
+  }
+
+  .todaySectionTitle {
+    color: #c7d2fe;
+  }
+
+  .todayDate {
+    color: #a5b4fc;
+    background: rgba(99, 102, 241, 0.25);
+  }
+
+  .todayBullet {
+    color: #a5b4fc;
+  }
+
+  .todayText {
+    color: #e8eaed;
+  }
+
+  .todayLink {
+    color: #a5b4fc;
+  }
+
+  .todayLink:hover {
+    color: #c7d2fe;
+    border-bottom-color: #c7d2fe;
+  }
+}
