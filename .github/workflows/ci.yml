@@ -2560,7 +2560,7 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: npm ci --no-audit --no-fund
 
-      - name: released
+      - name: Bump released module versions
         id: released
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         env:
@@ -2583,7 +2583,7 @@ jobs:
           fi
           git push origin HEAD:master
 
-      - name: retry
+      - name: Bump versions taken by another commit
         id: retry
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         env:
