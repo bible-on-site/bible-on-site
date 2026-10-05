@@ -1357,17 +1357,10 @@ jobs:
           files="${{ env.API_DIRECTORY }}/.junit-report/unit/results.xml,${{ env.API_DIRECTORY }}/.playwright-report/e2e/junit/results.xml"
           echo "junit_files=$files" >> $GITHUB_OUTPUT
 
-      - name: Prepare Codecov Python environment
-        if: ${{ !cancelled() }}
-        run: |
-          python3 -m venv "$RUNNER_TEMP/codecov-venv"
-          echo "$RUNNER_TEMP/codecov-venv/bin" >> "$GITHUB_PATH"
-
       - name: Publish API Unit/E2E Report To Codecov
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
-          use_pypi: true
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ steps.list_api_junit_files.outputs.junit_files }}
           flags: api
@@ -1476,17 +1469,10 @@ jobs:
           retention-days: 1
           overwrite: true
 
-      - name: Prepare Codecov Python environment
-        if: ${{ !cancelled() }}
-        run: |
-          python3 -m venv "$RUNNER_TEMP/codecov-venv"
-          echo "$RUNNER_TEMP/codecov-venv/bin" >> "$GITHUB_PATH"
-
       - name: Publish App Unit Report To Codecov
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
-          use_pypi: true
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
           flags: app
@@ -1534,7 +1520,6 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
-          use_pypi: true
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
           flags: app
@@ -1657,17 +1642,10 @@ jobs:
           overwrite: true
           if-no-files-found: error
 
-      - name: Prepare Codecov Python environment
-        if: ${{ !cancelled() }}
-        run: |
-          python3 -m venv "$RUNNER_TEMP/codecov-venv"
-          echo "$RUNNER_TEMP/codecov-venv/bin" >> "$GITHUB_PATH"
-
       - name: Publish Bulletin Unit Report To Codecov
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
-          use_pypi: true
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.BULLETIN_DIRECTORY }}/.junit-report/unit/results.xml
           flags: bulletin
@@ -1823,17 +1801,10 @@ jobs:
           overwrite: true
           if-no-files-found: error
 
-      - name: Prepare Codecov Python environment
-        if: ${{ !cancelled() }}
-        run: |
-          python3 -m venv "$RUNNER_TEMP/codecov-venv"
-          echo "$RUNNER_TEMP/codecov-venv/bin" >> "$GITHUB_PATH"
-
       - name: Publish Data Unit Report To Codecov
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
-          use_pypi: true
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.DATA_DIRECTORY }}/.junit-report/unit/results.xml
           flags: data
@@ -1889,7 +1860,6 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
-          use_pypi: true
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.DATA_DIRECTORY }}/.junit-report/integration/results.xml
           flags: data-integration
@@ -2100,17 +2070,10 @@ jobs:
           files=$(ls -1 | paste -sd,)
           echo "junit_files=$files" >> $GITHUB_OUTPUT
 
-      - name: Prepare Codecov Python environment
-        if: ${{ needs.website_e2e.result != 'skipped' }}
-        run: |
-          python3 -m venv "$RUNNER_TEMP/codecov-venv"
-          echo "$RUNNER_TEMP/codecov-venv/bin" >> "$GITHUB_PATH"
-
       - name: Publish Website Unit/E2E/Perf Report To Codecov
         if: ${{ needs.website_e2e.result != 'skipped' }}
         uses: codecov/codecov-action@v7
         with:
-          use_pypi: true
           working-directory: ${{ env.TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ steps.list_files.outputs.junit_files }}
@@ -2291,15 +2254,9 @@ jobs:
           name: ${{ needs.website_e2e.result != 'skipped' && env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF || env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_DIRECTORY }}
 
-      - name: Prepare Codecov Python environment
-        run: |
-          python3 -m venv "$RUNNER_TEMP/codecov-venv"
-          echo "$RUNNER_TEMP/codecov-venv/bin" >> "$GITHUB_PATH"
-
       - name: Publish Website Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
-          use_pypi: true
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
           disable_search: true
@@ -2315,7 +2272,6 @@ jobs:
       - name: Publish API Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
-          use_pypi: true
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.API_COVERAGE_REPORT }}
           disable_search: true
@@ -2331,7 +2287,6 @@ jobs:
       - name: Publish App Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
-          use_pypi: true
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.APP_COVERAGE_REPORT }}
           disable_search: true
@@ -2347,7 +2302,6 @@ jobs:
       - name: Publish Bulletin Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
-          use_pypi: true
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.BULLETIN_COVERAGE_REPORT }}
           disable_search: true
@@ -2363,7 +2317,6 @@ jobs:
       - name: Publish Admin Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
-          use_pypi: true
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
           disable_search: true
@@ -2379,7 +2332,6 @@ jobs:
       - name: Publish Data Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
-          use_pypi: true
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.DATA_COVERAGE_REPORT }}
           disable_search: true
