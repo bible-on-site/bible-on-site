@@ -37,9 +37,11 @@ drivers through `sessions.Create(...)`. If session startup fails, subsequent
 scenarios fail without requesting another session on a device whose preparation
 may still be running; the original failure remains in the test report.
 
-iOS waits for XCTest's `hittable` attribute before actions and uses `mobile: tap`
-at the element's center. This exercises the real touch target of rounded floating
-controls while avoiding XCTest's automatic hit-point selection. Android uses
+iOS waits for XCTest's `hittable` attribute before actions and sends one W3C touch
+at the element's viewport center, with a 100 ms pause between down and up. This
+exercises the real touch target of rounded floating controls while avoiding
+XCTest's automatic hit-point selection. Native device logs record menu press,
+release, click and completed animations to diagnose touch delivery. Android uses
 native element clicks. UI assertions and the 45-second readiness deadline remain shared.
 iOS keeps XCTest idle checks enabled with a one-second `waitForIdleTimeout`, so
 repeated internal idle waits during startup do not exhaust the page object's

@@ -3,6 +3,7 @@ using OpenQA.Selenium;
 using OpenQA.Selenium.Appium;
 using OpenQA.Selenium.Appium.Android;
 using OpenQA.Selenium.Appium.iOS;
+using OpenQA.Selenium.Interactions;
 
 namespace BibleOnSite.Tests.MobileE2E.Platforms;
 
@@ -98,15 +99,21 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
         && string.Equals(element.GetAttribute("hittable"), "true", StringComparison.OrdinalIgnoreCase);
     public override void Tap(AppiumDriver driver, AppiumElement element)
     {
-        // Use an explicit touch at the current center of the native control.
-        // Coordinates are relative to the element when elementId is supplied.
-        var size = element.Size;
-        driver.ExecuteScript("mobile: tap", new Dictionary<string, object>
-        {
-            ["elementId"] = element.Id,
-            ["x"] = size.Width / 2.0,
-            ["y"] = size.Height / 2.0
-        });
+        // Use viewport coordinates rather than XCTest's element-relative tap.
+        // One down/up pair with a short dwell produces a native touch, not a
+        // long press or a second attempt when the expected UI does not appear.
+        driver.PerformActions([CreateTapSequence(element.Location, element.Size)]);
+    }
+    internal static ActionSequence CreateTapSequence(System.Drawing.Point location, System.Drawing.Size size)
+    {
+        var finger = new PointerInputDevice(PointerKind.Touch, "finger");
+        var sequence = new ActionSequence(finger, 0);
+        sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport,
+            location.X + size.Width / 2, location.Y + size.Height / 2, TimeSpan.Zero));
+        sequence.AddAction(finger.CreatePointerDown(MouseButton.Left));
+        sequence.AddAction(finger.CreatePause(TimeSpan.FromMilliseconds(100)));
+        sequence.AddAction(finger.CreatePointerUp(MouseButton.Left));
+        return sequence;
     }
     public override void GoBack(AppiumDriver driver) => Tap(driver, driver.FindElement(FlyoutButton));
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>

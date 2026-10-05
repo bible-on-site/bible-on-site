@@ -710,6 +710,8 @@
                     CornerRadius="28"
                     BackgroundColor="{StaticResource Primary}"
                     TextColor="White"
+                    Pressed="OnCircularMenuPressed"
+                    Released="OnCircularMenuReleased"
                     Clicked="OnCircularMenuClicked"
                     AbsoluteLayout.LayoutBounds="0.5,0.95,56,56"
                     AbsoluteLayout.LayoutFlags="PositionProportional">

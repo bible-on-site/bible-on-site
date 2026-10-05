@@ -985,12 +985,19 @@ public partial class PerekPage : ContentPage
 
     #region Circular Menu Methods
 
+    private void OnCircularMenuPressed(object? sender, EventArgs e) =>
+        Console.WriteLine($"[CircularMenu] Pressed: open={_isMenuOpen}");
+
+    private void OnCircularMenuReleased(object? sender, EventArgs e) =>
+        Console.WriteLine($"[CircularMenu] Released: open={_isMenuOpen}");
+
     /// <summary>
     /// Toggles the circular menu open/closed state with animation.
     /// </summary>
     private async void OnCircularMenuClicked(object? sender, EventArgs e)
     {
         _isMenuOpen = !_isMenuOpen;
+        Console.WriteLine($"[CircularMenu] Clicked: open={_isMenuOpen}");
 
         if (_isMenuOpen)
         {
@@ -1037,6 +1044,7 @@ public partial class PerekPage : ContentPage
         }
 
         await Task.WhenAll(animations);
+        Console.WriteLine($"[CircularMenu] Open animation complete: open={_isMenuOpen}");
     }
 
     /// <summary>
@@ -1068,6 +1076,7 @@ public partial class PerekPage : ContentPage
         {
             button.InputTransparent = true;
         }
+        Console.WriteLine($"[CircularMenu] Close animation complete: open={_isMenuOpen}");
     }
 
     /// <summary>
