@@ -12,7 +12,7 @@ namespace BibleOnSite.Tests.MobileE2E;
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "Shared")]
-public sealed class PerekPilotTests(ITestOutputHelper output) : IAsyncLifetime
+public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessionFactory sessions) : IAsyncLifetime
 {
     private readonly MobileTestConfiguration _configuration = MobileTestConfiguration.FromEnvironment();
     private AppiumDriver? _driver;
@@ -22,7 +22,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output) : IAsyncLifetime
     public Task InitializeAsync()
     {
         _platform = MobilePlatformAdapter.For(_configuration.Platform);
-        _driver = _platform.CreateDriver(_configuration.Server, _platform.CreateOptions(_configuration));
+        _driver = sessions.Create(() => _platform.CreateDriver(_configuration.Server, _platform.CreateOptions(_configuration)));
         _page = new(_driver, _platform);
         return Task.CompletedTask;
     }
@@ -113,4 +113,4 @@ public sealed class PerekPilotTests(ITestOutputHelper output) : IAsyncLifetime
 }
 
 [CollectionDefinition("Mobile device", DisableParallelization = true)]
-public sealed class MobileDeviceCollection;
+public sealed class MobileDeviceCollection : ICollectionFixture<MobileDeviceSessionFactory>;

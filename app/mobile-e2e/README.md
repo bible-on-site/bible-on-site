@@ -32,7 +32,10 @@ branching or skipping an entire shared scenario. Shared classes use
 `[Trait("Category", "MobileE2E")]`; the Nuke target automatically selects shared
 tests plus the current platform, leaving platform-only behavior easy to add.
 Use `[Collection("Mobile device")]` on every mobile test class to serialize
-scenarios that own the same device.
+scenarios that own the same device. Inject `MobileDeviceSessionFactory` and create
+drivers through `sessions.Create(...)`. If session startup fails, subsequent
+scenarios fail without requesting another session on a device whose preparation
+may still be running; the original failure remains in the test report.
 
 iOS waits for XCTest's `hittable` attribute before actions and uses `mobile: tap`
 at the element's center. This exercises the real touch target of rounded floating
@@ -70,4 +73,7 @@ timestamped Appium and device logs, TRX and JUnit reports, under `app/.artifacts
 iOS also exports app lifecycle logs and fresh app crash reports. Failed runs
 collect a short native stack sample if the app is still running, without
 competing with healthy tests for simulator resources.
+The independent log export allows iOS to disable Appium's duplicate live system
+log stream with `skipLogCapture`, avoiding its cold-start overhead. Session setup
+has a five-minute client budget inside the six-minute test-host hang guard.
 CI uploads a separate artifact for each platform even on test failures.

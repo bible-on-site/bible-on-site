@@ -52,6 +52,9 @@ public abstract class MobilePlatformAdapter
             options.AddAdditionalAppiumOption("autoAcceptAlerts", true);
             options.AddAdditionalAppiumOption("enforceAppInstall", true);
             options.AddAdditionalAppiumOption("isHeadless", true);
+            // run.mjs exports device/lifecycle/crash logs independently. Appium's
+            // duplicate live stream can stall cold simulator session startup.
+            options.AddAdditionalAppiumOption("skipLogCapture", true);
             options.AddAdditionalAppiumOption("showXcodeLog", true);
             options.AddAdditionalAppiumOption("usePreinstalledWDA", true);
             options.AddAdditionalAppiumOption("prebuiltWDAPath", configuration.PrebuiltWdaPath
@@ -107,6 +110,7 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
     }
     public override void GoBack(AppiumDriver driver) => Tap(driver, driver.FindElement(FlyoutButton));
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
-        // Cover simulator/app preparation plus one bounded WDA startup attempt.
-        new IOSDriver(server, options, TimeSpan.FromMinutes(4));
+        // Cover cold simulator/app preparation plus WDA startup before the
+        // six-minute test-host hang guard, without overlapping session setup.
+        new IOSDriver(server, options, TimeSpan.FromMinutes(5));
 }
