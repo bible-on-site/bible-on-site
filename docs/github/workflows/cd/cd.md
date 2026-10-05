@@ -55,12 +55,12 @@ Triggered by `release_app` job in `ci.yml` after App CI passes.
 Triggered by `release_data` job in `ci.yml` after Data CI passes.
 
 Tanahpedia/schema-only changes intentionally skip the perushim generation job. The
-release gate accepts that `skipped` result and Data CD downloads the always-present
-`perushim-data-sql.master` artifact. A skipped perushim job must never suppress a
+release gate accepts that `skipped` result and binds the current run's non-expired
+`perushim-data-sql.master` artifact by immutable ID and SHA-256 digest. A skipped perushim job must never suppress a
 detected data deployment.
 
 **Flow:**
-1. Download the current-run perushim artifact or the non-expired master baseline
+1. Validate the dispatch's source and freshness, then download and verify its pinned SQL archive
 2. Configure AWS credentials (OIDC)
 3. Validate and run data migration scripts against production RDS
 

@@ -11,6 +11,7 @@ const source = {
 	head_branch: "master",
 	head_sha: sha,
 	workflow_id: 5,
+	run_attempt: 1,
 };
 const input = {
 	repo: "test/repo",
@@ -34,6 +35,18 @@ function request(overrides = {}) {
 		if (endpoint.includes("/compare/"))
 			return { status: overrides.status ?? "identical" };
 		if (endpoint.includes("/deployments?")) return [];
+		if (endpoint.includes("/runs/10/artifacts?"))
+			return {
+				artifacts: [
+					{
+						id: 90,
+						name: "perushim-data-sql",
+						expired: false,
+						digest: `sha256:${"a".repeat(64)}`,
+						workflow_run: { id: 10, head_sha: sha },
+					},
+				],
+			};
 		if (endpoint.includes("/releases?"))
 			return overrides.releases ?? [published];
 		throw new Error(`Unexpected API call: ${endpoint}`);
@@ -50,6 +63,7 @@ test("latest release deploys from the artifact's exact commit", () => {
 		deploy: true,
 		ref: sha,
 		version: "1.0.10",
+		runAttempt: 1,
 	});
 });
 test("a late older dispatch cannot replace a newer release", () => {
@@ -108,7 +122,12 @@ test("manual iOS upload resolves its version and SHA from its source run", () =>
 		},
 		request({ releases: [{ tag_name: "app-v5.0.118" }] }),
 	);
-	assert.deepEqual(result, { deploy: true, ref: sha, version: "5.0.118" });
+	assert.deepEqual(result, {
+		deploy: true,
+		ref: sha,
+		version: "5.0.118",
+		runAttempt: 1,
+	});
 });
 test("release pagination finds a superseding release on later pages", () => {
 	const mock = request();
@@ -239,4 +258,161 @@ test("an unfinished newer data attempt does not block recovery", () => {
 		},
 	);
 	assert.equal(result.deploy, true);
+});
+
+const metadata = (attempt = 1, extra = {}) => ({
+	...published,
+	body: `<!-- release-delivery:${JSON.stringify({ ref: sha, ci_run_id: "10", ci_run_attempt: attempt, module_name: "website", module_version: "1.0.10", ...extra })} -->`,
+});
+
+function historyRequest(jobs, attempt = 2, release = metadata()) {
+	const mock = request({
+		source: { ...source, run_attempt: attempt },
+		releases: [release],
+	});
+	return (url) => (url.includes("/runs/10/jobs?") ? { jobs } : mock(url));
+}
+
+test("published assets retain original passing CI despite a later failed full rerun", () => {
+	const result = checkDeployment(
+		input,
+		historyRequest([
+			{ name: "Cross Module CI", run_attempt: 2, conclusion: "failure" },
+			{ name: "Cross Module CI", run_attempt: 1, conclusion: "success" },
+		]),
+	);
+	assert.equal(result.deploy, true);
+	assert.equal(result.runAttempt, 1);
+});
+
+test("a failed-jobs-only release rerun can reuse its unchanged successful quality gate", () => {
+	const result = checkDeployment(
+		input,
+		historyRequest(
+			[{ name: "Cross Module CI", run_attempt: 1, conclusion: "success" }],
+			2,
+			metadata(2),
+		),
+	);
+	assert.equal(result.deploy, true);
+	assert.equal(result.runAttempt, 2);
+});
+
+test("a failed newer quality gate cannot inherit an older passing result", () => {
+	assert.throws(
+		() =>
+			checkDeployment(
+				input,
+				historyRequest(
+					[
+						{ name: "Cross Module CI", run_attempt: 1, conclusion: "success" },
+						{ name: "Cross Module CI", run_attempt: 2, conclusion: "failure" },
+					],
+					2,
+					metadata(2),
+				),
+			),
+		/has not passed/,
+	);
+});
+
+test("original quality evidence can occur on later job-history pages", () => {
+	const mock = historyRequest([], 2);
+	const result = checkDeployment(input, (url) => {
+		if (!url.includes("/runs/10/jobs?")) return mock(url);
+		assert.match(url, /filter=all/);
+		return {
+			jobs: url.endsWith("page=1")
+				? Array(100).fill({ name: "Other" })
+				: [{ name: "Cross Module CI", run_attempt: 1, conclusion: "success" }],
+		};
+	});
+	assert.equal(result.deploy, true);
+});
+
+test("published provenance must match the deployment source CI", () => {
+	for (const extra of [
+		{ ci_run_id: "11" },
+		{ ref: "b".repeat(40) },
+		{ ci_run_attempt: 3 },
+	]) {
+		assert.throws(
+			() => checkDeployment(input, historyRequest([], 2, metadata(1, extra))),
+			/source|exceeds/,
+		);
+	}
+});
+
+test("legacy SQL dispatch refuses to select replacement data after a rerun", () => {
+	const mock = request({ source: { ...source, run_attempt: 2 } });
+	assert.throws(
+		() =>
+			checkDeployment({ ...input, moduleName: "data" }, (url) =>
+				url.includes("/actions/runs?") ? { workflow_runs: [] } : mock(url),
+			),
+		/Legacy SQL dispatch/,
+	);
+});
+
+test("legacy SQL binding detects a CI rerun during artifact resolution", () => {
+	const mock = request();
+	let reads = 0;
+	assert.throws(
+		() =>
+			checkDeployment({ ...input, moduleName: "data" }, (url) => {
+				if (url.endsWith("/actions/runs/10"))
+					return { ...source, run_attempt: ++reads };
+				if (url.includes("/actions/runs?")) return { workflow_runs: [] };
+				return mock(url);
+			}),
+		/CI changed/,
+	);
+});
+
+test("a successful later SQL attempt stays protected after its CI fails", () => {
+	const mock = request({ source: { ...source, run_attempt: 3 } });
+	const result = checkDeployment(
+		{ ...input, moduleName: "data", runAttempt: 1 },
+		(url) => {
+			if (url.includes("/deployments?"))
+				return [
+					{ id: 22, sha, payload: { ci_run_id: "10", ci_run_attempt: "2" } },
+				];
+			if (url.includes("/deployments/22/statuses"))
+				return [{ state: "success" }];
+			return mock(url);
+		},
+	);
+	assert.equal(result.deploy, false);
+});
+
+test("pinned SQL keeps its original passing attempt when a later rebuild fails", () => {
+	const mock = historyRequest([
+		{ name: "Cross Module CI", run_attempt: 1, conclusion: "success" },
+		{ name: "Cross Module CI", run_attempt: 2, conclusion: "failure" },
+	]);
+	const result = checkDeployment(
+		{
+			...input,
+			moduleName: "data",
+			runAttempt: 1,
+			artifactId: "90",
+			artifactDigest: `sha256:${"a".repeat(64)}`,
+		},
+		(url) => {
+			if (url.includes("/actions/runs?")) return { workflow_runs: [] };
+			if (url.endsWith("/artifacts/90"))
+				return {
+					id: 90,
+					name: "perushim-data-sql",
+					expired: false,
+					digest: `sha256:${"a".repeat(64)}`,
+					workflow_run: { id: 10, head_sha: sha },
+				};
+			return mock(url);
+		},
+	);
+	assert.equal(result.deploy, true);
+	assert.equal(result.artifactId, "90");
+	assert.equal(result.runAttempt, 1);
 });

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import {
+	chmodSync,
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
@@ -24,7 +25,7 @@ function fixture(t: { after: (fn: () => void) => void }) {
 			encoding: "utf8",
 			stdio: ["ignore", "pipe", "pipe"],
 		}).trim();
-	git(root, "init", "--bare", remote);
+	git(root, "init", "--bare", "-b", "master", remote);
 	git(root, "init", "-b", "master", a);
 	const configure = (cwd: string) => {
 		git(cwd, "config", "user.name", "Test");
@@ -51,7 +52,7 @@ function fixture(t: { after: (fn: () => void) => void }) {
 	git(a, "push", "--tags", "origin", "master");
 	git(root, "clone", remote, b);
 	configure(b);
-	return { a, b, git, setVersion };
+	return { a, b, remote, git, setVersion };
 }
 
 const released = {
@@ -198,4 +199,25 @@ test("combined publication still skips CI for normal releases", (t) => {
 	const { a, git } = fixture(t);
 	publishVersionBumps(released, "all", a);
 	assert.match(git(a, "log", "-1", "--format=%s"), /skip ci/);
+});
+
+test("a policy rejection does not pretend that master advanced or retry a forbidden push", (t) => {
+	const { a, remote, git } = fixture(t);
+	const original = git(a, "rev-parse", "HEAD");
+	const hook = join(remote, "hooks/pre-receive");
+	writeFileSync(hook, "#!/bin/sh\necho 'test policy rejection' >&2\nexit 1\n");
+	chmodSync(hook, 0o755);
+	let attempts = 0;
+	assert.throws(
+		() =>
+			publishVersionBumps(released, "all", a, undefined, () => {
+				attempts++;
+			}),
+		/Version push failed.*test policy rejection/s,
+	);
+	assert.equal(attempts, 1);
+	assert.equal(
+		git(a, "ls-remote", "origin", "refs/heads/master").split(/\s/)[0],
+		original,
+	);
 });

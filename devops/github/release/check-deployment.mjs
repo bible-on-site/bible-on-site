@@ -3,7 +3,9 @@ import { appendFileSync, copyFileSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { resolveSqlArtifact } from "./data-artifact.mjs";
 import { startDeployment } from "./deployment-state.mjs";
+import { releasePayload } from "./release-provenance.mjs";
 
 const api = (endpoint) =>
 	JSON.parse(
@@ -31,9 +33,46 @@ export function newerVersion(candidate, version) {
 	return false;
 }
 
+/** A failed-jobs-only rerun can retain an earlier successful quality gate. */
+function checkQuality(root, runId, runAttempt, request) {
+	let quality;
+	for (let page = 1; ; page++) {
+		const jobs = request(
+			`${root}/actions/runs/${runId}/jobs?filter=all&per_page=100&page=${page}`,
+		).jobs;
+		for (const job of jobs) {
+			const attempt = job.run_attempt ?? 1;
+			if (
+				job.name === "Cross Module CI" &&
+				attempt <= runAttempt &&
+				(!quality ||
+					attempt > (quality.run_attempt ?? 1) ||
+					(attempt === (quality.run_attempt ?? 1) && job.id > quality.id))
+			)
+				quality = job;
+		}
+		if (jobs.length < 100) break;
+	}
+	if (quality?.conclusion !== "success")
+		throw new Error(
+			"Source CI has not passed Cross Module CI for the release attempt",
+		);
+}
+
 /** Called inside the target's CD concurrency lock, before any production writes. */
 export function checkDeployment(
-	{ repo, runId, ref, moduleName, moduleDirectory, version, artifactName },
+	{
+		repo,
+		runId,
+		ref,
+		moduleName,
+		moduleDirectory,
+		version,
+		artifactName,
+		runAttempt,
+		artifactId,
+		artifactDigest,
+	},
 	request = api,
 ) {
 	if (!/^\d+$/.test(String(runId)))
@@ -46,23 +85,19 @@ export function checkDeployment(
 		source.head_branch !== "master"
 	)
 		throw new Error("Deployment source must be master push CI");
-	let qualityPassed = false;
-	for (let page = 1; ; page++) {
-		const jobs = request(
-			`${root}/actions/runs/${runId}/jobs?per_page=100&page=${page}`,
-		).jobs;
-		qualityPassed = jobs.some(
-			(job) => job.name === "Cross Module CI" && job.conclusion === "success",
-		);
-		if (qualityPassed || jobs.length < 100) break;
-	}
-	if (!qualityPassed)
-		throw new Error("Source CI has not passed Cross Module CI");
 	if (ref && ref !== source.head_sha)
 		throw new Error("Deployment ref does not match the artifact's CI run");
 	ref = source.head_sha;
 	if (!/^[a-f0-9]{40}$/.test(ref))
 		throw new Error("Deployment requires an immutable commit SHA");
+	const currentAttempt = source.run_attempt ?? 1;
+	runAttempt = Number(runAttempt ?? currentAttempt);
+	if (
+		!Number.isSafeInteger(runAttempt) ||
+		runAttempt < 1 ||
+		runAttempt > currentAttempt
+	)
+		throw new Error("Invalid source CI attempt");
 	if (moduleName === "data") {
 		// Completion is durable even if a newer CI run is subsequently rerun and fails.
 		// Compare commits, because Actions creation/queue order is not commit order.
@@ -74,7 +109,9 @@ export function checkDeployment(
 			for (const deployment of deployments) {
 				let newer =
 					deployment.sha === ref &&
-					Number(deployment.payload?.ci_run_id) > Number(runId);
+					(Number(deployment.payload?.ci_run_id) > Number(runId) ||
+						(Number(deployment.payload?.ci_run_id) === Number(runId) &&
+							Number(deployment.payload?.ci_run_attempt) > runAttempt));
 				if (deployment.sha !== ref) {
 					if (!comparisons.has(deployment.sha))
 						comparisons.set(
@@ -98,12 +135,14 @@ export function checkDeployment(
 		}
 		// Data has no version tags. A successful newer Release Data job proves
 		// that its SQL is ready and its dispatch supersedes this one.
-		for (let page = 1; ; page++) {
+		dataRuns: for (let page = 1; ; page++) {
 			const runs = request(
 				`${root}/actions/runs?per_page=100&page=${page}`,
 			).workflow_runs;
 			for (const run of runs) {
-				if (run.id <= source.id) return { deploy: true, ref };
+				if (run.id < source.id) break dataRuns;
+				if (run.id === source.id && (run.run_attempt ?? 1) <= runAttempt)
+					break dataRuns;
 				if (
 					run.name !== source.name ||
 					run.event !== "push" ||
@@ -123,6 +162,8 @@ export function checkDeployment(
 				}
 				if (!dispatched) continue;
 				if (
+					(run.head_sha === ref &&
+						(run.id > source.id || (run.run_attempt ?? 1) > runAttempt)) ||
 					request(`${root}/compare/${ref}...${run.head_sha}`).status === "ahead"
 				)
 					return {
@@ -131,8 +172,26 @@ export function checkDeployment(
 						reason: `Superseded by data CI ${run.id}`,
 					};
 			}
-			if (runs.length < 100) return { deploy: true, ref };
+			if (runs.length < 100) break;
 		}
+		// A legacy dispatch has no archive ID. After a rerun its original SQL
+		// cannot be proven; require a fresh dispatch rather than selecting new SQL.
+		if (artifactId === undefined && currentAttempt !== 1)
+			throw new Error(
+				"Legacy SQL dispatch cannot be recovered after a CI rerun; dispatch its immutable artifact ID",
+			);
+		checkQuality(root, runId, runAttempt, request);
+		const artifact = resolveSqlArtifact(
+			{ repo, runId, ref, artifactId, artifactDigest },
+			request,
+		);
+		if (
+			artifactId === undefined &&
+			(request(`${root}/actions/runs/${runId}`).run_attempt ?? 1) !==
+				currentAttempt
+		)
+			throw new Error("CI changed while binding the legacy SQL artifact");
+		return { deploy: true, ref, runAttempt, ...artifact };
 	}
 	if (!directories[moduleName] || moduleDirectory !== directories[moduleName])
 		throw new Error("Unknown deployment module/directory");
@@ -143,12 +202,12 @@ export function checkDeployment(
 	const tag = `${moduleName}-v${version}`;
 	if (request(`${root}/compare/${tag}...${ref}`).status !== "identical")
 		throw new Error("Release tag and artifact commit differ");
-	let found = false;
+	let found;
 	for (let page = 1; ; page++) {
 		const releases = request(`${root}/releases?per_page=100&page=${page}`);
 		for (const release of releases) {
 			if (release.draft || release.prerelease) continue;
-			if (release.tag_name === tag) found = true;
+			if (release.tag_name === tag) found = release;
 			if (!release.tag_name.startsWith(`${moduleName}-v`)) continue;
 			const candidate = release.tag_name.slice(moduleName.length + 2);
 			if (newerVersion(candidate, version))
@@ -162,7 +221,21 @@ export function checkDeployment(
 		if (releases.length < 100) break;
 	}
 	if (!found) throw new Error(`No published release for ${tag}`);
-	return { deploy: true, ref, version };
+	const provenance = releasePayload(found);
+	if (provenance) {
+		if (
+			provenance.ref !== ref ||
+			String(provenance.ci_run_id) !== String(runId)
+		)
+			throw new Error(
+				"Deployment source differs from published release metadata",
+			);
+		runAttempt = Number(provenance.ci_run_attempt ?? 1);
+		if (runAttempt > currentAttempt)
+			throw new Error("Published CI attempt exceeds source CI");
+	}
+	checkQuality(root, runId, runAttempt, request);
+	return { deploy: true, ref, version, runAttempt };
 }
 
 if (
@@ -182,6 +255,9 @@ if (
 				: (payload.module_directory ?? "app"),
 		version: payload.module_version,
 		artifactName: event.inputs?.ios_artifact_name,
+		runAttempt: payload.ci_run_attempt,
+		artifactId: payload.sql_artifact_id,
+		artifactDigest: payload.sql_artifact_digest,
 	});
 	if (result.deploy) {
 		const state = startDeployment({
@@ -189,6 +265,8 @@ if (
 			target: process.env.DEPLOY_TARGET ?? process.env.DEPLOY_MODULE,
 			ref: result.ref,
 			version: result.version,
+			runAttempt: result.runAttempt,
+			artifactId: result.artifactId,
 			runId: payload.ci_run_id ?? payload.run_id ?? event.inputs?.ci_run_id,
 		});
 		result = { ...result, ...state };
@@ -200,7 +278,7 @@ if (
 	}
 	appendFileSync(
 		process.env.GITHUB_OUTPUT,
-		`deploy=${result.deploy}\nref=${result.ref}\ndeployment_id=${result.deploymentId ?? ""}\n`,
+		`deploy=${result.deploy}\nref=${result.ref}\ndeployment_id=${result.deploymentId ?? ""}\nartifact_id=${result.artifactId ?? ""}\nartifact_digest=${result.artifactDigest ?? ""}\n`,
 	);
 	if (result.version)
 		appendFileSync(

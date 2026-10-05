@@ -107,7 +107,8 @@ jobs:
             --arg module_directory "${{ inputs.module_directory }}" \
             --arg module_version "${{ inputs.module_version }}" \
             --arg ci_run_id "${{ github.run_id }}" \
-            '{ref: $ref, module_name: $module_name, module_directory: $module_directory, module_version: $module_version, ci_run_id: $ci_run_id}')
+            --arg ci_run_attempt "${{ github.run_attempt }}" \
+            '{ref: $ref, module_name: $module_name, module_directory: $module_directory, module_version: $module_version, ci_run_id: $ci_run_id, ci_run_attempt: $ci_run_attempt}')
 
           # Add artifact names to payload using cd_key or default key
           while read -r artifact; do
@@ -156,7 +157,7 @@ jobs:
               exit 0
             fi
             if [ "$STATUS" = "identical" ]; then
-              # Published assets never change; drafts can resume their original upload.
+              # Published assets never change; drafts resume with this passing CI build.
               if gh api "repos/${{ github.repository }}/releases/tags/${TAG_NAME}" > release.json 2> release-error.txt; then
                 ORIGINAL_PAYLOAD=$(node devops/github/release/release-assets.mjs)
                 if [ -n "$ORIGINAL_PAYLOAD" ]; then
@@ -165,14 +166,16 @@ jobs:
                     echo "Release metadata source does not match the tag commit" >&2
                     exit 1
                   fi
-                  echo "CD_PAYLOAD=$ORIGINAL_PAYLOAD" >> $GITHUB_OUTPUT
                 fi
                 echo "NEEDS_BUMP=false" >> $GITHUB_OUTPUT
                 echo "TAG_EXISTS=true" >> $GITHUB_OUTPUT
                 if jq -e '.draft == true' release.json > /dev/null; then
                   echo "SKIP_RELEASE=false" >> $GITHUB_OUTPUT
-                  echo "Resuming draft release from its original CI artifacts"
+                  echo "Resuming draft release with this passing CI build"
                 else
+                  if [ -n "$ORIGINAL_PAYLOAD" ]; then
+                    echo "CD_PAYLOAD=$ORIGINAL_PAYLOAD" >> $GITHUB_OUTPUT
+                  fi
                   echo "SKIP_RELEASE=true" >> $GITHUB_OUTPUT
                   echo "Release already published; preserving its original artifacts"
                 fi
@@ -223,7 +226,11 @@ jobs:
           SOURCE_RUN=$(echo "$DELIVERY_PAYLOAD" | jq -r .ci_run_id)
           echo "Processing artifacts: $ARTIFACTS"
 
-          # Process each artifact using gh CLI for precise control
+          SOURCE_ATTEMPT=$(echo "$DELIVERY_PAYLOAD" | jq -r .ci_run_attempt)
+          test "$(gh api "repos/${{ github.repository }}/actions/runs/$SOURCE_RUN" --jq .run_attempt)" = "$SOURCE_ATTEMPT"
+          gh api "repos/${{ github.repository }}/actions/runs/$SOURCE_RUN/artifacts" --paginate --jq '.artifacts[]' > "$RUNNER_TEMP/release-artifacts.jsonl"
+
+          # Pin each archive before downloading; never follow a replaced artifact name.
           echo "$ARTIFACTS" | jq -c '.[]' | while read -r artifact; do
             NAME=$(echo "$artifact" | jq -r '.name // empty')
             PATH_DIR=$(echo "$artifact" | jq -r '.path')
@@ -237,11 +244,16 @@ jobs:
             echo "Downloading artifact '$NAME' to '$PATH_DIR'"
             mkdir -p "$PATH_DIR"
 
-            # Download artifact using gh CLI
-            gh run download "$SOURCE_RUN" --name "$NAME" --dir "$PATH_DIR"
-
-            echo "Contents of $PATH_DIR:"
-            ls -la "$PATH_DIR" 2>/dev/null || echo "  (empty or not found)"
+            SOURCE=$(jq -s -e --arg name "$NAME" --arg run_id "$SOURCE_RUN" --arg ref "${{ github.sha }}" '
+              [.[] | select(.name == $name and .expired == false and (.workflow_run.id | tostring) == $run_id and .workflow_run.head_sha == $ref)]
+              | max_by(.id) | select(. != null and (.digest | test("^sha256:[a-f0-9]{64}$")))' "$RUNNER_TEMP/release-artifacts.jsonl")
+            ID=$(echo "$SOURCE" | jq -r .id)
+            DIGEST=$(echo "$SOURCE" | jq -r .digest)
+            ARCHIVE="$RUNNER_TEMP/release-$ID.zip"
+            gh api "repos/${{ github.repository }}/actions/artifacts/$ID/zip" > "$ARCHIVE"
+            printf '%s  %s\n' "${DIGEST#sha256:}" "$ARCHIVE" | sha256sum --check --status
+            unzip -q "$ARCHIVE" -d "$PATH_DIR"
+            ls -la "$PATH_DIR"
           done
 
       - name: Prepare Release

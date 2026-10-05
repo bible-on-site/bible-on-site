@@ -58,17 +58,17 @@ test("deployment history pagination retains completion evidence", () => {
 	assert.equal(result.deploy, false);
 });
 
-test("data identity includes the original artifact run", () => {
+test("data identity includes the immutable artifact ID", () => {
 	let key;
 	startDeployment(
-		{ ...input, target: "data", version: undefined },
+		{ ...input, target: "data", version: undefined, artifactId: "90" },
 		(_url, body) => {
 			if (!body) return [];
 			if (body.payload) key = body.payload.release_key;
 			return { id: 2 };
 		},
 	);
-	assert.equal(key, `data-${input.ref}-10`);
+	assert.equal(key, `data-${input.ref}-10-90`);
 });
 
 test("record failures stop deployment instead of assuming it is safe", () => {
@@ -101,4 +101,30 @@ test("final success and failure remain visible with their workflow logs", () => 
 		() => finishDeployment("test/repo", undefined, "success"),
 		/ID is required/,
 	);
+});
+
+test("a rebuilt SQL archive is independent while its repeated dispatch is a no-op", () => {
+	for (const artifactId of ["90", "91"]) {
+		const result = startDeployment(
+			{
+				...input,
+				target: "data",
+				version: undefined,
+				artifactId,
+				runAttempt: 2,
+			},
+			(url, body) => {
+				if (body) {
+					if (body.payload) {
+						assert.equal(body.payload.sql_artifact_id, artifactId);
+						assert.equal(body.payload.ci_run_attempt, "2");
+					}
+					return { id: 2 };
+				}
+				if (url.includes("/statuses?")) return [{ state: "success" }];
+				return [{ id: 1, payload: { release_key: `data-${input.ref}-10-90` } }];
+			},
+		);
+		assert.equal(result.deploy, artifactId === "91");
+	}
 });

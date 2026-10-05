@@ -17,7 +17,7 @@ export const request = (endpoint, body) =>
 
 /** Runs inside the same target lock as the production writes. */
 export function startDeployment(
-	{ repo, target, ref, version, runId },
+	{ repo, target, ref, version, runId, runAttempt = 1, artifactId },
 	api = request,
 ) {
 	if (
@@ -27,7 +27,11 @@ export function startDeployment(
 	)
 		throw new Error(`Unknown deployment target: ${target}`);
 	const root = `repos/${repo}/deployments`;
-	const key = version ? `${target}-v${version}` : `${target}-${ref}-${runId}`;
+	if (!version && !/^\d+$/.test(String(artifactId)))
+		throw new Error("Data deployment requires an immutable SQL artifact ID");
+	const key = version
+		? `${target}-v${version}`
+		: `${target}-${ref}-${runId}-${artifactId}`;
 	for (let page = 1; ; page++) {
 		const previous = api(
 			`${root}?sha=${ref}&environment=${target}&task=deploy:release&per_page=100&page=${page}`,
@@ -50,7 +54,12 @@ export function startDeployment(
 		auto_merge: false,
 		required_contexts: [],
 		production_environment: true,
-		payload: { release_key: key, ci_run_id: String(runId) },
+		payload: {
+			release_key: key,
+			ci_run_id: String(runId),
+			ci_run_attempt: String(runAttempt),
+			...(artifactId ? { sql_artifact_id: String(artifactId) } : {}),
+		},
 		description: `Release delivery: ${key}`,
 	});
 	if (!deployment.id)

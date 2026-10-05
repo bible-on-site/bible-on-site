@@ -53,8 +53,9 @@ SQL artifact come from the same CI run. API failures stop deployment.
 A release is a draft until all required assets are uploaded and verified by name,
 size and the GitHub SHA-256 digest when available. Missing files, partial uploads
 and API failures stop publication and CD. Rerun the failed CI jobs to finish a tag-only
-or draft release. Draft recovery downloads from the original CI run recorded in the
-release notes. Published assets are never replaced by a rerun.
+or draft release. Draft recovery uses the current passing CI build of the exact tag commit and
+updates its delivery metadata. Downloads pin immutable archive IDs and verify
+their SHA-256 checksums. Published assets are never replaced by a rerun.
 
 Versioned CD downloads the published GitHub Release assets, not mutable CI artifacts:
 a full CI rerun may rebuild the same artifact name, but cannot change the binary CD
@@ -81,3 +82,11 @@ CD, rerun failed jobs in that CD workflow. Queues retain at most 100 pending job
 manual cancellation, expired CI artifacts during draft recovery, and exhausted five-attempt
 bump publication retries still require explicit recovery from the visible failed/cancelled
 run. The workflow never force-pushes master or rolls production back automatically.
+
+## CI reruns and SQL archive identity
+
+Published release metadata records the original CI run and attempt. CD verifies the latest Cross Module CI result at or before that attempt, so a failed full rerun cannot invalidate already published binaries. A failed-jobs-only rerun can reuse its unchanged successful quality gate. A newer failed quality gate never inherits an earlier pass.
+
+Data dispatches carry an immutable SQL artifact ID, SHA-256 archive digest, commit SHA, and CI attempt. CD verifies the archive's source, expiry, and checksum before accessing production. Data completion records include that artifact ID, allowing a new archive from a CI rerun to deploy while repeated dispatches of a completed archive are skipped. Successfully deployed later attempts also prevent older SQL from replacing them.
+
+Legacy data dispatches without an artifact ID are bound once to a verified archive only if the source CI has never been rerun. After a rerun, their original SQL cannot be proven: use the new Release Data dispatch with an immutable artifact ID. Deleted or expired archives fail visibly; they never fall back to replacement SQL.

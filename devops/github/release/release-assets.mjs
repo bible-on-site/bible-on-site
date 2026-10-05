@@ -3,22 +3,9 @@ import { globSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const marker = /<!-- release-delivery:(.*?) -->/;
+import { releasePayload } from "./release-provenance.mjs";
 
-/** Published releases must replay their original artifact provenance. */
-export function releasePayload(release) {
-	const match = release.body?.match(marker);
-	if (!match) return undefined; // Releases published before delivery metadata was introduced.
-	const payload = JSON.parse(match[1]);
-	if (
-		!/^[a-f0-9]{40}$/.test(payload.ref) ||
-		!/^\d+$/.test(String(payload.ci_run_id)) ||
-		release.tag_name !== `${payload.module_name}-v${payload.module_version}`
-	) {
-		throw new Error("Release delivery metadata does not match its tag/source");
-	}
-	return payload;
-}
+export { releasePayload } from "./release-provenance.mjs";
 
 /** Do not expose a draft or dispatch CD until every expected asset is uploaded. */
 export function verifyReleaseAssets(release, artifacts, cwd = process.cwd()) {

@@ -2561,15 +2561,23 @@ jobs:
     if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.data_ci.result == 'success' && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
+      actions: read
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout release automation
+        uses: actions/checkout@v7
+      - name: Bind SQL artifact source
+        id: sql_source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node devops/github/release/data-artifact.mjs
       - name: Trigger Data CD Workflow
         uses: peter-evans/repository-dispatch@v4
         with:
           repository: ${{ github.repository }}
           token: ${{ secrets.BOT_PAT }}
           event-type: deploy-data
-          client-payload: '{"ref": "${{ github.sha }}", "run_id": "${{ github.run_id }}"}'
+          client-payload: ${{ steps.sql_source.outputs.payload }}
 
   # ====================================================================================
   # VERSION BUMP JOB - Post-release version bumps on master

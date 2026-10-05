@@ -48,6 +48,10 @@ for (const [status, bump, skip, releaseState, exit = 0] of [
 			new URL("./release-assets.mjs", import.meta.url),
 			join(root, "devops/github/release/release-assets.mjs"),
 		);
+		copyFileSync(
+			new URL("./release-provenance.mjs", import.meta.url),
+			join(root, "devops/github/release/release-provenance.mjs"),
+		);
 		const result = spawnSync(
 			shell,
 			[
@@ -85,7 +89,7 @@ for (const [status, bump, skip, releaseState, exit = 0] of [
 		const values = readFileSync(output, "utf8");
 		assert.match(values, new RegExp(`NEEDS_BUMP=${bump}`));
 		assert.match(values, new RegExp(`SKIP_RELEASE=${skip}`));
-		if (releaseState?.endsWith("-original")) {
+		if (releaseState === "published-original") {
 			const payload = JSON.parse(
 				values
 					.split("\n")
@@ -95,6 +99,8 @@ for (const [status, bump, skip, releaseState, exit = 0] of [
 			assert.equal(payload.ci_run_id, "9");
 			assert.equal(payload.released_artifact_name, "original-artifact");
 		}
+		if (releaseState === "draft-original")
+			assert.doesNotMatch(values, /CD_PAYLOAD=/);
 	});
 }
 test("release artifact failures remain fatal and queues retain pending releases", () => {
@@ -110,6 +116,7 @@ test("publication stays draft until asset verification, and completed reruns rep
 			workflow.indexOf("--draft=false"),
 	);
 	assert.match(workflow, /CD_PAYLOAD=\$ORIGINAL_PAYLOAD/);
-	assert.match(workflow, /gh run download "\$SOURCE_RUN"/);
+	assert.match(workflow, /actions\/artifacts\/\$ID\/zip/);
+	assert.doesNotMatch(workflow, /gh run download/);
 	assert.match(workflow, /steps.check_tag.outputs.ANCESTOR != 'true'/);
 });
