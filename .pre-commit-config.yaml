@@ -44,7 +44,7 @@ repos:
       - id: check-app-version
         name: check-app-version
         entry: python devops/check-app-version.py
-        language: system
+        language: python
         files: ^app/BibleOnSite/BibleOnSite\.csproj$
         pass_filenames: false
       - id: md-dead-link-check
