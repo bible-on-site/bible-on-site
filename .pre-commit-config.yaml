@@ -36,7 +36,7 @@ repos:
   # https://github.com/rhysd/actionlint/issues/693
   # This Astral revision supports them and retains the existing Pyflakes checks.
   - repo: "https://github.com/astral-sh/actionlint"
-    rev: 9e5dcb067e7cdcfe44d3f015ba9f2be4583466cb
+    rev: 0141e7822652fbee3a1b878c3d83d9c1dce87d67
     hooks:
       - id: actionlint
   - repo: local
