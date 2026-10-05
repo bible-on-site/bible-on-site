@@ -48,11 +48,11 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.0.111</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>5.0.117</ApplicationDisplayVersion>
 		<!-- Windows MSIX requires each version component ≤65535, so we use a separate incrementing value -->
 		<!-- Android versionCode can be large, continuing from Play Store's 40000017 -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000111</ApplicationVersion>
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">111</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000117</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">117</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<!-- WindowsPackageType None = unpackaged (fixes "Class not registered" when running from CLI). MSIX for Store: /p:WindowsPackageType=MSIX -->
@@ -121,7 +121,7 @@
 	<!-- Android: Play Asset Delivery SDK.
 	     XAAMM0000 manifest collisions with Plugin.Firebase are suppressed in NoWarn above. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
-		<PackageReference Include="Xamarin.Google.Android.Play.Asset.Delivery" Version="2.3.0.7" />
+		<PackageReference Include="Xamarin.Google.Android.Play.Asset.Delivery" Version="2.3.0.8" />
 	</ItemGroup>
 
 	<!-- D8 duplicate-class workaround: PAD + Firebase transitively pull in AndroidX
@@ -131,7 +131,11 @@
 	     For packages with NuGet version conflicts (where ExcludeAssets triggers NU1107),
 	     a target strips the duplicate .aar from @(AndroidAarLibrary) before extraction. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
-		<PackageReference Include="Xamarin.AndroidX.Compose.Runtime.Annotation.Jvm" Version="1.11.4" ExcludeAssets="all" />
+		<PackageReference Include="Xamarin.AndroidX.Compose.Runtime.Annotation.Jvm" Version="1.12.1" ExcludeAssets="all" />
+		<!-- Fragment 1.9 merges Kotlin extensions into the main artifact. Keep Ktx
+		     aligned so Firebase's older transitive Ktx does not duplicate those classes.
+		     https://developer.android.com/jetpack/androidx/releases/fragment#1.9.0-alpha01 -->
+		<PackageReference Include="Xamarin.AndroidX.Fragment.Ktx" Version="1.9.0" />
 	</ItemGroup>
 	<Target Name="_RemoveDuplicateAndroidXAars" BeforeTargets="_ResolveAars;_ExtractAar;_GetLibraryImports" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<ItemGroup>
@@ -206,14 +210,14 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="CommunityToolkit.Maui" Version="15.0.0" />
+		<PackageReference Include="CommunityToolkit.Maui" Version="15.0.1" />
 		<PackageReference Include="CommunityToolkit.Maui.MediaElement" Version="10.0.0" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 		<PackageReference Include="GraphQL.Client" Version="6.1.0" />
 		<PackageReference Include="GraphQL.Client.Serializer.Newtonsoft" Version="6.1.0" />
-		<PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
+		<PackageReference Include="HtmlAgilityPack" Version="1.13.0" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.110" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.10" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.12" />
 		<PackageReference Include="sqlite-net-pcl" Version="1.11.285" />
 	</ItemGroup>
 

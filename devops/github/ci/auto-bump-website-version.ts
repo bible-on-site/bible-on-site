@@ -15,7 +15,7 @@ const repoRoot = path.resolve(
 const packageRelativePath = "web/bible-on-site/package.json";
 const lockRelativePath = "web/bible-on-site/package-lock.json";
 
-export function nextWebsiteVersion(
+export function nextModuleVersion(
 	currentVersion: string,
 	masterVersion: string,
 	releasedVersion: string | null,
@@ -36,7 +36,7 @@ export function nextWebsiteVersion(
 	return next;
 }
 
-export function rewriteWebsiteVersions(
+export function rewritePackageVersions(
 	packageText: string,
 	lockText: string,
 	nextVersion: string,
@@ -51,7 +51,7 @@ export function rewriteWebsiteVersions(
 		lockData.version !== packageData.version ||
 		lockData.packages?.[""]?.version !== packageData.version
 	) {
-		throw new Error("Website package and lockfile versions differ");
+		throw new Error("Package and lockfile versions differ");
 	}
 
 	const versionField = /("version"\s*:\s*")([^"]+)(")/g;
@@ -76,7 +76,7 @@ export function rewriteWebsiteVersions(
 		},
 	);
 	if (packageCount < 1 || lockCount < 2) {
-		throw new Error("Missing website package or lockfile version field");
+		throw new Error("Missing package or lockfile version field");
 	}
 	return { packageText: updatedPackage, lockText: updatedLock };
 }
@@ -109,7 +109,7 @@ function run(): void {
 	);
 	const masterVersion = (JSON.parse(masterText) as { version: string }).version;
 	const releasedVersion = getReleasedVersion("website");
-	const nextVersion = nextWebsiteVersion(
+	const nextVersion = nextModuleVersion(
 		currentVersion,
 		masterVersion,
 		releasedVersion,
@@ -127,7 +127,7 @@ function run(): void {
 		}
 	}
 
-	const updated = rewriteWebsiteVersions(packageText, lockText, nextVersion);
+	const updated = rewritePackageVersions(packageText, lockText, nextVersion);
 	writeFileSync(packagePath, updated.packageText);
 	writeFileSync(lockPath, updated.lockText);
 	execFileSync("git", ["add", "--", packageRelativePath, lockRelativePath], {

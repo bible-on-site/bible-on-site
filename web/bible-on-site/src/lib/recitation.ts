@@ -14,6 +14,23 @@ export interface AlignmentWord
 	endMs: number | null;
 }
 
+/** Intervals are ordered and nonoverlapping; silence has no active word. */
+export function wordAtPosition(
+	words: RecitationWord[],
+	milliseconds: number | null,
+): RecitationWord | null {
+	if (milliseconds === null || !Number.isFinite(milliseconds)) return null;
+	let low = 0;
+	let high = words.length;
+	while (low < high) {
+		const middle = (low + high) >>> 1;
+		if (words[middle].startMs <= milliseconds) low = middle + 1;
+		else high = middle;
+	}
+	const word = words[low - 1];
+	return word && milliseconds < word.endMs ? word : null;
+}
+
 export interface Recitation {
 	version: 1;
 	perekId: number;

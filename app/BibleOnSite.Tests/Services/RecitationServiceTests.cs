@@ -34,9 +34,52 @@ public class RecitationServiceTests
                 return Handler(request, cancellationToken);
             }
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = path == "/api/recitation"
-                ? new StringContent(JsonSerializer.Serialize(Package, RecitationPackage.JsonOptions), Encoding.UTF8, "application/json")
+                ? new StringContent(JsonSerializer.Serialize(Package, RecitationJsonContext.Default.RecitationPackage), Encoding.UTF8, "application/json")
                 : new ByteArrayContent(Audio[path]) });
         }
+    }
+
+    [Fact]
+    public async Task Preferences_NarrationControlsPersistIndependentlyAndNotifyTheirLabels()
+    {
+        await using var storage = new TestStorage();
+        using var server = new Server(); using var http = new HttpClient(server);
+        var service = new RecitationService(storage.FileSystem.Object, http);
+        var saved = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(saved);
+        var model = new RecitationPreferencesViewModel(service, preferences, new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)));
+        model.Speed.Should().Be(1); model.Volume.Should().Be(1);
+        model.OriginalPauses.Should().BeTrue(); model.CustomPauses.Should().BeFalse();
+        model.PauseSeconds = 0; model.OriginalPauses.Should().BeTrue("a hidden slider must not change the default");
+        var notifications = new List<string>(); model.PropertyChanged += (_, e) => notifications.Add(e.PropertyName!);
+        model.Speed = 1.6; model.Volume = 0.35;
+        model.OriginalPauses = false; model.PauseSeconds = 1.6;
+        model.Speed.Should().Be(1.5); model.Volume.Should().Be(0.35);
+        model.CustomPauses.Should().BeTrue(); model.PauseSeconds.Should().Be(1.5);
+        notifications.Should().Contain(["Speed", "Volume", "OriginalPauses", "CustomPauses", "PauseSeconds"]);
+        var restored = PreferencesService.CreateForTesting(saved); restored.Load();
+        restored.RecitationSpeed.Should().Be(1.5); restored.RecitationVolume.Should().Be(0.35);
+        restored.RecitationVersePauseMs.Should().Be(1500);
+        model.OriginalPauses = true; preferences.RecitationVersePauseMs.Should().Be(-1);
+        model.Enabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CustomPauseIsPassedSeparatelyWithoutChangingApprovedIntervals()
+    {
+        await using var storage = new TestStorage();
+        using var server = new Server(); using var http = new HttpClient(server);
+        var audio = "approved audio"u8.ToArray();
+        server.Package = new(1, [Track(1, audio)]); server.Audio["/recordings/1_record.mp3"] = audio;
+        var service = new RecitationService(storage.FileSystem.Object, http, new("https://example.com/api/recitation"));
+        await service.UpdateAsync(); await service.DownloadAsync([1]);
+        var decoder = new Mock<IRecitationAudioDecoder>();
+        decoder.Setup(d => d.CreateClipAsync(It.IsAny<string>(), It.IsAny<IReadOnlyList<(double Start, double End)>>(), It.IsAny<CancellationToken>(), 2000)).ReturnsAsync("WAV"u8.ToArray());
+        var ranges = new List<(double Start, double End)> { (100, 1800) };
+        var clip = await service.PrepareAudioAsync(1, Canonical(), null, null, CancellationToken.None, ranges, decoder.Object, 2000);
+        (await File.ReadAllBytesAsync(clip)).Should().Equal("WAV"u8.ToArray());
+        decoder.Verify(d => d.CreateClipAsync(It.IsAny<string>(), It.Is<IReadOnlyList<(double Start, double End)>>(r => r.SequenceEqual(ranges)), It.IsAny<CancellationToken>(), 2000), Times.Once);
+        await service.Invoking(s => s.PrepareAudioAsync(1, Canonical(), null, null, CancellationToken.None, ranges, decoder.Object, double.NaN)).Should().ThrowAsync<InvalidDataException>();
     }
 
     [Fact]
@@ -104,6 +147,8 @@ public class RecitationServiceTests
         var restored = new RecitationService(storage.FileSystem.Object, http);
         await restored.InitializeAsync();
         restored.IsInstalled.Should().BeTrue();
+        restored.Tracks.Select(t => t.PerekId).Should().BeEquivalentTo([1, 2],
+            "the offline catalog retains chapters whose audio has not been downloaded");
         var path = await restored.PrepareAudioAsync(1, Canonical());
         (await File.ReadAllBytesAsync(path)).Should().Equal(audio);
         Directory.Exists(Path.Combine(storage.Root, "extensions", "recitation")).Should().BeTrue();
@@ -212,7 +257,7 @@ public class RecitationServiceTests
             if (stage == "audio" && request.RequestUri!.AbsolutePath == "/api/recitation")
             {
                 return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(
-                    JsonSerializer.Serialize(server.Package, RecitationPackage.JsonOptions), Encoding.UTF8, "application/json") };
+                    JsonSerializer.Serialize(server.Package, RecitationJsonContext.Default.RecitationPackage), Encoding.UTF8, "application/json") };
             }
             entered.SetResult();
             await Task.Delay(Timeout.Infinite, cancellation);

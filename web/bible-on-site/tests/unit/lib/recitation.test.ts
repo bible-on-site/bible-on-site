@@ -1,5 +1,10 @@
 import type { Pasuk } from "@/data/db/tanah-view-types";
-import { parseRecitation, playableWords, verseRange } from "@/lib/recitation";
+import {
+	parseRecitation,
+	playableWords,
+	verseRange,
+	wordAtPosition,
+} from "@/lib/recitation";
 
 const pesukim = [
 	{
@@ -102,3 +107,23 @@ test.each([
 		"Invalid recitation manifest",
 	);
 });
+
+test.each([
+	[null, null],
+	[Number.NaN, null],
+	[Number.POSITIVE_INFINITY, null],
+	[0, null],
+	[1200, 1],
+	[1799.9, 1],
+	[1800, null],
+	[1900, 2],
+	[2300, null],
+	[9000, null],
+])(
+	"word at audio-clock position %s preserves silence and exclusive end boundaries",
+	(position, segment) => {
+		expect(wordAtPosition(manifest.words, position)?.segment ?? null).toBe(
+			segment,
+		);
+	},
+);

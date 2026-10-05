@@ -32,6 +32,32 @@ public partial class RecitationPreferencesViewModel : ObservableObject
         get => _preferences.RecitationEnabled;
         set { _preferences.RecitationEnabled = value && IsInstalled; OnPropertyChanged(); }
     }
+    public double Speed
+    {
+        get => _preferences.RecitationSpeed;
+        set { _preferences.RecitationSpeed = Math.Round(value * 4) / 4; OnPropertyChanged(); }
+    }
+    public double Volume
+    {
+        get => _preferences.RecitationVolume;
+        set { _preferences.RecitationVolume = value; OnPropertyChanged(); }
+    }
+    public bool OriginalPauses
+    {
+        get => _preferences.RecitationVersePauseMs < 0;
+        set { _preferences.RecitationVersePauseMs = value ? -1 : 1000; OnPropertyChanged(); OnPropertyChanged(nameof(CustomPauses)); OnPropertyChanged(nameof(PauseSeconds)); }
+    }
+    public bool CustomPauses => !OriginalPauses;
+    public double PauseSeconds
+    {
+        get => Math.Max(0, _preferences.RecitationVersePauseMs) / 1000;
+        set
+        {
+            if (!CustomPauses) { return; }
+            _preferences.RecitationVersePauseMs = Math.Round(value * 2) * 500;
+            OnPropertyChanged();
+        }
+    }
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsIdle))] private bool _isDownloading;
     public bool IsIdle => !IsDownloading;
     [ObservableProperty] private double _progress;

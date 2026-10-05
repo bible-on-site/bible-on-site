@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using BibleOnSite.Models;
 
 namespace BibleOnSite.Tests.Models;
@@ -15,13 +16,15 @@ public class RecitationTests
     [InlineData("duration")] [InlineData("status")] [InlineData("empty")]
     [InlineData("overlap")] [InlineData("missingTime")] [InlineData("nonfinite")]
     [InlineData("pastEnd")] [InlineData("duplicate")] [InlineData("changedText")]
-    [InlineData("pendingWithWords")]
+    [InlineData("pendingWithWords")] [InlineData("zeroIdentity")] [InlineData("relativeUrl")]
     public void InvalidCatalogCannotExposePartialOrAlteredWordTimings(string fault)
     {
         var track = Valid();
         track = fault switch
         {
             "identity" => track with { PerekId = 930 },
+            "zeroIdentity" => track with { PerekId = 0 },
+            "relativeUrl" => track with { AudioUrl = "recordings/1_record.mp3" },
             "url" => track with { AudioUrl = "https://user@example.com/recordings/1_record.mp3" },
             "sourceHash" => track with { AudioSha256 = "incorrect" },
             "duration" => track with { DurationMs = double.NaN },
@@ -44,7 +47,7 @@ public class RecitationTests
         var track = Valid(); track.Validate();
         (track with { AlignmentStatus = "pending", Words = [] }).Validate();
         new RecitationPackage(1, [track]).Validate();
-        foreach (var package in new[] { new RecitationPackage(2, [track]), new RecitationPackage(1, []), new RecitationPackage(1, [track, track]) })
+        foreach (var package in new[] { new RecitationPackage(2, [track]), new RecitationPackage(1, []), new RecitationPackage(1, [track, track]), new RecitationPackage(1, null!) })
         {
             package.Invoking(p => p.Validate()).Should().Throw<InvalidDataException>();
         }
@@ -60,5 +63,14 @@ public class RecitationTests
         (track with { Words = [track.Words[0]] }).Matches(canonical).Should().BeFalse();
         canonical[0].Segments.Insert(1, new() { Type = SegmentType.Stuma, Value = "" });
         track.Matches(canonical).Should().BeFalse("word ordinals cannot be shifted past a nonspoken segment");
+    }
+
+    [Fact]
+    public void ClipRangesUseCamelCaseWireFormat()
+    {
+        List<RecitationClipRange> ranges = [new(100, 800)];
+        var json = JsonSerializer.Serialize(ranges, RecitationJsonContext.Default.ClipRanges);
+        json.Should().Be("[{\"start\":100,\"end\":800}]");
+        JsonSerializer.Deserialize(json, RecitationJsonContext.Default.ClipRanges).Should().Equal(ranges);
     }
 }
