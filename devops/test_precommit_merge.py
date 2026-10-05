@@ -52,17 +52,23 @@ class PrecommitMergeTests(unittest.TestCase):
             git("merge", "--no-commit", "master")
 
             write(".husky/pre-commit", (ROOT / ".husky/pre-commit").read_text(encoding="utf-8"))
-            write(".husky/shared-checks.sh", "#!/bin/bash\necho \"$1\" >> checked-modules\n")
-            # The old hook incorrectly enters the admin branch; keep its lint harmless.
-            write("bin/npm", "#!/bin/bash\nexit 0\n")
+            write("bin/npm", '#!/bin/bash\npwd >> "$NPM_LOG"\n')
             (repo / "bin/npm").chmod(0o755)
             env = os.environ.copy()
             env["PATH"] = str(repo / "bin") + os.pathsep + env["PATH"]
+            env["NPM_LOG"] = str(repo / "npm-calls")
             # Execute only the copied repository hook, with no user-supplied command.
-            subprocess.run(  # nosec B603: fixed fixture hook, no shell.  # nosemgrep
-                [BASH, ".husky/pre-commit"], cwd=repo, env=env, check=True
+            result = subprocess.run(  # nosec B603: fixed fixture hook, no shell.  # nosemgrep
+                [BASH, ".husky/pre-commit"],
+                cwd=repo,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=True,
             )
-            self.assertEqual(["app"], (repo / "checked-modules").read_text().splitlines())
+            self.assertIn("Detected changes in modules: app", result.stdout)
+            self.assertNotIn("web/admin", result.stdout)
+            self.assertFalse((repo / "npm-calls").exists())
 
 
 if __name__ == "__main__":
