@@ -103,3 +103,23 @@
     background-image: url(/root/sefarim-bottom-devider-xl.svg);
   }
 }
+
+@media (prefers-color-scheme: dark) {
+  .section {
+    background-color: #16283f;
+  }
+
+  .header,
+  .header h1 {
+    color: #e8eaed;
+  }
+
+  .header h2 {
+    color: #9aa0a6;
+  }
+
+  .spinner {
+    border-color: #2d3548;
+    border-top-color: #7eb0ff;
+  }
+}
