@@ -77,5 +77,6 @@ collect a short native stack sample if the app is still running, without
 competing with healthy tests for simulator resources.
 The independent log export allows iOS to disable Appium's duplicate live system
 log stream with `skipLogCapture`, avoiding its cold-start overhead. Session setup
-has a five-minute client budget inside the six-minute test-host hang guard.
+has a five-minute client budget inside the ten-minute per-test hang guard, leaving
+room for the scenario and diagnostics.
 CI uploads a separate artifact for each platform even on test failures.
