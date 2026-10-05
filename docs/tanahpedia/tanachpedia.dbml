@@ -216,9 +216,10 @@ Table tanahpedia_entry_revision {
   proposed_unique_name varchar(255)
   proposed_title varchar(255)
   proposed_content mediumtext
-  source varchar(255) [note: 'External AI client / model identifier']
+  source varchar(255) [note: 'Writer id: admin, llm-assistant, or external AI client id']
   notes text [note: 'AI rationale / notes for the human editor']
-  status varchar(20) [note: 'PENDING, APPROVED, REJECTED']
+  status varchar(20) [note: 'PENDING, APPLIED, REJECTED']
+  base_revision_id char(36) [note: 'APPLIED head this change was based on (optimistic concurrency); not a FK']
   created_at datetime
   updated_at datetime
 }
