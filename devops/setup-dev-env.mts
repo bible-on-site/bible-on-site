@@ -40,6 +40,7 @@ async function main() {
 	console.info("Setting up devops...");
 	if (!setupPythonVenv(devopsDir))
 		throw new Error("Failed to set up Python virtual environment for devops");
+	installGitHooks();
 
 	const modules = [
 		{ name: "website", path: websiteDir },
@@ -819,6 +820,20 @@ function setupPythonVenv(dir: string, name = ".", fullSetup = true) {
 	}
 	return fullSetup ? pipInstall(dir) : false;
 }
+// Installs the pre-commit framework's git hooks (pre-commit + post-commit
+// stages); the logic lives in install-git-hooks.mjs so the root package.json
+// `prepare` script runs the same code on `npm install`/`npm ci`.
+function installGitHooks(): void {
+	const result = spawnSync(
+		"node",
+		[path.join(devopsDir, "install-git-hooks.mjs")],
+		{ cwd: projectDir, stdio: "inherit" },
+	);
+	if (result.status !== 0) {
+		throw new Error("Failed to install pre-commit git hooks");
+	}
+}
+
 function getActivationCommand(dir: string) {
 	return isWin
 		? path.join(dir, ".venv", "Scripts", "activate")
