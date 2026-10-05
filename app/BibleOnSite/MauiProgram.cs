@@ -82,9 +82,8 @@ public static class MauiProgram
 		// Without this, CrossFirebaseAnalytics.Current silently fails on iOS.
 		// Note: Plugin.Firebase 4.0.0 does NOT support MacCatalyst — only iOS and Android.
 		//
-		// Wrapped in try-catch because the underlying Firebase iOS SDK (currently 12.5 via AdamE bindings)
-		// crashes on iOS 26 due to a known issue (firebase/firebase-ios-sdk#15020, fixed in SDK 12.9.0).
-		// Until the .NET bindings are updated, we gracefully degrade: the app works without analytics.
+		// If initialization raises a managed exception, leave analytics disabled.
+		// Native crashes require a device crash report and cannot be caught here.
 		builder.ConfigureLifecycleEvents(events =>
 		{
 #if IOS

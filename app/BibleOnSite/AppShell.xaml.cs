@@ -24,13 +24,26 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute("ArticlesPage", typeof(ArticlesPage));
 		Routing.RegisterRoute("AuthorsPage", typeof(AuthorsPage));
 		Routing.RegisterRoute("articleDetail", typeof(ArticleDetailPage));
-		Routing.RegisterRoute("LoadingPage", typeof(LoadingPage));
 		Routing.RegisterRoute("ContactPage", typeof(ContactPage));
 		Routing.RegisterRoute("DonationsPage", typeof(DonationsPage));
 		Routing.RegisterRoute("TosPage", typeof(TosPage));
 		Routing.RegisterRoute("PreferencesPage", typeof(PreferencesPage));
 
 		Navigated += OnNavigated;
+	}
+
+	internal void CompleteStartup()
+	{
+		if (ReaderContent.Content is PerekPage)
+		{
+			return;
+		}
+
+		// Reuse the startup ShellContent instead of creating a second native root.
+		// Clear the template first so MAUI replaces its cached loading page too.
+		var reader = new PerekPage();
+		ReaderContent.ContentTemplate = null;
+		ReaderContent.Content = reader;
 	}
 
 #if IOS || MACCATALYST
