@@ -29,7 +29,18 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version-file: devops/perek-images/package.json
-          cache: npm
-          cache-dependency-path: devops/perek-images/package-lock.json
+      - name: Restore npm cache
+        id: npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-perek-images-${{ hashFiles('devops/perek-images/package-lock.json') }}
+          restore-keys: ${{ runner.os }}-npm-perek-images-
       - run: npm ci --prefix devops/perek-images --no-audit
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
       - run: npm test --prefix devops/perek-images
