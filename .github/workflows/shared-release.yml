@@ -34,6 +34,9 @@ on:
       released:
         description: Whether the module was successfully released (for version bump coordination)
         value: ${{ jobs.release.outputs.released }}
+      needs_bump:
+        description: Whether the module needs a retry version bump on master
+        value: ${{ jobs.release.outputs.needs_bump }}
     secrets:
       DEPLOY_KEY:
         required: true
@@ -108,6 +111,7 @@ jobs:
     name: Release
     outputs:
       released: ${{ steps.mark_released.outputs.released }}
+      needs_bump: ${{ steps.check_tag.outputs.NEEDS_BUMP }}
     # Queue (don't cancel) concurrent releases for the same module so that
     # checking and creating the version tag is serialized.
     concurrency:
@@ -137,12 +141,16 @@ jobs:
             # Any other commit reused the version and would never deploy.
             STATUS=$(gh api "repos/${{ github.repository }}/compare/${TAG_NAME}...${{ github.sha }}" --jq .status)
             if [ "$STATUS" != "identical" ] && [ "$STATUS" != "behind" ]; then
-              echo "::error::${TAG_NAME} was released from another commit, so ${{ github.sha }} (${STATUS} of it) would never deploy its ${{ inputs.module_name }} changes. Bump the ${{ inputs.module_name }} version in a follow-up PR."
-              exit 1
+              echo "::warning::${TAG_NAME} was released from another commit, so ${{ github.sha }} (${STATUS} of it) needs a retry version bump."
+              echo "NEEDS_BUMP=true" >> $GITHUB_OUTPUT
+              echo "TAG_EXISTS=true" >> $GITHUB_OUTPUT
+              exit 0
             fi
             echo "::notice::Tag ${TAG_NAME} already exists on remote and contains this commit — skipping tag/release creation"
+            echo "NEEDS_BUMP=false" >> $GITHUB_OUTPUT
             echo "TAG_EXISTS=true" >> $GITHUB_OUTPUT
           else
+            echo "NEEDS_BUMP=false" >> $GITHUB_OUTPUT
             echo "TAG_EXISTS=false" >> $GITHUB_OUTPUT
           fi
 
@@ -253,8 +261,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           files: ${{ steps.prepare_release.outputs.FILE_PATTERNS }}
 
-      # Non-website module bumps are handled by the centralized bump_versions job.
-      # Website versions are reserved in their pull requests.
+      # All module versions are bumped on master by the centralized bump_versions job.
       - name: Mark Release Complete
         id: mark_released
         if: steps.check_tag.outputs.TAG_EXISTS != 'true'
