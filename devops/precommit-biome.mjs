@@ -48,11 +48,18 @@ for (const dir of MODULES) {
 		continue;
 	}
 
-	const result = spawnSync(localBin, ["lint", ...moduleFiles], {
-		cwd: resolve(dir),
-		stdio: "inherit",
-		shell: process.platform === "win32",
-	});
+	// On Windows shell:true joins command+args into a raw cmd line, so the
+	// binary path must carry its own quotes or a space in the checkout path
+	// (e.g. "devin workspace") splits it into a bogus command.
+	const result = spawnSync(
+		process.platform === "win32" ? `"${localBin}"` : localBin,
+		["lint", ...moduleFiles],
+		{
+			cwd: resolve(dir),
+			stdio: "inherit",
+			shell: process.platform === "win32",
+		},
+	);
 	if (result.status !== 0) failed = true;
 }
 
