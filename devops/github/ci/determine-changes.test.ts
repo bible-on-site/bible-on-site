@@ -22,6 +22,12 @@ const changed = (files: string[], ...keys: ModuleKey[]) =>
 	keys.map((key) => detectChanges(files)[key]);
 
 describe("detectChanges", () => {
+	test("mobile matrix workflow changes require app checks without a release", () => {
+		const changes = detectChanges([".github/workflows/app-mobile-e2e.yml"]);
+		assert.deepEqual(changes.app, { module_changed: false, ci_changed: true });
+		assert.equal(changes.website.ci_changed, false);
+	});
+
 	for (const path of [
 		"web/bible-on-site/package.json",
 		"web/bible-on-site/package-lock.json",
