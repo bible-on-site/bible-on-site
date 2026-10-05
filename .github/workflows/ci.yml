@@ -331,7 +331,7 @@ jobs:
         with:
           name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp/${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
       - name: Check Sefaria MongoDB image availability
@@ -577,7 +577,7 @@ jobs:
         with:
           name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp/lcov-docker-image.tar
-          retention-days: 400
+          retention-days: 90
 
   build_sefaria_mongo_docker:
     name: Build Sefaria MongoDB Docker Image
@@ -679,11 +679,17 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.WEBSITE_NODE_CACHE_PATH }}
-          cache: npm
 
-      - name: Cache playwright binaries
-        uses: actions/cache@v6
+      - name: Restore npm cache
+        id: npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-website-${{ hashFiles(env.WEBSITE_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-npm-website-
+
+      - name: Restore playwright binaries
+        uses: actions/cache/restore@v6
         id: playwright-cache
         with:
           path: |
@@ -695,16 +701,31 @@ jobs:
         run: |
           npm ci --no-audit
 
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
+
       - name: Install Playwright Browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
+
+      - name: Save playwright binaries
+        if: ${{ github.ref == 'refs/heads/master' && steps.playwright-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
 
       - name: Install Playwright System Dependencies
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
-      - name: Build cache
-        uses: actions/cache@v6
+      - name: Restore Next.js build cache
+        id: nextjs-cache
+        uses: actions/cache/restore@v6
         with:
           path: ${{ env.WEBSITE_DIRECTORY }}/.next/cache
           key: ${{ runner.os }}-nextjs-${{ hashFiles(format('{0}/package-lock.json', env.WEBSITE_DIRECTORY)) }}-${{ hashFiles(format('{0}/**/*.js', env.WEBSITE_DIRECTORY), format('{0}/**/*.jsx', env.WEBSITE_DIRECTORY), format('{0}/**/*.ts', env.WEBSITE_DIRECTORY), format('{0}/**/*.tsx', env.WEBSITE_DIRECTORY)) }}
@@ -748,6 +769,7 @@ jobs:
         if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
 
       - name: Populate MySQL for build
@@ -764,6 +786,13 @@ jobs:
         env:
           DB_URL: ${{ (needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true') && 'mysql://root:test_123@127.0.0.1:3306/tanah_test' || '' }}
         run: npm run build
+
+      - name: Save Next.js build cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.nextjs-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.WEBSITE_DIRECTORY }}/.next/cache
+          key: ${{ steps.nextjs-cache.outputs.cache-primary-key }}
 
       - name: Verify approved recitation in the production build
         run: node scripts/verify-recitation-build.mjs
@@ -858,11 +887,17 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.WEBSITE_NODE_CACHE_PATH }}
-          cache: npm
 
-      - name: Cache playwright binaries
-        uses: actions/cache@v6
+      - name: Restore npm cache
+        id: npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-website-${{ hashFiles(env.WEBSITE_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-npm-website-
+
+      - name: Restore playwright binaries
+        uses: actions/cache/restore@v6
         id: playwright-cache
         with:
           path: |
@@ -874,6 +909,13 @@ jobs:
         run: |
           node --version && npm --version
           npm ci --no-audit
+
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
 
       - name: Verify Lockfile Sync With Packaging npm
         id: npm_lockfile_packaging_check
@@ -887,6 +929,13 @@ jobs:
       - name: Install Playwright Browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
+
+      - name: Save playwright binaries
+        if: ${{ github.ref == 'refs/heads/master' && steps.playwright-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
 
       - name: Install Playwright System Dependencies
         if: steps.playwright-cache.outputs.cache-hit == 'true'
@@ -929,6 +978,7 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
 
       # Build only the seeder used by the E2E launcher, not every data pipeline.
@@ -1004,7 +1054,7 @@ jobs:
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
           if-no-files-found: error
 
@@ -1014,7 +1064,7 @@ jobs:
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
   admin_ci:
@@ -1040,12 +1090,25 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.ADMIN_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.ADMIN_NODE_CACHE_PATH }}
-          cache: npm
+
+      - name: Restore npm cache
+        id: npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-admin-${{ hashFiles(env.ADMIN_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-npm-admin-
 
       - name: Install npm Dependencies
         id: npm_ci
         run: npm ci --no-audit
+
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
 
       - name: Verify Lockfile Sync With Packaging npm
         id: npm_lockfile_packaging_check
@@ -1120,6 +1183,7 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
 
       # Build only the two seeders used by the E2E launcher.
@@ -1148,7 +1212,7 @@ jobs:
         with:
           name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
           if-no-files-found: error
 
@@ -1158,7 +1222,7 @@ jobs:
         with:
           name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
       - name: Store Admin E2E HTML Report
@@ -1204,6 +1268,7 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: |
             ${{ env.API_DIRECTORY }}
             ${{ env.DATA_DIRECTORY }}
@@ -1223,14 +1288,27 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
-          cache: npm
+
+      - name: Restore npm cache
+        id: devops-npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-devops-${{ hashFiles(env.DEVOPS_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-npm-devops-
 
       - name: Install devops npm Dependencies
         id: devops_npm_ci
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           npm ci --no-audit
+
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.devops-npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.devops-npm-cache.outputs.cache-primary-key }}
 
       - name: Install and start MySQL
         id: mysql
@@ -1246,14 +1324,27 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.API_TESTS_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.API_TESTS_NODE_CACHE_PATH }}
-          cache: npm
+
+      - name: Restore npm cache
+        id: tests-npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-api-tests-${{ hashFiles(env.API_TESTS_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-npm-api-tests-
 
       - name: Install Tests npm Dependencies
         id: tests_npm_ci
         working-directory: ${{ env.API_TESTS_DIRECTORY }}
         run: |
           npm ci --no-audit
+
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.tests-npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.tests-npm-cache.outputs.cache-primary-key }}
 
       # API tests use Playwright's HTTP request fixture and node:http2 only;
       # they do not launch a browser or need browser/system-dependency installs.
@@ -1335,7 +1426,7 @@ jobs:
         with:
           name: ${{ env.API_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.API_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
       - name: Store API Coverage Report (master)
@@ -1344,7 +1435,7 @@ jobs:
         with:
           name: ${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.API_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
   app_ci:
@@ -1377,11 +1468,16 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Cache NuGet packages
-        uses: actions/cache@v6
+      - name: Hash NuGet dependency inputs
+        id: nuget-key
+        run: node ${{ github.workspace }}/devops/github/ci/nuget-cache-key.mjs
+
+      - name: Restore NuGet packages
+        id: nuget-cache
+        uses: actions/cache/restore@v6
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/BibleOnSite.Tests.csproj', '**/BibleOnSite.csproj') }}
+          key: ${{ runner.os }}-nuget-${{ steps.nuget-key.outputs.hash }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 
@@ -1417,6 +1513,13 @@ jobs:
       - name: Run Unit Tests with Coverage
         run: dotnet run --project devops -- CoverageUnit --configuration Release
 
+      - name: Save NuGet packages
+        if: ${{ github.ref == 'refs/heads/master' && steps.nuget-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
+
       - name: Store App Unit JUnit Report
         uses: actions/upload-artifact@v7
         with:
@@ -1445,6 +1548,7 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: |
             ${{ env.API_DIRECTORY }}
             ${{ env.DATA_DIRECTORY }}
@@ -1499,7 +1603,7 @@ jobs:
         with:
           name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.APP_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
           if-no-files-found: error
 
@@ -1509,97 +1613,26 @@ jobs:
         with:
           name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.APP_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
+  app_mobile_e2e:
+    name: App Mobile E2E
+    needs: [setup_env, determine_changes]
+    if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
+    uses: ./.github/workflows/app-mobile-e2e.yml
+
   app_ios_ci:
-    name: App iOS CI
+    name: App iOS native audio CI
     runs-on: macos-26
-    needs: [setup_env, determine_changes, determine_baseline_availability, perushim_data]
+    needs: [setup_env, determine_changes]
     # Only on PRs — on master, Package iOS (IPA) already validates the full iOS build.
     if: ${{ github.event_name == 'pull_request' && always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
-    defaults:
-      run:
-        working-directory: ${{ env.APP_DIRECTORY }}
     permissions:
       contents: read
-
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-        with:
-          ref: ${{ github.sha }}
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v6
-        with:
-          # Keep in sync with the maui-ios workload below; see https://github.com/bible-on-site/bible-on-site/issues/1871
-          dotnet-version: "10.0.401"
-
-      - name: Cache NuGet packages
-        uses: actions/cache@v6
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-maui-ios-${{ hashFiles('app/**/*.csproj') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-maui-ios-
-            ${{ runner.os }}-nuget-
-
-      - name: Install MAUI workload
-        # Workload set 10.0.401 uses the iOS 26.5 SDK compatible with Xcode 26.6.
-        # 10.0.401.1 selects an iOS 27 SDK and fails the Xcode version check; see https://github.com/bible-on-site/bible-on-site/issues/1871
-        run: dotnet workload install maui-ios --version 10.0.401
-
-      - name: Restore perushim notes SQLite
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ needs.perushim_data.result != 'skipped' && env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_WF || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
-          path: ${{ runner.temp }}/perushim-sqlite
-
-      - name: Prepare matching Perushim catalog and iOS notes
-        run: python3 devops/prepare_perushim_assets.py --source "${{ runner.temp }}/perushim-sqlite" --app-directory BibleOnSite --platform iOS
-
-      - name: Select Xcode version
-        run: |
-          XCODE_PATH=/Applications/Xcode_26.6.app
-          if [ ! -d "$XCODE_PATH" ]; then
-            XCODE_PATH=""
-          fi
-          if [ -z "$XCODE_PATH" ]; then
-            XCODE_PATH=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
-          fi
-          if [ -z "$XCODE_PATH" ]; then
-            XCODE_PATH=$(xcode-select -p | sed 's|/Contents/Developer||')
-          fi
-          echo "Selecting Xcode: $XCODE_PATH"
-          sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
-          xcodebuild -version
-          xcrun --sdk macosx --show-sdk-path
-
-      # TODO(#1401): iOS SDK forces IL stripping even for simulator builds.
-      # We kill the process once the DLL is produced to skip IL stripping.
-      - name: Build iOS target
-        run: |
-          dotnet build BibleOnSite/BibleOnSite.csproj -c Release \
-            -p:TargetFrameworks=net10.0-ios \
-            -p:ErrorOnDuplicatePublishOutputFiles=false > build.log 2>&1 &
-          PID=$!
-          while kill -0 $PID 2>/dev/null; do
-            if grep -q "BibleOnSite -> .*BibleOnSite\.dll" build.log 2>/dev/null; then
-              cat build.log
-              if grep -q ": error " build.log; then
-                echo "Errors found in build output"
-                wait $PID; exit 1
-              fi
-              echo "Build succeeded (DLL produced) — skipping IL stripping"
-              kill $PID 2>/dev/null; wait $PID 2>/dev/null; exit 0
-            fi
-            sleep 2
-          done
-          RC=0
-          wait $PID || RC=$?
-          cat build.log
-          exit $RC
 
       - name: Setup Node for native audio precision checks
         uses: actions/setup-node@v7
@@ -1643,6 +1676,7 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.BULLETIN_DIRECTORY }}
           cache-on-failure: true
           shared-key: "bulletin-rust"
@@ -1692,7 +1726,7 @@ jobs:
         with:
           name: ${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.BULLETIN_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
   recitation_ci:
@@ -1719,7 +1753,7 @@ jobs:
       - name: Verify canonical text preprocessing
         run: node --test data/sefaria/pipelines/tanah-view/tests/preprocessor.test.mjs
       - name: Verify module release and shared decoder check routing
-        run: node --test devops/github/ci/determine-changes.test.ts devops/github/ci/auto-create-pr.test.mjs
+        run: node --test devops/github/ci/determine-changes.test.ts devops/github/ci/auto-create-pr.test.mjs devops/github/ci/nuget-cache-key.test.mjs
       - name: Install storage test dependencies
         run: npm ci --prefix devops
       - name: Verify repeatable deployment recovery
@@ -1769,6 +1803,7 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
           cache-on-failure: true
           shared-key: "data-rust"
@@ -1909,7 +1944,7 @@ jobs:
         with:
           name: ${{ env.DATA_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.DATA_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
       - name: Store Data Coverage Report (master)
@@ -1918,7 +1953,7 @@ jobs:
         with:
           name: ${{ env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.DATA_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
       - name: Stop MongoDB Container
@@ -1968,6 +2003,7 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
           cache-on-failure: true
           shared-key: "data-rust"
@@ -2075,7 +2111,7 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     needs: [website_e2e, website_performance]
-    if: ${{ always() && (needs.website_e2e.result != 'skipped' || needs.website_performance.result != 'skipped') }}
+    if: ${{ always() && !cancelled() && (needs.website_e2e.result != 'skipped' || needs.website_performance.result != 'skipped') }}
     steps:
       - name: Checkout
         id: checkout
@@ -2119,6 +2155,7 @@ jobs:
         app_ci,
         admin_ci,
         app_ios_ci,
+        app_mobile_e2e,
         bulletin_ci,
         data_ci,
         recitation_ci,
@@ -2127,7 +2164,8 @@ jobs:
         determine_baseline_availability,
         determine_docker_image_availability,
       ]
-    if: ${{ always() }}
+    # Evaluate failures, but release the PR concurrency slot when replaced.
+    if: ${{ always() && !cancelled() }}
     steps:
       - name: Check Prerequisites
         id: check_prerequisites
@@ -2180,8 +2218,12 @@ jobs:
           fi
 
           if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ]; then
+            if [ "${{ needs.app_mobile_e2e.result }}" != "success" ]; then
+              echo "Appium mobile E2E matrix failed or did not run"
+              exit 1
+            fi
             APP_IOS_RESULT="${{ needs.app_ios_ci.result }}"
-            # App iOS CI only runs on PRs; on master it's skipped (Package iOS covers it)
+            # Native audio precision runs on PRs; mobile E2E runs on every relevant CI event.
             if [ "$APP_IOS_RESULT" != "success" ] && [ "$APP_IOS_RESULT" != "skipped" ]; then
               echo "App iOS CI failed"
               echo "Overall status: failure"
@@ -2333,14 +2375,27 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
-          cache: npm
+
+      - name: Restore npm cache
+        id: devops-npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-devops-${{ hashFiles(env.DEVOPS_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-npm-devops-
 
       - name: Install devops npm Dependencies
         id: devops_npm_ci
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           npm ci --no-audit
+
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.devops-npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.devops-npm-cache.outputs.cache-primary-key }}
 
       - name: Merge Test Coverage (Website + API)
         run: npm run coverage:merge

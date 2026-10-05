@@ -15,14 +15,6 @@
     FlowDirection="RightToLeft"
     FlyoutBackdrop="#80000000">
 
-    <!-- Loading Page (shown first on startup) -->
-    <ShellContent
-        ContentTemplate="{DataTemplate pages:LoadingPage}"
-        Route="LoadingPage"
-        FlyoutItemIsVisible="False"
-        Shell.NavBarIsVisible="False"
-        Shell.TabBarIsVisible="False"/>
-
     <!-- Flyout Header with Logo -->
     <Shell.FlyoutHeader>
         <Grid HeightRequest="180"
@@ -139,6 +131,7 @@
                                Margin="0,0,12,0"/>
                         <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
                             <Label Text="העדפות"
+                                   AutomationId="FlyoutPreferences"
                                    FontSize="16"
                                    TextColor="{StaticResource Gray900}"/>
                             <Label Text="הגדרות משתמש"
@@ -213,10 +206,12 @@
         </DataTemplate>
     </Shell.FlyoutContentTemplate>
 
-    <!-- The only Shell root besides LoadingPage: flyout pages are pushed above it (AppRoutes.FlyoutPage) so back always returns here -->
+    <!-- Startup and reading share one native navigation container. Flyout pages
+         are pushed above it (AppRoutes.FlyoutPage), so back returns to the reader. -->
     <FlyoutItem FlyoutItemIsVisible="False">
         <ShellContent
-            ContentTemplate="{DataTemplate pages:PerekPage}"
+            x:Name="ReaderContent"
+            ContentTemplate="{DataTemplate pages:LoadingPage}"
             Route="PerekPage"/>
     </FlyoutItem>
 

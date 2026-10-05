@@ -29,6 +29,7 @@
         "Compile",
         "CompileAndroid",
         "CompileE2E",
+        "CompileMobileE2E",
         "CompileTests",
         "CompileWindows",
         "CoverageAll",
@@ -55,6 +56,8 @@
         "Test",
         "TestE2E",
         "TestIntegration",
+        "TestMobileE2E",
+        "TestMobileE2EUnit",
         "TestUnit",
         "Version"
       ]
@@ -193,6 +196,10 @@
           "type": "integer",
           "description": "Maximum number of flights to keep (older flights will be deleted). Default: 5",
           "format": "int32"
+        },
+        "MobilePlatform": {
+          "type": "string",
+          "description": "Mobile E2E platform: Android or iOS"
         },
         "MsixPath": {
           "type": "string",

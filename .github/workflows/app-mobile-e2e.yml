@@ -1,0 +1,157 @@
+name: App Mobile E2E
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  appium:
+    name: Appium ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      # Each platform owns its runner, device, server and artifacts. Preserve
+      # both results when one platform fails; there is no cross-platform dependency.
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Android
+            artifact: android
+            runner: ubuntu-latest
+            workload: maui-android
+          - platform: iOS
+            artifact: ios
+            runner: macos-26
+            workload: maui-ios
+    env:
+      MOBILE_PLATFORM: ${{ matrix.platform }}
+      MOBILE_E2E_ARTIFACTS: ${{ github.workspace }}/app/.artifacts/mobile-e2e/${{ matrix.artifact }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          # Keep aligned with Xcode 26.6 and the iOS packaging workload; see #1871.
+          dotnet-version: "10.0.401"
+
+      - name: Hash NuGet dependency inputs
+        id: nuget-key
+        run: node ${{ github.workspace }}/devops/github/ci/nuget-cache-key.mjs
+
+      - name: Restore NuGet packages
+        id: nuget-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-mobile-e2e-${{ matrix.platform }}-${{ steps.nuget-key.outputs.hash }}
+          restore-keys: |
+            ${{ runner.os }}-mobile-e2e-${{ matrix.platform }}-
+            ${{ runner.os }}-nuget-
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+
+      - name: Restore npm cache
+        id: npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-mobile-e2e-${{ hashFiles('devops/package-lock.json', 'app/mobile-e2e/package-lock.json') }}
+          restore-keys: ${{ runner.os }}-npm-mobile-e2e-
+
+      - name: Install build and Appium dependencies
+        run: |
+          npm ci --prefix devops --no-audit
+          npm ci --prefix app/mobile-e2e --no-audit
+
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
+
+      - name: Validate the test harness
+        working-directory: app
+        run: |
+          npm run test:unit --prefix mobile-e2e
+          dotnet run --project devops -- TestMobileE2EUnit
+
+      - name: Setup Java
+        if: matrix.platform == 'Android'
+        uses: actions/setup-java@v6
+        with:
+          distribution: microsoft
+          java-version: "21"
+
+      - name: Select compatible Xcode
+        if: matrix.platform == 'iOS'
+        run: sudo xcode-select --switch /Applications/Xcode_26.6.app/Contents/Developer
+
+      - name: Install MAUI workload
+        # 10.0.401.1 selects an iOS 27 SDK that needs a newer Xcode; see #1871.
+        run: dotnet workload install ${{ matrix.workload }} --version 10.0.401
+
+      - name: Build complete simulator app
+        # Explicit bash enables pipefail, preserving npm failures through tee.
+        shell: bash
+        run: |
+          mkdir -p "$MOBILE_E2E_ARTIFACTS"
+          npm run build:app --prefix app/mobile-e2e 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/build.log"
+
+      - name: Save NuGet packages
+        if: ${{ github.ref == 'refs/heads/master' && steps.nuget-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
+
+      - name: Enable Android hardware acceleration
+        if: matrix.platform == 'Android'
+        run: sudo chmod 666 /dev/kvm
+
+      - name: Run shared pilot on Android
+        if: matrix.platform == 'Android'
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        env:
+          MOBILE_UDID: emulator-5554
+        with:
+          api-level: 36
+          arch: x86_64
+          target: google_apis
+          profile: pixel_7
+          avd-name: mobile_e2e
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-snapshot -no-metrics
+          script: npm test --prefix app/mobile-e2e
+
+      - name: Prepare prebuilt iOS automation agent
+        if: matrix.platform == 'iOS'
+        run: npm run ios:wda --prefix app/mobile-e2e
+
+      - name: Boot iPhone simulator
+        if: matrix.platform == 'iOS'
+        run: npm run ios:boot --prefix app/mobile-e2e
+
+      - name: Run shared pilot on iOS
+        if: matrix.platform == 'iOS'
+        run: npm test --prefix app/mobile-e2e
+
+      - name: Upload platform results and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: appium-${{ matrix.artifact }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            app/.artifacts/mobile-e2e/${{ matrix.artifact }}/
+            app/.nuke/temp/build*.log
+          retention-days: 14
+          # Only the explicit diagnostics paths above are included.
+          include-hidden-files: true
