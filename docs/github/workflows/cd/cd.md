@@ -2,6 +2,12 @@
 
 All CD workflows are triggered via `repository_dispatch` events from CI after successful builds.
 
+Dispatches queue per production target without canceling an active deployment.
+Before production writes, the workflow checks its source CI run and immutable
+commit, and skips a dispatch superseded by a newer release. Artifact download and
+source checkout use the same CI run/commit; Data also uses an immutable SHA.
+See [version and deployment concurrency](../../version-verification.md#concurrent-releases-and-deployment).
+
 | Workflow | Trigger Event | Purpose |
 |----------|---------------|---------|
 | [`cd-aws.yml`](../../../../.github/workflows/cd-aws.yml) | `deploy-aws` | Deploy Website/API Docker images to AWS ECR → ECS |

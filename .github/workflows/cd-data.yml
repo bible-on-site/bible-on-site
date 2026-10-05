@@ -4,11 +4,18 @@ on:
   repository_dispatch:
     types: [deploy-data]
 
+# Keep every dispatch; never interrupt a production write.
+concurrency:
+  group: ${{ github.repository }}-cd-data
+  cancel-in-progress: false
+  queue: max
+
 jobs:
   deploy:
     name: Deploy Data to Production RDS
     permissions:
       contents: read
+      actions: read
       id-token: write # Required for OIDC authentication with AWS
     runs-on: ubuntu-latest
 
@@ -18,12 +25,26 @@ jobs:
       DEVOPS_NODE_VERSION_FILE: devops/package.json
 
     steps:
-      - name: Checkout
+      - name: Checkout deployment automation
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.client_payload.ref }}
+          ref: ${{ github.sha }}
+
+      - name: Check deployment source and freshness
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_MODULE: data
+        run: node devops/github/release/check-deployment.mjs
+
+      - name: Checkout artifact source
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.guard.outputs.ref }}
 
       - name: Setup Node.js
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
@@ -31,6 +52,7 @@ jobs:
           cache: npm
 
       - name: Install npm Dependencies
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: npm ci --no-audit
 
@@ -42,6 +64,7 @@ jobs:
       # so a genuine download error is not masked and a clear failure is raised when
       # neither artifact is available.
       - name: Download Perushim SQL
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.BOT_PAT }}
           RUN_ID: ${{ github.event.client_payload.run_id }}
@@ -67,11 +90,13 @@ jobs:
           echo "perushim_data.sql ready ($(wc -l < data/mysql/perushim_data.sql) lines)"
 
       - name: Configure AWS Credentials (OIDC)
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Deploy Data to Production RDS
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: npm run deploy:data

@@ -15,7 +15,7 @@
 		"dev": "node --import tsx ./dev-all.mts",
 		"setup_dev_env": "node --import tsx ./setup-dev-env.mts",
 		"tanahpedia:apply": "node ./tanahpedia-apply.mjs",
-		"test:version": "node --import tsx --test github/ci/bump-module-versions.test.mts",
+		"test:version": "node --import tsx --test github/ci/bump-module-versions.test.mts github/ci/publish-version-bumps.test.mts github/release/check-deployment.test.mjs github/release/shared-release.test.mjs",
 		"bump:module-versions": "node --import tsx ./github/ci/bump-module-versions.ts",
 		"deploy": "echo 'Use deploy:ecr, deploy:data, or deploy:bulletin' && exit 1",
 		"deploy:ecr": "node --import tsx ./deploy/ecr-deploy/index.mts",

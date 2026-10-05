@@ -51,7 +51,7 @@ jobs:
     name: Trigger CD Workflow
     needs: release
     # A rerun or overlapping CI build may have packaged an already released
-    # version. Only deploy the artifact that actually created its release tag.
+    # version. Only deploy the exact tag commit, including interrupted-release recovery.
     if: ${{ needs.release.outputs.released == 'true' }}
     runs-on: ubuntu-latest
     steps:
@@ -117,6 +117,7 @@ jobs:
     concurrency:
       group: ${{ github.repository }}-release-${{ inputs.module_name }}
       cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
@@ -144,11 +145,32 @@ jobs:
               echo "::warning::${TAG_NAME} was released from another commit, so ${{ github.sha }} (${STATUS} of it) needs a retry version bump."
               echo "NEEDS_BUMP=true" >> $GITHUB_OUTPUT
               echo "TAG_EXISTS=true" >> $GITHUB_OUTPUT
+              echo "SKIP_RELEASE=true" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            if [ "$STATUS" = "identical" ]; then
+              # A completed release is immutable. Only a tag without its release
+              # may resume here; rerun a failed dispatch job to retry an existing release.
+              if gh api "repos/${{ github.repository }}/releases/tags/${TAG_NAME}" > release.json 2> release-error.txt; then
+                echo "NEEDS_BUMP=false" >> $GITHUB_OUTPUT
+                echo "TAG_EXISTS=true" >> $GITHUB_OUTPUT
+                echo "SKIP_RELEASE=true" >> $GITHUB_OUTPUT
+                echo "Release already published; preserving its original artifacts"
+                exit 0
+              elif ! grep -q '(HTTP 404)' release-error.txt; then
+                cat release-error.txt >&2
+                exit 1
+              fi
+              echo "NEEDS_BUMP=false" >> $GITHUB_OUTPUT
+              echo "TAG_EXISTS=true" >> $GITHUB_OUTPUT
+              echo "SKIP_RELEASE=false" >> $GITHUB_OUTPUT
+              echo "Resuming tag-only release from this exact commit"
               exit 0
             fi
             echo "::notice::Tag ${TAG_NAME} already exists on remote and contains this commit — skipping tag/release creation"
             echo "NEEDS_BUMP=false" >> $GITHUB_OUTPUT
             echo "TAG_EXISTS=true" >> $GITHUB_OUTPUT
+            echo "SKIP_RELEASE=true" >> $GITHUB_OUTPUT
           else
             echo "NEEDS_BUMP=false" >> $GITHUB_OUTPUT
             echo "TAG_EXISTS=false" >> $GITHUB_OUTPUT
@@ -171,7 +193,7 @@ jobs:
           git push origin ${{ steps.check_tag.outputs.TAG_NAME }}
 
       - name: Download Artifacts
-        if: steps.check_tag.outputs.TAG_EXISTS != 'true'
+        if: steps.check_tag.outputs.SKIP_RELEASE != 'true'
         run: |
           set -e
 
@@ -193,16 +215,14 @@ jobs:
             mkdir -p "$PATH_DIR"
 
             # Download artifact using gh CLI
-            gh run download ${{ github.run_id }} --name "$NAME" --dir "$PATH_DIR" || {
-              echo "Warning: Failed to download artifact '$NAME', it may not exist"
-            }
+            gh run download ${{ github.run_id }} --name "$NAME" --dir "$PATH_DIR"
 
             echo "Contents of $PATH_DIR:"
             ls -la "$PATH_DIR" 2>/dev/null || echo "  (empty or not found)"
           done
 
       - name: Prepare Release
-        if: steps.check_tag.outputs.TAG_EXISTS != 'true'
+        if: steps.check_tag.outputs.SKIP_RELEASE != 'true'
         id: prepare_release
         run: |
           set -e
@@ -252,7 +272,7 @@ jobs:
           echo "$BODY"
 
       - name: Create GitHub Release
-        if: steps.check_tag.outputs.TAG_EXISTS != 'true'
+        if: steps.check_tag.outputs.SKIP_RELEASE != 'true'
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.check_tag.outputs.TAG_NAME }}
@@ -260,9 +280,10 @@ jobs:
           body: ${{ steps.prepare_release.outputs.BODY }}
           token: ${{ secrets.GITHUB_TOKEN }}
           files: ${{ steps.prepare_release.outputs.FILE_PATTERNS }}
+          fail_on_unmatched_files: true
 
-      # All module versions are bumped on master by the centralized bump_versions job.
+      # CD carries this immutable SHA/version; the later master bump cannot change it.
       - name: Mark Release Complete
         id: mark_released
-        if: steps.check_tag.outputs.TAG_EXISTS != 'true'
+        if: steps.check_tag.outputs.SKIP_RELEASE != 'true'
         run: echo "released=true" >> $GITHUB_OUTPUT

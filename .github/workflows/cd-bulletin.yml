@@ -4,10 +4,17 @@ on:
   repository_dispatch:
     types: [deploy-bulletin]
 
+# Keep every dispatch; never interrupt a production write.
+concurrency:
+  group: ${{ github.repository }}-cd-bulletin
+  cancel-in-progress: false
+  queue: max
+
 jobs:
   deploy:
     permissions:
       contents: read
+      actions: read
       id-token: write # Required for OIDC authentication with AWS
     runs-on: ubuntu-latest
 
@@ -24,13 +31,27 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION }}
 
     steps:
-      - name: Checkout
+      - name: Checkout deployment automation
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.client_payload.ref }}
+          ref: ${{ github.sha }}
+
+      - name: Check deployment source and freshness
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_MODULE: bulletin
+        run: node devops/github/release/check-deployment.mjs
+
+      - name: Checkout artifact source
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.guard.outputs.ref }}
 
       - name: Setup Node.js
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: setup-node
         uses: actions/setup-node@v7
         with:
@@ -39,23 +60,27 @@ jobs:
           cache: npm
 
       - name: Install npm Dependencies
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: npm_ci
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           npm ci --no-audit
 
       - name: Configure AWS Credentials (OIDC)
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Prepare Lambda ZIP Restore
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: prepare_restore
         run: |
           mkdir -p "$LAMBDA_ZIP_OUTPUT_DIR"
 
       - name: Restore Lambda ZIP
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: actions/download-artifact@v8
         with:
           name: ${{ env.RELEASED_ARTIFACT_NAME }}
@@ -64,6 +89,7 @@ jobs:
           github-token: ${{ secrets.BOT_PAT }}
 
       - name: Find Lambda ZIP
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: find_zip
         run: |
           LAMBDA_ZIP=$(find "${{ env.LAMBDA_ZIP_OUTPUT_DIR }}" -name "*.zip" | head -1)
@@ -71,6 +97,7 @@ jobs:
           echo "Found Lambda ZIP: ${LAMBDA_ZIP}"
 
       - name: Deploy to Lambda
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: deploy
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
