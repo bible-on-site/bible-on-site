@@ -13,6 +13,8 @@ public abstract class MobilePlatformAdapter
     public virtual LayoutExpectations Layout => new();
     public abstract By AutomationId(string id);
     public abstract By FlyoutButton { get; }
+    public virtual bool CanTap(AppiumElement element) => element.Enabled;
+    public virtual void Tap(AppiumDriver driver, AppiumElement element) => element.Click();
     public abstract void GoBack(AppiumDriver driver);
     public abstract AppiumDriver CreateDriver(Uri server, AppiumOptions options);
 
@@ -85,7 +87,21 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
 {
     public override By AutomationId(string id) => MobileBy.AccessibilityId(id);
     public override By FlyoutButton => By.XPath("//XCUIElementTypeNavigationBar/XCUIElementTypeButton[1]");
-    public override void GoBack(AppiumDriver driver) => driver.FindElement(FlyoutButton).Click();
+    public override bool CanTap(AppiumElement element) => element.Enabled
+        && string.Equals(element.GetAttribute("hittable"), "true", StringComparison.OrdinalIgnoreCase);
+    public override void Tap(AppiumDriver driver, AppiumElement element)
+    {
+        // Use an explicit touch at the current center of the native control.
+        // Coordinates are relative to the element when elementId is supplied.
+        var size = element.Size;
+        driver.ExecuteScript("mobile: tap", new Dictionary<string, object>
+        {
+            ["elementId"] = element.Id,
+            ["x"] = size.Width / 2.0,
+            ["y"] = size.Height / 2.0
+        });
+    }
+    public override void GoBack(AppiumDriver driver) => Tap(driver, driver.FindElement(FlyoutButton));
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
         // Cover simulator/app preparation plus one bounded WDA startup attempt.
         new IOSDriver(server, options, TimeSpan.FromMinutes(4));

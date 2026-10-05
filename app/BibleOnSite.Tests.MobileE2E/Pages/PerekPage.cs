@@ -41,9 +41,13 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     public string Source => WaitFor("PerekSource", element => !string.IsNullOrWhiteSpace(element.Text)).Text;
     public string FirstPasuk => WaitFor("PasukText", element => !string.IsNullOrWhiteSpace(element.Text)).Text;
 
+    public void Tap(string automationId) => Tap(platform.AutomationId(automationId));
+
+    public void Tap(By locator) => platform.Tap(driver, WaitFor(locator, platform.CanTap));
+
     public void OpenCircularMenu()
     {
-        WaitFor("CircularMenuButton").Click();
+        Tap("CircularMenuButton");
         WaitFor("TodayButton", element => element.Enabled);
     }
 

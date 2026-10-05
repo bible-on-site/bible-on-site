@@ -51,11 +51,11 @@ public sealed class PerekPilotTests(ITestOutputHelper output) : IAsyncLifetime
         var next = _page.WaitFor("NextPerekButton");
         var forward = next.Enabled ? "NextPerekButton" : "PrevPerekButton";
         var backward = next.Enabled ? "PrevPerekButton" : "NextPerekButton";
-        _page.WaitFor(forward, element => element.Enabled).Click();
+        _page.Tap(forward);
         _page.WaitFor("PerekSource", element => element.Text != source);
         _page.WaitFor("PasukText", element => !string.IsNullOrWhiteSpace(element.Text) && element.Text != pasuk);
         // Satellite navigation keeps the menu open for further chapter changes.
-        _page.WaitFor(backward, element => element.Enabled).Click();
+        _page.Tap(backward);
         _page.WaitFor("PerekSource", element => element.Text == source);
         _page.WaitFor("PasukText", element => element.Text == pasuk);
         _page.AssertBottomNavigationLayout();
@@ -65,8 +65,8 @@ public sealed class PerekPilotTests(ITestOutputHelper output) : IAsyncLifetime
     public void NativeFlyoutOpensPreferencesAndBackReturnsToThePerek() => Scenario(() =>
     {
         var source = _page.Source;
-        _page.WaitFor(_platform.FlyoutButton, element => element.Enabled).Click();
-        _page.WaitFor("FlyoutPreferences").Click();
+        _page.Tap(_platform.FlyoutButton);
+        _page.Tap("FlyoutPreferences");
         Assert.True(_page.WaitFor("FontFactorSlider").Enabled);
         Assert.True(_page.WaitFor("PerekTodaysRadio").Enabled);
         Assert.True(_page.WaitFor("PerekLastRadio").Enabled);

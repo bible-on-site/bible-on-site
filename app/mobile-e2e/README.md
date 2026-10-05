@@ -22,7 +22,7 @@ after packaging. Canonical content comes from the existing packaged database.
 
 Keep user flows and business assertions shared in the C# tests and page objects.
 `MobilePlatformAdapter` owns driver capabilities, native navigation and layout
-expectations; `AndroidPlatformAdapter` and `IosPlatformAdapter` are the extension
+expectations and native tap behavior; `AndroidPlatformAdapter` and `IosPlatformAdapter` are the extension
 points for native selectors, safe-area differences and other intended platform
 behavior. The adapters map MAUI automation IDs to Android resource IDs and iOS
 accessibility identifiers. Override `Layout` for a documented platform difference rather than
@@ -33,6 +33,11 @@ branching or skipping an entire shared scenario. Shared classes use
 tests plus the current platform, leaving platform-only behavior easy to add.
 Use `[Collection("Mobile device")]` on every mobile test class to serialize
 scenarios that own the same device.
+
+iOS waits for XCTest's `hittable` attribute before actions and uses `mobile: tap`
+at the element's center. This exercises the real touch target of rounded floating
+controls while avoiding XCTest's automatic hit-point selection. Android uses
+native element clicks. UI assertions and the 45-second readiness deadline remain shared.
 
 The pilot matrix deliberately covers Android and iOS. Existing Windows FlaUI
 tests and Android gesture regressions remain separate. Additional device/OS
