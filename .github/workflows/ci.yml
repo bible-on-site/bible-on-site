@@ -1572,16 +1572,8 @@ jobs:
           retention-days: 1
           overwrite: true
 
-      - name: Publish App Unit Report To Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v7
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
-          flags: app
-          report_type: test_results
-
       # ============ Integration Tests Setup ============
+      # rust-cache hashes CC_* env vars; keep it before codecov-action, which exports CC_SHA.
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -1596,6 +1588,15 @@ jobs:
           workspaces: |
             ${{ env.API_DIRECTORY }}
             ${{ env.DATA_DIRECTORY }}
+
+      - name: Publish App Unit Report To Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
+          flags: app
+          report_type: test_results
 
       - name: Install and start MySQL
         id: mysql
