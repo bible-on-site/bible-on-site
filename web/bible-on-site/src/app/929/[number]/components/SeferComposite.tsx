@@ -163,7 +163,7 @@ const ClientWrapper = (props: {
 	// the SEO DOM from the rendering pipeline, eliminating the layout
 	// recalculation cost that was causing flip animation lag.
 	useEffect(() => {
-		if (currentlyToggled) {
+		if (currentlyToggled && isWideEnough === true) {
 			document.documentElement.dataset.bookView = "";
 		} else {
 			delete document.documentElement.dataset.bookView;
@@ -171,7 +171,7 @@ const ClientWrapper = (props: {
 		return () => {
 			delete document.documentElement.dataset.bookView;
 		};
-	}, [currentlyToggled]);
+	}, [currentlyToggled, isWideEnough]);
 
 	// Don't render anything on mobile - sefer view is tablet+ only
 	// Return null during SSR/initial render to avoid hydration mismatch,
