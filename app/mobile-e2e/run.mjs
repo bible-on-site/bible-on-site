@@ -34,7 +34,7 @@ await new Promise((resolvePort, reject) => {
 });
 const serverLog = openSync(resolve(artifacts, "appium.log"), "w");
 const server = spawn(process.execPath, [resolve(directory, "node_modules/appium/index.js"),
-  "--address", "127.0.0.1", "--port", "4723", "--log-no-colors",
+  "--address", "127.0.0.1", "--port", "4723", "--log-no-colors", "--log-timestamp",
   "--use-drivers", platform === "android" ? "uiautomator2" : "xcuitest"], {
   cwd: directory, windowsHide: true, stdio: ["ignore", serverLog, serverLog],
 });

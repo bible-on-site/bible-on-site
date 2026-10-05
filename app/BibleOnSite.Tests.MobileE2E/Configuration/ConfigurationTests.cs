@@ -43,10 +43,12 @@ public sealed class ConfigurationTests
             Assert.Equal(true, options["appium:usePreinstalledWDA"]);
             Assert.Equal("/test/WebDriverAgentRunner-Runner.app", options["appium:prebuiltWDAPath"]);
             Assert.Equal(1, options["appium:wdaStartupRetries"]);
+            Assert.Equal(1.0, options["appium:waitForIdleTimeout"]);
         }
         else
         {
             Assert.False(options.ContainsKey("appium:prebuiltWDAPath"));
+            Assert.False(options.ContainsKey("appium:waitForIdleTimeout"));
         }
         Assert.False(options.ContainsKey($"appium:{otherPlatformKey}"));
     }

@@ -34,8 +34,8 @@ public abstract class MobilePlatformAdapter
             options.PlatformVersion = configuration.PlatformVersion;
         }
         options.AddAdditionalAppiumOption("noReset", false);
-        // XCUITest fullReset erases the whole simulator. Reinstall only the app
-        // on iOS so every scenario has clean data while the device stays booted.
+        // Android fully uninstalls the app. iOS resets and reinstalls it through
+        // noReset=false and enforceAppInstall=true while the device stays booted.
         options.AddAdditionalAppiumOption("fullReset", android);
         options.AddAdditionalAppiumOption("newCommandTimeout", 120);
         if (android)
@@ -59,6 +59,10 @@ public abstract class MobilePlatformAdapter
             options.AddAdditionalAppiumOption("wdaStartupRetries", 1);
             options.AddAdditionalAppiumOption("wdaLaunchTimeout", 180000);
             options.AddAdditionalAppiumOption("wdaConnectionTimeout", 90000);
+            // XCTest's repeated default idle waits can consume the entire shared
+            // readiness deadline during the loading-page/reader transition.
+            // Keep idle checks enabled; page objects poll the actual UI state.
+            options.AddAdditionalAppiumOption("waitForIdleTimeout", 1.0);
         }
         return options;
     }

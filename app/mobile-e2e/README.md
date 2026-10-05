@@ -38,6 +38,9 @@ iOS waits for XCTest's `hittable` attribute before actions and uses `mobile: tap
 at the element's center. This exercises the real touch target of rounded floating
 controls while avoiding XCTest's automatic hit-point selection. Android uses
 native element clicks. UI assertions and the 45-second readiness deadline remain shared.
+iOS keeps XCTest idle checks enabled with a one-second `waitForIdleTimeout`, so
+repeated internal idle waits during startup do not exhaust the page object's
+readiness polling. See the [Appium idle-wait capability](https://appium.github.io/appium-xcuitest-driver/latest/reference/capabilities/).
 
 The pilot matrix deliberately covers Android and iOS. Existing Windows FlaUI
 tests and Android gesture regressions remain separate. Additional device/OS
@@ -63,7 +66,7 @@ From `app/`, `dotnet run --project devops -- TestMobileE2EUnit` checks platform
 configuration and device capabilities without a device or mobile workload.
 
 Screenshots and native view trees are captured for each scenario, alongside
-Appium and device logs, TRX and JUnit reports, under `app/.artifacts/mobile-e2e/<platform>`.
+timestamped Appium and device logs, TRX and JUnit reports, under `app/.artifacts/mobile-e2e/<platform>`.
 iOS also exports app lifecycle logs and fresh app crash reports. Failed runs
 collect a short native stack sample if the app is still running, without
 competing with healthy tests for simulator resources.
