@@ -8,6 +8,12 @@ namespace BibleOnSite.Tests.MobileE2E.Pages;
 
 public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platform)
 {
+    // The first native snapshot on a cold simulator can finish after the
+    // loading page has been replaced, while returning that earlier empty tree.
+    // Allow another snapshot before applying the normal interaction deadlines.
+    public void WaitForStartup() => WaitFor(platform.AutomationId("PerekSource"),
+        element => !string.IsNullOrWhiteSpace(element.Text), TimeSpan.FromMinutes(2));
+
     public AppiumElement WaitFor(string automationId) => WaitFor(automationId, _ => true);
 
     public AppiumElement WaitFor(string automationId, Func<AppiumElement, bool> condition) =>
@@ -15,9 +21,12 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
 
     public AppiumElement WaitFor(By locator) => WaitFor(locator, _ => true);
 
-    public AppiumElement WaitFor(By locator, Func<AppiumElement, bool> condition)
+    public AppiumElement WaitFor(By locator, Func<AppiumElement, bool> condition) =>
+        WaitFor(locator, condition, TimeSpan.FromSeconds(45));
+
+    private AppiumElement WaitFor(By locator, Func<AppiumElement, bool> condition, TimeSpan timeout)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(45);
+        var deadline = DateTime.UtcNow.Add(timeout);
         while (DateTime.UtcNow < deadline)
         {
             try
@@ -36,7 +45,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             }
             Thread.Sleep(200);
         }
-        throw new WebDriverTimeoutException($"No visible element matching {locator} met the condition within 45 seconds.");
+        throw new WebDriverTimeoutException($"No visible element matching {locator} met the condition within {timeout.TotalSeconds} seconds.");
     }
 
     public string Source => WaitFor("PerekSource", element => !string.IsNullOrWhiteSpace(element.Text)).Text;

@@ -24,6 +24,15 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         _platform = MobilePlatformAdapter.For(_configuration.Platform);
         _driver = sessions.Create(() => _platform.CreateDriver(_configuration.Server, _platform.CreateOptions(_configuration)));
         _page = new(_driver, _platform);
+        try
+        {
+            _page.WaitForStartup();
+        }
+        catch
+        {
+            SaveDiagnostics("SessionStartup", "failed");
+            throw;
+        }
         return Task.CompletedTask;
     }
 
