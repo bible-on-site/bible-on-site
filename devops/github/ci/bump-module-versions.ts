@@ -359,6 +359,37 @@ export function publishVersionBumps(
 	throw new Error("Master advanced during all five version bump attempts");
 }
 
+/** Older in-flight bump jobs check out master but still use two CLI steps. */
+export function executeVersionBumps(
+	needs: ReleaseNeeds,
+	mode: "released" | "retry" | "all",
+	publish: boolean,
+	cwd = repoRoot,
+	environment = process.env,
+): string | undefined {
+	const legacyPublisher =
+		!publish &&
+		environment.GITHUB_ACTIONS === "true" &&
+		environment.GITHUB_EVENT_NAME === "push" &&
+		environment.GITHUB_REF === "refs/heads/master" &&
+		environment.GITHUB_JOB === "bump_versions";
+	if (publish || legacyPublisher) {
+		if (environment.GITHUB_ACTIONS !== "true")
+			throw new Error(
+				"Publishing requires a disposable GitHub Actions checkout",
+			);
+		publishVersionBumps(
+			needs,
+			legacyPublisher ? "all" : mode,
+			cwd,
+			environment.GITHUB_SHA,
+		);
+		// No summary: the older workflow must skip its unsafe commit/rebase/push steps.
+		return undefined;
+	}
+	return bumpModuleVersions(needs, mode, cwd);
+}
+
 async function main(): Promise<void> {
 	const { mode, publish } = await yargs(hideBin(process.argv))
 		.option("mode", {
@@ -372,17 +403,9 @@ async function main(): Promise<void> {
 	const needsJson = process.env.NEEDS_JSON;
 	if (!needsJson) throw new Error("NEEDS_JSON is required");
 	const needs = JSON.parse(needsJson) as ReleaseNeeds;
-	if (publish) {
-		if (process.env.GITHUB_ACTIONS !== "true")
-			throw new Error(
-				"Publishing requires a disposable GitHub Actions checkout",
-			);
-		publishVersionBumps(needs, mode, repoRoot, process.env.GITHUB_SHA);
-	} else {
-		const summary = bumpModuleVersions(needs, mode);
-		if (process.env.GITHUB_OUTPUT)
-			appendFileSync(process.env.GITHUB_OUTPUT, `summary=${summary}\n`);
-	}
+	const summary = executeVersionBumps(needs, mode, publish);
+	if (summary !== undefined && process.env.GITHUB_OUTPUT)
+		appendFileSync(process.env.GITHUB_OUTPUT, `summary=${summary}\n`);
 }
 
 if (

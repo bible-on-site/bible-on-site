@@ -90,3 +90,17 @@ Published release metadata records the original CI run and attempt. CD verifies 
 Data dispatches carry an immutable SQL artifact ID, SHA-256 archive digest, commit SHA, and CI attempt. CD verifies the archive's source, expiry, and checksum before accessing production. Data completion records include that artifact ID, allowing a new archive from a CI rerun to deploy while repeated dispatches of a completed archive are skipped. Successfully deployed later attempts also prevent older SQL from replacing them.
 
 Legacy data dispatches without an artifact ID are bound once to a verified archive only if the source CI has never been rerun. After a rerun, their original SQL cannot be proven: use the new Release Data dispatch with an immutable artifact ID. Deleted or expired archives fail visibly; they never fall back to replacement SQL.
+
+
+## Handover from older workflows
+
+An older master `bump_versions` job checks out current master but invokes separate
+released/retry CLI steps. The publisher recognizes only that existing master push
+job and handles both modes together with safe retries. It emits no edit summary,
+so the older workflow skips its commit/rebase/push steps. Other callers retain
+file-only behavior unless they explicitly request publishing.
+
+Before merging this change, drain any production CD runs and version-bump jobs
+already running with older code. To recover a historical CD failure after the handover, issue a fresh dispatch
+from a current master release workflow so the new guards execute. Rerunning an old
+CD run reuses its historical workflow code and does not acquire these new guards.

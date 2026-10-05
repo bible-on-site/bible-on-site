@@ -11,7 +11,10 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { publishVersionBumps } from "./bump-module-versions.ts";
+import {
+	executeVersionBumps,
+	publishVersionBumps,
+} from "./bump-module-versions.ts";
 
 function fixture(t: { after: (fn: () => void) => void }) {
 	const root = mkdtempSync(join(tmpdir(), "version-publish-"));
@@ -219,5 +222,80 @@ test("a policy rejection does not pretend that master advanced or retry a forbid
 	assert.equal(
 		git(a, "ls-remote", "origin", "refs/heads/master").split(/\s/)[0],
 		original,
+	);
+});
+
+test("an older master bump workflow uses one safe publication and skips its obsolete push steps", (t) => {
+	const { a, git } = fixture(t);
+	mkdirSync(join(a, "web/admin"), { recursive: true });
+	const version = "1.0.0";
+	writeFileSync(
+		join(a, "web/admin/package.json"),
+		JSON.stringify({ name: "admin", version }),
+	);
+	writeFileSync(
+		join(a, "web/admin/package-lock.json"),
+		JSON.stringify({ version, packages: { "": { version } } }),
+	);
+	git(a, "add", ".");
+	git(a, "commit", "-m", "feature after website release");
+	git(a, "tag", "admin-v1.0.0");
+	git(a, "push", "--tags", "origin", "master");
+	const environment = {
+		GITHUB_ACTIONS: "true",
+		GITHUB_EVENT_NAME: "push",
+		GITHUB_REF: "refs/heads/master",
+		GITHUB_JOB: "bump_versions",
+		GITHUB_SHA: git(a, "rev-parse", "HEAD"),
+	};
+	const needs = {
+		release_website: { result: "success", outputs: { needs_bump: "true" } },
+		release_admin: { result: "success", outputs: { released: "true" } },
+	};
+	assert.equal(
+		executeVersionBumps(needs, "released", false, a, environment),
+		undefined,
+	);
+	const published = git(a, "rev-parse", "HEAD");
+	assert.match(git(a, "log", "-1", "--format=%s"), /website to 1.0.1/);
+	assert.match(git(a, "log", "-1", "--format=%s"), /admin to 1.0.1/);
+	assert.doesNotMatch(git(a, "log", "-1", "--format=%s"), /skip ci/);
+	assert.equal(
+		executeVersionBumps(needs, "retry", false, a, environment),
+		undefined,
+	);
+	assert.equal(git(a, "rev-parse", "HEAD"), published);
+	assert.equal(git(a, "status", "--porcelain"), "");
+});
+
+test("implicit publication is restricted to the existing master push bump job", (t) => {
+	for (const extra of [
+		{ GITHUB_ACTIONS: "false" },
+		{ GITHUB_EVENT_NAME: "workflow_dispatch" },
+		{ GITHUB_REF: "refs/pull/1/merge" },
+		{ GITHUB_JOB: "cross_module_ci" },
+	]) {
+		const { a, git } = fixture(t);
+		const original = git(a, "rev-parse", "HEAD");
+		const summary = executeVersionBumps(released, "released", false, a, {
+			GITHUB_ACTIONS: "true",
+			GITHUB_EVENT_NAME: "push",
+			GITHUB_REF: "refs/heads/master",
+			GITHUB_JOB: "bump_versions",
+			...extra,
+		});
+		assert.equal(summary, "website to 1.0.1");
+		assert.equal(git(a, "rev-parse", "HEAD"), original);
+		assert.equal(
+			git(a, "ls-remote", "origin", "refs/heads/master").split(/\s/)[0],
+			original,
+		);
+	}
+	assert.throws(
+		() =>
+			executeVersionBumps(released, "all", true, undefined, {
+				GITHUB_ACTIONS: "false",
+			}),
+		/disposable/,
 	);
 });
