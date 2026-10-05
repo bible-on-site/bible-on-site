@@ -5,6 +5,13 @@ import PerekSwipeNavigation from "@/app/929/[number]/components/PerekSwipeNaviga
 let pathname = "/929/2";
 const push = jest.fn();
 const router = { push };
+const fixtureText = {
+	chapter: "Chapter text",
+	citation: "Citation",
+	settings: "Settings",
+	dialog: "Dialog content",
+	card: "Carousel card",
+};
 jest.mock("next/navigation", () => ({
 	usePathname: () => pathname,
 	useRouter: () => router,
@@ -21,7 +28,15 @@ function emit(
 	changedTouches = touches,
 	time = 100,
 ) {
-	const event = createEvent[type](target, { touches, changedTouches });
+	const event = createEvent(
+		type.toLowerCase(),
+		target,
+		{ touches, changedTouches },
+		{
+			EventType: "TouchEvent",
+			defaultInit: { bubbles: true, cancelable: true },
+		},
+	);
 	Object.defineProperty(event, "timeStamp", { value: time });
 	fireEvent(target, event);
 	return event;
@@ -41,16 +56,16 @@ function swipe(
 function Reader() {
 	return (
 		<PerekSwipeNavigation className="perek-layout">
-			<article data-testid="text">Chapter text</article>
-			<a href="/pedia/example">Citation</a>
-			<button type="button">Settings</button>
+			<article data-testid="text">{fixtureText.chapter}</article>
+			<a href="/pedia/example">{fixtureText.citation}</a>
+			<button type="button">{fixtureText.settings}</button>
 			<input aria-label="Volume" type="range" />
 			<div data-testid="editable" contentEditable />
 			<dialog open data-testid="dialog">
-				<span>Dialog content</span>
+				<span>{fixtureText.dialog}</span>
 			</dialog>
 			<div data-testid="carousel" style={{ overflowX: "auto" }}>
-				<span data-testid="card">Carousel card</span>
+				<span data-testid="card">{fixtureText.card}</span>
 			</div>
 		</PerekSwipeNavigation>
 	);

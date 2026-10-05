@@ -83,6 +83,7 @@ test("vertical touch scrolling keeps the chapter and scrolls the reader", async 
 	page,
 }) => {
 	await page.goto("/929/2");
+	await textPoint(page);
 	const before = await page
 		.getByRole("article")
 		.evaluate((el) => el.parentElement?.scrollTop ?? 0);
