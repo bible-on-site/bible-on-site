@@ -29,6 +29,8 @@ function request(overrides = {}) {
 	return (endpoint) => {
 		if (endpoint.endsWith("/actions/runs/10"))
 			return overrides.source ?? source;
+		if (endpoint.includes("/runs/10/jobs?"))
+			return { jobs: [{ name: "Cross Module CI", conclusion: "success" }] };
 		if (endpoint.includes("/compare/"))
 			return { status: overrides.status ?? "identical" };
 		if (endpoint.includes("/releases?"))
@@ -168,10 +170,37 @@ for (const file of [
 				[
 					"Checkout deployment automation",
 					"Check deployment source and freshness",
+					"Record deployment result",
 				].includes(name)
 			)
 				continue;
 			assert.match(block, /if:.*steps.guard.outputs.deploy == 'true'/, name);
 		}
+	});
+}
+
+test("unverified source CI cannot write to production", () => {
+	const mock = request();
+	assert.throws(
+		() =>
+			checkDeployment(input, (endpoint) =>
+				endpoint.includes("/runs/10/jobs?")
+					? { jobs: [{ name: "Cross Module CI", conclusion: "failure" }] }
+					: mock(endpoint),
+			),
+		/has not passed/,
+	);
+});
+
+for (const file of ["cd-aws.yml", "cd-bulletin.yml", "cd-app.yml"]) {
+	test(`${file} deploys published binaries instead of mutable rerun artifacts`, () => {
+		const workflow = readFileSync(
+			new URL(`../../../.github/workflows/${file}`, import.meta.url),
+			"utf8",
+		);
+		assert.match(workflow, /gh release download/);
+		assert.doesNotMatch(workflow, /actions\/download-artifact/);
+		assert.match(workflow, /deployments: write/);
+		assert.match(workflow, /DEPLOYMENT_RESULT: \$\{\{ job.status \}\}/);
 	});
 }

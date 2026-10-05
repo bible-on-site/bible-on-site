@@ -15,6 +15,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      deployments: write
       id-token: write # Required for OIDC authentication with AWS
     runs-on: ubuntu-latest
 
@@ -96,12 +97,9 @@ jobs:
 
       - name: Restore Docker Image
         if: ${{ steps.guard.outputs.deploy == 'true' }}
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.RELEASED_ARTIFACT_NAME }}
-          path: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
-          run-id: ${{ env.CI_RUN_ID }}
-          github-token: ${{ secrets.BOT_PAT }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "${{ env.MODULE_NAME }}-v${{ env.MODULE_VERSION }}" --pattern "${{ env.DOCKER_IMAGE_NAME }}-v${{ env.MODULE_VERSION }}.tar.gz" --dir "${{ env.DOCKER_IMAGE_OUTPUT_DIR }}"
 
       - name: Deploy to ECR
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -123,3 +121,11 @@ jobs:
           python data/recitation/audit.py
           python data/recitation/deployment.py --origin https://xn--febl3a.co.il \
             --version "$MODULE_VERSION" --check-audio --attempts 30 --interval 20
+
+      - name: Record deployment result
+        if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.guard.outputs.deployment_id }}
+          DEPLOYMENT_RESULT: ${{ job.status }}
+        run: node "${{ runner.temp }}/deployment-state.mjs"

@@ -27,6 +27,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      deployments: write
     runs-on: ubuntu-latest
 
     env:
@@ -46,6 +47,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DEPLOY_MODULE: app
+          DEPLOY_TARGET: app-android
         run: node devops/github/release/check-deployment.mjs
 
       - name: Checkout artifact source
@@ -56,12 +58,9 @@ jobs:
 
       - name: Restore Android AAB
         if: ${{ steps.guard.outputs.deploy == 'true' }}
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.ANDROID_ARTIFACT_NAME }}
-          path: ${{ env.APP_DIRECTORY }}/.artifacts
-          run-id: ${{ env.CI_RUN_ID }}
-          github-token: ${{ secrets.BOT_PAT }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "app-v${{ env.MODULE_VERSION }}" --pattern "*.aab" --dir "${{ env.APP_DIRECTORY }}/.artifacts"
 
       - name: Find AAB file
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -101,6 +100,14 @@ jobs:
             --aab-path "${{ steps.find_aab.outputs.AAB_FILE }}" \
             --google-play-key-file "${{ runner.temp }}/service-account.json"
 
+      - name: Record deployment result
+        if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.guard.outputs.deployment_id }}
+          DEPLOYMENT_RESULT: ${{ job.status }}
+        run: node "${{ runner.temp }}/deployment-state.mjs"
+
       - name: Cleanup
         if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
         run: rm -f ${{ runner.temp }}/service-account.json
@@ -120,6 +127,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      deployments: write
     runs-on: windows-latest
 
     env:
@@ -139,6 +147,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DEPLOY_MODULE: app
+          DEPLOY_TARGET: app-windows
         run: node devops/github/release/check-deployment.mjs
 
       - name: Checkout artifact source
@@ -149,12 +158,9 @@ jobs:
 
       - name: Restore Windows MSIX
         if: ${{ steps.guard.outputs.deploy == 'true' }}
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.WINDOWS_ARTIFACT_NAME }}
-          path: ${{ env.APP_DIRECTORY }}/.artifacts
-          run-id: ${{ env.CI_RUN_ID }}
-          github-token: ${{ secrets.BOT_PAT }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "app-v${{ env.MODULE_VERSION }}" --pattern "BibleOnSite*.msix" --dir "${{ env.APP_DIRECTORY }}/.artifacts"
 
       - name: Find MSIX file
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -213,6 +219,14 @@ jobs:
             --ms-store-flight-group-id "${{ secrets.MS_STORE_FLIGHT_GROUP_ID }}" `
             --max-flights-to-keep 15
 
+      - name: Record deployment result
+        if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.guard.outputs.deployment_id }}
+          DEPLOYMENT_RESULT: ${{ job.status }}
+        run: node "${{ runner.temp }}/deployment-state.mjs"
+
       - name: Deployment Summary
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         shell: pwsh
@@ -229,6 +243,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      deployments: write
     runs-on: macos-15
 
     env:
@@ -248,6 +263,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DEPLOY_MODULE: app
+          DEPLOY_TARGET: app-ios
         run: node devops/github/release/check-deployment.mjs
 
       - name: Checkout artifact source
@@ -258,12 +274,9 @@ jobs:
 
       - name: Restore iOS IPA
         if: ${{ steps.guard.outputs.deploy == 'true' }}
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.IOS_ARTIFACT_NAME }}
-          path: ${{ env.APP_DIRECTORY }}/.artifacts
-          run-id: ${{ env.CI_RUN_ID }}
-          github-token: ${{ secrets.BOT_PAT }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "app-v${{ env.MODULE_VERSION }}" --pattern "*.ipa" --dir "${{ env.APP_DIRECTORY }}/.artifacts"
 
       - name: Find IPA file
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -336,6 +349,14 @@ jobs:
             echo "❌ Build upload/processing failed"
             exit $EXIT_CODE
           fi
+
+      - name: Record deployment result
+        if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.guard.outputs.deployment_id }}
+          DEPLOYMENT_RESULT: ${{ job.status }}
+        run: node "${{ runner.temp }}/deployment-state.mjs"
 
       - name: Cleanup
         if: ${{ always() && steps.guard.outputs.deploy == 'true' }}

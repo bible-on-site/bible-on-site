@@ -139,3 +139,63 @@ test("publishing refuses unrelated working tree edits", (t) => {
 	);
 	assert.equal(readFileSync(join(a, "user.txt"), "utf8"), "user edits");
 });
+
+test("three overlapping collision requests coalesce into one retry CI commit", (t) => {
+	const { a, git } = fixture(t);
+	writeFileSync(join(a, "feature.txt"), "merged code");
+	git(a, "add", ".");
+	git(a, "commit", "-m", "feature");
+	git(a, "push", "origin", "master");
+	const source = git(a, "rev-parse", "HEAD");
+	publishVersionBumps(retry, "all", a, source);
+	const scheduled = git(a, "rev-parse", "HEAD");
+	for (let request = 0; request < 3; request++)
+		publishVersionBumps(retry, "all", a, source);
+	assert.equal(git(a, "rev-parse", "HEAD"), scheduled);
+	assert.doesNotMatch(git(a, "log", "-1", "--format=%s"), /skip ci/);
+});
+
+test("one publication combines normal releases and collision retries", (t) => {
+	const { a, git } = fixture(t);
+	mkdirSync(join(a, "web/admin"), { recursive: true });
+	const version = "1.0.0";
+	writeFileSync(
+		join(a, "web/admin/package.json"),
+		JSON.stringify({ name: "admin", version }),
+	);
+	writeFileSync(
+		join(a, "web/admin/package-lock.json"),
+		JSON.stringify({ version, packages: { "": { version } } }),
+	);
+	git(a, "add", ".");
+	git(a, "commit", "-m", "admin feature");
+	git(a, "tag", "admin-v1.0.0", "HEAD~1");
+	git(a, "push", "--tags", "origin", "master");
+	const source = git(a, "rev-parse", "HEAD");
+	publishVersionBumps(
+		{
+			...released,
+			release_admin: { result: "success", outputs: { needs_bump: "true" } },
+		},
+		"all",
+		a,
+		source,
+	);
+	assert.equal(git(a, "rev-parse", "HEAD~1"), source);
+	assert.equal(
+		JSON.parse(readFileSync(join(a, "web/admin/package.json"), "utf8")).version,
+		"1.0.1",
+	);
+	assert.equal(
+		JSON.parse(readFileSync(join(a, "web/bible-on-site/package.json"), "utf8"))
+			.version,
+		"1.0.1",
+	);
+	assert.doesNotMatch(git(a, "log", "-1", "--format=%s"), /skip ci/);
+});
+
+test("combined publication still skips CI for normal releases", (t) => {
+	const { a, git } = fixture(t);
+	publishVersionBumps(released, "all", a);
+	assert.match(git(a, "log", "-1", "--format=%s"), /skip ci/);
+});

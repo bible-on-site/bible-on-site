@@ -2620,14 +2620,8 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: npm ci --no-audit --no-fund
 
-      - name: Publish released version bumps
+      - name: Publish release and collision version bumps together
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-        run: npm run bump:module-versions -- --mode released --publish
-
-      - name: Publish versions taken by another commit
-        working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        env:
-          NEEDS_JSON: ${{ toJSON(needs) }}
-        run: npm run bump:module-versions -- --mode retry --publish
+        run: npm run bump:module-versions -- --mode all --publish

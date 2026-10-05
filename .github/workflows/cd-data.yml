@@ -16,6 +16,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      deployments: write
       id-token: write # Required for OIDC authentication with AWS
     runs-on: ubuntu-latest
 
@@ -100,3 +101,11 @@ jobs:
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: npm run deploy:data
+
+      - name: Record deployment result
+        if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.guard.outputs.deployment_id }}
+          DEPLOYMENT_RESULT: ${{ job.status }}
+        run: node "${{ runner.temp }}/deployment-state.mjs"

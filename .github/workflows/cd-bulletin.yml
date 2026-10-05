@@ -15,6 +15,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      deployments: write
       id-token: write # Required for OIDC authentication with AWS
     runs-on: ubuntu-latest
 
@@ -81,12 +82,9 @@ jobs:
 
       - name: Restore Lambda ZIP
         if: ${{ steps.guard.outputs.deploy == 'true' }}
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.RELEASED_ARTIFACT_NAME }}
-          path: ${{ env.LAMBDA_ZIP_OUTPUT_DIR }}
-          run-id: ${{ env.CI_RUN_ID }}
-          github-token: ${{ secrets.BOT_PAT }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "bulletin-v${{ env.MODULE_VERSION }}" --pattern "*.zip" --dir "${{ env.LAMBDA_ZIP_OUTPUT_DIR }}"
 
       - name: Find Lambda ZIP
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -104,3 +102,11 @@ jobs:
           npm run deploy:bulletin -- \
             --module-version "${{ env.MODULE_VERSION }}" \
             --lambda-zip "${{ github.workspace }}/${{ steps.find_zip.outputs.LAMBDA_ZIP }}"
+
+      - name: Record deployment result
+        if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.guard.outputs.deployment_id }}
+          DEPLOYMENT_RESULT: ${{ job.status }}
+        run: node "${{ runner.temp }}/deployment-state.mjs"

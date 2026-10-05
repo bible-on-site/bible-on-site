@@ -34,13 +34,15 @@ const repoRoot = path.resolve(
 
 export function modulesToBump(
 	needs: ReleaseNeeds,
-	mode: "released" | "retry",
+	mode: "released" | "retry" | "all",
 ): ModuleName[] {
 	const outputName = mode === "released" ? "released" : "needs_bump";
 	return moduleNames.filter(
 		(name) =>
 			needs[`release_${name}`]?.result === "success" &&
-			needs[`release_${name}`]?.outputs?.[outputName] === "true",
+			(needs[`release_${name}`]?.outputs?.[outputName] === "true" ||
+				(mode === "all" &&
+					needs[`release_${name}`]?.outputs?.released === "true")),
 	);
 }
 
@@ -224,7 +226,7 @@ function writeVersion(
 
 export function bumpModuleVersions(
 	needs: ReleaseNeeds,
-	mode: "released" | "retry",
+	mode: "released" | "retry" | "all",
 	cwd = repoRoot,
 	sourceSha?: string,
 ): string {
@@ -236,7 +238,11 @@ export function bumpModuleVersions(
 		);
 		if (!currentVersion) throw new Error(`Missing ${name} version`);
 		const releasedVersion = getReleasedVersion(name, cwd);
-		if (mode === "retry" && sourceSha && releasedVersion) {
+		const retry =
+			mode === "retry" ||
+			(mode === "all" &&
+				needs[`release_${name}`]?.outputs?.needs_bump === "true");
+		if (retry && sourceSha && releasedVersion) {
 			const result = spawnSync(
 				"git",
 				[
@@ -256,10 +262,44 @@ export function bumpModuleVersions(
 					`Cannot compare ${name} release ancestry: ${result.stderr}`,
 				);
 		}
+		// A prior queued collision already scheduled CI for this source and version.
+		// Keep the failed run visible for recovery instead of creating duplicate builds.
+		if (
+			retry &&
+			sourceSha &&
+			releasedVersion &&
+			semver.gt(currentVersion, releasedVersion)
+		) {
+			const [commit, subject] = execFileSync(
+				"git",
+				["log", "-1", "--format=%H%n%s", "--", module.versionFile],
+				{ cwd, encoding: "utf8" },
+			)
+				.trim()
+				.split("\n");
+			if (
+				subject?.startsWith("chore(release): Bump versions to release (") &&
+				subject.includes(`${name} to ${currentVersion}`)
+			) {
+				const covered = spawnSync(
+					"git",
+					["merge-base", "--is-ancestor", sourceSha, commit],
+					{ cwd },
+				);
+				if (covered.status === 0) {
+					console.log(`${name}: retry CI already scheduled by ${commit}`);
+					continue;
+				}
+				if (covered.status !== 1)
+					throw new Error(
+						`Cannot compare pending retry ancestry: ${covered.stderr}`,
+					);
+			}
+		}
 		const nextVersion = nextReleaseVersion(
 			currentVersion,
 			releasedVersion,
-			mode === "retry",
+			retry,
 		);
 		if (!nextVersion) continue;
 		writeVersion(module, currentVersion, nextVersion, cwd);
@@ -272,7 +312,7 @@ export function bumpModuleVersions(
 /** Recompute after a competing master push; never rebase stale version edits. */
 export function publishVersionBumps(
 	needs: ReleaseNeeds,
-	mode: "released" | "retry",
+	mode: "released" | "retry" | "all",
 	cwd = repoRoot,
 	sourceSha?: string,
 	beforePush?: (attempt: number) => void,
@@ -293,7 +333,11 @@ export function publishVersionBumps(
 		const summary = bumpModuleVersions(needs, mode, cwd, sourceSha);
 		if (!summary) return;
 		const message =
-			mode === "released"
+			mode === "released" ||
+			(mode === "all" &&
+				!modulesToBump(needs, "retry").some((name) =>
+					summary.includes(`${name} to `),
+				))
 				? `chore(release): Bump versions (${summary}) [skip ci]`
 				: `chore(release): Bump versions to release (${summary})`;
 		git("commit", "-n", "-am", message);
@@ -319,7 +363,7 @@ async function main(): Promise<void> {
 	const { mode, publish } = await yargs(hideBin(process.argv))
 		.option("mode", {
 			type: "string",
-			choices: ["released", "retry"] as const,
+			choices: ["released", "retry", "all"] as const,
 			demandOption: true,
 		})
 		.option("publish", { type: "boolean", default: false })

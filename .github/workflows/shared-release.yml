@@ -45,6 +45,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   trigger_cd:
@@ -52,9 +53,48 @@ jobs:
     needs: release
     # A rerun or overlapping CI build may have packaged an already released
     # version. Only deploy the exact tag commit, including interrupted-release recovery.
-    if: ${{ needs.release.outputs.released == 'true' }}
+    if: ${{ needs.release.outputs.released == 'true' && needs.release.outputs.cd_payload != '' }}
     runs-on: ubuntu-latest
     steps:
+      - name: Trigger CD Workflow
+        uses: peter-evans/repository-dispatch@v4
+        with:
+          repository: ${{ github.repository }}
+          token: ${{ secrets.BOT_PAT }}
+          event-type: ${{ inputs.cd_event_type }}
+          client-payload: ${{ needs.release.outputs.cd_payload }}
+
+  release:
+    name: Release
+    outputs:
+      released: ${{ steps.mark_released.outputs.released }}
+      needs_bump: ${{ steps.check_tag.outputs.NEEDS_BUMP }}
+      cd_payload: ${{ steps.mark_released.outputs.CD_PAYLOAD }}
+    # Queue (don't cancel) concurrent releases for the same module so that
+    # checking and creating the version tag is serialized.
+    concurrency:
+      group: ${{ github.repository }}-release-${{ inputs.module_name }}
+      cancel-in-progress: false
+      queue: max
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+      - name: Setup release Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+
       - name: Build CD Payload
         id: build_payload
         run: |
@@ -99,39 +139,6 @@ jobs:
           echo "CD_PAYLOAD=$PAYLOAD_COMPACT" >> $GITHUB_OUTPUT
           echo "Generated CD payload: $PAYLOAD"
 
-      - name: Trigger CD Workflow
-        uses: peter-evans/repository-dispatch@v4
-        with:
-          repository: ${{ github.repository }}
-          token: ${{ secrets.BOT_PAT }}
-          event-type: ${{ inputs.cd_event_type }}
-          client-payload: ${{ steps.build_payload.outputs.CD_PAYLOAD }}
-
-  release:
-    name: Release
-    outputs:
-      released: ${{ steps.mark_released.outputs.released }}
-      needs_bump: ${{ steps.check_tag.outputs.NEEDS_BUMP }}
-    # Queue (don't cancel) concurrent releases for the same module so that
-    # checking and creating the version tag is serialized.
-    concurrency:
-      group: ${{ github.repository }}-release-${{ inputs.module_name }}
-      cancel-in-progress: false
-      queue: max
-    runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ github.token }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Configure Git
-        run: |
-          git config --global user.email "actions@github.com"
-          git config --global user.name "GitHub Actions"
-
       - name: Check Tag
         id: check_tag
         run: |
@@ -149,13 +156,26 @@ jobs:
               exit 0
             fi
             if [ "$STATUS" = "identical" ]; then
-              # A completed release is immutable. Only a tag without its release
-              # may resume here; rerun a failed dispatch job to retry an existing release.
+              # Published assets never change; drafts can resume their original upload.
               if gh api "repos/${{ github.repository }}/releases/tags/${TAG_NAME}" > release.json 2> release-error.txt; then
+                ORIGINAL_PAYLOAD=$(node devops/github/release/release-assets.mjs)
+                if [ -n "$ORIGINAL_PAYLOAD" ]; then
+                  ORIGINAL_REF=$(echo "$ORIGINAL_PAYLOAD" | jq -r .ref)
+                  if [ "$ORIGINAL_REF" != "${{ github.sha }}" ]; then
+                    echo "Release metadata source does not match the tag commit" >&2
+                    exit 1
+                  fi
+                  echo "CD_PAYLOAD=$ORIGINAL_PAYLOAD" >> $GITHUB_OUTPUT
+                fi
                 echo "NEEDS_BUMP=false" >> $GITHUB_OUTPUT
                 echo "TAG_EXISTS=true" >> $GITHUB_OUTPUT
-                echo "SKIP_RELEASE=true" >> $GITHUB_OUTPUT
-                echo "Release already published; preserving its original artifacts"
+                if jq -e '.draft == true' release.json > /dev/null; then
+                  echo "SKIP_RELEASE=false" >> $GITHUB_OUTPUT
+                  echo "Resuming draft release from its original CI artifacts"
+                else
+                  echo "SKIP_RELEASE=true" >> $GITHUB_OUTPUT
+                  echo "Release already published; preserving its original artifacts"
+                fi
                 exit 0
               elif ! grep -q '(HTTP 404)' release-error.txt; then
                 cat release-error.txt >&2
@@ -167,6 +187,7 @@ jobs:
               echo "Resuming tag-only release from this exact commit"
               exit 0
             fi
+            echo "ANCESTOR=true" >> $GITHUB_OUTPUT
             echo "::notice::Tag ${TAG_NAME} already exists on remote and contains this commit — skipping tag/release creation"
             echo "NEEDS_BUMP=false" >> $GITHUB_OUTPUT
             echo "TAG_EXISTS=true" >> $GITHUB_OUTPUT
@@ -198,6 +219,8 @@ jobs:
           set -e
 
           ARTIFACTS='${{ inputs.artifacts_json }}'
+          DELIVERY_PAYLOAD='${{ steps.check_tag.outputs.CD_PAYLOAD || steps.build_payload.outputs.CD_PAYLOAD }}'
+          SOURCE_RUN=$(echo "$DELIVERY_PAYLOAD" | jq -r .ci_run_id)
           echo "Processing artifacts: $ARTIFACTS"
 
           # Process each artifact using gh CLI for precise control
@@ -215,7 +238,7 @@ jobs:
             mkdir -p "$PATH_DIR"
 
             # Download artifact using gh CLI
-            gh run download ${{ github.run_id }} --name "$NAME" --dir "$PATH_DIR"
+            gh run download "$SOURCE_RUN" --name "$NAME" --dir "$PATH_DIR"
 
             echo "Contents of $PATH_DIR:"
             ls -la "$PATH_DIR" 2>/dev/null || echo "  (empty or not found)"
@@ -259,6 +282,8 @@ jobs:
             BODY="Automated release for ${MODULE_NAME_CAP} version ${{ inputs.module_version }}."
           fi
 
+          DELIVERY_PAYLOAD='${{ steps.check_tag.outputs.CD_PAYLOAD || steps.build_payload.outputs.CD_PAYLOAD }}'
+          BODY="${BODY}"$'\n\n'"<!-- release-delivery:${DELIVERY_PAYLOAD} -->"
           echo "BODY<<EOF" >> $GITHUB_OUTPUT
           echo "$BODY" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -281,9 +306,30 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           files: ${{ steps.prepare_release.outputs.FILE_PATTERNS }}
           fail_on_unmatched_files: true
+          draft: true
 
-      # CD carries this immutable SHA/version; the later master bump cannot change it.
+      - name: Verify and publish complete release
+        if: steps.check_tag.outputs.SKIP_RELEASE != 'true'
+        env:
+          RELEASE_ARTIFACTS: ${{ inputs.artifacts_json }}
+        run: |
+          gh api "repos/${{ github.repository }}/releases/tags/${{ steps.check_tag.outputs.TAG_NAME }}" > release.json
+          node devops/github/release/release-assets.mjs --verify
+          gh release edit "${{ steps.check_tag.outputs.TAG_NAME }}" --draft=false
+
+      # Recovery must finish the bump even when publishing or dispatch succeeded earlier.
       - name: Mark Release Complete
         id: mark_released
-        if: steps.check_tag.outputs.SKIP_RELEASE != 'true'
-        run: echo "released=true" >> $GITHUB_OUTPUT
+        if: steps.check_tag.outputs.ANCESTOR != 'true' && steps.check_tag.outputs.NEEDS_BUMP != 'true' && (steps.check_tag.outputs.SKIP_RELEASE != 'true' || steps.check_tag.outputs.TAG_EXISTS == 'true')
+        env:
+          NEW_PAYLOAD: ${{ steps.build_payload.outputs.CD_PAYLOAD }}
+          ORIGINAL_PAYLOAD: ${{ steps.check_tag.outputs.CD_PAYLOAD }}
+          SKIP_RELEASE: ${{ steps.check_tag.outputs.SKIP_RELEASE }}
+        run: |
+          echo "released=true" >> $GITHUB_OUTPUT
+          if [ "$SKIP_RELEASE" = "true" ]; then
+            # Legacy releases lack provenance: advance the version, but do not redeploy rebuilt assets.
+            echo "CD_PAYLOAD=$ORIGINAL_PAYLOAD" >> $GITHUB_OUTPUT
+          else
+            echo "CD_PAYLOAD=${ORIGINAL_PAYLOAD:-$NEW_PAYLOAD}" >> $GITHUB_OUTPUT
+          fi

@@ -1,7 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { startDeployment } from "./deployment-state.mjs";
 
 const api = (endpoint) =>
 	JSON.parse(
@@ -44,6 +46,18 @@ export function checkDeployment(
 		source.head_branch !== "master"
 	)
 		throw new Error("Deployment source must be master push CI");
+	let qualityPassed = false;
+	for (let page = 1; ; page++) {
+		const jobs = request(
+			`${root}/actions/runs/${runId}/jobs?per_page=100&page=${page}`,
+		).jobs;
+		qualityPassed = jobs.some(
+			(job) => job.name === "Cross Module CI" && job.conclusion === "success",
+		);
+		if (qualityPassed || jobs.length < 100) break;
+	}
+	if (!qualityPassed)
+		throw new Error("Source CI has not passed Cross Module CI");
 	if (ref && ref !== source.head_sha)
 		throw new Error("Deployment ref does not match the artifact's CI run");
 	ref = source.head_sha;
@@ -125,7 +139,7 @@ if (
 ) {
 	const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, "utf8"));
 	const payload = event.client_payload ?? {};
-	const result = checkDeployment({
+	let result = checkDeployment({
 		repo: process.env.GITHUB_REPOSITORY,
 		runId: payload.ci_run_id ?? payload.run_id ?? event.inputs?.ci_run_id,
 		ref: payload.ref,
@@ -137,9 +151,24 @@ if (
 		version: payload.module_version,
 		artifactName: event.inputs?.ios_artifact_name,
 	});
+	if (result.deploy) {
+		const state = startDeployment({
+			repo: process.env.GITHUB_REPOSITORY,
+			target: process.env.DEPLOY_TARGET ?? process.env.DEPLOY_MODULE,
+			ref: result.ref,
+			version: result.version,
+			runId: payload.ci_run_id ?? payload.run_id ?? event.inputs?.ci_run_id,
+		});
+		result = { ...result, ...state };
+		if (state.deploy)
+			copyFileSync(
+				new URL("./deployment-state.mjs", import.meta.url),
+				path.join(process.env.RUNNER_TEMP, "deployment-state.mjs"),
+			);
+	}
 	appendFileSync(
 		process.env.GITHUB_OUTPUT,
-		`deploy=${result.deploy}\nref=${result.ref}\n`,
+		`deploy=${result.deploy}\nref=${result.ref}\ndeployment_id=${result.deploymentId ?? ""}\n`,
 	);
 	if (result.version)
 		appendFileSync(
