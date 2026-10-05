@@ -10,7 +10,7 @@ The app build-number consistency check in `devops/check-app-version.py` remains 
 
 If a release tag already exists but belongs to another commit, the release job warns,
 skips tag creation and release, and sets `needs_bump`. The master bump job then increments
-that module and pushes a separate retry commit without `[skip ci]`. That push starts a
+that module together with other required bumps, without `[skip ci]`. That push starts a
 new CI run for the bumped module, which can package and release its new version. The
 release workflow dispatches CD only for the exact tag commit, so retry runs do not deploy
 the colliding release.
@@ -21,7 +21,8 @@ module version bumps happen only after releases on `master`.
 ## Concurrent releases and deployment
 
 CI packages an immutable commit, creates its module tag and GitHub Release, and
-dispatches CD with that commit and CI run ID. Deployment also requires that source run's `Cross Module CI` to have passed. The master version bump follows the
+dispatches CD with that commit and CI run ID. Deployment also requires that source run's
+`Cross Module CI` to have passed. The master version bump follows the
 release/dispatch; CD can still be running when the bump is pushed. CD never builds
 from the bump commit or reads the next version from the moving master branch.
 
@@ -42,7 +43,8 @@ collision retry pushes run CI.
 
 Inside the CD queue, a guard verifies the artifact's CI run, source SHA and release
 tag. A newer published version supersedes an older queued dispatch. Data has no
-version tag: a newer successful `Release Data` job supersedes older SQL dispatches.
+version tag: a newer successful `Release Data` job or durable successful data deployment
+supersedes older SQL dispatches, including when the newer CI is subsequently rerun.
 Data checkout also uses the dispatching commit SHA, so its migration scripts and
 SQL artifact come from the same CI run. API failures stop deployment.
 

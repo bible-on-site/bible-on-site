@@ -33,6 +33,7 @@ function request(overrides = {}) {
 			return { jobs: [{ name: "Cross Module CI", conclusion: "success" }] };
 		if (endpoint.includes("/compare/"))
 			return { status: overrides.status ?? "identical" };
+		if (endpoint.includes("/deployments?")) return [];
 		if (endpoint.includes("/releases?"))
 			return overrides.releases ?? [published];
 		throw new Error(`Unexpected API call: ${endpoint}`);
@@ -204,3 +205,38 @@ for (const file of ["cd-aws.yml", "cd-bulletin.yml", "cd-app.yml"]) {
 		assert.match(workflow, /DEPLOYMENT_RESULT: \$\{\{ job.status \}\}/);
 	});
 }
+
+test("successful newer data stays protected after its CI rerun fails", () => {
+	const mock = request();
+	for (const newerSha of [sha, "b".repeat(40)]) {
+		const result = checkDeployment(
+			{ ...input, moduleName: "data" },
+			(endpoint) => {
+				if (endpoint.includes("/deployments?"))
+					return [{ id: 22, sha: newerSha, payload: { ci_run_id: "20" } }];
+				if (endpoint.includes("/deployments/22/statuses"))
+					return [{ state: "success" }];
+				if (endpoint.includes("/compare/")) return { status: "ahead" };
+				return mock(endpoint);
+			},
+		);
+		assert.equal(result.deploy, false);
+	}
+});
+
+test("an unfinished newer data attempt does not block recovery", () => {
+	const mock = request();
+	const result = checkDeployment(
+		{ ...input, moduleName: "data" },
+		(endpoint) => {
+			if (endpoint.includes("/deployments?"))
+				return [{ id: 22, sha: "b".repeat(40), payload: { ci_run_id: "20" } }];
+			if (endpoint.includes("/deployments/22/statuses"))
+				return [{ state: "failure" }];
+			if (endpoint.includes("/compare/")) return { status: "ahead" };
+			if (endpoint.includes("/actions/runs?")) return { workflow_runs: [] };
+			return mock(endpoint);
+		},
+	);
+	assert.equal(result.deploy, true);
+});

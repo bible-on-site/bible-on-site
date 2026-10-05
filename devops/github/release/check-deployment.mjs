@@ -64,6 +64,38 @@ export function checkDeployment(
 	if (!/^[a-f0-9]{40}$/.test(ref))
 		throw new Error("Deployment requires an immutable commit SHA");
 	if (moduleName === "data") {
+		// Completion is durable even if a newer CI run is subsequently rerun and fails.
+		// Compare commits, because Actions creation/queue order is not commit order.
+		const comparisons = new Map();
+		for (let page = 1; ; page++) {
+			const deployments = request(
+				`${root}/deployments?environment=data&task=deploy:release&per_page=100&page=${page}`,
+			);
+			for (const deployment of deployments) {
+				let newer =
+					deployment.sha === ref &&
+					Number(deployment.payload?.ci_run_id) > Number(runId);
+				if (deployment.sha !== ref) {
+					if (!comparisons.has(deployment.sha))
+						comparisons.set(
+							deployment.sha,
+							request(`${root}/compare/${ref}...${deployment.sha}`).status,
+						);
+					newer = comparisons.get(deployment.sha) === "ahead";
+				}
+				if (!newer) continue;
+				const [status] = request(
+					`${root}/deployments/${deployment.id}/statuses?per_page=1`,
+				);
+				if (status?.state === "success")
+					return {
+						deploy: false,
+						ref,
+						reason: `Superseded by successful data deployment ${deployment.id}`,
+					};
+			}
+			if (deployments.length < 100) break;
+		}
 		// Data has no version tags. A successful newer Release Data job proves
 		// that its SQL is ready and its dispatch supersedes this one.
 		for (let page = 1; ; page++) {
