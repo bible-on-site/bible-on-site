@@ -4,6 +4,7 @@
   </Folder>
   <Project Path="BibleOnSite.Core/BibleOnSite.Core.csproj" />
   <Project Path="BibleOnSite.Tests.E2E/BibleOnSite.Tests.E2E.csproj" />
+  <Project Path="BibleOnSite.Tests.MobileE2E/BibleOnSite.Tests.MobileE2E.csproj" />
   <Project Path="BibleOnSite.Tests/BibleOnSite.Tests.csproj" />
   <Project Path="BibleOnSite/BibleOnSite.csproj" />
 </Solution>

@@ -33,7 +33,7 @@
 			"description": "Keep the iOS SDK pins aligned with the Xcode 26.6-compatible workload set; see https://github.com/bible-on-site/bible-on-site/issues/1871",
 			"matchManagers": ["github-actions"],
 			"matchPackageNames": ["dotnet-sdk"],
-			"matchFileNames": [".github/workflows/ci.yml", ".github/workflows/app-package.yml"],
+			"matchFileNames": [".github/workflows/ci.yml", ".github/workflows/app-package.yml", ".github/workflows/app-mobile-e2e.yml"],
 			"matchCurrentValue": "10.0.401",
 			"enabled": false
 		}

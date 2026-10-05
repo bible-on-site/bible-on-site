@@ -116,4 +116,49 @@ partial class Build
             // TODO: Add dotnet format or other linting tools
             Serilog.Log.Information("Lint target not yet implemented - add dotnet format or analyzers");
         });
+
+    Target CompileMobileE2E => _ => _
+        .Description("Build a complete Debug app for the mobile E2E emulator/simulator")
+        .Executes(() =>
+        {
+            if (!MobileIsAndroid && !MobilePlatform.Equals("iOS", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException("Set MOBILE_PLATFORM or --mobile-platform to Android or iOS.");
+            }
+
+            // Exercise offline startup using packaged SQLite, even if a developer
+            // has a local API running. Never direct this UI pilot at production.
+            var configPath = SourceDirectory / "Resources" / "Raw" / "api-config.txt";
+            var originalConfig = File.Exists(configPath) ? File.ReadAllBytes(configPath) : null;
+            try
+            {
+                File.WriteAllText(configPath, "http://127.0.0.1:1");
+                var properties = new Dictionary<string, object>
+                {
+                    ["TargetFrameworks"] = MobileIsAndroid ? "net10.0-android" : "net10.0-ios",
+                    ["RuntimeIdentifier"] = MobileIsAndroid ? "android-x64" : "iossimulator-arm64"
+                };
+                if (MobileIsAndroid)
+                {
+                    properties["RuntimeIdentifiers"] = "android-x64";
+                    properties["EmbedAssembliesIntoApk"] = "true";
+                    properties["AndroidPackageFormats"] = "apk";
+                }
+                DotNetBuild(s => s
+                    .SetProjectFile(MainProject)
+                    .SetConfiguration("Debug")
+                    .SetProperties(properties));
+            }
+            finally
+            {
+                if (originalConfig == null)
+                {
+                    File.Delete(configPath);
+                }
+                else
+                {
+                    File.WriteAllBytes(configPath, originalConfig);
+                }
+            }
+        });
 }

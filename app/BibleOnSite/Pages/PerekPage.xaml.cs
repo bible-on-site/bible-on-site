@@ -54,18 +54,28 @@ public partial class PerekPage : ContentPage
 
     public PerekPage()
     {
+        Console.WriteLine("[Startup] PerekPage InitializeComponent");
         InitializeComponent();
+#if IOS
+        InitializeBottomBarDebugControls();
+#endif
+        Console.WriteLine("[Startup] PerekPage binding context");
         _viewModel = new PerekViewModel();
         BindingContext = _viewModel;
+        Console.WriteLine("[Startup] PerekPage resources and navigation");
         ForwardSelectedArticleIdChanged();
         SetupFontSizeResources();
         SetupCarouselNavigation();
         SetupExitButtonDragHandler();
+        Console.WriteLine("[Startup] PerekPage constructed");
     }
 
     public PerekPage(PerekViewModel viewModel)
     {
         InitializeComponent();
+#if IOS
+        InitializeBottomBarDebugControls();
+#endif
         _viewModel = viewModel;
         BindingContext = _viewModel;
         ForwardSelectedArticleIdChanged();
@@ -347,9 +357,11 @@ public partial class PerekPage : ContentPage
 
     protected override async void OnAppearing()
     {
+        Console.WriteLine("[Startup] PerekPage appearing");
         base.OnAppearing();
         SubscribeRecitation();
         await InitializeRecitationAsync();
+        Console.WriteLine("[Startup] PerekPage recitation initialized");
 #if ANDROID
         MainActivity.TouchStarted += OnTouchStarted;
         MainActivity.SubscribeTouchDispatched(OnTouchDispatched);
@@ -482,6 +494,16 @@ public partial class PerekPage : ContentPage
     }
 
 #if IOS
+    private void InitializeBottomBarDebugControls()
+    {
+        // XAML sets the default selection while constructing the page. Hook up
+        // changes only after all controls touched by the handler exist.
+        foreach (var choice in new[] { DebugFix0, DebugFix3, DebugFix4, DebugFix11, DebugFix15, DebugFix16, DebugFix17 })
+        {
+            choice.CheckedChanged += OnDebugFixChanged;
+        }
+    }
+
     private void OnPageSizeChanged(object? sender, EventArgs e) => ApplyBottomBarSafeArea();
     private int _currentDebugFix = 4; // Default: TranslationY (confirmed best by tester)
     private double _bottomInset;
@@ -641,7 +663,6 @@ public partial class PerekPage : ContentPage
         }
     }
 #else
-    private void OnDebugFixChanged(object? sender, CheckedChangedEventArgs e) { }
     private void OnDebugToggleTapped(object? sender, TappedEventArgs e) { }
 #endif
 
@@ -964,12 +985,19 @@ public partial class PerekPage : ContentPage
 
     #region Circular Menu Methods
 
+    private void OnCircularMenuPressed(object? sender, EventArgs e) =>
+        Console.WriteLine($"[CircularMenu] Pressed: open={_isMenuOpen}");
+
+    private void OnCircularMenuReleased(object? sender, EventArgs e) =>
+        Console.WriteLine($"[CircularMenu] Released: open={_isMenuOpen}");
+
     /// <summary>
     /// Toggles the circular menu open/closed state with animation.
     /// </summary>
     private async void OnCircularMenuClicked(object? sender, EventArgs e)
     {
         _isMenuOpen = !_isMenuOpen;
+        Console.WriteLine($"[CircularMenu] Clicked: open={_isMenuOpen}");
 
         if (_isMenuOpen)
         {
@@ -1016,6 +1044,7 @@ public partial class PerekPage : ContentPage
         }
 
         await Task.WhenAll(animations);
+        Console.WriteLine($"[CircularMenu] Open animation complete: open={_isMenuOpen}");
     }
 
     /// <summary>
@@ -1047,6 +1076,7 @@ public partial class PerekPage : ContentPage
         {
             button.InputTransparent = true;
         }
+        Console.WriteLine($"[CircularMenu] Close animation complete: open={_isMenuOpen}");
     }
 
     /// <summary>

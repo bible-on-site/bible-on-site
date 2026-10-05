@@ -34,6 +34,7 @@
                                TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"
                                LineBreakMode="WordWrap"/>
                         <Slider Minimum="0.5"
+                                AutomationId="FontFactorSlider"
                                 Maximum="2.0"
                                 Value="{Binding FontFactor}"
                                 MinimumTrackColor="{StaticResource Primary}"
@@ -61,11 +62,13 @@
                                TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
                         <HorizontalStackLayout Spacing="8">
                             <RadioButton x:Name="PerekTodaysRadio"
+                                         AutomationId="PerekTodaysRadio"
                                          Content="הפרק של היום"
                                          GroupName="PerekToLoad"
                                          IsChecked="{Binding IsPerekToLoadTodays}"
                                          CheckedChanged="OnPerekToLoadRadioChanged"/>
                             <RadioButton x:Name="PerekLastRadio"
+                                         AutomationId="PerekLastRadio"
                                          Content="האחרון שלמדתי"
                                          GroupName="PerekToLoad"
                                          IsChecked="{Binding IsPerekToLoadLastLearnt}"
