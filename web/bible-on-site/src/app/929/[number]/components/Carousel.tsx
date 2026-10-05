@@ -101,7 +101,10 @@ export function Carousel({
 	const [state, setState] = useState(INITIAL_STATE);
 
 	const update = useCallback(() => {
-		const next = measure(ref.current as HTMLDivElement);
+		// A queued resize/scroll callback can arrive after navigation detaches the ref.
+		const el = ref.current;
+		if (!el) return;
+		const next = measure(el);
 		setState((prev) => (sameState(prev, next) ? prev : next));
 	}, []);
 

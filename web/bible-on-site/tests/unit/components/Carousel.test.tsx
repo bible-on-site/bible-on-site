@@ -161,4 +161,25 @@ describe("Carousel", () => {
 		// @ts-expect-error restore jsdom, which has no ResizeObserver
 		delete global.ResizeObserver;
 	});
+
+	it("ignores a queued resize callback after navigation unmounts the carousel", () => {
+		let resize: ResizeObserverCallback | undefined;
+		global.ResizeObserver = jest.fn((callback: ResizeObserverCallback) => {
+			resize = callback;
+			return {
+				observe: jest.fn(),
+				disconnect: jest.fn(),
+				unobserve: jest.fn(),
+			};
+		}) as never;
+		const { unmount } = render(
+			<Carousel className="track" prevLabel="p" nextLabel="n">
+				<a href="#0">0</a>
+			</Carousel>,
+		);
+		unmount();
+		expect(() => resize?.([], {} as ResizeObserver)).not.toThrow();
+		// @ts-expect-error restore jsdom, which has no ResizeObserver
+		delete global.ResizeObserver;
+	});
 });
