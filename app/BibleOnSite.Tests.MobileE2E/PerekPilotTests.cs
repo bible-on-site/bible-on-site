@@ -30,7 +30,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         }
         catch
         {
-            SaveDiagnostics("SessionStartup", "failed");
+            SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed");
             throw;
         }
         return Task.CompletedTask;
