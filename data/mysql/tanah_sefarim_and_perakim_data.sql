@@ -1927,11 +1927,11 @@ VALUES (348, 348, 'נבואת נחמה על הגאולה, משא על אחרית
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (349, 349, 'משא מואב');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (350, 350, 'נבואת זעם על מואב');
+VALUES (350, 350, 'נבואת פורענות למואב כעונש על יחסם הרע ליהודה המושפלת');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (351, 351, '');
+VALUES (351, 351, 'נבואת פורענות לארם ולישראל על עוון ע"ז נבואה על והצלת יהודה (מידי סנחריב)');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (352, 352, '');
+VALUES (352, 352, 'נבואה על תגובת הגוים לנס ההצלה של יהודה מסנחריב או עם ישראל בעת קיבוץ הגלויות');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (353, 353, '');
 INSERT INTO tanah_perek (id, perek, header)
