@@ -36,6 +36,17 @@ jobs:
         with:
           # Dependency review compares the PR head, not its synthetic merge commit.
           ref: ${{ env.SNAPSHOT_SHA }}
+          # Review compares the common ancestor, which can precede the base tip.
+          fetch-depth: ${{ matrix.source == 'base' && '0' || '1' }}
+      - name: 'Resolve dependency comparison base'
+        if: matrix.source == 'base'
+        shell: bash
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          comparison_base=$(git merge-base "$SNAPSHOT_SHA" "$PR_HEAD_SHA")
+          git checkout --detach "$comparison_base"
+          echo "SNAPSHOT_SHA=$comparison_base" >> "$GITHUB_ENV"
       - name: 'Setup .NET'
         uses: actions/setup-dotnet@v6
         with:

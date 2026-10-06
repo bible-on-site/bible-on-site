@@ -14,11 +14,13 @@ content or production credentials are involved. See [AWS HTTP client configurati
 
 See [the snapshot provenance finding](https://github.com/bible-on-site/bible-on-site/issues/1997).
 
-Dependency review compares the pull request's base and head SHAs. The submission
+Dependency review compares the pull request's common ancestor and head SHA. The submission
 SDK already labels PR snapshots with the head SHA; default checkout scans the
 synthetic merge commit. Match checkout and snapshot metadata explicitly. Submit
-both base and head on pull requests, since a version-only `[skip ci]` base can
-lack a snapshot. Use one stable NuGet correlator across all workflow contexts.
+both comparison base and head on pull requests. Resolve the common ancestor
+with `git merge-base`; submitting only the current base tip leaves older PRs
+without the graph GitHub actually compares. A version-only `[skip ci]` commit
+can also lack a snapshot. Use one stable NuGet correlator across all workflow contexts.
 
 Run review only after both submissions complete, then wait for indexing without
 relaxing vulnerability or license checks. Push and merge-group submissions retain
@@ -52,3 +54,5 @@ The S3 populator's five unit tests and local HTTP integration test pass with the
 current client features and regenerated lockfile. The TLS dependency tree contains
 only the patched verifier. No existing locked package version was upgraded; the
 legacy client and its exclusive dependencies were removed.
+
+The [dependency review API](https://docs.github.com/en/rest/dependency-graph/dependency-review) determines the merge base for its comparison. Branches need not merge master just to supply this graph.
