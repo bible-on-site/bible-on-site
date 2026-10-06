@@ -1,15 +1,14 @@
 # ============================================================================
-# This CloudFormation template documents the ECR→ECS auto-deploy infrastructure.
-# The resources were manually created via AWS CLI (January 2026) and this template
-# reflects the current AWS configuration.
+# Undeployed scale-up proposal; this template does not reflect the live Lambda.
+# See README.md and #2016 for verified runtime state and availability evidence.
 # ============================================================================
 
 AWSTemplateFormatVersion: "2010-09-09"
 Description: |
   ECR to ECS Auto-Deploy Infrastructure.
 
-  This template documents the infrastructure that automatically triggers ECS
-  service deployments whenever a new Docker image is pushed to ECR.
+  This template is an undeployed scale-up proposal. It does not describe the
+  current Lambda and does not establish uninterrupted public availability.
 
   This template creates EventBridge rules and a Lambda function that automatically
   triggers ECS service deployments whenever a new Docker image is pushed to ECR.
@@ -135,24 +134,21 @@ Resources:
   #
   # Lambda code (Python 3.12) - stored in: docs/aws/cloudformation/ecr-ecs-auto-deploy/ecr-to-ecs-deploy-lambda.py
   #
-  # The function performs zero-downtime deployment:
+  # The undeployed proposal attempts the following sequence:
   # 1. Receives ECR push events from EventBridge
   # 2. Maps ECR repository name to ECS service name
   # 3. For single-task services: temporarily scales to 2, forces deployment,
   #    waits for the new task, then scales back to 1
   # 4. For multi-task services: forces deployment directly
   #
-  # Deployment:
-  #   cp ecr-to-ecs-deploy-lambda.py index.py
-  #   zip lambda.zip index.py
-  #   aws lambda update-function-code --function-name ecr-to-ecs-deploy --zip-file fileb://lambda.zip
-  #   aws lambda update-function-configuration --function-name ecr-to-ecs-deploy --timeout 240
+  # Running counts alone do not prove readiness or discovery propagation.
+  # Do not deploy this proposal without the validation described in README.md.
   #
   ECRToECSDeployFunction:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: ecr-to-ecs-deploy
-      Description: Triggers zero-downtime ECS deployment when ECR image is pushed
+      Description: Undeployed proposal to scale up during an ECS rollout
       Runtime: python3.12
       Handler: index.handler
       Timeout: 240 # Increased from 30 to allow waiting for new task stabilisation
