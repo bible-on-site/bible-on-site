@@ -93,9 +93,22 @@ Keep all other fields and secret
 references intact. Recheck that no rollout or other task-definition update
 has started before updating the service to the new revision.
 
+The stop timeout applies to newly started tasks. An already-running image with
+the old launcher cannot acquire the new listener drain retroactively. For the
+first transition, temporarily protect that old task from deployment termination.
+After the replacement passes readiness and complete response checks, save the
+old Cloud Map instance attributes and deregister that old instance. Keep its
+protected listener alive until discovery removal and the 90-second DNS drain
+complete; then remove protection promptly. Restore the saved discovery instance
+if the replacement fails before handover. Use a bounded protection expiry and
+verify cleanup; do not leave protection enabled for later deployments. See the
+[ECS task-protection rules](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-scale-in-protection.html).
+
 Observe a complete rollout using the router probe log, public health,
 readiness, and recitation requests, ECS task health, and Cloud Map health.
 Verify the running image against its release provenance and compare complete
-response bodies. The readiness endpoint initializes canonical server data;
+response bodies. Validate a subsequent ordinary rollout without temporary task
+protection or manual discovery changes to prove the steady-state handover.
+The readiness endpoint initializes canonical server data;
 it does not promise that every database-backed page or every future failure
 mode is ready. Keep #2016 open until the live handover has been validated.
