@@ -1240,3 +1240,115 @@
   width: 100%;
   max-width: 220px;
 }
+
+@media (prefers-color-scheme: dark) {
+  .section {
+    background: linear-gradient(160deg, #161b2a 0%, #1a1f36 100%);
+    border-color: #3b4370;
+  }
+
+  .title {
+    color: #c7d2fe;
+  }
+
+  .familyTreeSectionLabel {
+    color: #a5b4fc;
+    background: linear-gradient(160deg, #1a2030 0%, #232a45 100%);
+    border-color: #3b4370;
+    box-shadow: 0 1px 4px rgba(99, 102, 241, 0.25);
+  }
+
+  .familyTreeSectionLabelAlt {
+    color: #c4b5fd;
+    border-color: #4c3d8f;
+  }
+
+  .card,
+  .cardFocal {
+    background: #1a1f2e;
+    border-color: #2d3548;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  }
+
+  .cardFocal {
+    border-color: #6366f1;
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
+  }
+
+  .cardCitation {
+    border-top-color: #2d3548;
+  }
+
+  .cardCitationLine,
+  .relationRibbon,
+  .relationRibbonMeta,
+  .marriageColumnLooseTitle {
+    color: #9aa0a6;
+  }
+
+  .sexMark {
+    color: #b8c2d9;
+    border-color: #3b4256;
+    background: #1a1f2e;
+  }
+
+  .sexMarkMale {
+    color: #93c5fd;
+    border-color: #1e40af;
+    background-image: repeating-linear-gradient(45deg, #16213d, #16213d 3px, #1a2748 3px, #1a2748 6px);
+  }
+
+  .sexMarkFemale {
+    color: #f9a8d4;
+    border-color: #9d174d;
+    background-image: repeating-linear-gradient(45deg, #31152b, #31152b 3px, #3a1a33 3px, #3a1a33 6px);
+  }
+
+  .personLink {
+    color: #a5b4fc;
+  }
+
+  .personUnlinked {
+    color: #e8eaed;
+  }
+
+  .relationRibbonMain,
+  .relationRibbonCitationLine {
+    color: #b8c2d9;
+  }
+
+  .relationRibbonSep {
+    color: #64748b;
+  }
+
+  .citationTanachLink {
+    color: #a5b4fc;
+  }
+
+  .citationTanachLink:hover {
+    color: #c7d2fe;
+  }
+
+  .spouseTierFullWidth[data-spouse-layout="cards"] :is(.relationRibbon, .relationRibbonCitation, .spouseUnionTimelineRibbon),
+  .verticalSpouseStack .relationRibbon,
+  .verticalSpouseStack .relationRibbonCitation,
+  .verticalSpouseStack .spouseUnionTimelineRibbon,
+  .childTimelineCell .relationRibbon,
+  .childTimelineCell .relationRibbonCitation,
+  .childTimelineCell .relationRibbonCitationLine,
+  .spouseOnlyCollapsed .relationRibbon,
+  .spouseOnlyCollapsed .relationRibbonCitation,
+  .spouseOnlyCollapsed .relationRibbonCitationLine,
+  .spouseOnlyCollapsed .spouseUnionTimelineRibbon {
+    background: #12151c;
+  }
+
+  .spouseOpinionTitleInline {
+    color: #a5b4fc;
+  }
+
+  .marriageColumnSpousePlaceholder {
+    border-color: #3b4256;
+    background: #12151c;
+  }
+}

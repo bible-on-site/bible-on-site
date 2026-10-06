@@ -227,3 +227,63 @@
 .shareButton:hover {
   background: #e8e0cc;
 }
+
+@media (prefers-color-scheme: dark) {
+  .perushimSection {
+    background: linear-gradient(to bottom, #1a1611, #12100d);
+    border-color: #4a4030;
+  }
+
+  .sectionTitle,
+  .perushName {
+    color: #cbb98c;
+  }
+
+  .emptyMessage,
+  .parshanName,
+  .pasukLabel,
+  .parshanSubtitle {
+    color: #b8a578;
+  }
+
+  .carousel {
+    scrollbar-color: #5a4e38 transparent;
+  }
+
+  .carousel::-webkit-scrollbar-thumb {
+    background: #5a4e38;
+  }
+
+  .carouselItem {
+    background: #1f1a12;
+    border-color: #4a4030;
+  }
+
+  .carouselItem:hover {
+    border-color: #8b7355;
+  }
+
+  .noteCount {
+    color: #cbb98c;
+    background: #2a241a;
+  }
+
+  .backButton,
+  .shareButton {
+    border-color: #4a4030;
+    color: #cbb98c;
+  }
+
+  .backButton:hover,
+  .shareButton:hover {
+    background: #2a241a;
+  }
+
+  .shareButton {
+    background: #2a241a;
+  }
+
+  .noteContent {
+    color: #e8eaed;
+  }
+}

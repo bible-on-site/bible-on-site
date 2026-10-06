@@ -65,3 +65,26 @@
 		min-width: 5rem;
 	}
 }
+
+@media (prefers-color-scheme: dark) {
+	.heading {
+		color: #a8b9ff;
+	}
+
+	.table th {
+		background: #12151c;
+		color: #b8c2d9;
+	}
+
+	.source a {
+		color: #7eb0ff;
+	}
+
+	.citation {
+		color: #9aa0a6;
+	}
+
+	.occurrence {
+		color: #e8eaed;
+	}
+}
