@@ -1330,6 +1330,9 @@
   }
 
   .spouseTierFullWidth[data-spouse-layout="cards"] :is(.relationRibbon, .relationRibbonCitation, .spouseUnionTimelineRibbon),
+  .verticalSpouseStack .relationRibbon,
+  .verticalSpouseStack .relationRibbonCitation,
+  .verticalSpouseStack .spouseUnionTimelineRibbon,
   .childTimelineCell .relationRibbon,
   .childTimelineCell .relationRibbonCitation,
   .childTimelineCell .relationRibbonCitationLine,
@@ -1338,6 +1341,10 @@
   .spouseOnlyCollapsed .relationRibbonCitationLine,
   .spouseOnlyCollapsed .spouseUnionTimelineRibbon {
     background: #12151c;
+  }
+
+  .spouseOpinionTitleInline {
+    color: #a5b4fc;
   }
 
   .marriageColumnSpousePlaceholder {
