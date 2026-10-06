@@ -1,3 +1,4 @@
+import type { PoolConnection } from "mysql2/promise";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { executeMock, getConnectionMock, createPoolMock, conn } = vi.hoisted(
@@ -42,6 +43,8 @@ import {
 	txQueryOne,
 } from "~/server/db";
 
+const poolConn = conn as unknown as PoolConnection;
+
 describe("db", () => {
 	beforeEach(() => {
 		// Keep createPoolMock's import-time call record intact.
@@ -85,7 +88,7 @@ describe("db", () => {
 
 	it("transaction commits and releases the connection", async () => {
 		const result = await transaction(async (c) => {
-			expect(c).toBe(conn);
+			expect(c).toBe(poolConn);
 			return "done";
 		});
 		expect(result).toBe("done");
@@ -109,9 +112,9 @@ describe("db", () => {
 			.mockResolvedValueOnce([[{ id: 1 }], []])
 			.mockResolvedValueOnce([[{ id: 2 }], []])
 			.mockResolvedValueOnce([{ affectedRows: 1 }, []]);
-		expect(await txQuery(conn, "SELECT", [1])).toEqual([{ id: 1 }]);
-		expect(await txQueryOne(conn, "SELECT")).toEqual({ id: 2 });
-		expect(await txExecute(conn, "UPDATE")).toEqual({ affectedRows: 1 });
+		expect(await txQuery(poolConn, "SELECT", [1])).toEqual([{ id: 1 }]);
+		expect(await txQueryOne(poolConn, "SELECT")).toEqual({ id: 2 });
+		expect(await txExecute(poolConn, "UPDATE")).toEqual({ affectedRows: 1 });
 		expect(conn.execute).toHaveBeenCalledTimes(3);
 	});
 });
