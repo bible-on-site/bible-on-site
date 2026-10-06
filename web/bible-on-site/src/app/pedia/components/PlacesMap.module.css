@@ -88,6 +88,35 @@
     border-color: #1a1f2e;
   }
 
+  .mapRoot :global(.mapboxgl-popup-content) {
+    background: #1a1f2e;
+    color: #e8eaed;
+  }
+
+  .mapRoot :global(.mapboxgl-popup-close-button) {
+    color: #9aa0a6;
+  }
+
+  .mapRoot :global(.mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip) {
+    border-top-color: #1a1f2e;
+  }
+
+  .mapRoot :global(.mapboxgl-popup-anchor-top .mapboxgl-popup-tip) {
+    border-bottom-color: #1a1f2e;
+  }
+
+  .mapRoot :global(.mapboxgl-popup-anchor-left .mapboxgl-popup-tip) {
+    border-right-color: #1a1f2e;
+  }
+
+  .mapRoot :global(.mapboxgl-popup-anchor-right .mapboxgl-popup-tip) {
+    border-left-color: #1a1f2e;
+  }
+
+  .mapboxPlace + .mapboxPlace {
+    border-top-color: #2d3548;
+  }
+
   .mapboxPopup a,
   .mapRoot :global(.leaflet-popup-content a) {
     color: #a5b4fc;
