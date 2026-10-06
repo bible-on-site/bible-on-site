@@ -12,6 +12,11 @@ on:
   pull_request:
     branches: [ "master" ]
 
+# A superseded review must not overwrite the current head's PR report.
+concurrency:
+  group: dependency-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 # If using a dependency submission action in this workflow this permission will need to be set to:
 #
 # permissions:
