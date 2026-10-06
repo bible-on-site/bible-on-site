@@ -60,6 +60,11 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
 
     protected override void ConnectHandler(UITextView platformView)
     {
+        // A reconnect gets a fresh UITextView: invalidate the render cache so the
+        // property mapper re-renders, and discard completions targeted at the
+        // previous platform view.
+        _renderedHtml = null;
+        _renderSerial++;
         base.ConnectHandler(platformView);
         VirtualView.HtmlContentChanged += OnHtmlContentChanged;
         VirtualView.StyleChanged += OnStyleChanged;
@@ -130,6 +135,12 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
             NSMutableAttributedString? attributedString;
             lock (ParseLock)
             {
+                // Skip the WebKit import entirely when the bound content already
+                // moved on — stale parses must not hold the shared lock.
+                if (serial != _renderSerial)
+                {
+                    return;
+                }
                 attributedString = ParseHtml(styledHtml);
             }
             if (attributedString != null)
@@ -158,6 +169,9 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
                 {
                     PlatformView.TextAlignment = UITextAlignment.Right;
                 }
+                // The cell was measured while the text view was empty; re-measure
+                // now that the rendered content has arrived.
+                VirtualView.InvalidateMeasure();
             });
         });
     }

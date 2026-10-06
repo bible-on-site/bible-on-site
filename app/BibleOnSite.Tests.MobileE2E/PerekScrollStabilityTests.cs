@@ -43,6 +43,8 @@ public sealed class PerekScrollStabilityTests(ITestOutputHelper output, MobileDe
     [Fact]
     public void RapidPasukScrollingKeepsTheAppAlive()
     {
+        CheckFirstPerushIfAvailable();
+
         var list = _page.WaitFor("PasukimCollection");
         var location = list.Location;
         var size = list.Size;
@@ -68,6 +70,33 @@ public sealed class PerekScrollStabilityTests(ITestOutputHelper output, MobileDe
         Assert.Equal(4L, Convert.ToInt64(appState));
         Assert.NotEmpty(_page.Source);
         Assert.NotEmpty(_page.FirstPasuk);
+    }
+
+    // PerushNotes only render (through HtmlView, the crashed code path) when a
+    // perush is checked and the perushim notes pack is available on the device.
+    // Check the first perush when present; the scroll storm still runs either way.
+    private void CheckFirstPerushIfAvailable()
+    {
+        _page.Tap("PerushimChevronButton");
+        // The panel animates up (~250 ms); poll briefly for a rendered checkbox.
+        AppiumElement? checkbox = null;
+        for (var attempt = 0; attempt < 10 && checkbox == null; attempt++)
+        {
+            Thread.Sleep(300);
+            checkbox = _driver!
+                .FindElements(_platform.AutomationId("PerushCheckBox"))
+                .FirstOrDefault(element => element.Displayed);
+        }
+        if (checkbox == null)
+        {
+            output.WriteLine("No perushim available in this build; scrolling without inline commentary.");
+        }
+        else
+        {
+            _platform.Tap(_driver!, checkbox);
+            output.WriteLine("Checked the first perush so scrolling churns HtmlView cells.");
+        }
+        _page.Tap("PerushimChevronButton");
     }
 
     private static ActionSequence CreateFlickSequence(int fromX, int fromY, int toX, int toY)
