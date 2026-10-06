@@ -40,6 +40,9 @@ public partial class PerekPage : ContentPage
     // Tracks the carousel width so rotation/resize can be detected in SizeChanged.
     private double _carouselWidth = -1;
 
+    // A resize observed while the initial load was running; consumed when it ends.
+    private bool _pendingCarouselResnap;
+
 #if IOS
     private CancellationTokenSource? _scrollRefreshCts;
 #endif
@@ -142,32 +145,45 @@ public partial class PerekPage : ContentPage
         }
         var isFirstMeasure = _carouselWidth <= 0;
         _carouselWidth = width;
-        if (isFirstMeasure || _carouselInitializing || _isLoading)
+        if (isFirstMeasure || _carouselInitializing)
         {
             return;
         }
-
-        Dispatcher.Dispatch(() =>
+        if (_isLoading)
         {
+            // Rotation during the initial load: retry the re-snap once the
+            // load completes instead of leaving stale item widths behind.
+            _pendingCarouselResnap = true;
+            return;
+        }
+
+        Dispatcher.Dispatch(ResnapCarousel);
+    }
+
+    /// <summary>
+    /// Re-snaps the carousel to the current position after its width changed,
+    /// restoring a single full-width item.
+    /// </summary>
+    private void ResnapCarousel()
+    {
 #if IOS
-            var collectionView = PerekCarousel.Handler?.PlatformView switch
-            {
-                UIKit.UICollectionView cv => cv,
-                UIKit.UIView view => FindDescendantCollectionView(view),
-                _ => null,
-            };
-            collectionView?.CollectionViewLayout.InvalidateLayout();
+        var collectionView = PerekCarousel.Handler?.PlatformView switch
+        {
+            UIKit.UICollectionView cv => cv,
+            UIKit.UIView view => FindDescendantCollectionView(view),
+            _ => null,
+        };
+        collectionView?.CollectionViewLayout.InvalidateLayout();
 #elif ANDROID
-            if (PerekCarousel.Handler?.PlatformView is AndroidX.RecyclerView.Widget.RecyclerView recyclerView)
-            {
-                recyclerView.Post(recyclerView.RequestLayout);
-            }
+        if (PerekCarousel.Handler?.PlatformView is AndroidX.RecyclerView.Widget.RecyclerView recyclerView)
+        {
+            recyclerView.Post(recyclerView.RequestLayout);
+        }
 #endif
-            PerekCarousel.InvalidateMeasure();
-            _carouselInitializing = true;
-            PerekCarousel.ScrollTo(_viewModel.CarouselPosition, animate: false);
-            _carouselInitializing = false;
-        });
+        PerekCarousel.InvalidateMeasure();
+        _carouselInitializing = true;
+        PerekCarousel.ScrollTo(_viewModel.CarouselPosition, animate: false);
+        _carouselInitializing = false;
     }
 
 #if IOS
@@ -488,6 +504,11 @@ public partial class PerekPage : ContentPage
             finally
             {
                 _isLoading = false;
+                if (_pendingCarouselResnap)
+                {
+                    _pendingCarouselResnap = false;
+                    Dispatcher.Dispatch(ResnapCarousel);
+                }
             }
         }
         else if (_viewModel.PerekId > 0 && !_isLoading)
