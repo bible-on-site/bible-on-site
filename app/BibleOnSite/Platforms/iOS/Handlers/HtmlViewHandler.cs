@@ -25,9 +25,20 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         [nameof(HtmlView.H3FontSizeMultiplier)] = MapHeaderStyles
     };
 
-    // NSHTML import runs WebKit synchronously and spins the main run loop, so it is
-    // skipped when nothing that affects the output changed (e.g. layout-driven refreshes).
+    // NSHTML import runs WebKit synchronously and spins the calling thread's run
+    // loop. On the main thread that nested loop services pending UICollectionView
+    // updates while a cell is being created, re-entering _updateVisibleCellsNow:
+    // and crashing with SIGABRT (TestFlight incident F0AF3C74). The import runs on
+    // a worker thread instead, and the parsed string is applied back on the main
+    // thread. _renderSerial invalidates stale parses when the bound content
+    // changes while an earlier import is still in flight.
     private string? _renderedHtml;
+    private int _renderSerial;
+
+    // WebKitLegacy is not thread-safe: concurrent off-main imports from
+    // multiple cells serialize here. Each parse still spins only its own
+    // worker run loop, never the main one.
+    private static readonly object ParseLock = new();
 
     public HtmlViewHandler() : base(PropertyMapper)
     {
@@ -81,6 +92,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         if (string.IsNullOrEmpty(html))
         {
             _renderedHtml = null;
+            _renderSerial++;
             PlatformView.Text = string.Empty;
             return;
         }
@@ -92,22 +104,79 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
             return;
         }
         _renderedHtml = renderKey;
+        var serial = ++_renderSerial;
 
+        var paragraphStyle = new NSMutableParagraphStyle
+        {
+            Alignment = VirtualView.TextAlignment switch
+            {
+                HtmlTextAlignment.Center => UITextAlignment.Center,
+                HtmlTextAlignment.End => VirtualView.TextDirection == HtmlTextDirection.Rtl
+                    ? UITextAlignment.Left : UITextAlignment.Right,
+                HtmlTextAlignment.Justify => UITextAlignment.Justified,
+                _ => VirtualView.TextDirection == HtmlTextDirection.Rtl
+                    ? UITextAlignment.Right : UITextAlignment.Left
+            },
+            LineHeightMultiple = (nfloat)VirtualView.LineHeight
+        };
+        var textColor = GetTextColor();
+        var rtl = VirtualView.TextDirection == HtmlTextDirection.Rtl;
+
+        // Clear recycled content before the parsed result arrives.
+        PlatformView.Text = string.Empty;
+
+        Task.Run(() =>
+        {
+            NSMutableAttributedString? attributedString;
+            lock (ParseLock)
+            {
+                attributedString = ParseHtml(styledHtml);
+            }
+            if (attributedString != null)
+            {
+                var range = new NSRange(0, attributedString.Length);
+                attributedString.AddAttribute(UIStringAttributeKey.ParagraphStyle, paragraphStyle, range);
+                attributedString.AddAttribute(UIStringAttributeKey.ForegroundColor, textColor, range);
+            }
+
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                if (PlatformView == null || VirtualView == null || serial != _renderSerial)
+                {
+                    return;
+                }
+                if (attributedString != null)
+                {
+                    PlatformView.AttributedText = attributedString;
+                }
+                else
+                {
+                    PlatformView.Text = html;
+                    PlatformView.TextColor = textColor;
+                }
+                if (rtl)
+                {
+                    PlatformView.TextAlignment = UITextAlignment.Right;
+                }
+            });
+        });
+    }
+
+    // Runs off the main thread: NSHTML import spins a nested run loop which is
+    // fatal on the main thread inside UICollectionView cell creation.
+    private static NSMutableAttributedString? ParseHtml(string styledHtml)
+    {
         try
         {
             var htmlData = NSData.FromString(styledHtml, NSStringEncoding.Unicode);
             if (htmlData == null || htmlData.Length == 0)
             {
-                PlatformView.Text = html;
-                PlatformView.TextColor = GetTextColor();
-                return;
+                return null;
             }
 
             var importParams = new NSDictionary(
                 new NSString("DocumentType"), new NSString("NSHTML"),
                 new NSString("CharacterEncoding"), NSNumber.FromInt32((int)NSStringEncoding.Unicode));
-
-            NSAttributedString? attributedString = null;
 
             // NSAttributedString HTML import uses WebKit internally and can throw
             // unhandled ObjC exceptions (SIGABRT) that bypass C# try-catch.
@@ -118,64 +187,29 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
             {
                 NSError? error = null;
 #pragma warning disable CS0618
-                attributedString = new NSAttributedString(htmlData, importParams, out _, ref error!);
+                var parsed = new NSAttributedString(htmlData, importParams, out _, ref error!);
 #pragma warning restore CS0618
                 if (error != null)
                 {
                     System.Diagnostics.Debug.WriteLine($"HtmlView NSAttributedString error: {error.LocalizedDescription}");
-                    attributedString = null;
+                    return null;
                 }
+                return parsed == null ? null : new NSMutableAttributedString(parsed);
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"HtmlView NSAttributedString init exception: {ex.Message}");
-                attributedString = null;
+                return null;
             }
             finally
             {
                 ObjCRuntime.Class.ThrowOnInitFailure = previousThrowSetting;
             }
-
-            if (attributedString != null)
-            {
-                var mutableString = new NSMutableAttributedString(attributedString);
-
-                var paragraphStyle = new NSMutableParagraphStyle
-                {
-                    Alignment = VirtualView.TextAlignment switch
-                    {
-                        HtmlTextAlignment.Center => UITextAlignment.Center,
-                        HtmlTextAlignment.End => VirtualView.TextDirection == HtmlTextDirection.Rtl
-                            ? UITextAlignment.Left : UITextAlignment.Right,
-                        HtmlTextAlignment.Justify => UITextAlignment.Justified,
-                        _ => VirtualView.TextDirection == HtmlTextDirection.Rtl
-                            ? UITextAlignment.Right : UITextAlignment.Left
-                    },
-                    LineHeightMultiple = (nfloat)VirtualView.LineHeight
-                };
-
-                var range = new NSRange(0, mutableString.Length);
-                mutableString.AddAttribute(UIStringAttributeKey.ParagraphStyle, paragraphStyle, range);
-                mutableString.AddAttribute(UIStringAttributeKey.ForegroundColor, GetTextColor(), range);
-
-                PlatformView.AttributedText = mutableString;
-            }
-            else
-            {
-                PlatformView.Text = html;
-                PlatformView.TextColor = GetTextColor();
-            }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"HtmlViewHandler iOS error: {ex.Message}");
-            PlatformView.Text = html;
-            PlatformView.TextColor = GetTextColor();
-        }
-
-        if (VirtualView.TextDirection == HtmlTextDirection.Rtl)
-        {
-            PlatformView.TextAlignment = UITextAlignment.Right;
+            System.Diagnostics.Debug.WriteLine($"HtmlViewHandler iOS parse error: {ex.Message}");
+            return null;
         }
     }
 

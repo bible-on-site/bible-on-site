@@ -25,6 +25,17 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         [nameof(HtmlView.H3FontSizeMultiplier)] = MapHeaderStyles
     };
 
+    // NSHTML import runs WebKit synchronously and spins the calling thread's run
+    // loop; on the main thread that can re-enter UICollectionView updates during
+    // cell creation and crash with SIGABRT. Parse on a worker thread and apply on
+    // the main thread; _renderSerial invalidates stale parses after new content.
+    private string? _renderedHtml;
+    private int _renderSerial;
+
+    // WebKitLegacy is not thread-safe: concurrent off-main imports from
+    // multiple cells serialize here.
+    private static readonly object ParseLock = new();
+
     public HtmlViewHandler() : base(PropertyMapper)
     {
     }
@@ -76,70 +87,125 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         var html = VirtualView.HtmlContent;
         if (string.IsNullOrEmpty(html))
         {
+            _renderedHtml = null;
+            _renderSerial++;
             PlatformView.Text = string.Empty;
             return;
         }
 
         // Wrap content with styling
         var styledHtml = WrapWithStyles(html);
+        var renderKey = $"{VirtualView.TextAlignment}|{styledHtml}";
+        if (renderKey == _renderedHtml)
+        {
+            return;
+        }
+        _renderedHtml = renderKey;
+        var serial = ++_renderSerial;
 
+        var paragraphStyle = new NSMutableParagraphStyle
+        {
+            Alignment = VirtualView.TextAlignment switch
+            {
+                HtmlTextAlignment.Center => UITextAlignment.Center,
+                HtmlTextAlignment.End => VirtualView.TextDirection == HtmlTextDirection.Rtl
+                    ? UITextAlignment.Left : UITextAlignment.Right,
+                HtmlTextAlignment.Justify => UITextAlignment.Justified,
+                _ => VirtualView.TextDirection == HtmlTextDirection.Rtl
+                    ? UITextAlignment.Right : UITextAlignment.Left
+            },
+            LineHeightMultiple = (nfloat)VirtualView.LineHeight
+        };
+        var textColor = GetTextColor();
+        var rtl = VirtualView.TextDirection == HtmlTextDirection.Rtl;
+
+        // Clear recycled content before the parsed result arrives.
+        PlatformView.Text = string.Empty;
+
+        Task.Run(() =>
+        {
+            NSMutableAttributedString? attributedString;
+            lock (ParseLock)
+            {
+                attributedString = ParseHtml(styledHtml);
+            }
+            if (attributedString != null)
+            {
+                var range = new NSRange(0, attributedString.Length);
+                attributedString.AddAttribute(UIStringAttributeKey.ParagraphStyle, paragraphStyle, range);
+                attributedString.AddAttribute(UIStringAttributeKey.ForegroundColor, textColor, range);
+            }
+
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                if (PlatformView == null || VirtualView == null || serial != _renderSerial)
+                {
+                    return;
+                }
+                if (attributedString != null)
+                {
+                    PlatformView.AttributedText = attributedString;
+                }
+                else
+                {
+                    // Fallback to plain text
+                    PlatformView.Text = html;
+                    PlatformView.TextColor = textColor;
+                }
+                if (rtl)
+                {
+                    // Set text direction
+                    PlatformView.TextAlignment = UITextAlignment.Right;
+                }
+            });
+        });
+    }
+
+    // Runs off the main thread: NSHTML import spins a nested run loop which is
+    // fatal on the main thread inside UICollectionView cell creation.
+    private static NSMutableAttributedString? ParseHtml(string styledHtml)
+    {
         try
         {
             // Parse HTML using NSAttributedString via import
             var htmlData = NSData.FromString(styledHtml, NSStringEncoding.Unicode);
+            if (htmlData == null || htmlData.Length == 0)
+            {
+                return null;
+            }
 
             var importParams = new NSDictionary(
                 new NSString("DocumentType"), new NSString("NSHTML"),
                 new NSString("CharacterEncoding"), NSNumber.FromInt32((int)NSStringEncoding.Unicode));
 
-            NSError? error = null;
+            var previousThrowSetting = ObjCRuntime.Class.ThrowOnInitFailure;
+            ObjCRuntime.Class.ThrowOnInitFailure = false;
+            try
+            {
+                NSError? error = null;
 #pragma warning disable CS0618 // Type or member is obsolete - this constructor still works and is simpler
-            var attributedString = new NSAttributedString(htmlData, importParams, out _, ref error!);
+                var parsed = new NSAttributedString(htmlData, importParams, out _, ref error!);
 #pragma warning restore CS0618
-
-            if (error == null && attributedString != null)
-            {
-                var mutableString = new NSMutableAttributedString(attributedString);
-
-                // Apply text alignment
-                var paragraphStyle = new NSMutableParagraphStyle
+                if (error != null)
                 {
-                    Alignment = VirtualView.TextAlignment switch
-                    {
-                        HtmlTextAlignment.Center => UITextAlignment.Center,
-                        HtmlTextAlignment.End => VirtualView.TextDirection == HtmlTextDirection.Rtl
-                            ? UITextAlignment.Left : UITextAlignment.Right,
-                        HtmlTextAlignment.Justify => UITextAlignment.Justified,
-                        _ => VirtualView.TextDirection == HtmlTextDirection.Rtl
-                            ? UITextAlignment.Right : UITextAlignment.Left
-                    },
-                    LineHeightMultiple = (nfloat)VirtualView.LineHeight
-                };
-
-                var range = new NSRange(0, mutableString.Length);
-                mutableString.AddAttribute(UIStringAttributeKey.ParagraphStyle, paragraphStyle, range);
-                mutableString.AddAttribute(UIStringAttributeKey.ForegroundColor, GetTextColor(), range);
-
-                PlatformView.AttributedText = mutableString;
+                    return null;
+                }
+                return parsed == null ? null : new NSMutableAttributedString(parsed);
             }
-            else
+            catch (Exception ex)
             {
-                // Fallback to plain text
-                PlatformView.Text = html;
-                PlatformView.TextColor = GetTextColor();
+                System.Diagnostics.Debug.WriteLine($"HtmlViewHandler MacCatalyst parse error: {ex.Message}");
+                return null;
+            }
+            finally
+            {
+                ObjCRuntime.Class.ThrowOnInitFailure = previousThrowSetting;
             }
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"HtmlViewHandler MacCatalyst error: {ex.Message}");
-            PlatformView.Text = html;
-            PlatformView.TextColor = GetTextColor();
-        }
-
-        // Set text direction
-        if (VirtualView.TextDirection == HtmlTextDirection.Rtl)
-        {
-            PlatformView.TextAlignment = UITextAlignment.Right;
+            return null;
         }
     }
 
