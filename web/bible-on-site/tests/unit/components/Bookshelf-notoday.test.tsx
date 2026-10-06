@@ -26,14 +26,12 @@ jest.mock("@/app/components/Bookshelf/bookshelf.module.scss", () => ({
 	shelfLabel: "shelfLabel",
 }));
 
-jest.mock("@/data/db/sefarim", () => ({
-	sefarim: [
-		{ name: "בראשית", helek: "תורה", perekFrom: 1, perekTo: 50 },
-	],
+jest.mock("@/data/db/client-catalog.generated.json", () => ({
+	books: [{ name: "בראשית", helek: "תורה", perekFrom: 1, perekTo: 50 }],
 }));
 
 // Return a perek ID that doesn't match any sefer range → todaySeferName = ""
-jest.mock("@/data/perek-dto", () => ({
+jest.mock("@/data/perek-calendar", () => ({
 	getTodaysPerekId: () => 999,
 }));
 

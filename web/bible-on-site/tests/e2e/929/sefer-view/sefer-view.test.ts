@@ -40,22 +40,28 @@ async function fastMouseSwipe(page: Page, x: number, y: number, delta: number) {
 		buttons: 1,
 		clickCount: 1,
 	});
+	// Hammer samples velocity over intervals longer than 25ms. Leave a short
+	// press before sending the native moves together: awaiting every CDP
+	// acknowledgement can turn a fast swipe into a slow drag under load.
+	await new Promise((resolve) => setTimeout(resolve, 30));
+	const inputs: Promise<unknown>[] = [];
 	for (let step = 1; step <= 6; step++) {
-		await client.send("Input.dispatchMouseEvent", {
+		inputs.push(client.send("Input.dispatchMouseEvent", {
 			type: "mouseMoved",
 			x: x + (step * delta) / 6,
 			y,
 			buttons: 1,
-		});
+		}));
 	}
-	await client.send("Input.dispatchMouseEvent", {
+	inputs.push(client.send("Input.dispatchMouseEvent", {
 		type: "mouseReleased",
 		x: x + delta,
 		y,
 		button: "left",
 		buttons: 0,
 		clickCount: 1,
-	});
+	}));
+	await Promise.all(inputs);
 	await client.detach();
 }
 
