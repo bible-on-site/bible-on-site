@@ -29,11 +29,22 @@ permissions:
   pull-requests: write
 
 jobs:
-  submit-nuget:
+  nuget-snapshots:
     permissions:
       contents: write
       id-token: write
     uses: ./.github/workflows/dependency-submission.yml
+  # Reusable jobs have prefixed check names; retain the repository's PR gate.
+  submit-nuget:
+    needs: nuget-snapshots
+    if: ${{ always() && !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Verify both dependency graphs were submitted
+        env:
+          SUBMISSION_RESULT: ${{ needs.nuget-snapshots.result }}
+        run: test "$SUBMISSION_RESULT" = success
   dependency-review:
     needs: submit-nuget
     runs-on: ubuntu-latest

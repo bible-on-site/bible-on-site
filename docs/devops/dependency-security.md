@@ -22,6 +22,10 @@ with `git merge-base`; submitting only the current base tip leaves older PRs
 without the graph GitHub actually compares. A version-only `[skip ci]` commit
 can also lack a snapshot. Use one stable NuGet correlator across all workflow contexts.
 
+Keep the required `submit-nuget` check name in both PR and merge-group contexts.
+Reusable and matrix jobs add prefixes/suffixes; explicit aggregate jobs must fail
+if any submission fails or is skipped. Do not relax repository protection.
+
 Run review only after both submissions complete, then wait for indexing without
 relaxing vulnerability or license checks. Push and merge-group submissions retain
 their own immutable source. See [GitHub's submission/review guidance](https://docs.github.com/en/code-security/concepts/supply-chain-security/dependency-review#best-practices-for-using-the-dependency-review-api-and-the-dependency-submission-api-together).
