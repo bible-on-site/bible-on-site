@@ -9,19 +9,17 @@
  * 2. Populates the S3 test bucket (when S3_ENDPOINT is set)
  * 3. Starts the Vite dev server for E2E tests
  *
- * With MEASURE_COV=1 the Vite process records V8 coverage from startup
- * (NODE_V8_COVERAGE) and listens on --inspect so the Playwright global
- * teardown can flush that coverage to disk over CDP.
+ * With MEASURE_COV=1 the Vite plugin instruments app modules; coverage is
+ * collected via the test fixture and /api/dev/coverage — no launcher plumbing
+ * needed beyond env propagation.
  *
  * Usage: node --import tsx ./tests/util/launch-e2e-server.mts
  */
 
 import { execSync, spawn } from "node:child_process";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { shouldMeasureCov } from "../../../shared/tests-util/environment.mjs";
-import { E2E_SERVER_DEBUG_PORT } from "./e2e-debug-port";
 
 const projectRoot = path.resolve(
 	path.dirname(fileURLToPath(import.meta.url)),
@@ -99,36 +97,14 @@ async function main(): Promise<void> {
 		log("[S3 Setup] S3_ENDPOINT not set, skipping S3 population");
 	}
 
-	// Vite is spawned via its bin entry (not `npm run dev:app` / npx) so that
-	// NODE_OPTIONS=--inspect lands on the dev-server process itself — npm/npx
-	// wrapper processes would consume the debug port on some platforms.
-	const viteBin = path.join(projectRoot, "node_modules/vite/bin/vite.js");
-	const env = { ...process.env };
-	if (shouldMeasureCov) {
-		env.NODE_OPTIONS = `--inspect=${E2E_SERVER_DEBUG_PORT}`;
-		const v8CoverageDir = path.join(projectRoot, ".coverage/e2e/.v8");
-		rmSync(v8CoverageDir, { recursive: true, force: true });
-		mkdirSync(v8CoverageDir, { recursive: true });
-		env.NODE_V8_COVERAGE = v8CoverageDir;
-		log(
-			`[Server] Coverage enabled: inspector on port ${E2E_SERVER_DEBUG_PORT}, ` +
-				`V8 coverage dir ${v8CoverageDir}`,
-		);
-	}
-
-	log(
-		`[Server] Starting Vite dev server: node ${viteBin} --port 3101 --strictPort`,
-	);
-
-	const server = spawn(
-		process.execPath,
-		[viteBin, "--port", "3101", "--strictPort"],
-		{
-			cwd: projectRoot,
-			stdio: "inherit",
-			env,
-		},
-	);
+	// Inherits env so MEASURE_COV reaches vite.config.ts (istanbul instrumentation).
+	log("[Server] Starting Vite dev server: npm run dev:app");
+	const server = spawn("npm", ["run", "dev:app"], {
+		cwd: projectRoot,
+		stdio: "inherit",
+		env: process.env,
+		shell: true,
+	});
 
 	server.on("error", (err) => {
 		log(`[Server] Error: ${err.message}`);

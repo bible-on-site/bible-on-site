@@ -61,7 +61,7 @@ npm run build
 ### Tests & coverage
 
 - Unit: `npm run test:unit` / coverage: `npm run coverage:unit` (outputs `web/admin/.coverage/unit/lcov.info`)
-- E2E: `npm run test:e2e` / coverage: `npm run coverage:e2e` (V8 coverage via monocart → `web/admin/.coverage/e2e/lcov.info`)
+- E2E: `npm run test:e2e` / coverage: `npm run coverage:e2e` (istanbul instrumentation via monocart → `web/admin/.coverage/e2e/lcov.info`)
 - Merge unit + e2e: `npm run coverage:merge` → `web/admin/.coverage/merged/lcov.info`
 - CI publishes the merged report to Codecov with flag **`admin`** (see root `README.md`).
 

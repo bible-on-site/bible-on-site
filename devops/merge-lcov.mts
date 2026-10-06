@@ -2,10 +2,12 @@
  * Concatenate lcov.info files into a single report.
  *
  * Usage:
- *   node --import tsx merge-lcov.mts --out <file> [--require <file>]... [--optional <file>]... [--rm-input-dirs]
+ *   node --import tsx merge-lcov.mts --out <file> --prefix <dir> [--require <file>]... [--optional <file>]... [--rm-input-dirs]
  *
  * --require   input must exist; a missing one fails the merge (exit 1)
  * --optional  input is skipped with a warning when missing
+ * --prefix    module dir relative to repo root (e.g. web/admin/) — rewrites
+ *             bare `SF:src/...` records so Codecov flag paths match
  * --rm-input-dirs  delete the parent directory of every consumed input afterwards
  *
  * Paths are resolved against the caller's working directory.
@@ -21,6 +23,7 @@ const argv = await yargs(hideBin(process.argv))
 	.option("out", { type: "string", demandOption: true, describe: "merged lcov output path" })
 	.option("require", { type: "array", string: true, default: [], describe: "input lcov paths that must exist" })
 	.option("optional", { type: "array", string: true, default: [], describe: "input lcov paths included when present" })
+	.option("prefix", { type: "string", describe: "repo-root-relative dir prepended to bare SF:src/ records (e.g. web/admin/)" })
 	.option("rm-input-dirs", { type: "boolean", default: false, describe: "remove each consumed input's parent directory" })
 	.strict()
 	.parse();
@@ -45,7 +48,14 @@ for (const input of inputs) {
 		console.log(`⚠ Coverage input not found, skipping: ${inputPath}`);
 		continue;
 	}
-	stream.write(readFileSync(inputPath, "utf8"));
+	let content = readFileSync(inputPath, "utf8");
+	if (argv.prefix) {
+		const prefix = argv.prefix as string;
+		content = content
+			.replace(/^SF:src\//gm, `SF:${prefix}src/`)
+			.replace(/^SF:src\\/gm, `SF:${prefix}src/`);
+	}
+	stream.write(content);
 	hasContent = true;
 	consumedDirs.add(dirname(inputPath));
 	console.log(`✓ Added coverage from ${inputPath}`);
