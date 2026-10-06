@@ -72,10 +72,22 @@ jobs:
           dotnet restore app/BibleOnSite.Tests.E2E/BibleOnSite.Tests.E2E.csproj -p:EnableWindowsTargeting=true
           dotnet restore app/BibleOnSite.Tests.MobileE2E/BibleOnSite.Tests.MobileE2E.csproj
           dotnet restore app/devops/_build.csproj
-      - name: 'Submit NuGet dependencies'
+      # Older comparison bases retain this action's original job-name slot.
+      # Submit the real restored graph in both slots so those bases remain
+      # comparable without syncing PR branches or ignoring snapshot warnings.
+      - name: 'Submit NuGet dependencies in the legacy slot'
         uses: advanced-security/component-detection-dependency-submission-action@v0.2.0
         with:
           detectorsCategories: NuGet
+          fail-on-empty: true
+          correlator: submit-nuget
+          snapshot-sha: ${{ env.SNAPSHOT_SHA }}
+          snapshot-ref: ${{ env.SNAPSHOT_REF }}
+      - name: 'Submit NuGet dependencies in the current slot'
+        uses: advanced-security/component-detection-dependency-submission-action@v0.2.0
+        with:
+          detectorsCategories: NuGet
+          fail-on-empty: true
           # Stable across PR, merge queue and master workflow contexts.
           correlator: nuget
           snapshot-sha: ${{ env.SNAPSHOT_SHA }}

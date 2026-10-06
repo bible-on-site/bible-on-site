@@ -20,7 +20,14 @@ synthetic merge commit. Match checkout and snapshot metadata explicitly. Submit
 both comparison base and head on pull requests. Resolve the common ancestor
 with `git merge-base`; submitting only the current base tip leaves older PRs
 without the graph GitHub actually compares. A version-only `[skip ci]` commit
-can also lack a snapshot. Use one stable NuGet correlator across all workflow contexts.
+can also lack a snapshot. Keep correlators stable across all workflow contexts.
+
+Historical bases retain the original `submit-nuget` correlator as well as the
+newer `nuget` slot. Submit the actual restored source graph in both slots on
+base, head, merge-group and master runs. Both submissions must contain resolved
+dependencies and succeed. This preserves comparisons for older PR branches
+without syncing them merely because they are behind. These are real scans of
+the checked-out commit, not empty snapshots or copied manifests from another SHA.
 
 Keep the required `submit-nuget` check name in both PR and merge-group contexts.
 Reusable and matrix jobs add prefixes/suffixes; explicit aggregate jobs must fail
@@ -29,6 +36,13 @@ if any submission fails or is skipped. Do not relax repository protection.
 Run review only after both submissions complete, then wait for indexing without
 relaxing vulnerability or license checks. Push and merge-group submissions retain
 their own immutable source. See [GitHub's submission/review guidance](https://docs.github.com/en/code-security/concepts/supply-chain-security/dependency-review#best-practices-for-using-the-dependency-review-api-and-the-dependency-submission-api-together).
+
+The review action can finish successfully after its snapshot retry timeout even
+when GitHub still warns that the base and head snapshot counts differ. Check the
+comparison API again after review and fail on any snapshot warning, HTTP or
+network failure, or invalid response. An empty dependency diff is valid only
+when the snapshot comparison is complete. The verification script has a bounded
+network timeout and never logs its authentication token.
 
 ## Upstream blockers
 
