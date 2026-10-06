@@ -9,14 +9,15 @@
  * 2. Populates the S3 test bucket (when S3_ENDPOINT is set)
  * 3. Starts the Vite dev server for E2E tests
  *
- * With MEASURE_COV=1 the Vite process is started with --inspect so the
- * Playwright global teardown can pull server-side V8 coverage over CDP.
+ * With MEASURE_COV=1 the Vite process records V8 coverage from startup
+ * (NODE_V8_COVERAGE) and listens on --inspect so the Playwright global
+ * teardown can flush that coverage to disk over CDP.
  *
  * Usage: node --import tsx ./tests/util/launch-e2e-server.mts
  */
 
 import { execSync, spawn } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { shouldMeasureCov } from "../../../shared/tests-util/environment.mjs";
@@ -105,8 +106,13 @@ async function main(): Promise<void> {
 	const env = { ...process.env };
 	if (shouldMeasureCov) {
 		env.NODE_OPTIONS = `--inspect=${E2E_SERVER_DEBUG_PORT}`;
+		const v8CoverageDir = path.join(projectRoot, ".coverage/e2e/.v8");
+		rmSync(v8CoverageDir, { recursive: true, force: true });
+		mkdirSync(v8CoverageDir, { recursive: true });
+		env.NODE_V8_COVERAGE = v8CoverageDir;
 		log(
-			`[Server] Coverage enabled: Vite will listen on inspector port ${E2E_SERVER_DEBUG_PORT}`,
+			`[Server] Coverage enabled: inspector on port ${E2E_SERVER_DEBUG_PORT}, ` +
+				`V8 coverage dir ${v8CoverageDir}`,
 		);
 	}
 

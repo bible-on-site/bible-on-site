@@ -1,12 +1,18 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import type { FullConfig } from "@playwright/test";
 import { CDPClient } from "monocart-coverage-reports";
 import { addCoverageReport } from "monocart-reporter";
 import { E2E_SERVER_DEBUG_PORT } from "./e2e-debug-port";
 
+const V8_COVERAGE_DIR = ".coverage/e2e/.v8";
+
 /**
- * Pulls V8 coverage from the Vite/Nitro dev server (launched with
- * NODE_OPTIONS=--inspect by tests/util/launch-e2e-server.mts) and feeds it to
- * monocart-reporter. Mirrors the website's playwright-global-teardown-coverage.js.
+ * Collects the Vite/Nitro dev server's V8 coverage. The launcher starts Vite
+ * with NODE_V8_COVERAGE=<dir> and --inspect; this teardown asks the process to
+ * exit over CDP, which makes Node flush coverage-*.json files into that dir —
+ * they are then fed to monocart-reporter.
  */
 const globalTeardown = async (config: FullConfig) => {
 	let client: Awaited<ReturnType<typeof CDPClient>> | undefined;
@@ -22,19 +28,55 @@ const globalTeardown = async (config: FullConfig) => {
 		);
 		return;
 	}
-	if (!client?.getIstanbulCoverage) {
+
+	if (!client) return;
+	// `session` is not part of the public type surface but exists at runtime.
+	const session = (
+		client as unknown as {
+			session?: {
+				send: (
+					method: string,
+					params?: Record<string, unknown>,
+				) => Promise<unknown>;
+			};
+		}
+	).session;
+	if (!session) {
 		console.warn(
-			`[coverage] Debug port ${E2E_SERVER_DEBUG_PORT} connected but Istanbul coverage not available.`,
+			`[coverage] Debug port ${E2E_SERVER_DEBUG_PORT} connected without a CDP session.`,
 		);
 		return;
 	}
-	const coverageData = await client.getIstanbulCoverage();
-	await client.close();
+	await session.send("Runtime.enable");
+	// The target exits while evaluating, so the response and the websocket close
+	// can race — never await this call.
+	void session
+		.send("Runtime.evaluate", { expression: "process.exit(0)" })
+		.catch(() => {});
+	void client.close().catch(() => {});
+
+	// Wait for NODE_V8_COVERAGE to flush coverage-*.json to disk.
+	const v8Dir = join(process.cwd(), V8_COVERAGE_DIR);
+	let files: string[] = [];
+	for (let i = 0; i < 50; i++) {
+		files = readdirSync(v8Dir).filter((f) => f.endsWith(".json"));
+		if (files.length > 0) break;
+		await delay(200);
+	}
+	if (files.length === 0) {
+		console.warn(
+			`[coverage] No server coverage files in ${v8Dir} — was Vite started with NODE_V8_COVERAGE?`,
+		);
+		return;
+	}
 
 	// There is no test info on teardown — mock the shape monocart needs.
 	const mockTestInfo = { config } as Parameters<typeof addCoverageReport>[1];
-	if (Object.keys(coverageData).length > 0) {
-		await addCoverageReport(coverageData, mockTestInfo);
+	for (const file of files) {
+		const data = JSON.parse(readFileSync(join(v8Dir, file), "utf8"));
+		if (data?.result?.length) {
+			await addCoverageReport(data, mockTestInfo);
+		}
 	}
 };
 
