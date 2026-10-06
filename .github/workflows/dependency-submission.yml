@@ -13,8 +13,7 @@ name: 'Dependency submission'
 on:
   push:
     branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
+  workflow_call:
   merge_group:
   workflow_dispatch:
 
@@ -23,11 +22,31 @@ permissions:
   id-token: write
 
 jobs:
-  submit-nuget:
+  submit-snapshots:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        source: ${{ github.event_name == 'pull_request' && fromJSON('["base", "head"]') || fromJSON('["head"]') }}
+    env:
+      SNAPSHOT_SHA: ${{ matrix.source == 'base' && github.event.pull_request.base.sha || github.event.pull_request.head.sha || github.sha }}
+      SNAPSHOT_REF: ${{ matrix.source == 'base' && format('refs/heads/{0}', github.event.pull_request.base.ref) || github.event.pull_request.head.ref && format('refs/heads/{0}', github.event.pull_request.head.ref) || github.ref }}
     steps:
       - name: 'Checkout repository'
         uses: actions/checkout@v7
+        with:
+          # Dependency review compares the PR head, not its synthetic merge commit.
+          ref: ${{ env.SNAPSHOT_SHA }}
+          # Review compares the common ancestor, which can precede the base tip.
+          fetch-depth: ${{ matrix.source == 'base' && '0' || '1' }}
+      - name: 'Resolve dependency comparison base'
+        if: matrix.source == 'base'
+        shell: bash
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          comparison_base=$(git merge-base "$SNAPSHOT_SHA" "$PR_HEAD_SHA")
+          git checkout --detach "$comparison_base"
+          echo "SNAPSHOT_SHA=$comparison_base" >> "$GITHUB_ENV"
       - name: 'Setup .NET'
         uses: actions/setup-dotnet@v6
         with:
@@ -51,3 +70,19 @@ jobs:
         uses: advanced-security/component-detection-dependency-submission-action@v0.2.0
         with:
           detectorsCategories: NuGet
+          # Stable across PR, merge queue and master workflow contexts.
+          correlator: nuget
+          snapshot-sha: ${{ env.SNAPSHOT_SHA }}
+          snapshot-ref: ${{ env.SNAPSHOT_REF }}
+
+  # Repository rules require this exact check name in merge-group/master runs.
+  submit-nuget:
+    needs: submit-snapshots
+    if: ${{ always() && !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Verify every snapshot submission succeeded
+        env:
+          SUBMISSION_RESULT: ${{ needs.submit-snapshots.result }}
+        run: test "$SUBMISSION_RESULT" = success

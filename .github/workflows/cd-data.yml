@@ -4,11 +4,19 @@ on:
   repository_dispatch:
     types: [deploy-data]
 
+# Keep every dispatch; never interrupt a production write.
+concurrency:
+  group: ${{ github.repository }}-cd-data
+  cancel-in-progress: false
+  queue: max
+
 jobs:
   deploy:
     name: Deploy Data to Production RDS
     permissions:
       contents: read
+      actions: read
+      deployments: write
       id-token: write # Required for OIDC authentication with AWS
     runs-on: ubuntu-latest
 
@@ -18,12 +26,26 @@ jobs:
       DEVOPS_NODE_VERSION_FILE: devops/package.json
 
     steps:
-      - name: Checkout
+      - name: Checkout deployment automation
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.client_payload.ref }}
+          ref: ${{ github.sha }}
+
+      - name: Check deployment source and freshness
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_MODULE: data
+        run: node devops/github/release/check-deployment.mjs
+
+      - name: Checkout artifact source
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.guard.outputs.ref }}
 
       - name: Setup Node.js
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
@@ -31,47 +53,43 @@ jobs:
           cache: npm
 
       - name: Install npm Dependencies
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: npm ci --no-audit
 
-      # Download the perushim SQL from the dispatching run. Prefer the per-run
-      # `perushim-data-sql` artifact (freshly generated during a data release);
-      # fall back to the always-present `perushim-data-sql.master` baseline when the
-      # per-run artifact is absent or expired. Both artifacts contain perushim_data.sql.
-      # The run's artifacts are inspected explicitly (and non-expired ones selected)
-      # so a genuine download error is not masked and a clear failure is raised when
-      # neither artifact is available.
+      # Verify the exact immutable archive before granting access to production.
       - name: Download Perushim SQL
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         env:
-          GH_TOKEN: ${{ secrets.BOT_PAT }}
-          RUN_ID: ${{ github.event.client_payload.run_id }}
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ steps.guard.outputs.artifact_id }}
+          ARTIFACT_DIGEST: ${{ steps.guard.outputs.artifact_digest }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           mkdir -p data/mysql
-          available=$(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" --paginate \
-            --jq '.artifacts[] | select(.expired == false) | .name')
-          if echo "$available" | grep -qx "perushim-data-sql"; then
-            artifact="perushim-data-sql"
-          elif echo "$available" | grep -qx "perushim-data-sql.master"; then
-            artifact="perushim-data-sql.master"
-          else
-            echo "No non-expired perushim artifact found on run $RUN_ID." >&2
-            echo "Available (non-expired) artifacts:" >&2
-            echo "$available" >&2
-            exit 1
-          fi
-          echo "Using perushim artifact: $artifact"
-          gh run download "$RUN_ID" -R "$REPO" -n "$artifact" -D data/mysql/perushim-dl
-          cp data/mysql/perushim-dl/perushim_data.sql data/mysql/perushim_data.sql
-          echo "perushim_data.sql ready ($(wc -l < data/mysql/perushim_data.sql) lines)"
+          archive="$RUNNER_TEMP/perushim-data.zip"
+          gh api "repos/$REPO/actions/artifacts/$ARTIFACT_ID/zip" > "$archive"
+          printf '%s  %s\n' "${ARTIFACT_DIGEST#sha256:}" "$archive" | sha256sum --check --status
+          unzip -p "$archive" perushim_data.sql > data/mysql/perushim_data.sql
+          test -s data/mysql/perushim_data.sql
 
       - name: Configure AWS Credentials (OIDC)
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Deploy Data to Production RDS
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: npm run deploy:data
+
+      - name: Record deployment result
+        if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.guard.outputs.deployment_id }}
+          DEPLOYMENT_RESULT: ${{ job.status }}
+        run: node "${{ runner.temp }}/deployment-state.mjs"
