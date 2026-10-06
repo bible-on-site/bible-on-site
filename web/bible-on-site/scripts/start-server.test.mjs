@@ -12,12 +12,18 @@ const nativeSignals = { skip: process.platform === "win32", timeout: 10_000 };
 async function fixture(t, source, options = {}) {
 	const directory = await mkdtemp(path.join(os.tmpdir(), "bible-handover-test-"));
 	await writeFile(path.join(directory, "server.js"), source);
+	const launcher = path.join(directory, "launcher.mjs");
+	await writeFile(launcher, `
+const { startServer } = await import(process.argv[2]);
+startServer({ cwd: process.argv[3], drainMs: Number(process.argv[4]) });
+`);
 	const wrapper = spawn(
 		process.execPath,
 		[
-			"--input-type=module",
-			"--eval",
-			`import {startServer} from ${JSON.stringify(entry)}; startServer(${JSON.stringify({ ...options, cwd: options.cwd === "missing" ? path.join(directory, "missing") : directory })});`,
+			launcher,
+			entry,
+			options.cwd === "missing" ? path.join(directory, "missing") : directory,
+			String(options.drainMs ?? 90_000),
 		],
 		{ stdio: ["ignore", "pipe", "pipe"] },
 	);
