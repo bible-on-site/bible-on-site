@@ -118,3 +118,21 @@ publisher finish recovery.
 
 See [GitHub's release API](https://docs.github.com/en/rest/releases/releases) and
 validate changes with `npm run test:version` in `devops`.
+
+TestFlight delivery reads the app identity, marketing version, and build number
+from the published IPA and checks that exact iOS build through Apple's API.
+An existing valid build resumes distribution without another binary upload.
+Processing builds are polled; rejected builds and API errors fail the delivery.
+If an earlier recorded delivery exists and Apple cannot confirm its build, a
+retry does not upload again. Keep the original uploader error visible and use
+the read-only **Inspect TestFlight build** workflow to inspect the published
+release before recovery. The normal source, quality, freshness, and deployment
+ledger guards still apply to every production write.
+
+Upload verification and beta distribution are separate steps. Distribution
+uses both the exact app version and build number; an external submission limit
+still leaves the verified upload successful with a visible warning (#1183).
+Independent distribution workflows remain tracked in
+[issue #1183](https://github.com/bible-on-site/bible-on-site/issues/1183).
+See [Apple's build query](https://developer.apple.com/documentation/appstoreconnectapi/get-v1-builds)
+and [Fastlane's upload/distribution options](https://docs.fastlane.tools/actions/pilot/).
