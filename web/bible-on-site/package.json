@@ -64,7 +64,7 @@
 		"moment-timezone": "0.6.5",
 		"mpg123-decoder": "1.0.3",
 		"mysql2": "3.24.5",
-		"next": "16.4.0-canary.60",
+		"next": "16.4.0-canary.61",
 		"nuqs": "2.10.1",
 		"pdf-lib": "1.17.1",
 		"react": "19.3.0",
