@@ -121,7 +121,9 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
                 PlatformView.BeginInvokeOnMainThread(() =>
                 {
                     if (generation != _renderGeneration || PlatformView == null)
+                    {
                         return;
+                    }
                     if (attributed != null)
                     {
                         PlatformView.AttributedText = attributed;
