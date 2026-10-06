@@ -44,6 +44,12 @@ public partial class PerekPage : ContentPage
     private static DateTime _lastScrollTime = DateTime.MinValue;
     private const int ScrollCooldownMs = 500; // Don't allow long-press within 500ms of scroll
 
+    // Tracks the carousel width so rotation/resize can be detected in SizeChanged.
+    private double _carouselWidth = -1;
+
+    // A resize observed while the initial load was running; consumed when it ends.
+    private bool _pendingCarouselResnap;
+
 #if IOS
     private CancellationTokenSource? _scrollRefreshCts;
 #endif
@@ -101,6 +107,7 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private void SetupCarouselNavigation()
     {
+        PerekCarousel.SizeChanged += OnCarouselSizeChanged;
         _viewModel.NavigationRequested += (_, perekId) =>
         {
             ResetRecitationContext();
@@ -126,6 +133,86 @@ public partial class PerekPage : ContentPage
 #endif
         };
     }
+
+    /// <summary>
+    /// Re-snaps the CarouselView when its width changes (device rotation, window
+    /// resize). The native carousel keeps the pre-rotation item size, so several
+    /// items stay visible side by side until the user swipes. Invalidating the
+    /// native layout and re-snapping to the current position restores a single
+    /// full-width item immediately.
+    /// </summary>
+    private void OnCarouselSizeChanged(object? sender, EventArgs e)
+    {
+        var width = PerekCarousel.Width;
+        if (width <= 0)
+        {
+            return;
+        }
+        if (Math.Abs(width - _carouselWidth) < 0.5)
+        {
+            return;
+        }
+        var isFirstMeasure = _carouselWidth <= 0;
+        _carouselWidth = width;
+        if (isFirstMeasure || _carouselInitializing)
+        {
+            return;
+        }
+        if (_isLoading)
+        {
+            // Rotation during the initial load: retry the re-snap once the
+            // load completes instead of leaving stale item widths behind.
+            _pendingCarouselResnap = true;
+            return;
+        }
+
+        Dispatcher.Dispatch(ResnapCarousel);
+    }
+
+    /// <summary>
+    /// Re-snaps the carousel to the current position after its width changed,
+    /// restoring a single full-width item.
+    /// </summary>
+    private void ResnapCarousel()
+    {
+#if IOS
+        var collectionView = PerekCarousel.Handler?.PlatformView switch
+        {
+            UIKit.UICollectionView cv => cv,
+            UIKit.UIView view => FindDescendantCollectionView(view),
+            _ => null,
+        };
+        collectionView?.CollectionViewLayout.InvalidateLayout();
+#elif ANDROID
+        if (PerekCarousel.Handler?.PlatformView is AndroidX.RecyclerView.Widget.RecyclerView recyclerView)
+        {
+            recyclerView.Post(recyclerView.RequestLayout);
+        }
+#endif
+        PerekCarousel.InvalidateMeasure();
+        _carouselInitializing = true;
+        PerekCarousel.ScrollTo(_viewModel.CarouselPosition, animate: false);
+        _carouselInitializing = false;
+    }
+
+#if IOS
+    private static UIKit.UICollectionView? FindDescendantCollectionView(UIKit.UIView view)
+    {
+        foreach (var subview in view.Subviews)
+        {
+            if (subview is UIKit.UICollectionView collectionView)
+            {
+                return collectionView;
+            }
+            var found = FindDescendantCollectionView(subview);
+            if (found != null)
+            {
+                return found;
+            }
+        }
+        return null;
+    }
+#endif
 
     /// <summary>
     /// Populates page-level DynamicResource entries for font sizes and keeps them
@@ -433,6 +520,11 @@ public partial class PerekPage : ContentPage
             finally
             {
                 _isLoading = false;
+                if (_pendingCarouselResnap)
+                {
+                    _pendingCarouselResnap = false;
+                    Dispatcher.Dispatch(ResnapCarousel);
+                }
             }
         }
         else if (_viewModel.PerekId > 0 && !_isLoading)
