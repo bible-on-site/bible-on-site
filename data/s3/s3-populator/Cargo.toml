@@ -7,7 +7,8 @@ description = "Populate S3 buckets with test data for development and testing"
 [dependencies]
 anyhow = "1.0"
 aws-config = { version = "1.12", features = ["behavior-version-latest"] }
-aws-sdk-s3 = "1.150"
+# Keep the current HTTPS client; the legacy rustls feature pulls vulnerable webpki 0.101.
+aws-sdk-s3 = { version = "1.150", default-features = false, features = ["sigv4a", "http-1x", "default-https-client", "rt-tokio"] }
 aws-smithy-http-client = "1.4.2"
 clap = { version = "4.6", features = ["derive", "env"] }
 crc32fast = "1.5"

@@ -10,12 +10,22 @@ import {
 } from "./bump-module-versions.ts";
 
 describe("modulesToBump", () => {
+	it("ignores outputs from a failed release/dispatch", () => {
+		const needs: ReleaseNeeds = {
+			release_website: {
+				result: "failure",
+				outputs: { released: "true", needs_bump: "true" },
+			},
+		};
+		assert.deepEqual(modulesToBump(needs, "released"), []);
+		assert.deepEqual(modulesToBump(needs, "retry"), []);
+	});
 	it("selects released modules and ignores missing or skipped jobs", () => {
 		const skipped = { result: "skipped", outputs: {} };
 		const needs: ReleaseNeeds = {
-			release_website: { outputs: { released: "true" } },
-			release_api: { outputs: {} },
-			release_app: { outputs: { released: "true" } },
+			release_website: { result: "success", outputs: { released: "true" } },
+			release_api: { result: "success", outputs: {} },
+			release_app: { result: "success", outputs: { released: "true" } },
 			release_admin: skipped,
 		};
 		assert.deepEqual(modulesToBump(needs, "released"), ["website", "app"]);
@@ -24,10 +34,10 @@ describe("modulesToBump", () => {
 	it("selects only modules that need a retry bump", () => {
 		const skipped = { result: "skipped", outputs: {} };
 		const needs: ReleaseNeeds = {
-			release_website: { outputs: { needs_bump: "true" } },
+			release_website: { result: "success", outputs: { needs_bump: "true" } },
 			release_api: skipped,
-			release_app: { outputs: { released: "true" } },
-			release_admin: { outputs: { needs_bump: "true" } },
+			release_app: { result: "success", outputs: { released: "true" } },
+			release_admin: { result: "success", outputs: { needs_bump: "true" } },
 		};
 		assert.deepEqual(modulesToBump(needs, "retry"), ["website", "admin"]);
 	});
