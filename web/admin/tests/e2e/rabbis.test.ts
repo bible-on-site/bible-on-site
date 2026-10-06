@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../util/test-fixture";
 
 test.describe("Rabbis Management", () => {
 	test("displays rabbis list with authors", async ({ page }) => {

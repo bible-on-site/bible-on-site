@@ -10,7 +10,7 @@
 		"tsx": "4.23.15"
 	},
 	"scripts": {
-		"coverage:merge": "node --import tsx ./merge-coverage.mts",
+		"coverage:merge": "node --import tsx ./merge-lcov.mts --out ../.coverage/lcov.info --require ../web/bible-on-site/.coverage/merged/lcov.info --require ../web/api/.coverage/merged/lcov.info --optional ../web/admin/.coverage/merged/lcov.info --optional ../app/.coverage/merged/lcov.info --optional ../data/.coverage/merged/lcov.info --rm-input-dirs",
 		"coverage:gaps": "node ./coverage-gaps.mjs",
 		"dev": "node --import tsx ./dev-all.mts",
 		"setup_dev_env": "node --import tsx ./setup-dev-env.mts",

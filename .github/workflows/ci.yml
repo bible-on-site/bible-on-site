@@ -1199,7 +1199,7 @@ jobs:
         working-directory: ${{ env.DATA_DIRECTORY }}
         run: cargo build --release -p db-populator -p s3-populator
 
-      - name: E2E Test
+      - name: E2E Test with Coverage
         id: npm-e2e-test
         env:
           DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
@@ -1209,7 +1209,7 @@ jobs:
           S3_ACCESS_KEY_ID: test
           S3_SECRET_ACCESS_KEY: test_1234
           S3_FORCE_PATH_STYLE: "true"
-        run: npm run test:e2e
+        run: npm run coverage:e2e
 
       - name: Merge test coverage (unit; E2E lcov when enabled)
         run: npm run coverage:merge

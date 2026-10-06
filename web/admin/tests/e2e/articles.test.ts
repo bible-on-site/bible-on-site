@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../util/test-fixture";
 
 test.describe("Articles Management", () => {
 	test("displays articles navigation", async ({ page }) => {
@@ -52,8 +52,12 @@ test.describe("Articles Management", () => {
 
 		// Expand בראשית (first sefer, no additionals)
 		await page.getByRole("button", { name: /בראשית/ }).click();
-		await expect(page.getByRole("link", { name: "א", exact: true }).first()).toBeVisible();
-		await expect(page.getByRole("link", { name: "נ", exact: true })).toBeVisible();
+		await expect(
+			page.getByRole("link", { name: "א", exact: true }).first(),
+		).toBeVisible();
+		await expect(
+			page.getByRole("link", { name: "נ", exact: true }),
+		).toBeVisible();
 	});
 
 	test("sefarim with additionals show additional letter prefix", async ({
