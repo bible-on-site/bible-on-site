@@ -120,6 +120,7 @@ export function AuthorArticlesTable({ rows }: { rows: AuthorArticleRow[] }) {
 								className={styles.row}
 								onClick={(event) => {
 									if ((event.target as HTMLElement).closest("a")) return;
+									if (window.getSelection()?.isCollapsed === false) return;
 									router.push(articleHref(row));
 								}}
 							>

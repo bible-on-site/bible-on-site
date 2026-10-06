@@ -102,10 +102,10 @@
 .articlesSection {
   margin-top: 32px;
   padding: 24px;
-  background: linear-gradient(to bottom, #f8f9fc, #ffffff);
+  background: var(--surface-elevated);
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-subtle);
 }
 
 .sectionHeader {
