@@ -18,10 +18,26 @@
  */
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 /** Modules that have their own biome.json, in lint order. */
 const MODULES = ["web/bible-on-site", "web/admin"];
+
+/**
+ * Locate the hook-env Biome's JavaScript bin (installed by
+ * additional_dependencies) on Windows without a shell: the env's biome.cmd
+ * would otherwise force cmd.exe, letting staged filenames be re-parsed as
+ * shell syntax. Global npm layout puts the package beside the .cmd shim at
+ * <env>/node_modules/@biomejs/biome/bin/biome.
+ */
+function envBiomeJs() {
+	if (process.platform !== "win32") return null;
+	for (const dir of (process.env.PATH ?? "").split(";").filter(Boolean)) {
+		const js = join(dir, "node_modules", "@biomejs", "biome", "bin", "biome");
+		if (existsSync(join(dir, "biome.cmd")) && existsSync(js)) return js;
+	}
+	return null;
+}
 
 const stagedFiles = process.argv.slice(2).map((f) => f.replaceAll("\\", "/"));
 
@@ -39,22 +55,27 @@ for (const dir of MODULES) {
 	// literal argv entries so metacharacters can never reach cmd.exe, and
 	// checkout paths with spaces need no quoting.
 	const localBin = resolve(dir, "node_modules", "@biomejs", "biome", "bin", "biome");
+	const envBin = envBiomeJs();
 	const result = existsSync(localBin)
 		? spawnSync( // nosemgrep
 				process.execPath,
 				[localBin, "lint", ...moduleFiles],
 				{ cwd: resolve(dir), stdio: "inherit" },
 			)
-		: spawnSync( // nosemgrep — hook-env fallback binary (pre-commit.ci)
-				"biome",
-				["lint", ...moduleFiles],
-				{
-					cwd: resolve(dir),
-					stdio: "inherit",
-					// Windows can't exec the env's biome.cmd shim without a shell.
-					shell: process.platform === "win32",
-				},
-			);
+		: envBin
+			? spawnSync( // nosemgrep
+					process.execPath,
+					[envBin, "lint", ...moduleFiles],
+					{ cwd: resolve(dir), stdio: "inherit" },
+				)
+			: spawnSync( // nosemgrep — POSIX hook env exposes a shebang bin
+					"biome",
+					["lint", ...moduleFiles],
+					{ cwd: resolve(dir), stdio: "inherit" },
+				);
+	if (result.error) {
+		console.error(`biome-lint: could not run Biome for ${dir}: ${result.error.message}`);
+	}
 	if (result.status !== 0) failed = true;
 }
 
