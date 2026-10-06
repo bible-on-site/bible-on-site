@@ -7,6 +7,10 @@ FROM rust:${RUST_VERSION}-alpine AS build
 WORKDIR /app
 
 # Install host build dependencies.
+# The base image tag (rust:1.98.1-alpine) already pins the toolchain; alpine
+# renames versioned packages (clangNN/lldNN) per release, so apk pins would
+# break on the next base bump for no reproducibility gain.
+# hadolint ignore=DL3018
 RUN apk add --no-cache clang lld musl-dev git openssl-dev openssl-libs-static pkgconfig
 
 # Copy source files (build context is web/)

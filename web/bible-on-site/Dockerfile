@@ -50,7 +50,9 @@ ENV NEXT_PUBLIC_ENV=$NEXT_PUBLIC_ENV
 # The public Mapbox token is embedded into client bundles by Next.js at build time.
 # This argument is intentionally public, so the secret build-argument rule does not apply.
 # nosemgrep
+# hadolint ignore=DL3064
 ARG MAPBOX_PUBLIC_KEY
+# hadolint ignore=DL3064
 ENV NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=$MAPBOX_PUBLIC_KEY
 
 RUN npm run build
@@ -63,7 +65,7 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Install curl for ECS health checks
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl~=8
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
@@ -75,7 +77,7 @@ COPY --from=builder /app/bible-on-site/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/bible-on-site/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/bible-on-site/.next/static ./.next/static
 
-USER nextjs
+USER 1001
 
 EXPOSE 3000
 

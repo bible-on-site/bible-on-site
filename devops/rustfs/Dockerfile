@@ -3,5 +3,5 @@ WORKDIR /opt/s3-init
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY rustfs/init.mjs rustfs/config.mjs ./
-USER node
+USER 1000
 ENTRYPOINT ["node", "init.mjs"]

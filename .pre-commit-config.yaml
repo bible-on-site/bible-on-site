@@ -34,6 +34,12 @@ repos:
     rev: 0141e7822652fbee3a1b878c3d83d9c1dce87d67
     hooks:
       - id: actionlint
+  # hadolint-py ships the hadolint binary as a Python wheel — no docker daemon
+  # or manual binary install needed (works on pre-commit.ci and Windows).
+  - repo: "https://github.com/AleksaC/hadolint-py"
+    rev: v2.15.1
+    hooks:
+      - id: hadolint
   - repo: local
     hooks:
       - id: check-app-version

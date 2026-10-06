@@ -18,14 +18,14 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl~=8
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 adminjs
 
 COPY --from=builder --chown=adminjs:nodejs /app/admin/.output ./.output
 
-USER adminjs
+USER 1001
 
 EXPOSE 3101
 
