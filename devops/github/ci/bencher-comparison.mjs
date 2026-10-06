@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -39,4 +40,3 @@ if (path.resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
 		JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, "utf8")), testedBaseSha);
 	if (args.length) process.stdout.write(`${args.join("\n")}\n`);
 }
-import { execFileSync } from "node:child_process";
