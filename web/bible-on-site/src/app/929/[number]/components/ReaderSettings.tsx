@@ -7,6 +7,7 @@ import {
 	getStoredReaderSettings,
 	PEREK_FONT_SCALES,
 	PEREK_LINE_HEIGHTS,
+	PEREK_TANAKH_FONTS,
 	PEREK_WORD_SPACINGS,
 	type ReaderSettings as ReaderState,
 	setStoredReaderSettings,
@@ -216,6 +217,23 @@ export default function ReaderSettings() {
 										}
 									/>
 									<small>רווח בין שורות</small>
+								</label>
+								<label>
+									גופן פסוקים
+									<select
+										aria-label="גופן פסוקים"
+										value={display.fontId}
+										onChange={(e) =>
+											updateDisplay({ fontId: Number(e.target.value) })
+										}
+									>
+										{PEREK_TANAKH_FONTS.map((font, index) => (
+											<option key={font || "default"} value={index}>
+												{font === "taamey" ? "Taamey D (ניסיוני)" : "ברירת מחדל"}
+											</option>
+										))}
+									</select>
+									<small>גופן טעמים מסורתי, עדיין בבחינה</small>
 								</label>
 							</section>
 						) : (

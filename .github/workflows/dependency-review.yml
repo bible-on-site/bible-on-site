@@ -12,6 +12,11 @@ on:
   pull_request:
     branches: [ "master" ]
 
+# A superseded review must not overwrite the current head's PR report.
+concurrency:
+  group: dependency-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 # If using a dependency submission action in this workflow this permission will need to be set to:
 #
 # permissions:
@@ -24,7 +29,24 @@ permissions:
   pull-requests: write
 
 jobs:
+  nuget-snapshots:
+    permissions:
+      contents: write
+      id-token: write
+    uses: ./.github/workflows/dependency-submission.yml
+  # Reusable jobs have prefixed check names; retain the repository's PR gate.
+  submit-nuget:
+    needs: nuget-snapshots
+    if: ${{ always() && !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Verify both dependency graphs were submitted
+        env:
+          SUBMISSION_RESULT: ${{ needs.nuget-snapshots.result }}
+        run: test "$SUBMISSION_RESULT" = success
   dependency-review:
+    needs: submit-nuget
     runs-on: ubuntu-latest
     steps:
       - name: 'Checkout repository'
@@ -34,6 +56,9 @@ jobs:
         # Commonly enabled options, see https://github.com/actions/dependency-review-action#configuration-options for all available options.
         with:
           comment-summary-in-pr: always
+          # Wait for GitHub to index the completed base/head submissions.
+          retry-on-snapshot-warnings: true
+          retry-on-snapshot-warnings-timeout: 600
           # flowbite-react uses npm aliases ("tailwind-merge-v2": "npm:tailwind-merge@2.6.1")
           # which install the LEGITIMATE tailwind-merge package under alias names.
           # The scanner falsely matches these alias names against known malware advisories.
