@@ -33,9 +33,33 @@
 			"description": "Keep the iOS SDK pins aligned with the Xcode 26.6-compatible workload set; see https://github.com/bible-on-site/bible-on-site/issues/1871",
 			"matchManagers": ["github-actions"],
 			"matchPackageNames": ["dotnet-sdk"],
-			"matchFileNames": [".github/workflows/ci.yml", ".github/workflows/app-package.yml", ".github/workflows/app-mobile-e2e.yml"],
+			"matchFileNames": [
+				".github/workflows/ci.yml",
+				".github/workflows/app-package.yml",
+				".github/workflows/app-mobile-e2e.yml"
+			],
 			"matchCurrentValue": "10.0.401",
 			"enabled": false
+		},
+		{
+			"description": "Android driver 8.7.0 bundles vulnerable dependencies that npm overrides cannot replace. Update to a patched upstream bundle when available; see https://github.com/bible-on-site/bible-on-site/issues/1995",
+			"matchManagers": ["npm"],
+			"matchFileNames": ["app/mobile-e2e/package.json"],
+			"matchPackageNames": ["appium-uiautomator2-driver"]
+		},
+		{
+			"description": "Jest coverage tooling still pulls unpatched sprintf-js through legacy YAML/argparse. Retain updates and verify removal or a fixed upstream release; see https://github.com/bible-on-site/bible-on-site/issues/1996",
+			"matchManagers": ["npm"],
+			"matchFileNames": ["web/bible-on-site/package.json"],
+			"matchPackageNames": [
+				"jest",
+				"jest-environment-jsdom",
+				"babel-plugin-istanbul",
+				"@istanbuljs/load-nyc-config",
+				"js-yaml",
+				"argparse",
+				"sprintf-js"
+			]
 		}
 	],
 	"vulnerabilityAlerts": {
