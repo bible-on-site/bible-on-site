@@ -292,3 +292,59 @@ button.backLink {
 .noteContent p {
   margin: 0.5rem 0;
 }
+
+@media (prefers-color-scheme: dark) {
+  .expandedArticle,
+  .expandedPerush,
+  .backLink {
+    border-color: #2d3548;
+  }
+
+  .authorImage {
+    background: #2d3548;
+    border-color: #a8b9ff;
+  }
+
+  .authorName,
+  .articleTitle,
+  .articleBody h1,
+  .articleBody h2,
+  .articleBody h3,
+  .perushTitle,
+  .notePasuk,
+  .backLink {
+    color: #a8b9ff;
+  }
+
+  .authorLink:hover .authorName,
+  .articleBody a {
+    color: #7eb0ff;
+  }
+
+  .articleBody,
+  .noteContent {
+    color: #d7dae0;
+  }
+
+  .backLink {
+    background: #1a1f2e;
+  }
+
+  .backLink:hover {
+    background: #232a45;
+    border-color: #a8b9ff;
+  }
+
+  .parshanName {
+    color: #9aa0a6;
+  }
+
+  .note {
+    background: #12151c;
+  }
+
+  .noteHighlight {
+    background: rgba(58, 47, 16, 0.95);
+    border-right-color: #92600b;
+  }
+}

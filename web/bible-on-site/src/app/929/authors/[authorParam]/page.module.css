@@ -217,3 +217,56 @@
     font-size: 1.5rem;
   }
 }
+
+@media (prefers-color-scheme: dark) {
+  .breadcrumb ol {
+    color: #b8c2d9;
+  }
+
+  .breadcrumb li:not(:last-child)::after {
+    color: #64748b;
+  }
+
+  .breadcrumb li a,
+  .authorName,
+  .sectionTitle,
+  .articleName {
+    color: #a8b9ff;
+  }
+
+  .breadcrumb li.active,
+  .perekLink {
+    color: #b7adf0;
+  }
+
+  .authorImageContainer {
+    background: linear-gradient(135deg, #1a1f2e, #2d3548);
+    border-color: #3b4256;
+  }
+
+  .authorPlaceholder {
+    color: #64748b;
+  }
+
+  .authorDetails {
+    color: #b8c2d9;
+  }
+
+  .articlesSection {
+    background: linear-gradient(to bottom, #161b2a, #12151c);
+    border-color: #2d3548;
+  }
+
+  .articleCard {
+    background: #1a1f2e;
+    border-color: #2d3548;
+  }
+
+  .articleCard:hover {
+    border-color: #a8b9ff;
+  }
+
+  .articleMeta {
+    color: #9aa0a6;
+  }
+}

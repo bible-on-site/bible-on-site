@@ -120,3 +120,28 @@
     margin-top: 5em;
   }
 }
+
+@media (prefers-color-scheme: dark) {
+  .tosSection {
+    background-color: #16283f;
+  }
+
+  .tosHeader h1,
+  .tosList h2 {
+    color: #e8eaed;
+  }
+
+  .tosList h3 {
+    color: #b8c2d9;
+  }
+
+  .tosList p,
+  .tosSubList ul li {
+    color: #b8c2d9;
+  }
+
+  .tosList a,
+  .tosList a:visited {
+    color: #7eb0ff;
+  }
+}

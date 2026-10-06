@@ -330,3 +330,35 @@
   border-bottom-style: solid;
   border-bottom-color: #1552ac;
 }
+
+@media (prefers-color-scheme: dark) {
+  .page,
+  .pageContentPage,
+  .pageBlank {
+    background-color: #1a1f2e;
+  }
+
+  .perekTextScrollWrapper {
+    --scrollbarBG: #2d3548;
+  }
+
+  .pageHeaderRow,
+  .pasukNum {
+    color: #a8b9ff;
+  }
+
+  .perekHeader,
+  .perekIllustrationFigure figcaption,
+  .blankPageDate,
+  .qri label::before {
+    color: #9aa0a6;
+  }
+
+  .perekTextHeader h1 {
+    color: #b7adf0;
+  }
+
+  .tanahpediaLink:hover {
+    border-bottom-color: #7eb0ff;
+  }
+}
