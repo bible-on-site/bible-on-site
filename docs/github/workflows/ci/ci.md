@@ -129,10 +129,18 @@ the read-only **Inspect TestFlight build** workflow to inspect the published
 release before recovery. The normal source, quality, freshness, and deployment
 ledger guards still apply to every production write.
 
-Upload verification and beta distribution are separate steps. Distribution
-uses both the exact app version and build number; an external submission limit
-still leaves the verified upload successful with a visible warning (#1183).
-Independent distribution workflows remain tracked in
+After a verified upload, app CD calls the separate **Distribute TestFlight build**
+workflow. It specifies the iOS platform and both the exact app version and build
+number. Upload and distribution have independent `app-ios` and `app-ios-beta`
+deployment records. A distribution error fails its own job and record while
+preserving the verified upload's success.
+
+Retry distribution alone by manually running that workflow on `master` with the
+published `ios_artifact_name` and its source `ci_run_id`. This recovery shares
+the app CD lock, retains the source/quality/freshness guards, and verifies Apple's
+exact build through the published IPA. It contains no binary upload step. A
+successful repeated distribution skips all writes; a superseded release also
+skips recovery. This implements
 [issue #1183](https://github.com/bible-on-site/bible-on-site/issues/1183).
 See [Apple's build query](https://developer.apple.com/documentation/appstoreconnectapi/get-v1-builds)
 and [Fastlane's upload/distribution options](https://docs.fastlane.tools/actions/pilot/).
