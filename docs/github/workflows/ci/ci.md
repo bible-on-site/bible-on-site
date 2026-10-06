@@ -95,3 +95,26 @@ release_new_module:
 ```
 
 **Affected Jobs:** `release_website`, `release_api`, `release_app`
+
+### Draft release lookup and recovery
+
+GitHub's release-by-tag endpoint returns published releases. For an interrupted
+draft, use the authenticated, paginated release listing to find the exact tag;
+authorization and transport failures must stop recovery. After the release action
+uploads assets, use its numeric release ID to read and publish that draft only
+after local files match every expected uploaded asset's size and digest.
+
+Rerunning the same source resumes its draft. A published release retains its
+original artifacts, source CI run and attempt. A different source using that
+version must take the normal collision bump; never move its tag or overwrite its
+published assets.
+
+If an older workflow still uses the published-only endpoint and cannot resume its
+draft, verify the original passing source quality, tag/source/attempt metadata,
+Actions archive IDs and hashes, and all release asset bytes before publishing by
+ID. Then rerun only the failed release jobs: their published-release path replays
+the original payload and lets the normal CD guards and queued master version
+publisher finish recovery.
+
+See [GitHub's release API](https://docs.github.com/en/rest/releases/releases) and
+validate changes with `npm run test:version` in `devops`.
