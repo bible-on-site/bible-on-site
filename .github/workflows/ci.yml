@@ -2286,7 +2286,7 @@ jobs:
           files: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
           disable_search: true
           flags: website
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
       - name: Restore API Coverage Report
         uses: actions/download-artifact@v8
@@ -2301,7 +2301,7 @@ jobs:
           files: ${{ env.API_COVERAGE_REPORT }}
           disable_search: true
           flags: api
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
       - name: Restore App Coverage Report
         uses: actions/download-artifact@v8
@@ -2316,7 +2316,7 @@ jobs:
           files: ${{ env.APP_COVERAGE_REPORT }}
           disable_search: true
           flags: app
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
       - name: Restore Bulletin Coverage Report
         uses: actions/download-artifact@v8
@@ -2361,7 +2361,7 @@ jobs:
           files: ${{ env.DATA_COVERAGE_REPORT }}
           disable_search: true
           flags: data
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
       - name: Restore lcov Docker image
         uses: actions/download-artifact@v8
@@ -2412,8 +2412,11 @@ jobs:
       - name: Verify Coverage 3rd Party Reporting
         run: |
           # Check Codecov ci_passed via API. Accepts: true (pass), false (fail),
-          # or null after retries (no coverage uploaded = nothing to fail).
+          # or unresolved after retries (warn + proceed on outage/slow
+          # processing; fail when Codecov processed and still has no report —
+          # that means the uploads never landed).
             MAX_RETRIES=6
+            API_REACHED=0
             RETRY_COUNT=0
             SLEEP_SECONDS=15
             OWNER_REPO=(${GITHUB_REPOSITORY/\// })
@@ -2425,11 +2428,21 @@ jobs:
             echo "Checking Codecov for commit: $COMMIT_SHA"
             CODECOV_URL="https://api.codecov.io/api/v2/github/${OWNER_REPO[0]}/repos/${OWNER_REPO[1]}/commits/$COMMIT_SHA"
             while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-              HTTP_CODE=$(curl -s -o /tmp/codecov_response.json -w "%{http_code}" -H "Authorization: token ${{ secrets.CODECOV_API_TOKEN }}" "$CODECOV_URL")
-              CODECOV_JSON=$(cat /tmp/codecov_response.json)
+              CODECOV_JSON=""
+              CI_PASSED="null"
+              STATE="null"
+              # A transport failure (DNS/TLS, e.g. a codecov.io certificate
+              # outage) makes curl exit non-zero; run it inside a condition so
+              # the step reaches the retry/warn path instead of dying under -e.
+              if HTTP_CODE=$(curl -s -o /tmp/codecov_response.json -w "%{http_code}" -H "Authorization: token ${{ secrets.CODECOV_API_TOKEN }}" "$CODECOV_URL"); then
+                CODECOV_JSON=$(cat /tmp/codecov_response.json)
+              else
+                HTTP_CODE="000"
+              fi
               if [ "$HTTP_CODE" != "200" ]; then
                 echo "Codecov API returned HTTP $HTTP_CODE (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
               else
+                API_REACHED=1
                 CI_PASSED=$(echo "$CODECOV_JSON" | jq -r 'if .ci_passed == null then "null" else .ci_passed end')
                 STATE=$(echo "$CODECOV_JSON" | jq -r '.state // "null"')
                 echo "Codecov ci_passed=$CI_PASSED state=$STATE (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
@@ -2447,6 +2460,14 @@ jobs:
                 echo "Last response (HTTP $HTTP_CODE): $(echo "$CODECOV_JSON" | jq -c '.')"
                 if [ "$CI_PASSED" = "false" ]; then
                   echo "Codecov explicitly failed"
+                  exit 1
+                fi
+                if [ "$API_REACHED" = "1" ] && [ "$STATE" = "complete" ]; then
+                  # Codecov answered and finished processing, yet has nothing to
+                  # evaluate: the coverage uploads never landed. That is a CI
+                  # problem (lost reports → flag thresholds unenforced), not a
+                  # Codecov outage — fail instead of bypassing the gate.
+                  echo "::error::Codecov processed this commit but has no coverage reports — uploads failed while the service was reachable"
                   exit 1
                 fi
                 echo "::warning::Codecov did not resolve ci_passed — proceeding (not an explicit failure)"
