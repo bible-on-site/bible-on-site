@@ -2392,10 +2392,6 @@ jobs:
         run: |
           npm ci --no-audit
 
-      - name: Verify Local Coverage Thresholds
-        working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        run: npm run coverage:verify-targets
-
       - name: Save npm cache
         if: ${{ github.ref == 'refs/heads/master' && steps.devops-npm-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
@@ -2416,8 +2412,11 @@ jobs:
       - name: Verify Coverage 3rd Party Reporting
         run: |
           # Check Codecov ci_passed via API. Accepts: true (pass), false (fail),
-          # or null after retries (no coverage uploaded = nothing to fail).
+          # or unresolved after retries (warn + proceed on outage/slow
+          # processing; fail when Codecov processed and still has no report —
+          # that means the uploads never landed).
             MAX_RETRIES=6
+            API_REACHED=0
             RETRY_COUNT=0
             SLEEP_SECONDS=15
             OWNER_REPO=(${GITHUB_REPOSITORY/\// })
@@ -2443,6 +2442,7 @@ jobs:
               if [ "$HTTP_CODE" != "200" ]; then
                 echo "Codecov API returned HTTP $HTTP_CODE (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
               else
+                API_REACHED=1
                 CI_PASSED=$(echo "$CODECOV_JSON" | jq -r 'if .ci_passed == null then "null" else .ci_passed end')
                 STATE=$(echo "$CODECOV_JSON" | jq -r '.state // "null"')
                 echo "Codecov ci_passed=$CI_PASSED state=$STATE (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
@@ -2460,6 +2460,14 @@ jobs:
                 echo "Last response (HTTP $HTTP_CODE): $(echo "$CODECOV_JSON" | jq -c '.')"
                 if [ "$CI_PASSED" = "false" ]; then
                   echo "Codecov explicitly failed"
+                  exit 1
+                fi
+                if [ "$API_REACHED" = "1" ] && [ "$STATE" = "complete" ]; then
+                  # Codecov answered and finished processing, yet has nothing to
+                  # evaluate: the coverage uploads never landed. That is a CI
+                  # problem (lost reports → flag thresholds unenforced), not a
+                  # Codecov outage — fail instead of bypassing the gate.
+                  echo "::error::Codecov processed this commit but has no coverage reports — uploads failed while the service was reachable"
                   exit 1
                 fi
                 echo "::warning::Codecov did not resolve ci_passed — proceeding (not an explicit failure)"

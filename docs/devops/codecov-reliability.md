@@ -48,24 +48,38 @@ Cost/complexity is disproportionate for a project of this size. **Rejected.**
 ## Option B — Keep Codecov SaaS, decouple uploads from merge gating
 
 Coverage uploads are telemetry: a failed upload does not indicate a product
-defect. The quality gate should therefore live where the coverage data already
-exists — the local lcov reports — rather than in the upload's delivery.
+defect. The risk of making them non-fatal is that a *lost* upload silently
+removes the flag-threshold gate — so the verify poll must distinguish "Codecov
+is down/slow" from "Codecov answered and finished processing yet has no
+report".
 
 Concrete changes:
 
 1. Set `fail_ci_if_error: false` on the four coverage uploads
    (website, api, app, data) so an outage produces warnings instead of a
    blocked merge.
-2. Add a `Verify Local Coverage Thresholds` step
-   (`devops/verify-coverage-thresholds.mts`) that parses the per-flag targets
-   from `codecov.yml` and enforces them against the local lcov reports —
-   keeping threshold enforcement even when an upload never reaches Codecov.
-3. Harden the `ci_passed` verify poll so a `curl` transport failure is treated
-   like any other non-200 response and reaches the retry/warn-and-proceed path
-   instead of failing the step under `bash -e`.
+2. Harden the `ci_passed` verify poll:
+   - A `curl` transport failure (DNS/TLS) is treated like any other non-200
+     response and reaches the retry/warn path instead of failing the step
+     under `bash -e`.
+   - When the API responds 200 with `state=complete` but `ci_passed` never
+     resolves, the reports never landed — Codecov processed the commit and
+     found nothing to evaluate. That is a CI-side failure (uploads lost while
+     the service was reachable → flag thresholds unenforced), so the step
+     fails rather than bypassing the gate.
+   - Unresolved while the API never answered, or while reports are still
+     processing (`state` not `complete`), keeps the warn-and-proceed path:
+     a Codecov outage or backlog must not block merges.
+
+A local lcov threshold check was considered for (2) and rejected: Codecov's
+coverage metric (lines + branches, verified against uploaded reports) does not
+match raw `LH/LF`, so a local reimplementation fails flags Codecov passes and
+vice versa. Enforcing codecov.yml targets belongs to Codecov's own evaluation;
+the local step only needs to detect that the evaluation never ran.
 
 This matches the issue's "make Codecov check non-blocking" alternative while
-keeping coverage enforcement active under all conditions. **Recommended.**
+keeping coverage enforcement active whenever Codecov is reachable.
+**Recommended.**
 
 ## Option C — Replace Codecov gating with Codacy or in-CI checks
 
@@ -80,7 +94,7 @@ degrades further.
 ## Decision
 
 Implement **Option B** in this PR: uploads become best-effort
-(`fail_ci_if_error: false`), flag thresholds are enforced locally against the
-lcov reports, and the `ci_passed` verify poll survives transport failures.
-Self-hosting stays available as a contingency if Codecov SaaS becomes
-persistently unreliable or shut down.
+(`fail_ci_if_error: false`), and the `ci_passed` verify poll survives transport
+failures and still fails when Codecov is reachable but the uploads were lost
+(`state=complete` with unresolved `ci_passed`). Self-hosting stays available as
+a contingency if Codecov SaaS becomes persistently unreliable or shut down.
