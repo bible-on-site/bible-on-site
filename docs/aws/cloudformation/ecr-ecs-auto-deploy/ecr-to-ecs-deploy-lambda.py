@@ -63,7 +63,7 @@ def handler(event, context):
 
     # ─── 2. Temporarily scale up if running a single task ────────────────
     if needs_scale_up:
-        print(f"Scaling {service_name} to desiredCount=2 for zero-downtime deploy")
+        print(f"Proposed scale-up of {service_name} to desiredCount=2")
         ecs.update_service(
             cluster=cluster_name,
             service=service_name,
@@ -82,7 +82,7 @@ def handler(event, context):
     # ─── 3. Wait for the new deployment to have a running task ───────────
     if needs_scale_up:
         deadline = time.time() + STABILISE_TIMEOUT
-        new_task_healthy = False
+        new_task_running = False
 
         while time.time() < deadline:
             time.sleep(POLL_INTERVAL)
@@ -98,11 +98,11 @@ def handler(event, context):
 
             # This count alone does not establish readiness or public availability.
             if running >= 2:
-                new_task_healthy = True
+                new_task_running = True
                 print("New task is running — scaling back down")
                 break
 
-        if not new_task_healthy:
+        if not new_task_running:
             print(
                 f"⚠️ Timed out after {STABILISE_TIMEOUT}s waiting for new task. "
                 f"Scaling back to {original_desired} anyway to avoid cost."
@@ -118,5 +118,5 @@ def handler(event, context):
 
     return {
         "statusCode": 200,
-        "body": f"Zero-downtime deployment completed for {service_name}",
+        "body": f"Proposal sequence completed for {service_name}; availability unverified",
     }
