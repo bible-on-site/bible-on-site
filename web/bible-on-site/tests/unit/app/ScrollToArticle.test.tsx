@@ -20,9 +20,9 @@ describe("ScrollToSlug", () => {
 
 	function stubTarget(id = "article-view") {
 		const scrollIntoView = jest.fn();
-		document.body.innerHTML = `<div id="${id}"></div>`;
-		const el = document.getElementById(id);
-		if (!el) throw new Error("target element missing");
+		const el = document.createElement("div");
+		el.id = id;
+		document.body.appendChild(el);
 		el.scrollIntoView = scrollIntoView;
 		return scrollIntoView;
 	}
@@ -41,6 +41,7 @@ describe("ScrollToSlug", () => {
 	});
 
 	it("does nothing when the target element is missing", () => {
+		document.body.innerHTML = "";
 		render(<ScrollToSlug targetId="missing" />);
 		expect(() => {
 			act(() => {
