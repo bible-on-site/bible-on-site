@@ -980,12 +980,17 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
+          # Release-profile cache shared with admin_ci; data_ci keeps its own
+          # key because its coverage builds produce debug-profile artifacts.
+          shared-key: "e2e-release-crates"
 
-      # Build only the seeder used by the E2E launcher, not every data pipeline.
-      # This prevents timeout when launcher runs cargo make mysql-populate
+      # Build only the seeders used by the E2E launchers, not every data
+      # pipeline. Both shared-key consumers must build the same crate set:
+      # rust-cache never overwrites an existing key, so whichever job saves
+      # first must persist the full artifact set (db-populator + s3-populator).
       - name: Pre-build data crate for E2E tests
         working-directory: ${{ env.DATA_DIRECTORY }}
-        run: cargo build --release -p db-populator
+        run: cargo build --release -p db-populator -p s3-populator
 
       # The E2E launcher populates MySQL once before starting next dev. Restore
       # its SQL input here, preferring this run's generated data over the baseline.
@@ -1185,6 +1190,8 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
+          # Same release-profile populator cache as website_ci.
+          shared-key: "e2e-release-crates"
 
       # Build only the two seeders used by the E2E launcher.
       # This prevents timeout when the E2E launcher runs cargo make mysql-populate and s3-populate-test
