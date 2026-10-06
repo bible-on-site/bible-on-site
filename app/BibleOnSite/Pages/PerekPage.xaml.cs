@@ -67,6 +67,7 @@ public partial class PerekPage : ContentPage
         SetupFontSizeResources();
         SetupCarouselNavigation();
         SetupExitButtonDragHandler();
+        AppLinkHelper.PerekRequested += OnAppLinkPerekRequested;
         Console.WriteLine("[Startup] PerekPage constructed");
     }
 
@@ -82,6 +83,7 @@ public partial class PerekPage : ContentPage
         SetupFontSizeResources();
         SetupCarouselNavigation();
         SetupExitButtonDragHandler();
+        AppLinkHelper.PerekRequested += OnAppLinkPerekRequested;
     }
 
     /// <summary>
@@ -447,8 +449,39 @@ public partial class PerekPage : ContentPage
         }
     }
 
+    /// <summary>
+    /// An app link that arrived while the reader was open (warm link), or while
+    /// a flyout page was on top. Pops back to the reader and jumps to the perek.
+    /// </summary>
+    private void OnAppLinkPerekRequested(object? sender, int perekId)
+    {
+        _ = Dispatcher.DispatchAsync(async () =>
+        {
+            // Wait out an in-flight initial load so the deep link isn't overwritten.
+            for (var i = 0; i < 100 && _isLoading; i++)
+            {
+                await Task.Delay(100);
+            }
+            AppLinkHelper.PendingPerekId = null;
+            var shell = Shell.Current;
+            if (shell != null &&
+                !shell.CurrentState.Location.OriginalString.EndsWith(AppRoutes.Perek, StringComparison.Ordinal))
+            {
+                await shell.GoToAsync(AppRoutes.FlyoutPage(AppRoutes.Perek));
+            }
+            await _viewModel.NavigateToPerekAsync(perekId);
+        });
+    }
+
     private static int GetInitialPerekId()
     {
+        // A perek link that opened the app (cold start) wins over preferences.
+        if (AppLinkHelper.PendingPerekId is int pendingPerekId)
+        {
+            AppLinkHelper.PendingPerekId = null;
+            return pendingPerekId;
+        }
+
         var prefs = PreferencesService.Instance;
         if (prefs.PerekToLoad == PerekToLoad.Todays)
         {
