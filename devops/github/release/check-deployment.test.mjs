@@ -177,6 +177,7 @@ for (const file of [
 	"cd-app.yml",
 	"cd-bulletin.yml",
 	"cd-data.yml",
+	"testflight-distribution.yml",
 ]) {
 	test(`${file} queues dispatches and gates every production step`, () => {
 		const workflow = readFileSync(
@@ -189,8 +190,10 @@ for (const file of [
 			if (
 				[
 					"Checkout deployment automation",
+					"Setup Node",
 					"Check deployment source and freshness",
 					"Record deployment result",
+					"Record distribution result",
 				].includes(name)
 			)
 				continue;
@@ -212,7 +215,12 @@ test("unverified source CI cannot write to production", () => {
 	);
 });
 
-for (const file of ["cd-aws.yml", "cd-bulletin.yml", "cd-app.yml"]) {
+for (const file of [
+	"cd-aws.yml",
+	"cd-bulletin.yml",
+	"cd-app.yml",
+	"testflight-distribution.yml",
+]) {
 	test(`${file} deploys published binaries instead of mutable rerun artifacts`, () => {
 		const workflow = readFileSync(
 			new URL(`../../../.github/workflows/${file}`, import.meta.url),
