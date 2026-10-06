@@ -11,10 +11,22 @@ public class AppLinkHelperTests
     [InlineData("https://www.929.org.il/929/123/איוב-כג", 123)]
     [InlineData("https://www.929.org.il/929/123?pasuk=5", 123)]
     [InlineData("https://www.929.org.il/929/123#footer", 123)]
-    public void TryParsePerekId_ValidPerekUrl_ReturnsPerekId(string url, int expected)
+    public void TryParse_ValidPerekUrl_ReturnsPerekId(string url, int expected)
     {
-        AppLinkHelper.TryParsePerekId(url, out var perekId).Should().BeTrue();
-        perekId.Should().Be(expected);
+        AppLinkHelper.TryParse(url, out var target).Should().BeTrue();
+        target.PerekId.Should().Be(expected);
+        target.ArticleId.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("https://xn--febl3a.co.il/929/123/456", 123, 456)]
+    [InlineData("https://xn--febl3a.co.il/929/123/456?pasuk=5", 123, 456)]
+    public void TryParse_ArticleUrl_ReturnsPerekAndArticle(
+        string url, int expectedPerek, int expectedArticle)
+    {
+        AppLinkHelper.TryParse(url, out var target).Should().BeTrue();
+        target.PerekId.Should().Be(expectedPerek);
+        target.ArticleId.Should().Be(expectedArticle);
     }
 
     [Theory]
@@ -32,28 +44,29 @@ public class AppLinkHelperTests
     [InlineData("https://www.929.org.il/929/abc")]
     [InlineData("https://www.929.org.il/930/1")]
     [InlineData("https://www.929.org.il/pedia/929/5")]
-    public void TryParsePerekId_NotAPerekUrl_ReturnsFalse(string? url)
+    public void TryParse_NotAPerekUrl_ReturnsFalse(string? url)
     {
-        AppLinkHelper.TryParsePerekId(url, out var perekId).Should().BeFalse();
-        perekId.Should().Be(0);
+        AppLinkHelper.TryParse(url, out var target).Should().BeFalse();
+        target.PerekId.Should().Be(0);
+        target.ArticleId.Should().BeNull();
     }
 
     [Fact]
-    public void RequestPerek_StoresPendingIdAndRaisesEvent()
+    public void Request_StoresPendingTargetAndRaisesEvent()
     {
-        int? raised = null;
-        EventHandler<int> handler = (_, id) => raised = id;
-        AppLinkHelper.PerekRequested += handler;
+        AppLinkHelper.AppLinkTarget? raised = null;
+        EventHandler<AppLinkHelper.AppLinkTarget> handler = (_, target) => raised = target;
+        AppLinkHelper.TargetRequested += handler;
         try
         {
-            AppLinkHelper.RequestPerek(55);
-            AppLinkHelper.PendingPerekId.Should().Be(55);
-            raised.Should().Be(55);
+            AppLinkHelper.Request(new AppLinkHelper.AppLinkTarget(55, 7));
+            AppLinkHelper.PendingTarget.Should().Be(new AppLinkHelper.AppLinkTarget(55, 7));
+            raised.Should().Be(new AppLinkHelper.AppLinkTarget(55, 7));
         }
         finally
         {
-            AppLinkHelper.PerekRequested -= handler;
-            AppLinkHelper.PendingPerekId = null;
+            AppLinkHelper.TargetRequested -= handler;
+            AppLinkHelper.PendingTarget = null;
         }
     }
 }

@@ -9,17 +9,12 @@ namespace BibleOnSite;
 
 [Activity(Theme = "@style/Maui.SplashTheme", MainLauncher = true, LaunchMode = LaunchMode.SingleTop, Exported = true, ConfigurationChanges = ConfigChanges.ScreenSize | ConfigChanges.Orientation | ConfigChanges.UiMode | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.Density)]
 // Android App Links: verified https links to perek pages on the website open
-// directly in the app (both the Hebrew IDN domain and 929.org.il serve the
-// same site). Verification uses /.well-known/assetlinks.json on each host.
+// directly in the app. Only the Hebrew IDN domain is claimed — 929.org.il
+// is a Cloudflare redirect to it and cannot host /.well-known/assetlinks.json,
+// so those filters could never verify on Android 12+.
 [IntentFilter(new[] { Intent.ActionView }, AutoVerify = true,
     Categories = new[] { Intent.CategoryDefault, Intent.CategoryBrowsable },
     DataScheme = "https", DataHost = "xn--febl3a.co.il", DataPathPrefix = "/929")]
-[IntentFilter(new[] { Intent.ActionView }, AutoVerify = true,
-    Categories = new[] { Intent.CategoryDefault, Intent.CategoryBrowsable },
-    DataScheme = "https", DataHost = "929.org.il", DataPathPrefix = "/929")]
-[IntentFilter(new[] { Intent.ActionView }, AutoVerify = true,
-    Categories = new[] { Intent.CategoryDefault, Intent.CategoryBrowsable },
-    DataScheme = "https", DataHost = "www.929.org.il", DataPathPrefix = "/929")]
 public class MainActivity : MauiAppCompatActivity
 {
     protected override void OnCreate(Bundle? savedInstanceState)
@@ -43,9 +38,9 @@ public class MainActivity : MauiAppCompatActivity
         {
             return;
         }
-        if (AppLinkHelper.TryParsePerekId(intent.Data?.ToString(), out var perekId))
+        if (AppLinkHelper.TryParse(intent.Data?.ToString(), out var target))
         {
-            AppLinkHelper.RequestPerek(perekId);
+            AppLinkHelper.Request(target);
         }
     }
 

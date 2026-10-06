@@ -1,33 +1,37 @@
 namespace BibleOnSite.Helpers;
 
 /// <summary>
-/// Parses Android app links (website URLs) and carries the requested perek to
+/// Parses Android app links (website URLs) and carries the requested target to
 /// the reader page. The platform activity records links before the app shell
-/// exists; PerekPage consumes the pending id during its initial load, or the
-/// raised event drives navigation when the app is already running.
+/// exists; PerekPage consumes the pending target during its initial load, or
+/// the raised event drives navigation when the app is already running.
 /// </summary>
 public static class AppLinkHelper
 {
-    /// <summary>Website path for a perek is /929/{perekId}.</summary>
+    /// <summary>Website path prefix for perek/article pages is /929/.</summary>
     private const string PerekSection = "929";
 
+    /// <summary>A website link target: a perek, optionally with an article.</summary>
+    public readonly record struct AppLinkTarget(int PerekId, int? ArticleId);
+
     /// <summary>
-    /// Perek requested by an app link that arrived before the reader page
-    /// loaded. Consumed (cleared) by <see cref="Pages.PerekPage"/>.
+    /// Link target that arrived before the reader page loaded. Consumed
+    /// (cleared) by <see cref="Pages.PerekPage"/>.
     /// </summary>
-    public static int? PendingPerekId { get; set; }
+    public static AppLinkTarget? PendingTarget { get; set; }
 
     /// <summary>Raised when an app link arrives while the app is running.</summary>
-    public static event EventHandler<int>? PerekRequested;
+    public static event EventHandler<AppLinkTarget>? TargetRequested;
 
     /// <summary>
-    /// Parses a website perek URL such as https://www.929.org.il/929/123 or
-    /// https://xn--febl3a.co.il/929/123/slug into its perek id (1-929).
+    /// Parses a website URL such as https://xn--febl3a.co.il/929/123 or
+    /// https://xn--febl3a.co.il/929/123/456 into its target. The second
+    /// numeric segment is an article id on the website's article route.
     /// Host is not validated — Android already filters by intent-filter host.
     /// </summary>
-    public static bool TryParsePerekId(string? url, out int perekId)
+    public static bool TryParse(string? url, out AppLinkTarget target)
     {
-        perekId = 0;
+        target = default;
         if (string.IsNullOrWhiteSpace(url) ||
             !Uri.TryCreate(url, UriKind.Absolute, out var uri))
         {
@@ -39,19 +43,25 @@ public static class AppLinkHelper
         {
             return false;
         }
-        if (!int.TryParse(segments[1], out var parsed) || parsed is < 1 or > 929)
+        if (!int.TryParse(segments[1], out var perekId) || perekId is < 1 or > 929)
         {
             return false;
         }
 
-        perekId = parsed;
+        int? articleId = null;
+        if (segments.Length > 2 && int.TryParse(segments[2], out var article) && article > 0)
+        {
+            articleId = article;
+        }
+
+        target = new AppLinkTarget(perekId, articleId);
         return true;
     }
 
-    /// <summary>Stores the requested perek and notifies any running reader.</summary>
-    public static void RequestPerek(int perekId)
+    /// <summary>Stores the requested target and notifies any running reader.</summary>
+    public static void Request(AppLinkTarget target)
     {
-        PendingPerekId = perekId;
-        PerekRequested?.Invoke(null, perekId);
+        PendingTarget = target;
+        TargetRequested?.Invoke(null, target);
     }
 }
