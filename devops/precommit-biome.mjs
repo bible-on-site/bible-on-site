@@ -48,7 +48,12 @@ for (const dir of MODULES) {
 		: spawnSync( // nosemgrep — hook-env fallback binary (pre-commit.ci)
 				"biome",
 				["lint", ...moduleFiles],
-				{ cwd: resolve(dir), stdio: "inherit" },
+				{
+					cwd: resolve(dir),
+					stdio: "inherit",
+					// Windows can't exec the env's biome.cmd shim without a shell.
+					shell: process.platform === "win32",
+				},
 			);
 	if (result.status !== 0) failed = true;
 }
