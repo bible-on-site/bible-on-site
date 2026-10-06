@@ -25,9 +25,9 @@ public static class AppLinkHelper
 
     /// <summary>
     /// Parses a website URL such as https://xn--febl3a.co.il/929/123 or
-    /// https://xn--febl3a.co.il/929/123/456 into its target. The second
+    /// https://xn--febl3a.com/929/123/456 into its target. The second
     /// numeric segment is an article id on the website's article route.
-    /// Host is not validated — Android already filters by intent-filter host.
+    /// Host is not validated — Android already filters by intent-filter hosts.
     /// </summary>
     public static bool TryParse(string? url, out AppLinkTarget target)
     {

@@ -9,12 +9,14 @@ namespace BibleOnSite;
 
 [Activity(Theme = "@style/Maui.SplashTheme", MainLauncher = true, LaunchMode = LaunchMode.SingleTop, Exported = true, ConfigurationChanges = ConfigChanges.ScreenSize | ConfigChanges.Orientation | ConfigChanges.UiMode | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.Density)]
 // Android App Links: verified https links to perek pages on the website open
-// directly in the app. Only the Hebrew IDN domain is claimed — 929.org.il
-// is a Cloudflare redirect to it and cannot host /.well-known/assetlinks.json,
-// so those filters could never verify on Android 12+.
+// directly in the app. Both Hebrew IDN domains are claimed (תנך.co.il and
+// תנך.com serve the site and host /.well-known/assetlinks.json). 929.org.il
+// is a Cloudflare redirect and cannot host assetlinks.json, so it stays
+// unclaimed — filters for it could never verify on Android 12+.
 [IntentFilter(new[] { Intent.ActionView }, AutoVerify = true,
     Categories = new[] { Intent.CategoryDefault, Intent.CategoryBrowsable },
-    DataScheme = "https", DataHost = "xn--febl3a.co.il", DataPathPrefix = "/929")]
+    DataScheme = "https", DataHosts = new[] { "xn--febl3a.co.il", "xn--febl3a.com" },
+    DataPathPrefix = "/929")]
 public class MainActivity : MauiAppCompatActivity
 {
     protected override void OnCreate(Bundle? savedInstanceState)
