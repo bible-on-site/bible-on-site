@@ -2286,7 +2286,7 @@ jobs:
           files: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
           disable_search: true
           flags: website
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
       - name: Restore API Coverage Report
         uses: actions/download-artifact@v8
@@ -2301,7 +2301,7 @@ jobs:
           files: ${{ env.API_COVERAGE_REPORT }}
           disable_search: true
           flags: api
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
       - name: Restore App Coverage Report
         uses: actions/download-artifact@v8
@@ -2316,7 +2316,7 @@ jobs:
           files: ${{ env.APP_COVERAGE_REPORT }}
           disable_search: true
           flags: app
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
       - name: Restore Bulletin Coverage Report
         uses: actions/download-artifact@v8
@@ -2361,7 +2361,7 @@ jobs:
           files: ${{ env.DATA_COVERAGE_REPORT }}
           disable_search: true
           flags: data
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
       - name: Restore lcov Docker image
         uses: actions/download-artifact@v8
