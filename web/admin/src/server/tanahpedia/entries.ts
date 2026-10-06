@@ -5,8 +5,10 @@ import {
 	ENTITY_TYPES,
 	type EntityType,
 } from "~/lib/tanahpedia/labels";
+import type { EntryRevisionRow } from "~/lib/tanahpedia/revisions-shared";
 import { loadTanahpediaEntryById } from "./entry-loader.server";
-import { execute, query, queryOne } from "../db";
+import { saveEntryRevisioned } from "./revisions";
+import { execute, query, queryOne, transaction, txExecute, txQueryOne } from "../db";
 
 const ANIMAL_KIND_KEYS = ["BEHEMA", "CHAYA", "OF", "SHERETZ"] as const;
 const ANIMAL_PURITY_KEYS = ["TAHOR", "TAMEH"] as const;
@@ -217,7 +219,14 @@ export const getEntry = createServerFn({ method: "GET" })
 	.handler(async ({ data: id }) => {
 		const entry = await loadTanahpediaEntryById(id);
 		if (!entry) throw new Error("Entry not found");
-		return entry;
+		const head = await queryOne<Pick<EntryRevisionRow, "id">>(
+			`SELECT id FROM tanahpedia_entry_revision
+			 WHERE entry_id = ? AND status = 'APPLIED'
+			 ORDER BY created_at DESC, id DESC
+			 LIMIT 1`,
+			[id],
+		);
+		return { ...entry, currentRevisionId: head?.id ?? null };
 	});
 
 export const createEntry = createServerFn({ method: "POST" })
@@ -227,17 +236,42 @@ export const createEntry = createServerFn({ method: "POST" })
 			unique_name: string;
 			title: string;
 			content: string;
+			source?: string;
+			notes?: string | null;
 		}) => data,
 	)
 	.handler(async ({ data }) => {
-		await execute(
-			"INSERT INTO tanahpedia_entry (id, unique_name, title, content) VALUES (?, ?, ?, ?)",
-			[data.id, data.unique_name, data.title, data.content || null],
-		);
-		return await queryOne<TanahpediaEntry>(
-			"SELECT id, unique_name, title, content, created_at, updated_at FROM tanahpedia_entry WHERE id = ?",
-			[data.id],
-		);
+		return await transaction(async (conn) => {
+			await txExecute(
+				conn,
+				"INSERT INTO tanahpedia_entry (id, unique_name, title, content) VALUES (?, ?, ?, ?)",
+				[data.id, data.unique_name, data.title, data.content || null],
+			);
+			const headId = crypto.randomUUID();
+			await txExecute(
+				conn,
+				`INSERT INTO tanahpedia_entry_revision
+				 (id, entry_id, proposed_unique_name, proposed_title, proposed_content,
+				  source, notes, status, base_revision_id)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, 'APPLIED', NULL)`,
+				[
+					headId,
+					data.id,
+					data.unique_name,
+					data.title,
+					data.content || null,
+					data.source?.trim() || "admin",
+					data.notes?.trim() || null,
+				],
+			);
+			const entry = await txQueryOne<TanahpediaEntry>(
+				conn,
+				"SELECT id, unique_name, title, content, created_at, updated_at FROM tanahpedia_entry WHERE id = ?",
+				[data.id],
+			);
+			if (!entry) throw new Error("Entry not found");
+			return { ...entry, headRevisionId: headId };
+		});
 	});
 
 export const updateEntry = createServerFn({ method: "POST" })
@@ -247,17 +281,16 @@ export const updateEntry = createServerFn({ method: "POST" })
 			unique_name: string;
 			title: string;
 			content: string;
+			baseRevisionId?: string | null;
+			source?: string;
+			notes?: string | null;
 		}) => data,
 	)
 	.handler(async ({ data }) => {
-		await execute(
-			"UPDATE tanahpedia_entry SET unique_name = ?, title = ?, content = ? WHERE id = ?",
-			[data.unique_name, data.title, data.content || null, data.id],
-		);
-		return await queryOne<TanahpediaEntry>(
-			"SELECT id, unique_name, title, content, created_at, updated_at FROM tanahpedia_entry WHERE id = ?",
-			[data.id],
-		);
+		return await transaction(async (conn) => {
+			const { entry, headRevisionId } = await saveEntryRevisioned(conn, data);
+			return { ...entry, headRevisionId };
+		});
 	});
 
 export const deleteEntry = createServerFn({ method: "POST" })

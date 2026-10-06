@@ -7,7 +7,7 @@ applyTo: "**"
 
 ## Pre-commit
 
-Config `.pre-commit-config.yaml`; venv `devops/.venv/`; tool config `devops/pyproject.toml`; Husky runs it via `.husky/pre-commit`. When adding a hook, also update `docs/devops/pre-commit.md`.
+Config `.pre-commit-config.yaml`; venv `devops/.venv/`; tool config `devops/pyproject.toml`. pre-commit installs the git hooks directly (`pre-commit install --hook-type pre-commit --hook-type post-commit`, run by `devops/setup-dev-env.mts`). When adding a hook, also update `docs/devops/pre-commit.md`.
 
 ## Task Boundary Workdir Gate
 

@@ -1,8 +1,9 @@
 FROM alpine:3.24
 
 
-# Install lcov and its dependencies
-RUN apk add --no-cache --repository http://dl-cdn.alpinelinux.org/alpine/edge/community lcov
+# Install lcov and its dependencies (the alpine:3.24 base image's default
+# repositories already include v3.24/community)
+RUN apk add --no-cache lcov~=2
 
 # Set working directory
 WORKDIR /.coverage

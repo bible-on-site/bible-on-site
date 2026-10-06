@@ -38,12 +38,15 @@ mutation Submit($input: SubmitEntryRevisionInput!) {
 | `proposedContent`    | `String` | Proposed entry body (HTML).                                            |
 | `source`             | `String!`| **Required.** External AI client / model id (e.g. `"gpt-4o"`).         |
 | `notes`              | `String` | AI rationale / notes for the human editor.                             |
+| `baseRevisionId`     | `String` | The APPLIED head revision this proposal was authored against.           |
 
 Validation (server-side):
 
 - `source` must be non-blank.
 - At least one of `proposedUniqueName` / `proposedTitle` / `proposedContent` must be present.
 - When `entryId` is supplied it must reference an existing entry, otherwise `NOT_FOUND`.
+- When `baseRevisionId` is supplied it must reference a revision of the same entry,
+  otherwise `BAD_REQUEST`. It may only be set when `entryId` is set.
 
 ## Mutation — apply a revision
 
@@ -68,6 +71,17 @@ mutation Apply($id: String!) {
   is linked back to the new entry.
 - Re-applying an already-`APPLIED` revision is rejected (`BAD_REQUEST`); a missing revision
   or a deleted target entry returns `NOT_FOUND`.
+- When the revision declares `baseRevisionId`, applying while the entry's APPLIED head has
+  moved elsewhere is rejected (`BAD_REQUEST`, stale base) — fetch the current head and
+  re-submit the proposal to retry. On a successful apply the revision's stored
+  `baseRevisionId` is stamped with the head it displaced.
+
+## Wiki-style history
+
+Every applied change — admin save, LLM-assistant apply, or an applied external revision —
+is an immutable `APPLIED` full-snapshot row. The entry's latest `APPLIED` revision is its
+head; the admin editor sends it as the save's base so concurrent editors are rejected
+rather than silently overwriting, and restores are themselves new `APPLIED` revisions.
 
 ## Query — triage queue (Admin / internal)
 
