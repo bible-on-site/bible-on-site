@@ -11,7 +11,7 @@ pub struct TanahpediaRevisionsQuery;
 #[Object]
 impl TanahpediaRevisionsQuery {
     /// List Tanahpedia entry revisions (newest first) for human triage,
-    /// optionally filtered by `status` (PENDING / APPROVED / REJECTED) and/or the
+    /// optionally filtered by `status` (PENDING / APPLIED / REJECTED) and/or the
     /// targeted `entryId`.
     async fn tanahpedia_entry_revisions(
         &self,
@@ -62,7 +62,9 @@ impl TanahpediaRevisionsMutation {
     /// Requires the same `Authorization: Bearer <TANAHPEDIA_REVISION_API_KEY>`
     /// header as submission. The revision row is retained as the change's audit
     /// record and marked `APPLIED`. When the revision has no `entryId` a new
-    /// entry is created and linked back to the revision.
+    /// entry is created and linked back to the revision. When the revision
+    /// declares `baseRevisionId`, applying while the entry's APPLIED head has
+    /// moved elsewhere is rejected as a stale base.
     async fn apply_entry_revision(&self, ctx: &Context<'_>, id: String) -> Result<EntryRevision> {
         ctx.data::<ApiAuth>()?
             .authorize_revision_manager()
