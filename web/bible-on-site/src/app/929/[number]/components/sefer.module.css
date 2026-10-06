@@ -10,6 +10,12 @@
   position: relative;
 }
 
+/* Keep React's unfinished page slots unpainted until FlipBook has applied
+   dimensions. Visibility preserves the geometry needed for initialization. */
+.bookArea > :global(.he-book:not(.flipbook)) {
+  visibility: hidden;
+}
+
 .page {
   background-color: white;
   padding: 15px;

@@ -29,8 +29,8 @@ jest.mock("@/app/components/Bookshelf/bookshelf.module.scss", () => ({
 }));
 
 // Minimal sefarim covering all helek groups (Torah, Neviim Rishonim, Trei Asar, Ketuvim)
-jest.mock("@/data/db/sefarim", () => ({
-	sefarim: [
+jest.mock("@/data/db/client-catalog.generated.json", () => ({
+	books: [
 		{ name: "בראשית", helek: "תורה", perekFrom: 1, perekTo: 50 },
 		{ name: "שמות", helek: "תורה", perekFrom: 51, perekTo: 90 },
 		{ name: "יהושע", helek: "נביאים", perekFrom: 91, perekTo: 120 },
@@ -39,7 +39,7 @@ jest.mock("@/data/db/sefarim", () => ({
 	],
 }));
 
-jest.mock("@/data/perek-dto", () => ({
+jest.mock("@/data/perek-calendar", () => ({
 	getTodaysPerekId: () => 5, // within בראשית (1-50)
 }));
 

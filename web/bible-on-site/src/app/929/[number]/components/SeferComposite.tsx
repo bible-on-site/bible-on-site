@@ -8,7 +8,6 @@ import {
 	useRef,
 	useState,
 } from "react";
-
 import type { PerekObj } from "@/data/perek-dto";
 import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
 import type { ArticleSummary } from "@/lib/articles";
@@ -29,7 +28,7 @@ import { bookPageFromPath, bookPageFromQuery } from "./sefer-page-utils";
 // chunk is fetched asynchronously, which keeps the interaction-to-next-paint
 // well below 200 ms because the browser only needs to paint the light
 // overlay — not mount the entire FlipBook tree — in the same frame.
-const Sefer = dynamic(() => import("./Sefer"), {
+const Sefer = dynamic(() => import("./LoadedSefer"), {
 	ssr: false,
 	loading: () => (
 		<output className={styles.loadingContainer} aria-label="טוען תצוגת ספר...">

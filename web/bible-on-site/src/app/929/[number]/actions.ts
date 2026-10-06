@@ -2,10 +2,6 @@
 
 import type { Article, ArticleSummary } from "@/lib/articles";
 import { getArticleById, getArticleSummariesByPerekId } from "@/lib/articles";
-import {
-	getPageRangesDownloadHandler,
-	getSeferDownloadHandler,
-} from "@/lib/download/handlers";
 import type {
 	SeferDownloadContext,
 	SemanticPageInfo,
@@ -94,6 +90,7 @@ export interface DownloadActionError {
 export async function downloadSefer(
 	ctx: SeferDownloadContext,
 ): Promise<DownloadActionResult | DownloadActionError> {
+	const { getSeferDownloadHandler } = await import("@/lib/download/handlers");
 	const handler = getSeferDownloadHandler();
 	if (!handler) {
 		return { error: "not_implemented" };
@@ -117,6 +114,9 @@ export async function downloadPageRanges(
 	semanticPages: SemanticPageInfo[],
 	context?: { seferName?: string },
 ): Promise<DownloadActionResult | DownloadActionError> {
+	const { getPageRangesDownloadHandler } = await import(
+		"@/lib/download/handlers"
+	);
 	const handler = getPageRangesDownloadHandler();
 	if (!handler) {
 		return { error: "not_implemented" };

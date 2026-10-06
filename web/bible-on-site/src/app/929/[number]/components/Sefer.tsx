@@ -38,9 +38,10 @@ import {
 	type PerekSummaries,
 } from "@/app/929/[number]/actions";
 import { BookshelfModal } from "@/app/components/Bookshelf";
+import type { SefarimItem } from "@/data/db/tanah-view-types";
 import type { PerekObj } from "@/data/perek-dto";
 import { getSeferColor } from "@/data/sefer-colors";
-import { getSeferByName } from "@/data/sefer-dto";
+
 import type { ArticleSummary } from "@/lib/articles";
 import type { PerushSummary } from "@/lib/perushim";
 import type { PerekIllustration } from "@/lib/seo/perek-illustrations";
@@ -113,6 +114,7 @@ const FlipBook = dynamic<
 
 const Sefer = (props: {
 	perekObj: PerekObj;
+	sefer: SefarimItem;
 	articles: ArticleSummary[];
 	perushim: PerushSummary[];
 	perekIds?: number[];
@@ -131,7 +133,7 @@ const Sefer = (props: {
 		initialSlug,
 		initialBookPage,
 	} = props;
-	const sefer = getSeferByName(perekObj.sefer);
+	const sefer = props.sefer;
 	const flipBookRef = useRef<FlipBookHandle>(null);
 	const bookWrapperRef = useRef<HTMLDivElement>(null);
 	const seferColor = getSeferColor(perekObj.sefer);
