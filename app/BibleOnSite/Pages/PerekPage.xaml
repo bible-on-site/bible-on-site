@@ -264,6 +264,7 @@
                             <!-- Perek Text - Pasukim List (Row 1) with perushim inline -->
                             <CollectionView Grid.Row="1"
                                             x:Name="PasukimCollection"
+                                            AutomationId="PasukimCollection"
                                             ItemsSource="{Binding Pasukim}"
                                             SelectionMode="None"
                                             Scrolled="OnPasukimScrolled"
@@ -470,6 +471,7 @@
                             <DataTemplate x:DataType="models:Perush">
                                 <Grid Padding="4,2" ColumnDefinitions="Auto,*" x:Name="PerushRow">
                                     <CheckBox Grid.Column="0"
+                                              AutomationId="PerushCheckBox"
                                               VerticalOptions="Center"
                                               Margin="0,0,8,0"
                                               CheckedChanged="OnPerushCheckboxChanged">
@@ -536,6 +538,7 @@
 
                 <!-- Perushim Chevron Button at 8% -->
                 <Button x:Name="PerushimChevronButton"
+                        AutomationId="PerushimChevronButton"
                         Text="{x:Static fonts:FluentUI.chevron_up_24_regular}"
                         FontFamily="FluentIcons"
                         FontSize="20"
