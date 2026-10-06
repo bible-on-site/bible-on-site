@@ -52,8 +52,30 @@ public partial class AppShell : Shell
 		if (Handler?.PlatformView is UIView uiView)
 		{
 			uiView.SemanticContentAttribute = UISemanticContentAttribute.ForceRightToLeft;
+			InstallRightEdgeFlyoutGesture(uiView);
 			HandlerChanged -= OnShellHandlerChanged;
 		}
+	}
+
+	/// <summary>
+	/// MAUI's built-in Shell flyout gesture is bound to the left screen edge even
+	/// under ForceRightToLeft — the drawer slides in from the right but only a
+	/// left-edge swipe opens it. Attach an explicit right-edge recognizer so the
+	/// RTL gesture (right edge toward left) opens the flyout.
+	/// </summary>
+	private void InstallRightEdgeFlyoutGesture(UIView uiView)
+	{
+		var edgePan = new UIScreenEdgePanGestureRecognizer(() =>
+		{
+			if (!FlyoutIsPresented)
+			{
+				FlyoutIsPresented = true;
+			}
+		})
+		{
+			Edges = UIRectEdge.Right,
+		};
+		uiView.AddGestureRecognizer(edgePan);
 	}
 #endif
 
