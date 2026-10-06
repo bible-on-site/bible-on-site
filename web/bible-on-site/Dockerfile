@@ -18,8 +18,8 @@ COPY --from=manifests /app/package.json /app/package-lock.json ./
 COPY bible-on-site/.npmrc* ./
 # Install ALL dependencies (including dev like sass) needed for the build step.
 # The final runner stage uses Next.js standalone output, so dev deps don't end up in production.
-# --ignore-scripts: postinstall (copy-local-flip-book.mjs) is for local dev only
-# and the scripts/ directory isn't available in this deps stage.
+# Source-dependent postinstall helpers run outside this dependency-only stage.
+# prebuild derives the browser catalog after the full source is copied.
 RUN npm ci --prefer-offline --ignore-scripts
 
 # Rebuild the source code only when needed

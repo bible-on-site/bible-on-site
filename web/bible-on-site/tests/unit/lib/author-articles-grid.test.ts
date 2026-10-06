@@ -3,14 +3,43 @@ import {
 	DEFAULT_ARTICLE_SORT,
 	distinctSefarim,
 	filterAuthorArticles,
+	normalizeAbstractHtml,
 	sortAuthorArticles,
 } from "../../../src/lib/authors/articles-grid";
 
 const rows: AuthorArticleRow[] = [
-	{ id: 1, perekId: 1, name: "מאמר א", abstract: "על בראשית", sefer: "בראשית", source: "בראשית א" },
-	{ id: 2, perekId: 5, name: "מאמר ב", abstract: null, sefer: "בראשית", source: "בראשית ה" },
-	{ id: 3, perekId: 240, name: "גמח", abstract: "פרק גמח", sefer: "ישעיהו", source: "ישעיהו א" },
-	{ id: 4, perekId: 300, name: "מאמר ד", abstract: "", sefer: "תהילים", source: "תהילים א" },
+	{
+		id: 1,
+		perekId: 1,
+		name: "מאמר א",
+		abstract: "על בראשית",
+		sefer: "בראשית",
+		source: "בראשית א",
+	},
+	{
+		id: 2,
+		perekId: 5,
+		name: "מאמר ב",
+		abstract: null,
+		sefer: "בראשית",
+		source: "בראשית ה",
+	},
+	{
+		id: 3,
+		perekId: 240,
+		name: "גמח",
+		abstract: "פרק גמח",
+		sefer: "ישעיהו",
+		source: "ישעיהו א",
+	},
+	{
+		id: 4,
+		perekId: 300,
+		name: "מאמר ד",
+		abstract: "",
+		sefer: "תהילים",
+		source: "תהילים א",
+	},
 ];
 
 describe("distinctSefarim", () => {
@@ -20,6 +49,20 @@ describe("distinctSefarim", () => {
 
 	it("deduplicates repeated sefarim", () => {
 		expect(distinctSefarim(rows)).toHaveLength(3);
+	});
+});
+
+describe("normalizeAbstractHtml", () => {
+	it("rewrites headings as paragraphs preserving text", () => {
+		const html = '<h1>כותרת</h1><p>תוכן</p><h3 class="x">משנה</h3>';
+		expect(normalizeAbstractHtml(html)).toBe(
+			'<p class="abstractHeading">כותרת</p><p>תוכן</p><p class="abstractHeading">משנה</p>',
+		);
+	});
+
+	it("leaves markup without headings untouched", () => {
+		const html = "<p>פסקה</p><strong>מודגש</strong>";
+		expect(normalizeAbstractHtml(html)).toBe(html);
 	});
 });
 
@@ -41,6 +84,14 @@ describe("filterAuthorArticles", () => {
 	it("searches by abstract", () => {
 		const result = filterAuthorArticles(rows, "גמח", "");
 		expect(result.map((r) => r.id)).toEqual([3]);
+	});
+
+	it("matches visible abstract text but not HTML markup", () => {
+		const htmlRows: AuthorArticleRow[] = [
+			{ ...rows[0], abstract: "<h1>כותרת</h1><p>תוכן הכתבה</p>" },
+		];
+		expect(filterAuthorArticles(htmlRows, "תוכן", "")).toHaveLength(1);
+		expect(filterAuthorArticles(htmlRows, "h1", "")).toHaveLength(0);
 	});
 
 	it("searches by source citation", () => {
@@ -65,18 +116,29 @@ describe("sortAuthorArticles", () => {
 	});
 
 	it("sorts by perek descending", () => {
-		const result = sortAuthorArticles(rows, { key: "perek", direction: "desc" });
+		const result = sortAuthorArticles(rows, {
+			key: "perek",
+			direction: "desc",
+		});
 		expect(result.map((r) => r.perekId)).toEqual([300, 240, 5, 1]);
 	});
 
 	it("sorts by name with Hebrew collation", () => {
 		const result = sortAuthorArticles(rows, { key: "name", direction: "asc" });
-		expect(result.map((r) => r.name)).toEqual(["גמח", "מאמר א", "מאמר ב", "מאמר ד"]);
+		expect(result.map((r) => r.name)).toEqual([
+			"גמח",
+			"מאמר א",
+			"מאמר ב",
+			"מאמר ד",
+		]);
 	});
 
 	it("sorts by sefer in canonical order then perek", () => {
 		const shuffled = [rows[3], rows[2], rows[1], rows[0]];
-		const result = sortAuthorArticles(shuffled, { key: "sefer", direction: "asc" });
+		const result = sortAuthorArticles(shuffled, {
+			key: "sefer",
+			direction: "asc",
+		});
 		expect(result.map((r) => r.id)).toEqual([1, 2, 3, 4]);
 	});
 

@@ -15,16 +15,17 @@ import { test } from "../../../util/playwright/test-fixture";
  * Tests use the skipOnMobile fixture to automatically skip on mobile viewports.
  */
 
-function activePageAngle(page: Page) {
-	return page.evaluate(() => {
+function activePageAngle(page: Page, signed = false) {
+	return page.evaluate((signed) => {
 		const turningPage = Array.from(
 			document.querySelectorAll<HTMLElement>(".he-book .page"),
 		).find((page) => page.style.willChange === "transform");
 		const angle = turningPage?.style.transform.match(
 			/rotateY\((-?[\d.]+)deg\)/,
 		);
-		return angle ? Math.abs(Number(angle[1])) : 0;
-	});
+		const value = angle ? Number(angle[1]) : 0;
+		return signed ? value : Math.abs(value);
+	}, signed);
 }
 
 async function fastMouseSwipe(page: Page, x: number, y: number, delta: number) {
@@ -40,22 +41,36 @@ async function fastMouseSwipe(page: Page, x: number, y: number, delta: number) {
 		buttons: 1,
 		clickCount: 1,
 	});
-	for (let step = 1; step <= 6; step++) {
-		await client.send("Input.dispatchMouseEvent", {
+	// Hammer samples velocity over intervals longer than 25ms. Leave a short
+	// press, then confirm the first move so Chromium cannot coalesce the entire
+	// gesture into a panstart followed by a release, without any panmove.
+	await new Promise((resolve) => setTimeout(resolve, 30));
+	await client.send("Input.dispatchMouseEvent", {
+		type: "mouseMoved",
+		x: x + delta / 6,
+		y,
+		buttons: 1,
+	});
+	// Send the remaining motion together: awaiting every acknowledgement can
+	// turn a fast swipe into a slow drag under load or trace recording.
+	const inputs: Promise<unknown>[] = [];
+	for (let step = 2; step <= 6; step++) {
+		inputs.push(client.send("Input.dispatchMouseEvent", {
 			type: "mouseMoved",
 			x: x + (step * delta) / 6,
 			y,
 			buttons: 1,
-		});
+		}));
 	}
-	await client.send("Input.dispatchMouseEvent", {
+	inputs.push(client.send("Input.dispatchMouseEvent", {
 		type: "mouseReleased",
 		x: x + delta,
 		y,
 		button: "left",
 		buttons: 0,
 		clickCount: 1,
-	});
+	}));
+	await Promise.all(inputs);
 	await client.detach();
 }
 
@@ -488,14 +503,14 @@ test.describe("Sefer view", () => {
 		test("Swiping verse text drags and turns the page", async ({ page }) => {
 			await page.setViewportSize({ width: 1440, height: 900 });
 			const seferPage = new SeferPage(page);
-			await seferPage.openSeferViewForPerek(1);
+			await seferPage.openSeferViewForPerek(2);
 			await seferPage.verifyPesukimAreVisible();
 			const rect = await page
-				.locator(".he-book article:visible")
+				.locator(".he-book .page.current-page article")
 				.first()
 				.boundingBox();
 			if (!rect) throw new Error("Verse text is not visible");
-			const x = Math.round(rect.x + 40);
+			const x = Math.round(rect.x + rect.width - 40);
 			const y = Math.round(rect.y + 45);
 			expect(
 				await page.evaluate(
@@ -505,29 +520,40 @@ test.describe("Sefer view", () => {
 				),
 			).toBe(true);
 			const indicator = page.locator(".flipbook-toolbar-indicator");
-			await expect(indicator).toHaveValue("א / נ");
-			const before = await indicator.inputValue();
+			await expect(indicator).toHaveValue("ב / נ");
 			const client = await page.context().newCDPSession(page);
 			await client.send("Input.dispatchTouchEvent", {
 				type: "touchStart",
 				touchPoints: [{ x, y }],
 			});
-			for (let step = 1; step <= 6; step++) {
+			// Start near the verse's right edge and drag left across the book's
+			// midpoint. A 650px rightward drag from the first chapter never reaches
+			// halfway at this viewport; it only turns if release velocity is high,
+			// which tracing and runner load can change.
+			for (const offset of [20, 40, 300, 500, x - 20]) {
 				await client.send("Input.dispatchTouchEvent", {
 					type: "touchMove",
-					touchPoints: [{ x: x + Math.round((step * 650) / 6), y }],
+					touchPoints: [{ x: x - offset, y }],
 				});
-				if (step === 3) {
+				if (offset === 300) {
 					await expect.poll(() => activePageAngle(page)).toBeGreaterThan(10);
 					await page.waitForTimeout(150);
 					expect(await activePageAngle(page)).toBeGreaterThan(10);
 				}
 			}
+			// Confirm a real drag beyond halfway before releasing, so completion
+			// checks distance rather than a timing-sensitive flick. The library
+			// mirrors the page past halfway, changing this backward drag's rotation
+			// from negative to positive.
+			await expect.poll(() => activePageAngle(page, true)).toBeGreaterThan(10);
+			await page.waitForTimeout(150);
+			expect(await activePageAngle(page, true)).toBeGreaterThan(10);
 			await client.send("Input.dispatchTouchEvent", {
 				type: "touchEnd",
 				touchPoints: [],
 			});
-			await expect(indicator).not.toHaveValue(before);
+			await expect(indicator).toHaveValue("א / נ");
+			await client.detach();
 		});
 	});
 

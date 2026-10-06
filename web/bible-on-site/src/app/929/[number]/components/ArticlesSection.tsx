@@ -1,3 +1,4 @@
+import DOMPurify from "isomorphic-dompurify";
 import Image from "next/image";
 import Link from "next/link";
 import type { ArticleSummary } from "@/lib/articles";
@@ -73,8 +74,11 @@ export function ArticlesSection({
 								{article.abstract && (
 									<div
 										className={styles.articleAbstract}
-										// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
-										dangerouslySetInnerHTML={{ __html: article.abstract }}
+										// nosemgrep -- DOMPurify-sanitized abstract
+										// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
+										dangerouslySetInnerHTML={{
+											__html: DOMPurify.sanitize(article.abstract),
+										}}
 									/>
 								)}
 							</button>
@@ -98,8 +102,11 @@ export function ArticlesSection({
 								{article.abstract && (
 									<div
 										className={styles.articleAbstract}
-										// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
-										dangerouslySetInnerHTML={{ __html: article.abstract }}
+										// nosemgrep -- DOMPurify-sanitized abstract
+										// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
+										dangerouslySetInnerHTML={{
+											__html: DOMPurify.sanitize(article.abstract),
+										}}
 									/>
 								)}
 							</Link>

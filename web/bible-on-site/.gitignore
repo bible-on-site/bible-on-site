@@ -52,3 +52,9 @@ jest-*.json
 jest-err.txt
 build.log
 tests/unit/components/err.txt
+
+# Derived navigation metadata; regenerate from the canonical corpus.
+/src/data/db/client-catalog.generated.json
+
+# Generated, content-addressed reader books
+/public/generated/sefarim/

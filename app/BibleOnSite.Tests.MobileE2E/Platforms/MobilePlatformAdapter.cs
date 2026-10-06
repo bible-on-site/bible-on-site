@@ -62,7 +62,10 @@ public abstract class MobilePlatformAdapter
                 ?? throw new ArgumentException("npm test must prepare MOBILE_WDA_PATH for iOS."));
             options.AddAdditionalAppiumOption("wdaStartupRetries", 1);
             options.AddAdditionalAppiumOption("wdaLaunchTimeout", 180000);
-            options.AddAdditionalAppiumOption("wdaConnectionTimeout", 90000);
+            // appium-webdriveragent applies this to every proxied WDA request,
+            // including POST /session. A cold app launch can exceed 90s; keep the
+            // server default (240s) inside the five-minute IOSDriver budget.
+            options.AddAdditionalAppiumOption("wdaConnectionTimeout", 240000);
             // XCTest's repeated default idle waits can consume the entire shared
             // readiness deadline during the loading-page/reader transition.
             // Keep idle checks enabled; page objects poll the actual UI state.

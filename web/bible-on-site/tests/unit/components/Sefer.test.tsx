@@ -172,9 +172,11 @@ jest.mock("@/app/929/[number]/components/Stuma", () => ({
 	Stuma: () => <span />,
 }));
 
-import Sefer from "@/app/929/[number]/components/Sefer";
+import type { ComponentProps } from "react";
+import SeferContents from "@/app/929/[number]/components/Sefer";
 import type { QriSegment } from "@/data/db/tanah-view-types";
 import type { PerekObj } from "@/data/perek-dto";
+import { getSeferByName } from "@/data/sefer-dto";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 
 function timeframe(from: string, to: string): QriSegment["recordingTimeFrame"] {
@@ -209,6 +211,11 @@ const minimalPerek: PerekObj = {
 		},
 	],
 };
+
+// Keep existing view fixtures while book loading is tested independently.
+const Sefer = (props: Omit<ComponentProps<typeof SeferContents>, "sefer">) => (
+	<SeferContents {...props} sefer={getSeferByName(props.perekObj.sefer)} />
+);
 
 describe("Sefer component", () => {
 	beforeEach(() => {

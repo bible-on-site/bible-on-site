@@ -30,7 +30,7 @@ jest.mock("@/app/929/[number]/components/ReadModeToggler", () => ({
 	default: () => <div data-testid="read-mode-toggler" />,
 }));
 
-jest.mock("@/app/929/[number]/components/Sefer", () => ({
+jest.mock("@/app/929/[number]/components/LoadedSefer", () => ({
 	__esModule: true,
 	default: () => <div data-testid="sefer" />,
 }));

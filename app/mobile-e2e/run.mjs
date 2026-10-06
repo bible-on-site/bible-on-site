@@ -1,12 +1,12 @@
 import { execFile, execFileSync, spawn } from "node:child_process";
-import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { createServer } from "node:net";
 import { promisify } from "node:util";
-import { get } from "node:http";
+import { probeAppiumReadiness } from "./appium-readiness.mjs";
 import { prepareWda } from "./prepare-wda.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
@@ -40,6 +40,13 @@ const server = spawn(process.execPath, [resolve(directory, "node_modules/appium/
 });
 let serverExit;
 server.on("exit", (code, signal) => { serverExit = `code ${code}, signal ${signal}`; });
+const readinessLog = resolve(artifacts, "appium-readiness.jsonl");
+writeFileSync(readinessLog, "");
+const readinessStarted = Date.now();
+const observeReadiness = (observation) => appendFileSync(readinessLog, `${JSON.stringify({
+  time: new Date().toISOString(), elapsedMs: Date.now() - readinessStarted, ...observation,
+})}\n`);
+server.on("spawn", () => observeReadiness({ phase: "spawned", pid: server.pid }));
 let test;
 let diagnosticsFailed = false;
 const execute = promisify(execFile);
@@ -69,39 +76,12 @@ const stop = () => { test?.kill(); server.kill(); };
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
-function serverIsReady() {
-  return new Promise((resolveReady, reject) => {
-    const request = get({ hostname: "127.0.0.1", port: 4723, path: "/status", timeout: 1000 }, (response) => {
-      let body = "";
-      response.setEncoding("utf8");
-      response.on("error", reject);
-      response.on("data", (chunk) => { body += chunk; });
-      response.on("end", () => {
-        try {
-          resolveReady(response.statusCode === 200 && JSON.parse(body).value?.ready === true);
-        } catch (error) {
-          reject(error);
-        }
-      });
-    });
-    request.on("timeout", () => request.destroy(Object.assign(new Error("Appium readiness timed out"), { code: "ETIMEDOUT" })));
-    request.on("error", (error) => {
-      if (["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT"].includes(error.code)) {
-        // The owned loopback service is still loading its driver.
-        resolveReady(false);
-      } else {
-        reject(error);
-      }
-    });
-  });
-}
-
 try {
   const deadline = Date.now() + 60000;
   let ready = false;
   while (Date.now() < deadline) {
     if (serverExit) throw new Error(`Appium exited (${serverExit}). See ${artifacts}/appium.log`);
-    if (await serverIsReady()) { ready = true; break; }
+    if (await probeAppiumReadiness({ observe: observeReadiness })) { ready = true; break; }
     await delay(250);
   }
   if (!ready) throw new Error(`Appium did not become ready. See ${artifacts}/appium.log`);
@@ -131,7 +111,7 @@ try {
     if (platform === "ios") {
       const lifecycleLog = execFileSync("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
         "log", "show", "--style", "compact", "--last", "10m", "--predicate",
-        '(process == "SpringBoard" OR process == "runningboardd" OR process == "ReportCrash") AND (eventMessage CONTAINS[c] "daily929" OR eventMessage CONTAINS[c] "BibleOnSite")'],
+        '(process == "SpringBoard" OR process == "runningboardd" OR process == "ReportCrash" OR process == "testmanagerd") AND (eventMessage CONTAINS[c] "daily929" OR eventMessage CONTAINS[c] "BibleOnSite" OR eventMessage CONTAINS[c] "WebDriverAgent" OR eventMessage CONTAINS[c] "xctrunner")'],
       { encoding: "utf8", timeout: 30000, maxBuffer: 20 * 1024 * 1024 });
       writeFileSync(resolve(artifacts, "app-lifecycle.log"), lifecycleLog);
       const reportDirectories = [resolve(homedir(), "Library/Logs/DiagnosticReports"),
@@ -142,7 +122,7 @@ try {
         for (const report of readdirSync(reports)) {
           const source = resolve(reports, report);
           const metadata = statSync(source);
-          if (report.startsWith("BibleOnSite") && metadata.isFile() && metadata.mtimeMs >= runStarted) {
+          if ((report.startsWith("BibleOnSite") || report.startsWith("WebDriverAgent")) && metadata.isFile() && metadata.mtimeMs >= runStarted) {
             copyFileSync(source, resolve(artifacts, `crash-${index}-${report}`));
           }
         }

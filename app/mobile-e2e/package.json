@@ -8,7 +8,7 @@
   "scripts": {
     "build:app": "dotnet run --project ../devops -- CompileMobileE2E --configuration Debug",
     "test": "node run.mjs",
-    "test:unit": "node --test simulator.test.mjs",
+    "test:unit": "node --test simulator.test.mjs appium-readiness.test.mjs",
     "ios:wda": "node prepare-wda.mjs",
     "ios:boot": "node boot-ios.mjs"
   },
@@ -19,5 +19,8 @@
   },
   "allowScripts": {
     "appium@3.8.0": true
+  },
+  "overrides": {
+    "shell-quote": "1.11.0"
   }
 }
