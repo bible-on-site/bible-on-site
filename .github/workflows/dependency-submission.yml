@@ -1,0 +1,53 @@
+# Dependency Submission (NuGet)
+#
+# Replaces GitHub's managed "Automatic dependency submission" job, which runs a bare
+# `dotnet restore` on every project under Ubuntu and fails on this repo:
+# BibleOnSite.csproj targets MAUI platforms whose workloads are not installed (and the
+# ios/maccatalyst workloads do not exist for Linux at all), while the Windows-only E2E
+# test project requires EnableWindowsTargeting. This workflow restores each project in
+# a form that works on Ubuntu, then submits the resolved graph with the same
+# component-detection action the managed job uses.
+#
+# Source repository: https://github.com/advanced-security/component-detection-dependency-submission-action
+name: 'Dependency submission'
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  submit-nuget:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v7
+      - name: 'Setup .NET'
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: 'Setup Java for the Android workload'
+        uses: actions/setup-java@v6
+        with:
+          distribution: "microsoft"
+          java-version: "17"
+      - name: 'Install MAUI Android workload'
+        run: dotnet workload install maui-android
+      - name: 'Restore NuGet projects'
+        run: |
+          dotnet restore app/BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android -p:RuntimeIdentifiers=android-arm64 -r android-arm64
+          dotnet restore app/BibleOnSite.Core/BibleOnSite.Core.csproj
+          dotnet restore app/BibleOnSite.Tests/BibleOnSite.Tests.csproj
+          dotnet restore app/BibleOnSite.Tests.E2E/BibleOnSite.Tests.E2E.csproj
+          dotnet restore app/BibleOnSite.Tests.MobileE2E/BibleOnSite.Tests.MobileE2E.csproj
+          dotnet restore app/devops/_build.csproj
+      - name: 'Submit NuGet dependencies'
+        uses: advanced-security/component-detection-dependency-submission-action@v0.2.0
+        with:
+          detectorsCategories: NuGet

@@ -8,6 +8,9 @@
     <IsTestProject>true</IsTestProject>
     <UseWPF>false</UseWPF>
     <UseWindowsForms>false</UseWindowsForms>
+    <!-- Allow restore on non-Windows runners (e.g. GitHub dependency submission on Ubuntu);
+         the tests still only execute on Windows. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <!-- Needed for WinUI3 automation -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
