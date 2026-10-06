@@ -1,8 +1,3 @@
-ci:
-  # biome-lint runs each web module's own locally-installed Biome; pre-commit.ci
-  # has no module node_modules, and each module's CI lint job is the
-  # authoritative remote gate, so skip it in the cloud and keep it local-only.
-  skip: [biome-lint]
 repos:
   - repo: "https://github.com/mxr/sync-pre-commit-deps"
     rev: v0.0.5
@@ -56,6 +51,39 @@ repos:
       - id: biome-lint
         name: biome-lint (per-module)
         entry: node devops/precommit-biome.mjs
-        language: system
+        language: node
+        additional_dependencies: ["@biomejs/biome@2.5.15"]
         files: ^web/(bible-on-site|admin)/.*\.(ts|tsx|js|jsx|mjs|cjs)$
         pass_filenames: true
+      # Module checks migrated from .husky/pre-commit. precommit-run.mjs
+      # re-derives the changed-file set relative to MERGE_HEAD during merges,
+      # so incoming (already-published) changes do not trigger module checks.
+      # These are dependency-free node scripts: `language: system` (unlike
+      # biome-lint, which installs @biomejs/biome via additional_dependencies).
+      - id: flip-book-npm-dep
+        name: html-flip-book-react pinned to npm
+        entry: node devops/flip-book-dep.mjs pre
+        language: system
+        files: ^web/bible-on-site/
+        pass_filenames: false
+      - id: web-unit-tests
+        name: web/bible-on-site unit tests
+        entry: node devops/precommit-run.mjs web/bible-on-site npm run test:unit
+        language: system
+        files: ^web/bible-on-site/
+        pass_filenames: false
+      # One hook covers all Rust modules: precommit-rust.mjs buckets staged
+      # changes per module and runs that module's cargo-make lint tasks.
+      - id: web-rust-checks
+        name: web rust lint + fmt (per-module)
+        entry: node devops/precommit-rust.mjs
+        language: system
+        files: ^web/(api|bulletin)/
+        pass_filenames: false
+      - id: flip-book-local-restore
+        name: restore local html-flip-book-react
+        entry: node devops/flip-book-dep.mjs post
+        language: system
+        stages: [post-commit]
+        always_run: true
+        pass_filenames: false

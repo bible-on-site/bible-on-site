@@ -36,7 +36,7 @@ This document describes the DevOps tools and practices used in the Bible on Site
 | [![Biome](https://img.shields.io/badge/Biome-60a5fa?style=for-the-badge&logo=biome&logoColor=white)](https://biomejs.dev/) | Linter & Formatter | website |
 | [![Clippy](https://img.shields.io/badge/Clippy-000?style=for-the-badge&logo=rust&logoColor=white)](https://doc.rust-lang.org/clippy/) | Linter & Formatter | api |
 | [![SonarQube](https://img.shields.io/badge/SonarQube-126ED3?logo=sonarqubecloud&logoColor=fff&style=for-the-badge)](https://www.sonarsource.com/products/sonarcloud/) | Linter | app |
-| [![Husky](https://custom-icon-badges.demolab.com/badge/Husky-000000.svg?logo=husky&style=for-the-badge)](https://typicode.github.io/husky/) | Git hooks for pre-commit checks | * |
+| [![pre-commit](https://img.shields.io/badge/pre--commit-fabf8c?logo=pre-commit&logoColor=black&style=for-the-badge)](https://pre-commit.com/) | Git hooks framework for pre-commit checks | * |
 
 ### 🔨 BUILD
 
