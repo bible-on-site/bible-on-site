@@ -83,5 +83,7 @@ competing with healthy tests for simulator resources.
 The independent log export allows iOS to disable Appium's duplicate live system
 log stream with `skipLogCapture`, avoiding its cold-start overhead. Session setup
 has a five-minute client budget inside the ten-minute per-test hang guard, leaving
-room for the scenario and diagnostics.
+room for the scenario and diagnostics. `wdaConnectionTimeout` bounds every proxied
+WDA request including `POST /session`, so it stays at the driver default of 240
+seconds — a cold app launch can exceed 90 seconds before the first test runs.
 CI uploads a separate artifact for each platform even on test failures.

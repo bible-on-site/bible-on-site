@@ -2185,6 +2185,19 @@ jobs:
             exit 1
           fi
 
+          # Module jobs skip silently when these prerequisite lookups fail.
+          if [ "${{ needs.determine_baseline_availability.result }}" != "success" ]; then
+            echo "Could not determine master coverage baselines."
+            echo "Overall status: failure"
+            exit 1
+          fi
+
+          if [ "${{ needs.determine_docker_image_availability.result }}" != "success" ]; then
+            echo "Could not determine Docker image availability."
+            echo "Overall status: failure"
+            exit 1
+          fi
+
           if [ "${{ needs.determine_changes.outputs.data_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.data_ci_changed }}" = "true" ]; then
             if [ "${{ needs.recitation_ci.result }}" != "success" ]; then
               echo "Recitation alignment and RustFS validation did not pass."
@@ -2193,9 +2206,9 @@ jobs:
           fi
 
           WEBSITE_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          CI_CHANGED=$([ "${{ needs.determine_changes.outputs.website_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          WEBSITE_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.website_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           WEBSITE_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_website_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$WEBSITE_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$WEBSITE_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
+          if [ "$WEBSITE_MODULE_CHANGED" = "true" ] || [ "$WEBSITE_CI_CHANGED" = "true" ] || [ "$WEBSITE_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             E2E_STATUS=$([ "${{ needs.website_e2e.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             # The performance job owns production-build validation, including
             # coverage-baseline recovery runs with no source changes.
@@ -2207,8 +2220,9 @@ jobs:
           fi
 
           API_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.api_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          API_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.api_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           API_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_api_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$API_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$API_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
+          if [ "$API_MODULE_CHANGED" = "true" ] || [ "$API_CI_CHANGED" = "true" ] || [ "$API_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             API_STATUS=$([ "${{ needs.api_e2e.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$API_STATUS" = "failure" ]; then
               echo "Overall status: failure"
@@ -2217,8 +2231,9 @@ jobs:
           fi
 
           APP_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.app_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          APP_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.app_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           APP_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_app_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$APP_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
+          if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ] || [ "$APP_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             APP_STATUS=$([ "${{ needs.app_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$APP_STATUS" = "failure" ]; then
               echo "Overall status: failure"
@@ -2226,7 +2241,7 @@ jobs:
             fi
           fi
 
-          if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ]; then
+          if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ]; then
             if [ "${{ needs.app_mobile_e2e.result }}" != "success" ]; then
               echo "Appium mobile E2E matrix failed or did not run"
               exit 1
@@ -2241,9 +2256,11 @@ jobs:
           fi
 
           BULLETIN_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.bulletin_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          BULLETIN_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.bulletin_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           BULLETIN_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_bulletin_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$BULLETIN_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$BULLETIN_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
-            BULLETIN_STATUS=$([ "${{ needs.bulletin_ci.result }}" = "failure" ] && echo "failure" || echo "success") # Generated
+          if [ "$BULLETIN_MODULE_CHANGED" = "true" ] || [ "$BULLETIN_CI_CHANGED" = "true" ] || [ "$BULLETIN_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
+            # A triggered suite that did not complete (failure, skip, cancel) blocks the merge.
+            BULLETIN_STATUS=$([ "${{ needs.bulletin_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$BULLETIN_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
@@ -2251,9 +2268,10 @@ jobs:
           fi
 
           ADMIN_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.admin_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          ADMIN_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.admin_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           ADMIN_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_admin_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$ADMIN_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$ADMIN_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
-            ADMIN_STATUS=$([ "${{ needs.admin_ci.result }}" = "failure" ] && echo "failure" || echo "success") # Generated
+          if [ "$ADMIN_MODULE_CHANGED" = "true" ] || [ "$ADMIN_CI_CHANGED" = "true" ] || [ "$ADMIN_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
+            ADMIN_STATUS=$([ "${{ needs.admin_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$ADMIN_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
@@ -2261,12 +2279,22 @@ jobs:
           fi
 
           DATA_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.data_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          DATA_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.data_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           DATA_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_data_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$DATA_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$DATA_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
-            # Only fail if data_ci or perushim_data explicitly failed (not if skipped)
-            DATA_STATUS=$([ "${{ needs.data_ci.result }}" = "failure" ] && echo "failure" || echo "success") # Generated
-            PERUSHIM_STATUS=$([ "${{ needs.perushim_data.result }}" = "failure" ] && echo "failure" || echo "success") # Generated
-            if [ "$DATA_STATUS" = "failure" ] || [ "$PERUSHIM_STATUS" = "failure" ]; then
+          if [ "$DATA_MODULE_CHANGED" = "true" ] || [ "$DATA_CI_CHANGED" = "true" ] || [ "$DATA_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
+            DATA_STATUS=$([ "${{ needs.data_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "$DATA_STATUS" = "failure" ]; then
+              echo "Overall status: failure"
+              exit 1
+            fi
+          fi
+
+          PERUSHIM_PIPELINE_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.perushim_pipeline_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          PERUSHIM_DATA_SQL_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          PERUSHIM_NOTES_SQLITE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_perushim_notes_sqlite_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$PERUSHIM_PIPELINE_MODULE_CHANGED" = "true" ] || [ "$PERUSHIM_DATA_SQL_AVAILABLE" = "false" ] || [ "$PERUSHIM_NOTES_SQLITE_AVAILABLE" = "false" ]; then
+            PERUSHIM_STATUS=$([ "${{ needs.perushim_data.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "$PERUSHIM_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
             fi
