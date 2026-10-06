@@ -16,6 +16,13 @@ public partial class PerekPage : ContentPage
 {
     private readonly PerekViewModel _viewModel;
     private bool _isLoading;
+
+    // Generation counter: each app-link request supersedes any earlier one
+    // still waiting for the initial load.
+    private long _appLinkGeneration;
+
+    // Article from a cold-start app link, opened after the initial load.
+    private int? _pendingArticleId;
     private DateTime _lastLongPressTime = DateTime.MinValue;
     private int _pressedPasukNum = -1;
     private CancellationTokenSource? _longPressTokenSource;
@@ -67,6 +74,7 @@ public partial class PerekPage : ContentPage
         SetupFontSizeResources();
         SetupCarouselNavigation();
         SetupExitButtonDragHandler();
+        SubscribeAppLinks();
         Console.WriteLine("[Startup] PerekPage constructed");
     }
 
@@ -82,6 +90,7 @@ public partial class PerekPage : ContentPage
         SetupFontSizeResources();
         SetupCarouselNavigation();
         SetupExitButtonDragHandler();
+        SubscribeAppLinks();
     }
 
     /// <summary>
@@ -408,6 +417,13 @@ public partial class PerekPage : ContentPage
 
                 // Update articles count badge
                 await UpdateArticlesCountAsync();
+
+                // A cold-start link may also carry an article to open.
+                if (_pendingArticleId is int pendingArticleId)
+                {
+                    _pendingArticleId = null;
+                    await Shell.Current.GoToAsync($"articleDetail?articleId={pendingArticleId}");
+                }
             }
             catch (Exception ex)
             {
@@ -447,8 +463,69 @@ public partial class PerekPage : ContentPage
         }
     }
 
-    private static int GetInitialPerekId()
+    /// <summary>
+    /// An app link that arrived while the reader was open (warm link), or while
+    /// a flyout page was on top. Pops back to the reader and jumps to the perek.
+    /// </summary>
+    /// <summary>
+    /// App-link subscription. The handler lives on a static event, so it must be
+    /// released when the page unloads — otherwise readers recreated by Shell
+    /// keep collecting handlers that navigate obsolete pages.
+    /// </summary>
+    private void SubscribeAppLinks()
     {
+        AppLinkHelper.TargetRequested += OnAppLinkRequested;
+        Unloaded += (_, _) => AppLinkHelper.TargetRequested -= OnAppLinkRequested;
+    }
+
+    private void OnAppLinkRequested(object? sender, AppLinkHelper.AppLinkTarget target)
+    {
+        if (Handler is null)
+        {
+            // Dead page left over from a Shell recreation; detach instead of
+            // navigating an obsolete reader.
+            AppLinkHelper.TargetRequested -= OnAppLinkRequested;
+            return;
+        }
+
+        // Last link wins: a newer request supersedes any earlier one still
+        // waiting out the initial load.
+        var generation = Interlocked.Increment(ref _appLinkGeneration);
+        _ = Dispatcher.DispatchAsync(async () =>
+        {
+            for (var i = 0; i < 100 && _isLoading && generation == _appLinkGeneration; i++)
+            {
+                await Task.Delay(100);
+            }
+            if (generation != _appLinkGeneration)
+            {
+                return;
+            }
+            AppLinkHelper.PendingTarget = null;
+            var shell = Shell.Current;
+            if (shell != null &&
+                !shell.CurrentState.Location.OriginalString.EndsWith(AppRoutes.Perek, StringComparison.Ordinal))
+            {
+                await shell.GoToAsync(AppRoutes.FlyoutPage(AppRoutes.Perek));
+            }
+            await _viewModel.NavigateToPerekAsync(target.PerekId);
+            if (target.ArticleId is int articleId && Shell.Current != null)
+            {
+                await Shell.Current.GoToAsync($"articleDetail?articleId={articleId}");
+            }
+        });
+    }
+
+    private int GetInitialPerekId()
+    {
+        // A link that opened the app (cold start) wins over preferences.
+        if (AppLinkHelper.PendingTarget is { } pendingTarget)
+        {
+            AppLinkHelper.PendingTarget = null;
+            _pendingArticleId = pendingTarget.ArticleId;
+            return pendingTarget.PerekId;
+        }
+
         var prefs = PreferencesService.Instance;
         if (prefs.PerekToLoad == PerekToLoad.Todays)
         {
