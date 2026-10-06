@@ -22,12 +22,11 @@ with `git merge-base`; submitting only the current base tip leaves older PRs
 without the graph GitHub actually compares. A version-only `[skip ci]` commit
 can also lack a snapshot. Keep correlators stable across all workflow contexts.
 
-Historical bases retain the original `submit-nuget` correlator as well as the
-newer `nuget` slot. Submit the actual restored source graph in both slots on
-base, head, merge-group and master runs. Both submissions must contain resolved
-dependencies and succeed. This preserves comparisons for older PR branches
-without syncing them merely because they are behind. These are real scans of
-the checked-out commit, not empty snapshots or copied manifests from another SHA.
+Do not add duplicate correlators merely to equalize snapshot counts. A trial
+that submitted the same real restored NuGet graph under both the historical
+`submit-nuget` and current `nuget` names changed a two-base/one-head warning to
+three-base/two-head; it did not repair the comparison. Retain one stable `nuget`
+correlator and require a nonempty submission.
 
 Keep the required `submit-nuget` check name in both PR and merge-group contexts.
 Reusable and matrix jobs add prefixes/suffixes; explicit aggregate jobs must fail
@@ -43,6 +42,23 @@ comparison API again after review and fail on any snapshot warning, HTTP or
 network failure, or invalid response. An empty dependency diff is valid only
 when the snapshot comparison is complete. The verification script has a bounded
 network timeout and never logs its authentication token.
+
+This guard remains an unmerged draft until GitHub returns complete comparisons.
+See [the historical snapshot blocker](https://github.com/bible-on-site/bible-on-site/issues/2002). The API still reports unequal
+counts after ordered, source-bound submissions and 600 seconds of indexing retries.
+It exposes comparison and snapshot creation endpoints, but no supported endpoint
+to list, filter by snapshot identity, or delete historical snapshots. Queue and
+master runs submitted the same merge SHA under different actual refs; this is a
+possible source of duplicates, not a confirmed backend diagnosis. Managed Python
+graph submissions are another recorded source. Do not forge detector/ref metadata,
+upload empty graphs, weaken vulnerability/license checks, or sync a conflict-free
+green PR to work around this.
+
+Use `npm --prefix devops run test:dependency-snapshots` for local regression tests.
+Use `npm --prefix devops run verify:dependency-snapshots` to check a specific pair,
+with `GITHUB_REPOSITORY`, immutable `DEPENDENCY_BASE_SHA`/`DEPENDENCY_HEAD_SHA`, and
+`GH_TOKEN` supplied by the invoking environment. On GitHub, inspect the completed
+reusable submission job logs directly; the parent workflow log may omit them.
 
 ## Upstream blockers
 

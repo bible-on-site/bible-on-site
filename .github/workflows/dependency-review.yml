@@ -56,7 +56,7 @@ jobs:
         with:
           node-version-file: devops/package.json
       - name: Test dependency snapshot verification
-        run: node --test devops/github/ci/dependency-snapshots.test.mjs
+        run: npm --prefix devops run test:dependency-snapshots
       - name: 'Dependency Review'
         uses: actions/dependency-review-action@v5
         # Commonly enabled options, see https://github.com/actions/dependency-review-action#configuration-options for all available options.
@@ -84,4 +84,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DEPENDENCY_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           DEPENDENCY_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: node devops/github/ci/dependency-snapshots.mjs
+        run: npm --prefix devops run verify:dependency-snapshots

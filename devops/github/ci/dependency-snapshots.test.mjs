@@ -52,6 +52,13 @@ for (const status of [403, 500]) {
 	});
 }
 
+test("a dependency change does not make an incomplete comparison acceptable", async () => {
+	await assert.rejects(verifyDependencySnapshots({
+		...source,
+		fetcher: async () => response([{ change_type: "added", name: "Example" }], "Snapshot counts differ"),
+	}), /Snapshot counts differ/);
+});
+
 test("network and timeout failures propagate", async () => {
 	const failure = new Error("Timed out");
 	await assert.rejects(verifyDependencySnapshots({
