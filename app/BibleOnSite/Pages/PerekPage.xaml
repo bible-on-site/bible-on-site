@@ -111,7 +111,7 @@
     <ContentPage.Resources>
         <ResourceDictionary>
             <Color x:Key="SelectedPasukBackground">#E3F2FD</Color>
-            <Color x:Key="SelectedPasukBackgroundDark">#1E3A5F</Color>
+            <Color x:Key="SelectedPasukBackgroundDark">#3D5A80</Color>
             <converters:IntEqualityConverter x:Key="IntEqualityConverter"/>
             <converters:PerushCheckedConverter x:Key="PerushCheckedConverter"/>
             <x:Double x:Key="BottomBarTotalHeight">90</x:Double>
@@ -287,7 +287,7 @@
                                             </Border.FlowDirection>
                                             <Border.Triggers>
                                                 <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
-                                                    <Setter Property="BackgroundColor" Value="{StaticResource SelectedPasukBackground}"/>
+                                                    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SelectedPasukBackground}, Dark={StaticResource SelectedPasukBackgroundDark}}"/>
                                                 </DataTrigger>
                                             </Border.Triggers>
                                             <Border.GestureRecognizers>
