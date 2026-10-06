@@ -48,7 +48,7 @@ for (const dir of MODULES) {
 	// quoted there because shell:true joins command+args into a raw cmd
 	// line and a space in the checkout path (e.g. "devin workspace") would
 	// otherwise split it into a bogus command.
-	const result = spawnSync(
+	const result = spawnSync( // nosemgrep
 		process.platform === "win32" ? `"${biome}"` : biome,
 		["lint", ...moduleFiles],
 		{ // nosemgrep

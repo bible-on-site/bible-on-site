@@ -68,9 +68,8 @@ export async function txQuery<T>(
 	sql: string,
 	params?: unknown[],
 ): Promise<T[]> {
-	// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string -- sql is always a parameterized literal from callers
 	// biome-ignore lint/suspicious/noExplicitAny: mysql2 v3.17 narrowed QueryValues; unknown[] is not assignable to QueryValues
-	const [rows] = await conn.execute(sql, (params ?? []) as any);
+	const [rows] = await conn.execute(sql, (params ?? []) as any); // nosemgrep: javascript.lang.security.audit.db.formatted-sql-string -- sql is always a parameterized literal from callers
 	return rows as T[];
 }
 
@@ -90,8 +89,7 @@ export async function txExecute(
 	sql: string,
 	params?: unknown[],
 ): Promise<mysql.ResultSetHeader> {
-	// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string -- sql is always a parameterized literal from callers
 	// biome-ignore lint/suspicious/noExplicitAny: mysql2 v3.17 narrowed QueryValues; unknown[] is not assignable to QueryValues
-	const [result] = await conn.execute(sql, (params ?? []) as any);
+	const [result] = await conn.execute(sql, (params ?? []) as any); // nosemgrep: javascript.lang.security.audit.db.formatted-sql-string -- sql is always a parameterized literal from callers
 	return result as mysql.ResultSetHeader;
 }

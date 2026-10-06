@@ -216,7 +216,7 @@ function RevisionRow({
 				<div
 					className="admin-prose mt-3 rounded-lg border border-gray-200 bg-white p-4 max-h-72 overflow-auto"
 					// biome-ignore lint/security/noDangerouslySetInnerHtml: DOMPurify-sanitized revision snapshot preview
-					dangerouslySetInnerHTML={{
+					dangerouslySetInnerHTML={{ // nosemgrep -- DOMPurify-sanitized revision snapshot preview
 						__html: DOMPurify.sanitize(
 							revision.proposed_content || "<p></p>",
 						),
