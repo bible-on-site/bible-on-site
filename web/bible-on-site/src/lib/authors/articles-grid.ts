@@ -41,9 +41,12 @@ export function distinctSefarim(rows: AuthorArticleRow[]): string[] {
 		.map(([sefer]) => sefer);
 }
 
+const HTML_TAG_PATTERN = /<[^>]*>/g;
+
 /**
  * Case-insensitive substring search over name, abstract and source,
- * combined with an optional sefer filter.
+ * combined with an optional sefer filter. The abstract is HTML, so its
+ * tags are stripped to match only visible text.
  */
 export function filterAuthorArticles(
 	rows: AuthorArticleRow[],
@@ -54,9 +57,11 @@ export function filterAuthorArticles(
 	return rows.filter((row) => {
 		if (sefer !== "" && row.sefer !== sefer) return false;
 		if (needle === "") return true;
-		return [row.name, row.abstract ?? "", row.source].some((field) =>
-			field.toLowerCase().includes(needle),
-		);
+		return [
+			row.name,
+			(row.abstract ?? "").replace(HTML_TAG_PATTERN, " "),
+			row.source,
+		].some((field) => field.toLowerCase().includes(needle));
 	});
 }
 

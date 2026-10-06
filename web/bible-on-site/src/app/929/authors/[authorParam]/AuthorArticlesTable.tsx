@@ -1,5 +1,6 @@
 "use client";
 
+import DOMPurify from "isomorphic-dompurify";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -134,8 +135,10 @@ export function AuthorArticlesTable({ rows }: { rows: AuthorArticleRow[] }) {
 								<td className={styles.abstractCell}>
 									{row.abstract && (
 										<div
-											// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
-											dangerouslySetInnerHTML={{ __html: row.abstract }}
+											// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
+											dangerouslySetInnerHTML={{
+												__html: DOMPurify.sanitize(row.abstract),
+											}}
 										/>
 									)}
 								</td>
