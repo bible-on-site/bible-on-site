@@ -4,7 +4,11 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { releasePayload, verifyReleaseAssets } from "./release-assets.mjs";
+import {
+	findRelease,
+	releasePayload,
+	verifyReleaseAssets,
+} from "./release-assets.mjs";
 
 const payload = {
 	ref: "a".repeat(40),
@@ -17,6 +21,58 @@ const release = {
 	tag_name: "app-v5.0.120",
 	body: `Release notes\n<!-- release-delivery:${JSON.stringify(payload)} -->`,
 };
+
+test("draft lookup uses the authenticated listing rather than the published-only tag endpoint", () => {
+	const draft = { id: 7, tag_name: "app-v5.0.120", draft: true };
+	assert.equal(
+		findRelease("test/repo", draft.tag_name, (endpoint) => {
+			assert.equal(endpoint, "repos/test/repo/releases?per_page=100&page=1");
+			return [{ id: 6, tag_name: "website-v1.0.0", draft: false }, draft];
+		}),
+		draft,
+	);
+});
+
+test("lookup paginates to older drafts and published releases", () => {
+	const published = { id: 7, tag_name: "app-v5.0.120", draft: false };
+	const calls = [];
+	assert.equal(
+		findRelease("test/repo", published.tag_name, (endpoint) => {
+			calls.push(endpoint);
+			return calls.length === 1
+				? Array.from({ length: 100 }, (_, i) => ({ tag_name: `other-${i}` }))
+				: [published];
+		}),
+		published,
+	);
+	assert.deepEqual(calls, [
+		"repos/test/repo/releases?per_page=100&page=1",
+		"repos/test/repo/releases?per_page=100&page=2",
+	]);
+});
+
+test("a genuinely absent release is distinct from authorization and response failures", () => {
+	assert.equal(
+		findRelease("test/repo", "app-v5.0.120", () => []),
+		null,
+	);
+	assert.throws(
+		() =>
+			findRelease("test/repo", "app-v5.0.120", () => {
+				throw new Error("HTTP 403");
+			}),
+		/HTTP 403/,
+	);
+	assert.throws(
+		() => findRelease("test/repo", "app-v5.0.120", () => ({})),
+		/Invalid release listing/,
+	);
+	assert.throws(
+		() => findRelease("../repo", "app-v5.0.120", () => []),
+		/requires/,
+	);
+	assert.throws(() => findRelease("test/repo", "../tag", () => []), /requires/);
+});
 
 test("reruns recover the original immutable source, CI run and artifact names", () => {
 	assert.deepEqual(releasePayload(release), payload);

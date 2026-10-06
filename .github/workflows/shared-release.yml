@@ -158,7 +158,9 @@ jobs:
             fi
             if [ "$STATUS" = "identical" ]; then
               # Published assets never change; drafts resume with this passing CI build.
-              if gh api "repos/${{ github.repository }}/releases/tags/${TAG_NAME}" > release.json 2> release-error.txt; then
+              # Tag lookup omits drafts. A failed authenticated listing remains fatal.
+              node devops/github/release/release-assets.mjs --lookup "$TAG_NAME" > release.json
+              if jq -e '. != null' release.json > /dev/null; then
                 ORIGINAL_PAYLOAD=$(node devops/github/release/release-assets.mjs)
                 if [ -n "$ORIGINAL_PAYLOAD" ]; then
                   ORIGINAL_REF=$(echo "$ORIGINAL_PAYLOAD" | jq -r .ref)
@@ -180,9 +182,6 @@ jobs:
                   echo "Release already published; preserving its original artifacts"
                 fi
                 exit 0
-              elif ! grep -q '(HTTP 404)' release-error.txt; then
-                cat release-error.txt >&2
-                exit 1
               fi
               echo "NEEDS_BUMP=false" >> $GITHUB_OUTPUT
               echo "TAG_EXISTS=true" >> $GITHUB_OUTPUT
@@ -310,6 +309,7 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.check_tag.outputs.SKIP_RELEASE != 'true'
+        id: create_release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.check_tag.outputs.TAG_NAME }}
@@ -324,10 +324,14 @@ jobs:
         if: steps.check_tag.outputs.SKIP_RELEASE != 'true'
         env:
           RELEASE_ARTIFACTS: ${{ inputs.artifacts_json }}
+          RELEASE_ID: ${{ steps.create_release.outputs.id }}
         run: |
-          gh api "repos/${{ github.repository }}/releases/tags/${{ steps.check_tag.outputs.TAG_NAME }}" > release.json
+          # The action returns the numeric ID of the draft it created/resumed.
+          [[ "$RELEASE_ID" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/${{ github.repository }}/releases/$RELEASE_ID" > release.json
           node devops/github/release/release-assets.mjs --verify
-          gh release edit "${{ steps.check_tag.outputs.TAG_NAME }}" --draft=false
+          gh api --method PATCH "repos/${{ github.repository }}/releases/$RELEASE_ID" -F draft=false > "$RUNNER_TEMP/published-release.json"
+          jq -e '.draft == false' "$RUNNER_TEMP/published-release.json" > /dev/null
 
       # Recovery must finish the bump even when publishing or dispatch succeeded earlier.
       - name: Mark Release Complete

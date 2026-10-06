@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
 	copyFileSync,
+	existsSync,
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
 	rmSync,
+	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,17 +18,24 @@ const workflow = readFileSync(
 	new URL("../../../.github/workflows/shared-release.yml", import.meta.url),
 	"utf8",
 ).replace(/\r/g, "");
-const script = workflow
-	.split("      - name: Check Tag\n")[1]
-	.split("        run: |\n")[1]
-	.split("\n      - name:")[0]
-	.split("\n")
-	.map((line) => line.slice(10))
-	.join("\n")
-	.replace(/\$\{\{ inputs.module_name \}\}/g, "website")
-	.replace(/\$\{\{ inputs.module_version \}\}/g, "1.0.0")
-	.replace(/\$\{\{ github.repository \}\}/g, "test/repo")
-	.replace(/\$\{\{ github.sha \}\}/g, "a".repeat(40));
+function stepScript(name) {
+	const lines = workflow
+		.split(`      - name: ${name}\n`)[1]
+		.split("        run: |\n")[1]
+		.split("\n");
+	const end = lines.findIndex(
+		(line) => line.trim() && !line.startsWith("          "),
+	);
+	return lines
+		.slice(0, end === -1 ? lines.length : end)
+		.map((line) => line.slice(10))
+		.join("\n")
+		.replace(/\$\{\{ inputs.module_name \}\}/g, "website")
+		.replace(/\$\{\{ inputs.module_version \}\}/g, "1.0.0")
+		.replace(/\$\{\{ github.repository \}\}/g, "test/repo")
+		.replace(/\$\{\{ github.sha \}\}/g, "a".repeat(40));
+}
+const script = stepScript("Check Tag");
 const shell =
 	process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "bash";
 for (const [status, bump, skip, releaseState, exit = 0] of [
@@ -59,13 +69,13 @@ for (const [status, bump, skip, releaseState, exit = 0] of [
 				"-o",
 				"pipefail",
 				"-c",
-				`git() { printf 'sha refs/tags/website-v1.0.0\\n'; }\ngh() {
-  if [[ "$2" == */compare/* ]]; then echo "$STATUS";
-  elif [ "$RELEASE_STATE" = published ]; then echo '{}';
+				`git() { printf 'sha refs/tags/website-v1.0.0\\n'; }\ngh() { echo "$STATUS"; }\nnode() {
+  if [ "$2" != --lookup ]; then command node "$@"; return; fi
+  if [ "$RELEASE_STATE" = published ]; then echo '{}';
   elif [ "$RELEASE_STATE" = draft ]; then echo '{"draft":true}';
   elif [[ "$RELEASE_STATE" == *-original ]]; then echo "$RELEASE_JSON";
   elif [ "$RELEASE_STATE" = denied ]; then echo 'gh: Forbidden (HTTP 403)' >&2; return 1;
-  else echo 'gh: Not Found (HTTP 404)' >&2; return 1; fi
+  else echo 'null'; fi
 }\n${script}`,
 			],
 			{
@@ -113,10 +123,76 @@ test("publication stays draft until asset verification, and completed reruns rep
 	assert.match(workflow, /draft: true/);
 	assert.ok(
 		workflow.indexOf("release-assets.mjs --verify") <
-			workflow.indexOf("--draft=false"),
+			workflow.indexOf("-F draft=false"),
 	);
 	assert.match(workflow, /CD_PAYLOAD=\$ORIGINAL_PAYLOAD/);
 	assert.match(workflow, /actions\/artifacts\/\$ID\/zip/);
 	assert.doesNotMatch(workflow, /gh run download/);
 	assert.match(workflow, /steps.check_tag.outputs.ANCESTOR != 'true'/);
 });
+
+for (const state of ["complete", "truncated", "unavailable", "invalid-id"]) {
+	test(`publication uses the returned draft ID and preserves verification failures: ${state}`, (t) => {
+		const root = mkdtempSync(join(tmpdir(), "release-publish-"));
+		t.after(() => rmSync(root, { recursive: true, force: true }));
+		mkdirSync(join(root, "devops/github/release"), { recursive: true });
+		for (const file of ["release-assets.mjs", "release-provenance.mjs"])
+			copyFileSync(
+				new URL(`./${file}`, import.meta.url),
+				join(root, "devops/github/release", file),
+			);
+		mkdirSync(join(root, "assets"));
+		writeFileSync(join(root, "assets/app.ipa"), "signed original binary");
+		const calls = join(root, "calls");
+		const releaseJson = {
+			id: 7,
+			draft: true,
+			assets: [
+				{
+					name: "app.ipa",
+					state: "uploaded",
+					size: state === "truncated" ? 3 : 22,
+					digest: `sha256:${createHash("sha256").update("signed original binary").digest("hex")}`,
+				},
+			],
+		};
+		const result = spawnSync(
+			shell,
+			[
+				"-e",
+				"-o",
+				"pipefail",
+				"-c",
+				`gh() {
+  printf '%s\\n' "$*" >> "$GH_CALLS"
+  if [[ "$2" == */releases/tags/* ]] || [ "$RELEASE_STATE" = unavailable ]; then echo 'gh: Not Found (HTTP 404)' >&2; return 1; fi
+  if [ "$2" = --method ]; then echo '{"id":7,"draft":false}'; else echo "$RELEASE_JSON"; fi
+}\n${stepScript("Verify and publish complete release")}`,
+			],
+			{
+				cwd: root,
+				encoding: "utf8",
+				env: {
+					...process.env,
+					GH_CALLS: calls,
+					RELEASE_STATE: state,
+					RELEASE_ID: state === "invalid-id" ? "7/../tags/other" : "7",
+					RELEASE_JSON: JSON.stringify(releaseJson),
+					RELEASE_ARTIFACTS: JSON.stringify([
+						{ name: "original", path: "assets", glob: "*.ipa" },
+					]),
+					RUNNER_TEMP: root,
+				},
+			},
+		);
+		assert.equal(result.status, state === "complete" ? 0 : 1, result.stderr);
+		const requests = existsSync(calls) ? readFileSync(calls, "utf8") : "";
+		assert.doesNotMatch(requests, /releases\/tags\//);
+		if (state === "complete")
+			assert.match(
+				requests,
+				/api --method PATCH repos\/test\/repo\/releases\/7 -F draft=false/,
+			);
+		else assert.doesNotMatch(requests, /PATCH/);
+	});
+}
