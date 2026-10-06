@@ -89,7 +89,7 @@ Published release metadata records the original CI run and attempt. CD verifies 
 
 Data dispatches carry an immutable SQL artifact ID, SHA-256 archive digest, commit SHA, and CI attempt. CD verifies the archive's source, expiry, and checksum before accessing production. Data completion records include that artifact ID, allowing a new archive from a CI rerun to deploy while repeated dispatches of a completed archive are skipped. Successfully deployed later attempts also prevent older SQL from replacing them.
 
-Legacy data dispatches without an artifact ID are bound once to a verified archive only if the source CI has never been rerun. After a rerun, their original SQL cannot be proven: use the new Release Data dispatch with an immutable artifact ID. Completed pinned SQL deliveries remain no-ops after archive expiry. Incomplete deliveries with deleted or expired archives fail visibly; they never fall back to replacement SQL.
+Legacy data dispatches using `refs/heads/master` resolve to their validated master push CI commit, never the current moving branch. Without an artifact ID they are bound once to a verified archive only if the source CI has never been rerun. After a rerun, their original SQL cannot be proven: use the new Release Data dispatch with an immutable artifact ID. Completed pinned SQL deliveries remain no-ops after archive expiry. Incomplete deliveries with deleted or expired archives fail visibly; they never fall back to replacement SQL.
 
 
 ## Handover from older workflows

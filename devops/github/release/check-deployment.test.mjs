@@ -343,6 +343,42 @@ test("published provenance must match the deployment source CI", () => {
 	}
 });
 
+test("legacy SQL dispatch binds the master branch ref to its validated CI commit", () => {
+	const mock = request();
+	const api = (url) =>
+		url.includes("/actions/runs?") ? { workflow_runs: [] } : mock(url);
+	const legacy = { ...input, moduleName: "data", ref: "refs/heads/master" };
+	const result = checkDeployment(legacy, api);
+	assert.equal(result.deploy, true);
+	assert.equal(result.ref, sha);
+	assert.equal(result.artifactId, "90");
+	assert.throws(
+		() => checkDeployment({ ...legacy, ref: "refs/heads/dev" }, api),
+		/does not match/,
+	);
+	assert.throws(
+		() => checkDeployment({ ...input, ref: "refs/heads/master" }, api),
+		/does not match/,
+	);
+	assert.throws(
+		() =>
+			checkDeployment(
+				legacy,
+				request({ source: { ...source, head_branch: "dev" } }),
+			),
+		/master push CI/,
+	);
+	assert.throws(
+		() =>
+			checkDeployment(legacy, (url) =>
+				url.endsWith("/actions/runs/10")
+					? { ...source, run_attempt: 2 }
+					: api(url),
+			),
+		/Legacy SQL dispatch/,
+	);
+});
+
 test("legacy SQL dispatch refuses to select replacement data after a rerun", () => {
 	const mock = request({ source: { ...source, run_attempt: 2 } });
 	assert.throws(

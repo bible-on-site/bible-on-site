@@ -85,7 +85,10 @@ export function checkDeployment(
 		source.head_branch !== "master"
 	)
 		throw new Error("Deployment source must be master push CI");
-	if (ref && ref !== source.head_sha)
+	// Older Release Data jobs sent github.ref. Bind that one legacy branch ref
+	// to the validated master CI source; never resolve the moving branch itself.
+	const legacyDataRef = moduleName === "data" && ref === "refs/heads/master";
+	if (ref && ref !== source.head_sha && !legacyDataRef)
 		throw new Error("Deployment ref does not match the artifact's CI run");
 	ref = source.head_sha;
 	if (!/^[a-f0-9]{40}$/.test(ref))
