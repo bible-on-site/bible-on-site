@@ -21,28 +21,28 @@ import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { config as loadEnv } from "dotenv";
-import yargs from "yargs";
-import { hideBin } from "yargs/helpers";
 
-const argv = await yargs(hideBin(process.argv))
-	.option("env-file", {
-		type: "string",
-		default: ".dev.env",
-		describe: "env file in the module directory used as a DB_URL fallback",
-	})
-	.option("tables", {
-		type: "string",
-		default: "tanah_sefer",
-		describe: "comma-separated tables that must each contain rows for the DB to count as bootstrapped",
-	})
-	.option("sync-from-prod", {
-		type: "boolean",
-		default: false,
-		describe: "refresh content from production before falling back to local populate",
-	})
-	.strict()
-	.parse();
+// Zero-dependency arg parsing — this script runs from a module's cwd where
+// devops/node_modules may not be installed.
+const flags = new Map<string, string>();
+const boolFlags = new Set(["sync-from-prod"]);
+const args = process.argv.slice(2);
+for (let i = 0; i < args.length; i++) {
+	const raw = args[i];
+	if (!raw.startsWith("--")) {
+		console.error(`ensure-dev-db: unexpected argument "${raw}"`);
+		process.exit(1);
+	}
+	const [name, inline] = raw.slice(2).split("=", 2);
+	const value = inline ?? (boolFlags.has(name) ? "true" : args[++i]);
+	if (value === undefined) {
+		console.error(`ensure-dev-db: missing value for --${name}`);
+		process.exit(1);
+	}
+	flags.set(name, value);
+}
+const envFile = flags.get("env-file") ?? ".dev.env";
+const syncFromProd = flags.get("sync-from-prod") === "true";
 
 const moduleDir = process.cwd();
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -50,7 +50,7 @@ const dataDir = resolve(repoRoot, "data");
 const devopsDir = resolve(repoRoot, "devops");
 const label = readPackageName(moduleDir);
 
-const requiredTables = (argv.tables as string)
+const requiredTables = (flags.get("tables") ?? "tanah_sefer")
 	.split(",")
 	.map((t) => t.trim())
 	.filter(Boolean);
@@ -69,9 +69,15 @@ function readPackageName(dir: string): string {
 
 function loadDbUrl(): string | null {
 	if (process.env.DB_URL) return process.env.DB_URL;
-	const envPath = resolve(moduleDir, argv["env-file"] as string);
+	const envPath = resolve(moduleDir, envFile);
 	if (existsSync(envPath)) {
-		loadEnv({ path: envPath, override: false });
+		// Minimal dotenv parse — repo env files are plain KEY=value lines.
+		for (const line of readFileSync(envPath, "utf8").split(/\r?\n/)) {
+			const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/.exec(line);
+			if (!m || process.env[m[1]] !== undefined) continue;
+			const v = m[2].replace(/^["']|["']$/g, "");
+			process.env[m[1]] = v;
+		}
 	}
 	return process.env.DB_URL ?? null;
 }
@@ -207,7 +213,7 @@ async function main(): Promise<void> {
 	const dbUrl = loadDbUrl();
 	if (!dbUrl) {
 		console.warn(
-			`  ensure-dev-db (${label}): ${argv["env-file"]} not found or DB_URL missing — skipping DB check`,
+			`  ensure-dev-db (${label}): ${envFile} not found or DB_URL missing — skipping DB check`,
 		);
 		return;
 	}
@@ -220,7 +226,7 @@ async function main(): Promise<void> {
 		return;
 	}
 
-	if (argv["sync-from-prod"]) {
+	if (syncFromProd) {
 		const syncDisabled = process.env.DEV_DB_SYNC_FROM_PROD === "0";
 		const synced = syncDisabled ? false : runSyncFromProd();
 		if (!synced) {

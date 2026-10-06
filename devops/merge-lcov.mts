@@ -12,32 +12,50 @@
  *
  * Paths are resolved against the caller's working directory.
  */
-import { createWriteStream } from "node:fs";
-import { existsSync, mkdirSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync } from "node:fs";
 import { readFileSync, rmSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import yargs from "yargs";
-import { hideBin } from "yargs/helpers";
 
-const argv = await yargs(hideBin(process.argv))
-	.option("out", { type: "string", demandOption: true, describe: "merged lcov output path" })
-	.option("require", { type: "array", string: true, default: [], describe: "input lcov paths that must exist" })
-	.option("optional", { type: "array", string: true, default: [], describe: "input lcov paths included when present" })
-	.option("prefix", { type: "string", describe: "repo-root-relative dir prepended to bare SF:src/ records (e.g. web/admin/)" })
-	.option("rm-input-dirs", { type: "boolean", default: false, describe: "remove each consumed input's parent directory" })
-	.strict()
-	.parse();
+// Zero-dependency arg parsing — this script runs from a module's cwd where
+// devops/node_modules may not be installed (e.g. the Admin CI job).
+const args = process.argv.slice(2);
+const flags = new Map<string, string[]>();
+for (let i = 0; i < args.length; i++) {
+	const raw = args[i];
+	if (!raw.startsWith("--")) {
+		console.error(`✗ Unexpected argument: ${raw}`);
+		process.exit(1);
+	}
+	const [name, inline] = raw.slice(2).split("=", 2);
+	const value = inline ?? (name === "rm-input-dirs" ? "true" : args[++i]);
+	if (value === undefined) {
+		console.error(`✗ Missing value for --${name}`);
+		process.exit(1);
+	}
+	const list = flags.get(name) ?? [];
+	list.push(value);
+	flags.set(name, list);
+}
 
-const outPath = resolve(argv.out);
+const out = flags.get("out")?.[0];
+if (!out) {
+	console.error("✗ --out <file> is required");
+	process.exit(1);
+}
+
+const outPath = resolve(out);
 mkdirSync(dirname(outPath), { recursive: true });
 
-const missing = (argv.require as string[]).filter((p) => !existsSync(resolve(p)));
+const required = flags.get("require") ?? [];
+const missing = required.filter((p) => !existsSync(resolve(p)));
 if (missing.length > 0) {
 	console.error(`✗ Required coverage input(s) missing:\n  ${missing.join("\n  ")}`);
 	process.exit(1);
 }
 
-const inputs = [...(argv.require as string[]), ...(argv.optional as string[])];
+const inputs = [...required, ...(flags.get("optional") ?? [])];
+const prefix = flags.get("prefix")?.[0];
+const rmInputDirs = flags.has("rm-input-dirs");
 const consumedDirs = new Set<string>();
 let hasContent = false;
 
@@ -49,8 +67,7 @@ for (const input of inputs) {
 		continue;
 	}
 	let content = readFileSync(inputPath, "utf8");
-	if (argv.prefix) {
-		const prefix = argv.prefix as string;
+	if (prefix) {
 		content = content
 			.replace(/^SF:src\//gm, `SF:${prefix}src/`)
 			.replace(/^SF:src\\/gm, `SF:${prefix}src/`);
@@ -62,7 +79,7 @@ for (const input of inputs) {
 }
 stream.end();
 
-if (argv["rm-input-dirs"]) {
+if (rmInputDirs) {
 	for (const dir of consumedDirs) {
 		rmSync(dir, { recursive: true, force: true });
 		console.log(`✓ Removed ${dir}`);
