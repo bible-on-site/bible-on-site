@@ -34,29 +34,22 @@ for (const dir of MODULES) {
 		.map((file) => file.slice(prefix.length));
 	if (moduleFiles.length === 0) continue;
 
-	const localBin = resolve(
-		dir,
-		"node_modules",
-		".bin",
-		process.platform === "win32" ? "biome.cmd" : "biome",
-	);
-	// Prefer the module's pinned Biome; fall back to the hook env's binary.
-	const biome = existsSync(localBin) ? localBin : "biome";
-
-	// shell is required only on Windows to spawn the .cmd biome shim;
-	// argv is fully static — no user input is shelled. The binary must be
-	// quoted there because shell:true joins command+args into a raw cmd
-	// line and a space in the checkout path (e.g. "devin workspace") would
-	// otherwise split it into a bogus command.
-	const result = spawnSync( // nosemgrep
-		process.platform === "win32" ? `"${biome}"` : biome,
-		["lint", ...moduleFiles],
-		{ // nosemgrep
-			cwd: resolve(dir),
-			stdio: "inherit",
-			shell: process.platform === "win32",
-		},
-	);
+	// Prefer the module's pinned Biome through its JavaScript bin, which Node
+	// runs directly — no .cmd shim, no shell. This keeps staged filenames as
+	// literal argv entries so metacharacters can never reach cmd.exe, and
+	// checkout paths with spaces need no quoting.
+	const localBin = resolve(dir, "node_modules", "@biomejs", "biome", "bin", "biome");
+	const result = existsSync(localBin)
+		? spawnSync( // nosemgrep
+				process.execPath,
+				[localBin, "lint", ...moduleFiles],
+				{ cwd: resolve(dir), stdio: "inherit" },
+			)
+		: spawnSync( // nosemgrep — hook-env fallback binary (pre-commit.ci)
+				"biome",
+				["lint", ...moduleFiles],
+				{ cwd: resolve(dir), stdio: "inherit" },
+			);
 	if (result.status !== 0) failed = true;
 }
 
