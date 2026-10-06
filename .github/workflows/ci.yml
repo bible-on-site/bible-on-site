@@ -668,6 +668,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 2 # Inspect the actual base of the tested PR merge.
 
       - name: Merge and audit approved recitation timings
         run: |
@@ -809,10 +810,15 @@ jobs:
           BENCHER_PROJECT: bible-on-site-website
           BENCHER_BRANCH: ${{ github.head_ref || github.ref_name }} # PR source branch, or branch name on push
         run: |
+          # Fail before reporting if an event cannot identify its base. Keep
+          # master push history intact; reset only feature/queue comparisons.
+          node "$GITHUB_WORKSPACE/devops/github/ci/bencher-comparison.mjs" > "$RUNNER_TEMP/bencher-comparison-args.txt"
+          mapfile -t BENCHER_COMPARISON_ARGS < "$RUNNER_TEMP/bencher-comparison-args.txt"
           bencher run \
             --project "$BENCHER_PROJECT" \
             --token "${{ secrets.BENCHER_API_TOKEN }}" \
             --branch "$BENCHER_BRANCH" \
+            "${BENCHER_COMPARISON_ARGS[@]}" \
             --testbed ubuntu-latest \
             --adapter json \
             --github-actions '${{ secrets.GITHUB_TOKEN }}' \
@@ -2447,9 +2453,11 @@ jobs:
           path: ~/.npm
           key: ${{ steps.devops-npm-cache.outputs.cache-primary-key }}
 
-      - name: Test version publication and deployment collision guards
+      - name: Test release, deployment, and CI reporting guards
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        run: npm run test:version
+        run: |
+          npm run test:version
+          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs
 
       - name: Merge Test Coverage (Website + API)
         run: npm run coverage:merge
@@ -2463,12 +2471,10 @@ jobs:
 
       - name: Verify Coverage 3rd Party Reporting
         run: |
-          # Check Codecov ci_passed via API. Accepts: true (pass), false (fail),
-          # or unresolved after retries (warn + proceed on outage/slow
-          # processing; fail when Codecov processed and still has no report —
-          # that means the uploads never landed).
+          # ci_passed is upstream CI, not proof of coverage uploads. Inspect the
+          # actual completed report before classifying unresolved CI as lost uploads.
+          # Retain the existing outage/backlog policy and explicit-failure gate.
             MAX_RETRIES=6
-            API_REACHED=0
             RETRY_COUNT=0
             SLEEP_SECONDS=15
             OWNER_REPO=(${GITHUB_REPOSITORY/\// })
@@ -2483,6 +2489,7 @@ jobs:
               CODECOV_JSON=""
               CI_PASSED="null"
               STATE="null"
+              REPORT_STATE="pending"
               # A transport failure (DNS/TLS, e.g. a codecov.io certificate
               # outage) makes curl exit non-zero; run it inside a condition so
               # the step reaches the retry/warn path instead of dying under -e.
@@ -2494,14 +2501,14 @@ jobs:
               if [ "$HTTP_CODE" != "200" ]; then
                 echo "Codecov API returned HTTP $HTTP_CODE (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
               else
-                API_REACHED=1
                 CI_PASSED=$(echo "$CODECOV_JSON" | jq -r 'if .ci_passed == null then "null" else .ci_passed end')
                 STATE=$(echo "$CODECOV_JSON" | jq -r '.state // "null"')
-                echo "Codecov ci_passed=$CI_PASSED state=$STATE (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
-                if [ "$CI_PASSED" = "true" ]; then
+                REPORT_STATE=$(node devops/github/ci/codecov-report-state.mjs /tmp/codecov_response.json)
+                echo "Codecov ci_passed=$CI_PASSED state=$STATE report=$REPORT_STATE (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
+                if [ "$REPORT_STATE" = "passed" ]; then
                   echo "Codecov check passed"
                   break
-                elif [ "$CI_PASSED" = "false" ]; then
+                elif [ "$REPORT_STATE" = "failed" ]; then
                   echo "Codecov check failed (ci_passed=false)"
                   echo "status=failure" >> $GITHUB_OUTPUT
                   exit 1
@@ -2509,20 +2516,24 @@ jobs:
               fi
               if [ $RETRY_COUNT -eq $((MAX_RETRIES-1)) ]; then
                 echo "Codecov ci_passed not resolved after $MAX_RETRIES attempts (ci_passed=$CI_PASSED, state=$STATE)"
-                echo "Last response (HTTP $HTTP_CODE): $(echo "$CODECOV_JSON" | jq -c '.')"
+                # Log metadata only; the full line-by-line report is very large.
+                echo "Last response (HTTP $HTTP_CODE): $(echo "$CODECOV_JSON" | jq -c '{ci_passed, state, totals}')"
                 if [ "$CI_PASSED" = "false" ]; then
                   echo "Codecov explicitly failed"
                   exit 1
                 fi
-                if [ "$API_REACHED" = "1" ] && [ "$STATE" = "complete" ]; then
-                  # Codecov answered and finished processing, yet has nothing to
-                  # evaluate: the coverage uploads never landed. That is a CI
-                  # problem (lost reports → flag thresholds unenforced), not a
-                  # Codecov outage — fail instead of bypassing the gate.
+                if [ "$REPORT_STATE" = "missing" ]; then
+                  # Processing completed, but the actual coverage report is empty.
+                  # Distinguish missing uploads from completed reports whose CI
+                  # status has not resolved yet (including this polling job).
                   echo "::error::Codecov processed this commit but has no coverage reports — uploads failed while the service was reachable"
                   exit 1
                 fi
-                echo "::warning::Codecov did not resolve ci_passed — proceeding (not an explicit failure)"
+                if [ "$REPORT_STATE" = "reported" ]; then
+                  echo "::warning::Codecov coverage report is complete; upstream CI is still unresolved"
+                else
+                  echo "::warning::Codecov did not resolve processing — proceeding under the existing outage/backlog policy"
+                fi
                 break
               fi
               sleep $SLEEP_SECONDS
