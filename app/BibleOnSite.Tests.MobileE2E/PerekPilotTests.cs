@@ -90,7 +90,9 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         // Regression: iOS SIGABRT inside UICollectionView _updateVisibleCellsNow
         // when the perushim HtmlView imported HTML on the main thread during cell
         // creation. Rapid recycling must leave the app alive and rendering.
+        var perushSelected = _page.SelectFirstPerushIfAvailable();
         _page.FlickPasukim(15);
+        output.WriteLine($"perush selected: {perushSelected}");
         Assert.NotEmpty(_page.Source);
         Assert.NotEmpty(_page.FirstPasuk);
         _page.AssertBottomNavigationLayout();

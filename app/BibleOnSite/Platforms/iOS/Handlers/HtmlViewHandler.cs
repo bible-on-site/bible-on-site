@@ -31,6 +31,9 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
     // Generation guard: a stale background import must not overwrite newer content
     // when a collection cell is recycled while its parse is still in flight.
     private int _renderGeneration;
+    // Serializes the global ThrowOnInitFailure toggle across concurrent imports
+    // (and other handlers) so an overlapped restore cannot leave it disabled.
+    private static readonly object s_importLock = new();
 
     public HtmlViewHandler() : base(PropertyMapper)
     {
@@ -59,6 +62,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
 
     protected override void DisconnectHandler(UITextView platformView)
     {
+        // Invalidate any in-flight import and the render cache so the completion
+        // cannot write to a detached view and a reconnect re-renders its content.
+        _renderedHtml = null;
+        _renderGeneration++;
         VirtualView.HtmlContentChanged -= OnHtmlContentChanged;
         VirtualView.StyleChanged -= OnStyleChanged;
         base.DisconnectHandler(platformView);
@@ -159,28 +166,31 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
             // NSAttributedString HTML import uses WebKit internally and can throw
             // unhandled ObjC exceptions (SIGABRT) that bypass C# try-catch.
             // Temporarily disable ThrowOnInitFailure to convert these into null returns.
-            var previousThrowSetting = ObjCRuntime.Class.ThrowOnInitFailure;
-            ObjCRuntime.Class.ThrowOnInitFailure = false;
-            try
+            lock (s_importLock)
             {
-                NSError? error = null;
-#pragma warning disable CS0618
-                attributedString = new NSAttributedString(htmlData, importParams, out _, ref error!);
-#pragma warning restore CS0618
-                if (error != null)
+                var previousThrowSetting = ObjCRuntime.Class.ThrowOnInitFailure;
+                ObjCRuntime.Class.ThrowOnInitFailure = false;
+                try
                 {
-                    System.Diagnostics.Debug.WriteLine($"HtmlView NSAttributedString error: {error.LocalizedDescription}");
+                    NSError? error = null;
+#pragma warning disable CS0618
+                    attributedString = new NSAttributedString(htmlData, importParams, out _, ref error!);
+#pragma warning restore CS0618
+                    if (error != null)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"HtmlView NSAttributedString error: {error.LocalizedDescription}");
+                        attributedString = null;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"HtmlView NSAttributedString init exception: {ex.Message}");
                     attributedString = null;
                 }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"HtmlView NSAttributedString init exception: {ex.Message}");
-                attributedString = null;
-            }
-            finally
-            {
-                ObjCRuntime.Class.ThrowOnInitFailure = previousThrowSetting;
+                finally
+                {
+                    ObjCRuntime.Class.ThrowOnInitFailure = previousThrowSetting;
+                }
             }
 
             if (attributedString == null)
