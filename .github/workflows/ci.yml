@@ -387,50 +387,6 @@ jobs:
         id: determine
         run: node devops/github/ci/determine-changes.ts
 
-  # Version Verification Jobs
-  # These jobs run on PRs and master to verify that module versions are properly bumped
-  # before any release can occur. Website PRs must also exceed the current master
-  # version, since a released tag can lag behind an in-flight master build.
-  verify_website_version:
-    name: Verify Website Version
-    needs: [setup_env, determine_changes]
-    if: ${{ needs.determine_changes.outputs.website_module_changed == 'true' }}
-    uses: ./.github/workflows/shared-verify-version.yml
-    with:
-      module_name: website
-
-  verify_api_version:
-    name: Verify API Version
-    needs: [setup_env, determine_changes]
-    if: ${{ needs.determine_changes.outputs.api_module_changed == 'true' }}
-    uses: ./.github/workflows/shared-verify-version.yml
-    with:
-      module_name: api
-
-  verify_app_version:
-    name: Verify App Version
-    needs: [setup_env, determine_changes]
-    if: ${{ needs.determine_changes.outputs.app_module_changed == 'true' }}
-    uses: ./.github/workflows/shared-verify-version.yml
-    with:
-      module_name: app
-
-  verify_bulletin_version:
-    name: Verify Bulletin Version
-    needs: [setup_env, determine_changes]
-    if: ${{ needs.determine_changes.outputs.bulletin_module_changed == 'true' }}
-    uses: ./.github/workflows/shared-verify-version.yml
-    with:
-      module_name: bulletin
-
-  verify_admin_version:
-    name: Verify Admin Version
-    needs: [setup_env, determine_changes]
-    if: ${{ needs.determine_changes.outputs.admin_module_changed == 'true' }}
-    uses: ./.github/workflows/shared-verify-version.yml
-    with:
-      module_name: admin
-
   package_website:
     name: Package Website
     needs: [setup_env, determine_changes]
@@ -1572,16 +1528,8 @@ jobs:
           retention-days: 1
           overwrite: true
 
-      - name: Publish App Unit Report To Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v7
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
-          flags: app
-          report_type: test_results
-
       # ============ Integration Tests Setup ============
+      # rust-cache hashes CC_* env vars; keep it before codecov-action, which exports CC_SHA.
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -1596,6 +1544,15 @@ jobs:
           workspaces: |
             ${{ env.API_DIRECTORY }}
             ${{ env.DATA_DIRECTORY }}
+
+      - name: Publish App Unit Report To Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
+          flags: app
+          report_type: test_results
 
       - name: Install and start MySQL
         id: mysql
@@ -1844,13 +1801,14 @@ jobs:
         with:
           tool: cargo-make, cargo-llvm-cov, cargo-nextest
 
+      # Per-job key: rust-cache never overwrites an existing key, so a shared key is owned by whichever job saves first.
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
           cache-on-failure: true
-          shared-key: "data-rust"
+          shared-key: "data-ci-rust"
 
       # Overlap the image pull with lint/unit coverage; integration tests wait below.
       - name: Pull Sefaria MongoDB Docker Image
@@ -2050,7 +2008,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
           cache-on-failure: true
-          shared-key: "data-rust"
+          shared-key: "perushim-data-rust"
 
       - name: Pull Sefaria MongoDB Docker Image
         env:
@@ -2193,11 +2151,6 @@ jobs:
     needs:
       [
         determine_changes,
-        verify_website_version,
-        verify_api_version,
-        verify_app_version,
-        verify_admin_version,
-        verify_bulletin_version,
         website_performance,
         website_e2e,
         api_e2e,
@@ -2232,42 +2185,7 @@ jobs:
             fi
           fi
 
-          # Version verification checks (only fail if the job ran and failed, not if skipped)
           WEBSITE_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$WEBSITE_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_website_version.result }}" = "failure" ]; then
-            echo "Website version verification failed."
-            echo "Overall status: failure"
-            exit 1
-          fi
-
-          API_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.api_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$API_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_api_version.result }}" = "failure" ]; then
-            echo "API version verification failed."
-            echo "Overall status: failure"
-            exit 1
-          fi
-
-          APP_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.app_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$APP_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_app_version.result }}" = "failure" ]; then
-            echo "App version verification failed."
-            echo "Overall status: failure"
-            exit 1
-          fi
-
-          BULLETIN_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.bulletin_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$BULLETIN_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_bulletin_version.result }}" = "failure" ]; then
-            echo "Bulletin version verification failed."
-            echo "Overall status: failure"
-            exit 1
-          fi
-
-          ADMIN_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.admin_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$ADMIN_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_admin_version.result }}" = "failure" ]; then
-            echo "Admin version verification failed."
-            echo "Overall status: failure"
-            exit 1
-          fi
-
           CI_CHANGED=$([ "${{ needs.determine_changes.outputs.website_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           WEBSITE_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_website_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
           if [ "$WEBSITE_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$WEBSITE_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
@@ -2652,24 +2570,22 @@ jobs:
           client-payload: '{"ref": "${{ github.ref }}", "run_id": "${{ github.run_id }}"}'
 
   # ====================================================================================
-  # VERSION BUMP JOB - Consolidated version bumping for non-website modules
+  # VERSION BUMP JOB - Post-release version bumps on master
   # ====================================================================================
-  # Website changes reserve their version in the PR and keep it on master after
-  # release. Bumping it afterward let overlapping master runs package the same
-  # version. Other modules retain their existing centralized post-release bump.
+  # Released versions are bumped on master, including website. If a tag already
+  # belongs to another commit, a retry bump without [skip ci] starts a new release run.
   # ====================================================================================
   bump_versions:
     name: Bump Versions
-    needs: [setup_env, release_api, release_app, release_admin, release_bulletin]
-    # Run if at least one module was released
-    # Note: Using always() + result check as a workaround for reusable workflow result evaluation issues (see #1065)
-    # For each release job, we check both result == 'success' AND outputs.released == 'true'
+    needs: [setup_env, release_website, release_api, release_app, release_admin, release_bulletin]
+    # Note: Using always() and success checks as a workaround for reusable workflow result evaluation issues (see #1065)
     if: >-
       ${{ always() && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' &&
-      ((needs.release_api.result == 'success' && needs.release_api.outputs.released == 'true') ||
-       (needs.release_app.result == 'success' && needs.release_app.outputs.released == 'true') ||
-       (needs.release_admin.result == 'success' && needs.release_admin.outputs.released == 'true') ||
-       (needs.release_bulletin.result == 'success' && needs.release_bulletin.outputs.released == 'true')) }}
+      ((needs.release_website.result == 'success' && (needs.release_website.outputs.released == 'true' || needs.release_website.outputs.needs_bump == 'true')) ||
+       (needs.release_api.result == 'success' && (needs.release_api.outputs.released == 'true' || needs.release_api.outputs.needs_bump == 'true')) ||
+       (needs.release_app.result == 'success' && (needs.release_app.outputs.released == 'true' || needs.release_app.outputs.needs_bump == 'true')) ||
+       (needs.release_admin.result == 'success' && (needs.release_admin.outputs.released == 'true' || needs.release_admin.outputs.needs_bump == 'true')) ||
+       (needs.release_bulletin.result == 'success' && (needs.release_bulletin.outputs.released == 'true' || needs.release_bulletin.outputs.needs_bump == 'true')))}}
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -2681,138 +2597,68 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
 
       - name: Configure Git
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-      - name: Add Deploy Key
-        uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555
-        with:
-          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
-
-      # Setup toolchains for modules that need version bumps
-      - name: Setup Node.js (for Admin/Bulletin)
-        if: ${{ needs.release_admin.outputs.released == 'true' || needs.release_bulletin.outputs.released == 'true' }}
+      - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
           cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
           cache: npm
 
-      - name: Install devops dependencies (for Bulletin)
-        if: ${{ needs.release_bulletin.outputs.released == 'true' }}
+      - name: Install devops dependencies
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        run: npm ci
+        run: npm ci --no-audit --no-fund
 
-      - name: Setup Rust (for API/Bulletin)
-        if: ${{ needs.release_api.outputs.released == 'true' || needs.release_bulletin.outputs.released == 'true' }}
-        uses: dtolnay/rust-toolchain@stable
+      - name: Bump released module versions
+        id: released
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: npm run bump:module-versions -- --mode released
 
-      - name: Install cargo-make (for API/Bulletin)
-        if: ${{ needs.release_api.outputs.released == 'true' || needs.release_bulletin.outputs.released == 'true' }}
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-make
-
-      - name: Install Rust bump tools (for API)
-        if: ${{ needs.release_api.outputs.released == 'true' }}
-        uses: taiki-e/install-action@v2
-        with:
-          tool: tomato-toml, semver-bump
-
-      - name: Setup .NET (for App)
-        if: ${{ needs.release_app.outputs.released == 'true' }}
-        uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: "10.0.x"
-
-      - name: Restore dotnet tools (for App)
-        if: ${{ needs.release_app.outputs.released == 'true' }}
-        working-directory: app
-        run: dotnet tool restore
-
-      # Bump versions for each released module
-      - name: Bump Admin Version
-        if: ${{ needs.release_admin.outputs.released == 'true' }}
-        working-directory: ${{ needs.setup_env.outputs.admin_directory }}
-        run: npm version patch --no-git-tag-version --ignore-scripts
-
-      - name: Bump API Version
-        if: ${{ needs.release_api.outputs.released == 'true' }}
-        working-directory: ${{ needs.setup_env.outputs.api_directory }}
-        run: cargo make bump-version
-
-      - name: Bump Bulletin Version
-        if: ${{ needs.release_bulletin.outputs.released == 'true' }}
-        working-directory: ${{ needs.setup_env.outputs.bulletin_directory }}
-        run: cargo make bump-version
-
-      - name: Bump App Version
-        if: ${{ needs.release_app.outputs.released == 'true' }}
-        working-directory: app
-        run: dotnet run --project devops -- BumpVersion
-
-      # Collect all changed files and create a single commit
-      - name: Commit All Version Bumps
+      - name: Commit and push released version bumps
+        if: ${{ steps.released.outputs.summary != '' }}
+        env:
+          SUMMARY: ${{ steps.released.outputs.summary }}
         run: |
           set -e
-
-          FILES_TO_ADD=""
-          MODULES_BUMPED=""
-
-          if [ "${{ needs.release_admin.outputs.released }}" = "true" ]; then
-            FILES_TO_ADD="$FILES_TO_ADD ${{ needs.setup_env.outputs.admin_directory }}/package.json ${{ needs.setup_env.outputs.admin_directory }}/package-lock.json"
-            ADMIN_VERSION=$(node -e "const pkg = require('./${{ needs.setup_env.outputs.admin_directory }}/package.json'); console.log(pkg.version)")
-            MODULES_BUMPED="${MODULES_BUMPED}admin to ${ADMIN_VERSION}, "
-          fi
-
-          if [ "${{ needs.release_api.outputs.released }}" = "true" ]; then
-            FILES_TO_ADD="$FILES_TO_ADD ${{ needs.setup_env.outputs.api_directory }}/Cargo.toml ${{ needs.setup_env.outputs.api_directory }}/Cargo.lock"
-            API_VERSION=$(grep -m1 '^version' ${{ needs.setup_env.outputs.api_directory }}/Cargo.toml | sed 's/.*"\(.*\)"/\1/')
-            MODULES_BUMPED="${MODULES_BUMPED}api to ${API_VERSION}, "
-          fi
-
-          if [ "${{ needs.release_bulletin.outputs.released }}" = "true" ]; then
-            FILES_TO_ADD="$FILES_TO_ADD ${{ needs.setup_env.outputs.bulletin_directory }}/Cargo.toml ${{ needs.setup_env.outputs.bulletin_directory }}/Cargo.lock"
-            BULLETIN_VERSION=$(grep -m1 '^version' ${{ needs.setup_env.outputs.bulletin_directory }}/Cargo.toml | sed 's/.*"\(.*\)"/\1/')
-            MODULES_BUMPED="${MODULES_BUMPED}bulletin to ${BULLETIN_VERSION}, "
-          fi
-
-          if [ "${{ needs.release_app.outputs.released }}" = "true" ]; then
-            FILES_TO_ADD="$FILES_TO_ADD app/BibleOnSite/BibleOnSite.csproj"
-            APP_VERSION=$(grep -o '<ApplicationDisplayVersion>[^<]*</ApplicationDisplayVersion>' app/BibleOnSite/BibleOnSite.csproj | sed 's/<[^>]*>//g')
-            MODULES_BUMPED="${MODULES_BUMPED}app to ${APP_VERSION}, "
-          fi
-
-          # Remove trailing comma and space
-          MODULES_BUMPED=$(echo "$MODULES_BUMPED" | sed 's/, $//')
-
-          if [ -n "$FILES_TO_ADD" ]; then
-            git add $FILES_TO_ADD
-            git checkout -- . 2>/dev/null || true
-            git clean -fd 2>/dev/null || true
-            git commit -n -m "chore(release): Bump versions ($MODULES_BUMPED) [skip ci]"
-          else
-            echo "No version files to commit"
-            exit 0
-          fi
-
-      - name: Push Version Bump Changes
-        run: |
-          set -e
-          CURRENT_BRANCH=$(git symbolic-ref --short HEAD)
-          git remote set-url origin git@github.com:${{ github.repository }}
-          git fetch origin "$CURRENT_BRANCH"
-
-          # Rebase on top of any changes that happened during the release
-          if ! git rebase "origin/$CURRENT_BRANCH"; then
+          git commit -n -am "chore(release): Bump versions ($SUMMARY) [skip ci]"
+          git fetch origin master
+          if ! git rebase origin/master; then
             echo "Error: Failed to rebase version bump commit. This may indicate a conflict."
             echo "Aborting rebase..."
             git rebase --abort
             exit 1
           fi
+          git push origin HEAD:master
 
-          git push origin HEAD
+      - name: Bump versions taken by another commit
+        id: retry
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: npm run bump:module-versions -- --mode retry
+
+      - name: Commit and push retry version bumps
+        if: ${{ steps.retry.outputs.summary != '' }}
+        env:
+          SUMMARY: ${{ steps.retry.outputs.summary }}
+        run: |
+          set -e
+          git commit -n -am "chore(release): Bump versions to release ($SUMMARY)"
+          git fetch origin master
+          if ! git rebase origin/master; then
+            echo "Error: Failed to rebase version bump commit. This may indicate a conflict."
+            echo "Aborting rebase..."
+            git rebase --abort
+            exit 1
+          fi
+          git push origin HEAD:master

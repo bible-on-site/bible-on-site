@@ -162,3 +162,46 @@
     height: 64px;
   }
 }
+
+@media (prefers-color-scheme: dark) {
+  .breadcrumb ol {
+    color: #b8c2d9;
+  }
+
+  .breadcrumb li:not(:last-child)::after {
+    color: #64748b;
+  }
+
+  .breadcrumb li a,
+  .pageTitle,
+  .authorName {
+    color: #a8b9ff;
+  }
+
+  .breadcrumb li.active {
+    color: #b7adf0;
+  }
+
+  .pageSubtitle,
+  .authorDetails {
+    color: #9aa0a6;
+  }
+
+  .authorCard {
+    background: #1a1f2e;
+    border-color: #2d3548;
+  }
+
+  .authorCard:hover {
+    border-color: #a8b9ff;
+  }
+
+  .authorImageContainer {
+    background: linear-gradient(135deg, #1a1f2e, #2d3548);
+    border-color: #3b4256;
+  }
+
+  .authorPlaceholder {
+    color: #64748b;
+  }
+}

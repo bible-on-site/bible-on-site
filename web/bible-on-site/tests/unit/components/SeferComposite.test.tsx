@@ -38,6 +38,11 @@ jest.mock("@/app/929/[number]/components/Sefer", () => ({
 import SeferComposite from "@/app/929/[number]/components/SeferComposite";
 
 describe("SeferComposite", () => {
+	beforeEach(() => {
+		mockGet.mockReturnValue(null);
+		delete document.documentElement.dataset.bookView;
+	});
+
 	const minimalPerek = {
 		perekId: 5,
 		perekHeb: "ה",
@@ -54,5 +59,13 @@ describe("SeferComposite", () => {
 		);
 		// isWideEnough is false → component returns null
 		expect(container.firstChild).toBeNull();
+	});
+
+	it("keeps chapter text visible on phones even when a link requests book view", () => {
+		mockGet.mockImplementation((key: string) => (key === "book" ? "" : null));
+		render(
+			<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
+		);
+		expect(document.documentElement).not.toHaveAttribute("data-book-view");
 	});
 });

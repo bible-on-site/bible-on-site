@@ -1,4 +1,5 @@
 using Android.App;
+using Android.Content;
 using Android.Content.PM;
 using Android.OS;
 using Android.Views;
@@ -6,14 +7,41 @@ using BibleOnSite.Behaviors;
 using BibleOnSite.Helpers;
 namespace BibleOnSite;
 
-[Activity(Theme = "@style/Maui.SplashTheme", MainLauncher = true, LaunchMode = LaunchMode.SingleTop, ConfigurationChanges = ConfigChanges.ScreenSize | ConfigChanges.Orientation | ConfigChanges.UiMode | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.Density)]
+[Activity(Theme = "@style/Maui.SplashTheme", MainLauncher = true, LaunchMode = LaunchMode.SingleTop, Exported = true, ConfigurationChanges = ConfigChanges.ScreenSize | ConfigChanges.Orientation | ConfigChanges.UiMode | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.Density)]
+// Android App Links: verified https links to perek pages on the website open
+// directly in the app. Only the Hebrew IDN domain is claimed — 929.org.il
+// is a Cloudflare redirect to it and cannot host /.well-known/assetlinks.json,
+// so those filters could never verify on Android 12+.
+[IntentFilter(new[] { Intent.ActionView }, AutoVerify = true,
+    Categories = new[] { Intent.CategoryDefault, Intent.CategoryBrowsable },
+    DataScheme = "https", DataHost = "xn--febl3a.co.il", DataPathPrefix = "/929")]
 public class MainActivity : MauiAppCompatActivity
 {
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         base.OnCreate(savedInstanceState);
+        HandleAppLinkIntent(Intent);
         // Firebase initialized from google-services.json (Plugin.Firebase / Xamarin.Firebase.Analytics process it at build).
         // For explicit init use Plugin.Firebase.Core CrossFirebase.Initialize(activity, settings) when needed.
+    }
+
+    protected override void OnNewIntent(Intent? intent)
+    {
+        base.OnNewIntent(intent);
+        HandleAppLinkIntent(intent);
+    }
+
+    /// <summary>Routes a VIEW intent for a website perek URL into app navigation.</summary>
+    private static void HandleAppLinkIntent(Intent? intent)
+    {
+        if (intent?.Action != Intent.ActionView)
+        {
+            return;
+        }
+        if (AppLinkHelper.TryParse(intent.Data?.ToString(), out var target))
+        {
+            AppLinkHelper.Request(target);
+        }
     }
 
     private readonly PressGestureTracker _touch = new();

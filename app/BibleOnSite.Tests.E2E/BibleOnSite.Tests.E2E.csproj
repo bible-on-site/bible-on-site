@@ -8,6 +8,9 @@
     <IsTestProject>true</IsTestProject>
     <UseWPF>false</UseWPF>
     <UseWindowsForms>false</UseWindowsForms>
+    <!-- Allow restore on non-Windows runners (e.g. GitHub dependency submission on Ubuntu);
+         the tests still only execute on Windows. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <!-- Needed for WinUI3 automation -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
@@ -19,7 +22,7 @@
     </PackageReference>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>

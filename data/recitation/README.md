@@ -131,9 +131,10 @@ another chapter. Run this while the independent GPU batch continues:
 .venv/Scripts/python.exe audit.py
 ```
 
-Commit the intermediate DB and canonical JSON together, bump the website version,
-and deliver through CI/CD, which verifies every ready chapter against the running
-deployment. A pending or held chapter retains full-chapter playback only.
+Commit the intermediate DB and canonical JSON together, then deliver through CI/CD,
+which verifies every ready chapter against the running deployment. Website versions
+are bumped by the post-release workflow on master, not in this change. A pending or
+held chapter retains full-chapter playback only.
 
 On Windows, the batch requests system wakefulness for its lifetime and releases
 that request on completion or error. It does not alter global power settings or
