@@ -2392,6 +2392,10 @@ jobs:
         run: |
           npm ci --no-audit
 
+      - name: Verify Local Coverage Thresholds
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        run: npm run coverage:verify-targets
+
       - name: Save npm cache
         if: ${{ github.ref == 'refs/heads/master' && steps.devops-npm-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
@@ -2425,8 +2429,17 @@ jobs:
             echo "Checking Codecov for commit: $COMMIT_SHA"
             CODECOV_URL="https://api.codecov.io/api/v2/github/${OWNER_REPO[0]}/repos/${OWNER_REPO[1]}/commits/$COMMIT_SHA"
             while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-              HTTP_CODE=$(curl -s -o /tmp/codecov_response.json -w "%{http_code}" -H "Authorization: token ${{ secrets.CODECOV_API_TOKEN }}" "$CODECOV_URL")
-              CODECOV_JSON=$(cat /tmp/codecov_response.json)
+              CODECOV_JSON=""
+              CI_PASSED="null"
+              STATE="null"
+              # A transport failure (DNS/TLS, e.g. a codecov.io certificate
+              # outage) makes curl exit non-zero; run it inside a condition so
+              # the step reaches the retry/warn path instead of dying under -e.
+              if HTTP_CODE=$(curl -s -o /tmp/codecov_response.json -w "%{http_code}" -H "Authorization: token ${{ secrets.CODECOV_API_TOKEN }}" "$CODECOV_URL"); then
+                CODECOV_JSON=$(cat /tmp/codecov_response.json)
+              else
+                HTTP_CODE="000"
+              fi
               if [ "$HTTP_CODE" != "200" ]; then
                 echo "Codecov API returned HTTP $HTTP_CODE (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
               else
