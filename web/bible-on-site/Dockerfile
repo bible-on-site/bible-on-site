@@ -76,6 +76,7 @@ COPY --from=builder /app/bible-on-site/public ./public
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder --chown=nextjs:nodejs /app/bible-on-site/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/bible-on-site/.next/static ./.next/static
+COPY --chown=nextjs:nodejs bible-on-site/scripts/start-server.mjs ./start-server.mjs
 
 USER 1001
 
@@ -91,4 +92,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --start-interval=30
 
 # server.js is created by next build from the standalone output
 # https://nextjs.org/docs/pages/api-reference/config/next-config-js/output
-CMD ["node", "server.js"]
+CMD ["node", "start-server.mjs"]

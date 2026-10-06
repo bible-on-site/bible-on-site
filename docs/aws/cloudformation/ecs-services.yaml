@@ -267,6 +267,8 @@ Resources:
         - Name: website
           Image: !Ref WebsiteImageUri
           Essential: true
+          # 90 seconds for cached DNS requests, then 30 seconds for Next shutdown.
+          StopTimeout: 120
           PortMappings:
             - ContainerPort: 3000
               HostPort: 3000

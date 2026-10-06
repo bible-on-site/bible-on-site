@@ -21,6 +21,14 @@ response after a successful connection, not a stale upstream address. The
 separate Nginx temporary-directory validation incident was already corrected
 before this normal rollout.
 
+The next normal 0.2.472 rollout captured both phases. At 21:45:31-21:45:38,
+eight router probes returned 502 while selecting the old address
+`172.31.26.62:3000`; the old task began stopping at 21:45:18.287. Requests then
+connected promptly to the new address `172.31.32.179:3000` but waited without
+headers during cold loading. A three-minute public sample contained 31 failed
+requests out of 135. Readiness alone addresses the second phase; the old
+listener must also remain available while discovery and cached DNS change.
+
 ## Reproduction and repair
 
 The exact published 0.2.470 image was tested locally with the deployed
@@ -43,11 +51,23 @@ chapter probes succeeded. Both experiments returned the same complete
 `4279d6bb8ae2e670daa886f1a7957e22550656afd0290ba003e6827445065af4`.
 
 The repair uses the existing readiness endpoint in both the website
-Dockerfile and the documented ECS task definition. It preserves the binding
-address, capacity, health-check timings, routing, and canonical data. The
-packaged-image check waits for Docker readiness at the production limits
+Dockerfile and the documented ECS task definition. A small production launcher
+retains the old Next listener for 90 seconds after SIGTERM, then forwards that
+signal to Next for its normal shutdown. Duplicate SIGTERM does not extend the
+deadline; SIGINT remains immediate, and child failures retain their exit code.
+The ECS stop timeout is 120 seconds, allowing a further 30 seconds for Next
+to finish in-flight requests. Local development commands keep their existing
+launcher. Capacity, health-check timings, routing, and canonical data are
+preserved. The packaged-image check waits for Docker readiness at the production limits
 before verifying every approved chapter and the complete app extension.
 Failure or a five-minute startup timeout prevents publication of that image.
+
+The real Linux child-process tests passed all four signal/failure cases. The
+published image with the production launcher, at the same CPU/memory limits,
+also served 61 requests with zero failures during its full 90-second drain.
+The complete recitation body retained the same hash; the longest request took
+1.760 seconds. A second SIGTERM did not reset the deadline, and the container
+exited normally with code 143 after 90.814 seconds.
 
 AWS counts the replacement's essential container health check before retiring
 the old task under `MinimumHealthyPercent: 100`; an early successful check
@@ -56,13 +76,20 @@ alone therefore does not fix premature acceptance. See the
 [ECS health-check rules](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/healthcheck.html)
 and [service deployment rules](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service_definition_parameters.html).
 
+The drain covers Route 53's usual propagation window of up to 60 seconds plus
+the router's ten-second DNS cache, with a margin. It is bounded rather than a
+guarantee about every possible DNS failure. See the
+[Route 53 change rules](https://docs.aws.amazon.com/Route53/latest/APIReference/API_ChangeResourceRecordSets.html)
+and [Fargate stop-timeout rules](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_ContainerDefinition.html).
+
 ## Applying and validating the live change
 
 The CloudFormation templates are reference documentation and have never been
 deployed. Do not deploy the entire template to apply this change. After the
 source passes normal CI and merge, clone the service's **current** task
-definition and change only its website health-check URL to
-`http://localhost:3000/api/health/ready`. Keep all other fields and secret
+definition and change its website health-check URL to
+`http://localhost:3000/api/health/ready` and its `stopTimeout` to 120.
+Keep all other fields and secret
 references intact. Recheck that no rollout or other task-definition update
 has started before updating the service to the new revision.
 
