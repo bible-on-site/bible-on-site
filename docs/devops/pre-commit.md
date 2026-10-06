@@ -44,6 +44,7 @@ These checks run on all staged files regardless of module:
 | `mixed-line-ending` | Enforces consistent line endings |
 | `check-json5` | Validates JSON5 syntax |
 | `actionlint` | Lints GitHub Actions workflows |
+| `hadolint` | Lints Dockerfiles ([hadolint-py](https://github.com/AleksaC/hadolint-py) ships the binary as a wheel — no Docker daemon or system install needed, so it also runs on pre-commit.ci) |
 | `md-dead-link-check` | Detects broken links in Markdown files |
 
 The workflow linter uses a pinned [Astral actionlint revision](https://github.com/astral-sh/actionlint/commit/9e5dcb067e7cdcfe44d3f015ba9f2be4583466cb)
