@@ -1019,7 +1019,11 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: website-e2e-html-report-${{ github.run_id }}
-          path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/e2e/html
+          # `setup/` holds launcher.log + the teed next dev server.log, needed
+          # to attribute dev-server errors on failures (#2005).
+          path: |
+            ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/e2e/html
+            ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/setup
           retention-days: 7
           overwrite: true
 
@@ -1031,6 +1035,15 @@ jobs:
           path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/e2e/junit/e2e-results.xml
           retention-days: 1
           overwrite: true
+
+      - name: Show Website E2E Debug Logs
+        if: ${{ failure() }}
+        working-directory: ${{ env.WEBSITE_DIRECTORY }}
+        run: |
+          echo "=== launcher.log ==="
+          cat .playwright-report/setup/launcher.log 2>/dev/null || echo "(no launcher.log)"
+          echo "=== next dev server.log (tail) ==="
+          tail -n 300 .playwright-report/setup/server.log 2>/dev/null || echo "(no server.log)"
 
       - name: Restore lcov Docker image
         uses: actions/download-artifact@v8
