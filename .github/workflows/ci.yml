@@ -809,10 +809,15 @@ jobs:
           BENCHER_PROJECT: bible-on-site-website
           BENCHER_BRANCH: ${{ github.head_ref || github.ref_name }} # PR source branch, or branch name on push
         run: |
+          # Fail before reporting if an event cannot identify its base. Keep
+          # master push history intact; reset only feature/queue comparisons.
+          node "$GITHUB_WORKSPACE/devops/github/ci/bencher-comparison.mjs" > "$RUNNER_TEMP/bencher-comparison-args.txt"
+          mapfile -t BENCHER_COMPARISON_ARGS < "$RUNNER_TEMP/bencher-comparison-args.txt"
           bencher run \
             --project "$BENCHER_PROJECT" \
             --token "${{ secrets.BENCHER_API_TOKEN }}" \
             --branch "$BENCHER_BRANCH" \
+            "${BENCHER_COMPARISON_ARGS[@]}" \
             --testbed ubuntu-latest \
             --adapter json \
             --github-actions '${{ secrets.GITHUB_TOKEN }}' \
@@ -2451,7 +2456,7 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           npm run test:version
-          node --test github/ci/codecov-report-state.test.mjs
+          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs
 
       - name: Merge Test Coverage (Website + API)
         run: npm run coverage:merge
