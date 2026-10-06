@@ -1,7 +1,10 @@
 /** @jest-environment jsdom */
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import ReaderSettings from "@/app/929/[number]/components/ReaderSettings";
-import { READER_SETTINGS_STORAGE_KEY } from "@/lib/reader-settings";
+import {
+	READER_SETTINGS_STORAGE_KEY,
+	READER_SETTINGS_VERSION,
+} from "@/lib/reader-settings";
 import {
 	getRecitationSettings,
 	openReaderSettings,
@@ -43,7 +46,13 @@ test("one settings button opens display controls and preserves existing preferen
 	});
 	expect(
 		JSON.parse(localStorage.getItem(READER_SETTINGS_STORAGE_KEY) ?? "null"),
-	).toEqual({ fontStep: 4, lineStep: 2, wordStep: 4, fontId: 0 });
+	).toEqual({
+		fontStep: 4,
+		lineStep: 2,
+		wordStep: 4,
+		fontId: 0,
+		v: READER_SETTINGS_VERSION,
+	});
 });
 test("chapter shortcut opens the same modal focused on narration and returns focus on close", () => {
 	render(<ReaderSettings />);
