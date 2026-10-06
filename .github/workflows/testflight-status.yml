@@ -1,0 +1,40 @@
+name: Inspect TestFlight build
+
+on:
+  workflow_dispatch:
+    inputs:
+      module_version:
+        description: "Published app release version to inspect (e.g., 5.0.126)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+      - name: Restore the published IPA for read-only inspection
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODULE_VERSION: ${{ inputs.module_version }}
+        run: |
+          if ! [[ "$MODULE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid app release version"
+            exit 1
+          fi
+          gh release download "app-v$MODULE_VERSION" --repo "$GITHUB_REPOSITORY" \
+            --pattern '*.ipa' --dir "$RUNNER_TEMP/testflight-inspect"
+          echo "IPA_FILE=$(find "$RUNNER_TEMP/testflight-inspect" -name '*.ipa' -type f | head -1)" >> "$GITHUB_ENV"
+      - name: Read the exact build state from Apple
+        env:
+          MODULE_VERSION: ${{ inputs.module_version }}
+          API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: node devops/github/release/testflight-build.mjs inspect
