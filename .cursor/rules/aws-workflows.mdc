@@ -33,3 +33,7 @@ Before editing `.github/workflows/`:
   still block; only a suite whose own trigger did not fire may pass untested.
 - When adding or removing CI jobs or changing a job's `if`, update the
   `cross_module_ci` gate in the same change so triggers and gating stay in sync.
+- Never enable GitHub's managed "Automatic dependency submission" (Settings ->
+  Code security -> Dependency graph). It bare-restores every csproj on Ubuntu,
+  always fails on the MAUI project, and double-reports `submit-nuget`, racing
+  the required check owned by `dependency-submission.yml`.
