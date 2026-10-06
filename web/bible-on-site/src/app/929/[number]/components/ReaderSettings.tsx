@@ -229,11 +229,11 @@ export default function ReaderSettings() {
 									>
 										{PEREK_TANAKH_FONTS.map((font, index) => (
 											<option key={font || "default"} value={index}>
-												{font === "taamey" ? "Taamey D (ניסיוני)" : "ברירת מחדל"}
+												{font === "noto" ? "Noto Serif Hebrew" : "Taamey D"}
 											</option>
 										))}
 									</select>
-									<small>גופן טעמים מסורתי, עדיין בבחינה</small>
+									<small>גופן טעמים מסורתי</small>
 								</label>
 							</section>
 						) : (
