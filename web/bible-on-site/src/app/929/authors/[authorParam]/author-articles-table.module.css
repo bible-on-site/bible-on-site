@@ -106,6 +106,24 @@
   max-width: 320px;
 }
 
+/* Database abstracts are HTML; headings render inline like the perek page */
+.abstractCell h1,
+.abstractCell h2,
+.abstractCell h3,
+.abstractCell h4,
+.abstractCell h5,
+.abstractCell h6 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+  display: inline;
+}
+
+.abstractCell p {
+  margin: 0;
+  display: inline;
+}
+
 .noResults {
   text-align: center;
   padding: 24px;

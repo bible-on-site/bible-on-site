@@ -131,7 +131,14 @@ export function AuthorArticlesTable({ rows }: { rows: AuthorArticleRow[] }) {
 								</td>
 								<td>{row.sefer}</td>
 								<td>{row.source}</td>
-								<td className={styles.abstractCell}>{row.abstract ?? ""}</td>
+								<td className={styles.abstractCell}>
+									{row.abstract && (
+										<div
+											// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
+											dangerouslySetInnerHTML={{ __html: row.abstract }}
+										/>
+									)}
+								</td>
 							</tr>
 						))}
 						{visible.length === 0 && (
