@@ -1,6 +1,11 @@
 name: Inspect TestFlight build
 
 on:
+  workflow_call:
+    inputs:
+      ios_artifact_name:
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       module_version:
@@ -23,17 +28,25 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           MODULE_VERSION: ${{ inputs.module_version }}
+          IOS_ARTIFACT_NAME: ${{ inputs.ios_artifact_name }}
         run: |
+          if [ -z "$MODULE_VERSION" ]; then
+            if ! [[ "$IOS_ARTIFACT_NAME" =~ ^app-ios-v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+              echo "Invalid iOS release artifact name"
+              exit 1
+            fi
+            MODULE_VERSION="${BASH_REMATCH[1]}"
+          fi
           if ! [[ "$MODULE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Invalid app release version"
             exit 1
           fi
           gh release download "app-v$MODULE_VERSION" --repo "$GITHUB_REPOSITORY" \
             --pattern '*.ipa' --dir "$RUNNER_TEMP/testflight-inspect"
+          echo "MODULE_VERSION=$MODULE_VERSION" >> "$GITHUB_ENV"
           echo "IPA_FILE=$(find "$RUNNER_TEMP/testflight-inspect" -name '*.ipa' -type f | head -1)" >> "$GITHUB_ENV"
       - name: Read the exact build state from Apple
         env:
-          MODULE_VERSION: ${{ inputs.module_version }}
           API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}

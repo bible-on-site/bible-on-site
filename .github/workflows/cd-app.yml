@@ -13,6 +13,11 @@ on:
         description: "CI run ID that created the artifact"
         required: false
         type: string
+      inspect_ios_build:
+        description: "Read the exact Apple build state without deploying"
+        required: false
+        default: false
+        type: boolean
 
 # Keep every dispatch; never interrupt a production write.
 concurrency:
@@ -239,7 +244,7 @@ jobs:
 
   deploy_app_store:
     name: Deploy to App Store (TestFlight)
-    if: ${{ github.event.client_payload.ios_artifact_name != '' || inputs.ios_artifact_name != '' }}
+    if: ${{ (github.event.client_payload.ios_artifact_name != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
     permissions:
       contents: read
       actions: read
@@ -391,3 +396,12 @@ jobs:
           echo "**Version:** ${{ env.MODULE_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "**Target:** TestFlight" >> $GITHUB_STEP_SUMMARY
           echo "**Status:** Uploaded ✅" >> $GITHUB_STEP_SUMMARY
+
+  inspect_app_store:
+    if: ${{ inputs.inspect_ios_build }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/testflight-status.yml
+    with:
+      ios_artifact_name: ${{ inputs.ios_artifact_name }}
+    secrets: inherit
