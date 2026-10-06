@@ -137,6 +137,7 @@ export function AuthorArticlesTable({ rows }: { rows: AuthorArticleRow[] }) {
 										<div
 											// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 											dangerouslySetInnerHTML={{
+												// nosemgrep -- DOMPurify-sanitized abstract
 												__html: DOMPurify.sanitize(row.abstract),
 											}}
 										/>

@@ -76,6 +76,7 @@ export function ArticlesSection({
 										className={styles.articleAbstract}
 										// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 										dangerouslySetInnerHTML={{
+											// nosemgrep -- DOMPurify-sanitized abstract
 											__html: DOMPurify.sanitize(article.abstract),
 										}}
 									/>
@@ -103,6 +104,7 @@ export function ArticlesSection({
 										className={styles.articleAbstract}
 										// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 										dangerouslySetInnerHTML={{
+											// nosemgrep -- DOMPurify-sanitized abstract
 											__html: DOMPurify.sanitize(article.abstract),
 										}}
 									/>
