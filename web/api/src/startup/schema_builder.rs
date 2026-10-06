@@ -129,6 +129,7 @@ mod tests {
             source: "gpt-test".to_string(),
             notes: Some("review note".to_string()),
             status: "PENDING".to_string(),
+            base_revision_id: None,
             created_at: now,
             updated_at: now,
         }

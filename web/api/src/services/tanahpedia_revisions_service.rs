@@ -17,6 +17,23 @@ fn normalize(value: Option<String>) -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
+/// Finds the APPLIED head revision of an entry — the row that produced the
+/// entry's current content. `None` when the entry has no revision history yet
+/// (e.g. seeded or legacy content).
+async fn latest_applied_revision(
+    conn: &sea_orm::DatabaseConnection,
+    entry_id: &str,
+) -> Result<Option<entry_revision::Model>, ServiceError> {
+    entry_revision::Entity::find()
+        .filter(entry_revision::Column::EntryId.eq(entry_id))
+        .filter(entry_revision::Column::Status.eq(REVISION_STATUS_APPLIED))
+        .order_by_desc(entry_revision::Column::CreatedAt)
+        .order_by_desc(entry_revision::Column::Id)
+        .one(conn)
+        .await
+        .map_err(|db_err| ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err)))
+}
+
 /// Persists a revision proposed by an external AI client for human triage.
 ///
 /// Validation:
@@ -25,6 +42,9 @@ fn normalize(value: Option<String>) -> Option<String> {
 ///   `proposed_content` must be present.
 /// - when `entry_id` is supplied it must reference an existing entry; omit it to
 ///   propose a brand-new entry.
+/// - when `base_revision_id` is supplied it must reference an existing revision
+///   of the same entry; it is only meaningful for proposals targeting an
+///   existing entry.
 ///
 /// The revision is always stored with status `PENDING`; nothing is applied to
 /// `tanahpedia_entry` here — a human reviews it later.
@@ -41,6 +61,7 @@ pub async fn create_revision(
     let proposed_content = normalize(input.proposed_content);
     let notes = normalize(input.notes);
     let entry_id = normalize(input.entry_id);
+    let base_revision_id = normalize(input.base_revision_id);
 
     if proposed_unique_name.is_none() && proposed_title.is_none() && proposed_content.is_none() {
         return Err(ServiceError::bad_request(
@@ -63,6 +84,34 @@ pub async fn create_revision(
         }
     }
 
+    // A declared base must reference a real revision of the same entry.
+    if let Some(ref base_id) = base_revision_id {
+        if entry_id.is_none() {
+            return Err(ServiceError::bad_request(
+                "baseRevisionId is only meaningful when entryId targets an existing entry",
+            ));
+        }
+        let base = entry_revision::Entity::find_by_id(base_id.clone())
+            .one(db.get_connection())
+            .await
+            .map_err(|db_err| {
+                ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
+            })?;
+        match base {
+            Some(base) if base.entry_id.as_deref() == entry_id.as_deref() => {}
+            Some(_) => {
+                return Err(ServiceError::bad_request(
+                    "baseRevisionId references a revision of a different entry",
+                ));
+            }
+            None => {
+                return Err(ServiceError::bad_request(
+                    "baseRevisionId does not reference an existing revision",
+                ));
+            }
+        }
+    }
+
     let now = chrono::Utc::now().naive_utc();
     let model = entry_revision::Model {
         id: uuid::Uuid::new_v4().to_string(),
@@ -73,6 +122,7 @@ pub async fn create_revision(
         source,
         notes,
         status: REVISION_STATUS_PENDING.to_string(),
+        base_revision_id,
         created_at: now,
         updated_at: now,
     };
@@ -128,6 +178,12 @@ pub async fn find_revisions(
 ///   requires both `proposed_unique_name` and `proposed_title` (the entry's
 ///   non-null columns) — and the revision is linked to the new entry.
 ///
+/// When the revision declares a `base_revision_id`, applying it while the
+/// entry's APPLIED head has moved elsewhere is rejected (optimistic
+/// concurrency) instead of silently overwriting a newer change. The applied
+/// row keeps that base — or is stamped with the head it displaced — so the
+/// history graph records what each change was based on.
+///
 /// Re-applying an already-`APPLIED` revision is rejected.
 pub async fn apply_revision(
     db: &Database,
@@ -150,6 +206,7 @@ pub async fn apply_revision(
     }
 
     let now = chrono::Utc::now().naive_utc();
+    let mut head_revision_id: Option<String> = None;
 
     let target_entry_id = match revision.entry_id.clone() {
         Some(entry_id) => {
@@ -165,6 +222,16 @@ pub async fn apply_revision(
                         Option::<String>::None,
                     )
                 })?;
+
+            let head = latest_applied_revision(conn, &entry_id).await?;
+            if let Some(declared_base) = revision.base_revision_id.as_deref()
+                && head.as_ref().map(|h| h.id.as_str()) != Some(declared_base)
+            {
+                return Err(ServiceError::bad_request(
+                    "revision base is stale: the entry head has moved since the revision was proposed",
+                ));
+            }
+            head_revision_id = head.map(|h| h.id);
 
             let mut update =
                 entry::Entity::update_many().filter(entry::Column::Id.eq(entry_id.clone()));
@@ -214,6 +281,8 @@ pub async fn apply_revision(
         }
     };
 
+    let final_base_revision_id = revision.base_revision_id.clone().or(head_revision_id);
+
     entry_revision::Entity::update_many()
         .col_expr(
             entry_revision::Column::Status,
@@ -222,6 +291,10 @@ pub async fn apply_revision(
         .col_expr(
             entry_revision::Column::EntryId,
             Expr::value(target_entry_id.clone()),
+        )
+        .col_expr(
+            entry_revision::Column::BaseRevisionId,
+            Expr::value(final_base_revision_id.clone()),
         )
         .col_expr(entry_revision::Column::UpdatedAt, Expr::value(now))
         .filter(entry_revision::Column::Id.eq(revision.id.clone()))
@@ -234,6 +307,7 @@ pub async fn apply_revision(
     let mut applied = revision;
     applied.status = REVISION_STATUS_APPLIED.to_string();
     applied.entry_id = Some(target_entry_id);
+    applied.base_revision_id = final_base_revision_id;
     applied.updated_at = now;
 
     tracing::info!(revision_id = %applied.id, "Applied entry revision");
@@ -381,6 +455,7 @@ mod tests {
             source: "gpt-4o".to_string(),
             notes: None,
             status: "PENDING".to_string(),
+            base_revision_id: None,
             created_at: chrono::Utc::now().naive_utc(),
             updated_at: chrono::Utc::now().naive_utc(),
         };
@@ -419,6 +494,7 @@ mod tests {
             source: "gpt-4o".to_string(),
             notes: None,
             status: status.to_string(),
+            base_revision_id: None,
             created_at: chrono::Utc::now().naive_utc(),
             updated_at: chrono::Utc::now().naive_utc(),
         }
@@ -502,6 +578,7 @@ mod tests {
             .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
                 "entry-1",
             )]])
+            .append_query_results::<entry_revision::Model, Vec<entry_revision::Model>, _>([vec![]])
             .append_exec_results([
                 MockExecResult {
                     last_insert_id: 0,
@@ -521,6 +598,193 @@ mod tests {
 
         assert_eq!(applied.status, "APPLIED");
         assert_eq!(applied.entry_id.as_deref(), Some("entry-1"));
+        assert_eq!(applied.base_revision_id, None);
+    }
+
+    #[tokio::test]
+    async fn apply_revision_stamps_current_head_as_base() {
+        let mut head = revision_model(Some("entry-1"), "APPLIED");
+        head.id = "rev-head".to_string();
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<entry_revision::Model, Vec<entry_revision::Model>, _>([vec![
+                revision_model(Some("entry-1"), "PENDING"),
+            ]])
+            .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
+                "entry-1",
+            )]])
+            .append_query_results::<entry_revision::Model, Vec<entry_revision::Model>, _>([vec![
+                head,
+            ]])
+            .append_exec_results([
+                MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                },
+                MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                },
+            ])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let applied = apply_revision(&db, "rev-1".to_string())
+            .await
+            .expect("revision should apply");
+
+        assert_eq!(applied.base_revision_id.as_deref(), Some("rev-head"));
+    }
+
+    #[tokio::test]
+    async fn apply_revision_accepts_matching_declared_base() {
+        let mut head = revision_model(Some("entry-1"), "APPLIED");
+        head.id = "rev-head".to_string();
+        let mut proposal = revision_model(Some("entry-1"), "PENDING");
+        proposal.base_revision_id = Some("rev-head".to_string());
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<entry_revision::Model, Vec<entry_revision::Model>, _>([vec![
+                proposal,
+            ]])
+            .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
+                "entry-1",
+            )]])
+            .append_query_results::<entry_revision::Model, Vec<entry_revision::Model>, _>([vec![
+                head,
+            ]])
+            .append_exec_results([
+                MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                },
+                MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                },
+            ])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let applied = apply_revision(&db, "rev-1".to_string())
+            .await
+            .expect("revision should apply");
+
+        assert_eq!(applied.base_revision_id.as_deref(), Some("rev-head"));
+    }
+
+    #[tokio::test]
+    async fn apply_revision_rejects_stale_declared_base() {
+        let mut head = revision_model(Some("entry-1"), "APPLIED");
+        head.id = "rev-head".to_string();
+        let mut proposal = revision_model(Some("entry-1"), "PENDING");
+        proposal.base_revision_id = Some("rev-old".to_string());
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<entry_revision::Model, Vec<entry_revision::Model>, _>([vec![
+                proposal,
+            ]])
+            .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
+                "entry-1",
+            )]])
+            .append_query_results::<entry_revision::Model, Vec<entry_revision::Model>, _>([vec![
+                head,
+            ]])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let err = apply_revision(&db, "rev-1".to_string()).await.unwrap_err();
+        assert!(matches!(err, ServiceError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn create_revision_rejects_base_for_new_entry_proposal() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let input = SubmitEntryRevisionInput {
+            source: "gpt-4o".to_string(),
+            proposed_title: Some("x".to_string()),
+            base_revision_id: Some("rev-9".to_string()),
+            ..Default::default()
+        };
+
+        let err = create_revision(&db, input).await.unwrap_err();
+        assert!(matches!(err, ServiceError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn create_revision_rejects_unknown_base_revision() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
+                "entry-1",
+            )]])
+            .append_query_results::<entry_revision::Model, Vec<entry_revision::Model>, _>([vec![]])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+        let input = SubmitEntryRevisionInput {
+            source: "gpt-4o".to_string(),
+            entry_id: Some("entry-1".to_string()),
+            proposed_title: Some("x".to_string()),
+            base_revision_id: Some("rev-missing".to_string()),
+            ..Default::default()
+        };
+
+        let err = create_revision(&db, input).await.unwrap_err();
+        assert!(matches!(err, ServiceError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn create_revision_rejects_base_of_other_entry() {
+        let mut base = revision_model(Some("entry-2"), "APPLIED");
+        base.id = "rev-base".to_string();
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
+                "entry-1",
+            )]])
+            .append_query_results::<entry_revision::Model, Vec<entry_revision::Model>, _>([vec![
+                base,
+            ]])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+        let input = SubmitEntryRevisionInput {
+            source: "gpt-4o".to_string(),
+            entry_id: Some("entry-1".to_string()),
+            proposed_title: Some("x".to_string()),
+            base_revision_id: Some("rev-base".to_string()),
+            ..Default::default()
+        };
+
+        let err = create_revision(&db, input).await.unwrap_err();
+        assert!(matches!(err, ServiceError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn create_revision_accepts_declared_base_of_same_entry() {
+        let mut base = revision_model(Some("entry-1"), "APPLIED");
+        base.id = "rev-base".to_string();
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
+                "entry-1",
+            )]])
+            .append_query_results::<entry_revision::Model, Vec<entry_revision::Model>, _>([vec![
+                base,
+            ]])
+            .append_exec_results([MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            }])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+        let input = SubmitEntryRevisionInput {
+            source: "gpt-4o".to_string(),
+            entry_id: Some("entry-1".to_string()),
+            proposed_content: Some("<p>טקסט</p>".to_string()),
+            base_revision_id: Some("rev-base".to_string()),
+            ..Default::default()
+        };
+
+        let revision = create_revision(&db, input)
+            .await
+            .expect("revision should be created");
+
+        assert_eq!(revision.base_revision_id.as_deref(), Some("rev-base"));
     }
 
     #[tokio::test]
