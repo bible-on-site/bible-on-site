@@ -43,7 +43,7 @@ test("one settings button opens display controls and preserves existing preferen
 	});
 	expect(
 		JSON.parse(localStorage.getItem(READER_SETTINGS_STORAGE_KEY) ?? "null"),
-	).toEqual({ fontStep: 4, lineStep: 2, wordStep: 4 });
+	).toEqual({ fontStep: 4, lineStep: 2, wordStep: 4, fontId: 0 });
 });
 test("chapter shortcut opens the same modal focused on narration and returns focus on close", () => {
 	render(<ReaderSettings />);
