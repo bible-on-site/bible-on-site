@@ -59,15 +59,6 @@ function getCoverageReportOptions(): CoverageReportOptions {
 				normalized.includes("/src/") && !normalized.includes("node_modules")
 			);
 		},
-		// Files never loaded during e2e still count as uncovered.
-		all: {
-			dir: ["./src"],
-			filter: {
-				"**/*.css": false,
-				"**/routeTree.gen.ts": false,
-				"**/*": true,
-			},
-		},
 		onEnd: async () => {
 			// Normalize SF paths to forward slashes and prefix with web/admin/ so
 			// Codecov flag matching maps them to the admin module.
