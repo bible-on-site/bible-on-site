@@ -14,12 +14,20 @@ on:
         required: false
         type: string
 
+# Keep every dispatch; never interrupt a production write.
+concurrency:
+  group: ${{ github.repository }}-cd-app
+  cancel-in-progress: false
+  queue: max
+
 jobs:
   deploy_google_play:
     name: Deploy to Google Play (Internal Track)
     if: ${{ github.event.client_payload.android_artifact_name != '' }}
     permissions:
       contents: read
+      actions: read
+      deployments: write
     runs-on: ubuntu-latest
 
     env:
@@ -29,20 +37,33 @@ jobs:
       APP_DIRECTORY: app
 
     steps:
-      - name: Checkout
+      - name: Checkout deployment automation
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.client_payload.ref }}
+          ref: ${{ github.sha }}
+
+      - name: Check deployment source and freshness
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_MODULE: app
+          DEPLOY_TARGET: app-android
+        run: node devops/github/release/check-deployment.mjs
+
+      - name: Checkout artifact source
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.guard.outputs.ref }}
 
       - name: Restore Android AAB
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.ANDROID_ARTIFACT_NAME }}
-          path: ${{ env.APP_DIRECTORY }}/.artifacts
-          run-id: ${{ env.CI_RUN_ID }}
-          github-token: ${{ secrets.BOT_PAT }}
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "app-v${{ env.MODULE_VERSION }}" --pattern "*.aab" --dir "${{ env.APP_DIRECTORY }}/.artifacts"
 
       - name: Find AAB file
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: find_aab
         run: |
           AAB_FILE=$(find ${{ env.APP_DIRECTORY }}/.artifacts -name "*.aab" | head -1)
@@ -56,30 +77,43 @@ jobs:
           echo "Found AAB: $AAB_FILE"
 
       - name: Setup .NET
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
 
       - name: Write service account key
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         run: |
           echo '${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}' > ${{ runner.temp }}/service-account.json
 
       - name: Restore dotnet tools
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         working-directory: ${{ env.APP_DIRECTORY }}
         run: dotnet tool restore
 
       - name: Upload to Google Play
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         working-directory: ${{ env.APP_DIRECTORY }}
         run: |
           dotnet run --project devops -- DeployGooglePlay \
             --aab-path "${{ steps.find_aab.outputs.AAB_FILE }}" \
             --google-play-key-file "${{ runner.temp }}/service-account.json"
 
+      - name: Record deployment result
+        if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.guard.outputs.deployment_id }}
+          DEPLOYMENT_RESULT: ${{ job.status }}
+        run: node "${{ runner.temp }}/deployment-state.mjs"
+
       - name: Cleanup
-        if: always()
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
         run: rm -f ${{ runner.temp }}/service-account.json
 
       - name: Deployment Summary
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         run: |
           echo "## Android Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -92,6 +126,8 @@ jobs:
     if: ${{ github.event.client_payload.windows_artifact_name != '' }}
     permissions:
       contents: read
+      actions: read
+      deployments: write
     runs-on: windows-latest
 
     env:
@@ -101,20 +137,33 @@ jobs:
       APP_DIRECTORY: app
 
     steps:
-      - name: Checkout
+      - name: Checkout deployment automation
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.client_payload.ref }}
+          ref: ${{ github.sha }}
+
+      - name: Check deployment source and freshness
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_MODULE: app
+          DEPLOY_TARGET: app-windows
+        run: node devops/github/release/check-deployment.mjs
+
+      - name: Checkout artifact source
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.guard.outputs.ref }}
 
       - name: Restore Windows MSIX
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.WINDOWS_ARTIFACT_NAME }}
-          path: ${{ env.APP_DIRECTORY }}/.artifacts
-          run-id: ${{ env.CI_RUN_ID }}
-          github-token: ${{ secrets.BOT_PAT }}
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "app-v${{ env.MODULE_VERSION }}" --pattern "BibleOnSite*.msix" --dir "${{ env.APP_DIRECTORY }}/.artifacts"
 
       - name: Find MSIX file
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: find_msix
         shell: pwsh
         run: |
@@ -130,14 +179,17 @@ jobs:
           Write-Host "Found MSIX: $msixPath"
 
       - name: Setup .NET
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
 
       - name: Setup Microsoft Store Developer CLI
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: microsoft/setup-msstore-cli@v1
 
       - name: Configure Microsoft Store Developer CLI
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         shell: pwsh
         run: |
           msstore reconfigure `
@@ -147,10 +199,12 @@ jobs:
             --clientSecret ${{ secrets.MS_STORE_CLIENT_SECRET }}
 
       - name: Restore dotnet tools
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         working-directory: ${{ env.APP_DIRECTORY }}
         run: dotnet tool restore
 
       - name: Upload to Microsoft Store
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         working-directory: ${{ env.APP_DIRECTORY }}
         shell: pwsh
         env:
@@ -165,7 +219,16 @@ jobs:
             --ms-store-flight-group-id "${{ secrets.MS_STORE_FLIGHT_GROUP_ID }}" `
             --max-flights-to-keep 15
 
+      - name: Record deployment result
+        if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.guard.outputs.deployment_id }}
+          DEPLOYMENT_RESULT: ${{ job.status }}
+        run: node "${{ runner.temp }}/deployment-state.mjs"
+
       - name: Deployment Summary
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         shell: pwsh
         run: |
           "## Windows Deployment Summary" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
@@ -179,6 +242,8 @@ jobs:
     if: ${{ github.event.client_payload.ios_artifact_name != '' || inputs.ios_artifact_name != '' }}
     permissions:
       contents: read
+      actions: read
+      deployments: write
     runs-on: macos-15
 
     env:
@@ -188,18 +253,33 @@ jobs:
       APP_DIRECTORY: app
 
     steps:
-      - name: Checkout
+      - name: Checkout deployment automation
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Check deployment source and freshness
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_MODULE: app
+          DEPLOY_TARGET: app-ios
+        run: node devops/github/release/check-deployment.mjs
+
+      - name: Checkout artifact source
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.guard.outputs.ref }}
 
       - name: Restore iOS IPA
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.IOS_ARTIFACT_NAME }}
-          path: ${{ env.APP_DIRECTORY }}/.artifacts
-          run-id: ${{ env.CI_RUN_ID }}
-          github-token: ${{ secrets.BOT_PAT }}
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "app-v${{ env.MODULE_VERSION }}" --pattern "*.ipa" --dir "${{ env.APP_DIRECTORY }}/.artifacts"
 
       - name: Find IPA file
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: find_ipa
         run: |
           IPA_FILE=$(find ${{ env.APP_DIRECTORY }}/.artifacts -name "*.ipa" | head -1)
@@ -212,6 +292,7 @@ jobs:
           echo "Found IPA: $IPA_FILE"
 
       - name: Setup App Store Connect API Key
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         env:
           API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
@@ -232,6 +313,7 @@ jobs:
           echo "API_KEY_PATH=$HOME/private_keys/api_key.json" >> $GITHUB_ENV
 
       - name: Install Fastlane
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         run: gem install fastlane -NV
 
       # TODO: Split upload and distribution into separate workflows (see #1183)
@@ -239,6 +321,7 @@ jobs:
       # we consider the job successful if the build was processed, even if
       # external distribution fails due to rate limits.
       - name: Upload to TestFlight and Distribute to Beta Group
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         env:
           TESTFLIGHT_BETA_GROUP: ${{ secrets.TESTFLIGHT_BETA_GROUP_NAME }}
         run: |
@@ -267,11 +350,20 @@ jobs:
             exit $EXIT_CODE
           fi
 
+      - name: Record deployment result
+        if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.guard.outputs.deployment_id }}
+          DEPLOYMENT_RESULT: ${{ job.status }}
+        run: node "${{ runner.temp }}/deployment-state.mjs"
+
       - name: Cleanup
-        if: always()
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
         run: rm -rf $HOME/private_keys
 
       - name: Deployment Summary
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         run: |
           echo "## iOS Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
