@@ -1,5 +1,6 @@
 "use client";
 
+import DOMPurify from "isomorphic-dompurify";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -10,6 +11,7 @@ import {
 	DEFAULT_ARTICLE_SORT,
 	distinctSefarim,
 	filterAuthorArticles,
+	normalizeAbstractHtml,
 	sortAuthorArticles,
 } from "../../../../lib/authors/articles-grid";
 import styles from "./author-articles-table.module.css";
@@ -131,7 +133,19 @@ export function AuthorArticlesTable({ rows }: { rows: AuthorArticleRow[] }) {
 								</td>
 								<td>{row.sefer}</td>
 								<td>{row.source}</td>
-								<td className={styles.abstractCell}>{row.abstract ?? ""}</td>
+								<td className={styles.abstractCell}>
+									{row.abstract && (
+										<div
+											// nosemgrep -- DOMPurify-sanitized abstract
+											// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
+											dangerouslySetInnerHTML={{
+												__html: DOMPurify.sanitize(
+													normalizeAbstractHtml(row.abstract),
+												),
+											}}
+										/>
+									)}
+								</td>
 							</tr>
 						))}
 						{visible.length === 0 && (

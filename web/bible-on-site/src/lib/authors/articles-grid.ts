@@ -41,9 +41,26 @@ export function distinctSefarim(rows: AuthorArticleRow[]): string[] {
 		.map(([sefer]) => sefer);
 }
 
+const HTML_TAG_PATTERN = /<[^>]*>/g;
+
+const HEADING_OPEN_PATTERN = /<h[1-6](\s[^>]*)?>/gi;
+const HEADING_CLOSE_PATTERN = /<\/h[1-6]>/gi;
+
+/**
+ * Abstract HTML embeds section headings (h1-h6). Inside the datagrid cell a
+ * real heading pollutes the page outline and breaks heading-based selectors,
+ * so headings are rewritten as bold paragraphs before sanitization.
+ */
+export function normalizeAbstractHtml(html: string): string {
+	return html
+		.replace(HEADING_OPEN_PATTERN, '<p class="abstractHeading">')
+		.replace(HEADING_CLOSE_PATTERN, "</p>");
+}
+
 /**
  * Case-insensitive substring search over name, abstract and source,
- * combined with an optional sefer filter.
+ * combined with an optional sefer filter. The abstract is HTML, so its
+ * tags are stripped to match only visible text.
  */
 export function filterAuthorArticles(
 	rows: AuthorArticleRow[],
@@ -54,9 +71,11 @@ export function filterAuthorArticles(
 	return rows.filter((row) => {
 		if (sefer !== "" && row.sefer !== sefer) return false;
 		if (needle === "") return true;
-		return [row.name, row.abstract ?? "", row.source].some((field) =>
-			field.toLowerCase().includes(needle),
-		);
+		return [
+			row.name,
+			(row.abstract ?? "").replace(HTML_TAG_PATTERN, " "),
+			row.source,
+		].some((field) => field.toLowerCase().includes(needle));
 	});
 }
 

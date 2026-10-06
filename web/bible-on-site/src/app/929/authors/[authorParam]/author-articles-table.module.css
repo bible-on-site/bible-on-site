@@ -1,126 +1,136 @@
 .grid {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
 }
 
 .toolbar {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
+	display: flex;
+	gap: 12px;
+	flex-wrap: wrap;
 }
 
 .search {
-  flex: 1;
-  min-width: 180px;
-  padding: 8px 12px;
-  font-size: 0.95rem;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--surface-elevated);
-  color: var(--foreground);
+	flex: 1;
+	min-width: 180px;
+	padding: 8px 12px;
+	font-size: 0.95rem;
+	border: 1px solid var(--border-subtle);
+	border-radius: 8px;
+	background: var(--surface-elevated);
+	color: var(--foreground);
 }
 
 .seferFilter {
-  padding: 8px 12px;
-  font-size: 0.95rem;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--surface-elevated);
-  color: var(--foreground);
+	padding: 8px 12px;
+	font-size: 0.95rem;
+	border: 1px solid var(--border-subtle);
+	border-radius: 8px;
+	background: var(--surface-elevated);
+	color: var(--foreground);
 }
 
 .tableWrap {
-  overflow-x: auto;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+	overflow-x: auto;
+	border: 1px solid var(--border-subtle);
+	border-radius: 8px;
 }
 
 .table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.95rem;
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.95rem;
 }
 
 .table th {
-  background: var(--surface-muted);
-  color: var(--pasuk-num-color);
-  font-weight: 700;
-  text-align: right;
-  padding: 10px 12px;
-  border-bottom: 2px solid var(--pasuk-num-color);
-  white-space: nowrap;
+	background: var(--surface-muted);
+	color: var(--pasuk-num-color);
+	font-weight: 700;
+	text-align: right;
+	padding: 10px 12px;
+	border-bottom: 2px solid var(--pasuk-num-color);
+	white-space: nowrap;
 }
 
 .table th.sortable {
-  padding: 0;
+	padding: 0;
 }
 
 .sortButton {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 10px 12px;
-  background: none;
-  border: none;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  text-align: right;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 10px 12px;
+	background: none;
+	border: none;
+	font: inherit;
+	color: inherit;
+	cursor: pointer;
+	text-align: right;
 }
 
 .sortGlyph {
-  font-size: 0.7rem;
-  color: var(--muted-text);
+	font-size: 0.7rem;
+	color: var(--muted-text);
 }
 
 .table td {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border-subtle);
-  vertical-align: top;
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--border-subtle);
+	vertical-align: top;
 }
 
 .row {
-  cursor: pointer;
-  transition: background 0.15s ease;
+	cursor: pointer;
+	transition: background 0.15s ease;
 }
 
 .row:hover {
-  background: var(--surface-muted);
+	background: var(--surface-muted);
 }
 
 .nameCell a {
-  color: var(--link-accent);
-  font-weight: 600;
-  text-decoration: none;
+	color: var(--link-accent);
+	font-weight: 600;
+	text-decoration: none;
 }
 
 .nameCell a:hover {
-  text-decoration: underline;
+	text-decoration: underline;
 }
 
 .abstractCell {
-  color: var(--muted-text);
-  font-size: 0.85rem;
-  max-width: 320px;
+	color: var(--muted-text);
+	font-size: 0.85rem;
+	max-width: 320px;
+}
+
+/* Database abstracts are HTML; headings are rewritten as bold paragraphs
+   so they stay block-level without emitting real h1-h6 elements */
+.abstractCell p {
+	margin: 0;
+}
+
+.abstractCell .abstractHeading {
+	font-weight: 600;
 }
 
 .noResults {
-  text-align: center;
-  padding: 24px;
-  color: var(--muted-text);
+	text-align: center;
+	padding: 24px;
+	color: var(--muted-text);
 }
 
 .resultCount {
-  margin: 0;
-  font-size: 0.85rem;
-  color: var(--muted-text);
+	margin: 0;
+	font-size: 0.85rem;
+	color: var(--muted-text);
 }
 
 @media (max-width: 640px) {
-  .abstractColumn,
-  .abstractCell {
-    display: none;
-  }
+	.abstractColumn,
+	.abstractCell {
+		display: none;
+	}
 }
