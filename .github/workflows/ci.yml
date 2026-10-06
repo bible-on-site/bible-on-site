@@ -2399,6 +2399,10 @@ jobs:
           path: ~/.npm
           key: ${{ steps.devops-npm-cache.outputs.cache-primary-key }}
 
+      - name: Test version publication and deployment collision guards
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        run: npm run test:version
+
       - name: Merge Test Coverage (Website + API)
         run: npm run coverage:merge
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
@@ -2580,15 +2584,23 @@ jobs:
     if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.data_ci.result == 'success' && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
+      actions: read
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout release automation
+        uses: actions/checkout@v7
+      - name: Bind SQL artifact source
+        id: sql_source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node devops/github/release/data-artifact.mjs
       - name: Trigger Data CD Workflow
         uses: peter-evans/repository-dispatch@v4
         with:
           repository: ${{ github.repository }}
           token: ${{ secrets.BOT_PAT }}
           event-type: deploy-data
-          client-payload: '{"ref": "${{ github.ref }}", "run_id": "${{ github.run_id }}"}'
+          client-payload: ${{ steps.sql_source.outputs.payload }}
 
   # ====================================================================================
   # VERSION BUMP JOB - Post-release version bumps on master
@@ -2614,6 +2626,7 @@ jobs:
     concurrency:
       group: ${{ github.repository }}-version-bump
       cancel-in-progress: false
+      queue: max
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -2638,48 +2651,8 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: npm ci --no-audit --no-fund
 
-      - name: Bump released module versions
-        id: released
+      - name: Publish release and collision version bumps together
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-        run: npm run bump:module-versions -- --mode released
-
-      - name: Commit and push released version bumps
-        if: ${{ steps.released.outputs.summary != '' }}
-        env:
-          SUMMARY: ${{ steps.released.outputs.summary }}
-        run: |
-          set -e
-          git commit -n -am "chore(release): Bump versions ($SUMMARY) [skip ci]"
-          git fetch origin master
-          if ! git rebase origin/master; then
-            echo "Error: Failed to rebase version bump commit. This may indicate a conflict."
-            echo "Aborting rebase..."
-            git rebase --abort
-            exit 1
-          fi
-          git push origin HEAD:master
-
-      - name: Bump versions taken by another commit
-        id: retry
-        working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        env:
-          NEEDS_JSON: ${{ toJSON(needs) }}
-        run: npm run bump:module-versions -- --mode retry
-
-      - name: Commit and push retry version bumps
-        if: ${{ steps.retry.outputs.summary != '' }}
-        env:
-          SUMMARY: ${{ steps.retry.outputs.summary }}
-        run: |
-          set -e
-          git commit -n -am "chore(release): Bump versions to release ($SUMMARY)"
-          git fetch origin master
-          if ! git rebase origin/master; then
-            echo "Error: Failed to rebase version bump commit. This may indicate a conflict."
-            echo "Aborting rebase..."
-            git rebase --abort
-            exit 1
-          fi
-          git push origin HEAD:master
+        run: npm run bump:module-versions -- --mode all --publish

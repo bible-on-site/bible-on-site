@@ -10,6 +10,10 @@ For changes limited to README files, local test suites and CI are not required f
 
 For a task the user assigns, you may grant the local tool, Docker file-sharing, and workspace access permissions needed to complete and validate that task. Keep each grant scoped to the task and follow platform security prompts and repository policy. Do not ask the user to repeat this authorization.
 
+# Worktree Isolation
+
+Use a dedicated Git worktree for every task unless the entire task can be completed using API calls alone. Create or reuse a worktree belonging to the current task before changing repository files or running builds. Do not switch branches or modify files in another task's checkout. After delivery, archive the task's managed worktree or remove its unmanaged worktree.
+
 # Data Ownership
 
 Application content belongs in the database. Treat the Rust db-populator and local population scripts as temporary bootstrap and test tooling, not as a source of production content. Populate the local database from production with `sync-from-prod`; make lasting content changes through the database deployment or admin editing path. Do not add production place or article content to the Rust populator just to make it appear locally.

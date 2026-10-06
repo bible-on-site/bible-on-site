@@ -6,8 +6,8 @@
  *        Also accepts short names: app, api, website
  */
 
-import { execSync } from "node:child_process";
-import { dirname, join } from "node:path";
+import { execFileSync } from "node:child_process";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
@@ -18,7 +18,7 @@ import {
 } from "../../get-module-version.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = join(__dirname, "../..");
+const REPO_ROOT = join(__dirname, "../../..");
 
 /**
  * Get the latest released version from git tags for a module.
@@ -27,22 +27,23 @@ const REPO_ROOT = join(__dirname, "../..");
  */
 export function getReleasedVersion(
 	identifier: ModulePath | ModuleName,
+	cwd = REPO_ROOT,
 ): string | null {
 	const tagPrefix = getTagPrefix(identifier);
-	try {
-		const result = execSync(`git tag -l "${tagPrefix}*" --sort=-v:refname`, {
+	const result = execFileSync(
+		"git",
+		["tag", "-l", `${tagPrefix}*`, "--sort=-v:refname"],
+		{
 			encoding: "utf-8",
-			cwd: REPO_ROOT,
+			cwd,
 			stdio: ["pipe", "pipe", "pipe"],
-		});
-		const tags = result.trim().split("\n").filter(Boolean);
-		if (tags.length === 0) {
-			return null;
-		}
-		return tags[0].replace(tagPrefix, "");
-	} catch {
+		},
+	);
+	const tags = result.trim().split("\n").filter(Boolean);
+	if (tags.length === 0) {
 		return null;
 	}
+	return tags[0].replace(tagPrefix, "");
 }
 
 async function main() {
@@ -59,6 +60,8 @@ async function main() {
 				"api",
 				"website",
 				"bulletin",
+				"admin",
+				"web/admin",
 			] as const,
 			demandOption: true,
 		})
@@ -74,6 +77,9 @@ async function main() {
 }
 
 // Run main if executed directly
-if (import.meta.url === `file://${process.argv[1].replace(/\\/g, "/")}`) {
+if (
+	process.argv[1] &&
+	resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
 	main();
 }
