@@ -16,18 +16,28 @@ export const PEREK_FONT_SCALES = [0.85, 0.92, 1, 1.15, 1.3] as const;
 export const PEREK_LINE_HEIGHTS = [1.5, 1.75, 2] as const;
 export const PEREK_WORD_SPACINGS = [0.12, 0.2, 0.28, 0.36, 0.44] as const;
 
+/**
+ * Tanakh font choices applied to the perek text. Index 0 is the default
+ * (Noto Serif Hebrew); index 1 selects the experimental Taamey D face.
+ * Applied as `data-tanakh-font` on <html>, which CSS selectors match.
+ */
+export const PEREK_TANAKH_FONTS = ["", "taamey"] as const;
+
 export type ReaderSettings = {
 	/** Index into PEREK_FONT_SCALES. */
 	fontStep: number;
 	/** Index into PEREK_LINE_HEIGHTS. */
 	lineStep: number;
 	wordStep: number;
+	/** Index into PEREK_TANAKH_FONTS. */
+	fontId: number;
 };
 
 export const DEFAULT_READER_SETTINGS: ReaderSettings = {
 	fontStep: PEREK_FONT_SCALES.indexOf(1),
 	lineStep: 0,
 	wordStep: 0,
+	fontId: 0,
 };
 
 const clampStep = (value: number, max: number) =>
@@ -48,6 +58,10 @@ function normalizeSettings(raw: unknown): ReaderSettings {
 			candidate.wordStep == null
 				? 0
 				: clampStep(candidate.wordStep, PEREK_WORD_SPACINGS.length - 1),
+		fontId:
+			candidate.fontId == null
+				? DEFAULT_READER_SETTINGS.fontId
+				: clampStep(candidate.fontId, PEREK_TANAKH_FONTS.length - 1),
 	};
 }
 
@@ -94,16 +108,20 @@ export function applyReaderSettings(
 		"--perek-word-spacing",
 		`${PEREK_WORD_SPACINGS[normalized.wordStep]}em`,
 	);
+	const tanakhFont = PEREK_TANAKH_FONTS[normalized.fontId];
+	if (tanakhFont) root.dataset.tanakhFont = tanakhFont;
+	else delete root.dataset.tanakhFont;
 }
 
 /**
  * Inline bootstrap that re-applies stored settings before first paint so
  * returning readers see no font-size / line-height flash. Rendered as a raw
- * <script> at the top of the perek layout; kept dependency-free on purpose.
+ * <script> in the root layout's head, including visits that reach the reader
+ * through client-side navigation; kept dependency-free on purpose.
  *
  * Deliberately a static literal: building this string by interpolating the
  * constants above trips static-analysis code-construction rules, so the
  * storage key, arrays and default indices are duplicated here verbatim. The
  * reader-settings unit test asserts they stay in sync.
  */
-export const READER_SETTINGS_BOOTSTRAP = `(function(){try{var s=JSON.parse(localStorage.getItem("perekReaderSettings")||"null")||{};var f=[0.85,0.92,1,1.15,1.3],l=[1.5,1.75,2],w=[0.12,0.2,0.28,0.36,0.44];function c(v,m){return typeof v==="number"&&isFinite(v)?Math.min(Math.max(Math.round(v),0),m):0}var e=document.documentElement;e.style.setProperty("--perek-font-scale",String(f[s.fontStep==null?2:c(s.fontStep,f.length-1)]));e.style.setProperty("--perek-line-height",String(l[s.lineStep==null?0:c(s.lineStep,l.length-1)]));e.style.setProperty("--perek-word-spacing",String(w[s.wordStep==null?0:c(s.wordStep,w.length-1)])+"em")}catch(e){}})();`;
+export const READER_SETTINGS_BOOTSTRAP = `(function(){try{var s=JSON.parse(localStorage.getItem("perekReaderSettings")||"null")||{};var f=[0.85,0.92,1,1.15,1.3],l=[1.5,1.75,2],w=[0.12,0.2,0.28,0.36,0.44],tf=["","taamey"];function c(v,m){return typeof v==="number"&&isFinite(v)?Math.min(Math.max(Math.round(v),0),m):0}var e=document.documentElement;e.style.setProperty("--perek-font-scale",String(f[s.fontStep==null?2:c(s.fontStep,f.length-1)]));e.style.setProperty("--perek-line-height",String(l[s.lineStep==null?0:c(s.lineStep,l.length-1)]));e.style.setProperty("--perek-word-spacing",String(w[s.wordStep==null?0:c(s.wordStep,w.length-1)])+"em");var t=tf[s.fontId==null?0:c(s.fontId,tf.length-1)];if(t){e.dataset.tanakhFont=t}else{delete e.dataset.tanakhFont}}catch(e){}})();`;

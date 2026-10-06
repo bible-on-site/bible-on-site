@@ -16,6 +16,13 @@ public partial class PerekPage : ContentPage
 {
     private readonly PerekViewModel _viewModel;
     private bool _isLoading;
+
+    // Generation counter: each app-link request supersedes any earlier one
+    // still waiting for the initial load.
+    private long _appLinkGeneration;
+
+    // Article from a cold-start app link, opened after the initial load.
+    private int? _pendingArticleId;
     private DateTime _lastLongPressTime = DateTime.MinValue;
     private int _pressedPasukNum = -1;
     private CancellationTokenSource? _longPressTokenSource;
@@ -36,6 +43,12 @@ public partial class PerekPage : ContentPage
     // Scroll state tracking - used to prevent long-press during scroll
     private static DateTime _lastScrollTime = DateTime.MinValue;
     private const int ScrollCooldownMs = 500; // Don't allow long-press within 500ms of scroll
+
+    // Tracks the carousel width so rotation/resize can be detected in SizeChanged.
+    private double _carouselWidth = -1;
+
+    // A resize observed while the initial load was running; consumed when it ends.
+    private bool _pendingCarouselResnap;
 
 #if IOS
     private CancellationTokenSource? _scrollRefreshCts;
@@ -67,6 +80,7 @@ public partial class PerekPage : ContentPage
         SetupFontSizeResources();
         SetupCarouselNavigation();
         SetupExitButtonDragHandler();
+        SubscribeAppLinks();
         Console.WriteLine("[Startup] PerekPage constructed");
     }
 
@@ -82,6 +96,7 @@ public partial class PerekPage : ContentPage
         SetupFontSizeResources();
         SetupCarouselNavigation();
         SetupExitButtonDragHandler();
+        SubscribeAppLinks();
     }
 
     /// <summary>
@@ -92,6 +107,7 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private void SetupCarouselNavigation()
     {
+        PerekCarousel.SizeChanged += OnCarouselSizeChanged;
         _viewModel.NavigationRequested += (_, perekId) =>
         {
             ResetRecitationContext();
@@ -117,6 +133,86 @@ public partial class PerekPage : ContentPage
 #endif
         };
     }
+
+    /// <summary>
+    /// Re-snaps the CarouselView when its width changes (device rotation, window
+    /// resize). The native carousel keeps the pre-rotation item size, so several
+    /// items stay visible side by side until the user swipes. Invalidating the
+    /// native layout and re-snapping to the current position restores a single
+    /// full-width item immediately.
+    /// </summary>
+    private void OnCarouselSizeChanged(object? sender, EventArgs e)
+    {
+        var width = PerekCarousel.Width;
+        if (width <= 0)
+        {
+            return;
+        }
+        if (Math.Abs(width - _carouselWidth) < 0.5)
+        {
+            return;
+        }
+        var isFirstMeasure = _carouselWidth <= 0;
+        _carouselWidth = width;
+        if (isFirstMeasure || _carouselInitializing)
+        {
+            return;
+        }
+        if (_isLoading)
+        {
+            // Rotation during the initial load: retry the re-snap once the
+            // load completes instead of leaving stale item widths behind.
+            _pendingCarouselResnap = true;
+            return;
+        }
+
+        Dispatcher.Dispatch(ResnapCarousel);
+    }
+
+    /// <summary>
+    /// Re-snaps the carousel to the current position after its width changed,
+    /// restoring a single full-width item.
+    /// </summary>
+    private void ResnapCarousel()
+    {
+#if IOS
+        var collectionView = PerekCarousel.Handler?.PlatformView switch
+        {
+            UIKit.UICollectionView cv => cv,
+            UIKit.UIView view => FindDescendantCollectionView(view),
+            _ => null,
+        };
+        collectionView?.CollectionViewLayout.InvalidateLayout();
+#elif ANDROID
+        if (PerekCarousel.Handler?.PlatformView is AndroidX.RecyclerView.Widget.RecyclerView recyclerView)
+        {
+            recyclerView.Post(recyclerView.RequestLayout);
+        }
+#endif
+        PerekCarousel.InvalidateMeasure();
+        _carouselInitializing = true;
+        PerekCarousel.ScrollTo(_viewModel.CarouselPosition, animate: false);
+        _carouselInitializing = false;
+    }
+
+#if IOS
+    private static UIKit.UICollectionView? FindDescendantCollectionView(UIKit.UIView view)
+    {
+        foreach (var subview in view.Subviews)
+        {
+            if (subview is UIKit.UICollectionView collectionView)
+            {
+                return collectionView;
+            }
+            var found = FindDescendantCollectionView(subview);
+            if (found != null)
+            {
+                return found;
+            }
+        }
+        return null;
+    }
+#endif
 
     /// <summary>
     /// Populates page-level DynamicResource entries for font sizes and keeps them
@@ -408,6 +504,13 @@ public partial class PerekPage : ContentPage
 
                 // Update articles count badge
                 await UpdateArticlesCountAsync();
+
+                // A cold-start link may also carry an article to open.
+                if (_pendingArticleId is int pendingArticleId)
+                {
+                    _pendingArticleId = null;
+                    await Shell.Current.GoToAsync($"articleDetail?articleId={pendingArticleId}");
+                }
             }
             catch (Exception ex)
             {
@@ -417,6 +520,11 @@ public partial class PerekPage : ContentPage
             finally
             {
                 _isLoading = false;
+                if (_pendingCarouselResnap)
+                {
+                    _pendingCarouselResnap = false;
+                    Dispatcher.Dispatch(ResnapCarousel);
+                }
             }
         }
         else if (_viewModel.PerekId > 0 && !_isLoading)
@@ -447,8 +555,69 @@ public partial class PerekPage : ContentPage
         }
     }
 
-    private static int GetInitialPerekId()
+    /// <summary>
+    /// An app link that arrived while the reader was open (warm link), or while
+    /// a flyout page was on top. Pops back to the reader and jumps to the perek.
+    /// </summary>
+    /// <summary>
+    /// App-link subscription. The handler lives on a static event, so it must be
+    /// released when the page unloads — otherwise readers recreated by Shell
+    /// keep collecting handlers that navigate obsolete pages.
+    /// </summary>
+    private void SubscribeAppLinks()
     {
+        AppLinkHelper.TargetRequested += OnAppLinkRequested;
+        Unloaded += (_, _) => AppLinkHelper.TargetRequested -= OnAppLinkRequested;
+    }
+
+    private void OnAppLinkRequested(object? sender, AppLinkHelper.AppLinkTarget target)
+    {
+        if (Handler is null)
+        {
+            // Dead page left over from a Shell recreation; detach instead of
+            // navigating an obsolete reader.
+            AppLinkHelper.TargetRequested -= OnAppLinkRequested;
+            return;
+        }
+
+        // Last link wins: a newer request supersedes any earlier one still
+        // waiting out the initial load.
+        var generation = Interlocked.Increment(ref _appLinkGeneration);
+        _ = Dispatcher.DispatchAsync(async () =>
+        {
+            for (var i = 0; i < 100 && _isLoading && generation == _appLinkGeneration; i++)
+            {
+                await Task.Delay(100);
+            }
+            if (generation != _appLinkGeneration)
+            {
+                return;
+            }
+            AppLinkHelper.PendingTarget = null;
+            var shell = Shell.Current;
+            if (shell != null &&
+                !shell.CurrentState.Location.OriginalString.EndsWith(AppRoutes.Perek, StringComparison.Ordinal))
+            {
+                await shell.GoToAsync(AppRoutes.FlyoutPage(AppRoutes.Perek));
+            }
+            await _viewModel.NavigateToPerekAsync(target.PerekId);
+            if (target.ArticleId is int articleId && Shell.Current != null)
+            {
+                await Shell.Current.GoToAsync($"articleDetail?articleId={articleId}");
+            }
+        });
+    }
+
+    private int GetInitialPerekId()
+    {
+        // A link that opened the app (cold start) wins over preferences.
+        if (AppLinkHelper.PendingTarget is { } pendingTarget)
+        {
+            AppLinkHelper.PendingTarget = null;
+            _pendingArticleId = pendingTarget.ArticleId;
+            return pendingTarget.PerekId;
+        }
+
         var prefs = PreferencesService.Instance;
         if (prefs.PerekToLoad == PerekToLoad.Todays)
         {

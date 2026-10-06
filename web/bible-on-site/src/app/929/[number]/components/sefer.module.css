@@ -296,6 +296,14 @@
   overflow-x: hidden;
   display: flow-root;
 }
+/* Experimental Taamey D face, selected via reader settings (data-tanakh-font).
+   Site rule: components inherit font families — the perek reader is the
+   sanctioned exception because pasuk typeface is a user-facing display
+   preference (like font size), not a component styling choice. */
+:global(:root[data-tanakh-font="taamey"]) .perekText {
+  font-family: var(--font-tanakh-taamey), var(--font-tanakh), "Times New Roman",
+    serif;
+}
 .pasukNum {
   color: #1c2c5d;
   cursor: pointer;
@@ -329,4 +337,36 @@
 .tanahpediaLink:hover {
   border-bottom-style: solid;
   border-bottom-color: #1552ac;
+}
+
+@media (prefers-color-scheme: dark) {
+  .page,
+  .pageContentPage,
+  .pageBlank {
+    background-color: #1a1f2e;
+  }
+
+  .perekTextScrollWrapper {
+    --scrollbarBG: #2d3548;
+  }
+
+  .pageHeaderRow,
+  .pasukNum {
+    color: #a8b9ff;
+  }
+
+  .perekHeader,
+  .perekIllustrationFigure figcaption,
+  .blankPageDate,
+  .qri label::before {
+    color: #9aa0a6;
+  }
+
+  .perekTextHeader h1 {
+    color: #b7adf0;
+  }
+
+  .tanahpediaLink:hover {
+    border-bottom-color: #7eb0ff;
+  }
 }

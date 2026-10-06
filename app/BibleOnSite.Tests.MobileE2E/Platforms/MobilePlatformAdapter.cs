@@ -117,7 +117,7 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
     }
     public override void GoBack(AppiumDriver driver) => Tap(driver, driver.FindElement(FlyoutButton));
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
-        // Cover cold simulator/app preparation plus WDA startup before the
-        // six-minute test-host hang guard, without overlapping session setup.
+        // The five-minute client budget fits inside the ten-minute per-test hang
+        // guard, together with the scenario.
         new IOSDriver(server, options, TimeSpan.FromMinutes(5));
 }
