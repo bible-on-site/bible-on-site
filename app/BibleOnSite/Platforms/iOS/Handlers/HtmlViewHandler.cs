@@ -28,6 +28,9 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
     // NSHTML import runs WebKit synchronously and spins the main run loop, so it is
     // skipped when nothing that affects the output changed (e.g. layout-driven refreshes).
     private string? _renderedHtml;
+    // Generation guard: a stale background import must not overwrite newer content
+    // when a collection cell is recycled while its parse is still in flight.
+    private int _renderGeneration;
 
     public HtmlViewHandler() : base(PropertyMapper)
     {
@@ -81,6 +84,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         if (string.IsNullOrEmpty(html))
         {
             _renderedHtml = null;
+            _renderGeneration++;
             PlatformView.Text = string.Empty;
             return;
         }
@@ -93,14 +97,55 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         }
         _renderedHtml = renderKey;
 
+        var generation = ++_renderGeneration;
+        var alignment = VirtualView.TextAlignment;
+        var direction = VirtualView.TextDirection;
+        var lineHeight = VirtualView.LineHeight;
+
+        // Drop recycled content while the import runs so a reused cell does not
+        // flash a previous pasuk's text.
+        PlatformView.Text = string.Empty;
+        if (direction == HtmlTextDirection.Rtl)
+        {
+            PlatformView.TextAlignment = UITextAlignment.Right;
+        }
+
+        // NSAttributedString NSHTML import spins the main run loop through WebKit.
+        // Run inside UICollectionView cell creation that re-enters collection view
+        // layout and hits a UIKit consistency assertion (SIGABRT), so the import
+        // must happen off the main thread.
+        _ = Task.Run(() => CreateAttributedText(styledHtml, alignment, direction, lineHeight))
+            .ContinueWith(task =>
+            {
+                var attributed = task.Status == TaskStatus.RanToCompletion ? task.Result : null;
+                PlatformView.BeginInvokeOnMainThread(() =>
+                {
+                    if (generation != _renderGeneration || PlatformView == null)
+                        return;
+                    if (attributed != null)
+                    {
+                        PlatformView.AttributedText = attributed;
+                    }
+                    else
+                    {
+                        PlatformView.Text = html;
+                        PlatformView.TextColor = GetTextColor();
+                    }
+                });
+            });
+    }
+
+    // Runs on a background thread: builds the styled attributed string without
+    // touching PlatformView or VirtualView.
+    private NSMutableAttributedString? CreateAttributedText(string styledHtml,
+        HtmlTextAlignment alignment, HtmlTextDirection direction, double lineHeight)
+    {
         try
         {
             var htmlData = NSData.FromString(styledHtml, NSStringEncoding.Unicode);
             if (htmlData == null || htmlData.Length == 0)
             {
-                PlatformView.Text = html;
-                PlatformView.TextColor = GetTextColor();
-                return;
+                return null;
             }
 
             var importParams = new NSDictionary(
@@ -136,46 +181,37 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
                 ObjCRuntime.Class.ThrowOnInitFailure = previousThrowSetting;
             }
 
-            if (attributedString != null)
+            if (attributedString == null)
             {
-                var mutableString = new NSMutableAttributedString(attributedString);
+                return null;
+            }
 
-                var paragraphStyle = new NSMutableParagraphStyle
+            var mutableString = new NSMutableAttributedString(attributedString);
+
+            var paragraphStyle = new NSMutableParagraphStyle
+            {
+                Alignment = alignment switch
                 {
-                    Alignment = VirtualView.TextAlignment switch
-                    {
-                        HtmlTextAlignment.Center => UITextAlignment.Center,
-                        HtmlTextAlignment.End => VirtualView.TextDirection == HtmlTextDirection.Rtl
-                            ? UITextAlignment.Left : UITextAlignment.Right,
-                        HtmlTextAlignment.Justify => UITextAlignment.Justified,
-                        _ => VirtualView.TextDirection == HtmlTextDirection.Rtl
-                            ? UITextAlignment.Right : UITextAlignment.Left
-                    },
-                    LineHeightMultiple = (nfloat)VirtualView.LineHeight
-                };
+                    HtmlTextAlignment.Center => UITextAlignment.Center,
+                    HtmlTextAlignment.End => direction == HtmlTextDirection.Rtl
+                        ? UITextAlignment.Left : UITextAlignment.Right,
+                    HtmlTextAlignment.Justify => UITextAlignment.Justified,
+                    _ => direction == HtmlTextDirection.Rtl
+                        ? UITextAlignment.Right : UITextAlignment.Left
+                },
+                LineHeightMultiple = (nfloat)lineHeight
+            };
 
-                var range = new NSRange(0, mutableString.Length);
-                mutableString.AddAttribute(UIStringAttributeKey.ParagraphStyle, paragraphStyle, range);
-                mutableString.AddAttribute(UIStringAttributeKey.ForegroundColor, GetTextColor(), range);
+            var range = new NSRange(0, mutableString.Length);
+            mutableString.AddAttribute(UIStringAttributeKey.ParagraphStyle, paragraphStyle, range);
+            mutableString.AddAttribute(UIStringAttributeKey.ForegroundColor, GetTextColor(), range);
 
-                PlatformView.AttributedText = mutableString;
-            }
-            else
-            {
-                PlatformView.Text = html;
-                PlatformView.TextColor = GetTextColor();
-            }
+            return mutableString;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"HtmlViewHandler iOS error: {ex.Message}");
-            PlatformView.Text = html;
-            PlatformView.TextColor = GetTextColor();
-        }
-
-        if (VirtualView.TextDirection == HtmlTextDirection.Rtl)
-        {
-            PlatformView.TextAlignment = UITextAlignment.Right;
+            return null;
         }
     }
 

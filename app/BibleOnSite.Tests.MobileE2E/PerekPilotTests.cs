@@ -84,6 +84,18 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         _page.AssertBottomNavigationLayout();
     });
 
+    [Fact]
+    public void RapidPasukimScrollingKeepsAppResponsive() => Scenario(() =>
+    {
+        // Regression: iOS SIGABRT inside UICollectionView _updateVisibleCellsNow
+        // when the perushim HtmlView imported HTML on the main thread during cell
+        // creation. Rapid recycling must leave the app alive and rendering.
+        _page.FlickPasukim(15);
+        Assert.NotEmpty(_page.Source);
+        Assert.NotEmpty(_page.FirstPasuk);
+        _page.AssertBottomNavigationLayout();
+    });
+
     private void Scenario(Action run, [System.Runtime.CompilerServices.CallerMemberName] string name = "")
     {
         try
