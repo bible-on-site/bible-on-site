@@ -63,7 +63,7 @@ jobs:
           dotnet restore app/BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android -p:RuntimeIdentifiers=android-arm64 -r android-arm64
           dotnet restore app/BibleOnSite.Core/BibleOnSite.Core.csproj
           dotnet restore app/BibleOnSite.Tests/BibleOnSite.Tests.csproj
-          dotnet restore app/BibleOnSite.Tests.E2E/BibleOnSite.Tests.E2E.csproj
+          dotnet restore app/BibleOnSite.Tests.E2E/BibleOnSite.Tests.E2E.csproj -p:EnableWindowsTargeting=true
           dotnet restore app/BibleOnSite.Tests.MobileE2E/BibleOnSite.Tests.MobileE2E.csproj
           dotnet restore app/devops/_build.csproj
       - name: 'Submit NuGet dependencies'
