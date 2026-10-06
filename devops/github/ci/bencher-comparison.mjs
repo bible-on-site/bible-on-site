@@ -3,13 +3,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** Compare feature/queue measurements with their base; preserve push history. */
-export function bencherComparisonArgs(eventName, event) {
+export function bencherComparisonArgs(eventName, event, testedBaseSha) {
 	if (eventName === "push" || eventName === "workflow_dispatch") return [];
 	let branch;
 	let sha;
 	if (eventName === "pull_request") {
 		branch = event.pull_request?.base?.ref;
-		sha = event.pull_request?.base?.sha;
+		// A PR payload can lag the base of the checked synthetic merge.
+		sha = testedBaseSha;
 	} else if (eventName === "merge_group") {
 		branch = event.merge_group?.base_ref;
 		sha = event.merge_group?.base_sha;
@@ -27,7 +28,15 @@ export function bencherComparisonArgs(eventName, event) {
 }
 
 if (path.resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
-	const args = bencherComparisonArgs(process.env.GITHUB_EVENT_NAME,
-		JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, "utf8")));
+	const eventName = process.env.GITHUB_EVENT_NAME;
+	let testedBaseSha;
+	if (eventName === "pull_request") {
+		// Fail if checkout stops testing a merge, rather than using a stale base.
+		execFileSync("git", ["rev-parse", "--verify", "HEAD^2"]);
+		testedBaseSha = execFileSync("git", ["rev-parse", "HEAD^"], { encoding: "utf8" }).trim();
+	}
+	const args = bencherComparisonArgs(eventName,
+		JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, "utf8")), testedBaseSha);
 	if (args.length) process.stdout.write(`${args.join("\n")}\n`);
 }
+import { execFileSync } from "node:child_process";

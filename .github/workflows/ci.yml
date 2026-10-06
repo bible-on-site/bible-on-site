@@ -668,6 +668,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 2 # Inspect the actual base of the tested PR merge.
 
       - name: Merge and audit approved recitation timings
         run: |
@@ -2452,7 +2453,7 @@ jobs:
           path: ~/.npm
           key: ${{ steps.devops-npm-cache.outputs.cache-primary-key }}
 
-      - name: Test release, deployment, and coverage reporting guards
+      - name: Test release, deployment, and CI reporting guards
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           npm run test:version

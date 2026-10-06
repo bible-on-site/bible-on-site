@@ -7,7 +7,9 @@ of 185.25 and 174 ms. The browser test's existing 200 ms absolute limit also
 passed. No browser application or performance-test source changed between the
 feature measurements.
 
-Feature and merge-queue reports now request the event's base branch and SHA,
+Feature reports use the checked synthetic merge's first parent, even when the
+PR payload's base SHA is stale. Queue reports use the immutable queue base.
+Both request the base branch and SHA,
 inherit its history and thresholds, and reset that comparison on each run.
 This also lets a feature's first measurement compare with existing base data.
 Pushes and manual master runs keep their accumulated history. Missing or
