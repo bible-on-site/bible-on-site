@@ -229,9 +229,25 @@ jobs:
 
       - name: Verify recitation in the packaged website
         if: ${{ env.IS_NPM == 'true' }}
+        timeout-minutes: 8
         run: |
-          CONTAINER=$(docker run -d -p 127.0.0.1:3000:3000 "${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }}")
+          # Exercise the cold release image at the deployed Fargate limits.
+          # Its Dockerfile readiness check must pass before the first data request.
+          CONTAINER=$(docker run -d --cpus 0.25 --memory 2048m -p 127.0.0.1:3000:3000 "${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }}")
           trap 'docker logs "$CONTAINER"; docker rm -f "$CONTAINER"' EXIT
+          READINESS_DEADLINE=$((SECONDS + 300))
+          while (( SECONDS < READINESS_DEADLINE )); do
+            READINESS_STATE=$(docker inspect --format '{{.State.Status}} {{.State.Health.Status}}' "$CONTAINER")
+            case "$READINESS_STATE" in
+              'running healthy') break ;;
+              'running starting') sleep 5 ;;
+              *) echo "Packaged website failed readiness: $READINESS_STATE"; exit 1 ;;
+            esac
+          done
+          if [ "$READINESS_STATE" != 'running healthy' ]; then
+            echo 'Packaged website did not become ready within 300 seconds'
+            exit 1
+          fi
           python data/recitation/deployment.py --origin http://127.0.0.1:3000 \
             --version "${{ steps.get_module_version.outputs.MODULE_VERSION }}" --attempts 12 --interval 5
 

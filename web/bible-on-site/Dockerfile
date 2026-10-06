@@ -84,6 +84,11 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
+# Load canonical server data before a replacement is eligible for traffic.
+# Keep these settings aligned with the ECS container health check.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --start-interval=30s --retries=5 \
+    CMD ["curl", "-sf", "--max-time", "5", "http://localhost:3000/api/health/ready"]
+
 # server.js is created by next build from the standalone output
 # https://nextjs.org/docs/pages/api-reference/config/next-config-js/output
 CMD ["node", "server.js"]
