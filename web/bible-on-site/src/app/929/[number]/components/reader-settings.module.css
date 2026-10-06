@@ -132,3 +132,50 @@
 	font-weight: normal;
 	line-height: 1.5;
 }
+
+@media (prefers-color-scheme: dark) {
+	.button {
+		background: #1a1f2e;
+		color: #a8b9ff;
+	}
+
+	.button:hover {
+		background: #232a45;
+	}
+
+	.panel {
+		border-color: #2d3548;
+		background: #1a1f2e;
+		color: #a8b9ff;
+	}
+
+	.panel::backdrop {
+		background: rgba(10, 13, 20, 0.55);
+	}
+
+	.panelHeader button,
+	.categories button,
+	.section output,
+	.section small {
+		color: #9aa0a6;
+	}
+
+	.categories {
+		background: #12151c;
+	}
+
+	.categories button[aria-pressed="true"] {
+		background: #232a45;
+		color: #a8b9ff;
+	}
+
+	.section input {
+		accent-color: #7eb0ff;
+	}
+
+	.section select {
+		border-color: #3b4256;
+		background: #12151c;
+		color: #a8b9ff;
+	}
+}

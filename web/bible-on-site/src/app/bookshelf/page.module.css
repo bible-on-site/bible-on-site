@@ -15,3 +15,9 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+@media (prefers-color-scheme: dark) {
+  .page {
+    background: #0f1219;
+  }
+}

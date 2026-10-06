@@ -134,3 +134,15 @@
   outline-color: #fff;
   border-color: transparent;
 }
+
+@media (prefers-color-scheme: dark) {
+  /* Dark-mode paper: keep the book metaphor but invert the sheet so the
+     light inherited text stays readable. */
+  .he-book .page {
+    background: #1a1f2e;
+  }
+
+  .page--cover-interior-inset {
+    background: #1c1a15;
+  }
+}
