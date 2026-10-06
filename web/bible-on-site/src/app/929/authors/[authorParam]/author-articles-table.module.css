@@ -106,21 +106,14 @@
 	max-width: 320px;
 }
 
-/* Database abstracts are HTML; headings render inline like the perek page */
-.abstractCell h1,
-.abstractCell h2,
-.abstractCell h3,
-.abstractCell h4,
-.abstractCell h5,
-.abstractCell h6 {
-	font-size: 0.95rem;
-	font-weight: 600;
-	margin: 0;
-	display: inline;
-}
-
+/* Database abstracts are HTML; headings are rewritten as bold paragraphs
+   so they stay block-level without emitting real h1-h6 elements */
 .abstractCell p {
 	margin: 0;
+}
+
+.abstractCell .abstractHeading {
+	font-weight: 600;
 }
 
 .noResults {

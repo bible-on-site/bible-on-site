@@ -74,9 +74,9 @@ export function ArticlesSection({
 								{article.abstract && (
 									<div
 										className={styles.articleAbstract}
+										// nosemgrep -- DOMPurify-sanitized abstract
 										// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 										dangerouslySetInnerHTML={{
-											// nosemgrep -- DOMPurify-sanitized abstract
 											__html: DOMPurify.sanitize(article.abstract),
 										}}
 									/>
@@ -102,9 +102,9 @@ export function ArticlesSection({
 								{article.abstract && (
 									<div
 										className={styles.articleAbstract}
+										// nosemgrep -- DOMPurify-sanitized abstract
 										// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 										dangerouslySetInnerHTML={{
-											// nosemgrep -- DOMPurify-sanitized abstract
 											__html: DOMPurify.sanitize(article.abstract),
 										}}
 									/>

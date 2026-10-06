@@ -3,6 +3,7 @@ import {
 	DEFAULT_ARTICLE_SORT,
 	distinctSefarim,
 	filterAuthorArticles,
+	normalizeAbstractHtml,
 	sortAuthorArticles,
 } from "../../../src/lib/authors/articles-grid";
 
@@ -48,6 +49,20 @@ describe("distinctSefarim", () => {
 
 	it("deduplicates repeated sefarim", () => {
 		expect(distinctSefarim(rows)).toHaveLength(3);
+	});
+});
+
+describe("normalizeAbstractHtml", () => {
+	it("rewrites headings as paragraphs preserving text", () => {
+		const html = '<h1>כותרת</h1><p>תוכן</p><h3 class="x">משנה</h3>';
+		expect(normalizeAbstractHtml(html)).toBe(
+			'<p class="abstractHeading">כותרת</p><p>תוכן</p><p class="abstractHeading">משנה</p>',
+		);
+	});
+
+	it("leaves markup without headings untouched", () => {
+		const html = "<p>פסקה</p><strong>מודגש</strong>";
+		expect(normalizeAbstractHtml(html)).toBe(html);
 	});
 });
 

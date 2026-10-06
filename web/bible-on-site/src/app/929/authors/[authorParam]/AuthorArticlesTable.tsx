@@ -11,6 +11,7 @@ import {
 	DEFAULT_ARTICLE_SORT,
 	distinctSefarim,
 	filterAuthorArticles,
+	normalizeAbstractHtml,
 	sortAuthorArticles,
 } from "../../../../lib/authors/articles-grid";
 import styles from "./author-articles-table.module.css";
@@ -135,10 +136,12 @@ export function AuthorArticlesTable({ rows }: { rows: AuthorArticleRow[] }) {
 								<td className={styles.abstractCell}>
 									{row.abstract && (
 										<div
+											// nosemgrep -- DOMPurify-sanitized abstract
 											// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 											dangerouslySetInnerHTML={{
-												// nosemgrep -- DOMPurify-sanitized abstract
-												__html: DOMPurify.sanitize(row.abstract),
+												__html: DOMPurify.sanitize(
+													normalizeAbstractHtml(row.abstract),
+												),
 											}}
 										/>
 									)}
