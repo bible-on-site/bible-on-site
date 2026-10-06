@@ -10,6 +10,17 @@ explicitly and retain SigV4a, HTTP 1.x and Tokio support. The resolved TLS verif
 is now `rustls-webpki 0.103.15`, resolving the three data alerts. No application
 content or production credentials are involved. See [AWS HTTP client configuration](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/http.html).
 
+## Dependency graph provenance
+
+See [the snapshot provenance finding](https://github.com/bible-on-site/bible-on-site/issues/1997).
+
+Dependency review compares the pull request's head SHA. NuGet submission now
+checks out that same SHA and sets the action's snapshot SHA/ref explicitly. Push
+and merge-group runs retain their own immutable SHA/ref. This prevents snapshots
+of synthetic PR merge commits from being mistaken for snapshots of the reviewed
+head. Dependency review waits for the parallel submission job to publish its graph
+instead of reporting a missing head snapshot immediately.
+
 ## Upstream blockers
 
 | Existing dependency pin | Resolved vulnerable dependency | Follow-up |

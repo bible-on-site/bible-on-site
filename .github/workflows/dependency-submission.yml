@@ -28,6 +28,9 @@ jobs:
     steps:
       - name: 'Checkout repository'
         uses: actions/checkout@v7
+        with:
+          # Dependency review compares the PR head, not its synthetic merge commit.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: 'Setup .NET'
         uses: actions/setup-dotnet@v6
         with:
@@ -51,3 +54,5 @@ jobs:
         uses: advanced-security/component-detection-dependency-submission-action@v0.2.0
         with:
           detectorsCategories: NuGet
+          snapshot-sha: ${{ github.event.pull_request.head.sha || github.sha }}
+          snapshot-ref: ${{ github.event_name == 'pull_request' && format('refs/heads/{0}', github.event.pull_request.head.ref) || github.ref }}
