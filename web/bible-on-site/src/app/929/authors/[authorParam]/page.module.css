@@ -129,51 +129,6 @@
   letter-spacing: 0.02em;
 }
 
-.articlesList {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.articleCard {
-  background: #ffffff;
-  border-radius: 8px;
-  padding: 16px 20px;
-  border: 1px solid #e5e7eb;
-  transition: all 0.2s ease;
-  text-decoration: none;
-  color: inherit;
-  display: block;
-}
-
-.articleCard:hover {
-  border-color: #1c2c5d;
-  box-shadow: 0 4px 12px rgba(28, 44, 93, 0.12);
-  transform: translateY(-2px);
-}
-
-.articleName {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1c2c5d;
-  margin: 0;
-  line-height: 1.4;
-}
-
-.articleMeta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  font-size: 0.85rem;
-  color: #6b7280;
-}
-
-.perekLink {
-  color: #9a92d1;
-  font-weight: 500;
-}
-
 .emptyState {
   text-align: center;
   padding: 32px;
