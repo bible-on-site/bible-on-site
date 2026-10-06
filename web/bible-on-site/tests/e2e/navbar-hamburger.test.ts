@@ -11,6 +11,9 @@ const MENU_ITEMS = [
 	["תרומות", "/donation"],
 ] as const;
 
+// Preserve the original runtime/network evidence when a retry passes (#2005).
+test.use({ trace: "retain-on-failure" });
+
 test.describe("NavBar hamburger menu", () => {
 	test("opens and closes from the keyboard", async ({ page }) => {
 		await page.goto("/");
