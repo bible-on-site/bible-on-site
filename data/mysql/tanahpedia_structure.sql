@@ -149,10 +149,14 @@ CREATE TABLE `tanahpedia_entry_entity` (
     CONSTRAINT `fk_entry_entity_entry` FOREIGN KEY (`entry_id`) REFERENCES `tanahpedia_entry` (`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_entry_entity_entity` FOREIGN KEY (`entity_id`) REFERENCES `tanahpedia_entity` (`id`) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
--- Entry revisions submitted by EXTERNAL AI clients via the API for human triage.
--- entry_id NULL = the revision proposes a brand-new entry. status is a free-text
--- lifecycle marker (PENDING / APPROVED / REJECTED) kept as a string to avoid an
--- enum migration. Nothing is applied to `tanahpedia_entry` until a human approves.
+-- Wiki-style revision history for entry content, plus a proposal queue for
+-- EXTERNAL AI clients. Every applied content change (admin save, LLM-assistant
+-- apply, external apply) is an immutable APPLIED row; `entry_id` NULL = the
+-- revision proposes a brand-new entry. `status` is a free-text lifecycle marker
+-- (PENDING / APPLIED / REJECTED) kept as a string to avoid an enum migration.
+-- `base_revision_id` records the APPLIED head the change was based on, for
+-- optimistic concurrency and restore auditing; it is deliberately not a
+-- foreign key so revision rows never block each other's lifecycle.
 DROP TABLE IF EXISTS `tanahpedia_entry_revision`;
 CREATE TABLE `tanahpedia_entry_revision` (
     `id` char(36) NOT NULL,
@@ -160,9 +164,10 @@ CREATE TABLE `tanahpedia_entry_revision` (
     `proposed_unique_name` varchar(255) DEFAULT NULL,
     `proposed_title` varchar(255) DEFAULT NULL,
     `proposed_content` mediumtext,
-    `source` varchar(255) NOT NULL COMMENT 'External AI client / model identifier',
+    `source` varchar(255) NOT NULL COMMENT 'Writer identifier: admin, llm-assistant, or external AI client id',
     `notes` text COMMENT 'AI rationale / notes for the human editor',
     `status` varchar(20) NOT NULL DEFAULT 'PENDING',
+    `base_revision_id` char(36) DEFAULT NULL COMMENT 'APPLIED head this change was based on',
     `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),

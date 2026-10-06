@@ -44,12 +44,19 @@ for (const dir of MODULES) {
 	const biome = existsSync(localBin) ? localBin : "biome";
 
 	// shell is required only on Windows to spawn the .cmd biome shim;
-	// argv is fully static — no user input is shelled.
-	const result = spawnSync(biome, ["lint", ...moduleFiles], { // nosemgrep
-		cwd: resolve(dir),
-		stdio: "inherit",
-		shell: process.platform === "win32",
-	});
+	// argv is fully static — no user input is shelled. The binary must be
+	// quoted there because shell:true joins command+args into a raw cmd
+	// line and a space in the checkout path (e.g. "devin workspace") would
+	// otherwise split it into a bogus command.
+	const result = spawnSync( // nosemgrep
+		process.platform === "win32" ? `"${biome}"` : biome,
+		["lint", ...moduleFiles],
+		{ // nosemgrep
+			cwd: resolve(dir),
+			stdio: "inherit",
+			shell: process.platform === "win32",
+		},
+	);
 	if (result.status !== 0) failed = true;
 }
 
