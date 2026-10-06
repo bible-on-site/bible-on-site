@@ -2,7 +2,7 @@ import "@/lib/download/register-tanach";
 import type React from "react";
 import PerekSwipeNavigation from "./components/PerekSwipeNavigation";
 import ReaderSettings from "./components/ReaderSettings";
-import { hebrewSerif } from "./hebrew-font";
+import { hebrewSerif, taameyD } from "./hebrew-font";
 import "./layout.css";
 
 // Must live in layout (not page) so Next.js passes parent params to
@@ -18,7 +18,9 @@ export default function PerekLayout({
 	children: React.ReactNode;
 }) {
 	return (
-		<PerekSwipeNavigation className={`perek-layout ${hebrewSerif.variable}`}>
+		<PerekSwipeNavigation
+			className={`perek-layout ${hebrewSerif.variable} ${taameyD.variable}`}
+		>
 			<ReaderSettings />
 			{children}
 		</PerekSwipeNavigation>
