@@ -37,17 +37,17 @@ You run every git command yourself; never hand git (or AWS/docker/npm) commands 
 
 ## Branch Management
 
-- **Never clone** the repository to do work — reuse this checkout and create a branch per feature/fix.
-- Use **worktrees only when explicitly asked**, and clean them up after merge (`git worktree remove <path>` + `git worktree prune`).
-- Before pushing, check whether the branch already exists on remote (`git ls-remote --heads origin <branch-name>`): if it exists and was merged, use a new name; otherwise fetch and rebase first.
+- **Never clone** the repository to do work — create a branch per feature/fix in a dedicated worktree.
+- **Require a worktree** unless the entire task can be completed using API calls alone. Create or reuse a worktree belonging to the current task before changing files or running builds. Never switch branches or modify files in another task's checkout. After merge, archive a managed worktree through the app or remove an unmanaged worktree and prune its registration.
+- Before pushing, check whether the branch already exists on remote (`git ls-remote --heads origin <branch-name>`). If it was merged, use a new name. For an existing PR, apply the branch sync rule below.
 
-## Pre-Push: Merge From Master
+## Pull Request Branch Sync
 
-**MANDATORY** before every push: `git fetch origin master && git merge origin/master`. Resolve any conflict immediately — inspect each file, apply the correct resolution (preserving both sides where appropriate), stage it, and complete the merge. Push only with a clean tree.
+Start new branches from the intended base. Sync an existing pull request branch with its base only when both conditions hold: the current head has no green CI result, and there is an actual merge conflict. Being behind the base is not sufficient. When syncing is necessary, resolve conflicts preserving both sides where appropriate, validate the resolution, and push with a clean tree.
 
 ## Post-Push: Monitor CI
 
-**MANDATORY** after every push: wait 10–20s, then `gh run list --branch <branch-name> --limit 3`, polling every 30–60s until it completes. On failure, inspect (`gh run view <run-id> --log-failed`), fix the root cause locally, and push again (repeating the master merge). Report the final observed status.
+**MANDATORY** after every push: wait 10–20s, then `gh run list --branch <branch-name> --limit 3`, polling every 30–60s until it completes. On failure, inspect (`gh run view <run-id> --log-failed`), fix the root cause locally, and push again. Apply the branch sync rule above before syncing with the base. Report the final observed status.
 
 ## Ship It — A Local Fix Is Not A Fix
 

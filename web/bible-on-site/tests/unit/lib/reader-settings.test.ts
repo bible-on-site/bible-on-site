@@ -5,6 +5,7 @@ import {
 	getStoredReaderSettings,
 	PEREK_FONT_SCALES,
 	PEREK_LINE_HEIGHTS,
+	PEREK_TANAKH_FONTS,
 	PEREK_WORD_SPACINGS,
 	READER_SETTINGS_BOOTSTRAP,
 	READER_SETTINGS_STORAGE_KEY,
@@ -25,6 +26,7 @@ describe("reader-settings", () => {
 		localStorage.clear();
 		document.documentElement.style.removeProperty("--perek-font-scale");
 		document.documentElement.style.removeProperty("--perek-line-height");
+		delete document.documentElement.dataset.tanakhFont;
 	});
 
 	afterEach(() => jest.restoreAllMocks());
@@ -39,6 +41,7 @@ describe("reader-settings", () => {
 			fontStep: 4,
 			lineStep: 2,
 			wordStep: 0,
+			fontId: 0,
 		});
 	});
 
@@ -51,6 +54,7 @@ describe("reader-settings", () => {
 			fontStep: 3,
 			lineStep: 1,
 			wordStep: 0,
+			fontId: 0,
 		});
 		setStoredReaderSettings({ fontStep: 3, lineStep: 1, wordStep: 4 });
 		runBootstrap();
@@ -76,6 +80,7 @@ describe("reader-settings", () => {
 			fontStep: PEREK_FONT_SCALES.length - 1,
 			lineStep: 0,
 			wordStep: 0,
+			fontId: 0,
 		});
 	});
 
@@ -87,6 +92,7 @@ describe("reader-settings", () => {
 			fontStep: 0,
 			lineStep: PEREK_LINE_HEIGHTS.length - 1,
 			wordStep: 0,
+			fontId: 0,
 		});
 	});
 
@@ -129,6 +135,28 @@ describe("reader-settings", () => {
 		expect(READER_SETTINGS_BOOTSTRAP).toContain(
 			`s.lineStep==null?${DEFAULT_READER_SETTINGS.lineStep}`,
 		);
+		expect(READER_SETTINGS_BOOTSTRAP).toContain(
+			JSON.stringify(PEREK_TANAKH_FONTS),
+		);
+		expect(READER_SETTINGS_BOOTSTRAP).toContain(
+			`s.fontId==null?${DEFAULT_READER_SETTINGS.fontId}`,
+		);
+	});
+
+	it("applyReaderSettings sets data-tanakh-font for Taamey D and removes it for default", () => {
+		applyReaderSettings({ fontId: 1 });
+		expect(document.documentElement.dataset.tanakhFont).toBe("taamey");
+		applyReaderSettings({ fontId: 0 });
+		expect(document.documentElement.dataset.tanakhFont).toBeUndefined();
+	});
+
+	it("bootstrap applies stored font choice before paint", () => {
+		localStorage.setItem(
+			READER_SETTINGS_STORAGE_KEY,
+			JSON.stringify({ fontId: 1 }),
+		);
+		runBootstrap();
+		expect(document.documentElement.dataset.tanakhFont).toBe("taamey");
 	});
 
 	it("bootstrap script applies stored settings synchronously before paint", () => {

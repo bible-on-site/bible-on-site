@@ -1,5 +1,6 @@
 #!/usr/bin/env npx tsx
 
+import { execFileSync, spawnSync } from "node:child_process";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,14 +8,16 @@ import semver from "semver";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import {
-	getModuleVersion,
 	type ModuleConfig,
 	type ModuleName,
 	resolveModule,
 } from "../../get-module-version.ts";
 import { getReleasedVersion } from "../release/get-version.ts";
 
-export type ReleaseNeeds = Record<string, { outputs?: Record<string, string> }>;
+export type ReleaseNeeds = Record<
+	string,
+	{ result?: string; outputs?: Record<string, string> }
+>;
 
 const moduleNames: ModuleName[] = [
 	"website",
@@ -31,11 +34,15 @@ const repoRoot = path.resolve(
 
 export function modulesToBump(
 	needs: ReleaseNeeds,
-	mode: "released" | "retry",
+	mode: "released" | "retry" | "all",
 ): ModuleName[] {
 	const outputName = mode === "released" ? "released" : "needs_bump";
 	return moduleNames.filter(
-		(name) => needs[`release_${name}`]?.outputs?.[outputName] === "true",
+		(name) =>
+			needs[`release_${name}`]?.result === "success" &&
+			(needs[`release_${name}`]?.outputs?.[outputName] === "true" ||
+				(mode === "all" &&
+					needs[`release_${name}`]?.outputs?.released === "true")),
 	);
 }
 
@@ -163,39 +170,40 @@ export function rewriteAppVersions(
 	);
 }
 
-function read(relativePath: string): string {
-	return readFileSync(path.join(repoRoot, relativePath), "utf8");
+function read(relativePath: string, cwd: string): string {
+	return readFileSync(path.join(cwd, relativePath), "utf8");
 }
 
-function write(relativePath: string, text: string): void {
-	writeFileSync(path.join(repoRoot, relativePath), text);
+function write(relativePath: string, text: string, cwd: string): void {
+	writeFileSync(path.join(cwd, relativePath), text);
 }
 
 function writeVersion(
 	module: ModuleConfig,
 	currentVersion: string,
 	nextVersion: string,
+	cwd: string,
 ): void {
 	function writePackage(): void {
 		const lockFile = `${module.path}/package-lock.json`;
 		const updated = rewritePackageVersions(
-			read(module.versionFile),
-			read(lockFile),
+			read(module.versionFile, cwd),
+			read(lockFile, cwd),
 			nextVersion,
 		);
-		write(module.versionFile, updated.packageText);
-		write(lockFile, updated.lockText);
+		write(module.versionFile, updated.packageText, cwd);
+		write(lockFile, updated.lockText, cwd);
 	}
 	function writeCargo(): void {
 		const lockFile = `${module.path}/Cargo.lock`;
 		const updated = rewriteCargoVersions(
-			read(module.versionFile),
-			read(lockFile),
+			read(module.versionFile, cwd),
+			read(lockFile, cwd),
 			currentVersion,
 			nextVersion,
 		);
-		write(module.versionFile, updated.tomlText);
-		write(lockFile, updated.lockText);
+		write(module.versionFile, updated.tomlText, cwd);
+		write(lockFile, updated.lockText, cwd);
 	}
 	switch (module.name) {
 		case "website":
@@ -209,54 +217,195 @@ function writeVersion(
 		case "app":
 			write(
 				module.versionFile,
-				rewriteAppVersions(read(module.versionFile), nextVersion),
+				rewriteAppVersions(read(module.versionFile, cwd), nextVersion),
+				cwd,
 			);
 			break;
 	}
 }
 
+export function bumpModuleVersions(
+	needs: ReleaseNeeds,
+	mode: "released" | "retry" | "all",
+	cwd = repoRoot,
+	sourceSha?: string,
+): string {
+	const summary: string[] = [];
+	for (const name of modulesToBump(needs, mode)) {
+		const module = resolveModule(name);
+		const currentVersion = module.extractFromFile?.(
+			read(module.versionFile, cwd),
+		);
+		if (!currentVersion) throw new Error(`Missing ${name} version`);
+		const releasedVersion = getReleasedVersion(name, cwd);
+		const retry =
+			mode === "retry" ||
+			(mode === "all" &&
+				needs[`release_${name}`]?.outputs?.needs_bump === "true");
+		if (retry && sourceSha && releasedVersion) {
+			const result = spawnSync(
+				"git",
+				[
+					"merge-base",
+					"--is-ancestor",
+					sourceSha,
+					`${module.tagPrefix}${releasedVersion}`,
+				],
+				{ cwd },
+			);
+			if (result.status === 0) {
+				console.log(`${name}: latest release already contains ${sourceSha}`);
+				continue;
+			}
+			if (result.status !== 1)
+				throw new Error(
+					`Cannot compare ${name} release ancestry: ${result.stderr}`,
+				);
+		}
+		// A prior queued collision already scheduled CI for this source and version.
+		// Keep the failed run visible for recovery instead of creating duplicate builds.
+		if (
+			retry &&
+			sourceSha &&
+			releasedVersion &&
+			semver.gt(currentVersion, releasedVersion)
+		) {
+			const [commit, subject] = execFileSync(
+				"git",
+				["log", "-1", "--format=%H%n%s", "--", module.versionFile],
+				{ cwd, encoding: "utf8" },
+			)
+				.trim()
+				.split("\n");
+			if (
+				subject?.startsWith("chore(release): Bump versions to release (") &&
+				subject.includes(`${name} to ${currentVersion}`)
+			) {
+				const covered = spawnSync(
+					"git",
+					["merge-base", "--is-ancestor", sourceSha, commit],
+					{ cwd },
+				);
+				if (covered.status === 0) {
+					console.log(`${name}: retry CI already scheduled by ${commit}`);
+					continue;
+				}
+				if (covered.status !== 1)
+					throw new Error(
+						`Cannot compare pending retry ancestry: ${covered.stderr}`,
+					);
+			}
+		}
+		const nextVersion = nextReleaseVersion(
+			currentVersion,
+			releasedVersion,
+			retry,
+		);
+		if (!nextVersion) continue;
+		writeVersion(module, currentVersion, nextVersion, cwd);
+		summary.push(`${name} to ${nextVersion}`);
+		console.log(`Bumped ${name} ${currentVersion} -> ${nextVersion}`);
+	}
+	return summary.join(", ");
+}
+
+/** Recompute after a competing master push; never rebase stale version edits. */
+export function publishVersionBumps(
+	needs: ReleaseNeeds,
+	mode: "released" | "retry" | "all",
+	cwd = repoRoot,
+	sourceSha?: string,
+	beforePush?: (attempt: number) => void,
+): void {
+	const git = (...args: string[]) =>
+		execFileSync("git", args, { cwd, encoding: "utf8" });
+	if (git("status", "--porcelain").trim())
+		throw new Error("Version publisher requires a clean checkout");
+	for (let attempt = 1; attempt <= 5; attempt++) {
+		git(
+			"fetch",
+			"--tags",
+			"origin",
+			"+refs/heads/master:refs/remotes/origin/master",
+		);
+		git("reset", "--hard", "origin/master");
+		const base = git("rev-parse", "HEAD").trim();
+		const summary = bumpModuleVersions(needs, mode, cwd, sourceSha);
+		if (!summary) return;
+		const message =
+			mode === "released" ||
+			(mode === "all" &&
+				!modulesToBump(needs, "retry").some((name) =>
+					summary.includes(`${name} to `),
+				))
+				? `chore(release): Bump versions (${summary}) [skip ci]`
+				: `chore(release): Bump versions to release (${summary})`;
+		git("commit", "-n", "-am", message);
+		beforePush?.(attempt);
+		const pushed = spawnSync("git", ["push", "origin", "HEAD:master"], {
+			cwd,
+			encoding: "utf8",
+		});
+		if (pushed.status === 0) return;
+		const remote = git("ls-remote", "origin", "refs/heads/master").split(
+			/\s/,
+		)[0];
+		if (remote === base)
+			throw new Error(`Version push failed: ${pushed.stderr}`);
+		console.log(
+			"Master advanced during the bump; recalculating from its new head",
+		);
+	}
+	throw new Error("Master advanced during all five version bump attempts");
+}
+
+/** Older in-flight bump jobs check out master but still use two CLI steps. */
+export function executeVersionBumps(
+	needs: ReleaseNeeds,
+	mode: "released" | "retry" | "all",
+	publish: boolean,
+	cwd = repoRoot,
+	environment = process.env,
+): string | undefined {
+	const legacyPublisher =
+		!publish &&
+		environment.GITHUB_ACTIONS === "true" &&
+		environment.GITHUB_EVENT_NAME === "push" &&
+		environment.GITHUB_REF === "refs/heads/master" &&
+		environment.GITHUB_JOB === "bump_versions";
+	if (publish || legacyPublisher) {
+		if (environment.GITHUB_ACTIONS !== "true")
+			throw new Error(
+				"Publishing requires a disposable GitHub Actions checkout",
+			);
+		publishVersionBumps(
+			needs,
+			legacyPublisher ? "all" : mode,
+			cwd,
+			environment.GITHUB_SHA,
+		);
+		// No summary: the older workflow must skip its unsafe commit/rebase/push steps.
+		return undefined;
+	}
+	return bumpModuleVersions(needs, mode, cwd);
+}
+
 async function main(): Promise<void> {
-	const { mode } = await yargs(hideBin(process.argv))
+	const { mode, publish } = await yargs(hideBin(process.argv))
 		.option("mode", {
 			type: "string",
-			choices: ["released", "retry"] as const,
+			choices: ["released", "retry", "all"] as const,
 			demandOption: true,
 		})
+		.option("publish", { type: "boolean", default: false })
 		.strict()
 		.parse();
 	const needsJson = process.env.NEEDS_JSON;
 	if (!needsJson) throw new Error("NEEDS_JSON is required");
 	const needs = JSON.parse(needsJson) as ReleaseNeeds;
-	const selected = new Set(modulesToBump(needs, mode));
-	const summary: string[] = [];
-
-	for (const name of moduleNames) {
-		if (!selected.has(name)) {
-			console.log(`Skipping ${name}: no matching release output`);
-			continue;
-		}
-		const currentVersion = getModuleVersion(name);
-		const releasedVersion = getReleasedVersion(name);
-		const nextVersion = nextReleaseVersion(
-			currentVersion,
-			releasedVersion,
-			mode === "retry",
-		);
-		if (!nextVersion) {
-			console.log(`${name} ${currentVersion} is already ahead`);
-			continue;
-		}
-		writeVersion(resolveModule(name), currentVersion, nextVersion);
-		summary.push(`${name} to ${nextVersion}`);
-		console.log(`Bumped ${name} ${currentVersion} → ${nextVersion}`);
-	}
-
-	if (process.env.GITHUB_OUTPUT) {
-		appendFileSync(
-			process.env.GITHUB_OUTPUT,
-			`summary=${summary.join(", ")}\n`,
-		);
-	}
+	const summary = executeVersionBumps(needs, mode, publish);
+	if (summary !== undefined && process.env.GITHUB_OUTPUT)
+		appendFileSync(process.env.GITHUB_OUTPUT, `summary=${summary}\n`);
 }
 
 if (

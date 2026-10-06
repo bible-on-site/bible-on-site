@@ -57,6 +57,8 @@ Copilot and agents follow the same workflow as above but should:
 
 ### Branch Management
 
+Use a dedicated Git worktree for every task unless the entire task can be completed using API calls alone. Create or reuse a worktree belonging to the current task before changing repository files or running builds. Do not switch branches or modify files in another task's checkout. After delivery, archive a managed worktree through the app or remove an unmanaged worktree and prune its registration.
+
 **Before pushing to a branch**, always verify the branch doesn't already exist on remote (it may have been merged/deleted):
 
 ```bash
@@ -70,7 +72,11 @@ git ls-remote --heads origin <branch-name>
 **Why this matters:** Pushing to an already-merged branch can cause conflicts and confusion. If the branch already exists:
 1. Check if it was merged (PR closed)
 2. If merged, create a new branch with a different name
-3. If not merged, fetch and rebase before pushing
+3. If not merged, apply the branch sync rule below
+
+### Pull Request Branch Sync
+
+Start new branches from the intended base. Sync an existing pull request branch with its base only when both conditions hold: the current head has no green CI result, and there is an actual merge conflict. Being behind the base is not sufficient. When syncing is necessary, inspect the overlapping changes, resolve conflicts preserving both sides where appropriate, validate the resolution, and push with a clean tree.
 
 ### Pull Request Management
 - Always create a new branch for each feature or fix
