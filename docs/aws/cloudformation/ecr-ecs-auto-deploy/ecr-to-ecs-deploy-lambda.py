@@ -1,33 +1,19 @@
 """
-ECR to ECS Auto-Deploy Lambda Function
+Undeployed ECR to ECS scale-up proposal (#2016)
 
 Triggered by EventBridge when an ECR image is pushed.
 Forces a new deployment of the corresponding ECS service.
 
-Zero-downtime strategy for services with DesiredCount=1:
+Proposed strategy for services with DesiredCount=1:
   1. Temporarily scale DesiredCount to 2
   2. Force a new deployment (ECS starts a new task with the latest image)
   3. Wait for the new task to reach RUNNING state
   4. Scale DesiredCount back to 1 (ECS drains and stops the old task)
 
-This ensures at least one healthy task is serving traffic at all times,
-even for single-task services that would otherwise see brief downtime
-during the rolling update.
-
-⚠️ DISCLAIMER: This file is maintained as documentation to reflect the de-facto
-Lambda code deployed in AWS. The actual Lambda was created via AWS CLI.
-
-Deployment:
-    cp ecr-to-ecs-deploy-lambda.py index.py
-    zip lambda.zip index.py
-    aws lambda update-function-code \
-        --function-name ecr-to-ecs-deploy \
-        --zip-file fileb://lambda.zip \
-        --region il-central-1
-    aws lambda update-function-configuration \
-        --function-name ecr-to-ecs-deploy \
-        --timeout 240 \
-        --region il-central-1
+This prototype is NOT the deployed Lambda. A running task count does not prove
+container readiness, discovery propagation, or successful public requests.
+Do not use it as a zero-downtime guarantee or deployment recipe. See README.md
+for the verified runtime and the evidence still required before changing it.
 """
 
 import boto3
@@ -44,7 +30,7 @@ POLL_INTERVAL = 10  # seconds between checks
 def handler(event, context):
     """
     Triggered by EventBridge when an ECR image is pushed.
-    Forces a new deployment of the corresponding ECS service with zero-downtime.
+    Illustrates the undeployed scale-up proposal; availability is unvalidated.
     """
     print(f"Event received: {json.dumps(event)}")
 
@@ -110,7 +96,7 @@ def handler(event, context):
                 f"({', '.join(d['status'] + ':' + str(d['runningCount']) for d in deployments)})"
             )
 
-            # When we have 2+ running tasks, the new deployment is healthy
+            # This count alone does not establish readiness or public availability.
             if running >= 2:
                 new_task_healthy = True
                 print("New task is running — scaling back down")
