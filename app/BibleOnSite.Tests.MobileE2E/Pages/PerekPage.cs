@@ -2,6 +2,7 @@ using System.Drawing;
 using BibleOnSite.Tests.MobileE2E.Platforms;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Appium;
+using OpenQA.Selenium.Interactions;
 using Xunit;
 
 namespace BibleOnSite.Tests.MobileE2E.Pages;
@@ -59,6 +60,26 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     {
         Tap("CircularMenuButton");
         WaitFor("TodayButton", element => element.Enabled);
+    }
+
+    // Rapid vertical flicks through the pasukim list. Exercises fast cell
+    // recycling of the perushim HtmlView content.
+    public void FlickPasukim(int times)
+    {
+        var window = driver.Manage().Window.Size;
+        var x = window.Width / 2;
+        for (var i = 0; i < times; i++)
+        {
+            var finger = new PointerInputDevice(PointerKind.Touch, "finger");
+            var sequence = new ActionSequence(finger, 0);
+            sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport,
+                x, (int)(window.Height * 0.75), TimeSpan.Zero));
+            sequence.AddAction(finger.CreatePointerDown(MouseButton.Left));
+            sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport,
+                x, (int)(window.Height * 0.25), TimeSpan.FromMilliseconds(120)));
+            sequence.AddAction(finger.CreatePointerUp(MouseButton.Left));
+            driver.PerformActions([sequence]);
+        }
     }
 
     public void AssertBottomNavigationLayout()
