@@ -33,7 +33,7 @@ For App development, you'll also need:
     - Android Emulator - 35.3.11
     - Android Emulator hypervisor driver (installer) - 2.2.0
     - Android SDK Platform-Tools - 35.0.2
-  - Headless alternative (no Android Studio): install the `cmdline-tools` zip under `%LOCALAPPDATA%\Android\Sdk\cmdline-tools\latest`, then use `sdkmanager` for `platform-tools`, `emulator`, `platforms;android-36`, `build-tools;36.0.0`, `system-images;android-36;google_apis;x86_64` and `extras;google;Android_Emulator_Hypervisor_Driver`. The hypervisor driver requires a one-time elevated install (`silent_install.bat`); verify with `emulator -accel-check`. See `.github/tool-registry.md` ("Android emulator (local Windows)") for the full recipe.
+  - Headless alternative (no Android Studio): install the `cmdline-tools` zip under `%LOCALAPPDATA%\Android\Sdk\cmdline-tools\latest`, then use `sdkmanager` for `platform-tools`, `emulator`, `platforms;android-36`, `build-tools;36.0.0`, `system-images;android-36;google_apis;x86_64` and `extras;google;Android_Emulator_Hypervisor_Driver`. Acceleration: when a Hyper-V hypervisor is active (`Get-CimInstance Win32_ComputerSystem` → `HypervisorPresent=True`), the emulator accelerates via WHPX and no driver is needed; otherwise install AEHD once elevated via `extras\google\Android_Emulator_Hypervisor_Driver\silent_install.bat`. Verify with `emulator -accel-check`. Create and boot an AVD: `avdmanager create avd -n <name> -k "system-images;android-36;google_apis;x86_64" -d pixel_7`, then `emulator -avd <name> -no-snapshot -no-metrics -noaudio`. See `.github/tool-registry.md` ("Android emulator (local Windows)") for the full recipe.
 - MAUI Toolset
   - `dotnet workload install maui`
 
