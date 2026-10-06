@@ -1774,7 +1774,7 @@ jobs:
       - name: Verify canonical text preprocessing
         run: node --test data/sefaria/pipelines/tanah-view/tests/preprocessor.test.mjs
       - name: Verify module release and shared decoder check routing
-        run: node --test devops/github/ci/determine-changes.test.ts devops/github/ci/auto-create-pr.test.mjs devops/github/ci/nuget-cache-key.test.mjs devops/github/ci/codecov-report-state.test.mjs
+        run: node --test devops/github/ci/determine-changes.test.ts devops/github/ci/auto-create-pr.test.mjs devops/github/ci/nuget-cache-key.test.mjs
       - name: Install storage test dependencies
         run: npm ci --prefix devops
       - name: Verify repeatable deployment recovery
@@ -2447,9 +2447,11 @@ jobs:
           path: ~/.npm
           key: ${{ steps.devops-npm-cache.outputs.cache-primary-key }}
 
-      - name: Test version publication and deployment collision guards
+      - name: Test release, deployment, and coverage reporting guards
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        run: npm run test:version
+        run: |
+          npm run test:version
+          node --test github/ci/codecov-report-state.test.mjs
 
       - name: Merge Test Coverage (Website + API)
         run: npm run coverage:merge
