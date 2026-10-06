@@ -24,7 +24,13 @@ permissions:
   pull-requests: write
 
 jobs:
+  submit-nuget:
+    permissions:
+      contents: write
+      id-token: write
+    uses: ./.github/workflows/dependency-submission.yml
   dependency-review:
+    needs: submit-nuget
     runs-on: ubuntu-latest
     steps:
       - name: 'Checkout repository'
@@ -34,7 +40,7 @@ jobs:
         # Commonly enabled options, see https://github.com/actions/dependency-review-action#configuration-options for all available options.
         with:
           comment-summary-in-pr: always
-          # NuGet submission runs in parallel and must publish its head snapshot first.
+          # Wait for GitHub to index the completed base/head submissions.
           retry-on-snapshot-warnings: true
           retry-on-snapshot-warnings-timeout: 600
           # flowbite-react uses npm aliases ("tailwind-merge-v2": "npm:tailwind-merge@2.6.1")

@@ -13,8 +13,7 @@ name: 'Dependency submission'
 on:
   push:
     branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
+  workflow_call:
   merge_group:
   workflow_dispatch:
 
@@ -25,12 +24,18 @@ permissions:
 jobs:
   submit-nuget:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        source: ${{ github.event_name == 'pull_request' && fromJSON('["base", "head"]') || fromJSON('["head"]') }}
+    env:
+      SNAPSHOT_SHA: ${{ matrix.source == 'base' && github.event.pull_request.base.sha || github.event.pull_request.head.sha || github.sha }}
+      SNAPSHOT_REF: ${{ matrix.source == 'base' && format('refs/heads/{0}', github.event.pull_request.base.ref) || github.event.pull_request.head.ref && format('refs/heads/{0}', github.event.pull_request.head.ref) || github.ref }}
     steps:
       - name: 'Checkout repository'
         uses: actions/checkout@v7
         with:
           # Dependency review compares the PR head, not its synthetic merge commit.
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.SNAPSHOT_SHA }}
       - name: 'Setup .NET'
         uses: actions/setup-dotnet@v6
         with:
@@ -54,5 +59,7 @@ jobs:
         uses: advanced-security/component-detection-dependency-submission-action@v0.2.0
         with:
           detectorsCategories: NuGet
-          snapshot-sha: ${{ github.event.pull_request.head.sha || github.sha }}
-          snapshot-ref: ${{ github.event_name == 'pull_request' && format('refs/heads/{0}', github.event.pull_request.head.ref) || github.ref }}
+          # Stable across PR, merge queue and master workflow contexts.
+          correlator: nuget
+          snapshot-sha: ${{ env.SNAPSHOT_SHA }}
+          snapshot-ref: ${{ env.SNAPSHOT_REF }}

@@ -14,12 +14,15 @@ content or production credentials are involved. See [AWS HTTP client configurati
 
 See [the snapshot provenance finding](https://github.com/bible-on-site/bible-on-site/issues/1997).
 
-Dependency review compares the pull request's head SHA. NuGet submission now
-checks out that same SHA and sets the action's snapshot SHA/ref explicitly. Push
-and merge-group runs retain their own immutable SHA/ref. This prevents snapshots
-of synthetic PR merge commits from being mistaken for snapshots of the reviewed
-head. Dependency review waits for the parallel submission job to publish its graph
-instead of reporting a missing head snapshot immediately.
+Dependency review compares the pull request's base and head SHAs. The submission
+SDK already labels PR snapshots with the head SHA; default checkout scans the
+synthetic merge commit. Match checkout and snapshot metadata explicitly. Submit
+both base and head on pull requests, since a version-only `[skip ci]` base can
+lack a snapshot. Use one stable NuGet correlator across all workflow contexts.
+
+Run review only after both submissions complete, then wait for indexing without
+relaxing vulnerability or license checks. Push and merge-group submissions retain
+their own immutable source. See [GitHub's submission/review guidance](https://docs.github.com/en/code-security/concepts/supply-chain-security/dependency-review#best-practices-for-using-the-dependency-review-api-and-the-dependency-submission-api-together).
 
 ## Upstream blockers
 
