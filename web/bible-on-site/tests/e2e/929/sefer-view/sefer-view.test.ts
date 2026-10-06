@@ -40,22 +40,36 @@ async function fastMouseSwipe(page: Page, x: number, y: number, delta: number) {
 		buttons: 1,
 		clickCount: 1,
 	});
-	for (let step = 1; step <= 6; step++) {
-		await client.send("Input.dispatchMouseEvent", {
+	// Hammer samples velocity over intervals longer than 25ms. Leave a short
+	// press, then confirm the first move so Chromium cannot coalesce the entire
+	// gesture into a panstart followed by a release, without any panmove.
+	await new Promise((resolve) => setTimeout(resolve, 30));
+	await client.send("Input.dispatchMouseEvent", {
+		type: "mouseMoved",
+		x: x + delta / 6,
+		y,
+		buttons: 1,
+	});
+	// Send the remaining motion together: awaiting every acknowledgement can
+	// turn a fast swipe into a slow drag under load or trace recording.
+	const inputs: Promise<unknown>[] = [];
+	for (let step = 2; step <= 6; step++) {
+		inputs.push(client.send("Input.dispatchMouseEvent", {
 			type: "mouseMoved",
 			x: x + (step * delta) / 6,
 			y,
 			buttons: 1,
-		});
+		}));
 	}
-	await client.send("Input.dispatchMouseEvent", {
+	inputs.push(client.send("Input.dispatchMouseEvent", {
 		type: "mouseReleased",
 		x: x + delta,
 		y,
 		button: "left",
 		buttons: 0,
 		clickCount: 1,
-	});
+	}));
+	await Promise.all(inputs);
 	await client.detach();
 }
 
