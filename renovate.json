@@ -42,10 +42,10 @@
 			"enabled": false
 		},
 		{
-			"description": "Android driver 8.7.0 bundles vulnerable dependencies that npm overrides cannot replace. Update to a patched upstream bundle when available; see https://github.com/bible-on-site/bible-on-site/issues/1995",
+			"description": "Android 8.7.0 and iOS 12.15.0 bundle vulnerable dependencies that npm overrides cannot replace. The root shell-quote override patches only the non-bundled copy. Update to patched upstream bundles when available; see https://github.com/bible-on-site/bible-on-site/issues/1995",
 			"matchManagers": ["npm"],
 			"matchFileNames": ["app/mobile-e2e/package.json"],
-			"matchPackageNames": ["appium-uiautomator2-driver"]
+			"matchPackageNames": ["appium-uiautomator2-driver", "appium-xcuitest-driver"]
 		},
 		{
 			"description": "Jest coverage tooling still pulls unpatched sprintf-js through legacy YAML/argparse. Retain updates and verify removal or a fixed upstream release; see https://github.com/bible-on-site/bible-on-site/issues/1996",

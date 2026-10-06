@@ -87,3 +87,13 @@ room for the scenario and diagnostics. `wdaConnectionTimeout` bounds every proxi
 WDA request including `POST /session`, so it stays at the driver default of 240
 seconds — a cold app launch can exceed 90 seconds before the first test runs.
 CI uploads a separate artifact for each platform even on test failures.
+
+## Dependency security
+
+The `shell-quote` override replaces the non-bundled copy pinned by Appium support
+with 1.11.0, which fixes command injection involving a line terminator after a
+comment token. Both published drivers still contain bundled shell-quote 1.10.0;
+Android also bundles other vulnerable packages. npm overrides do not replace
+those bundled files. Keep their alerts visible and follow
+[#1995](https://github.com/bible-on-site/bible-on-site/issues/1995) for patched
+upstream distributions. Verify nested copies after every driver upgrade.
