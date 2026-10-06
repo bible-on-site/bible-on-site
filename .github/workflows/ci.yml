@@ -96,8 +96,11 @@ env:
   ADMIN_E2E_JUNIT_REPORT_ARTIFACT_NAME: admin-e2e-junit-report-${{ github.run_id }}
   ADMIN_COVERAGE_ARTIFACT_NAME_MASTER: admin-coverage.master
   ADMIN_COVERAGE_ARTIFACT_NAME_WF: admin-coverage.${{ github.run_id }}
+  ADMIN_COVERAGE_DIRECTORY: web/admin/.coverage
   ADMIN_MERGED_COVERAGE_DIRECTORY: web/admin/.coverage/merged
   ADMIN_MERGED_COVERAGE_REPORT: web/admin/.coverage/merged/lcov.info
+  ADMIN_UNIT_COVERAGE_REPORT: web/admin/.coverage/unit/lcov.info
+  ADMIN_E2E_COVERAGE_REPORT: web/admin/.coverage/e2e/lcov.info
   BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER: bulletin-coverage.master
   BULLETIN_COVERAGE_ARTIFACT_NAME_WF: bulletin-coverage.${{ github.run_id }}
   BULLETIN_COVERAGE_DIRECTORY: web/bulletin/.coverage/unit
@@ -1218,7 +1221,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_WF }}
-          path: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
+          # Whole .coverage dir: unit + e2e are uploaded to Codecov under
+          # separate flags (merged is for the cross-module report).
+          path: ${{ env.ADMIN_COVERAGE_DIRECTORY }}
           retention-days: 90
           overwrite: true
           if-no-files-found: error
@@ -1228,7 +1233,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
+          path: ${{ env.ADMIN_COVERAGE_DIRECTORY }}
           retention-days: 90
           overwrite: true
 
@@ -2372,15 +2377,26 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: ${{ needs.admin_ci.result != 'skipped' && env.ADMIN_COVERAGE_ARTIFACT_NAME_WF || env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: ${{ env.ADMIN_MERGED_COVERAGE_DIRECTORY }}
+          path: ${{ env.ADMIN_COVERAGE_DIRECTORY }}
 
       - name: Publish Admin Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
+          # The admin flag tracks unit coverage (its historical baseline);
+          # e2e goes under admin_e2e so thin e2e suites don't dilute it.
+          files: ${{ env.ADMIN_UNIT_COVERAGE_REPORT }}
           disable_search: true
           flags: admin
+          fail_ci_if_error: false
+
+      - name: Publish Admin E2E Coverage To Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.ADMIN_E2E_COVERAGE_REPORT }}
+          disable_search: true
+          flags: admin_e2e
           fail_ci_if_error: false
 
       - name: Restore Data Coverage Report
