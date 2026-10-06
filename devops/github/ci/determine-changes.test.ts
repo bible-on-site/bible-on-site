@@ -22,6 +22,15 @@ const changed = (files: string[], ...keys: ModuleKey[]) =>
 	keys.map((key) => detectChanges(files)[key]);
 
 describe("detectChanges", () => {
+	test("benchmark comparison changes check the website without releasing a module", () => {
+		const changes = detectChanges(["devops/github/ci/bencher-comparison.mjs"]);
+		assert.deepEqual(changes.website, { module_changed: false, ci_changed: true });
+		for (const [key, flags] of Object.entries(changes)) {
+			if (key !== "website")
+				assert.deepEqual(flags, { module_changed: false, ci_changed: false });
+		}
+	});
+
 	test("mobile matrix workflow changes require app checks without a release", () => {
 		const changes = detectChanges([".github/workflows/app-mobile-e2e.yml"]);
 		assert.deepEqual(changes.app, { module_changed: false, ci_changed: true });

@@ -2,12 +2,10 @@ import { NextResponse } from "next/server";
 import { getPerekByPerekId } from "@/data/perek-dto";
 
 /**
- * Readiness probe that warms critical code paths before container receives traffic.
- * ALB should use this endpoint for health checks to ensure the app is fully ready.
- *
- * This endpoint:
- * 1. Warms the data loading code path by loading a sample perek
- * 2. Ensures all lazy-loaded modules are initialized
+ * ECS readiness probe. Importing perek-dto initializes the canonical server data
+ * shared by chapter and recitation routes; the sample lookups verify it is usable.
+ * Liveness can pass before this cold load completes, so ECS must use this endpoint
+ * before replacing the old task. This does not check database-backed pages.
  */
 
 let isWarmed = false;
