@@ -10,7 +10,7 @@ The repository uses pre-commit hooks managed by [pre-commit](https://pre-commit.
 | Python venv | `devops/.venv/` |
 | Tool configurations | `devops/pyproject.toml` |
 
-**Husky integration**: Husky (npm) triggers pre-commit (Python) on git hooks. The `.husky/pre-commit` script calls `pre-commit run`.
+**Git hook installation**: pre-commit installs the repository's git hooks itself (`pre-commit install --hook-type pre-commit --hook-type post-commit`), wired into `devops/setup-dev-env.mts`. No Husky/npm hook layer remains.
 
 ### Running Hooks Manually
 

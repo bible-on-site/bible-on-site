@@ -8,7 +8,7 @@ alwaysApply: true
 ## Pre-commit
 
 - Config: `.pre-commit-config.yaml`; venv: `devops/.venv/`; tool config: `devops/pyproject.toml`.
-- Husky runs pre-commit via `.husky/pre-commit`.
+- pre-commit installs the git hooks directly (`pre-commit install --hook-type pre-commit --hook-type post-commit`, via root `prepare` script and `devops/setup-dev-env.mts`).
 - Adding a hook: add to `.pre-commit-config.yaml`, then update `docs/devops/pre-commit.md`.
 
 ## Clean Working Directory Before Commit

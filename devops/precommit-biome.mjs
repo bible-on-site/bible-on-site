@@ -6,16 +6,15 @@
  * (web/bible-on-site, web/admin) and they may pin different Biome versions, so
  * Biome cannot be run once from the repo root ("Found a nested root
  * configuration, but there's already a root configuration"). We bucket the
- * staged paths by module, then run *that module's own* locally-installed Biome
- * from inside the module on the module-relative paths — exactly how CI lints
- * each module, and with the version the module actually pins. This is fully
+ * staged paths by module, then run Biome from inside the module on the
+ * module-relative paths — exactly how CI lints each module. This is fully
  * cross-platform (no shell heredocs), unlike semgrep which has no native
  * Windows support.
  *
- * This is a local convenience gate (see `ci.skip` in .pre-commit-config.yaml):
- * the authoritative remote check is each module's CI lint job. If a module's
- * Biome is not installed (developer hasn't run `npm ci` there), we print a
- * notice and skip that module rather than blocking the commit.
+ * Each run prefers the module's own locally-installed Biome (the version that
+ * module pins). When the module isn't npm-installed — e.g. pre-commit.ci — it
+ * falls back to the Biome that the hook's `additional_dependencies` install
+ * into the hook environment (synced by sync-pre-commit-deps).
  */
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -41,14 +40,12 @@ for (const dir of MODULES) {
 		".bin",
 		process.platform === "win32" ? "biome.cmd" : "biome",
 	);
-	if (!existsSync(localBin)) {
-		console.warn(
-			`[biome-lint] skipping ${dir}: Biome not installed (run \`npm ci\` in ${dir}).`,
-		);
-		continue;
-	}
+	// Prefer the module's pinned Biome; fall back to the hook env's binary.
+	const biome = existsSync(localBin) ? localBin : "biome";
 
-	const result = spawnSync(localBin, ["lint", ...moduleFiles], {
+	// shell is required only on Windows to spawn the .cmd biome shim;
+	// argv is fully static — no user input is shelled.
+	const result = spawnSync(biome, ["lint", ...moduleFiles], { // nosemgrep
 		cwd: resolve(dir),
 		stdio: "inherit",
 		shell: process.platform === "win32",

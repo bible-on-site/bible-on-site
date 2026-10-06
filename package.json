@@ -2,13 +2,12 @@
 	"name": "bible-on-site-monorepo",
 	"devDependencies": {
 		"@types/node": "^26.6.3",
-		"cross-env": "10.1.0",
-		"husky": "9.1.7"
+		"cross-env": "10.1.0"
 	},
 	"scripts": {
 		"dev": "npm run dev --prefix devops --",
 		"images:prepare": "node devops/perek-images/prepare.mjs",
-		"prepare": "husky",
+		"prepare": "node devops/install-git-hooks.mjs",
 		"version": "cross-env-shell echo ${npm_package_version}"
 	},
 	"dependencies": {
