@@ -330,6 +330,7 @@
                                                             <DataTemplate x:DataType="models:PerushNoteDisplay">
                                                                 <VerticalStackLayout Spacing="2">
                                                                     <Label Text="{Binding PerushName}"
+                                                                           AutomationId="PerushNoteName"
                                                                            FontSize="{DynamicResource PerushNameFontSize}"
                                                                            FontAttributes="Bold"
                                                                            TextColor="{StaticResource Primary}"/>
@@ -470,6 +471,7 @@
                             <DataTemplate x:DataType="models:Perush">
                                 <Grid Padding="4,2" ColumnDefinitions="Auto,*" x:Name="PerushRow">
                                     <CheckBox Grid.Column="0"
+                                              AutomationId="PerushCheckBox"
                                               VerticalOptions="Center"
                                               Margin="0,0,8,0"
                                               CheckedChanged="OnPerushCheckboxChanged">
@@ -536,6 +538,7 @@
 
                 <!-- Perushim Chevron Button at 8% -->
                 <Button x:Name="PerushimChevronButton"
+                        AutomationId="PerushimChevronButton"
                         Text="{x:Static fonts:FluentUI.chevron_up_24_regular}"
                         FontFamily="FluentIcons"
                         FontSize="20"

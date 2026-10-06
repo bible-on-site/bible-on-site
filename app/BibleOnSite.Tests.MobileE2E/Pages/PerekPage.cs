@@ -52,6 +52,48 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     public string Source => WaitFor("PerekSource", element => !string.IsNullOrWhiteSpace(element.Text)).Text;
     public string FirstPasuk => WaitFor("PasukText", element => !string.IsNullOrWhiteSpace(element.Text)).Text;
 
+    // Single-shot presence check with a short timeout for optional UI.
+    public AppiumElement? FindFirst(string automationId, TimeSpan timeout)
+    {
+        var locator = platform.AutomationId(automationId);
+        var deadline = DateTime.UtcNow.Add(timeout);
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                var element = driver.FindElements(locator).FirstOrDefault(e => e.Displayed);
+                if (element != null)
+                {
+                    return element;
+                }
+            }
+            catch (StaleElementReferenceException)
+            {
+                // The carousel can replace its native views between lookups.
+            }
+            Thread.Sleep(200);
+        }
+        return null;
+    }
+
+    // Checks a perush so its notes render inline via HtmlView, then closes the
+    // panel. Returns false when the perek has no perushim (notes ship via
+    // PAD/ODR and are absent from the offline e2e build).
+    public bool SelectFirstPerushIfAvailable()
+    {
+        Tap("PerushimChevronButton");
+        var checkbox = FindFirst("PerushCheckBox", TimeSpan.FromSeconds(5));
+        if (checkbox == null)
+        {
+            Tap("PerushimChevronButton");
+            return false;
+        }
+        platform.Tap(driver, checkbox);
+        Tap("PerushimChevronButton");
+        WaitFor("PerushNoteName", element => !string.IsNullOrWhiteSpace(element.Text));
+        return true;
+    }
+
     public void Tap(string automationId) => Tap(platform.AutomationId(automationId));
 
     public void Tap(By locator) => platform.Tap(driver, WaitFor(locator, platform.CanTap));
