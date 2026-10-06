@@ -6,3 +6,10 @@ export const hebrewSerif = localFont({
 	variable: "--font-tanakh",
 	display: "swap",
 });
+
+// Experimental Taamey D face for pesukim with taamim; selectable in reader settings.
+export const taameyD = localFont({
+	src: "../../fonts/TaameyD.woff2",
+	variable: "--font-tanakh-taamey",
+	display: "swap",
+});
