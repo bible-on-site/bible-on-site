@@ -43,6 +43,7 @@ public sealed class ConfigurationTests
             Assert.Equal(true, options["appium:usePreinstalledWDA"]);
             Assert.Equal("/test/WebDriverAgentRunner-Runner.app", options["appium:prebuiltWDAPath"]);
             Assert.Equal(1, options["appium:wdaStartupRetries"]);
+            Assert.Equal(240000, options["appium:wdaConnectionTimeout"]);
             Assert.Equal(1.0, options["appium:waitForIdleTimeout"]);
             Assert.Equal(true, options["appium:skipLogCapture"]);
         }
