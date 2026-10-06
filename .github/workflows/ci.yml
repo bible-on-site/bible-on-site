@@ -1818,30 +1818,22 @@ jobs:
           shared-key: "data-ci-rust"
 
       # Overlap the image pull with lint/unit coverage; integration tests wait below.
-      # (background:/wait: are not real step keys — the pull must actually be detached.)
       - name: Pull Sefaria MongoDB Docker Image
         id: pull-sefaria-mongo
+        background: true
         env:
           GH_TOKEN: ${{ github.token }}
           SEFARIA_MONGO_IMAGE: ${{ needs.determine_docker_image_availability.outputs.sefaria_mongo_image }}
         run: |
-          rm -f /tmp/sefaria-pull.exit /tmp/sefaria-pull.log
-          (
-            set +e
-            if [ "${{ needs.determine_docker_image_availability.outputs.is_sefaria_mongo_available }}" != "true" ] && [ "${{ needs.determine_docker_image_availability.outputs.can_publish_sefaria_mongo }}" != "true" ]; then
-              gh run download ${{ github.run_id }} -n ${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }} -D /tmp &&
-                docker load --input /tmp/sefaria-mongo-image.tar &&
-                rm -f /tmp/sefaria-mongo-image.tar
-            else
-              echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin &&
-                docker pull "$SEFARIA_MONGO_IMAGE"
-            fi
-            rc=$?
-            df -h /
-            echo $rc > /tmp/sefaria-pull.exit
-          ) > /tmp/sefaria-pull.log 2>&1 &
-          disown
-          echo "Started mongo image pull in background (pid $!)"
+          if [ "${{ needs.determine_docker_image_availability.outputs.is_sefaria_mongo_available }}" != "true" ] && [ "${{ needs.determine_docker_image_availability.outputs.can_publish_sefaria_mongo }}" != "true" ]; then
+            gh run download ${{ github.run_id }} -n ${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }} -D /tmp
+            docker load --input /tmp/sefaria-mongo-image.tar
+            rm -f /tmp/sefaria-mongo-image.tar
+          else
+            echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+            docker pull "$SEFARIA_MONGO_IMAGE"
+          fi
+          df -h /
 
       - name: Lint
         id: lint
@@ -1890,25 +1882,7 @@ jobs:
           report_type: test_results
 
       - name: Wait for Sefaria MongoDB Docker Image
-        env:
-          SEFARIA_MONGO_IMAGE: ${{ needs.determine_docker_image_availability.outputs.sefaria_mongo_image }}
-        run: |
-          # The pull runs detached since the earlier step; poll its exit marker.
-          for i in $(seq 1 120); do
-            if [ -f /tmp/sefaria-pull.exit ]; then break; fi
-            sleep 5
-          done
-          if [ -f /tmp/sefaria-pull.log ]; then cat /tmp/sefaria-pull.log; fi
-          if [ ! -f /tmp/sefaria-pull.exit ]; then
-            echo "::error::MongoDB image pull did not finish within 10 minutes"
-            exit 1
-          fi
-          rc=$(cat /tmp/sefaria-pull.exit)
-          if [ "$rc" != "0" ]; then
-            echo "::error::MongoDB image pull failed (exit $rc)"
-            exit 1
-          fi
-          docker image inspect "$SEFARIA_MONGO_IMAGE" > /dev/null
+        wait: pull-sefaria-mongo
 
       # ============ Integration Test Setup: MongoDB Container ============
       - name: Setup MongoDB Container for Integration Tests
