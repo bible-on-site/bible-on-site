@@ -8,6 +8,12 @@
 # a form that works on Ubuntu, then submits the resolved graph with the same
 # component-detection action the managed job uses.
 #
+# The managed job MUST stay disabled in repo Settings (Settings -> Code security ->
+# Advanced Security -> Dependency graph -> "Automatic dependency submission"). While
+# enabled it double-reports a check named `submit-nuget` on every push/PR, always
+# fails on the MAUI csproj, and races this workflow's job for the required
+# `submit-nuget` check (the last run to finish wins), randomly blocking merges.
+#
 # Source repository: https://github.com/advanced-security/component-detection-dependency-submission-action
 name: 'Dependency submission'
 on:
@@ -63,7 +69,7 @@ jobs:
           dotnet restore app/BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android -p:RuntimeIdentifiers=android-arm64 -r android-arm64
           dotnet restore app/BibleOnSite.Core/BibleOnSite.Core.csproj
           dotnet restore app/BibleOnSite.Tests/BibleOnSite.Tests.csproj
-          dotnet restore app/BibleOnSite.Tests.E2E/BibleOnSite.Tests.E2E.csproj
+          dotnet restore app/BibleOnSite.Tests.E2E/BibleOnSite.Tests.E2E.csproj -p:EnableWindowsTargeting=true
           dotnet restore app/BibleOnSite.Tests.MobileE2E/BibleOnSite.Tests.MobileE2E.csproj
           dotnet restore app/devops/_build.csproj
       - name: 'Submit NuGet dependencies'

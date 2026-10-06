@@ -33,6 +33,16 @@ Each module CI runs only if: module changed OR CI files changed OR baseline unav
 - Restores coverage from module CIs (or master baseline if skipped)
 - Publishes coverage to Codecov (per-module flags: `website`, `api`, `app`, `bulletin`, `admin`, …)
 - Merges and publishes cross-module coverage to Codacy
+- Required merge gate ("Check Prerequisites"), failing closed:
+  - The detection jobs (`determine_changes`, `determine_baseline_availability`,
+    `determine_docker_image_availability`) must succeed — module jobs skip
+    silently when they fail, so an unchecked failure would pass untested.
+  - Every suite whose own trigger fired (`<module>_module_changed`,
+    `<module>_ci_changed`, or a missing coverage/Docker-image baseline) must
+    report `success` — a failed, skipped, or cancelled triggered suite still
+    blocks the merge. Only a suite whose trigger did not fire may pass untested.
+  - `app_ios_ci` (native audio) is the one exception: it runs on PRs only, so
+    `skipped` is accepted on other events.
 
 ### 4. Packaging (Master Only)
 | Job | Output | Purpose |
