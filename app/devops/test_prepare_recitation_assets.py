@@ -49,12 +49,10 @@ class RecitationAssetsTests(unittest.TestCase):
     def test_build_http_transport_checks_exact_original_bytes(self):
         response = io.BytesIO(self.audio)
         response.status = 200
-        with patch("prepare_recitation_assets.HTTPSConnection") as factory:
-            factory.return_value.getresponse.return_value = response
+        with patch("prepare_recitation_assets.open_https", return_value=response) as transport:
             track = {**self.track, "audioUrl": "https://example.com/recordings/1_record.mp3"}
             self.assertEqual(recording(track, self.cache).read_bytes(), self.audio)
-            factory.assert_called_once_with("example.com", None, timeout=120)
-            factory.return_value.request.assert_called_once_with("GET", "/recordings/1_record.mp3")
+            transport.assert_called_once_with("https://example.com/recordings/1_record.mp3")
 
     def test_build_rejects_non_https_and_non_chapter_urls(self):
         for url in ["file:///recordings/1_record.mp3", "http://example.com/recordings/1_record.mp3",

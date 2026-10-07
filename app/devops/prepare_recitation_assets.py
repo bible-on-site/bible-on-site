@@ -4,14 +4,15 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 import hashlib
-from http.client import HTTPSConnection
 import json
 from pathlib import Path
 import shutil
 import sqlite3
+import ssl
 import sys
 import tempfile
 from urllib.parse import urlsplit
+from urllib.request import HTTPSHandler, HTTPDefaultErrorHandler, HTTPErrorProcessor, OpenerDirector
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -21,6 +22,15 @@ from audit_native import audit_native, NATIVE
 from publish import DATABASE, chapters_in, extract, publish
 
 CATALOG = "recitation-catalog.json"
+
+
+def open_https(url):
+    # Only HTTPS is installed: file://, plaintext HTTP and redirects have no handler.
+    opener = OpenerDirector()
+    opener.add_handler(HTTPSHandler(context=ssl.create_default_context()))
+    opener.add_handler(HTTPDefaultErrorHandler())
+    opener.add_handler(HTTPErrorProcessor())
+    return opener.open(url, timeout=120)
 
 
 def digest(path):
@@ -42,12 +52,10 @@ def recording(track, cache, recordings=None):
             if (url.scheme != "https" or not url.hostname or url.username or url.password or url.query or url.fragment
                     or url.path != f'/recordings/{track["perekId"]}_record.mp3'):
                 raise ValueError("Build recording URLs must be HTTPS chapter assets")
-            with closing(HTTPSConnection(url.hostname, url.port, timeout=120)) as connection:
-                connection.request("GET", url.path)
-                with connection.getresponse() as source, temporary.open("wb") as target:
-                    if source.status != 200:
-                        raise ValueError(f'{track["perekId"]}: recording download returned HTTP {source.status}')
-                    shutil.copyfileobj(source, target)
+            with open_https(url.geturl()) as source, temporary.open("wb") as target:
+                if source.status != 200:
+                    raise ValueError(f'{track["perekId"]}: recording download returned HTTP {source.status}')
+                shutil.copyfileobj(source, target)
         if digest(temporary) != track["audioSha256"]:
             raise ValueError(f'{track["perekId"]}: recording checksum mismatch')
         temporary.replace(destination)
