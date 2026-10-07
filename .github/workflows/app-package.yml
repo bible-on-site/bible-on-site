@@ -176,6 +176,11 @@ jobs:
         working-directory: ${{ env.APP_DIRECTORY }}
         run: dotnet tool restore
 
+      - name: Setup Python for recitation extension packaging
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
       - name: Restore original recitation audio cache
         uses: actions/cache@v6
         with:
@@ -322,6 +327,11 @@ jobs:
       - name: Restore dotnet tools
         working-directory: ${{ env.APP_DIRECTORY }}
         run: dotnet tool restore
+
+      - name: Setup Python for recitation extension packaging
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
 
       - name: Restore original recitation audio cache
         uses: actions/cache@v6
@@ -538,6 +548,11 @@ jobs:
         working-directory: ${{ env.APP_DIRECTORY }}
         run: dotnet tool restore
 
+      - name: Setup Python for recitation extension packaging
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
       - name: Restore original recitation audio cache
         uses: actions/cache@v6
         with:
@@ -591,3 +606,4 @@ jobs:
           # Delete temp files
           rm -f $RUNNER_TEMP/certificate.p12 || true
           rm -f $RUNNER_TEMP/profile.mobileprovision || true
+

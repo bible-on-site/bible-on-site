@@ -1526,6 +1526,11 @@ jobs:
           distribution: "microsoft"
           java-version: "17"
 
+      - name: Setup Python for recitation extension packaging
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
       - name: Restore original recitation audio cache
         uses: actions/cache@v6
         with:
@@ -2752,3 +2757,4 @@ jobs:
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
         run: npm run bump:module-versions -- --mode all --publish
+
