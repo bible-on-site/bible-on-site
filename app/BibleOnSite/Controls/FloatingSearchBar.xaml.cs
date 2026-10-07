@@ -72,7 +72,7 @@ public partial class FloatingSearchBar : ContentView
         _viewModel.CancelSearch();
         SearchPanel.IsVisible = FiltersPanel.IsVisible = false;
         SearchOpenChanged?.Invoke(this, EventArgs.Empty);
-        SearchInput.Unfocus();
+        _ = HideKeyboardAsync();
         _viewModel.SearchPhrase = string.Empty;
         _viewModel.SearchResults.Clear();
         _viewModel.ErrorMessage = _viewModel.AvailabilityMessage = string.Empty;
@@ -137,7 +137,25 @@ public partial class FloatingSearchBar : ContentView
         UpdateStatus();
     }
 
-    private void OnSearchSubmitted(object? sender, EventArgs e) => ScheduleSearch(0);
+    private void OnSearchSubmitted(object? sender, EventArgs e)
+    {
+        ScheduleSearch(0);
+        _ = HideKeyboardAsync();
+    }
+
+    private async Task HideKeyboardAsync()
+    {
+        try
+        {
+            // Unfocus alone can leave Android's floating keyboard over the results.
+            await SearchInput.HideSoftInputAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Could not dismiss search keyboard: {ex}");
+        }
+        SearchInput.Unfocus();
+    }
 
     private void UpdateStatus()
     {
@@ -160,7 +178,7 @@ public partial class FloatingSearchBar : ContentView
             return;
         }
         FiltersPanel.IsVisible = !FiltersPanel.IsVisible;
-        SearchInput.Unfocus();
+        await HideKeyboardAsync();
         UpdateStatus();
     }
 

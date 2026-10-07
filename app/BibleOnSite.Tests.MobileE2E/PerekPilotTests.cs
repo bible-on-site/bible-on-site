@@ -74,6 +74,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
 
         SearchFor("בראשית ברא אלהים", "בראשית א א");
         _page.Tap("SearchFiltersButton");
+        _page.WaitFor("SearchKindPerush", _ => !_driver!.IsKeyboardShown());
         _page.Tap("SearchKindPerush");
         _page.Tap("SearchFiltersButton");
         _page.WaitFor("SearchStatus", element => System.Text.RegularExpressions.Regex.IsMatch(element.Text, @"^\d+ תוצאות$"));
@@ -87,6 +88,11 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         if (_configuration.KeepAppForReview)
         {
             SearchFor("בראשית ברא אלהים", "בראשית א א");
+            _page.Tap("SearchFiltersButton");
+            _page.WaitFor("SearchKindPerush", _ => !_driver.IsKeyboardShown());
+            _page.Tap("SearchKindPerush");
+            _page.Tap("SearchFiltersButton");
+            _page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א א");
             SaveDiagnostics("FloatingSearchReview", "passed");
         }
     });
