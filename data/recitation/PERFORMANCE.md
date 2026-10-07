@@ -51,12 +51,14 @@ need copying.
 
 ## Acceptance evidence
 
-The immutable snapshot `benchmarks/golden-2026-10-07.json` covers all **54 accepted
+The immutable snapshot `benchmarks/golden-2026-10-07.json.gz` covers all **54 accepted
 chapters and 10,370 word intervals**. It records the backup commit, original
 pipeline source hashes, audio/text hashes, boundaries and truthful provenance.
 Its content digest is pinned in the harness. The **51 current v3 references**
 also include matching ASR and scored alignment evidence, revalidated against
 the existing `trusted.py` gates while taking the snapshot.
+Gzip reduces only the fixture's storage size; decompression restores its exact
+JSON contents, and the comparison pins their content digest.
 
 The three earlier listening/manual references, 568, 773 and 829, remain protected.
 Their old pipeline metadata is preserved and clearly excluded from the pinned
@@ -94,7 +96,7 @@ From `data/recitation`, with the existing venv's Python executable:
 
 ```powershell
 # Default profile is the preserved baseline. No ASR reference cache is reused.
-python benchmark.py run --goldens benchmarks/golden-2026-10-07.json `
+python benchmark.py run --goldens benchmarks/golden-2026-10-07.json.gz `
   --recordings C:/Users/Dorad/git/tanah-s3/recordings `
   --output .outputs/benchmarks/smoke --perek 338 `
   --profiles baseline selected-heads selected-heads-resident-self

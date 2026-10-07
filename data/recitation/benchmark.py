@@ -8,6 +8,7 @@ import argparse
 from contextlib import closing, contextmanager
 from copy import deepcopy
 import gc
+import gzip
 import hashlib
 import json
 import math
@@ -40,6 +41,13 @@ TOLERANCE_MS = 5
 
 def digest_json(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+def load_snapshot(path):
+    data = path.read_bytes()
+    if path.suffix == ".gz":
+        data = gzip.decompress(data)
+    return json.loads(data.decode("utf-8"))
 
 
 def git_bytes(root, *args):
@@ -98,7 +106,11 @@ def snapshot(root, recordings, output):
     result = {"version": 1, "baselineTag": BASELINE_TAG, "baselineCommit": commit,
               "sourceHashes": hashes, "databaseSha256": audio_hash(db_path), "settings": SETTINGS,
               "chapters": goldens}
-    write_json(output, result)
+    if output.suffix == ".gz":
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(gzip.compress(json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode(), mtime=0))
+    else:
+        write_json(output, result)
     return result
 
 
@@ -314,7 +326,7 @@ def main():
         print(json.dumps({"goldenChapters": len(result["chapters"]),
                           "eligible": sum(c["eligible"] for c in result["chapters"])}))
     else:
-        result = run(json.loads(args.goldens.read_text(encoding="utf-8")), args.recordings,
+        result = run(load_snapshot(args.goldens), args.recordings,
                      args.output, args.profiles, args.perek)
         print(json.dumps(result, indent=2))
 

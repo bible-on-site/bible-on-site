@@ -2,7 +2,6 @@
 
 from copy import deepcopy
 import os
-import json
 import tempfile
 from pathlib import Path
 import unittest
@@ -10,7 +9,7 @@ import unittest
 import torch
 from transformers import WhisperConfig, WhisperForConditionalGeneration
 
-from benchmark import BASELINE_COMMIT, GOLDEN_DIGEST, ROOT, SETTINGS, TEXT, compare, digest_json, exclusive_run, source_hashes, summary
+from benchmark import BASELINE_COMMIT, GOLDEN_DIGEST, ROOT, SETTINGS, TEXT, compare, digest_json, exclusive_run, load_snapshot, source_hashes, summary
 from alignment import load_chapters, text_hash, validate_timings, words_for
 from whisper_experiment import PROFILES, experimental_memory
 from whisper_memory import bounded_whisper_memory
@@ -109,7 +108,7 @@ class GoldenComparisonTests(unittest.TestCase):
             self.assertFalse((output / "worker.lock").exists())
 
     def test_all_preserved_goldens_have_exact_canonical_identities_and_immutable_sources(self):
-        snapshot = json.loads(Path(__file__).with_name("benchmarks").joinpath("golden-2026-10-07.json").read_text(encoding="utf-8"))
+        snapshot = load_snapshot(Path(__file__).with_name("benchmarks").joinpath("golden-2026-10-07.json.gz"))
         self.assertEqual(digest_json(snapshot), GOLDEN_DIGEST)
         self.assertEqual(snapshot["baselineCommit"], BASELINE_COMMIT)
         self.assertEqual(snapshot["sourceHashes"], source_hashes(ROOT))
