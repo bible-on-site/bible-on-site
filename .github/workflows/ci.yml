@@ -97,7 +97,6 @@ env:
   ADMIN_COVERAGE_ARTIFACT_NAME_MASTER: admin-coverage.master
   ADMIN_COVERAGE_ARTIFACT_NAME_WF: admin-coverage.${{ github.run_id }}
   ADMIN_COVERAGE_DIRECTORY: web/admin/.coverage
-  ADMIN_MERGED_COVERAGE_DIRECTORY: web/admin/.coverage/merged
   ADMIN_MERGED_COVERAGE_REPORT: web/admin/.coverage/merged/lcov.info
   ADMIN_UNIT_COVERAGE_REPORT: web/admin/.coverage/unit/lcov.info
   ADMIN_E2E_COVERAGE_REPORT: web/admin/.coverage/e2e/lcov.info
@@ -1221,9 +1220,12 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_WF }}
-          # Whole .coverage dir: unit + e2e are uploaded to Codecov under
-          # separate flags (merged is for the cross-module report).
-          path: ${{ env.ADMIN_COVERAGE_DIRECTORY }}
+          # Unit + e2e files too: each is uploaded to Codecov under its own
+          # flag (merged is for the cross-module report).
+          path: |
+            ${{ env.ADMIN_UNIT_COVERAGE_REPORT }}
+            ${{ env.ADMIN_E2E_COVERAGE_REPORT }}
+            ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
           retention-days: 90
           overwrite: true
           if-no-files-found: error
@@ -1233,7 +1235,10 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: ${{ env.ADMIN_COVERAGE_DIRECTORY }}
+          path: |
+            ${{ env.ADMIN_UNIT_COVERAGE_REPORT }}
+            ${{ env.ADMIN_E2E_COVERAGE_REPORT }}
+            ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
           retention-days: 90
           overwrite: true
 
