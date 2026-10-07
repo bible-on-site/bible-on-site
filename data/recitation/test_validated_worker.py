@@ -7,6 +7,7 @@ import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
+import weakref
 
 import benchmark
 import held_controls
@@ -76,6 +77,22 @@ class QualificationTests(unittest.TestCase):
 
 
 class FallbackTests(unittest.TestCase):
+    def test_failed_inference_traceback_is_released_before_retry(self):
+        class FailedModel:
+            pass
+
+        references = []
+
+        def original(audio, args):
+            if not references:
+                allocation = FailedModel()
+                references.append(weakref.ref(allocation))
+                raise RuntimeError("CUDA out of memory")
+            self.assertIsNone(references[0]())
+            return []
+
+        worker.transcribe_with_fallback(original, object(), object(), {})
+
     def test_cuda_oom_retries_original_without_changing_arguments(self):
         args, audio, state = object(), object(), {}
         original_memory = whisper_memory.bounded_whisper_memory

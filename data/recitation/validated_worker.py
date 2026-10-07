@@ -3,6 +3,7 @@
 import argparse
 from contextlib import contextmanager
 from copy import deepcopy
+import gc
 import json
 from importlib.metadata import version
 from pathlib import Path
@@ -144,9 +145,12 @@ def transcribe_with_fallback(original, audio, args, state):
         if "cuda" not in message or "out of memory" not in message:
             raise
         print("Memory profile ran out of GPU memory; retrying the original full FP32/five-beam inference", flush=True)
-        result = original(audio, args)
-        state.update(source="inference", memoryProfile="baseline", fallbackReason="GPU memory exhausted")
-        return result
+    # Leave the exception handler before retrying: its traceback can retain the
+    # failed model's tensors even after the original transcribe finally runs.
+    gc.collect()
+    result = original(audio, args)
+    state.update(source="inference", memoryProfile="baseline", fallbackReason="GPU memory exhausted")
+    return result
 
 
 def attach_provenance(manifest, report, cache, pid, state, qualification):
