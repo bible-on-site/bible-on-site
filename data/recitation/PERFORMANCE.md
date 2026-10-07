@@ -151,3 +151,71 @@ the original strict-score reports are retained as evidence of the comparison
 change. Small-model checks pass for all profiles on CPU and CUDA, with exact tokens, timestamps and selected
 attention maps. Full golden coverage and held-case controls remain required;
 no production profile has changed.
+
+## Moving the measured gain into the queue
+
+The four contemporaneous baseline controls show about **8.3% less inference
+time** for the combined profile. Comparing chapters per hour alone exaggerates
+the gain: these golden chapters are short. The full suite is still accumulating
+evidence; a partial result cannot activate the queue.
+
+`validated_worker.py` wraps the original worker without editing `recite.py`,
+`whisper_memory.py`, model pins or acceptance gates. Its default is the original
+path. The faster profile requires all 51 golden chapters, all four fresh
+baseline controls, a fresh baseline/candidate pair from the final reviewed
+source, and fresh negative controls from three genuinely held recordings.
+The wrapper recomputes comparisons and rechecks original acceptance evidence;
+it does not trust a summary's success flag.
+
+```mermaid
+flowchart LR
+    A["Evidence vault<br/>51 goldens · 10,214 words"] --> G
+    B["Control room<br/>4 paired baselines + final-source replay"] --> G
+    C["Safety check<br/>3 held recordings must stay held"] --> G
+    G{"Every boundary and<br/>original gate passes?"} -->|yes| W
+    W["Validated Python worker<br/>same pinned Whisper + Hebrew CTC"] --> Q
+    Q["Next unprocessed chapter<br/>same canonical word identities"]
+    G -->|no| F["Original FP32 / five-beam worker"]
+    W -->|GPU memory exhausted| F
+    classDef evidence fill:#e9e5ff,stroke:#7050bb,color:#22173e
+    classDef work fill:#e5f6ec,stroke:#3b8a5b,color:#173923
+    classDef fallback fill:#fff2d9,stroke:#b87922,color:#50340c
+    class A,B,C evidence
+    class W,Q work
+    class F fallback
+```
+
+The immutable negative fixture preserves the original missing boundaries,
+diagnostics and rejection reasons for chapters 102, 783 and 765. Its fresh
+replays are diagnostic only. A missing interval becoming filled, changed ASR
+text, excessive boundary/score drift, or an unexpected approval fails the
+negative check. Those results never enter the publication database.
+
+The queue records the qualification and actual ASR path in manifest, diagnostic
+report and database provenance. Reused ASR records are labelled as verified
+caches, with their original execution profile left unknown when unavailable.
+A CUDA out-of-memory error retries the original FP32, five-beam whole-track
+inference with the same arguments; driver failures propagate. No smaller model,
+precision change or automatic timestamp repair is used for recovery.
+
+From the repository root, using the existing CUDA venv and HF cache, after the
+exclusive full suite has exited:
+
+```powershell
+python data/recitation/held_controls.py `
+  --recordings C:/Users/Dorad/git/tanah-s3/recordings `
+  --output data/recitation/.outputs/benchmarks/held-controls
+
+python data/recitation/validated_worker.py `
+  --memory-profile selected-heads-resident-self `
+  --validation data/recitation/.outputs/benchmarks/golden-suite-2026-10-07 `
+  --final-control data/recitation/.outputs/benchmarks/final-source-338-2026-10-07 `
+  --held-controls data/recitation/.outputs/benchmarks/held-controls `
+  --recordings C:/Users/Dorad/git/tanah-s3/recordings `
+  --shortest-first --database path/to/working.sqlite --text path/to/working.json
+```
+
+Add `--check-only` to verify qualification without starting inference. Missing,
+stale or failed evidence refuses the faster path. Preserve the existing working
+cache/output directories when resuming a collection. The original command
+remains the fallback and the timing publication cadence is unchanged.

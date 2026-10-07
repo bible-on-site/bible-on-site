@@ -5,7 +5,10 @@ segmentation and acceptance gates, durable storage, delivery and live word highl
 
 For isolated speed experiments, the preserved fallback and strict per-boundary
 golden comparisons, see [the lossless performance protocol](PERFORMANCE.md).
-The production worker does not enable experimental profiles.
+`recite.py` remains the original default. The optional `validated_worker.py`
+enables the measured memory profile only after complete per-word evidence,
+fresh controls and held-case checks pass; GPU capacity failures retry the
+original full-quality inference. See the performance protocol for its commands.
 
 The perakim JSON is the text authority. Whisper supplies acoustic landmarks; it
 never replaces, inserts, deletes, or merges the canonical words in the output.

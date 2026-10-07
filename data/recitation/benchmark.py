@@ -197,7 +197,8 @@ def assert_idle_gpu():
             if process["ProcessId"] in (os.getpid(), os.getppid()):
                 continue
             command_line = process.get("CommandLine") or ""
-            if ("recite.py" in command_line or ("benchmark.py" in command_line and " run " in command_line)):
+            if ("recite.py" in command_line or "validated_worker.py" in command_line or "held_controls.py" in command_line
+                    or ("benchmark.py" in command_line and " run " in command_line)):
                 raise RuntimeError(f"Another GPU worker is running: {process['ProcessId']}")
     import torch
     if not torch.cuda.is_available():
