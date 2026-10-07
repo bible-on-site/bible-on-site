@@ -3,6 +3,10 @@
 See [the illustrated pipeline guide](PIPELINE.md) for the source-of-truth model,
 segmentation and acceptance gates, durable storage, delivery and live word highlighting.
 
+For isolated speed experiments, the preserved fallback and strict per-boundary
+golden comparisons, see [the lossless performance protocol](PERFORMANCE.md).
+The production worker does not enable experimental profiles.
+
 The perakim JSON is the text authority. Whisper supplies acoustic landmarks; it
 never replaces, inserts, deletes, or merges the canonical words in the output.
 The identity of a spoken word is the existing **1-based perek ID, pasuk, segment**.
