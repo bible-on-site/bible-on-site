@@ -6,7 +6,7 @@ from copy import deepcopy
 import json
 from importlib.metadata import version
 from pathlib import Path
-import subprocess  # nosec B404: fixed resolved FFmpeg executable, argv only.
+import subprocess  # nosec B404: fixed FFmpeg command, argv only.
 import sys
 
 import benchmark
@@ -34,8 +34,8 @@ def runtime_environment():
     environment = benchmark.assert_idle_gpu()
     environment["transformers"] = version("transformers")
     environment["numpy"] = version("numpy")
-    environment["ffmpeg"] = subprocess.check_output(  # nosec B603: fixed resolved executable, no shell.
-        [recite.executable("ffmpeg"), "-version"], text=True).splitlines()[0]
+    environment["ffmpeg"] = subprocess.check_output(  # nosec B603 B607: fixed command, same PATH as the original decoder.
+        ["ffmpeg", "-version"], text=True).splitlines()[0]
     return environment
 
 
