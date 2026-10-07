@@ -267,18 +267,20 @@ Resources:
         - Name: website
           Image: !Ref WebsiteImageUri
           Essential: true
+          # 90 seconds for cached DNS requests, then 30 seconds for Next shutdown.
+          StopTimeout: 120
           PortMappings:
             - ContainerPort: 3000
               HostPort: 3000
               Protocol: tcp
-          # Container health check - warms the app before marking container as healthy
-          # This ensures the Node.js runtime and data modules are fully loaded
+          # Readiness loads canonical server data before ECS replaces the old task.
+          # Keep these settings aligned with the website Dockerfile.
           HealthCheck:
             Command:
               - CMD-SHELL
-              # Use /api/health (lightweight liveness). Never curl the homepage.
+              # Liveness alone can pass before data routes finish cold loading.
               # Use localhost (not 127.0.0.1) for clarity and consistency.
-              - curl -sf --max-time 5 http://localhost:3000/api/health > /dev/null || exit 1
+              - curl -sf --max-time 5 http://localhost:3000/api/health/ready > /dev/null || exit 1
             Interval: 30
             Timeout: 10
             Retries: 5
@@ -323,7 +325,8 @@ Resources:
       ServiceName: bible-on-site-website
       Cluster: !Ref ECSCluster
       TaskDefinition: !Ref WebsiteTaskDefinition
-      # DesiredCount: 1 can cause ~1-3 min downtime during rolling deploy. Use 2+ for zero-downtime. See docs/aws/deployment-downtime-2026-02-10.md
+      # Readiness and MinimumHealthyPercent retain the old task during cold loading.
+      # DesiredCount: 1 still has no redundancy outside a rollout.
       DesiredCount: 1
       LaunchType: FARGATE
       PlatformVersion: LATEST
