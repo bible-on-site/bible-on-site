@@ -37,6 +37,7 @@ SETTINGS = {"dtype": "float32", "numBeams": 5, "language": "he", "task": "transc
             "nativeLongForm": True, "pipeline": TRUSTED_PIPELINE}
 TEXT = Path("web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json")
 TOLERANCE_MS = 5
+ACOUSTIC_TOLERANCE = .001
 
 
 def digest_json(value):
@@ -116,7 +117,7 @@ def snapshot(root, recordings, output):
 
 def compare(golden, candidate):
     """Fail on any missing/changed identity, quality gate or boundary beyond 5 ms."""
-    errors, deltas = [], []
+    errors, deltas, score_deltas = [], [], []
     for key in ("perekId", "audioSha256", "textSha256", "audioUrl", "durationMs"):
         if candidate.get(key) != golden.get(key):
             errors.append(f"Changed source: {key}")
@@ -144,10 +145,20 @@ def compare(golden, candidate):
             deltas.append(delta)
             if delta > TOLERANCE_MS:
                 errors.append(f"{identity} {key}: {delta} ms drift")
-        # ±5 ms does not authorize degrading acoustic/text evidence.
-        for key in ("textScore", "acousticScore"):
-            if expected.get(key) != actual.get(key):
-                errors.append(f"Changed {key}: {identity}")
+        if expected.get("textScore") != actual.get("textScore"):
+            errors.append(f"Changed textScore: {identity}")
+        score = actual.get("acousticScore")
+        expected_score = expected.get("acousticScore")
+        if (not isinstance(score, (float, int)) or isinstance(score, bool) or not math.isfinite(score)
+                or not 0 <= score <= 1 or expected_score is None):
+            errors.append(f"Missing/invalid acousticScore: {identity}")
+        else:
+            delta = abs(score - expected_score)
+            score_deltas.append(delta)
+            # User allows slight score variation (2026-10-07). It cannot mask a
+            # worse boundary or relax any original approval threshold.
+            if delta > ACOUSTIC_TOLERANCE + 1e-12:
+                errors.append(f"Changed acousticScore: {identity}, {delta:.6f} drift")
     expected_asr = golden.get("asr", {}).get("words", [])
     actual_asr = candidate.get("asr", {}).get("words", [])
     if len(expected_asr) != len(actual_asr):
@@ -162,6 +173,7 @@ def compare(golden, candidate):
                         or abs(value - expected[key]) * 1000 > TOLERANCE_MS + 1e-8):
                     errors.append(f"ASR boundary changed: {index}/{key}")
     return {"passed": not errors, "errors": errors, "maxDriftMs": max(deltas, default=None),
+            "maxAcousticScoreDrift": max(score_deltas, default=None),
             "comparedWords": len(rows), "comparedBoundaries": len(deltas)}
 
 
@@ -205,8 +217,9 @@ def exclusive_run(output):
         lease.unlink(missing_ok=True)
 
 
-def run(goldens, recordings, output, profiles, ids):
+def run(goldens, recordings, output, profiles, ids, baseline_ids=None):
     import torch
+    import transformers
     from acoustic import HebrewAligner
     from importlib.metadata import version
 
@@ -219,6 +232,8 @@ def run(goldens, recordings, output, profiles, ids):
     if ids and not set(ids).issubset({chapter["perekId"] for chapter in eligible}):
         raise ValueError("Requested chapter is not a pinned v3 golden reference")
     chosen = [chapter for chapter in eligible if not ids or chapter["perekId"] in ids]
+    if baseline_ids and ("baseline" not in profiles or not set(baseline_ids).issubset({c["perekId"] for c in chosen})):
+        raise ValueError("Baseline controls must be selected eligible chapters with the baseline profile enabled")
     chosen.sort(key=lambda chapter: chapter["durationMs"])
     args = SimpleNamespace(asr_model=ASR_MODEL, asr_revision=ASR_REVISION, device="cuda",
                            min_text_score=.6, min_acoustic_score=.5, min_coverage=.85)
@@ -240,6 +255,8 @@ def run(goldens, recordings, output, profiles, ids):
                 raise ValueError(f"Source changed: {pid}")
             audio = decode(path)
             for profile in profiles:
+                if profile == "baseline" and baseline_ids and pid not in baseline_ids:
+                    continue
                 destination = output / f"{pid}-{profile}.json"
                 if destination.exists():
                     result = json.loads(destination.read_text(encoding="utf-8"))
@@ -249,7 +266,23 @@ def run(goldens, recordings, output, profiles, ids):
                     continue
                 print(f"Benchmark {pid}/{profile}: fresh full FP32 ASR; {len(canonical)} canonical words", flush=True)
                 began = time.monotonic()
-                with patch("whisper_memory.bounded_whisper_memory", lambda model: experimental_memory(model, profile)):
+                phases = {}
+                original_pipeline = transformers.pipeline
+
+                def measured_load(*args, **kwargs):
+                    started = time.monotonic()
+                    loaded = original_pipeline(*args, **kwargs)
+                    phases["modelLoadSeconds"] = time.monotonic() - started
+                    return loaded
+
+                @contextmanager
+                def measured_memory(model):
+                    with experimental_memory(model, profile):
+                        started = time.monotonic()
+                        yield
+                        phases["inferenceSeconds"] = time.monotonic() - started
+
+                with patch("whisper_memory.bounded_whisper_memory", measured_memory), patch("transformers.pipeline", measured_load):
                     recognized = transcribe(audio, args)
                 asr_seconds = time.monotonic() - began
                 peak = torch.cuda.max_memory_allocated()
@@ -273,8 +306,9 @@ def run(goldens, recordings, output, profiles, ids):
                     quality_error = str(error)
                 result = dict(manifest, asr=cached, settings=SETTINGS, qualityPassed=quality_error is None,
                               qualityError=quality_error, profile=profile, runFingerprint=fingerprint,
+                              runnerHashes=runner, goldenDigest=digest_json(goldens), sourceHashes=goldens["sourceHashes"],
                               environment=environment, diagnostics=report,
-                              measurements={"asrSeconds": asr_seconds, "ctcSeconds": time.monotonic()-align_began,
+                              measurements={**phases, "asrSeconds": asr_seconds, "ctcSeconds": time.monotonic()-align_began,
                                             "totalSeconds": time.monotonic()-began, "peakCudaBytes": peak})
                 result["comparison"] = compare(golden, result)
                 write_json(destination, result)
@@ -297,9 +331,17 @@ def summary(goldens, results, profiles):
         baseline_seconds = sum(base["measurements"]["totalSeconds"] for base, candidate in pairs)
         candidate_seconds = sum(candidate["measurements"]["totalSeconds"] for base, candidate in pairs)
         speedup = baseline_seconds / candidate_seconds if candidate_seconds else None
+        inference_pairs = [(base["measurements"]["inferenceSeconds"], candidate["measurements"]["inferenceSeconds"])
+                           for base, candidate in pairs if "inferenceSeconds" in base["measurements"]
+                           and "inferenceSeconds" in candidate["measurements"]]
+        inference_total = sum(candidate for base, candidate in inference_pairs)
+        inference_speedup = sum(base for base, candidate in inference_pairs) / inference_total if inference_total else None
+        paired_comparisons = [{"perekId": candidate["perekId"], **compare(base, candidate)} for base, candidate in pairs]
         verdicts[profile] = {"covered": sorted(covered), "missing": sorted(required-covered),
                              "allBoundariesPassed": drift_passed, "baselineReproduced": baseline_passed,
+                             "pairedComparisons": paired_comparisons,
                              "pairedSpeedup": speedup,
+                             "pairedInferenceSpeedup": inference_speedup,
                              "promotionAllowed": False}
         # Even a complete golden suite supplies evidence, not an automatic change
         # to the production worker. Held-case controls and review are still needed.
@@ -320,6 +362,8 @@ def main():
     execute.add_argument("--output", type=Path, required=True)
     execute.add_argument("--profiles", choices=PROFILES, nargs="+", default=["baseline"])
     execute.add_argument("--perek", type=int, action="append")
+    execute.add_argument("--baseline-perek", type=int, action="append",
+                         help="Optional baseline controls; candidates still run on every selected golden")
     args = parser.parse_args()
     if args.command == "snapshot":
         result = snapshot(args.baseline_root, args.recordings, args.output)
@@ -327,7 +371,7 @@ def main():
                           "eligible": sum(c["eligible"] for c in result["chapters"])}))
     else:
         result = run(load_snapshot(args.goldens), args.recordings,
-                     args.output, args.profiles, args.perek)
+                     args.output, args.profiles, args.perek, args.baseline_perek)
         print(json.dumps(result, indent=2))
 
 

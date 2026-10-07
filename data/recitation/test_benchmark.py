@@ -69,9 +69,21 @@ class GoldenComparisonTests(unittest.TestCase):
         changed["settings"]["dtype"] = "float16"
         self.assertFalse(compare(self.golden, changed)["passed"])
         changed = deepcopy(self.candidate)
-        changed["words"][0]["acousticScore"] -= .0001
+        changed["words"][0]["acousticScore"] -= .0011
         self.assertFalse(compare(self.golden, changed)["passed"])
         self.assertFalse(compare(self.golden, dict(self.candidate, qualityPassed=False))["passed"])
+
+    def test_tiny_acoustic_variation_is_per_word_and_never_relaxes_boundaries(self):
+        self.candidate["words"][0]["acousticScore"] -= .001
+        self.candidate["words"][1]["acousticScore"] += .001
+        result = compare(self.golden, self.candidate)
+        self.assertTrue(result["passed"], result)
+        self.assertAlmostEqual(result["maxAcousticScoreDrift"], .001)
+        self.candidate["words"][1]["endMs"] += 6
+        self.assertFalse(compare(self.golden, self.candidate)["passed"])
+        self.candidate["words"][1]["endMs"] -= 6
+        self.candidate["words"][1]["acousticScore"] -= .01
+        self.assertFalse(compare(self.golden, self.candidate)["passed"])
 
     def test_asr_text_count_and_boundary_are_compared_independently(self):
         for replacement in ([], [{"text": "גד", "start": .1, "end": .5}],

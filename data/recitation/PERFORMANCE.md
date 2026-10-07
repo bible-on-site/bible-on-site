@@ -73,12 +73,18 @@ Every tested chapter must meet all of these requirements:
 - Each word's start **and** end differs by at most **5 ms**, including verse
   boundaries. One 6 ms outlier fails even if the average is nearly zero.
 - Recognized ASR word count/text remains identical and each ASR boundary stays
-  within 5 ms. Rounded acoustic/text evidence must also remain identical.
+  within 5 ms. Text scores remain identical. Following the owner's clarification
+  on 2026-10-07, acoustic scores may vary by at most **0.001 per word** (0.1
+  percentage point), checked individually rather than averaged. The original
+  acoustic acceptance threshold and warning policy remain unchanged. These
+  scores are uncalibrated evidence, not an estimate of audible quality.
 - A fresh baseline replay reproduces the golden reference before a paired
   runtime comparison can support a speed claim.
 
 The harness reports missing chapters, every failing boundary, runtime for ASR
-and CTC, peak CUDA allocation and the software/GPU environment. A subset is
+and CTC, peak CUDA allocation and the software/GPU environment. New runs also
+separate model loading from inference so warm file caches cannot masquerade as
+an inference speedup. A subset is
 explicitly incomplete. `promotionAllowed` is always false: full golden coverage,
 held-case controls and review are required before a separate production change.
 Unit tests establish exact tokens, timestamps and selected attention values on
@@ -103,6 +109,8 @@ python benchmark.py run --goldens benchmarks/golden-2026-10-07.json.gz `
 
 # Omitting --perek selects every eligible golden reference, shortest first.
 # Repeating the exact run resumes only completed, matching isolated results.
+# --baseline-perek selects fresh baseline controls without rerunning all 51
+# baseline transcriptions. Candidate coverage and missing controls stay explicit.
 ```
 
 Results go into the specified experiment directory, never into the collection's
@@ -112,7 +120,34 @@ The original `recite.py` remains the recovery path and imports no experiment.
 
 ## Measured results
 
-Real-recording GPU measurements are in progress. No velocity improvement has
-been established yet. The initial small-model numerical checks pass for all
-profiles on both CPU and CUDA, with exact tokens, token timestamps and selected
-attention maps. Full golden comparisons remain required.
+The first GPU smoke test on Isaiah 4 (338, 89 words) produced these results:
+
+| Profile | ASR seconds | Total seconds | Worst boundary drift | Peak CUDA allocation |
+| --- | ---: | ---: | ---: | ---: |
+| Preserved baseline | 356.390 | 361.765 | 0 ms | 6.27 GiB |
+| Selected timestamp heads | 345.657 | 349.907 | 0 ms | 6.27 GiB |
+| Selected heads + resident self cache | 336.796 | 340.937 | 0 ms | 6.29 GiB |
+
+ASR evidence is exactly identical. Both pass the original quality gates. The
+selected-head run took 3.3% less total time in this single pair, including model
+loading and CTC. This is preliminary: the baseline ran first, and an independent
+CPU diagnostic ran during part of the candidate. More recordings and repeated
+controls are needed before making a collection-wide speed claim. The combined
+profile took 5.8% less total time (1.061× throughput) in this first pair and used
+about 21 MiB more peak CUDA allocation. Its ASR and all 89 scored word rows are
+also exactly identical to the contemporaneous baseline.
+
+Both CUDA runs differ from the stored acoustic scores by at most 0.0005, with
+zero boundary changes. A separate pinned CPU CTC replay reproduces all stored
+scores and boundaries exactly. This identifies a CPU/CUDA comparison effect,
+rather than an effect introduced by retaining fewer attention maps; the two
+CUDA runs also retain identical acoustic evidence. PyTorch documents that
+[CPU and GPU results need not be identical](https://docs.pytorch.org/docs/2.14/notes/randomness.html).
+The original stricter comparison recorded that score difference as a failure;
+the evidence is preserved, and the later user-approved 0.001 tolerance is explicit.
+
+The smoke test completed successfully under the explicit 0.001 score tolerance;
+the original strict-score reports are retained as evidence of the comparison
+change. Small-model checks pass for all profiles on CPU and CUDA, with exact tokens, timestamps and selected
+attention maps. Full golden coverage and held-case controls remain required;
+no production profile has changed.
