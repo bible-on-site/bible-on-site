@@ -151,6 +151,25 @@ does not populate the cache. Headers, body bytes and conditional-response
 semantics are preserved. Verify the released image's actual response times,
 hashes, CPU and health under normal traffic during live validation.
 
+The guarded 0.2.475 rollout also captured 21 public probe timeouts after the
+replacement had passed repeated private readiness, extension and chapter
+checks. Router failures at 00:45:48-00:46:36 UTC selected the new address
+`172.31.28.37:3000`, connected in 0.001-0.002 seconds, and received no headers.
+The published image still contains an 84,764,779-byte server JavaScript chunk
+with the canonical JSON embedded as text. The query-string variation used by
+CD did not reproduce the stall locally. Neither the extra API checks nor a
+successful final CD result establishes a clean handover.
+
+The canonical server loader now reads the unchanged JSON from an explicitly
+traced standalone file and shares the parsed objects across production server
+module contexts. This removes the large data literal from production route
+JavaScript while preserving original JSON number precision. Development keeps
+the JSON dependency in its module graph for HMR, and Jest keeps its existing
+fixture replacement. A direct production-loader comparison matched the entire
+35-book source and the exact 884,490-byte extension hash. Tracing, packaged
+startup, and a clean ordinary live rollout must still be verified; the precise
+cause of the later stalls remains unproven.
+
 Observe a complete rollout using the router probe log, public health,
 readiness, and recitation requests, ECS task health, and Cloud Map health.
 Verify the running image against its release provenance and compare complete
