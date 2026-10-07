@@ -465,9 +465,14 @@ public partial class PerekPage
 
     protected override bool OnBackButtonPressed()
     {
+        return TryHandleReaderBack() || base.OnBackButtonPressed();
+    }
+
+    private bool TryHandleReaderBack()
+    {
         if (ChapterSearch.IsSearchOpen) { ChapterSearch.Close(); return true; }
         if (_focusedPasuk != null || _chapterRecitationSelection || _viewModel.SelectedPasukNums.Count > 0)
         { ClearAllSelections(); return true; }
-        return base.OnBackButtonPressed();
+        return false;
     }
 }

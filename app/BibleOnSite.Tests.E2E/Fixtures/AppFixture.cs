@@ -213,10 +213,11 @@ public class AppFixture : IAsyncLifetime
             RedirectStandardError = false,
         };
 
-        // Set API_URL to use local test API
-        startInfo.EnvironmentVariables["API_URL"] = ApiUrl;
+        // Offline fixtures use a closed endpoint even when a development API is running.
+        var launchApiUrl = RequiresApi ? ApiUrl : "http://127.0.0.1:1";
+        startInfo.EnvironmentVariables["API_URL"] = launchApiUrl;
 
-        Console.WriteLine($"Starting app from {projectDir} with API_URL={ApiUrl}");
+        Console.WriteLine($"Starting app from {projectDir} with API_URL={launchApiUrl}");
 
         _appProcess = Process.Start(startInfo);
 

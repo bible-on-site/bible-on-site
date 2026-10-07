@@ -17,6 +17,7 @@ public abstract class MobilePlatformAdapter
     public virtual bool CanTap(AppiumElement element) => element.Enabled;
     public virtual void Tap(AppiumDriver driver, AppiumElement element) => element.Click();
     public abstract void GoBack(AppiumDriver driver);
+    public virtual void GoBackFromFocusedVerse(AppiumDriver driver) => GoBack(driver);
     public abstract AppiumDriver CreateDriver(Uri server, AppiumOptions options);
 
     public AppiumOptions CreateOptions(MobileTestConfiguration configuration)
@@ -96,6 +97,7 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
 
 public sealed class IosPlatformAdapter : MobilePlatformAdapter
 {
+    public override void GoBackFromFocusedVerse(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SelectionBackButton")));
     public override By AutomationId(string id) => MobileBy.AccessibilityId(id);
     public override By FlyoutButton => By.XPath("//XCUIElementTypeNavigationBar/XCUIElementTypeButton[1]");
     public override bool CanTap(AppiumElement element) => element.Enabled

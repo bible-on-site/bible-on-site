@@ -12,6 +12,7 @@ public partial class FloatingSearchBar : ContentView
     private bool _buildingFilters;
     private bool _filtersBuilt;
     public bool IsSearchOpen => SearchPanel.IsVisible;
+    public event EventHandler? SearchOpenChanged;
     public event EventHandler<SearchResult>? ResultSelected;
 
     public FloatingSearchBar()
@@ -28,6 +29,7 @@ public partial class FloatingSearchBar : ContentView
     private async void OnSearchFocused(object? sender, FocusEventArgs e)
     {
         SearchPanel.IsVisible = FiltersButton.IsVisible = CloseButton.IsVisible = true;
+        SearchOpenChanged?.Invoke(this, EventArgs.Empty);
         try
         {
             if (!StarterService.Instance.IsLoaded) await StarterService.Instance.LoadAsync();
@@ -48,6 +50,7 @@ public partial class FloatingSearchBar : ContentView
         _debounce?.Cancel();
         _viewModel.CancelSearch();
         SearchPanel.IsVisible = FiltersPanel.IsVisible = FiltersButton.IsVisible = CloseButton.IsVisible = false;
+        SearchOpenChanged?.Invoke(this, EventArgs.Empty);
         SearchInput.Unfocus();
         _viewModel.SearchPhrase = string.Empty;
         _viewModel.SearchResults.Clear();

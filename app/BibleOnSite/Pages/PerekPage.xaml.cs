@@ -399,6 +399,9 @@ public partial class PerekPage : ContentPage
 
     protected override void OnDisappearing()
     {
+#if ANDROID
+        UnregisterReaderBack();
+#endif
         ChapterSearch.Close();
         ResetRecitationContext();
         PreferencesService.Instance.PreferencesChanged -= OnRecitationPreferencesChanged;
@@ -462,6 +465,9 @@ public partial class PerekPage : ContentPage
     {
         Console.WriteLine("[Startup] PerekPage appearing");
         base.OnAppearing();
+#if ANDROID
+        RegisterReaderBack();
+#endif
         SubscribeRecitation();
         await InitializeRecitationAsync();
         Console.WriteLine("[Startup] PerekPage recitation initialized");

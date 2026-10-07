@@ -69,9 +69,10 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
             .First(element => element.Displayed && element.Text == "בראשית א א");
         _platform.Tap(_driver, result);
         Assert.Contains("בראשית", System.Text.RegularExpressions.Regex.Replace(_page.WaitFor("FocusedPasukText").Text, @"\p{M}", ""));
+        _platform.GoBackFromFocusedVerse(_driver);
+        _page.WaitFor("PerekSearchInput");
         if (_configuration.KeepAppForReview)
         {
-            _platform.GoBack(_driver);
             SearchFor("בראשית ברא אלהים", "בראשית א א");
             SaveDiagnostics("FloatingSearchReview", "passed");
         }
