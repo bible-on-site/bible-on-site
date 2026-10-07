@@ -76,6 +76,7 @@ jobs:
         uses: advanced-security/component-detection-dependency-submission-action@v0.2.0
         with:
           detectorsCategories: NuGet
+          fail-on-empty: true
           # Stable across PR, merge queue and master workflow contexts.
           correlator: nuget
           snapshot-sha: ${{ env.SNAPSHOT_SHA }}
