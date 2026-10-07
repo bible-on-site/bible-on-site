@@ -30,14 +30,23 @@ def verify(package, catalog_path, platform):
             if len(metadata) != 1:
                 raise ValueError("Missing Apple ODR manifest")
             tags = metadata[0].get("NSBundleResourceRequestTags", {})
+            resources = metadata[0].get("NSBundleResourceRequestAssetPacks", {})
+            payloads = {}
+            for name in names:
+                if name.endswith(".assetpack/Info.plist"):
+                    info = plistlib.loads(archive.read(name))
+                    payloads[info["CFBundleIdentifier"]] = (name.rsplit("/", 1)[0] + "/Assets.car", info.get("Tags", []))
             for book in catalog["books"]:
                 pack = f'recitation_{book["seferId"]}'
                 if pack not in tags:
                     raise ValueError(f"Missing Apple ODR book tag: {pack}")
-                identifiers = tags[pack]["NSBundleResourceRequestAssetPacks"]
+                identifiers = tags[pack].get("NSAssetPacks", [])
+                if not identifiers:
+                    raise ValueError(f"Apple ODR tag has no resource references: {pack}")
                 for identifier in identifiers:
-                    matches = [n for n in names if f"/{identifier}.assetpack/" in n and n.endswith("/Assets.car")]
-                    if not matches or any(archive.getinfo(n).file_size == 0 for n in matches):
+                    path, declared_tags = payloads.get(identifier, ("", []))
+                    if ("Assets.car" not in resources.get(identifier, []) or pack not in declared_tags
+                            or path not in names or archive.getinfo(path).file_size == 0):
                         raise ValueError(f"Missing compiled ODR audio payload: {pack}")
     print(f'Verified {len(catalog["books"])} {platform} recitation packs in {package.name}')
 

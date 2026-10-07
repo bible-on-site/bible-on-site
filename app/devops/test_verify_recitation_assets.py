@@ -39,9 +39,15 @@ class ReleaseArtifactTests(unittest.TestCase):
                 package = root / "app.ipa"
                 with zipfile.ZipFile(package, "w") as archive:
                     archive.writestr("Payload/Bible.app/recitation-catalog.json", catalog.read_bytes())
-                    metadata = {"NSBundleResourceRequestTags": {"recitation_1": {"NSBundleResourceRequestAssetPacks": ["pack1"]}}}
+                    # Apple's reference identifier differs from the physical assetpack directory.
+                    metadata = {"NSBundleResourceRequestTags": {"recitation_1": {"NSAssetPacks": ["hashed-pack-id"]}},
+                                "NSBundleResourceRequestAssetPacks": {"hashed-pack-id": ["Assets.car"]}}
                     archive.writestr("Payload/Bible.app/OnDemandResources.plist", plistlib.dumps(metadata))
-                    if payload: archive.writestr("OnDemandResources/pack1.assetpack/Assets.car", b"compiled lossless dataset")
+                    if payload:
+                        directory = "Payload/OnDemandResources/com.app.recitation_1.assetpack/"
+                        archive.writestr(directory + "Assets.car", b"compiled lossless dataset")
+                        archive.writestr(directory + "Info.plist", plistlib.dumps({
+                            "CFBundleIdentifier": "hashed-pack-id", "Tags": ["recitation_1"]}))
                 if payload: verify(package, catalog, "iOS")
                 else:
                     with self.assertRaises(ValueError): verify(package, catalog, "iOS")
