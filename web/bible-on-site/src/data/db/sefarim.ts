@@ -29,9 +29,13 @@ function sourceSefarim(): Sefarim {
 	}
 	if (process.env.NODE_ENV === "production") return canonicalSefarim();
 	// The development dependency remains in the module graph so edits trigger HMR.
-	const data = require("./sefaria-dump-5784-sivan-4.tanah_view.json") as
+	const loaded = require("./sefaria-dump-5784-sivan-4.tanah_view.json") as
 		| string
-		| Sefarim;
+		| Sefarim
+		| { default: string | Sefarim };
+	const data = typeof loaded === "object" && "default" in loaded
+		? loaded.default
+		: loaded;
 	return typeof data === "string" ? (JSON.parse(data) as Sefarim) : data;
 }
 
