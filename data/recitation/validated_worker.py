@@ -19,6 +19,7 @@ from whisper_experiment import experimental_memory
 
 PROFILE = "selected-heads-resident-self"
 CONTROLS = (338, 354, 203, 531)
+SAMPLE_DIGEST = "1ed82ac6a4ef1fec14411130f7523399390b2ed777da0208c15ee2e8d5767ffd"
 # Source actually loaded by the preserved 2026-10-07 full-suite process (b4116ff).
 ARCHIVED_RUNNER = {
     "benchmark": "e912a926201d63f6caaa009ab474a7e1b05b062e3438425e6da382bf78658e2f",
@@ -95,7 +96,25 @@ def verify_positive_controls(snapshot, goldens, suite, final_control, recordings
     return comparisons, environment
 
 
-def qualify(suite, final_control, held, recordings):
+def select_goldens(snapshot, sample_path=None):
+    pool = {c["perekId"]: c for c in snapshot["chapters"] if c["eligible"]}
+    if sample_path is None:
+        return pool, {"name": "complete", "eligibleReferenceChapters": len(pool)}
+    sample = json.loads(sample_path.read_text(encoding="utf-8"))
+    if benchmark.digest_json(sample) != SAMPLE_DIGEST or sample["goldenDigest"] != benchmark.GOLDEN_DIGEST:
+        raise ValueError("The fixed golden validation sample changed")
+    ids = sample["chapters"]
+    if (len(ids) < 17 or len(set(ids)) != len(ids) or not set(ids).issubset(pool)
+            or not set(CONTROLS).issubset(ids) or sample["eligibleReferenceChapters"] != len(pool)):
+        raise ValueError("Incomplete golden sample or baseline controls")
+    selected = {pid: pool[pid] for pid in ids}
+    if sample["canonicalWords"] != sum(len(chapter["words"]) for chapter in selected.values()):
+        raise ValueError("Golden sample canonical word count changed")
+    return selected, {"name": "fixed-validated-sample", "digest": SAMPLE_DIGEST,
+                      "chapters": ids, "eligibleReferenceChapters": len(pool)}
+
+
+def qualify(suite, final_control, held, recordings, golden_sample=None):
     from held_controls import check
 
     snapshot = benchmark.load_snapshot(Path(__file__).with_name("benchmarks") / "golden-2026-10-07.json.gz")
@@ -103,11 +122,12 @@ def qualify(suite, final_control, held, recordings):
         raise ValueError("Golden snapshot changed")
     if benchmark.source_hashes(recite.ROOT) != snapshot["sourceHashes"]:
         raise ValueError("The original fallback pipeline changed")
-    goldens = {c["perekId"]: c for c in snapshot["chapters"] if c["eligible"]}
+    goldens, scope = select_goldens(snapshot, golden_sample)
     runner = current_runner()
     comparisons, environment = verify_positive_controls(snapshot, goldens, suite, final_control, recordings, runner)
     held_evidence = check(held, recordings, environment)
     return {"name": PROFILE, "goldenDigest": benchmark.GOLDEN_DIGEST, "heldControls": held_evidence,
+            "goldenScope": scope,
             "goldenChapters": len(goldens), "comparedWords": sum(c["comparedWords"] for c in comparisons),
             "maxBoundaryDriftMs": max(c["maxDriftMs"] for c in comparisons),
             "maxAcousticScoreDrift": max(c["maxAcousticScoreDrift"] for c in comparisons),
@@ -198,8 +218,9 @@ def run(profile_args):
         return
     validate_arguments(args)
     if not profile_args.validation or not profile_args.final_control or not profile_args.held_controls:
-        raise ValueError("The complete golden suite, fresh final-source pair and held controls are required")
-    qualification = qualify(profile_args.validation, profile_args.final_control, profile_args.held_controls, args.recordings)
+        raise ValueError("Golden evidence, a fresh final-source pair and held controls are required")
+    qualification = qualify(profile_args.validation, profile_args.final_control, profile_args.held_controls,
+                            args.recordings, profile_args.golden_sample)
     if profile_args.check_only:
         print(json.dumps(qualification, ensure_ascii=False, indent=2))
         return
@@ -216,6 +237,8 @@ def main():
     parser.add_argument("--validation", type=Path)
     parser.add_argument("--final-control", type=Path)
     parser.add_argument("--held-controls", type=Path)
+    parser.add_argument("--golden-sample", type=Path,
+                        help="Use the immutable 17-chapter validation sample explicitly chosen for collection resumption")
     parser.add_argument("--check-only", action="store_true")
     profile_args, remaining = parser.parse_known_args()
     original_argv = sys.argv
