@@ -376,7 +376,7 @@ jobs:
     name: Package iOS (IPA)
     needs: [resolve_perushim_artifact]
     if: ${{ always() && !cancelled() && !failure() && (inputs.platform == 'iOS' || inputs.platform == 'All') }}
-    runs-on: macos-26
+    runs-on: xcode-27
     outputs:
       artifact_name: ${{ steps.set_artifact_name.outputs.artifact_name }}
       module_version: ${{ steps.get_version.outputs.VERSION }}
@@ -421,8 +421,8 @@ jobs:
         run: |
           # Show .NET SDK info to debug
           dotnet --info
-          # Pin the iOS 26.5 workload set for Xcode 26.6; see https://github.com/bible-on-site/bible-on-site/issues/1871
-          dotnet workload install maui-ios --version 10.0.401
+          # Pin the iOS 27 workload set for Xcode 27; see https://github.com/bible-on-site/bible-on-site/issues/1871
+          dotnet workload install maui-ios --version 10.0.401.1
           # Show installed workloads
           dotnet workload list
 
@@ -432,18 +432,18 @@ jobs:
           echo "Available Xcode installations:"
           ls -la /Applications/ | grep -i xcode || true
 
-          # The current MAUI iOS workload requires Xcode 26.6.
-          XCODE_PATH=/Applications/Xcode_26.6.app
+          # The current MAUI iOS workload requires Xcode 27.
+          XCODE_PATH=/Applications/Xcode_27.app
           if [ ! -d "$XCODE_PATH" ]; then
             XCODE_PATH=""
           fi
           if [ -z "$XCODE_PATH" ]; then
-            echo "Xcode 26.6 not found, trying the newest available 26.x"
-            XCODE_PATH=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+            echo "Xcode 27.0 not found, trying the newest available 27.x"
+            XCODE_PATH=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)
           fi
           if [ -z "$XCODE_PATH" ]; then
             # Fallback to default Xcode
-            echo "Xcode 26.x not found, using default Xcode"
+            echo "Xcode 27.x not found, using default Xcode"
             XCODE_PATH=$(xcode-select -p | sed 's|/Contents/Developer||')
           fi
 
