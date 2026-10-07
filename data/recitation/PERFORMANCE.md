@@ -85,8 +85,10 @@ The harness reports missing chapters, every failing boundary, runtime for ASR
 and CTC, peak CUDA allocation and the software/GPU environment. New runs also
 separate model loading from inference so warm file caches cannot masquerade as
 an inference speedup. A subset is
-explicitly incomplete. `promotionAllowed` is always false: full golden coverage,
-held-case controls and review are required before a separate production change.
+explicitly incomplete. `promotionAllowed` is always false: the harness cannot
+activate the collection worker. Separate qualification requires either complete
+golden coverage or the explicit, immutable owner-approved sample below, plus
+fresh controls and held-case checks.
 Unit tests establish exact tokens, timestamps and selected attention values on
 a small random model, on CPU and explicitly enabled CUDA. They do not substitute
 for real recordings.
@@ -148,28 +150,42 @@ the evidence is preserved, and the later user-approved 0.001 tolerance is explic
 
 The smoke test completed successfully under the explicit 0.001 score tolerance;
 the original strict-score reports are retained as evidence of the comparison
-change. Small-model checks pass for all profiles on CPU and CUDA, with exact tokens, timestamps and selected
-attention maps. Full golden coverage and held-case controls remain required;
-no production profile has changed.
+change. Small-model checks pass for all profiles on CPU and CUDA, with exact tokens,
+timestamps and selected attention maps. The production wrapper requires the
+qualification described below; the benchmark itself never activates a profile.
 
 ## Moving the measured gain into the queue
 
 The four contemporaneous baseline controls show about **8.3% less inference
 time** for the combined profile. Comparing chapters per hour alone exaggerates
-the gain: these golden chapters are short. The full suite is still accumulating
-evidence; a partial result cannot activate the queue.
+the gain: these golden chapters are short. On 2026-10-07 the owner chose this
+measured gain and asked to resume population after many successful comparisons,
+rather than continue replaying every reference chapter. At that point **17
+chapters, 2,554 words and 5,108 word boundaries** passed with **0 ms timing drift**.
+All four fresh baseline pairs have identical ASR and scored word rows. Maximum
+acoustic score drift against the stored references is 0.0005.
+
+`benchmarks/resume-sample-2026-10-07.json` freezes those exact 17 chapter IDs and
+all four paired controls, pins its content digest, and records this decision.
+It cannot be replaced with a smaller or different subset. Qualification records
+`goldenChapters: 17`, `comparedWords: 2554` and the sample digest; the reference
+pool remains 51 chapters. This is evidence for the selected profile, not a claim
+that the other 34 golden chapters were replayed or that every future recording
+is guaranteed identical. New collection chapters still face all original gates.
 
 `validated_worker.py` wraps the original worker without editing `recite.py`,
 `whisper_memory.py`, model pins or acceptance gates. Its default is the original
-path. The faster profile requires all 51 golden chapters, all four fresh
-baseline controls, a fresh baseline/candidate pair from the final reviewed
-source, and fresh negative controls from three genuinely held recordings.
+path. The faster profile requires all 51 golden chapters by default. Passing
+`--golden-sample benchmarks/resume-sample-2026-10-07.json` explicitly selects the
+17 completed comparisons instead. Both paths require all four fresh baseline
+controls, a fresh baseline/candidate pair from the final reviewed source, and
+fresh negative controls from three genuinely held recordings.
 The wrapper recomputes comparisons and rechecks original acceptance evidence;
 it does not trust a summary's success flag.
 
 ```mermaid
 flowchart LR
-    A["Evidence vault<br/>51 goldens · 10,214 words"] --> G
+    A["Evidence vault<br/>51-reference default<br/>or pinned 17-chapter sample · 2,554 words"] --> G
     B["Control room<br/>4 paired baselines + final-source replay"] --> G
     C["Safety check<br/>3 held recordings must stay held"] --> G
     G{"Every boundary and<br/>original gate passes?"} -->|yes| W
@@ -199,7 +215,7 @@ inference with the same arguments; driver failures propagate. No smaller model,
 precision change or automatic timestamp repair is used for recovery.
 
 From the repository root, using the existing CUDA venv and HF cache, after the
-exclusive full suite has exited:
+exclusive benchmark has exited:
 
 ```powershell
 python data/recitation/held_controls.py `
@@ -208,6 +224,7 @@ python data/recitation/held_controls.py `
 
 python data/recitation/validated_worker.py `
   --memory-profile selected-heads-resident-self `
+  --golden-sample data/recitation/benchmarks/resume-sample-2026-10-07.json `
   --validation data/recitation/.outputs/benchmarks/golden-suite-2026-10-07 `
   --final-control data/recitation/.outputs/benchmarks/final-source-338-2026-10-07 `
   --held-controls data/recitation/.outputs/benchmarks/held-controls `
@@ -217,5 +234,9 @@ python data/recitation/validated_worker.py `
 
 Add `--check-only` to verify qualification without starting inference. Missing,
 stale or failed evidence refuses the faster path. Preserve the existing working
-cache/output directories when resuming a collection. The original command
-remains the fallback and the timing publication cadence is unchanged.
+cache/output directories when resuming a collection. Point database, text,
+cache and alignment output to the same absolute paths used by the original
+worker, so completed matching chapters are skipped. Use the existing
+`data/recitation/.cache/huggingface` model cache in that collection worktree.
+The original command remains the fallback and the timing publication cadence
+is unchanged.

@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "goldenDigest": "e39ce8284c31679801c149528a6606890e5283ca80bd235f642e8e40e70ac0ad",
+  "eligibleReferenceChapters": 51,
+  "chapters": [
+    61,
+    187,
+    203,
+    207,
+    259,
+    261,
+    338,
+    349,
+    352,
+    354,
+    365,
+    369,
+    531,
+    532,
+    796,
+    818,
+    826
+  ],
+  "canonicalWords": 2554,
+  "freshBaselineControls": [
+    338,
+    354,
+    203,
+    531
+  ],
+  "boundaryToleranceMs": 5,
+  "acousticScoreTolerance": 0.001,
+  "decisionDate": "2026-10-07",
+  "decision": "Use the measured memory-transfer improvement after many golden comparisons, then resume the existing collection checkpoint",
+  "evidence": "Fresh full FP32 five-beam ASR and Hebrew CTC for every listed chapter; remaining reference chapters were not rerun"
+}
