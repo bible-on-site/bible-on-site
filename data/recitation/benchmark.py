@@ -25,7 +25,7 @@ from alignment import load_chapters, text_hash, validate_timings, words_for
 from awake import keep_awake
 from model_versions import ALIGN_MODEL, ALIGN_REVISION, ASR_MODEL, ASR_REVISION
 from recite import ROOT, align_track, audio_hash, decode, duration, transcribe, write_json
-from trusted import AUDIO_BASE, TRUSTED_PIPELINE, approve_alignment
+from trusted import TRUSTED_PIPELINE, approve_alignment
 from whisper_experiment import PROFILES, experimental_memory
 
 BASELINE_TAG = "recitation-baseline-2026-10-07"

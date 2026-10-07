@@ -111,12 +111,13 @@ class GoldenComparisonTests(unittest.TestCase):
     def test_atomic_lease_rejects_duplicate_and_cleans_up_on_failure(self):
         with tempfile.TemporaryDirectory() as folder:
             output = Path(folder)
-            with self.assertRaisesRegex(RuntimeError, "test failure"):
+            def fail_inside_lease():
                 with exclusive_run(output):
                     with self.assertRaises(FileExistsError):
                         with exclusive_run(output):
                             self.fail("Duplicate entered")
                     raise RuntimeError("test failure")
+            self.assertRaisesRegex(RuntimeError, "test failure", fail_inside_lease)
             self.assertFalse((output / "worker.lock").exists())
 
     def test_all_preserved_goldens_have_exact_canonical_identities_and_immutable_sources(self):
@@ -182,9 +183,10 @@ class ExperimentalMemoryTests(unittest.TestCase):
                         for layer, head, compact_head in ((2, 3, 0), (1, 2, 0), (1, 0, 1)):
                             self.assertTrue(torch.equal(base_step[layer][:, head], compact_step[layer][:, compact_head]))
                 self.assertEqual(model._extract_token_timestamps, capture)
-                with self.assertRaisesRegex(RuntimeError, "interrupted"):
+                def fail_inside_profile():
                     with experimental_memory(model, profile):
                         raise RuntimeError("interrupted")
+                self.assertRaisesRegex(RuntimeError, "interrupted", fail_inside_profile)
                 for module in model.modules():
                     self.assertEqual(set(module._forward_pre_hooks), hook_sets[module][0])
                     self.assertEqual(set(module._forward_hooks), hook_sets[module][1])
