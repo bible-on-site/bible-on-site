@@ -19,5 +19,8 @@
   },
   "allowScripts": {
     "appium@3.8.0": true
+  },
+  "overrides": {
+    "shell-quote": "1.11.0"
   }
 }

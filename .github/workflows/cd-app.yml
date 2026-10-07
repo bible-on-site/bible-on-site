@@ -13,6 +13,11 @@ on:
         description: "CI run ID that created the artifact"
         required: false
         type: string
+      inspect_ios_build:
+        description: "Read the exact Apple build state without deploying"
+        required: false
+        default: false
+        type: boolean
 
 # Keep every dispatch; never interrupt a production write.
 concurrency:
@@ -239,7 +244,7 @@ jobs:
 
   deploy_app_store:
     name: Deploy to App Store (TestFlight)
-    if: ${{ github.event.client_payload.ios_artifact_name != '' || inputs.ios_artifact_name != '' }}
+    if: ${{ (github.event.client_payload.ios_artifact_name != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
     permissions:
       contents: read
       actions: read
@@ -265,6 +270,10 @@ jobs:
           DEPLOY_MODULE: app
           DEPLOY_TARGET: app-ios
         run: node devops/github/release/check-deployment.mjs
+
+      - name: Preserve TestFlight recovery automation
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        run: cp devops/github/release/testflight-build.mjs "$RUNNER_TEMP/testflight-build.mjs"
 
       - name: Checkout artifact source
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -316,39 +325,36 @@ jobs:
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         run: gem install fastlane -NV
 
-      # TODO: Split upload and distribution into separate workflows (see #1183)
-      # This stdout checker is a workaround for Apple's submission limit errors -
-      # we consider the job successful if the build was processed, even if
-      # external distribution fails due to rate limits.
-      - name: Upload to TestFlight and Distribute to Beta Group
+      - name: Check the exact TestFlight build before uploading
         if: ${{ steps.guard.outputs.deploy == 'true' }}
+        id: testflight
         env:
-          TESTFLIGHT_BETA_GROUP: ${{ secrets.TESTFLIGHT_BETA_GROUP_NAME }}
+          GH_TOKEN: ${{ github.token }}
+          IPA_FILE: ${{ steps.find_ipa.outputs.IPA_FILE }}
+          ARTIFACT_REF: ${{ steps.guard.outputs.ref }}
+          DEPLOYMENT_ID: ${{ steps.guard.outputs.deployment_id }}
+        run: node "$RUNNER_TEMP/testflight-build.mjs" preflight
+
+      - name: Upload the missing TestFlight build once
+        if: ${{ steps.guard.outputs.deploy == 'true' && steps.testflight.outputs.upload == 'true' }}
+        id: upload
+        env:
+          IPA_FILE: ${{ steps.find_ipa.outputs.IPA_FILE }}
         run: |
           set +e
-          OUTPUT=$(fastlane pilot upload \
-            --ipa "${{ steps.find_ipa.outputs.IPA_FILE }}" \
-            --api_key_path "${{ env.API_KEY_PATH }}" \
-            --skip_waiting_for_build_processing false \
-            --distribute_external true \
-            --groups "${TESTFLIGHT_BETA_GROUP}" \
-            --beta_app_description "בכ\"ט כסלו תשע\"ה(21 דצמ' 14) התחילה תכנית לימוד תנ\"ך יומי של משרד החינוך, פרק ליום. כחודש לאחר מכן עלה לרשת אתר לימוד תנך באותו פורמט אשר מתעדכן מיום ליום במאמרים של רבנים. כמו כן יש רעיונות נוספים שעתידים להתחדש, תעקבו אחרינו! לימוד פורה, תנך.co.il" \
-            --beta_app_feedback_email "tanah.site@gmail.com" \
-            --beta_app_review_info '{"contact_email":"tanah.site@gmail.com","contact_first_name":"Dorad","contact_last_name":"Levinshtein","contact_phone":"+372 5707 8640"}' \
-            --changelog "Automated build v${{ env.MODULE_VERSION }}" 2>&1)
+          fastlane pilot upload --ipa "$IPA_FILE" --api_key_path "$API_KEY_PATH" \
+            --skip_submission true --skip_waiting_for_build_processing true
           EXIT_CODE=$?
-          echo "$OUTPUT"
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+          # Apple's API check below decides whether the exact build was accepted.
+          exit 0
 
-          if echo "$OUTPUT" | grep -q "Successfully finished processing the build"; then
-            echo "✅ Build was uploaded and processed successfully"
-            if [ $EXIT_CODE -ne 0 ]; then
-              echo "::warning::Distribution may have failed (e.g., submission limits) - manual distribution may be required"
-            fi
-            exit 0
-          else
-            echo "❌ Build upload/processing failed"
-            exit $EXIT_CODE
-          fi
+      - name: Verify Apple accepted and processed the exact build
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          IPA_FILE: ${{ steps.find_ipa.outputs.IPA_FILE }}
+          UPLOAD_EXIT_CODE: ${{ steps.upload.outputs.exit_code || '0' }}
+        run: node "$RUNNER_TEMP/testflight-build.mjs" postflight
 
       - name: Record deployment result
         if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
@@ -370,3 +376,27 @@ jobs:
           echo "**Version:** ${{ env.MODULE_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "**Target:** TestFlight" >> $GITHUB_STEP_SUMMARY
           echo "**Status:** Uploaded ✅" >> $GITHUB_STEP_SUMMARY
+
+  distribute_app_store:
+    name: Distribute to TestFlight
+    needs: deploy_app_store
+    if: ${{ always() && needs.deploy_app_store.result == 'success' && (github.event.client_payload.ios_artifact_name != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
+    permissions:
+      contents: read
+      actions: read
+      deployments: write
+    uses: ./.github/workflows/testflight-distribution.yml
+    with:
+      ios_artifact_name: ${{ github.event.client_payload.ios_artifact_name || inputs.ios_artifact_name }}
+      ci_run_id: ${{ github.event.client_payload.ci_run_id || inputs.ci_run_id }}
+      parent_lock_held: true
+    secrets: inherit
+
+  inspect_app_store:
+    if: ${{ inputs.inspect_ios_build }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/testflight-status.yml
+    with:
+      ios_artifact_name: ${{ inputs.ios_artifact_name }}
+    secrets: inherit

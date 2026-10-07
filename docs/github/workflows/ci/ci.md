@@ -118,3 +118,29 @@ publisher finish recovery.
 
 See [GitHub's release API](https://docs.github.com/en/rest/releases/releases) and
 validate changes with `npm run test:version` in `devops`.
+
+TestFlight delivery reads the app identity, marketing version, and build number
+from the published IPA and checks that exact iOS build through Apple's API.
+An existing valid build resumes distribution without another binary upload.
+Processing builds are polled; rejected builds and API errors fail the delivery.
+If an earlier recorded delivery exists and Apple cannot confirm its build, a
+retry does not upload again. Keep the original uploader error visible and use
+the read-only **Inspect TestFlight build** workflow to inspect the published
+release before recovery. The normal source, quality, freshness, and deployment
+ledger guards still apply to every production write.
+
+After a verified upload, app CD calls the separate **Distribute TestFlight build**
+workflow. It specifies the iOS platform and both the exact app version and build
+number. Upload and distribution have independent `app-ios` and `app-ios-beta`
+deployment records. A distribution error fails its own job and record while
+preserving the verified upload's success.
+
+Retry distribution alone by manually running that workflow on `master` with the
+published `ios_artifact_name` and its source `ci_run_id`. This recovery shares
+the app CD lock, retains the source/quality/freshness guards, and verifies Apple's
+exact build through the published IPA. It contains no binary upload step. A
+successful repeated distribution skips all writes; a superseded release also
+skips recovery. This implements
+[issue #1183](https://github.com/bible-on-site/bible-on-site/issues/1183).
+See [Apple's build query](https://developer.apple.com/documentation/appstoreconnectapi/get-v1-builds)
+and [Fastlane's upload/distribution options](https://docs.fastlane.tools/actions/pilot/).

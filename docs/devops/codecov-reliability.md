@@ -62,11 +62,16 @@ Concrete changes:
    - A `curl` transport failure (DNS/TLS) is treated like any other non-200
      response and reaches the retry/warn path instead of failing the step
      under `bash -e`.
-   - When the API responds 200 with `state=complete` but `ci_passed` never
-     resolves, the reports never landed — Codecov processed the commit and
-     found nothing to evaluate. That is a CI-side failure (uploads lost while
-     the service was reachable → flag thresholds unenforced), so the step
-     fails rather than bypassing the gate.
+   - When the API responds 200 with `state=complete`, inspect `report.files`
+     and its nonzero file, line, and session totals. An absent or empty report
+     is a CI-side lost-upload failure, even if upstream CI passed.
+   - A complete, nonempty report with unresolved `ci_passed` is **not** a
+     missing upload. PR #2023 reproduced this with all six uploads merged and
+     20,265 covered lines. Codecov defines `ci_passed` as upstream CI status;
+     the polling job itself may still be running. After retries, warn and
+     proceed when this report exists, while retaining any explicit failure.
+     See the [Codecov commit serializer](https://github.com/codecov/umbrella/blob/main/apps/codecov-api/api/public/v2/commit/serializers.py).
+     Per-flag threshold statuses remain Codecov's own evaluation.
    - Unresolved while the API never answered, or while reports are still
      processing (`state` not `complete`), keeps the warn-and-proceed path:
      a Codecov outage or backlog must not block merges.
@@ -96,5 +101,5 @@ degrades further.
 Implement **Option B** in this PR: uploads become best-effort
 (`fail_ci_if_error: false`), and the `ci_passed` verify poll survives transport
 failures and still fails when Codecov is reachable but the uploads were lost
-(`state=complete` with unresolved `ci_passed`). Self-hosting stays available as
+(`state=complete` with an absent or empty coverage report). Self-hosting stays available as
 a contingency if Codecov SaaS becomes persistently unreliable or shut down.

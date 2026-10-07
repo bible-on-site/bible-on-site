@@ -54,14 +54,11 @@ public sealed class PerekScrollStabilityTests(ITestOutputHelper output, MobileDe
 
         // Fast back-to-back flicks maximize prefetch churn: cells are created,
         // dequeued and recycled while perushim HTML is being imported.
-        for (var i = 0; i < 40; i++)
-        {
-            _driver!.PerformActions([CreateFlickSequence(centerX, bottomY, centerX, topY)]);
-        }
-        for (var i = 0; i < 40; i++)
-        {
-            _driver!.PerformActions([CreateFlickSequence(centerX, topY, centerX, bottomY)]);
-        }
+        // One native sequence per direction avoids a separate XCTest idle wait
+        // and HTTP round trip for every flick. The old 80-command storm reached
+        // the hang guard while the app was still alive and responding normally.
+        _driver!.PerformActions([CreateFlickSequence(centerX, bottomY, centerX, topY, 40)]);
+        _driver.PerformActions([CreateFlickSequence(centerX, topY, centerX, bottomY, 40)]);
 
         var appState = _driver!.ExecuteScript("mobile: queryAppState",
             new Dictionary<string, object> { ["bundleId"] = "com.tanah.daily929" });
@@ -99,14 +96,24 @@ public sealed class PerekScrollStabilityTests(ITestOutputHelper output, MobileDe
         _page.Tap("PerushimChevronButton");
     }
 
-    private static ActionSequence CreateFlickSequence(int fromX, int fromY, int toX, int toY)
+    internal static ActionSequence CreateFlickSequence(int fromX, int fromY, int toX, int toY, int repetitions)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(repetitions);
         var finger = new PointerInputDevice(PointerKind.Touch, "finger");
         var sequence = new ActionSequence(finger, 0);
-        sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, fromX, fromY, TimeSpan.Zero));
-        sequence.AddAction(finger.CreatePointerDown(MouseButton.Left));
-        sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, toX, toY, TimeSpan.FromMilliseconds(120)));
-        sequence.AddAction(finger.CreatePointerUp(MouseButton.Left));
+        for (var i = 0; i < repetitions; i++)
+        {
+            sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, fromX, fromY, TimeSpan.Zero));
+            sequence.AddAction(finger.CreatePointerDown(MouseButton.Left));
+            sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, toX, toY, TimeSpan.FromMilliseconds(120)));
+            sequence.AddAction(finger.CreatePointerUp(MouseButton.Left));
+            // Preserve distinct lifted touches while keeping prefetch/recycle
+            // churn continuous, without a server idle wait between gestures.
+            if (i + 1 < repetitions)
+            {
+                sequence.AddAction(finger.CreatePause(TimeSpan.FromMilliseconds(100)));
+            }
+        }
         return sequence;
     }
 }
