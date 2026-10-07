@@ -176,6 +176,16 @@ jobs:
         working-directory: ${{ env.APP_DIRECTORY }}
         run: dotnet tool restore
 
+      - name: Restore original recitation audio cache
+        uses: actions/cache@v6
+        with:
+          path: .cache/recitation-assets
+          key: recitation-audio-v1-${{ hashFiles('data/recitation/recitation.sqlite') }}
+          restore-keys: recitation-audio-v1-
+
+      - name: Prepare lossless recitation book extension packages
+        run: python app/devops/prepare_recitation_assets.py --platform Windows
+
       - name: Package MSIX
         working-directory: ${{ env.APP_DIRECTORY }}
         run: |
@@ -313,6 +323,16 @@ jobs:
         working-directory: ${{ env.APP_DIRECTORY }}
         run: dotnet tool restore
 
+      - name: Restore original recitation audio cache
+        uses: actions/cache@v6
+        with:
+          path: .cache/recitation-assets
+          key: recitation-audio-v1-${{ hashFiles('data/recitation/recitation.sqlite') }}
+          restore-keys: recitation-audio-v1-
+
+      - name: Prepare lossless recitation book extension packages
+        run: python app/devops/prepare_recitation_assets.py --platform Android
+
       - name: Package AAB
         working-directory: ${{ env.APP_DIRECTORY }}
         run: |
@@ -351,6 +371,9 @@ jobs:
             echo "::warning::No obvious perushim/asset-pack path in AAB zip listing — verify Play Asset Delivery packaging if PAD fails on device."
             unzip -l "$AAB" | head -30
           fi
+
+      - name: Verify all recitation PAD modules and hashes
+        run: python app/devops/verify_recitation_assets.py --platform Android --catalog app/BibleOnSite/Resources/Raw/recitation-catalog.json --package "$(find app/.artifacts -name '*.aab' -print -quit)"
 
       - name: Set artifact name output
         id: set_artifact_name
@@ -515,6 +538,16 @@ jobs:
         working-directory: ${{ env.APP_DIRECTORY }}
         run: dotnet tool restore
 
+      - name: Restore original recitation audio cache
+        uses: actions/cache@v6
+        with:
+          path: .cache/recitation-assets
+          key: recitation-audio-v1-${{ hashFiles('data/recitation/recitation.sqlite') }}
+          restore-keys: recitation-audio-v1-
+
+      - name: Prepare lossless recitation book extension packages
+        run: python app/devops/prepare_recitation_assets.py --platform iOS
+
       - name: Package IPA
         working-directory: ${{ env.APP_DIRECTORY }}
         run: |
@@ -527,6 +560,9 @@ jobs:
         with:
           path: ~/.nuget/packages
           key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
+
+      - name: Verify all recitation ODR tags and payloads
+        run: python app/devops/verify_recitation_assets.py --platform iOS --catalog app/BibleOnSite/Resources/Raw/recitation-catalog.json --package "$(find app/.artifacts -name '*.ipa' -print -quit)"
 
       - name: Set artifact name output
         id: set_artifact_name

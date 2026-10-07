@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Nuke.Common;
 using Nuke.Common.IO;
+using Nuke.Common.Tooling;
 using Nuke.Common.Tools.DotNet;
 using static Nuke.Common.Tools.DotNet.DotNetTasks;
 
@@ -76,7 +77,15 @@ partial class Build
         .Unlisted()
         .Executes(() =>
         {
-            // This target only restores the appropriate platform - build happens in publish
+            var platforms = Platform.Equals("All", StringComparison.OrdinalIgnoreCase)
+                ? new[] { "Android", OperatingSystem.IsMacOS() ? "iOS" : "Windows" }
+                : new[] { Platform };
+            foreach (var platform in platforms)
+                ProcessTasks.StartProcess(OperatingSystem.IsWindows() ? "python" : "python3",
+                    $"\"{RootDirectory / "devops/prepare_recitation_assets.py"}\" --platform {platform}", RootDirectory)
+                    .AssertZeroExitCode();
+
+            // Generate extension assets before project evaluation, then restore the target platform.
             if (Platform.Equals("Windows", StringComparison.OrdinalIgnoreCase))
             {
                 if (OperatingSystem.IsWindows())
@@ -122,6 +131,7 @@ partial class Build
             ["AppxPackageDir"] = $"{ArtifactsDirectory}/",
             ["AppxPackageSigningEnabled"] = "true",
             ["TargetFramework"] = "net10.0-windows10.0.19041.0",
+            ["RequireRecitationAssets"] = "true",
             // Microsoft Store requires revision (4th component) to be 0
             // Override ApplicationVersion to 0 to produce X.Y.Z.0 version format
             ["ApplicationVersion"] = "0"
@@ -151,6 +161,7 @@ partial class Build
         var msbuildProperties = new Dictionary<string, object>
         {
             ["AndroidPackageFormat"] = "aab",
+            ["RequireRecitationAssets"] = "true",
             ["RuntimeIdentifiers"] = "android-arm64"
         };
 
@@ -205,6 +216,7 @@ partial class Build
             ["TargetFramework"] = "net10.0-ios",
             ["ArchiveOnBuild"] = "true",
             ["BuildIpa"] = "true",
+            ["RequireRecitationAssets"] = "true",
             ["IpaPackageDir"] = $"{ArtifactsDirectory}/",
             ["SupportedOSPlatformVersion"] = "17.0",
             ["_ExcludeSimulatorArchitectures"] = "true"
