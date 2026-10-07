@@ -63,7 +63,7 @@ test.each([
 	["raw-text namespace", { default: bytes }],
 	["parsed-JSON namespace", { default: JSON.parse(bytes) }],
 ])("development accepts the %s module without using the production cache", (_, module) => {
-	process.env.NODE_ENV = "development";
+	process.env = { ...process.env, NODE_ENV: "development" };
 	jest.doMock("../../../src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json", () => module);
 	expect(load()).toEqual(JSON.parse(bytes));
 	expect(readFileSync).not.toHaveBeenCalled();
@@ -71,7 +71,7 @@ test.each([
 });
 
 test("development observes a replaced module on the next load", () => {
-	process.env.NODE_ENV = "development";
+	process.env = { ...process.env, NODE_ENV: "development" };
 	jest.doMock("../../../src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json", () => bytes);
 	const first = load();
 	const changed = bytes.replace("בראשית", "שמות");
