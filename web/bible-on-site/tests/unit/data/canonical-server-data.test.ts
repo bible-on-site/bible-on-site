@@ -27,6 +27,7 @@ beforeEach(() => {
 afterEach(() => {
 	process.env = environment;
 	delete server[cache];
+	jest.dontMock("../../../src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json");
 });
 
 test("production parses the original traced bytes without bundler rounding", () => {
@@ -55,3 +56,27 @@ test.each([new Error("Canonical file missing"), new SyntaxError("Invalid JSON")]
 		expect(readFileSync).toHaveBeenCalledTimes(2);
 	},
 );
+
+test.each([
+	["raw text", bytes],
+	["parsed JSON", JSON.parse(bytes)],
+	["raw-text namespace", { default: bytes }],
+	["parsed-JSON namespace", { default: JSON.parse(bytes) }],
+])("development accepts the %s module without using the production cache", (_, module) => {
+	process.env.NODE_ENV = "development";
+	jest.doMock("../../../src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json", () => module);
+	expect(load()).toEqual(JSON.parse(bytes));
+	expect(readFileSync).not.toHaveBeenCalled();
+	expect(server[cache]).toBeUndefined();
+});
+
+test("development observes a replaced module on the next load", () => {
+	process.env.NODE_ENV = "development";
+	jest.doMock("../../../src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json", () => bytes);
+	const first = load();
+	const changed = bytes.replace("בראשית", "שמות");
+	jest.doMock("../../../src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json", () => changed);
+	expect(load()).toEqual(JSON.parse(changed));
+	expect(first).toEqual(JSON.parse(bytes));
+	expect(readFileSync).not.toHaveBeenCalled();
+});
