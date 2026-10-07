@@ -93,7 +93,7 @@
 	"optionalDependencies": {
 		"@emnapi/core": "1.11.3",
 		"@emnapi/runtime": "1.11.3",
-		"@emnapi/wasi-threads": "1.2.3",
+		"@emnapi/wasi-threads": "2.2.0",
 		"@napi-rs/wasm-runtime": "1.1.6",
 		"@tybys/wasm-util": "0.10.3"
 	}
