@@ -9,6 +9,7 @@ import {
 	PEREK_WORD_SPACINGS,
 	READER_SETTINGS_BOOTSTRAP,
 	READER_SETTINGS_STORAGE_KEY,
+	READER_SETTINGS_VERSION,
 	setStoredReaderSettings,
 } from "../../../src/lib/reader-settings";
 
@@ -42,6 +43,7 @@ describe("reader-settings", () => {
 			lineStep: 2,
 			wordStep: 0,
 			fontId: 0,
+			v: READER_SETTINGS_VERSION,
 		});
 	});
 
@@ -55,6 +57,7 @@ describe("reader-settings", () => {
 			lineStep: 1,
 			wordStep: 0,
 			fontId: 0,
+			v: READER_SETTINGS_VERSION,
 		});
 		setStoredReaderSettings({ fontStep: 3, lineStep: 1, wordStep: 4 });
 		runBootstrap();
@@ -81,6 +84,7 @@ describe("reader-settings", () => {
 			lineStep: 0,
 			wordStep: 0,
 			fontId: 0,
+			v: READER_SETTINGS_VERSION,
 		});
 	});
 
@@ -93,6 +97,7 @@ describe("reader-settings", () => {
 			lineStep: PEREK_LINE_HEIGHTS.length - 1,
 			wordStep: 0,
 			fontId: 0,
+			v: READER_SETTINGS_VERSION,
 		});
 	});
 
@@ -139,13 +144,13 @@ describe("reader-settings", () => {
 			JSON.stringify(PEREK_TANAKH_FONTS),
 		);
 		expect(READER_SETTINGS_BOOTSTRAP).toContain(
-			`s.fontId==null?${DEFAULT_READER_SETTINGS.fontId}`,
+			`s.v===${READER_SETTINGS_VERSION}&&s.fontId!=null`,
 		);
 	});
 
-	it("applyReaderSettings sets data-tanakh-font for Taamey D and removes it for default", () => {
+	it("applyReaderSettings sets data-tanakh-font for the Noto opt-out and removes it for the default", () => {
 		applyReaderSettings({ fontId: 1 });
-		expect(document.documentElement.dataset.tanakhFont).toBe("taamey");
+		expect(document.documentElement.dataset.tanakhFont).toBe("noto");
 		applyReaderSettings({ fontId: 0 });
 		expect(document.documentElement.dataset.tanakhFont).toBeUndefined();
 	});
@@ -153,10 +158,26 @@ describe("reader-settings", () => {
 	it("bootstrap applies stored font choice before paint", () => {
 		localStorage.setItem(
 			READER_SETTINGS_STORAGE_KEY,
+			JSON.stringify({ v: READER_SETTINGS_VERSION, fontId: 1 }),
+		);
+		runBootstrap();
+		expect(document.documentElement.dataset.tanakhFont).toBe("noto");
+	});
+
+	it("v1 stored font choices migrate to the Taamey default", () => {
+		for (const fontId of [0, 1]) {
+			localStorage.setItem(
+				READER_SETTINGS_STORAGE_KEY,
+				JSON.stringify({ fontId }),
+			);
+			expect(getStoredReaderSettings().fontId).toBe(0);
+		}
+		localStorage.setItem(
+			READER_SETTINGS_STORAGE_KEY,
 			JSON.stringify({ fontId: 1 }),
 		);
 		runBootstrap();
-		expect(document.documentElement.dataset.tanakhFont).toBe("taamey");
+		expect(document.documentElement.dataset.tanakhFont).toBeUndefined();
 	});
 
 	it("bootstrap script applies stored settings synchronously before paint", () => {

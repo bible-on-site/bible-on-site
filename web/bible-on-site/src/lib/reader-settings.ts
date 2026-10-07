@@ -18,10 +18,18 @@ export const PEREK_WORD_SPACINGS = [0.12, 0.2, 0.28, 0.36, 0.44] as const;
 
 /**
  * Tanakh font choices applied to the perek text. Index 0 is the default
- * (Noto Serif Hebrew); index 1 selects the experimental Taamey D face.
- * Applied as `data-tanakh-font` on <html>, which CSS selectors match.
+ * (Taamey D — no `data-tanakh-font` attribute); index 1 opts out to
+ * Noto Serif Hebrew. Applied as `data-tanakh-font` on <html>, which CSS
+ * selectors match.
  */
-export const PEREK_TANAKH_FONTS = ["", "taamey"] as const;
+export const PEREK_TANAKH_FONTS = ["", "noto"] as const;
+
+/**
+ * Storage schema version. v1 indexed fonts as [0=default(Noto), 1=taamey];
+ * after Taamey became the default both meanings resolve to index 0, so v1
+ * payloads are migrated rather than reinterpreted as an opt-out.
+ */
+export const READER_SETTINGS_VERSION = 2;
 
 export type ReaderSettings = {
 	/** Index into PEREK_FONT_SCALES. */
@@ -31,6 +39,8 @@ export type ReaderSettings = {
 	wordStep: number;
 	/** Index into PEREK_TANAKH_FONTS. */
 	fontId: number;
+	/** Storage schema version; see READER_SETTINGS_VERSION. */
+	v: number;
 };
 
 export const DEFAULT_READER_SETTINGS: ReaderSettings = {
@@ -38,6 +48,7 @@ export const DEFAULT_READER_SETTINGS: ReaderSettings = {
 	lineStep: 0,
 	wordStep: 0,
 	fontId: 0,
+	v: READER_SETTINGS_VERSION,
 };
 
 const clampStep = (value: number, max: number) =>
@@ -62,6 +73,7 @@ function normalizeSettings(raw: unknown): ReaderSettings {
 			candidate.fontId == null
 				? DEFAULT_READER_SETTINGS.fontId
 				: clampStep(candidate.fontId, PEREK_TANAKH_FONTS.length - 1),
+		v: READER_SETTINGS_VERSION,
 	};
 }
 
@@ -69,9 +81,14 @@ export function getStoredReaderSettings(): ReaderSettings {
 	/* istanbul ignore next: SSR */
 	if (typeof window === "undefined") return DEFAULT_READER_SETTINGS;
 	try {
-		return normalizeSettings(
-			JSON.parse(localStorage.getItem(READER_SETTINGS_STORAGE_KEY) ?? "null"),
+		const stored = JSON.parse(
+			localStorage.getItem(READER_SETTINGS_STORAGE_KEY) ?? "null",
 		);
+		// v1 fontId semantics predate the Taamey default; collapse to default
+		// so experiment opt-ins keep Taamey and nobody flips to an opt-out.
+		const migrated =
+			stored?.v === READER_SETTINGS_VERSION ? stored : { ...stored, fontId: 0 };
+		return normalizeSettings(migrated);
 	} catch {
 		return DEFAULT_READER_SETTINGS;
 	}
@@ -124,4 +141,4 @@ export function applyReaderSettings(
  * storage key, arrays and default indices are duplicated here verbatim. The
  * reader-settings unit test asserts they stay in sync.
  */
-export const READER_SETTINGS_BOOTSTRAP = `(function(){try{var s=JSON.parse(localStorage.getItem("perekReaderSettings")||"null")||{};var f=[0.85,0.92,1,1.15,1.3],l=[1.5,1.75,2],w=[0.12,0.2,0.28,0.36,0.44],tf=["","taamey"];function c(v,m){return typeof v==="number"&&isFinite(v)?Math.min(Math.max(Math.round(v),0),m):0}var e=document.documentElement;e.style.setProperty("--perek-font-scale",String(f[s.fontStep==null?2:c(s.fontStep,f.length-1)]));e.style.setProperty("--perek-line-height",String(l[s.lineStep==null?0:c(s.lineStep,l.length-1)]));e.style.setProperty("--perek-word-spacing",String(w[s.wordStep==null?0:c(s.wordStep,w.length-1)])+"em");var t=tf[s.fontId==null?0:c(s.fontId,tf.length-1)];if(t){e.dataset.tanakhFont=t}else{delete e.dataset.tanakhFont}}catch(e){}})();`;
+export const READER_SETTINGS_BOOTSTRAP = `(function(){try{var s=JSON.parse(localStorage.getItem("perekReaderSettings")||"null")||{};var f=[0.85,0.92,1,1.15,1.3],l=[1.5,1.75,2],w=[0.12,0.2,0.28,0.36,0.44],tf=["","noto"];function c(v,m){return typeof v==="number"&&isFinite(v)?Math.min(Math.max(Math.round(v),0),m):0}var e=document.documentElement;e.style.setProperty("--perek-font-scale",String(f[s.fontStep==null?2:c(s.fontStep,f.length-1)]));e.style.setProperty("--perek-line-height",String(l[s.lineStep==null?0:c(s.lineStep,l.length-1)]));e.style.setProperty("--perek-word-spacing",String(w[s.wordStep==null?0:c(s.wordStep,w.length-1)])+"em");var t=tf[s.v===2&&s.fontId!=null?c(s.fontId,tf.length-1):0];if(t){e.dataset.tanakhFont=t}else{delete e.dataset.tanakhFont}}catch(e){}})();`;

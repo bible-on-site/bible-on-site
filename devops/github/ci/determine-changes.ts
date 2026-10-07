@@ -37,7 +37,7 @@ export const MODULES = {
 			"data/recitation/recitation.sqlite",
 			"app/BibleOnSite/Resources/Raw/recitation-audio.html",
 		],
-		ciPaths: RELEASE_CI_PATHS,
+		ciPaths: [...RELEASE_CI_PATHS, "devops/github/ci/bencher-comparison.mjs"],
 	},
 	api: { directory: "web/api", ciPaths: RELEASE_CI_PATHS },
 	app: {

@@ -49,6 +49,64 @@ test("another platform's success does not suppress a failed platform", () => {
 	assert.equal(result.deploy, true);
 });
 
+test("a verified iOS upload does not suppress independent beta distribution", () => {
+	const writes = [];
+	const result = startDeployment(
+		{ ...input, target: "app-ios-beta" },
+		(url, body) => {
+			if (body) {
+				writes.push(body);
+				return { id: 2 };
+			}
+			assert.match(url, /environment=app-ios-beta/);
+			return [{ id: 1, payload: { release_key: "app-ios-v5.0.120" } }];
+		},
+	);
+	assert.deepEqual(result, { deploy: true, deploymentId: 2 });
+	assert.equal(writes[0].environment, "app-ios-beta");
+	assert.equal(writes[0].ref, input.ref);
+	assert.deepEqual(writes[0].payload, {
+		release_key: "app-ios-beta-v5.0.120",
+		ci_run_id: input.runId,
+		ci_run_attempt: "1",
+	});
+	assert.equal(writes[1].state, "in_progress");
+});
+
+test("successful beta distribution is a no-op on retry and independent of upload", () => {
+	for (const target of ["app-ios-beta", "app-ios"]) {
+		const result = startDeployment({ ...input, target }, (url, body) => {
+			if (body) {
+				assert.equal(target, "app-ios");
+				return { id: 2 };
+			}
+			if (url.includes("/statuses?")) return [{ state: "success" }];
+			assert.ok(url.includes(`environment=${target}&`));
+			return [{ id: 1, payload: { release_key: "app-ios-beta-v5.0.120" } }];
+		});
+		assert.equal(result.deploy, target === "app-ios");
+	}
+});
+
+test("failed beta distribution remains retryable without changing upload history", () => {
+	const writes = [];
+	const result = startDeployment(
+		{ ...input, target: "app-ios-beta" },
+		(url, body) => {
+			if (body) {
+				writes.push({ url, body });
+				return { id: 3 };
+			}
+			if (url.includes("/statuses?")) return [{ state: "failure" }];
+			assert.match(url, /environment=app-ios-beta/);
+			return [{ id: 2, payload: { release_key: "app-ios-beta-v5.0.120" } }];
+		},
+	);
+	assert.deepEqual(result, { deploy: true, deploymentId: 3 });
+	assert.equal(writes[0].body.environment, "app-ios-beta");
+	assert.match(writes[1].url, /deployments\/3\/statuses$/);
+});
+
 test("deployment history pagination retains completion evidence", () => {
 	const result = startDeployment(input, (url) => {
 		if (url.includes("/statuses?")) return [{ state: "success" }];

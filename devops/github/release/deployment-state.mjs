@@ -21,7 +21,7 @@ export function startDeployment(
 	api = request,
 ) {
 	if (
-		!/^(website|api|admin|bulletin|data|app-(android|windows|ios))$/.test(
+		!/^(website|api|admin|bulletin|data|app-(android|windows|ios|ios-beta))$/.test(
 			target,
 		)
 	)
