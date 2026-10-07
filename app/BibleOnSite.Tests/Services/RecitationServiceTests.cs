@@ -64,7 +64,10 @@ public class RecitationServiceTests
                             progress?.Report(1); return Task.FromResult(true);
                         });
                 }
-                else storage.PackageFiles[book.FileName] = bytes;
+                else
+                {
+                    storage.PackageFiles[book.FileName] = bytes;
+                }
             }
             Catalog = new(1, Package, books); SaveCatalog();
         }
@@ -114,7 +117,10 @@ public class RecitationServiceTests
         extension.Audio["/recordings/1_record.mp3"] = fault == "audio" ? "corrupt"u8.ToArray() : replacement;
         extension.Bundle(); var pack = extension.Catalog!.Books[0];
         var path = Path.Combine(storage.Root, "store", pack.PackName, pack.FileName);
-        if (fault == "archive") await File.AppendAllTextAsync(path, "damage");
+        if (fault == "archive")
+        {
+            await File.AppendAllTextAsync(path, "damage");
+        }
         if (fault == "inventory")
         {
             using (var archive = ZipFile.Open(path, ZipArchiveMode.Update)) archive.CreateEntry("../escape.mp3");
@@ -170,7 +176,7 @@ public class RecitationServiceTests
         await model.LoadAsync(); await model.DownloadSelectedAsync(); model.Status.Should().Contain("בחרו");
         model.SelectAllCommand.Execute(null); var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         extension.Delivery.Setup(d => d.FetchAsync("recitation_2", It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()))
-            .Returns(async (string _, IProgress<double>? progress, CancellationToken ct) =>
+            .Returns(async (string _, IProgress<double>? _, CancellationToken ct) =>
             {
                 entered.SetResult(); await Task.Delay(Timeout.Infinite, ct); return false;
             });

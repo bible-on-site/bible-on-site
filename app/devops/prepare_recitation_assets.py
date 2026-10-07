@@ -4,13 +4,14 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 import hashlib
+from http.client import HTTPSConnection
 import json
 from pathlib import Path
 import shutil
 import sqlite3
 import sys
 import tempfile
-from urllib.request import urlopen
+from urllib.parse import urlsplit
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -37,8 +38,16 @@ def recording(track, cache, recordings=None):
         if recordings is not None:
             shutil.copyfile(recordings / f'{track["perekId"]}_record.mp3', temporary)
         else:
-            with urlopen(track["audioUrl"], timeout=120) as source, temporary.open("wb") as target:  # nosec B310: URLs are from the validated release database.
-                shutil.copyfileobj(source, target)
+            url = urlsplit(track["audioUrl"])
+            if (url.scheme != "https" or not url.hostname or url.username or url.password or url.query or url.fragment
+                    or url.path != f'/recordings/{track["perekId"]}_record.mp3'):
+                raise ValueError("Build recording URLs must be HTTPS chapter assets")
+            with closing(HTTPSConnection(url.hostname, url.port, timeout=120)) as connection:
+                connection.request("GET", url.path)
+                with connection.getresponse() as source, temporary.open("wb") as target:
+                    if source.status != 200:
+                        raise ValueError(f'{track["perekId"]}: recording download returned HTTP {source.status}')
+                    shutil.copyfileobj(source, target)
         if digest(temporary) != track["audioSha256"]:
             raise ValueError(f'{track["perekId"]}: recording checksum mismatch')
         temporary.replace(destination)

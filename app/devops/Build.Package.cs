@@ -81,9 +81,11 @@ partial class Build
                 ? new[] { "Android", OperatingSystem.IsMacOS() ? "iOS" : "Windows" }
                 : new[] { Platform };
             foreach (var platform in platforms)
+            {
                 ProcessTasks.StartProcess(OperatingSystem.IsWindows() ? "python" : "python3",
                     $"\"{RootDirectory / "devops/prepare_recitation_assets.py"}\" --platform {platform}", RootDirectory)
                     .AssertZeroExitCode();
+            }
 
             // Generate extension assets before project evaluation, then restore the target platform.
             if (Platform.Equals("Windows", StringComparison.OrdinalIgnoreCase))

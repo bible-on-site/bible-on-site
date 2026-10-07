@@ -98,21 +98,27 @@ public sealed record RecitationBookPack(int SeferId, string Sha256, long SizeByt
 
 public sealed record RecitationExtensionCatalog(int Version, RecitationPackage Package, List<RecitationBookPack> Books)
 {
-    public const string FileName = "recitation-catalog.json";
+    public static string FileName => "recitation-catalog.json";
 
     public void Validate()
     {
         if (Version != 1 || Package == null || Books is not { Count: > 0 })
+        {
             throw new InvalidDataException("Missing recitation book packages.");
+        }
         Package.Validate();
         if (Books.Any(b => b == null || b.PerekIds is not { Count: > 0 } || b.SeferId is < 1 or > 39 ||
                 b.SizeBytes is <= 0 or > 512_000_000 || b.Sha256 is not { Length: 64 } ||
                 b.Sha256.Any(c => !"0123456789abcdef".Contains(c))))
+        {
             throw new InvalidDataException("Invalid recitation book packages.");
+        }
         var ids = Books.SelectMany(b => b.PerekIds).ToList();
         if (Books.Select(b => b.SeferId).Distinct().Count() != Books.Count ||
             ids.Count != ids.Distinct().Count() || !ids.Order().SequenceEqual(Package.Tracks.Select(t => t.PerekId).Order()))
+        {
             throw new InvalidDataException("Invalid recitation book packages.");
+        }
     }
 }
 

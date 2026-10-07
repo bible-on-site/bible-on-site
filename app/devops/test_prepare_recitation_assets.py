@@ -1,10 +1,12 @@
 import hashlib
 from contextlib import closing
+import io
 import json
 from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 from prepare_recitation_assets import book_archive, prepare_assets, recording
@@ -44,6 +46,23 @@ class RecitationAssetsTests(unittest.TestCase):
             recording(self.track, self.cache, self.recordings)
         self.assertEqual(list(self.cache.iterdir()), [])
 
+    def test_build_http_transport_checks_exact_original_bytes(self):
+        response = io.BytesIO(self.audio)
+        response.status = 200
+        with patch("prepare_recitation_assets.HTTPSConnection") as factory:
+            factory.return_value.getresponse.return_value = response
+            track = {**self.track, "audioUrl": "https://example.com/recordings/1_record.mp3"}
+            self.assertEqual(recording(track, self.cache).read_bytes(), self.audio)
+            factory.assert_called_once_with("example.com", None, timeout=120)
+            factory.return_value.request.assert_called_once_with("GET", "/recordings/1_record.mp3")
+
+    def test_build_rejects_non_https_and_non_chapter_urls(self):
+        for url in ["file:///recordings/1_record.mp3", "http://example.com/recordings/1_record.mp3",
+                    "https://example.com/other.mp3", "https://user:password@example.com/recordings/1_record.mp3"]:
+            with self.subTest(url=url), self.assertRaisesRegex(ValueError, "HTTPS"):
+                recording({**self.track, "audioUrl": url}, self.cache)
+        self.assertEqual(list(self.cache.iterdir()), [])
+
     def test_end_to_end_packs_native_books_and_only_approved_exact_timings(self):
         words = [{"type": "qri", "value": "אור"}]
         text_sha = hashlib.sha256("1:1:אור".encode()).hexdigest()
@@ -51,7 +70,7 @@ class RecitationAssetsTests(unittest.TestCase):
         database.write_text(json.dumps([{"perekFrom": 1, "perakim": [
             {"pesukim": [{"segments": words}]}, {"pesukim": [{"segments": words}]}]}]), encoding="utf-8")
         intermediate = self.root / "recitation.sqlite"
-        with closing(sqlite3.connect(intermediate)) as connection, connection:
+        with closing(sqlite3.connect(intermediate)) as connection:
             connection.executescript("""PRAGMA user_version=3;
                 CREATE TABLE recitation_track(perek_id,audio_url,audio_sha256,text_sha256,duration_ms,alignment_status,provenance_json);
                 CREATE TABLE recitation_word(perek_id,pasuk,segment,start_ms,end_ms);""")
@@ -59,14 +78,16 @@ class RecitationAssetsTests(unittest.TestCase):
                 connection.execute("INSERT INTO recitation_track VALUES (?,?,?,?,?,?,?)", (
                     pid, f"https://example.com/recordings/{pid}_record.mp3", self.sha, text_sha, 1000, status, "{}"))
             connection.execute("INSERT INTO recitation_word VALUES (1,1,1,123,987)")
+            connection.commit()
         native = self.root / "native.sqlite"
-        with closing(sqlite3.connect(native)) as connection, connection:
+        with closing(sqlite3.connect(native)) as connection:
             connection.executescript("""CREATE TABLE tanah_sefer(id,perek_id_from,perek_id_to);
                 INSERT INTO tanah_sefer VALUES (1,1,2);
                 CREATE TABLE tanah_pasuk_segment(id,perek_id,pasuk_id,segment_type);
                 CREATE TABLE tanah_pasuk_segment_value(id,value);
                 INSERT INTO tanah_pasuk_segment VALUES (1,1,1,'qri'),(2,2,1,'qri');
                 INSERT INTO tanah_pasuk_segment_value VALUES (1,'אור'),(2,'אור');""")
+            connection.commit()
         (self.recordings / "2_record.mp3").write_bytes(self.audio)
         source_bytes = database.read_bytes()
         catalogs = []

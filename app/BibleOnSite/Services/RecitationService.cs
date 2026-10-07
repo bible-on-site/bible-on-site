@@ -36,7 +36,10 @@ public sealed class RecitationService
 
     public async Task InitializeAsync()
     {
-        if (!_initialized) await UpdateAsync();
+        if (!_initialized)
+        {
+            await UpdateAsync();
+        }
     }
 
     public RecitationTrack? GetTrack(int perekId) => _tracks.GetValueOrDefault(perekId);
@@ -45,7 +48,9 @@ public sealed class RecitationService
     // Timings are coupled to the installed app release, just like the Perushim catalog.
     public Task RefreshIfStaleAsync() => InitializeAsync();
 
-    public async Task UpdateAsync(CancellationToken cancellationToken = default)
+    public Task UpdateAsync() => UpdateAsync(CancellationToken.None);
+
+    public async Task UpdateAsync(CancellationToken cancellationToken)
     {
         await _gate.WaitAsync(cancellationToken);
         try
@@ -64,8 +69,13 @@ public sealed class RecitationService
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    public async Task DownloadAsync(IEnumerable<int> perekIds, IProgress<double>? progress = null,
-        CancellationToken cancellationToken = default)
+    public Task DownloadAsync(IEnumerable<int> perekIds) => DownloadAsync(perekIds, null, CancellationToken.None);
+
+    public Task DownloadAsync(IEnumerable<int> perekIds, IProgress<double>? progress) =>
+        DownloadAsync(perekIds, progress, CancellationToken.None);
+
+    public async Task DownloadAsync(IEnumerable<int> perekIds, IProgress<double>? progress,
+        CancellationToken cancellationToken)
     {
         await InitializeAsync();
         await _downloadGate.WaitAsync(cancellationToken);
@@ -73,7 +83,10 @@ public sealed class RecitationService
         {
             var selected = perekIds.ToHashSet();
             var books = _books.Where(b => b.PerekIds.Any(selected.Contains)).ToList();
-            if (books.Count == 0) throw new InvalidOperationException("No recordings for the selected books.");
+            if (books.Count == 0)
+            {
+                throw new InvalidOperationException("No recordings for the selected books.");
+            }
             Directory.CreateDirectory(DirectoryPath);
             var total = books.Sum(b => b.SizeBytes);
             long completed = 0;
@@ -83,7 +96,10 @@ public sealed class RecitationService
                 var missing = new List<RecitationTrack>();
                 foreach (var track in tracks)
                 {
-                    if (!await MatchesHashAsync(AudioPath(track), track.AudioSha256, cancellationToken)) missing.Add(track);
+                    if (!await MatchesHashAsync(AudioPath(track), track.AudioSha256, cancellationToken))
+                    {
+                        missing.Add(track);
+                    }
                 }
                 if (missing.Count > 0)
                 {
@@ -109,7 +125,9 @@ public sealed class RecitationService
     {
         var directory = await _delivery.TryGetAssetPathAsync(book.PackName, cancellationToken);
         if (directory == null && await _delivery.FetchAsync(book.PackName, progress, cancellationToken))
+        {
             directory = await _delivery.TryGetAssetPathAsync(book.PackName, cancellationToken);
+        }
         var path = directory == null ? null : new[] { Path.Combine(directory, book.FileName),
             Path.Combine(directory, "assets", book.FileName) }.FirstOrDefault(File.Exists);
         var bundledCopy = Path.Combine(DirectoryPath, book.FileName + ".download");
@@ -124,11 +142,15 @@ public sealed class RecitationService
                 path = bundledCopy;
             }
             if (new FileInfo(path).Length != book.SizeBytes || !await MatchesHashAsync(path, book.Sha256, cancellationToken))
+            {
                 throw new InvalidDataException("Recording book package does not match this app release.");
+            }
             using var zip = ZipFile.OpenRead(path);
             var expected = tracks.Select(t => t.AudioSha256 + ".mp3").ToHashSet();
             if (zip.Entries.Count != expected.Count || !zip.Entries.Select(e => e.FullName).ToHashSet().SetEquals(expected))
+            {
                 throw new InvalidDataException("Unexpected or missing recordings in book package.");
+            }
             foreach (var track in missing)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -139,7 +161,9 @@ public sealed class RecitationService
                     await using var source = zip.GetEntry(track.AudioSha256 + ".mp3")!.Open();
                     await using (var file = File.Create(temporary)) await source.CopyToAsync(file, cancellationToken);
                     if (!await MatchesHashAsync(temporary, track.AudioSha256, cancellationToken))
+                    {
                         throw new InvalidDataException("Recording checksum mismatch.");
+                    }
                     cancellationToken.ThrowIfCancellationRequested();
                     File.Move(temporary, destination, true);
                 }
