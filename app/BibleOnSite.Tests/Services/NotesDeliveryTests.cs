@@ -217,4 +217,12 @@ public class NotesDeliveryTests
         analytics.SetScreen("test");
         analytics.LogSearch("משה");
     }
+
+    [Fact]
+    public void IndependentExtensionsUseTheirOwnApplePayloadNames()
+    {
+        PadDeliveryService.PayloadFileName("perushim_notes").Should().Be("sefaria-dump-5784-sivan-4.perushim_notes.sqlite");
+        PadDeliveryService.PayloadFileName("recitation_1").Should().Be("recitation_1.zip");
+        PadDeliveryService.PayloadFileName("recitation_39").Should().Be("recitation_39.zip");
+    }
 }

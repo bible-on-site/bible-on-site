@@ -16,6 +16,10 @@ public class ViewModelDefaultsTests
             PreferencesService.Initialize(new InMemoryPreferencesStorage());
             var vm = new PerekViewModel();
             var settings = new PreferencesViewModel();
+            var recitation = new RecitationPreferencesViewModel();
+            recitation.Enabled.Should().BeFalse();
+            recitation.IsDownloading.Should().BeFalse();
+            recitation.Books.Should().BeEmpty();
             vm.Source.Should().BeEmpty();
             vm.SeferTanahUsName.Should().BeEmpty();
             vm.Additional.Should().BeNull();

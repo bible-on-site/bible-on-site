@@ -1,119 +1,68 @@
-using System.Net.Http.Json;
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
 using BibleOnSite.Models;
-using SQLite;
 
 namespace BibleOnSite.Services;
 
-/// <summary>A separate, optional SQLite extension and hash-addressed offline audio store.</summary>
+/// <summary>Independent store-delivered book packs; playback uses verified, persistent local audio.</summary>
 public sealed class RecitationService
 {
-    private static readonly Lazy<RecitationService> Shared = new(() => new(FileSystem.Current, new HttpClient()));
+    private static readonly Lazy<RecitationService> Shared = new(() => new(FileSystem.Current, PadDeliveryService.Instance));
     public static RecitationService Instance => Shared.Value;
     private readonly IFileSystem _files;
-    private readonly HttpClient _http;
-    private readonly Uri _packageUrl;
+    private readonly IPadDeliveryService _delivery;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly SemaphoreSlim _downloadGate = new(1, 1);
     private Dictionary<int, RecitationTrack> _tracks = new();
+    private List<RecitationBookPack> _books = [];
     private bool _initialized;
-    private DateTime _lastRefreshAttempt;
-    // The analyzer misses null-conditional event invocation; both events are invoked below.
-#pragma warning disable S3264
+#pragma warning disable S3264 // Subscribed by platform XAML controls excluded from test compilation.
     public event EventHandler? Changed;
     public event EventHandler? PlaybackStopRequested;
 #pragma warning restore S3264
     public void RequestPlaybackStop() => PlaybackStopRequested?.Invoke(this, EventArgs.Empty);
     public bool IsInstalled => _tracks.Count > 0;
     public IReadOnlyCollection<RecitationTrack> Tracks => _tracks.Values;
+    public IReadOnlyList<RecitationBookPack> Books => _books;
     private string DirectoryPath => Path.Combine(_files.AppDataDirectory, "extensions", "recitation");
     private string AudioPath(RecitationTrack track) => Path.Combine(DirectoryPath, track.AudioSha256 + ".mp3");
 
-    public RecitationService(IFileSystem files, HttpClient http) : this(files, http, null) { }
-
-    public RecitationService(IFileSystem files, HttpClient http, Uri? packageUrl)
+    public RecitationService(IFileSystem files, IPadDeliveryService delivery)
     {
         _files = files;
-        _http = http;
-        _packageUrl = packageUrl ?? new Uri(Environment.GetEnvironmentVariable("RECITATION_PACKAGE_URL") ??
-            "https://xn--febl3a.co.il/api/recitation");
+        _delivery = delivery;
     }
 
     public async Task InitializeAsync()
     {
-        await _gate.WaitAsync();
-        try
+        if (!_initialized)
         {
-            if (_initialized)
-            {
-                return;
-            }
-
-            var path = Path.Combine(DirectoryPath, "recitation.sqlite");
-            if (File.Exists(path))
-            {
-                using var db = new SQLiteConnection(path, SQLiteOpenFlags.ReadOnly);
-                var package = new RecitationPackage(1, db.Table<TrackRow>().ToList()
-                    .Select(r => JsonSerializer.Deserialize(r.Payload, RecitationJsonContext.Default.RecitationTrack)!).ToList());
-                package.Validate();
-                _tracks = package.Tracks.ToDictionary(t => t.PerekId);
-            }
-            _initialized = true;
+            await UpdateAsync();
         }
-        finally { _gate.Release(); }
     }
 
     public RecitationTrack? GetTrack(int perekId) => _tracks.GetValueOrDefault(perekId);
     public bool HasAudio(int perekId) => GetTrack(perekId) is { } track && File.Exists(AudioPath(track));
 
-    public async Task RefreshIfStaleAsync()
-    {
-        var path = Path.Combine(DirectoryPath, "recitation.sqlite");
-        if (!IsInstalled || DateTime.UtcNow - _lastRefreshAttempt < TimeSpan.FromHours(1) ||
-            DateTime.UtcNow - File.GetLastWriteTimeUtc(path) < TimeSpan.FromDays(1))
-        {
-            return;
-        }
+    // Timings are coupled to the installed app release, just like the Perushim catalog.
+    public Task RefreshIfStaleAsync() => InitializeAsync();
 
-        _lastRefreshAttempt = DateTime.UtcNow;
-        try { await UpdateAsync(); }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Offline recitation extension retained: {ex.Message}"); }
-    }
-
-    /// <summary>Refresh timing metadata atomically; already downloaded recordings are reused.</summary>
     public Task UpdateAsync() => UpdateAsync(CancellationToken.None);
 
     public async Task UpdateAsync(CancellationToken cancellationToken)
     {
-        var package = await _http.GetFromJsonAsync(_packageUrl, RecitationJsonContext.Default.RecitationPackage, cancellationToken)
-            ?? throw new InvalidDataException("Missing recitation extension.");
-        package.Validate();
         await _gate.WaitAsync(cancellationToken);
         try
         {
-            Directory.CreateDirectory(DirectoryPath);
-            var destination = Path.Combine(DirectoryPath, "recitation.sqlite");
-            var temporary = destination + ".download";
-            try
-            {
-                File.Delete(temporary);
-                using (var db = new SQLiteConnection(temporary))
-                {
-                    db.CreateTable<TrackRow>();
-                    db.RunInTransaction(() =>
-                    {
-                        foreach (var track in package.Tracks)
-                        {
-                            db.Insert(new TrackRow { PerekId = track.PerekId, Payload = JsonSerializer.Serialize(track, RecitationJsonContext.Default.RecitationTrack) });
-                        }
-                    });
-                }
-                cancellationToken.ThrowIfCancellationRequested();
-                File.Move(temporary, destination, true);
-            }
-            finally { File.Delete(temporary); }
-            _tracks = package.Tracks.ToDictionary(t => t.PerekId);
+            await using var stream = await _files.OpenAppPackageFileAsync(RecitationExtensionCatalog.FileName);
+            var catalog = await JsonSerializer.DeserializeAsync(stream,
+                RecitationJsonContext.Default.RecitationExtensionCatalog, cancellationToken)
+                ?? throw new InvalidDataException("Missing recitation extension catalog.");
+            catalog.Validate();
+            cancellationToken.ThrowIfCancellationRequested();
+            _tracks = catalog.Package.Tracks.ToDictionary(t => t.PerekId);
+            _books = catalog.Books;
             _initialized = true;
         }
         finally { _gate.Release(); }
@@ -122,57 +71,46 @@ public sealed class RecitationService
 
     public Task DownloadAsync(IEnumerable<int> perekIds) => DownloadAsync(perekIds, null, CancellationToken.None);
 
+    public Task DownloadAsync(IEnumerable<int> perekIds, IProgress<double>? progress) =>
+        DownloadAsync(perekIds, progress, CancellationToken.None);
+
     public async Task DownloadAsync(IEnumerable<int> perekIds, IProgress<double>? progress,
         CancellationToken cancellationToken)
     {
+        await InitializeAsync();
         await _downloadGate.WaitAsync(cancellationToken);
         try
         {
-            var tracks = perekIds.Distinct().Select(GetTrack).OfType<RecitationTrack>().ToList();
-            if (tracks.Count == 0)
+            var selected = perekIds.ToHashSet();
+            var books = _books.Where(b => b.PerekIds.Any(selected.Contains)).ToList();
+            if (books.Count == 0)
             {
-                throw new InvalidOperationException("No recordings in the selected books.");
+                throw new InvalidOperationException("No recordings for the selected books.");
             }
-
             Directory.CreateDirectory(DirectoryPath);
-            for (var index = 0; index < tracks.Count; index++)
+            var total = books.Sum(b => b.SizeBytes);
+            long completed = 0;
+            foreach (var book in books)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                var track = tracks[index];
-                var destination = AudioPath(track);
-                if (!await MatchesHashAsync(destination, track.AudioSha256, cancellationToken))
+                var tracks = book.PerekIds.Select(id => _tracks[id]).DistinctBy(t => t.AudioSha256).ToList();
+                var missing = new List<RecitationTrack>();
+                foreach (var track in tracks)
                 {
-                    var temporary = destination + ".download";
-                    try
+                    if (!await MatchesHashAsync(AudioPath(track), track.AudioSha256, cancellationToken))
                     {
-                        using var response = await _http.GetAsync(track.AudioUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-                        response.EnsureSuccessStatusCode();
-                        await using (var input = await response.Content.ReadAsStreamAsync(cancellationToken))
-                        await using (var output = File.Create(temporary))
-                        {
-                            var buffer = new byte[65536];
-                            long total = 0;
-                            int read;
-                            while ((read = await input.ReadAsync(buffer, cancellationToken)) > 0)
-                            {
-                                await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
-                                total += read;
-                                if (response.Content.Headers.ContentLength is > 0)
-                                {
-                                    progress?.Report((index + (double)total / response.Content.Headers.ContentLength.Value) / tracks.Count);
-                                }
-                            }
-                        }
-                        if (!await MatchesHashAsync(temporary, track.AudioSha256, cancellationToken))
-                        {
-                            throw new InvalidDataException("Recording checksum mismatch.");
-                        }
-
-                        File.Move(temporary, destination, true);
+                        missing.Add(track);
                     }
-                    finally { File.Delete(temporary); }
                 }
-                progress?.Report((index + 1.0) / tracks.Count);
+                if (missing.Count > 0)
+                {
+                    var prior = completed;
+                    // A synchronous adapter prevents late progress callbacks from earlier packs.
+                    var downloadProgress = new InlineProgress(value => progress?.Report(
+                        (prior + Math.Clamp(value, 0, 1) * book.SizeBytes * 0.9) / total));
+                    await InstallBookAsync(book, tracks, missing, downloadProgress, cancellationToken);
+                }
+                completed += book.SizeBytes;
+                progress?.Report((double)completed / total);
             }
         }
         finally
@@ -180,6 +118,64 @@ public sealed class RecitationService
             _downloadGate.Release();
             Changed?.Invoke(this, EventArgs.Empty);
         }
+    }
+
+    private async Task InstallBookAsync(RecitationBookPack book, List<RecitationTrack> tracks,
+        List<RecitationTrack> missing, IProgress<double> progress, CancellationToken cancellationToken)
+    {
+        var directory = await _delivery.TryGetAssetPathAsync(book.PackName, cancellationToken);
+        if (directory == null && await _delivery.FetchAsync(book.PackName, progress, cancellationToken))
+        {
+            directory = await _delivery.TryGetAssetPathAsync(book.PackName, cancellationToken);
+        }
+        var path = directory == null ? null : new[] { Path.Combine(directory, book.FileName),
+            Path.Combine(directory, "assets", book.FileName) }.FirstOrDefault(File.Exists);
+        var bundledCopy = Path.Combine(DirectoryPath, book.FileName + ".download");
+        try
+        {
+            if (path == null)
+            {
+                // Windows and sideloaded Debug builds use the same payload as a package asset.
+                // Store mobile builds never bundle this fallback and never contact S3.
+                await using var bundled = await _files.OpenAppPackageFileAsync(book.FileName);
+                await using (var file = File.Create(bundledCopy)) await bundled.CopyToAsync(file, cancellationToken);
+                path = bundledCopy;
+            }
+            if (new FileInfo(path).Length != book.SizeBytes || !await MatchesHashAsync(path, book.Sha256, cancellationToken))
+            {
+                throw new InvalidDataException("Recording book package does not match this app release.");
+            }
+            using var zip = ZipFile.OpenRead(path);
+            var expected = tracks.Select(t => t.AudioSha256 + ".mp3").ToHashSet();
+            if (zip.Entries.Count != expected.Count || !zip.Entries.Select(e => e.FullName).ToHashSet().SetEquals(expected))
+            {
+                throw new InvalidDataException("Unexpected or missing recordings in book package.");
+            }
+            foreach (var track in missing)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var destination = AudioPath(track);
+                var temporary = destination + ".download";
+                try
+                {
+                    await using var source = zip.GetEntry(track.AudioSha256 + ".mp3")!.Open();
+                    await using (var file = File.Create(temporary)) await source.CopyToAsync(file, cancellationToken);
+                    if (!await MatchesHashAsync(temporary, track.AudioSha256, cancellationToken))
+                    {
+                        throw new InvalidDataException("Recording checksum mismatch.");
+                    }
+                    cancellationToken.ThrowIfCancellationRequested();
+                    File.Move(temporary, destination, true);
+                }
+                finally { File.Delete(temporary); }
+            }
+        }
+        finally { File.Delete(bundledCopy); }
+    }
+
+    private sealed class InlineProgress(Action<double> report) : IProgress<double>
+    {
+        public void Report(double value) => report(value);
     }
 
     public Task<string> PrepareAudioAsync(int perekId, IReadOnlyList<Pasuk> pasukim) =>
@@ -277,10 +273,4 @@ public sealed class RecitationService
         return Convert.ToHexStringLower(await SHA256.HashDataAsync(file, cancellationToken)) == expected;
     }
 
-    [Table("recitation_track")]
-    private sealed class TrackRow
-    {
-        [PrimaryKey] public int PerekId { get; set; }
-        public string Payload { get; set; } = "";
-    }
 }

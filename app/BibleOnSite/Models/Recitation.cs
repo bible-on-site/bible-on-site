@@ -89,10 +89,44 @@ public sealed record RecitationPackage(int Version, List<RecitationTrack> Tracks
 
 public sealed record RecitationClipRange(double Start, double End);
 
+// The small catalog ships with the app. Audio travels exclusively in store-delivered book packs.
+public sealed record RecitationBookPack(int SeferId, string Sha256, long SizeBytes, List<int> PerekIds)
+{
+    public string PackName => $"recitation_{SeferId}";
+    public string FileName => PackName + ".zip";
+}
+
+public sealed record RecitationExtensionCatalog(int Version, RecitationPackage Package, List<RecitationBookPack> Books)
+{
+    public static string FileName => "recitation-catalog.json";
+
+    public void Validate()
+    {
+        if (Version != 1 || Package == null || Books is not { Count: > 0 })
+        {
+            throw new InvalidDataException("Missing recitation book packages.");
+        }
+        Package.Validate();
+        if (Books.Any(b => b == null || b.PerekIds is not { Count: > 0 } || b.SeferId is < 1 or > 39 ||
+                b.SizeBytes is <= 0 or > 512_000_000 || b.Sha256 is not { Length: 64 } ||
+                b.Sha256.Any(c => !"0123456789abcdef".Contains(c))))
+        {
+            throw new InvalidDataException("Invalid recitation book packages.");
+        }
+        var ids = Books.SelectMany(b => b.PerekIds).ToList();
+        if (Books.Select(b => b.SeferId).Distinct().Count() != Books.Count ||
+            ids.Count != ids.Distinct().Count() || !ids.Order().SequenceEqual(Package.Tracks.Select(t => t.PerekId).Order()))
+        {
+            throw new InvalidDataException("Invalid recitation book packages.");
+        }
+    }
+}
+
 // Native release builds trim reflection metadata. Keep the extension wire format explicit.
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(RecitationPackage))]
 [JsonSerializable(typeof(RecitationTrack))]
+[JsonSerializable(typeof(RecitationExtensionCatalog))]
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(List<RecitationClipRange>), TypeInfoPropertyName = "ClipRanges")]
 #pragma warning disable S2333 // System.Text.Json source generation supplies this partial implementation.
