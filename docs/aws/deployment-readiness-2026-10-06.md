@@ -50,7 +50,7 @@ chapter probes succeeded. Both experiments returned the same complete
 884,490-byte recitation body with SHA-256
 `4279d6bb8ae2e670daa886f1a7957e22550656afd0290ba003e6827445065af4`.
 
-The repair uses the existing readiness endpoint in both the website
+The initial repair used the existing readiness endpoint in both the website
 Dockerfile and the documented ECS task definition. A small production launcher
 retains the old Next listener for 90 seconds after SIGTERM, then forwards that
 signal to Next for its normal shutdown. Duplicate SIGTERM does not extend the
@@ -87,22 +87,60 @@ and [Fargate stop-timeout rules](https://docs.aws.amazon.com/AmazonECS/latest/AP
 The CloudFormation templates are reference documentation and have never been
 deployed. Do not deploy the entire template to apply this change. After the
 source passes normal CI and merge, clone the service's **current** task
-definition and change its website health-check URL to
-`http://localhost:3000/api/health/ready` and its `stopTimeout` to 120.
+definition and change its website health-check command to the three-route
+command in `cloudformation/ecs-services.yaml` and its `stopTimeout` to 120.
 Keep all other fields and secret
 references intact. Recheck that no rollout or other task-definition update
 has started before updating the service to the new revision.
 
 The stop timeout applies to newly started tasks. An already-running image with
 the old launcher cannot acquire the new listener drain retroactively. For the
-first transition, temporarily protect that old task from deployment termination.
-After the replacement passes readiness and complete response checks, save the
-old Cloud Map instance attributes and deregister that old instance. Keep its
-protected listener alive until discovery removal and the 90-second DNS drain
-complete; then remove protection promptly. Restore the saved discovery instance
-if the replacement fails before handover. Use a bounded protection expiry and
-verify cleanup; do not leave protection enabled for later deployments. See the
+first transition, temporarily protect that old task from deployment termination
+and pin only the router's website backend to that verified, warmed task. Save
+the original router configuration and its hash first; validate each change
+using the full installed Nginx configuration, then reload. After the replacement
+passes readiness, complete extension and chapter-response checks, point the
+temporary website pin at the replacement and verify public responses. Remove
+old-task protection and let ECS retire the old task and remove its discovery
+entry. After the old task is stopped and DNS selects only the replacement for
+the full cache propagation window, restore the original router configuration
+byte for byte, validate and reload, and verify its hash and public responses.
+Before releasing protection, a failed replacement can be reverted to the
+verified old pin. Use a bounded protection expiry and verify cleanup; do not
+leave protection or a pinned address enabled for later deployments. See the
 [ECS task-protection rules](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-scale-in-protection.html).
+
+Do not manually deregister an ECS-managed Cloud Map instance as a drain
+mechanism. In the first live attempt, ECS stopped protected task
+`960ec154526a4d719912e7e0c9e92ef3` at 2026-10-07 00:10:02 UTC with the
+reason `Missing instance for task in (service-registry ...)`. Protection did
+not retain that listener once its discovery registration was removed.
+
+The initial single-route gate also proved insufficient with the published
+Next 16.4.0 image, website 0.2.473. Replacement
+`b302d14f23984f119759c8b7c533f731` passed readiness and a complete recitation
+extension response before public health and chapter probes stalled at
+00:10:13-00:10:54 UTC. Connections to the replacement completed in
+0.000-0.003 seconds while no headers arrived. The revised health command
+requests `/api/health/ready`, `/api/recitation`, and `/api/recitation/2`
+sequentially so each actual route bundle must respond before discovery accepts
+the replacement. Each request has a three-second bound; all three fit within
+the existing ten-second health-check timeout. A cold request can fail while
+initialization continues, and a later check must successfully complete every
+route before accepting the task. Health timing and service capacity are unchanged.
+
+The exact published 0.2.473 image passed this revised gate locally at
+0.25 CPU / 2048 MB. Once healthy, the complete extension response took
+1.604 seconds, the chapter response 0.076 seconds, and a concurrent health
+response 0.035 seconds; the complete response hashes matched production.
+Each route was also made to return 503 independently in a real-container
+fixture: every failed route rejected the health check, while three successful
+routes accepted it. The isolated single-readiness experiment did not reproduce
+the later live stall, so its precise cause remains unproven. The additional
+route checks strengthen the acceptance contract; they do not establish that
+every possible startup stall has been eliminated. They add the complete
+extension request to each health interval, so observe CPU and health under
+normal traffic as part of live validation.
 
 Observe a complete rollout using the router probe log, public health,
 readiness, and recitation requests, ECS task health, and Cloud Map health.
