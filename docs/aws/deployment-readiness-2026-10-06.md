@@ -170,6 +170,14 @@ fixture replacement. A direct production-loader comparison matched the entire
 startup, and a clean ordinary live rollout must still be verified; the precise
 cause of the later stalls remains unproven.
 
+The production-build verifier compares the standalone canonical file's byte
+length and SHA-256 with the build's source file before starting the server.
+It records the largest server JavaScript file and rejects a chunk at least as
+large as the canonical source, preventing the previous embedded payload from
+returning unnoticed. The existing approved-chapter and recording checks then
+exercise the actual standalone server. This qualification runs for source,
+merge-queue and master builds.
+
 Observe a complete rollout using the router probe log, public health,
 readiness, and recitation requests, ECS task health, and Cloud Map health.
 Verify the running image against its release provenance and compare complete
