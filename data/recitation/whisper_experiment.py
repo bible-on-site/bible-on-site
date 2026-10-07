@@ -92,15 +92,12 @@ def install_hooks(model, compact, resident, selected, handles):
 
 @contextmanager
 def experimental_memory(model, profile):
-    """
-    Keep all attention math; change only retained diagnostics and cache location.
-
-    Selected heads retain the exact FP32 values read by upstream word DTW.
-    Unused layers keep a shape-only zero view. DTW still runs upstream, with its
-    head indices remapped to compact copies in the same original order.
-    Resident self keeps only self KV on GPU; cross KV stays offloaded.
-    No automatic OOM retry, search/precision change, or publication is permitted.
-    """
+    """Keep all attention math; change only retained diagnostics and cache location."""
+    # Selected heads retain the exact FP32 values read by upstream word DTW.
+    # Unused layers keep a shape-only zero view. DTW still runs upstream, with its
+    # head indices remapped to compact copies in the same original order.
+    # Resident self keeps only self KV on GPU; cross KV stays offloaded.
+    # No automatic OOM retry, search/precision change, or publication is permitted.
     if profile not in PROFILES:
         raise ValueError(f"Unknown experimental profile: {profile}")
     if profile == "baseline":

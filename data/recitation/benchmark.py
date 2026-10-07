@@ -1,9 +1,7 @@
-"""
-Isolated, resumable GPU A/B runs against an immutable accepted timing snapshot.
+"""Isolated, resumable GPU A/B runs against an immutable accepted timing snapshot."""
 
-No production database, canonical JSON, or worker cache is written by this tool.
-The original worker remains the default. A passing smoke test is not promotion.
-"""
+# No production database, canonical JSON, or worker cache is written by this tool.
+# The original worker remains the default. A passing smoke test is not promotion.
 
 import argparse
 from contextlib import closing, contextmanager
