@@ -17,6 +17,8 @@ public class RecitationTests
     [InlineData("overlap")] [InlineData("missingTime")] [InlineData("nonfinite")]
     [InlineData("pastEnd")] [InlineData("duplicate")] [InlineData("changedText")]
     [InlineData("pendingWithWords")] [InlineData("zeroIdentity")] [InlineData("relativeUrl")]
+    [InlineData("scheme")] [InlineData("query")] [InlineData("fragment")] [InlineData("wrongChapter")]
+    [InlineData("textHash")] [InlineData("words")] [InlineData("zeroDuration")]
     public void InvalidCatalogCannotExposePartialOrAlteredWordTimings(string fault)
     {
         var track = Valid();
@@ -26,8 +28,15 @@ public class RecitationTests
             "zeroIdentity" => track with { PerekId = 0 },
             "relativeUrl" => track with { AudioUrl = "recordings/1_record.mp3" },
             "url" => track with { AudioUrl = "https://user@example.com/recordings/1_record.mp3" },
+            "scheme" => track with { AudioUrl = "ftp://example.com/recordings/1_record.mp3" },
+            "query" => track with { AudioUrl = "https://example.com/recordings/1_record.mp3?other=1" },
+            "fragment" => track with { AudioUrl = "https://example.com/recordings/1_record.mp3#other" },
+            "wrongChapter" => track with { AudioUrl = "https://example.com/recordings/2_record.mp3" },
             "sourceHash" => track with { AudioSha256 = "incorrect" },
+            "textHash" => track with { TextSha256 = "incorrect" },
+            "words" => track with { Words = null! },
             "duration" => track with { DurationMs = double.NaN },
+            "zeroDuration" => track with { DurationMs = 0 },
             "status" => track with { AlignmentStatus = "guessed" },
             "empty" => track with { Words = [] },
             "overlap" => track with { Words = [track.Words[0], track.Words[1] with { StartMs = 799 }] },
@@ -72,5 +81,40 @@ public class RecitationTests
         var json = JsonSerializer.Serialize(ranges, RecitationJsonContext.Default.ClipRanges);
         json.Should().Be("[{\"start\":100,\"end\":800}]");
         JsonSerializer.Deserialize(json, RecitationJsonContext.Default.ClipRanges).Should().Equal(ranges);
+    }
+
+    [Theory]
+    [InlineData("version")] [InlineData("package")] [InlineData("books")] [InlineData("emptyBooks")]
+    [InlineData("nullBook")] [InlineData("chapterIds")] [InlineData("emptyChapterIds")]
+    [InlineData("lowBookId")] [InlineData("highBookId")]
+    [InlineData("emptyArchive")] [InlineData("oversizeArchive")]
+    [InlineData("nullHash")] [InlineData("shortHash")] [InlineData("invalidHash")]
+    [InlineData("duplicateBooks")] [InlineData("duplicateChapter")] [InlineData("missingChapter")]
+    public void InvalidBookCatalogCannotRedirectOrPartiallyInstallAnExtension(string fault)
+    {
+        var book = new RecitationBookPack(1, new string('a', 64), 1000, [1]);
+        var catalog = new RecitationExtensionCatalog(1, new(1, [Valid()]), [book]);
+        catalog.Validate();
+        catalog = fault switch
+        {
+            "version" => catalog with { Version = 2 },
+            "package" => catalog with { Package = null! },
+            "books" => catalog with { Books = null! },
+            "emptyBooks" => catalog with { Books = [] },
+            "nullBook" => catalog with { Books = [null!] },
+            "chapterIds" => catalog with { Books = [book with { PerekIds = null! }] },
+            "emptyChapterIds" => catalog with { Books = [book with { PerekIds = [] }] },
+            "lowBookId" => catalog with { Books = [book with { SeferId = 0 }] },
+            "highBookId" => catalog with { Books = [book with { SeferId = 40 }] },
+            "emptyArchive" => catalog with { Books = [book with { SizeBytes = 0 }] },
+            "oversizeArchive" => catalog with { Books = [book with { SizeBytes = 512_000_001 }] },
+            "nullHash" => catalog with { Books = [book with { Sha256 = null! }] },
+            "shortHash" => catalog with { Books = [book with { Sha256 = "short" }] },
+            "invalidHash" => catalog with { Books = [book with { Sha256 = new string('z', 64) }] },
+            "duplicateBooks" => catalog with { Books = [book, book] },
+            "duplicateChapter" => catalog with { Books = [book with { PerekIds = [1, 1] }] },
+            _ => catalog with { Books = [book with { PerekIds = [2] }] }
+        };
+        catalog.Invoking(c => c.Validate()).Should().Throw<InvalidDataException>();
     }
 }

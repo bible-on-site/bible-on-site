@@ -106,7 +106,8 @@ public class RecitationServiceTests
     }
 
     [Theory]
-    [InlineData("archive")] [InlineData("audio")] [InlineData("inventory")]
+    [InlineData("archive")] [InlineData("archiveHash")] [InlineData("audio")]
+    [InlineData("inventory")] [InlineData("wrongInventory")]
     public async Task CorruptOrWrongReleasePackIsRejected_AndExistingAudioSurvives(string fault)
     {
         await using var storage = new TestStorage();
@@ -121,9 +122,18 @@ public class RecitationServiceTests
         {
             await File.AppendAllTextAsync(path, "damage");
         }
-        if (fault == "inventory")
+        if (fault == "archiveHash")
         {
-            using (var archive = ZipFile.Open(path, ZipArchiveMode.Update)) archive.CreateEntry("../escape.mp3");
+            var bytes = await File.ReadAllBytesAsync(path); bytes[0] ^= 1;
+            await File.WriteAllBytesAsync(path, bytes);
+        }
+        if (fault is "inventory" or "wrongInventory")
+        {
+            using (var archive = ZipFile.Open(path, ZipArchiveMode.Update))
+            {
+                if (fault == "wrongInventory") archive.Entries[0].Delete();
+                archive.CreateEntry("../escape.mp3");
+            }
             var bytes = await File.ReadAllBytesAsync(path);
             extension.Catalog = extension.Catalog with { Books = [pack with { Sha256 = Hash(bytes), SizeBytes = bytes.Length }] };
             extension.SaveCatalog();
@@ -132,6 +142,41 @@ public class RecitationServiceTests
         await service.Invoking(s => s.DownloadAsync([1])).Should().ThrowAsync<InvalidDataException>();
         service.HasAudio(1).Should().BeFalse(); (await File.ReadAllBytesAsync(originalPath)).Should().Equal("audio"u8.ToArray());
         Directory.EnumerateFiles(storage.Root, "*.download", SearchOption.AllDirectories).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CachedBookRepairsCorruptLocalAudio_AndDoesNotFetchDuplicateRecordings()
+    {
+        await using var storage = new TestStorage();
+        var audio = "original MP3"u8.ToArray();
+        var extension = new Extension(storage) { Package = new(1, [Track(1, audio), Track(2, audio)]) };
+        extension.Audio["/recordings/1_record.mp3"] = audio;
+        extension.BookIds[1] = 1; extension.BookIds[2] = 1; extension.Bundle();
+        var pack = extension.Catalog!.Books[0];
+        var directory = Path.Join(storage.Root, "store", pack.PackName);
+        Directory.CreateDirectory(Path.Join(directory, "assets"));
+        File.Move(Path.Join(directory, pack.FileName), Path.Join(directory, "assets", pack.FileName));
+        extension.Delivery.Setup(d => d.TryGetAssetPathAsync(pack.PackName, It.IsAny<CancellationToken>())).ReturnsAsync(directory);
+        var service = extension.Service; var changes = 0;
+        service.Changed += (_, _) => changes++;
+        service.RequestPlaybackStop();
+        await service.InitializeAsync(); service.Tracks.Should().BeEquivalentTo(extension.Package.Tracks);
+        var progress = new List<double>();
+        await service.DownloadAsync([1], new ImmediateProgress(progress.Add));
+        service.HasAudio(1).Should().BeTrue(); service.HasAudio(2).Should().BeTrue();
+        var path = await service.PrepareAudioAsync(1, Canonical());
+        await File.WriteAllBytesAsync(path, "damaged"u8.ToArray());
+        await service.Invoking(s => s.PrepareAudioAsync(1, Canonical())).Should().ThrowAsync<InvalidDataException>();
+        await service.DownloadAsync([2]);
+        (await File.ReadAllBytesAsync(path)).Should().Equal(audio);
+        Directory.EnumerateFiles(Path.Join(storage.Root, "extensions", "recitation"), "*.mp3").Should().ContainSingle();
+        extension.Delivery.Verify(d => d.FetchAsync(It.IsAny<string>(), It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()), Times.Never);
+        progress.Should().Equal(1); changes.Should().Be(3);
+    }
+
+    private sealed class ImmediateProgress(Action<double> report) : IProgress<double>
+    {
+        public void Report(double value) => report(value);
     }
 
     [Fact]
@@ -188,6 +233,81 @@ public class RecitationServiceTests
         extension.Bundle(); await model.DownloadSelectedAsync();
         service.HasAudio(2).Should().BeTrue(); model.Enabled.Should().BeTrue(); model.Books[0].Status.Should().Contain("1 מתוך 1");
         Directory.EnumerateFiles(storage.Root, "*.download", SearchOption.AllDirectories).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task PreferencesShowUnavailableBooks_AndRetryAFailedExtensionInstall()
+    {
+        await using var storage = new TestStorage();
+        var db = await storage.CreateDatabaseAsync("sefaria-dump-5784-sivan-4.tanah_view.sqlite", PerekDataServiceTests.Schema);
+        await db.ExecuteAsync("INSERT INTO tanah_sefer VALUES (1,'בראשית','Genesis',1,1),(2,'שמות','Exodus',2,2)");
+        await db.ExecuteAsync("INSERT INTO tanah_perek VALUES (1,1,NULL),(2,1,NULL)");
+        var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray())]) };
+        var model = new RecitationPreferencesViewModel(extension.Service,
+            PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()),
+            new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)));
+        await model.LoadAsync(); model.Status.Should().Contain("לא ניתן לטעון");
+        extension.Bundle(store: false);
+        await model.LoadAsync(); await model.LoadAsync(); model.Books.Should().HaveCount(2);
+        model.Books[1].Status.Should().Be("אין הקלטות זמינות");
+        model.Books[0].IsSelected = true;
+        var filename = extension.Catalog!.Books[0].FileName;
+        var bytes = storage.PackageFiles[filename]; storage.PackageFiles.Remove(filename);
+        await model.DownloadSelectedAsync(); model.Status.Should().Contain("לא ניתן להשלים");
+        model.IsIdle.Should().BeTrue(); model.Enabled.Should().BeFalse();
+        storage.PackageFiles[filename] = bytes;
+        await model.DownloadSelectedAsync(); model.Enabled.Should().BeTrue();
+        model.Books[0].Status.Should().Contain("1 מתוך 1").And.Contain("MB");
+        model.Enabled = false; model.Enabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task MissingCatalogKeepsBookChoices_AndCannotEnableRecitation()
+    {
+        await using var storage = new TestStorage(); var extension = new Extension(storage);
+        var model = new RecitationPreferencesViewModel(extension.Service,
+            PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()),
+            new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)));
+        model.Books.Add(new RecitationBookChoice { Name = "בראשית", PerekIds = [1], IsSelected = true });
+        model.Enabled = true; model.Enabled.Should().BeFalse();
+        await model.DownloadSelectedAsync(); model.Status.Should().Contain("לא ניתן להשלים");
+        model.Books.Should().ContainSingle(); model.Books[0].IsSelected.Should().BeTrue();
+        model.Books[0].Status.Should().Be("זמינות תיבדק בעת ההורדה");
+        model.CancelDownloadCommand.Execute(null); model.IsIdle.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ActivePreferencesDownloadShowsProgress_AndCompletedStatusIgnoresLateProgress()
+    {
+        await using var storage = new TestStorage();
+        var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray())]) };
+        extension.Bundle(); var service = extension.Service; await service.InitializeAsync();
+        var model = new RecitationPreferencesViewModel(service,
+            PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()),
+            new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)));
+        model.Books.Add(new RecitationBookChoice { Name = "בראשית", PerekIds = [1], IsSelected = true });
+        var observed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        model.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(model.Progress) && model.Progress > 0) observed.TrySetResult(); };
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        IProgress<double>? deliveredProgress = null;
+        extension.Delivery.Setup(d => d.FetchAsync("recitation_1", It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()))
+            .Returns(async (string _, IProgress<double>? progress, CancellationToken _) =>
+            {
+                deliveredProgress = progress; progress!.Report(0.5); await release.Task; return true;
+            });
+        // Emulate the provider making a complete archive available only after download.
+        var directory = Path.Join(storage.Root, "store", "recitation_1");
+        extension.Delivery.Setup(d => d.TryGetAssetPathAsync("recitation_1", It.IsAny<CancellationToken>()))
+            .Returns(() => Task.FromResult(release.Task.IsCompleted ? directory : null));
+        var downloading = model.DownloadSelectedAsync();
+        await observed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        model.IsDownloading.Should().BeTrue(); model.Progress.Should().BeApproximately(0.45, 1e-10);
+        release.SetResult(); await downloading;
+        var completed = model.Status;
+        deliveredProgress!.Report(0.25);
+        await Task.Delay(50);
+        model.CancelDownloadCommand.Execute(null);
+        model.Status.Should().Be(completed); model.IsIdle.Should().BeTrue();
     }
     [Fact]
     public async Task Preferences_NarrationControlsPersistIndependentlyAndNotifyTheirLabels()
@@ -287,6 +407,8 @@ public class RecitationServiceTests
         await service.Invoking(s => s.PrepareAudioAsync(1, Canonical(), null, 800, CancellationToken.None, null, null))
             .Should().ThrowAsync<InvalidDataException>();
         await service.Invoking(s => s.PrepareAudioAsync(1, Canonical(), 100, 800)).Should().ThrowAsync<InvalidOperationException>();
+        await service.Invoking(s => s.PrepareAudioAsync(1, Canonical(), [], new Mock<IRecitationAudioDecoder>().Object))
+            .Should().ThrowAsync<InvalidDataException>();
     }
 
 }
