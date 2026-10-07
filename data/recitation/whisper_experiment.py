@@ -10,26 +10,7 @@ from whisper_memory import (
 PROFILES = ("baseline", "selected-heads", "resident-self", "selected-heads-resident-self")
 
 
-@contextmanager
-def experimental_memory(model, profile):
-    """Keep all attention math; change only retained diagnostics and cache location.
-
-    Selected heads retain the exact FP32 values read by upstream word DTW.
-    Unused layers keep a shape-only zero view. DTW still runs upstream, with its
-    head indices remapped to the compact copies in the same original order.
-    Resident self keeps only the self KV cache on GPU; cross KV stays offloaded.
-    No automatic OOM retry, search/precision change, or publication is permitted.
-    """
-    if profile not in PROFILES:
-        raise ValueError(f"Unknown experimental profile: {profile}")
-    if profile == "baseline":
-        with bounded_whisper_memory(model):
-            yield
-        return
-    import torch
-
-    compact = profile.startswith("selected-heads")
-    resident = profile.endswith("resident-self")
+def alignment_selection(model):
     heads = [tuple(pair) for pair in model.generation_config.alignment_heads]
     if not heads:
         raise ValueError("Pinned alignment heads are required")
@@ -41,9 +22,11 @@ def experimental_memory(model, profile):
         if head not in selected.setdefault(layer, []):
             selected[layer].append(head)
     remapped = [[layer, selected[layer].index(head)] for layer, head in heads]
-    handles = []
-    original = model._extract_token_timestamps
-    had_override = "_extract_token_timestamps" in model.__dict__
+    return heads, selected, remapped
+
+
+def selected_attention_hook(selected):
+    import torch
 
     def save_selected(module, args, output):
         hidden, weights = output
@@ -54,11 +37,17 @@ def experimental_memory(model, profile):
             index = torch.tensor(indices, device=weights.device)
             saved = weights.detach().index_select(1, index).cpu()
         else:
-            # No unused head can enter DTW. Preserve the layer/time dimensions
-            # required by upstream concatenation without transferring its maps.
+            # Unused heads never enter DTW. Keep the required layer/time shape
+            # without transferring their computed diagnostic maps.
             saved = torch.zeros(1, dtype=weights.dtype).expand(
                 weights.shape[0], 1, weights.shape[2], weights.shape[3])
         return hidden, saved
+
+    return save_selected
+
+
+def unused_self_hook():
+    import torch
 
     def save_unused_self(module, args, output):
         hidden, weights = output
@@ -66,6 +55,10 @@ def experimental_memory(model, profile):
             return hidden, None
         return hidden, torch.zeros(1, dtype=weights.dtype).expand(weights.shape)
 
+    return save_unused_self
+
+
+def timestamp_hook(original, heads, remapped, compact):
     def cpu_timestamps(outputs, alignment_heads, *args, **kwargs):
         if [tuple(pair) for pair in alignment_heads] != heads:
             raise ValueError("Alignment heads changed during the experiment")
@@ -78,17 +71,51 @@ def experimental_memory(model, profile):
         result = original(type(outputs)(**fields), remapped if compact else alignment_heads, *args, **kwargs)
         return result.to(outputs.sequences.device)
 
+    return cpu_timestamps
+
+
+def install_hooks(model, compact, resident, selected, handles):
+    save_selected = selected_attention_hook(selected)
+    save_unused_self = unused_self_hook()
+    handles.append(model.model.encoder.register_forward_pre_hook(_skip_unused_encoder_maps, with_kwargs=True))
+    for layer in model.model.decoder.layers:
+        for attention in (layer.self_attn, layer.encoder_attn):
+            is_cross = attention is layer.encoder_attn
+            if is_cross or not resident:
+                handles.append(attention.register_forward_pre_hook(_onload_cache, with_kwargs=True))
+                handles.append(attention.register_forward_hook(_offload_cache, with_kwargs=True))
+            save = _save_attention_on_cpu
+            if compact:
+                save = save_selected if is_cross else save_unused_self
+            handles.append(attention.register_forward_hook(save, prepend=True))
+
+
+@contextmanager
+def experimental_memory(model, profile):
+    """
+    Keep all attention math; change only retained diagnostics and cache location.
+
+    Selected heads retain the exact FP32 values read by upstream word DTW.
+    Unused layers keep a shape-only zero view. DTW still runs upstream, with its
+    head indices remapped to compact copies in the same original order.
+    Resident self keeps only self KV on GPU; cross KV stays offloaded.
+    No automatic OOM retry, search/precision change, or publication is permitted.
+    """
+    if profile not in PROFILES:
+        raise ValueError(f"Unknown experimental profile: {profile}")
+    if profile == "baseline":
+        with bounded_whisper_memory(model):
+            yield
+        return
+    compact = profile.startswith("selected-heads")
+    resident = profile.endswith("resident-self")
+    heads, selected, remapped = alignment_selection(model)
+    original = model._extract_token_timestamps
+    had_override = "_extract_token_timestamps" in model.__dict__
+    handles = []
     try:
-        handles.append(model.model.encoder.register_forward_pre_hook(_skip_unused_encoder_maps, with_kwargs=True))
-        for layer in model.model.decoder.layers:
-            for attention in (layer.self_attn, layer.encoder_attn):
-                is_cross = attention is layer.encoder_attn
-                if is_cross or not resident:
-                    handles.append(attention.register_forward_pre_hook(_onload_cache, with_kwargs=True))
-                    handles.append(attention.register_forward_hook(_offload_cache, with_kwargs=True))
-                save = (save_selected if is_cross else save_unused_self) if compact else _save_attention_on_cpu
-                handles.append(attention.register_forward_hook(save, prepend=True))
-        model._extract_token_timestamps = cpu_timestamps
+        install_hooks(model, compact, resident, selected, handles)
+        model._extract_token_timestamps = timestamp_hook(original, heads, remapped, compact)
         yield
     finally:
         if had_override:

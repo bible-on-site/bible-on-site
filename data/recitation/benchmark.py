@@ -1,4 +1,5 @@
-"""Isolated, resumable GPU A/B runs against an immutable accepted timing snapshot.
+"""
+Isolated, resumable GPU A/B runs against an immutable accepted timing snapshot.
 
 No production database, canonical JSON, or worker cache is written by this tool.
 The original worker remains the default. A passing smoke test is not promotion.
@@ -51,27 +52,21 @@ def load_snapshot(path):
     return json.loads(data.decode("utf-8"))
 
 
-def git_bytes(root, *args):
-    return subprocess.check_output(["git", "-C", str(root.resolve()), *args])  # nosec B603 B607: git argv, no shell.
-
-
 def source_hashes(root):
     return {name: audio_hash(root / "data/recitation" / name) for name in BASELINE_FILES}
 
 
 def snapshot(root, recordings, output):
     """Read accepted data from the backup commit, not the working checkpoint DB."""
-    commit = git_bytes(root, "rev-parse", f"{BASELINE_TAG}^{{commit}}").decode().strip()
-    if commit != BASELINE_COMMIT:
-        raise ValueError("Backup tag no longer identifies the preserved baseline")
+    reference = load_snapshot(Path(__file__).with_name("benchmarks") / "golden-2026-10-07.json.gz")
+    if digest_json(reference) != GOLDEN_DIGEST or reference["baselineCommit"] != BASELINE_COMMIT:
+        raise ValueError("The preserved baseline reference changed")
+    commit = BASELINE_COMMIT
     hashes = source_hashes(root)
-    for name, fingerprint in hashes.items():
-        saved = git_bytes(root, "show", f"{commit}:data/recitation/{name}")
-        if hashlib.sha256(saved).hexdigest() != fingerprint:
-            raise ValueError(f"Baseline source differs from the backup: {name}")
+    if hashes != reference["sourceHashes"]:
+        raise ValueError("Baseline source differs from the preserved backup hashes")
     db_path = root / "data/recitation/recitation.sqlite"
-    saved_db = git_bytes(root, "show", f"{commit}:data/recitation/recitation.sqlite")
-    if hashlib.sha256(saved_db).hexdigest() != audio_hash(db_path):
+    if reference["databaseSha256"] != audio_hash(db_path):
         raise ValueError("Accepted database differs from the preserved backup")
     chapters = load_chapters(root / TEXT)
     cache = root / "data/recitation/.outputs"
@@ -115,6 +110,56 @@ def snapshot(root, recordings, output):
     return result
 
 
+def valid_number(value):
+    return isinstance(value, (float, int)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def valid_interval(start, end, previous_end, duration_ms):
+    integers = all(isinstance(value, int) and not isinstance(value, bool) for value in (start, end))
+    return integers and previous_end <= start < end <= duration_ms and 40 <= end-start <= 3000
+
+
+def word_comparison(expected, actual, previous_end, duration_ms):
+    identity = (expected["pasuk"], expected["segment"])
+    if not isinstance(actual, dict) or any(actual.get(k) != expected[k] for k in ("pasuk", "segment", "text")):
+        return [f"Changed word identity/text: {identity}"], [], [], previous_end
+    start, end = actual.get("startMs"), actual.get("endMs")
+    if not valid_interval(start, end, previous_end, duration_ms):
+        return [f"Invalid/missing/overlapping word interval: {identity}"], [], [], previous_end
+    errors, deltas, scores = [], [], []
+    for key in ("startMs", "endMs"):
+        delta = abs(actual[key] - expected[key])
+        deltas.append(delta)
+        if delta > TOLERANCE_MS:
+            errors.append(f"{identity} {key}: {delta} ms drift")
+    if expected.get("textScore") != actual.get("textScore"):
+        errors.append(f"Changed textScore: {identity}")
+    score, expected_score = actual.get("acousticScore"), expected.get("acousticScore")
+    if not valid_number(score) or not 0 <= score <= 1 or expected_score is None:
+        errors.append(f"Missing/invalid acousticScore: {identity}")
+    else:
+        delta = abs(score - expected_score)
+        scores.append(delta)
+        # User allows slight score variation (2026-10-07). No original gate changes.
+        if delta > ACOUSTIC_TOLERANCE + 1e-12:
+            errors.append(f"Changed acousticScore: {identity}, {delta:.6f} drift")
+    return errors, deltas, scores, end
+
+
+def asr_comparison(expected_asr, actual_asr):
+    errors = []
+    if len(expected_asr) != len(actual_asr):
+        return ["ASR word count changed"]
+    for index, (expected, actual) in enumerate(zip(expected_asr, actual_asr, strict=True)):
+        if expected.get("text") != actual.get("text"):
+            errors.append(f"ASR text changed: {index}")
+        for key in ("start", "end"):
+            value = actual.get(key)
+            if not valid_number(value) or abs(value - expected[key]) * 1000 > TOLERANCE_MS + 1e-8:
+                errors.append(f"ASR boundary changed: {index}/{key}")
+    return errors
+
+
 def compare(golden, candidate):
     """Fail on any missing/changed identity, quality gate or boundary beyond 5 ms."""
     errors, deltas, score_deltas = [], [], []
@@ -130,48 +175,11 @@ def compare(golden, candidate):
         return {"passed": False, "errors": errors + ["Canonical word count changed"], "maxDriftMs": None}
     previous_end = 0
     for expected, actual in zip(golden["words"], rows, strict=True):
-        identity = (expected["pasuk"], expected["segment"])
-        if not isinstance(actual, dict) or any(actual.get(k) != expected[k] for k in ("pasuk", "segment", "text")):
-            errors.append(f"Changed word identity/text: {identity}")
-            continue
-        start, end = actual.get("startMs"), actual.get("endMs")
-        if (type(start) is not int or type(end) is not int or not previous_end <= start < end <= golden["durationMs"]
-                or not 40 <= end - start <= 3000):
-            errors.append(f"Invalid/missing/overlapping word interval: {identity}")
-            continue
-        previous_end = end
-        for key in ("startMs", "endMs"):
-            delta = abs(actual[key] - expected[key])
-            deltas.append(delta)
-            if delta > TOLERANCE_MS:
-                errors.append(f"{identity} {key}: {delta} ms drift")
-        if expected.get("textScore") != actual.get("textScore"):
-            errors.append(f"Changed textScore: {identity}")
-        score = actual.get("acousticScore")
-        expected_score = expected.get("acousticScore")
-        if (not isinstance(score, (float, int)) or isinstance(score, bool) or not math.isfinite(score)
-                or not 0 <= score <= 1 or expected_score is None):
-            errors.append(f"Missing/invalid acousticScore: {identity}")
-        else:
-            delta = abs(score - expected_score)
-            score_deltas.append(delta)
-            # User allows slight score variation (2026-10-07). It cannot mask a
-            # worse boundary or relax any original approval threshold.
-            if delta > ACOUSTIC_TOLERANCE + 1e-12:
-                errors.append(f"Changed acousticScore: {identity}, {delta:.6f} drift")
-    expected_asr = golden.get("asr", {}).get("words", [])
-    actual_asr = candidate.get("asr", {}).get("words", [])
-    if len(expected_asr) != len(actual_asr):
-        errors.append("ASR word count changed")
-    else:
-        for index, (expected, actual) in enumerate(zip(expected_asr, actual_asr, strict=True)):
-            if expected.get("text") != actual.get("text"):
-                errors.append(f"ASR text changed: {index}")
-            for key in ("start", "end"):
-                value = actual.get(key)
-                if (not isinstance(value, (float, int)) or isinstance(value, bool) or not math.isfinite(value)
-                        or abs(value - expected[key]) * 1000 > TOLERANCE_MS + 1e-8):
-                    errors.append(f"ASR boundary changed: {index}/{key}")
+        word_errors, word_deltas, word_scores, previous_end = word_comparison(expected, actual, previous_end, golden["durationMs"])
+        errors.extend(word_errors)
+        deltas.extend(word_deltas)
+        score_deltas.extend(word_scores)
+    errors.extend(asr_comparison(golden.get("asr", {}).get("words", []), candidate.get("asr", {}).get("words", [])))
     return {"passed": not errors, "errors": errors, "maxDriftMs": max(deltas, default=None),
             "maxAcousticScoreDrift": max(score_deltas, default=None),
             "comparedWords": len(rows), "comparedBoundaries": len(deltas)}
