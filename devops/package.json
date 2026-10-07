@@ -10,12 +10,12 @@
 		"tsx": "4.23.15"
 	},
 	"scripts": {
-		"coverage:merge": "node --import tsx ./merge-coverage.mts",
+		"coverage:merge": "node --import tsx ./merge-lcov.mts --out ../.coverage/lcov.info --require ../web/bible-on-site/.coverage/merged/lcov.info --require ../web/api/.coverage/merged/lcov.info --optional ../web/admin/.coverage/merged/lcov.info --optional ../app/.coverage/merged/lcov.info --optional ../data/.coverage/merged/lcov.info --rm-input-dirs",
 		"coverage:gaps": "node ./coverage-gaps.mjs",
 		"dev": "node --import tsx ./dev-all.mts",
 		"setup_dev_env": "node --import tsx ./setup-dev-env.mts",
 		"tanahpedia:apply": "node ./tanahpedia-apply.mjs",
-		"test:version": "node --import tsx --test github/ci/bump-module-versions.test.mts github/ci/publish-version-bumps.test.mts github/release/check-deployment.test.mjs github/release/shared-release.test.mjs github/release/deployment-state.test.mjs github/release/release-assets.test.mjs github/release/data-artifact.test.mjs github/release/testflight-build.test.mjs",
+		"test:version": "node --import tsx --test merge-lcov.test.mts github/ci/bump-module-versions.test.mts github/ci/publish-version-bumps.test.mts github/release/check-deployment.test.mjs github/release/shared-release.test.mjs github/release/deployment-state.test.mjs github/release/release-assets.test.mjs github/release/data-artifact.test.mjs github/release/testflight-build.test.mjs",
 		"bump:module-versions": "node --import tsx ./github/ci/bump-module-versions.ts",
 		"deploy": "echo 'Use deploy:ecr, deploy:data, or deploy:bulletin' && exit 1",
 		"deploy:ecr": "node --import tsx ./deploy/ecr-deploy/index.mts",
