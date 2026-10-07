@@ -55,6 +55,19 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     public void FloatingSearchFindsMisspelledChapterAndUnpointedVerse() => Scenario(() =>
     {
         Assert.NotEmpty(_page.FirstPasuk);
+        _page.Tap("SearchFiltersButton");
+        _page.WaitFor("SearchKindPerek");
+        _page.Tap("SearchNavigationButton");
+        SearchFor("בראשיט 1", "בראשית א");
+        var settings = _page.WaitFor("SearchFiltersButton");
+        var clear = _page.WaitFor("ClearSearchButton");
+        var input = _page.WaitFor("PerekSearchInput");
+        var navigation = _page.WaitFor("SearchNavigationButton");
+        Assert.True(settings.Location.X + settings.Size.Width <= clear.Location.X, "Settings belong at the left edge in RTL.");
+        Assert.True(clear.Location.X + clear.Size.Width <= input.Location.X, "The single clear button follows the text field in RTL.");
+        Assert.True(input.Location.X + input.Size.Width <= navigation.Location.X, "Back belongs at the right edge in RTL.");
+        _page.Tap("ClearSearchButton");
+        _page.WaitFor("SearchStatus", element => element.Text == "הקלידו פרק, פסוק, פירוש או שם רב");
         SearchFor("בראשיט 1", "בראשית א");
         _platform.Tap(_driver!, _page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
         _page.WaitFor("PerekSource", element => element.Text == "בראשית א");
@@ -82,8 +95,8 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     {
         var bar = _page.WaitFor("PerekSearchInput");
         _platform.Tap(_driver!, bar);
-        var input = bar.TagName.Contains("TextView", StringComparison.Ordinal) || bar.TagName.Contains("EditText", StringComparison.Ordinal) || bar.TagName.Contains("SearchField", StringComparison.Ordinal)
-            ? bar : bar.FindElement(By.XPath(".//*[@class='android.widget.EditText' or @class='android.widget.AutoCompleteTextView' or @type='XCUIElementTypeSearchField']"));
+        var input = bar.TagName.Contains("TextView", StringComparison.Ordinal) || bar.TagName.Contains("EditText", StringComparison.Ordinal) || bar.TagName.Contains("SearchField", StringComparison.Ordinal) || bar.TagName.Contains("TextField", StringComparison.Ordinal)
+            ? bar : bar.FindElement(By.XPath(".//*[@class='android.widget.EditText' or @class='android.widget.AutoCompleteTextView' or @type='XCUIElementTypeSearchField' or @type='XCUIElementTypeTextField']"));
         input.Clear();
         input.SendKeys(text);
         _page.WaitFor("SearchResultTitle", element => element.Text == expectedTitle);

@@ -5,15 +5,19 @@ using BibleOnSite.ViewModels;
 
 namespace BibleOnSite.Controls;
 
+#pragma warning disable S2333 // MAUI XAML generates the other partial declaration.
 public partial class FloatingSearchBar : ContentView
+#pragma warning restore S2333
 {
     private readonly SearchViewModel _viewModel = new();
     private CancellationTokenSource? _debounce;
     private bool _buildingFilters;
     private bool _filtersBuilt;
     public bool IsSearchOpen => SearchPanel.IsVisible;
+#pragma warning disable S3264 // Invoked below; subscribers include XAML and the Android reader callback.
     public event EventHandler? SearchOpenChanged;
     public event EventHandler<SearchResult>? ResultSelected;
+#pragma warning restore S3264
 
     public FloatingSearchBar()
     {
@@ -28,15 +32,32 @@ public partial class FloatingSearchBar : ContentView
 
     private async void OnSearchFocused(object? sender, FocusEventArgs e)
     {
-        SearchPanel.IsVisible = FiltersButton.IsVisible = CloseButton.IsVisible = true;
+        await OpenSearchAsync();
+    }
+
+    private async Task OpenSearchAsync()
+    {
+        if (IsSearchOpen)
+        {
+            return;
+        }
+        SearchPanel.IsVisible = true;
         SearchOpenChanged?.Invoke(this, EventArgs.Empty);
+        UpdateStatus();
         try
         {
-            if (!StarterService.Instance.IsLoaded) await StarterService.Instance.LoadAsync();
+            // The reader loads authors from the API or cache during startup.
+            // Opening local search must not require a second network request.
             _viewModel.SetAuthors(StarterService.Instance.Authors);
             _viewModel.SetPerushim(await PerushimCatalogService.Instance.GetAllPerushimAsync());
-            if (!_filtersBuilt) await BuildFiltersAsync();
-            if (IsSearchOpen) ScheduleSearch();
+            if (!_filtersBuilt)
+            {
+                await BuildFiltersAsync();
+            }
+            if (IsSearchOpen)
+            {
+                ScheduleSearch();
+            }
         }
         catch (Exception ex)
         {
@@ -49,38 +70,69 @@ public partial class FloatingSearchBar : ContentView
     {
         _debounce?.Cancel();
         _viewModel.CancelSearch();
-        SearchPanel.IsVisible = FiltersPanel.IsVisible = FiltersButton.IsVisible = CloseButton.IsVisible = false;
+        SearchPanel.IsVisible = FiltersPanel.IsVisible = false;
         SearchOpenChanged?.Invoke(this, EventArgs.Empty);
         SearchInput.Unfocus();
         _viewModel.SearchPhrase = string.Empty;
         _viewModel.SearchResults.Clear();
         _viewModel.ErrorMessage = _viewModel.AvailabilityMessage = string.Empty;
+        UpdateStatus();
     }
 
-    private void OnCloseClicked(object? sender, EventArgs e) => Close();
+    private void OnNavigationClicked(object? sender, EventArgs e)
+    {
+        if (IsSearchOpen)
+        {
+            Close();
+        }
+        else
+        {
+            SearchInput.Focus();
+        }
+    }
+
+    private void OnClearClicked(object? sender, EventArgs e)
+    {
+        SearchInput.Text = string.Empty;
+        SearchInput.Focus();
+    }
     private void OnSearchTextChanged(object? sender, TextChangedEventArgs e)
     {
-        if (BindingContext == null) return;
+        if (BindingContext == null)
+        {
+            return;
+        }
         _viewModel.SearchPhrase = e.NewTextValue ?? string.Empty;
         _viewModel.SearchResults.Clear();
         FiltersPanel.IsVisible = false;
         UpdateStatus();
-        if (IsSearchOpen) ScheduleSearch();
+        if (IsSearchOpen)
+        {
+            ScheduleSearch();
+        }
     }
 
-    private async void ScheduleSearch(int delay = 500)
+    private void ScheduleSearch(int delay = 500) => _ = RunSearchAsync(delay);
+
+    private async Task RunSearchAsync(int delay)
     {
         _debounce?.Cancel();
         _debounce?.Dispose();
         _debounce = new CancellationTokenSource();
         var token = _debounce.Token;
         _viewModel.CancelSearch();
+        _viewModel.SearchResults.Clear();
+        _viewModel.LoadingMessage = "מחפש...";
+        _viewModel.IsLoading = !string.IsNullOrWhiteSpace(_viewModel.SearchPhrase);
         try
         {
             await Task.Delay(delay, token);
             await _viewModel.SearchAsync(token);
         }
-        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // Replaced queries and closing the panel intentionally cancel this search.
+        }
         catch (Exception ex) { Console.Error.WriteLine($"Search failed: {ex}"); }
         UpdateStatus();
     }
@@ -89,6 +141,9 @@ public partial class FloatingSearchBar : ContentView
 
     private void UpdateStatus()
     {
+        NavigationButton.Text = IsSearchOpen ? Fonts.FluentUI.arrow_right_24_regular : Fonts.FluentUI.search_24_regular;
+        SemanticProperties.SetDescription(NavigationButton, IsSearchOpen ? "סגירת החיפוש" : "חיפוש");
+        ClearButton.IsVisible = !string.IsNullOrEmpty(_viewModel.SearchPhrase);
         ErrorText.IsVisible = !string.IsNullOrWhiteSpace(_viewModel.ErrorMessage);
         AvailabilityText.IsVisible = !string.IsNullOrWhiteSpace(_viewModel.AvailabilityMessage);
         SearchStatus.Text = _viewModel.IsLoading ? _viewModel.LoadingMessage :
@@ -97,8 +152,13 @@ public partial class FloatingSearchBar : ContentView
         ResultsList.IsVisible = !FiltersPanel.IsVisible && _viewModel.SearchResults.Count > 0;
     }
 
-    private void OnFiltersClicked(object? sender, EventArgs e)
+    private async void OnFiltersClicked(object? sender, EventArgs e)
     {
+        await OpenSearchAsync();
+        if (!IsSearchOpen)
+        {
+            return;
+        }
         FiltersPanel.IsVisible = !FiltersPanel.IsVisible;
         SearchInput.Unfocus();
         UpdateStatus();
@@ -123,11 +183,13 @@ public partial class FloatingSearchBar : ContentView
             KindsFilters.Clear();
             BookFilters.Clear();
             foreach (var filter in Enum.GetValues<SearchFilter>())
+            {
                 KindsFilters.Add(FilterRow(filter.GetHebrewName(), $"SearchKind{filter}", _viewModel.IsFilterEnabled(filter), enabled =>
                 {
                     _viewModel.SetFilterEnabled(filter, enabled);
                     ScheduleSearch();
                 }));
+            }
             foreach (var (key, group) in SefarimData.SefarimGroups)
             {
                 var groupIndex = key - 1;
@@ -141,6 +203,7 @@ public partial class FloatingSearchBar : ContentView
                 var books = PerekDataService.Instance.Perakim!.Values.Where(perek => perek.SeferId >= group.From && perek.SeferId <= group.To)
                     .DistinctBy(perek => perek.SeferId).OrderBy(perek => perek.SeferId);
                 foreach (var book in books)
+                {
                     BookFilters.Add(FilterRow(book.SeferName, $"SearchBook{book.SeferId}", _viewModel.IsSeferFilterEnabled(book.SeferId), enabled =>
                     {
                         _viewModel.SetSeferFilterEnabled(book.SeferId, enabled);
@@ -149,6 +212,7 @@ public partial class FloatingSearchBar : ContentView
                         _buildingFilters = false;
                         ScheduleSearch();
                     }));
+                }
             }
             _filtersBuilt = true;
         }
@@ -159,7 +223,13 @@ public partial class FloatingSearchBar : ContentView
     {
         var checkBox = new CheckBox { IsChecked = enabled, AutomationId = automationId };
         SemanticProperties.SetDescription(checkBox, title);
-        checkBox.CheckedChanged += (_, e) => { if (!_buildingFilters) changed(e.Value); };
+        checkBox.CheckedChanged += (_, e) =>
+        {
+            if (!_buildingFilters)
+            {
+                changed(e.Value);
+            }
+        };
         var label = new Label { Text = title, VerticalOptions = LayoutOptions.Center };
         var row = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star)] };
         row.Add(checkBox);
@@ -172,14 +242,23 @@ public partial class FloatingSearchBar : ContentView
 
     private void OnLimitChanged(object? sender, EventArgs e)
     {
-        if (LimitPicker.SelectedItem is not int limit) return;
+        if (LimitPicker.SelectedItem is not int limit)
+        {
+            return;
+        }
         _viewModel.ResultsLimit = limit;
-        if (IsSearchOpen) ScheduleSearch();
+        if (IsSearchOpen)
+        {
+            ScheduleSearch();
+        }
     }
 
     private void OnResultSelected(object? sender, SelectionChangedEventArgs e)
     {
-        if (e.CurrentSelection.FirstOrDefault() is not SearchResult result) return;
+        if (e.CurrentSelection.FirstOrDefault() is not SearchResult result)
+        {
+            return;
+        }
         ResultsList.SelectedItem = null;
         Close();
         ResultSelected?.Invoke(this, result);

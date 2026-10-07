@@ -64,7 +64,9 @@ public partial class SearchViewModel : ObservableObject
         _enabledSefarim = new HashSet<int>(Enumerable.Range(1, 35));
     }
 
+#pragma warning disable S1172 // ObservableProperty generates this hook with a value parameter.
     partial void OnSearchPhraseChanged(string value) => CancelSearch();
+#pragma warning restore S1172
 
     public void CancelSearch()
     {

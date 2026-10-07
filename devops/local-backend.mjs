@@ -19,6 +19,8 @@ if (args.some((arg) => arg !== "--native"))
 
 async function healthy() {
 	try {
+		// Loopback health check contains no credentials and never leaves this computer.
+		// nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request
 		const response = await fetch("http://127.0.0.1:3003/health", {
 			signal: AbortSignal.timeout(2000),
 		});

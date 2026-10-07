@@ -111,7 +111,9 @@ public partial class PerekPage : ContentPage
         _viewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(PerekViewModel.Source))
+            {
                 ChapterSearch.SetSource(_viewModel.Source);
+            }
         };
         PerekCarousel.SizeChanged += OnCarouselSizeChanged;
         _viewModel.NavigationRequested += (_, perekId) =>

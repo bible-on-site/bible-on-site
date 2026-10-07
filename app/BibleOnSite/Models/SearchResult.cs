@@ -11,7 +11,7 @@ public abstract class SearchResult
     public string SubtitleHtml { get; set; } = string.Empty;
     public string Category => ResultType.GetHebrewName();
     public int Score { get; set; }
-    public string? ThumbnailUrl => this is AuthorSearchResult author ? author.Author.ImageUrl : null;
+    public virtual string? ThumbnailUrl => null;
     public bool HasThumbnail => ThumbnailUrl != null;
 
     protected static string CreateHighlightedResult(string text, string searchPhrase)
@@ -26,6 +26,7 @@ public abstract class SearchResult
 public class AuthorSearchResult : SearchResult
 {
     public Author Author { get; }
+    public override string? ThumbnailUrl => Author.ImageUrl;
 
     public override SearchFilter ResultType => SearchFilter.Author;
 

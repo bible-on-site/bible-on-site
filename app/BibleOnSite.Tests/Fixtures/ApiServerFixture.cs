@@ -23,7 +23,7 @@ public class ApiServerFixture : IAsyncLifetime
 
     public const string ApiUrl = "http://127.0.0.1:3003";
     // A new worktree may need its first Rust build before the API can listen.
-    public const int StartupTimeoutSeconds = 600;
+    public static int StartupTimeoutSeconds => 600;
     public const int HealthCheckIntervalMs = 500;
 
     public async Task InitializeAsync()

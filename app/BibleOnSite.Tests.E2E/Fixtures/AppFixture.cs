@@ -164,7 +164,10 @@ public class AppFixture : IAsyncLifetime
         {
             attempts++;
             await Task.Delay(2000);
-            if (_apiProcess.HasExited) throw new InvalidOperationException("API process exited before becoming ready");
+            if (_apiProcess.HasExited)
+            {
+                throw new InvalidOperationException("API process exited before becoming ready");
+            }
             if (IsApiRunning())
             {
                 Console.WriteLine($"API server started successfully (after ~{attempts * 2} seconds)");
@@ -185,7 +188,10 @@ public class AppFixture : IAsyncLifetime
         _automation = new UIA3Automation();
 
         // Ensure API is running first (reuse if already running)
-        if (RequiresApi) await EnsureApiRunningAsync();
+        if (RequiresApi)
+        {
+            await EnsureApiRunningAsync();
+        }
 
         // Only clean up this checkout's test app, never another running checkout.
         foreach (var proc in Process.GetProcessesByName("BibleOnSite"))

@@ -6,7 +6,9 @@ namespace BibleOnSite.Pages;
 public partial class PerekPage
 #pragma warning restore S2333
 {
+#pragma warning disable S1172 // The XAML event delegate requires the sender parameter.
     private async void OnSearchResultSelected(object? sender, SearchResult result)
+#pragma warning restore S1172
     {
         try
         {
@@ -25,7 +27,10 @@ public partial class PerekPage
                 PerushSearchResult commentary => commentary.PerekId,
                 _ => 0
             };
-            if (perekId == 0) return;
+            if (perekId == 0)
+            {
+                return;
+            }
             await _viewModel.NavigateToPerekAsync(perekId);
             var pasukNum = result switch
             {
@@ -34,7 +39,9 @@ public partial class PerekPage
                 _ => 0
             };
             if (result is PerushSearchResult note && int.TryParse(note.PerushId, out var perushId) && !_viewModel.IsPerushChecked(perushId))
+            {
                 _viewModel.ToggleCheckedPerush(perushId);
+            }
             if (_viewModel.Perek?.Pasukim.FirstOrDefault(pasuk => pasuk.PasukNum == pasukNum) is { } pasuk)
             {
                 await OpenFocusedPasukAsync(pasuk);

@@ -36,31 +36,46 @@ public sealed class SearchIndexService : IAsyncDisposable
 
     public bool CommentaryAvailable { get; private set; }
 
+    public Task<List<SearchHit>> SearchAsync(string query, IReadOnlySet<SearchFilter> filters,
+        IReadOnlySet<int> books, int limit, CancellationToken cancellationToken) =>
+        SearchAsync(query, filters, books, limit, cancellationToken, null);
+
     public async Task<List<SearchHit>> SearchAsync(string query, IReadOnlySet<SearchFilter> filters,
-        IReadOnlySet<int> books, int limit, CancellationToken cancellationToken, IProgress<string>? progress = null)
+        IReadOnlySet<int> books, int limit, CancellationToken cancellationToken, IProgress<string>? progress)
     {
         var terms = SearchText.Tokens(query);
-        if (terms.Length is 0 or > 16 || terms.Any(term => term.Length > 64) || books.Count == 0) return [];
+        if (terms.Length is 0 or > 16 || terms.Any(term => term.Length > 64) || books.Count == 0)
+        {
+            return [];
+        }
         limit = Math.Clamp(limit, 1, 50);
         progress?.Report(filters.Contains(SearchFilter.Perush) && !_ready.ContainsKey("notes")
             ? "מכין את החיפוש בפסוקים ובפירושים..." : "מחפש...");
         var hits = new List<SearchHit>();
         foreach (var (table, type) in new[] { ("verses", SearchFilter.Pasuk), ("notes", SearchFilter.Perush) })
         {
-            if (!filters.Contains(type)) continue;
+            if (!filters.Contains(type))
+            {
+                continue;
+            }
             // Changed queries can stop waiting while each independent import continues.
             Task build;
             lock (_buildSync)
             {
                 ObjectDisposedException.ThrowIf(_disposed, this);
                 if (!_buildTasks.TryGetValue(table, out build!) || build.IsCompleted)
+                {
                     _buildTasks[table] = build = EnsureIndexAsync(table);
+                }
             }
             await build.WaitAsync(cancellationToken);
             await _gates[table].WaitAsync(cancellationToken);
             try
             {
-                if (!_ready.ContainsKey(table)) continue;
+                if (!_ready.ContainsKey(table))
+                {
+                    continue;
+                }
                 cancellationToken.ThrowIfCancellationRequested();
                 var phrase = "\"" + string.Join(" ", terms) + "\"";
                 var rows = await QueryAsync(table, phrase, books, limit);
@@ -126,13 +141,21 @@ public sealed class SearchIndexService : IAsyncDisposable
         {
             await _perakim.LoadAsync();
             if (table == "verses")
+            {
                 await BuildAsync(table, await _perakim.GetSearchConnectionAsync(), false);
+            }
             else if (_notes != null)
             {
                 var connection = await _notes.GetSearchConnectionAsync();
                 CommentaryAvailable = connection != null;
-                if (connection != null) await BuildAsync("notes", connection, true);
-                else _ready.TryRemove("notes", out _);
+                if (connection != null)
+                {
+                    await BuildAsync("notes", connection, true);
+                }
+                else
+                {
+                    _ready.TryRemove("notes", out _);
+                }
             }
         }
         finally { _gates[table].Release(); }
@@ -142,7 +165,10 @@ public sealed class SearchIndexService : IAsyncDisposable
     {
         var file = new FileInfo(source.DatabasePath);
         var fingerprint = $"v1:{file.Length}:{file.LastWriteTimeUtc.Ticks}";
-        if (_ready.GetValueOrDefault(table) == fingerprint) return;
+        if (_ready.GetValueOrDefault(table) == fingerprint)
+        {
+            return;
+        }
         var stored = await _index.ExecuteScalarAsync<string>("SELECT fingerprint FROM search_metadata WHERE name = ?", table);
         if (stored != fingerprint)
         {
@@ -159,7 +185,10 @@ public sealed class SearchIndexService : IAsyncDisposable
                     // Keyset pagination bounds memory even for the full commentary asset pack.
                     var batch = await source.QueryAsync<IndexRow>("SELECT rowid AS RowId, perek_id AS PerekId, " +
                         "pasuk AS PasukNum, perush_id AS PerushId, note_content AS Body FROM note WHERE rowid > ? ORDER BY rowid LIMIT 512", lastId);
-                    if (batch.Count == 0) break;
+                    if (batch.Count == 0)
+                    {
+                        break;
+                    }
                     await InsertAsync(table, batch);
                     lastId = batch[^1].RowId;
                 }
@@ -170,7 +199,10 @@ public sealed class SearchIndexService : IAsyncDisposable
                     "group_concat(value, ' ') AS Body FROM (SELECT s.perek_id, s.pasuk_id, v.value " +
                     "FROM tanah_pasuk_segment s JOIN tanah_pasuk_segment_value v ON v.id = s.id " +
                     "WHERE s.segment_type IN ('qri','ktiv') ORDER BY s.perek_id, s.pasuk_id, s.id) GROUP BY perek_id, pasuk_id");
-                foreach (var batch in verses.Chunk(512)) await InsertAsync(table, batch);
+                foreach (var batch in verses.Chunk(512))
+                {
+                    await InsertAsync(table, batch);
+                }
             }
             await _index.ExecuteAsync($"CREATE VIRTUAL TABLE {table}_vocab USING fts5vocab({table}, 'row')");
             await _index.ExecuteAsync($"INSERT INTO {table}({table}) VALUES ('optimize')");
@@ -185,7 +217,10 @@ public sealed class SearchIndexService : IAsyncDisposable
         foreach (var row in rows)
         {
             var perek = _perakim.GetPerek(row.PerekId);
-            if (perek == null) continue;
+            if (perek == null)
+            {
+                continue;
+            }
             var body = SearchText.PlainText(row.Body);
             connection.Execute($"INSERT INTO {table}(Text,Body,PerekId,PasukNum,PerushId,SeferId) VALUES (?,?,?,?,?,?)",
                 SearchText.Normalize(body), body, row.PerekId, row.PasukNum, row.PerushId, perek.SeferId);
@@ -203,9 +238,18 @@ public sealed class SearchIndexService : IAsyncDisposable
         try { await Task.WhenAll(builds); }
         finally
         {
-            foreach (var gate in _gates.Values) await gate.WaitAsync();
+            foreach (var gate in _gates.Values)
+            {
+                await gate.WaitAsync();
+            }
             try { await _index.CloseAsync(); }
-            finally { foreach (var gate in _gates.Values) gate.Dispose(); }
+            finally
+            {
+                foreach (var gate in _gates.Values)
+                {
+                    gate.Dispose();
+                }
+            }
         }
     }
 

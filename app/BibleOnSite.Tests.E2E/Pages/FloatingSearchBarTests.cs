@@ -1,6 +1,6 @@
 using BibleOnSite.Tests.E2E.Fixtures;
-using FlaUI.Core.Definitions;
 using FlaUI.Core.Capturing;
+using FlaUI.Core.Input;
 
 namespace BibleOnSite.Tests.E2E.Pages;
 
@@ -18,13 +18,35 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
     [Fact]
     public async Task OfflineSearch_FindsMisspelledChapter_FiltersVerses_AndOpensFocusedVerse()
     {
+        (await fixture.WaitForElementAsync(window =>
+        {
+            return window.FindAllDescendants(fixture.CF.ByAutomationId("PasukText"))
+                .FirstOrDefault(verse => !string.IsNullOrWhiteSpace(verse.Name) && !verse.IsOffscreen);
+        }, TimeSpan.FromSeconds(30))).Should().NotBeNull("the reader finishes startup before search interactions");
         fixture.MainWindow.Patterns.Transform.Pattern.Move(20, 20);
         fixture.MainWindow.Patterns.Transform.Pattern.Resize(860, 900);
         var bar = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("PerekSearchInput")), TimeSpan.FromSeconds(30));
         bar.Should().NotBeNull();
-        var input = bar!.ControlType == ControlType.Edit ? bar : bar.FindFirstDescendant(fixture.CF.ByControlType(ControlType.Edit));
+        var input = bar;
         input.Should().NotBeNull();
-        input!.Focus();
+        fixture.Click(input!);
+        input!.AsTextBox().Text = "בראשיט 1";
+        await WaitForFinishedSearchAsync();
+        var clear = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("ClearSearchButton")));
+        var navigation = fixture.FindByAutomationId("SearchNavigationButton")!;
+        var settings = fixture.FindByAutomationId("SearchFiltersButton")!;
+        settings.BoundingRectangle.Right.Should().BeLessThanOrEqualTo(clear!.BoundingRectangle.Left);
+        clear.BoundingRectangle.Right.Should().BeLessThanOrEqualTo(input.BoundingRectangle.Left);
+        input.BoundingRectangle.Right.Should().BeLessThanOrEqualTo(navigation.BoundingRectangle.Left);
+        CapturePreview("floating-search-rtl.png");
+        fixture.Click(clear);
+        input.AsTextBox().Text.Should().BeEmpty("the single X clears the query and keeps search open");
+        fixture.Click(navigation);
+        fixture.Click(settings);
+        (await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchKindPerek"))))
+            .Should().NotBeNull("settings are accessible before typing a query");
+        fixture.Click(navigation);
+        fixture.Click(input);
         input.AsTextBox().Text = "בראשיט 1";
         await WaitForFinishedSearchAsync();
         var chapter = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchResults"))
@@ -37,9 +59,14 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
         (await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("PerekSource").And(fixture.CF.ByName("בראשית א"))))).Should().NotBeNull();
 
         bar = fixture.FindByAutomationId("PerekSearchInput");
-        input = bar!.ControlType == ControlType.Edit ? bar : bar.FindFirstDescendant(fixture.CF.ByControlType(ControlType.Edit));
-        input!.Focus();
-        input.AsTextBox().Text = "בראשית ברא אלהים";
+        input = bar;
+        fixture.Click(input!);
+        (await fixture.WaitForElementAsync(window =>
+        {
+            var field = window.FindFirstDescendant(fixture.CF.ByAutomationId("PerekSearchInput"));
+            return field?.FrameworkAutomationElement.HasKeyboardFocus == true ? field : null;
+        })).Should().NotBeNull("typing starts after the native field receives focus");
+        Keyboard.Type("בראשית ברא אלהים");
         await WaitForFinishedSearchAsync();
         var filters = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchFiltersButton")));
         fixture.Click(filters!);
