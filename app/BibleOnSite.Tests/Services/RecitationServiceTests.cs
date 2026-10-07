@@ -131,7 +131,10 @@ public class RecitationServiceTests
         {
             using (var archive = ZipFile.Open(path, ZipArchiveMode.Update))
             {
-                if (fault == "wrongInventory") archive.Entries[0].Delete();
+                if (fault == "wrongInventory")
+                {
+                    archive.Entries[0].Delete();
+                }
                 archive.CreateEntry("../escape.mp3");
             }
             var bytes = await File.ReadAllBytesAsync(path);
@@ -287,7 +290,13 @@ public class RecitationServiceTests
             new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)));
         model.Books.Add(new RecitationBookChoice { Name = "בראשית", PerekIds = [1], IsSelected = true });
         var observed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        model.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(model.Progress) && model.Progress > 0) observed.TrySetResult(); };
+        model.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(model.Progress) && model.Progress > 0)
+            {
+                observed.TrySetResult();
+            }
+        };
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         IProgress<double>? deliveredProgress = null;
         extension.Delivery.Setup(d => d.FetchAsync("recitation_1", It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()))
