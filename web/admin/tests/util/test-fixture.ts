@@ -4,6 +4,8 @@ import {
 	type Page,
 	test as testBase,
 } from "@playwright/test";
+import libCoverage from "istanbul-lib-coverage";
+import libSourceMaps from "istanbul-lib-source-maps";
 import { addCoverageReport } from "monocart-reporter";
 import { shouldMeasureCov } from "../../../shared/tests-util/environment.mjs";
 
@@ -18,8 +20,9 @@ declare global {
  * E2E test entry point. When MEASURE_COV=1 (npm run coverage:e2e), drains
  * istanbul `__coverage__` from both realms per test: instrumented client code
  * writes `window.__coverage__`, while instrumented Nitro SSR modules write to
- * the dev server's globalThis — exposed via /api/dev/coverage. Both are fed to
- * monocart-reporter, which maps them through Vite's sourcemaps into lcov.
+ * the dev server's globalThis — exposed via /api/dev/coverage. SSR entries are
+ * instrumented post-transform, so their embedded inputSourceMap must be applied
+ * to restore original source positions before the data reaches monocart.
  */
 export const test = testBase.extend({
 	context: async ({ context }, use) => {
@@ -53,6 +56,7 @@ async function drainPageCoverage(page: Page) {
 }
 
 async function setupCoverageCollection(context: BrowserContext) {
+	const sourceMapStore = libSourceMaps.createSourceMapStore();
 	await context.addInitScript(() =>
 		window.addEventListener("beforeunload", () => {
 			window.collectIstanbulCoverage?.(window.__coverage__);
@@ -60,10 +64,13 @@ async function setupCoverageCollection(context: BrowserContext) {
 	);
 	await context.exposeFunction(
 		"collectIstanbulCoverage",
-		(coverage?: Record<string, unknown>) => {
-			if (coverage && Object.keys(coverage).length > 0) {
-				void addCoverageReport(coverage, test.info());
-			}
+		async (coverage?: Record<string, unknown>) => {
+			if (!coverage || Object.keys(coverage).length === 0) return;
+			// transformCoverage is a no-op for entries without inputSourceMap.
+			const remapped = await sourceMapStore.transformCoverage(
+				libCoverage.createCoverageMap(coverage as libCoverage.CoverageMapData),
+			);
+			void addCoverageReport(remapped.data, test.info());
 		},
 	);
 }

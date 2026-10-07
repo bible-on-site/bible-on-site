@@ -66,6 +66,9 @@ function getCoverageReportOptions(): CoverageReportOptions {
 			const content = fs.readFileSync(lcovPath, "utf8");
 			const fixed = content.replace(/^SF:.+$/gm, (line) => {
 				let p = line.slice(3).replace(/\\/g, "/");
+				// Vite virtual-module queries (e.g. ?tsr-split=component) must not
+				// split a source file into distinct coverage paths.
+				p = p.split("?")[0];
 				const srcIdx = p.indexOf("web/admin/src/");
 				if (srcIdx !== -1) {
 					p = p.slice(srcIdx);
