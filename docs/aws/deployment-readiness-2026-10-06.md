@@ -138,9 +138,18 @@ fixture: every failed route rejected the health check, while three successful
 routes accepted it. The isolated single-readiness experiment did not reproduce
 the later live stall, so its precise cause remains unproven. The additional
 route checks strengthen the acceptance contract; they do not establish that
-every possible startup stall has been eliminated. They add the complete
-extension request to each health interval, so observe CPU and health under
-normal traffic as part of live validation.
+every possible startup stall has been eliminated.
+
+During the guarded 0.2.475 transition, repeated complete extension responses
+still took 1.989-2.817 seconds at production capacity. Repeating that work in
+every health interval would leave little margin for the three-second request
+bound. The extension route now retains its completely validated serialized
+body and ETag for the process's immutable canonical data. Later app downloads,
+conditional requests and health probes reuse those bytes. A changed S3 endpoint,
+bucket or region rebuilds the recording URLs and ETag; unsuccessful validation
+does not populate the cache. Headers, body bytes and conditional-response
+semantics are preserved. Verify the released image's actual response times,
+hashes, CPU and health under normal traffic during live validation.
 
 Observe a complete rollout using the router probe log, public health,
 readiness, and recitation requests, ECS task health, and Cloud Map health.
