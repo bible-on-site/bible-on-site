@@ -10,6 +10,23 @@ from verify_recitation_assets import verify
 
 
 class ReleaseArtifactTests(unittest.TestCase):
+    def test_windows_requires_root_catalog_and_exact_packaged_archives(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            audio = b"book archive"
+            catalog = root / "catalog.json"
+            catalog.write_text(json.dumps({"books": [{"seferId": 1, "sha256": hashlib.sha256(audio).hexdigest()}]}))
+            for content in [audio, b"corrupt"]:
+                package = root / "app.msix"
+                with zipfile.ZipFile(package, "w") as archive:
+                    archive.writestr("recitation-catalog.json", catalog.read_bytes())
+                    archive.writestr("recitation_1.zip", content)
+                if content == audio:
+                    verify(package, catalog, "Windows")
+                else:
+                    with self.assertRaises(ValueError):
+                        verify(package, catalog, "Windows")
+
     def test_aab_requires_every_matching_module_and_excludes_base_audio(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

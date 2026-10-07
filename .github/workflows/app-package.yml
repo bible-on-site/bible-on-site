@@ -228,6 +228,9 @@ jobs:
         run: echo "artifact_name=app-windows-v${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
         shell: bash
 
+      - name: Verify all recitation Windows archives and hashes
+        run: python app/devops/verify_recitation_assets.py --platform Windows --catalog app/BibleOnSite/Resources/Raw/recitation-catalog.json --package "${{ steps.find_msix.outputs.MSIX_PATH }}"
+
       - name: Upload MSIX artifact
         uses: actions/upload-artifact@v7
         with:
