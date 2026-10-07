@@ -120,6 +120,10 @@
 
     <Grid x:Name="MainGrid">
 
+        <controls:FloatingSearchBar x:Name="ChapterSearch" ZIndex="100"
+                                    VerticalOptions="Start" Margin="8,4"
+                                    ResultSelected="OnSearchResultSelected"/>
+
 <!-- iOS bottom bar debug (beta-only collapsible dropdown) -->
 <Grid x:Name="BottomBarDebugOverlay"
       IsVisible="False"
@@ -207,6 +211,8 @@
         <Grid x:Name="ContentArea"
               ZIndex="0"
               RowDefinitions="Auto,Auto,*">
+
+            <BoxView x:Name="SearchBarSpacer" Grid.Row="0" HeightRequest="64" Color="Transparent" BackgroundColor="Transparent"/>
 
             <!-- Loading overlay — shown while CarouselView initialises its 929-item
                  adapter.  Uses a native ActivityIndicator which animates on the GPU

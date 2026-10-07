@@ -107,6 +107,12 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private void SetupCarouselNavigation()
     {
+        ChapterSearch.SetSource(_viewModel.Source);
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PerekViewModel.Source))
+                ChapterSearch.SetSource(_viewModel.Source);
+        };
         PerekCarousel.SizeChanged += OnCarouselSizeChanged;
         _viewModel.NavigationRequested += (_, perekId) =>
         {
@@ -329,7 +335,7 @@ public partial class PerekPage : ContentPage
     private void OnTouchStarted(object? sender, TouchPosition position)
     {
         _swipe.Cancel();
-        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || _isMenuOpen || _isShowingArticles || _focusedPasuk != null ||
+        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || _isMenuOpen || _isShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
             !ContainsTouch(PerekCarousel, position) || ContainsTouch(BottomBar, position) ||
             ContainsTouch(ExitFullScreenButton, position))
         {
@@ -340,7 +346,7 @@ public partial class PerekPage : ContentPage
 
     private void OnTouchDispatched(object? sender, TouchPosition position)
     {
-        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || _isMenuOpen || _isShowingArticles || _focusedPasuk != null ||
+        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || _isMenuOpen || _isShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
             !ContainsTouch(PerekCarousel, position) || ContainsTouch(BottomBar, position) ||
             ContainsTouch(ExitFullScreenButton, position) || ContainsTouch(CircularMenuButton, position) ||
             ContainsTouch(SelectionBar, position))
@@ -393,6 +399,7 @@ public partial class PerekPage : ContentPage
 
     protected override void OnDisappearing()
     {
+        ChapterSearch.Close();
         ResetRecitationContext();
         PreferencesService.Instance.PreferencesChanged -= OnRecitationPreferencesChanged;
         RecitationService.Instance.Changed -= OnRecitationPackageChanged;
@@ -1910,6 +1917,8 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private void EnterFullScreen()
     {
+        ChapterSearch.Close();
+        ChapterSearch.IsVisible = SearchBarSpacer.IsVisible = false;
         // Close circular menu if open
         if (_isMenuOpen)
         {
@@ -1943,6 +1952,7 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private void ExitFullScreen()
     {
+        ChapterSearch.IsVisible = SearchBarSpacer.IsVisible = true;
         // Hide floating exit button first
         ExitFullScreenButton.IsVisible = false;
 

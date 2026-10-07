@@ -34,10 +34,10 @@ public abstract class MobilePlatformAdapter
         {
             options.PlatformVersion = configuration.PlatformVersion;
         }
-        options.AddAdditionalAppiumOption("noReset", false);
+        options.AddAdditionalAppiumOption("noReset", configuration.KeepAppForReview);
         // Android fully uninstalls the app. iOS resets and reinstalls it through
         // noReset=false and enforceAppInstall=true while the device stays booted.
-        options.AddAdditionalAppiumOption("fullReset", android);
+        options.AddAdditionalAppiumOption("fullReset", android && !configuration.KeepAppForReview);
         options.AddAdditionalAppiumOption("newCommandTimeout", 120);
         if (android)
         {

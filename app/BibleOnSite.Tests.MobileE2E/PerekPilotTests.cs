@@ -52,6 +52,43 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     });
 
     [Fact]
+    public void FloatingSearchFindsMisspelledChapterAndUnpointedVerse() => Scenario(() =>
+    {
+        Assert.NotEmpty(_page.FirstPasuk);
+        SearchFor("בראשיט 1", "בראשית א");
+        _platform.Tap(_driver!, _page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
+        _page.WaitFor("PerekSource", element => element.Text == "בראשית א");
+
+        SearchFor("בראשית ברא אלהים", "בראשית א א");
+        _page.Tap("SearchFiltersButton");
+        _page.Tap("SearchKindPerush");
+        _page.Tap("SearchFiltersButton");
+        _page.WaitFor("SearchStatus", element => System.Text.RegularExpressions.Regex.IsMatch(element.Text, @"^\d+ תוצאות$"));
+        SaveDiagnostics("FloatingSearchVerseResults", "passed");
+        var result = _driver!.FindElements(_platform.AutomationId("SearchResultTitle"))
+            .First(element => element.Displayed && element.Text == "בראשית א א");
+        _platform.Tap(_driver, result);
+        Assert.Contains("בראשית", System.Text.RegularExpressions.Regex.Replace(_page.WaitFor("FocusedPasukText").Text, @"\p{M}", ""));
+        if (_configuration.KeepAppForReview)
+        {
+            _platform.GoBack(_driver);
+            SearchFor("בראשית ברא אלהים", "בראשית א א");
+            SaveDiagnostics("FloatingSearchReview", "passed");
+        }
+    });
+
+    private void SearchFor(string text, string expectedTitle)
+    {
+        var bar = _page.WaitFor("PerekSearchInput");
+        _platform.Tap(_driver!, bar);
+        var input = bar.TagName.Contains("TextView", StringComparison.Ordinal) || bar.TagName.Contains("EditText", StringComparison.Ordinal) || bar.TagName.Contains("SearchField", StringComparison.Ordinal)
+            ? bar : bar.FindElement(By.XPath(".//*[@class='android.widget.EditText' or @class='android.widget.AutoCompleteTextView' or @type='XCUIElementTypeSearchField']"));
+        input.Clear();
+        input.SendKeys(text);
+        _page.WaitFor("SearchResultTitle", element => element.Text == expectedTitle);
+    }
+
+    [Fact]
     public void AdjacentPerekNavigationChangesTheTextAndReturnsToTheOriginal() => Scenario(() =>
     {
         var source = _page.Source;

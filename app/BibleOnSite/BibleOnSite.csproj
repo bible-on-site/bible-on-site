@@ -63,6 +63,9 @@
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">23.0</SupportedOSPlatformVersion>
 		<!-- For Release: embed assemblies in APK. For Debug: use Fast Deployment (much faster iteration) -->
 		<EmbedAssembliesIntoApk Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release'">true</EmbedAssembliesIntoApk>
+		<!-- Debug APKs include the large commentary database. Store SQLite assets directly
+		     to avoid recompressing it on every local edit; Release packaging keeps compression. -->
+		<AndroidStoreUncompressedFileExtensions Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Debug'">$(AndroidStoreUncompressedFileExtensions);.sqlite</AndroidStoreUncompressedFileExtensions>
 		<!-- .NET 10 MAUI on Linux CI: the SDK infers RuntimeIdentifier=linux-x64 for
 		     self-contained apps, appending it to RuntimeIdentifiers. The Android SDK then
 		     fails with XA0035. The Nuke build script pins RuntimeIdentifier=android-arm64

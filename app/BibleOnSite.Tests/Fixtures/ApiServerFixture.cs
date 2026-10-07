@@ -22,7 +22,8 @@ public class ApiServerFixture : IAsyncLifetime
     private bool _apiUrlOverridden;
 
     public const string ApiUrl = "http://127.0.0.1:3003";
-    public const int StartupTimeoutSeconds = 120;
+    // A new worktree may need its first Rust build before the API can listen.
+    public const int StartupTimeoutSeconds = 600;
     public const int HealthCheckIntervalMs = 500;
 
     public async Task InitializeAsync()
@@ -113,7 +114,7 @@ public class ApiServerFixture : IAsyncLifetime
         var startInfo = new ProcessStartInfo
         {
             FileName = "cargo",
-            Arguments = "make run-for-tests",
+            Arguments = "run --locked --profile dev",
             WorkingDirectory = apiDir,
             UseShellExecute = false,
             RedirectStandardOutput = true,

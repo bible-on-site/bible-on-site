@@ -70,6 +70,12 @@ Set both for local iOS runs; CI exports them automatically.
 `MOBILE_APP_PATH` can select another compatible build. Each local
 run owns an Appium server on `127.0.0.1:4723`; keep that port free.
 
+Set `MOBILE_KEEP_APP=1` to keep the installed app and its data for manual review
+after a local run. Install the current build first when using this option;
+normal runs still reset the app. The floating search scenario covers a misspelled
+chapter reference, unpointed verse text, and opening the exact verse. It accepts
+verse results while the first commentary index continues preparing.
+
 `npm run test:unit` checks simulator selection and the locked driver module's
 ESM loading without a device.
 From `app/`, `dotnet run --project devops -- TestMobileE2EUnit` checks platform

@@ -16,6 +16,7 @@ namespace BibleOnSite.Tests.E2E.Fixtures;
 /// </summary>
 public class AppFixture : IAsyncLifetime
 {
+    protected virtual bool RequiresApi => true;
     private Application? _app;
     private UIA3Automation? _automation;
     private Process? _appProcess;
@@ -138,30 +139,32 @@ public class AppFixture : IAsyncLifetime
         _weStartedApi = true;
         _apiStartedAt = DateTime.UtcNow;
 
-        // Use cmd.exe /c to run cargo make in a shell context (ensures PATH is available)
+        // Launch the API directly; the inherited PATH locates Cargo.
         var startInfo = new ProcessStartInfo
         {
-            FileName = "cmd.exe",
-            Arguments = "/c cargo make run-api-test",
+            FileName = "cargo",
+            Arguments = "run --locked",
             WorkingDirectory = ApiDirectory,
             UseShellExecute = false,
             CreateNoWindow = true,
             WindowStyle = ProcessWindowStyle.Hidden,
         };
 
+        startInfo.Environment["PROFILE"] = "test";
         _apiProcess = Process.Start(startInfo);
         if (_apiProcess == null)
         {
             throw new InvalidOperationException("Failed to start API server process");
         }
 
-        // Wait for API to be ready (max 120 seconds - Rust compilation can take a while)
-        var timeout = DateTime.Now.AddSeconds(120);
+        // A new worktree may need its first Rust build before the API can listen.
+        var timeout = DateTime.Now.AddSeconds(600);
         var attempts = 0;
         while (DateTime.Now < timeout)
         {
             attempts++;
             await Task.Delay(2000);
+            if (_apiProcess.HasExited) throw new InvalidOperationException("API process exited before becoming ready");
             if (IsApiRunning())
             {
                 Console.WriteLine($"API server started successfully (after ~{attempts * 2} seconds)");
@@ -173,15 +176,16 @@ public class AppFixture : IAsyncLifetime
             }
         }
 
-        throw new InvalidOperationException("API server did not respond within 120 seconds");
+        throw new InvalidOperationException("API server did not respond within 600 seconds");
     }
 
     public async Task InitializeAsync()
     {
+        SetProcessDPIAware();
         _automation = new UIA3Automation();
 
         // Ensure API is running first (reuse if already running)
-        await EnsureApiRunningAsync();
+        if (RequiresApi) await EnsureApiRunningAsync();
 
         // Only clean up this checkout's test app, never another running checkout.
         foreach (var proc in Process.GetProcessesByName("BibleOnSite"))
@@ -383,6 +387,8 @@ public class AppFixture : IAsyncLifetime
     }
 
     [DllImport("user32.dll")]
+    private static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")]
     private static extern IntPtr WindowFromPoint(Point point);
@@ -408,7 +414,14 @@ public class AppFixture : IAsyncLifetime
     public void Click(AutomationElement element, MouseButton button, bool doubleClick)
     {
         AssertForeground();
-        var point = element.GetClickablePoint();
+        Point point;
+        try { point = element.GetClickablePoint(); }
+        catch (FlaUI.Core.Exceptions.NoClickablePointException) when (!element.IsOffscreen && element.BoundingRectangle.Width > 0 && element.BoundingRectangle.Height > 0)
+        {
+            // WinUI text inside CollectionView items may omit the clickable-point provider.
+            var bounds = element.BoundingRectangle;
+            point = new Point((int)(bounds.Left + bounds.Width / 2), (int)(bounds.Top + bounds.Height / 2));
+        }
         AssertOwnedWindow(WindowFromPoint(point));
         if (doubleClick)
         {
@@ -432,10 +445,17 @@ public class AppFixture : IAsyncLifetime
 
         while (sw.Elapsed < timeout)
         {
-            var element = finder(MainWindow);
-            if (element != null)
+            try
             {
-                return element;
+                var element = finder(MainWindow);
+                if (element != null)
+                {
+                    return element;
+                }
+            }
+            catch (COMException ex) when (ex.HResult == unchecked((int)0x80131505))
+            {
+                // WinUI can briefly time out while its first visual tree is being built.
             }
             await Task.Delay(100);
         }

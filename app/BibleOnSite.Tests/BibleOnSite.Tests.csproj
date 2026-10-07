@@ -59,6 +59,7 @@
     <Compile Include="..\BibleOnSite\Services\StarterService.cs" Link="Services\StarterService.cs" />
     <Compile Include="..\BibleOnSite\Services\LocalDatabaseService.cs" Link="Services\LocalDatabaseService.cs" />
     <Compile Include="..\BibleOnSite\Services\PerekDataService.cs" Link="Services\PerekDataService.cs" />
+    <Compile Include="..\BibleOnSite\Services\SearchIndexService.cs" Link="Services\SearchIndexService.cs" />
     <Compile Include="..\BibleOnSite\Services\NetworkService.cs" Link="Services\NetworkService.cs" />
     <Compile Include="..\BibleOnSite\Services\IAnalyticsService.cs" Link="Services\IAnalyticsService.cs" />
     <Compile Include="..\BibleOnSite\Services\AnalyticsService.cs" Link="Services\AnalyticsService.cs" />

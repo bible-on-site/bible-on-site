@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
+             xmlns:models="clr-namespace:BibleOnSite.Models"
+             x:Class="BibleOnSite.Controls.FloatingSearchBar"
+             x:DataType="viewmodels:SearchViewModel"
+             FlowDirection="RightToLeft">
+    <VerticalStackLayout Spacing="6">
+        <Border StrokeShape="RoundRectangle 12" Padding="8,2"
+                BackgroundColor="{AppThemeBinding Light=White, Dark=#242424}"
+                Stroke="{AppThemeBinding Light=#DDDDDD, Dark=#555555}">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <SearchBar x:Name="SearchInput" AutomationId="PerekSearchInput"
+                           Text="{Binding SearchPhrase, Mode=TwoWay}"
+                           Placeholder="חיפוש" BackgroundColor="Transparent"
+                           TextChanged="OnSearchTextChanged" Focused="OnSearchFocused"
+                           SearchButtonPressed="OnSearchSubmitted"/>
+                <Button Grid.Column="1" x:Name="FiltersButton" Text="סינון"
+                        AutomationId="SearchFiltersButton" IsVisible="False"
+                        BackgroundColor="Transparent" TextColor="{AppThemeBinding Light=#234F68, Dark=#8CC9ED}"
+                        SemanticProperties.Description="הגדרות חיפוש" Clicked="OnFiltersClicked"/>
+                <Button Grid.Column="2" x:Name="CloseButton" Text="✕" IsVisible="False"
+                        AutomationId="CloseSearchButton" BackgroundColor="Transparent"
+                        TextColor="{AppThemeBinding Light=Black, Dark=White}"
+                        SemanticProperties.Description="סגירת החיפוש" Clicked="OnCloseClicked"/>
+            </Grid>
+        </Border>
+        <Border x:Name="SearchPanel" AutomationId="SearchPanel" IsVisible="False"
+                StrokeShape="RoundRectangle 12" Padding="12"
+                BackgroundColor="{AppThemeBinding Light=White, Dark=#242424}"
+                Stroke="{AppThemeBinding Light=#DDDDDD, Dark=#555555}">
+            <VerticalStackLayout Spacing="6">
+                <VerticalStackLayout x:Name="FiltersPanel" IsVisible="False" Spacing="4">
+                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="4">
+                        <Button Text="מה לחפש" AutomationId="SearchKindsTab" Clicked="OnKindsTabClicked" FontSize="13" Padding="2"/>
+                        <Button Grid.Column="1" Text="היכן לחפש" AutomationId="SearchBooksTab" Clicked="OnBooksTabClicked" FontSize="13" Padding="2"/>
+                        <Button Grid.Column="2" Text="הגדרות נוספות" AutomationId="SearchOptionsTab" Clicked="OnOptionsTabClicked" FontSize="13" Padding="2"/>
+                    </Grid>
+                    <ScrollView HeightRequest="220">
+                        <VerticalStackLayout>
+                            <VerticalStackLayout x:Name="KindsFilters"/>
+                            <VerticalStackLayout x:Name="BookFilters" IsVisible="False"/>
+                            <VerticalStackLayout x:Name="MoreFilters" IsVisible="False" Padding="8" Spacing="8">
+                                <Label Text="מספר תוצאות מרבי"/>
+                                <Picker x:Name="LimitPicker" AutomationId="SearchLimitPicker"
+                                        Title="מספר תוצאות" SelectedIndexChanged="OnLimitChanged"/>
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </ScrollView>
+                </VerticalStackLayout>
+                <Grid ColumnDefinitions="Auto,*">
+                    <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}"
+                                       WidthRequest="24" HeightRequest="24"/>
+                    <Label Grid.Column="1" x:Name="SearchStatus" AutomationId="SearchStatus" FontSize="13"
+                           VerticalOptions="Center" Text="הקלידו פרק, פסוק, פירוש או שם רב"/>
+                </Grid>
+                <Label x:Name="ErrorText" IsVisible="False" Text="{Binding ErrorMessage}" TextColor="{AppThemeBinding Light=#B02020, Dark=#FF9090}" FontSize="13"/>
+                <Label x:Name="AvailabilityText" IsVisible="False" Text="{Binding AvailabilityMessage}" FontSize="13"/>
+                <CollectionView x:Name="ResultsList" AutomationId="SearchResults"
+                                ItemsSource="{Binding SearchResults}" HeightRequest="280"
+                                SelectionMode="Single" SelectionChanged="OnResultSelected">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="models:SearchResult">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Padding="4,10">
+                                <Image Source="{Binding ThumbnailUrl}" IsVisible="{Binding HasThumbnail}"
+                                       WidthRequest="36" HeightRequest="36" VerticalOptions="Start"/>
+                                <VerticalStackLayout Grid.Column="1" Spacing="3">
+                                    <Label Text="{Binding Category}" FontSize="11" TextColor="{AppThemeBinding Light=#666666, Dark=#BBBBBB}"/>
+                                    <Label Text="{Binding Title}" AutomationId="SearchResultTitle" FontSize="16" FontAttributes="Bold"/>
+                                    <Label Text="{Binding SubtitleHtml}" TextType="Html" FontSize="14" MaxLines="3"/>
+                                    <BoxView HeightRequest="1" BackgroundColor="{AppThemeBinding Light=#EEEEEE, Dark=#444444}"/>
+                                </VerticalStackLayout>
+                            </Grid>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </VerticalStackLayout>
+        </Border>
+    </VerticalStackLayout>
+</ContentView>

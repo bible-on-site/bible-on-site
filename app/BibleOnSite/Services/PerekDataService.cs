@@ -39,6 +39,8 @@ public class PerekDataService
     /// </summary>
     public IReadOnlyDictionary<int, Perek>? Perakim => _perakim;
 
+    internal Task<SQLiteAsyncConnection> GetSearchConnectionAsync() => _databaseService.GetDatabaseAsync();
+
     /// <summary>
     /// Loads all sefarim and perakim from the database.
     /// </summary>
