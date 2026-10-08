@@ -6,7 +6,7 @@ ARG APP_NAME=api
 ################################################################################
 # Create a stage for building the application.
 
-FROM rust:1.98.1-alpine AS build
+FROM rust:1.99.0-alpine AS build
 ARG APP_NAME
 WORKDIR /app
 

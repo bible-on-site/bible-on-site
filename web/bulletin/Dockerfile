@@ -1,7 +1,7 @@
 # Build stage for Lambda-compatible binary (musl target).
 # Build context must be web/ — ensure bulletin/ is included in web/.dockerignore.
 
-FROM rust:1.98.1-alpine AS build
+FROM rust:1.99.0-alpine AS build
 WORKDIR /app
 
 # Install host build dependencies.
