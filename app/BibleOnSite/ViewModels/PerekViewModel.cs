@@ -105,7 +105,28 @@ public partial class PerekViewModel : ObservableObject
     /// <summary>Currently displayed carousel perek.</summary>
     [ObservableProperty]
     private Perek? _currentCarouselPerek;
+
+    /// <summary>שניים מקרא reading mode — renders every pasuk twice consecutively.</summary>
+    [ObservableProperty]
+    private bool _isShnayimMikraEnabled;
+
+    /// <summary>תיקון קוראים reading mode — continuous chapter flow with a tap-to-toggle marks.</summary>
+    [ObservableProperty]
+    private bool _isTikkunKorimEnabled;
+
+    /// <summary>Whether niqqud and taamim are currently hidden in תיקון קוראים mode.</summary>
+    [ObservableProperty]
+    private bool _tikkunMarksHidden;
 #pragma warning restore MVVMTK0045
+
+    partial void OnIsTikkunKorimEnabledChanged(bool value)
+    {
+        // Leaving the mode restores the original marked display settings.
+        if (!value)
+        {
+            TikkunMarksHidden = false;
+        }
+    }
 
     public PerekViewModel() : this(PreferencesService.Instance, null)
     {

@@ -926,11 +926,22 @@ public partial class PerekPage : ContentPage
 
         // Get the Pasuk from the behavior's associated view (the Border)
         if (sender is LongPressBehavior behavior &&
-            behavior.AssociatedView?.BindingContext is Pasuk pasuk)
+            ResolvePasuk(behavior.AssociatedView?.BindingContext) is { } pasuk)
         {
             await HandlePasukTapAsync(pasuk, behavior.AssociatedView);
         }
     }
+
+    /// <summary>
+    /// Resolves the logical pasuk behind a row's BindingContext — rows bind to
+    /// <see cref="PasukDisplayItem"/> so שניים מקרא copies map to the same pasuk.
+    /// </summary>
+    private static Pasuk? ResolvePasuk(object? bindingContext) => bindingContext switch
+    {
+        PasukDisplayItem item => item.Pasuk,
+        Pasuk pasuk => pasuk,
+        _ => null
+    };
 
     /// <summary>
     /// Handles right-click on pasuk - enters selection mode (Windows only).
@@ -974,7 +985,7 @@ public partial class PerekPage : ContentPage
         _longPressTokenSource?.Cancel();
         _longPressTokenSource = new CancellationTokenSource();
 
-        if (sender is Border border && border.BindingContext is Pasuk pasuk)
+        if (sender is Border border && ResolvePasuk(border.BindingContext) is { } pasuk)
         {
             _pressedPasukNum = pasuk.PasukNum;
 
@@ -1039,7 +1050,7 @@ public partial class PerekPage : ContentPage
 
         // The sender is the LongPressBehavior - get the Pasuk from the associated view's BindingContext
         if (sender is LongPressBehavior behavior &&
-            behavior.AssociatedView?.BindingContext is Pasuk pasuk)
+            ResolvePasuk(behavior.AssociatedView?.BindingContext) is { } pasuk)
         {
             ResetRecitationContext();
             var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
@@ -1300,6 +1311,56 @@ public partial class PerekPage : ContentPage
     {
         // Menu stays open - user can click multiple satellites
         // Menu closes only when clicking the hamburger button again
+    }
+
+    /// <summary>
+    /// Opens/closes the reader options menu (הקראות, שניים מקרא, תיקון קוראים).
+    /// </summary>
+    private void OnReaderMenuButtonClicked(object? sender, EventArgs e)
+    {
+        ReaderMenuOverlay.IsVisible = !ReaderMenuOverlay.IsVisible;
+    }
+
+    /// <summary>
+    /// Dismisses the reader menu when tapping outside the panel.
+    /// </summary>
+    private void OnReaderMenuDismissed(object? sender, TappedEventArgs e)
+    {
+        ReaderMenuOverlay.IsVisible = false;
+    }
+
+    /// <summary>
+    /// הקראות menu item - navigates to the recitation preferences.
+    /// </summary>
+    private async void OnReaderMenuRecitationsTapped(object? sender, TappedEventArgs e)
+    {
+        ReaderMenuOverlay.IsVisible = false;
+        await Shell.Current.GoToAsync("PreferencesPage");
+    }
+
+    /// <summary>
+    /// שניים מקרא menu item - toggles double rendering of every pasuk.
+    /// </summary>
+    private void OnShnayimMikraTapped(object? sender, TappedEventArgs e)
+    {
+        _viewModel.IsShnayimMikraEnabled = !_viewModel.IsShnayimMikraEnabled;
+    }
+
+    /// <summary>
+    /// תיקון קוראים menu item - toggles the continuous reading flow.
+    /// </summary>
+    private void OnTikkunKorimTapped(object? sender, TappedEventArgs e)
+    {
+        _viewModel.IsTikkunKorimEnabled = !_viewModel.IsTikkunKorimEnabled;
+    }
+
+    /// <summary>
+    /// Tap on the תיקון קוראים text - toggles niqqud+taamim for the entire perek.
+    /// Runs on a dedicated view so it cannot trigger selection, playback or navigation.
+    /// </summary>
+    private void OnTikkunTextTapped(object? sender, TappedEventArgs e)
+    {
+        _viewModel.TikkunMarksHidden = !_viewModel.TikkunMarksHidden;
     }
 
     /// <summary>
