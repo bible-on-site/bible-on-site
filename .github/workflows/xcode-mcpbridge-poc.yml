@@ -2,9 +2,6 @@ name: Xcode mcpbridge PoC
 
 on:
   workflow_dispatch:
-  push:
-    branches: [devin/ios-issues-pass]
-    paths: [.github/workflows/xcode-mcpbridge-poc.yml]
 
 permissions:
   contents: read
