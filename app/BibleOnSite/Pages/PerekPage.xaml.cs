@@ -709,8 +709,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable
     /// (SafeAreaEdges = Container), and each Layout pads independently —
     /// clearing it only on MainGrid just moves the padding to ContentArea,
     /// which is what produced the empty landscape side bands (#1308).
-    /// Opt the entire subtree out except the root grid's bottom edge, which
-    /// ApplyBottomBarSafeArea manages around the home indicator itself.
+    /// Keep the root's top inset so the reader toolbar stays below the status
+    /// bar and notch. Its bottom edge also respects the home indicator, with
+    /// ApplyBottomBarSafeArea managing the bottom bar itself. Leave the sides
+    /// and descendant layouts unpadded so landscape content spans the width.
     /// Views inside scroll views (the carousel cells and pasukim lists) never
     /// apply safe-area padding, so only the direct layout chain needs this.
     /// </summary>
@@ -718,7 +720,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
     {
         MainGrid.SafeAreaEdges = new SafeAreaEdges(
             SafeAreaRegions.None,
-            SafeAreaRegions.None,
+            SafeAreaRegions.Container,
             SafeAreaRegions.None,
             SafeAreaRegions.Container);
         DisableSafeAreaPadding(MainGrid);
