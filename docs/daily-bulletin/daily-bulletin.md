@@ -14,6 +14,8 @@ Preparation stores the input snapshot, email HTML, PDF bytes, subject, source, a
 
 `data/mysql/tanah_daily_bulletin_upgrade.sql` is an additive, repeatable migration in the normal data deployment manifest. It retains article eligibility, prepared bulletins, and delivery records. It intentionally builds table DDL with `CONCAT`: the existing database deployment Lambda rewrites literal `CREATE TABLE` statements into destructive rebuilds, even with `IF NOT EXISTS`.
 
+The preprocessor also rewrites table/view creation keywords inside SQL comments. The migration avoids those phrases in its comments, and the deployment validator rejects them. Validate both preprocessing and execution against disposable MySQL before changing this migration.
+
 The fresh local/CI population path also applies the upgrade after creating the dynamic schema. Never rebuild production dynamic tables to apply this change.
 
 ## Preview runtime
