@@ -49,7 +49,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Env
 dotenvy = "0.15"
 ammonia = "4.2.0"
-base64 = "0.22.1"
+base64 = "0.23.0"
 
 [dev-dependencies]
 sea-orm = { version = "2.0.4", default-features = false, features = ["mock"] }

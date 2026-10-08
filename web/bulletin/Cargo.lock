@@ -383,7 +383,7 @@ version = "0.1.32"
 dependencies = [
  "ammonia",
  "anyhow",
- "base64 0.22.1",
+ "base64 0.23.1",
  "dotenvy",
  "entities",
  "lambda_http",
