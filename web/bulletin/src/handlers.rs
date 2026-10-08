@@ -150,7 +150,7 @@ pub async fn cli_handler() -> anyhow::Result<()> {
     let mut input = String::new();
     io::stdin().read_to_string(&mut input)?;
 
-    if std::env::args().any(|arg| arg == "--daily-preview") {
+    if std::env::args_os().any(|arg| arg == "--daily-preview") {
         let req: bulletin::daily::DailyInput = serde_json::from_str(&input)?;
         let result = bulletin::daily::render(&req, &daily_fonts_dir())?;
         serde_json::to_writer(io::stdout(), &result)?;
