@@ -95,13 +95,7 @@ public partial class AppShell : Shell
 		}
 		// MAUI's own flyout pan only engages in the left 10% band; mirror it on
 		// the right edge for the RTL drawer so ordinary carousel swipes keep paging.
-		var x = touch.LocationInView(view).X;
-		var allowed = x >= view.Frame.Width * 0.9;
-		if (x >= view.Frame.Width * 0.5 || allowed)
-		{
-			Console.WriteLine($"[EdgePan] ShouldReceiveTouch x={x:F1} width={view.Frame.Width:F1} page={shell.CurrentPage?.GetType().Name} behavior={GetFlyoutBehavior(shell.CurrentPage)} => {allowed}");
-		}
-		return allowed;
+		return touch.LocationInView(view).X >= view.Frame.Width * 0.9;
 	}
 
 	private static bool OnFlyoutEdgePanShouldBegin(UIGestureRecognizer recognizer)
@@ -113,14 +107,11 @@ public partial class AppShell : Shell
 		// Commit only to a clear leftward pull — a vertical drag at the right
 		// edge must keep scrolling the page instead of opening the drawer.
 		var translation = pan.TranslationInView(pan.View);
-		var allowed = translation.X < 0 && Math.Abs(translation.X) > Math.Abs(translation.Y);
-		Console.WriteLine($"[EdgePan] ShouldBegin translation=({translation.X:F1},{translation.Y:F1}) => {allowed}");
-		return allowed;
+		return translation.X < 0 && Math.Abs(translation.X) > Math.Abs(translation.Y);
 	}
 
 	private static void OnSharedFlyoutEdgePan(UIPanGestureRecognizer pan)
 	{
-		Console.WriteLine($"[EdgePan] fired state={pan.State} flyoutPresented={Current?.FlyoutIsPresented}");
 		if (Current is AppShell shell && !shell.FlyoutIsPresented)
 		{
 			shell.FlyoutIsPresented = true;

@@ -104,15 +104,18 @@ try {
   try {
     const androidSdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT;
     const adb = androidSdk ? resolve(androidSdk, "platform-tools", process.platform === "win32" ? "adb.exe" : "adb") : "adb";
+    // Log export duration scales with how long the suite ran; a 30s budget
+    // intermittently times out after a full test pass and fails the job.
+    const logExportTimeout = 120000;
     const nativeLog = platform === "android"
-      ? execFileSync(adb, ["-s", process.env.MOBILE_UDID, "logcat", "-d"], { encoding: "utf8", timeout: 30000, maxBuffer: 20 * 1024 * 1024, windowsHide: true })
-      : execFileSync("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID, "log", "show", "--style", "compact", "--last", `${Math.ceil((Date.now() - runStarted) / 1000)}s`, "--predicate", 'process == "BibleOnSite"'], { encoding: "utf8", timeout: 30000, maxBuffer: 20 * 1024 * 1024 });
+      ? execFileSync(adb, ["-s", process.env.MOBILE_UDID, "logcat", "-d"], { encoding: "utf8", timeout: logExportTimeout, maxBuffer: 20 * 1024 * 1024, windowsHide: true })
+      : execFileSync("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID, "log", "show", "--style", "compact", "--last", `${Math.ceil((Date.now() - runStarted) / 1000)}s`, "--predicate", 'process == "BibleOnSite"'], { encoding: "utf8", timeout: logExportTimeout, maxBuffer: 20 * 1024 * 1024 });
     writeFileSync(resolve(artifacts, "device.log"), nativeLog);
     if (platform === "ios") {
       const lifecycleLog = execFileSync("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
         "log", "show", "--style", "compact", "--last", "10m", "--predicate",
         '(process == "SpringBoard" OR process == "runningboardd" OR process == "ReportCrash" OR process == "testmanagerd") AND (eventMessage CONTAINS[c] "daily929" OR eventMessage CONTAINS[c] "BibleOnSite" OR eventMessage CONTAINS[c] "WebDriverAgent" OR eventMessage CONTAINS[c] "xctrunner")'],
-      { encoding: "utf8", timeout: 30000, maxBuffer: 20 * 1024 * 1024 });
+      { encoding: "utf8", timeout: logExportTimeout, maxBuffer: 20 * 1024 * 1024 });
       writeFileSync(resolve(artifacts, "app-lifecycle.log"), lifecycleLog);
       const reportDirectories = [resolve(homedir(), "Library/Logs/DiagnosticReports"),
         resolve(homedir(), "Library/Developer/CoreSimulator/Devices", process.env.MOBILE_UDID,
