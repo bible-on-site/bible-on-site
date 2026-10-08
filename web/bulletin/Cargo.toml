@@ -21,7 +21,7 @@ lambda_http = "1.3"
 lambda_runtime = "1.4"
 
 # PDF generation via Typst engine (proper Hebrew text shaping via rustybuzz)
-typst-as-lib = { version = "0.16", default-features = false }
+typst-as-lib = { version = "0.17", default-features = false }
 typst-pdf = "0.15"
 
 # Database — shared layer from API
