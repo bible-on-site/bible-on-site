@@ -24,7 +24,7 @@ jobs:
             workload: maui-android
           - platform: iOS
             artifact: ios
-            runner: macos-26
+            runner: xcode-27
             workload: maui-ios
     env:
       MOBILE_PLATFORM: ${{ matrix.platform }}
@@ -36,7 +36,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          # Keep aligned with Xcode 26.6 and the iOS packaging workload; see #1871.
+          # Keep aligned with Xcode 27 and the iOS packaging workload; see #1871.
           dotnet-version: "10.0.401"
 
       - name: Hash NuGet dependency inputs
@@ -93,11 +93,11 @@ jobs:
 
       - name: Select compatible Xcode
         if: matrix.platform == 'iOS'
-        run: sudo xcode-select --switch /Applications/Xcode_26.6.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
 
       - name: Install MAUI workload
-        # 10.0.401.1 selects an iOS 27 SDK that needs a newer Xcode; see #1871.
-        run: dotnet workload install ${{ matrix.workload }} --version 10.0.401
+        # 10.0.401.1 selects the iOS 27 SDK, which requires Xcode 27; see #1871.
+        run: dotnet workload install ${{ matrix.workload }} --version 10.0.401.1
 
       - name: Build complete simulator app
         # Explicit bash enables pipefail, preserving npm failures through tee.

@@ -272,6 +272,10 @@ partial class PadDeliveryService
 #endif
 
 #if IOS || MACCATALYST
+// NSBundleResourceRequest is obsoleted in the iOS 27 SDK (Apple directs new code to
+// Background Assets) but remains functional on iOS 27 devices; the BGAssetDownloadManager
+// port is tracked at https://github.com/bible-on-site/bible-on-site/issues/2036.
+#pragma warning disable CA1422
 partial class PadDeliveryService
 {
 
@@ -538,4 +542,5 @@ partial class PadDeliveryService
         }
     }
 }
+#pragma warning restore CA1422
 #endif
