@@ -33,7 +33,10 @@
 		"node": ">=26.10.0 <27"
 	},
 	"overrides": {
-		"deepmerge-ts": "8.0.2"
+		"deepmerge-ts": "8.0.2",
+		"@istanbuljs/load-nyc-config": {
+			"js-yaml": "^5.4.3"
+		}
 	},
 	"dependencies": {
 		"@aws-sdk/client-s3": "3.1146.0",
