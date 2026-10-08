@@ -1,0 +1,48 @@
+name: Xcode mcpbridge PoC
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  poc:
+    name: Exercise xcrun mcpbridge on iOS simulator
+    runs-on: xcode-27
+    timeout-minutes: 20
+    steps:
+      - name: Select compatible Xcode
+        run: sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
+
+      - name: Verify mcpbridge exists
+        run: |
+          xcrun --find mcpbridge
+          # Probe help; a nonzero exit is recorded but must not mask absence.
+          set +e
+          xcrun mcpbridge --help 2>&1 | head -40
+          set -e
+
+      - name: Boot simulator
+        run: |
+          xcrun simctl boot "iPhone 17" 2>/dev/null; true
+          xcrun simctl bootstatus "iPhone 17" -b
+          xcrun simctl list devices booted
+
+      - name: Probe mcpbridge MCP tools
+        run: |
+          python3 - <<'PY'
+          import subprocess
+          messages = [
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"poc","version":"0"}}}',
+            '{"jsonrpc":"2.0","method":"notifications/initialized"}',
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}',
+          ]
+          proc = subprocess.run(
+              ["xcrun", "mcpbridge"], input="\n".join(messages) + "\n",
+              capture_output=True, text=True, timeout=60)
+          print(proc.stdout[:8000])
+          print("--- stderr ---")
+          print(proc.stderr[:2000])
+          assert '"result"' in proc.stdout, "mcpbridge returned no tools/list result"
+          PY
