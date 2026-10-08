@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.478",
+	"version": "0.2.479",
 	"private": true,
 	"license": "MIT",
 	"browserslist": [
@@ -51,7 +51,10 @@
 		"brace-expansion": "5.0.12",
 		"deepmerge-ts": "8.0.2",
 		"postcss": "8.5.29",
-		"sharp": "0.35.5"
+		"sharp": "0.35.5",
+		"@istanbuljs/load-nyc-config": {
+			"js-yaml": "^5.4.3"
+		}
 	},
 	"dependencies": {
 		"@aws-sdk/client-lambda": "3.1146.0",
@@ -116,5 +119,11 @@
 		"@emnapi/wasi-threads": "2.2.0",
 		"@napi-rs/wasm-runtime": "1.1.5",
 		"@tybys/wasm-util": "0.10.2"
+	},
+	"allowScripts": {
+		"@parcel/watcher@2.6.0": true,
+		"@swc/core@1.16.13": true,
+		"esbuild@0.28.2": true,
+		"unrs-resolver@1.12.2": true
 	}
 }

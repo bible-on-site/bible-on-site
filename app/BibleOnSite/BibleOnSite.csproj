@@ -48,11 +48,11 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.0.129</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>5.0.131</ApplicationDisplayVersion>
 		<!-- Windows MSIX requires each version component ≤65535, so we use a separate incrementing value -->
 		<!-- Android versionCode can be large, continuing from Play Store's 40000017 -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000129</ApplicationVersion>
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">129</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000131</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">131</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<!-- WindowsPackageType None = unpackaged (fixes "Class not registered" when running from CLI). MSIX for Store: /p:WindowsPackageType=MSIX -->
@@ -207,6 +207,17 @@
 	</Target>
 
 	<!-- Android Debug fallback: bundle perushim notes in app package so they work without PAD (APK installs). -->
+	<!-- Generated book packs use the same delivery SDK, independently of perushim_notes. -->
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+		<AndroidAsset Include="Platforms\Android\AssetPacks\recitation_*\*.zip" Link="%(Filename)%(Extension)" AssetPack="%(Filename)" DeliveryType="OnDemand" />
+		<MauiAsset Include="Platforms\Android\AssetPacks\recitation_*\*.zip" LogicalName="%(Filename)%(Extension)" Condition="'$(Configuration)' == 'Debug'" />
+	</ItemGroup>
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
+		<MauiAsset Include="Platforms\Windows\Recitation\*.zip" LogicalName="%(Filename)%(Extension)" />
+	</ItemGroup>
+	<Target Name="RequireRecitationExtensionAssets" BeforeTargets="Build" Condition="'$(RequireRecitationAssets)' == 'true'">
+		<Error Condition="!Exists('Resources/Raw/recitation-catalog.json')" Text="Generate the recitation catalog and book packs before packaging this release." />
+	</Target>
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Debug' AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')">
 		<MauiAsset Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" LogicalName="sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
 	</ItemGroup>
