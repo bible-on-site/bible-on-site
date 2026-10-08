@@ -367,7 +367,7 @@ dependencies = [
 
 [[package]]
 name = "bible-on-site-bulletin"
-version = "0.1.29"
+version = "0.1.32"
 dependencies = [
  "anyhow",
  "dotenvy",

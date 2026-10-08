@@ -1,18 +1,17 @@
 # Note: Using classic docker build (DOCKER_BUILDKIT=0) for network:host support
 # Do not add BuildKit-specific syntax directives (e.g. --mount)
 
-ARG RUST_VERSION=1.98.1
 ARG APP_NAME=api
 
 ################################################################################
 # Create a stage for building the application.
 
-FROM rust:${RUST_VERSION}-alpine AS build
+FROM rust:1.99.0-alpine AS build
 ARG APP_NAME
 WORKDIR /app
 
 # Install host build dependencies.
-# The base image tag (rust:1.98.1-alpine) already pins the toolchain; alpine
+# The pinned base image already fixes the toolchain; alpine
 # renames versioned packages (clangNN/lldNN) per release, so apk pins would
 # break on the next base bump for no reproducibility gain.
 # hadolint ignore=DL3018
