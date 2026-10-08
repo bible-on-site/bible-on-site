@@ -36,7 +36,7 @@ public partial class PerekPage
 
     private async Task InitializeRecitationAsync()
     {
-        try { await RecitationService.Instance.InitializeAsync(); UpdateSelectionBar(); _ = RecitationService.Instance.RefreshIfStaleAsync(); }
+        try { await RecitationService.Instance.InitializeAsync(); _viewModel.RefreshRecitationAvailability(); UpdateSelectionBar(); _ = RecitationService.Instance.RefreshIfStaleAsync(); }
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Recitation extension: {ex.Message}"); }
     }
 
@@ -63,7 +63,7 @@ public partial class PerekPage
 
     private void OnRecitationPackageChanged(object? sender, EventArgs e) => Dispatcher.Dispatch(() =>
     {
-        RefreshFocusedRecitation(); UpdateSelectionBar();
+        _viewModel.RefreshRecitationAvailability(); RefreshFocusedRecitation(); UpdateSelectionBar();
     });
     private void OnPlaybackStopRequested(object? sender, EventArgs e) => Dispatcher.Dispatch(() => { StopRecitation(); UpdateSelectionBar(); });
 
@@ -210,12 +210,61 @@ public partial class PerekPage
             UpdatePasukSelection(view, pasuk.PasukNum);
             return;
         }
-        if (!_doubleTap.Tap(_viewModel.PerekId, pasuk.PasukNum, Environment.TickCount64))
+        var doubled = _doubleTap.Tap(_viewModel.PerekId, pasuk.PasukNum, Environment.TickCount64);
+        if (!doubled)
         {
+            // קריינות: a single tap plays just this pasuk; a double tap still
+            // reaches the focused-pasuk view on the second Tap() call.
+            if (CanPlayPasukOnTap)
+            {
+                await PlayPasukRecitationAsync(pasuk);
+            }
             return;
         }
 
         await OpenFocusedPasukAsync(pasuk);
+    }
+
+    /// <summary>
+    /// Single-tap pasuk playback applies only while קריינות is checked and the
+    /// currently displayed perek has downloaded audio.
+    /// </summary>
+    private bool CanPlayPasukOnTap => _viewModel.IsQriynotEnabled &&
+        _viewModel.Perek is { } perek && RecitationService.Instance.HasAudio(perek.PerekId);
+
+    /// <summary>
+    /// Plays exactly one pasuk by bounding the track to its word timings.
+    /// Requires an aligned ("ready") track — without word timings there is no
+    /// pasuk boundary to stop at.
+    /// </summary>
+    private async Task PlayPasukRecitationAsync(Pasuk pasuk)
+    {
+        if (_viewModel.Perek is not { } perek)
+        {
+            return;
+        }
+
+        var track = RecitationService.Instance.GetTrack(perek.PerekId);
+        if (track?.AlignmentStatus != "ready")
+        {
+            return;
+        }
+
+        var words = track.Words.Where(w => w.Pasuk == pasuk.PasukNum).ToList();
+        if (words.Count == 0 || words[0].StartMs == null || words[^1].EndMs == null)
+        {
+            return;
+        }
+
+        var key = $"pasuk:{perek.PerekId}:{pasuk.PasukNum}";
+        if (_playingKey == key)
+        {
+            // The second tap of a double-tap opens the focused pasuk — let the
+            // pasuk keep playing rather than toggling pause.
+            return;
+        }
+
+        await PlayRecitationAsync(key, ranges: [(words[0].StartMs!.Value, words[^1].EndMs!.Value)]);
     }
 
     private async void OnPasukDoubleTapped(object? sender, TappedEventArgs e)
@@ -465,6 +514,8 @@ public partial class PerekPage
 
     protected override bool OnBackButtonPressed()
     {
+        if (ReaderMenuOverlay.IsVisible)
+        { ReaderMenuOverlay.IsVisible = false; return true; }
         if (_focusedPasuk != null || _chapterRecitationSelection || _viewModel.SelectedPasukNums.Count > 0)
         { ClearAllSelections(); return true; }
         return base.OnBackButtonPressed();
