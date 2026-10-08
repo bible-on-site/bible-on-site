@@ -39,6 +39,29 @@ public class SearchIndexServiceTests
     }
 
     [Fact]
+    public async Task LegacyIndex_IsRebuiltAndKeepsOriginalScriptureInExternalContent()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        var path = Path.Combine(storage.Root, "search.sqlite");
+        var legacy = await storage.CreateDatabaseAsync("search.sqlite",
+            "CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)",
+            "CREATE VIRTUAL TABLE verses USING fts5(Text, Body UNINDEXED, PerekId UNINDEXED, PasukNum UNINDEXED, PerushId UNINDEXED, SeferId UNINDEXED)",
+            "INSERT INTO verses VALUES ('ישן','תוכן ישן',1,1,0,1)");
+        var source = new FileInfo(Path.Combine(storage.Root, BibleDb));
+        await legacy.ExecuteAsync("INSERT INTO search_metadata VALUES ('verses', ?)", $"v1:{source.Length}:{source.LastWriteTimeUtc.Ticks}");
+        await using var index = new SearchIndexService(perakim, null, path);
+        var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Pasuk }, new HashSet<int> { 1 }, 10, default);
+        hits.Should().ContainSingle().Which.Text.Should().Contain("בְּרֵאשִׁ֖ית");
+        (await legacy.ExecuteScalarAsync<string>("SELECT Text FROM verses_content WHERE PerekId = 1"))
+            .Should().Contain("בְּרֵאשִׁ֖ית");
+        (await legacy.ExecuteScalarAsync<string>("SELECT fingerprint FROM search_metadata WHERE name = 'verses'"))
+            .Should().StartWith("v2:");
+        (await index.SearchAsync("ישן", new HashSet<SearchFilter> { SearchFilter.Pasuk }, new HashSet<int> { 1 }, 10, default))
+            .Should().BeEmpty("a migrated cache cannot retain stale search results");
+    }
+
+    [Fact]
     public async Task Search_UsesLevenshteinFallback_AndReusesCompletedIndex()
     {
         await using var storage = new TestStorage();
@@ -139,6 +162,7 @@ public class SearchIndexServiceTests
         SearchText.Score("משה", "דוד").Should().Be(0);
         SearchText.Score("ברא אלהים", "ברא").Should().BeGreaterThan(SearchText.Score("בראשית", "ברא"));
         SearchText.PlainText("<p>בריאת</p><p>העולם</p>").Should().Contain("בריאת העולם");
+        SearchText.PlainText("בריאה &amp; אור").Should().Be("בריאה & אור");
     }
 
     [Fact]

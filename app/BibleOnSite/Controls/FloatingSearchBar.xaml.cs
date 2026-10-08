@@ -30,6 +30,20 @@ public partial class FloatingSearchBar : ContentView
 
     public void SetSource(string source) => SearchInput.Placeholder = source;
 
+    public View DetachHeader()
+    {
+        SearchLayout.Remove(SearchHeader);
+        // The header replaces the reader's source toolbar while results float over the verses.
+        SearchHeader.BindingContext = _viewModel;
+        return SearchHeader;
+    }
+
+    public async Task OpenAsync()
+    {
+        await OpenSearchAsync();
+        Dispatcher.Dispatch(() => SearchInput.Focus());
+    }
+
     private async void OnSearchFocused(object? sender, FocusEventArgs e)
     {
         await OpenSearchAsync();
@@ -182,7 +196,7 @@ public partial class FloatingSearchBar : ContentView
         UpdateStatus();
     }
 
-    private void ShowFilterTab(VerticalStackLayout tab)
+    private void ShowFilterTab(View tab)
     {
         KindsFilters.IsVisible = tab == KindsFilters;
         BookFilters.IsVisible = tab == BookFilters;
@@ -211,25 +225,37 @@ public partial class FloatingSearchBar : ContentView
             foreach (var (key, group) in SefarimData.SefarimGroups)
             {
                 var groupIndex = key - 1;
+                var column = new VerticalStackLayout();
+                var bookRows = new List<Grid>();
                 var groupRow = FilterRow(group.Header, $"SearchGroup{key}", _viewModel.IsSeferGroupFilterEnabled(groupIndex), enabled =>
                 {
                     _viewModel.SetSeferGroupFilterEnabled(groupIndex, enabled);
-                    _ = BuildFiltersAsync();
+                    _buildingFilters = true;
+                    foreach (var row in bookRows)
+                    {
+                        ((CheckBox)row.Children[0]).IsChecked = enabled;
+                    }
+                    _buildingFilters = false;
                     ScheduleSearch();
                 });
-                BookFilters.Add(groupRow);
+                ((Label)groupRow.Children[1]).FontAttributes = FontAttributes.Bold;
+                column.Add(groupRow);
+                BookFilters.Add(column, groupIndex);
                 var books = PerekDataService.Instance.Perakim!.Values.Where(perek => perek.SeferId >= group.From && perek.SeferId <= group.To)
                     .DistinctBy(perek => perek.SeferId).OrderBy(perek => perek.SeferId);
                 foreach (var book in books)
                 {
-                    BookFilters.Add(FilterRow(book.SeferName, $"SearchBook{book.SeferId}", _viewModel.IsSeferFilterEnabled(book.SeferId), enabled =>
+                    var row = FilterRow(book.SeferName, $"SearchBook{book.SeferId}", _viewModel.IsSeferFilterEnabled(book.SeferId), enabled =>
                     {
                         _viewModel.SetSeferFilterEnabled(book.SeferId, enabled);
                         _buildingFilters = true;
                         ((CheckBox)groupRow.Children[0]).IsChecked = _viewModel.IsSeferGroupFilterEnabled(groupIndex);
                         _buildingFilters = false;
                         ScheduleSearch();
-                    }));
+                    });
+                    ((Label)row.Children[1]).FontSize = 12;
+                    bookRows.Add(row);
+                    column.Add(row);
                 }
             }
             _filtersBuilt = true;
@@ -239,7 +265,7 @@ public partial class FloatingSearchBar : ContentView
 
     private Grid FilterRow(string title, string automationId, bool enabled, Action<bool> changed)
     {
-        var checkBox = new CheckBox { IsChecked = enabled, AutomationId = automationId };
+        var checkBox = new CheckBox { IsChecked = enabled, AutomationId = automationId, WidthRequest = 32, HeightRequest = 44 };
         SemanticProperties.SetDescription(checkBox, title);
         checkBox.CheckedChanged += (_, e) =>
         {

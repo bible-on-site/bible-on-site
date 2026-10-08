@@ -9,6 +9,13 @@ public partial class PerekPage
 {
     private bool _preserveSearchOnDisappear;
     private SearchResult? _searchReaderResult;
+    private View? _searchHeader;
+
+    private async void OnPerekSourceClicked(object? sender, EventArgs e) => await ChapterSearch.OpenAsync();
+
+    private void OnChapterSearchOpenChanged(object? sender, EventArgs e) => UpdateSelectionBar();
+
+    private void OnReaderMenuClicked(object? sender, EventArgs e) => Shell.Current.FlyoutIsPresented = true;
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {
@@ -43,7 +50,7 @@ public partial class PerekPage
             }
             else if (GetSearchPerekId(result) > 0)
             {
-                await Shell.Current.GoToAsync(AppRoutes.SearchReader, new ShellNavigationQueryParameters
+                await Shell.Current.GoToAsync(AppRoutes.SearchReader, false, new ShellNavigationQueryParameters
                 {
                     ["searchResult"] = result
                 });

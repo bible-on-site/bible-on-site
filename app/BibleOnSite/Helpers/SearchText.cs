@@ -10,6 +10,10 @@ public static class SearchText
 {
     public static string PlainText(string text)
     {
+        if (!text.Contains('<'))
+        {
+            return HtmlEntity.DeEntitize(text);
+        }
         var document = new HtmlDocument();
         document.LoadHtml(text);
         foreach (var node in document.DocumentNode.SelectNodes("//script|//style") ?? Enumerable.Empty<HtmlNode>())

@@ -107,6 +107,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable
     /// </summary>
     private void SetupCarouselNavigation()
     {
+        _searchHeader = ChapterSearch.DetachHeader();
+        ChapterSearch.SearchOpenChanged += OnChapterSearchOpenChanged;
         ChapterSearch.SetSource(_viewModel.Source);
         _viewModel.PropertyChanged += (_, e) =>
         {
@@ -404,6 +406,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable
 #if ANDROID
         UnregisterReaderBack();
 #endif
+#if WINDOWS
+        UnregisterReaderKeyboardBack();
+#endif
         if (!_preserveSearchOnDisappear)
         {
             ChapterSearch.Close();
@@ -472,6 +477,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         base.OnAppearing();
 #if ANDROID
         RegisterReaderBack();
+#endif
+#if WINDOWS
+        RegisterReaderKeyboardBack();
 #endif
         SubscribeRecitation();
         await InitializeRecitationAsync();
@@ -880,6 +888,11 @@ public partial class PerekPage : ContentPage, IQueryAttributable
     /// </summary>
     private async void OnPasukTapped(object? sender, TappedEventArgs e)
     {
+        if (ChapterSearch.IsSearchOpen)
+        {
+            ChapterSearch.Close();
+            return;
+        }
 #if ANDROID
         // On Android, taps are handled natively via LongPressBehavior.NativeTapped
         // because (a) MAUI's TapGestureRecognizer fails in nested CarouselView >
@@ -916,6 +929,11 @@ public partial class PerekPage : ContentPage, IQueryAttributable
     /// </summary>
     private async void OnPasukNativeTapped(object? sender, EventArgs e)
     {
+        if (ChapterSearch.IsSearchOpen)
+        {
+            ChapterSearch.Close();
+            return;
+        }
         // Skip tap if long press just happened
         if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 300)
         {
@@ -1092,16 +1110,23 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         ToolTipProperties.SetText(SelectionRecitationButton, hint);
         SemanticProperties.SetDescription(SelectionRecitationButton, hint);
 
-        Shell.SetNavBarIsVisible(this, true);
-        Shell.SetFlyoutBehavior(this, isSelectionMode ? FlyoutBehavior.Disabled : FlyoutBehavior.Flyout);
+        var searching = ChapterSearch.IsSearchOpen;
+        Shell.SetNavBarIsVisible(this, false);
+        ReaderToolbar.IsVisible = !ExitFullScreenButton.IsVisible;
+        Shell.SetFlyoutBehavior(this, isSelectionMode || searching ? FlyoutBehavior.Disabled : FlyoutBehavior.Flyout);
+        Shell.SetBackButtonBehavior(this, new BackButtonBehavior { IsVisible = !searching });
         var shellBackground = isSelectionMode
             ? (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"]
             : Microsoft.Maui.Controls.Application.Current!.RequestedTheme == AppTheme.Dark
                 ? (Color)Microsoft.Maui.Controls.Application.Current.Resources["OffBlack"]
                 : Colors.White;
         Shell.SetBackgroundColor(this, shellBackground);
-        NormalNavigationTitle.IsVisible = !isSelectionMode;
-        SelectionBar.IsVisible = isSelectionMode;
+        ReaderToolbar.BackgroundColor = shellBackground;
+        NormalNavigationBar.IsVisible = !isSelectionMode && !searching;
+        SearchTitleHost.IsVisible = searching;
+        SearchTitleHost.Content = searching ? _searchHeader : null;
+        ChapterSearch.IsVisible = searching;
+        SelectionBar.IsVisible = isSelectionMode && !searching;
         SelectionCountLabel.Text = count.ToString();
     }
 
@@ -1942,7 +1967,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable
     private void EnterFullScreen()
     {
         ChapterSearch.Close();
-        ChapterSearch.IsVisible = SearchBarSpacer.IsVisible = false;
         // Close circular menu if open
         if (_isMenuOpen)
         {
@@ -1960,6 +1984,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
 
         // Hide Shell navigation bar (no TabBar in this app - single page per FlyoutItem)
         Shell.SetNavBarIsVisible(this, false);
+        ReaderToolbar.IsVisible = false;
 
         // Hide bottom bar completely
         BottomBar.IsVisible = false;
@@ -1976,12 +2001,12 @@ public partial class PerekPage : ContentPage, IQueryAttributable
     /// </summary>
     private void ExitFullScreen()
     {
-        ChapterSearch.IsVisible = SearchBarSpacer.IsVisible = true;
         // Hide floating exit button first
         ExitFullScreenButton.IsVisible = false;
 
-        // Show Shell navigation bar (no TabBar in this app - single page per FlyoutItem)
-        Shell.SetNavBarIsVisible(this, true);
+        // Restore the reader toolbar without introducing a native Back button.
+        Shell.SetNavBarIsVisible(this, false);
+        ReaderToolbar.IsVisible = true;
 
         // Show bottom bar
         BottomBar.IsVisible = true;

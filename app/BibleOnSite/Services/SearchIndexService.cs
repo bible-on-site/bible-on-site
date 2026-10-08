@@ -8,6 +8,7 @@ namespace BibleOnSite.Services;
 /// <summary>Disposable derived FTS5 indexes; the installed content databases remain read-only.</summary>
 public sealed class SearchIndexService : IAsyncDisposable
 {
+    private const int ImportBatchSize = 4096;
     private readonly PerekDataService _perakim;
     private readonly PerushimNotesService? _notes;
     private readonly SQLiteAsyncConnection _index;
@@ -122,8 +123,9 @@ public sealed class SearchIndexService : IAsyncDisposable
         var bookIds = books.Order().ToArray();
         var placeholders = string.Join(",", bookIds.Select(_ => "?"));
         var arguments = new object[] { match }.Concat(bookIds.Cast<object>()).Append(limit).ToArray();
-        return _index.QueryAsync<IndexRow>($"SELECT rowid AS RowId, PerekId, PasukNum, PerushId, Body FROM {table} " +
-            $"WHERE {table} MATCH ? AND SeferId IN ({placeholders}) ORDER BY bm25({table}), rowid LIMIT ?", arguments);
+        return _index.QueryAsync<IndexRow>($"SELECT {table}.rowid AS RowId, c.PerekId, c.PasukNum, c.PerushId, c.Text AS Body FROM {table} " +
+            $"JOIN {table}_content c ON c.rowid = {table}.rowid WHERE {table} MATCH ? AND c.SeferId IN ({placeholders}) " +
+            $"ORDER BY bm25({table}), {table}.rowid LIMIT ?", arguments);
     }
 
     private async Task InitializeIndexAsync()
@@ -164,7 +166,7 @@ public sealed class SearchIndexService : IAsyncDisposable
     private async Task BuildAsync(string table, SQLiteAsyncConnection source, bool commentary)
     {
         var file = new FileInfo(source.DatabasePath);
-        var fingerprint = $"v1:{file.Length}:{file.LastWriteTimeUtc.Ticks}";
+        var fingerprint = $"v2:{file.Length}:{file.LastWriteTimeUtc.Ticks}";
         if (_ready.GetValueOrDefault(table) == fingerprint)
         {
             return;
@@ -175,8 +177,12 @@ public sealed class SearchIndexService : IAsyncDisposable
             await _index.ExecuteAsync("DELETE FROM search_metadata WHERE name = ?", table);
             await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}_vocab");
             await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}");
-            await _index.ExecuteAsync($"CREATE VIRTUAL TABLE {table} USING fts5(Text, Body UNINDEXED, PerekId UNINDEXED, " +
-                "PasukNum UNINDEXED, PerushId UNINDEXED, SeferId UNINDEXED)");
+            await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}_content");
+            // Keep one original text copy. An external-content FTS table stores
+            // only tokens and positions instead of duplicating every note.
+            await _index.ExecuteAsync($"CREATE TABLE {table}_content (rowid INTEGER PRIMARY KEY, Text TEXT, " +
+                "PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER)");
+            await _index.ExecuteAsync($"CREATE VIRTUAL TABLE {table} USING fts5(Text, content='{table}_content', content_rowid='rowid')");
             if (commentary)
             {
                 long lastId = 0;
@@ -184,7 +190,7 @@ public sealed class SearchIndexService : IAsyncDisposable
                 {
                     // Keyset pagination bounds memory even for the full commentary asset pack.
                     var batch = await source.QueryAsync<IndexRow>("SELECT rowid AS RowId, perek_id AS PerekId, " +
-                        "pasuk AS PasukNum, perush_id AS PerushId, note_content AS Body FROM note WHERE rowid > ? ORDER BY rowid LIMIT 512", lastId);
+                        $"pasuk AS PasukNum, perush_id AS PerushId, note_content AS Body FROM note WHERE rowid > ? ORDER BY rowid LIMIT {ImportBatchSize}", lastId);
                     if (batch.Count == 0)
                     {
                         break;
@@ -199,7 +205,7 @@ public sealed class SearchIndexService : IAsyncDisposable
                     "group_concat(value, ' ') AS Body FROM (SELECT s.perek_id, s.pasuk_id, v.value " +
                     "FROM tanah_pasuk_segment s JOIN tanah_pasuk_segment_value v ON v.id = s.id " +
                     "WHERE s.segment_type IN ('qri','ktiv') ORDER BY s.perek_id, s.pasuk_id, s.id) GROUP BY perek_id, pasuk_id");
-                foreach (var batch in verses.Chunk(512))
+                foreach (var batch in verses.Chunk(ImportBatchSize))
                 {
                     await InsertAsync(table, batch);
                 }
@@ -222,8 +228,19 @@ public sealed class SearchIndexService : IAsyncDisposable
                 continue;
             }
             var body = SearchText.PlainText(row.Body);
-            connection.Execute($"INSERT INTO {table}(Text,Body,PerekId,PasukNum,PerushId,SeferId) VALUES (?,?,?,?,?,?)",
-                SearchText.Normalize(body), body, row.PerekId, row.PasukNum, row.PerushId, perek.SeferId);
+            StoredIndexEntry entry = table == "notes" ? new CommentaryIndexEntry() : new VerseIndexEntry();
+            entry.Text = body;
+            entry.PerekId = row.PerekId;
+            entry.PasukNum = row.PasukNum;
+            entry.PerushId = row.PerushId;
+            entry.SeferId = perek.SeferId;
+            // Insert caches a prepared statement for each mapped table. Execute
+            // would prepare the same SQL again for every commentary note.
+            connection.Insert(entry);
+            TokenIndexEntry tokens = table == "notes" ? new CommentaryTokenEntry() : new VerseTokenEntry();
+            tokens.RowId = entry.RowId;
+            tokens.Text = SearchText.Normalize(body);
+            connection.Insert(tokens);
         }
     });
 
@@ -252,6 +269,36 @@ public sealed class SearchIndexService : IAsyncDisposable
             }
         }
     }
+
+    private class StoredIndexEntry
+    {
+        [PrimaryKey, AutoIncrement, Column("rowid")]
+        public long RowId { get; set; }
+        public string Text { get; set; } = string.Empty;
+        public int PerekId { get; set; }
+        public int PasukNum { get; set; }
+        public int PerushId { get; set; }
+        public int SeferId { get; set; }
+    }
+
+    [Table("verses_content")]
+    private sealed class VerseIndexEntry : StoredIndexEntry;
+
+    [Table("notes_content")]
+    private sealed class CommentaryIndexEntry : StoredIndexEntry;
+
+    private class TokenIndexEntry
+    {
+        [Column("rowid")]
+        public long RowId { get; set; }
+        public string Text { get; set; } = string.Empty;
+    }
+
+    [Table("verses")]
+    private sealed class VerseTokenEntry : TokenIndexEntry;
+
+    [Table("notes")]
+    private sealed class CommentaryTokenEntry : TokenIndexEntry;
 
     private sealed class IndexRow
     {

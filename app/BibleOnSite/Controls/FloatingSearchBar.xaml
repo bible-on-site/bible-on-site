@@ -22,9 +22,14 @@
             <Setter Property="VerticalOptions" Value="Center"/>
         </Style>
     </ContentView.Resources>
-    <VerticalStackLayout Spacing="8" BackgroundColor="Transparent">
-        <Border StrokeShape="RoundRectangle 28" Padding="6,0" HeightRequest="56" StrokeThickness="0"
+    <VerticalStackLayout x:Name="SearchLayout" BackgroundColor="Transparent">
+        <Border x:Name="SearchHeader" StrokeShape="RoundRectangle 28" Padding="6,0" StrokeThickness="0"
                 BackgroundColor="{AppThemeBinding Light={StaticResource Secondary}, Dark=#263244}">
+            <Border.HeightRequest>
+                <OnPlatform x:TypeArguments="x:Double" Default="48">
+                    <On Platform="Android,iOS" Value="56"/>
+                </OnPlatform>
+            </Border.HeightRequest>
             <Grid ColumnDefinitions="Auto,*,Auto,Auto" FlowDirection="RightToLeft">
                 <Button x:Name="NavigationButton" Style="{StaticResource SearchIconButton}"
                         Text="{x:Static fonts:FluentUI.search_24_regular}" AutomationId="SearchNavigationButton"
@@ -57,7 +62,7 @@
                     <ScrollView HeightRequest="220">
                         <VerticalStackLayout>
                             <VerticalStackLayout x:Name="KindsFilters"/>
-                            <VerticalStackLayout x:Name="BookFilters" IsVisible="False"/>
+                            <Grid x:Name="BookFilters" IsVisible="False" ColumnDefinitions="*,*,*" ColumnSpacing="6"/>
                             <VerticalStackLayout x:Name="MoreFilters" IsVisible="False" Padding="8" Spacing="8">
                                 <Label Text="מספר תוצאות מרבי"/>
                                 <Picker x:Name="LimitPicker" AutomationId="SearchLimitPicker"

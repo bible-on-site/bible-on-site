@@ -26,8 +26,15 @@ public static class AppRoutes
     public static string SearchReader => "searchReader";
 
     /// <summary>
-    /// Flyout pages are pushed above the perek page (never swapped in as Shell roots)
-    /// so the nav-bar back button and iOS swipe-back always lead back to the perek.
+    /// Flyout pages replace another menu page above the most recent reader.
+    /// Preserve search-reader history so Back returns to the chapter being read.
     /// </summary>
-    public static string FlyoutPage(string route) => route == Perek ? $"//{Perek}" : $"//{Perek}/{route}";
+    public static string FlyoutPage(string route, string? currentLocation = null)
+    {
+        var segments = (currentLocation ?? $"//{Perek}").Split('?', 2)[0]
+            .Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var reader = Array.FindLastIndex(segments, segment => segment == Perek || segment == SearchReader);
+        var readerPath = reader < 0 ? $"//{Perek}" : "//" + string.Join('/', segments.Take(reader + 1));
+        return route == Perek ? readerPath : $"{readerPath}/{route}";
+    }
 }

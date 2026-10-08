@@ -15,6 +15,7 @@ public abstract class MobilePlatformAdapter
     public abstract By AutomationId(string id);
     public abstract By FlyoutButton { get; }
     public virtual bool CanTap(AppiumElement element) => element.Enabled;
+    public abstract bool IsChecked(AppiumElement element);
     public virtual void Tap(AppiumDriver driver, AppiumElement element) => element.Click();
     public abstract void GoBack(AppiumDriver driver);
     public virtual void GoBackFromFocusedVerse(AppiumDriver driver) => GoBack(driver);
@@ -46,6 +47,9 @@ public abstract class MobilePlatformAdapter
             options.AddAdditionalAppiumOption("autoGrantPermissions", true);
             options.AddAdditionalAppiumOption("uiautomator2ServerInstallTimeout", 120000);
             options.AddAdditionalAppiumOption("androidInstallTimeout", 180000);
+            // Package-manager inspection after a full reinstall can wait for
+            // the bundled commentary database's disk work on a cold emulator.
+            options.AddAdditionalAppiumOption("adbExecTimeout", 60000);
             options.AddAdditionalAppiumOption("disableWindowAnimation", true);
         }
         else
@@ -87,9 +91,10 @@ public sealed record LayoutExpectations(double MinimumButtonExtent = 44, double 
 
 public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
 {
+    public override bool IsChecked(AppiumElement element) => element.GetAttribute("checked") == "true";
     // MAUI maps AutomationId to Android resource-id, preserving screen-reader text.
     public override By AutomationId(string id) => By.Id($"com.tanah.daily929:id/{id}");
-    public override By FlyoutButton => By.XPath("//android.widget.ImageButton[@content-desc='Open navigation drawer']");
+    public override By FlyoutButton => AutomationId("ReaderMenuButton");
     public override void GoBack(AppiumDriver driver) => driver.Navigate().Back();
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
         new AndroidDriver(server, options, TimeSpan.FromMinutes(4));
@@ -97,9 +102,10 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
 
 public sealed class IosPlatformAdapter : MobilePlatformAdapter
 {
+    public override bool IsChecked(AppiumElement element) => element.GetAttribute("value") == "1";
     public override void GoBackFromFocusedVerse(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SelectionBackButton")));
     public override By AutomationId(string id) => MobileBy.AccessibilityId(id);
-    public override By FlyoutButton => By.XPath("//XCUIElementTypeNavigationBar/XCUIElementTypeButton[1]");
+    public override By FlyoutButton => AutomationId("ReaderMenuButton");
     public override bool CanTap(AppiumElement element) => element.Enabled
         && string.Equals(element.GetAttribute("hittable"), "true", StringComparison.OrdinalIgnoreCase);
     public override void Tap(AppiumDriver driver, AppiumElement element)
@@ -120,7 +126,25 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
         sequence.AddAction(finger.CreatePointerUp(MouseButton.Left));
         return sequence;
     }
-    public override void GoBack(AppiumDriver driver) => Tap(driver, driver.FindElement(FlyoutButton));
+    public override void GoBack(AppiumDriver driver)
+    {
+        var button = driver.FindElements(By.XPath("//XCUIElementTypeNavigationBar/XCUIElementTypeButton[1]"))
+            .FirstOrDefault(element => element.Displayed && CanTap(element));
+        if (button != null)
+        {
+            Tap(driver, button);
+            return;
+        }
+        // Reader jumps keep the hamburger. Use iOS's standard RTL edge-back gesture.
+        var size = driver.Manage().Window.Size;
+        var finger = new PointerInputDevice(PointerKind.Touch, "history-back");
+        var sequence = new ActionSequence(finger, 0);
+        sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, size.Width - 2, size.Height / 2, TimeSpan.Zero));
+        sequence.AddAction(finger.CreatePointerDown(MouseButton.Left));
+        sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, size.Width / 3, size.Height / 2, TimeSpan.FromMilliseconds(400)));
+        sequence.AddAction(finger.CreatePointerUp(MouseButton.Left));
+        driver.PerformActions([sequence]);
+    }
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
         // The five-minute client budget fits inside the ten-minute per-test hang
         // guard, together with the scenario.

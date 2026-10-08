@@ -18,13 +18,27 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
     [Fact]
     public async Task OfflineSearch_OpensRegularReader_AndBackRestoresQueryAndResults()
     {
+        try { await VerifyOfflineSearchAsync(); }
+        catch
+        {
+            if (!fixture.App.HasExited) CapturePreview("floating-search-failed.png");
+            throw;
+        }
+    }
+
+    private async Task VerifyOfflineSearchAsync()
+    {
         (await fixture.WaitForElementAsync(window =>
         {
             return window.FindAllDescendants(fixture.CF.ByAutomationId("PasukText"))
                 .FirstOrDefault(verse => !string.IsNullOrWhiteSpace(verse.Name) && !verse.IsOffscreen);
         }, TimeSpan.FromSeconds(30))).Should().NotBeNull("the reader finishes startup before search interactions");
+        (await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("ReaderMenuButton"))))
+            .Should().NotBeNull("the reader toolbar finishes loading before resizing the window");
         fixture.MainWindow.Patterns.Transform.Pattern.Move(20, 20);
         fixture.MainWindow.Patterns.Transform.Pattern.Resize(860, 900);
+        await AssertRegularReaderAsync();
+        await OpenSearchAsync();
         var bar = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("PerekSearchInput")), TimeSpan.FromSeconds(30));
         bar.Should().NotBeNull();
         var input = bar;
@@ -41,11 +55,38 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
         CapturePreview("floating-search-rtl.png");
         fixture.Click(clear);
         input.AsTextBox().Text.Should().BeEmpty("the single X clears the query and keeps search open");
-        fixture.Click(navigation);
+        var emptyStatus = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchStatus")));
+        var panelBottom = emptyStatus!.BoundingRectangle.Bottom;
+        var outsideVerse = await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("PasukText"))
+            .FirstOrDefault(verse => !verse.IsOffscreen && verse.BoundingRectangle.Top >= panelBottom));
+        outsideVerse.Should().NotBeNull();
+        fixture.Click(outsideVerse!);
+        await AssertRegularReaderAsync();
+        CapturePreview("floating-search-dismissed.png");
+        await OpenSearchAsync();
+        input = fixture.FindByAutomationId("PerekSearchInput")!;
+        settings = fixture.FindByAutomationId("SearchFiltersButton")!;
+        navigation = fixture.FindByAutomationId("SearchNavigationButton")!;
         fixture.Click(settings);
         (await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchKindPerek"))))
             .Should().NotBeNull("settings are accessible before typing a query");
+        fixture.Click(fixture.FindByAutomationId("SearchBooksTab")!);
+        var torah = (await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchGroup1"))))!;
+        var neviim = fixture.FindByAutomationId("SearchGroup2")!;
+        var ketuvim = fixture.FindByAutomationId("SearchGroup3")!;
+        torah.BoundingRectangle.Left.Should().BeGreaterThan(neviim.BoundingRectangle.Left);
+        neviim.BoundingRectangle.Left.Should().BeGreaterThan(ketuvim.BoundingRectangle.Left);
+        torah.AsCheckBox().IsChecked = false;
+        fixture.FindByAutomationId("SearchBook1")!.AsCheckBox().IsChecked.Should().BeFalse();
+        fixture.FindByAutomationId("SearchBook2")!.AsCheckBox().IsChecked.Should().BeFalse();
+        neviim.AsCheckBox().IsChecked.Should().BeTrue();
+        torah.AsCheckBox().IsChecked = true;
+        fixture.FindByAutomationId("SearchBook2")!.AsCheckBox().IsChecked.Should().BeTrue();
+        CapturePreview("floating-search-book-columns.png");
+        fixture.Click(fixture.FindByAutomationId("SearchKindsTab")!);
         fixture.Click(navigation);
+        await OpenSearchAsync();
+        input = fixture.FindByAutomationId("PerekSearchInput")!;
         fixture.Click(input);
         await EnterQueryAsync("בראשיט 1");
         await WaitForFinishedSearchAsync();
@@ -64,11 +105,12 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
         input = bar;
         fixture.Click(input!);
         await EnterQueryAsync("ויעש אלהים את הרקיע");
-        await WaitForFinishedSearchAsync();
+        await WaitForFinishedSearchAsync("בראשית א ז");
         var filters = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchFiltersButton")));
         fixture.Click(filters!);
         CapturePreview("floating-search-filters.png");
         var chapterFilter = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchKindPerek")));
+        chapterFilter.Should().NotBeNull("the settings panel opens after the verse query finishes");
         chapterFilter!.AsCheckBox().IsChecked = false;
         fixture.Click(filters!);
         await WaitForFinishedSearchAsync();
@@ -91,11 +133,30 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
 
     private async Task AssertRegularReaderAsync()
     {
-        (await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("PerekSearchInput"))
-            .FirstOrDefault(field => !field.IsOffscreen && field.AsTextBox().Text == string.Empty)))
-            .Should().NotBeNull("results open on a separate ordinary reader page");
+        (await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("PerekSource"))
+            .FirstOrDefault(source => !source.IsOffscreen)))
+            .Should().NotBeNull("the ordinary reader shows its chapter source");
+        (await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("ReaderMenuButton"))
+            .FirstOrDefault(button => !button.IsOffscreen)))
+            .Should().NotBeNull("reader jumps keep the usual hamburger");
+        fixture.MainWindow.FindAllDescendants(fixture.CF.ByAutomationId("PerekSearchInput"))
+            .Should().NotContain(field => !field.IsOffscreen, "search replaces the source only when opened");
         fixture.MainWindow.FindAllDescendants(fixture.CF.ByAutomationId("SelectionBackButton"))
             .Should().NotContain(button => !button.IsOffscreen, "search must not open the blue selection toolbar");
+    }
+
+    private async Task OpenSearchAsync()
+    {
+        var source = await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("PerekSource"))
+            .FirstOrDefault(title => !title.IsOffscreen));
+        source.Should().NotBeNull();
+        var bounds = source!.BoundingRectangle;
+        fixture.MainWindow.Focus();
+        fixture.Click(source);
+        var input = await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("PerekSearchInput"))
+            .FirstOrDefault(field => !field.IsOffscreen));
+        input.Should().NotBeNull();
+        input!.BoundingRectangle.Y.Should().BeLessThanOrEqualTo(bounds.Bottom, "search occupies the source toolbar");
     }
 
     private async Task EnterQueryAsync(string query)
@@ -109,21 +170,25 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
 
     private async Task GoBackToSearchAsync(string query)
     {
-        var back = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByName("Back")));
-        back.Should().NotBeNull("the result is on the standard navigation stack");
-        fixture.Click(back!);
+        fixture.AssertForeground();
+        (await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("ReaderMenuButton"))
+            .FirstOrDefault(button => button.FrameworkAutomationElement.HasKeyboardFocus)))
+            .Should().NotBeNull("reader navigation gives keyboard focus to its toolbar");
+        Keyboard.TypeSimultaneously(FlaUI.Core.WindowsAPI.VirtualKeyShort.ALT, FlaUI.Core.WindowsAPI.VirtualKeyShort.LEFT);
         (await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("PerekSearchInput"))
             .FirstOrDefault(field => !field.IsOffscreen && field.AsTextBox().Text == query)))
             .Should().NotBeNull("Back restores the original search phrase");
     }
 
-    private async Task WaitForFinishedSearchAsync()
+    private async Task WaitForFinishedSearchAsync(string? expectedTitle = null)
     {
         // Query completion can replace the initially published chapter rows.
         (await fixture.WaitForElementAsync(window =>
         {
             var status = window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchStatus"));
-            return status != null && System.Text.RegularExpressions.Regex.IsMatch(status.Name, @"^\d+ תוצאות$") ? status : null;
+            var results = window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchResults"));
+            return status != null && System.Text.RegularExpressions.Regex.IsMatch(status.Name, @"^\d+ תוצאות$")
+                && (expectedTitle == null || results?.FindFirstDescendant(fixture.CF.ByName(expectedTitle)) != null) ? status : null;
         }, TimeSpan.FromSeconds(90))).Should().NotBeNull("search must finish before selecting a result");
     }
 
