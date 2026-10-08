@@ -141,4 +141,25 @@ describe("prepared bulletins", () => {
 		mocks.query.mockResolvedValue(deliveries);
 		expect((await readPreparedBulletin(input.date))?.input).toEqual(input);
 	});
+	it("includes chapter dedications in the saved input and reports a missing post-commit snapshot", async () => {
+		mocks.queryOne
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ perek_id: 1 })
+			.mockResolvedValueOnce(null);
+		mocks.query
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([{ subject: "לזכרון" }, { subject: "לרפואה" }]);
+		await expect(prepareBulletin(input.date)).rejects.toThrow(
+			"שמירת העלון נכשלה",
+		);
+		expect(mocks.render).toHaveBeenCalledWith({
+			...input,
+			article: null,
+			dedications: ["לזכרון", "לרפואה"],
+		});
+		const storedInput = JSON.parse(mocks.execute.mock.calls[0][1][3]);
+		expect(storedInput.dedications).toEqual(["לזכרון", "לרפואה"]);
+		expect(mocks.commit).toHaveBeenCalledOnce();
+		expect(mocks.release).toHaveBeenCalledOnce();
+	});
 });

@@ -53,13 +53,14 @@ function renderPage() {
 }
 describe("daily bulletin preview", () => {
 	beforeEach(() => {
-		vi.useRealTimers();
-		vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-08T12:00:00Z"));
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-10-08T12:00:00Z"));
 		mocks.read.mockReset().mockResolvedValue(null);
 		mocks.prepare.mockReset().mockResolvedValue(saved);
 	});
-	afterEach(() => {
+		afterEach(() => {
 		cleanup();
+		vi.useRealTimers();
 		vi.restoreAllMocks();
 	});
 	it("prepares the selected date once and shows its saved email, PDF, and delivery status", async () => {
