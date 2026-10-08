@@ -83,7 +83,13 @@ public partial class AppShell : Shell
 		}
 		// MAUI's own flyout pan only engages in the left 10% band; mirror it on
 		// the right edge for the RTL drawer so ordinary carousel swipes keep paging.
-		return touch.LocationInView(view).X >= view.Frame.Width * 0.9;
+		var x = touch.LocationInView(view).X;
+		var allowed = x >= view.Frame.Width * 0.9;
+		if (x >= view.Frame.Width * 0.5 || allowed)
+		{
+			Console.WriteLine($"[EdgePan] ShouldReceiveTouch x={x:F1} width={view.Frame.Width:F1} page={shell.CurrentPage?.GetType().Name} behavior={GetFlyoutBehavior(shell.CurrentPage)} => {allowed}");
+		}
+		return allowed;
 	}
 
 	private static bool OnFlyoutEdgePanShouldBegin(UIGestureRecognizer recognizer)
@@ -95,11 +101,14 @@ public partial class AppShell : Shell
 		// Commit only to a clear leftward pull — a vertical drag at the right
 		// edge must keep scrolling the page instead of opening the drawer.
 		var translation = pan.TranslationInView(pan.View);
-		return translation.X < 0 && Math.Abs(translation.X) > Math.Abs(translation.Y);
+		var allowed = translation.X < 0 && Math.Abs(translation.X) > Math.Abs(translation.Y);
+		Console.WriteLine($"[EdgePan] ShouldBegin translation=({translation.X:F1},{translation.Y:F1}) => {allowed}");
+		return allowed;
 	}
 
-	private static void OnSharedFlyoutEdgePan()
+	private static void OnSharedFlyoutEdgePan(UIPanGestureRecognizer pan)
 	{
+		Console.WriteLine($"[EdgePan] fired state={pan.State} flyoutPresented={Current?.FlyoutIsPresented}");
 		if (Current is AppShell shell && !shell.FlyoutIsPresented)
 		{
 			shell.FlyoutIsPresented = true;
@@ -117,9 +126,12 @@ public partial class AppShell : Shell
 
 	private void InstallRightEdgeFlyoutGesture(UIView uiView)
 	{
-		// If Shell replaced its native view, move the recognizer to the new one
-		// instead of leaving it on the old view holding a callback into us.
-		if (_flyoutEdgeView is not null && !ReferenceEquals(_flyoutEdgeView, uiView))
+		// The recognizer must live on the UIWindow — the only view guaranteed to
+		// be an ancestor of every touch target. The shell renderer manages its
+		// flyout/detail controllers in a subtree that can sit beside (not inside)
+		// the handler's platform view, which left the edge gesture dead (#1306).
+		var host = uiView.Window ?? FindKeyWindow() ?? uiView;
+		if (_flyoutEdgeView is not null && !ReferenceEquals(_flyoutEdgeView, host))
 		{
 			_flyoutEdgeView.RemoveGestureRecognizer(SharedFlyoutEdgePan);
 			_flyoutEdgeView = null;
@@ -129,8 +141,18 @@ public partial class AppShell : Shell
 			return;
 		}
 
-		uiView.AddGestureRecognizer(SharedFlyoutEdgePan);
-		_flyoutEdgeView = uiView;
+		host.AddGestureRecognizer(SharedFlyoutEdgePan);
+		_flyoutEdgeView = host;
+		Console.WriteLine($"[EdgePan] attached host={host.GetType().Name} frame={host.Frame} platformView={uiView.GetType().Name} inWindow={uiView.Window != null}");
+	}
+
+	private static UIWindow? FindKeyWindow()
+	{
+		var windows = UIApplication.SharedApplication.ConnectedScenes
+			.OfType<UIWindowScene>()
+			.SelectMany(scene => scene.Windows)
+			.ToList();
+		return windows.FirstOrDefault(window => window.IsKeyWindow) ?? windows.FirstOrDefault();
 	}
 #endif
 

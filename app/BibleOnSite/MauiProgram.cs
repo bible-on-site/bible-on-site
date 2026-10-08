@@ -68,7 +68,7 @@ public static class MauiProgram
 		// switch. Once iOS determines the dominant scroll axis, movement on the other
 		// axis is suppressed for that gesture — matching the legacy Flutter app's
 		// PageView + ListView gesture-arena behavior.
-		Microsoft.Maui.Controls.Handlers.Items.CarouselViewHandler.Mapper.AppendToMapping("SwipeSensitivity", (handler, _) =>
+		Microsoft.Maui.Controls.Handlers.Items2.CarouselViewHandler2.Mapper.AppendToMapping("SwipeSensitivity", (handler, _) =>
 		{
 			if (handler.PlatformView is UIKit.UICollectionView collectionView)
 			{
@@ -78,10 +78,8 @@ public static class MauiProgram
 				// wins, leaving the RTL drawer gesture dead on perek pages (#1306).
 				// Give the drawer gesture priority so a swipe starting at the
 				// right screen edge opens the drawer instead of switching perek.
-				if (AppShell.SharedFlyoutEdgePan.View is not null)
-				{
-					collectionView.PanGestureRecognizer.RequireGestureRecognizerToFail(AppShell.SharedFlyoutEdgePan);
-				}
+				collectionView.PanGestureRecognizer.RequireGestureRecognizerToFail(AppShell.SharedFlyoutEdgePan);
+				Console.WriteLine($"[EdgePan] carousel pan wired to fail on {collectionView.GetType().Name}");
 			}
 		});
 #endif
