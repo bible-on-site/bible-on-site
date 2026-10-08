@@ -144,17 +144,19 @@ public partial class PerekViewModel : ObservableObject
         }
     }
 
-    partial void OnPerekChanged(Perek? value) => RefreshRecitationAvailability();
+    partial void OnPerekChanged(Perek? value) => RefreshRecitationAvailability(value);
 
     /// <summary>
     /// Re-evaluates whether the currently displayed perek has a downloaded
     /// recitation — controls the קריינות menu item and header play button.
     /// Called when the perek changes and after the recitation package updates.
     /// </summary>
-    public void RefreshRecitationAvailability()
+    public void RefreshRecitationAvailability() => RefreshRecitationAvailability(Perek);
+
+    private void RefreshRecitationAvailability(Perek? perek)
     {
-        HasCurrentPerekRecitation = _hasPerekAudio != null && Perek is { } perek &&
-            _hasPerekAudio(perek.PerekId);
+        HasCurrentPerekRecitation = _hasPerekAudio != null && perek is { } current &&
+            _hasPerekAudio(current.PerekId);
     }
 
     public PerekViewModel() : this(PreferencesService.Instance, null,
@@ -162,8 +164,13 @@ public partial class PerekViewModel : ObservableObject
     {
     }
 
+    public PerekViewModel(PreferencesService preferencesService, Func<int, Perek?>? perekLoader)
+        : this(preferencesService, perekLoader, null)
+    {
+    }
+
     public PerekViewModel(PreferencesService preferencesService, Func<int, Perek?>? perekLoader,
-        Func<int, bool>? hasPerekAudio = null)
+        Func<int, bool>? hasPerekAudio)
         : this(preferencesService, perekLoader, null, null, null, null, null, null, hasPerekAudio)
     {
     }
@@ -171,7 +178,16 @@ public partial class PerekViewModel : ObservableObject
     public PerekViewModel(PreferencesService preferencesService, Func<int, Perek?>? perekLoader,
         PerekDataService? perekDataService, PerushimCatalogService? catalogService,
         PerushimNotesService? notesService, IAppNavigator? navigator,
-        IFileSystem? fileSystem, IShare? share, Func<int, bool>? hasPerekAudio = null)
+        IFileSystem? fileSystem, IShare? share)
+        : this(preferencesService, perekLoader, perekDataService, catalogService, notesService,
+            navigator, fileSystem, share, null)
+    {
+    }
+
+    public PerekViewModel(PreferencesService preferencesService, Func<int, Perek?>? perekLoader,
+        PerekDataService? perekDataService, PerushimCatalogService? catalogService,
+        PerushimNotesService? notesService, IAppNavigator? navigator,
+        IFileSystem? fileSystem, IShare? share, Func<int, bool>? hasPerekAudio)
     {
         _preferencesService = preferencesService;
         _perekLoader = perekLoader ?? DefaultPerekLoader;

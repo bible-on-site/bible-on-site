@@ -77,6 +77,10 @@ public class TikkunFlowView : GraphicsView
 
     private static void OnContentChanged(BindableObject bindable, object oldValue, object newValue)
     {
+        if (Equals(oldValue, newValue))
+        {
+            return;
+        }
         var view = (TikkunFlowView)bindable;
         view._contentVersion++;
         view.Invalidate();
