@@ -2,6 +2,7 @@ using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using SQLite;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 
 namespace BibleOnSite.Services;
 
@@ -208,6 +209,7 @@ public sealed class SearchIndexService : IAsyncDisposable
         var stored = await _index.ExecuteScalarAsync<string>("SELECT fingerprint FROM search_metadata WHERE name = ?", table);
         if (stored != fingerprint)
         {
+            var timer = Stopwatch.StartNew();
             await _index.ExecuteAsync("DELETE FROM search_metadata WHERE name = ?", table);
             await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}_vocab");
             await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}");
@@ -223,6 +225,7 @@ public sealed class SearchIndexService : IAsyncDisposable
             if (commentary)
             {
                 long lastId = 0;
+                var imported = 0;
                 while (true)
                 {
                     // Keyset pagination bounds memory even for the full commentary asset pack.
@@ -234,6 +237,11 @@ public sealed class SearchIndexService : IAsyncDisposable
                     }
                     await InsertAsync(table, batch);
                     lastId = batch[^1].RowId;
+                    imported += batch.Count;
+                    if (imported % (ImportBatchSize * 8) == 0)
+                    {
+                        Console.WriteLine($"Search index '{table}': {imported} documents in {timer.Elapsed.TotalSeconds:F1}s.");
+                    }
                 }
             }
             else
@@ -251,6 +259,7 @@ public sealed class SearchIndexService : IAsyncDisposable
             await _index.ExecuteAsync($"INSERT INTO {table}({table}) VALUES ('optimize')");
             // Publish only a complete import; an interrupted build is rebuilt on next launch.
             await _index.ExecuteAsync("INSERT OR REPLACE INTO search_metadata VALUES (?, ?)", table, fingerprint);
+            Console.WriteLine($"Search index '{table}' complete in {timer.Elapsed.TotalSeconds:F1}s.");
         }
         _ready[table] = fingerprint;
     }

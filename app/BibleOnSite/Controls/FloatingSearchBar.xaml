@@ -118,7 +118,7 @@
     </CollectionView.ItemTemplate>
    </CollectionView>
    <Grid x:Name="FilterSheetOverlay" Grid.RowSpan="4" IsVisible="False" ZIndex="20">
-    <BoxView BackgroundColor="Transparent" Color="Black" Opacity="0.4"><BoxView.GestureRecognizers><TapGestureRecognizer Tapped="OnSheetDismissed"/></BoxView.GestureRecognizers></BoxView>
+    <Grid BackgroundColor="#66000000"><Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnSheetDismissed"/></Grid.GestureRecognizers></Grid>
     <Border x:Name="FilterSheet" AutomationId="SearchSheet" VerticalOptions="End" HeightRequest="420"
      StrokeShape="RoundRectangle 24,24,0,0" StrokeThickness="0" Padding="16,8,16,16" BackgroundColor="{AppThemeBinding Light=White, Dark=#1C2635}">
      <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="8">

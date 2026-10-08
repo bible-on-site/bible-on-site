@@ -144,6 +144,13 @@ partial class Build
                     properties["EmbedAssembliesIntoApk"] = "true";
                     properties["AndroidPackageFormats"] = "apk";
                 }
+                else
+                {
+                    // ARM64 Debug otherwise interprets the full commentary import.
+                    // Compile the indexing/HTML/SQLite hot path as in Release while
+                    // retaining interpretation for the rest of the simulator app.
+                    properties["MtouchInterpreter"] = "all,-BibleOnSite,-HtmlAgilityPack,-SQLite-net";
+                }
                 DotNetBuild(s => s
                     .SetProjectFile(MainProject)
                     .SetConfiguration("Debug")

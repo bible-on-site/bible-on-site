@@ -73,8 +73,6 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         _platform.DismissSearchSheet(_driver);
         _page.WaitForHidden("SearchSheet");
         AssertBookGroupColumns();
-        _page.Tap("SearchSheetApplyButton");
-        _page.WaitForHidden("SearchSheet");
         _platform.RevealTrailingSearchChips(_driver);
         _page.Tap("SearchClearAll");
         _page.WaitForHidden("SearchClearAll");
@@ -237,12 +235,22 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         _page.WaitFor("SearchBook2", element => _platform.IsChecked(element));
         _page.Tap("SearchGroup2");
         _page.Tap("SearchGroup3");
+        _page.Tap("SearchSheetApplyButton");
+        _page.WaitForHidden("SearchSheet");
+        // XCTest correctly marks background chips as covered by the sheet.
+        // Assert each summary after applying the selection, as a user reads it.
         _page.WaitFor("SearchBooksSummary", element => element.Text == "תורה");
+        _page.Tap("SearchBooksTab");
         _page.Tap("SearchBook1");
+        _page.Tap("SearchSheetApplyButton");
+        _page.WaitForHidden("SearchSheet");
         _page.WaitFor("SearchBooksSummary", element => element.Text == "שמות +3");
+        _page.Tap("SearchBooksTab");
         _page.Tap("SearchBook1");
-        _page.WaitFor("SearchBooksSummary", element => element.Text == "תורה");
         SaveDiagnostics("FloatingSearchBookColumns", "passed");
+        _page.Tap("SearchSheetApplyButton");
+        _page.WaitForHidden("SearchSheet");
+        _page.WaitFor("SearchBooksSummary", element => element.Text == "תורה");
     }
 
     [Fact]
