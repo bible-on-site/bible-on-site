@@ -166,7 +166,6 @@ if (resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
 			output("usable", "false");
 		}
 	} else if (command === "confirm-saved") {
-		const execute = promisify(execFile);
 		const udid = env.MOBILE_UDID;
 		if (!udid) throw new Error("Set MOBILE_UDID to the emulator identifier.");
 		const androidSdk = env.ANDROID_HOME ?? env.ANDROID_SDK_ROOT;

@@ -26,11 +26,9 @@ if (platform === "ios" && !existsSync(resolve(appPath, "GoogleService-Info.plist
   throw new Error("The iOS app is missing its root Firebase configuration resource.");
 }
 const execute = promisify(execFile);
-let androidAdb;
 if (platform === "android") {
   const androidSdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT;
   const adb = androidSdk ? resolve(androidSdk, "platform-tools", process.platform === "win32" ? "adb.exe" : "adb") : "adb";
-  androidAdb = adb;
   const deviceReadinessLog = resolve(artifacts, "device-readiness.jsonl");
   writeFileSync(deviceReadinessLog, "");
   await waitForAndroidDevice({ adb, udid: process.env.MOBILE_UDID, execute,
