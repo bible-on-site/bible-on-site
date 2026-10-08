@@ -26,6 +26,9 @@ jobs:
           xcrun mcpbridge --help 2>&1 | head -40
           set -e
 
+      - name: Enable Xcode MCP server
+        run: sudo xcrun mcp-server enable
+
       - name: Boot simulator
         run: |
           xcrun simctl boot "iPhone 17" 2>/dev/null; true
