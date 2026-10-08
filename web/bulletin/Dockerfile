@@ -1,13 +1,11 @@
 # Build stage for Lambda-compatible binary (musl target).
 # Build context must be web/ — ensure bulletin/ is included in web/.dockerignore.
 
-ARG RUST_VERSION=1.98.1
-
-FROM rust:${RUST_VERSION}-alpine AS build
+FROM rust:1.98.1-alpine AS build
 WORKDIR /app
 
 # Install host build dependencies.
-# The base image tag (rust:1.98.1-alpine) already pins the toolchain; alpine
+# The pinned base image already fixes the toolchain; alpine
 # renames versioned packages (clangNN/lldNN) per release, so apk pins would
 # break on the next base bump for no reproducibility gain.
 # hadolint ignore=DL3018
