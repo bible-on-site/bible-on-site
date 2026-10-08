@@ -303,4 +303,96 @@ public class HtmlRunsTests
             runs.Should().Contain(r => r.BaselineShift == 1);
         }
     }
+
+    public class InlineCss
+    {
+        [Fact]
+        public void text_decoration_underline_sets_underline()
+        {
+            var runs = HtmlRuns.FromHtml("<span style=\"text-decoration:underline\">א</span>");
+            runs.Should().ContainSingle();
+            runs[0].Underline.Should().BeTrue();
+        }
+
+        [Fact]
+        public void text_decoration_line_through_sets_strikethrough()
+        {
+            var runs = HtmlRuns.FromHtml("<span style=\"text-decoration:line-through\">א</span>");
+            runs.Should().ContainSingle();
+            runs[0].Strikethrough.Should().BeTrue();
+        }
+
+        [Fact]
+        public void vertical_align_super_and_sub_shift_baseline()
+        {
+            var runs = HtmlRuns.FromHtml("א<span style=\"vertical-align:super\">2</span>ב<span style=\"vertical-align:sub\">n</span>");
+            runs.First(r => r.Text == "2").BaselineShift.Should().Be(1);
+            runs.First(r => r.Text == "n").BaselineShift.Should().Be(-1);
+        }
+
+        [Theory]
+        [InlineData("font-size:150%", 1.5)]
+        [InlineData("font-size:0.5em", 0.5)]
+        [InlineData("font-size:smaller", 0.83)]
+        [InlineData("font-size:larger", 1.17)]
+        [InlineData("font-size:x-large", 1.17)]
+        public void font_size_declarations_scale_the_run(string style, double expected)
+        {
+            var runs = HtmlRuns.FromHtml($"<span style=\"{style}\">א</span>");
+            runs.Should().ContainSingle();
+            runs[0].FontScale.Should().BeApproximately(expected, 0.001);
+        }
+
+        [Fact]
+        public void unsupported_and_malformed_declarations_are_ignored()
+        {
+            var runs = HtmlRuns.FromHtml("<span style=\"color:red; baddecl; font-family:serif\">א</span>");
+            runs.Should().ContainSingle();
+            runs[0].Text.Should().Be("א");
+            runs[0].FontScale.Should().BeApproximately(1.0, 0.001);
+        }
+    }
+
+    public class StructuralExtras
+    {
+        [Fact]
+        public void hr_renders_a_separator_line()
+        {
+            var runs = HtmlRuns.FromHtml("<p>א</p><hr><p>ב</p>");
+            var text = string.Concat(runs.Select(r => r.Text));
+            text.Should().Be("א\n―――\nב");
+        }
+
+        [Fact]
+        public void table_cells_separate_with_spaces()
+        {
+            var runs = HtmlRuns.FromHtml("<table><tr><td>א</td><td>ב</td></tr></table>");
+            var text = string.Concat(runs.Select(r => r.Text));
+            text.Should().Contain("א  ב");
+        }
+
+        [Fact]
+        public void li_outside_a_list_still_gets_a_bullet()
+        {
+            var runs = HtmlRuns.FromHtml("<li>א</li>");
+            var text = string.Concat(runs.Select(r => r.Text));
+            text.Should().Contain("• א");
+        }
+
+        [Fact]
+        public void small_shrinks_and_big_enlarges()
+        {
+            var runs = HtmlRuns.FromHtml("א<small>ק</small>ב<big>ג</big>");
+            runs.First(r => r.Text.Contains('ק')).FontScale.Should().BeLessThan(1.0);
+            runs.First(r => r.Text.Contains('ג')).FontScale.Should().BeGreaterThan(1.0);
+        }
+
+        [Fact]
+        public void trailing_whitespace_inside_the_last_run_is_trimmed()
+        {
+            var runs = HtmlRuns.FromHtml("<b>א </b>");
+            runs.Should().ContainSingle();
+            runs[0].Text.Should().Be("א");
+        }
+    }
 }
