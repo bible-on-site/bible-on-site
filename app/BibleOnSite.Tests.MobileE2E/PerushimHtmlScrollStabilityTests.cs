@@ -57,23 +57,21 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         var topY = list.Location.Y + list.Size.Height / 5;
         var bottomY = list.Location.Y + list.Size.Height * 4 / 5;
 
-        // Back-to-back flick storms maximize cell prefetch/recycle churn while
-        // every pasuk cell renders several HtmlView commentary blocks.
-        for (var round = 0; round < 3; round++)
-        {
-            StormOnce(bottomY, topY);
-            StormOnce(topY, bottomY);
-        }
+        // 80 back-to-back flicks (matching PerekScrollStabilityTests) maximize
+        // cell prefetch/recycle churn while every pasuk cell renders several
+        // HtmlView commentary blocks.
+        Storm(bottomY, topY);
+        Storm(topY, bottomY);
 
         // WDA resolves every pointerMove against the app element's AX snapshot
-        // during synthesis; launching another storm while the previous one's
-        // scroll momentum and HtmlView re-layouts are still running can hit an
-        // unresolvable frame (XCTest "point.x != INFINITY"). Splitting each
-        // storm into short bursts gated on a hittable element both shrinks the
-        // per-request synthesis window and waits for the app to settle.
-        void StormOnce(int fromY, int toY)
+        // during synthesis; launching another full storm while the previous
+        // one's scroll momentum and HtmlView re-layouts are still running can
+        // hit an unresolvable frame (XCTest "point.x != INFINITY"). Splitting
+        // each storm into short bursts gated on a hittable element both shrinks
+        // the per-request synthesis window and waits for the app to settle.
+        void Storm(int fromY, int toY)
         {
-            for (var burst = 0; burst < 3; burst++)
+            for (var burst = 0; burst < 4; burst++)
             {
                 _page.WaitFor("PasukimCollection", _platform.CanTap);
                 _driver!.PerformActions([PerekScrollStabilityTests.CreateFlickSequence(
