@@ -17,6 +17,12 @@ public partial class PerekPage
     private const string SearchIntroductionAnimation = "ReaderSearchIntroduction";
     private bool _searchIntroductionPending = true;
 
+    private void InitializeSearchHeader()
+    {
+        _searchHeader = ChapterSearch.DetachHeader();
+        _searchHeaderHeight = _searchHeader.HeightRequest;
+    }
+
     private async void OnPerekSourceClicked(object? sender, EventArgs e)
     {
         var sourceBounds = SearchIntroduction.IsVisible ? SearchIntroduction.Bounds : NormalNavigationTitle.Bounds;

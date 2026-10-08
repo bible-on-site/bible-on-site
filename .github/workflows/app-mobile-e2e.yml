@@ -124,8 +124,10 @@ jobs:
         # truncated Google archive fails before it can boot or run any tests.
         # Preinstall that same version so the action can reuse a verified install.
         run: |
+          sdk_manager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$sdk_manager"
           for attempt in 1 2 3; do
-            if sdkmanager --install emulator --channel=0; then
+            if "$sdk_manager" --install emulator --channel=0; then
               "$ANDROID_HOME/emulator/emulator" -version
               exit 0
             fi

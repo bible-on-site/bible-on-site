@@ -110,18 +110,20 @@ public partial class PerekPage : ContentPage, IQueryAttributable
     private void SetupCarouselNavigation()
     {
 #if ANDROID || IOS
-        var statusBar = new CommunityToolkit.Maui.Behaviors.StatusBarBehavior
+        if (OperatingSystem.IsAndroid() || OperatingSystem.IsIOS())
         {
-            ApplyOn = CommunityToolkit.Maui.Behaviors.StatusBarApplyOn.OnPageNavigatedTo
-        };
-        statusBar.SetBinding(CommunityToolkit.Maui.Behaviors.StatusBarBehavior.StatusBarColorProperty,
-            new Binding(nameof(BackgroundColor), source: ReaderToolbar));
-        statusBar.SetAppTheme(CommunityToolkit.Maui.Behaviors.StatusBarBehavior.StatusBarStyleProperty,
-            CommunityToolkit.Maui.Core.StatusBarStyle.DarkContent, CommunityToolkit.Maui.Core.StatusBarStyle.LightContent);
-        Behaviors.Add(statusBar);
+            var statusBar = new CommunityToolkit.Maui.Behaviors.StatusBarBehavior
+            {
+                ApplyOn = CommunityToolkit.Maui.Behaviors.StatusBarApplyOn.OnPageNavigatedTo
+            };
+            statusBar.SetBinding(CommunityToolkit.Maui.Behaviors.StatusBarBehavior.StatusBarColorProperty,
+                new Binding(nameof(BackgroundColor), source: ReaderToolbar));
+            statusBar.SetAppTheme(CommunityToolkit.Maui.Behaviors.StatusBarBehavior.StatusBarStyleProperty,
+                CommunityToolkit.Maui.Core.StatusBarStyle.DarkContent, CommunityToolkit.Maui.Core.StatusBarStyle.LightContent);
+            Behaviors.Add(statusBar);
+        }
 #endif
-        _searchHeader = ChapterSearch.DetachHeader();
-        _searchHeaderHeight = _searchHeader.HeightRequest;
+        InitializeSearchHeader();
         ChapterSearch.SearchOpenChanged += OnChapterSearchOpenChanged;
         ChapterSearch.SetSource(_viewModel.Source);
         _viewModel.PropertyChanged += (_, e) =>
