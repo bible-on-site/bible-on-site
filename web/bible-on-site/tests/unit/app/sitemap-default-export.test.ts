@@ -18,7 +18,7 @@ jest.mock("@/lib/authors", () => ({
 }));
 
 jest.mock("@/lib/perushim", () => ({
-	getPerushimByPerekId: jest.fn(),
+	getAllPerushPerekNamePairs: jest.fn(),
 }));
 
 jest.mock("@/lib/tanahpedia/service", () => ({
@@ -33,7 +33,7 @@ import { headers } from "next/headers";
 import sitemapFn, { SITEMAP_SECTIONS, TOTAL_PERAKIM } from "@/app/sitemap";
 import { getAllArticlePerekIdPairs } from "@/lib/articles";
 import { getAllAuthorSlugs } from "@/lib/authors";
-import { getPerushimByPerekId } from "@/lib/perushim";
+import { getAllPerushPerekNamePairs } from "@/lib/perushim";
 import { CATEGORY_SLUGS } from "@/lib/tanahpedia/category-slug";
 import { getAllEntryUniqueNames } from "@/lib/tanahpedia/service";
 
@@ -53,8 +53,7 @@ describe("sitemap default export", () => {
 		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([
 			{ articleId: 10, perekId: 1 },
 		]);
-		// Return empty perushim for all 929 perakim
-		(getPerushimByPerekId as jest.Mock).mockResolvedValue([]);
+		(getAllPerushPerekNamePairs as jest.Mock).mockResolvedValue([]);
 		(getAllEntryUniqueNames as jest.Mock).mockResolvedValue(["יעקב"]);
 
 		const result = await sitemapFn();
@@ -96,7 +95,7 @@ describe("sitemap default export", () => {
 		});
 		(getAllAuthorSlugs as jest.Mock).mockResolvedValue([]);
 		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([]);
-		(getPerushimByPerekId as jest.Mock).mockResolvedValue([]);
+		(getAllPerushPerekNamePairs as jest.Mock).mockResolvedValue([]);
 		(getAllEntryUniqueNames as jest.Mock).mockResolvedValue([]);
 
 		const result = await sitemapFn();
@@ -110,7 +109,7 @@ describe("sitemap default export", () => {
 		});
 		(getAllAuthorSlugs as jest.Mock).mockResolvedValue([]);
 		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([]);
-		(getPerushimByPerekId as jest.Mock).mockResolvedValue([]);
+		(getAllPerushPerekNamePairs as jest.Mock).mockResolvedValue([]);
 		(getAllEntryUniqueNames as jest.Mock).mockResolvedValue([]);
 
 		await sitemapFn();
@@ -127,14 +126,9 @@ describe("sitemap default export", () => {
 		(getAllAuthorSlugs as jest.Mock).mockResolvedValue([]);
 		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([]);
 		(getAllEntryUniqueNames as jest.Mock).mockResolvedValue([]);
-		// Return a perush only for perek 1, empty for rest
-		(getPerushimByPerekId as jest.Mock).mockImplementation((perekId: number) =>
-			perekId === 1
-				? Promise.resolve([
-						{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 5 },
-					])
-				: Promise.resolve([]),
-		);
+		(getAllPerushPerekNamePairs as jest.Mock).mockResolvedValue([
+			{ perekId: 1, perushName: 'רש"י' },
+		]);
 
 		const result = await sitemapFn();
 
@@ -162,7 +156,7 @@ describe("sitemap default export", () => {
 		});
 		(getAllAuthorSlugs as jest.Mock).mockResolvedValue([]);
 		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([]);
-		(getPerushimByPerekId as jest.Mock).mockResolvedValue([]);
+		(getAllPerushPerekNamePairs as jest.Mock).mockResolvedValue([]);
 		(getAllEntryUniqueNames as jest.Mock).mockResolvedValue(["יעקב", "שמשון"]);
 
 		const result = await sitemapFn();

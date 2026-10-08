@@ -91,8 +91,8 @@ test.describe("Sefer commentary navigation", () => {
 				const blank = page.locator('.he-book .page[data-page-index="4"]');
 				const item =
 					kind === "article"
-						? blank.locator("button#article-1")
-						: blank.getByRole("button", { name: /רש"י/ });
+						? blank.locator("a#article-1")
+						: blank.getByRole("link", { name: /רש"י/ });
 				await item.tap();
 				await expect(
 					blank.getByText(kind === "article" ? "פתיחה" : /אמר רבי יצחק/),
@@ -127,8 +127,8 @@ test.describe("Sefer commentary navigation", () => {
 				const blank = page.locator('.he-book .page[data-page-index="4"]');
 				const item =
 					kind === "article"
-						? blank.locator("button#article-1")
-						: blank.getByRole("button", { name: /רש"י/ });
+						? blank.locator("a#article-1")
+						: blank.getByRole("link", { name: /רש"י/ });
 				const back = blank.getByRole("button", {
 					name: kind === "article" ? "חזרה למאמרים →" : "→ חזרה לפרשנים",
 				});
@@ -170,8 +170,8 @@ test.describe("Sefer commentary navigation", () => {
 			await chapter.click();
 			const blank = page.locator('.he-book .page[data-page-index="4"]');
 			await (kind === "article"
-				? blank.locator("button#article-1")
-				: blank.getByRole("button", { name: /רש"י/ })
+				? blank.locator("a#article-1")
+				: blank.getByRole("link", { name: /רש"י/ })
 			).click();
 			await expect(
 				blank.getByText(kind === "article" ? "פתיחה" : /אמר רבי יצחק/),
@@ -205,10 +205,8 @@ test.describe("Sefer commentary navigation", () => {
 			await page.reload();
 			await expect(back).toBeVisible({ timeout: 60_000 });
 			await back.click();
-			await expect(
-				blank.getByRole("button", { name: /אבן עזרא/ }),
-			).toBeVisible();
-			await blank.getByRole("button", { name: /אבן עזרא/ }).click();
+			await expect(blank.getByRole("link", { name: /אבן עזרא/ })).toBeVisible();
+			await blank.getByRole("link", { name: /אבן עזרא/ }).click();
 			await expect(
 				blank.getByRole("heading", { name: "אבן עזרא", exact: true }),
 			).toBeVisible({ timeout: 30_000 });
