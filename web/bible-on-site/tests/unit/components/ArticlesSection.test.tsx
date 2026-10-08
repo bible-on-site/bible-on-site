@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { ArticlesSection } from "../../../src/app/929/[number]/components/ArticlesSection";
 import type { Article } from "../../../src/lib/articles";
 
@@ -138,6 +138,24 @@ describe("ArticlesSection", () => {
 
 			expect(handleClick).toHaveBeenCalledTimes(1);
 			expect(handleClick).toHaveBeenCalledWith(mockArticles[0]);
+		});
+
+		it("lets modifier-clicks follow the href instead of the callback", () => {
+			const handleClick = jest.fn();
+			render(
+				<ArticlesSection
+					articles={mockArticles}
+					onArticleClick={handleClick}
+				/>,
+			);
+
+			const link = screen.getAllByRole("link")[0];
+			fireEvent.click(link, { ctrlKey: true });
+			fireEvent.click(link, { metaKey: true });
+			fireEvent.click(link, { shiftKey: true });
+			fireEvent.click(link, { altKey: true });
+
+			expect(handleClick).not.toHaveBeenCalled();
 		});
 
 		it("renders abstract in callback mode when present", () => {

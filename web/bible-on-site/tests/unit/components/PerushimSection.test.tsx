@@ -140,6 +140,19 @@ describe("PerushimSection", () => {
 		expect(mockGetPerushNotesForPage).not.toHaveBeenCalled();
 	});
 
+	it("lets modifier-clicks follow the href instead of opening in place", async () => {
+		const perushim: PerushSummary[] = [
+			{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 55 },
+		];
+		render(<PerushimSection perekId={1} perushim={perushim} />);
+		const link = screen.getByRole("link", { name: /רש"י/ });
+
+		fireEvent.click(link, { ctrlKey: true });
+		await act(async () => {});
+
+		expect(mockGetPerushNotesForPage).not.toHaveBeenCalled();
+	});
+
 	it("handles error in internal handlePerushClick", async () => {
 		mockGetPerushNotesForPage.mockRejectedValue(new Error("fail"));
 		const perushim: PerushSummary[] = [

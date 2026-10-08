@@ -108,6 +108,16 @@ describe("seo/tanahpedia-jsonld", () => {
 		it("leaves unknown named entities as written", () => {
 			expect(plainText("a&nosuchentity;b", 100)).toBe("a&nosuchentity;b");
 		});
+
+		it("leaves out-of-range numeric entities untouched instead of throwing", () => {
+			expect(plainText("a &#x110000; b", 100)).toBe("a &#x110000; b");
+			expect(plainText("a &#99999999; b", 100)).toBe("a &#99999999; b");
+		});
+
+		it("strips markup revealed by entity decoding", () => {
+			expect(plainText("x &lt;b&gt;bold&lt;/b&gt; y", 100)).toBe("x bold y");
+			expect(plainText("a &lt;i&gt;שלום&lt;/i&gt; b", 100)).toBe("a שלום b");
+		});
 	});
 
 	describe("buildEntryGraph", () => {

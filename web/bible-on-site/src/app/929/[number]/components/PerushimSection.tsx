@@ -104,6 +104,11 @@ export function PerushimSection({
 							href={`/929/${perekId}/${encodeURIComponent(perush.name)}`}
 							className={styles.carouselItem}
 							onClick={(e) => {
+								// Modifier/new-tab clicks keep the anchor's
+								// default navigation.
+								if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+									return;
+								}
 								e.preventDefault();
 								handlePerushClick(perush);
 							}}

@@ -61,6 +61,11 @@ export function ArticlesSection({
 							onClick={
 								onArticleClick
 									? (e) => {
+											// Modifier/new-tab clicks keep the
+											// anchor's default navigation.
+											if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+												return;
+											}
 											e.preventDefault();
 											onArticleClick(article);
 										}
