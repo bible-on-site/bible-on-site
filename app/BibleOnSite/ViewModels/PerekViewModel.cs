@@ -23,6 +23,9 @@ public partial class PerekViewModel : ObservableObject
     private readonly IShare _share;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, Perek> _readerPerakim = new();
 
+    /// <summary>Reports whether a perek has downloaded recitation audio (production: RecitationService).</summary>
+    private readonly Func<int, bool>? _hasPerekAudio;
+
     // Using fields with [ObservableProperty] - the MVVMTK0045 warnings are acceptable
     // as we're not targeting AOT scenarios for WinRT marshalling.
 #pragma warning disable MVVMTK0045
@@ -106,14 +109,70 @@ public partial class PerekViewModel : ObservableObject
     /// <summary>Currently displayed carousel perek.</summary>
     [ObservableProperty]
     private Perek? _currentCarouselPerek;
+
+    /// <summary>שניים מקרא reading mode — renders every pasuk twice consecutively.</summary>
+    [ObservableProperty]
+    private bool _isShnayimMikraEnabled;
+
+    /// <summary>תיקון קוראים reading mode — continuous chapter flow with a tap-to-toggle marks.</summary>
+    [ObservableProperty]
+    private bool _isTikkunKorimEnabled;
+
+    /// <summary>Whether niqqud and taamim are currently hidden in תיקון קוראים mode.</summary>
+    [ObservableProperty]
+    private bool _tikkunMarksHidden;
+
+    /// <summary>קריינות reading mode — header play button plus single-tap pasuk playback.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowHeaderPlayButton))]
+    private bool _isQriynotEnabled;
+
+    /// <summary>Whether a recitation is downloaded for the currently displayed perek.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowHeaderPlayButton))]
+    private bool _hasCurrentPerekRecitation;
+
+    /// <summary>The header play button shows only while קריינות is checked and audio exists.</summary>
+    public bool ShowHeaderPlayButton => IsQriynotEnabled && HasCurrentPerekRecitation;
 #pragma warning restore MVVMTK0045
 
-    public PerekViewModel() : this(PreferencesService.Instance, null)
+    partial void OnIsTikkunKorimEnabledChanged(bool value)
+    {
+        // Leaving the mode restores the original marked display settings.
+        if (!value)
+        {
+            TikkunMarksHidden = false;
+        }
+    }
+
+    partial void OnPerekChanged(Perek? value) => RefreshRecitationAvailability(value);
+
+    /// <summary>
+    /// Re-evaluates whether the currently displayed perek has a downloaded
+    /// recitation — controls the קריינות menu item and header play button.
+    /// Called when the perek changes and after the recitation package updates.
+    /// </summary>
+    public void RefreshRecitationAvailability() => RefreshRecitationAvailability(Perek);
+
+    private void RefreshRecitationAvailability(Perek? perek)
+    {
+        HasCurrentPerekRecitation = _hasPerekAudio != null && perek is { } current &&
+            _hasPerekAudio(current.PerekId);
+    }
+
+    public PerekViewModel() : this(PreferencesService.Instance, null,
+        hasPerekAudio: perekId => RecitationService.Instance.HasAudio(perekId))
     {
     }
 
     public PerekViewModel(PreferencesService preferencesService, Func<int, Perek?>? perekLoader)
-        : this(preferencesService, perekLoader, null, null, null, null, null, null)
+        : this(preferencesService, perekLoader, null)
+    {
+    }
+
+    public PerekViewModel(PreferencesService preferencesService, Func<int, Perek?>? perekLoader,
+        Func<int, bool>? hasPerekAudio)
+        : this(preferencesService, perekLoader, null, null, null, null, null, null, hasPerekAudio)
     {
     }
 
@@ -121,6 +180,15 @@ public partial class PerekViewModel : ObservableObject
         PerekDataService? perekDataService, PerushimCatalogService? catalogService,
         PerushimNotesService? notesService, IAppNavigator? navigator,
         IFileSystem? fileSystem, IShare? share)
+        : this(preferencesService, perekLoader, perekDataService, catalogService, notesService,
+            navigator, fileSystem, share, null)
+    {
+    }
+
+    public PerekViewModel(PreferencesService preferencesService, Func<int, Perek?>? perekLoader,
+        PerekDataService? perekDataService, PerushimCatalogService? catalogService,
+        PerushimNotesService? notesService, IAppNavigator? navigator,
+        IFileSystem? fileSystem, IShare? share, Func<int, bool>? hasPerekAudio)
     {
         _preferencesService = preferencesService;
         _perekLoader = perekLoader ?? DefaultPerekLoader;
@@ -130,6 +198,7 @@ public partial class PerekViewModel : ObservableObject
         _navigator = navigator ?? ShellAppNavigator.Instance;
         _fileSystem = fileSystem ?? FileSystem.Current;
         _share = share ?? Share.Default;
+        _hasPerekAudio = hasPerekAudio;
 
         // Sync FontFactor from preferences and listen for changes
         _fontFactor = _preferencesService.FontFactor;

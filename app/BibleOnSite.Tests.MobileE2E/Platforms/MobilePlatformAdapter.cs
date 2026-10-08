@@ -163,7 +163,7 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
     public override bool IsChecked(AppiumElement element) => element.GetAttribute("checked") == "true";
     // MAUI maps AutomationId to Android resource-id, preserving screen-reader text.
     public override By AutomationId(string id) => By.Id($"com.tanah.daily929:id/{id}");
-    public override By FlyoutButton => AutomationId("ReaderMenuButton");
+    public override By FlyoutButton => AutomationId("ReaderNavigationButton");
     public override void GoBack(AppiumDriver driver) => driver.Navigate().Back();
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
         new AndroidDriver(server, options, TimeSpan.FromMinutes(4));
@@ -175,7 +175,7 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
     public override bool IsChecked(AppiumElement element) => element.GetAttribute("value") == "1";
     public override void GoBackFromFocusedVerse(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SelectionBackButton")));
     public override By AutomationId(string id) => MobileBy.AccessibilityId(id);
-    public override By FlyoutButton => AutomationId("ReaderMenuButton");
+    public override By FlyoutButton => AutomationId("ReaderNavigationButton");
     public override bool CanTap(AppiumElement element) => element.Enabled
         && string.Equals(element.GetAttribute("hittable"), "true", StringComparison.OrdinalIgnoreCase);
     public override void Tap(AppiumDriver driver, AppiumElement element)

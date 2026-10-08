@@ -36,7 +36,7 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
             return window.FindAllDescendants(fixture.CF.ByAutomationId("PasukText"))
                 .FirstOrDefault(verse => !string.IsNullOrWhiteSpace(verse.Name) && !verse.IsOffscreen);
         }, TimeSpan.FromSeconds(30))).Should().NotBeNull("the reader finishes startup before search interactions");
-        (await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("ReaderMenuButton"))))
+        (await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("ReaderNavigationButton"))))
             .Should().NotBeNull("the reader toolbar finishes loading before resizing the window");
         fixture.MainWindow.Patterns.Transform.Pattern.Move(20, 20);
         fixture.MainWindow.Patterns.Transform.Pattern.Resize(860, 900);
@@ -134,7 +134,7 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
         (await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("PerekSource"))
             .FirstOrDefault(source => !source.IsOffscreen)))
             .Should().NotBeNull("the ordinary reader shows its chapter source");
-        (await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("ReaderMenuButton"))
+        (await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("ReaderNavigationButton"))
             .FirstOrDefault(button => !button.IsOffscreen)))
             .Should().NotBeNull("reader jumps keep the usual hamburger");
         fixture.MainWindow.FindAllDescendants(fixture.CF.ByAutomationId("PerekSearchInput"))
@@ -169,7 +169,7 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
     private async Task GoBackToSearchAsync(string query)
     {
         fixture.AssertForeground();
-        (await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("ReaderMenuButton"))
+        (await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("ReaderNavigationButton"))
             .FirstOrDefault(button => button.FrameworkAutomationElement.HasKeyboardFocus)))
             .Should().NotBeNull("reader navigation gives keyboard focus to its toolbar");
         Keyboard.TypeSimultaneously(FlaUI.Core.WindowsAPI.VirtualKeyShort.ALT, FlaUI.Core.WindowsAPI.VirtualKeyShort.LEFT);

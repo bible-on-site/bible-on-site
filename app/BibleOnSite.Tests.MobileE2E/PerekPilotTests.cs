@@ -1,8 +1,4 @@
-using BibleOnSite.Tests.MobileE2E.Configuration;
-using BibleOnSite.Tests.MobileE2E.Pages;
-using BibleOnSite.Tests.MobileE2E.Platforms;
 using OpenQA.Selenium;
-using OpenQA.Selenium.Appium;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -12,90 +8,62 @@ namespace BibleOnSite.Tests.MobileE2E;
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "Shared")]
-public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessionFactory sessions) : IAsyncLifetime
+public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessionFactory sessions)
+    : MobileDeviceTest(output, sessions)
 {
-    private readonly MobileTestConfiguration _configuration = MobileTestConfiguration.FromEnvironment();
-    private AppiumDriver? _driver;
-    private MobilePlatformAdapter _platform = null!;
-    private PerekPage _page = null!;
-
-    public Task InitializeAsync()
-    {
-        _platform = MobilePlatformAdapter.For(_configuration.Platform);
-        _driver = sessions.Create(() => _platform.CreateDriver(_configuration.Server, _platform.CreateOptions(_configuration)));
-        _page = new(_driver, _platform);
-        try
-        {
-            _page.WaitForStartup();
-        }
-        catch
-        {
-            SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed");
-            throw;
-        }
-        return Task.CompletedTask;
-    }
-
-    public Task DisposeAsync()
-    {
-        _driver?.Quit();
-        _driver?.Dispose();
-        return Task.CompletedTask;
-    }
-
     [Fact]
     public void StartupDisplaysPackagedPesukimAndUsableBottomNavigation() => Scenario(() =>
     {
-        Assert.NotEmpty(_page.Source);
-        Assert.NotEmpty(_page.FirstPasuk);
-        _page.AssertBottomNavigationLayout();
+        Assert.NotEmpty(Page.Source);
+        Assert.NotEmpty(Page.FirstPasuk);
+        Page.AssertBottomNavigationLayout();
     });
 
     [Fact]
     public void SearchReplacesTheSourceAndGroupsBooksInThreeColumns() => Scenario(() =>
     {
-        Assert.NotEmpty(_page.FirstPasuk);
+        Assert.NotEmpty(Page.FirstPasuk);
         AssertRegularReader();
-        var source = _page.WaitFor("PerekSource");
+        var source = Page.WaitFor("PerekSource");
         var sourceTop = source.Location.Y;
         var sourceBottom = sourceTop + source.Size.Height;
-        _page.Tap("PerekSource");
-        var headerInput = _page.WaitFor("PerekSearchInput");
+        Page.Tap("PerekSource");
+        var headerInput = Page.WaitFor("PerekSearchInput");
         Assert.InRange(headerInput.Location.Y + headerInput.Size.Height / 2, sourceTop, sourceBottom);
-        _page.WaitFor("SearchStatus", element => element.Text == "חיפושים אחרונים");
-        _page.WaitFor("RecentSearches");
-        Assert.DoesNotContain(_driver!.FindElements(_platform.AutomationId("PerekHeader")), element => element.Displayed);
-        var searchPage = _page.WaitFor("SearchPanel");
-        Assert.InRange(searchPage.Size.Width, _driver.Manage().Window.Size.Width - 8, _driver.Manage().Window.Size.Width);
+        Page.WaitFor("SearchStatus", element => element.Text == "חיפושים אחרונים");
+        Page.WaitFor("RecentSearches");
+        Assert.DoesNotContain(Driver!.FindElements(Platform.AutomationId("PerekHeader")), element => element.Displayed);
+        var searchPage = Page.WaitFor("SearchPanel");
+        Assert.InRange(searchPage.Size.Width, Driver.Manage().Window.Size.Width - 8, Driver.Manage().Window.Size.Width);
         SaveDiagnostics("SearchPageRecentSearches", "passed");
-        _page.Tap("SearchKindsTab");
-        _page.WaitFor("SearchKindPerek");
-        _platform.DismissSearchSheet(_driver);
-        _page.WaitForHidden("SearchSheet");
+        Page.Tap("SearchKindsTab");
+        Page.WaitFor("SearchKindPerek");
+        Platform.DismissSearchSheet(Driver);
+        Page.WaitForHidden("SearchSheet");
         AssertBookGroupColumns();
-        _platform.RevealTrailingSearchChips(_driver);
-        _page.Tap("SearchClearAll");
-        _page.WaitForHidden("SearchClearAll");
-        _page.WaitFor("SearchKindsSummary", element => element.Text == "מה לחפש");
-        _page.WaitFor("SearchBooksSummary", element => element.Text == "היכן לחפש");
-        _page.Tap("SearchSortButton");
-        _page.Tap("SearchSortGeneration");
-        _page.WaitForHidden("SearchSheet");
+        Platform.RevealTrailingSearchChips(Driver);
+        Page.Tap("SearchClearAll");
+        Page.WaitForHidden("SearchClearAll");
+        Page.WaitFor("SearchKindsSummary", element => element.Text == "מה לחפש");
+        Page.WaitFor("SearchBooksSummary", element => element.Text == "היכן לחפש");
+        Page.Tap("SearchSortButton");
+        Page.Tap("SearchSortGeneration");
+        Page.WaitForHidden("SearchSheet");
         SearchFor("בראשיט 1", "בראשית א");
-        var clear = _page.WaitFor("ClearSearchButton");
-        var input = _page.WaitFor("PerekSearchInput");
-        var navigation = _page.WaitFor("SearchNavigationButton");
+        var clear = Page.WaitFor("ClearSearchButton");
+        var input = Page.WaitFor("PerekSearchInput");
+        var navigation = Page.WaitFor("SearchNavigationButton");
         Assert.True(clear.Location.X + clear.Size.Width <= input.Location.X, "The single clear button follows the text field in RTL.");
         Assert.True(input.Location.X + input.Size.Width <= navigation.Location.X, "Back belongs at the right edge in RTL.");
-        _platform.Tap(_driver, _page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
+        Platform.Tap(Driver, Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
         AssertRegularReader();
-        _platform.GoBack(_driver);
-        _page.WaitFor("PerekSearchInput", element => element.Text == "בראשיט 1");
-        _page.Tap("ClearSearchButton");
-        _page.WaitFor("RecentSearchPhrase", element => element.Text == "בראשיט 1");
-        _platform.Tap(_driver, _page.WaitFor("RecentSearchPhrase", element => element.Text == "בראשיט 1"));
-        _page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א");
-        _page.Tap("SearchNavigationButton");
+        Platform.GoBack(Driver);
+        Page.WaitFor("PerekSearchInput", element => element.Text == "בראשיט 1");
+        Page.Tap("ClearSearchButton");
+        Page.WaitFor("RecentSearchPhrase", element => element.Text == "בראשיט 1");
+        Platform.Tap(Driver, Page.WaitFor("RecentSearchPhrase", element => element.Text == "בראשיט 1"));
+        Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א");
+        Page.Tap("SearchNavigationButton");
         AssertRegularReader();
         SaveDiagnostics("SearchPageClosed", "passed");
     });
@@ -103,225 +71,186 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     [Fact]
     public void FloatingSearchFindsMisspelledChapterAndUnpointedVerse() => Scenario(() =>
     {
-        Assert.NotEmpty(_page.FirstPasuk);
+        Assert.NotEmpty(Page.FirstPasuk);
         AssertRegularReader();
-        _page.Tap("PerekSource");
-        _page.Tap("SearchKindsTab");
-        if (_platform.IsChecked(_page.WaitFor("SearchKindPerush")))
+        Page.Tap("PerekSource");
+        Page.Tap("SearchKindsTab");
+        if (Platform.IsChecked(Page.WaitFor("SearchKindPerush")))
         {
-            _page.Tap("SearchKindPerush");
+            Page.Tap("SearchKindPerush");
         }
-        _page.Tap("SearchSheetApplyButton");
-        _page.WaitForHidden("SearchSheet");
+        Page.Tap("SearchSheetApplyButton");
+        Page.WaitForHidden("SearchSheet");
         SearchFor("בראשיט 1", "בראשית א");
-        _platform.Tap(_driver!, _page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
-        _page.WaitFor("PerekSource", element => element.Text == "בראשית א");
+        Platform.Tap(Driver!, Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
+        Page.WaitFor("PerekSource", element => element.Text == "בראשית א");
         AssertRegularReader();
-        _platform.GoBack(_driver!);
-        _page.WaitFor("PerekSearchInput", element => element.Text == "בראשיט 1");
-        _page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א");
+        Platform.GoBack(Driver!);
+        Page.WaitFor("PerekSearchInput", element => element.Text == "בראשיט 1");
+        Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א");
 
         SearchFor("ויעש אלהים את הרקיע", "בראשית א ז");
-        _page.WaitFor("SearchStatus", element => System.Text.RegularExpressions.Regex.IsMatch(element.Text, @"^\d+ תוצאות$"));
+        Page.WaitFor("SearchStatus", element => System.Text.RegularExpressions.Regex.IsMatch(element.Text, @"^\d+ תוצאות$"));
         SaveDiagnostics("FloatingSearchVerseResults", "passed");
-        var result = _driver!.FindElements(_platform.AutomationId("SearchResultTitle"))
+        var result = Driver!.FindElements(Platform.AutomationId("SearchResultTitle"))
             .First(element => element.Displayed && element.Text == "בראשית א ז");
-        _platform.Tap(_driver, result);
+        Platform.Tap(Driver, result);
         AssertRegularReader();
-        _page.WaitFor("PasukNumber", element => element.Text == "ז");
-        _platform.GoBack(_driver);
-        _page.WaitFor("PerekSearchInput", element => element.Text == "ויעש אלהים את הרקיע");
-        _page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א ז");
-        _page.Tap("SearchNavigationButton");
+        Page.WaitFor("PasukNumber", element => element.Text == "ז");
+        Platform.GoBack(Driver);
+        Page.WaitFor("PerekSearchInput", element => element.Text == "ויעש אלהים את הרקיע");
+        Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א ז");
+        Page.Tap("SearchNavigationButton");
         AssertRegularReader();
     });
 
     [Fact]
     public void FloatingSearchCommentaryJumpRestoresPhraseResultsAndPosition() => Scenario(() =>
     {
-        var driver = _driver!;
-        Assert.NotEmpty(_page.FirstPasuk);
+        var driver = Driver!;
+        Assert.NotEmpty(Page.FirstPasuk);
         AssertRegularReader();
-        _page.Tap("PerekSource");
-        _page.Tap("SearchKindsTab");
-        if (!_platform.IsChecked(_page.WaitFor("SearchKindPerush")))
+        Page.Tap("PerekSource");
+        Page.Tap("SearchKindsTab");
+        if (!Platform.IsChecked(Page.WaitFor("SearchKindPerush")))
         {
-            _page.Tap("SearchKindPerush");
+            Page.Tap("SearchKindPerush");
         }
-        _page.Tap("SearchSheetApplyButton");
-        _page.WaitForHidden("SearchSheet");
+        Page.Tap("SearchSheetApplyButton");
+        Page.WaitForHidden("SearchSheet");
         SearchFor("בראשית ברא אלהים", "בראשית א א");
         // A fresh installation builds the local index for the entire commentary
         // package. Subsequent result and history assertions use normal deadlines.
-        var commentary = _page.WaitFor("SearchResultTitle", element => element.Text.Contains(" - בראשית א א", StringComparison.Ordinal), TimeSpan.FromMinutes(6));
+        var commentary = Page.WaitFor("SearchResultTitle", element => element.Text.Contains(" - בראשית א א", StringComparison.Ordinal), TimeSpan.FromMinutes(6));
         var title = commentary.Text;
         var commentaryName = title.Split(" - ", StringSplitOptions.None)[0];
         var position = commentary.Location;
-        _platform.Tap(driver, commentary);
+        Platform.Tap(driver, commentary);
         AssertRegularReader();
-        _page.WaitFor("InlinePerushName", element => element.Text == commentaryName);
+        Page.WaitFor("InlinePerushName", element => element.Text == commentaryName);
         SaveDiagnostics("FloatingSearchCommentaryReader", "passed");
         // Menu navigation must keep this reader above the retained search page.
-        var readerSource = _page.Source;
-        _page.Tap(_platform.FlyoutButton);
-        _page.Tap("FlyoutPreferences");
-        _page.WaitFor("FontFactorSlider");
-        _platform.GoBack(driver);
-        _page.WaitFor("PerekSource", element => element.Text == readerSource);
-        _page.WaitFor("InlinePerushName", element => element.Text == commentaryName);
+        var readerSource = Page.Source;
+        Page.Tap(Platform.FlyoutButton);
+        Page.Tap("FlyoutPreferences");
+        Page.WaitFor("FontFactorSlider");
+        Platform.GoBack(driver);
+        Page.WaitFor("PerekSource", element => element.Text == readerSource);
+        Page.WaitFor("InlinePerushName", element => element.Text == commentaryName);
         AssertRegularReader();
-        _platform.GoBack(driver);
-        _page.WaitFor("PerekSearchInput", element => element.Text == "בראשית ברא אלהים");
-        var restored = _page.WaitFor("SearchResultTitle", element => element.Text == title);
+        Platform.GoBack(driver);
+        Page.WaitFor("PerekSearchInput", element => element.Text == "בראשית ברא אלהים");
+        var restored = Page.WaitFor("SearchResultTitle", element => element.Text == title);
         Assert.Equal(position, restored.Location);
-        var alternative = _page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א א");
-        _platform.Tap(driver, alternative);
+        var alternative = Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א א");
+        Platform.Tap(driver, alternative);
         AssertRegularReader();
-        _platform.GoBack(driver);
-        _page.WaitFor("PerekSearchInput", element => element.Text == "בראשית ברא אלהים");
-        if (_configuration.KeepAppForReview)
+        Platform.GoBack(driver);
+        Page.WaitFor("PerekSearchInput", element => element.Text == "בראשית ברא אלהים");
+        if (Configuration.KeepAppForReview)
         {
-            _platform.Tap(driver, _page.WaitFor("SearchResultTitle", element => element.Text == title));
+            Platform.Tap(driver, Page.WaitFor("SearchResultTitle", element => element.Text == title));
             AssertRegularReader();
-            _page.WaitFor("InlinePerushName", element => element.Text == commentaryName);
+            Page.WaitFor("InlinePerushName", element => element.Text == commentaryName);
             SaveDiagnostics("FloatingSearchReview", "passed");
         }
     });
 
     private void AssertRegularReader()
     {
-        _page.WaitFor("PerekSource", element => !string.IsNullOrEmpty(element.Text));
-        Assert.True(_page.WaitFor("ReaderMenuButton").Enabled);
-        Assert.DoesNotContain(_driver!.FindElements(_platform.AutomationId("PerekSearchInput")), element => element.Displayed);
-        Assert.DoesNotContain(_driver!.FindElements(_platform.AutomationId("SearchPanel")), element => element.Displayed);
-        Assert.DoesNotContain(_driver!.FindElements(_platform.AutomationId("SelectionBackButton")), element => element.Displayed);
-        Assert.DoesNotContain(_driver.FindElements(_platform.AutomationId("FocusedPasukText")), element => element.Displayed);
+        Page.WaitFor("PerekSource", element => !string.IsNullOrEmpty(element.Text));
+        Assert.True(Page.WaitFor("ReaderNavigationButton").Enabled);
+        Assert.DoesNotContain(Driver!.FindElements(Platform.AutomationId("PerekSearchInput")), element => element.Displayed);
+        Assert.DoesNotContain(Driver!.FindElements(Platform.AutomationId("SearchPanel")), element => element.Displayed);
+        Assert.DoesNotContain(Driver!.FindElements(Platform.AutomationId("SelectionBackButton")), element => element.Displayed);
+        Assert.DoesNotContain(Driver.FindElements(Platform.AutomationId("FocusedPasukText")), element => element.Displayed);
     }
 
     private void SearchFor(string text, string expectedTitle)
     {
-        if (!_driver!.FindElements(_platform.AutomationId("PerekSearchInput")).Any(element => element.Displayed))
+        if (!Driver!.FindElements(Platform.AutomationId("PerekSearchInput")).Any(element => element.Displayed))
         {
-            _page.Tap("PerekSource");
+            Page.Tap("PerekSource");
         }
-        var bar = _page.WaitFor("PerekSearchInput", element => element.Enabled);
-        _platform.Tap(_driver!, bar);
+        var bar = Page.WaitFor("PerekSearchInput", element => element.Enabled);
+        Platform.Tap(Driver!, bar);
         var input = bar.TagName.Contains("TextView", StringComparison.Ordinal) || bar.TagName.Contains("EditText", StringComparison.Ordinal) || bar.TagName.Contains("SearchField", StringComparison.Ordinal) || bar.TagName.Contains("TextField", StringComparison.Ordinal)
             ? bar : bar.FindElement(By.XPath(".//*[@class='android.widget.EditText' or @class='android.widget.AutoCompleteTextView' or @type='XCUIElementTypeSearchField' or @type='XCUIElementTypeTextField']"));
         input.Clear();
         input.SendKeys(text);
-        _page.WaitFor("SearchResultTitle", element => element.Text == expectedTitle);
+        Page.WaitFor("SearchResultTitle", element => element.Text == expectedTitle);
     }
 
     private void AssertBookGroupColumns()
     {
-        _page.Tap("SearchBooksTab");
-        var torah = _page.WaitFor("SearchGroup1");
-        var neviim = _page.WaitFor("SearchGroup2");
-        var ketuvim = _page.WaitFor("SearchGroup3");
+        Page.Tap("SearchBooksTab");
+        var torah = Page.WaitFor("SearchGroup1");
+        var neviim = Page.WaitFor("SearchGroup2");
+        var ketuvim = Page.WaitFor("SearchGroup3");
         Assert.True(torah.Location.X > neviim.Location.X && neviim.Location.X > ketuvim.Location.X);
         Assert.Equal(torah.Location.Y, neviim.Location.Y);
         Assert.Equal(torah.Location.Y, ketuvim.Location.Y);
-        Assert.True(_page.WaitFor("SearchBook1").Location.Y > torah.Location.Y);
-        _page.Tap("SearchGroup1");
-        _page.WaitFor("SearchBook1", element => !_platform.IsChecked(element));
-        _page.WaitFor("SearchBook2", element => !_platform.IsChecked(element));
-        Assert.True(_platform.IsChecked(_page.WaitFor("SearchGroup2")));
-        Assert.True(_platform.IsChecked(_page.WaitFor("SearchGroup3")));
-        _page.Tap("SearchBook1");
-        _page.WaitFor("SearchBook1", element => _platform.IsChecked(element));
-        Assert.False(_platform.IsChecked(_page.WaitFor("SearchGroup1")));
-        _page.Tap("SearchGroup1");
-        _page.WaitFor("SearchBook2", element => _platform.IsChecked(element));
-        _page.Tap("SearchGroup2");
-        _page.Tap("SearchGroup3");
-        _page.Tap("SearchSheetApplyButton");
-        _page.WaitForHidden("SearchSheet");
+        Assert.True(Page.WaitFor("SearchBook1").Location.Y > torah.Location.Y);
+        Page.Tap("SearchGroup1");
+        Page.WaitFor("SearchBook1", element => !Platform.IsChecked(element));
+        Page.WaitFor("SearchBook2", element => !Platform.IsChecked(element));
+        Assert.True(Platform.IsChecked(Page.WaitFor("SearchGroup2")));
+        Assert.True(Platform.IsChecked(Page.WaitFor("SearchGroup3")));
+        Page.Tap("SearchBook1");
+        Page.WaitFor("SearchBook1", element => Platform.IsChecked(element));
+        Assert.False(Platform.IsChecked(Page.WaitFor("SearchGroup1")));
+        Page.Tap("SearchGroup1");
+        Page.WaitFor("SearchBook2", element => Platform.IsChecked(element));
+        Page.Tap("SearchGroup2");
+        Page.Tap("SearchGroup3");
+        Page.Tap("SearchSheetApplyButton");
+        Page.WaitForHidden("SearchSheet");
         // XCTest correctly marks background chips as covered by the sheet.
         // Assert each summary after applying the selection, as a user reads it.
-        _page.WaitFor("SearchBooksSummary", element => element.Text == "תורה");
-        _page.Tap("SearchBooksTab");
-        _page.Tap("SearchBook1");
-        _page.Tap("SearchSheetApplyButton");
-        _page.WaitForHidden("SearchSheet");
-        _page.WaitFor("SearchBooksSummary", element => element.Text == "שמות +3");
-        _page.Tap("SearchBooksTab");
-        _page.Tap("SearchBook1");
+        Page.WaitFor("SearchBooksSummary", element => element.Text == "תורה");
+        Page.Tap("SearchBooksTab");
+        Page.Tap("SearchBook1");
+        Page.Tap("SearchSheetApplyButton");
+        Page.WaitForHidden("SearchSheet");
+        Page.WaitFor("SearchBooksSummary", element => element.Text == "שמות +3");
+        Page.Tap("SearchBooksTab");
+        Page.Tap("SearchBook1");
         SaveDiagnostics("FloatingSearchBookColumns", "passed");
-        _page.Tap("SearchSheetApplyButton");
-        _page.WaitForHidden("SearchSheet");
-        _page.WaitFor("SearchBooksSummary", element => element.Text == "תורה");
+        Page.Tap("SearchSheetApplyButton");
+        Page.WaitForHidden("SearchSheet");
+        Page.WaitFor("SearchBooksSummary", element => element.Text == "תורה");
     }
 
     [Fact]
     public void AdjacentPerekNavigationChangesTheTextAndReturnsToTheOriginal() => Scenario(() =>
     {
-        var source = _page.Source;
-        var pasuk = _page.FirstPasuk;
-        _page.OpenCircularMenu();
-        var next = _page.WaitFor("NextPerekButton");
+        var source = Page.Source;
+        var pasuk = Page.FirstPasuk;
+        Page.OpenCircularMenu();
+        var next = Page.WaitFor("NextPerekButton");
         var forward = next.Enabled ? "NextPerekButton" : "PrevPerekButton";
         var backward = next.Enabled ? "PrevPerekButton" : "NextPerekButton";
-        _page.Tap(forward);
-        _page.WaitFor("PerekSource", element => element.Text != source);
-        _page.WaitFor("PasukText", element => !string.IsNullOrWhiteSpace(element.Text) && element.Text != pasuk);
+        Page.Tap(forward);
+        Page.WaitFor("PerekSource", element => element.Text != source);
+        Page.WaitFor("PasukText", element => !string.IsNullOrWhiteSpace(element.Text) && element.Text != pasuk);
         // Satellite navigation keeps the menu open for further chapter changes.
-        _page.Tap(backward);
-        _page.WaitFor("PerekSource", element => element.Text == source);
-        _page.WaitFor("PasukText", element => element.Text == pasuk);
-        _page.AssertBottomNavigationLayout();
+        Page.Tap(backward);
+        Page.WaitFor("PerekSource", element => element.Text == source);
+        Page.WaitFor("PasukText", element => element.Text == pasuk);
+        Page.AssertBottomNavigationLayout();
     });
 
     [Fact]
     public void NativeFlyoutOpensPreferencesAndBackReturnsToThePerek() => Scenario(() =>
     {
-        var source = _page.Source;
-        _page.Tap(_platform.FlyoutButton);
-        _page.Tap("FlyoutPreferences");
-        Assert.True(_page.WaitFor("FontFactorSlider").Enabled);
-        Assert.True(_page.WaitFor("PerekTodaysRadio").Enabled);
-        Assert.True(_page.WaitFor("PerekLastRadio").Enabled);
-        _platform.GoBack(_driver!);
-        _page.WaitFor("PerekSource", element => element.Text == source);
-        _page.AssertBottomNavigationLayout();
+        var source = Page.Source;
+        Page.Tap(Platform.FlyoutButton);
+        Page.Tap("FlyoutPreferences");
+        Assert.True(Page.WaitFor("FontFactorSlider").Enabled);
+        Assert.True(Page.WaitFor("PerekTodaysRadio").Enabled);
+        Assert.True(Page.WaitFor("PerekLastRadio").Enabled);
+        Platform.GoBack(Driver!);
+        Page.WaitFor("PerekSource", element => element.Text == source);
+        Page.AssertBottomNavigationLayout();
     });
-
-    private void Scenario(Action run, [System.Runtime.CompilerServices.CallerMemberName] string name = "")
-    {
-        try
-        {
-            run();
-            SaveDiagnostics(name, "passed");
-        }
-        catch
-        {
-            SaveDiagnostics(name, "failed");
-            throw;
-        }
-    }
-
-    private void SaveDiagnostics(string name, string outcome)
-    {
-        var prefix = Path.Join(_configuration.ArtifactDirectory, $"{name}-{outcome}");
-        Directory.CreateDirectory(_configuration.ArtifactDirectory);
-        try
-        {
-            _driver!.GetScreenshot().SaveAsFile(prefix + ".png");
-            File.WriteAllText(prefix + ".xml", _driver.PageSource);
-        }
-        catch (WebDriverException exception)
-        {
-            // Preserve the scenario failure when a crashed app prevents diagnostics.
-            File.WriteAllText(prefix + "-diagnostics-error.txt", exception.ToString());
-            output.WriteLine($"Could not capture device diagnostics: {exception}");
-            if (outcome == "passed")
-            {
-                throw;
-            }
-        }
-        output.WriteLine($"{_configuration.Platform}: {name} {outcome}; artifacts: {prefix}");
-    }
 }
-
-[CollectionDefinition("Mobile device", DisableParallelization = true)]
-public sealed class MobileDeviceCollection : ICollectionFixture<MobileDeviceSessionFactory>;

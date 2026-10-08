@@ -36,7 +36,7 @@ public partial class PerekPage
         {
             if (Shell.Current.CurrentPage == this && !ChapterSearch.IsSearchOpen)
             {
-                ReaderMenuButton.Focus();
+                ReaderNavigationButton.Focus();
             }
         });
     }

@@ -25,6 +25,7 @@ public partial class PerekPage
 
     private async void OnPerekSourceClicked(object? sender, EventArgs e)
     {
+        ReaderMenuOverlay.IsVisible = false;
         var sourceBounds = SearchIntroduction.IsVisible ? SearchIntroduction.Bounds : NormalNavigationTitle.Bounds;
         FinishSearchIntroduction();
         var opening = ChapterSearch.OpenAsync();
@@ -136,7 +137,7 @@ public partial class PerekPage
 #endif
         NormalNavigationTitle.IsVisible = true;
         NormalNavigationTitle.Opacity = 0;
-        var sourceWidth = NormalNavigationBar.Width - 2 * ReaderMenuButton.Width - NormalNavigationTitle.Margin.HorizontalThickness;
+        var sourceWidth = NormalNavigationBar.Width - 2 * ReaderNavigationButton.Width - NormalNavigationTitle.Margin.HorizontalThickness;
         var introductionWidth = Math.Min(ReaderToolbar.Width - 8, sourceWidth * 1.06);
         if (sourceWidth <= 0 || introductionWidth <= 0)
         {
