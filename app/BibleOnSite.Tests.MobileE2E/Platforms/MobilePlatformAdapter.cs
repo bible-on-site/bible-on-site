@@ -74,8 +74,11 @@ public abstract class MobilePlatformAdapter
         return sequence;
     }
 
+    public AppiumOptions CreateOptions(MobileTestConfiguration configuration) =>
+        CreateOptions(configuration, null);
+
     public AppiumOptions CreateOptions(MobileTestConfiguration configuration,
-        IReadOnlyDictionary<string, string>? appEnvironment = null)
+        IReadOnlyDictionary<string, string>? appEnvironment)
     {
         var android = configuration.Platform == MobilePlatform.Android;
         var options = new AppiumOptions

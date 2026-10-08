@@ -177,7 +177,8 @@ public static class HtmlRuns
         private static bool SameStyle(Style a, Style b) =>
             a.Bold == b.Bold && a.Italic == b.Italic && a.Underline == b.Underline &&
             a.Strikethrough == b.Strikethrough && a.BaselineShift == b.BaselineShift &&
-            a.FontScale == b.FontScale && a.HeadingLevel == b.HeadingLevel && a.Link == b.Link;
+            Math.Abs(a.FontScale - b.FontScale) < 0.0001 &&
+            a.HeadingLevel == b.HeadingLevel && a.Link == b.Link;
     }
 
     private static void Walk(HtmlNode node, Style style, Context context)
@@ -339,6 +340,10 @@ public static class HtmlRuns
                 heading.Bold = true;
                 heading.HeadingLevel = t[1] - '0';
                 break;
+            default:
+                // Unrecognized elements keep the inherited style; their
+                // children are still walked.
+                break;
         }
 
         var inlineStyle = node.GetAttributeValue("style", null);
@@ -385,6 +390,8 @@ public static class HtmlRuns
                     break;
                 case "font-size":
                     ApplyFontSize(value, mutate);
+                    break;
+                default:
                     break;
             }
         }
