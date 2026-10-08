@@ -16,6 +16,7 @@ const {
 }));
 
 vi.mock("@tanstack/react-start", () => ({
+	createServerOnlyFn: (fn: unknown) => fn,
 	createServerFn: () => ({
 		validator: (validate: (data: unknown) => unknown) => ({
 			handler:
@@ -110,9 +111,7 @@ describe("saveEntryRevisioned", () => {
 	});
 
 	it("rejects a stale base revision", async () => {
-		txQueryOneMock
-			.mockResolvedValueOnce(ENTRY)
-			.mockResolvedValueOnce(HEAD);
+		txQueryOneMock.mockResolvedValueOnce(ENTRY).mockResolvedValueOnce(HEAD);
 		await expect(
 			saveEntryRevisioned(fakeConn, {
 				id: "entry-1",
