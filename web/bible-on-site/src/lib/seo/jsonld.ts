@@ -131,9 +131,38 @@ function stripHtmlTags(html: string, replacement: string): string {
 	return stripped;
 }
 
+const NAMED_HTML_ENTITIES: Record<string, string> = {
+	"&amp;": "&",
+	"&lt;": "<",
+	"&gt;": ">",
+	"&quot;": '"',
+	"&apos;": "'",
+	"&nbsp;": "\u00a0",
+};
+
+/**
+ * Decode HTML entities to their literal characters so plain-text excerpts
+ * read naturally in `<meta>` descriptions and JSON-LD fields. Numeric
+ * (`&#39;`, `&#x27;`) entities decode via code point; the named set covers
+ * the entities that appear in stored content.
+ */
+function decodeHtmlEntities(text: string): string {
+	return text
+		.replace(/&#x([0-9a-fA-F]+);/g, (_, hex: string) =>
+			String.fromCodePoint(Number.parseInt(hex, 16)),
+		)
+		.replace(/&#(\d+);/g, (_, dec: string) =>
+			String.fromCodePoint(Number.parseInt(dec, 10)),
+		)
+		.replace(/&[a-zA-Z]+;/g, (entity) => NAMED_HTML_ENTITIES[entity] ?? entity);
+}
+
 /** Plain-text snippet from HTML, for a definition/description/abstract. */
 export function plainText(html: string, maxLen: number): string {
-	return stripHtmlTags(html, " ").replace(/\s+/g, " ").trim().slice(0, maxLen);
+	return decodeHtmlEntities(stripHtmlTags(html, " "))
+		.replace(/\s+/g, " ")
+		.trim()
+		.slice(0, maxLen);
 }
 
 /**

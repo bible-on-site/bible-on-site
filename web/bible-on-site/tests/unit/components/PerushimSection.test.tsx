@@ -119,7 +119,7 @@ describe("PerushimSection", () => {
 		pushStateSpy.mockRestore();
 	});
 
-	it("delegates to onPerushClick when provided (renders buttons)", () => {
+	it("delegates to onPerushClick when provided (keeps crawlable links)", () => {
 		const onPerushClick = jest.fn();
 		const perushim: PerushSummary[] = [
 			{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 55 },
@@ -131,7 +131,11 @@ describe("PerushimSection", () => {
 				onPerushClick={onPerushClick}
 			/>,
 		);
-		fireEvent.click(screen.getByRole("button", { name: /רש"י/ }));
+		const link = screen.getByRole("link", { name: /רש"י/ });
+		expect(link.getAttribute("href")).toBe(
+			`/929/1/${encodeURIComponent('רש"י')}`,
+		);
+		fireEvent.click(link);
 		expect(onPerushClick).toHaveBeenCalledWith(perushim[0]);
 		expect(mockGetPerushNotesForPage).not.toHaveBeenCalled();
 	});
