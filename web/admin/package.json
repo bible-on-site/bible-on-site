@@ -39,8 +39,8 @@
 		}
 	},
 	"dependencies": {
-		"@aws-sdk/client-s3": "3.1146.0",
-		"@aws-sdk/s3-request-presigner": "3.1146.0",
+		"@aws-sdk/client-s3": "3.1147.0",
+		"@aws-sdk/s3-request-presigner": "3.1147.0",
 		"@tanstack/react-query": "5.104.1",
 		"@tanstack/react-router": "1.170.41",
 		"@tanstack/react-router-devtools": "1.167.2",
@@ -70,7 +70,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.15",
-		"@playwright/test": "1.63.0",
+		"@playwright/test": "1.64.0",
 		"@tailwindcss/vite": "4.3.3",
 		"@testing-library/dom": "10.4.2",
 		"@testing-library/jest-dom": "7.0.1",
@@ -90,14 +90,14 @@
 		"istanbul-lib-instrument": "6.0.3",
 		"istanbul-lib-source-maps": "5.0.6",
 		"jsdom": "30.1.2",
-		"monocart-coverage-reports": "2.13.1",
-		"monocart-reporter": "2.14.0",
+		"monocart-coverage-reports": "2.13.2",
+		"monocart-reporter": "2.14.1",
 		"postcss": "8.5.29",
-		"rolldown": "1.2.12",
+		"rolldown": "1.2.13",
 		"tailwindcss": "4.3.3",
 		"tsx": "4.23.15",
 		"typescript": "7.0.2",
-		"vite": "8.3.2",
+		"vite": "8.3.3",
 		"vite-plugin-istanbul": "9.0.1",
 		"vitest": "5.0.3"
 	},
@@ -105,7 +105,7 @@
 		"@emnapi/core": "1.11.3",
 		"@emnapi/runtime": "1.11.3",
 		"@emnapi/wasi-threads": "2.2.0",
-		"@napi-rs/wasm-runtime": "1.1.6",
-		"@tybys/wasm-util": "0.10.3"
+		"@napi-rs/wasm-runtime": "1.2.5",
+		"@tybys/wasm-util": "0.10.4"
 	}
 }

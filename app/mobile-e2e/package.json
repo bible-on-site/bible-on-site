@@ -15,12 +15,12 @@
   "devDependencies": {
     "appium": "3.8.0",
     "appium-uiautomator2-driver": "8.7.0",
-    "appium-xcuitest-driver": "12.15.2"
+    "appium-xcuitest-driver": "12.16.0"
   },
   "allowScripts": {
     "appium@3.8.0": true
   },
   "overrides": {
-    "shell-quote": "1.11.0"
+    "shell-quote": "1.12.0"
   }
 }
