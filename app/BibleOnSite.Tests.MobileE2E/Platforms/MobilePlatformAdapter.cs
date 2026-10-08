@@ -19,6 +19,61 @@ public abstract class MobilePlatformAdapter
     public abstract void GoBack(AppiumDriver driver);
     public abstract AppiumDriver CreateDriver(Uri server, AppiumOptions options);
 
+    /// <summary>
+    /// RTL navigation drawer gesture: a swipe starting at the right screen edge
+    /// and travelling left. The perek carousel competes for the same touches on
+    /// iOS, so the sequence must begin inside the native edge band (#1306).
+    /// </summary>
+    public virtual void OpenFlyoutViaRightEdgeSwipe(AppiumDriver driver) =>
+        driver.PerformActions([CreateEdgeSwipeSequence(driver.Manage().Window.Size)]);
+
+    /// <summary>
+    /// Tap the dimmed area beside the open drawer. The RTL drawer slides in from
+    /// the right with a fixed width, so the scrim occupies only the left sliver —
+    /// tap near the left edge to stay off the drawer on narrow phones.
+    /// </summary>
+    public virtual void DismissFlyoutViaScrim(AppiumDriver driver)
+    {
+        var window = driver.Manage().Window.Size;
+        TapAtPoint(driver, Math.Max(8, window.Width / 10), window.Height / 2);
+    }
+
+    public virtual void TapAtPoint(AppiumDriver driver, int x, int y) =>
+        driver.PerformActions([CreateTapAtSequence(x, y)]);
+
+    internal static ActionSequence CreateTapAtSequence(int x, int y)
+    {
+        var finger = new PointerInputDevice(PointerKind.Touch, "finger");
+        var sequence = new ActionSequence(finger, 0);
+        sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, x, y, TimeSpan.Zero));
+        sequence.AddAction(finger.CreatePointerDown(MouseButton.Left));
+        sequence.AddAction(finger.CreatePause(TimeSpan.FromMilliseconds(100)));
+        sequence.AddAction(finger.CreatePointerUp(MouseButton.Left));
+        return sequence;
+    }
+
+    internal static ActionSequence CreateEdgeSwipeSequence(System.Drawing.Size window)
+    {
+        var finger = new PointerInputDevice(PointerKind.Touch, "finger");
+        var sequence = new ActionSequence(finger, 0);
+        var startX = window.Width - 2;
+        var endX = window.Width / 3;
+        var y = window.Height / 2;
+        sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, startX, y, TimeSpan.Zero));
+        sequence.AddAction(finger.CreatePointerDown(MouseButton.Left));
+        // Several short drags keep continuous inward motion for the native edge
+        // recognizer instead of a single jump that reads as a flick to nowhere.
+        const int steps = 6;
+        for (var i = 1; i <= steps; i++)
+        {
+            var x = startX - (startX - endX) * i / steps;
+            sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, x, y,
+                TimeSpan.FromMilliseconds(50)));
+        }
+        sequence.AddAction(finger.CreatePointerUp(MouseButton.Left));
+        return sequence;
+    }
+
     public AppiumOptions CreateOptions(MobileTestConfiguration configuration)
     {
         var android = configuration.Platform == MobilePlatform.Android;
@@ -107,17 +162,8 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
         // long press or a second attempt when the expected UI does not appear.
         driver.PerformActions([CreateTapSequence(element.Location, element.Size)]);
     }
-    internal static ActionSequence CreateTapSequence(System.Drawing.Point location, System.Drawing.Size size)
-    {
-        var finger = new PointerInputDevice(PointerKind.Touch, "finger");
-        var sequence = new ActionSequence(finger, 0);
-        sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport,
-            location.X + size.Width / 2, location.Y + size.Height / 2, TimeSpan.Zero));
-        sequence.AddAction(finger.CreatePointerDown(MouseButton.Left));
-        sequence.AddAction(finger.CreatePause(TimeSpan.FromMilliseconds(100)));
-        sequence.AddAction(finger.CreatePointerUp(MouseButton.Left));
-        return sequence;
-    }
+    internal static ActionSequence CreateTapSequence(System.Drawing.Point location, System.Drawing.Size size) =>
+        CreateTapAtSequence(location.X + size.Width / 2, location.Y + size.Height / 2);
     public override void GoBack(AppiumDriver driver) => Tap(driver, driver.FindElement(FlyoutButton));
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
         // The five-minute client budget fits inside the ten-minute per-test hang

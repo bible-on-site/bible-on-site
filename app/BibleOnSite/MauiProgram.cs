@@ -73,6 +73,15 @@ public static class MauiProgram
 			if (handler.PlatformView is UIKit.UICollectionView collectionView)
 			{
 				collectionView.DirectionalLockEnabled = true;
+				// The carousel's horizontal paging pan competes with the Shell
+				// flyout's right-edge recognizer over the same touches and usually
+				// wins, leaving the RTL drawer gesture dead on perek pages (#1306).
+				// Give the drawer gesture priority so a swipe starting at the
+				// right screen edge opens the drawer instead of switching perek.
+				if (AppShell.SharedFlyoutEdgePan.View is not null)
+				{
+					collectionView.PanGestureRecognizer.RequireGestureRecognizerToFail(AppShell.SharedFlyoutEdgePan);
+				}
 			}
 		});
 #endif

@@ -47,8 +47,42 @@ public partial class AppShell : Shell
 	}
 
 #if IOS || MACCATALYST
-	private UIScreenEdgePanGestureRecognizer? _flyoutEdgePan;
 	private UIView? _flyoutEdgeView;
+
+	/// <summary>
+	/// MAUI's built-in Shell flyout gesture is bound to the left screen edge even
+	/// under ForceRightToLeft — the drawer slides in from the right but only a
+	/// left-edge swipe opens it. This recognizer opens the flyout on the RTL
+	/// gesture (right edge toward left).
+	/// One shared instance: the perek carousel's native pan is wired to yield to
+	/// exactly this recognizer (MauiProgram), so recreating it would silently
+	/// drop that priority and let carousel paging swallow the edge swipe again.
+	/// </summary>
+	internal static readonly UIScreenEdgePanGestureRecognizer SharedFlyoutEdgePan =
+		new UIScreenEdgePanGestureRecognizer(OnSharedFlyoutEdgePan)
+		{
+			Edges = UIRectEdge.Right,
+		};
+
+	private static void OnSharedFlyoutEdgePan()
+	{
+		if (Current is AppShell shell)
+		{
+			shell.OpenFlyoutFromRightEdgePan();
+		}
+	}
+
+	private void OpenFlyoutFromRightEdgePan()
+	{
+		// Honor the selection-mode lock: when a pasuk is selected the page
+		// sets FlyoutBehavior.Disabled and the drawer must stay closed.
+		if (CurrentPage is not null &&
+			GetFlyoutBehavior(CurrentPage) == FlyoutBehavior.Flyout &&
+			!FlyoutIsPresented)
+		{
+			FlyoutIsPresented = true;
+		}
+	}
 
 	private void OnShellHandlerChanged(object? sender, EventArgs e)
 	{
@@ -59,45 +93,21 @@ public partial class AppShell : Shell
 		}
 	}
 
-	/// <summary>
-	/// MAUI's built-in Shell flyout gesture is bound to the left screen edge even
-	/// under ForceRightToLeft — the drawer slides in from the right but only a
-	/// left-edge swipe opens it. Attach an explicit right-edge recognizer so the
-	/// RTL gesture (right edge toward left) opens the flyout.
-	/// </summary>
 	private void InstallRightEdgeFlyoutGesture(UIView uiView)
 	{
 		// If Shell replaced its native view, move the recognizer to the new one
 		// instead of leaving it on the old view holding a callback into us.
-		if (_flyoutEdgeView is not null && _flyoutEdgePan is not null &&
-			!ReferenceEquals(_flyoutEdgeView, uiView))
+		if (_flyoutEdgeView is not null && !ReferenceEquals(_flyoutEdgeView, uiView))
 		{
-			_flyoutEdgeView.RemoveGestureRecognizer(_flyoutEdgePan);
-			_flyoutEdgePan.Dispose();
-			_flyoutEdgePan = null;
+			_flyoutEdgeView.RemoveGestureRecognizer(SharedFlyoutEdgePan);
 			_flyoutEdgeView = null;
 		}
-		if (_flyoutEdgePan is not null)
+		if (_flyoutEdgeView is not null)
 		{
 			return;
 		}
 
-		var edgePan = new UIScreenEdgePanGestureRecognizer(() =>
-		{
-			// Honor the selection-mode lock: when a pasuk is selected the page
-			// sets FlyoutBehavior.Disabled and the drawer must stay closed.
-			if (CurrentPage is not null &&
-				GetFlyoutBehavior(CurrentPage) == FlyoutBehavior.Flyout &&
-				!FlyoutIsPresented)
-			{
-				FlyoutIsPresented = true;
-			}
-		})
-		{
-			Edges = UIRectEdge.Right,
-		};
-		uiView.AddGestureRecognizer(edgePan);
-		_flyoutEdgePan = edgePan;
+		uiView.AddGestureRecognizer(SharedFlyoutEdgePan);
 		_flyoutEdgeView = uiView;
 	}
 #endif

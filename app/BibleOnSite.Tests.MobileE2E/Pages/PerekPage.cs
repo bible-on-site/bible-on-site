@@ -51,6 +51,62 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     public string Source => WaitFor("PerekSource", element => !string.IsNullOrWhiteSpace(element.Text)).Text;
     public string FirstPasuk => WaitFor("PasukText", element => !string.IsNullOrWhiteSpace(element.Text)).Text;
 
+    /// <summary>
+    /// Waits until no element matching the automation id is displayed with its
+    /// center inside the viewport. Dismissed flyout content leaves the
+    /// accessibility tree entirely on iOS, but a closing animation or a stale
+    /// snapshot can keep a copy around briefly.
+    /// </summary>
+    public void WaitForHidden(string automationId)
+    {
+        var locator = platform.AutomationId(automationId);
+        var timeout = TimeSpan.FromSeconds(30);
+        var deadline = DateTime.UtcNow.Add(timeout);
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                var visible = driver.FindElements(locator)
+                    .Any(element => element.Displayed && HasVisibleCenter(element));
+                if (!visible)
+                {
+                    return;
+                }
+            }
+            catch (StaleElementReferenceException)
+            {
+                // The carousel can replace its native views between lookup and inspection.
+            }
+            Thread.Sleep(200);
+        }
+        throw new WebDriverTimeoutException($"Element matching {locator} stayed visible for {timeout.TotalSeconds} seconds.");
+    }
+
+    /// <summary>
+    /// Returns the element's frame once two consecutive snapshots agree. A
+    /// rotation or a carousel re-snap moves the frame over several layout
+    /// passes; measuring during the transition races the assertion.
+    /// </summary>
+    public (Point Location, Size Size) WaitForStableFrame(string automationId)
+    {
+        var locator = platform.AutomationId(automationId);
+        var timeout = TimeSpan.FromSeconds(45);
+        var deadline = DateTime.UtcNow.Add(timeout);
+        var frame = Rectangle.Empty;
+        while (DateTime.UtcNow < deadline)
+        {
+            var element = WaitFor(locator);
+            var current = new Rectangle(element.Location, element.Size);
+            if (current == frame)
+            {
+                return (current.Location, current.Size);
+            }
+            frame = current;
+            Thread.Sleep(250);
+        }
+        throw new WebDriverTimeoutException($"The frame of {locator} did not stabilize within {timeout.TotalSeconds} seconds.");
+    }
+
     public void Tap(string automationId) => Tap(platform.AutomationId(automationId));
 
     public void Tap(By locator) => platform.Tap(driver, WaitFor(locator, platform.CanTap));

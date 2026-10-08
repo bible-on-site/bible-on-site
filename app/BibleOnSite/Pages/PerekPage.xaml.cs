@@ -70,6 +70,7 @@ public partial class PerekPage : ContentPage
         Console.WriteLine("[Startup] PerekPage InitializeComponent");
         InitializeComponent();
 #if IOS
+        ConfigureReaderSafeArea();
         InitializeBottomBarDebugControls();
 #endif
         Console.WriteLine("[Startup] PerekPage binding context");
@@ -88,6 +89,7 @@ public partial class PerekPage : ContentPage
     {
         InitializeComponent();
 #if IOS
+        ConfigureReaderSafeArea();
         InitializeBottomBarDebugControls();
 #endif
         _viewModel = viewModel;
@@ -663,6 +665,23 @@ public partial class PerekPage : ContentPage
     }
 
 #if IOS
+    /// <summary>
+    /// MAUI pads Layouts inside the device safe area by default
+    /// (SafeAreaEdges = Container). On iPhone that insets the whole reader —
+    /// most visible in landscape as empty bands on both sides (#1308).
+    /// Let the reader reach the side and top edges; keep the bottom inset
+    /// because ApplyBottomBarSafeArea positions the bottom bar around the
+    /// home indicator itself.
+    /// </summary>
+    private void ConfigureReaderSafeArea()
+    {
+        MainGrid.SafeAreaEdges = new SafeAreaEdges(
+            SafeAreaRegions.None,
+            SafeAreaRegions.None,
+            SafeAreaRegions.None,
+            SafeAreaRegions.Container);
+    }
+
     private void InitializeBottomBarDebugControls()
     {
         // XAML sets the default selection while constructing the page. Hook up
