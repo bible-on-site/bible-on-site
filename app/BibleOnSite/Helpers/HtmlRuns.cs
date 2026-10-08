@@ -392,6 +392,7 @@ public static class HtmlRuns
                     ApplyFontSize(value, mutate);
                     break;
                 default:
+                    // Unknown CSS properties are ignored.
                     break;
             }
         }
