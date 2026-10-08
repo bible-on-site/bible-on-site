@@ -64,7 +64,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         // property mapper re-renders, and discard completions targeted at the
         // previous platform view.
         _renderedHtml = null;
-        _renderSerial++;
+        Interlocked.Increment(ref _renderSerial);
         base.ConnectHandler(platformView);
         VirtualView.HtmlContentChanged += OnHtmlContentChanged;
         VirtualView.StyleChanged += OnStyleChanged;
@@ -72,6 +72,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
 
     protected override void DisconnectHandler(UITextView platformView)
     {
+        // MAUI clears its platform reference before this callback. Invalidate
+        // every queued parse before it can apply to a recycled commentary cell.
+        Interlocked.Increment(ref _renderSerial);
+        _renderedHtml = null;
         VirtualView.HtmlContentChanged -= OnHtmlContentChanged;
         VirtualView.StyleChanged -= OnStyleChanged;
         base.DisconnectHandler(platformView);
@@ -90,40 +94,41 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
 
     private void UpdateContent()
     {
-        if (PlatformView == null || VirtualView == null)
+        var handler = (IElementHandler)this;
+        if (handler.PlatformView is not UITextView platformView || handler.VirtualView is not HtmlView virtualView)
             return;
 
-        var html = VirtualView.HtmlContent;
+        var html = virtualView.HtmlContent;
         if (string.IsNullOrEmpty(html))
         {
             _renderedHtml = null;
-            _renderSerial++;
-            PlatformView.Text = string.Empty;
+            Interlocked.Increment(ref _renderSerial);
+            platformView.Text = string.Empty;
             return;
         }
 
         var styledHtml = WrapWithStyles(html);
-        var renderKey = $"{VirtualView.TextAlignment}|{styledHtml}";
+        var renderKey = $"{virtualView.TextAlignment}|{styledHtml}";
         if (renderKey == _renderedHtml)
         {
             return;
         }
         _renderedHtml = renderKey;
-        var serial = ++_renderSerial;
+        var serial = Interlocked.Increment(ref _renderSerial);
 
         var paragraphStyle = new NSMutableParagraphStyle
         {
-            Alignment = VirtualView.TextAlignment switch
+            Alignment = virtualView.TextAlignment switch
             {
                 HtmlTextAlignment.Center => UITextAlignment.Center,
-                HtmlTextAlignment.End => VirtualView.TextDirection == HtmlTextDirection.Rtl
+                HtmlTextAlignment.End => virtualView.TextDirection == HtmlTextDirection.Rtl
                     ? UITextAlignment.Left : UITextAlignment.Right,
                 HtmlTextAlignment.Justify => UITextAlignment.Justified,
-                _ => VirtualView.TextDirection == HtmlTextDirection.Rtl
+                _ => virtualView.TextDirection == HtmlTextDirection.Rtl
                     ? UITextAlignment.Right : UITextAlignment.Left
             },
-            LineHeightMultiple = (nfloat)VirtualView.LineHeight,
-            BaseWritingDirection = VirtualView.TextDirection switch
+            LineHeightMultiple = (nfloat)virtualView.LineHeight,
+            BaseWritingDirection = virtualView.TextDirection switch
             {
                 HtmlTextDirection.Rtl => NSWritingDirection.RightToLeft,
                 HtmlTextDirection.Ltr => NSWritingDirection.LeftToRight,
@@ -133,7 +138,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         var textColor = GetTextColor();
 
         // Clear recycled content before the parsed result arrives.
-        PlatformView.Text = string.Empty;
+        platformView.Text = string.Empty;
 
         Task.Run(() =>
         {
@@ -142,8 +147,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
             {
                 // Skip the WebKit import entirely when the bound content already
                 // moved on — stale parses must not hold the shared lock.
-                if (serial != _renderSerial)
+                if (serial != Volatile.Read(ref _renderSerial))
                 {
+                    paragraphStyle.Dispose();
+                    textColor.Dispose();
                     return;
                 }
                 attributedString = ParseHtml(styledHtml);
@@ -155,27 +162,42 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
                 attributedString.AddAttribute(UIStringAttributeKey.ForegroundColor, textColor, range);
             }
 
-            MainThread.BeginInvokeOnMainThread(() =>
-            {
-                if (PlatformView == null || VirtualView == null || serial != _renderSerial)
-                {
-                    return;
-                }
-                if (attributedString != null)
-                {
-                    PlatformView.AttributedText = attributedString;
-                }
-                else
-                {
-                    PlatformView.Text = html;
-                    PlatformView.TextColor = textColor;
-                    PlatformView.TextAlignment = paragraphStyle.Alignment;
-                }
-                // The cell was measured while the text view was empty; re-measure
-                // now that the rendered content has arrived.
-                VirtualView.InvalidateMeasure();
-            });
+            MainThread.BeginInvokeOnMainThread(() => ApplyParsedContent(
+                platformView, virtualView, serial, html, attributedString, paragraphStyle, textColor));
         });
+    }
+
+    private void ApplyParsedContent(UITextView platformView, HtmlView virtualView, int serial, string html,
+        NSMutableAttributedString? attributedString, NSMutableParagraphStyle paragraphStyle, UIColor textColor)
+    {
+        try
+        {
+            var handler = (IElementHandler)this;
+            if (serial != Volatile.Read(ref _renderSerial) ||
+                !ReferenceEquals(handler.PlatformView, platformView) ||
+                !ReferenceEquals(handler.VirtualView, virtualView))
+            {
+                return;
+            }
+            if (attributedString != null)
+            {
+                platformView.AttributedText = attributedString;
+            }
+            else
+            {
+                platformView.Text = html;
+                platformView.TextColor = textColor;
+                platformView.TextAlignment = paragraphStyle.Alignment;
+            }
+            // Parsed text arrived after the original empty-cell measure.
+            virtualView.InvalidateMeasure();
+        }
+        finally
+        {
+            attributedString?.Dispose();
+            paragraphStyle.Dispose();
+            textColor.Dispose();
+        }
     }
 
     // Runs off the main thread: NSHTML import spins a nested run loop which is

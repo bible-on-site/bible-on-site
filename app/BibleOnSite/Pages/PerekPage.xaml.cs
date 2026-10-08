@@ -578,6 +578,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
             // Perushim may have been installed (downloaded in Preferences) or cleared by the OS
             // since this page last appeared. Re-check and reload so they show without an app restart.
             await RefreshPerushimIfAvailabilityChangedAsync();
+            StartSearchIntroduction();
         }
 #if IOS
         Dispatcher.Dispatch(ConfigureIosReaderHistory);

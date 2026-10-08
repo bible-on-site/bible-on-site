@@ -116,10 +116,17 @@ public partial class PerekPage
 
     private void StartSearchIntroduction()
     {
-        if (!_searchIntroductionPending || ChapterSearch.IsSearchOpen)
+        if (ChapterSearch.IsSearchOpen || !NormalNavigationBar.IsVisible)
         {
             return;
         }
+        FinishSearchIntroduction();
+        _searchIntroductionPending = true;
+        SearchIntroduction.IsVisible = true;
+        SearchIntroduction.Opacity = 0;
+        SearchIntroduction.WidthRequest = -1;
+        SearchIntroductionText.Opacity = 1;
+        SearchIntroductionText.Scale = 1;
 #if IOS
         if (UIKit.UIAccessibility.IsReduceMotionEnabled)
         {
@@ -129,13 +136,14 @@ public partial class PerekPage
 #endif
         NormalNavigationTitle.IsVisible = true;
         NormalNavigationTitle.Opacity = 0;
-        var sourceWidth = ((IView)NormalNavigationTitle).Measure(double.PositiveInfinity, 40).Width;
-        var introductionWidth = SearchIntroduction.Width;
+        var sourceWidth = NormalNavigationBar.Width - 2 * ReaderMenuButton.Width - NormalNavigationTitle.Margin.HorizontalThickness;
+        var introductionWidth = Math.Min(ReaderToolbar.Width - 8, sourceWidth * 1.06);
         if (sourceWidth <= 0 || introductionWidth <= 0)
         {
             FinishSearchIntroduction();
             return;
         }
+        SearchIntroduction.HorizontalOptions = LayoutOptions.Center;
         var animation = new Animation(progress =>
         {
             var reveal = Math.Min(progress / 0.18, 1);
@@ -144,6 +152,7 @@ public partial class PerekPage
             SearchIntroduction.Scale = 0.96 + 0.04 * reveal;
             SearchIntroduction.WidthRequest = introductionWidth + (sourceWidth - introductionWidth) * contraction;
             SearchIntroductionText.Opacity = 1 - contraction;
+            SearchIntroductionText.Scale = 1 - 0.2 * contraction;
             NormalNavigationTitle.Opacity = contraction;
         });
         animation.Commit(this, SearchIntroductionAnimation, 16, 1400, Easing.Linear, (_, _) => FinishSearchIntroduction());
@@ -158,6 +167,8 @@ public partial class PerekPage
         _searchIntroductionPending = false;
         this.AbortAnimation(SearchIntroductionAnimation);
         SearchIntroduction.IsVisible = false;
+        SearchIntroduction.HorizontalOptions = LayoutOptions.Fill;
+        SearchIntroduction.WidthRequest = -1;
         NormalNavigationTitle.IsVisible = true;
         NormalNavigationTitle.Opacity = 1;
     }

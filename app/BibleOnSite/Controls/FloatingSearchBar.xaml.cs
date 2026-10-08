@@ -33,7 +33,7 @@ public partial class FloatingSearchBar : ContentView
     public View DetachHeader()
     {
         SearchLayout.Remove(SearchHeader);
-        // The header replaces the reader's source toolbar while results float over the verses.
+        // The header replaces the source toolbar; its dropdown keeps the chapter heading visible.
         SearchHeader.BindingContext = _viewModel;
         return SearchHeader;
     }

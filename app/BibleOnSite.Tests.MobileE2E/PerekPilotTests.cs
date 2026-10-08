@@ -57,11 +57,18 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Assert.NotEmpty(_page.FirstPasuk);
         AssertRegularReader();
         var source = _page.WaitFor("PerekSource");
+        var chapterTitle = _page.WaitFor("PerekHeader").Text;
         var sourceTop = source.Location.Y;
         var sourceBottom = sourceTop + source.Size.Height;
         _page.Tap("PerekSource");
         var headerInput = _page.WaitFor("PerekSearchInput");
         Assert.InRange(headerInput.Location.Y + headerInput.Size.Height / 2, sourceTop, sourceBottom);
+        _page.WaitFor("SearchStatus", element => element.Text == "הקלידו פרק, פסוק, פירוש או שם רב");
+        var emptyDropdown = _page.WaitFor("SearchPanel");
+        var chapterHeader = _page.WaitFor("PerekHeader", element => element.Text == chapterTitle);
+        Assert.True(chapterHeader.Location.Y >= emptyDropdown.Location.Y + emptyDropdown.Size.Height,
+            "The empty search hint belongs above the unchanged chapter heading.");
+        SaveDiagnostics("FloatingSearchEmptyHint", "passed");
         _page.Tap("SearchFiltersButton");
         _page.WaitFor("SearchKindPerek");
         AssertBookGroupColumns();
