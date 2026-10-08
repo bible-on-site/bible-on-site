@@ -119,7 +119,7 @@ describe("PerushimSection", () => {
 		pushStateSpy.mockRestore();
 	});
 
-	it("delegates to onPerushClick when provided (renders buttons)", () => {
+	it("delegates to onPerushClick when provided (keeps crawlable links)", () => {
 		const onPerushClick = jest.fn();
 		const perushim: PerushSummary[] = [
 			{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 55 },
@@ -131,8 +131,25 @@ describe("PerushimSection", () => {
 				onPerushClick={onPerushClick}
 			/>,
 		);
-		fireEvent.click(screen.getByRole("button", { name: /רש"י/ }));
+		const link = screen.getByRole("link", { name: /רש"י/ });
+		expect(link.getAttribute("href")).toBe(
+			`/929/1/${encodeURIComponent('רש"י')}`,
+		);
+		fireEvent.click(link);
 		expect(onPerushClick).toHaveBeenCalledWith(perushim[0]);
+		expect(mockGetPerushNotesForPage).not.toHaveBeenCalled();
+	});
+
+	it("lets modifier-clicks follow the href instead of opening in place", async () => {
+		const perushim: PerushSummary[] = [
+			{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 55 },
+		];
+		render(<PerushimSection perekId={1} perushim={perushim} />);
+		const link = screen.getByRole("link", { name: /רש"י/ });
+
+		fireEvent.click(link, { ctrlKey: true });
+		await act(async () => {});
+
 		expect(mockGetPerushNotesForPage).not.toHaveBeenCalled();
 	});
 

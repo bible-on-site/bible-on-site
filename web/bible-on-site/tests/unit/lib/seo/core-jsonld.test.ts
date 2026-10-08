@@ -245,6 +245,54 @@ describe("seo/core-jsonld", () => {
 			expect(person?.sameAs).toBeUndefined();
 		});
 
+		it("marks the WebPage mainEntity as the commentary Article + publisher", () => {
+			const graph = buildPerushGraph({
+				perush: perushDetail(),
+				perekObj: perekObj(),
+			});
+			const node = nodeByType(graph, "Article");
+			expect(node?.publisher).toEqual({
+				"@id": `${SITE_ORIGIN}/#organization`,
+			});
+			expect(nodeByType(graph, "WebPage")?.mainEntity).toEqual({
+				"@id": node?.["@id"],
+			});
+		});
+
+		it("derives a plain-text description from note content", () => {
+			const graph = buildPerushGraph({
+				perush: perushDetail({
+					notes: [
+						{
+							pasuk: 1,
+							noteIdx: 0,
+							noteContent: "<p>בבקשה ורצון.</p>",
+						},
+						{
+							pasuk: 2,
+							noteIdx: 0,
+							noteContent: "<p>שני &quot;מובא&quot;.</p>",
+						},
+					],
+				}),
+				perekObj: perekObj(),
+			});
+			const description = nodeByType(graph, "Article")?.description;
+			expect(description).toContain("בבקשה ורצון.");
+			expect(description).toContain('שני "מובא".');
+			expect(description).not.toContain("<");
+		});
+
+		it("omits description when notes contain only placeholder markup", () => {
+			const graph = buildPerushGraph({
+				perush: perushDetail({
+					notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p></p>" }],
+				}),
+				perekObj: perekObj(),
+			});
+			expect(nodeByType(graph, "Article")?.description).toBeUndefined();
+		});
+
 		it("attaches sameAs when external references are provided", () => {
 			const graph = buildPerushGraph({
 				perush: perushDetail(),
