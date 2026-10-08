@@ -66,6 +66,14 @@ jobs:
               time.sleep(0.2)
           proc.kill()
           out = "".join(lines)
-          print(out[:10000])
-          assert '"tools"' in out, "mcpbridge returned no tools/list result"
+          tools = []
+          for line in lines:
+              try:
+                  msg = json.loads(line)
+              except json.JSONDecodeError:
+                  continue
+              for tool in msg.get("result", {}).get("tools", []):
+                  tools.append(tool["name"])
+          print("mcpbridge tools:", *tools, sep="\n- ")
+          assert tools, "mcpbridge returned no tools"
           PY
