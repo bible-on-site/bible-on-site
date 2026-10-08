@@ -150,6 +150,13 @@ pub async fn cli_handler() -> anyhow::Result<()> {
     let mut input = String::new();
     io::stdin().read_to_string(&mut input)?;
 
+    if std::env::args().any(|arg| arg == "--daily-preview") {
+        let req: bulletin::daily::DailyInput = serde_json::from_str(&input)?;
+        let result = bulletin::daily::render(&req, &daily_fonts_dir())?;
+        serde_json::to_writer(io::stdout(), &result)?;
+        return Ok(());
+    }
+
     let req: GeneratePdfRequest =
         serde_json::from_str(&input).map_err(|e| anyhow::anyhow!("Invalid request JSON: {}", e))?;
 
@@ -178,6 +185,7 @@ pub async fn lambda_handler(
 
     match path {
         "/api/generate-pdf" => lambda_generate_pdf(event).await,
+        "/api/preview-daily" => lambda_preview_daily(event).await,
         "/health" => Ok(LambdaResponse::builder()
             .status(200)
             .header("content-type", "application/json")
@@ -189,6 +197,33 @@ pub async fn lambda_handler(
             .body(Body::Text(r#"{"error":"not_found"}"#.into()))
             .unwrap()),
     }
+}
+
+fn daily_fonts_dir() -> PathBuf {
+    env::var("FONTS_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fonts"))
+}
+
+async fn lambda_preview_daily(
+    event: LambdaRequest,
+) -> Result<LambdaResponse<Body>, lambda_http::Error> {
+    let bytes = match event.body() {
+        Body::Text(s) => s.as_bytes(),
+        Body::Binary(b) => b.as_slice(),
+        _ => &[],
+    };
+    let (status, body) = match serde_json::from_slice::<bulletin::daily::DailyInput>(bytes) {
+        Err(e) => (400, serde_json::json!({"error": e.to_string()})),
+        Ok(req) => match bulletin::daily::render(&req, &daily_fonts_dir()) {
+            Ok(artifacts) => (200, serde_json::to_value(artifacts)?),
+            Err(e) => (400, serde_json::json!({"error": e.to_string()})),
+        },
+    };
+    Ok(LambdaResponse::builder()
+        .status(status)
+        .header("content-type", "application/json")
+        .body(Body::Text(body.to_string()))?)
 }
 
 async fn lambda_generate_pdf(
@@ -210,7 +245,9 @@ async fn lambda_generate_pdf(
         Err(e) => {
             return Ok(LambdaResponse::builder()
                 .status(400)
-                .body(Body::Text(format!(r#"{{"error":"{}"}}"#, e)))
+                .body(Body::Text(
+                    serde_json::json!({"error": e.to_string()}).to_string(),
+                ))
                 .unwrap());
         }
     };
@@ -227,7 +264,7 @@ async fn lambda_generate_pdf(
             .unwrap()),
         Err(e) => Ok(LambdaResponse::builder()
             .status(500)
-            .body(Body::Text(format!(r#"{{"error":"{}"}}"#, e)))
+            .body(Body::Text(serde_json::json!({"error": e}).to_string()))
             .unwrap()),
     }
 }
@@ -349,6 +386,48 @@ mod tests {
             text_body(response.body()),
             r#"{"error":"Unknown perekId: 999999"}"#
         );
+    }
+
+    #[tokio::test]
+    async fn daily_preview_returns_matching_artifacts_and_valid_json_errors() {
+        use base64::{Engine, engine::general_purpose::STANDARD};
+        let response = lambda_handler(request(
+            "/api/preview-daily",
+            Body::Binary(br#"{"date":"2026-10-08","hebrewDate":"test date","perekId":1,"article":null,"dedications":[]}"#.to_vec()),
+        )).await.unwrap();
+        assert_eq!(response.status().as_u16(), 200);
+        let artifacts: bulletin::daily::DailyArtifacts =
+            serde_json::from_str(text_body(response.body())).unwrap();
+        assert_eq!(artifacts.source, "בראשית א");
+        assert!(artifacts.subject.contains("test date"));
+        assert!(
+            STANDARD
+                .decode(artifacts.pdf_base64)
+                .unwrap()
+                .starts_with(b"%PDF-")
+        );
+        for body in [
+            Body::Empty,
+            Body::Text(
+                r#"{"date":"invalid","hebrewDate":"date","perekId":1,"article":null}"#.into(),
+            ),
+        ] {
+            let response = lambda_handler(request("/api/preview-daily", body))
+                .await
+                .unwrap();
+            assert_eq!(response.status().as_u16(), 400);
+            let value: serde_json::Value =
+                serde_json::from_str(text_body(response.body())).unwrap();
+            assert!(value["error"].is_string());
+        }
+        let invalid = lambda_handler(request(
+            "/api/generate-pdf",
+            Body::Text(r#"{"perakimIds":"quoted"}"#.into()),
+        ))
+        .await
+        .unwrap();
+        let value: serde_json::Value = serde_json::from_str(text_body(invalid.body())).unwrap();
+        assert!(value["error"].as_str().unwrap().contains("quoted"));
     }
 
     #[tokio::test]
