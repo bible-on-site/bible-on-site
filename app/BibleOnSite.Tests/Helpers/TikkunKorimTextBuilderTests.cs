@@ -23,6 +23,13 @@ public class TikkunKorimTextBuilderTests
         }
 
         [Fact]
+        public void strips_upper_lower_dots_and_qamats_qatan()
+        {
+            // U+05C4 upper dot, U+05C5 lower dot, U+05C7 qamats qatan.
+            TikkunKorimTextBuilder.StripMarks("אׄבׅגׇ").Should().Be("אבג");
+        }
+
+        [Fact]
         public void preserves_maqaf_sof_pasuk_and_punctuation()
         {
             TikkunKorimTextBuilder.StripMarks("כָּל־הָאָרֶץ׃")

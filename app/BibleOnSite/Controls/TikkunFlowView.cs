@@ -16,6 +16,9 @@ public class TikkunFlowView : GraphicsView
     private static readonly Thickness ContentPadding = new(12, 8, 12, 0);
     private const double LineHeightFactor = 1.4;
 
+    private static readonly BindableProperty.BindingPropertyChangedDelegate OnContentChanged =
+        (bindable, _, _) => ((TikkunFlowView)bindable).InvalidateContent();
+
     /// <summary>The perek's pesukim — bound to the carousel item's Pasukim.</summary>
     public static readonly BindableProperty PasukimProperty = BindableProperty.Create(
         nameof(Pasukim), typeof(IReadOnlyList<Pasuk>), typeof(TikkunFlowView),
@@ -75,21 +78,16 @@ public class TikkunFlowView : GraphicsView
         set => SetValue(TextFontSizeProperty, value);
     }
 
-    private static void OnContentChanged(BindableObject bindable, object oldValue, object newValue)
+    private void InvalidateContent()
     {
-        if (Equals(oldValue, newValue))
-        {
-            return;
-        }
-        var view = (TikkunFlowView)bindable;
-        view._contentVersion++;
-        view.Invalidate();
+        _contentVersion++;
+        Invalidate();
     }
 
     private sealed class TikkunFlowDrawable : IDrawable
     {
         private readonly TikkunFlowView _view;
-        private IReadOnlyList<TikkunWord>? _words;
+        private IReadOnlyList<TikkunWord> _words = [];
         private int _wordsVersion = -1;
         private TikkunFlowLayout.Result? _layout;
         private float _laidWidth = -1;
@@ -100,7 +98,7 @@ public class TikkunFlowView : GraphicsView
         {
             EnsureWords();
             var textWidth = dirtyRect.Width - (float)(ContentPadding.Left + ContentPadding.Right);
-            if (_words == null || _words.Count == 0 || textWidth <= 0)
+            if (_words.Count == 0 || textWidth <= 0)
             {
                 var empty = (float)(ContentPadding.Top + ContentPadding.Bottom);
                 if (Math.Abs(_view.HeightRequest - empty) > 0.5)
@@ -141,7 +139,7 @@ public class TikkunFlowView : GraphicsView
 
         private void EnsureWords()
         {
-            if (_wordsVersion == _view._contentVersion && _words != null)
+            if (_wordsVersion == _view._contentVersion)
             {
                 return;
             }
