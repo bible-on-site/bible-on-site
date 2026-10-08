@@ -27,3 +27,6 @@ exclude_paths:
   # CloudFormation Lambda scripts are infra reference code, not application code.
   # Linters flag intentional patterns (e.g. time.sleep polling loops) as issues.
   - "docs/aws/cloudformation/**"
+  # Android SDK manifest parser test fixtures embed Google's repository XML;
+  # markup rules flag the fixture strings as interpolated HTML/XSS.
+  - "devops/github/ci/android-sdk-manifest.test.mjs"
