@@ -193,7 +193,8 @@ export async function checkBuild({
 	lookup,
 	phase,
 	previous = false,
-	attempts = 20,
+	// Extension-bearing builds can take longer than ten minutes to appear.
+	attempts = 60,
 	sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 	report = console.log,
 }) {
@@ -262,7 +263,7 @@ if (
 		}
 		throw error;
 	}
-	if (phase === "inspect" && !result.build) await reportUploads();
+	if (phase === "inspect") await reportUploads();
 	if (process.env.GITHUB_OUTPUT)
 		appendFileSync(
 			process.env.GITHUB_OUTPUT,

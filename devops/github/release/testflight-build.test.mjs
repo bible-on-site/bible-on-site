@@ -347,6 +347,40 @@ test("a partial delivery resumes the exact processed build without uploading aga
 		);
 	}
 });
+test("large extensions can finish processing after the old ten-minute budget", async () => {
+	let reads = 0;
+	let waits = 0;
+	const result = await checkBuild({
+		phase: "postflight",
+		lookup: async () =>
+			++reads < 40 ? null : { id: "exact-build", state: "VALID" },
+		sleep: async (ms) => {
+			assert.equal(ms, 30000);
+			waits++;
+		},
+		report: () => {},
+	});
+	assert.equal(reads, 40);
+	assert.equal(waits, 39);
+	assert.equal(result.upload, false);
+});
+test("the extended processing budget still ends without permitting another upload", async () => {
+	let reads = 0;
+	await assert.rejects(
+		checkBuild({
+			phase: "preflight",
+			previous: true,
+			lookup: async () => {
+				reads++;
+				return null;
+			},
+			sleep: async () => {},
+			report: () => {},
+		}),
+		/do not repeat/,
+	);
+	assert.equal(reads, 60);
+});
 test("failed, invalid and unconfirmed builds do not count as delivered", async () => {
 	for (const state of ["INVALID", "FAILED"])
 		await assert.rejects(check([state]), /rejected/);
