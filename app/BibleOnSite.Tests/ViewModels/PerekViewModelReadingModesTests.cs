@@ -143,5 +143,29 @@ public class PerekViewModelReadingModesTests
             viewModel.Perek = MakePerek(2);
             viewModel.HasCurrentPerekRecitation.Should().BeTrue();
         }
+
+        [Fact]
+        public void manual_refresh_uses_the_currently_bound_perek()
+        {
+            var viewModel = CreateViewModel(perekId => perekId == 1);
+            viewModel.Perek = MakePerek(2);
+            viewModel.HasCurrentPerekRecitation.Should().BeFalse();
+
+            viewModel.Perek = MakePerek(1);
+            viewModel.RefreshRecitationAvailability();
+
+            viewModel.HasCurrentPerekRecitation.Should().BeTrue();
+        }
+
+        [Fact]
+        public void no_audio_probe_means_no_recitation_reported()
+        {
+            var viewModel = CreateViewModel();
+            viewModel.Perek = MakePerek(1);
+            viewModel.RefreshRecitationAvailability();
+
+            viewModel.HasCurrentPerekRecitation.Should().BeFalse();
+            viewModel.ShowHeaderPlayButton.Should().BeFalse();
+        }
     }
 }
