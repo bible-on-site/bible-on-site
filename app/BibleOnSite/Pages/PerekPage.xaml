@@ -26,7 +26,7 @@
         </ResourceDictionary>
     </ContentPage.Resources>
 
-    <Grid x:Name="MainGrid" RowDefinitions="Auto,Auto,*">
+    <Grid x:Name="MainGrid" RowDefinitions="Auto,*">
         <Grid x:Name="ReaderToolbar" Grid.Row="0" MinimumHeightRequest="56"
               BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}">
             <Grid x:Name="NormalNavigationBar" ColumnDefinitions="48,*,48" HeightRequest="56">
@@ -60,7 +60,7 @@
                            HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
                 </Border>
             </Grid>
-            <ContentView x:Name="SearchTitleHost" IsVisible="False" Margin="4,0" VerticalOptions="Center"/>
+            <ContentView x:Name="SearchTitleHost" IsVisible="False" Margin="0" VerticalOptions="Center"/>
             <Grid
                   x:Name="SelectionBar"
                   AutomationId="SelectionBar"
@@ -147,12 +147,12 @@
                      Color="{AppThemeBinding Light=#DBE8F8, Dark=#47658E}"/>
         </Grid>
 
-        <controls:FloatingSearchBar x:Name="ChapterSearch" Grid.Row="1" ZIndex="100"
-                                    IsVisible="False" VerticalOptions="Start" Margin="8,8"
+        <controls:FloatingSearchBar x:Name="ChapterSearch" Grid.Row="1" ZIndex="300"
+                                    IsVisible="False" VerticalOptions="Fill" Margin="0"
                                     ResultSelected="OnSearchResultSelected"/>
 
 <!-- iOS bottom bar debug (beta-only collapsible dropdown) -->
-<Grid x:Name="BottomBarDebugOverlay" Grid.Row="2"
+<Grid x:Name="BottomBarDebugOverlay" Grid.Row="1"
       IsVisible="False"
       ZIndex="999"
       VerticalOptions="Start"
@@ -208,7 +208,7 @@
         <!-- Exit Full Screen Button (floating, hidden by default) -->
         <!-- Gesture recognizers are set up in code-behind: native Android touch for
              pixel-perfect drag tracking, MAUI gesture recognizers for other platforms. -->
-        <Border x:Name="ExitFullScreenButton" Grid.Row="2"
+        <Border x:Name="ExitFullScreenButton" Grid.Row="1"
                 WidthRequest="48"
                 HeightRequest="48"
                 StrokeShape="RoundRectangle 24"
@@ -235,7 +235,7 @@
         </Border>
 
         <!-- Main Content Area - fills entire viewport -->
-        <Grid x:Name="ContentArea" Grid.Row="2" BackgroundColor="{AppThemeBinding Light=White, Dark={StaticResource OffBlack}}"
+        <Grid x:Name="ContentArea" Grid.Row="1" BackgroundColor="{AppThemeBinding Light=White, Dark={StaticResource OffBlack}}"
               ZIndex="0"
               RowDefinitions="Auto,Auto,*">
 
@@ -459,7 +459,7 @@
         </Grid>
 
         <!-- Perushim Panel (slides up from bottom, above content but behind bottom bar) -->
-        <Border x:Name="PerushimPanel" Grid.Row="2"
+        <Border x:Name="PerushimPanel" Grid.Row="1"
                 BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}"
                 StrokeShape="RoundRectangle 16,16,0,0"
                 Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
@@ -553,7 +553,7 @@
         </Border>
 
         <!-- Bottom Navigation Bar with Circular Menu - OVERLAY floating at bottom -->
-        <Grid x:Name="BottomBar" Grid.Row="2"
+        <Grid x:Name="BottomBar" Grid.Row="1"
               HeightRequest="90"
               VerticalOptions="End"
               ZIndex="100"
@@ -655,7 +655,7 @@
         </Grid>
 
         <!-- Satellite buttons overlay - uses AbsoluteLayout for precise positioning -->
-        <AbsoluteLayout x:Name="FloatingMenuContainer" Grid.Row="2"
+        <AbsoluteLayout x:Name="FloatingMenuContainer" Grid.Row="1"
                         ZIndex="150"
                         InputTransparent="True"
                         CascadeInputTransparent="False"
@@ -761,7 +761,7 @@
         </AbsoluteLayout>
 
         <!-- Perek Picker Popup Overlay -->
-        <Grid x:Name="FocusedPasukOverlay" Grid.Row="2" IsVisible="False" ZIndex="150"
+        <Grid x:Name="FocusedPasukOverlay" Grid.Row="1" IsVisible="False" ZIndex="150"
               AutomationId="FocusedPasukOverlay" BackgroundColor="{AppThemeBinding Light=White, Dark=#1C1C1E}">
             <ScrollView>
                 <VerticalStackLayout Padding="20,16" Spacing="16">
@@ -784,12 +784,12 @@
                 </VerticalStackLayout>
             </ScrollView>
         </Grid>
-        <WebView x:Name="RecitationDecoderView" Grid.Row="2" WidthRequest="1" HeightRequest="1" Opacity="0" InputTransparent="True"/>
-        <toolkit:MediaElement x:Name="RecitationPlayer" Grid.Row="2" WidthRequest="1" HeightRequest="1" Opacity="0"
+        <WebView x:Name="RecitationDecoderView" Grid.Row="1" WidthRequest="1" HeightRequest="1" Opacity="0" InputTransparent="True"/>
+        <toolkit:MediaElement x:Name="RecitationPlayer" Grid.Row="1" WidthRequest="1" HeightRequest="1" Opacity="0"
                               InputTransparent="True" ShouldAutoPlay="False" ShouldShowPlaybackControls="False"
                               MediaOpened="OnRecitationMediaOpened" MediaEnded="OnRecitationMediaEnded"
                               MediaFailed="OnRecitationMediaFailed" StateChanged="OnRecitationStateChanged"/>
-        <controls:PerekPickerPopup x:Name="PerekPickerPopup" Grid.Row="2"
+        <controls:PerekPickerPopup x:Name="PerekPickerPopup" Grid.Row="1"
                                    ZIndex="200"
                                    PerekSelected="OnPerekPickerSelected"/>
     </Grid>

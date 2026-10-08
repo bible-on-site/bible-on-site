@@ -11,6 +11,27 @@ public class SearchIndexServiceTests
     private const string BibleDb = "sefaria-dump-5784-sivan-4.tanah_view.sqlite";
     private const string NotesDb = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
 
+    [Fact]
+    public async Task GenerationOrdering_AppliesBeforeLimit_AndKeepsUnknownDatesLast()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
+            "INSERT INTO note VALUES (7,1,1,0,'בראשית'),(8,1,1,0,'בראשית'),(9,1,1,0,'בראשית')");
+        var delivery = new Mock<IPadDeliveryService>();
+        delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((string?)null);
+        var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Combine(storage.Root, "search.sqlite"));
+        var ordering = new SearchOrdering(SearchSort.Generation, new Dictionary<int, int> { [7] = 1800, [8] = 1040 });
+        var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Perush }, new HashSet<int> { 1 }, 1, default, null, ordering);
+        hits.Should().ContainSingle().Which.PerushId.Should().Be(8);
+        hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Perush }, new HashSet<int> { 1 }, 10, default, null, ordering);
+        hits.Select(hit => hit.PerushId).Should().Equal(8, 7, 9);
+        (await index.SearchAsync("ברא", new HashSet<SearchFilter> { SearchFilter.Pasuk }, new HashSet<int> { 1, 2 }, 1, default, null, ordering))
+            .Should().ContainSingle().Which.PerekId.Should().Be(1);
+    }
+
     private static async Task<PerekDataService> SeedAsync(TestStorage storage)
     {
         var db = await storage.CreateDatabaseAsync(BibleDb, PerekDataServiceTests.Schema);

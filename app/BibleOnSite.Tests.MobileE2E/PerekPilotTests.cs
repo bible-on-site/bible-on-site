@@ -57,37 +57,49 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Assert.NotEmpty(_page.FirstPasuk);
         AssertRegularReader();
         var source = _page.WaitFor("PerekSource");
-        var chapterTitle = _page.WaitFor("PerekHeader").Text;
         var sourceTop = source.Location.Y;
         var sourceBottom = sourceTop + source.Size.Height;
         _page.Tap("PerekSource");
         var headerInput = _page.WaitFor("PerekSearchInput");
         Assert.InRange(headerInput.Location.Y + headerInput.Size.Height / 2, sourceTop, sourceBottom);
-        _page.WaitFor("SearchStatus", element => element.Text == "הקלידו פרק, פסוק, פירוש או שם רב");
-        var emptyDropdown = _page.WaitFor("SearchPanel");
-        var chapterHeader = _page.WaitFor("PerekHeader", element => element.Text == chapterTitle);
-        Assert.True(chapterHeader.Location.Y >= emptyDropdown.Location.Y + emptyDropdown.Size.Height,
-            "The empty search hint belongs above the unchanged chapter heading.");
-        SaveDiagnostics("FloatingSearchEmptyHint", "passed");
-        _page.Tap("SearchFiltersButton");
+        _page.WaitFor("SearchStatus", element => element.Text == "חיפושים אחרונים");
+        _page.WaitFor("RecentSearches");
+        Assert.DoesNotContain(_driver!.FindElements(_platform.AutomationId("PerekHeader")), element => element.Displayed);
+        var searchPage = _page.WaitFor("SearchPanel");
+        Assert.InRange(searchPage.Size.Width, _driver.Manage().Window.Size.Width - 8, _driver.Manage().Window.Size.Width);
+        SaveDiagnostics("SearchPageRecentSearches", "passed");
+        _page.Tap("SearchKindsTab");
         _page.WaitFor("SearchKindPerek");
+        _platform.DismissSearchSheet(_driver);
+        _page.WaitForHidden("SearchSheet");
         AssertBookGroupColumns();
-        _page.Tap("SearchNavigationButton");
+        _page.Tap("SearchSheetApplyButton");
+        _page.WaitForHidden("SearchSheet");
+        _platform.RevealTrailingSearchChips(_driver);
+        _page.Tap("SearchClearAll");
+        _page.WaitForHidden("SearchClearAll");
+        _page.WaitFor("SearchKindsSummary", element => element.Text == "מה לחפש");
+        _page.WaitFor("SearchBooksSummary", element => element.Text == "היכן לחפש");
+        _page.Tap("SearchSortButton");
+        _page.Tap("SearchSortGeneration");
+        _page.WaitForHidden("SearchSheet");
         SearchFor("בראשיט 1", "בראשית א");
-        var settings = _page.WaitFor("SearchFiltersButton");
         var clear = _page.WaitFor("ClearSearchButton");
         var input = _page.WaitFor("PerekSearchInput");
         var navigation = _page.WaitFor("SearchNavigationButton");
-        Assert.True(settings.Location.X + settings.Size.Width <= clear.Location.X, "Settings belong at the left edge in RTL.");
         Assert.True(clear.Location.X + clear.Size.Width <= input.Location.X, "The single clear button follows the text field in RTL.");
         Assert.True(input.Location.X + input.Size.Width <= navigation.Location.X, "Back belongs at the right edge in RTL.");
-        _page.Tap("ClearSearchButton");
-        _page.WaitFor("SearchStatus", element => element.Text == "הקלידו פרק, פסוק, פירוש או שם רב");
-        var panel = _page.WaitFor("SearchPanel");
-        var panelBottom = panel.Location.Y + panel.Size.Height;
-        _platform.Tap(_driver!, _page.WaitFor("PasukText", element => element.Location.Y >= panelBottom));
+        _platform.Tap(_driver, _page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
         AssertRegularReader();
-        SaveDiagnostics("FloatingSearchDismissedByVerse", "passed");
+        _platform.GoBack(_driver);
+        _page.WaitFor("PerekSearchInput", element => element.Text == "בראשיט 1");
+        _page.Tap("ClearSearchButton");
+        _page.WaitFor("RecentSearchPhrase", element => element.Text == "בראשיט 1");
+        _platform.Tap(_driver, _page.WaitFor("RecentSearchPhrase", element => element.Text == "בראשיט 1"));
+        _page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א");
+        _page.Tap("SearchNavigationButton");
+        AssertRegularReader();
+        SaveDiagnostics("SearchPageClosed", "passed");
     });
 
     [Fact]
@@ -96,12 +108,13 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Assert.NotEmpty(_page.FirstPasuk);
         AssertRegularReader();
         _page.Tap("PerekSource");
-        _page.Tap("SearchFiltersButton");
+        _page.Tap("SearchKindsTab");
         if (_platform.IsChecked(_page.WaitFor("SearchKindPerush")))
         {
             _page.Tap("SearchKindPerush");
         }
-        _page.Tap("SearchFiltersButton");
+        _page.Tap("SearchSheetApplyButton");
+        _page.WaitForHidden("SearchSheet");
         SearchFor("בראשיט 1", "בראשית א");
         _platform.Tap(_driver!, _page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
         _page.WaitFor("PerekSource", element => element.Text == "בראשית א");
@@ -132,12 +145,13 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Assert.NotEmpty(_page.FirstPasuk);
         AssertRegularReader();
         _page.Tap("PerekSource");
-        _page.Tap("SearchFiltersButton");
+        _page.Tap("SearchKindsTab");
         if (!_platform.IsChecked(_page.WaitFor("SearchKindPerush")))
         {
             _page.Tap("SearchKindPerush");
         }
-        _page.Tap("SearchFiltersButton");
+        _page.Tap("SearchSheetApplyButton");
+        _page.WaitForHidden("SearchSheet");
         SearchFor("בראשית ברא אלהים", "בראשית א א");
         // A fresh installation builds the local index for the entire commentary
         // package. Subsequent result and history assertions use normal deadlines.
@@ -221,8 +235,14 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Assert.False(_platform.IsChecked(_page.WaitFor("SearchGroup1")));
         _page.Tap("SearchGroup1");
         _page.WaitFor("SearchBook2", element => _platform.IsChecked(element));
+        _page.Tap("SearchGroup2");
+        _page.Tap("SearchGroup3");
+        _page.WaitFor("SearchBooksSummary", element => element.Text == "תורה");
+        _page.Tap("SearchBook1");
+        _page.WaitFor("SearchBooksSummary", element => element.Text == "שמות +3");
+        _page.Tap("SearchBook1");
+        _page.WaitFor("SearchBooksSummary", element => element.Text == "תורה");
         SaveDiagnostics("FloatingSearchBookColumns", "passed");
-        _page.Tap("SearchKindsTab");
     }
 
     [Fact]

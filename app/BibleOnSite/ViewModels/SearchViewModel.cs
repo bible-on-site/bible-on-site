@@ -24,6 +24,7 @@ public partial class SearchViewModel : ObservableObject
     private readonly HashSet<SearchFilter> _enabledFilters;
     private readonly HashSet<int> _enabledSefarim;
     private readonly List<Author> _authors = new();
+    public SearchSort Sorting { get; set; } = SearchSort.Relevance;
 
 #pragma warning disable MVVMTK0045
     [ObservableProperty]
@@ -236,6 +237,7 @@ public partial class SearchViewModel : ObservableObject
         var filters = _enabledFilters.ToHashSet();
         var books = _enabledSefarim.ToHashSet();
         var limit = Math.Clamp(ResultsLimit, 1, 50);
+        var ordering = new SearchOrdering(Sorting, _perushim.ToDictionary(pair => pair.Key, pair => pair.Value.Priority));
         try
         {
             IsLoading = true;
@@ -255,7 +257,7 @@ public partial class SearchViewModel : ObservableObject
                 var progress = new Progress<string>(message => { if (version == _searchVersion) LoadingMessage = message; });
                 foreach (var type in new[] { SearchFilter.Pasuk, SearchFilter.Perush }.Where(filters.Contains))
                 {
-                    var hits = await searchIndex.SearchAsync(phrase, new HashSet<SearchFilter> { type }, books, limit, token, progress);
+                    var hits = await searchIndex.SearchAsync(phrase, new HashSet<SearchFilter> { type }, books, limit, token, progress, ordering);
                     foreach (var hit in hits)
                     {
                         SearchResult result = hit.Type == SearchFilter.Pasuk
@@ -265,6 +267,7 @@ public partial class SearchViewModel : ObservableObject
                         result.Title = name + _perekDataService.GetPerekSource(hit.PerekId) + " " + hit.PasukNum.ToHebrewLetters();
                         result.SubtitleHtml = SearchText.Snippet(hit.Text, phrase);
                         result.Score = hit.Score;
+                        result.GenerationOrder = ordering.YearFor(hit.PerushId);
                         results.Add(result);
                     }
                     token.ThrowIfCancellationRequested();
@@ -292,7 +295,9 @@ public partial class SearchViewModel : ObservableObject
 
     private void PublishResults(List<SearchResult> results, int limit)
     {
-        var visible = results.OrderByDescending(result => result.Score).Take(limit).ToArray();
+        var visible = (Sorting == SearchSort.Generation
+            ? results.OrderBy(result => result.GenerationOrder).ThenBy(result => result.SourceOrder).ThenByDescending(result => result.Score)
+            : results.OrderByDescending(result => result.Score)).Take(limit).ToArray();
         for (var position = 0; position < visible.Length; position++)
         {
             var existing = SearchResults.IndexOf(visible[position]);
@@ -314,6 +319,7 @@ public partial class SearchViewModel : ObservableObject
             {
                 Title = _perekDataService.GetPerekSource(perek.PerekId) ?? string.Empty,
                 SubtitleHtml = SearchText.Snippet(perek.Header, phrase),
+                GenerationOrder = int.MinValue,
                 Score = Math.Max(SearchText.Score(_perekDataService.GetPerekSource(perek.PerekId) ?? "", referenceQuery), SearchText.Score(perek.Header, phrase))
             })
             .Where(result => result.Score > 0).OrderByDescending(result => result.Score).ThenBy(result => result.Perek.PerekId);

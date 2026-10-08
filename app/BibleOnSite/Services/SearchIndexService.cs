@@ -42,8 +42,9 @@ public sealed class SearchIndexService : IAsyncDisposable
         SearchAsync(query, filters, books, limit, cancellationToken, null);
 
     public async Task<List<SearchHit>> SearchAsync(string query, IReadOnlySet<SearchFilter> filters,
-        IReadOnlySet<int> books, int limit, CancellationToken cancellationToken, IProgress<string>? progress)
+        IReadOnlySet<int> books, int limit, CancellationToken cancellationToken, IProgress<string>? progress, SearchOrdering? ordering = null)
     {
+        ordering ??= SearchOrdering.Relevant;
         var terms = SearchText.Tokens(query);
         if (terms.Length is 0 or > 16 || terms.Any(term => term.Length > 64) || books.Count == 0)
         {
@@ -79,16 +80,16 @@ public sealed class SearchIndexService : IAsyncDisposable
                 }
                 cancellationToken.ThrowIfCancellationRequested();
                 var phrase = "\"" + string.Join(" ", terms) + "\"";
-                var rows = await QueryAsync(table, phrase, books, limit);
+                var rows = await QueryAsync(table, phrase, books, limit, ordering);
                 if (rows.Count < limit)
                 {
                     var exactWords = string.Join(" AND ", terms.Select(term => $"\"{term}\""));
-                    rows = rows.Concat(await QueryAsync(table, exactWords, books, limit)).DistinctBy(row => row.RowId).ToList();
+                    rows = rows.Concat(await QueryAsync(table, exactWords, books, limit, ordering)).DistinctBy(row => row.RowId).ToList();
                 }
                 if (rows.Count < limit)
                 {
                     var prefixes = string.Join(" AND ", terms.Select(term => $"\"{term}\"*"));
-                    rows = rows.Concat(await QueryAsync(table, prefixes, books, limit)).DistinctBy(row => row.RowId).ToList();
+                    rows = rows.Concat(await QueryAsync(table, prefixes, books, limit, ordering)).DistinctBy(row => row.RowId).ToList();
                 }
                 // Expand only if exact/prefix matches have not filled the user's result limit.
                 if (rows.Count < limit)
@@ -106,7 +107,7 @@ public sealed class SearchIndexService : IAsyncDisposable
                             .Take(24).Select(row => $"\"{row.Term}\"").ToArray(), cancellationToken);
                         clauses.Add("(" + string.Join(" OR ", similar.Prepend($"\"{term}\"*")) + ")");
                     }
-                    var fuzzy = await QueryAsync(table, string.Join(" AND ", clauses), books, limit);
+                    var fuzzy = await QueryAsync(table, string.Join(" AND ", clauses), books, limit, ordering);
                     rows = rows.Concat(fuzzy).DistinctBy(row => row.RowId).ToList();
                 }
                 hits.AddRange(rows.Select(row => new SearchHit(type, row.PerekId, row.PasukNum,
@@ -115,17 +116,37 @@ public sealed class SearchIndexService : IAsyncDisposable
             finally { _gates[table].Release(); }
         }
         cancellationToken.ThrowIfCancellationRequested();
-        return hits.OrderByDescending(hit => hit.Score).Take(limit).ToList();
+        return (ordering.Sort == SearchSort.Generation
+            ? hits.OrderBy(hit => ordering.YearFor(hit.PerushId)).ThenBy(hit => hit.PerekId).ThenBy(hit => hit.PasukNum)
+            : hits.OrderByDescending(hit => hit.Score)).Take(limit).ToList();
     }
 
-    private Task<List<IndexRow>> QueryAsync(string table, string match, IReadOnlySet<int> books, int limit)
+    private Task<List<IndexRow>> QueryAsync(string table, string match, IReadOnlySet<int> books, int limit, SearchOrdering ordering)
     {
         var bookIds = books.Order().ToArray();
         var placeholders = string.Join(",", bookIds.Select(_ => "?"));
-        var arguments = new object[] { match }.Concat(bookIds.Cast<object>()).Append(limit).ToArray();
+        var arguments = new List<object> { match };
+        arguments.AddRange(bookIds.Cast<object>());
+        var orderSql = $"bm25({table}), {table}.rowid";
+        if (ordering.Sort == SearchSort.Generation)
+        {
+            var years = ordering.CommentaryYears.OrderBy(pair => pair.Key).ToArray();
+            var generationSql = "CASE WHEN c.PerushId = 0 THEN -2147483648 ELSE 2147483647 END";
+            if (table == "notes" && years.Length > 0)
+            {
+                generationSql = "CASE c.PerushId " + string.Join(" ", years.Select(_ => "WHEN ? THEN ?")) + " ELSE 2147483647 END";
+                foreach (var year in years)
+                {
+                    arguments.Add(year.Key);
+                    arguments.Add(year.Value);
+                }
+            }
+            orderSql = $"{generationSql}, c.PerekId, c.PasukNum, {table}.rowid";
+        }
+        arguments.Add(limit);
         return _index.QueryAsync<IndexRow>($"SELECT {table}.rowid AS RowId, c.PerekId, c.PasukNum, c.PerushId, c.Text AS Body FROM {table} " +
             $"JOIN {table}_documents c ON c.rowid = {table}.rowid WHERE {table} MATCH ? AND c.SeferId IN ({placeholders}) " +
-            $"ORDER BY bm25({table}), {table}.rowid LIMIT ?", arguments);
+            $"ORDER BY {orderSql} LIMIT ?", arguments.ToArray());
     }
 
     private async Task InitializeIndexAsync()

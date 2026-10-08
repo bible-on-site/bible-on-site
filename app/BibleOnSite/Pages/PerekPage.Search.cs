@@ -78,7 +78,7 @@ public partial class PerekPage
                 (float)(startColor.Blue + (endColor.Blue - startColor.Blue) * progress));
             if (header.StrokeShape is RoundRectangle shape)
             {
-                shape.CornerRadius = new CornerRadius(14 + 14 * progress);
+                shape.CornerRadius = new CornerRadius(14 * (1 - progress));
             }
             if (content != null)
             {
@@ -102,10 +102,10 @@ public partial class PerekPage
         {
             header.HeightRequest = _searchHeaderHeight;
             header.IsEnabled = true;
-            header.SetAppThemeColor(Border.BackgroundColorProperty, Colors.White, Color.FromArgb("#263244"));
+            header.SetAppThemeColor(Border.BackgroundColorProperty, Color.FromArgb("#F2F7FE"), Color.FromArgb("#20304A"));
             if (header.StrokeShape is RoundRectangle shape)
             {
-                shape.CornerRadius = new CornerRadius(28);
+                shape.CornerRadius = new CornerRadius(0);
             }
             if (header.Content is View content)
             {

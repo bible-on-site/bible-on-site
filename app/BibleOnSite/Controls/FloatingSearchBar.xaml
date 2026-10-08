@@ -1,107 +1,152 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
-             xmlns:models="clr-namespace:BibleOnSite.Models"
-             xmlns:controls="clr-namespace:BibleOnSite.Controls"
-             xmlns:fonts="clr-namespace:Fonts"
-             x:Class="BibleOnSite.Controls.FloatingSearchBar"
-             x:DataType="viewmodels:SearchViewModel"
-             FlowDirection="RightToLeft">
-    <ContentView.Resources>
-        <Style x:Key="SearchIconButton" TargetType="Button">
-            <Setter Property="FontFamily" Value="FluentIcons"/>
-            <Setter Property="FontSize" Value="24"/>
-            <Setter Property="WidthRequest" Value="44"/>
-            <Setter Property="HeightRequest" Value="44"/>
-            <Setter Property="Padding" Value="10"/>
-            <Setter Property="CornerRadius" Value="22"/>
-            <Setter Property="BorderWidth" Value="0"/>
-            <Setter Property="BackgroundColor" Value="Transparent"/>
-            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
-            <Setter Property="VerticalOptions" Value="Center"/>
-        </Style>
-    </ContentView.Resources>
-    <VerticalStackLayout x:Name="SearchLayout" BackgroundColor="Transparent">
-        <Border x:Name="SearchHeader" StrokeShape="RoundRectangle 28" Padding="6,0" StrokeThickness="0"
-                BackgroundColor="{AppThemeBinding Light=White, Dark=#263244}">
-            <Border.HeightRequest>
-                <OnPlatform x:TypeArguments="x:Double" Default="48">
-                    <On Platform="Android,iOS" Value="56"/>
-                </OnPlatform>
-            </Border.HeightRequest>
-            <Grid ColumnDefinitions="Auto,*,Auto,Auto" FlowDirection="RightToLeft">
-                <Button x:Name="NavigationButton" Style="{StaticResource SearchIconButton}"
-                        Text="{x:Static fonts:FluentUI.search_24_regular}" AutomationId="SearchNavigationButton"
-                        SemanticProperties.Description="חיפוש" Clicked="OnNavigationClicked"/>
-                <controls:SearchEntry Grid.Column="1" x:Name="SearchInput" AutomationId="PerekSearchInput"
-                                     Text="{Binding SearchPhrase, Mode=TwoWay}" Placeholder="חיפוש"
-                                     FontSize="17" VerticalOptions="Center" HeightRequest="48"
-                                     TextColor="{AppThemeBinding Light=#26384E, Dark=#E7EEF8}"
-                                     PlaceholderColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"
-                                     TextChanged="OnSearchTextChanged" Focused="OnSearchFocused" Completed="OnSearchSubmitted"/>
-                <Button Grid.Column="2" x:Name="ClearButton" Style="{StaticResource SearchIconButton}" IsVisible="False"
-                        Text="{x:Static fonts:FluentUI.dismiss_24_regular}" AutomationId="ClearSearchButton"
-                        SemanticProperties.Description="ניקוי החיפוש" Clicked="OnClearClicked"/>
-                <Button Grid.Column="3" x:Name="FiltersButton" Style="{StaticResource SearchIconButton}"
-                        Text="{x:Static fonts:FluentUI.settings_24_regular}" AutomationId="SearchFiltersButton"
-                        SemanticProperties.Description="הגדרות חיפוש" Clicked="OnFiltersClicked"/>
-            </Grid>
-        </Border>
-        <Border x:Name="SearchPanel" AutomationId="SearchPanel" IsVisible="False"
-                StrokeShape="RoundRectangle 20" Padding="12"
-                BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}"
-                Stroke="{AppThemeBinding Light=#D8E4F4, Dark=#46566D}">
-            <VerticalStackLayout Spacing="6">
-                <VerticalStackLayout x:Name="FiltersPanel" IsVisible="False" Spacing="4">
-                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="4">
-                        <Button Text="מה לחפש" AutomationId="SearchKindsTab" Clicked="OnKindsTabClicked" FontSize="13" Padding="2"/>
-                        <Button Grid.Column="1" Text="היכן לחפש" AutomationId="SearchBooksTab" Clicked="OnBooksTabClicked" FontSize="13" Padding="2"/>
-                        <Button Grid.Column="2" Text="הגדרות נוספות" AutomationId="SearchOptionsTab" Clicked="OnOptionsTabClicked" FontSize="13" Padding="2"/>
-                    </Grid>
-                    <ScrollView HeightRequest="220">
-                        <VerticalStackLayout>
-                            <VerticalStackLayout x:Name="KindsFilters"/>
-                            <Grid x:Name="BookFilters" IsVisible="False" ColumnDefinitions="*,*,*" ColumnSpacing="6"/>
-                            <VerticalStackLayout x:Name="MoreFilters" IsVisible="False" Padding="8" Spacing="8">
-                                <Label Text="מספר תוצאות מרבי"/>
-                                <Picker x:Name="LimitPicker" AutomationId="SearchLimitPicker"
-                                        Title="מספר תוצאות" SelectedIndexChanged="OnLimitChanged"/>
-                            </VerticalStackLayout>
-                        </VerticalStackLayout>
-                    </ScrollView>
-                </VerticalStackLayout>
-                <Grid ColumnDefinitions="Auto,*">
-                    <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}"
-                                       WidthRequest="24" HeightRequest="24"/>
-                    <Label Grid.Column="1" x:Name="SearchStatus" AutomationId="SearchStatus" FontSize="13"
-                           TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"
-                           VerticalOptions="Center" Text="הקלידו פרק, פסוק, פירוש או שם רב"/>
-                </Grid>
-                <Label x:Name="ErrorText" IsVisible="False" Text="{Binding ErrorMessage}" TextColor="{AppThemeBinding Light=#B02020, Dark=#FF9090}" FontSize="13"/>
-                <Label x:Name="AvailabilityText" IsVisible="False" Text="{Binding AvailabilityMessage}" FontSize="13"/>
-                <CollectionView x:Name="ResultsList" AutomationId="SearchResults"
-                                ItemsSource="{Binding SearchResults}" HeightRequest="280"
-                                SelectionMode="Single" SelectionChanged="OnResultSelected">
-                    <CollectionView.ItemTemplate>
-                        <DataTemplate x:DataType="models:SearchResult">
-                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Padding="4,10">
-                                <Image Source="{Binding ThumbnailUrl}" IsVisible="{Binding HasThumbnail}"
-                                       WidthRequest="36" HeightRequest="36" VerticalOptions="Start"/>
-                                <VerticalStackLayout Grid.Column="1" Spacing="3">
-                                    <Label Text="{Binding Category}" FontSize="11" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
-                                    <Label Text="{Binding Title}" AutomationId="SearchResultTitle" FontSize="16" FontAttributes="Bold"
-                                           TextColor="{AppThemeBinding Light=#26384E, Dark=#E7EEF8}"/>
-                                    <Label Text="{Binding SubtitleHtml}" TextType="Html" FontSize="14" MaxLines="3"
-                                           TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/>
-                                    <BoxView HeightRequest="1" Color="{AppThemeBinding Light=#E8F0FA, Dark=#46566D}"
-                                             BackgroundColor="Transparent"/>
-                                </VerticalStackLayout>
-                            </Grid>
-                        </DataTemplate>
-                    </CollectionView.ItemTemplate>
-                </CollectionView>
-            </VerticalStackLayout>
-        </Border>
-    </VerticalStackLayout>
+ xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+ xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels" xmlns:models="clr-namespace:BibleOnSite.Models"
+ xmlns:controls="clr-namespace:BibleOnSite.Controls" xmlns:fonts="clr-namespace:Fonts"
+ x:Class="BibleOnSite.Controls.FloatingSearchBar" x:DataType="viewmodels:SearchViewModel" FlowDirection="RightToLeft">
+ <ContentView.Resources>
+  <Style x:Key="SearchIconButton" TargetType="Button">
+   <Setter Property="FontFamily" Value="FluentIcons"/><Setter Property="FontSize" Value="24"/>
+   <Setter Property="WidthRequest" Value="44"/><Setter Property="HeightRequest" Value="44"/>
+   <Setter Property="Padding" Value="10"/><Setter Property="BorderWidth" Value="0"/>
+   <Setter Property="BackgroundColor" Value="Transparent"/>
+   <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+  </Style>
+  <Style x:Key="FilterChip" TargetType="Border">
+   <Setter Property="StrokeShape" Value="RoundRectangle 10"/><Setter Property="Padding" Value="10,6"/>
+   <Setter Property="MinimumHeightRequest" Value="36"/>
+   <Setter Property="Stroke" Value="{AppThemeBinding Light=#D8E4F4, Dark=#46566D}"/>
+   <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=White, Dark=#1C2635}"/>
+  </Style>
+  <Style x:Key="ChipText" TargetType="Label">
+   <Setter Property="FontSize" Value="13"/><Setter Property="VerticalOptions" Value="Center"/>
+   <Setter Property="TextColor" Value="{AppThemeBinding Light=#26384E, Dark=#E7EEF8}"/>
+  </Style>
+  <Style x:Key="ChipChevron" TargetType="Label">
+   <Setter Property="FontFamily" Value="FluentIcons"/>
+   <Setter Property="Text" Value="{x:Static fonts:FluentUI.chevron_down_20_regular}"/>
+   <Setter Property="FontSize" Value="16"/><Setter Property="VerticalOptions" Value="Center"/>
+   <Setter Property="TextColor" Value="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/>
+  </Style>
+ </ContentView.Resources>
+ <Grid x:Name="SearchLayout" RowDefinitions="Auto,*">
+  <Border x:Name="SearchHeader" StrokeShape="RoundRectangle 0" Padding="8,0" StrokeThickness="0"
+   HeightRequest="56" BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}">
+   <Grid ColumnDefinitions="Auto,*,Auto">
+    <Button x:Name="NavigationButton" Style="{StaticResource SearchIconButton}"
+     Text="{x:Static fonts:FluentUI.arrow_right_24_regular}" AutomationId="SearchNavigationButton"
+     SemanticProperties.Description="סגירת החיפוש" Clicked="OnNavigationClicked"/>
+    <controls:SearchEntry Grid.Column="1" x:Name="SearchInput" AutomationId="PerekSearchInput"
+     Text="{Binding SearchPhrase, Mode=TwoWay}" Placeholder="חיפוש" FontSize="17" VerticalOptions="Center" HeightRequest="48"
+     TextColor="{AppThemeBinding Light=#26384E, Dark=#E7EEF8}" PlaceholderColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"
+     TextChanged="OnSearchTextChanged" Focused="OnSearchFocused" Completed="OnSearchSubmitted"/>
+    <Button Grid.Column="2" x:Name="ClearButton" Style="{StaticResource SearchIconButton}" IsVisible="False"
+     Text="{x:Static fonts:FluentUI.dismiss_24_regular}" AutomationId="ClearSearchButton"
+     SemanticProperties.Description="ניקוי החיפוש" Clicked="OnClearClicked"/>
+   </Grid>
+  </Border>
+  <Grid Grid.Row="1" x:Name="SearchPanel" AutomationId="SearchPanel" IsVisible="False"
+   RowDefinitions="Auto,Auto,Auto,*" BackgroundColor="{AppThemeBinding Light=White, Dark=#1C2635}">
+   <ScrollView Orientation="Horizontal" HorizontalScrollBarVisibility="Never" AutomationId="SearchFilterChips">
+    <HorizontalStackLayout Padding="16,8" Spacing="8">
+     <Border Style="{StaticResource FilterChip}" AutomationId="SearchKindsTab">
+      <Border.GestureRecognizers><TapGestureRecognizer Tapped="OnKindsTabClicked"/></Border.GestureRecognizers>
+      <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="6">
+       <Label x:Name="KindsChipText" Text="מה לחפש" AutomationId="SearchKindsSummary" Style="{StaticResource ChipText}"/>
+       <Label Grid.Column="1" Style="{StaticResource ChipChevron}"/>
+      </Grid>
+     </Border>
+     <Border Style="{StaticResource FilterChip}" AutomationId="SearchBooksTab">
+      <Border.GestureRecognizers><TapGestureRecognizer Tapped="OnBooksTabClicked"/></Border.GestureRecognizers>
+      <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="6">
+       <Label x:Name="BooksChipText" Text="היכן לחפש" AutomationId="SearchBooksSummary" Style="{StaticResource ChipText}"/>
+       <Label Grid.Column="1" Style="{StaticResource ChipChevron}"/>
+      </Grid>
+     </Border>
+     <Border Style="{StaticResource FilterChip}" AutomationId="SearchOptionsTab">
+      <Border.GestureRecognizers><TapGestureRecognizer Tapped="OnOptionsTabClicked"/></Border.GestureRecognizers>
+      <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="6">
+       <Label x:Name="OptionsChipText" Text="הגדרות נוספות" AutomationId="SearchOptionsSummary" Style="{StaticResource ChipText}"/>
+       <Label Grid.Column="1" Style="{StaticResource ChipChevron}"/>
+      </Grid>
+     </Border>
+     <Border x:Name="ClearAllChip" Style="{StaticResource FilterChip}" AutomationId="SearchClearAll" IsVisible="False">
+      <Border.GestureRecognizers><TapGestureRecognizer Tapped="OnClearAllClicked"/></Border.GestureRecognizers>
+      <Label Text="נקה הכל" Style="{StaticResource ChipText}" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+     </Border>
+    </HorizontalStackLayout>
+   </ScrollView>
+   <Grid Grid.Row="1" Padding="16,4,16,8" ColumnDefinitions="Auto,Auto,*" ColumnSpacing="6" AutomationId="SearchSortButton">
+    <Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnSortClicked"/></Grid.GestureRecognizers>
+    <Label x:Name="SortLabel" Text="הכי רלוונטי" Style="{StaticResource ChipText}"/>
+    <Label Grid.Column="1" Style="{StaticResource ChipChevron}"/>
+   </Grid>
+   <VerticalStackLayout Grid.Row="2" Padding="16,4" Spacing="4">
+    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+     <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}" WidthRequest="22" HeightRequest="22"/>
+     <Label Grid.Column="1" x:Name="SearchStatus" AutomationId="SearchStatus" FontSize="13"
+      TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}" VerticalOptions="Center"/>
+    </Grid>
+    <Label x:Name="ErrorText" IsVisible="False" Text="{Binding ErrorMessage}" TextColor="{AppThemeBinding Light=#B02020, Dark=#FF9090}" FontSize="13"/>
+    <Label x:Name="AvailabilityText" IsVisible="False" Text="{Binding AvailabilityMessage}" FontSize="13"/>
+   </VerticalStackLayout>
+   <CollectionView Grid.Row="3" x:Name="RecentList" AutomationId="RecentSearches" SelectionMode="Single" SelectionChanged="OnRecentSelected">
+    <CollectionView.EmptyView><Label Text="עדיין אין חיפושים אחרונים" Margin="16,20" TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/></CollectionView.EmptyView>
+    <CollectionView.ItemTemplate>
+     <DataTemplate x:DataType="x:String">
+      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16" Padding="20,16">
+       <Label Text="{x:Static fonts:FluentUI.history_24_regular}" FontFamily="FluentIcons" FontSize="24" TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/>
+       <Label Grid.Column="1" Text="{Binding .}" AutomationId="RecentSearchPhrase" FontSize="16" TextColor="{AppThemeBinding Light=#26384E, Dark=#E7EEF8}"/>
+      </Grid>
+     </DataTemplate>
+    </CollectionView.ItemTemplate>
+   </CollectionView>
+   <CollectionView Grid.Row="3" x:Name="ResultsList" AutomationId="SearchResults" ItemsSource="{Binding SearchResults}"
+    SelectionMode="Single" SelectionChanged="OnResultSelected" IsVisible="False">
+    <CollectionView.ItemTemplate>
+     <DataTemplate x:DataType="models:SearchResult">
+      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" Padding="16,12">
+       <Image Source="{Binding ThumbnailUrl}" IsVisible="{Binding HasThumbnail}" WidthRequest="36" HeightRequest="36" VerticalOptions="Start"/>
+       <VerticalStackLayout Grid.Column="1" Spacing="4">
+        <Label Text="{Binding Category}" FontSize="11" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+        <Label Text="{Binding Title}" AutomationId="SearchResultTitle" FontSize="16" FontAttributes="Bold" TextColor="{AppThemeBinding Light=#26384E, Dark=#E7EEF8}"/>
+        <Label Text="{Binding SubtitleHtml}" TextType="Html" FontSize="14" MaxLines="3" TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/>
+        <BoxView HeightRequest="1" Margin="0,8,0,0" Color="{AppThemeBinding Light=#E8F0FA, Dark=#46566D}"/>
+       </VerticalStackLayout>
+      </Grid>
+     </DataTemplate>
+    </CollectionView.ItemTemplate>
+   </CollectionView>
+   <Grid x:Name="FilterSheetOverlay" Grid.RowSpan="4" IsVisible="False" ZIndex="20">
+    <BoxView Color="#66000000"><BoxView.GestureRecognizers><TapGestureRecognizer Tapped="OnSheetDismissed"/></BoxView.GestureRecognizers></BoxView>
+    <Border x:Name="FilterSheet" AutomationId="SearchSheet" VerticalOptions="End" HeightRequest="420"
+     StrokeShape="RoundRectangle 24,24,0,0" StrokeThickness="0" Padding="16,8,16,16" BackgroundColor="{AppThemeBinding Light=White, Dark=#1C2635}">
+     <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="8">
+      <Grid HeightRequest="20">
+       <Grid.GestureRecognizers><PanGestureRecognizer PanUpdated="OnSheetPanUpdated"/></Grid.GestureRecognizers>
+       <BoxView WidthRequest="36" HeightRequest="4" CornerRadius="2" HorizontalOptions="Center" VerticalOptions="Center" Color="#D8E4F4"/>
+      </Grid>
+      <Grid Grid.Row="1" ColumnDefinitions="*,Auto">
+       <Label x:Name="SheetTitle" AutomationId="SearchSheetTitle" FontAttributes="Bold" FontSize="18" VerticalOptions="Center"/>
+       <Button Grid.Column="1" Style="{StaticResource SearchIconButton}" Text="{x:Static fonts:FluentUI.dismiss_24_regular}"
+        AutomationId="SearchSheetDismissButton" SemanticProperties.Description="סגירת ההגדרות" Clicked="OnSheetDismissed"/>
+      </Grid>
+      <ScrollView Grid.Row="2"><Grid>
+       <VerticalStackLayout x:Name="KindsFilters" IsVisible="False"/>
+       <Grid x:Name="BookFilters" IsVisible="False" ColumnDefinitions="*,*,*" ColumnSpacing="6"/>
+       <VerticalStackLayout x:Name="MoreFilters" IsVisible="False" Padding="8" Spacing="8">
+        <Label Text="מספר תוצאות מרבי"/>
+        <Picker x:Name="LimitPicker" AutomationId="SearchLimitPicker" Title="מספר תוצאות" SelectedIndexChanged="OnLimitChanged"/>
+       </VerticalStackLayout>
+       <VerticalStackLayout x:Name="SortFilters" IsVisible="False">
+        <RadioButton x:Name="SortRelevanceRadio" Content="הכי רלוונטי" GroupName="SearchSort" Value="Relevance" IsChecked="True" AutomationId="SearchSortRelevance" CheckedChanged="OnSortChanged"/>
+        <RadioButton Content="לפי סדר הדורות" GroupName="SearchSort" Value="Generation" AutomationId="SearchSortGeneration" CheckedChanged="OnSortChanged"/>
+       </VerticalStackLayout>
+      </Grid></ScrollView>
+      <Button Grid.Row="3" Text="הצגת תוצאות" AutomationId="SearchSheetApplyButton" Clicked="OnSheetDismissed"/>
+     </Grid>
+    </Border>
+   </Grid>
+  </Grid>
+ </Grid>
 </ContentView>

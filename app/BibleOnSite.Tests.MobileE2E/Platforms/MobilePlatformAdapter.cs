@@ -19,6 +19,20 @@ public abstract class MobilePlatformAdapter
     public virtual void Tap(AppiumDriver driver, AppiumElement element) => element.Click();
     public abstract void GoBack(AppiumDriver driver);
     public virtual void GoBackFromFocusedVerse(AppiumDriver driver) => GoBack(driver);
+    public virtual void DismissSearchSheet(AppiumDriver driver) => GoBack(driver);
+
+    public void RevealTrailingSearchChips(AppiumDriver driver)
+    {
+        var chips = driver.FindElement(AutomationId("SearchFilterChips"));
+        var finger = new PointerInputDevice(PointerKind.Touch, "finger");
+        var sequence = new ActionSequence(finger, 0);
+        var y = chips.Location.Y + chips.Size.Height / 2;
+        sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, chips.Location.X + chips.Size.Width / 4, y, TimeSpan.Zero));
+        sequence.AddAction(finger.CreatePointerDown(MouseButton.Left));
+        sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, chips.Location.X + chips.Size.Width * 4 / 5, y, TimeSpan.FromMilliseconds(400)));
+        sequence.AddAction(finger.CreatePointerUp(MouseButton.Left));
+        driver.PerformActions([sequence]);
+    }
     public abstract AppiumDriver CreateDriver(Uri server, AppiumOptions options);
 
     /// <summary>
@@ -157,6 +171,7 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
 
 public sealed class IosPlatformAdapter : MobilePlatformAdapter
 {
+    public override void DismissSearchSheet(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SearchSheetDismissButton")));
     public override bool IsChecked(AppiumElement element) => element.GetAttribute("value") == "1";
     public override void GoBackFromFocusedVerse(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SelectionBackButton")));
     public override By AutomationId(string id) => MobileBy.AccessibilityId(id);

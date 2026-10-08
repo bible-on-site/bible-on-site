@@ -1165,6 +1165,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         SearchTitleHost.IsVisible = searching;
         SearchTitleHost.Content = searching ? _searchHeader : null;
         ChapterSearch.IsVisible = searching;
+        ContentArea.IsVisible = !searching;
         SelectionBar.IsVisible = isSelectionMode && !searching;
         SelectionCountLabel.Text = count.ToString();
     }

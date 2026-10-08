@@ -470,7 +470,7 @@ public partial class PerekPage
 
     private bool TryHandleReaderBack()
     {
-        if (ChapterSearch.IsSearchOpen) { ChapterSearch.Close(); return true; }
+        if (ChapterSearch.IsSearchOpen) { ChapterSearch.HandleBack(); return true; }
         if (_focusedPasuk != null || _chapterRecitationSelection || _viewModel.SelectedPasukNums.Count > 0)
         { ClearAllSelections(); return true; }
         return false;

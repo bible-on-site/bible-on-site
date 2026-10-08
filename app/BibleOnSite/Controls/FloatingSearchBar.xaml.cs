@@ -11,8 +11,9 @@ public partial class FloatingSearchBar : ContentView
 {
     private readonly SearchViewModel _viewModel = new();
     private CancellationTokenSource? _debounce;
-    private bool _buildingFilters;
+    private bool _buildingFilters = true;
     private bool _filtersBuilt;
+    private readonly SearchHistoryService _history = new(new MauiPreferencesStorage());
     public bool IsSearchOpen => SearchPanel.IsVisible;
 #pragma warning disable S3264 // Invoked below; subscribers include XAML and the Android reader callback.
     public event EventHandler? SearchOpenChanged;
@@ -26,6 +27,9 @@ public partial class FloatingSearchBar : ContentView
         LimitPicker.ItemsSource = Enumerable.Range(1, 10).Select(value => value * 5).ToList();
         LimitPicker.SelectedItem = _viewModel.ResultsLimit;
         _viewModel.PropertyChanged += (_, _) => UpdateStatus();
+        SearchPanel.SizeChanged += (_, _) => ResizeFilterSheet();
+        RefreshRecentHistory();
+        _buildingFilters = false;
     }
 
     public void SetSource(string source) => SearchInput.Placeholder = source;
@@ -33,7 +37,7 @@ public partial class FloatingSearchBar : ContentView
     public View DetachHeader()
     {
         SearchLayout.Remove(SearchHeader);
-        // The header replaces the source toolbar; its dropdown keeps the chapter heading visible.
+        // Keep the source toolbar in place while the search page covers the reader.
         SearchHeader.BindingContext = _viewModel;
         return SearchHeader;
     }
@@ -55,6 +59,8 @@ public partial class FloatingSearchBar : ContentView
         }
         SearchPanel.IsVisible = true;
         SearchOpenChanged?.Invoke(this, EventArgs.Empty);
+        RefreshRecentHistory();
+        _ = AnimateSearchPageAsync();
         UpdateStatus();
         try
         {
@@ -82,7 +88,11 @@ public partial class FloatingSearchBar : ContentView
     {
         _debounce?.Cancel();
         _viewModel.CancelSearch();
-        SearchPanel.IsVisible = FiltersPanel.IsVisible = false;
+        CloseFilterSheetImmediately();
+        this.AbortAnimation("SearchPageEntrance");
+        SearchPanel.IsVisible = false;
+        SearchPanel.Opacity = 1;
+        SearchPanel.TranslationY = 0;
         SearchOpenChanged?.Invoke(this, EventArgs.Empty);
         _ = HideKeyboardAsync();
         _viewModel.SearchPhrase = string.Empty;
@@ -116,7 +126,11 @@ public partial class FloatingSearchBar : ContentView
         }
         _viewModel.SearchPhrase = e.NewTextValue ?? string.Empty;
         _viewModel.SearchResults.Clear();
-        FiltersPanel.IsVisible = false;
+        CloseFilterSheetImmediately();
+        if (string.IsNullOrWhiteSpace(_viewModel.SearchPhrase))
+        {
+            RefreshRecentHistory();
+        }
         UpdateStatus();
         if (IsSearchOpen)
         {
@@ -151,6 +165,7 @@ public partial class FloatingSearchBar : ContentView
 
     private void OnSearchSubmitted(object? sender, EventArgs e)
     {
+        RememberSearch();
         ScheduleSearch(0);
         _ = HideKeyboardAsync();
     }
@@ -177,32 +192,13 @@ public partial class FloatingSearchBar : ContentView
         ErrorText.IsVisible = !string.IsNullOrWhiteSpace(_viewModel.ErrorMessage);
         AvailabilityText.IsVisible = !string.IsNullOrWhiteSpace(_viewModel.AvailabilityMessage);
         SearchStatus.Text = _viewModel.IsLoading ? _viewModel.LoadingMessage :
-            string.IsNullOrWhiteSpace(_viewModel.SearchPhrase) ? "הקלידו פרק, פסוק, פירוש או שם רב" :
+            string.IsNullOrWhiteSpace(_viewModel.SearchPhrase) ? "חיפושים אחרונים" :
             _viewModel.SearchResults.Count == 0 ? "לא נמצאו תוצאות" : $"{_viewModel.SearchResults.Count} תוצאות";
-        ResultsList.IsVisible = !FiltersPanel.IsVisible && _viewModel.SearchResults.Count > 0;
+        var emptyPhrase = string.IsNullOrWhiteSpace(_viewModel.SearchPhrase);
+        ResultsList.IsVisible = !emptyPhrase && _viewModel.SearchResults.Count > 0;
+        RecentList.IsVisible = emptyPhrase;
+        UpdateFilterSummaries();
     }
-
-    private async void OnFiltersClicked(object? sender, EventArgs e)
-    {
-        await OpenSearchAsync();
-        if (!IsSearchOpen)
-        {
-            return;
-        }
-        FiltersPanel.IsVisible = !FiltersPanel.IsVisible;
-        await HideKeyboardAsync();
-        UpdateStatus();
-    }
-
-    private void ShowFilterTab(View tab)
-    {
-        KindsFilters.IsVisible = tab == KindsFilters;
-        BookFilters.IsVisible = tab == BookFilters;
-        MoreFilters.IsVisible = tab == MoreFilters;
-    }
-    private void OnKindsTabClicked(object? sender, EventArgs e) => ShowFilterTab(KindsFilters);
-    private void OnBooksTabClicked(object? sender, EventArgs e) => ShowFilterTab(BookFilters);
-    private void OnOptionsTabClicked(object? sender, EventArgs e) => ShowFilterTab(MoreFilters);
 
     private async Task BuildFiltersAsync()
     {
@@ -217,6 +213,8 @@ public partial class FloatingSearchBar : ContentView
                 KindsFilters.Add(FilterRow(filter.GetHebrewName(), $"SearchKind{filter}", _viewModel.IsFilterEnabled(filter), enabled =>
                 {
                     _viewModel.SetFilterEnabled(filter, enabled);
+                    _kindsExplicit = true;
+                    UpdateFilterSummaries();
                     ScheduleSearch();
                 }));
             }
@@ -228,6 +226,8 @@ public partial class FloatingSearchBar : ContentView
                 var groupRow = FilterRow(group.Header, $"SearchGroup{key}", _viewModel.IsSeferGroupFilterEnabled(groupIndex), enabled =>
                 {
                     _viewModel.SetSeferGroupFilterEnabled(groupIndex, enabled);
+                    _booksExplicit = true;
+                    UpdateFilterSummaries();
                     _buildingFilters = true;
                     foreach (var row in bookRows)
                     {
@@ -246,6 +246,8 @@ public partial class FloatingSearchBar : ContentView
                     var row = FilterRow(book.SeferName, $"SearchBook{book.SeferId}", _viewModel.IsSeferFilterEnabled(book.SeferId), enabled =>
                     {
                         _viewModel.SetSeferFilterEnabled(book.SeferId, enabled);
+                        _booksExplicit = true;
+                        UpdateFilterSummaries();
                         _buildingFilters = true;
                         ((CheckBox)groupRow.Children[0]).IsChecked = _viewModel.IsSeferGroupFilterEnabled(groupIndex);
                         _buildingFilters = false;
@@ -264,6 +266,7 @@ public partial class FloatingSearchBar : ContentView
     private Grid FilterRow(string title, string automationId, bool enabled, Action<bool> changed)
     {
         var checkBox = new CheckBox { IsChecked = enabled, AutomationId = automationId, WidthRequest = 32, HeightRequest = 44 };
+        _filterChecks[automationId] = checkBox;
         SemanticProperties.SetDescription(checkBox, title);
         checkBox.CheckedChanged += (_, e) =>
         {
@@ -289,6 +292,11 @@ public partial class FloatingSearchBar : ContentView
             return;
         }
         _viewModel.ResultsLimit = limit;
+        if (!_buildingFilters)
+        {
+            _optionsExplicit = true;
+            UpdateFilterSummaries();
+        }
         if (IsSearchOpen)
         {
             ScheduleSearch();
@@ -302,10 +310,68 @@ public partial class FloatingSearchBar : ContentView
             return;
         }
         ResultsList.SelectedItem = null;
+        RememberSearch();
         _debounce?.Cancel();
         _viewModel.CancelSearch();
         UpdateStatus();
         _ = HideKeyboardAsync();
         ResultSelected?.Invoke(this, result);
+    }
+
+    private Task AnimateSearchPageAsync()
+    {
+#if IOS
+        if (UIKit.UIAccessibility.IsReduceMotionEnabled)
+        {
+            return Task.CompletedTask;
+        }
+#endif
+        SearchPanel.Opacity = 0;
+        SearchPanel.TranslationY = 32;
+        var completion = new TaskCompletionSource();
+        new Animation(progress =>
+        {
+            SearchPanel.Opacity = progress;
+            SearchPanel.TranslationY = 32 * (1 - progress);
+        }).Commit(this, "SearchPageEntrance", 16, 200, Easing.CubicOut, (_, _) => completion.TrySetResult());
+        return completion.Task;
+    }
+
+    private void RefreshRecentHistory()
+    {
+        try
+        {
+            RecentList.ItemsSource = _history.Read();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Could not load recent searches: {ex}");
+            RecentList.ItemsSource = Array.Empty<string>();
+        }
+    }
+
+    private void RememberSearch()
+    {
+        try
+        {
+            _history.Remember(_viewModel.SearchPhrase);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Could not save recent search: {ex}");
+        }
+    }
+
+    private async void OnRecentSelected(object? sender, SelectionChangedEventArgs e)
+    {
+        if (e.CurrentSelection.FirstOrDefault() is not string phrase)
+        {
+            return;
+        }
+        RecentList.SelectedItem = null;
+        SearchInput.Text = phrase;
+        RememberSearch();
+        ScheduleSearch(0);
+        await HideKeyboardAsync();
     }
 }

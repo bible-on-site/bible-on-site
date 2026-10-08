@@ -51,27 +51,23 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
         await WaitForFinishedSearchAsync();
         var clear = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("ClearSearchButton")));
         var navigation = fixture.FindByAutomationId("SearchNavigationButton")!;
-        var settings = fixture.FindByAutomationId("SearchFiltersButton")!;
-        settings.BoundingRectangle.Right.Should().BeLessThanOrEqualTo(clear!.BoundingRectangle.Left);
-        clear.BoundingRectangle.Right.Should().BeLessThanOrEqualTo(input.BoundingRectangle.Left);
+        clear!.BoundingRectangle.Right.Should().BeLessThanOrEqualTo(input.BoundingRectangle.Left);
         input.BoundingRectangle.Right.Should().BeLessThanOrEqualTo(navigation.BoundingRectangle.Left);
         CapturePreview("floating-search-rtl.png");
         fixture.Click(clear);
         input.AsTextBox().Text.Should().BeEmpty("the single X clears the query and keeps search open");
-        var emptyStatus = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchStatus")));
-        var panelBottom = emptyStatus!.BoundingRectangle.Bottom;
-        var outsideVerse = await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("PasukText"))
-            .FirstOrDefault(verse => !verse.IsOffscreen && verse.BoundingRectangle.Top >= panelBottom));
-        outsideVerse.Should().NotBeNull();
-        fixture.Click(outsideVerse!);
+        fixture.MainWindow.FindAllDescendants(fixture.CF.ByAutomationId("PerekHeader"))
+            .Should().NotContain(header => !header.IsOffscreen, "the white search page covers the reader");
+        fixture.Click(navigation);
         await AssertRegularReaderAsync();
         CapturePreview("floating-search-dismissed.png");
         await OpenSearchAsync();
-        settings = fixture.FindByAutomationId("SearchFiltersButton")!;
+        var settings = fixture.FindByAutomationId("SearchKindsTab")!;
         navigation = fixture.FindByAutomationId("SearchNavigationButton")!;
         fixture.Click(settings);
         (await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchKindPerek"))))
             .Should().NotBeNull("settings are accessible before typing a query");
+        fixture.Click(fixture.FindByAutomationId("SearchSheetApplyButton")!);
         fixture.Click(fixture.FindByAutomationId("SearchBooksTab")!);
         var torah = (await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchGroup1"))))!;
         var neviim = fixture.FindByAutomationId("SearchGroup2")!;
@@ -85,7 +81,7 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
         torah.AsCheckBox().IsChecked = true;
         fixture.FindByAutomationId("SearchBook2")!.AsCheckBox().IsChecked.Should().BeTrue();
         CapturePreview("floating-search-book-columns.png");
-        fixture.Click(fixture.FindByAutomationId("SearchKindsTab")!);
+        fixture.Click(fixture.FindByAutomationId("SearchSheetApplyButton")!);
         fixture.Click(navigation);
         await OpenSearchAsync();
         input = fixture.FindByAutomationId("PerekSearchInput")!;
@@ -108,13 +104,13 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
         fixture.Click(input!);
         await EnterQueryAsync("ויעש אלהים את הרקיע");
         await WaitForFinishedSearchAsync("בראשית א ז");
-        var filters = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchFiltersButton")));
+        var filters = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchKindsTab")));
         fixture.Click(filters!);
         CapturePreview("floating-search-filters.png");
         var chapterFilter = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchKindPerek")));
         chapterFilter.Should().NotBeNull("the settings panel opens after the verse query finishes");
         chapterFilter!.AsCheckBox().IsChecked = false;
-        fixture.Click(filters!);
+        fixture.Click(fixture.FindByAutomationId("SearchSheetApplyButton")!);
         await WaitForFinishedSearchAsync();
         var verse = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchResults"))
             ?.FindFirstDescendant(fixture.CF.ByName("בראשית א ז")), TimeSpan.FromSeconds(45));

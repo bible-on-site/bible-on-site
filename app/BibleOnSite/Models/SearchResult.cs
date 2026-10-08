@@ -11,6 +11,14 @@ public abstract class SearchResult
     public string SubtitleHtml { get; set; } = string.Empty;
     public string Category => ResultType.GetHebrewName();
     public int Score { get; set; }
+    public int GenerationOrder { get; set; } = int.MaxValue;
+    public int SourceOrder => this switch
+    {
+        PerekSearchResult perek => perek.Perek.PerekId * 1000,
+        PasukSearchResult pasuk => pasuk.PerekId * 1000 + pasuk.Pasuk.PasukNum,
+        PerushSearchResult perush => perush.PerekId * 1000 + perush.PasukNum,
+        _ => int.MaxValue
+    };
     public virtual string? ThumbnailUrl => null;
     public bool HasThumbnail => ThumbnailUrl != null;
 
