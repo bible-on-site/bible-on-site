@@ -21,10 +21,12 @@ import {
 	getPerushimByPerekId,
 } from "../../../../lib/perushim";
 import {
+	articlePath,
 	buildArticleGraph,
 	buildPerushGraph,
+	perushPath,
 } from "../../../../lib/seo/core-jsonld";
-import { SITE_NAME } from "../../../../lib/seo/jsonld";
+import { plainText, SITE_NAME } from "../../../../lib/seo/jsonld";
 import { selectPerekImages } from "../../../../lib/seo/perek-illustrations";
 import { getPerekImagesByChapter } from "../../../../lib/seo/perek-images-data";
 import { fetchAllEntityRefs } from "../../../../lib/tanahpedia/perek-entity-refs";
@@ -35,7 +37,6 @@ import { PerekHeading } from "../components/PerekHeading";
 import { PerekText } from "../components/PerekText";
 import { PerushimSection } from "../components/PerushimSection";
 import SeferComposite from "../components/SeferComposite";
-import perekStyles from "../page.module.css";
 import styles from "./page.module.css";
 import { ScrollToSlug } from "./ScrollToArticle";
 import { ScrollToPerushPasukNote } from "./ScrollToPerushPasuk";
@@ -147,22 +148,21 @@ export async function generateMetadata({
 		}
 
 		const descriptionSource = article.abstract || article.content;
-		let plainText = descriptionSource ?? "";
-		let prev: string;
-		do {
-			prev = plainText;
-			plainText = plainText.replace(/<[^>]*>/g, "");
-		} while (plainText !== prev);
 		const title = `${article.name} | ${article.authorName} | ${SITE_NAME}`;
-		const description = plainText
-			? plainText.slice(0, 160)
-			: `מאמר מאת ${article.authorName}`;
+		const description =
+			(descriptionSource ? plainText(descriptionSource, 160) : "") ||
+			`מאמר מאת ${article.authorName}`;
+		const url = articlePath(perekId, article.id);
 		return {
 			title,
 			description,
+			alternates: {
+				canonical: url,
+			},
 			openGraph: {
 				title,
 				description,
+				url,
 				siteName: SITE_NAME,
 				locale: "he_IL",
 				type: "article",
@@ -182,18 +182,33 @@ export async function generateMetadata({
 
 	const perekObj = getPerekByPerekId(perekId);
 	const sefer = getSeferByName(perekObj.sefer);
+	const perushDetail = await getCachedPerushDetail(perush.id, perekId);
+	const notesExcerpt = perushDetail
+		? plainText(
+				perushDetail.notes.map((note) => note.noteContent).join(" "),
+				160,
+			)
+		: "";
 
 	const title = `${perush.name} על ${sefer.name} ${perekObj.perekHeb} | ${SITE_NAME}`;
-	const description = `פירוש ${perush.name} מאת ${perush.parshanName} על ${sefer.name} פרק ${perekObj.perekHeb}`;
+	const description =
+		notesExcerpt ||
+		`פירוש ${perush.name} מאת ${perush.parshanName} על ${sefer.name} פרק ${perekObj.perekHeb}`;
+	const url = perushPath(perekId, perush.name);
 	return {
 		title,
 		description,
+		alternates: {
+			canonical: url,
+		},
 		openGraph: {
 			title,
 			description,
+			url,
 			siteName: SITE_NAME,
 			locale: "he_IL",
 			type: "article",
+			authors: [perush.parshanName],
 		},
 	};
 }
@@ -327,6 +342,47 @@ export default async function ArticlePage({
 			<Suspense fallback={null}>
 				<ScrollToPerushPasukNote />
 			</Suspense>
+			<section id="perush-view" className={styles.expandedPerush}>
+				<header className={styles.perushHeader}>
+					<h1 className={styles.perushTitle}>
+						{perushDetail.name} על {perekObj.source}
+					</h1>
+					<h2 className={styles.parshanName}>{perushDetail.parshanName}</h2>
+				</header>
+
+				<div className={styles.perushContent}>
+					{perushDetail.notes.map((note, idx) => {
+						const prevSamePasuk =
+							idx > 0 && perushDetail.notes[idx - 1].pasuk === note.pasuk;
+						const noteAnchorId = !prevSamePasuk
+							? `perush-pasuk-${note.pasuk}`
+							: undefined;
+						return (
+							<div
+								key={`${note.pasuk}-${note.noteIdx}`}
+								id={noteAnchorId}
+								className={styles.note}
+								data-perush-pasuk={note.pasuk}
+							>
+								<span className={styles.notePasuk}>
+									פסוק {toLetters(note.pasuk)}:
+								</span>
+								<div
+									className={styles.noteContent}
+									// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
+									dangerouslySetInnerHTML={{ __html: note.noteContent }}
+								/>
+							</div>
+						);
+					})}
+				</div>
+
+				<div className={styles.backToPerek}>
+					<Link href={`/929/${perekId}`} className={styles.backLink}>
+						חזרה לפרק →
+					</Link>
+				</div>
+			</section>
 			<Suspense>
 				<SeferComposite
 					perekObj={perekObj}
@@ -338,7 +394,7 @@ export default async function ArticlePage({
 					initialSlug={slug}
 				/>
 			</Suspense>
-			<div className={perekStyles.perekContainer}>
+			<div className={styles.articlePerekContainer}>
 				<Breadcrumb perekObj={perekObj} />
 				<PerekHeading perekObj={perekObj} />
 
@@ -352,47 +408,6 @@ export default async function ArticlePage({
 
 				{/* Articles carousel */}
 				<ArticlesSection articles={articles} />
-
-				{/* Expanded perush view */}
-				<section id="perush-view" className={styles.expandedPerush}>
-					<header className={styles.perushHeader}>
-						<h2 className={styles.perushTitle}>{perushDetail.name}</h2>
-						<h3 className={styles.parshanName}>{perushDetail.parshanName}</h3>
-					</header>
-
-					<div className={styles.perushContent}>
-						{perushDetail.notes.map((note, idx) => {
-							const prevSamePasuk =
-								idx > 0 && perushDetail.notes[idx - 1].pasuk === note.pasuk;
-							const noteAnchorId = !prevSamePasuk
-								? `perush-pasuk-${note.pasuk}`
-								: undefined;
-							return (
-								<div
-									key={`${note.pasuk}-${note.noteIdx}`}
-									id={noteAnchorId}
-									className={styles.note}
-									data-perush-pasuk={note.pasuk}
-								>
-									<span className={styles.notePasuk}>
-										פסוק {toLetters(note.pasuk)}:
-									</span>
-									<div
-										className={styles.noteContent}
-										// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
-										dangerouslySetInnerHTML={{ __html: note.noteContent }}
-									/>
-								</div>
-							);
-						})}
-					</div>
-
-					<div className={styles.backToPerek}>
-						<Link href={`/929/${perekId}`} className={styles.backLink}>
-							חזרה לפרק →
-						</Link>
-					</div>
-				</section>
 			</div>
 		</>
 	);
