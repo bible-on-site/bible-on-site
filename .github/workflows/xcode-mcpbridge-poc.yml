@@ -38,17 +38,34 @@ jobs:
       - name: Probe mcpbridge MCP tools
         run: |
           python3 - <<'PY'
-          import subprocess
-          messages = [
-            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"poc","version":"0"}}}',
-            '{"jsonrpc":"2.0","method":"notifications/initialized"}',
-            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}',
-          ]
-          proc = subprocess.run(
-              ["xcrun", "mcpbridge"], input="\n".join(messages) + "\n",
-              capture_output=True, text=True, timeout=60)
-          print(proc.stdout[:8000])
-          print("--- stderr ---")
-          print(proc.stderr[:2000])
-          assert '"result"' in proc.stdout, "mcpbridge returned no tools/list result"
+          import json, subprocess, threading, time
+          # mcpbridge is a persistent stdio MCP server — keep stdin open and
+          # read responses on a deadline instead of closing input.
+          proc = subprocess.Popen(
+              ["xcrun", "mcpbridge"], stdin=subprocess.PIPE,
+              stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+              text=True, bufsize=1)
+          lines = []
+          def reader():
+              for line in proc.stdout:
+                  lines.append(line)
+          threading.Thread(target=reader, daemon=True).start()
+          def send(msg):
+              proc.stdin.write(json.dumps(msg) + "\n")
+              proc.stdin.flush()
+          send({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                "params": {"protocolVersion": "2025-06-18", "capabilities": {},
+                           "clientInfo": {"name": "poc", "version": "0"}}})
+          deadline = time.time() + 30
+          while time.time() < deadline and not any('"id":1' in l or '"id": 1' in l for l in lines):
+              time.sleep(0.2)
+          send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+          send({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+          deadline = time.time() + 30
+          while time.time() < deadline and not any('"id":2' in l or '"id": 2' in l for l in lines):
+              time.sleep(0.2)
+          proc.kill()
+          out = "".join(lines)
+          print(out[:10000])
+          assert '"tools"' in out, "mcpbridge returned no tools/list result"
           PY
