@@ -25,4 +25,10 @@ describe("bulletin dates", () => {
 		expect(hebrewBulletinDate("2026-10-08")).toBe("כז תשרי תשפז");
 		vi.useRealTimers();
 	});
+	it.each([
+		["2027-02-20", "יג אדר א' תשפז"],
+		["2027-03-20", "יא אדר ב' תשפז"],
+	])("normalizes leap-year month punctuation for %s", (date, expected) => {
+		expect(hebrewBulletinDate(date)).toBe(expected);
+	});
 });

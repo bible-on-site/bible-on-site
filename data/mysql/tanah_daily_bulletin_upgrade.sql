@@ -1,5 +1,5 @@
 -- Safe bulletin schema upgrade. Existing content and delivery history are retained.
--- Split CREATE TABLE across strings because the deployment Lambda rewrites it.
+-- Build table DDL in separate fragments to avoid the deployment rewrite.
 SET @bulletinSql = (
     SELECT IF(COUNT(*) > 0, 'SELECT 1',
         'ALTER TABLE tanah_article ADD COLUMN distributable BOOLEAN NOT NULL DEFAULT FALSE')
