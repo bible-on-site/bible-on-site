@@ -718,23 +718,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
     /// </summary>
     private void ConfigureReaderSafeArea()
     {
-        MainGrid.SafeAreaEdges = new SafeAreaEdges(
-            SafeAreaRegions.None,
-            SafeAreaRegions.Container,
-            SafeAreaRegions.None,
-            SafeAreaRegions.Container);
-        DisableSafeAreaPadding(MainGrid);
-    }
-
-    private static void DisableSafeAreaPadding(Element root)
-    {
-        foreach (var child in root.GetVisualTreeDescendants())
-        {
-            if (child is Layout layout)
-            {
-                layout.SafeAreaEdges = SafeAreaEdges.None;
-            }
-        }
+        ReaderSafeArea.Configure(MainGrid);
     }
 
     private void InitializeBottomBarDebugControls()
