@@ -666,12 +666,14 @@ public partial class PerekPage : ContentPage
 
 #if IOS
     /// <summary>
-    /// MAUI pads Layouts inside the device safe area by default
-    /// (SafeAreaEdges = Container). On iPhone that insets the whole reader —
-    /// most visible in landscape as empty bands on both sides (#1308).
-    /// Let the reader reach the side and top edges; keep the bottom inset
-    /// because ApplyBottomBarSafeArea positions the bottom bar around the
-    /// home indicator itself.
+    /// MAUI pads every Layout inside the device safe area by default
+    /// (SafeAreaEdges = Container), and each Layout pads independently —
+    /// clearing it only on MainGrid just moves the padding to ContentArea,
+    /// which is what produced the empty landscape side bands (#1308).
+    /// Opt the entire subtree out except the root grid's bottom edge, which
+    /// ApplyBottomBarSafeArea manages around the home indicator itself.
+    /// Views inside scroll views (the carousel cells and pasukim lists) never
+    /// apply safe-area padding, so only the direct layout chain needs this.
     /// </summary>
     private void ConfigureReaderSafeArea()
     {
@@ -680,6 +682,18 @@ public partial class PerekPage : ContentPage
             SafeAreaRegions.None,
             SafeAreaRegions.None,
             SafeAreaRegions.Container);
+        DisableSafeAreaPadding(MainGrid);
+    }
+
+    private static void DisableSafeAreaPadding(Element root)
+    {
+        foreach (var child in root.GetVisualTreeDescendants())
+        {
+            if (child is Layout layout)
+            {
+                layout.SafeAreaEdges = SafeAreaEdges.None;
+            }
+        }
     }
 
     private void InitializeBottomBarDebugControls()

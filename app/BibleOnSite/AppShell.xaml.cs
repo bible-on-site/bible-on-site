@@ -58,29 +58,51 @@ public partial class AppShell : Shell
 	/// exactly this recognizer (MauiProgram), so recreating it would silently
 	/// drop that priority and let carousel paging swallow the edge swipe again.
 	/// </summary>
-	internal static readonly UIScreenEdgePanGestureRecognizer SharedFlyoutEdgePan =
-		new UIScreenEdgePanGestureRecognizer(OnSharedFlyoutEdgePan)
+	internal static readonly UIPanGestureRecognizer SharedFlyoutEdgePan = CreateFlyoutEdgePan();
+
+	private static UIPanGestureRecognizer CreateFlyoutEdgePan()
+	{
+		var pan = new UIPanGestureRecognizer(OnSharedFlyoutEdgePan);
+		pan.ShouldReceiveTouch += OnFlyoutEdgePanShouldReceiveTouch;
+		pan.ShouldBegin += OnFlyoutEdgePanShouldBegin;
+		return pan;
+	}
+
+	private static bool OnFlyoutEdgePanShouldReceiveTouch(UIGestureRecognizer recognizer, UITouch touch)
+	{
+		if (recognizer.View is not UIView view || Current is not AppShell shell || shell.FlyoutIsPresented)
 		{
-			Edges = UIRectEdge.Right,
-		};
+			return false;
+		}
+		// Honor the selection-mode lock: when a pasuk is selected the page
+		// sets FlyoutBehavior.Disabled and the drawer must stay closed.
+		if (shell.CurrentPage is null ||
+			GetFlyoutBehavior(shell.CurrentPage) != FlyoutBehavior.Flyout)
+		{
+			return false;
+		}
+		// MAUI's own flyout pan only engages in the left 10% band; mirror it on
+		// the right edge for the RTL drawer so ordinary carousel swipes keep paging.
+		return touch.LocationInView(view).X >= view.Frame.Width * 0.9;
+	}
+
+	private static bool OnFlyoutEdgePanShouldBegin(UIGestureRecognizer recognizer)
+	{
+		if (recognizer is not UIPanGestureRecognizer pan || pan.View is null)
+		{
+			return false;
+		}
+		// Commit only to a clear leftward pull — a vertical drag at the right
+		// edge must keep scrolling the page instead of opening the drawer.
+		var translation = pan.TranslationInView(pan.View);
+		return translation.X < 0 && Math.Abs(translation.X) > Math.Abs(translation.Y);
+	}
 
 	private static void OnSharedFlyoutEdgePan()
 	{
-		if (Current is AppShell shell)
+		if (Current is AppShell shell && !shell.FlyoutIsPresented)
 		{
-			shell.OpenFlyoutFromRightEdgePan();
-		}
-	}
-
-	private void OpenFlyoutFromRightEdgePan()
-	{
-		// Honor the selection-mode lock: when a pasuk is selected the page
-		// sets FlyoutBehavior.Disabled and the drawer must stay closed.
-		if (CurrentPage is not null &&
-			GetFlyoutBehavior(CurrentPage) == FlyoutBehavior.Flyout &&
-			!FlyoutIsPresented)
-		{
-			FlyoutIsPresented = true;
+			shell.FlyoutIsPresented = true;
 		}
 	}
 
