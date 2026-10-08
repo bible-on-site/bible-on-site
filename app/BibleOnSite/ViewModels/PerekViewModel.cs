@@ -265,6 +265,22 @@ public partial class PerekViewModel : ObservableObject
     /// </summary>
     public async Task LoadPerushimAsync(int perekId)
     {
+        // E2E hook (BIBLE_E2E_PERUSHIM=1): fabricate notes so the HtmlView
+        // commentary path is exercised in CI, where no ODR pack exists.
+        if (SyntheticPerushimProvider.Enabled)
+        {
+            _perushNotesCache = SyntheticPerushimProvider.NotesFor(
+                perekId, Perek?.Pasukim?.Select(p => p.PasukNum) ?? []);
+            CheckedPerushim = new List<int>();
+            Perushim = SyntheticPerushimProvider.Perushim;
+            PerushimCatalogAvailable = true;
+            PerushimNotesAvailable = true;
+            OnPropertyChanged(nameof(PerushimEmptyMessage));
+            OnPropertyChanged(nameof(ShowDownloadPerushimButton));
+            FillFilteredPerushContents();
+            return;
+        }
+
         await _catalogService.InitializeAsync();
         await _notesService.InitializeAsync();
 

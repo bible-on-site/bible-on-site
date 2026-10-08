@@ -74,7 +74,8 @@ public abstract class MobilePlatformAdapter
         return sequence;
     }
 
-    public AppiumOptions CreateOptions(MobileTestConfiguration configuration)
+    public AppiumOptions CreateOptions(MobileTestConfiguration configuration,
+        IReadOnlyDictionary<string, string>? appEnvironment = null)
     {
         var android = configuration.Platform == MobilePlatform.Android;
         var options = new AppiumOptions
@@ -125,6 +126,17 @@ public abstract class MobilePlatformAdapter
             // readiness deadline during the loading-page/reader transition.
             // Keep idle checks enabled; page objects poll the actual UI state.
             options.AddAdditionalAppiumOption("waitForIdleTimeout", 1.0);
+            if (appEnvironment is { Count: > 0 })
+            {
+                // XCUITest processArguments.env reaches the app as process
+                // environment variables — e.g. BIBLE_E2E_PERUSHIM turns on the
+                // synthetic commentary data used by the HtmlView stability test.
+                options.AddAdditionalAppiumOption("processArguments",
+                    new Dictionary<string, object>
+                    {
+                        ["env"] = new Dictionary<string, string>(appEnvironment)
+                    });
+            }
         }
         return options;
     }
