@@ -57,6 +57,6 @@ export function hebrewBulletinDate(date: string): string {
 	}).formatToParts(new Date(`${validateBulletinDate(date)}T12:00:00Z`));
 	const part = (type: Intl.DateTimeFormatPartTypes) =>
 		parts.find((p) => p.type === type)?.value ?? "";
-	const month = part("month").replaceAll("׳", "'").replaceAll("״", '"');
+	const month = part("month").replace(/׳/g, "'").replace(/״/g, '"');
 	return `${toHebrewLetters(Number(part("day")))} ${month} ${toHebrewLetters(Number(part("year")) % 1000)}`;
 }
