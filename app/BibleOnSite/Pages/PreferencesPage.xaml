@@ -169,13 +169,13 @@
                         </Grid>
                         <Slider Minimum="0" Maximum="1" Value="{Binding Volume}" AutomationId="RecitationVolumeSlider" SemanticProperties.Description="עוצמה"/>
                     </VerticalStackLayout>
-                    <Label Text="חבילה נפרדת מהפירושים. בחרו ספרים לשימוש ללא אינטרנט, או את כל הספרים (כ-935 MB)." LineBreakMode="WordWrap"/>
+                    <Label Text="חבילות הקראה נפרדות מהפירושים. בחרו ספרים לשימוש ללא אינטרנט, או את כל הספרים (כ-935 MB). חבילות ההקראה מתעדכנות יחד עם האפליקציה." LineBreakMode="WordWrap"/>
                     <Label Text="{Binding Status}" AutomationId="RecitationPackageStatus" LineBreakMode="WordWrap"/>
                     <Button Text="כל הספרים" Command="{Binding SelectAllCommand}" IsEnabled="{Binding IsIdle}" AutomationId="RecitationSelectAllButton"/>
                     <VerticalStackLayout BindableLayout.ItemsSource="{Binding Books}" IsEnabled="{Binding IsIdle}">
                         <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="viewmodels:RecitationBookChoice">
-                                <Grid ColumnDefinitions="Auto,*" Padding="0,4">
+                                <Grid ColumnDefinitions="Auto,*" Padding="0,4" IsEnabled="{Binding CanSelect}">
                                     <CheckBox IsChecked="{Binding IsSelected}" SemanticProperties.Description="{Binding Name}"/>
                                     <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
                                         <Label Text="{Binding Name}"/>
@@ -187,7 +187,6 @@
                     </VerticalStackLayout>
                     <ProgressBar Progress="{Binding Progress}" IsVisible="{Binding IsDownloading}" ProgressColor="{StaticResource Primary}"/>
                     <Button Text="הורדת הספרים שנבחרו" Command="{Binding DownloadSelectedCommand}" IsEnabled="{Binding IsIdle}" AutomationId="RecitationDownloadButton"/>
-                    <Button Text="עדכון זמינות ההקראה" Command="{Binding UpdateTimingsCommand}" IsEnabled="{Binding IsIdle}"/>
                     <Button Text="ביטול ההורדה" Command="{Binding CancelDownloadCommand}" IsVisible="{Binding IsDownloading}"/>
                 </VerticalStackLayout>
             </Border>

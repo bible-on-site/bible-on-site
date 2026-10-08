@@ -10,6 +10,7 @@ public partial class RecitationBookChoice : ObservableObject
 {
     public required string Name { get; init; }
     public required List<int> PerekIds { get; init; }
+    [ObservableProperty] private bool _canSelect = true;
     [ObservableProperty] private bool _isSelected;
     [ObservableProperty] private string _status = "";
 }
@@ -89,14 +90,18 @@ public partial class RecitationPreferencesViewModel : ObservableObject
         {
             var available = book.PerekIds.Count(id => _recitation.GetTrack(id) != null);
             var installed = book.PerekIds.Count(_recitation.HasAudio);
-            book.Status = !IsInstalled ? "זמינות תיבדק בעת ההורדה" : available == 0 ? "אין הקלטות זמינות" : $"{installed} מתוך {available} הקלטות מותקנות";
+            var size = _recitation.Books.Where(b => b.PerekIds.Any(book.PerekIds.Contains)).Sum(b => b.SizeBytes);
+            // Unknown availability can be retried; a loaded catalog is authoritative.
+            book.CanSelect = !IsInstalled || available > 0;
+            if (!book.CanSelect) { book.IsSelected = false; }
+            book.Status = !IsInstalled ? "זמינות תיבדק בעת ההורדה" : available == 0 ? "אין הקלטות זמינות" : $"{installed} מתוך {available} הקלטות מותקנות ({Math.Ceiling(size / 1_000_000d)} MB)";
         }
         OnPropertyChanged(nameof(IsInstalled)); OnPropertyChanged(nameof(Enabled));
     }
 
     [RelayCommand] private void SelectAll() { foreach (var book in Books)
         {
-            book.IsSelected = true;
+            book.IsSelected = book.CanSelect;
         }
     }
     [RelayCommand] private void CancelDownload() => _download?.Cancel();
@@ -109,7 +114,8 @@ public partial class RecitationPreferencesViewModel : ObservableObject
             return;
         }
 
-        var ids = Books.Where(b => b.IsSelected).SelectMany(b => b.PerekIds).ToArray();
+        Refresh();
+        var ids = Books.Where(b => b.IsSelected && b.CanSelect).SelectMany(b => b.PerekIds).ToArray();
         if (ids.Length == 0) { Status = "בחרו ספר אחד לפחות, או את כל הספרים."; return; }
         IsDownloading = true; Progress = 0;
         using var cancellation = new CancellationTokenSource();
@@ -136,21 +142,5 @@ public partial class RecitationPreferencesViewModel : ObservableObject
         finally { _download = null; IsDownloading = false; Refresh(); }
     }
 
-    [RelayCommand]
-    public async Task UpdateTimingsAsync()
-    {
-        if (IsDownloading)
-        {
-            return;
-        }
-
-        IsDownloading = true;
-        using var cancellation = new CancellationTokenSource();
-        _download = cancellation;
-        try { await _recitation.UpdateAsync(cancellation.Token); await LoadAsync(); Status = "חבילת ההקראה מעודכנת."; }
-        catch (OperationCanceledException) { Status = "העדכון הופסק. החבילה המותקנת נשארה זמינה."; }
-        catch (Exception) { Status = "העדכון לא הצליח. החבילה המותקנת נשארה זמינה."; }
-        finally { _download = null; IsDownloading = false; Refresh(); }
-    }
 }
 #pragma warning restore S2333

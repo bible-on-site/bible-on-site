@@ -31,6 +31,9 @@ app/BibleOnSite/Resources/Raw/*
 **/.raw/
 **/.outputs/
 app/.artifacts/
+app/BibleOnSite/Platforms/Android/AssetPacks/recitation_*/
+app/BibleOnSite/Platforms/iOS/Assets/Recitation.xcassets/
+app/BibleOnSite/Platforms/Windows/Recitation/
 data/mysql/tanah_full_dump.sql
 data/mysql/perushim_data.sql
 nul

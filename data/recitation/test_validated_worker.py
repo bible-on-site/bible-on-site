@@ -32,12 +32,12 @@ class QualificationTests(unittest.TestCase):
         return dict(deepcopy(self.goldens[pid]), settings=deepcopy(benchmark.SETTINGS),
                     qualityPassed=True, profile=profile, diagnostics={}, **deepcopy(self.metadata[str(directory)]))
 
-    def qualification(self, reader):
+    def qualification(self, reader, golden_sample=None, expected_approvals=53):
         with patch.object(worker, "read_result", side_effect=reader), \
                 patch.object(worker, "approve_alignment") as approval, \
                 patch.object(held_controls, "check", return_value={"digest": held_controls.DIGEST, "chapters": [102, 783, 765]}):
-            result = worker.qualify(Path("suite"), Path("final"), Path("held"), Path("recordings"))
-            self.assertEqual(approval.call_count, 53)
+            result = worker.qualify(Path("suite"), Path("final"), Path("held"), Path("recordings"), golden_sample)
+            self.assertEqual(approval.call_count, expected_approvals)
             return result
 
     def test_all_51_words_controls_and_current_source_required(self):
@@ -45,6 +45,46 @@ class QualificationTests(unittest.TestCase):
         self.assertEqual(proof["goldenChapters"], 51)
         self.assertEqual(proof["comparedWords"], 10214)
         self.assertEqual(proof["maxBoundaryDriftMs"], 0)
+        self.assertEqual(proof["goldenScope"]["name"], "complete")
+
+    def sample_path(self):
+        return Path(worker.__file__).with_name("benchmarks") / "resume-sample-2026-10-07.json"
+
+    def test_selected_sample_reports_only_the_actual_compared_chapters(self):
+        proof = self.qualification(self.result, self.sample_path(), expected_approvals=19)
+        self.assertEqual(proof["goldenChapters"], 17)
+        self.assertEqual(proof["comparedWords"], 2554)
+        self.assertEqual(proof["goldenScope"]["eligibleReferenceChapters"], 51)
+        self.assertEqual(proof["goldenScope"]["digest"], worker.SAMPLE_DIGEST)
+        self.assertEqual(len(proof["goldenScope"]["chapters"]), 17)
+
+    def test_altering_the_sample_cannot_reduce_validation(self):
+        sample = json.loads(self.sample_path().read_text(encoding="utf-8"))
+        sample["chapters"].pop()
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "sample.json"
+            path.write_text(json.dumps(sample), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "sample changed"):
+                worker.select_goldens(self.snapshot, path)
+
+    def test_a_missing_selected_chapter_still_blocks_activation(self):
+        def missing(directory, pid, profile):
+            if str(directory) == "suite" and pid == 261:
+                raise FileNotFoundError("Selected chapter missing")
+            return self.result(directory, pid, profile)
+
+        with self.assertRaises(FileNotFoundError):
+            self.qualification(missing, self.sample_path(), expected_approvals=19)
+
+    def test_sample_uses_the_same_strict_word_tolerance(self):
+        def drift(directory, pid, profile):
+            result = self.result(directory, pid, profile)
+            if str(directory) == "suite" and pid == 826:
+                result["words"][0]["endMs"] += 6
+            return result
+
+        with self.assertRaisesRegex(ValueError, "Word comparison failed"):
+            self.qualification(drift, self.sample_path(), expected_approvals=19)
 
     def test_missing_chapter_blocks_activation(self):
         missing = Mock(side_effect=FileNotFoundError("Not yet complete"))

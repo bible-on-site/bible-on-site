@@ -1526,6 +1526,21 @@ jobs:
           distribution: "microsoft"
           java-version: "17"
 
+      - name: Setup Python for recitation extension packaging
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Restore original recitation audio cache
+        uses: actions/cache@v6
+        with:
+          path: .cache/recitation-assets
+          key: recitation-audio-v1-${{ hashFiles('data/recitation/recitation.sqlite') }}
+          restore-keys: recitation-audio-v1-
+
+      - name: Prepare release recitation book packs
+        run: python3 devops/prepare_recitation_assets.py --platform Android
+
       - name: Verify Android release package
         run: |
           echo '{"sdk":{"version":"10.0.0","rollForward":"latestFeature"}}' > $GITHUB_WORKSPACE/global.json
@@ -1542,6 +1557,12 @@ jobs:
 
       - name: Verify native canonical recitation word identities
         run: python3 ../data/recitation/audit_native.py
+
+      - name: Verify packaged Android recitation modules
+        run: python3 devops/verify_recitation_assets.py --platform Android --catalog BibleOnSite/Resources/Raw/recitation-catalog.json --package "$(find BibleOnSite/bin/Release -name '*.aab' -print -quit)"
+
+      - name: Test recitation extension packaging
+        run: python3 -m unittest discover -s devops -p 'test_*recitation_assets.py'
 
       - name: Test paired Perushim release assets
         run: python3 -m unittest discover -s devops -p test_prepare_perushim_assets.py
@@ -2736,3 +2757,4 @@ jobs:
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
         run: npm run bump:module-versions -- --mode all --publish
+
