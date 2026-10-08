@@ -9,6 +9,7 @@ import {
 	apiToken,
 	checkBuild,
 	findBuild,
+	findBuildUploads,
 	previousDelivery,
 	readIpa,
 } from "./testflight-build.mjs";
@@ -191,6 +192,132 @@ for (const status of [401, 403, 404, 500])
 			new RegExp(`HTTP ${status}`),
 		);
 	});
+
+const uploadResponse = (state = "FAILED") => ({
+	data: [
+		{
+			id: "exact-upload",
+			type: "buildUploads",
+			attributes: {
+				cfBundleShortVersionString: metadata.version,
+				cfBundleVersion: metadata.number,
+				platform: "IOS",
+				state: {
+					state,
+					errors: [
+						{ code: "ITMS-90000", description: "Rejected resource pack" },
+					],
+					warnings: [{ code: "WARNING", description: "Upload warning" }],
+				},
+			},
+		},
+	],
+});
+
+async function uploadLookup(result, status = 200) {
+	const urls = [];
+	const uploads = await findBuildUploads(
+		metadata,
+		credentials,
+		async (url, options) => {
+			urls.push(url);
+			assert.equal(url.origin, "https://api.appstoreconnect.apple.com");
+			assert.equal(options.redirect, "error");
+			assert.match(options.headers.Authorization, /^Bearer /);
+			return {
+				ok: status === 200,
+				status,
+				json: async () => (urls.length === 1 ? { data: [app] } : result),
+			};
+		},
+	);
+	assert.equal(urls[1].pathname, `/v1/apps/${app.id}/buildUploads`);
+	assert.equal(
+		urls[1].searchParams.get("filter[cfBundleShortVersionString]"),
+		metadata.version,
+	);
+	assert.equal(
+		urls[1].searchParams.get("filter[cfBundleVersion]"),
+		metadata.number,
+	);
+	assert.equal(urls[1].searchParams.get("filter[platform]"), "IOS");
+	return uploads;
+}
+
+test("failed uploads expose Apple's rejection even when there is no processed build", async () => {
+	assert.deepEqual(await uploadLookup(uploadResponse()), [
+		{
+			id: "exact-upload",
+			state: "FAILED",
+			errors: [{ code: "ITMS-90000", description: "Rejected resource pack" }],
+			warnings: [{ code: "WARNING", description: "Upload warning" }],
+			...metadata,
+		},
+	]);
+	assert.deepEqual(await uploadLookup({ data: [] }), []);
+});
+
+test("upload processing and completion do not count as a validated build", async () => {
+	for (const state of ["AWAITING_UPLOAD", "PROCESSING", "COMPLETE"]) {
+		assert.equal((await uploadLookup(uploadResponse(state)))[0].state, state);
+	}
+	await assert.rejects(check([null], { previous: true }), /do not repeat/);
+});
+
+for (const [label, change] of [
+	[
+		"different version",
+		(r) => {
+			r.data[0].attributes.cfBundleShortVersionString = "5.0.127";
+		},
+	],
+	[
+		"different build",
+		(r) => {
+			r.data[0].attributes.cfBundleVersion = "127";
+		},
+	],
+	[
+		"different platform",
+		(r) => {
+			r.data[0].attributes.platform = "MAC_OS";
+		},
+	],
+	[
+		"unknown state",
+		(r) => {
+			r.data[0].attributes.state.state = "UNKNOWN";
+		},
+	],
+	[
+		"missing state",
+		(r) => {
+			delete r.data[0].attributes.state;
+		},
+	],
+	[
+		"malformed details",
+		(r) => {
+			r.data[0].attributes.state.errors = {};
+		},
+	],
+	[
+		"incomplete pagination",
+		(r) => {
+			r.links = { next: "https://untrusted.invalid/" };
+		},
+	],
+]) {
+	test(`upload diagnostics reject ${label}`, async () => {
+		const result = uploadResponse();
+		change(result);
+		await assert.rejects(uploadLookup(result));
+	});
+}
+
+test("upload lookup denial never permits a retry or hides an HTTP failure", async () => {
+	await assert.rejects(uploadLookup(uploadResponse(), 403), /HTTP 403/);
+});
 
 const check = (states, options = {}) => {
 	let reads = 0;

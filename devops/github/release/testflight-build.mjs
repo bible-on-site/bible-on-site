@@ -48,8 +48,8 @@ export function apiToken(credentials, now = Math.floor(Date.now() / 1000)) {
 	return `${message}.${sign("sha256", Buffer.from(message), { key, dsaEncoding: "ieee-p1363" }).toString("base64url")}`;
 }
 
-export async function findBuild(metadata, credentials, fetcher = fetch) {
-	const read = async (path, parameters) => {
+function appleReader(credentials, fetcher) {
+	return async (path, parameters) => {
 		const url = new URL(`https://api.appstoreconnect.apple.com/v1/${path}`);
 		url.search = new URLSearchParams(parameters).toString();
 		const response = await fetcher(url, {
@@ -66,17 +66,27 @@ export async function findBuild(metadata, credentials, fetcher = fetch) {
 			throw new Error("App Store Connect returned an incomplete build lookup");
 		return result;
 	};
+}
+
+async function findApp(metadata, read) {
 	const apps = (
 		await read("apps", { "filter[bundleId]": metadata.bundle, limit: "200" })
 	).data;
 	if (
 		apps.length !== 1 ||
 		apps[0].attributes?.bundleId !== metadata.bundle ||
+		typeof apps[0].id !== "string" ||
 		!apps[0].id
 	)
 		throw new Error("App Store Connect app identity is ambiguous");
+	return apps[0];
+}
+
+export async function findBuild(metadata, credentials, fetcher = fetch) {
+	const read = appleReader(credentials, fetcher);
+	const expectedApp = await findApp(metadata, read);
 	const result = await read("builds", {
-		"filter[app]": apps[0].id,
+		"filter[app]": expectedApp.id,
 		"filter[version]": metadata.number,
 		"filter[preReleaseVersion.version]": metadata.version,
 		"filter[preReleaseVersion.platform]": "IOS",
@@ -98,7 +108,7 @@ export async function findBuild(metadata, credentials, fetcher = fetch) {
 	);
 	if (
 		!build.id ||
-		app?.id !== apps[0].id ||
+		app?.id !== expectedApp.id ||
 		app.attributes.bundleId !== metadata.bundle ||
 		build.attributes?.version !== metadata.number ||
 		build.attributes.expired !== false ||
@@ -110,6 +120,50 @@ export async function findBuild(metadata, credentials, fetcher = fetch) {
 	)
 		throw new Error("App Store Connect returned a mismatched or invalid build");
 	return { id: build.id, state: build.attributes.processingState, ...metadata };
+}
+
+/** Upload diagnostics remain read-only and never authorize another upload. */
+export async function findBuildUploads(metadata, credentials, fetcher = fetch) {
+	const read = appleReader(credentials, fetcher);
+	const app = await findApp(metadata, read);
+	const result = await read(`apps/${encodeURIComponent(app.id)}/buildUploads`, {
+		"filter[cfBundleShortVersionString]": metadata.version,
+		"filter[cfBundleVersion]": metadata.number,
+		"filter[platform]": "IOS",
+		"fields[buildUploads]":
+			"cfBundleShortVersionString,cfBundleVersion,platform,state",
+		limit: "200",
+	});
+	return result.data.map((upload) => {
+		const attributes = upload.attributes;
+		if (
+			!upload.id ||
+			upload.type !== "buildUploads" ||
+			attributes?.cfBundleShortVersionString !== metadata.version ||
+			attributes.cfBundleVersion !== metadata.number ||
+			attributes.platform !== "IOS" ||
+			!["AWAITING_UPLOAD", "PROCESSING", "FAILED", "COMPLETE"].includes(
+				attributes.state?.state,
+			)
+		)
+			throw new Error(
+				"App Store Connect returned mismatched upload diagnostics",
+			);
+		return {
+			id: upload.id,
+			state: attributes.state.state,
+			errors: uploadDetails(attributes.state.errors),
+			warnings: uploadDetails(attributes.state.warnings),
+			...metadata,
+		};
+	});
+}
+
+function uploadDetails(details) {
+	if (details == null) return [];
+	if (!Array.isArray(details))
+		throw new Error("App Store Connect returned malformed upload details");
+	return details.map(({ code, description }) => ({ code, description }));
 }
 
 export function previousDelivery(
@@ -184,11 +238,31 @@ if (
 			version: metadata.version,
 			deploymentId: process.env.DEPLOYMENT_ID,
 		});
-	const result = await checkBuild({
-		phase,
-		previous,
-		lookup: () => findBuild(metadata, credentials),
-	});
+	const reportUploads = async () =>
+		console.log(
+			JSON.stringify({
+				phase: "upload-inspect",
+				uploads: await findBuildUploads(metadata, credentials),
+			}),
+		);
+	let result;
+	try {
+		result = await checkBuild({
+			phase,
+			previous,
+			lookup: () => findBuild(metadata, credentials),
+		});
+	} catch (error) {
+		try {
+			await reportUploads();
+		} catch (diagnosticError) {
+			console.error(
+				`Upload diagnostics unavailable: ${diagnosticError.message}`,
+			);
+		}
+		throw error;
+	}
+	if (phase === "inspect" && !result.build) await reportUploads();
 	if (process.env.GITHUB_OUTPUT)
 		appendFileSync(
 			process.env.GITHUB_OUTPUT,
