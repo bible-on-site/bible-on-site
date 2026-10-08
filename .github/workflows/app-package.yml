@@ -569,8 +569,10 @@ jobs:
       - name: Package IPA
         working-directory: ${{ env.APP_DIRECTORY }}
         run: |
+          set -o pipefail
           dotnet run --project devops -- Package --platform iOS --configuration Release \
-            --ios-team-id "${{ secrets.IOS_TEAM_ID }}"
+            --ios-team-id "${{ secrets.IOS_TEAM_ID }}" \
+            2>&1 | sed -E 's/(Apple (Distribution|Development): )[^(]+(\([^)]*\))/\1[masked] \3/g'
 
       - name: Save NuGet packages
         if: ${{ github.ref == 'refs/heads/master' && steps.nuget-cache.outputs.cache-hit != 'true' }}

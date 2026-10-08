@@ -48,13 +48,13 @@
 			"allowedVersions": "<26"
 		},
 		{
-			"description": "Android 8.7.0 and iOS 12.15.2 still bundle vulnerable dependencies (shell-quote 1.10.0 in both; axios 1.19.0, brace-expansion 5.0.9, morgan 1.11.0, proxy-addr 2.0.7, sharp 0.35.4 additionally in Android) that npm overrides cannot replace. Update to patched upstream bundles when available; see https://github.com/bible-on-site/bible-on-site/issues/1995",
+			"description": "Driver tarballs bundle copies npm overrides cannot replace. iOS 12.16.0 bundles only shell-quote 1.10.0; Android 8.7.0 additionally bundles axios 1.19.0, brace-expansion 5.0.9, morgan 1.11.0, proxy-addr 2.0.7, sharp 0.35.4 — uiautomator2 9.0.0-beta.1 fixes all but shell-quote, so hold Android for the stable 9.x. See https://github.com/bible-on-site/bible-on-site/issues/1995",
 			"matchManagers": ["npm"],
 			"matchFileNames": ["app/mobile-e2e/package.json"],
 			"matchPackageNames": ["appium-uiautomator2-driver", "appium-xcuitest-driver"]
 		},
 		{
-			"description": "Jest coverage tooling still pulls unpatched sprintf-js through legacy YAML/argparse. Retain updates and verify removal or a fixed upstream release; see https://github.com/bible-on-site/bible-on-site/issues/1996",
+			"description": "sprintf-js was removed via the scoped js-yaml@5.4.3 override under @istanbuljs/load-nyc-config (#1996). Keep that override until upstream load-nyc-config drops the js-yaml@3 chain.",
 			"matchManagers": ["npm"],
 			"matchFileNames": ["web/bible-on-site/package.json"],
 			"matchPackageNames": [
