@@ -106,6 +106,13 @@ public class ApiServerFixture : IAsyncLifetime
         // Set environment for test mode
         startInfo.Environment["PROFILE"] = "test";
         startInfo.Environment["PORT"] = new Uri(ApiUrl).Port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (OperatingSystem.IsWindows())
+        {
+            // Windows locks the development API's executable while it is running.
+            // Keep this fixture's compiled API separate so tests can rebuild after
+            // a version/source change without interrupting the emulator backend.
+            startInfo.Environment["CARGO_TARGET_DIR"] = Path.Combine(apiDir, "target", "app-integration");
+        }
 
         // Forward DB_URL from environment (set by CI or local dev)
         var dbUrl = Environment.GetEnvironmentVariable("DB_URL");

@@ -149,7 +149,9 @@ partial class Build
                     // ARM64 Debug otherwise interprets the full commentary import.
                     // Compile the indexing/HTML/SQLite hot path as in Release while
                     // retaining interpretation for the rest of the simulator app.
-                    properties["MtouchInterpreter"] = "all,-BibleOnSite,-HtmlAgilityPack,-SQLite-net";
+                    // Escape commas: MSBuild treats literal command-line commas
+                    // as separate properties, even inside a single argument.
+                    properties["MtouchInterpreter"] = "all%2C-BibleOnSite%2C-HtmlAgilityPack%2C-SQLite-net";
                 }
                 DotNetBuild(s => s
                     .SetProjectFile(MainProject)
