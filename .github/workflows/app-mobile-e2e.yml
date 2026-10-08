@@ -113,9 +113,12 @@ jobs:
           path: ~/.nuget/packages
           key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
 
-      - name: Enable Android hardware acceleration
+      - name: Prepare Android emulator runtime and hardware acceleration
         if: matrix.platform == 'Android'
-        run: sudo chmod 666 /dev/kvm
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libpulse0
+          sudo chmod 666 /dev/kvm
 
       - name: Install Android emulator with bounded download retries
         if: matrix.platform == 'Android'
