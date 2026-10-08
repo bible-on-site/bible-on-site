@@ -1330,12 +1330,24 @@ public partial class PerekPage : ContentPage
     }
 
     /// <summary>
-    /// הקראות menu item - navigates to the recitation preferences.
+    /// קריינות menu item - toggles single-tap pasuk playback and the header
+    /// play button. The item only renders when the current perek has a
+    /// downloaded recitation.
     /// </summary>
-    private async void OnReaderMenuRecitationsTapped(object? sender, TappedEventArgs e)
+    private void OnQriynotTapped(object? sender, TappedEventArgs e)
     {
-        ReaderMenuOverlay.IsVisible = false;
-        await Shell.Current.GoToAsync("PreferencesPage");
+        _viewModel.IsQriynotEnabled = !_viewModel.IsQriynotEnabled;
+    }
+
+    /// <summary>
+    /// קריינות header play button - plays the whole perek's recording.
+    /// </summary>
+    private async void OnHeaderPlayClicked(object? sender, EventArgs e)
+    {
+        if (_viewModel.Perek is { } perek)
+        {
+            await PlayRecitationAsync($"chapter:{perek.PerekId}");
+        }
     }
 
     /// <summary>
@@ -1359,6 +1371,20 @@ public partial class PerekPage : ContentPage
     /// Runs on a dedicated view so it cannot trigger selection, playback or navigation.
     /// </summary>
     private void OnTikkunTextTapped(object? sender, TappedEventArgs e)
+    {
+#if ANDROID
+        // On Android, taps are handled natively via LongPressBehavior.NativeTapped —
+        // MAUI's TapGestureRecognizer fails inside nested CarouselView templates.
+        return;
+#else
+        _viewModel.TikkunMarksHidden = !_viewModel.TikkunMarksHidden;
+#endif
+    }
+
+    /// <summary>
+    /// Native tap on the תיקון קוראים flow — fires from LongPressBehavior on Android.
+    /// </summary>
+    private void OnTikkunNativeTapped(object? sender, EventArgs e)
     {
         _viewModel.TikkunMarksHidden = !_viewModel.TikkunMarksHidden;
     }

@@ -1,4 +1,3 @@
-using System.Text;
 using BibleOnSite.Models;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Graphics;
@@ -6,8 +5,8 @@ using Microsoft.Maui.Graphics;
 namespace BibleOnSite.Helpers;
 
 /// <summary>
-/// Builds the continuous-flow "תיקון קוראים" text for a whole perek and provides
-/// reversible display-only stripping of niqqud and taamim.
+/// Builds the drawable word list for the continuous-flow "תיקון קוראים" view and
+/// provides reversible display-only stripping of niqqud and taamim.
 /// Canonical <see cref="Pasuk.Text"/> and <see cref="Pasuk.Segments"/> are never touched —
 /// each build re-derives its output from the original data, so toggling marks back on
 /// restores the marked text exactly.
@@ -30,84 +29,70 @@ public static class TikkunKorimTextBuilder
             return string.Empty;
         }
 
-        var builder = new StringBuilder(text.Length);
-        foreach (var c in text)
+        var builder = new System.Text.StringBuilder(text.Length);
+        foreach (var c in text.Where(c => !IsMark(c)))
         {
-            if (!IsMark(c))
-            {
-                builder.Append(c);
-            }
+            builder.Append(c);
         }
         return builder.ToString();
     }
 
     private static bool IsMark(char c) =>
-        c is >= '\u0591' and <= '\u05BD'   // cantillation accents (taamim)
-            or >= '\u05BF' and <= '\u05C2' // niqqud
-            or >= '\u05C4' and <= '\u05C5' // upper/lower dots
-            or '\u05C7';                   // qamats qatan
+        c is >= (char)0x0591 and <= (char)0x05BD   // cantillation accents (taamim)
+            or >= (char)0x05BF and <= (char)0x05C2 // niqqud
+            or >= (char)0x05C4 and <= (char)0x05C5 // upper/lower dots
+            or (char)0x05C7;                       // qamats qatan
 
     /// <summary>
-    /// Builds one continuous <see cref="FormattedString"/> for the whole perek —
-    /// pesukim flow inline with natural wrapping, each preceded by its pasuk marker
-    /// so verse identity is preserved. When <paramref name="repeatEachPasuk"/> is set
-    /// (combined with שניים מקרא) every pasuk's text is emitted twice, with the marker
-    /// shown only once per pair.
+    /// Builds the word sequence for the whole perek — pesukim flow inline, each
+    /// preceded by its pasuk-marker word so verse identity is preserved. When
+    /// <paramref name="repeatEachPasuk"/> is set (combined with שניים מקרא) every
+    /// pasuk's words are emitted twice, with the marker shown only once per pair.
+    /// Maqaf-joined words remain a single word so the justified layout never breaks
+    /// a maqaf pair across lines.
     /// </summary>
-    public static FormattedString BuildFormattedText(
+    public static IReadOnlyList<TikkunWord> BuildWords(
         IReadOnlyList<Pasuk>? pesukim,
         bool repeatEachPasuk,
         bool hideMarks)
     {
-        var formatted = new FormattedString();
+        var words = new List<TikkunWord>();
         if (pesukim is null)
         {
-            return formatted;
+            return words;
         }
 
         var copies = repeatEachPasuk ? 2 : 1;
         foreach (var pasuk in pesukim)
         {
             // One marker is shared by the pair in שניים מקרא mode.
-            formatted.Spans.Add(new Span
-            {
-                Text = pasuk.PasukNumHeb,
-                TextColor = PasukMarkerColor,
-                FontSize = 14,
-                FontAttributes = FontAttributes.Bold
-            });
+            words.Add(new TikkunWord(pasuk.PasukNumHeb, PasukMarkerColor, 14f / 18f, IsBold: true));
 
             for (var copy = 0; copy < copies; copy++)
             {
-                formatted.Spans.Add(new Span { Text = " " });
-                AppendPasukSpans(formatted, pasuk, hideMarks);
+                AppendPasukWords(words, pasuk, hideMarks);
             }
-            formatted.Spans.Add(new Span { Text = " " });
         }
-        return formatted;
+        return words;
     }
 
     /// <summary>
-    /// Appends the pasuk's already-styled spans (qri/ktiv, parsha markers, spacing and
-    /// maqaf handling all included) with marks optionally stripped. Gesture recognizers
-    /// are deliberately not copied — in תיקון קוראים a tap anywhere toggles marks and
-    /// must never trigger selection or playback.
+    /// Splits the pasuk's already-styled spans (qri/ktiv, parsha markers, spacing and
+    /// maqaf handling all included) into space-free words that keep the span styling.
+    /// Gesture recognizers are irrelevant at word level — in תיקון קוראים a tap
+    /// anywhere toggles marks and must never trigger selection or playback.
     /// </summary>
-    private static void AppendPasukSpans(FormattedString target, Pasuk pasuk, bool hideMarks)
+    private static void AppendPasukWords(List<TikkunWord> words, Pasuk pasuk, bool hideMarks)
     {
         foreach (var span in pasuk.FormattedText.Spans)
         {
-            target.Spans.Add(new Span
+            var text = hideMarks ? StripMarks(span.Text) : span.Text;
+            var scale = span.FontSize > 0 ? (float)(span.FontSize / 18.0) : 1f;
+            var bold = span.FontAttributes.HasFlag(FontAttributes.Bold);
+            foreach (var piece in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
             {
-                Text = hideMarks ? StripMarks(span.Text) : span.Text,
-                TextColor = span.TextColor,
-                BackgroundColor = span.BackgroundColor,
-                FontSize = span.FontSize,
-                FontAttributes = span.FontAttributes,
-                FontFamily = span.FontFamily,
-                LineHeight = span.LineHeight,
-                TextDecorations = span.TextDecorations
-            });
+                words.Add(new TikkunWord(piece, span.TextColor, scale, bold));
+            }
         }
     }
 }

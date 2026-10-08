@@ -1,15 +1,11 @@
 using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using FluentAssertions;
-using Microsoft.Maui.Controls;
 
 namespace BibleOnSite.Tests.Helpers;
 
 public class TikkunKorimTextBuilderTests
 {
-    private static string Flatten(FormattedString formatted) =>
-        string.Concat(formatted.Spans.Select(s => s.Text));
-
     private static Pasuk PasukOf(int num, params PasukSegment[] segments) => new()
     {
         PasukNum = num,
@@ -48,7 +44,7 @@ public class TikkunKorimTextBuilderTests
         }
     }
 
-    public class BuildFormattedText
+    public class BuildWords
     {
         private static List<Pasuk> TwoPesukim() =>
         [
@@ -57,31 +53,46 @@ public class TikkunKorimTextBuilderTests
             PasukOf(2, new PasukSegment { Type = SegmentType.Ktiv, Value = "וַיֹּאמֶר" })
         ];
 
-        [Fact]
-        public void flows_the_whole_perek_continuously_with_one_marker_per_pasuk()
-        {
-            var flat = Flatten(TikkunKorimTextBuilder.BuildFormattedText(TwoPesukim(), false, false));
+        private static List<string> Texts(IReadOnlyList<TikkunWord> words) =>
+            words.Select(w => w.Text).ToList();
 
-            flat.Should().Be("א בְּרֵאשִׁית בָּרָא ב וַיֹּאמֶר ");
+        [Fact]
+        public void emits_a_marker_word_before_each_pasuk()
+        {
+            var words = TikkunKorimTextBuilder.BuildWords(TwoPesukim(), false, false);
+
+            Texts(words).Should().Equal("א", "בְּרֵאשִׁית", "בָּרָא", "ב", "וַיֹּאמֶר");
+        }
+
+        [Fact]
+        public void styles_the_marker_bold_and_smaller_than_the_base_text()
+        {
+            var words = TikkunKorimTextBuilder.BuildWords(TwoPesukim(), false, false);
+
+            words[0].IsBold.Should().BeTrue();
+            words[0].FontSizeScale.Should().BeLessThan(1f);
+            words[0].TextColor.Should().NotBeNull();
+            words[1].IsBold.Should().BeFalse();
+            words[1].FontSizeScale.Should().Be(1f);
         }
 
         [Fact]
         public void hides_marks_for_the_entire_chapter_while_keeping_letters()
         {
-            var flat = Flatten(TikkunKorimTextBuilder.BuildFormattedText(TwoPesukim(), false, true));
+            var words = TikkunKorimTextBuilder.BuildWords(TwoPesukim(), false, true);
 
-            flat.Should().Be("א בראשית ברא ב ויאמר ");
+            Texts(words).Should().Equal("א", "בראשית", "ברא", "ב", "ויאמר");
         }
 
         [Fact]
         public void restores_the_original_marked_text_exactly_after_toggling_back()
         {
             var pesukim = TwoPesukim();
-            var withMarks = Flatten(TikkunKorimTextBuilder.BuildFormattedText(pesukim, false, false));
-            _ = TikkunKorimTextBuilder.BuildFormattedText(pesukim, false, true);
-            var shownAgain = Flatten(TikkunKorimTextBuilder.BuildFormattedText(pesukim, false, false));
+            var withMarks = Texts(TikkunKorimTextBuilder.BuildWords(pesukim, false, false));
+            _ = TikkunKorimTextBuilder.BuildWords(pesukim, false, true);
+            var shownAgain = Texts(TikkunKorimTextBuilder.BuildWords(pesukim, false, false));
 
-            shownAgain.Should().Be(withMarks);
+            shownAgain.Should().Equal(withMarks);
             pesukim.SelectMany(p => p.Segments).Select(s => s.Value)
                 .Should().Equal("בְּרֵאשִׁית", "בָּרָא", "וַיֹּאמֶר");
         }
@@ -89,9 +100,11 @@ public class TikkunKorimTextBuilderTests
         [Fact]
         public void repeats_each_pasuk_once_when_shnayim_mikra_is_enabled()
         {
-            var flat = Flatten(TikkunKorimTextBuilder.BuildFormattedText(TwoPesukim(), true, false));
+            var words = TikkunKorimTextBuilder.BuildWords(TwoPesukim(), true, false);
 
-            flat.Should().Be("א בְּרֵאשִׁית בָּרָא בְּרֵאשִׁית בָּרָא ב וַיֹּאמֶר וַיֹּאמֶר ");
+            Texts(words).Should().Equal(
+                "א", "בְּרֵאשִׁית", "בָּרָא", "בְּרֵאשִׁית", "בָּרָא",
+                "ב", "וַיֹּאמֶר", "וַיֹּאמֶר");
         }
 
         [Fact]
@@ -105,25 +118,26 @@ public class TikkunKorimTextBuilderTests
                     new PasukSegment { Type = SegmentType.Qri, Value = "הוּא", PairedOffset = 1 })
             };
 
-            var flat = Flatten(TikkunKorimTextBuilder.BuildFormattedText(pesukim, false, true));
+            var texts = Texts(TikkunKorimTextBuilder.BuildWords(pesukim, false, true));
 
-            flat.Should().Contain(" {פ} ");
-            flat.Should().Contain("(קרי: הוא)");
+            texts.Should().Contain("{פ}");
+            texts.Should().Contain("(קרי:");
+            texts.Should().Contain("הוא");
         }
 
         [Fact]
-        public void returns_empty_formatted_string_for_no_pesukim()
+        public void returns_no_words_for_missing_or_empty_pesukim()
         {
-            TikkunKorimTextBuilder.BuildFormattedText(null, false, false).Spans.Should().BeEmpty();
-            TikkunKorimTextBuilder.BuildFormattedText([], true, true).Spans.Should().BeEmpty();
+            TikkunKorimTextBuilder.BuildWords(null, false, false).Should().BeEmpty();
+            TikkunKorimTextBuilder.BuildWords([], true, true).Should().BeEmpty();
         }
 
         [Fact]
-        public void copies_no_gesture_recognizers_so_taps_only_toggle_marks()
+        public void emits_no_words_containing_spaces()
         {
-            var formatted = TikkunKorimTextBuilder.BuildFormattedText(TwoPesukim(), false, false);
+            var words = TikkunKorimTextBuilder.BuildWords(TwoPesukim(), true, false);
 
-            formatted.Spans.Should().OnlyContain(s => s.GestureRecognizers.Count == 0);
+            words.Should().OnlyContain(w => !w.Text.Contains(' '));
         }
     }
 }
