@@ -41,10 +41,13 @@ public sealed class SearchIndexService : IAsyncDisposable
         IReadOnlySet<int> books, int limit, CancellationToken cancellationToken) =>
         SearchAsync(query, filters, books, limit, cancellationToken, null);
 
+    public Task<List<SearchHit>> SearchAsync(string query, IReadOnlySet<SearchFilter> filters,
+        IReadOnlySet<int> books, int limit, CancellationToken cancellationToken, IProgress<string>? progress) =>
+        SearchAsync(query, filters, books, limit, cancellationToken, progress, SearchOrdering.Relevant);
+
     public async Task<List<SearchHit>> SearchAsync(string query, IReadOnlySet<SearchFilter> filters,
-        IReadOnlySet<int> books, int limit, CancellationToken cancellationToken, IProgress<string>? progress, SearchOrdering? ordering = null)
+        IReadOnlySet<int> books, int limit, CancellationToken cancellationToken, IProgress<string>? progress, SearchOrdering ordering)
     {
-        ordering ??= SearchOrdering.Relevant;
         var terms = SearchText.Tokens(query);
         if (terms.Length is 0 or > 16 || terms.Any(term => term.Length > 64) || books.Count == 0)
         {

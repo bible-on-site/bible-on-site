@@ -1,6 +1,6 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using BibleOnSite.Helpers;
+using BibleOnSite.Models;
 
 namespace BibleOnSite.Services;
 
@@ -13,7 +13,7 @@ public sealed class SearchHistoryService(IPreferencesStorage storage)
     {
         try
         {
-            return (JsonSerializer.Deserialize(storage.Get(StorageKey, "[]"), SearchHistoryJsonContext.Default.ListString) ?? [])
+            return (JsonSerializer.Deserialize(storage.Get(StorageKey, "[]"), AppJsonContext.Default.RecentSearches) ?? [])
                 .Where(phrase => !string.IsNullOrWhiteSpace(phrase) && phrase.Length <= 512)
                 .DistinctBy(SearchText.Normalize).Take(MaximumItems).ToArray();
         }
@@ -32,9 +32,6 @@ public sealed class SearchHistoryService(IPreferencesStorage storage)
         }
         var normalized = SearchText.Normalize(phrase);
         var items = Read().Where(item => SearchText.Normalize(item) != normalized).Prepend(phrase).Take(MaximumItems).ToList();
-        storage.Set(StorageKey, JsonSerializer.Serialize(items, SearchHistoryJsonContext.Default.ListString));
+        storage.Set(StorageKey, JsonSerializer.Serialize(items, AppJsonContext.Default.RecentSearches));
     }
 }
-
-[JsonSerializable(typeof(List<string>))]
-internal partial class SearchHistoryJsonContext : JsonSerializerContext;
