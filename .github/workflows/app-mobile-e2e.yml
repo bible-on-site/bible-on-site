@@ -117,6 +117,24 @@ jobs:
         if: matrix.platform == 'Android'
         run: sudo chmod 666 /dev/kvm
 
+      - name: Install Android emulator with bounded download retries
+        if: matrix.platform == 'Android'
+        shell: bash
+        # The emulator action installs the latest SDK emulator itself, but a
+        # truncated Google archive fails before it can boot or run any tests.
+        # Preinstall that same version so the action can reuse a verified install.
+        run: |
+          for attempt in 1 2 3; do
+            if sdkmanager --install emulator --channel=0; then
+              "$ANDROID_HOME/emulator/emulator" -version
+              exit 0
+            fi
+            if (( attempt == 3 )); then
+              exit 1
+            fi
+            sleep 5
+          done
+
       - name: Run shared pilot on Android
         if: matrix.platform == 'Android'
         uses: reactivecircus/android-emulator-runner@v2.38.0
