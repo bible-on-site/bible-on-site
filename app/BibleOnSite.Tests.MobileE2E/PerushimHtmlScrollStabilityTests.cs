@@ -61,10 +61,24 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         // every pasuk cell renders several HtmlView commentary blocks.
         for (var round = 0; round < 3; round++)
         {
-            _driver!.PerformActions([PerekScrollStabilityTests.CreateFlickSequence(
-                centerX, bottomY, centerX, topY, 30)]);
-            _driver.PerformActions([PerekScrollStabilityTests.CreateFlickSequence(
-                centerX, topY, centerX, bottomY, 30)]);
+            StormOnce(bottomY, topY);
+            StormOnce(topY, bottomY);
+        }
+
+        // WDA resolves every pointerMove against the app element's AX snapshot
+        // during synthesis; launching another storm while the previous one's
+        // scroll momentum and HtmlView re-layouts are still running can hit an
+        // unresolvable frame (XCTest "point.x != INFINITY"). Splitting each
+        // storm into short bursts gated on a hittable element both shrinks the
+        // per-request synthesis window and waits for the app to settle.
+        void StormOnce(int fromY, int toY)
+        {
+            for (var burst = 0; burst < 3; burst++)
+            {
+                _page.WaitFor("PasukimCollection", _platform.CanTap);
+                _driver!.PerformActions([PerekScrollStabilityTests.CreateFlickSequence(
+                    centerX, fromY, centerX, toY, 10)]);
+            }
         }
 
         var appState = _driver!.ExecuteScript("mobile: queryAppState",
