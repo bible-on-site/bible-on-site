@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmdirSync, statSync, unlinkSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { exportNativeLog } from "./native-logs.mjs";
+import { exportNativeLog, startNativeLog } from "./native-logs.mjs";
 
 function withArtifact(run) {
   const directory = mkdtempSync(join(tmpdir(), "mobile-native-log-test-"));
@@ -32,3 +32,41 @@ test("preserves a partial artifact and reports a native command failure", () => 
     assert.equal(readFileSync(artifact, "utf8"), "partial log");
   });
 });
+
+async function withStreamArtifact(run) {
+  const directory = mkdtempSync(join(tmpdir(), "mobile-native-stream-test-"));
+  const artifact = join(directory, "device-live.log");
+  try { await run(artifact); }
+  finally { unlinkSync(artifact); rmdirSync(directory); }
+}
+
+async function waitForLog(artifact) {
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    if (readFileSync(artifact, "utf8").includes("live log")) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("The test log stream did not start");
+}
+
+test("preserves live output and stops the owned streaming process", async () => {
+  await withStreamArtifact(async (artifact) => {
+    const stream = startNativeLog(process.execPath,
+      ["-e", "process.stdout.write('live log'); setInterval(() => {}, 1000)"], artifact);
+    try { await waitForLog(artifact); }
+    finally { await stream.stop(); }
+    assert.equal(readFileSync(artifact, "utf8"), "live log");
+  });
+});
+
+for (const code of [0, 7]) {
+  test(`reports an unexpected streaming process exit ${code} while preserving its output`, async () => {
+    await withStreamArtifact(async (artifact) => {
+      const stream = startNativeLog(process.execPath,
+        ["-e", `process.stdout.write('live log'); process.exit(${code})`], artifact);
+      await stream.completion;
+      await assert.rejects(stream.stop(), new RegExp(`code ${code}`));
+      assert.equal(readFileSync(artifact, "utf8"), "live log");
+    });
+  });
+}

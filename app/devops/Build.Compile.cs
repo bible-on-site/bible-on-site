@@ -151,7 +151,9 @@ partial class Build
                     // retaining interpretation for the rest of the simulator app.
                     // Escape commas: MSBuild treats literal command-line commas
                     // as separate properties, even inside a single argument.
-                    properties["MtouchInterpreter"] = "all%2C-BibleOnSite%2C-HtmlAgilityPack%2C-SQLite-net";
+                    // Normalization, reflection-based SQLite mapping and LINQ
+                    // also execute in framework assemblies during the import.
+                    properties["MtouchInterpreter"] = "all%2C-BibleOnSite%2C-HtmlAgilityPack%2C-SQLite-net%2C-System.Private.CoreLib%2C-System.Runtime%2C-System.Collections%2C-System.Linq%2C-System.Net.Primitives";
                 }
                 DotNetBuild(s => s
                     .SetProjectFile(MainProject)

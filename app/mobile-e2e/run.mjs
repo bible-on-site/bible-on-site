@@ -7,7 +7,7 @@ import { createServer } from "node:net";
 import { promisify } from "node:util";
 import { waitForAppiumReadiness } from "./appium-readiness.mjs";
 import { prepareWda } from "./prepare-wda.mjs";
-import { exportNativeLog } from "./native-logs.mjs";
+import { exportNativeLog, startNativeLog } from "./native-logs.mjs";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
@@ -68,6 +68,9 @@ const observeReadiness = (observation) => appendFileSync(readinessLog, `${JSON.s
 server.on("spawn", () => observeReadiness({ phase: "spawned", pid: server.pid }));
 let test;
 let diagnosticsFailed = false;
+const nativeStream = platform === "ios" ? startNativeLog("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
+  "log", "stream", "--style", "compact", "--level", "debug", "--predicate", 'process == "BibleOnSite"'],
+  resolve(artifacts, "device-live.log")) : undefined;
 
 async function sampleIosApp() {
   try {
@@ -90,7 +93,7 @@ async function sampleIosApp() {
     console.error("Could not sample the iOS app:", error);
   }
 }
-const stop = () => { test?.kill(); server.kill(); };
+const stop = () => { test?.kill(); server.kill(); nativeStream?.kill(); };
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
@@ -107,6 +110,12 @@ try {
     test.on("exit", (code) => resolveExit(code ?? 1));
   });
 } finally {
+  try {
+    await nativeStream?.stop();
+  } catch (error) {
+    diagnosticsFailed = true;
+    console.error("Could not finish native log stream:", error);
+  }
   if (platform === "ios" && process.exitCode !== 0) {
     // Symbolication can consume substantial resources on simulator runners.
     // Sample surviving failed/hung apps after tests, never alongside healthy runs.
