@@ -12,6 +12,7 @@
              x:Name="PerekPageRoot"
              x:DataType="viewmodels:PerekViewModel"
              Title="{Binding Source}"
+             BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}"
              FlowDirection="RightToLeft"
              Shell.NavBarIsVisible="False">
 
@@ -27,8 +28,8 @@
 
     <Grid x:Name="MainGrid" RowDefinitions="Auto,*">
         <Grid x:Name="ReaderToolbar" Grid.Row="0" MinimumHeightRequest="56"
-              BackgroundColor="{AppThemeBinding Light=#F1F4F8, Dark=#171D26}">
-            <Grid x:Name="NormalNavigationBar" ColumnDefinitions="Auto,*" HeightRequest="56">
+              BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}">
+            <Grid x:Name="NormalNavigationBar" ColumnDefinitions="48,*,48" HeightRequest="56">
                 <Button x:Name="ReaderMenuButton" Grid.Column="0" Text="☰" FontSize="24" WidthRequest="48" Padding="0"
                         BackgroundColor="Transparent" TextColor="{AppThemeBinding Light=Black, Dark=White}"
                         AutomationId="ReaderMenuButton" SemanticProperties.Description="פתיחת תפריט הניווט"
@@ -41,13 +42,22 @@
                    HeightRequest="40"
                    CornerRadius="14"
                    BorderWidth="0"
-                   Margin="0,0,8,0"
-                   BackgroundColor="{AppThemeBinding Light=#E2E8F0, Dark=#253043}"
-                   TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}"
+                   IsVisible="False"
+                   BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}"
+                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"
                    VerticalOptions="Center"
-                   HorizontalOptions="Start"
+                   HorizontalOptions="Center"
                    SemanticProperties.Hint="הקישו לפתיחת החיפוש"
                    Clicked="OnPerekSourceClicked"/>
+                <Border x:Name="SearchIntroduction" Grid.Column="1" HorizontalOptions="Center" VerticalOptions="Center"
+                        HeightRequest="40" Padding="12,0" StrokeThickness="0" StrokeShape="RoundRectangle 14"
+                        BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnPerekSourceClicked"/>
+                    </Border.GestureRecognizers>
+                    <Label x:Name="SearchIntroductionText" Text="חיפוש בתנ&quot;ך..." FontSize="20" VerticalOptions="Center"
+                           HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+                </Border>
             </Grid>
             <ContentView x:Name="SearchTitleHost" IsVisible="False" Margin="4,0" VerticalOptions="Center"/>
             <Grid
@@ -133,7 +143,7 @@
                         Clicked="OnSelectionCopyClicked"/>
             </Grid>
             <BoxView HeightRequest="1" VerticalOptions="End" InputTransparent="True" ZIndex="10"
-                     Color="{AppThemeBinding Light=#D7DEE8, Dark=#364252}"/>
+                     Color="{AppThemeBinding Light=#DBE8F8, Dark=#47658E}"/>
         </Grid>
 
         <controls:FloatingSearchBar x:Name="ChapterSearch" Grid.Row="1" ZIndex="100"
@@ -224,7 +234,7 @@
         </Border>
 
         <!-- Main Content Area - fills entire viewport -->
-        <Grid x:Name="ContentArea" Grid.Row="1"
+        <Grid x:Name="ContentArea" Grid.Row="1" BackgroundColor="{AppThemeBinding Light=White, Dark={StaticResource OffBlack}}"
               ZIndex="0"
               RowDefinitions="Auto,Auto,*">
 

@@ -109,6 +109,17 @@ public partial class PerekPage : ContentPage, IQueryAttributable
     /// </summary>
     private void SetupCarouselNavigation()
     {
+#if ANDROID || IOS
+        var statusBar = new CommunityToolkit.Maui.Behaviors.StatusBarBehavior
+        {
+            ApplyOn = CommunityToolkit.Maui.Behaviors.StatusBarApplyOn.OnPageNavigatedTo
+        };
+        statusBar.SetBinding(CommunityToolkit.Maui.Behaviors.StatusBarBehavior.StatusBarColorProperty,
+            new Binding(nameof(BackgroundColor), source: ReaderToolbar));
+        statusBar.SetAppTheme(CommunityToolkit.Maui.Behaviors.StatusBarBehavior.StatusBarStyleProperty,
+            CommunityToolkit.Maui.Core.StatusBarStyle.DarkContent, CommunityToolkit.Maui.Core.StatusBarStyle.LightContent);
+        Behaviors.Add(statusBar);
+#endif
         _searchHeader = ChapterSearch.DetachHeader();
         _searchHeaderHeight = _searchHeader.HeightRequest;
         ChapterSearch.SearchOpenChanged += OnChapterSearchOpenChanged;
@@ -406,6 +417,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
 
     protected override void OnDisappearing()
     {
+        FinishSearchIntroduction();
 #if ANDROID
         UnregisterReaderBack();
 #endif
@@ -532,6 +544,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
                 CarouselLoadingOverlay.IsVisible = false;
 
                 await ApplySearchReaderLocationAsync();
+                StartSearchIntroduction();
 
                 // Update articles count badge
                 await UpdateArticlesCountAsync();
@@ -564,6 +577,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable
             // since this page last appeared. Re-check and reload so they show without an app restart.
             await RefreshPerushimIfAvailabilityChangedAsync();
         }
+#if IOS
+        Dispatcher.Dispatch(ConfigureIosReaderHistory);
+#endif
     }
 
     /// <summary>
@@ -1138,8 +1154,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         var shellBackground = isSelectionMode
             ? (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"]
             : Microsoft.Maui.Controls.Application.Current!.RequestedTheme == AppTheme.Dark
-                ? Color.FromArgb("#171D26")
-                : Color.FromArgb("#F1F4F8");
+                ? Color.FromArgb("#20304A")
+                : Color.FromArgb("#F2F7FE");
         Shell.SetBackgroundColor(this, shellBackground);
         ReaderToolbar.BackgroundColor = shellBackground;
         NormalNavigationBar.IsVisible = !isSelectionMode && !searching;

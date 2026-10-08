@@ -14,10 +14,13 @@ public partial class PerekPage
     private View? _searchHeader;
     private double _searchHeaderHeight;
     private const string SearchExpansionAnimation = "ReaderSearchExpansion";
+    private const string SearchIntroductionAnimation = "ReaderSearchIntroduction";
+    private bool _searchIntroductionPending = true;
 
     private async void OnPerekSourceClicked(object? sender, EventArgs e)
     {
-        var sourceBounds = NormalNavigationTitle.Bounds;
+        var sourceBounds = SearchIntroduction.IsVisible ? SearchIntroduction.Bounds : NormalNavigationTitle.Bounds;
+        FinishSearchIntroduction();
         var opening = ChapterSearch.OpenAsync();
         await AnimateSearchExpansionAsync(sourceBounds);
         await opening;
@@ -104,6 +107,88 @@ public partial class PerekPage
             }
         }
     }
+
+    private void StartSearchIntroduction()
+    {
+        if (!_searchIntroductionPending || ChapterSearch.IsSearchOpen)
+        {
+            return;
+        }
+#if IOS
+        if (UIKit.UIAccessibility.IsReduceMotionEnabled)
+        {
+            FinishSearchIntroduction();
+            return;
+        }
+#endif
+        NormalNavigationTitle.IsVisible = true;
+        NormalNavigationTitle.Opacity = 0;
+        var sourceWidth = ((IView)NormalNavigationTitle).Measure(double.PositiveInfinity, 40).Width;
+        var introductionWidth = SearchIntroduction.Width;
+        if (sourceWidth <= 0 || introductionWidth <= 0)
+        {
+            FinishSearchIntroduction();
+            return;
+        }
+        var animation = new Animation(progress =>
+        {
+            var reveal = Math.Min(progress / 0.18, 1);
+            var contraction = Easing.CubicInOut.Ease(Math.Clamp((progress - 0.6) / 0.4, 0, 1));
+            SearchIntroduction.Opacity = reveal;
+            SearchIntroduction.Scale = 0.96 + 0.04 * reveal;
+            SearchIntroduction.WidthRequest = introductionWidth + (sourceWidth - introductionWidth) * contraction;
+            SearchIntroductionText.Opacity = 1 - contraction;
+            NormalNavigationTitle.Opacity = contraction;
+        });
+        animation.Commit(this, SearchIntroductionAnimation, 16, 1400, Easing.Linear, (_, _) => FinishSearchIntroduction());
+    }
+
+    private void FinishSearchIntroduction()
+    {
+        if (!_searchIntroductionPending)
+        {
+            return;
+        }
+        _searchIntroductionPending = false;
+        this.AbortAnimation(SearchIntroductionAnimation);
+        SearchIntroduction.IsVisible = false;
+        NormalNavigationTitle.IsVisible = true;
+        NormalNavigationTitle.Opacity = 1;
+    }
+
+#if IOS
+    private void ConfigureIosReaderHistory()
+    {
+        if (Handler is not IPlatformViewHandler pageHandler ||
+            pageHandler.ViewController?.NavigationController is not { } navigation ||
+            navigation.InteractivePopGestureRecognizer is not { } back ||
+            PerekCarousel.Handler?.PlatformView is not UIKit.UIView carousel)
+        {
+            return;
+        }
+        navigation.View!.SemanticContentAttribute = UIKit.UISemanticContentAttribute.ForceRightToLeft;
+        if (Navigation.NavigationStack.Count > 1)
+        {
+            back.Enabled = true;
+        }
+        // Native history owns the edge before the chapter carousel or verse list.
+        // Keep UIKit's interactive pop and MAUI's navigation delegate intact.
+        GiveNativeBackPriority(carousel, back);
+        Console.WriteLine($"[ReaderBack] stack={Navigation.NavigationStack.Count} enabled={back.Enabled} direction={navigation.View.EffectiveUserInterfaceLayoutDirection}");
+    }
+
+    private static void GiveNativeBackPriority(UIKit.UIView view, UIKit.UIGestureRecognizer back)
+    {
+        if (view is UIKit.UIScrollView scroll)
+        {
+            scroll.PanGestureRecognizer.RequireGestureRecognizerToFail(back);
+        }
+        foreach (var child in view.Subviews)
+        {
+            GiveNativeBackPriority(child, back);
+        }
+    }
+#endif
 
     private void OnReaderMenuClicked(object? sender, EventArgs e) => Shell.Current.FlyoutIsPresented = true;
 
