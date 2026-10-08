@@ -238,22 +238,33 @@ public class RecitationServiceTests
         Directory.EnumerateFiles(storage.Root, "*.download", SearchOption.AllDirectories).Should().BeEmpty();
     }
 
-    [Fact]
-    public async Task PreferencesShowUnavailableBooks_AndRetryAFailedExtensionInstall()
+    [Theory]
+    [InlineData("ready")]
+    [InlineData("pending")]
+    public async Task PreferencesShowUnavailableBooks_AndRetryAFailedExtensionInstall(string alignmentStatus)
     {
         await using var storage = new TestStorage();
         var db = await storage.CreateDatabaseAsync("sefaria-dump-5784-sivan-4.tanah_view.sqlite", PerekDataServiceTests.Schema);
         await db.ExecuteAsync("INSERT INTO tanah_sefer VALUES (1,'בראשית','Genesis',1,1),(2,'שמות','Exodus',2,2)");
         await db.ExecuteAsync("INSERT INTO tanah_perek VALUES (1,1,NULL),(2,1,NULL)");
-        var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray())]) };
+        var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray(), alignmentStatus)]) };
         var model = new RecitationPreferencesViewModel(extension.Service,
             PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()),
             new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)));
         await model.LoadAsync(); model.Status.Should().Contain("לא ניתן לטעון");
         extension.Bundle(store: false);
         await model.LoadAsync(); await model.LoadAsync(); model.Books.Should().HaveCount(2);
+        model.Books[0].CanSelect.Should().BeTrue("recordings need not be downloaded to select their book");
+        model.Books[0].Status.Should().Contain("0 מתוך 1");
+        model.Books[1].CanSelect.Should().BeFalse();
         model.Books[1].Status.Should().Be("אין הקלטות זמינות");
-        model.Books[0].IsSelected = true;
+        // A stale selection must not trigger a request for an unavailable extension.
+        model.Books[1].IsSelected = true;
+        await model.DownloadSelectedAsync();
+        model.Status.Should().Contain("בחרו"); model.Books[1].IsSelected.Should().BeFalse();
+        extension.Requests.Should().BeEmpty();
+        model.SelectAllCommand.Execute(null);
+        model.Books[0].IsSelected.Should().BeTrue(); model.Books[1].IsSelected.Should().BeFalse();
         var filename = extension.Catalog!.Books[0].FileName;
         var bytes = storage.PackageFiles[filename]; storage.PackageFiles.Remove(filename);
         await model.DownloadSelectedAsync(); model.Status.Should().Contain("לא ניתן להשלים");
@@ -275,6 +286,7 @@ public class RecitationServiceTests
         model.Enabled = true; model.Enabled.Should().BeFalse();
         await model.DownloadSelectedAsync(); model.Status.Should().Contain("לא ניתן להשלים");
         model.Books.Should().ContainSingle(); model.Books[0].IsSelected.Should().BeTrue();
+        model.Books[0].CanSelect.Should().BeTrue("an unavailable catalog must allow retrying the installation");
         model.Books[0].Status.Should().Be("זמינות תיבדק בעת ההורדה");
         model.CancelDownloadCommand.Execute(null); model.IsIdle.Should().BeTrue();
     }
