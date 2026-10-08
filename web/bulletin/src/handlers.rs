@@ -150,7 +150,12 @@ pub async fn cli_handler() -> anyhow::Result<()> {
     let mut input = String::new();
     io::stdin().read_to_string(&mut input)?;
 
-    if std::env::args_os().any(|arg| arg == "--daily-preview") {
+    // This selects a local output format, makes no security decision, and ignores argv[0].
+    // nosemgrep: rust.lang.security.args-os.args-os, args-os
+    if std::env::args_os()
+        .skip(1)
+        .any(|arg| arg == "--daily-preview")
+    {
         let req: bulletin::daily::DailyInput = serde_json::from_str(&input)?;
         let result = bulletin::daily::render(&req, &daily_fonts_dir())?;
         serde_json::to_writer(io::stdout(), &result)?;
