@@ -16,7 +16,7 @@ public sealed class OfflineSearchCollection : ICollectionFixture<OfflineSearchFi
 public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
 {
     [Fact]
-    public async Task OfflineSearch_FindsMisspelledChapter_FiltersVerses_AndOpensFocusedVerse()
+    public async Task OfflineSearch_OpensRegularReader_AndBackRestoresQueryAndResults()
     {
         (await fixture.WaitForElementAsync(window =>
         {
@@ -30,7 +30,7 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
         var input = bar;
         input.Should().NotBeNull();
         fixture.Click(input!);
-        input!.AsTextBox().Text = "בראשיט 1";
+        await EnterQueryAsync("בראשיט 1");
         await WaitForFinishedSearchAsync();
         var clear = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("ClearSearchButton")));
         var navigation = fixture.FindByAutomationId("SearchNavigationButton")!;
@@ -47,7 +47,7 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
             .Should().NotBeNull("settings are accessible before typing a query");
         fixture.Click(navigation);
         fixture.Click(input);
-        input.AsTextBox().Text = "בראשיט 1";
+        await EnterQueryAsync("בראשיט 1");
         await WaitForFinishedSearchAsync();
         var chapter = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchResults"))
             ?.FindFirstDescendant(fixture.CF.ByName("בראשית א")), TimeSpan.FromSeconds(45));
@@ -57,16 +57,13 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
         fixture.MainWindow.Focus();
         fixture.Click(chapter!);
         (await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("PerekSource").And(fixture.CF.ByName("בראשית א"))))).Should().NotBeNull();
+        await AssertRegularReaderAsync();
+        await GoBackToSearchAsync("בראשיט 1");
 
         bar = fixture.FindByAutomationId("PerekSearchInput");
         input = bar;
         fixture.Click(input!);
-        (await fixture.WaitForElementAsync(window =>
-        {
-            var field = window.FindFirstDescendant(fixture.CF.ByAutomationId("PerekSearchInput"));
-            return field?.FrameworkAutomationElement.HasKeyboardFocus == true ? field : null;
-        })).Should().NotBeNull("typing starts after the native field receives focus");
-        Keyboard.Type("בראשית ברא אלהים");
+        await EnterQueryAsync("ויעש אלהים את הרקיע");
         await WaitForFinishedSearchAsync();
         var filters = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchFiltersButton")));
         fixture.Click(filters!);
@@ -76,12 +73,48 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
         fixture.Click(filters!);
         await WaitForFinishedSearchAsync();
         var verse = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchResults"))
-            ?.FindFirstDescendant(fixture.CF.ByName("בראשית א א")), TimeSpan.FromSeconds(45));
+            ?.FindFirstDescendant(fixture.CF.ByName("בראשית א ז")), TimeSpan.FromSeconds(45));
         CapturePreview("floating-search.png");
         verse.Should().NotBeNull("unpointed text must match the packaged pointed scripture");
         fixture.Click(verse!);
-        (await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("FocusedPasukText"))))
-            .Should().NotBeNull("the selected search result opens its exact verse");
+        await AssertRegularReaderAsync();
+        (await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("PasukNumber"))
+            .FirstOrDefault(number => !number.IsOffscreen && number.Name == "ז")))
+            .Should().NotBeNull("the ordinary reader scrolls to the selected verse");
+        await GoBackToSearchAsync("ויעש אלהים את הרקיע");
+
+        (await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("SearchResultTitle"))
+            .FirstOrDefault(result => !result.IsOffscreen && result.Name == "בראשית א ז")))
+            .Should().NotBeNull("Back keeps the result available without typing again");
+        CapturePreview("search-restored-after-back.png");
+    }
+
+    private async Task AssertRegularReaderAsync()
+    {
+        (await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("PerekSearchInput"))
+            .FirstOrDefault(field => !field.IsOffscreen && field.AsTextBox().Text == string.Empty)))
+            .Should().NotBeNull("results open on a separate ordinary reader page");
+        fixture.MainWindow.FindAllDescendants(fixture.CF.ByAutomationId("SelectionBackButton"))
+            .Should().NotContain(button => !button.IsOffscreen, "search must not open the blue selection toolbar");
+    }
+
+    private async Task EnterQueryAsync(string query)
+    {
+        (await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("PerekSearchInput"))
+            .FirstOrDefault(field => field.FrameworkAutomationElement.HasKeyboardFocus)))
+            .Should().NotBeNull("typing starts after the native field receives focus");
+        Keyboard.TypeSimultaneously(FlaUI.Core.WindowsAPI.VirtualKeyShort.CONTROL, FlaUI.Core.WindowsAPI.VirtualKeyShort.KEY_A);
+        Keyboard.Type(query);
+    }
+
+    private async Task GoBackToSearchAsync(string query)
+    {
+        var back = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByName("Back")));
+        back.Should().NotBeNull("the result is on the standard navigation stack");
+        fixture.Click(back!);
+        (await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("PerekSearchInput"))
+            .FirstOrDefault(field => !field.IsOffscreen && field.AsTextBox().Text == query)))
+            .Should().NotBeNull("Back restores the original search phrase");
     }
 
     private async Task WaitForFinishedSearchAsync()

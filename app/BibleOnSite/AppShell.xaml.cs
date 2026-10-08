@@ -28,6 +28,7 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute("DonationsPage", typeof(DonationsPage));
 		Routing.RegisterRoute("TosPage", typeof(TosPage));
 		Routing.RegisterRoute("PreferencesPage", typeof(PreferencesPage));
+		Routing.RegisterRoute(AppRoutes.SearchReader, typeof(PerekPage));
 
 		Navigated += OnNavigated;
 	}

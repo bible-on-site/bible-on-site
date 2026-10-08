@@ -317,6 +317,7 @@
                                                   FlowDirection="RightToLeft">
                                                 <Label Grid.Column="0"
                                                        Text="{Binding PasukNumHeb}"
+                                                       AutomationId="PasukNumber"
                                                        FontSize="{DynamicResource PasukNumFontSize}"
                                                        FontAttributes="Bold"
                                                        VerticalTextAlignment="Start"
@@ -337,6 +338,7 @@
                                                             <DataTemplate x:DataType="models:PerushNoteDisplay">
                                                                 <VerticalStackLayout Spacing="2">
                                                                     <Label Text="{Binding PerushName}"
+                                                                           AutomationId="InlinePerushName"
                                                                            FontSize="{DynamicResource PerushNameFontSize}"
                                                                            FontAttributes="Bold"
                                                                            TextColor="{StaticResource Primary}"/>

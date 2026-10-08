@@ -31,9 +31,6 @@
                         SemanticProperties.Description="חיפוש" Clicked="OnNavigationClicked"/>
                 <controls:SearchEntry Grid.Column="1" x:Name="SearchInput" AutomationId="PerekSearchInput"
                                      Text="{Binding SearchPhrase, Mode=TwoWay}" Placeholder="חיפוש"
-                                     FlowDirection="RightToLeft" HorizontalTextAlignment="Start"
-                                     BackgroundColor="Transparent" ClearButtonVisibility="Never" ReturnType="Search"
-                                     IsSpellCheckEnabled="False"
                                      FontSize="17" VerticalOptions="Center" HeightRequest="48"
                                      TextColor="{AppThemeBinding Light=#26384E, Dark=#E7EEF8}"
                                      PlaceholderColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"

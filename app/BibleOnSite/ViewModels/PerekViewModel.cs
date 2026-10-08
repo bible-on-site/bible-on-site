@@ -21,6 +21,7 @@ public partial class PerekViewModel : ObservableObject
     private readonly IAppNavigator _navigator;
     private readonly IFileSystem _fileSystem;
     private readonly IShare _share;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, Perek> _readerPerakim = new();
 
     // Using fields with [ObservableProperty] - the MVVMTK0045 warnings are acceptable
     // as we're not targeting AOT scenarios for WinRT marshalling.
@@ -247,7 +248,7 @@ public partial class PerekViewModel : ObservableObject
             await _perekDataService.LoadAsync();
         }
 
-        var perek = _perekDataService.GetPerek(perekId);
+        var perek = GetReaderPerek(perekId);
         if (perek != null)
         {
             // Load pasukim
@@ -408,7 +409,7 @@ public partial class PerekViewModel : ObservableObject
     {
         if (CarouselPerakim != null && CarouselPerakim.Count == 929)
         {
-            var targetPerek = _perekDataService.GetPerek(perekId);
+            var targetPerek = GetReaderPerek(perekId);
             if (targetPerek != null)
             {
                 await EnsurePasukimLoadedAsync(targetPerek);
@@ -558,7 +559,7 @@ public partial class PerekViewModel : ObservableObject
             var result = new List<Perek>(929);
             for (var id = 1; id <= 929; id++)
             {
-                var p = id == perekId ? perek : _perekDataService.GetPerek(id);
+                var p = id == perekId ? perek : GetReaderPerek(id);
                 if (p != null) result.Add(p);
             }
 
@@ -619,7 +620,7 @@ public partial class PerekViewModel : ObservableObject
         var loaded = new List<(Perek, List<Pasuk>)>();
         for (var id = start; id <= end; id++)
         {
-            var p = _perekDataService.GetPerek(id);
+            var p = GetReaderPerek(id);
             if (p != null && p.Pasukim.Count == 0)
             {
                 loaded.Add((p, await _perekDataService.LoadPasukimAsync(id)));
@@ -644,6 +645,16 @@ public partial class PerekViewModel : ObservableObject
                 perek.Pasukim = pasukim;
             }
         }
+    }
+
+    private Perek? GetReaderPerek(int perekId)
+    {
+        if (_readerPerakim.TryGetValue(perekId, out var existing))
+        {
+            return existing;
+        }
+        var metadata = _perekDataService.GetPerek(perekId);
+        return metadata == null ? null : _readerPerakim.GetOrAdd(perekId, _ => metadata.CreateReaderCopy());
     }
 
     /// <summary>

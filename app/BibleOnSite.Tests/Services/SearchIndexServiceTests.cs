@@ -78,6 +78,10 @@ public class SearchIndexServiceTests
         hits[0].PerekId.Should().Be(1);
         hits[0].Text.Should().NotContain("<b>");
         (await notesDb.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM note")).Should().Be(2, "search must not alter source content");
+        var vm = new SearchViewModel(perakim, index) { SearchPhrase = "בריאת העולם" };
+        vm.SetPerushim([new Perush { Id = 7, Name = "רש\"י" }]);
+        await vm.SearchAsync();
+        vm.SearchResults.OfType<PerushSearchResult>().Should().Contain(result => result.Title == "רש\"י - בראשית א א");
     }
 
     [Fact]
@@ -135,6 +139,26 @@ public class SearchIndexServiceTests
         SearchText.Score("משה", "דוד").Should().Be(0);
         SearchText.Score("ברא אלהים", "ברא").Should().BeGreaterThan(SearchText.Score("בראשית", "ברא"));
         SearchText.PlainText("<p>בריאת</p><p>העולם</p>").Should().Contain("בריאת העולם");
+    }
+
+    [Fact]
+    public void HiddenHtmlAndAnEmptyQueryDoNotCreateSearchMatches()
+    {
+        SearchText.PlainText("<script>hidden</script><style>hidden</style><p>בריאה</p>")
+            .Should().Contain("בריאה").And.NotContain("hidden");
+        SearchText.Score("בריאה", " * ").Should().Be(0);
+        SearchText.Score("", "בריאה").Should().Be(0);
+        SearchText.Normalize("का").Should().Be("क", "spacing combining marks are removed along with Hebrew vowel marks");
+    }
+
+    [Theory]
+    [InlineData("רש'י")]
+    [InlineData("רש\"י")]
+    [InlineData("רש׳י")]
+    [InlineData("רש״י")]
+    public void Snippet_MatchesLegacyAbbreviationsWithoutSplittingTheWord(string text)
+    {
+        SearchText.Snippet(text, "רשי").Should().Be("<b>" + System.Net.WebUtility.HtmlEncode(text) + "</b>");
     }
 
     [Fact]

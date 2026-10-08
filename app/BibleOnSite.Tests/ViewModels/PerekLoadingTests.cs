@@ -49,6 +49,29 @@ public class PerekLoadingTests
     }
 
     [Fact]
+    public async Task OpeningAnotherReader_PreservesThePreviousReadersCommentariesAndSelection()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        var original = fixture.Model;
+        await original.LoadByPerekIdAsync(1);
+        original.ToggleCheckedPerush(1);
+        original.Perek!.Pasukim.Single().IsSelected = true;
+        var next = new PerekViewModel(PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()), null,
+            fixture.Data, new PerushimCatalogService(fixture.Storage.FileSystem.Object),
+            new PerushimNotesService(NotesDeliveryTests.Pad().Object, fixture.Storage.FileSystem.Object),
+            fixture.Navigator.Object, fixture.Storage.FileSystem.Object, null);
+        await next.LoadByPerekIdAsync(1);
+        next.ToggleCheckedPerush(2);
+
+        next.Perek.Should().NotBeSameAs(original.Perek);
+        next.Perek!.Pasukim.Single().PerushNotes.Single().PerushName.Should().Be("Targum");
+        original.Perek.Pasukim.Single().PerushNotes.Single().PerushName.Should().Be("Rashi");
+        original.Perek.Pasukim.Single().IsSelected.Should().BeTrue();
+        next.Perek.Pasukim.Single().IsSelected.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task ChapterLoad_LoadsVersesAndCommentaries_AndPreservesOnlyAvailableSelections()
     {
         await using var fixture = new Fixture();
@@ -215,8 +238,9 @@ public class PerekLoadingTests
     {
         await using var fixture = new Fixture();
         await fixture.Initialize(allChapters: true);
-        await fixture.Data.LoadAsync();
-        var adjacent = fixture.Data.GetPerek(3)!;
+        await fixture.Model.LoadByPerekIdAsync(1);
+        var adjacent = fixture.Model.CarouselPerakim.Single(perek => perek.PerekId == 3);
+        adjacent.Pasukim = [];
         SynchronizationContext? assignedOn = null;
         adjacent.PropertyChanged += (_, e) =>
         {
@@ -239,6 +263,7 @@ public class PerekLoadingTests
         }
 
         adjacent.Pasukim.Single().Text.Should().Be("שלישי");
+        fixture.Data.GetPerek(3)!.Pasukim.Should().BeEmpty("each navigation-stack reader owns its bound verse state");
         assignedOn.Should().BeSameAs(ui, "carousel cells bind Pasukim, so it must not change on a background thread");
     }
 }

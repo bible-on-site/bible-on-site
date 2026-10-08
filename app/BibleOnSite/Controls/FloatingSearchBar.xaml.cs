@@ -278,7 +278,10 @@ public partial class FloatingSearchBar : ContentView
             return;
         }
         ResultsList.SelectedItem = null;
-        Close();
+        _debounce?.Cancel();
+        _viewModel.CancelSearch();
+        UpdateStatus();
+        _ = HideKeyboardAsync();
         ResultSelected?.Invoke(this, result);
     }
 }

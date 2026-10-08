@@ -6,6 +6,16 @@ namespace BibleOnSite.Controls;
 /// </summary>
 public sealed class SearchEntry : Entry
 {
+    public SearchEntry()
+    {
+        FlowDirection = FlowDirection.RightToLeft;
+        HorizontalTextAlignment = TextAlignment.Start;
+        ClearButtonVisibility = ClearButtonVisibility.Never;
+        ReturnType = ReturnType.Search;
+        IsSpellCheckEnabled = false;
+        BackgroundColor = Colors.Transparent;
+    }
+
     static SearchEntry()
     {
         foreach (var property in new[] { nameof(Background), nameof(FlowDirection), nameof(HorizontalTextAlignment) })

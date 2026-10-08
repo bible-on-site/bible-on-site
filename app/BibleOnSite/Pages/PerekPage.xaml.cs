@@ -12,7 +12,7 @@ using Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific;
 /// <summary>
 /// Page for displaying a Perek (chapter) with its pasukim (verses).
 /// </summary>
-public partial class PerekPage : ContentPage
+public partial class PerekPage : ContentPage, IQueryAttributable
 {
     private readonly PerekViewModel _viewModel;
     private bool _isLoading;
@@ -404,7 +404,10 @@ public partial class PerekPage : ContentPage
 #if ANDROID
         UnregisterReaderBack();
 #endif
-        ChapterSearch.Close();
+        if (!_preserveSearchOnDisappear)
+        {
+            ChapterSearch.Close();
+        }
         ResetRecitationContext();
         PreferencesService.Instance.PreferencesChanged -= OnRecitationPreferencesChanged;
         RecitationService.Instance.Changed -= OnRecitationPackageChanged;
@@ -517,6 +520,8 @@ public partial class PerekPage : ContentPage
                 // Hide loading overlay — carousel is ready
                 CarouselLoadingOverlay.IsVisible = false;
 
+                await ApplySearchReaderLocationAsync();
+
                 // Update articles count badge
                 await UpdateArticlesCountAsync();
 
@@ -587,6 +592,12 @@ public partial class PerekPage : ContentPage
 
     private void OnAppLinkRequested(object? sender, AppLinkHelper.AppLinkTarget target)
     {
+        // Only the original reader handles app links; search readers are pushed
+        // above it and must not compete to navigate a page that has been popped.
+        if (Shell.Current?.Navigation.NavigationStack.OfType<PerekPage>().FirstOrDefault() is { } rootReader && rootReader != this)
+        {
+            return;
+        }
         if (Handler is null)
         {
             // Dead page left over from a Shell recreation; detach instead of
@@ -609,6 +620,7 @@ public partial class PerekPage : ContentPage
                 return;
             }
             AppLinkHelper.PendingTarget = null;
+            ChapterSearch.Close();
             var shell = Shell.Current;
             if (shell != null &&
                 !shell.CurrentState.Location.OriginalString.EndsWith(AppRoutes.Perek, StringComparison.Ordinal))
@@ -625,6 +637,10 @@ public partial class PerekPage : ContentPage
 
     private int GetInitialPerekId()
     {
+        if (_searchReaderResult is { } result)
+        {
+            return GetSearchPerekId(result);
+        }
         // A link that opened the app (cold start) wins over preferences.
         if (AppLinkHelper.PendingTarget is { } pendingTarget)
         {
