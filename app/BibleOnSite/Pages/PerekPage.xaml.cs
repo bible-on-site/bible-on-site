@@ -110,6 +110,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
     private void SetupCarouselNavigation()
     {
         _searchHeader = ChapterSearch.DetachHeader();
+        _searchHeaderHeight = _searchHeader.HeightRequest;
         ChapterSearch.SearchOpenChanged += OnChapterSearchOpenChanged;
         ChapterSearch.SetSource(_viewModel.Source);
         _viewModel.PropertyChanged += (_, e) =>
@@ -1137,8 +1138,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         var shellBackground = isSelectionMode
             ? (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"]
             : Microsoft.Maui.Controls.Application.Current!.RequestedTheme == AppTheme.Dark
-                ? (Color)Microsoft.Maui.Controls.Application.Current.Resources["OffBlack"]
-                : Colors.White;
+                ? Color.FromArgb("#171D26")
+                : Color.FromArgb("#F1F4F8");
         Shell.SetBackgroundColor(this, shellBackground);
         ReaderToolbar.BackgroundColor = shellBackground;
         NormalNavigationBar.IsVisible = !isSelectionMode && !searching;

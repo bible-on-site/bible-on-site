@@ -26,7 +26,8 @@
     </ContentPage.Resources>
 
     <Grid x:Name="MainGrid" RowDefinitions="Auto,*">
-        <Grid x:Name="ReaderToolbar" Grid.Row="0" BackgroundColor="{AppThemeBinding Light=White, Dark={StaticResource OffBlack}}">
+        <Grid x:Name="ReaderToolbar" Grid.Row="0" MinimumHeightRequest="56"
+              BackgroundColor="{AppThemeBinding Light=#F1F4F8, Dark=#171D26}">
             <Grid x:Name="NormalNavigationBar" ColumnDefinitions="Auto,*" HeightRequest="56">
                 <Button x:Name="ReaderMenuButton" Grid.Column="0" Text="☰" FontSize="24" WidthRequest="48" Padding="0"
                         BackgroundColor="Transparent" TextColor="{AppThemeBinding Light=Black, Dark=White}"
@@ -36,15 +37,19 @@
                    AutomationId="PerekSource"
                    Text="{Binding Source}"
                    FontSize="20"
-                   Padding="8,0"
-                   BackgroundColor="Transparent"
+                   Padding="12,0"
+                   HeightRequest="40"
+                   CornerRadius="14"
+                   BorderWidth="0"
+                   Margin="0,0,8,0"
+                   BackgroundColor="{AppThemeBinding Light=#E2E8F0, Dark=#253043}"
                    TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}"
                    VerticalOptions="Center"
                    HorizontalOptions="Start"
                    SemanticProperties.Hint="הקישו לפתיחת החיפוש"
                    Clicked="OnPerekSourceClicked"/>
             </Grid>
-            <ContentView x:Name="SearchTitleHost" IsVisible="False" Margin="4,0"/>
+            <ContentView x:Name="SearchTitleHost" IsVisible="False" Margin="4,0" VerticalOptions="Center"/>
             <Grid
                   x:Name="SelectionBar"
                   AutomationId="SelectionBar"
@@ -127,6 +132,8 @@
                         TextColor="White"
                         Clicked="OnSelectionCopyClicked"/>
             </Grid>
+            <BoxView HeightRequest="1" VerticalOptions="End" InputTransparent="True" ZIndex="10"
+                     Color="{AppThemeBinding Light=#D7DEE8, Dark=#364252}"/>
         </Grid>
 
         <controls:FloatingSearchBar x:Name="ChapterSearch" Grid.Row="1" ZIndex="100"

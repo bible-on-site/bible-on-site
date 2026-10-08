@@ -122,10 +122,15 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
                 _ => VirtualView.TextDirection == HtmlTextDirection.Rtl
                     ? UITextAlignment.Right : UITextAlignment.Left
             },
-            LineHeightMultiple = (nfloat)VirtualView.LineHeight
+            LineHeightMultiple = (nfloat)VirtualView.LineHeight,
+            BaseWritingDirection = VirtualView.TextDirection switch
+            {
+                HtmlTextDirection.Rtl => NSWritingDirection.RightToLeft,
+                HtmlTextDirection.Ltr => NSWritingDirection.LeftToRight,
+                _ => NSWritingDirection.Natural
+            }
         };
         var textColor = GetTextColor();
-        var rtl = VirtualView.TextDirection == HtmlTextDirection.Rtl;
 
         // Clear recycled content before the parsed result arrives.
         PlatformView.Text = string.Empty;
@@ -164,10 +169,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
                 {
                     PlatformView.Text = html;
                     PlatformView.TextColor = textColor;
-                }
-                if (rtl)
-                {
-                    PlatformView.TextAlignment = UITextAlignment.Right;
+                    PlatformView.TextAlignment = paragraphStyle.Alignment;
                 }
                 // The cell was measured while the text view was empty; re-measure
                 // now that the rendered content has arrived.

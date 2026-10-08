@@ -185,7 +185,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         {
             _page.Tap("PerekSource");
         }
-        var bar = _page.WaitFor("PerekSearchInput");
+        var bar = _page.WaitFor("PerekSearchInput", element => element.Enabled);
         _platform.Tap(_driver!, bar);
         var input = bar.TagName.Contains("TextView", StringComparison.Ordinal) || bar.TagName.Contains("EditText", StringComparison.Ordinal) || bar.TagName.Contains("SearchField", StringComparison.Ordinal) || bar.TagName.Contains("TextField", StringComparison.Ordinal)
             ? bar : bar.FindElement(By.XPath(".//*[@class='android.widget.EditText' or @class='android.widget.AutoCompleteTextView' or @type='XCUIElementTypeSearchField' or @type='XCUIElementTypeTextField']"));

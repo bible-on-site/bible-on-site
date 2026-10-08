@@ -38,11 +38,9 @@ public partial class FloatingSearchBar : ContentView
         return SearchHeader;
     }
 
-    public async Task OpenAsync()
-    {
-        await OpenSearchAsync();
-        Dispatcher.Dispatch(() => SearchInput.Focus());
-    }
+    public Task OpenAsync() => OpenSearchAsync();
+
+    public void FocusInput() => Dispatcher.Dispatch(() => SearchInput.Focus());
 
     private async void OnSearchFocused(object? sender, FocusEventArgs e)
     {

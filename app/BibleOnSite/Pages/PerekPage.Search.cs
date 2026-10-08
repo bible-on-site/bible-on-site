@@ -1,5 +1,7 @@
 using BibleOnSite.Models;
 using BibleOnSite.Services;
+using Microsoft.Maui.Controls.Shapes;
+using Microsoft.Maui.Graphics;
 
 namespace BibleOnSite.Pages;
 
@@ -10,10 +12,98 @@ public partial class PerekPage
     private bool _preserveSearchOnDisappear;
     private SearchResult? _searchReaderResult;
     private View? _searchHeader;
+    private double _searchHeaderHeight;
+    private const string SearchExpansionAnimation = "ReaderSearchExpansion";
 
-    private async void OnPerekSourceClicked(object? sender, EventArgs e) => await ChapterSearch.OpenAsync();
+    private async void OnPerekSourceClicked(object? sender, EventArgs e)
+    {
+        var sourceBounds = NormalNavigationTitle.Bounds;
+        var opening = ChapterSearch.OpenAsync();
+        await AnimateSearchExpansionAsync(sourceBounds);
+        await opening;
+        if (ChapterSearch.IsSearchOpen)
+        {
+            ChapterSearch.FocusInput();
+        }
+    }
 
-    private void OnChapterSearchOpenChanged(object? sender, EventArgs e) => UpdateSelectionBar();
+    private void OnChapterSearchOpenChanged(object? sender, EventArgs e)
+    {
+        if (!ChapterSearch.IsSearchOpen)
+        {
+            this.AbortAnimation(SearchExpansionAnimation);
+            ResetSearchHeader();
+        }
+        UpdateSelectionBar();
+    }
+
+    private Task AnimateSearchExpansionAsync(Rect sourceBounds)
+    {
+        var availableWidth = ReaderToolbar.Width - SearchTitleHost.Margin.HorizontalThickness;
+        if (_searchHeader is not Border header || availableWidth <= 0 || sourceBounds.Width <= 0)
+        {
+            return Task.CompletedTask;
+        }
+#if IOS
+        if (UIKit.UIAccessibility.IsReduceMotionEnabled)
+        {
+            return Task.CompletedTask;
+        }
+#endif
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var startWidth = Math.Min(sourceBounds.Width, availableWidth);
+        var startOffset = sourceBounds.Right - (ReaderToolbar.Width - SearchTitleHost.Margin.Right);
+        var startColor = NormalNavigationTitle.BackgroundColor;
+        var endColor = header.BackgroundColor;
+        var content = header.Content as View;
+        header.IsEnabled = false;
+        SearchTitleHost.HorizontalOptions = LayoutOptions.Start;
+        var animation = new Animation(progress =>
+        {
+            SearchTitleHost.WidthRequest = startWidth + (availableWidth - startWidth) * progress;
+            SearchTitleHost.TranslationX = startOffset * (1 - progress);
+            header.HeightRequest = sourceBounds.Height + (_searchHeaderHeight - sourceBounds.Height) * progress;
+            header.BackgroundColor = new Color(
+                (float)(startColor.Red + (endColor.Red - startColor.Red) * progress),
+                (float)(startColor.Green + (endColor.Green - startColor.Green) * progress),
+                (float)(startColor.Blue + (endColor.Blue - startColor.Blue) * progress));
+            if (header.StrokeShape is RoundRectangle shape)
+            {
+                shape.CornerRadius = new CornerRadius(14 + 14 * progress);
+            }
+            if (content != null)
+            {
+                content.Opacity = Math.Clamp((progress - 0.3) / 0.7, 0, 1);
+            }
+        });
+        animation.Commit(this, SearchExpansionAnimation, 16, 220, Easing.CubicOut, (_, _) =>
+        {
+            ResetSearchHeader();
+            completion.TrySetResult(true);
+        });
+        return completion.Task;
+    }
+
+    private void ResetSearchHeader()
+    {
+        SearchTitleHost.WidthRequest = -1;
+        SearchTitleHost.TranslationX = 0;
+        SearchTitleHost.HorizontalOptions = LayoutOptions.Fill;
+        if (_searchHeader is Border header)
+        {
+            header.HeightRequest = _searchHeaderHeight;
+            header.IsEnabled = true;
+            header.SetAppThemeColor(Border.BackgroundColorProperty, Colors.White, Color.FromArgb("#263244"));
+            if (header.StrokeShape is RoundRectangle shape)
+            {
+                shape.CornerRadius = new CornerRadius(28);
+            }
+            if (header.Content is View content)
+            {
+                content.Opacity = 1;
+            }
+        }
+    }
 
     private void OnReaderMenuClicked(object? sender, EventArgs e) => Shell.Current.FlyoutIsPresented = true;
 

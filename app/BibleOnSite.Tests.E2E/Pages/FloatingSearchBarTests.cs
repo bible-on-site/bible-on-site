@@ -156,7 +156,7 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
         fixture.MainWindow.Focus();
         fixture.Click(source);
         var input = await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("PerekSearchInput"))
-            .FirstOrDefault(field => !field.IsOffscreen));
+            .FirstOrDefault(field => !field.IsOffscreen && field.IsEnabled));
         input.Should().NotBeNull();
         input!.BoundingRectangle.Y.Should().BeLessThanOrEqualTo(bounds.Bottom, "search occupies the source toolbar");
     }

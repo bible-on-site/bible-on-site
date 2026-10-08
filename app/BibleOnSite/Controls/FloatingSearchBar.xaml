@@ -24,7 +24,7 @@
     </ContentView.Resources>
     <VerticalStackLayout x:Name="SearchLayout" BackgroundColor="Transparent">
         <Border x:Name="SearchHeader" StrokeShape="RoundRectangle 28" Padding="6,0" StrokeThickness="0"
-                BackgroundColor="{AppThemeBinding Light={StaticResource Secondary}, Dark=#263244}">
+                BackgroundColor="{AppThemeBinding Light=White, Dark=#263244}">
             <Border.HeightRequest>
                 <OnPlatform x:TypeArguments="x:Double" Default="48">
                     <On Platform="Android,iOS" Value="56"/>
