@@ -1,7 +1,53 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { test } from "node:test";
-import { probeAppiumReadiness } from "./appium-readiness.mjs";
+import { probeAppiumReadiness, waitForAppiumReadiness } from "./appium-readiness.mjs";
+
+test("waits for a cold server beyond one minute without widening individual network deadlines", async () => {
+  let elapsed = 0;
+  let probes = 0;
+  assert.equal(await waitForAppiumReadiness({
+    now: () => elapsed,
+    wait: async (duration) => { elapsed += duration; },
+    probe: async ({ timeout }) => {
+      probes++;
+      assert.ok(timeout <= 1000);
+      return elapsed >= 180000;
+    },
+  }), true);
+  assert.equal(elapsed, 180000);
+  assert.ok(probes > 240);
+});
+
+test("fails after the overall deadline even if a delayed response claims readiness", async () => {
+  let elapsed = 0;
+  assert.equal(await waitForAppiumReadiness({
+    timeout: 1000,
+    now: () => elapsed,
+    probe: async () => { elapsed = 1001; return true; },
+  }), false);
+});
+
+test("stops at the overall deadline when a server never becomes ready", async () => {
+  let elapsed = 0;
+  assert.equal(await waitForAppiumReadiness({
+    timeout: 1100,
+    now: () => elapsed,
+    wait: async (duration) => { elapsed += duration; },
+    probe: async ({ timeout }) => {
+      assert.ok(timeout <= Math.min(1000, 1100 - elapsed));
+      return false;
+    },
+  }), false);
+  assert.equal(elapsed, 1100);
+});
+
+test("fails immediately when the owned Appium process exits", async () => {
+  await assert.rejects(waitForAppiumReadiness({
+    exited: () => "code 1, signal null",
+    probe: async () => assert.fail("An exited process must not be probed."),
+  }), /Appium exited.*code 1/);
+});
 
 async function serve(t, handler) {
   const server = createServer(handler);

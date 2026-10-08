@@ -3,10 +3,9 @@ import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSyn
 import { dirname, resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { setTimeout as delay } from "node:timers/promises";
 import { createServer } from "node:net";
 import { promisify } from "node:util";
-import { probeAppiumReadiness } from "./appium-readiness.mjs";
+import { waitForAppiumReadiness } from "./appium-readiness.mjs";
 import { prepareWda } from "./prepare-wda.mjs";
 import { exportNativeLog } from "./native-logs.mjs";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
@@ -96,13 +95,7 @@ process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
 try {
-  const deadline = Date.now() + 60000;
-  let ready = false;
-  while (Date.now() < deadline) {
-    if (serverExit) throw new Error(`Appium exited (${serverExit}). See ${artifacts}/appium.log`);
-    if (await probeAppiumReadiness({ observe: observeReadiness })) { ready = true; break; }
-    await delay(250);
-  }
+  const ready = await waitForAppiumReadiness({ observe: observeReadiness, exited: () => serverExit });
   if (!ready) throw new Error(`Appium did not become ready. See ${artifacts}/appium.log`);
   test = spawn("dotnet", ["run", "--project", "devops", "--", "TestMobileE2E", "--configuration", "Debug"], {
     cwd: resolve(directory, ".."), windowsHide: true, stdio: "inherit",
