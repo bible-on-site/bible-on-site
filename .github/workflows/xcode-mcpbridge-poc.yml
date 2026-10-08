@@ -1,0 +1,84 @@
+name: Xcode mcpbridge PoC
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [devin/ios-issues-pass]
+    paths: [.github/workflows/xcode-mcpbridge-poc.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  poc:
+    name: Exercise xcrun mcpbridge on iOS simulator
+    runs-on: xcode-27
+    timeout-minutes: 20
+    steps:
+      - name: Select compatible Xcode
+        run: sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
+
+      - name: Verify mcpbridge exists
+        run: |
+          xcrun --find mcpbridge
+          # Probe help; a nonzero exit is recorded but must not mask absence.
+          set +e
+          xcrun mcpbridge --help 2>&1 | head -40
+          set -e
+
+      - name: Enable Xcode MCP server
+        run: sudo xcrun mcp-server enable
+
+      - name: Boot simulator
+        run: |
+          xcrun simctl boot "iPhone 17" 2>/dev/null; true
+          xcrun simctl bootstatus "iPhone 17" -b
+          xcrun simctl list devices booted
+
+      - name: Probe mcpbridge MCP tools
+        run: |
+          python3 - <<'PY'
+          import json, subprocess, threading, time
+          # mcpbridge is a persistent stdio MCP server — keep stdin open and
+          # read responses on a deadline instead of closing input.
+          # Xcode's tool service is slow to cold-start; retry the spawn once.
+          for attempt in range(2):
+              proc = subprocess.Popen(
+                  ["xcrun", "mcpbridge"], stdin=subprocess.PIPE,
+                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                  text=True, bufsize=1)
+              lines = []
+              def reader():
+                  for line in proc.stdout:
+                      lines.append(line)
+              threading.Thread(target=reader, daemon=True).start()
+              def send(msg):
+                  proc.stdin.write(json.dumps(msg) + "\n")
+                  proc.stdin.flush()
+              send({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                    "params": {"protocolVersion": "2025-06-18", "capabilities": {},
+                               "clientInfo": {"name": "poc", "version": "0"}}})
+              deadline = time.time() + 90
+              while time.time() < deadline and not any('"id":1' in l or '"id": 1' in l for l in lines):
+                  time.sleep(0.2)
+              send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+              send({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+              deadline = time.time() + 90
+              while time.time() < deadline and not any('"id":2' in l or '"id": 2' in l for l in lines):
+                  time.sleep(0.2)
+              proc.kill()
+              print(f"attempt {attempt + 1}: {len(lines)} lines")
+              if lines:
+                  break
+          out = "".join(lines)
+          tools = []
+          for line in lines:
+              try:
+                  msg = json.loads(line)
+              except json.JSONDecodeError:
+                  continue
+              for tool in msg.get("result", {}).get("tools", []):
+                  tools.append(tool["name"])
+          print("mcpbridge tools:", *tools, sep="\n- ")
+          assert tools, "mcpbridge returned no tools"
+          PY
