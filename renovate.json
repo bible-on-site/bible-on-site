@@ -24,6 +24,24 @@
 			"automerge": true
 		},
 		{
+			"description": "npm lockfile regeneration is the most failure-prone artifact update (optional wasm/native deps). Group it separately so one bad artifact cannot strand every other ecosystem's updates.",
+			"groupName": "all non-major npm dependencies",
+			"groupSlug": "npm-minor-patch",
+			"matchManagers": ["npm"],
+			"matchPackageNames": ["*"],
+			"matchUpdateTypes": ["minor", "patch"],
+			"automerge": true
+		},
+		{
+			"description": "cargo update regenerates Cargo.lock per workspace; keep it separate from file-edit-only managers for the same blast-radius reason as npm.",
+			"groupName": "all non-major cargo dependencies",
+			"groupSlug": "cargo-minor-patch",
+			"matchManagers": ["cargo"],
+			"matchPackageNames": ["*"],
+			"matchUpdateTypes": ["minor", "patch"],
+			"automerge": true
+		},
+		{
 			"description": "macos-26 breaks the .NET MAUI iOS build (default Xcode 26); see https://github.com/bible-on-site/bible-on-site/issues/1627",
 			"matchManagers": ["github-actions"],
 			"matchPackageNames": ["macos"],
