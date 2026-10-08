@@ -207,6 +207,17 @@
 	</Target>
 
 	<!-- Android Debug fallback: bundle perushim notes in app package so they work without PAD (APK installs). -->
+	<!-- Generated book packs use the same delivery SDK, independently of perushim_notes. -->
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+		<AndroidAsset Include="Platforms\Android\AssetPacks\recitation_*\*.zip" Link="%(Filename)%(Extension)" AssetPack="%(Filename)" DeliveryType="OnDemand" />
+		<MauiAsset Include="Platforms\Android\AssetPacks\recitation_*\*.zip" LogicalName="%(Filename)%(Extension)" Condition="'$(Configuration)' == 'Debug'" />
+	</ItemGroup>
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
+		<MauiAsset Include="Platforms\Windows\Recitation\*.zip" LogicalName="%(Filename)%(Extension)" />
+	</ItemGroup>
+	<Target Name="RequireRecitationExtensionAssets" BeforeTargets="Build" Condition="'$(RequireRecitationAssets)' == 'true'">
+		<Error Condition="!Exists('Resources/Raw/recitation-catalog.json')" Text="Generate the recitation catalog and book packs before packaging this release." />
+	</Target>
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Debug' AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')">
 		<MauiAsset Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" LogicalName="sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
 	</ItemGroup>

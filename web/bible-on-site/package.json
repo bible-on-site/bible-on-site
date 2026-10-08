@@ -14,7 +14,7 @@
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
 		"update:playwright": "npx playwright install",
-		"predev": "node scripts/kill-port.mjs 3001 && node scripts/ensure-docker-desktop.mjs && node scripts/ensure-dev-db.mjs && docker compose -f ../../devops/docker-compose.yml up -d --wait rustfs && docker compose -f ../../devops/docker-compose.yml run --build --rm rustfs-init && node scripts/toggle-flip-book-dep.mjs local && npm install --prefer-offline",
+		"predev": "node scripts/kill-port.mjs 3001 && node scripts/ensure-docker-desktop.mjs && node --import tsx ../../devops/ensure-dev-db.mts --sync-from-prod --tables tanah_sefer,tanahpedia_entry && docker compose -f ../../devops/docker-compose.yml up -d --wait rustfs && docker compose -f ../../devops/docker-compose.yml run --build --rm rustfs-init && node scripts/toggle-flip-book-dep.mjs local && npm install --prefer-offline",
 		"dev": "dotenv -e .dev.env -- next dev -p 3001",
 		"dev-webpack": "dotenv -e .dev.env -- next dev --webpack -p 3001",
 		"prebuild": "node scripts/generate-client-catalog.mjs",
@@ -51,7 +51,10 @@
 		"brace-expansion": "5.0.12",
 		"deepmerge-ts": "8.0.2",
 		"postcss": "8.5.29",
-		"sharp": "0.35.5"
+		"sharp": "0.35.5",
+		"@istanbuljs/load-nyc-config": {
+			"js-yaml": "^5.4.3"
+		}
 	},
 	"dependencies": {
 		"@aws-sdk/client-lambda": "3.1146.0",
@@ -116,5 +119,11 @@
 		"@emnapi/wasi-threads": "2.2.0",
 		"@napi-rs/wasm-runtime": "1.1.5",
 		"@tybys/wasm-util": "0.10.2"
+	},
+	"allowScripts": {
+		"@parcel/watcher@2.6.0": true,
+		"@swc/core@1.16.13": true,
+		"esbuild@0.28.2": true,
+		"unrs-resolver@1.12.2": true
 	}
 }

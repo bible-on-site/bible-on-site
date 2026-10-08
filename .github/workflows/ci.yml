@@ -96,8 +96,10 @@ env:
   ADMIN_E2E_JUNIT_REPORT_ARTIFACT_NAME: admin-e2e-junit-report-${{ github.run_id }}
   ADMIN_COVERAGE_ARTIFACT_NAME_MASTER: admin-coverage.master
   ADMIN_COVERAGE_ARTIFACT_NAME_WF: admin-coverage.${{ github.run_id }}
-  ADMIN_MERGED_COVERAGE_DIRECTORY: web/admin/.coverage/merged
+  ADMIN_COVERAGE_DIRECTORY: web/admin/.coverage
   ADMIN_MERGED_COVERAGE_REPORT: web/admin/.coverage/merged/lcov.info
+  ADMIN_UNIT_COVERAGE_REPORT: web/admin/.coverage/unit/lcov.info
+  ADMIN_E2E_COVERAGE_REPORT: web/admin/.coverage/e2e/lcov.info
   BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER: bulletin-coverage.master
   BULLETIN_COVERAGE_ARTIFACT_NAME_WF: bulletin-coverage.${{ github.run_id }}
   BULLETIN_COVERAGE_DIRECTORY: web/bulletin/.coverage/unit
@@ -1218,7 +1220,7 @@ jobs:
         working-directory: ${{ env.DATA_DIRECTORY }}
         run: cargo build --release -p db-populator -p s3-populator
 
-      - name: E2E Test
+      - name: E2E Test with Coverage
         id: npm-e2e-test
         env:
           DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
@@ -1228,7 +1230,7 @@ jobs:
           S3_ACCESS_KEY_ID: test
           S3_SECRET_ACCESS_KEY: test_1234
           S3_FORCE_PATH_STYLE: "true"
-        run: npm run test:e2e
+        run: npm run coverage:e2e
 
       - name: Merge test coverage (unit; E2E lcov when enabled)
         run: npm run coverage:merge
@@ -1237,7 +1239,12 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_WF }}
-          path: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
+          # Unit + e2e files too: each is uploaded to Codecov under its own
+          # flag (merged is for the cross-module report).
+          path: |
+            ${{ env.ADMIN_UNIT_COVERAGE_REPORT }}
+            ${{ env.ADMIN_E2E_COVERAGE_REPORT }}
+            ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
           retention-days: 90
           overwrite: true
           if-no-files-found: error
@@ -1247,7 +1254,10 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
+          path: |
+            ${{ env.ADMIN_UNIT_COVERAGE_REPORT }}
+            ${{ env.ADMIN_E2E_COVERAGE_REPORT }}
+            ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
           retention-days: 90
           overwrite: true
 
@@ -1516,6 +1526,21 @@ jobs:
           distribution: "microsoft"
           java-version: "17"
 
+      - name: Setup Python for recitation extension packaging
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Restore original recitation audio cache
+        uses: actions/cache@v6
+        with:
+          path: .cache/recitation-assets
+          key: recitation-audio-v1-${{ hashFiles('data/recitation/recitation.sqlite') }}
+          restore-keys: recitation-audio-v1-
+
+      - name: Prepare release recitation book packs
+        run: python3 devops/prepare_recitation_assets.py --platform Android
+
       - name: Verify Android release package
         run: |
           echo '{"sdk":{"version":"10.0.0","rollForward":"latestFeature"}}' > $GITHUB_WORKSPACE/global.json
@@ -1532,6 +1557,12 @@ jobs:
 
       - name: Verify native canonical recitation word identities
         run: python3 ../data/recitation/audit_native.py
+
+      - name: Verify packaged Android recitation modules
+        run: python3 devops/verify_recitation_assets.py --platform Android --catalog BibleOnSite/Resources/Raw/recitation-catalog.json --package "$(find BibleOnSite/bin/Release -name '*.aab' -print -quit)"
+
+      - name: Test recitation extension packaging
+        run: python3 -m unittest discover -s devops -p 'test_*recitation_assets.py'
 
       - name: Test paired Perushim release assets
         run: python3 -m unittest discover -s devops -p test_prepare_perushim_assets.py
@@ -2391,15 +2422,26 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: ${{ needs.admin_ci.result != 'skipped' && env.ADMIN_COVERAGE_ARTIFACT_NAME_WF || env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: ${{ env.ADMIN_MERGED_COVERAGE_DIRECTORY }}
+          path: ${{ env.ADMIN_COVERAGE_DIRECTORY }}
 
       - name: Publish Admin Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
+          # The admin flag tracks unit coverage (its historical baseline);
+          # e2e goes under admin_e2e so thin e2e suites don't dilute it.
+          files: ${{ env.ADMIN_UNIT_COVERAGE_REPORT }}
           disable_search: true
           flags: admin
+          fail_ci_if_error: false
+
+      - name: Publish Admin E2E Coverage To Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.ADMIN_E2E_COVERAGE_REPORT }}
+          disable_search: true
+          flags: admin_e2e
           fail_ci_if_error: false
 
       - name: Restore Data Coverage Report
@@ -2715,3 +2757,4 @@ jobs:
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
         run: npm run bump:module-versions -- --mode all --publish
+

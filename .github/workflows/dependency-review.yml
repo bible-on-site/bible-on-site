@@ -51,6 +51,12 @@ jobs:
     steps:
       - name: 'Checkout repository'
         uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+      - name: Test dependency snapshot verification
+        run: npm --prefix devops run test:dependency-snapshots
       - name: 'Dependency Review'
         uses: actions/dependency-review-action@v5
         # Commonly enabled options, see https://github.com/actions/dependency-review-action#configuration-options for all available options.
@@ -71,3 +77,11 @@ jobs:
             pkg:npm/%40asamuzakjp/css-color,
             pkg:npm/%40bramus/specificity,
             pkg:githubactions/actions/download-artifact
+      # The action can finish green after its snapshot retry timeout. A green
+      # review is usable only when GitHub confirms the comparison is complete.
+      - name: Verify complete dependency snapshots
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPENDENCY_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          DEPENDENCY_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: npm --prefix devops run verify:dependency-snapshots
