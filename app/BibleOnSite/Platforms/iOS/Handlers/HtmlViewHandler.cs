@@ -96,7 +96,9 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
     {
         var handler = (IElementHandler)this;
         if (handler.PlatformView is not UITextView platformView || handler.VirtualView is not HtmlView virtualView)
+        {
             return;
+        }
 
         var html = virtualView.HtmlContent;
         if (string.IsNullOrEmpty(html))
