@@ -175,7 +175,7 @@
                     <VerticalStackLayout BindableLayout.ItemsSource="{Binding Books}" IsEnabled="{Binding IsIdle}">
                         <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="viewmodels:RecitationBookChoice">
-                                <Grid ColumnDefinitions="Auto,*" Padding="0,4">
+                                <Grid ColumnDefinitions="Auto,*" Padding="0,4" IsEnabled="{Binding CanSelect}">
                                     <CheckBox IsChecked="{Binding IsSelected}" SemanticProperties.Description="{Binding Name}"/>
                                     <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
                                         <Label Text="{Binding Name}"/>
