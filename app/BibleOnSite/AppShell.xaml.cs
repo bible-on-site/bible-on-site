@@ -60,9 +60,21 @@ public partial class AppShell : Shell
 	/// </summary>
 	internal static readonly UIPanGestureRecognizer SharedFlyoutEdgePan = CreateFlyoutEdgePan();
 
+	/// <summary>
+	/// The perek carousel's scroll pan can begin on the same edge swipe in the
+	/// same touch-move pass; UIKit's default lets the first recognizer to begin
+	/// force every other candidate to Failed without dispatching its action.
+	/// An edge recognizer that cannot be prevented survives that race.
+	/// </summary>
+	private sealed class FlyoutEdgePanGestureRecognizer(Action<UIPanGestureRecognizer> action)
+		: UIPanGestureRecognizer(action)
+	{
+		public override bool CanBePreventedByGestureRecognizer(UIGestureRecognizer other) => false;
+	}
+
 	private static UIPanGestureRecognizer CreateFlyoutEdgePan()
 	{
-		var pan = new UIPanGestureRecognizer(OnSharedFlyoutEdgePan);
+		var pan = new FlyoutEdgePanGestureRecognizer(OnSharedFlyoutEdgePan);
 		pan.ShouldReceiveTouch += OnFlyoutEdgePanShouldReceiveTouch;
 		pan.ShouldBegin += OnFlyoutEdgePanShouldBegin;
 		return pan;
