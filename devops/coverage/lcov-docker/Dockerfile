@@ -1,8 +1,8 @@
 FROM alpine:3.24
 
 
-# Install lcov and its dependencies (the alpine:3.24 base image's default
-# repositories already include v3.24/community)
+# Install lcov and its dependencies (the pinned alpine base image's default
+# repositories already include its community repo)
 RUN apk add --no-cache lcov~=2
 
 # Set working directory
