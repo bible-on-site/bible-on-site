@@ -29,7 +29,9 @@ public static class AppRoutes
     /// Flyout pages replace another menu page above the most recent reader.
     /// Preserve search-reader history so Back returns to the chapter being read.
     /// </summary>
-    public static string FlyoutPage(string route, string? currentLocation = null)
+    public static string FlyoutPage(string route) => FlyoutPage(route, null);
+
+    public static string FlyoutPage(string route, string? currentLocation)
     {
         var segments = (currentLocation ?? $"//{Perek}").Split('?', 2)[0]
             .Split('/', StringSplitOptions.RemoveEmptyEntries);

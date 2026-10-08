@@ -90,7 +90,10 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         AssertRegularReader();
         _page.Tap("PerekSource");
         _page.Tap("SearchFiltersButton");
-        if (_platform.IsChecked(_page.WaitFor("SearchKindPerush"))) _page.Tap("SearchKindPerush");
+        if (_platform.IsChecked(_page.WaitFor("SearchKindPerush")))
+        {
+            _page.Tap("SearchKindPerush");
+        }
         _page.Tap("SearchFiltersButton");
         SearchFor("בראשיט 1", "בראשית א");
         _platform.Tap(_driver!, _page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
@@ -123,7 +126,10 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         AssertRegularReader();
         _page.Tap("PerekSource");
         _page.Tap("SearchFiltersButton");
-        if (!_platform.IsChecked(_page.WaitFor("SearchKindPerush"))) _page.Tap("SearchKindPerush");
+        if (!_platform.IsChecked(_page.WaitFor("SearchKindPerush")))
+        {
+            _page.Tap("SearchKindPerush");
+        }
         _page.Tap("SearchFiltersButton");
         SearchFor("בראשית ברא אלהים", "בראשית א א");
         // A fresh installation builds the local index for the entire commentary

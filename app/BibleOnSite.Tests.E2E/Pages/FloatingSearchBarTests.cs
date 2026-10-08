@@ -21,7 +21,10 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
         try { await VerifyOfflineSearchAsync(); }
         catch
         {
-            if (!fixture.App.HasExited) CapturePreview("floating-search-failed.png");
+            if (!fixture.App.HasExited)
+            {
+                CapturePreview("floating-search-failed.png");
+            }
             throw;
         }
     }
@@ -64,7 +67,6 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
         await AssertRegularReaderAsync();
         CapturePreview("floating-search-dismissed.png");
         await OpenSearchAsync();
-        input = fixture.FindByAutomationId("PerekSearchInput")!;
         settings = fixture.FindByAutomationId("SearchFiltersButton")!;
         navigation = fixture.FindByAutomationId("SearchNavigationButton")!;
         fixture.Click(settings);
