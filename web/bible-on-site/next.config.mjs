@@ -29,6 +29,11 @@ const bookPageSlugs = JSON.parse(
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	output: "standalone",
+	// Keep the canonical source bytes outside JavaScript chunks and present in
+	// standalone images for both route handlers and server component runtimes.
+	outputFileTracingIncludes: {
+		"/*": ["./src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json"],
+	},
 	transpilePackages: ["html-flip-book-react"],
 	turbopack: {
 		root: import.meta.dirname,
