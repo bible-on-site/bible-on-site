@@ -65,7 +65,7 @@ for (const code of [0, 7]) {
       const stream = startNativeLog(process.execPath,
         ["-e", `process.stdout.write('live log'); process.exit(${code})`], artifact);
       await stream.completion;
-      await assert.rejects(stream.stop(), new RegExp(`code ${code}`));
+      await assert.rejects(stream.stop(), (err) => String(err.message).includes(`code ${code}`));
       assert.equal(readFileSync(artifact, "utf8"), "live log");
     });
   });
