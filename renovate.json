@@ -30,18 +30,6 @@
 			"allowedVersions": "<26"
 		},
 		{
-			"description": "Keep the iOS SDK pins aligned with the Xcode 26.6-compatible workload set; see https://github.com/bible-on-site/bible-on-site/issues/1871",
-			"matchManagers": ["github-actions"],
-			"matchPackageNames": ["dotnet-sdk"],
-			"matchFileNames": [
-				".github/workflows/ci.yml",
-				".github/workflows/app-package.yml",
-				".github/workflows/app-mobile-e2e.yml"
-			],
-			"matchCurrentValue": "10.0.401",
-			"enabled": false
-		},
-		{
 			"description": "Android 8.7.0 and iOS 12.15.2 still bundle vulnerable dependencies (shell-quote 1.10.0 in both; axios 1.19.0, brace-expansion 5.0.9, morgan 1.11.0, proxy-addr 2.0.7, sharp 0.35.4 additionally in Android) that npm overrides cannot replace. Update to patched upstream bundles when available; see https://github.com/bible-on-site/bible-on-site/issues/1995",
 			"matchManagers": ["npm"],
 			"matchFileNames": ["app/mobile-e2e/package.json"],
