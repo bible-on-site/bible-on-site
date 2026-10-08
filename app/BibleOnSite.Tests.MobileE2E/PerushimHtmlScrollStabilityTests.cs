@@ -57,23 +57,27 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         var topY = list.Location.Y + list.Size.Height / 5;
         var bottomY = list.Location.Y + list.Size.Height * 4 / 5;
 
-        // 80 back-to-back flicks (matching PerekScrollStabilityTests) maximize
-        // cell prefetch/recycle churn while every pasuk cell renders several
-        // HtmlView commentary blocks.
+        // 40 flicks still force heavy cell prefetch/recycle churn while every
+        // pasuk cell renders HtmlView commentary blocks. Two corollaries of the
+        // shared-CPU simulator: each AX query serializes behind main-thread
+        // attributed-text layout (observed up to ~60s per query), so the gate
+        // between bursts must avoid element-resolution calls; and the whole
+        // test has to finish well inside the 10-minute blame-hang budget.
         Storm(bottomY, topY);
         Storm(topY, bottomY);
 
         // WDA resolves every pointerMove against the app element's AX snapshot
-        // during synthesis; launching another full storm while the previous
-        // one's scroll momentum and HtmlView re-layouts are still running can
-        // hit an unresolvable frame (XCTest "point.x != INFINITY"). Splitting
-        // each storm into short bursts gated on a hittable element both shrinks
-        // the per-request synthesis window and waits for the app to settle.
+        // during synthesis, so keep each request short. queryAppState asks the
+        // driver for the app lifecycle state without walking the view tree —
+        // cheap even while the main thread is busy — and fails fast instead of
+        // stalling for minutes if the app did crash.
         void Storm(int fromY, int toY)
         {
-            for (var burst = 0; burst < 4; burst++)
+            for (var burst = 0; burst < 2; burst++)
             {
-                _page.WaitFor("PasukimCollection", _platform.CanTap);
+                var midState = Convert.ToInt64(_driver!.ExecuteScript("mobile: queryAppState",
+                    new Dictionary<string, object> { ["bundleId"] = "com.tanah.daily929" }));
+                Assert.Equal(4L, midState);
                 _driver!.PerformActions([PerekScrollStabilityTests.CreateFlickSequence(
                     centerX, fromY, centerX, toY, 10)]);
             }
@@ -88,8 +92,11 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         Assert.NotEmpty(_page.FirstPasuk);
     }
 
-    // Opens the perushim panel and checks every synthetic commentary so each
-    // pasuk cell renders HtmlView notes; returns how many were checked.
+    // Opens the perushim panel and checks the first two synthetic commentaries
+    // so each pasuk cell renders HtmlView notes; returns how many were checked.
+    // Checking all three triples attributed-text layout cost without covering
+    // any additional code path — one HtmlView per commentary already exercises
+    // the parse/render pipeline that crashed.
     private int CheckAllPerushim()
     {
         _page.Tap("PerushimChevronButton");
@@ -105,13 +112,13 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
                 .ToList();
         }
 
-        foreach (var checkbox in checkboxes)
+        foreach (var checkbox in checkboxes.Take(2))
         {
             _platform.Tap(_driver!, checkbox);
         }
-        output.WriteLine($"Checked {checkboxes.Count} synthetic perushim.");
+        output.WriteLine($"Checked {Math.Min(checkboxes.Count, 2)} synthetic perushim.");
 
         _page.Tap("PerushimChevronButton");
-        return checkboxes.Count;
+        return Math.Min(checkboxes.Count, 2);
     }
 }
