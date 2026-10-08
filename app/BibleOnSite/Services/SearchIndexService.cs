@@ -124,12 +124,22 @@ public sealed class SearchIndexService : IAsyncDisposable
         var placeholders = string.Join(",", bookIds.Select(_ => "?"));
         var arguments = new object[] { match }.Concat(bookIds.Cast<object>()).Append(limit).ToArray();
         return _index.QueryAsync<IndexRow>($"SELECT {table}.rowid AS RowId, c.PerekId, c.PasukNum, c.PerushId, c.Text AS Body FROM {table} " +
-            $"JOIN {table}_content c ON c.rowid = {table}.rowid WHERE {table} MATCH ? AND c.SeferId IN ({placeholders}) " +
+            $"JOIN {table}_documents c ON c.rowid = {table}.rowid WHERE {table} MATCH ? AND c.SeferId IN ({placeholders}) " +
             $"ORDER BY bm25({table}), {table}.rowid LIMIT ?", arguments);
     }
 
     private async Task InitializeIndexAsync()
     {
+        var legacyTables = await _index.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM sqlite_schema WHERE name IN ('verses_content','notes_content')");
+        if (legacyTables > 0)
+        {
+            // Defensive SQLite can also forbid dropping the old _content table.
+            // Replace this derived cache before any import/query can use it.
+            var path = _index.DatabasePath;
+            await _index.CloseAsync();
+            File.Delete(path);
+        }
         await _index.ExecuteScalarAsync<string>("PRAGMA journal_mode=WAL");
         await _index.ExecuteAsync("PRAGMA synchronous=NORMAL");
         await _index.ExecuteAsync("CREATE TABLE IF NOT EXISTS search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)");
@@ -166,7 +176,7 @@ public sealed class SearchIndexService : IAsyncDisposable
     private async Task BuildAsync(string table, SQLiteAsyncConnection source, bool commentary)
     {
         var file = new FileInfo(source.DatabasePath);
-        var fingerprint = $"v2:{file.Length}:{file.LastWriteTimeUtc.Ticks}";
+        var fingerprint = $"v3:{file.Length}:{file.LastWriteTimeUtc.Ticks}";
         if (_ready.GetValueOrDefault(table) == fingerprint)
         {
             return;
@@ -178,11 +188,14 @@ public sealed class SearchIndexService : IAsyncDisposable
             await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}_vocab");
             await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}");
             await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}_content");
+            await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}_documents");
             // Keep one original text copy. An external-content FTS table stores
             // only tokens and positions instead of duplicating every note.
-            await _index.ExecuteAsync($"CREATE TABLE {table}_content (rowid INTEGER PRIMARY KEY, Text TEXT, " +
+            // _content is a reserved FTS shadow-table name. Apple's defensive
+            // SQLite mode rejects writes to it even with external content.
+            await _index.ExecuteAsync($"CREATE TABLE {table}_documents (rowid INTEGER PRIMARY KEY, Text TEXT, " +
                 "PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER)");
-            await _index.ExecuteAsync($"CREATE VIRTUAL TABLE {table} USING fts5(Text, content='{table}_content', content_rowid='rowid')");
+            await _index.ExecuteAsync($"CREATE VIRTUAL TABLE {table} USING fts5(Text, content='{table}_documents', content_rowid='rowid')");
             if (commentary)
             {
                 long lastId = 0;
@@ -281,10 +294,10 @@ public sealed class SearchIndexService : IAsyncDisposable
         public int SeferId { get; set; }
     }
 
-    [Table("verses_content")]
+    [Table("verses_documents")]
     private sealed class VerseIndexEntry : StoredIndexEntry;
 
-    [Table("notes_content")]
+    [Table("notes_documents")]
     private sealed class CommentaryIndexEntry : StoredIndexEntry;
 
     private class TokenIndexEntry

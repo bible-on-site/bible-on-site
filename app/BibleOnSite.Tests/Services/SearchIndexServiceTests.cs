@@ -38,27 +38,65 @@ public class SearchIndexServiceTests
         (await index.SearchAsync("\" OR * -", filters, books, 10, default)).Should().BeEmpty();
     }
 
-    [Fact]
-    public async Task LegacyIndex_IsRebuiltAndKeepsOriginalScriptureInExternalContent()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task LegacyIndex_IsRebuiltAndKeepsOriginalScriptureInExternalContent(int version)
     {
         await using var storage = new TestStorage();
         var perakim = await SeedAsync(storage);
         var path = Path.Combine(storage.Root, "search.sqlite");
-        var legacy = await storage.CreateDatabaseAsync("search.sqlite",
-            "CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)",
+        string[] schema = version == 1 ? [
             "CREATE VIRTUAL TABLE verses USING fts5(Text, Body UNINDEXED, PerekId UNINDEXED, PasukNum UNINDEXED, PerushId UNINDEXED, SeferId UNINDEXED)",
-            "INSERT INTO verses VALUES ('ישן','תוכן ישן',1,1,0,1)");
+            "INSERT INTO verses VALUES ('ישן','תוכן ישן',1,1,0,1)"
+        ] : [
+            "CREATE TABLE verses_content (rowid INTEGER PRIMARY KEY, Text TEXT, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER)",
+            "CREATE VIRTUAL TABLE verses USING fts5(Text, content='verses_content', content_rowid='rowid')",
+            "INSERT INTO verses_content VALUES (1,'תוכן ישן',1,1,0,1)",
+            "INSERT INTO verses VALUES ('ישן')"
+        ];
+        var legacy = await storage.CreateDatabaseAsync("search.sqlite",
+            ["CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)", .. schema]);
         var source = new FileInfo(Path.Combine(storage.Root, BibleDb));
-        await legacy.ExecuteAsync("INSERT INTO search_metadata VALUES ('verses', ?)", $"v1:{source.Length}:{source.LastWriteTimeUtc.Ticks}");
+        await legacy.ExecuteAsync("INSERT INTO search_metadata VALUES ('verses', ?)", $"v{version}:{source.Length}:{source.LastWriteTimeUtc.Ticks}");
+        await legacy.RunInTransactionAsync(connection =>
+            SQLitePCL.raw.sqlite3_db_config(connection.Handle, SQLitePCL.raw.SQLITE_DBCONFIG_DEFENSIVE, 1, out _)
+                .Should().Be(SQLitePCL.raw.SQLITE_OK));
         await using var index = new SearchIndexService(perakim, null, path);
         var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Pasuk }, new HashSet<int> { 1 }, 10, default);
         hits.Should().ContainSingle().Which.Text.Should().Contain("בְּרֵאשִׁ֖ית");
-        (await legacy.ExecuteScalarAsync<string>("SELECT Text FROM verses_content WHERE PerekId = 1"))
+        (await legacy.ExecuteScalarAsync<string>("SELECT Text FROM verses_documents WHERE PerekId = 1"))
             .Should().Contain("בְּרֵאשִׁ֖ית");
         (await legacy.ExecuteScalarAsync<string>("SELECT fingerprint FROM search_metadata WHERE name = 'verses'"))
-            .Should().StartWith("v2:");
+            .Should().StartWith("v3:");
         (await index.SearchAsync("ישן", new HashSet<SearchFilter> { SearchFilter.Pasuk }, new HashSet<int> { 1 }, 10, default))
             .Should().BeEmpty("a migrated cache cannot retain stale search results");
+    }
+
+    [Fact]
+    public async Task DefensiveSqlite_CanBuildAndSearchBothExternalContentIndexes()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
+            "INSERT INTO note VALUES (7,1,1,0,'בראשית ברא אלהים')");
+        var inspection = await storage.CreateDatabaseAsync("search.sqlite");
+        await inspection.RunInTransactionAsync(connection =>
+        {
+            SQLitePCL.raw.sqlite3_db_config(connection.Handle, SQLitePCL.raw.SQLITE_DBCONFIG_DEFENSIVE, 1, out var enabled)
+                .Should().Be(SQLitePCL.raw.SQLITE_OK);
+            enabled.Should().Be(1);
+        });
+        var delivery = new Mock<IPadDeliveryService>();
+        delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((string?)null);
+        var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Combine(storage.Root, "search.sqlite"));
+        var hits = await index.SearchAsync("בראשית ברא אלהים",
+            new HashSet<SearchFilter> { SearchFilter.Pasuk, SearchFilter.Perush }, new HashSet<int> { 1 }, 10, default);
+        hits.Should().HaveCount(2);
+        hits.Should().Contain(hit => hit.Type == SearchFilter.Pasuk && hit.PerekId == 1);
+        hits.Should().Contain(hit => hit.Type == SearchFilter.Perush && hit.PerushId == 7);
     }
 
     [Fact]
