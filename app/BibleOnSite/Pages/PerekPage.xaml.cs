@@ -70,6 +70,7 @@ public partial class PerekPage : ContentPage
         Console.WriteLine("[Startup] PerekPage InitializeComponent");
         InitializeComponent();
 #if IOS
+        ConfigureReaderSafeArea();
         InitializeBottomBarDebugControls();
 #endif
         Console.WriteLine("[Startup] PerekPage binding context");
@@ -88,6 +89,7 @@ public partial class PerekPage : ContentPage
     {
         InitializeComponent();
 #if IOS
+        ConfigureReaderSafeArea();
         InitializeBottomBarDebugControls();
 #endif
         _viewModel = viewModel;
@@ -663,6 +665,37 @@ public partial class PerekPage : ContentPage
     }
 
 #if IOS
+    /// <summary>
+    /// MAUI pads every Layout inside the device safe area by default
+    /// (SafeAreaEdges = Container), and each Layout pads independently —
+    /// clearing it only on MainGrid just moves the padding to ContentArea,
+    /// which is what produced the empty landscape side bands (#1308).
+    /// Opt the entire subtree out except the root grid's bottom edge, which
+    /// ApplyBottomBarSafeArea manages around the home indicator itself.
+    /// Views inside scroll views (the carousel cells and pasukim lists) never
+    /// apply safe-area padding, so only the direct layout chain needs this.
+    /// </summary>
+    private void ConfigureReaderSafeArea()
+    {
+        MainGrid.SafeAreaEdges = new SafeAreaEdges(
+            SafeAreaRegions.None,
+            SafeAreaRegions.None,
+            SafeAreaRegions.None,
+            SafeAreaRegions.Container);
+        DisableSafeAreaPadding(MainGrid);
+    }
+
+    private static void DisableSafeAreaPadding(Element root)
+    {
+        foreach (var child in root.GetVisualTreeDescendants())
+        {
+            if (child is Layout layout)
+            {
+                layout.SafeAreaEdges = SafeAreaEdges.None;
+            }
+        }
+    }
+
     private void InitializeBottomBarDebugControls()
     {
         // XAML sets the default selection while constructing the page. Hook up

@@ -68,12 +68,22 @@ public static class MauiProgram
 		// switch. Once iOS determines the dominant scroll axis, movement on the other
 		// axis is suppressed for that gesture — matching the legacy Flutter app's
 		// PageView + ListView gesture-arena behavior.
-		Microsoft.Maui.Controls.Handlers.Items.CarouselViewHandler.Mapper.AppendToMapping("SwipeSensitivity", (handler, _) =>
+		Microsoft.Maui.Controls.Handlers.Items2.CarouselViewHandler2.Mapper.AppendToMapping("SwipeSensitivity", (handler, _) =>
 		{
-			if (handler.PlatformView is UIKit.UICollectionView collectionView)
+			var collectionView = FindDescendant<UIKit.UICollectionView>(handler.PlatformView);
+			Console.WriteLine($"[EdgePan] carousel mapper platformView={handler.PlatformView?.GetType().Name ?? "null"} collectionView={collectionView?.GetType().Name ?? "null"}");
+			if (collectionView is null)
 			{
-				collectionView.DirectionalLockEnabled = true;
+				return;
 			}
+			collectionView.DirectionalLockEnabled = true;
+			// The carousel's horizontal paging pan competes with the Shell
+			// flyout's right-edge recognizer over the same touches and usually
+			// wins, leaving the RTL drawer gesture dead on perek pages (#1306).
+			// Give the drawer gesture priority so a swipe starting at the
+			// right screen edge opens the drawer instead of switching perek.
+			collectionView.PanGestureRecognizer.RequireGestureRecognizerToFail(AppShell.SharedFlyoutEdgePan);
+			Console.WriteLine("[EdgePan] carousel pan wired");
 		});
 #endif
 
@@ -126,4 +136,23 @@ public static class MauiProgram
 
 		return builder.Build();
 	}
+
+#if IOS || MACCATALYST
+	private static T? FindDescendant<T>(UIKit.UIView? root) where T : UIKit.UIView
+	{
+		if (root is T match)
+		{
+			return match;
+		}
+		foreach (var child in root?.Subviews ?? [])
+		{
+			var found = FindDescendant<T>(child);
+			if (found is not null)
+			{
+				return found;
+			}
+		}
+		return null;
+	}
+#endif
 }
