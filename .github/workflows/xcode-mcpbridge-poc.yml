@@ -41,30 +41,35 @@ jobs:
           import json, subprocess, threading, time
           # mcpbridge is a persistent stdio MCP server — keep stdin open and
           # read responses on a deadline instead of closing input.
-          proc = subprocess.Popen(
-              ["xcrun", "mcpbridge"], stdin=subprocess.PIPE,
-              stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-              text=True, bufsize=1)
-          lines = []
-          def reader():
-              for line in proc.stdout:
-                  lines.append(line)
-          threading.Thread(target=reader, daemon=True).start()
-          def send(msg):
-              proc.stdin.write(json.dumps(msg) + "\n")
-              proc.stdin.flush()
-          send({"jsonrpc": "2.0", "id": 1, "method": "initialize",
-                "params": {"protocolVersion": "2025-06-18", "capabilities": {},
-                           "clientInfo": {"name": "poc", "version": "0"}}})
-          deadline = time.time() + 30
-          while time.time() < deadline and not any('"id":1' in l or '"id": 1' in l for l in lines):
-              time.sleep(0.2)
-          send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-          send({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
-          deadline = time.time() + 30
-          while time.time() < deadline and not any('"id":2' in l or '"id": 2' in l for l in lines):
-              time.sleep(0.2)
-          proc.kill()
+          # Xcode's tool service is slow to cold-start; retry the spawn once.
+          for attempt in range(2):
+              proc = subprocess.Popen(
+                  ["xcrun", "mcpbridge"], stdin=subprocess.PIPE,
+                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                  text=True, bufsize=1)
+              lines = []
+              def reader():
+                  for line in proc.stdout:
+                      lines.append(line)
+              threading.Thread(target=reader, daemon=True).start()
+              def send(msg):
+                  proc.stdin.write(json.dumps(msg) + "\n")
+                  proc.stdin.flush()
+              send({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                    "params": {"protocolVersion": "2025-06-18", "capabilities": {},
+                               "clientInfo": {"name": "poc", "version": "0"}}})
+              deadline = time.time() + 90
+              while time.time() < deadline and not any('"id":1' in l or '"id": 1' in l for l in lines):
+                  time.sleep(0.2)
+              send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+              send({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+              deadline = time.time() + 90
+              while time.time() < deadline and not any('"id":2' in l or '"id": 2' in l for l in lines):
+                  time.sleep(0.2)
+              proc.kill()
+              print(f"attempt {attempt + 1}: {len(lines)} lines")
+              if lines:
+                  break
           out = "".join(lines)
           tools = []
           for line in lines:
