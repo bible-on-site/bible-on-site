@@ -1,6 +1,7 @@
 using Foundation;
 using Microsoft.Maui.Handlers;
 using BibleOnSite.Controls;
+using BibleOnSite.Helpers;
 using UIKit;
 using CoreGraphics;
 
@@ -8,7 +9,7 @@ namespace BibleOnSite.Handlers;
 
 /// <summary>
 /// MacCatalyst handler for HtmlView control.
-/// Uses UITextView with NSAttributedString for proper HTML/CSS support including text-align justify.
+/// Renders managed HTML text runs in UITextView, including RTL justified paragraphs.
 /// </summary>
 public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
 {
@@ -25,16 +26,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         [nameof(HtmlView.H3FontSizeMultiplier)] = MapHeaderStyles
     };
 
-    // NSHTML import runs WebKit synchronously and spins the calling thread's run
-    // loop; on the main thread that can re-enter UICollectionView updates during
-    // cell creation and crash with SIGABRT. Parse on a worker thread and apply on
-    // the main thread; _renderSerial invalidates stale parses after new content.
+    // Managed parsing avoids WebKit's nested main-thread run loop. The serial
+    // discards stale completions after a cell is rebound or disconnected.
     private string? _renderedHtml;
     private int _renderSerial;
-
-    // WebKitLegacy is not thread-safe: concurrent off-main imports from
-    // multiple cells serialize here.
-    private static readonly object ParseLock = new();
 
     public HtmlViewHandler() : base(PropertyMapper)
     {
@@ -104,9 +99,11 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
             return;
         }
 
-        // Wrap content with styling
-        var styledHtml = WrapWithStyles(html);
-        var renderKey = $"{virtualView.TextAlignment}|{styledHtml}";
+        var fontSize = virtualView.EffectiveFontSize;
+        var h1Scale = virtualView.H1FontSizeMultiplier;
+        var h2Scale = virtualView.H2FontSizeMultiplier;
+        var h3Scale = virtualView.H3FontSizeMultiplier;
+        var renderKey = $"{virtualView.TextAlignment}|{virtualView.TextDirection}|{fontSize}|{virtualView.LineHeight}|{h1Scale}|{h2Scale}|{h3Scale}|{html}";
         if (renderKey == _renderedHtml)
         {
             return;
@@ -140,17 +137,13 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
 
         Task.Run(() =>
         {
-            NSMutableAttributedString? attributedString;
-            lock (ParseLock)
+            if (serial != Volatile.Read(ref _renderSerial))
             {
-                if (serial != Volatile.Read(ref _renderSerial))
-                {
-                    paragraphStyle.Dispose();
-                    textColor.Dispose();
-                    return;
-                }
-                attributedString = ParseHtml(styledHtml);
+                paragraphStyle.Dispose();
+                textColor.Dispose();
+                return;
             }
+            var attributedString = HtmlAttributedStringFactory.FromHtml(html, fontSize, h1Scale, h2Scale, h3Scale);
             if (attributedString != null)
             {
                 var range = new NSRange(0, attributedString.Length);
@@ -194,88 +187,6 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
             paragraphStyle.Dispose();
             textColor.Dispose();
         }
-    }
-
-    // Runs off the main thread: NSHTML import spins a nested run loop which is
-    // fatal on the main thread inside UICollectionView cell creation.
-    private static NSMutableAttributedString? ParseHtml(string styledHtml)
-    {
-        try
-        {
-            // Parse HTML using NSAttributedString via import
-            var htmlData = NSData.FromString(styledHtml, NSStringEncoding.Unicode);
-            if (htmlData == null || htmlData.Length == 0)
-            {
-                return null;
-            }
-
-            var importParams = new NSDictionary(
-                new NSString("DocumentType"), new NSString("NSHTML"),
-                new NSString("CharacterEncoding"), NSNumber.FromInt32((int)NSStringEncoding.Unicode));
-
-            var previousThrowSetting = ObjCRuntime.Class.ThrowOnInitFailure;
-            ObjCRuntime.Class.ThrowOnInitFailure = false;
-            try
-            {
-                NSError? error = null;
-#pragma warning disable CS0618 // Type or member is obsolete - this constructor still works and is simpler
-                var parsed = new NSAttributedString(htmlData, importParams, out _, ref error!);
-#pragma warning restore CS0618
-                if (error != null)
-                {
-                    return null;
-                }
-                return parsed == null ? null : new NSMutableAttributedString(parsed);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"HtmlViewHandler MacCatalyst parse error: {ex.Message}");
-                return null;
-            }
-            finally
-            {
-                ObjCRuntime.Class.ThrowOnInitFailure = previousThrowSetting;
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"HtmlViewHandler MacCatalyst error: {ex.Message}");
-            return null;
-        }
-    }
-
-    private string WrapWithStyles(string html)
-    {
-        var textAlign = VirtualView.GetCssTextAlign();
-        var direction = VirtualView.GetCssDirection();
-        var fontSize = VirtualView.EffectiveFontSize;
-        var lineHeight = VirtualView.LineHeight;
-        var h1Size = fontSize * VirtualView.H1FontSizeMultiplier;
-        var h2Size = fontSize * VirtualView.H2FontSizeMultiplier;
-        var h3Size = fontSize * VirtualView.H3FontSizeMultiplier;
-
-        return $@"<!DOCTYPE html>
-<html dir=""{direction}"">
-<head>
-    <meta charset=""UTF-8"">
-    <style>
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            font-size: {fontSize}px;
-            text-align: {textAlign};
-            direction: {direction};
-            line-height: {lineHeight};
-            margin: 0;
-            padding: 0;
-        }}
-        h1 {{ font-size: {h1Size}px; }}
-        h2 {{ font-size: {h2Size}px; text-decoration: underline; }}
-        h3 {{ font-size: {h3Size}px; text-decoration: underline; }}
-        a {{ color: #1976d2; }}
-    </style>
-</head>
-<body>{html}</body>
-</html>";
     }
 
     private static void MapHtmlContent(HtmlViewHandler handler, HtmlView view)
