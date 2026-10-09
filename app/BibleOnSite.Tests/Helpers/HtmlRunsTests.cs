@@ -460,17 +460,18 @@ public class HtmlRunsStyleCoverageTests
         runs.First(r => r.Text.Contains('ב')).Italic.Should().BeTrue();
     }
 
-    [Theory]
-    [InlineData("underline")]
-    [InlineData("line-through")]
-    public void applies_inline_css_text_decoration(string decoration)
+    [Fact]
+    public void applies_inline_css_underline_decoration()
     {
-        var runs = HtmlRuns.FromHtml($"א<span style=\"text-decoration:{decoration}\">ב</span>");
-        var run = runs.First(r => r.Text.Contains('ב'));
-        if (decoration == "underline")
-            run.Underline.Should().BeTrue();
-        else
-            run.Strikethrough.Should().BeTrue();
+        var runs = HtmlRuns.FromHtml("א<span style=\"text-decoration:underline\">ב</span>");
+        runs.First(r => r.Text.Contains('ב')).Underline.Should().BeTrue();
+    }
+
+    [Fact]
+    public void applies_inline_css_line_through_decoration()
+    {
+        var runs = HtmlRuns.FromHtml("א<span style=\"text-decoration:line-through\">ב</span>");
+        runs.First(r => r.Text.Contains('ב')).Strikethrough.Should().BeTrue();
     }
 
     [Theory]
