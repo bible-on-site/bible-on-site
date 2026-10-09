@@ -199,6 +199,35 @@ public class NotesDeliveryTests
     }
 
     [Fact]
+    public async Task Diagnostics_WhenLocalDatabaseIsCorrupt_ReportsZeroTimestamp()
+    {
+        await using var storage = new TestStorage();
+        await File.WriteAllTextAsync(Path.Combine(storage.Root, DbName), "not a sqlite database");
+        var service = Create(storage);
+        var report = await service.GetDiagnosticsAsync();
+        report.Should().Contain("Local DB build_timestamp: 0");
+    }
+
+    [Fact]
+    public async Task Initialize_WhenPadCopyFails_FallsBackToBundledPackage()
+    {
+        await using var storage = new TestStorage();
+        await storage.BundleDatabaseAsync(DbName, "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
+            "INSERT INTO note VALUES (1,1,1,0,'bundled note')");
+        await using var remote = new TestStorage();
+        var remoteDb = await remote.CreateDatabaseAsync(DbName, "CREATE TABLE note (perush_id INTEGER)");
+        await remoteDb.CloseAsync();
+        await using var exclusive = new FileStream(Path.Combine(remote.Root, DbName), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        var pad = Pad();
+        pad.Setup(p => p.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(remote.Root);
+        var service = Create(storage, pad);
+        await service.InitializeAsync();
+        service.IsAvailable.Should().BeTrue();
+        var notes = await service.LoadNotesForPerekAsync(1, new Dictionary<int, Perush>());
+        notes.Single().NoteContent.Should().Be("bundled note");
+    }
+
+    [Fact]
     public async Task Download_WhenPackageAccessFails_ReturnsFalse()
     {
         await using var storage = new TestStorage();

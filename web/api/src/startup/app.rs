@@ -32,7 +32,8 @@ impl ActixApp {
         } else {
             format!(".{}.env", profile)
         };
-        if let Err(e) = dotenvy::from_filename_override(env_file_name.clone()) {
+        // Explicit launch configuration (CI, containers, local DB overrides) takes precedence.
+        if let Err(e) = dotenvy::from_filename(env_file_name.clone()) {
             tracing::warn!("Failed to load {} file: {}", env_file_name, e);
             tracing::warn!("Using default environment variables");
         }

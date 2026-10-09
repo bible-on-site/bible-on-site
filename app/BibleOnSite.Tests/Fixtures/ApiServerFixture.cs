@@ -1,13 +1,15 @@
 using System.Diagnostics;
 using System.Net.Http;
+using System.Net;
+using System.Net.Sockets;
 
 namespace BibleOnSite.Tests.Fixtures;
 
 /// <summary>
 /// xUnit fixture that starts the API server before tests and stops it after.
 /// Use with [Collection("ApiServer")] attribute on test classes that need the API.
-/// IMPORTANT: Integration tests require the API to run with PROFILE=test (tanah_test database).
-/// If an API server is already running with dev profile, tests may fail with unexpected data.
+/// Integration tests launch their own PROFILE=test API on an available loopback port.
+/// The development API on port 3003 can remain running for the emulator.
 ///
 /// NOTE: This fixture ensures the test database is populated before starting the API server.
 /// xUnit does NOT guarantee ICollectionFixture initialization order, so we must handle
@@ -21,8 +23,9 @@ public class ApiServerFixture : IAsyncLifetime
     private string? _previousApiUrl;
     private bool _apiUrlOverridden;
 
-    public const string ApiUrl = "http://127.0.0.1:3003";
-    public const int StartupTimeoutSeconds = 120;
+    public static string ApiUrl { get; } = $"http://127.0.0.1:{FindAvailablePort()}";
+    // A new worktree may need its first Rust build before the API can listen.
+    public static int StartupTimeoutSeconds => 600;
     public const int HealthCheckIntervalMs = 500;
 
     public async Task InitializeAsync()
@@ -36,27 +39,6 @@ public class ApiServerFixture : IAsyncLifetime
         _previousApiUrl = Environment.GetEnvironmentVariable("API_URL");
         Environment.SetEnvironmentVariable("API_URL", ApiUrl);
         _apiUrlOverridden = true;
-
-        // Check if API is already running - DO NOT reuse it!
-        // An existing API server may be running with dev database, not test database.
-        // Integration tests require the test database (tanah_test) for predictable data.
-        if (await IsApiRunning())
-        {
-            Console.WriteLine("WARNING: API server is already running on port 3003.");
-            Console.WriteLine("Integration tests require the API to run with PROFILE=test (uses tanah_test database).");
-            Console.WriteLine("Please stop any running 'api: start' task and re-run the tests.");
-            Console.WriteLine("The tests will attempt to use the existing server, but may fail if it's using dev data.");
-
-            // Check if we started it ourselves in a previous test run
-            if (_apiProcess != null)
-            {
-                Console.WriteLine("Reusing API server started by this test fixture.");
-                return;
-            }
-
-            Console.WriteLine("Using external API server - tests may fail if it's not using test database!");
-            return;
-        }
 
         Console.WriteLine("Starting API server with PROFILE=test (uses tanah_test database)...");
         await StartApiServer();
@@ -113,7 +95,7 @@ public class ApiServerFixture : IAsyncLifetime
         var startInfo = new ProcessStartInfo
         {
             FileName = "cargo",
-            Arguments = "make run-for-tests",
+            Arguments = "run --locked --profile dev",
             WorkingDirectory = apiDir,
             UseShellExecute = false,
             RedirectStandardOutput = true,
@@ -123,6 +105,14 @@ public class ApiServerFixture : IAsyncLifetime
 
         // Set environment for test mode
         startInfo.Environment["PROFILE"] = "test";
+        startInfo.Environment["PORT"] = new Uri(ApiUrl).Port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (OperatingSystem.IsWindows())
+        {
+            // Windows locks the development API's executable while it is running.
+            // Keep this fixture's compiled API separate so tests can rebuild after
+            // a version/source change without interrupting the emulator backend.
+            startInfo.Environment["CARGO_TARGET_DIR"] = Path.Combine(apiDir, "target", "app-integration");
+        }
 
         // Forward DB_URL from environment (set by CI or local dev)
         var dbUrl = Environment.GetEnvironmentVariable("DB_URL");
@@ -154,6 +144,13 @@ public class ApiServerFixture : IAsyncLifetime
         _apiProcess.BeginErrorReadLine();
 
         return Task.CompletedTask;
+    }
+
+    private static int FindAvailablePort()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 
     private async Task WaitForApiReady()

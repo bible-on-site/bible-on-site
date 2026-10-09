@@ -28,6 +28,7 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute("DonationsPage", typeof(DonationsPage));
 		Routing.RegisterRoute("TosPage", typeof(TosPage));
 		Routing.RegisterRoute("PreferencesPage", typeof(PreferencesPage));
+		Routing.RegisterRoute(AppRoutes.SearchReader, typeof(PerekPage));
 
 		Navigated += OnNavigated;
 	}
@@ -89,8 +90,11 @@ public partial class AppShell : Shell
 		// Honor the selection-mode lock: when a pasuk is selected the page
 		// sets FlyoutBehavior.Disabled and the drawer must stay closed.
 		if (shell.CurrentPage is null ||
-			GetFlyoutBehavior(shell.CurrentPage) != FlyoutBehavior.Flyout)
+			GetFlyoutBehavior(shell.CurrentPage) != FlyoutBehavior.Flyout ||
+			shell.Navigation.NavigationStack.Count > 1)
 		{
+			// Above the root, iOS owns this edge for standard history Back.
+			// The reader's hamburger still opens the drawer after a search jump.
 			return false;
 		}
 		// MAUI's own flyout pan only engages in the left 10% band; mirror it on
@@ -172,36 +176,36 @@ public partial class AppShell : Shell
 	private async void OnAlHaperekTapped(object? sender, TappedEventArgs e)
 	{
 		FlyoutIsPresented = false;
-		await GoToAsync(AppRoutes.FlyoutPage("PerekPage"));
+		await GoToAsync(AppRoutes.FlyoutPage("PerekPage", CurrentState.Location.OriginalString));
 	}
 
 	private async void OnAuthorsTapped(object? sender, TappedEventArgs e)
 	{
 		FlyoutIsPresented = false;
-		await GoToAsync(AppRoutes.FlyoutPage("AuthorsPage"));
+		await GoToAsync(AppRoutes.FlyoutPage("AuthorsPage", CurrentState.Location.OriginalString));
 	}
 
 	private async void OnTermsTapped(object? sender, TappedEventArgs e)
 	{
 		FlyoutIsPresented = false;
-		await GoToAsync(AppRoutes.FlyoutPage("TosPage"));
+		await GoToAsync(AppRoutes.FlyoutPage("TosPage", CurrentState.Location.OriginalString));
 	}
 
 	private async void OnPreferencesTapped(object? sender, TappedEventArgs e)
 	{
 		FlyoutIsPresented = false;
-		await GoToAsync(AppRoutes.FlyoutPage("PreferencesPage"));
+		await GoToAsync(AppRoutes.FlyoutPage("PreferencesPage", CurrentState.Location.OriginalString));
 	}
 
 	private async void OnContactTapped(object? sender, TappedEventArgs e)
 	{
 		FlyoutIsPresented = false;
-		await GoToAsync(AppRoutes.FlyoutPage("ContactPage"));
+		await GoToAsync(AppRoutes.FlyoutPage("ContactPage", CurrentState.Location.OriginalString));
 	}
 
 	private async void OnDonationsTapped(object? sender, TappedEventArgs e)
 	{
 		FlyoutIsPresented = false;
-		await GoToAsync(AppRoutes.FlyoutPage("DonationsPage"));
+		await GoToAsync(AppRoutes.FlyoutPage("DonationsPage", CurrentState.Location.OriginalString));
 	}
 }

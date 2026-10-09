@@ -238,10 +238,18 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
 
         if (isRtl)
         {
-            // For RTL: use TextAlignment.ViewStart which resolves to physical right
-            // when LayoutDirection is RTL (set by MapTextDirection or MAUI's FlowDirection).
-            handler.PlatformView.TextAlignment = Android.Views.TextAlignment.ViewStart;
-            handler.PlatformView.Gravity = Android.Views.GravityFlags.Start | Android.Views.GravityFlags.Top;
+            handler.PlatformView.TextAlignment = view.TextAlignment switch
+            {
+                HtmlTextAlignment.Center => Android.Views.TextAlignment.Center,
+                HtmlTextAlignment.End => Android.Views.TextAlignment.ViewEnd,
+                _ => Android.Views.TextAlignment.ViewStart
+            };
+            handler.PlatformView.Gravity = (view.TextAlignment switch
+            {
+                HtmlTextAlignment.Center => Android.Views.GravityFlags.CenterHorizontal,
+                HtmlTextAlignment.End => Android.Views.GravityFlags.End,
+                _ => Android.Views.GravityFlags.Start
+            }) | Android.Views.GravityFlags.Top;
         }
         else
         {
@@ -259,11 +267,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
                 handler.PlatformView.Gravity = Android.Views.GravityFlags.Left | Android.Views.GravityFlags.Top;
         }
 
-        // For justify, use JustificationMode on API 26+.
-        // Skip for RTL — JustificationMode.InterWord can override alignment for
-        // short/single-line text. RTL alignment is handled via RLM + TextDirection.
+        // Justify complete lines in either direction. TextDirection and the RLM
+        // keep short paragraphs and their final line aligned to the RTL start.
 #pragma warning disable CA1416 // Platform compatibility
-        if (view.TextAlignment == HtmlTextAlignment.Justify && !isRtl &&
+        if (view.TextAlignment == HtmlTextAlignment.Justify &&
             Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.O)
         {
             handler.PlatformView.JustificationMode = Android.Text.JustificationMode.InterWord;

@@ -7,30 +7,24 @@ public abstract class SearchResult
 {
     public string SearchPhrase { get; set; } = string.Empty;
     public abstract SearchFilter ResultType { get; }
+    public string Title { get; set; } = string.Empty;
+    public string SubtitleHtml { get; set; } = string.Empty;
+    public string Category => ResultType.GetHebrewName();
+    public int Score { get; set; }
+    public int GenerationOrder { get; set; } = int.MaxValue;
+    public int SourceOrder => this switch
+    {
+        PerekSearchResult perek => perek.Perek.PerekId * 1000,
+        PasukSearchResult pasuk => pasuk.PerekId * 1000 + pasuk.Pasuk.PasukNum,
+        PerushSearchResult perush => perush.PerekId * 1000 + perush.PasukNum,
+        _ => int.MaxValue
+    };
+    public virtual string? ThumbnailUrl => null;
+    public bool HasThumbnail => ThumbnailUrl != null;
 
     protected static string CreateHighlightedResult(string text, string searchPhrase)
     {
-        var matchIndex = string.IsNullOrEmpty(searchPhrase)
-            ? -1
-            : text.IndexOf(searchPhrase, StringComparison.Ordinal);
-        if (matchIndex < 0)
-        {
-            return text.Length > 50 ? text[..50] + "..." : text;
-        }
-
-        var highlighted = text.Replace(searchPhrase, $"<b>{searchPhrase}</b>");
-        var start = Math.Max(0, matchIndex - 20);
-        var end = Math.Min(highlighted.Length, matchIndex + searchPhrase.Length + 7 + 20);
-        var result = highlighted[start..end];
-        if (start > 0)
-        {
-            result = "..." + result;
-        }
-        if (end < highlighted.Length)
-        {
-            result += "...";
-        }
-        return result;
+        return Helpers.SearchText.Snippet(text, searchPhrase ?? string.Empty);
     }
 }
 
@@ -40,6 +34,7 @@ public abstract class SearchResult
 public class AuthorSearchResult : SearchResult
 {
     public Author Author { get; }
+    public override string? ThumbnailUrl => Author.ImageUrl;
 
     public override SearchFilter ResultType => SearchFilter.Author;
 

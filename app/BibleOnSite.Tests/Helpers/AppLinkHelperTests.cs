@@ -2,6 +2,7 @@ using BibleOnSite.Helpers;
 
 namespace BibleOnSite.Tests.Helpers;
 
+[Collection("Process environment")]
 public class AppLinkHelperTests
 {
     [Theory]
@@ -12,6 +13,8 @@ public class AppLinkHelperTests
     [InlineData("https://www.929.org.il/929/123/איוב-כג", 123)]
     [InlineData("https://www.929.org.il/929/123?pasuk=5", 123)]
     [InlineData("https://www.929.org.il/929/123#footer", 123)]
+    [InlineData("https://www.929.org.il/929/123/0", 123)]
+    [InlineData("https://www.929.org.il/929/123/-1", 123)]
     public void TryParse_ValidPerekUrl_ReturnsPerekId(string url, int expected)
     {
         AppLinkHelper.TryParse(url, out var target).Should().BeTrue();
@@ -50,6 +53,22 @@ public class AppLinkHelperTests
         AppLinkHelper.TryParse(url, out var target).Should().BeFalse();
         target.PerekId.Should().Be(0);
         target.ArticleId.Should().BeNull();
+    }
+
+    [Fact]
+    public void Request_BeforeTheReaderSubscribes_PreservesThePendingTarget()
+    {
+        var previous = AppLinkHelper.PendingTarget;
+        try
+        {
+            var target = new AppLinkHelper.AppLinkTarget(55, 7);
+            AppLinkHelper.Request(target);
+            AppLinkHelper.PendingTarget.Should().Be(target);
+        }
+        finally
+        {
+            AppLinkHelper.PendingTarget = previous;
+        }
     }
 
     [Fact]

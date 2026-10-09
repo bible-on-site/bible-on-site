@@ -114,7 +114,7 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         Page.WaitForStartup();
     }
 
-    private void SaveDiagnostics(string name, string outcome)
+    protected void SaveDiagnostics(string name, string outcome)
     {
         var prefix = Path.Join(Configuration.ArtifactDirectory, $"{name}-{outcome}");
         Directory.CreateDirectory(Configuration.ArtifactDirectory);

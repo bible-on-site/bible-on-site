@@ -11,7 +11,7 @@ jobs:
   appium:
     name: Appium ${{ matrix.platform }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       # Each platform owns its runner, device, server and artifacts. Preserve
       # both results when one platform fails; there is no cross-platform dependency.
@@ -124,7 +124,7 @@ jobs:
           path: ~/.nuget/packages
           key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
 
-      - name: Enable Android hardware acceleration
+      - name: Prepare Android emulator runtime and hardware acceleration
         if: matrix.platform == 'Android'
         run: |
           sudo apt-get update
@@ -272,6 +272,8 @@ jobs:
 
       - name: Run shared pilot on iOS
         if: matrix.platform == 'iOS'
+        # Leave time to upload diagnostics when the expanded device suite expires.
+        timeout-minutes: 45
         run: npm test --prefix app/mobile-e2e
 
       - name: Upload platform results and diagnostics
