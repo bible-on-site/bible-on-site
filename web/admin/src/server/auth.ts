@@ -1,20 +1,31 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
 const COGNITO_REGION = "il-central-1";
-const COGNITO_USER_POOL_ID =
-	process.env.COGNITO_USER_POOL_ID || "il-central-1_1jyMEBzqm";
-const COGNITO_CLIENT_ID =
-	process.env.COGNITO_CLIENT_ID || "3g2r20jej1u6kfao6hhvt1882k";
-const COGNITO_CLIENT_SECRET = process.env.COGNITO_CLIENT_SECRET || "";
-const COGNITO_DOMAIN =
-	process.env.COGNITO_DOMAIN ||
-	"bible-on-site-admin.auth.il-central-1.amazoncognito.com";
+const COGNITO_USER_POOL_ID = requireEnv("COGNITO_USER_POOL_ID");
+const COGNITO_CLIENT_ID = requireEnv("COGNITO_CLIENT_ID");
+const COGNITO_CLIENT_SECRET = requireEnv("COGNITO_CLIENT_SECRET");
+const COGNITO_DOMAIN = requireEnv("COGNITO_DOMAIN");
+
+// Machine-to-machine (client_credentials) access, for automated scripts to call
+// the admin API without a browser/SAML session. Entirely optional/additive: if
+// COGNITO_SERVICE_CLIENT_ID is not configured, verifyServiceAccessToken always
+// returns false and only the existing cookie-based user login path is usable.
+const COGNITO_SERVICE_CLIENT_ID =
+	process.env.COGNITO_SERVICE_CLIENT_ID?.trim() || undefined;
+const COGNITO_SERVICE_SCOPE =
+	process.env.COGNITO_SERVICE_SCOPE?.trim() || "admin-api/service";
+
+function requireEnv(name: string): string {
+	const value = process.env[name];
+	if (!value && process.env.SKIP_AUTH !== "true") {
+		throw new Error(`Missing required environment variable: ${name}`);
+	}
+	return value ?? "";
+}
 
 const ISSUER = `https://cognito-idp.${COGNITO_REGION}.amazonaws.com/${COGNITO_USER_POOL_ID}`;
 
-const jwks = createRemoteJWKSet(
-	new URL(`${ISSUER}/.well-known/jwks.json`),
-);
+const jwks = createRemoteJWKSet(new URL(`${ISSUER}/.well-known/jwks.json`));
 
 export function getLoginUrl(origin: string): string {
 	const params = new URLSearchParams({
@@ -47,14 +58,11 @@ export async function exchangeCodeForTokens(
 		redirect_uri: `${origin}/auth/callback`,
 	});
 
-	const response = await fetch(
-		`https://${COGNITO_DOMAIN}/oauth2/token`,
-		{
-			method: "POST",
-			headers: { "Content-Type": "application/x-www-form-urlencoded" },
-			body: body.toString(),
-		},
-	);
+	const response = await fetch(`https://${COGNITO_DOMAIN}/oauth2/token`, {
+		method: "POST",
+		headers: { "Content-Type": "application/x-www-form-urlencoded" },
+		body: body.toString(),
+	});
 
 	if (!response.ok) {
 		const text = await response.text();
@@ -76,14 +84,45 @@ export async function verifyIdToken(token: string): Promise<boolean> {
 	}
 }
 
-export function parseCookie(
-	cookieHeader: string,
-	name: string,
-): string | null {
-	const match = cookieHeader.match(
-		new RegExp(`(?:^|;\\s*)${name}=([^;]*)`),
-	);
-	return match ? decodeURIComponent(match[1]) : null;
+/**
+ * Verifies a Cognito OAuth2 client_credentials access token minted for the
+ * dedicated M2M app client. This is a separate, narrowly-scoped trust path
+ * from verifyIdToken above: it only accepts access tokens (never ID tokens),
+ * only from the specific service client_id, and only carrying the required
+ * custom scope - never the browser-facing admin-web-app client.
+ */
+export async function verifyServiceAccessToken(
+	token: string,
+): Promise<boolean> {
+	if (!COGNITO_SERVICE_CLIENT_ID) return false;
+	try {
+		const { payload } = await jwtVerify(token, jwks, { issuer: ISSUER });
+		if (payload.token_use !== "access") return false;
+		if (payload.client_id !== COGNITO_SERVICE_CLIENT_ID) return false;
+		const scopes =
+			typeof payload.scope === "string" ? payload.scope.split(" ") : [];
+		return scopes.includes(COGNITO_SERVICE_SCOPE);
+	} catch {
+		return false;
+	}
+}
+
+export function parseCookie(cookieHeader: string, name: string): string | null {
+	for (const part of cookieHeader.split(";")) {
+		const separatorIndex = part.indexOf("=");
+		if (separatorIndex === -1) continue;
+		const key = part.slice(0, separatorIndex).trim();
+		if (key === name) {
+			try {
+				return decodeURIComponent(part.slice(separatorIndex + 1));
+			} catch {
+				// Malformed percent-encoding in an attacker-controlled cookie header
+				// must not crash the request; treat it as a missing/invalid cookie.
+				return null;
+			}
+		}
+	}
+	return null;
 }
 
 export function buildSessionCookie(

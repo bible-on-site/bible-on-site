@@ -35,12 +35,14 @@ on:
   pull_request:
     branches: master
   merge_group:
+  # Use the dispatch's native branch/tag selector so execution and cache scope match.
   workflow_dispatch:
-    inputs:
-      ref:
-        description: "The branch or tag to run the workflow on"
-        required: true
-        default: "master"
+
+# Only the latest commit of a PR needs validation. Keep master, dispatched and
+# merge-queue runs independent so publication and queue validation are preserved.
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   API_CARGO_FILE: web/api/Cargo.toml
@@ -62,7 +64,12 @@ env:
   APP_MERGED_COVERAGE_DIRECTORY: app/.coverage/merged
   APP_DIRECTORY: app
   CROSS_MODULE_COVERAGE_REPORT: .coverage/lcov.info
+  DATA_COVERAGE_ARTIFACT_NAME_MASTER: data-coverage.master
+  DATA_COVERAGE_ARTIFACT_NAME_WF: data-coverage.${{ github.run_id }}
+  DATA_COVERAGE_DIRECTORY: data/.coverage
+  DATA_COVERAGE_REPORT: data/.coverage/merged/lcov.info
   DATA_DIRECTORY: data
+  DATA_MERGED_COVERAGE_DIRECTORY: data/.coverage/merged
   DEVOPS_DIRECTORY: devops
   DEVOPS_NODE_CACHE_PATH: devops/package-lock.json
   DEVOPS_NODE_VERSION_FILE: devops/package.json
@@ -87,6 +94,12 @@ env:
   ADMIN_NODE_VERSION_FILE: web/admin/package.json
   ADMIN_UNIT_JUNIT_REPORT_ARTIFACT_NAME: admin-unit-junit-report-${{ github.run_id }}
   ADMIN_E2E_JUNIT_REPORT_ARTIFACT_NAME: admin-e2e-junit-report-${{ github.run_id }}
+  ADMIN_COVERAGE_ARTIFACT_NAME_MASTER: admin-coverage.master
+  ADMIN_COVERAGE_ARTIFACT_NAME_WF: admin-coverage.${{ github.run_id }}
+  ADMIN_COVERAGE_DIRECTORY: web/admin/.coverage
+  ADMIN_MERGED_COVERAGE_REPORT: web/admin/.coverage/merged/lcov.info
+  ADMIN_UNIT_COVERAGE_REPORT: web/admin/.coverage/unit/lcov.info
+  ADMIN_E2E_COVERAGE_REPORT: web/admin/.coverage/e2e/lcov.info
   BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER: bulletin-coverage.master
   BULLETIN_COVERAGE_ARTIFACT_NAME_WF: bulletin-coverage.${{ github.run_id }}
   BULLETIN_COVERAGE_DIRECTORY: web/bulletin/.coverage/unit
@@ -97,14 +110,18 @@ env:
   DATA_UNIT_JUNIT_REPORT_ARTIFACT_NAME: data-unit-junit-report-${{ github.run_id }}
   DATA_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME: data-integration-junit-report-${{ github.run_id }}
   PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER: perushim-data-sql.master
-  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-notes-sqlite.master
-  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_WF: perushim-notes-sqlite.${{ github.run_id }}
+  # v2 carries a catalog/notes pair; old notes-only baselines cannot be reused.
+  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-sqlite-v2.master
+  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_WF: perushim-sqlite-v2.${{ github.run_id }}
   PERUSHIM_NOTES_SQLITE_FILENAME: sefaria-dump-5784-sivan-4.perushim_notes.sqlite
+  PERUSHIM_CATALOG_SQLITE_FILENAME: sefaria-dump-5784-sivan-4.perushim_catalog.sqlite
   PERUSHIM_NOTES_ANDROID_ASSET_RELDIR: Platforms/Android/AssetPacks/perushim_notes
   PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR: Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset
   PERUSHIM_PIPELINE_DIRECTORY: data/sefaria/pipelines/perushim-view
   LCOV_DOCKER_IMAGE_ARTIFACT_NAME: lcov-docker-image
   SEFARIA_MONGO_IMAGE_ARTIFACT_NAME: sefaria-mongo-image
+  SEFARIA_MONGO_IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/sefaria-mongo
+  SEFARIA_MONGO_DOCKER_DIRECTORY: data/sefaria/mongodb-docker
 
 jobs:
   setup_env:
@@ -112,7 +129,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       api_directory: ${{ env.API_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
-      api_playwright_version: ${{ steps.get_api_playwright_version.outputs.PLAYWRIGHT_VERSION }}
       app_directory: ${{ env.APP_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       admin_directory: ${{ env.ADMIN_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       bulletin_directory: ${{ env.BULLETIN_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
@@ -124,13 +140,9 @@ jobs:
       - run: echo "Setting up environment variables"
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
-      - name: Get API Playwright version
-        id: get_api_playwright_version
-        working-directory: ${{ env.API_TESTS_DIRECTORY }}
-        run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./package.json').devDependencies['@playwright/test'])")" >> $GITHUB_OUTPUT
+          ref: ${{ github.sha }}
       - name: Get Website Playwright version
         id: get_website_playwright_version
         working-directory: ${{ env.WEBSITE_DIRECTORY }}
@@ -146,7 +158,9 @@ jobs:
       is_api_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_api_master_coverage_available }}
       is_app_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_app_master_coverage_available }}
       is_bulletin_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_bulletin_master_coverage_available }}
+      is_admin_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_admin_master_coverage_available }}
       is_website_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_website_master_coverage_available }}
+      is_data_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_data_master_coverage_available }}
       is_perushim_data_sql_available: ${{ steps.check_master_coverage_artifacts.outputs.is_perushim_data_sql_available }}
       is_perushim_notes_sqlite_available: ${{ steps.check_master_coverage_artifacts.outputs.is_perushim_notes_sqlite_available }}
     steps:
@@ -178,27 +192,36 @@ jobs:
           IS_API_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}")
           IS_APP_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}")
           IS_BULLETIN_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}")
+          IS_ADMIN_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}")
           IS_WEBSITE_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}")
+          IS_DATA_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}")
           IS_PERUSHIM_DATA_SQL_AVAILABLE=$(check_and_download_artifact "${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}")
           IS_PERUSHIM_NOTES_SQLITE_AVAILABLE=$(check_and_download_artifact "${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}")
 
           echo "API master coverage available: $IS_API_MASTER_COVERAGE_AVAILABLE"
           echo "App master coverage available: $IS_APP_MASTER_COVERAGE_AVAILABLE"
           echo "Bulletin master coverage available: $IS_BULLETIN_MASTER_COVERAGE_AVAILABLE"
+          echo "Admin master coverage available: $IS_ADMIN_MASTER_COVERAGE_AVAILABLE"
           echo "Website master coverage available: $IS_WEBSITE_MASTER_COVERAGE_AVAILABLE"
+          echo "Data master coverage available: $IS_DATA_MASTER_COVERAGE_AVAILABLE"
           echo "Perushim data SQL available: $IS_PERUSHIM_DATA_SQL_AVAILABLE"
           echo "Perushim notes SQLite available: $IS_PERUSHIM_NOTES_SQLITE_AVAILABLE"
 
           echo "is_api_master_coverage_available=$IS_API_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_app_master_coverage_available=$IS_APP_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_bulletin_master_coverage_available=$IS_BULLETIN_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
+          echo "is_admin_master_coverage_available=$IS_ADMIN_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_website_master_coverage_available=$IS_WEBSITE_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
+          echo "is_data_master_coverage_available=$IS_DATA_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_perushim_data_sql_available=$IS_PERUSHIM_DATA_SQL_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_perushim_notes_sqlite_available=$IS_PERUSHIM_NOTES_SQLITE_AVAILABLE" >> $GITHUB_OUTPUT
 
+      # Keep JS action startup sequential: the runner's shared event.json can
+      # be truncated while another parallel action reads it.
+      # https://github.com/actions/checkout/issues/2484
       - name: Re-upload API master coverage for current workflow
         if: steps.check_master_coverage_artifacts.outputs.is_api_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
@@ -207,7 +230,7 @@ jobs:
 
       - name: Re-upload App master coverage for current workflow
         if: steps.check_master_coverage_artifacts.outputs.is_app_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
@@ -216,7 +239,7 @@ jobs:
 
       - name: Re-upload Bulletin master coverage for current workflow
         if: steps.check_master_coverage_artifacts.outputs.is_bulletin_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}
@@ -225,16 +248,31 @@ jobs:
 
       - name: Re-upload Website master coverage for current workflow
         if: steps.check_master_coverage_artifacts.outputs.is_website_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           retention-days: 90
           overwrite: true
 
+      - name: Re-upload Admin master coverage for current workflow
+        if: steps.check_master_coverage_artifacts.outputs.is_admin_master_coverage_available == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
+          path: /tmp/${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
+      - name: Re-upload Data master coverage for current workflow
+        if: steps.check_master_coverage_artifacts.outputs.is_data_master_coverage_available == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}
+          path: /tmp/${{ env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}
+          retention-days: 90
+          overwrite: true
+
       - name: Re-upload perushim data SQL for current workflow
         if: steps.check_master_coverage_artifacts.outputs.is_perushim_data_sql_available == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
@@ -243,23 +281,27 @@ jobs:
 
       - name: Re-upload perushim notes SQLite for current workflow
         if: steps.check_master_coverage_artifacts.outputs.is_perushim_notes_sqlite_available == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
           retention-days: 90
           overwrite: true
 
+
   determine_docker_image_availability:
     name: Determine Docker Image Availability
     permissions:
       contents: read
       actions: read
+      packages: read
     runs-on: ubuntu-latest
     outputs:
       is_lcov_docker_available: ${{ steps.check_docker_images.outputs.is_lcov_docker_available }}
       is_sefaria_mongo_available: ${{ steps.check_sefaria_mongo.outputs.is_sefaria_mongo_available }}
-      sefaria_mongo_artifact_id: ${{ steps.check_sefaria_mongo.outputs.sefaria_mongo_artifact_id }}
+      sefaria_mongo_image: ${{ steps.check_sefaria_mongo.outputs.sefaria_mongo_image }}
+      # Fork PR tokens are read-only, so their rebuilt image travels as a workflow artifact instead.
+      can_publish_sefaria_mongo: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
       - name: Check and restore LCOV Docker image artifact
         id: check_docker_images
@@ -287,157 +329,70 @@ jobs:
 
       - name: Re-upload LCOV Docker image for current workflow
         if: steps.check_docker_images.outputs.is_lcov_docker_available == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp/${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
-      - name: Check Sefaria MongoDB image artifact availability
+      - name: Check Sefaria MongoDB image availability
         id: check_sefaria_mongo
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Only check if artifact exists - don't download here
-          # MongoDB image is ~5GB, only data_ci needs it, so download there directly via gh api (faster than actions/download-artifact)
-          # Use ?name= filter to avoid pagination issues (25k+ artifacts in repo)
-          artifact_name="${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }}"
-          artifact_info=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$artifact_name" \
-            --jq "[.artifacts[] | select(.expired == false)] | first")
-
-          if [ "$artifact_info" != "null" ] && [ -n "$artifact_info" ]; then
-            artifact_id=$(echo "$artifact_info" | jq -r '.id')
-            echo "Found cached Sefaria MongoDB image (artifact id: $artifact_id)"
+          # Tag by the git tree hash of the build context, so any change to it rebuilds the image.
+          docker_dir="${{ env.SEFARIA_MONGO_DOCKER_DIRECTORY }}"
+          tree_sha=$(gh api "repos/${{ github.repository }}/contents/$(dirname "$docker_dir")?ref=${{ github.sha }}" \
+            --jq ".[] | select(.name == \"$(basename "$docker_dir")\") | .sha")
+          test -n "$tree_sha"
+          image="${{ env.SEFARIA_MONGO_IMAGE_REPOSITORY }}:$tree_sha"
+          echo "sefaria_mongo_image=$image" >> $GITHUB_OUTPUT
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          if docker manifest inspect "$image" > /dev/null; then
+            echo "Found Sefaria MongoDB image $image"
             echo "is_sefaria_mongo_available=true" >> $GITHUB_OUTPUT
-            echo "sefaria_mongo_artifact_id=$artifact_id" >> $GITHUB_OUTPUT
           else
-            echo "Sefaria MongoDB image not found in artifacts - will need to build"
+            echo "Sefaria MongoDB image $image not found - will need to build"
             echo "is_sefaria_mongo_available=false" >> $GITHUB_OUTPUT
           fi
 
-  determine_website_changes:
-    name: Determine Website Changes
-    needs: setup_env
-    secrets: inherit
-    uses: ./.github/workflows/shared-ci.yml
-    with:
-      module_directory: ${{ needs.setup_env.outputs.website_directory }}
-      module_name: ${{ needs.setup_env.outputs.website_directory }}
-      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
-
-  determine_api_changes:
-    name: Determine API Changes
-    needs: setup_env
-    secrets: inherit
-    uses: ./.github/workflows/shared-ci.yml
-    with:
-      module_directory: ${{ needs.setup_env.outputs.api_directory }}
-      module_name: ${{ needs.setup_env.outputs.api_directory }}
-      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
-
-  determine_app_changes:
-    name: Determine App Changes
-    needs: setup_env
-    secrets: inherit
-    uses: ./.github/workflows/shared-ci.yml
-    with:
-      module_directory: ${{ needs.setup_env.outputs.app_directory }}
-      module_name: ${{ needs.setup_env.outputs.app_directory }}
-      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
-
-  determine_admin_changes:
-    name: Determine Admin Changes
-    needs: setup_env
-    secrets: inherit
-    uses: ./.github/workflows/shared-ci.yml
-    with:
-      module_directory: ${{ needs.setup_env.outputs.admin_directory }}
-      module_name: ${{ needs.setup_env.outputs.admin_directory }}
-      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml"
-
-  determine_bulletin_changes:
-    name: Determine Bulletin Changes
-    needs: setup_env
-    secrets: inherit
-    uses: ./.github/workflows/shared-ci.yml
-    with:
-      module_directory: ${{ needs.setup_env.outputs.bulletin_directory }}
-      module_name: ${{ needs.setup_env.outputs.bulletin_directory }}
-      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml,.github/workflows/shared-release.yml"
-
-  determine_data_changes:
-    name: Determine Data Changes
-    needs: setup_env
-    secrets: inherit
-    uses: ./.github/workflows/shared-ci.yml
-    with:
-      module_directory: ${{ needs.setup_env.outputs.data_directory }}
-      module_name: ${{ needs.setup_env.outputs.data_directory }}
-      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml"
-
-  determine_perushim_pipeline_changes:
-    name: Determine Perushim Pipeline Changes
-    needs: setup_env
-    secrets: inherit
-    uses: ./.github/workflows/shared-ci.yml
-    with:
-      module_directory: data/sefaria/pipelines/perushim-view
-      module_name: data/sefaria/pipelines/perushim-view
-      ci_path: ".github/workflows/ci.yml,.github/workflows/shared-ci.yml"
-
-  # Version Verification Jobs
-  # These jobs run on PRs and master to verify that module versions are properly bumped
-  # before any release can occur. This prevents CD failures due to duplicate versions.
-  verify_website_version:
-    name: Verify Website Version
-    needs: [setup_env, determine_website_changes]
-    if: ${{ needs.determine_website_changes.outputs.module_changed == 'true' }}
-    uses: ./.github/workflows/shared-verify-version.yml
-    with:
-      module_name: website
-      ref: ${{ github.head_ref || github.ref }}
-
-  verify_api_version:
-    name: Verify API Version
-    needs: [setup_env, determine_api_changes]
-    if: ${{ needs.determine_api_changes.outputs.module_changed == 'true' }}
-    uses: ./.github/workflows/shared-verify-version.yml
-    with:
-      module_name: api
-      ref: ${{ github.head_ref || github.ref }}
-
-  verify_app_version:
-    name: Verify App Version
-    needs: [setup_env, determine_app_changes]
-    if: ${{ needs.determine_app_changes.outputs.module_changed == 'true' }}
-    uses: ./.github/workflows/shared-verify-version.yml
-    with:
-      module_name: app
-      ref: ${{ github.head_ref || github.ref }}
-
-  verify_bulletin_version:
-    name: Verify Bulletin Version
-    needs: [setup_env, determine_bulletin_changes]
-    if: ${{ needs.determine_bulletin_changes.outputs.module_changed == 'true' }}
-    uses: ./.github/workflows/shared-verify-version.yml
-    with:
-      module_name: bulletin
-      ref: ${{ github.head_ref || github.ref }}
-
-  verify_admin_version:
-    name: Verify Admin Version
-    needs: [setup_env, determine_admin_changes]
-    if: ${{ needs.determine_admin_changes.outputs.module_changed == 'true' }}
-    uses: ./.github/workflows/shared-verify-version.yml
-    with:
-      module_name: admin
-      ref: ${{ github.head_ref || github.ref }}
+  determine_changes:
+    name: Determine Changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      website_module_changed: ${{ steps.determine.outputs.website_module_changed }}
+      website_ci_changed: ${{ steps.determine.outputs.website_ci_changed }}
+      api_module_changed: ${{ steps.determine.outputs.api_module_changed }}
+      api_ci_changed: ${{ steps.determine.outputs.api_ci_changed }}
+      app_module_changed: ${{ steps.determine.outputs.app_module_changed }}
+      app_ci_changed: ${{ steps.determine.outputs.app_ci_changed }}
+      admin_module_changed: ${{ steps.determine.outputs.admin_module_changed }}
+      admin_ci_changed: ${{ steps.determine.outputs.admin_ci_changed }}
+      bulletin_module_changed: ${{ steps.determine.outputs.bulletin_module_changed }}
+      bulletin_ci_changed: ${{ steps.determine.outputs.bulletin_ci_changed }}
+      data_module_changed: ${{ steps.determine.outputs.data_module_changed }}
+      data_ci_changed: ${{ steps.determine.outputs.data_ci_changed }}
+      perushim_pipeline_module_changed: ${{ steps.determine.outputs.perushim_pipeline_module_changed }}
+      perushim_pipeline_ci_changed: ${{ steps.determine.outputs.perushim_pipeline_ci_changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
+      - name: Determine module changes
+        id: determine
+        run: node devops/github/ci/determine-changes.ts
 
   package_website:
     name: Package Website
-    needs: [setup_env, determine_website_changes]
-    if: ${{ needs.determine_website_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_changes]
+    if: ${{ needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -449,8 +404,8 @@ jobs:
 
   package_api:
     name: Package API
-    needs: [setup_env, determine_api_changes]
-    if: ${{ needs.determine_api_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_changes]
+    if: ${{ needs.determine_changes.outputs.api_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -464,8 +419,8 @@ jobs:
     name: Package App
     # Wait for perushim_data so the app is packaged with up-to-date perushim notes
     # when both app and perushim pipeline change in the same commit.
-    needs: [setup_env, determine_app_changes, perushim_data]
-    if: ${{ always() && !cancelled() && !failure() && needs.determine_app_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_changes, perushim_data]
+    if: ${{ always() && !cancelled() && !failure() && needs.determine_changes.outputs.app_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
       actions: read
@@ -473,12 +428,12 @@ jobs:
     uses: ./.github/workflows/app-package.yml
     with:
       platform: All
-      perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-notes-sqlite.{0}', github.run_id) || 'perushim-notes-sqlite.master' }}
+      perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2.{0}', github.run_id) || 'perushim-sqlite-v2.master' }}
 
   package_bulletin:
     name: Package Bulletin
-    needs: [setup_env, determine_bulletin_changes]
-    if: ${{ needs.determine_bulletin_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_changes]
+    if: ${{ needs.determine_changes.outputs.bulletin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
       actions: read
@@ -490,7 +445,7 @@ jobs:
       SHARED_ROOT_DIR: web
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -526,16 +481,19 @@ jobs:
           rm -rf ./bootstrap fonts/
 
       - name: Store Lambda ZIP
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BULLETIN_LAMBDA_ZIP_ARTIFACT_NAME }}
           path: ${{ env.BULLETIN_DIRECTORY }}/.release/bulletin-lambda-v${{ steps.get_version.outputs.MODULE_VERSION }}.zip
-          retention-days: 1
+          # Release artifact consumed by cd-bulletin (repository_dispatch). Must
+          # outlive a single day so a failed/late CD can be re-run without the
+          # artifact expiring (matches the website/api release artifacts at 90).
+          retention-days: 90
 
   package_admin:
     name: Package Admin
-    needs: [setup_env, determine_admin_changes]
-    if: ${{ needs.determine_admin_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_changes]
+    if: ${{ needs.determine_changes.outputs.admin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
       actions: read
@@ -547,7 +505,7 @@ jobs:
       SHARED_ROOT_DIR: web
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Get Module Version
         id: get_version
@@ -582,7 +540,7 @@ jobs:
         run: gzip -c -f ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }} > ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }}.gz
 
       - name: Store Docker Image
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_DOCKER_ARTIFACT_NAME }}
           path: ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
@@ -595,19 +553,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
         with:
           driver-opts: |
             network=host
             image=moby/buildkit:v0.22.0
 
       - name: Build And Cache lcov Docker Image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: devops/coverage/lcov-docker/
           file: devops/coverage/lcov-docker/Dockerfile
@@ -617,22 +575,26 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Store Docker Image
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp/lcov-docker-image.tar
-          retention-days: 400
+          retention-days: 90
 
   build_sefaria_mongo_docker:
     name: Build Sefaria MongoDB Docker Image
-    needs: [setup_env, determine_data_changes, determine_docker_image_availability]
-    if: ${{ needs.determine_docker_image_availability.outputs.is_sefaria_mongo_available != 'true' && (needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true') }}
+    needs: [setup_env, determine_changes, determine_docker_image_availability]
+    if: ${{ needs.determine_docker_image_availability.outputs.is_sefaria_mongo_available != 'true' && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # GitHub caps fork PR tokens to read-only, so only trusted runs can publish.
+      packages: write
     steps:
       # Free disk space for the MongoDB Docker image build (~10GB+ needed for mongorestore)
       # Enable large-packages and docker-images to maximize available space
       - name: Free Disk Space
-        uses: jlumbroso/free-disk-space@v1.3.1
+        uses: jlumbroso/free-disk-space@v2.0.0
         with:
           tool-cache: false
           android: true
@@ -643,29 +605,39 @@ jobs:
           swap-storage: true
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
         with:
           driver-opts: |
             network=host
             image=moby/buildkit:v0.22.0
 
-      - name: Build And Cache Sefaria MongoDB Docker Image
-        uses: docker/build-push-action@v6
+      - name: Log In To GitHub Container Registry
+        if: ${{ needs.determine_docker_image_availability.outputs.can_publish_sefaria_mongo == 'true' }}
+        uses: docker/login-action@v4
         with:
-          context: data/sefaria/mongodb-docker/
-          file: data/sefaria/mongodb-docker/Dockerfile
-          tags: sefaria-mongo:latest
-          outputs: type=docker,dest=/tmp/sefaria-mongo-image.tar
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build And Publish Sefaria MongoDB Docker Image
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ env.SEFARIA_MONGO_DOCKER_DIRECTORY }}/
+          file: ${{ env.SEFARIA_MONGO_DOCKER_DIRECTORY }}/Dockerfile
+          tags: ${{ needs.determine_docker_image_availability.outputs.sefaria_mongo_image }}
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          outputs: ${{ needs.determine_docker_image_availability.outputs.can_publish_sefaria_mongo == 'true' && 'type=registry,compression=zstd,force-compression=true,oci-mediatypes=true' || 'type=docker,dest=/tmp/sefaria-mongo-image.tar' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Store Docker Image
-        uses: actions/upload-artifact@v6
+        if: ${{ needs.determine_docker_image_availability.outputs.can_publish_sefaria_mongo != 'true' }}
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }}
           path: /tmp/sefaria-mongo-image.tar
@@ -673,10 +645,17 @@ jobs:
 
   # ACTUAL JOBS
   website_performance:
+    # Owns the production build gate; Website CI uses the instrumented dev server.
     name: Website Performance
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_website_changes, determine_baseline_availability]
-    if: ${{ needs.determine_website_changes.outputs.module_changed == 'true' || needs.determine_website_changes.outputs.ci_changed == 'true' }}
+    needs: [setup_env, determine_changes, determine_baseline_availability, perushim_data]
+    if: >-
+      ${{ always() && !cancelled() &&
+        needs.setup_env.result == 'success' &&
+        needs.determine_changes.result == 'success' &&
+        needs.determine_baseline_availability.result == 'success' &&
+        (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_website_master_coverage_available == 'false')
+      }}
     defaults:
       run:
         working-directory: ${{ env.WEBSITE_DIRECTORY }}
@@ -688,20 +667,32 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
+          fetch-depth: 2 # Inspect the actual base of the tested PR merge.
+
+      - name: Merge and audit approved recitation timings
+        run: |
+          python ../../data/recitation/publish.py
+          python ../../data/recitation/audit.py
 
       - name: Setup Node.js
         id: setup-node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.WEBSITE_NODE_CACHE_PATH }}
-          cache: npm
 
-      - name: Cache playwright binaries
-        uses: actions/cache@v5
+      - name: Restore npm cache
+        id: npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-website-${{ hashFiles(env.WEBSITE_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-npm-website-
+
+      - name: Restore playwright binaries
+        uses: actions/cache/restore@v6
         id: playwright-cache
         with:
           path: |
@@ -713,16 +704,31 @@ jobs:
         run: |
           npm ci --no-audit
 
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
+
       - name: Install Playwright Browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
+
+      - name: Save playwright binaries
+        if: ${{ github.ref == 'refs/heads/master' && steps.playwright-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
 
       - name: Install Playwright System Dependencies
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
-      - name: Build cache
-        uses: actions/cache@v5
+      - name: Restore Next.js build cache
+        id: nextjs-cache
+        uses: actions/cache/restore@v6
         with:
           path: ${{ env.WEBSITE_DIRECTORY }}/.next/cache
           key: ${{ runner.os }}-nextjs-${{ hashFiles(format('{0}/package-lock.json', env.WEBSITE_DIRECTORY)) }}-${{ hashFiles(format('{0}/**/*.js', env.WEBSITE_DIRECTORY), format('{0}/**/*.jsx', env.WEBSITE_DIRECTORY), format('{0}/**/*.ts', env.WEBSITE_DIRECTORY), format('{0}/**/*.tsx', env.WEBSITE_DIRECTORY)) }}
@@ -733,9 +739,10 @@ jobs:
       # ============ MySQL + Perushim Setup for SSG ============
       # Populate MySQL with perushim data so `next build` can statically
       # generate perush pages without "Access denied" errors.
-      # Only restores when master baseline artifact is available (similar to coverage baseline pattern).
+      # Prefers the current workflow's artifact (from perushim_data job) over
+      # the master baseline so pipeline code changes take effect immediately.
       - name: Install and start MySQL
-        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
         with:
@@ -744,31 +751,32 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
-      - name: Download perushim SQL master baseline
-        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
-        uses: actions/download-artifact@v7
+      - name: Download perushim SQL
+        if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        uses: actions/download-artifact@v8
         with:
-          name: ${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
+          name: ${{ needs.perushim_data.result == 'success' && 'perushim-data-sql' || env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
           path: ${{ env.DATA_DIRECTORY }}/mysql/perushim-sql-master
 
       - name: Setup Rust
-        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-make
-        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-make
 
       - name: Cache Cargo dependencies
-        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
 
       - name: Populate MySQL for build
-        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         working-directory: ${{ env.DATA_DIRECTORY }}
         env:
           DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
@@ -779,8 +787,18 @@ jobs:
       - name: Build
         id: npm-build
         env:
-          DB_URL: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' && 'mysql://root:test_123@127.0.0.1:3306/tanah_test' || '' }}
+          DB_URL: ${{ (needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true') && 'mysql://root:test_123@127.0.0.1:3306/tanah_test' || '' }}
         run: npm run build
+
+      - name: Save Next.js build cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.nextjs-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.WEBSITE_DIRECTORY }}/.next/cache
+          key: ${{ steps.nextjs-cache.outputs.cache-primary-key }}
+
+      - name: Verify approved recitation in the production build
+        run: node scripts/verify-recitation-build.mjs
 
       - name: Perf Test
         id: npm-perf-test
@@ -794,10 +812,15 @@ jobs:
           BENCHER_PROJECT: bible-on-site-website
           BENCHER_BRANCH: ${{ github.head_ref || github.ref_name }} # PR source branch, or branch name on push
         run: |
+          # Fail before reporting if an event cannot identify its base. Keep
+          # master push history intact; reset only feature/queue comparisons.
+          node "$GITHUB_WORKSPACE/devops/github/ci/bencher-comparison.mjs" > "$RUNNER_TEMP/bencher-comparison-args.txt"
+          mapfile -t BENCHER_COMPARISON_ARGS < "$RUNNER_TEMP/bencher-comparison-args.txt"
           bencher run \
             --project "$BENCHER_PROJECT" \
             --token "${{ secrets.BENCHER_API_TOKEN }}" \
             --branch "$BENCHER_BRANCH" \
+            "${BENCHER_COMPARISON_ARGS[@]}" \
             --testbed ubuntu-latest \
             --adapter json \
             --github-actions '${{ secrets.GITHUB_TOKEN }}' \
@@ -811,7 +834,8 @@ jobs:
             --threshold-measure count --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 10.00 --threshold-lower-boundary _ \
 
       - name: Store Website Perf HTML Report
-        uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
         with:
           name: website-perf-html-report-${{ github.run_id }}
           path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/perf/html
@@ -819,7 +843,8 @@ jobs:
           overwrite: true
 
       - name: Store Website Perf JUnit Report
-        uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_PERF_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/perf/junit/perf-results.xml
@@ -832,12 +857,21 @@ jobs:
     needs:
       [
         setup_env,
-        determine_website_changes,
+        determine_changes,
         determine_baseline_availability,
         determine_docker_image_availability,
         build_lcov_docker,
+        perushim_data,
       ]
-    if: ${{ always() && !cancelled() && !failure() && (needs.determine_website_changes.outputs.module_changed == 'true' || needs.determine_website_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_website_master_coverage_available == 'false') }}
+    if: >-
+      ${{ always() && !cancelled() &&
+        needs.setup_env.result == 'success' &&
+        needs.determine_changes.result == 'success' &&
+        needs.determine_baseline_availability.result == 'success' &&
+        (needs.determine_docker_image_availability.result == 'success' || needs.determine_docker_image_availability.result == 'skipped') &&
+        (needs.build_lcov_docker.result == 'success' || needs.build_lcov_docker.result == 'skipped') &&
+        (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_website_master_coverage_available == 'false')
+      }}
     defaults:
       run:
         working-directory: ${{ env.WEBSITE_DIRECTORY }}
@@ -847,20 +881,31 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
+
+      - name: Merge and audit approved recitation timings
+        run: |
+          python ../../data/recitation/publish.py
+          python ../../data/recitation/audit.py
 
       - name: Setup Node.js
         id: setup-node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.WEBSITE_NODE_CACHE_PATH }}
-          cache: npm
 
-      - name: Cache playwright binaries
-        uses: actions/cache@v5
+      - name: Restore npm cache
+        id: npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-website-${{ hashFiles(env.WEBSITE_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-npm-website-
+
+      - name: Restore playwright binaries
+        uses: actions/cache/restore@v6
         id: playwright-cache
         with:
           path: |
@@ -873,9 +918,32 @@ jobs:
           node --version && npm --version
           npm ci --no-audit
 
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
+
+      - name: Verify Lockfile Sync With Packaging npm
+        id: npm_lockfile_packaging_check
+        # The Package Website Docker build runs `npm ci` inside node:26.10.0-alpine,
+        # whose bundled npm is newer/stricter than the engines-pinned npm used
+        # above. A lockfile desync the pinned npm tolerates would otherwise only
+        # explode after merge (the packaging jobs are master-only), so validate
+        # here with the exact same image on every run.
+        run: docker run --rm -v "$PWD":/app -w /app node:26.10.0-alpine npm ci --dry-run --ignore-scripts --no-audit --no-fund
+
       - name: Install Playwright Browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
+
+      - name: Save playwright binaries
+        if: ${{ github.ref == 'refs/heads/master' && steps.playwright-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
 
       - name: Install Playwright System Dependencies
         if: steps.playwright-cache.outputs.cache-hit == 'true'
@@ -890,21 +958,12 @@ jobs:
         run: npm run coverage:unit
 
       - name: Store Website Unit JUnit Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.WEBSITE_DIRECTORY }}/.jest-report/unit-results.xml
           retention-days: 1
           overwrite: true
-
-      - name: Build cache
-        uses: actions/cache@v5
-        with:
-          path: ${{ env.WEBSITE_DIRECTORY }}/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles(format('{0}/package-lock.json', env.WEBSITE_DIRECTORY)) }}-${{ hashFiles(format('{0}/**/*.js', env.WEBSITE_DIRECTORY), format('{0}/**/*.jsx', env.WEBSITE_DIRECTORY), format('{0}/**/*.ts', env.WEBSITE_DIRECTORY), format('{0}/**/*.tsx', env.WEBSITE_DIRECTORY)) }}
-          # If source files changed but packages didn't, rebuild from a prior cache.
-          restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles(format('{0}/package-lock.json', env.WEBSITE_DIRECTORY)) }}-
 
       # ============ MySQL Setup for Articles ============
       - name: Install and start MySQL
@@ -927,39 +986,36 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
+          # Release-profile cache shared with admin_ci; data_ci keeps its own
+          # key because its coverage builds produce debug-profile artifacts.
+          shared-key: "e2e-release-crates"
 
-      # Pre-build the data crate to warm the cache before E2E tests
-      # This prevents timeout when launcher runs cargo make mysql-populate
+      # Build only the seeders used by the E2E launchers, not every data
+      # pipeline. Both shared-key consumers must build the same crate set:
+      # rust-cache never overwrites an existing key, so whichever job saves
+      # first must persist the full artifact set (db-populator + s3-populator).
       - name: Pre-build data crate for E2E tests
         working-directory: ${{ env.DATA_DIRECTORY }}
-        run: cargo build --release
+        run: cargo build --release -p db-populator -p s3-populator
 
-      # ============ Populate MySQL before build (for SSG / generateStaticParams) ============
-      # Restore perushim SQL from master baseline so `next build` can statically
-      # generate perush pages without DB errors (same pattern as coverage baseline).
-      - name: Download perushim SQL master baseline
-        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
-        uses: actions/download-artifact@v7
+      # The E2E launcher populates MySQL once before starting next dev. Restore
+      # its SQL input here, preferring this run's generated data over the baseline.
+      - name: Download perushim SQL
+        if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        uses: actions/download-artifact@v8
         with:
-          name: ${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
+          name: ${{ needs.perushim_data.result == 'success' && 'perushim-data-sql' || env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
           path: ${{ env.DATA_DIRECTORY }}/mysql/perushim-sql-master
 
-      - name: Populate MySQL for build
-        if: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+      - name: Prepare perushim SQL for E2E database population
+        if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         working-directory: ${{ env.DATA_DIRECTORY }}
-        env:
-          DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
-        run: |
-          cp mysql/perushim-sql-master/perushim_data.sql mysql/perushim_data.sql
-          cargo make mysql-populate
+        run: cp mysql/perushim-sql-master/perushim_data.sql mysql/perushim_data.sql
 
-      - name: Build
-        id: npm-build
-        env:
-          DB_URL: ${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' && 'mysql://root:test_123@127.0.0.1:3306/tanah_test' || '' }}
-        run: npm run build
-
+      # coverage:e2e starts next dev; the production build and standalone-server
+      # checks run in Website Performance, which remains a Cross Module CI gate.
       - name: E2E Test
         id: npm-e2e-test
         env:
@@ -967,23 +1023,38 @@ jobs:
         run: npm run coverage:e2e
 
       - name: Store Website E2E HTML Report
-        uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
         with:
           name: website-e2e-html-report-${{ github.run_id }}
-          path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/e2e/html
+          # `setup/` holds launcher.log + the teed next dev server.log, needed
+          # to attribute dev-server errors on failures (#2005).
+          path: |
+            ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/e2e/html
+            ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/setup
           retention-days: 7
           overwrite: true
 
       - name: Store Website E2E JUnit Report
-        uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_E2E_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/e2e/junit/e2e-results.xml
           retention-days: 1
           overwrite: true
 
+      - name: Show Website E2E Debug Logs
+        if: ${{ failure() }}
+        working-directory: ${{ env.WEBSITE_DIRECTORY }}
+        run: |
+          echo "=== launcher.log ==="
+          cat .playwright-report/setup/launcher.log 2>/dev/null || echo "(no launcher.log)"
+          echo "=== next dev server.log (tail) ==="
+          tail -n 300 .playwright-report/setup/server.log 2>/dev/null || echo "(no server.log)"
+
       - name: Restore lcov Docker image
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp
@@ -992,12 +1063,11 @@ jobs:
         run: docker load --input /tmp/lcov-docker-image.tar
 
       - name: Merge Test Coverage (Unit + E2E)
-        continue-on-error: true
         run: npm run coverage:merge
 
       - name: Store Coverage Debug Snippets
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: website-coverage-debug-${{ github.run_id }}
           path: ${{ env.WEBSITE_DIRECTORY }}/.coverage/debug
@@ -1006,28 +1076,28 @@ jobs:
           if-no-files-found: ignore
 
       - name: Store Website Coverage Report (wf)
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
           if-no-files-found: error
 
       - name: Store Website Coverage Report (master)
         if: ${{ env.IS_MASTER_BRANCH == 'true' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
   admin_ci:
     name: Admin CI
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_admin_changes]
-    if: ${{ needs.determine_admin_changes.outputs.module_changed == 'true' || needs.determine_admin_changes.outputs.ci_changed == 'true' }}
+    needs: [setup_env, determine_changes, determine_baseline_availability]
+    if: ${{ needs.determine_changes.outputs.admin_module_changed == 'true' || needs.determine_changes.outputs.admin_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_admin_master_coverage_available == 'false' }}
     defaults:
       run:
         working-directory: ${{ env.ADMIN_DIRECTORY }}
@@ -1037,21 +1107,43 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
 
       - name: Setup Node.js
         id: setup-node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.ADMIN_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.ADMIN_NODE_CACHE_PATH }}
-          cache: npm
+
+      - name: Restore npm cache
+        id: npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-admin-${{ hashFiles(env.ADMIN_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-npm-admin-
 
       - name: Install npm Dependencies
         id: npm_ci
         run: npm ci --no-audit
+
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
+
+      - name: Verify Lockfile Sync With Packaging npm
+        id: npm_lockfile_packaging_check
+        # The Package Admin Docker build runs `npm ci` inside node:26.10.0-alpine,
+        # whose bundled npm is newer/stricter than the engines-pinned npm used
+        # above. A lockfile desync the pinned npm tolerates would otherwise only
+        # explode after merge (the packaging jobs are master-only), so validate
+        # here with the exact same image on every run.
+        run: docker run --rm -v "$PWD":/app -w /app node:26.10.0-alpine npm ci --dry-run --ignore-scripts --no-audit --no-fund
 
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
@@ -1064,16 +1156,16 @@ jobs:
         id: npm-typecheck
         run: npx tsc --noEmit
 
-      - name: Unit Test
+      - name: Unit Test with Coverage
         id: npm-unit-test
-        run: npm run test:unit
+        run: npm run coverage:unit
 
       - name: Build
         id: npm-build
         run: npm run build
 
       - name: Store Admin Unit JUnit Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.ADMIN_DIRECTORY }}/.junit-report/unit-results.xml
@@ -1081,7 +1173,7 @@ jobs:
           overwrite: true
           if-no-files-found: ignore
 
-      # ============ MySQL and MinIO Setup for E2E Tests ============
+      # ============ MySQL and RustFS Setup for E2E Tests ============
       - name: Install and start MySQL
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
@@ -1091,29 +1183,20 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
-      - name: Start MinIO
+      - name: Start RustFS and initialize S3 buckets
+        working-directory: ${{ github.workspace }}
         run: |
-          docker run -d --name minio \
-            -p 4566:9000 \
-            -e MINIO_ROOT_USER=test \
-            -e MINIO_ROOT_PASSWORD=test_1234 \
-            minio/minio:latest server /data
-          # Wait for MinIO to be ready
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:4566/minio/health/live; then break; fi
-            sleep 1
-          done
+          if ! docker compose -f devops/docker-compose.yml up -d --wait --wait-timeout 180; then
+            docker compose -f devops/docker-compose.yml logs
+            exit 1
+          fi
+          docker compose -f devops/docker-compose.yml run --build --rm --no-deps rustfs-init
 
-      - name: Create S3 bucket in MinIO
-        run: |
-          docker run --rm --network host \
-            --entrypoint /bin/sh \
-            minio/mc:latest \
-            -c "
-              mc alias set ci http://localhost:4566 test test_1234 &&
-              mc mb --ignore-existing ci/bible-on-site-assets-test &&
-              mc anonymous set download ci/bible-on-site-assets-test
-            "
+      - name: Verify local S3 compatibility
+        working-directory: ${{ env.ADMIN_DIRECTORY }}
+        env:
+          S3_ENDPOINT: http://localhost:4566
+        run: npm run test:s3
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -1126,15 +1209,18 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
+          # Same release-profile populator cache as website_ci.
+          shared-key: "e2e-release-crates"
 
-      # Pre-build the data crates to warm the cache before E2E tests
+      # Build only the two seeders used by the E2E launcher.
       # This prevents timeout when the E2E launcher runs cargo make mysql-populate and s3-populate-test
       - name: Pre-build data crates for E2E tests
         working-directory: ${{ env.DATA_DIRECTORY }}
-        run: cargo build --release --workspace
+        run: cargo build --release -p db-populator -p s3-populator
 
-      - name: E2E Test
+      - name: E2E Test with Coverage
         id: npm-e2e-test
         env:
           DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
@@ -1144,10 +1230,39 @@ jobs:
           S3_ACCESS_KEY_ID: test
           S3_SECRET_ACCESS_KEY: test_1234
           S3_FORCE_PATH_STYLE: "true"
-        run: npm run test:e2e
+        run: npm run coverage:e2e
+
+      - name: Merge test coverage (unit; E2E lcov when enabled)
+        run: npm run coverage:merge
+
+      - name: Store Admin Coverage Report (wf)
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_WF }}
+          # Unit + e2e files too: each is uploaded to Codecov under its own
+          # flag (merged is for the cross-module report).
+          path: |
+            ${{ env.ADMIN_UNIT_COVERAGE_REPORT }}
+            ${{ env.ADMIN_E2E_COVERAGE_REPORT }}
+            ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
+          retention-days: 90
+          overwrite: true
+          if-no-files-found: error
+
+      - name: Store Admin Coverage Report (master)
+        if: ${{ env.IS_MASTER_BRANCH == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
+          path: |
+            ${{ env.ADMIN_UNIT_COVERAGE_REPORT }}
+            ${{ env.ADMIN_E2E_COVERAGE_REPORT }}
+            ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
+          retention-days: 90
+          overwrite: true
 
       - name: Store Admin E2E HTML Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: admin-e2e-html-report-${{ github.run_id }}
@@ -1161,21 +1276,21 @@ jobs:
     needs:
       [
         setup_env,
-        determine_api_changes,
+        determine_changes,
         determine_baseline_availability,
         determine_docker_image_availability,
         build_lcov_docker,
       ]
-    if: ${{ always() && !cancelled() && !failure() && (needs.determine_api_changes.outputs.module_changed == 'true' || needs.determine_api_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_api_master_coverage_available == 'false') }}
+    if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.api_module_changed == 'true' || needs.determine_changes.outputs.api_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_api_master_coverage_available == 'false') }}
     permissions:
       contents: read
 
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -1189,6 +1304,7 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: |
             ${{ env.API_DIRECTORY }}
             ${{ env.DATA_DIRECTORY }}
@@ -1205,17 +1321,30 @@ jobs:
 
       - name: Setup DevOps Node.js
         id: setup-devops-node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
-          cache: npm
+
+      - name: Restore npm cache
+        id: devops-npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-devops-${{ hashFiles(env.DEVOPS_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-npm-devops-
 
       - name: Install devops npm Dependencies
         id: devops_npm_ci
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           npm ci --no-audit
+
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.devops-npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.devops-npm-cache.outputs.cache-primary-key }}
 
       - name: Install and start MySQL
         id: mysql
@@ -1228,19 +1357,17 @@ jobs:
 
       - name: Setup Tests Node.js
         id: setup-tests-node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.API_TESTS_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.API_TESTS_NODE_CACHE_PATH }}
-          cache: npm
 
-      - name: Cache playwright binaries
-        uses: actions/cache@v5
-        id: playwright-cache
+      - name: Restore npm cache
+        id: tests-npm-cache
+        uses: actions/cache/restore@v6
         with:
-          path: |
-            ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.api_playwright_version }}
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-api-tests-${{ hashFiles(env.API_TESTS_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-npm-api-tests-
 
       - name: Install Tests npm Dependencies
         id: tests_npm_ci
@@ -1248,16 +1375,15 @@ jobs:
         run: |
           npm ci --no-audit
 
-      - name: Install Playwright Browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        working-directory: ${{ env.API_TESTS_DIRECTORY }}
-        run: npx playwright install --with-deps chromium
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.tests-npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.tests-npm-cache.outputs.cache-primary-key }}
 
-      - name: Install Playwright System Dependencies
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        working-directory: ${{ env.API_TESTS_DIRECTORY }}
-        run: npx playwright install-deps chromium
-
+      # API tests use Playwright's HTTP request fixture and node:http2 only;
+      # they do not launch a browser or need browser/system-dependency installs.
       - name: E2E Test
         id: api-e2e
         working-directory: ${{ env.API_DIRECTORY }}
@@ -1280,7 +1406,7 @@ jobs:
           echo "========================="
 
       - name: Restore lcov Docker image
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp
@@ -1293,7 +1419,7 @@ jobs:
         run: cargo make coverage-merge
 
       - name: Store API Unit JUnit Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.API_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.API_DIRECTORY }}/.junit-report/unit/results.xml
@@ -1301,7 +1427,7 @@ jobs:
           overwrite: true
 
       - name: Store API E2E JUnit Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.API_E2E_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/junit/results.xml
@@ -1316,7 +1442,7 @@ jobs:
 
       - name: Publish API Unit/E2E Report To Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ steps.list_api_junit_files.outputs.junit_files }}
@@ -1324,7 +1450,7 @@ jobs:
           report_type: test_results
 
       - name: Store API E2E HTML Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: api-e2e-html-report-${{ github.run_id }}
           path: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/html
@@ -1332,20 +1458,20 @@ jobs:
           overwrite: true
 
       - name: Store API Coverage Report (wf)
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.API_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.API_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
       - name: Store API Coverage Report (master)
         if: ${{ env.IS_MASTER_BRANCH == 'true' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.API_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
   app_ci:
@@ -1354,12 +1480,12 @@ jobs:
     needs:
       [
         setup_env,
-        determine_app_changes,
+        determine_changes,
         determine_baseline_availability,
         determine_docker_image_availability,
         build_lcov_docker,
       ]
-    if: ${{ always() && !cancelled() && !failure() && (needs.determine_app_changes.outputs.module_changed == 'true' || needs.determine_app_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_app_master_coverage_available == 'false') }}
+    if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_app_master_coverage_available == 'false') }}
     defaults:
       run:
         working-directory: ${{ env.APP_DIRECTORY }}
@@ -1369,54 +1495,98 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "9.0.x"
+          dotnet-version: "10.0.x"
 
-      - name: Cache NuGet packages
-        uses: actions/cache@v5
+      - name: Hash NuGet dependency inputs
+        id: nuget-key
+        run: node ${{ github.workspace }}/devops/github/ci/nuget-cache-key.mjs
+
+      - name: Restore NuGet packages
+        id: nuget-cache
+        uses: actions/cache/restore@v6
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/BibleOnSite.Tests.csproj', '**/BibleOnSite.csproj') }}
+          key: ${{ runner.os }}-nuget-${{ steps.nuget-key.outputs.hash }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 
       - name: Restore dotnet tools
         run: dotnet tool restore
 
-      - name: Verify Android NuGet restore
+      - name: Setup Java for Android release validation
+        uses: actions/setup-java@v6
+        with:
+          distribution: "microsoft"
+          java-version: "17"
+
+      - name: Setup Python for recitation extension packaging
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Restore original recitation audio cache
+        uses: actions/cache@v6
+        with:
+          path: .cache/recitation-assets
+          key: recitation-audio-v1-${{ hashFiles('data/recitation/recitation.sqlite') }}
+          restore-keys: recitation-audio-v1-
+
+      - name: Prepare release recitation book packs
+        run: python3 devops/prepare_recitation_assets.py --platform Android
+
+      - name: Verify Android release package
         run: |
-          echo '{"sdk":{"version":"9.0.0","rollForward":"latestFeature"}}' > $GITHUB_WORKSPACE/global.json
-          dotnet workload install maui-android --skip-manifest-update
-          dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net9.0-android
+          echo '{"sdk":{"version":"10.0.0","rollForward":"latestFeature"}}' > $GITHUB_WORKSPACE/global.json
+          dotnet workload install maui-android
+          dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android -p:RuntimeIdentifiers=android-arm64 -r android-arm64
+          # Compile with the checked-in notes fixture; store packages use the paired release artifact.
+          NOTES_GZ="BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz"
+          if [ -f "$NOTES_GZ" ] && [ ! -f "${NOTES_GZ%.gz}" ]; then
+            gzip -dc "$NOTES_GZ" > "${NOTES_GZ%.gz}"
+          fi
+          # Exercise D8 and release linking before merging, without store signing keys.
+          dotnet build BibleOnSite/BibleOnSite.csproj --no-restore -c Release -f net10.0-android -r android-arm64 -p:RuntimeIdentifiers=android-arm64 -p:AndroidPackageFormats=aab
           rm -f $GITHUB_WORKSPACE/global.json
+
+      - name: Verify native canonical recitation word identities
+        run: python3 ../data/recitation/audit_native.py
+
+      - name: Verify packaged Android recitation modules
+        run: python3 devops/verify_recitation_assets.py --platform Android --catalog BibleOnSite/Resources/Raw/recitation-catalog.json --package "$(find BibleOnSite/bin/Release -name '*.aab' -print -quit)"
+
+      - name: Test recitation extension packaging
+        run: python3 -m unittest discover -s devops -p 'test_*recitation_assets.py'
+
+      - name: Test paired Perushim release assets
+        run: python3 -m unittest discover -s devops -p test_prepare_perushim_assets.py
 
       - name: Run Unit Tests with Coverage
         run: dotnet run --project devops -- CoverageUnit --configuration Release
 
+      - name: Save NuGet packages
+        if: ${{ github.ref == 'refs/heads/master' && steps.nuget-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
+
       - name: Store App Unit JUnit Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.APP_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
           retention-days: 1
           overwrite: true
 
-      - name: Publish App Unit Report To Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
-          flags: app
-          report_type: test_results
-
       # ============ Integration Tests Setup ============
+      # rust-cache hashes CC_* env vars; keep it before codecov-action, which exports CC_SHA.
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -1427,9 +1597,19 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: |
             ${{ env.API_DIRECTORY }}
             ${{ env.DATA_DIRECTORY }}
+
+      - name: Publish App Unit Report To Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
+          flags: app
+          report_type: test_results
 
       - name: Install and start MySQL
         id: mysql
@@ -1447,7 +1627,7 @@ jobs:
         run: dotnet run --project devops -- CoverageIntegration --configuration Release
 
       - name: Store App Integration JUnit Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.APP_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
@@ -1456,7 +1636,7 @@ jobs:
 
       - name: Publish App Integration Report To Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
@@ -1465,7 +1645,7 @@ jobs:
 
       # ============ Coverage Merge ============
       - name: Restore lcov Docker image
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp
@@ -1477,107 +1657,58 @@ jobs:
         run: dotnet run --project devops -- CoverageMerge --configuration Release
 
       - name: Store App Coverage Report (wf)
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.APP_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
           if-no-files-found: error
 
       - name: Store App Coverage Report (master)
         if: ${{ env.IS_MASTER_BRANCH == 'true' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.APP_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
 
+  app_mobile_e2e:
+    name: App Mobile E2E
+    needs: [setup_env, determine_changes]
+    if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
+    uses: ./.github/workflows/app-mobile-e2e.yml
+
   app_ios_ci:
-    name: App iOS CI
-    runs-on: macos-15
-    needs: [setup_env, determine_app_changes, determine_baseline_availability, perushim_data]
+    name: App iOS native audio CI
+    runs-on: macos-26
+    needs: [setup_env, determine_changes]
     # Only on PRs — on master, Package iOS (IPA) already validates the full iOS build.
-    # TODO(#1018): when upgrading to .NET 10, verify workload install flags still work.
-    if: ${{ github.event_name == 'pull_request' && always() && !cancelled() && !failure() && (needs.determine_app_changes.outputs.module_changed == 'true' || needs.determine_app_changes.outputs.ci_changed == 'true') }}
-    defaults:
-      run:
-        working-directory: ${{ env.APP_DIRECTORY }}
+    if: ${{ github.event_name == 'pull_request' && always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
     permissions:
       contents: read
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      - name: Setup Node for native audio precision checks
+        uses: actions/setup-node@v7
         with:
-          ref: ${{ github.head_ref }}
+          node-version-file: web/bible-on-site/package.json
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: "9.0.x"
-
-      - name: Cache NuGet packages
-        uses: actions/cache@v5
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-maui-ios-${{ hashFiles('app/**/*.csproj') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-maui-ios-
-            ${{ runner.os }}-nuget-
-
-      - name: Install MAUI workload
-        run: dotnet workload install maui-ios --skip-manifest-update
-
-      - name: Restore perushim notes SQLite
-        uses: actions/download-artifact@v7
-        with:
-          name: ${{ needs.perushim_data.result != 'skipped' && env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_WF || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
-          path: ${{ env.APP_DIRECTORY }}/BibleOnSite/${{ env.PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR }}
-
-      - name: Select Xcode version
+      - name: Verify native audio time origin on Chromium and Apple WebKit
+        working-directory: web/bible-on-site
         run: |
-          XCODE_PATH=$(ls -d /Applications/Xcode_26.0*.app 2>/dev/null | sort -V | tail -1)
-          if [ -z "$XCODE_PATH" ]; then
-            XCODE_PATH=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | head -1)
-          fi
-          if [ -z "$XCODE_PATH" ]; then
-            XCODE_PATH=$(xcode-select -p | sed 's|/Contents/Developer||')
-          fi
-          echo "Selecting Xcode: $XCODE_PATH"
-          sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
-          xcodebuild -version
-
-      # TODO(#1401): iOS SDK forces IL stripping even for simulator builds.
-      # We kill the process once the DLL is produced to skip IL stripping.
-      - name: Build iOS target
-        run: |
-          dotnet build BibleOnSite/BibleOnSite.csproj -c Release \
-            -p:TargetFrameworks=net9.0-ios \
-            -p:ErrorOnDuplicatePublishOutputFiles=false > build.log 2>&1 &
-          PID=$!
-          while kill -0 $PID 2>/dev/null; do
-            if grep -q "BibleOnSite -> .*BibleOnSite\.dll" build.log 2>/dev/null; then
-              cat build.log
-              if grep -q ": error " build.log; then
-                echo "Errors found in build output"
-                wait $PID; exit 1
-              fi
-              echo "Build succeeded (DLL produced) — skipping IL stripping"
-              kill $PID 2>/dev/null; wait $PID 2>/dev/null; exit 0
-            fi
-            sleep 2
-          done
-          wait $PID; RC=$?
-          cat build.log
-          exit $RC
+          npm ci --ignore-scripts --no-audit
+          npx playwright install chromium webkit
+          npx playwright test --config playwright.recitation.config.ts
 
   bulletin_ci:
     name: Bulletin CI
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_bulletin_changes, determine_baseline_availability]
-    if: ${{ needs.determine_bulletin_changes.outputs.module_changed == 'true' || needs.determine_bulletin_changes.outputs.ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_bulletin_master_coverage_available == 'false' }}
+    needs: [setup_env, determine_changes, determine_baseline_availability]
+    if: ${{ needs.determine_changes.outputs.bulletin_module_changed == 'true' || needs.determine_changes.outputs.bulletin_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_bulletin_master_coverage_available == 'false' }}
     defaults:
       run:
         working-directory: ${{ env.BULLETIN_DIRECTORY }}
@@ -1587,9 +1718,9 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -1603,6 +1734,7 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.BULLETIN_DIRECTORY }}
           cache-on-failure: true
           shared-key: "bulletin-rust"
@@ -1621,16 +1753,17 @@ jobs:
 
       - name: Store Bulletin Unit JUnit Report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BULLETIN_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.BULLETIN_DIRECTORY }}/.junit-report/unit/results.xml
           retention-days: 1
           overwrite: true
+          if-no-files-found: error
 
       - name: Publish Bulletin Unit Report To Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.BULLETIN_DIRECTORY }}/.junit-report/unit/results.xml
@@ -1638,7 +1771,7 @@ jobs:
           report_type: test_results
 
       - name: Store Bulletin Coverage Report (workflow)
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.BULLETIN_COVERAGE_REPORT }}
@@ -1647,44 +1780,74 @@ jobs:
 
       - name: Store Bulletin Coverage Report (master baseline)
         if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.BULLETIN_COVERAGE_REPORT }}
-          retention-days: 400
+          retention-days: 90
           overwrite: true
+
+  recitation_ci:
+    name: Recitation alignment and RustFS
+    runs-on: ubuntu-latest
+    needs: [setup_env, determine_changes]
+    if: ${{ always() && !cancelled() && needs.setup_env.result == 'success' && needs.determine_changes.result == 'success' && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "26.11.1"
+      - name: Test alignment invariants without downloading GPU models
+        run: |
+          python -m venv data/recitation/.venv
+          data/recitation/.venv/bin/python -m pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
+          data/recitation/.venv/bin/python -m pip install numpy==2.5.3 transformers==5.18.0
+          cd data/recitation
+          .venv/bin/python -m unittest -v
+          .venv/bin/python publish.py
+          .venv/bin/python audit.py
+      - name: Verify canonical text preprocessing
+        run: node --test data/sefaria/pipelines/tanah-view/tests/preprocessor.test.mjs
+      - name: Verify module release and shared decoder check routing
+        run: node --test devops/github/ci/determine-changes.test.ts devops/github/ci/auto-create-pr.test.mjs devops/github/ci/nuget-cache-key.test.mjs
+      - name: Install storage test dependencies
+        run: npm ci --prefix devops
+      - name: Verify repeatable deployment recovery
+        working-directory: devops
+        run: node --import tsx --test deploy/ecr-deploy/resume-image.test.mts
+      - name: Start RustFS
+        run: docker compose -f devops/docker-compose.yml up -d --wait --wait-timeout 180 rustfs
+      - name: Verify MP3 byte-range seeking
+        run: node data/recitation/check_storage.mjs
 
   data_ci:
     name: Data CI
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_data_changes, determine_docker_image_availability, build_sefaria_mongo_docker]
-    if: ${{ always() && !cancelled() && !failure() && (needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true') }}
+    needs:
+      [
+        setup_env,
+        determine_changes,
+        determine_docker_image_availability,
+        build_sefaria_mongo_docker,
+        build_lcov_docker,
+        determine_baseline_availability,
+      ]
+    if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_data_master_coverage_available == 'false') }}
     defaults:
       run:
         working-directory: ${{ env.DATA_DIRECTORY }}
     permissions:
       contents: read
+      packages: read
 
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
-
-      # Free disk space EARLY - before Rust cache restore which can consume several GB
-      # This ensures enough space for the ~5GB MongoDB Docker image later
-      # Note: swap-storage must be true to match build_sefaria_mongo_docker job settings
-      - name: Free Disk Space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
+          ref: ${{ github.sha }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -1693,14 +1856,34 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make, cargo-nextest
+          tool: cargo-make, cargo-llvm-cov, cargo-nextest
 
+      # Per-job key: rust-cache never overwrites an existing key, so a shared key is owned by whichever job saves first.
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
           cache-on-failure: true
-          shared-key: "data-rust"
+          shared-key: "data-ci-rust"
+
+      # Overlap the image pull with lint/unit coverage; integration tests wait below.
+      - name: Pull Sefaria MongoDB Docker Image
+        id: pull-sefaria-mongo
+        background: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SEFARIA_MONGO_IMAGE: ${{ needs.determine_docker_image_availability.outputs.sefaria_mongo_image }}
+        run: |
+          if [ "${{ needs.determine_docker_image_availability.outputs.is_sefaria_mongo_available }}" != "true" ] && [ "${{ needs.determine_docker_image_availability.outputs.can_publish_sefaria_mongo }}" != "true" ]; then
+            gh run download ${{ github.run_id }} -n ${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }} -D /tmp
+            docker load --input /tmp/sefaria-mongo-image.tar
+            rm -f /tmp/sefaria-mongo-image.tar
+          else
+            echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+            docker pull "$SEFARIA_MONGO_IMAGE"
+          fi
+          df -h /
 
       - name: Lint
         id: lint
@@ -1710,57 +1893,54 @@ jobs:
         id: fmt-check
         run: cargo make fmt-check
 
+      - name: Install and start MySQL
+        id: mysql
+        uses: shogo82148/actions-setup-mysql@v1
+        with:
+          mysql-version: "8.4"
+          root-password: test_123
+          distribution: "mysql"
+          auto-start: true
+
+      - name: Validate Production SQL Parser Compatibility
+        working-directory: ${{ github.workspace }}
+        run: python devops/deploy/data-deploy/validate_lambda_parser.py --parse-only
+
       - name: Unit Test
         id: unit-test
-        run: cargo make test-unit-junit
+        env:
+          DB_POPULATOR_TEST_DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_db_populator_test
+        run: cargo make coverage-unit
 
       - name: Store Data Unit JUnit Report
-        uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.DATA_UNIT_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.DATA_DIRECTORY }}/.junit-report/unit/results.xml
           retention-days: 1
           overwrite: true
+          if-no-files-found: error
 
       - name: Publish Data Unit Report To Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.DATA_DIRECTORY }}/.junit-report/unit/results.xml
           flags: data
           report_type: test_results
 
-      # Download using gh api (faster than actions/download-artifact: ~2m vs ~6m)
-      - name: Download Sefaria MongoDB Docker Image
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          artifact_id="${{ needs.determine_docker_image_availability.outputs.sefaria_mongo_artifact_id }}"
-          if [ -n "$artifact_id" ] && [ "$artifact_id" != "" ]; then
-            echo "Downloading cached artifact (id: $artifact_id) via gh api..."
-            gh api repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip > /tmp/sefaria-mongo-image.zip
-            unzip -o /tmp/sefaria-mongo-image.zip -d /tmp
-            # Remove zip to free ~5GB before docker load needs to extract layers
-            rm -f /tmp/sefaria-mongo-image.zip
-          else
-            echo "No cached artifact, downloading from current workflow..."
-            gh run download ${{ github.run_id }} -n ${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }} -D /tmp
-          fi
-          echo "Disk space before docker load:"
-          df -h /
+      - name: Wait for Sefaria MongoDB Docker Image
+        wait: pull-sefaria-mongo
 
       # ============ Integration Test Setup: MongoDB Container ============
-      - name: Load Sefaria MongoDB Docker Image
-        run: |
-          docker load --input /tmp/sefaria-mongo-image.tar
-          # Remove tar to free space after loading
-          rm -f /tmp/sefaria-mongo-image.tar
-
       - name: Setup MongoDB Container for Integration Tests
         id: setup-mongodb
+        env:
+          SEFARIA_MONGO_IMAGE: ${{ needs.determine_docker_image_availability.outputs.sefaria_mongo_image }}
         run: |
-          docker run -d --name sefaria-mongo -p 27017:27017 sefaria-mongo:latest
+          docker run -d --name sefaria-mongo -p 27017:27017 "$SEFARIA_MONGO_IMAGE"
           echo "Waiting for MongoDB to be ready..."
           # Data was restored at Docker BUILD time to /mongodb-data
           # On first container startup, entrypoint.sh copies it to /data/db
@@ -1785,25 +1965,55 @@ jobs:
           MONGO_HOST: localhost
           MONGO_PORT: 27017
           DUMP_NAME: sefaria
-        run: cargo make test-integration-junit
+        run: cargo make coverage-integration
 
       - name: Store Data Integration JUnit Report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.DATA_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME }}
           path: ${{ env.DATA_DIRECTORY }}/.junit-report/integration/results.xml
           retention-days: 1
           overwrite: true
+          if-no-files-found: error
 
       - name: Publish Data Integration Report To Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.DATA_DIRECTORY }}/.junit-report/integration/results.xml
           flags: data-integration
           report_type: test_results
+
+      - name: Restore lcov Docker image
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
+          path: /tmp
+
+      - name: Load lcov Docker image
+        run: docker load --input /tmp/lcov-docker-image.tar
+
+      - name: Merge Test Coverage (Unit + Integration)
+        run: cargo make coverage-merge
+
+      - name: Store Data Coverage Report (wf)
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.DATA_COVERAGE_ARTIFACT_NAME_WF }}
+          path: ${{ env.DATA_COVERAGE_REPORT }}
+          retention-days: 90
+          overwrite: true
+
+      - name: Store Data Coverage Report (master)
+        if: ${{ env.IS_MASTER_BRANCH == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}
+          path: ${{ env.DATA_COVERAGE_REPORT }}
+          retention-days: 90
+          overwrite: true
 
       - name: Stop MongoDB Container
         if: ${{ always() }}
@@ -1819,10 +2029,17 @@ jobs:
   perushim_data:
     name: Perushim Data
     runs-on: ubuntu-latest
-    needs: [setup_env, determine_perushim_pipeline_changes, determine_baseline_availability, determine_docker_image_availability, build_sefaria_mongo_docker]
+    needs:
+      [
+        setup_env,
+        determine_changes,
+        determine_baseline_availability,
+        determine_docker_image_availability,
+        build_sefaria_mongo_docker,
+      ]
     if: >-
       ${{ always() && !cancelled() && !failure() && (
-        needs.determine_perushim_pipeline_changes.outputs.module_changed == 'true' ||
+        needs.determine_changes.outputs.perushim_pipeline_module_changed == 'true' ||
         needs.determine_baseline_availability.outputs.is_perushim_data_sql_available != 'true' ||
         needs.determine_baseline_availability.outputs.is_perushim_notes_sqlite_available != 'true'
       ) }}
@@ -1831,23 +2048,13 @@ jobs:
         working-directory: ${{ env.DATA_DIRECTORY }}
     permissions:
       contents: read
+      packages: read
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
-
-      - name: Free Disk Space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
+          ref: ${{ github.sha }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -1855,37 +2062,32 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
           cache-on-failure: true
-          shared-key: "data-rust"
+          shared-key: "perushim-data-rust"
 
-      # Download sefaria mongo docker image (same pattern as data_ci)
-      - name: Download Sefaria MongoDB Docker Image
+      - name: Pull Sefaria MongoDB Docker Image
         env:
           GH_TOKEN: ${{ github.token }}
+          SEFARIA_MONGO_IMAGE: ${{ needs.determine_docker_image_availability.outputs.sefaria_mongo_image }}
         run: |
-          artifact_id="${{ needs.determine_docker_image_availability.outputs.sefaria_mongo_artifact_id }}"
-          if [ -n "$artifact_id" ] && [ "$artifact_id" != "" ]; then
-            echo "Downloading cached artifact (id: $artifact_id) via gh api..."
-            gh api repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip > /tmp/sefaria-mongo-image.zip
-            unzip -o /tmp/sefaria-mongo-image.zip -d /tmp
-            rm -f /tmp/sefaria-mongo-image.zip
-          else
-            echo "No cached artifact, downloading from current workflow..."
+          if [ "${{ needs.determine_docker_image_availability.outputs.is_sefaria_mongo_available }}" != "true" ] && [ "${{ needs.determine_docker_image_availability.outputs.can_publish_sefaria_mongo }}" != "true" ]; then
             gh run download ${{ github.run_id }} -n ${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }} -D /tmp
+            docker load --input /tmp/sefaria-mongo-image.tar
+            rm -f /tmp/sefaria-mongo-image.tar
+          else
+            echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+            docker pull "$SEFARIA_MONGO_IMAGE"
           fi
-          echo "Disk space before docker load:"
           df -h /
-
-      - name: Load Sefaria MongoDB Docker Image
-        run: |
-          docker load --input /tmp/sefaria-mongo-image.tar
-          rm -f /tmp/sefaria-mongo-image.tar
 
       - name: Start MongoDB Container
         id: setup-mongodb
+        env:
+          SEFARIA_MONGO_IMAGE: ${{ needs.determine_docker_image_availability.outputs.sefaria_mongo_image }}
         run: |
-          docker run -d --name sefaria-mongo -p 27017:27017 sefaria-mongo:latest
+          docker run -d --name sefaria-mongo -p 27017:27017 "$SEFARIA_MONGO_IMAGE"
           echo "Waiting for MongoDB to be ready..."
           for i in {1..60}; do
             count=$(docker exec sefaria-mongo mongosh --quiet --eval "db.getSiblingDB('sefaria').texts.countDocuments({})" 2>/dev/null || echo "0")
@@ -1908,7 +2110,7 @@ jobs:
         run: cargo run --release --manifest-path sefaria/pipelines/perushim-view/Cargo.toml -- --format mysql --output-to-dependant-modules --dump-name "$DUMP_NAME"
 
       - name: Upload Perushim SQL Artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: perushim-data-sql
           path: ${{ env.DATA_DIRECTORY }}/mysql/perushim_data.sql
@@ -1917,7 +2119,7 @@ jobs:
 
       - name: Upload Perushim SQL Artifact (master baseline)
         if: ${{ env.IS_MASTER_BRANCH == 'true' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
           path: ${{ env.DATA_DIRECTORY }}/mysql/perushim_data.sql
@@ -1934,21 +2136,27 @@ jobs:
           SQLITE_DIR="${GITHUB_WORKSPACE}/${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output"
           mv "$SQLITE_DIR/${DUMP_NAME}.perushim_notes.sqlite" \
              "$SQLITE_DIR/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}"
+          mv "$SQLITE_DIR/${DUMP_NAME}.perushim_catalog.sqlite" \
+             "$SQLITE_DIR/${{ env.PERUSHIM_CATALOG_SQLITE_FILENAME }}"
 
       - name: Upload Perushim Notes SQLite Artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_WF }}
-          path: ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}
+          path: |
+            ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}
+            ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_CATALOG_SQLITE_FILENAME }}
           retention-days: 30
           overwrite: true
 
       - name: Upload Perushim Notes SQLite Artifact (master baseline)
         if: ${{ env.IS_MASTER_BRANCH == 'true' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
-          path: ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}
+          path: |
+            ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}
+            ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_CATALOG_SQLITE_FILENAME }}
           retention-days: 90
           overwrite: true
 
@@ -1962,16 +2170,16 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     needs: [website_e2e, website_performance]
-    if: ${{ always() && (needs.website_e2e.result != 'skipped' || needs.website_performance.result != 'skipped') }}
+    if: ${{ always() && !cancelled() && (needs.website_e2e.result != 'skipped' || needs.website_performance.result != 'skipped') }}
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
 
       - name: Restore Website JUnit Reports
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: website-*-junit-report-${{ github.run_id }}
           path: ${{ env.TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY }}
@@ -1986,7 +2194,7 @@ jobs:
 
       - name: Publish Website Unit/E2E/Perf Report To Codecov
         if: ${{ needs.website_e2e.result != 'skipped' }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           working-directory: ${{ env.TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY }}
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -1999,108 +2207,72 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       [
-        determine_website_changes,
-        determine_api_changes,
-        determine_app_changes,
-        determine_admin_changes,
-        determine_bulletin_changes,
-        determine_data_changes,
-        determine_perushim_pipeline_changes,
-        verify_website_version,
-        verify_api_version,
-        verify_app_version,
-        verify_admin_version,
-        verify_bulletin_version,
+        determine_changes,
         website_performance,
         website_e2e,
         api_e2e,
         app_ci,
         admin_ci,
         app_ios_ci,
+        app_mobile_e2e,
         bulletin_ci,
         data_ci,
+        recitation_ci,
         perushim_data,
         build_lcov_docker,
         determine_baseline_availability,
         determine_docker_image_availability,
       ]
-    if: ${{ always() }}
+    # Evaluate failures, but release the PR concurrency slot when replaced.
+    if: ${{ always() && !cancelled() }}
     steps:
       - name: Check Prerequisites
         id: check_prerequisites
         run: |
-          WEBSITE_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_website_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-          API_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_api_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-          APP_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_app_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-          ADMIN_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_admin_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-          BULLETIN_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_bulletin_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-          DATA_CHANGES_DETERMINATION_STATUS=$([ "${{ needs.determine_data_changes.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-          if [ "$WEBSITE_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$API_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$APP_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$ADMIN_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$BULLETIN_CHANGES_DETERMINATION_STATUS" = "failure" ] || [ "$DATA_CHANGES_DETERMINATION_STATUS" = "failure" ]; then
+          if [ "${{ needs.determine_changes.result }}" != "success" ]; then
             echo "Could not determine module changes."
-            [ "$WEBSITE_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine website changes."
-            [ "$API_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine API changes."
-            [ "$APP_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine app changes."
-            [ "$ADMIN_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine admin changes."
-            [ "$BULLETIN_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine bulletin changes."
-            [ "$DATA_CHANGES_DETERMINATION_STATUS" = "failure" ] && echo " - Failed to determine data changes."
             echo "Overall status: failure"
             exit 1
           fi
 
-          # Version verification checks (only fail if the job ran and failed, not if skipped)
-          WEBSITE_MODULE_CHANGED=$([ "${{ needs.determine_website_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$WEBSITE_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_website_version.result }}" = "failure" ]; then
-            echo "Website version verification failed."
+          # Module jobs skip silently when these prerequisite lookups fail.
+          if [ "${{ needs.determine_baseline_availability.result }}" != "success" ]; then
+            echo "Could not determine master coverage baselines."
             echo "Overall status: failure"
             exit 1
           fi
 
-          API_MODULE_CHANGED=$([ "${{ needs.determine_api_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$API_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_api_version.result }}" = "failure" ]; then
-            echo "API version verification failed."
+          if [ "${{ needs.determine_docker_image_availability.result }}" != "success" ]; then
+            echo "Could not determine Docker image availability."
             echo "Overall status: failure"
             exit 1
           fi
 
-          APP_MODULE_CHANGED=$([ "${{ needs.determine_app_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$APP_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_app_version.result }}" = "failure" ]; then
-            echo "App version verification failed."
-            echo "Overall status: failure"
-            exit 1
+          if [ "${{ needs.determine_changes.outputs.data_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.data_ci_changed }}" = "true" ]; then
+            if [ "${{ needs.recitation_ci.result }}" != "success" ]; then
+              echo "Recitation alignment and RustFS validation did not pass."
+              exit 1
+            fi
           fi
 
-          BULLETIN_MODULE_CHANGED=$([ "${{ needs.determine_bulletin_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$BULLETIN_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_bulletin_version.result }}" = "failure" ]; then
-            echo "Bulletin version verification failed."
-            echo "Overall status: failure"
-            exit 1
-          fi
-
-          ADMIN_MODULE_CHANGED=$([ "${{ needs.determine_admin_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$ADMIN_MODULE_CHANGED" = "true" ] && [ "${{ needs.verify_admin_version.result }}" = "failure" ]; then
-            echo "Admin version verification failed."
-            echo "Overall status: failure"
-            exit 1
-          fi
-
-          CI_CHANGED=$([ "${{ needs.determine_website_changes.outputs.ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          WEBSITE_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          WEBSITE_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.website_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           WEBSITE_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_website_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$WEBSITE_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$WEBSITE_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
+          if [ "$WEBSITE_MODULE_CHANGED" = "true" ] || [ "$WEBSITE_CI_CHANGED" = "true" ] || [ "$WEBSITE_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             E2E_STATUS=$([ "${{ needs.website_e2e.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-              PERFORMANCE_STATUS=skipped
-              # No need to run performance tests if only the master coverage is available but no changes were made to niether the website nor the CI
-              if [ "$WEBSITE_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ]; then
-                PERFORMANCE_STATUS=$([ "${{ needs.website_performance.result }}" = "success" ] && echo "success" || echo "failure") # Generated
-              fi
+            # The performance job owns production-build validation, including
+            # coverage-baseline recovery runs with no source changes.
+            PERFORMANCE_STATUS=$([ "${{ needs.website_performance.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$E2E_STATUS" = "failure" ] || [ "$PERFORMANCE_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
             fi
           fi
 
-          API_MODULE_CHANGED=$([ "${{ needs.determine_api_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          API_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_api_master_coverage_available }}" = "false" ] && echo "true" || echo "false") # Generated
-          if [ "$API_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$API_MASTER_COVERAGE_AVAILABLE" = "true" ]; then
+          API_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.api_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          API_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.api_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          API_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_api_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$API_MODULE_CHANGED" = "true" ] || [ "$API_CI_CHANGED" = "true" ] || [ "$API_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             API_STATUS=$([ "${{ needs.api_e2e.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$API_STATUS" = "failure" ]; then
               echo "Overall status: failure"
@@ -2108,9 +2280,10 @@ jobs:
             fi
           fi
 
-          APP_MODULE_CHANGED=$([ "${{ needs.determine_app_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          APP_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_app_master_coverage_available }}" = "false" ] && echo "true" || echo "false") # Generated
-          if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$APP_MASTER_COVERAGE_AVAILABLE" = "true" ]; then
+          APP_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.app_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          APP_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.app_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          APP_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_app_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ] || [ "$APP_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             APP_STATUS=$([ "${{ needs.app_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$APP_STATUS" = "failure" ]; then
               echo "Overall status: failure"
@@ -2118,9 +2291,13 @@ jobs:
             fi
           fi
 
-          if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ]; then
+          if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ]; then
+            if [ "${{ needs.app_mobile_e2e.result }}" != "success" ]; then
+              echo "Appium mobile E2E matrix failed or did not run"
+              exit 1
+            fi
             APP_IOS_RESULT="${{ needs.app_ios_ci.result }}"
-            # App iOS CI only runs on PRs; on master it's skipped (Package iOS covers it)
+            # Native audio precision runs on PRs; mobile E2E runs on every relevant CI event.
             if [ "$APP_IOS_RESULT" != "success" ] && [ "$APP_IOS_RESULT" != "skipped" ]; then
               echo "App iOS CI failed"
               echo "Overall status: failure"
@@ -2128,31 +2305,46 @@ jobs:
             fi
           fi
 
-          BULLETIN_MODULE_CHANGED=$([ "${{ needs.determine_bulletin_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          BULLETIN_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_bulletin_master_coverage_available }}" = "false" ] && echo "true" || echo "false") # Generated
-          if [ "$BULLETIN_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ] || [ "$BULLETIN_MASTER_COVERAGE_AVAILABLE" = "true" ]; then
-            BULLETIN_STATUS=$([ "${{ needs.bulletin_ci.result }}" = "failure" ] && echo "failure" || echo "success") # Generated
+          BULLETIN_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.bulletin_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          BULLETIN_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.bulletin_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          BULLETIN_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_bulletin_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$BULLETIN_MODULE_CHANGED" = "true" ] || [ "$BULLETIN_CI_CHANGED" = "true" ] || [ "$BULLETIN_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
+            # A triggered suite that did not complete (failure, skip, cancel) blocks the merge.
+            BULLETIN_STATUS=$([ "${{ needs.bulletin_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$BULLETIN_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
             fi
           fi
 
-          ADMIN_MODULE_CHANGED=$([ "${{ needs.determine_admin_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$ADMIN_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ]; then
-            ADMIN_STATUS=$([ "${{ needs.admin_ci.result }}" = "failure" ] && echo "failure" || echo "success") # Generated
+          ADMIN_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.admin_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          ADMIN_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.admin_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          ADMIN_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_admin_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$ADMIN_MODULE_CHANGED" = "true" ] || [ "$ADMIN_CI_CHANGED" = "true" ] || [ "$ADMIN_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
+            ADMIN_STATUS=$([ "${{ needs.admin_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$ADMIN_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
             fi
           fi
 
-          DATA_MODULE_CHANGED=$([ "${{ needs.determine_data_changes.outputs.module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$DATA_MODULE_CHANGED" = "true" ] || [ "$CI_CHANGED" = "true" ]; then
-            # Only fail if data_ci or perushim_data explicitly failed (not if skipped)
-            DATA_STATUS=$([ "${{ needs.data_ci.result }}" = "failure" ] && echo "failure" || echo "success") # Generated
-            PERUSHIM_STATUS=$([ "${{ needs.perushim_data.result }}" = "failure" ] && echo "failure" || echo "success") # Generated
-            if [ "$DATA_STATUS" = "failure" ] || [ "$PERUSHIM_STATUS" = "failure" ]; then
+          DATA_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.data_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          DATA_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.data_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          DATA_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_data_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$DATA_MODULE_CHANGED" = "true" ] || [ "$DATA_CI_CHANGED" = "true" ] || [ "$DATA_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
+            DATA_STATUS=$([ "${{ needs.data_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "$DATA_STATUS" = "failure" ]; then
+              echo "Overall status: failure"
+              exit 1
+            fi
+          fi
+
+          PERUSHIM_PIPELINE_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.perushim_pipeline_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          PERUSHIM_DATA_SQL_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          PERUSHIM_NOTES_SQLITE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_perushim_notes_sqlite_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "$PERUSHIM_PIPELINE_MODULE_CHANGED" = "true" ] || [ "$PERUSHIM_DATA_SQL_AVAILABLE" = "false" ] || [ "$PERUSHIM_NOTES_SQLITE_AVAILABLE" = "false" ]; then
+            PERUSHIM_STATUS=$([ "${{ needs.perushim_data.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "$PERUSHIM_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
             fi
@@ -2162,63 +2354,63 @@ jobs:
 
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.head_ref }}
+          ref: ${{ github.sha }}
 
       - name: Restore Website Coverage Report
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.website_e2e.result != 'skipped' && env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF || env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_DIRECTORY }}
 
       - name: Publish Website Coverage To Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
           disable_search: true
           flags: website
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
       - name: Restore API Coverage Report
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.api_e2e.result != 'skipped' && env.API_COVERAGE_ARTIFACT_NAME_WF || env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.API_MERGED_COVERAGE_DIRECTORY }}
 
       - name: Publish API Coverage To Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.API_COVERAGE_REPORT }}
           disable_search: true
           flags: api
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
       - name: Restore App Coverage Report
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.app_ci.result != 'skipped' && env.APP_COVERAGE_ARTIFACT_NAME_WF || env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.APP_MERGED_COVERAGE_DIRECTORY }}
 
       - name: Publish App Coverage To Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.APP_COVERAGE_REPORT }}
           disable_search: true
           flags: app
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
       - name: Restore Bulletin Coverage Report
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.bulletin_ci.result != 'skipped' && env.BULLETIN_COVERAGE_ARTIFACT_NAME_WF || env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.BULLETIN_COVERAGE_DIRECTORY }}
 
       - name: Publish Bulletin Coverage To Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.BULLETIN_COVERAGE_REPORT }}
@@ -2226,8 +2418,49 @@ jobs:
           flags: bulletin
           fail_ci_if_error: false
 
+      - name: Restore Admin Coverage Report
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.admin_ci.result != 'skipped' && env.ADMIN_COVERAGE_ARTIFACT_NAME_WF || env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
+          path: ${{ env.ADMIN_COVERAGE_DIRECTORY }}
+
+      - name: Publish Admin Coverage To Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          # The admin flag tracks unit coverage (its historical baseline);
+          # e2e goes under admin_e2e so thin e2e suites don't dilute it.
+          files: ${{ env.ADMIN_UNIT_COVERAGE_REPORT }}
+          disable_search: true
+          flags: admin
+          fail_ci_if_error: false
+
+      - name: Publish Admin E2E Coverage To Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.ADMIN_E2E_COVERAGE_REPORT }}
+          disable_search: true
+          flags: admin_e2e
+          fail_ci_if_error: false
+
+      - name: Restore Data Coverage Report
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.data_ci.result != 'skipped' && env.DATA_COVERAGE_ARTIFACT_NAME_WF || env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}
+          path: ${{ env.DATA_MERGED_COVERAGE_DIRECTORY }}
+
+      - name: Publish Data Coverage To Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.DATA_COVERAGE_REPORT }}
+          disable_search: true
+          flags: data
+          fail_ci_if_error: false
+
       - name: Restore lcov Docker image
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
           path: /tmp
@@ -2237,17 +2470,36 @@ jobs:
 
       - name: Setup DevOps Node.js
         id: setup-devops-node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
-          cache: npm
+
+      - name: Restore npm cache
+        id: devops-npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-devops-${{ hashFiles(env.DEVOPS_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-npm-devops-
 
       - name: Install devops npm Dependencies
         id: devops_npm_ci
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           npm ci --no-audit
+
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.devops-npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.devops-npm-cache.outputs.cache-primary-key }}
+
+      - name: Test release, deployment, and CI reporting guards
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        run: |
+          npm run test:version
+          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs
 
       - name: Merge Test Coverage (Website + API)
         run: npm run coverage:merge
@@ -2261,8 +2513,9 @@ jobs:
 
       - name: Verify Coverage 3rd Party Reporting
         run: |
-          # Check Codecov ci_passed via API. Accepts: true (pass), false (fail),
-          # or null after retries (no coverage uploaded = nothing to fail).
+          # ci_passed is upstream CI, not proof of coverage uploads. Inspect the
+          # actual completed report before classifying unresolved CI as lost uploads.
+          # Retain the existing outage/backlog policy and explicit-failure gate.
             MAX_RETRIES=6
             RETRY_COUNT=0
             SLEEP_SECONDS=15
@@ -2275,18 +2528,29 @@ jobs:
             echo "Checking Codecov for commit: $COMMIT_SHA"
             CODECOV_URL="https://api.codecov.io/api/v2/github/${OWNER_REPO[0]}/repos/${OWNER_REPO[1]}/commits/$COMMIT_SHA"
             while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-              HTTP_CODE=$(curl -s -o /tmp/codecov_response.json -w "%{http_code}" -H "Authorization: token ${{ secrets.CODECOV_API_TOKEN }}" "$CODECOV_URL")
-              CODECOV_JSON=$(cat /tmp/codecov_response.json)
+              CODECOV_JSON=""
+              CI_PASSED="null"
+              STATE="null"
+              REPORT_STATE="pending"
+              # A transport failure (DNS/TLS, e.g. a codecov.io certificate
+              # outage) makes curl exit non-zero; run it inside a condition so
+              # the step reaches the retry/warn path instead of dying under -e.
+              if HTTP_CODE=$(curl -s -o /tmp/codecov_response.json -w "%{http_code}" -H "Authorization: token ${{ secrets.CODECOV_API_TOKEN }}" "$CODECOV_URL"); then
+                CODECOV_JSON=$(cat /tmp/codecov_response.json)
+              else
+                HTTP_CODE="000"
+              fi
               if [ "$HTTP_CODE" != "200" ]; then
                 echo "Codecov API returned HTTP $HTTP_CODE (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
               else
-                CI_PASSED=$(echo "$CODECOV_JSON" | jq -r '.ci_passed // "null"')
+                CI_PASSED=$(echo "$CODECOV_JSON" | jq -r 'if .ci_passed == null then "null" else .ci_passed end')
                 STATE=$(echo "$CODECOV_JSON" | jq -r '.state // "null"')
-                echo "Codecov ci_passed=$CI_PASSED state=$STATE (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
-                if [ "$CI_PASSED" = "true" ]; then
+                REPORT_STATE=$(node devops/github/ci/codecov-report-state.mjs /tmp/codecov_response.json)
+                echo "Codecov ci_passed=$CI_PASSED state=$STATE report=$REPORT_STATE (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
+                if [ "$REPORT_STATE" = "passed" ]; then
                   echo "Codecov check passed"
                   break
-                elif [ "$CI_PASSED" = "false" ]; then
+                elif [ "$REPORT_STATE" = "failed" ]; then
                   echo "Codecov check failed (ci_passed=false)"
                   echo "status=failure" >> $GITHUB_OUTPUT
                   exit 1
@@ -2294,12 +2558,24 @@ jobs:
               fi
               if [ $RETRY_COUNT -eq $((MAX_RETRIES-1)) ]; then
                 echo "Codecov ci_passed not resolved after $MAX_RETRIES attempts (ci_passed=$CI_PASSED, state=$STATE)"
-                echo "Last response (HTTP $HTTP_CODE): $(echo "$CODECOV_JSON" | jq -c '.')"
+                # Log metadata only; the full line-by-line report is very large.
+                echo "Last response (HTTP $HTTP_CODE): $(echo "$CODECOV_JSON" | jq -c '{ci_passed, state, totals}')"
                 if [ "$CI_PASSED" = "false" ]; then
                   echo "Codecov explicitly failed"
                   exit 1
                 fi
-                echo "::warning::Codecov did not resolve ci_passed — proceeding (not an explicit failure)"
+                if [ "$REPORT_STATE" = "missing" ]; then
+                  # Processing completed, but the actual coverage report is empty.
+                  # Distinguish missing uploads from completed reports whose CI
+                  # status has not resolved yet (including this polling job).
+                  echo "::error::Codecov processed this commit but has no coverage reports — uploads failed while the service was reachable"
+                  exit 1
+                fi
+                if [ "$REPORT_STATE" = "reported" ]; then
+                  echo "::warning::Codecov coverage report is complete; upstream CI is still unresolved"
+                else
+                  echo "::warning::Codecov did not resolve processing — proceeding under the existing outage/backlog policy"
+                fi
                 break
               fi
               sleep $SLEEP_SECONDS
@@ -2309,10 +2585,10 @@ jobs:
 
   release_website:
     name: Release Website
-    needs: [setup_env, determine_website_changes, cross_module_ci, package_website]
+    needs: [setup_env, determine_changes, cross_module_ci, package_website]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_website passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_website.result == 'success' && needs.package_website.outputs.module_version != '' && needs.determine_website_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_website.result == 'success' && needs.package_website.outputs.module_version != '' && needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -2327,10 +2603,10 @@ jobs:
 
   release_api:
     name: Release API
-    needs: [setup_env, determine_api_changes, cross_module_ci, package_api]
+    needs: [setup_env, determine_changes, cross_module_ci, package_api]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_api passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_api.result == 'success' && needs.package_api.outputs.module_version != '' && needs.determine_api_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_api.result == 'success' && needs.package_api.outputs.module_version != '' && needs.determine_changes.outputs.api_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -2345,10 +2621,10 @@ jobs:
 
   release_app:
     name: Release App
-    needs: [setup_env, determine_app_changes, cross_module_ci, package_app]
+    needs: [setup_env, determine_changes, cross_module_ci, package_app]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_app passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_app.result == 'success' && needs.package_app.outputs.module_version != '' && needs.determine_app_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_app.result == 'success' && needs.package_app.outputs.module_version != '' && needs.determine_changes.outputs.app_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -2368,10 +2644,10 @@ jobs:
 
   release_bulletin:
     name: Release Bulletin
-    needs: [setup_env, determine_bulletin_changes, cross_module_ci, package_bulletin]
+    needs: [setup_env, determine_changes, cross_module_ci, package_bulletin]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_bulletin passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_bulletin.result == 'success' && needs.package_bulletin.outputs.module_version != '' && needs.determine_bulletin_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_bulletin.result == 'success' && needs.package_bulletin.outputs.module_version != '' && needs.determine_changes.outputs.bulletin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -2386,8 +2662,8 @@ jobs:
 
   release_admin:
     name: Release Admin
-    needs: [setup_env, determine_admin_changes, cross_module_ci, package_admin]
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_admin.result == 'success' && needs.package_admin.outputs.module_version != '' && needs.determine_admin_changes.outputs.module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_changes, cross_module_ci, package_admin]
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_admin.result == 'success' && needs.package_admin.outputs.module_version != '' && needs.determine_changes.outputs.admin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -2402,42 +2678,48 @@ jobs:
 
   release_data:
     name: Release Data
-    needs: [setup_env, determine_data_changes, cross_module_ci, data_ci, perushim_data]
+    needs: [setup_env, determine_changes, cross_module_ci, data_ci, perushim_data]
     # Note: Using always() as a workaround for reusable workflow result evaluation issues (see #1065)
-    # Also verify cross_module_ci, data_ci, and perushim_data passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.perushim_data.result == 'success' && (needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true') && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    # Perushim generation is intentionally skipped for Tanahpedia/schema-only changes;
+    # Data CD falls back to the always-present master artifact in that case.
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.data_ci.result == 'success' && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
+      actions: read
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout release automation
+        uses: actions/checkout@v7
+      - name: Bind SQL artifact source
+        id: sql_source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node devops/github/release/data-artifact.mjs
       - name: Trigger Data CD Workflow
         uses: peter-evans/repository-dispatch@v4
         with:
           repository: ${{ github.repository }}
           token: ${{ secrets.BOT_PAT }}
           event-type: deploy-data
-          client-payload: '{"ref": "${{ github.ref }}", "run_id": "${{ github.run_id }}"}'
+          client-payload: ${{ steps.sql_source.outputs.payload }}
 
   # ====================================================================================
-  # VERSION BUMP JOB - Consolidated version bumping to avoid race conditions
+  # VERSION BUMP JOB - Post-release version bumps on master
   # ====================================================================================
-  # This job runs after all release jobs and bumps versions for all released modules
-  # in a single commit/push, avoiding the race conditions that occur when multiple
-  # release jobs try to push version bumps in parallel.
+  # Released versions are bumped on master, including website. If a tag already
+  # belongs to another commit, a retry bump without [skip ci] starts a new release run.
   # ====================================================================================
   bump_versions:
     name: Bump Versions
     needs: [setup_env, release_website, release_api, release_app, release_admin, release_bulletin]
-    # Run if at least one module was released
-    # Note: Using always() + result check as a workaround for reusable workflow result evaluation issues (see #1065)
-    # For each release job, we check both result == 'success' AND outputs.released == 'true'
+    # Note: Using always() and success checks as a workaround for reusable workflow result evaluation issues (see #1065)
     if: >-
       ${{ always() && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' &&
-      ((needs.release_website.result == 'success' && needs.release_website.outputs.released == 'true') ||
-       (needs.release_api.result == 'success' && needs.release_api.outputs.released == 'true') ||
-       (needs.release_app.result == 'success' && needs.release_app.outputs.released == 'true') ||
-       (needs.release_admin.result == 'success' && needs.release_admin.outputs.released == 'true') ||
-       (needs.release_bulletin.result == 'success' && needs.release_bulletin.outputs.released == 'true')) }}
+      ((needs.release_website.result == 'success' && (needs.release_website.outputs.released == 'true' || needs.release_website.outputs.needs_bump == 'true')) ||
+       (needs.release_api.result == 'success' && (needs.release_api.outputs.released == 'true' || needs.release_api.outputs.needs_bump == 'true')) ||
+       (needs.release_app.result == 'success' && (needs.release_app.outputs.released == 'true' || needs.release_app.outputs.needs_bump == 'true')) ||
+       (needs.release_admin.result == 'success' && (needs.release_admin.outputs.released == 'true' || needs.release_admin.outputs.needs_bump == 'true')) ||
+       (needs.release_bulletin.result == 'success' && (needs.release_bulletin.outputs.released == 'true' || needs.release_bulletin.outputs.needs_bump == 'true')))}}
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -2445,155 +2727,34 @@ jobs:
     concurrency:
       group: ${{ github.repository }}-version-bump
       cancel-in-progress: false
+      queue: max
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
 
       - name: Configure Git
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-      - name: Add Deploy Key
-        uses: webfactory/ssh-agent@72c0bfd31ab22a2e11716951e3f107a9647dc97e
-        with:
-          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
-
-      # Setup toolchains for modules that need version bumps
-      - name: Setup Node.js (for Website/Admin/Bulletin)
-        if: ${{ needs.release_website.outputs.released == 'true' || needs.release_admin.outputs.released == 'true' || needs.release_bulletin.outputs.released == 'true' }}
-        uses: actions/setup-node@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
           cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
           cache: npm
 
-      - name: Install devops dependencies (for Bulletin)
-        if: ${{ needs.release_bulletin.outputs.released == 'true' }}
+      - name: Install devops dependencies
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        run: npm ci
+        run: npm ci --no-audit --no-fund
 
-      - name: Setup Rust (for API/Bulletin)
-        if: ${{ needs.release_api.outputs.released == 'true' || needs.release_bulletin.outputs.released == 'true' }}
-        uses: dtolnay/rust-toolchain@stable
+      - name: Publish release and collision version bumps together
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: npm run bump:module-versions -- --mode all --publish
 
-      - name: Install cargo-make (for API/Bulletin)
-        if: ${{ needs.release_api.outputs.released == 'true' || needs.release_bulletin.outputs.released == 'true' }}
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-make
-
-      - name: Install Rust bump tools (for API)
-        if: ${{ needs.release_api.outputs.released == 'true' }}
-        uses: taiki-e/install-action@v2
-        with:
-          tool: tomato-toml, semver-bump
-
-      - name: Setup .NET (for App)
-        if: ${{ needs.release_app.outputs.released == 'true' }}
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: "9.0.x"
-
-      - name: Restore dotnet tools (for App)
-        if: ${{ needs.release_app.outputs.released == 'true' }}
-        working-directory: app
-        run: dotnet tool restore
-
-      # Bump versions for each released module
-      - name: Bump Website Version
-        if: ${{ needs.release_website.outputs.released == 'true' }}
-        working-directory: ${{ needs.setup_env.outputs.website_directory }}
-        # Use --ignore-scripts to avoid running the 'version' script which requires cross-env-shell
-        # The version script just echoes the version and isn't needed during the bump
-        run: npm version patch --no-git-tag-version --ignore-scripts
-
-      - name: Bump Admin Version
-        if: ${{ needs.release_admin.outputs.released == 'true' }}
-        working-directory: ${{ needs.setup_env.outputs.admin_directory }}
-        run: npm version patch --no-git-tag-version --ignore-scripts
-
-      - name: Bump API Version
-        if: ${{ needs.release_api.outputs.released == 'true' }}
-        working-directory: ${{ needs.setup_env.outputs.api_directory }}
-        run: cargo make bump-version
-
-      - name: Bump Bulletin Version
-        if: ${{ needs.release_bulletin.outputs.released == 'true' }}
-        working-directory: ${{ needs.setup_env.outputs.bulletin_directory }}
-        run: cargo make bump-version
-
-      - name: Bump App Version
-        if: ${{ needs.release_app.outputs.released == 'true' }}
-        working-directory: app
-        run: dotnet run --project devops -- BumpVersion
-
-      # Collect all changed files and create a single commit
-      - name: Commit All Version Bumps
-        run: |
-          set -e
-
-          FILES_TO_ADD=""
-          MODULES_BUMPED=""
-
-          if [ "${{ needs.release_website.outputs.released }}" = "true" ]; then
-            FILES_TO_ADD="$FILES_TO_ADD ${{ needs.setup_env.outputs.website_directory }}/package.json ${{ needs.setup_env.outputs.website_directory }}/package-lock.json"
-            WEBSITE_VERSION=$(node -e "const pkg = require('./${{ needs.setup_env.outputs.website_directory }}/package.json'); console.log(pkg.version)")
-            MODULES_BUMPED="${MODULES_BUMPED}website to ${WEBSITE_VERSION}, "
-          fi
-
-          if [ "${{ needs.release_admin.outputs.released }}" = "true" ]; then
-            FILES_TO_ADD="$FILES_TO_ADD ${{ needs.setup_env.outputs.admin_directory }}/package.json ${{ needs.setup_env.outputs.admin_directory }}/package-lock.json"
-            ADMIN_VERSION=$(node -e "const pkg = require('./${{ needs.setup_env.outputs.admin_directory }}/package.json'); console.log(pkg.version)")
-            MODULES_BUMPED="${MODULES_BUMPED}admin to ${ADMIN_VERSION}, "
-          fi
-
-          if [ "${{ needs.release_api.outputs.released }}" = "true" ]; then
-            FILES_TO_ADD="$FILES_TO_ADD ${{ needs.setup_env.outputs.api_directory }}/Cargo.toml ${{ needs.setup_env.outputs.api_directory }}/Cargo.lock"
-            API_VERSION=$(grep -m1 '^version' ${{ needs.setup_env.outputs.api_directory }}/Cargo.toml | sed 's/.*"\(.*\)"/\1/')
-            MODULES_BUMPED="${MODULES_BUMPED}api to ${API_VERSION}, "
-          fi
-
-          if [ "${{ needs.release_bulletin.outputs.released }}" = "true" ]; then
-            FILES_TO_ADD="$FILES_TO_ADD ${{ needs.setup_env.outputs.bulletin_directory }}/Cargo.toml ${{ needs.setup_env.outputs.bulletin_directory }}/Cargo.lock"
-            BULLETIN_VERSION=$(grep -m1 '^version' ${{ needs.setup_env.outputs.bulletin_directory }}/Cargo.toml | sed 's/.*"\(.*\)"/\1/')
-            MODULES_BUMPED="${MODULES_BUMPED}bulletin to ${BULLETIN_VERSION}, "
-          fi
-
-          if [ "${{ needs.release_app.outputs.released }}" = "true" ]; then
-            FILES_TO_ADD="$FILES_TO_ADD app/BibleOnSite/BibleOnSite.csproj"
-            APP_VERSION=$(grep -o '<ApplicationDisplayVersion>[^<]*</ApplicationDisplayVersion>' app/BibleOnSite/BibleOnSite.csproj | sed 's/<[^>]*>//g')
-            MODULES_BUMPED="${MODULES_BUMPED}app to ${APP_VERSION}, "
-          fi
-
-          # Remove trailing comma and space
-          MODULES_BUMPED=$(echo "$MODULES_BUMPED" | sed 's/, $//')
-
-          if [ -n "$FILES_TO_ADD" ]; then
-            git add $FILES_TO_ADD
-            git checkout -- . 2>/dev/null || true
-            git clean -fd 2>/dev/null || true
-            git commit -n -m "chore(release): Bump versions ($MODULES_BUMPED) [skip ci]"
-          else
-            echo "No version files to commit"
-            exit 0
-          fi
-
-      - name: Push Version Bump Changes
-        run: |
-          set -e
-          CURRENT_BRANCH=$(git symbolic-ref --short HEAD)
-          git remote set-url origin git@github.com:${{ github.repository }}
-          git fetch origin "$CURRENT_BRANCH"
-
-          # Rebase on top of any changes that happened during the release
-          if ! git rebase "origin/$CURRENT_BRANCH"; then
-            echo "Error: Failed to rebase version bump commit. This may indicate a conflict."
-            echo "Aborting rebase..."
-            git rebase --abort
-            exit 1
-          fi
-
-          git push origin HEAD

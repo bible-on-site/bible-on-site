@@ -35,7 +35,7 @@ describe("Footer", () => {
 
 	it("renders copyright with year range", () => {
 		render(<Footer />);
-		expect(screen.getByText(/תנ״ך על הפרק/)).toBeInTheDocument();
+		expect(screen.getByText(/תנ"ך על הפרק/)).toBeInTheDocument();
 	});
 
 	it("renders GitHub link", () => {
@@ -75,6 +75,6 @@ describe("Footer", () => {
 		const { Footer: FooterMocked } = require("@/app/components/Footer");
 		render(<FooterMocked />);
 		// Should still render without crashing; the year < 5000 branch is covered
-		expect(screen.getByText(/תנ״ך על הפרק/)).toBeInTheDocument();
+		expect(screen.getByText(/תנ"ך על הפרק/)).toBeInTheDocument();
 	});
 });

@@ -1,3 +1,4 @@
+import { expect, type Page } from "@playwright/test";
 import { SeferPage } from "../../../util/playwright/page-objects/sefer-page";
 import { test } from "../../../util/playwright/test-fixture";
 
@@ -14,10 +15,546 @@ import { test } from "../../../util/playwright/test-fixture";
  * Tests use the skipOnMobile fixture to automatically skip on mobile viewports.
  */
 
+function activePageAngle(page: Page, signed = false) {
+	return page.evaluate((signed) => {
+		const turningPage = Array.from(
+			document.querySelectorAll<HTMLElement>(".he-book .page"),
+		).find((page) => page.style.willChange === "transform");
+		const angle = turningPage?.style.transform.match(
+			/rotateY\((-?[\d.]+)deg\)/,
+		);
+		const value = angle ? Number(angle[1]) : 0;
+		return signed ? value : Math.abs(value);
+	}, signed);
+}
+
+async function fastMouseSwipe(page: Page, x: number, y: number, delta: number) {
+	// Native CDP input avoids trace snapshots between move and release, which
+	// would otherwise turn this velocity-sensitive swipe into a slow drag.
+	const client = await page.context().newCDPSession(page);
+	await client.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
+	await client.send("Input.dispatchMouseEvent", {
+		type: "mousePressed",
+		x,
+		y,
+		button: "left",
+		buttons: 1,
+		clickCount: 1,
+	});
+	// Hammer samples velocity over intervals longer than 25ms. Leave a short
+	// press, then confirm the first move so Chromium cannot coalesce the entire
+	// gesture into a panstart followed by a release, without any panmove.
+	await new Promise((resolve) => setTimeout(resolve, 30));
+	await client.send("Input.dispatchMouseEvent", {
+		type: "mouseMoved",
+		x: x + delta / 6,
+		y,
+		buttons: 1,
+	});
+	// Send the remaining motion together: awaiting every acknowledgement can
+	// turn a fast swipe into a slow drag under load or trace recording.
+	const inputs: Promise<unknown>[] = [];
+	for (let step = 2; step <= 6; step++) {
+		inputs.push(client.send("Input.dispatchMouseEvent", {
+			type: "mouseMoved",
+			x: x + (step * delta) / 6,
+			y,
+			buttons: 1,
+		}));
+	}
+	inputs.push(client.send("Input.dispatchMouseEvent", {
+		type: "mouseReleased",
+		x: x + delta,
+		y,
+		button: "left",
+		buttons: 0,
+		clickCount: 1,
+	}));
+	await Promise.all(inputs);
+	await client.detach();
+}
+
 test.describe("Sefer view", () => {
 	// Skip all tests in this suite on mobile viewports - sefer view requires tablet+
 	test.beforeEach(({ skipOnNotWideEnough }) => {
 		void skipOnNotWideEnough;
+	});
+
+	test("TOC links open chapter routes with modifiers and turn pages on regular click", async ({
+		page,
+	}) => {
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await page.locator(".flipbook-toolbar-toc").click();
+		const chapter = page
+			.locator('.he-book .page[data-page-index="2"] .toc-link[href]')
+			.nth(1);
+		await expect(chapter).toBeVisible();
+		await expect(chapter).toHaveAttribute("href", "/929/2?book");
+		const originalUrl = page.url();
+
+		const ctrlPagePromise = page.context().waitForEvent("page");
+		await chapter.click({ modifiers: ["Control"] });
+		const ctrlPage = await ctrlPagePromise;
+		await expect(ctrlPage).toHaveURL(/\/929\/2\?book/);
+		await expect(page).toHaveURL(originalUrl);
+		await ctrlPage.close();
+
+		const shiftPagePromise = page.context().waitForEvent("page");
+		await chapter.click({ modifiers: ["Shift"] });
+		const shiftPage = await shiftPagePromise;
+		await expect(shiftPage).toHaveURL(/\/929\/2\?book/);
+		await expect(page).toHaveURL(originalUrl);
+		await shiftPage.close();
+
+		await chapter.click();
+		await expect(page).toHaveURL(/\/929\/2\?book/);
+		await expect(page.locator(".flipbook-toolbar-indicator")).toHaveValue(
+			"ב / נ",
+		);
+	});
+
+	test("browser Back restores a prior book page without reloading the document", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await page.evaluate(() => {
+			(
+				window as Window & { __bookHistoryMarker?: string }
+			).__bookHistoryMarker = "same-document";
+			document
+				.querySelector(".he-book")
+				?.setAttribute("data-book-instance", "same-book");
+		});
+
+		await page.locator(".flipbook-toolbar-next").click();
+		await expect(page).toHaveURL(/\/929\/2\?book/);
+		await page.locator(".flipbook-toolbar-toc").click();
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/תוכן");
+		await page.goBack();
+		await expect(page).toHaveURL(/\/929\/2\?book/);
+		await page.goForward();
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/תוכן");
+		await page.goBack();
+		await expect(page).toHaveURL(/\/929\/2\?book/);
+		await page.goBack();
+		await expect(page).toHaveURL(/\/929\/1\?book=?$/);
+		expect(
+			await page.evaluate(
+				() =>
+					(window as Window & { __bookHistoryMarker?: string })
+						.__bookHistoryMarker,
+			),
+		).toBe("same-document");
+		await expect(
+			page.locator('.he-book[data-book-instance="same-book"]'),
+		).toHaveCount(1);
+		await expect(page.locator(".flipbook-toolbar-indicator")).toHaveValue(
+			"א / נ",
+		);
+	});
+
+	test("TOC has a shareable URL that opens at the contents page", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await page.locator(".flipbook-toolbar-toc").click();
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/תוכן");
+		await page.reload();
+		await seferPage.verifySeferViewIsOpen();
+		await expect(
+			page
+				.locator('.he-book .page[data-page-index="2"] .toc-link[href]')
+				.first(),
+		).toBeVisible();
+	});
+
+	test("Shmuel semantic book routes load the requested spread", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		await page.goto("/929/שמואל/תוכן?book");
+		await seferPage.verifySeferViewIsOpen();
+		await expect(
+			page
+				.locator('.he-book .page[data-page-index="2"] .toc-link[href]')
+				.first(),
+		).toBeVisible();
+		await page.goto("/929/שמואל/כריכה?book");
+		await seferPage.verifySeferViewIsOpen();
+		await expect(
+			page.locator('.he-book section[aria-label="עטיפה קדמית"]'),
+		).toBeVisible();
+		await page.goto("/929/שמואל/גב?book");
+		await seferPage.verifySeferViewIsOpen();
+		await expect(
+			page.locator('.he-book section[aria-label="עטיפה אחורית"]'),
+		).toBeVisible();
+	});
+
+	test("front and back covers have shareable URLs that reopen the same spread", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		const dragLeafBackward = async (pageIndex: number) => {
+			const visiblePage = await page
+				.locator(`.he-book .page[data-page-index="${pageIndex}"]`)
+				.boundingBox();
+			if (!visiblePage) throw new Error(`Page ${pageIndex} is not visible`);
+			const x = visiblePage.x + visiblePage.width * 0.85;
+			const y = visiblePage.y + visiblePage.height / 2;
+			const bookWidth = await page
+				.locator(".he-book")
+				.evaluate((book) => book.clientWidth);
+			await page.mouse.move(x, y);
+			await page.mouse.down();
+			await page.mouse.move(x - bookWidth * 0.7, y, { steps: 15 });
+			await page.mouse.up();
+		};
+		await dragLeafBackward(3);
+		await expect(
+			page.locator('.he-book .page[data-page-index="1"]'),
+		).toHaveClass(/current-page/);
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/תוכן");
+		await expect(page.locator(".he-book .page--flipping")).toHaveCount(0);
+		await dragLeafBackward(1);
+		await expect(
+			page.locator('.he-book .page[data-page-index="0"]'),
+		).toHaveClass(/current-page/);
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/כריכה");
+		await page.reload();
+		await seferPage.verifySeferViewIsOpen();
+		await expect(
+			page.locator('.he-book .page[data-page-index="0"]'),
+		).toBeVisible();
+		await page.locator(".flipbook-toolbar-last").click();
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/גב");
+		await page.reload();
+		await seferPage.verifySeferViewIsOpen();
+		await expect(
+			page.locator('.he-book .page[data-page-index="103"]'),
+		).toBeVisible();
+		await page.locator(".flipbook-toolbar-prev").click();
+		await expect(page).toHaveURL(/\/929\/50\?book/);
+		await page.locator(".flipbook-toolbar-next").click();
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/גב");
+	});
+
+	test("Selects verse text without turning the page", async ({ page }) => {
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await seferPage.verifyPesukimAreVisible();
+		const selectButton = page.getByRole("button", {
+			name: "בחירת טקסט עם העכבר",
+		});
+		await expect(selectButton).toContainText("אב");
+		await expect(
+			selectButton.locator(".flipbook-toolbar-mouse-mode-caret"),
+		).toBeVisible();
+		await expect(
+			selectButton.locator(".flipbook-toolbar-mouse-mode-caret"),
+		).toHaveCSS("mask-image", /data:image\/png;base64/);
+		await expect(selectButton).toHaveAttribute("aria-pressed", "false");
+		await selectButton.click();
+		await expect(selectButton).toHaveAttribute("aria-pressed", "true");
+		const text = page.locator(".he-book article:visible").first();
+		const indicator = page.locator(".flipbook-toolbar-indicator");
+		await expect(indicator).toHaveValue("א / נ");
+		const initialPage = await indicator.inputValue();
+		const initialUrl = page.url();
+		const word = await text.evaluate((article) => {
+			const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT);
+			let node = walker.nextNode();
+			while (node && (node.textContent?.trim().length ?? 0) < 8) {
+				node = walker.nextNode();
+			}
+			if (!node) throw new Error("No verse text found");
+			const range = document.createRange();
+			range.selectNodeContents(node);
+			const rect = range.getBoundingClientRect();
+			return {
+				left: rect.left,
+				right: rect.right,
+				y: rect.top + rect.height / 2,
+			};
+		});
+		// Drag across an actual Hebrew word in reading order (right to left).
+		await page.mouse.move(word.right - 1, word.y);
+		await page.mouse.down();
+		await page.mouse.move(word.left + 1, word.y, { steps: 15 });
+		await page.mouse.up();
+		await expect
+			.poll(() =>
+				page.evaluate(() => window.getSelection()?.toString().length ?? 0),
+			)
+			.toBeGreaterThan(3);
+		await expect(indicator).toHaveValue(initialPage);
+		await expect(page).toHaveURL(initialUrl);
+		await expect(page.locator(".he-book .page--flipping")).toHaveCount(0);
+
+		// Navigation still works after a selection gesture.
+		await page.locator(".flipbook-toolbar-next").click();
+		await expect(indicator).not.toHaveValue(initialPage);
+	});
+
+	test("Slow drag across verse text still selects it", async ({ page }) => {
+		await page.setViewportSize({ width: 1440, height: 900 });
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await seferPage.verifyPesukimAreVisible();
+		await page.getByRole("button", { name: "בחירת טקסט עם העכבר" }).click();
+		const rect = await page
+			.locator(".he-book article:visible")
+			.first()
+			.boundingBox();
+		if (!rect) throw new Error("Verse text is not visible");
+		const x = rect.x + 60;
+		const y = rect.y + 45;
+		const indicator = page.locator(".flipbook-toolbar-indicator");
+		await expect(indicator).toHaveValue("א / נ");
+		await page.mouse.move(x, y);
+		await page.mouse.down();
+		await page.waitForTimeout(500);
+		await page.mouse.move(x + 200, y, { steps: 5 });
+		expect(
+			await page
+				.locator(".he-book .page")
+				.evaluateAll((pages) =>
+					pages.some(
+						(page) => (page as HTMLElement).style.willChange === "transform",
+					),
+				),
+		).toBe(false);
+		await page.mouse.up();
+		await expect
+			.poll(() =>
+				page.evaluate(() => window.getSelection()?.toString().length ?? 0),
+			)
+			.toBeGreaterThan(3);
+		await expect(indicator).toHaveValue("א / נ");
+	});
+
+	test("Fast mouse swipe over verse text turns the page", async ({ page }) => {
+		await page.setViewportSize({ width: 1440, height: 900 });
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await seferPage.verifyPesukimAreVisible();
+		const rect = await page
+			.locator(".he-book article:visible")
+			.first()
+			.boundingBox();
+		if (!rect) throw new Error("Verse text is not visible");
+		const x = rect.x + 60;
+		const y = rect.y + 45;
+		expect(
+			await page.evaluate(
+				({ x, y }) =>
+					document.elementFromPoint(x, y)?.closest("article") !== null,
+				{ x, y },
+			),
+		).toBe(true);
+		const indicator = page.locator(".flipbook-toolbar-indicator");
+		await expect(indicator).toHaveValue("א / נ");
+		const before = await indicator.inputValue();
+		await fastMouseSwipe(page, x, y, 600);
+		await expect(indicator).not.toHaveValue(before);
+		expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(
+			"",
+		);
+	});
+
+	test("Dragging verse content holds and moves the page before release", async ({
+		page,
+	}) => {
+		await page.setViewportSize({ width: 1440, height: 900 });
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await seferPage.verifyPesukimAreVisible();
+		const rect = await page
+			.locator(".he-book article:visible")
+			.first()
+			.boundingBox();
+		if (!rect) throw new Error("Verse text is not visible");
+		const x = rect.x + 60;
+		const y = rect.y + 45;
+		expect(
+			await page.evaluate(
+				({ x, y }) =>
+					document.elementFromPoint(x, y)?.closest("article") !== null,
+				{ x, y },
+			),
+		).toBe(true);
+		const indicator = page.locator(".flipbook-toolbar-indicator");
+		await expect(indicator).toHaveValue("א / נ");
+		const turningAngle = () => activePageAngle(page);
+
+		await page.mouse.move(x, y);
+		await page.mouse.down();
+		await page.waitForTimeout(550);
+		await page.mouse.move(x + 80, y, { steps: 8 });
+		await expect.poll(turningAngle).toBeGreaterThan(2);
+		await page.mouse.move(x + 300, y, { steps: 6 });
+		await expect.poll(turningAngle).toBeGreaterThan(10);
+		const heldAt = await turningAngle();
+		await page.waitForTimeout(250);
+		expect(await turningAngle()).toBeGreaterThan(10);
+		await page.mouse.move(x + 480, y, { steps: 4 });
+		await expect
+			.poll(async () => Math.abs((await turningAngle()) - heldAt))
+			.toBeGreaterThan(10);
+		const fartherAngle = await turningAngle();
+		await page.waitForTimeout(250);
+		await page.mouse.move(x + 200, y, { steps: 8 });
+		await expect
+			.poll(async () => Math.abs((await turningAngle()) - fartherAngle))
+			.toBeGreaterThan(10);
+		await expect(indicator).toHaveValue("א / נ");
+		await page.mouse.move(x + 600, y, { steps: 3 });
+		await page.waitForTimeout(250);
+		await page.mouse.up();
+		await expect(indicator).toHaveValue("א / נ");
+		await expect.poll(turningAngle).toBe(0);
+	});
+
+	test("Mouse selection mode can be toggled back to native page dragging", async ({
+		page,
+	}) => {
+		// Reload mounts the lazy book a second time before the drag assertions.
+		test.setTimeout(60_000);
+		await page.setViewportSize({ width: 1440, height: 900 });
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await seferPage.verifyPesukimAreVisible();
+		const selectButton = page.getByRole("button", {
+			name: "בחירת טקסט עם העכבר",
+		});
+		await selectButton.click();
+		await expect(selectButton).toHaveAttribute("aria-pressed", "true");
+		await page.reload();
+		await seferPage.verifySeferViewIsOpen();
+		await expect(selectButton).toHaveAttribute("aria-pressed", "true");
+		await selectButton.click();
+		await expect(selectButton).toHaveAttribute("aria-pressed", "false");
+		const rect = await page
+			.locator(".he-book article:visible")
+			.first()
+			.boundingBox();
+		if (!rect) throw new Error("Verse text is not visible");
+		const x = rect.x + 60;
+		const y = rect.y + 45;
+		await page.mouse.move(x, y);
+		await page.mouse.down();
+		await page.mouse.move(x + 300, y, { steps: 8 });
+		await expect.poll(() => activePageAngle(page)).toBeGreaterThan(10);
+		await page.mouse.up();
+	});
+
+	test("Mouse swipe over verse text turns back to the previous page", async ({
+		page,
+	}) => {
+		await page.setViewportSize({ width: 1440, height: 900 });
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(2);
+		await seferPage.verifyPesukimAreVisible();
+		const rect = await page
+			.locator(".he-book .page.current-page article")
+			.first()
+			.boundingBox();
+		if (!rect) throw new Error("Verse text is not visible");
+		const x = rect.x + rect.width - 40;
+		const y = rect.y + 45;
+		expect(
+			await page.evaluate(
+				({ x, y }) =>
+					document.elementFromPoint(x, y)?.closest("article") !== null,
+				{ x, y },
+			),
+		).toBe(true);
+		const indicator = page.locator(".flipbook-toolbar-indicator");
+		await expect(indicator).toHaveValue("ב / נ");
+		await fastMouseSwipe(page, x, y, -600);
+		await expect(indicator).toHaveValue("א / נ");
+	});
+
+	test.describe("Touch swipe", () => {
+		test.use({ hasTouch: true });
+
+		test("Swiping verse text drags and turns the page", async ({ page }) => {
+			await page.setViewportSize({ width: 1440, height: 900 });
+			const seferPage = new SeferPage(page);
+			await seferPage.openSeferViewForPerek(2);
+			await seferPage.verifyPesukimAreVisible();
+			const rect = await page
+				.locator(".he-book .page.current-page article")
+				.first()
+				.boundingBox();
+			if (!rect) throw new Error("Verse text is not visible");
+			const x = Math.round(rect.x + rect.width - 40);
+			const y = Math.round(rect.y + 45);
+			expect(
+				await page.evaluate(
+					({ x, y }) =>
+						document.elementFromPoint(x, y)?.closest("article") !== null,
+					{ x, y },
+				),
+			).toBe(true);
+			const indicator = page.locator(".flipbook-toolbar-indicator");
+			await expect(indicator).toHaveValue("ב / נ");
+			const client = await page.context().newCDPSession(page);
+			await client.send("Input.dispatchTouchEvent", {
+				type: "touchStart",
+				touchPoints: [{ x, y }],
+			});
+			// Start near the verse's right edge and drag left across the book's
+			// midpoint. A 650px rightward drag from the first chapter never reaches
+			// halfway at this viewport; it only turns if release velocity is high,
+			// which tracing and runner load can change.
+			for (const offset of [20, 40, 300, 500, x - 20]) {
+				await client.send("Input.dispatchTouchEvent", {
+					type: "touchMove",
+					touchPoints: [{ x: x - offset, y }],
+				});
+				if (offset === 300) {
+					await expect.poll(() => activePageAngle(page)).toBeGreaterThan(10);
+					await page.waitForTimeout(150);
+					expect(await activePageAngle(page)).toBeGreaterThan(10);
+				}
+			}
+			// Confirm a real drag beyond halfway before releasing, so completion
+			// checks distance rather than a timing-sensitive flick. The library
+			// mirrors the page past halfway, changing this backward drag's rotation
+			// from negative to positive.
+			await expect.poll(() => activePageAngle(page, true)).toBeGreaterThan(10);
+			await page.waitForTimeout(150);
+			expect(await activePageAngle(page, true)).toBeGreaterThan(10);
+			await client.send("Input.dispatchTouchEvent", {
+				type: "touchEnd",
+				touchPoints: [],
+			});
+			await expect(indicator).toHaveValue("א / נ");
+			await client.detach();
+		});
 	});
 
 	test.describe("Sefarim without additionals", () => {

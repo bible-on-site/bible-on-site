@@ -82,7 +82,7 @@ const config = {
 	testEnvironment: "jsdom",
 	testMatch: ["**/tests/(unit|integration)/**/*.test.ts?(x)"],
 	// Avoid haste collision between root package.json and .next/standalone/package.json
-	modulePathIgnorePatterns: ["<rootDir>/.next/"],
+	modulePathIgnorePatterns: ["[\\\\/]\\.next[\\\\/]"],
 	// Use SWC with coverage plugin when measuring coverage, otherwise use ts-jest
 	transform: shouldMeasureCov
 		? { "^.+\\.(t|j)sx?$": swcCoverageConfig }
@@ -97,19 +97,10 @@ async function nextJestConfigPromise() {
 		dir: "./",
 	});
 	const nextJestConfig = await createNextJestConfig(config)();
-	nextJestConfig.modulePathIgnorePatterns = [
-		...(nextJestConfig.modulePathIgnorePatterns ?? []),
-		"<rootDir>/.next/",
-	];
 	// This cannot be set directly in the jest config because it is overridden by next/jest.
 	nextJestConfig.transformIgnorePatterns = [
-		// ESM modules that need to be transformed: gematry, temporal-polyfill, sunrise-sunset-js
-		"/node_modules/(?!(gematry|temporal-polyfill|sunrise-sunset-js)/)",
-	];
-	// Avoid Haste module naming collision: .next/standalone/package.json vs root package.json
-	nextJestConfig.modulePathIgnorePatterns = [
-		...(nextJestConfig.modulePathIgnorePatterns ?? []),
-		"<rootDir>/\\.next/",
+		// ESM modules that need to be transformed for Jest's CommonJS runtime
+		"/node_modules/(?!(gematry|temporal-polyfill|temporal-utils|sunrise-sunset-js)/)",
 	];
 
 	return nextJestConfig;

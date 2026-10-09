@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Nuke.Common;
 using Nuke.Common.IO;
+using Nuke.Common.Tooling;
 using Nuke.Common.Tools.DotNet;
 using static Nuke.Common.Tools.DotNet.DotNetTasks;
 
@@ -76,7 +77,17 @@ partial class Build
         .Unlisted()
         .Executes(() =>
         {
-            // This target only restores the appropriate platform - build happens in publish
+            var platforms = Platform.Equals("All", StringComparison.OrdinalIgnoreCase)
+                ? new[] { "Android", OperatingSystem.IsMacOS() ? "iOS" : "Windows" }
+                : new[] { Platform };
+            foreach (var platform in platforms)
+            {
+                ProcessTasks.StartProcess(OperatingSystem.IsWindows() ? "python" : "python3",
+                    $"\"{RootDirectory / "devops/prepare_recitation_assets.py"}\" --platform {platform}", RootDirectory)
+                    .AssertZeroExitCode();
+            }
+
+            // Generate extension assets before project evaluation, then restore the target platform.
             if (Platform.Equals("Windows", StringComparison.OrdinalIgnoreCase))
             {
                 if (OperatingSystem.IsWindows())
@@ -84,7 +95,7 @@ partial class Build
                     // Restore with RuntimeIdentifier to get RID-specific packages for PublishReadyToRun
                     DotNetRestore(s => s
                         .SetProjectFile(MainProject)
-                        .SetProperty("TargetFramework", "net9.0-windows10.0.19041.0")
+                        .SetProperty("TargetFramework", "net10.0-windows10.0.19041.0")
                         .SetProperty("RuntimeIdentifier", "win-x64")
                         .SetProperty("PublishReadyToRun", "true"));
                 }
@@ -93,13 +104,15 @@ partial class Build
             {
                 DotNetRestore(s => s
                     .SetProjectFile(MainProject)
-                    .SetProperty("TargetFramework", "net9.0-android"));
+                    .SetProperty("TargetFramework", "net10.0-android")
+                    .SetProperty("RuntimeIdentifiers", "android-arm64")
+                    .SetRuntime("android-arm64"));
             }
             else if (Platform.Equals("iOS", StringComparison.OrdinalIgnoreCase))
             {
                 DotNetRestore(s => s
                     .SetProjectFile(MainProject)
-                    .SetProperty("TargetFramework", "net9.0-ios")
+                    .SetProperty("TargetFramework", "net10.0-ios")
                     .SetProperty("RuntimeIdentifier", "ios-arm64"));
             }
             else
@@ -119,7 +132,8 @@ partial class Build
             ["GenerateAppxPackageOnBuild"] = "true",
             ["AppxPackageDir"] = $"{ArtifactsDirectory}/",
             ["AppxPackageSigningEnabled"] = "true",
-            ["TargetFramework"] = "net9.0-windows10.0.19041.0",
+            ["TargetFramework"] = "net10.0-windows10.0.19041.0",
+            ["RequireRecitationAssets"] = "true",
             // Microsoft Store requires revision (4th component) to be 0
             // Override ApplicationVersion to 0 to produce X.Y.Z.0 version format
             ["ApplicationVersion"] = "0"
@@ -134,7 +148,7 @@ partial class Build
         DotNetPublish(s => s
             .SetProject(MainProject)
             .SetConfiguration(Configuration)
-            .SetFramework("net9.0-windows10.0.19041.0")
+            .SetFramework("net10.0-windows10.0.19041.0")
             .SetRuntime("win-x64")
             .SetProperties(msbuildProperties)
             .EnableNoRestore());
@@ -149,10 +163,10 @@ partial class Build
         var msbuildProperties = new Dictionary<string, object>
         {
             ["AndroidPackageFormat"] = "aab",
-            ["TargetFramework"] = "net9.0-android"
+            ["RequireRecitationAssets"] = "true",
+            ["RuntimeIdentifiers"] = "android-arm64"
         };
 
-        // Add signing configuration if provided
         if (!string.IsNullOrEmpty(AndroidKeystore))
         {
             msbuildProperties["AndroidKeyStore"] = "true";
@@ -170,13 +184,14 @@ partial class Build
         DotNetPublish(s => s
             .SetProject(MainProject)
             .SetConfiguration(Configuration)
-            .SetFramework("net9.0-android")
+            .SetFramework("net10.0-android")
+            .SetRuntime("android-arm64")
             .SetProperties(msbuildProperties)
             .EnableNoRestore());
 
         // Find and copy AAB to artifacts directory (MAUI doesn't respect --output for AAB)
-        var binDir = MainProject.Parent / "bin" / Configuration / "net9.0-android";
-        var aabFiles = binDir.GlobFiles("**/*-Signed.aab");  // Only get signed AABs
+        var binDir = MainProject.Parent / "bin" / Configuration / "net10.0-android";
+        var aabFiles = binDir.GlobFiles("**/*-Signed.aab");
 
         if (aabFiles.Count > 0)
         {
@@ -200,12 +215,11 @@ partial class Build
 
         var msbuildProperties = new Dictionary<string, object>
         {
-            ["TargetFramework"] = "net9.0-ios",
+            ["TargetFramework"] = "net10.0-ios",
             ["ArchiveOnBuild"] = "true",
             ["BuildIpa"] = "true",
+            ["RequireRecitationAssets"] = "true",
             ["IpaPackageDir"] = $"{ArtifactsDirectory}/",
-            // Skip simulator runtime validation - the .NET iOS SDK bundles iphonesimulator SDK 23A339 (iOS 17)
-            // but CI runners only have iOS 18.x/26.x runtimes installed, causing actool to fail
             ["SupportedOSPlatformVersion"] = "17.0",
             ["_ExcludeSimulatorArchitectures"] = "true"
         };
@@ -226,13 +240,13 @@ partial class Build
         DotNetPublish(s => s
             .SetProject(MainProject)
             .SetConfiguration(Configuration)
-            .SetFramework("net9.0-ios")
+            .SetFramework("net10.0-ios")
             .SetRuntime("ios-arm64")
             .SetProperties(msbuildProperties)
             .EnableNoRestore());
 
         // Find and copy IPA to artifacts directory
-        var binDir = MainProject.Parent / "bin" / Configuration / "net9.0-ios" / "ios-arm64";
+        var binDir = MainProject.Parent / "bin" / Configuration / "net10.0-ios" / "ios-arm64";
         var ipaFiles = binDir.GlobFiles("**/*.ipa");
 
         if (ipaFiles.Count > 0)

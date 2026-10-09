@@ -15,6 +15,9 @@ fn main() {
 
     let req = pdf::PdfRequest {
         sefer_name: perek_data.sefer_name.clone(),
+        include_cover: true,
+        include_toc: true,
+        cover_accent_hex: "8B0000".to_string(),
         perakim: vec![pdf::PdfPerekInput {
             perek_heb: tanach::perek_to_hebrew(perek_data.perek_in_sefer),
             header: perek_data.header.clone(),

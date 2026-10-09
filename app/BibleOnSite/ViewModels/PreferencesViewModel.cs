@@ -12,6 +12,10 @@ public partial class PreferencesViewModel : ObservableObject
 {
     private readonly PreferencesService _preferencesService;
     private readonly PerushimNotesService _perushimNotesService;
+    private readonly IFileSystem _fileSystem;
+    private readonly IShare _share;
+    private readonly IAppNavigator _navigator;
+    public RecitationPreferencesViewModel Recitation { get; }
 
     public PreferencesViewModel() : this(PreferencesService.Instance, PerushimNotesService.Instance)
     {
@@ -23,9 +27,25 @@ public partial class PreferencesViewModel : ObservableObject
     }
 
     public PreferencesViewModel(PreferencesService preferencesService, PerushimNotesService perushimNotesService)
+        : this(preferencesService, perushimNotesService, FileSystem.Current, Share.Default)
+    {
+    }
+
+    public PreferencesViewModel(PreferencesService preferencesService, PerushimNotesService perushimNotesService,
+        IFileSystem fileSystem, IShare share)
+        : this(preferencesService, perushimNotesService, fileSystem, share, ShellAppNavigator.Instance)
+    {
+    }
+
+    public PreferencesViewModel(PreferencesService preferencesService, PerushimNotesService perushimNotesService,
+        IFileSystem fileSystem, IShare share, IAppNavigator navigator)
     {
         _preferencesService = preferencesService;
         _perushimNotesService = perushimNotesService;
+        _fileSystem = fileSystem;
+        _share = share;
+        _navigator = navigator;
+        Recitation = new RecitationPreferencesViewModel(RecitationService.Instance, preferencesService, PerekDataService.Instance);
         _preferencesService.PreferencesChanged += OnPreferencesChanged;
     }
 
@@ -87,12 +107,40 @@ public partial class PreferencesViewModel : ObservableObject
         set { if (value) PerekToLoad = PerekToLoad.LastLearnt; }
     }
 
-    /// <summary>Whether to show the perushim section at all (only when NOT installed).</summary>
-    public bool ShowPerushimSection => !_perushimNotesService.IsAvailable;
+    /// <summary>Always show the perushim section — with different content based on install state.</summary>
+    public bool ShowPerushimSection => true;
 
-    /// <summary>Status text for perushim notes when not yet installed.</summary>
+    /// <summary>Whether perushim notes are installed and available.</summary>
+    public bool IsPerushimInstalled => _perushimNotesService.IsAvailable;
+
+    /// <summary>Whether to show the download controls (when NOT installed).</summary>
+    public bool ShowPerushimDownload => !_perushimNotesService.IsAvailable;
+
+    /// <summary>Status text for perushim notes.</summary>
     public string PerushimNotesStatusText =>
-        "חבילת הפירושים לא הותקנה. הורידו כדי להפעיל פירושים.";
+        _perushimNotesService.IsAvailable
+            ? "חבילת הפירושים מותקנת ✓"
+            : "חבילת הפירושים לא הותקנה. הורידו כדי להפעיל פירושים.";
+
+    /// <summary>True while the perushim package is downloading.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowPerushimDownloadButton))]
+    [NotifyPropertyChangedFor(nameof(PerushimDownloadStatusText))]
+    private bool _isPerushimDownloading;
+
+    /// <summary>Download progress in the range 0..1 (stays 0 until the first report).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PerushimDownloadStatusText))]
+    private double _perushimDownloadProgress;
+
+    /// <summary>Idle download button: shown only when not installed and not currently downloading.</summary>
+    public bool ShowPerushimDownloadButton => ShowPerushimDownload && !IsPerushimDownloading;
+
+    /// <summary>Label shown on the progress overlay (percentage when reported, else a generic message).</summary>
+    public string PerushimDownloadStatusText =>
+        PerushimDownloadProgress > 0
+            ? $"מוריד… {(int)Math.Round(PerushimDownloadProgress * 100)}%"
+            : "מוריד…";
 
     /// <summary>
     /// Loads preferences from device storage.
@@ -108,6 +156,9 @@ public partial class PreferencesViewModel : ObservableObject
         OnPropertyChanged(nameof(IsPerekToLoadTodays));
         OnPropertyChanged(nameof(IsPerekToLoadLastLearnt));
         OnPropertyChanged(nameof(ShowPerushimSection));
+        OnPropertyChanged(nameof(IsPerushimInstalled));
+        OnPropertyChanged(nameof(ShowPerushimDownload));
+        OnPropertyChanged(nameof(ShowPerushimDownloadButton));
         OnPropertyChanged(nameof(PerushimNotesStatusText));
     }
 
@@ -117,12 +168,53 @@ public partial class PreferencesViewModel : ObservableObject
     [RelayCommand]
     public async Task DownloadPerushimAsync()
     {
-        var ok = await _perushimNotesService.TryDownloadNotesAsync();
-        OnPropertyChanged(nameof(ShowPerushimSection));
-        OnPropertyChanged(nameof(PerushimNotesStatusText));
-        if (!ok && Application.Current?.Windows?.Count > 0 && Application.Current.Windows[0].Page is Page page)
+        if (IsPerushimDownloading)
+            return;
+
+        IsPerushimDownloading = true;
+        PerushimDownloadProgress = 0;
+        try
         {
-            await page.DisplayAlert("שגיאה", "לא ניתן להוריד את חבילת הפירושים. נסו שוב מאוחר יותר.", "אישור");
+            var progress = new Progress<double>(p => PerushimDownloadProgress = Math.Clamp(p, 0, 1));
+            var ok = await _perushimNotesService.TryDownloadNotesAsync(progress);
+            if (!ok)
+            {
+                await _navigator.DisplayAlertAsync("שגיאה", "לא ניתן להוריד את חבילת הפירושים. נסו שוב מאוחר יותר.", "אישור");
+            }
+        }
+        finally
+        {
+            IsPerushimDownloading = false;
+            OnPropertyChanged(nameof(ShowPerushimSection));
+            OnPropertyChanged(nameof(IsPerushimInstalled));
+            OnPropertyChanged(nameof(ShowPerushimDownload));
+            OnPropertyChanged(nameof(ShowPerushimDownloadButton));
+            OnPropertyChanged(nameof(PerushimNotesStatusText));
+        }
+    }
+
+    /// <summary>
+    /// Exports perushim diagnostics to a file and opens the share sheet so the user can save or send for support.
+    /// </summary>
+    [RelayCommand]
+    public async Task ExportPerushimLogsAsync()
+    {
+        try
+        {
+            var report = await _perushimNotesService.GetDiagnosticsAsync();
+            var fileName = $"perushim_diagnostics_{DateTime.UtcNow:yyyyMMdd_HHmmss}.txt";
+            var path = Path.Combine(_fileSystem.CacheDirectory, fileName);
+            await File.WriteAllTextAsync(path, report);
+            await _share.RequestAsync(new ShareFileRequest
+            {
+                Title = "ייצוא לוגים - פירושים",
+                File = new ShareFile(path),
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Export perushim logs failed: {ex.Message}");
+            await _navigator.DisplayAlertAsync("שגיאה", $"לא ניתן לייצא לוגים: {ex.Message}", "אישור");
         }
     }
 

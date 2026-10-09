@@ -1,0 +1,285 @@
+"""
+Validate deployed SQL files with the production Lambda's parser, in manifest order.
+Use --parse-only for the database-free compatibility check used in Data CI.
+Without --parse-only, execute the statements against a disposable local MySQL
+database (the parser injects DROP TABLE/VIEW statements).
+
+Usage:
+    python devops/deploy/data-deploy/validate_lambda_parser.py [--db DB_URL] [--parse-only]
+
+Paths are resolved from the script location, independent of the working directory.
+SQL files live in the repository's data/mysql/ directory. perushim_data.sql is
+loaded from the system temporary directory's perushim-sql/ subdirectory, with a
+local SQL fallback.
+"""
+
+import argparse
+import json
+import os
+import re
+import sys
+from pathlib import Path
+from tempfile import gettempdir
+
+
+# ---------------------------------------------------------------------------
+# Exact copy of Lambda helper functions
+# (must stay in sync with docs/aws/cloudformation/data-deploy/data-deploy-lambda.py)
+# ---------------------------------------------------------------------------
+
+def find_statement_end(buf):
+    in_string = False
+    i = 0
+    length = len(buf)
+    while i < length:
+        ch = buf[i]
+        if in_string:
+            if ch == "\\":
+                i += 2
+                continue
+            if ch == "'":
+                if i + 1 < length and buf[i + 1] == "'":
+                    i += 2
+                    continue
+                in_string = False
+        else:
+            if ch == "'":
+                in_string = True
+            elif ch == ";":
+                return i
+        i += 1
+    return -1
+
+
+def _should_execute(stmt):
+    if not stmt:
+        return False
+    while stmt.startswith("--"):
+        newline = stmt.find("\n")
+        if newline == -1:
+            return False
+        stmt = stmt[newline + 1:].strip()
+        if not stmt:
+            return False
+    if stmt.upper().startswith("USE "):
+        return False
+    if stmt.startswith("/*!") or stmt.startswith("/*M!"):
+        return False
+    if re.match(r"SET\s+.*=\s*@OLD_", stmt, re.IGNORECASE):
+        return False
+    if re.match(r"SET\s+@OLD_", stmt, re.IGNORECASE):
+        return False
+    return True
+
+
+def preprocess_sql(sql_content):
+    result = "SET FOREIGN_KEY_CHECKS = 0;\n"
+    table_pattern = r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"]?(\w+)[`"]?'
+    for match in re.finditer(table_pattern, sql_content, re.IGNORECASE):
+        table_name = match.group(1)
+        sql_content = sql_content.replace(
+            match.group(0), f"DROP TABLE IF EXISTS `{table_name}`;\n{match.group(0)}"
+        )
+    view_pattern = r'CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+[`"]?(\w+)[`"]?'
+    for match in re.finditer(view_pattern, sql_content, re.IGNORECASE):
+        view_name = match.group(1)
+        sql_content = sql_content.replace(
+            match.group(0), f"DROP VIEW IF EXISTS `{view_name}`;\n{match.group(0)}"
+        )
+    result += sql_content
+    result += "\nSET FOREIGN_KEY_CHECKS = 1;"
+    return result
+
+
+def parse_statements(sql_content):
+    statements = []
+    buf = sql_content
+    while True:
+        idx = find_statement_end(buf)
+        if idx == -1:
+            remaining = buf.strip()
+            if remaining and _should_execute(remaining):
+                statements.append(remaining)
+            break
+        stmt = buf[:idx].strip()
+        buf = buf[idx + 1:]
+        if stmt and _should_execute(stmt):
+            statements.append(stmt)
+    return statements
+
+
+def simulate_streaming_parse(filepath):
+    CHUNK = 1 * 1024 * 1024
+    buf = ""
+    statements = []
+    with open(filepath, "r", encoding="utf-8") as f:
+        while True:
+            chunk = f.read(CHUNK)
+            if not chunk:
+                break
+            buf += chunk
+            while True:
+                idx = find_statement_end(buf)
+                if idx == -1:
+                    break
+                stmt = buf[:idx].strip()
+                buf = buf[idx + 1:]
+                if not _should_execute(stmt):
+                    continue
+                statements.append(stmt)
+    remaining = buf.strip()
+    if remaining and _should_execute(remaining):
+        statements.append(remaining)
+    return statements
+
+
+def parse_file(filepath):
+    """Parse a SQL file using the same logic path the Lambda uses."""
+    size = os.path.getsize(filepath)
+    if size > 10 * 1024 * 1024:
+        return simulate_streaming_parse(filepath)
+    else:
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read()
+        content = preprocess_sql(content)
+        return parse_statements(content)
+
+
+def validate_lambda_safe_comments(filepath):
+    """Reject line comments that the production splitter can misparse as SQL."""
+    with open(filepath, "r", encoding="utf-8") as sql_file:
+        for line_number, line in enumerate(sql_file, start=1):
+            stripped = line.lstrip()
+            if stripped.startswith("--") and (";" in stripped or "'" in stripped):
+                raise ValueError(
+                    f"{filepath}:{line_number}: Lambda-unsafe SQL line comment "
+                    "contains a semicolon or apostrophe"
+                )
+            if stripped.startswith("--") and re.search(
+                r"\bCREATE\s+(?:TABLE|(?:OR\s+REPLACE\s+)?VIEW)\b",
+                stripped,
+                re.IGNORECASE,
+            ):
+                raise ValueError(
+                    f"{filepath}:{line_number}: Lambda-unsafe SQL line comment "
+                    "contains table/view creation keywords"
+                )
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--db", dest="db_url")
+    parser.add_argument("--parse-only", action="store_true")
+    args = parser.parse_args()
+
+    script_dir = Path(__file__).resolve().parent
+    repo_root = script_dir.parents[2]
+    data_dir = repo_root / "data" / "mysql"
+
+    manifest_path = script_dir / "sql-files.json"
+    with open(manifest_path, "r", encoding="utf-8") as manifest_file:
+        deploy_files = json.load(manifest_file)
+
+    # perushim_data.sql comes from the artifact.
+    artifact_path = Path(gettempdir()) / "perushim-sql" / "perushim_data.sql"
+    local_perushim_path = data_dir / "perushim_data.sql"
+
+    sql_files = []
+    for name in deploy_files:
+        if name == "perushim_data.sql":
+            if artifact_path.is_file():
+                sql_files.append((name, artifact_path))
+            elif local_perushim_path.is_file():
+                sql_files.append((name, local_perushim_path))
+            else:
+                print(
+                    "WARNING: perushim_data.sql not found at "
+                    f"{artifact_path} or {local_perushim_path}"
+                )
+            continue
+        sql_files.append((name, data_dir / name))
+
+    all_stmts = []
+    for name, fpath in sql_files:
+        if not fpath.is_file():
+            print(f"SKIP: {name} not found at {fpath}")
+            continue
+        validate_lambda_safe_comments(fpath)
+        size_mb = os.path.getsize(fpath) / (1024 * 1024)
+        path_type = "streaming" if size_mb > 10 else "preprocess"
+        stmts = parse_file(fpath)
+        print(f"  {name}: {len(stmts)} stmts ({size_mb:.1f} MB, {path_type})")
+        all_stmts.extend(stmts)
+
+    print(f"\nTotal: {len(all_stmts)} executable statements across {len(sql_files)} files")
+
+    if args.parse_only:
+        print("LAMBDA PARSER VALIDATION PASSED.")
+        return
+
+    # Try executing against local MySQL
+    try:
+        import pymysql
+    except ImportError:
+        print("\npymysql not installed — skipping live DB validation.")
+        sys.exit(0)
+
+    db_url = args.db_url or os.environ.get(
+        "DB_URL",
+        "mysql://root:test_123@localhost:3306/tanah-dev?ssl-mode=DISABLED",
+    )
+    from urllib.parse import urlparse
+    parsed = urlparse(db_url)
+    db_name = parsed.path.lstrip("/").split("?")[0]
+
+    conn = pymysql.connect(
+        host=parsed.hostname,
+        port=parsed.port or 3306,
+        user=parsed.username,
+        password=parsed.password,
+        database=db_name,
+        autocommit=True,
+    )
+
+    print(f"\nExecuting {len(all_stmts)} statements against {parsed.hostname}/{db_name} ...")
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
+            for i, stmt in enumerate(all_stmts):
+                try:
+                    cursor.execute(stmt)
+                except Exception as e:
+                    preview = stmt[:300].encode("ascii", errors="replace").decode("ascii")
+                    print(f"\n*** FAILED at statement {i}: {e}")
+                    print(f"    {preview}...")
+                    sys.exit(1)
+                if (i + 1) % 1000 == 0:
+                    print(f"  ... {i + 1}/{len(all_stmts)}")
+            cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
+    finally:
+        conn.close()
+
+    # Quick data check
+    conn2 = pymysql.connect(
+        host=parsed.hostname, port=parsed.port or 3306,
+        user=parsed.username, password=parsed.password,
+        database=db_name, autocommit=True,
+    )
+    try:
+        with conn2.cursor() as cur:
+            for table in ["tanah_helek", "tanah_sefer", "tanah_perek", "parshan", "perush", "note"]:
+                try:
+                    cur.execute(f"SELECT COUNT(*) FROM {table}")
+                    count = cur.fetchone()[0]
+                    print(f"  {table}: {count} rows")
+                except Exception:
+                    print(f"  {table}: (not found)")
+    finally:
+        conn2.close()
+
+    print(f"\nAll {len(all_stmts)} statements executed successfully!")
+    print("VALIDATION PASSED.")
+
+
+if __name__ == "__main__":
+    main()

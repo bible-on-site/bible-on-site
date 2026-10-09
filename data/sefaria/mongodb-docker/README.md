@@ -33,7 +33,7 @@ The dump is imported at build time, so the container starts with data pre-loaded
 
 ## CI Integration
 
-In CI, this image is built, cached, and used to run data integration tests. See `.github/workflows/ci.yml` for the workflow configuration.
+CI publishes this image to `ghcr.io/bible-on-site/sefaria-mongo`, tagged with the git tree hash of this directory, and Data CI and Perushim Data pull it. Fork pull requests cannot publish, so when they rebuild the image it reaches those jobs as a workflow artifact. See `.github/workflows/ci.yml` for the workflow configuration.
 
 ## Updating the Dump
 
@@ -41,4 +41,4 @@ When Sefaria releases a new dump:
 
 1. Update `DUMP_URL` in the Dockerfile
 2. Rebuild the image
-3. The CI cache will be invalidated automatically due to the Dockerfile change
+3. Any change to this directory changes the image tag, so CI rebuilds and publishes the image

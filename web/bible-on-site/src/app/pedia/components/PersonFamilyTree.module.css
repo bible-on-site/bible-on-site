@@ -1,0 +1,1354 @@
+.connector {
+  width: 2px;
+  height: 16px;
+  background: linear-gradient(180deg, #a5b4fc 0%, #c7d2fe 100%);
+  margin: 0 auto 8px;
+  border-radius: 1px;
+}
+
+.section {
+  margin: 28px 0 32px;
+  /* left padding +3px offsets the 4px-vs-1px border asymmetry so content centers visually */
+  padding: 20px 18px 24px 21px;
+  background: linear-gradient(160deg, #f8fafc 0%, #eef2ff 100%);
+  border: 1px solid #c7d2fe;
+  border-radius: 14px;
+  border-right: 4px solid #6366f1;
+  /* אחיד עם גופן הגוף (כולל עברית); ז/נ יורשים ולא נופלים ל־fallback במשקל כבד */
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+.title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #312e81;
+  margin: 0 0 6px 0;
+  text-align: center;
+}
+
+/* לייבלים ממוסגרים אחיד: הורים, ילדים, אחים, בנות/בני זוג, חלופי, קבוצות משנה */
+.familyTreeSectionLabel {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #4338ca;
+  line-height: 1.3;
+  padding: 4px 12px;
+  margin: 0;
+  text-align: center;
+  background: linear-gradient(160deg, #f8fafc 0%, #eef2ff 100%);
+  border-radius: 8px;
+  border: 1px solid #c7d2fe;
+  box-shadow: 0 1px 4px rgba(99, 102, 241, 0.08);
+}
+
+.familyTreeSectionLabelAlt {
+  color: #6d28d9;
+  border-color: #ddd6fe;
+}
+
+.tierLabel {
+  margin: 0 auto 10px;
+  text-align: center;
+}
+
+/* The plain children layout uses the same uninterrupted center line as the
+   spouse/children matrix. Keep each label's spacing inside its painted box so
+   the line reaches the first row without drawing through the child cards. */
+.childrenBranch {
+  width: 100%;
+}
+
+.childrenBranch :is(.connector, .verticalConnector) {
+  background: #a5b4fc;
+}
+
+.childrenBranch :is(.tierLabel, .verticalTierLabel, .altGroupLabel, .coParentChildLabel) {
+  background-image: linear-gradient(#a5b4fc, #a5b4fc);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 2px 100%;
+}
+
+.childrenBranch :is(.tierLabel, .verticalTierLabel, .altGroupLabel, .coParentChildLabel) {
+  margin-bottom: 0;
+  padding-bottom: 8px;
+}
+
+.childrenBranch .connector {
+  height: 24px;
+  margin-bottom: 0;
+}
+
+/* תווית «הורים» מעל הקו האופקי שמתחת לכרטיסי ההורים */
+.tierLabelParentsAboveArm {
+  margin: 0 auto 10px;
+  text-align: center;
+  background: linear-gradient(#a5b4fc, #a5b4fc) center / 2px 100% no-repeat;
+  position: relative;
+  z-index: 2;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: stretch;
+  gap: 12px;
+  margin-bottom: 16px;
+  position: relative;
+  z-index: 2;
+}
+
+.childRow {
+  direction: rtl;
+}
+
+@media (min-width: 768px) {
+  .childRowThree {
+    flex-wrap: nowrap;
+  }
+
+  .childRowThree > [data-testid="family-child-card"] {
+    flex: 0 1 220px;
+    min-width: 0;
+  }
+
+  .childRowThree .card {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+.altGroupBlock {
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.altGroupLabel {
+  margin: 0 auto 10px;
+  text-align: center;
+}
+
+.card {
+  position: relative;
+  min-width: 140px;
+  max-width: 280px;
+  padding: 12px 14px;
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+  text-align: center;
+}
+
+.cardFocal {
+  position: relative;
+  min-width: 140px;
+  max-width: 280px;
+  padding: 12px 14px;
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #818cf8;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.2);
+  text-align: center;
+}
+
+/* מקור האדם עצמו (למשל פסוק הלידה), בתוך משבצת הכרטיס מתחת לשם */
+.cardCitation {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.cardCitationLine {
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.cardCitationLine + .cardCitationLine {
+  margin-top: 2px;
+}
+
+/* ז / נ — פינה עליונה ב־inline-start (ב־RTL ימין) */
+.sexMark {
+  position: absolute;
+  top: 5px;
+  inset-inline-start: 7px;
+  font-family: inherit;
+  font-size: 0.82rem;
+  /* 800 גורם לעיתים להחלפת גופן לעברית; 700 תואם קישורי השם */
+  font-weight: 700;
+  line-height: 1;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 2px 6px;
+  background: #f8fafc;
+}
+
+/* ז (זכר) — פסים אלכסוניים כחולים; נ (נקבה) — פסים אלכסוניים ורודים */
+.sexMarkMale {
+  color: #1e40af;
+  border-color: #93c5fd;
+  background-image: repeating-linear-gradient(45deg, #dbeafe, #dbeafe 3px, #eff6ff 3px, #eff6ff 6px);
+}
+
+.sexMarkFemale {
+  color: #9d174d;
+  border-color: #f9a8d4;
+  background-image: repeating-linear-gradient(45deg, #fce7f3, #fce7f3 3px, #fdf2f8 3px, #fdf2f8 6px);
+}
+
+.coParentChildLabel {
+  margin: 0 auto 8px;
+  text-align: center;
+}
+
+.personLink {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: #4338ca;
+  font-weight: 700;
+  text-decoration: none;
+  font-size: 1rem;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.personLink:hover {
+  text-decoration: underline;
+}
+
+.personUnlinked {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: #1e293b;
+  font-weight: 600;
+  font-size: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* כאשר תג המין (ז/נ) קיים בכרטיס, שומרים רצועת מקום פנויה סימטרית משני
+   הצדדים (לא רק בצד התג) כדי שהשם לעולם לא ייגע בתג, וגם יישאר ממורכז
+  בדיוק - ריפוד חד-צדדי היה מזיז את הטקסט הנראה הצידה. שם ארוך נחתך
+  באליפסיס במקום להיתקל בתג. */
+.card[data-has-sex-mark] .personLink,
+.card[data-has-sex-mark] .personUnlinked,
+.cardFocal[data-has-sex-mark] .personLink,
+.cardFocal[data-has-sex-mark] .personUnlinked {
+  display: inline-block;
+  padding-inline: 32px;
+}
+
+/* ערימת כרטיס: טיב קשר + מקור מעל המשבצת (בין קווי העץ לכרטיס) */
+.personCardStack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 280px;
+  position: relative;
+  z-index: 2;
+}
+
+.relationRibbon {
+  width: 100%;
+  max-width: 220px;
+  margin: 0 auto 8px;
+  padding: 0 2px;
+  text-align: center;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+.relationRibbonMain {
+  font-weight: 600;
+  color: #475569;
+}
+
+.relationRibbonSep {
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.relationRibbonSubRow {
+  display: block;
+  margin-top: 3px;
+}
+
+.relationRibbonCitation {
+  width: 100%;
+  max-width: 220px;
+  margin: 0 auto 8px;
+  padding: 0 2px;
+  text-align: center;
+}
+
+.relationRibbonCitationLine {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #475569;
+  line-height: 1.45;
+  margin-top: 4px;
+}
+
+.relationRibbonCitationLine:first-child {
+  margin-top: 0;
+}
+
+.spouseUnionTimelineRibbon {
+  width: 100%;
+  max-width: 220px;
+  margin: 0 auto 8px;
+  padding: 0 4px;
+  text-align: center;
+}
+
+.relationRibbonMeta {
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.citationTanachLink {
+  color: #4338ca;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.citationTanachLink:hover {
+  color: #312e81;
+}
+
+/* המשך אנכי מההורים לכיוון מוקד המשפחה */
+.parentConnectorDown {
+  width: 2px;
+  height: 32px;
+  background: #a5b4fc;
+  margin: 0 auto;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.connectorCap {
+  width: 2px;
+  height: 10px;
+  background: #c7d2fe;
+  margin: 0 auto 0;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.parentConnectorStack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin: 0;
+  position: relative;
+  z-index: 0;
+}
+
+.parentRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  position: relative;
+  width: min(100%, 608px);
+  margin-inline: auto;
+  gap: 48px;
+  margin-bottom: 0;
+}
+
+.parentRow[data-parent-count="1"] {
+  width: min(100%, 280px);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.parentRow::before {
+  content: "";
+  position: absolute;
+  top: 75%;
+  left: var(--parent-line-inset-left, calc((100% - 48px) / 4));
+  right: var(--parent-line-inset-right, calc((100% - 48px) / 4));
+  transform: translateY(-50%);
+  height: 2px;
+  background: #c7d2fe;
+  border-radius: 1px;
+  z-index: 0;
+}
+
+/* קו אנכי מהזרוע האופקית של ההורים עד תחתית השורה — מחבר לקו parentConnectorDown */
+.parentRow::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 75%;
+  bottom: 0;
+  width: 2px;
+  background: #a5b4fc;
+  border-radius: 1px;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.parentRow[data-parent-count="1"]::before {
+  left: 50%;
+  right: 50%;
+}
+
+/* שורה עליונה: אחים–לייבל–מוקד–לייבל–אחים; מתחת גשר לבנות זוג; שורה מלאה לכרטיסים */
+.subjectGenerationGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: start;
+  column-gap: 12px;
+  row-gap: 6px;
+  margin-bottom: 0;
+  direction: rtl;
+}
+
+.siblingFocalFullSpan {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.siblingFocalRow {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 14px;
+  width: 100%;
+  direction: rtl;
+}
+
+/* מוקד במרכז עמודה; אחים בצדדים — דומה לדיאגרמת רצף */
+.siblingFocalRowGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  align-content: center;
+  /* joint spacing lives in the tie segments so the sibling line stays continuous */
+  column-gap: 0;
+  row-gap: 8px;
+  width: 100%;
+  direction: rtl;
+}
+
+.siblingGridPre {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.siblingGridPost {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* קו ארוך עד האחים — flex-basis 0 כדי למלא את רוחב תא ה-grid */
+.siblingTieStretch {
+  align-self: center;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 124px;
+  height: 2px;
+  margin: 0;
+  background: #c7d2fe;
+  border-radius: 1px;
+}
+
+.siblingTieCompact {
+  align-self: center;
+  /* 22px = old 8px stub + its 2px margins + the old 10px grid gap */
+  flex: 0 0 22px;
+  width: 22px;
+  min-width: 22px;
+  height: 2px;
+  margin: 0;
+  background: #c7d2fe;
+  border-radius: 1px;
+}
+
+.siblingClusterInRow {
+  flex-wrap: nowrap;
+  flex: 0 1 auto;
+  min-width: 0;
+  align-items: center;
+}
+
+.siblingGridFocal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* קו אנכי דרך הנושא: ללא הורים מתחיל בתוך הכרטיס וממשיך רק כלפי מטה. */
+.focalSpineRod {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  top: 50%;
+  bottom: -20px;
+  background: #a5b4fc;
+  border-radius: 1px;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.siblingGridFocal[data-has-parent-links] .focalSpineRod {
+  top: -26px;
+}
+
+.siblingCluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: center;
+  justify-content: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1 1 120px;
+  max-width: 100%;
+}
+
+/* בשורת מוקד–אחים: בלי flex-grow על הקלסטר — כדי שקו siblingTieStretch ימלא עד כרטיס האח */
+.siblingClusterInRow.siblingCluster {
+  flex: 0 1 auto;
+  flex-grow: 0;
+  max-width: 100%;
+}
+
+/* נשמר לתאימות — מעבר לרצף/מוקד */
+.siblingHorizTie {
+  align-self: center;
+  flex: 1 1 20px;
+  min-width: 12px;
+  height: 2px;
+  background: #c7d2fe;
+  border-radius: 1px;
+}
+
+.siblingBridge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 5.5rem;
+  padding: 0 4px;
+  align-self: center;
+  position: relative;
+}
+
+/* הקו עובר מאחורי התווית — הפיל האטום מסתיר את המרכז */
+.siblingBridge::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: calc(50% - 1px);
+  height: 2px;
+  background: #c7d2fe;
+  border-radius: 1px;
+}
+
+.siblingBridge > * {
+  position: relative;
+  z-index: 1;
+}
+
+.focalWrap {
+  flex: 0 0 auto;
+  align-self: center;
+  position: relative;
+  z-index: 1;
+}
+
+.spouseBridgeCenter {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: center;
+  display: flex;
+  justify-content: center;
+  margin-top: 4px;
+  position: relative;
+}
+
+/* קו אנכי דרך לייבל בנות הזוג — מחבר focalSpineRod למטריצת הנישואין */
+.spouseBridgeCenter::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: -12px;
+  bottom: -32px;
+  width: 2px;
+  background: #a5b4fc;
+  border-radius: 1px;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.spouseConnectorBridge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  direction: rtl;
+  position: relative;
+  z-index: 1;
+}
+
+/* קו אנכי יחיד ממוקד לבנות הזוג — בלי כפל גרדיינטים */
+.spouseConnectorStem {
+  width: 2px;
+  height: 6px;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.spouseConnectorLabel {
+  margin: 2px 0 0;
+}
+
+.spouseTierFullWidth {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  padding-top: 6px;
+  margin-top: 2px;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.spouseTierFullWidth[data-spouse-layout="cards"] {
+  background: linear-gradient(#a5b4fc, #a5b4fc) center / 2px 100% no-repeat;
+}
+
+.spouseTierFullWidth[data-spouse-layout="cards"] :is(.relationRibbon, .relationRibbonCitation, .spouseUnionTimelineRibbon) {
+  position: relative;
+  z-index: 2;
+  background: #f3f6fe;
+  border-radius: 6px;
+}
+
+.spouseTierCards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: stretch;
+  gap: 12px;
+  direction: rtl;
+}
+
+/* מטריצה: שורת בנות זוג (קו אופקי במרכז גובה הכרטיסים) → ילדים עם קו אנכי נשען על אותו קו */
+.spouseChildrenMatrixOuter {
+  position: relative;
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
+  margin: 0 auto;
+  direction: rtl;
+  /* מחצית גובה שורת בנות הזוג — לחיבור הקו האנכי לקו האופקי (מומר ב-JS) */
+  --matrix-spouse-mid-px: 36px;
+}
+
+/* קו אנכי ממרכז המכולה למטה עד קו הנישואין האופקי */
+.spouseChildrenMatrixOuter::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: -6px;
+  height: calc(var(--matrix-marriage-line-y, 50%) + 6px);
+  width: 2px;
+  background: #a5b4fc;
+  border-radius: 1px;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.matrixSpouseRow {
+  display: grid;
+  grid-template-columns: repeat(var(--matrix-column-count), minmax(128px, 1fr));
+  gap: 10px 18px;
+  justify-items: stretch;
+  align-items: end;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+}
+
+/* קו אופקי במרכז גובה משבצת הכרטיס הלבן (מחושב ב-JS) */
+.matrixSpouseRow::after {
+  content: "";
+  position: absolute;
+  left: var(--matrix-line-inset-left, 4px);
+  right: var(--matrix-line-inset-right, 4px);
+  top: var(--matrix-marriage-line-y, 50%);
+  height: 2px;
+  transform: translateY(-50%);
+  background: #c7d2fe;
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.matrixSpouseCell {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.matrixBelowSpouses {
+  display: grid;
+  gap: 10px 18px;
+  justify-items: stretch;
+  align-items: start;
+  width: 100%;
+  margin-top: 0;
+}
+
+.matrixChildrenTierLabel {
+  grid-column: 1 / -1;
+  margin: 16px 0 12px;
+  width: 100%;
+  text-align: center;
+  /* הקווים האנכיים נמשכים מעלה מעבר לתווית, ולכן היא חייבת שכבה מעליהם */
+  position: relative;
+  z-index: 2;
+}
+
+.matrixKidsCell {
+  width: 100%;
+  min-width: 0;
+  /* תקרה לתרומת ה-max-content של הטור: בלעדיה רוחב המטריצה גדל עם מספר
+     הילדים של בת זוג אחת והמטריצה מתקפלת לאנכית גם במסך רחב */
+  max-width: 300px;
+  min-height: 132px;
+  /* auto inline margins keep the capped cell centred in its track, so the child
+     line stays under the spouse card instead of hugging the track's edge */
+  margin: 0 auto;
+  padding: 0;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  align-self: stretch;
+  min-inline-size: 0;
+}
+
+.marriageColumnLegend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.marriageColumnTrunk {
+  box-sizing: border-box;
+  width: 100%;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  background: linear-gradient(#a5b4fc, #a5b4fc) center / 2px 100% no-repeat;
+  /* ממשיך את הקו האנכי עד לקו האופקי של בנות הזוג */
+  margin-top: calc(-1 * var(--matrix-spouse-mid-px, 36px));
+  padding-top: var(--matrix-spouse-mid-px, 36px);
+  padding-bottom: 6px;
+  min-height: 12px;
+}
+
+.marriageColumnLine {
+  width: 2px;
+  flex: 1 1 auto;
+  min-height: 28px;
+  background: linear-gradient(180deg, #c7d2fe 0%, #6366f1 55%, #818cf8 100%);
+  border-radius: 1px;
+}
+
+.marriageColumnChildren {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: stretch;
+  gap: 10px;
+  width: 100%;
+  padding-bottom: 4px;
+}
+
+.marriageColumnChildren > * {
+  flex: 0 1 auto;
+  min-width: 128px;
+  max-width: 100%;
+}
+
+/* ציר זמן לידות: גריד שטוח — כל תא (שורה, עמודה) מפורש, גבהי שורות משותפים */
+.childTimelineOuter {
+  width: 100%;
+  margin-top: 4px;
+  overflow: visible;
+}
+
+.childTimelineFlat {
+  display: grid;
+  gap: 8px 18px;
+  width: 100%;
+  overflow: visible;
+  direction: rtl;
+  padding: 0 2px 12px;
+}
+
+/* קו אנכי מקו הנישואין דרך כל ילדי האמא */
+.childTimelineTrunk {
+  position: relative;
+  z-index: 0;
+  pointer-events: none;
+  margin-top: calc(-1 * var(--matrix-spouse-mid-px, 36px));
+  padding-top: var(--matrix-spouse-mid-px, 36px);
+}
+
+.childTimelineTrunk::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #a5b4fc;
+  border-radius: 1px;
+}
+
+.childTimelineCell {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 4px;
+}
+
+.childTimelineCellEmpty {
+  min-height: 4px;
+  pointer-events: none;
+}
+
+/* מקורות מעל הכרטיס — לא לחתוך בקו האנכי */
+.childTimelineCell .relationRibbon,
+.childTimelineCell .relationRibbonCitation,
+.childTimelineCell .relationRibbonCitationLine,
+.childTimelineCell .card {
+  position: relative;
+  z-index: 2;
+}
+
+.childTimelineCell .relationRibbon,
+.childTimelineCell .relationRibbonCitation,
+.childTimelineCell .relationRibbonCitationLine {
+  background: #f1f3fb;
+  border-radius: 6px;
+  padding: 2px 4px;
+}
+
+.marriageColumnSpousePlaceholder {
+  min-height: 72px;
+  width: 100%;
+  max-width: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.marriageColumnLooseTitle {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.04em;
+}
+
+.spouseClusterInner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+@media (max-width: 600px) {
+  .section {
+    padding-inline: 10px;
+  }
+
+  /* שורת מוקד±אחים: במסך צר הגריד הקשיח (minmax(0,1fr) auto minmax(0,1fr))
+     שיקף את רוחב עמודת האחים גם בצד הריק, מה שהכפיל את הרוחב והוציא אח (עשו)
+     אל מחוץ למסך. מחליפים לפריסת flex ממורכזת שנכנעת/עוטפת, ומסתירים את קווי
+     הקישור האופקיים שמניחים שורה בודדת. */
+  .siblingFocalRowGrid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .siblingGridPre,
+  .siblingGridFocal,
+  .siblingGridPost {
+    width: auto;
+    max-width: 100%;
+    flex: 0 1 auto;
+  }
+
+  .siblingGridPre,
+  .siblingGridPost {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .siblingClusterInRow {
+    flex-wrap: wrap;
+  }
+
+  .siblingTieStretch,
+  .siblingTieCompact {
+    display: none;
+  }
+
+  .parentRow {
+    width: 100%;
+    gap: 12px;
+  }
+
+  .parentRow::before {
+    left: var(--parent-line-inset-left, calc((100% - 12px) / 4));
+    right: var(--parent-line-inset-right, calc((100% - 12px) / 4));
+  }
+
+  .parentRow .personCardStack {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .parentRow .card {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    padding-inline: 8px;
+  }
+
+  .spouseTierSpouseOnly {
+    overflow: visible;
+  }
+
+  .spouseOnlyMatrix {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .spouseOnlyMatrix .matrixSpouseRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .spouseOnlyMatrix .matrixSpouseRow::after {
+    top: var(--matrix-line-start-y, 0);
+    right: auto;
+    bottom: calc(100% - var(--matrix-line-end-y, calc(100% - 43px)));
+    left: 50%;
+    width: 2px;
+    height: auto;
+    transform: translateX(-50%);
+  }
+
+  .spouseOnlyMatrix .personCardStack {
+    max-width: min(240px, 100%);
+  }
+
+  .spouseOnlyMatrix .relationRibbon,
+  .spouseOnlyMatrix .relationRibbonCitation,
+  .spouseOnlyMatrix .spouseUnionTimelineRibbon {
+    position: relative;
+    z-index: 2;
+    background: #f1f3fb;
+    border-radius: 6px;
+  }
+}
+
+/* מסילת בנות-זוג בלבד (שמשון וכד') שנמדדה ע"י ה-JS כגולשת מהמכולה: מקפלים
+   לטור אנכי בכל רוחב מסך (כולל טווח 601–950px שאין לו @media), לא רק מתחת ל-600.
+   משכפל את חוקי @media(max-width:600px) של .spouseOnlyMatrix אך מונע ע"י המחלקה. */
+.spouseOnlyCollapsed {
+  width: 100%;
+  min-width: 0;
+}
+
+.spouseOnlyCollapsed .matrixSpouseRow {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.spouseOnlyCollapsed .matrixSpouseRow::after {
+  top: var(--matrix-line-start-y, 0);
+  right: auto;
+  bottom: calc(100% - var(--matrix-line-end-y, calc(100% - 43px)));
+  left: 50%;
+  width: 2px;
+  height: auto;
+  transform: translateX(-50%);
+}
+
+.spouseOnlyCollapsed .personCardStack {
+  max-width: min(240px, 100%);
+}
+
+.spouseOnlyCollapsed .relationRibbon,
+.spouseOnlyCollapsed .relationRibbonCitation,
+.spouseOnlyCollapsed .spouseUnionTimelineRibbon {
+  position: relative;
+  z-index: 2;
+  background: #f1f3fb;
+  border-radius: 6px;
+}
+
+/* פריסה אנכית מוכללת (מסכים צרים): כל הקשרים על ציר אנכי אחד — הורים, מוקד,
+   אחים, בנות זוג, ילדים — תווית מעל כל קבוצה וקו שדרה יחיד. */
+.verticalAxis {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.verticalTierLabel {
+  margin: 0 auto 8px;
+  text-align: center;
+  position: relative;
+  z-index: 2;
+}
+
+.verticalConnector {
+  width: 2px;
+  /* full 34px span (was 18px + 8px margins) so the line touches its neighbors */
+  height: 34px;
+  background: linear-gradient(180deg, #a5b4fc 0%, #c7d2fe 100%);
+  border-radius: 1px;
+  margin: 0 auto;
+  flex-shrink: 0;
+}
+
+.verticalParents {
+  width: 100%;
+}
+
+.verticalFocal {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.verticalSiblingGroup {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.verticalSiblingGroup .personCardStack {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.verticalSiblingGroup .card {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.verticalSpouseStack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+}
+
+.verticalSpouseStack .personCardStack {
+  max-width: min(240px, 100%);
+}
+
+.verticalSpouseStack .relationRibbon,
+.verticalSpouseStack .relationRibbonCitation,
+.verticalSpouseStack .spouseUnionTimelineRibbon {
+  position: relative;
+  z-index: 2;
+  background: #f1f3fb;
+  border-radius: 6px;
+}
+
+.verticalChildren {
+  width: 100%;
+}
+
+/* מטריצת בן-זוג+ילדים (יעקב): כשהמטריצה האופקית לא נכנסת במכולה, ה-JS מחליף
+   אותה בטור אנכי לכל בת זוג + ילדיה (MobileMatrixStack) — בכל רוחב מסך, לא רק
+   מתחת ל-600px. לכן חוקי המקורות/רצועות אינם בתוך @media אלא חלים תמיד. */
+.matrixMobileStack .relationRibbon,
+.matrixMobileStack .relationRibbonCitation,
+.matrixMobileStack .spouseUnionTimelineRibbon {
+  position: relative;
+  z-index: 2;
+  /* transparent: no line passes behind in the stacked layout, and a solid pill
+     clashes with the section gradient */
+  background: transparent;
+  border-radius: 6px;
+}
+
+.matrixMobileStack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  width: 100%;
+  direction: rtl;
+  padding-top: 4px;
+}
+
+.matrixMobileColumn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 640px;
+  min-width: 0;
+}
+
+.matrixMobileSpouse {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.matrixMobileConnector {
+  width: 2px;
+  /* full 28px span (was 18px + 6px/4px margins) so the line touches its neighbors */
+  height: 28px;
+  background: linear-gradient(180deg, #c7d2fe 0%, #6366f1 60%, #818cf8 100%);
+  border-radius: 1px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.matrixMobileChildren {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 8px;
+  width: 100%;
+  justify-items: stretch;
+}
+
+/* Cards are width-capped (max-width) inside stretched grid items; without
+   self-centering they anchor to inline-start (right in RTL) and the whole
+   children cluster drifts off the column's connector line. */
+.matrixMobileChildren .personCardStack,
+.matrixMobileChildren [data-testid="family-child-card"] {
+  width: 100%;
+  min-width: 0;
+  max-width: 280px;
+  margin-inline: auto;
+}
+
+.matrixMobileChildren .card {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding-inline: 8px;
+  margin-inline: auto;
+}
+
+.matrixMobileLooseLabel {
+  margin: 0 0 6px;
+  text-align: center;
+}
+
+/* כותרת שיטה מעל שורת טיב הקשר — מחוץ למשבצת הלבנה */
+.spouseOpinionTitleInline {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #312e81;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.spouseOpinionRibbonFirst {
+  width: 100%;
+  max-width: 220px;
+}
+
+.spouseOpinionRibbon {
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+  width: 100%;
+  max-width: 220px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .section {
+    background: linear-gradient(160deg, #161b2a 0%, #1a1f36 100%);
+    border-color: #3b4370;
+  }
+
+  .title {
+    color: #c7d2fe;
+  }
+
+  .familyTreeSectionLabel {
+    color: #a5b4fc;
+    background: linear-gradient(160deg, #1a2030 0%, #232a45 100%);
+    border-color: #3b4370;
+    box-shadow: 0 1px 4px rgba(99, 102, 241, 0.25);
+  }
+
+  .familyTreeSectionLabelAlt {
+    color: #c4b5fd;
+    border-color: #4c3d8f;
+  }
+
+  .card,
+  .cardFocal {
+    background: #1a1f2e;
+    border-color: #2d3548;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  }
+
+  .cardFocal {
+    border-color: #6366f1;
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
+  }
+
+  .cardCitation {
+    border-top-color: #2d3548;
+  }
+
+  .cardCitationLine,
+  .relationRibbon,
+  .relationRibbonMeta,
+  .marriageColumnLooseTitle {
+    color: #9aa0a6;
+  }
+
+  .sexMark {
+    color: #b8c2d9;
+    border-color: #3b4256;
+    background: #1a1f2e;
+  }
+
+  .sexMarkMale {
+    color: #93c5fd;
+    border-color: #1e40af;
+    background-image: repeating-linear-gradient(45deg, #16213d, #16213d 3px, #1a2748 3px, #1a2748 6px);
+  }
+
+  .sexMarkFemale {
+    color: #f9a8d4;
+    border-color: #9d174d;
+    background-image: repeating-linear-gradient(45deg, #31152b, #31152b 3px, #3a1a33 3px, #3a1a33 6px);
+  }
+
+  .personLink {
+    color: #a5b4fc;
+  }
+
+  .personUnlinked {
+    color: #e8eaed;
+  }
+
+  .relationRibbonMain,
+  .relationRibbonCitationLine {
+    color: #b8c2d9;
+  }
+
+  .relationRibbonSep {
+    color: #64748b;
+  }
+
+  .citationTanachLink {
+    color: #a5b4fc;
+  }
+
+  .citationTanachLink:hover {
+    color: #c7d2fe;
+  }
+
+  .spouseTierFullWidth[data-spouse-layout="cards"] :is(.relationRibbon, .relationRibbonCitation, .spouseUnionTimelineRibbon),
+  .verticalSpouseStack .relationRibbon,
+  .verticalSpouseStack .relationRibbonCitation,
+  .verticalSpouseStack .spouseUnionTimelineRibbon,
+  .childTimelineCell .relationRibbon,
+  .childTimelineCell .relationRibbonCitation,
+  .childTimelineCell .relationRibbonCitationLine,
+  .spouseOnlyCollapsed .relationRibbon,
+  .spouseOnlyCollapsed .relationRibbonCitation,
+  .spouseOnlyCollapsed .relationRibbonCitationLine,
+  .spouseOnlyCollapsed .spouseUnionTimelineRibbon {
+    background: #12151c;
+  }
+
+  .spouseOpinionTitleInline {
+    color: #a5b4fc;
+  }
+
+  .marriageColumnSpousePlaceholder {
+    border-color: #3b4256;
+    background: #12151c;
+  }
+}

@@ -12,16 +12,16 @@ import { unstable_cache } from "next/cache";
 import { Suspense } from "react";
 import { getPerekByPerekId } from "@/data/perek-dto";
 import { getSeferByName, getPerekIdsForSefer } from "@/data/sefer-dto";
-import { getArticlesByPerekId } from "@/lib/articles";
+import { getArticleSummariesByPerekId } from "@/lib/articles";
 import { getPerushimByPerekId } from "@/lib/perushim";
 
 import SeferDirect from "./SeferDirect";
 
 export const dynamic = "force-dynamic";
 
-const getCachedArticles = unstable_cache(
-	async (perekId: number) => getArticlesByPerekId(perekId),
-	["articles"],
+const getCachedArticleSummaries = unstable_cache(
+	async (perekId: number) => getArticleSummariesByPerekId(perekId),
+	["article-summaries"],
 	{ tags: ["articles"], revalidate: false },
 );
 
@@ -41,22 +41,17 @@ export default async function DevSeferPage({
 	const perekObj = getPerekByPerekId(perekId);
 	const sefer = getSeferByName(perekObj.sefer);
 	const perekIds = getPerekIdsForSefer(sefer);
-
-	const articlesByPerekIndex = await Promise.all(
-		perekIds.map((id) => getCachedArticles(id)),
-	);
-	const perushimByPerekIndex = await Promise.all(
-		perekIds.map((id) => getCachedPerushim(id)),
-	);
-	const articles = await getCachedArticles(perekId);
+	const [articles, perushim] = await Promise.all([
+		getCachedArticleSummaries(perekId),
+		getCachedPerushim(perekId),
+	]);
 
 	return (
 		<Suspense fallback={<div style={{ padding: 40, textAlign: "center" }}>טוען ספר…</div>}>
 			<SeferDirect
 				perekObj={perekObj}
 				articles={articles}
-				articlesByPerekIndex={articlesByPerekIndex}
-				perushimByPerekIndex={perushimByPerekIndex}
+				perushim={perushim}
 				perekIds={perekIds}
 			/>
 		</Suspense>

@@ -11,7 +11,7 @@ To download necessary tools, clone the repository, and install dependencies, you
 You'll need the following tools:
 
 - [Git](https://git-scm.com)
-- [Node.js](https://nodejs.org), version == 24.11.1
+- [Node.js](https://nodejs.org), version == 26.10.0
   - If using `nvm`, consider updating your default Node installation with `nvm alias default <VERSION>`
 - [Python](https://www.python.org/downloads/) == [3.14.0, 3.14.2]
   - Make sure `python` can run from a command line prompt without error
@@ -20,7 +20,7 @@ You'll need the following tools:
 
 For API development, you'll also need:
 
-- [Rust](https://www.rust-lang.org/) == 1.84.1
+- [Rust](https://www.rust-lang.org/) == 1.98.1
 
 For App development, you'll also need:
 
@@ -33,6 +33,7 @@ For App development, you'll also need:
     - Android Emulator - 35.3.11
     - Android Emulator hypervisor driver (installer) - 2.2.0
     - Android SDK Platform-Tools - 35.0.2
+  - Headless alternative (no Android Studio): install the `cmdline-tools` zip under `%LOCALAPPDATA%\Android\Sdk\cmdline-tools\latest`, then use `sdkmanager` for `platform-tools`, `emulator`, `platforms;android-36`, `build-tools;36.0.0`, `system-images;android-36;google_apis;x86_64` and `extras;google;Android_Emulator_Hypervisor_Driver`. Acceleration: when a Hyper-V hypervisor is active (`Get-CimInstance Win32_ComputerSystem` → `HypervisorPresent=True`), the emulator accelerates via WHPX and no driver is needed; otherwise install AEHD once elevated via `extras\google\Android_Emulator_Hypervisor_Driver\silent_install.bat`. Verify with `emulator -accel-check`. Create and boot an AVD: `avdmanager create avd -n <name> -k "system-images;android-36;google_apis;x86_64" -d pixel_7`, then `emulator -avd <name> -no-snapshot -no-metrics -noaudio`. See `.github/tool-registry.md` ("Android emulator (local Windows)") for the full recipe.
 - MAUI Toolset
   - `dotnet workload install maui`
 
@@ -51,11 +52,15 @@ For website E2E/performance tests and API testing, you'll also need:
 
 ### Data and MySQL dev database
 
-The development MySQL database is named **tanah-dev**. Populate it with structure and test data from the `data` directory:
+The development MySQL database is named **tanah-dev**. Bootstrap it (structure + sefarim/perushim; demo «הרב לדוגמא» articles are **not** loaded by default):
 
 ```bash
 cd data && cargo make mysql-populate-dev
 ```
+
+For bundled demo articles only (optional): `cargo make mysql-populate-dev-with-test-articles`.
+
+The **admin** app (`web/admin`) uses **`tanah-dev`** when `DB_URL` is unset and `NODE_ENV` is not `production` (`src/server/db-config.ts`). Use `.dev.env` from `npm run dev` so `DB_URL` points at `tanah-dev`; avoid pointing dev admin at **`tanah`** unless you intend to edit the non-dev database.
 
 For production-like data on demand:
 

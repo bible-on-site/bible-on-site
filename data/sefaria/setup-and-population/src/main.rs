@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use std::env;
-use std::path::Path;
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[derive(Parser)]
@@ -95,71 +96,25 @@ fn run_populate() -> Result<()> {
     // Load environment variables
     dotenvy::dotenv().ok();
 
-    let mongo_host = env::var("MONGO_HOST").unwrap_or_else(|_| "localhost".to_string());
-    let mongo_port = env::var("MONGO_PORT").unwrap_or_else(|_| "27017".to_string());
+    let (mongo_host, mongo_port) = mongo_host_port_from_env();
 
     println!("📦 Populating MongoDB...\n");
     println!("   Host: {}:{}", mongo_host, mongo_port);
 
     // Find the dump directory
     let raw_dir = Path::new("../.raw");
-    if !raw_dir.exists() {
-        anyhow::bail!(
-            "Raw directory not found at {:?}. Please download the Sefaria dump first.\nSee ../retrieval/README.md for instructions.",
-            raw_dir.canonicalize().unwrap_or(raw_dir.to_path_buf())
-        );
-    }
-
-    // Find sefaria dump folder (e.g., sefaria_dump_5784-sivan-4)
-    let dump_dir = std::fs::read_dir(raw_dir)?
-        .filter_map(|entry| entry.ok())
-        .find(|entry| {
-            entry
-                .file_name()
-                .to_string_lossy()
-                .starts_with("sefaria_dump_")
-        });
-
-    let dump_dir = match dump_dir {
-        Some(dir) => dir.path(),
-        None => anyhow::bail!(
-            "No sefaria_dump_* directory found in {:?}. Please extract the dump first.",
-            raw_dir
-        ),
-    };
+    let dump_dir = find_sefaria_dump_dir(raw_dir)?;
 
     println!("   Dump: {}\n", dump_dir.display());
 
     // Find mongorestore
-    let mongorestore = if cfg!(target_os = "windows") {
-        // Try to find mongorestore in common paths
-        let tools_dir = Path::new(r"C:\Program Files\MongoDB\Tools");
-        if tools_dir.exists() {
-            let mut found = None;
-            if let Ok(entries) = std::fs::read_dir(tools_dir) {
-                for entry in entries.filter_map(|e| e.ok()) {
-                    let bin_path = entry.path().join("bin").join("mongorestore.exe");
-                    if bin_path.exists() {
-                        found = Some(bin_path);
-                        break;
-                    }
-                }
-            }
-            found.unwrap_or_else(|| "mongorestore".into())
-        } else {
-            "mongorestore".into()
-        }
-    } else {
-        "mongorestore".into()
-    };
+    let mongorestore = find_mongorestore();
 
     println!("🚀 Running mongorestore...\n");
 
+    let args = mongorestore_args(&mongo_host, &mongo_port, &dump_dir);
     let status = Command::new(&mongorestore)
-        .arg("--host")
-        .arg(format!("{}:{}", mongo_host, mongo_port))
-        .arg("--drop")
-        .arg(&dump_dir)
+        .args(&args)
         .status()
         .context("Failed to run mongorestore. Is it installed and in PATH?")?;
 
@@ -170,4 +125,185 @@ fn run_populate() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn mongo_host_port_from_env() -> (String, String) {
+    mongo_host_port_from_vars(|key| env::var(key).ok())
+}
+
+fn mongo_host_port_from_vars(mut get_var: impl FnMut(&str) -> Option<String>) -> (String, String) {
+    (
+        get_var("MONGO_HOST").unwrap_or_else(|| "localhost".to_string()),
+        get_var("MONGO_PORT").unwrap_or_else(|| "27017".to_string()),
+    )
+}
+
+fn find_sefaria_dump_dir(raw_dir: &Path) -> Result<PathBuf> {
+    if !raw_dir.exists() {
+        anyhow::bail!(
+            "Raw directory not found at {:?}. Please download the Sefaria dump first.\nSee ../retrieval/README.md for instructions.",
+            raw_dir.canonicalize().unwrap_or(raw_dir.to_path_buf())
+        );
+    }
+
+    let dump_dir = std::fs::read_dir(raw_dir)?
+        .filter_map(|entry| entry.ok())
+        .find(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with("sefaria_dump_")
+        });
+
+    match dump_dir {
+        Some(dir) => Ok(dir.path()),
+        None => anyhow::bail!(
+            "No sefaria_dump_* directory found in {:?}. Please extract the dump first.",
+            raw_dir
+        ),
+    }
+}
+
+fn find_mongorestore() -> PathBuf {
+    if cfg!(target_os = "windows") {
+        let tools_dir = Path::new(r"C:\Program Files\MongoDB\Tools");
+        find_mongorestore_under_tools(tools_dir).unwrap_or_else(|| "mongorestore".into())
+    } else {
+        "mongorestore".into()
+    }
+}
+
+fn find_mongorestore_under_tools(tools_dir: &Path) -> Option<PathBuf> {
+    if !tools_dir.exists() {
+        return None;
+    }
+
+    let entries = std::fs::read_dir(tools_dir).ok()?;
+    for entry in entries.filter_map(|entry| entry.ok()) {
+        let bin_path = entry.path().join("bin").join("mongorestore.exe");
+        if bin_path.exists() {
+            return Some(bin_path);
+        }
+    }
+    None
+}
+
+fn mongorestore_args(mongo_host: &str, mongo_port: &str, dump_dir: &Path) -> Vec<OsString> {
+    vec![
+        "--host".into(),
+        format!("{}:{}", mongo_host, mongo_port).into(),
+        "--drop".into(),
+        dump_dir.as_os_str().to_os_string(),
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::{CommandFactory, Parser};
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        env::temp_dir().join(format!("sefaria-setup-test-{}-{}", name, suffix))
+    }
+
+    #[test]
+    fn cli_parses_setup_and_populate_subcommands() {
+        let setup = Cli::parse_from(["sefaria-setup", "setup"]);
+        assert!(matches!(setup.command, Commands::Setup));
+
+        let populate = Cli::parse_from(["sefaria-setup", "populate"]);
+        assert!(matches!(populate.command, Commands::Populate));
+    }
+
+    #[test]
+    fn clap_command_metadata_matches_binary_contract() {
+        let command = Cli::command();
+
+        assert_eq!(command.get_name(), "sefaria-setup");
+        assert_eq!(
+            command.get_about().map(|about| about.to_string()),
+            Some("Setup and populate MongoDB with Sefaria data".to_string())
+        );
+    }
+
+    #[test]
+    fn mongo_host_port_uses_defaults_and_env_overrides() {
+        assert_eq!(
+            mongo_host_port_from_vars(|_| None),
+            ("localhost".to_string(), "27017".to_string())
+        );
+        assert_eq!(
+            mongo_host_port_from_vars(|key| match key {
+                "MONGO_HOST" => Some("mongo".to_string()),
+                "MONGO_PORT" => Some("28017".to_string()),
+                _ => None,
+            }),
+            ("mongo".to_string(), "28017".to_string())
+        );
+    }
+
+    #[test]
+    fn find_sefaria_dump_dir_reports_missing_raw_and_missing_dump() {
+        let missing = temp_dir("missing");
+        let error = find_sefaria_dump_dir(&missing).unwrap_err().to_string();
+        assert!(error.contains("Raw directory not found"));
+
+        let empty = temp_dir("empty");
+        fs::create_dir_all(&empty).unwrap();
+        let error = find_sefaria_dump_dir(&empty).unwrap_err().to_string();
+        assert!(error.contains("No sefaria_dump_* directory"));
+        fs::remove_dir_all(empty).unwrap();
+    }
+
+    #[test]
+    fn find_sefaria_dump_dir_returns_first_matching_dump() {
+        let raw = temp_dir("raw");
+        let dump = raw.join("sefaria_dump_5784-sivan-4");
+        fs::create_dir_all(&dump).unwrap();
+        fs::create_dir_all(raw.join("other")).unwrap();
+
+        assert_eq!(find_sefaria_dump_dir(&raw).unwrap(), dump);
+
+        fs::remove_dir_all(raw).unwrap();
+    }
+
+    #[test]
+    fn find_mongorestore_under_tools_detects_versioned_windows_tool_layout() {
+        let tools = temp_dir("tools");
+        let restore = tools.join("100.9.5").join("bin").join("mongorestore.exe");
+        fs::create_dir_all(restore.parent().unwrap()).unwrap();
+        fs::write(&restore, b"").unwrap();
+
+        assert_eq!(find_mongorestore_under_tools(&tools), Some(restore));
+
+        fs::remove_dir_all(tools).unwrap();
+    }
+
+    #[test]
+    fn find_mongorestore_under_tools_falls_back_when_missing() {
+        let missing = temp_dir("tools-missing");
+
+        assert_eq!(find_mongorestore_under_tools(&missing), None);
+    }
+
+    #[test]
+    fn mongorestore_args_build_expected_host_drop_and_dump_arguments() {
+        let dump = Path::new("../.raw/sefaria_dump_5784-sivan-4");
+
+        assert_eq!(
+            mongorestore_args("mongo", "28017", dump),
+            vec![
+                OsString::from("--host"),
+                OsString::from("mongo:28017"),
+                OsString::from("--drop"),
+                dump.as_os_str().to_os_string(),
+            ]
+        );
+    }
 }

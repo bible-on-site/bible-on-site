@@ -2,6 +2,12 @@
 
 All CD workflows are triggered via `repository_dispatch` events from CI after successful builds.
 
+Dispatches queue per production target without canceling an active deployment.
+Before production writes, the workflow checks its source CI run and immutable
+commit, and skips a dispatch superseded by a newer release. Artifact download and
+source checkout use the same CI run/commit; Data also uses an immutable SHA.
+See [version and deployment concurrency](../../version-verification.md#concurrent-releases-and-deployment).
+
 | Workflow | Trigger Event | Purpose |
 |----------|---------------|---------|
 | [`cd-aws.yml`](../../../../.github/workflows/cd-aws.yml) | `deploy-aws` | Deploy Website/API Docker images to AWS ECR → ECS |
@@ -48,9 +54,20 @@ Triggered by `release_app` job in `ci.yml` after App CI passes.
 
 Triggered by `release_data` job in `ci.yml` after Data CI passes.
 
+Tanahpedia/schema-only changes intentionally skip the perushim generation job. The
+release gate accepts that `skipped` result and binds the current run's non-expired
+`perushim-data-sql.master` artifact by immutable ID and SHA-256 digest. A skipped perushim job must never suppress a
+detected data deployment.
+
 **Flow:**
-1. Configure AWS credentials (OIDC)
-2. Run data migration scripts against production RDS
+1. Validate the dispatch's source and freshness, then download and verify its pinned SQL archive
+2. Configure AWS credentials (OIDC)
+3. Validate and run data migration scripts against production RDS
+
+Every SQL file in the deploy manifest must pass
+`python devops/deploy/data-deploy/validate_lambda_parser.py --parse-only` in Data CI. Tanahpedia schema
+changes are deployed and verified in a schema-only change before an API or website
+release starts querying the new schema.
 
 ## Architecture
 ![cd](./cd.svg)

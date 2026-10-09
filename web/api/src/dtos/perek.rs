@@ -5,7 +5,7 @@ use entities::perek::Model;
 
 /// Convert a number to Hebrew letters (gematry) with gershayim.
 /// Supports numbers 1-999.
-fn number_to_hebrew(n: i32) -> String {
+pub(crate) fn number_to_hebrew(n: i32) -> String {
     if n <= 0 || n > 999 {
         return n.to_string();
     }
@@ -24,7 +24,7 @@ fn number_to_hebrew(n: i32) -> String {
         result.push_str(hundreds[h]);
     }
 
-    // Handle special cases: 15 = ט״ו, 16 = ט״ז
+    // Handle special cases: 15 = ט"ו, 16 = ט"ז
     if t == 1 && o == 5 {
         result.push_str("טו");
     } else if t == 1 && o == 6 {
@@ -41,7 +41,7 @@ fn number_to_hebrew(n: i32) -> String {
     add_gershayim(&result)
 }
 
-/// Add gershayim (״) before the last character, or geresh (') for single character
+/// Add gershayim (") before the last character, or geresh (') for single character
 fn add_gershayim(s: &str) -> String {
     let chars: Vec<char> = s.chars().collect();
     if chars.is_empty() {
@@ -51,7 +51,7 @@ fn add_gershayim(s: &str) -> String {
         format!("{}'", s)
     } else {
         let (before_last, last) = s.char_indices().last().map(|(i, c)| (&s[..i], c)).unwrap();
-        format!("{}״{}", before_last, last)
+        format!("{}\"{}", before_last, last)
     }
 }
 
@@ -171,6 +171,24 @@ impl Perek {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{NaiveDate, NaiveTime};
+
+    fn perek_model() -> Model {
+        Model {
+            id: 7,
+            perek_id: Some(42),
+            sefer_id: Some(2),
+            sefer_name: Some("Genesis".to_string()),
+            additional: Some(1),
+            additional_letter: Some("II".to_string()),
+            perek: Some(5),
+            perek_in_context: Some(16),
+            date: Some(NaiveDate::from_ymd_opt(2026, 7, 19).unwrap()),
+            hebdate: Some("57850101".to_string()),
+            tseit: Some(NaiveTime::from_hms_opt(20, 30, 0).unwrap()),
+            header: Some("Opening".to_string()),
+        }
+    }
 
     #[test]
     fn number_to_hebrew_handles_invalid_numbers() {
@@ -190,19 +208,19 @@ mod tests {
         assert_eq!(number_to_hebrew(1), "א'");
         assert_eq!(number_to_hebrew(5), "ה'");
 
-        // Two digits (gets gershayim ״)
+        // Two digits (gets gershayim \")
         assert_eq!(number_to_hebrew(10), "י'");
-        assert_eq!(number_to_hebrew(11), "י״א");
-        assert_eq!(number_to_hebrew(22), "כ״ב");
+        assert_eq!(number_to_hebrew(11), "י\"א");
+        assert_eq!(number_to_hebrew(22), "כ\"ב");
 
         // Special cases: 15 and 16
-        assert_eq!(number_to_hebrew(15), "ט״ו");
-        assert_eq!(number_to_hebrew(16), "ט״ז");
+        assert_eq!(number_to_hebrew(15), "ט\"ו");
+        assert_eq!(number_to_hebrew(16), "ט\"ז");
 
         // Three digits
         assert_eq!(number_to_hebrew(100), "ק'");
-        assert_eq!(number_to_hebrew(785), "תשפ״ה");
-        assert_eq!(number_to_hebrew(999), "תתקצ״ט"); // 900+90+9 = ת + ת + ק + צ + ט
+        assert_eq!(number_to_hebrew(785), "תשפ\"ה");
+        assert_eq!(number_to_hebrew(999), "תתקצ\"ט"); // 900+90+9 = ת + ת + ק + צ + ט
     }
 
     #[test]
@@ -246,5 +264,70 @@ mod tests {
         assert!(!is_hebrew_leap_year(5785));
         // 5787 is position 11 in cycle -> leap year
         assert!(is_hebrew_leap_year(5787));
+    }
+
+    #[test]
+    fn format_hebrew_date_rejects_non_numeric_dates() {
+        assert_eq!(format_hebrew_date("not-a-date"), None);
+        assert_eq!(format_hebrew_date(""), None);
+    }
+
+    #[test]
+    fn perek_from_model_compiles_source_dates_and_time_fields() {
+        let dto = Perek::from(perek_model());
+
+        assert_eq!(dto.id, 7);
+        assert_eq!(dto.perek_id, Some(42));
+        assert_eq!(dto.sefer_id, Some(2));
+        assert_eq!(dto.additional, Some(1));
+        assert_eq!(dto.perek, Some(5));
+        assert_eq!(dto.date.as_deref(), Some("2026-07-19"));
+        assert_eq!(dto.hebdate.as_deref(), Some("57850101"));
+        assert_eq!(dto.tseit.as_deref(), Some("20:30:00"));
+        assert_eq!(dto.header.as_deref(), Some("Opening"));
+        assert!(
+            dto.compiled_hebdate
+                .as_deref()
+                .is_some_and(|s| !s.is_empty())
+        );
+        assert!(
+            dto.compiled_source
+                .as_deref()
+                .is_some_and(|s| s.starts_with("Genesis II "))
+        );
+    }
+
+    #[test]
+    fn perek_from_model_handles_optional_source_and_invalid_hebdate() {
+        let mut model = perek_model();
+        model.sefer_name = None;
+        model.additional_letter = None;
+        model.perek_in_context = None;
+        model.hebdate = Some("bad".to_string());
+        model.date = None;
+        model.tseit = None;
+
+        let dto = Perek::from(model);
+
+        assert_eq!(dto.compiled_source, None);
+        assert_eq!(dto.compiled_hebdate, None);
+        assert_eq!(dto.date, None);
+        assert_eq!(dto.tseit, None);
+    }
+
+    #[test]
+    fn perek_from_model_defaults_source_perek_when_context_is_missing() {
+        let mut model = perek_model();
+        model.sefer_name = Some("Book".to_string());
+        model.additional_letter = None;
+        model.perek_in_context = None;
+
+        let dto = Perek::from(model);
+
+        assert!(
+            dto.compiled_source
+                .as_deref()
+                .is_some_and(|s| s.starts_with("Book "))
+        );
     }
 }

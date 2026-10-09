@@ -1,33 +1,31 @@
-// import Image from "next/image";
-
-import { toLetters } from "gematry";
+import type { Metadata } from "next";
 import { unstable_cache } from "next/cache";
-import React, { Suspense } from "react";
-import { isQriDifferentThanKtiv } from "../../../data/db/tanah-view-types";
+import { Suspense } from "react";
+import { loadRecitation } from "@/lib/recitation-loader";
 import { getPerekByPerekId } from "../../../data/perek-dto";
-import { getSeferByName, getPerekIdsForSefer } from "../../../data/sefer-dto";
-import { getArticlesByPerekId } from "../../../lib/articles";
+import { getPerekIdsForSefer, getSeferByName } from "../../../data/sefer-dto";
+import { getArticleSummariesByPerekId } from "../../../lib/articles";
 import { getPerushimByPerekId } from "../../../lib/perushim";
+import { buildPerekGraph } from "../../../lib/seo/core-jsonld";
+import { absUrl } from "../../../lib/seo/jsonld";
+import { selectPerekImages } from "../../../lib/seo/perek-illustrations";
+import { getPerekImagesByChapter } from "../../../lib/seo/perek-images-data";
+import { fetchAllEntityRefs } from "../../../lib/tanahpedia/perek-entity-refs";
+import { JsonLd } from "../../components/JsonLd";
 import { ArticlesSection } from "./components/ArticlesSection";
-import { PerushimSection } from "./components/PerushimSection";
 import { QaWidget } from "./components/QaWidget";
 import Breadcrumb from "./components/Breadcrumb";
-import { Ptuah } from "./components/Ptuha";
+import { PerekHeading } from "./components/PerekHeading";
+import { PerekIntro } from "./components/PerekIntro";
+import { PerekText } from "./components/PerekText";
+import { PerushimSection } from "./components/PerushimSection";
 import SeferComposite from "./components/SeferComposite";
-import { Stuma } from "./components/Stuma";
 import styles from "./page.module.css";
 // perakim are a closed list — no fallback rendering for unknown IDs.
 export const dynamicParams = false;
 
-// this reserverd function is a magic for caching
-/* istanbul ignore next: only runs during next build */
-export function generateStaticParams() {
-	// Return an array of objects with the key "number" as a string
-	return Array.from({ length: 929 }, (_, i) => ({ number: String(i + 1) }));
-}
-
 /**
- * Cache articles with on-demand revalidation support.
+ * Cache article summaries (no full content) with on-demand revalidation support.
  *
  * IMPORTANT: We use on-demand revalidation only (no periodic/time-based revalidation).
  * Periodic revalidation should be avoided because:
@@ -40,12 +38,12 @@ export function generateStaticParams() {
  * - Single page: revalidatePath('/929/{perekId}')
  * - All articles: revalidateTag('articles')
  */
-const getCachedArticles = unstable_cache(
-	async (perekId: number) => getArticlesByPerekId(perekId),
-	["articles"],
+const getCachedArticleSummaries = unstable_cache(
+	async (perekId: number) => getArticleSummariesByPerekId(perekId),
+	["article-summaries"],
 	{
 		tags: ["articles"],
-		revalidate: false, // No periodic revalidation - on-demand only
+		revalidate: false,
 	},
 );
 
@@ -58,9 +56,50 @@ const getCachedPerushim = unstable_cache(
 		revalidate: false,
 	},
 );
-
-
-// TODO: figure out if need to use generateMetadata
+export async function generateMetadata({
+	params,
+}: {
+	params: Promise<{ number: string }>;
+}): Promise<Metadata> {
+	const { number } = await params;
+	const perekId = Number.parseInt(number, 10);
+	const perekObj = getPerekByPerekId(perekId);
+	const illustration = (await getPerekImagesByChapter())[perekId]?.[0];
+	const title = `${perekObj.source} | תנ"ך על הפרק`;
+	const description =
+		illustration?.description ??
+		`קריאת ${perekObj.source} בתנ"ך, עם פירושים ומאמרים על הפרק.`;
+	return {
+		title,
+		description,
+		alternates: { canonical: `/929/${perekId}` },
+		...(illustration
+			? {
+					robots: {
+						googleBot: { "max-image-preview": "large" as const },
+					},
+					openGraph: {
+						title,
+						description,
+						url: `/929/${perekId}`,
+						locale: "he_IL",
+						images: [
+							{
+								url: absUrl(illustration.socialSrc),
+								width: illustration.socialWidth,
+								height: illustration.socialHeight,
+								alt: illustration.alt,
+							},
+						],
+					},
+					twitter: {
+						card: "summary_large_image" as const,
+						images: [absUrl(illustration.socialSrc)],
+					},
+				}
+			: {}),
+	};
+}
 export default async function Perek({
 	params,
 }: {
@@ -69,83 +108,42 @@ export default async function Perek({
 	const { number } = await params;
 	const perekId = Number.parseInt(number, 10); // convert string to number
 	const perekObj = getPerekByPerekId(perekId);
+	const recitation = loadRecitation(perekObj);
 	const sefer = getSeferByName(perekObj.sefer);
 	const perekIds = getPerekIdsForSefer(sefer);
-	// Fetch articles and perushim for every perek in the sefer so each blank page shows the correct data
-	const articlesByPerekIndex = await Promise.all(
-		perekIds.map((id) => getCachedArticles(id)),
-	);
-	const perushimByPerekIndex = await Promise.all(
-		perekIds.map((id) => getCachedPerushim(id)),
-	);
-	const articles = await getCachedArticles(perekId);
-	const perushim = await getPerushimByPerekId(perekId);
+	const articles = await getCachedArticleSummaries(perekId);
+	const perushim = await getCachedPerushim(perekId);
+	const entityRefsByPerek = await fetchAllEntityRefs(perekIds);
+	const imagesByPerek = await getPerekImagesByChapter();
+	const seferImages = selectPerekImages(imagesByPerek, perekIds);
 
 	return (
 		<>
+			<JsonLd
+				data={buildPerekGraph(
+					perekObj,
+					imagesByPerek[perekId] ?? [],
+					recitation,
+				)}
+			/>
 			<Suspense>
 				<SeferComposite
 					perekObj={perekObj}
 					articles={articles}
-					articlesByPerekIndex={articlesByPerekIndex}
-					perushimByPerekIndex={perushimByPerekIndex}
+					perushim={perushim}
 					perekIds={perekIds}
+					entityRefsByPerek={entityRefsByPerek}
+					imagesByPerek={seferImages}
 				/>
 			</Suspense>
 			<div className={`${styles.perekContainer} seo-content`}>
 				<Breadcrumb perekObj={perekObj} />
-
-				<article className={styles.perekText}>
-					{perekObj.pesukim.map((pasuk, pasukIdx) => {
-						const pasukKey = pasukIdx + 1;
-						const pasukNumElement = (
-							<span className={styles.pasukNum}>{toLetters(pasukIdx + 1)}</span>
-						);
-						const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
-							const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
-							const isQriWithDifferentKtiv =
-								segment.type === "qri" && isQriDifferentThanKtiv(segment);
-							// TODO: merge qris sequnce like in 929/406
-							return (
-								<React.Fragment key={segmentKey}>
-									<span className={isQriWithDifferentKtiv ? styles.qri : ""}>
-										{segment.type === "ktiv" ? (
-											segment.value
-										) : segment.type === "qri" ? (
-											isQriWithDifferentKtiv ? (
-												<>
-													{/* biome-ignore lint/a11y/noLabelWithoutControl: It'll take some time to validate this fix altogether with css rules */}
-													(<label />
-													{segment.value})
-												</>
-											) : (
-												segment.value
-											)
-										) : segment.type === "ptuha" ? (
-											Ptuah()
-										) : (
-											Stuma()
-										)}
-									</span>
-									{segmentIdx === pasuk.segments.length - 1 ||
-									((segment.type === "ktiv" || segment.type === "qri") &&
-										segment.value.at(segment.value.length - 1) ===
-											"־") ? null : (
-										<span> </span>
-									)}
-								</React.Fragment>
-							);
-						});
-						return (
-							<React.Fragment key={pasukKey}>
-								{pasukNumElement}
-								<span> </span>
-								{pasukElement}
-								<span> </span>
-							</React.Fragment>
-						);
-					})}
-				</article>
+				<PerekHeading perekObj={perekObj} />
+				<PerekIntro images={imagesByPerek[perekId] ?? []} />
+				<PerekText
+					perekObj={perekObj}
+					entityRefs={entityRefsByPerek[perekId] ?? []}
+				/>
 
 				{/* Perushim section - commentaries carousel */}
 				<PerushimSection perekId={perekId} perushim={perushim} />

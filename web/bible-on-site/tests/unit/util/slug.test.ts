@@ -6,8 +6,8 @@ describe("slug utilities", () => {
 			expect(sanitizeForUrl('שליט"א')).toBe("שליטא");
 		});
 
-		it("strips Hebrew gershayim (״)", () => {
-			expect(sanitizeForUrl("שליט״א")).toBe("שליטא");
+		it("strips Hebrew gershayim (\")", () => {
+			expect(sanitizeForUrl("שליט\"א")).toBe("שליטא");
 		});
 
 		it("strips Hebrew geresh (׳)", () => {
@@ -19,7 +19,7 @@ describe("slug utilities", () => {
 		});
 
 		it("strips multiple problematic characters", () => {
-			expect(sanitizeForUrl('הרב "אברהם" ז״ל')).toBe("הרב אברהם זל");
+			expect(sanitizeForUrl('הרב "אברהם" ז"ל')).toBe("הרב אברהם זל");
 		});
 
 		it("trims surrounding whitespace", () => {

@@ -1,6 +1,16 @@
-/* Expanded article section within perek page */
+/* The article route keeps the chapter below the article in normal flow. */
+.articlePerekContainer {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  background-color: var(--surface-elevated, #fff);
+}
+
+/* Expanded article section within perek page. It opens the route in normal
+   flow, so clear the 72px top nav at rest and when ScrollToSlug scrolls to it. */
 .expandedArticle {
-  margin: 24px 16px;
+  margin: calc(72px + 24px) 16px 24px;
+  scroll-margin-top: calc(72px + 24px);
   padding: 24px;
   background: transparent;
   border-radius: 12px;
@@ -25,10 +35,6 @@
   margin-bottom: 16px;
 }
 
-.authorLink:hover .authorName {
-  color: #1552ac;
-}
-
 .authorImage {
   width: 80px;
   height: 80px;
@@ -49,6 +55,10 @@
   font-weight: 600;
   color: #1c2c5d;
   transition: color 0.2s;
+}
+
+.authorLink:hover .authorName {
+  color: #1552ac;
 }
 
 .articleTitle {
@@ -90,6 +100,53 @@
   margin: 1em 0;
 }
 
+/* רשימות ממוספרות במאמרים (תואם תוכן מפרוד / עורך — ol עם data-ordered-type) */
+.articleBody ul,
+.articleBody ol {
+  margin: 0.75em 0;
+  padding-right: 1.5rem;
+  padding-left: 0;
+}
+
+.articleBody li {
+  margin: 0.35em 0;
+}
+
+@counter-style article-hebrew-alpha {
+  system: fixed;
+  symbols: "\5D0" "\5D1" "\5D2" "\5D3" "\5D4" "\5D5" "\5D6" "\5D7" "\5D8" "\5D9" "\5DB" "\5DC" "\5DD" "\5DE" "\5DF"
+    "\5E0" "\5E1" "\5E2" "\5E4" "\5E6" "\5E7" "\5E8" "\5E9" "\5EA";
+  suffix: ". ";
+}
+
+.articleBody ol[data-ordered-type="hebrew-alpha"] {
+  list-style: article-hebrew-alpha;
+  padding-right: 2rem;
+}
+
+/* רשימות ממוספרות במאמרים (תואם תוכן מפרוד / עורך — ol עם data-ordered-type) */
+.articleBody ul,
+.articleBody ol {
+	margin: 0.75em 0;
+	padding-right: 1.5rem;
+	padding-left: 0;
+}
+
+.articleBody li {
+	margin: 0.35em 0;
+}
+
+@counter-style article-hebrew-alpha {
+	system: fixed;
+	symbols: "\5D0" "\5D1" "\5D2" "\5D3" "\5D4" "\5D5" "\5D6" "\5D7" "\5D8" "\5D9" "\5DB" "\5DC" "\5DD" "\5DE" "\5DF" "\5E0" "\5E1" "\5E2" "\5E4" "\5E6" "\5E7" "\5E8" "\5E9" "\5EA";
+	suffix: ". ";
+}
+
+.articleBody ol[data-ordered-type="hebrew-alpha"] {
+	list-style: article-hebrew-alpha;
+	padding-right: 2rem;
+}
+
 .articleBody a {
   color: #1552ac;
 }
@@ -129,7 +186,8 @@ button.backLink {
 
 @media (max-width: 640px) {
   .expandedArticle {
-    margin: 16px 8px;
+    margin: calc(72px + 16px) 8px 16px;
+    scroll-margin-top: calc(72px + 16px);
     padding: 16px;
   }
 
@@ -146,27 +204,14 @@ button.backLink {
     height: 64px;
   }
 
-  .expandedPerush {
-    padding: 16px;
-    margin: 16px 8px;
-  }
-
-  .perushTitle {
-    font-size: 1.3rem;
-  }
-
-  .parshanName {
-    font-size: 1.1rem;
-  }
-
-  .noteContent {
-    font-size: 1rem;
-  }
 }
 
-/* Perush styles */
+/* Perush styles — now the first block on the route, so it carries the same
+   top-nav clearance as the expanded article for the at-rest and
+   ScrollToSlug-scrolled positions. */
 .expandedPerush {
-  margin: 24px 16px;
+  margin: calc(72px + 24px) 16px 24px;
+  scroll-margin-top: calc(72px + 24px);
   padding: 24px;
   background: transparent;
   border-radius: 12px;
@@ -186,12 +231,6 @@ button.backLink {
   font-weight: 700;
   color: #1c2c5d;
   margin: 0 0 8px 0;
-}
-
-.parshanYear {
-  font-size: 1.1rem;
-  color: #6b7280;
-  font-weight: 400;
 }
 
 .parshanName {
@@ -214,6 +253,12 @@ button.backLink {
   border-right: 4px solid #1c2c5d;
 }
 
+.noteHighlight {
+  background: rgba(254, 243, 199, 0.95);
+  border-right-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
+}
+
 .notePasuk {
   display: inline-block;
   font-weight: 700;
@@ -233,4 +278,82 @@ button.backLink {
 
 .noteContent p {
   margin: 0.5rem 0;
+}
+
+/* Must follow the base perush rules above; a media block placed earlier in
+   the file would lose the cascade to the base declarations. */
+@media (max-width: 640px) {
+  .expandedPerush {
+    margin: calc(72px + 16px) 8px 16px;
+    scroll-margin-top: calc(72px + 16px);
+    padding: 16px;
+  }
+
+  .perushTitle {
+    font-size: 1.3rem;
+  }
+
+  .parshanName {
+    font-size: 1.1rem;
+  }
+
+  .noteContent {
+    font-size: 1rem;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .expandedArticle,
+  .expandedPerush,
+  .backLink {
+    border-color: #2d3548;
+  }
+
+  .authorImage {
+    background: #2d3548;
+    border-color: #a8b9ff;
+  }
+
+  .authorName,
+  .articleTitle,
+  .articleBody h1,
+  .articleBody h2,
+  .articleBody h3,
+  .perushTitle,
+  .notePasuk,
+  .backLink {
+    color: #a8b9ff;
+  }
+
+  .authorLink:hover .authorName,
+  .articleBody a {
+    color: #7eb0ff;
+  }
+
+  .articleBody,
+  .noteContent {
+    color: #d7dae0;
+  }
+
+  .backLink {
+    background: #1a1f2e;
+  }
+
+  .backLink:hover {
+    background: #232a45;
+    border-color: #a8b9ff;
+  }
+
+  .parshanName {
+    color: #9aa0a6;
+  }
+
+  .note {
+    background: #12151c;
+  }
+
+  .noteHighlight {
+    background: rgba(58, 47, 16, 0.95);
+    border-right-color: #92600b;
+  }
 }

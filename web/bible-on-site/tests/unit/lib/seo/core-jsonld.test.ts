@@ -1,0 +1,411 @@
+import type { PerekObj } from "../../../../src/data/perek-dto";
+import type { Article } from "../../../../src/lib/articles";
+import type { AuthorDetails } from "../../../../src/lib/authors";
+import type { PerushDetail } from "../../../../src/lib/perushim";
+import {
+	AUTHORS_PATH,
+	articlePath,
+	authorPath,
+	buildArticleGraph,
+	buildAuthorGraph,
+	buildAuthorsListGraph,
+	buildPerekGraph,
+	buildPerushGraph,
+	parshanId,
+	perekPath,
+	perushPath,
+	seferId,
+	TANAH_ID,
+} from "../../../../src/lib/seo/core-jsonld";
+import { SITE_ORIGIN } from "../../../../src/lib/seo/jsonld";
+
+type NodeMap = Record<string, unknown> & { "@type": string; "@id"?: string };
+
+function perekObj(over: Partial<PerekObj> = {}): PerekObj {
+	return {
+		perekId: 1,
+		perekHeb: "א",
+		header: "בראשית",
+		pesukim: [],
+		helek: "תורה",
+		sefer: "בראשית",
+		source: "בראשית א",
+		...over,
+	};
+}
+
+function article(over: Partial<Article> = {}): Article {
+	return {
+		id: 42,
+		perekId: 1,
+		authorId: 7,
+		abstract: "<p>תקציר המאמר.</p>",
+		content: "<p>גוף המאמר המלא.</p>",
+		name: "כותרת המאמר",
+		priority: 1,
+		authorName: "הרב פלוני",
+		authorImageUrl: "https://cdn.example/authors/high-res/7.jpg",
+		...over,
+	};
+}
+
+function perushDetail(over: Partial<PerushDetail> = {}): PerushDetail {
+	return {
+		id: 3,
+		name: 'רש"י',
+		parshanName: "רבי שלמה יצחקי",
+		parshanBirthYear: 1040,
+		notes: [],
+		...over,
+	};
+}
+
+function authorDetails(over: Partial<AuthorDetails> = {}): AuthorDetails {
+	return {
+		id: 7,
+		name: "הרב פלוני",
+		details: "<p>קורות חייו של הרב.</p>",
+		imageUrl: "https://cdn.example/authors/high-res/7.jpg",
+		...over,
+	};
+}
+
+function nodesOf(graph: { "@graph": unknown }): NodeMap[] {
+	return graph["@graph"] as unknown as NodeMap[];
+}
+
+function nodeByType(graph: { "@graph": unknown }, type: string) {
+	return nodesOf(graph).find((n) => n["@type"] === type);
+}
+
+describe("seo/core-jsonld", () => {
+	describe("path + id helpers", () => {
+		it("builds stable paths and URNs", () => {
+			expect(perekPath(5)).toBe("/929/5");
+			expect(articlePath(5, 42)).toBe("/929/5/42");
+			expect(perushPath(5, 'רש"י')).toBe(
+				`/929/5/${encodeURIComponent('רש"י')}`,
+			);
+			expect(authorPath("plony")).toBe("/929/authors/plony");
+			expect(TANAH_ID).toBe("urn:bible-on-site:tanah");
+			expect(seferId("בראשית")).toBe(
+				`urn:bible-on-site:sefer:${encodeURIComponent("בראשית")}`,
+			);
+			expect(parshanId("רבי שלמה יצחקי")).toBe(
+				`urn:bible-on-site:parshan:${encodeURIComponent("רבי שלמה יצחקי")}`,
+			);
+		});
+	});
+
+	describe("buildPerekGraph", () => {
+		it("emits a Chapter in the Tanah → Sefer hierarchy + breadcrumb", () => {
+			const recording = {
+				perekId: 1,
+				audioUrl: "https://images.example.com/sample.mp3",
+				durationMs: 12000,
+				audioSha256: "b".repeat(64),
+			};
+			const graph = buildPerekGraph(
+				perekObj(),
+				[
+					{
+						id: 17,
+						src: "https://images.example.com/sample.webp",
+						width: 1600,
+						height: 900,
+						avifSrcSet: "",
+						socialSrc: "https://images.example.com/social.jpg",
+						socialWidth: 1600,
+						socialHeight: 900,
+						alt: "איור לדוגמה",
+						caption: "כיתוב לדוגמה",
+						description: null,
+						credit: null,
+					},
+				],
+				recording,
+			);
+			const chapter = nodeByType(graph, "Chapter");
+			expect(chapter?.["@id"]).toBe(`${SITE_ORIGIN}/929/1#chapter`);
+			expect(chapter?.isPartOf).toEqual({ "@id": seferId("בראשית") });
+			expect(chapter?.image).toEqual([
+				"https://images.example.com/sample.webp",
+			]);
+			const books = nodesOf(graph).filter((n) => n["@type"] === "Book");
+			const tanah = books.find((b) => b["@id"] === TANAH_ID);
+			const sefer = books.find((b) => b["@id"] === seferId("בראשית"));
+			expect(tanah?.name).toBe('תנ"ך');
+			expect(sefer?.isPartOf).toEqual({ "@id": TANAH_ID });
+			expect(sefer?.genre).toBe("תורה");
+			const page = nodeByType(graph, "WebPage");
+			expect(page?.about).toEqual({ "@id": chapter?.["@id"] });
+			expect(page?.primaryImageOfPage).toMatchObject({
+				contentUrl: "https://images.example.com/sample.webp",
+				width: 1600,
+				height: 900,
+			});
+			expect(page?.audio).toEqual({
+				"@id": nodeByType(graph, "AudioObject")?.["@id"],
+			});
+			const crumb = nodeByType(graph, "BreadcrumbList");
+			const crumbs = crumb?.itemListElement as Array<{ name: string }>;
+			expect(crumbs.map((c) => c.name)).toEqual(["בית", "בראשית א"]);
+		});
+
+		it("omits the sefer genre when there is no helek", () => {
+			const graph = buildPerekGraph(perekObj({ helek: "" }));
+			const sefer = nodesOf(graph).find(
+				(n) => n["@type"] === "Book" && n["@id"] === seferId("בראשית"),
+			);
+			expect(sefer?.genre).toBeUndefined();
+		});
+
+		it("does not advertise an illustration for an unillustrated perek", () => {
+			const graph = buildPerekGraph(
+				perekObj({ perekId: 2, perekHeb: "ב", source: "בראשית ב" }),
+			);
+			expect(nodeByType(graph, "Chapter")?.image).toBeUndefined();
+			expect(nodeByType(graph, "WebPage")?.primaryImageOfPage).toBeUndefined();
+		});
+	});
+
+	describe("buildArticleGraph", () => {
+		it("emits an Article with author Person, about Chapter, and description", () => {
+			const graph = buildArticleGraph({
+				article: article(),
+				perekObj: perekObj(),
+				authorSlug: "harav-ploni",
+			});
+			const node = nodeByType(graph, "Article");
+			expect(node?.["@id"]).toBe(`${SITE_ORIGIN}/929/1/42#article`);
+			expect(node?.headline).toBe("כותרת המאמר");
+			expect(node?.about).toEqual({ "@id": `${SITE_ORIGIN}/929/1#chapter` });
+			expect(node?.description).toBe("תקציר המאמר.");
+			const person = nodeByType(graph, "Person");
+			expect(person?.["@id"]).toBe(
+				`${SITE_ORIGIN}/929/authors/harav-ploni#person`,
+			);
+			expect(person?.image).toBe("https://cdn.example/authors/high-res/7.jpg");
+			expect(node?.author).toEqual({ "@id": person?.["@id"] });
+			expect(node?.publisher).toEqual({
+				"@id": `${SITE_ORIGIN}/#organization`,
+			});
+			expect(nodeByType(graph, "WebPage")?.mainEntity).toEqual({
+				"@id": node?.["@id"],
+			});
+		});
+
+		it("omits description when the abstract and content are empty", () => {
+			const graph = buildArticleGraph({
+				article: article({ abstract: "<p></p>", content: "" }),
+				perekObj: perekObj(),
+				authorSlug: "harav-ploni",
+			});
+			expect(nodeByType(graph, "Article")?.description).toBeUndefined();
+		});
+
+		it("falls back to content for the description and omits image when absent", () => {
+			const graph = buildArticleGraph({
+				article: article({
+					abstract: null,
+					content: "<p>גוף בלבד.</p>",
+					authorImageUrl: "",
+				}),
+				perekObj: perekObj(),
+				authorSlug: "harav-ploni",
+			});
+			expect(nodeByType(graph, "Article")?.description).toBe("גוף בלבד.");
+			expect(nodeByType(graph, "Person")?.image).toBeUndefined();
+		});
+
+		it("omits description when both abstract and content are null", () => {
+			const graph = buildArticleGraph({
+				article: article({ abstract: null, content: null }),
+				perekObj: perekObj(),
+				authorSlug: "harav-ploni",
+			});
+			expect(nodeByType(graph, "Article")?.description).toBeUndefined();
+		});
+	});
+
+	describe("buildPerushGraph", () => {
+		it("emits a commentary Article with the parshan Person + birthDate", () => {
+			const graph = buildPerushGraph({
+				perush: perushDetail(),
+				perekObj: perekObj(),
+			});
+			const node = nodeByType(graph, "Article");
+			expect(node?.headline).toBe('רש"י על בראשית א');
+			expect(node?.author).toEqual({
+				"@id": parshanId("רבי שלמה יצחקי"),
+			});
+			const person = nodeByType(graph, "Person");
+			expect(person?.name).toBe("רבי שלמה יצחקי");
+			expect(person?.birthDate).toBe("1040");
+			expect(person?.sameAs).toBeUndefined();
+		});
+
+		it("marks the WebPage mainEntity as the commentary Article + publisher", () => {
+			const graph = buildPerushGraph({
+				perush: perushDetail(),
+				perekObj: perekObj(),
+			});
+			const node = nodeByType(graph, "Article");
+			expect(node?.publisher).toEqual({
+				"@id": `${SITE_ORIGIN}/#organization`,
+			});
+			expect(nodeByType(graph, "WebPage")?.mainEntity).toEqual({
+				"@id": node?.["@id"],
+			});
+		});
+
+		it("derives a plain-text description from note content", () => {
+			const graph = buildPerushGraph({
+				perush: perushDetail({
+					notes: [
+						{
+							pasuk: 1,
+							noteIdx: 0,
+							noteContent: "<p>בבקשה ורצון.</p>",
+						},
+						{
+							pasuk: 2,
+							noteIdx: 0,
+							noteContent: "<p>שני &quot;מובא&quot;.</p>",
+						},
+					],
+				}),
+				perekObj: perekObj(),
+			});
+			const description = nodeByType(graph, "Article")?.description;
+			expect(description).toContain("בבקשה ורצון.");
+			expect(description).toContain('שני "מובא".');
+			expect(description).not.toContain("<");
+		});
+
+		it("omits description when notes contain only placeholder markup", () => {
+			const graph = buildPerushGraph({
+				perush: perushDetail({
+					notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p></p>" }],
+				}),
+				perekObj: perekObj(),
+			});
+			expect(nodeByType(graph, "Article")?.description).toBeUndefined();
+		});
+
+		it("attaches sameAs when external references are provided", () => {
+			const graph = buildPerushGraph({
+				perush: perushDetail(),
+				perekObj: perekObj(),
+				sameAs: ["https://www.wikidata.org/wiki/Q131338"],
+			});
+			expect(nodeByType(graph, "Person")?.sameAs).toEqual([
+				"https://www.wikidata.org/wiki/Q131338",
+			]);
+		});
+	});
+
+	describe("buildAuthorGraph", () => {
+		it("emits a ProfilePage with a Person mainEntity", () => {
+			const graph = buildAuthorGraph({
+				author: authorDetails(),
+				slug: "harav-ploni",
+			});
+			const page = nodeByType(graph, "ProfilePage");
+			const person = nodeByType(graph, "Person");
+			expect(person?.["@id"]).toBe(
+				`${SITE_ORIGIN}/929/authors/harav-ploni#person`,
+			);
+			expect(person?.description).toBe("קורות חייו של הרב.");
+			expect(page?.mainEntity).toEqual({ "@id": person?.["@id"] });
+			const crumb = nodeByType(graph, "BreadcrumbList");
+			const crumbs = crumb?.itemListElement as Array<{ name: string }>;
+			expect(crumbs.map((c) => c.name)).toEqual(["בית", "הרבנים", "הרב פלוני"]);
+		});
+
+		it("omits image and description when absent", () => {
+			const graph = buildAuthorGraph({
+				author: authorDetails({ imageUrl: "", details: "" }),
+				slug: "harav-ploni",
+			});
+			const person = nodeByType(graph, "Person");
+			expect(person?.image).toBeUndefined();
+			expect(person?.description).toBeUndefined();
+		});
+
+		it("attaches sameAs when external references are provided", () => {
+			const graph = buildAuthorGraph({
+				author: authorDetails(),
+				slug: "harav-ploni",
+				sameAs: ["https://www.wikidata.org/wiki/Q1234"],
+			});
+			expect(nodeByType(graph, "Person")?.sameAs).toEqual([
+				"https://www.wikidata.org/wiki/Q1234",
+			]);
+		});
+	});
+
+	describe("buildAuthorsListGraph", () => {
+		it("emits a CollectionPage + ItemList of authors", () => {
+			const graph = buildAuthorsListGraph({
+				authors: [
+					{ name: "הרב א", slug: "harav-a" },
+					{ name: "הרב ב", slug: "harav-b" },
+				],
+			});
+			const page = nodeByType(graph, "CollectionPage");
+			expect(page?.["@id"]).toBe(`${SITE_ORIGIN}${AUTHORS_PATH}#webpage`);
+			const list = nodeByType(graph, "ItemList");
+			expect(list?.numberOfItems).toBe(2);
+			const items = list?.itemListElement as Array<{
+				position: number;
+				url: string;
+				name: string;
+			}>;
+			expect(items[1]).toMatchObject({
+				position: 2,
+				url: `${SITE_ORIGIN}/929/authors/harav-b`,
+				name: "הרב ב",
+			});
+		});
+	});
+});
+
+test("recorded chapters link a Hebrew AudioObject to their canonical chapter", () => {
+	const recording = {
+		perekId: 829,
+		audioUrl:
+			"https://bible-on-site-assets.s3.il-central-1.amazonaws.com/recordings/829_record.mp3",
+		durationMs: 36885,
+		audioSha256: "a".repeat(64),
+	};
+	const graph = buildPerekGraph(
+		perekObj({ perekId: 829, source: "אסתר י", sefer: "אסתר" }),
+		[],
+		recording,
+	);
+	const audio = nodeByType(graph, "AudioObject");
+	expect(audio).toMatchObject({
+		contentUrl: recording.audioUrl,
+		duration: "PT36.885S",
+		encodingFormat: "audio/mpeg",
+		inLanguage: "he",
+		isAccessibleForFree: true,
+		sha256: recording.audioSha256,
+	});
+	expect(audio?.encodesCreativeWork).toEqual({
+		"@id": nodeByType(graph, "Chapter")?.["@id"],
+	});
+	expect(nodeByType(graph, "Chapter")?.encoding).toEqual({
+		"@id": audio?.["@id"],
+	});
+	expect(nodeByType(graph, "WebPage")?.audio).toEqual({
+		"@id": audio?.["@id"],
+	});
+	expect(
+		nodeByType(buildPerekGraph(perekObj()), "AudioObject"),
+	).toBeUndefined();
+	expect(
+		nodeByType(buildPerekGraph(perekObj(), [], recording), "AudioObject"),
+	).toBeUndefined();
+});

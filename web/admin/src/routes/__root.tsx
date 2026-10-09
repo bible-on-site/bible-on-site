@@ -9,7 +9,7 @@ import {
 	Scripts,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
-import appCss from "~/styles/app.css?url";
+import appCss from "../styles/app.css?url";
 
 const queryClient = new QueryClient({
 	defaultOptions: {
@@ -66,8 +66,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 										to="/"
 										className="text-gray-600 hover:text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
 										activeProps={{
-											className:
-												"!text-blue-600 !bg-blue-50 font-semibold",
+											className: "!text-blue-600 !bg-blue-50 font-semibold",
 										}}
 										activeOptions={{ exact: true }}
 									>
@@ -77,21 +76,34 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 										to="/articles"
 										className="text-gray-600 hover:text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
 										activeProps={{
-											className:
-												"!text-blue-600 !bg-blue-50 font-semibold",
+											className: "!text-blue-600 !bg-blue-50 font-semibold",
 										}}
 									>
 										מאמרים
 									</Link>
 									<Link
+										to="/bulletins"
+										className="text-gray-600 hover:text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium"
+									>
+										עלון יומי
+									</Link>
+									<Link
 										to="/rabbis"
 										className="text-gray-600 hover:text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
 										activeProps={{
-											className:
-												"!text-blue-600 !bg-blue-50 font-semibold",
+											className: "!text-blue-600 !bg-blue-50 font-semibold",
 										}}
 									>
 										רבנים
+									</Link>
+									<Link
+										to="/tanahpedia"
+										className="text-gray-600 hover:text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+										activeProps={{
+											className: "!text-blue-600 !bg-blue-50 font-semibold",
+										}}
+									>
+										תנכפדיה
 									</Link>
 								</div>
 							</div>

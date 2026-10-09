@@ -18,6 +18,7 @@ jest.mock("@/app/929/[number]/components/perushim-section.module.css", () => ({
 	pasukGroup: "pasukGroup",
 	pasukLabel: "pasukLabel",
 	noteContent: "noteContent",
+	shareButton: "shareButton",
 }));
 
 jest.mock("@/app/929/[number]/components/sefer.module.css", () => ({
@@ -30,8 +31,8 @@ import { PerushFullView } from "../../../src/app/929/[number]/components/PerushF
 
 const samplePerush = {
 	id: 1,
-	name: "רש״י",
-	parshanName: "רש״י",
+	name: 'רש"י',
+	parshanName: 'רש"י',
 	notes: [
 		{ pasuk: 1, noteIdx: 0, noteContent: "<p>note 1</p>" },
 		{ pasuk: 2, noteIdx: 0, noteContent: "<p>note 2</p>" },
@@ -41,7 +42,7 @@ const samplePerush = {
 describe("PerushFullView", () => {
 	it("renders perush name and parshan name", () => {
 		render(<PerushFullView perush={samplePerush} onBack={jest.fn()} />);
-		expect(screen.getAllByText("רש״י").length).toBeGreaterThanOrEqual(1);
+		expect(screen.getAllByText('רש"י').length).toBeGreaterThanOrEqual(1);
 	});
 
 	it("renders back button that calls onBack", () => {
@@ -67,12 +68,12 @@ describe("PerushFullView", () => {
 		expect(container.innerHTML).not.toContain("perushNotesInBook");
 	});
 
-	it("shows parshanBirthYear when present", () => {
+	it("does not show parshanBirthYear in display", () => {
 		const perush = { ...samplePerush, parshanBirthYear: 1040 };
 		const { container } = render(
 			<PerushFullView perush={perush} onBack={jest.fn()} />,
 		);
-		expect(container.innerHTML).toContain("1040");
+		expect(container.innerHTML).not.toContain("1040");
 	});
 
 	it("groups notes by pasuk", () => {
@@ -80,5 +81,21 @@ describe("PerushFullView", () => {
 		// Hebrew letters for pasuk 1 and 2
 		expect(screen.getByText(/פסוק א/)).toBeTruthy();
 		expect(screen.getByText(/פסוק ב/)).toBeTruthy();
+	});
+
+	it("renders share button when perekId is provided", () => {
+		render(
+			<PerushFullView perush={samplePerush} onBack={jest.fn()} perekId={5} />,
+		);
+		const shareLink = screen.getByLabelText("שיתוף");
+		expect(shareLink).toBeTruthy();
+		expect(shareLink.getAttribute("href")).toBe(
+			`/929/5/${encodeURIComponent('רש"י')}`,
+		);
+	});
+
+	it("does not render share button when perekId is not provided", () => {
+		render(<PerushFullView perush={samplePerush} onBack={jest.fn()} />);
+		expect(screen.queryByLabelText("שיתוף")).toBeNull();
 	});
 });

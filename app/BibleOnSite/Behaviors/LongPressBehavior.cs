@@ -1,5 +1,7 @@
 using System.Timers;
 using System.Windows.Input;
+using BibleOnSite.Helpers;
+using BibleOnSite.Models;
 
 namespace BibleOnSite.Behaviors;
 
@@ -7,20 +9,14 @@ namespace BibleOnSite.Behaviors;
 /// A cross-platform long-press behavior using timer-based detection.
 /// On Android it also detects taps natively, because MAUI's TapGestureRecognizer
 /// fails to propagate taps through nested CarouselView > CollectionView templates.
-/// Checks scroll state to prevent triggering during scroll.
+/// Cancels on movement and validates delayed callbacks before selecting a verse.
 /// </summary>
 public class LongPressBehavior : Behavior<View>
 {
     private View? _associatedView;
     private System.Timers.Timer? _longPressTimer;
-    private bool _isPressed;
-#if ANDROID
-    private bool _longPressFired;
-    // Tracks whether a finger is actively down.  Unlike _isPressed (which
-    // is cleared by CancelLongPressTimer during scroll), this is only
-    // cleared on Up/Cancel so we can detect taps even after scroll-cancel.
-    private bool _touchActive;
-#endif
+    private ElapsedEventHandler? _timerElapsed;
+    private readonly PressGestureTracker _press = new();
 
     // Static list of all active behaviors for global cancellation
     private static readonly List<LongPressBehavior> _activeBehaviors = new();
@@ -99,6 +95,8 @@ public class LongPressBehavior : Behavior<View>
         base.OnAttachedTo(bindable);
         _associatedView = bindable;
         bindable.HandlerChanged += OnHandlerChanged;
+        bindable.BindingContextChanged += OnBindingContextChanged;
+        AttachNativeEvents();
 
         lock (_lock)
         {
@@ -114,86 +112,143 @@ public class LongPressBehavior : Behavior<View>
         }
 
         bindable.HandlerChanged -= OnHandlerChanged;
-        CleanupTimer();
+        bindable.BindingContextChanged -= OnBindingContextChanged;
+        CancelLongPressTimer();
         DetachNativeEvents();
         _associatedView = null;
         base.OnDetachingFrom(bindable);
     }
 
+    private void OnBindingContextChanged(object? sender, EventArgs e) => CancelLongPressTimer();
+
     private void OnHandlerChanged(object? sender, EventArgs e)
     {
-        if (_associatedView?.Handler != null)
-        {
-            AttachNativeEvents();
-        }
+        CancelLongPressTimer();
+        DetachNativeEvents();
+        AttachNativeEvents();
     }
 
 #if ANDROID
+    private Android.Views.View? _androidView;
+
+    /// <summary>
+    /// A settling RecyclerView can consume Down without dispatching it to the
+    /// verse. Arm that verse after native dispatch only if it did not receive
+    /// Down itself; the activity still cancels the press on movement or Up.
+    /// </summary>
+    public static void BeginUnreceivedPress(float rawX, float rawY, Perek? currentPerek)
+    {
+        if (currentPerek?.Pasukim is not { Count: > 0 } pasukim)
+            return;
+
+        lock (_lock)
+        {
+            foreach (var behavior in _activeBehaviors)
+            {
+                var bindingContext = behavior._associatedView?.BindingContext;
+                if (behavior._androidView is not { IsShown: true } view ||
+                    !(bindingContext is Pasuk pasuk && pasukim.Contains(pasuk) || ReferenceEquals(bindingContext, currentPerek)))
+                    continue;
+
+                var visibleBounds = new Android.Graphics.Rect();
+                if (!view.GetGlobalVisibleRect(visibleBounds) ||
+                    !visibleBounds.Contains((int)rawX, (int)rawY))
+                    continue;
+
+                if (!behavior._press.IsPressed)
+                {
+                    var touchSlop = view.Context is { } context
+                        ? Android.Views.ViewConfiguration.Get(context)?.ScaledTouchSlop ?? 12
+                        : 12;
+                    behavior._press.Begin(rawX, rawY, touchSlop);
+                    behavior.StartLongPressTimer();
+                }
+                return;
+            }
+        }
+    }
+
     private void AttachNativeEvents()
     {
         if (_associatedView?.Handler?.PlatformView is Android.Views.View androidView)
         {
+            _androidView = androidView;
             androidView.Touch += OnAndroidTouch;
         }
     }
 
     private void DetachNativeEvents()
     {
-        if (_associatedView?.Handler?.PlatformView is Android.Views.View androidView)
+        if (_androidView != null)
         {
-            androidView.Touch -= OnAndroidTouch;
+            _androidView.Touch -= OnAndroidTouch;
+            _androidView = null;
         }
     }
 
     private void OnAndroidTouch(object? sender, Android.Views.View.TouchEventArgs e)
     {
-        var action = e.Event?.Action & Android.Views.MotionEventActions.Mask;
+        if (e.Event is not { } motion)
+            return;
 
-        switch (action)
+        switch (motion.ActionMasked)
         {
             case Android.Views.MotionEventActions.Down:
-                _touchActive = true;
-                if (!Pages.PerekPage.IsScrolling)
-                {
-                    StartLongPressTimer();
-                }
-                // Claim the touch so we receive Up (needed for tap detection).
-                // The RecyclerView can still intercept via onInterceptTouchEvent
-                // when it detects a scroll gesture — it sends Cancel to us and
-                // takes over.
+                var touchSlop = _androidView?.Context is { } context
+                    ? Android.Views.ViewConfiguration.Get(context)?.ScaledTouchSlop ?? 12
+                    : 12;
+                _press.Begin(motion.RawX, motion.RawY, touchSlop);
+                // A new stationary press is independent of the previous scroll.
+                // Motion beyond touch slop cancels it in MainActivity.
+                StartLongPressTimer();
+
+                // Claim Down to receive Up. RecyclerView retains responsibility
+                // for intercepting horizontal swipes and vertical scrolls.
                 e.Handled = true;
                 return;
 
             case Android.Views.MotionEventActions.Up:
-                // If the finger lifted before the long-press timer fired,
-                // this is a normal tap.  Use _touchActive (not _isPressed)
-                // because _isPressed may be cleared by Move-scroll cancellation.
-                if (_touchActive && !_longPressFired)
-                {
+                // Also check the release coordinates if Android coalesced moves.
+                _press.Move(motion.RawX, motion.RawY, isScrolling: false);
+                var tapped = _press.End();
+                CleanupTimer();
+                if (tapped)
                     NativeTapped?.Invoke(this, EventArgs.Empty);
-                }
-                _touchActive = false;
-                CancelLongPressTimer();
                 break;
 
             case Android.Views.MotionEventActions.Cancel:
-                _touchActive = false;
-                CancelLongPressTimer();
-                break;
-
+            case Android.Views.MotionEventActions.PointerDown:
             case Android.Views.MotionEventActions.PointerUp:
                 CancelLongPressTimer();
                 break;
 
             case Android.Views.MotionEventActions.Move:
-                // Cancel if scrolling started
-                if (_isPressed && Pages.PerekPage.IsScrolling)
-                {
-                    CancelLongPressTimer();
-                }
+                _press.Move(motion.RawX, motion.RawY, isScrolling: false);
+                if (!_press.IsPressed)
+                    CleanupTimer();
                 break;
         }
         e.Handled = false;
+    }
+#elif IOS || MACCATALYST
+    private UIKit.UIView? _appleView;
+    private UIKit.UILongPressGestureRecognizer? _applePress;
+    private void AttachNativeEvents()
+    {
+        if (_associatedView?.Handler?.PlatformView is not UIKit.UIView view) return;
+        _appleView = view;
+        _applePress = new UIKit.UILongPressGestureRecognizer(gesture =>
+        {
+            if (gesture.State == UIKit.UIGestureRecognizerState.Began)
+                LongPressed?.Invoke(this, EventArgs.Empty);
+        }) { MinimumPressDuration = LongPressDuration / 1000.0, CancelsTouchesInView = false };
+        view.UserInteractionEnabled = true;
+        view.AddGestureRecognizer(_applePress);
+    }
+    private void DetachNativeEvents()
+    {
+        if (_applePress != null) { _appleView?.RemoveGestureRecognizer(_applePress); _applePress.Dispose(); }
+        _applePress = null; _appleView = null;
     }
 #else
     private void AttachNativeEvents() { }
@@ -202,38 +257,28 @@ public class LongPressBehavior : Behavior<View>
 
     private void StartLongPressTimer()
     {
-        _isPressed = true;
-#if ANDROID
-        _longPressFired = false;
-#endif
         CleanupTimer();
 
         _longPressTimer = new System.Timers.Timer(LongPressDuration);
-        _longPressTimer.Elapsed += OnLongPressTimerElapsed;
+        var pressId = _press.PressId;
+        _timerElapsed = (_, _) => OnLongPressTimerElapsed(pressId);
+        _longPressTimer.Elapsed += _timerElapsed;
         _longPressTimer.AutoReset = false;
         _longPressTimer.Start();
     }
 
     private void CancelLongPressTimer()
     {
-        _isPressed = false;
+#if IOS || MACCATALYST
+        if (_applePress != null) { _applePress.Enabled = false; _applePress.Enabled = true; }
+#endif
+        _press.Cancel();
         CleanupTimer();
     }
 
-    private void OnLongPressTimerElapsed(object? sender, ElapsedEventArgs e)
+    private void OnLongPressTimerElapsed(int pressId)
     {
-        if (!_isPressed)
-            return;
-
-        // Double-check scroll state before firing
-        if (Pages.PerekPage.IsScrolling)
-            return;
-
-#if ANDROID
-        _longPressFired = true;
-#endif
-
-        MainThread.BeginInvokeOnMainThread(() =>
+        _press.DispatchLongPress(pressId, MainThread.BeginInvokeOnMainThread, () =>
         {
             LongPressed?.Invoke(this, EventArgs.Empty);
 
@@ -242,7 +287,7 @@ public class LongPressBehavior : Behavior<View>
             {
                 Command.Execute(param);
             }
-        });
+        }, () => false);
     }
 
     private void CleanupTimer()
@@ -250,7 +295,8 @@ public class LongPressBehavior : Behavior<View>
         if (_longPressTimer != null)
         {
             _longPressTimer.Stop();
-            _longPressTimer.Elapsed -= OnLongPressTimerElapsed;
+            _longPressTimer.Elapsed -= _timerElapsed;
+            _timerElapsed = null;
             _longPressTimer.Dispose();
             _longPressTimer = null;
         }

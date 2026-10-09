@@ -12,29 +12,33 @@ coverage:
         threshold: 0%
         informational: true
       api:
-        target: auto
-        threshold: 1%
+        target: 97%
+        threshold: 0%
         flags:
           - api
       app:
-        target: auto
+        target: 98.5%
         threshold: 0%
         flags:
           - app
       website:
         target: 99%
-        threshold: 1%
+        threshold: 0%
         flags:
           - website
       bulletin:
-        target: auto
-        threshold: 1%
-        informational: true
+        target: 90%
+        threshold: 0%
         flags:
           - bulletin
+      admin:
+        target: 86%
+        threshold: 0%
+        flags:
+          - admin
       data:
-        # TODO: Increase target once data is covered by CI
-        target: 0%
+        target: 84%
+        threshold: 0%
         flags:
           - data
     patch:
@@ -61,6 +65,12 @@ flags:
   bulletin:
     paths:
       - web/bulletin/src/
+  admin:
+    paths:
+      - web/admin/src/
+  admin_e2e:
+    paths:
+      - web/admin/src/
   data:
     paths:
       - data/

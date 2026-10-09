@@ -1,33 +1,44 @@
 {
+	"type": "module",
 	"engines": {
-		"node": ">=24.11.1 <24.12.0"
+		"node": ">=26.10.0 <27"
 	},
 	"devDependencies": {
-		"@types/node": "25.3.0",
-		"@types/semver": "7.7.1",
+		"@types/node": "26.6.4",
+		"@types/semver": "7.8.0",
 		"@types/yargs": "17.0.35",
-		"tsx": "4.21.0"
+		"tsx": "4.23.15"
 	},
 	"scripts": {
-		"coverage:merge": "node --import tsx ./merge-coverage.mts",
+		"coverage:merge": "node --import tsx ./merge-lcov.mts --out ../.coverage/lcov.info --require ../web/bible-on-site/.coverage/merged/lcov.info --require ../web/api/.coverage/merged/lcov.info --optional ../web/admin/.coverage/merged/lcov.info --optional ../app/.coverage/merged/lcov.info --optional ../data/.coverage/merged/lcov.info --rm-input-dirs",
+		"coverage:gaps": "node ./coverage-gaps.mjs",
+		"dev": "node --import tsx ./dev-all.mts",
 		"setup_dev_env": "node --import tsx ./setup-dev-env.mts",
-		"verify-version": "node --import tsx ./github/ci/is-version-newer-than-baseline.ts",
+		"tanahpedia:apply": "node ./tanahpedia-apply.mjs",
+		"test:version": "node --import tsx --test merge-lcov.test.mts github/ci/bump-module-versions.test.mts github/ci/publish-version-bumps.test.mts github/ci/android-sdk-manifest.test.mjs github/ci/android-sdk-install.test.mjs github/release/check-deployment.test.mjs github/release/shared-release.test.mjs github/release/deployment-state.test.mjs github/release/release-assets.test.mjs github/release/data-artifact.test.mjs github/release/testflight-build.test.mjs",
+		"test:dependency-snapshots": "node --test github/ci/dependency-snapshots.test.mjs",
+		"verify:dependency-snapshots": "node github/ci/dependency-snapshots.mjs",
+		"bump:module-versions": "node --import tsx ./github/ci/bump-module-versions.ts",
 		"deploy": "echo 'Use deploy:ecr, deploy:data, or deploy:bulletin' && exit 1",
 		"deploy:ecr": "node --import tsx ./deploy/ecr-deploy/index.mts",
 		"deploy:data": "node --import tsx ./deploy/data-deploy/index.mts",
+		"test:deploy-data": "node --test deploy/data-deploy/lambda-invocation.test.mts",
 		"deploy:bulletin": "node --import tsx ./deploy/bulletin-deploy/index.mts",
 		"bump:cargo": "node --import tsx ./bump-cargo-version.ts"
 	},
 	"dependencies": {
-		"@aws-sdk/client-ec2": "3.998.0",
-		"@aws-sdk/client-ecr": "3.998.0",
-		"@aws-sdk/client-lambda": "3.998.0",
-		"@aws-sdk/client-s3": "3.998.0",
-		"@aws-sdk/client-ssm": "^3.996.0",
-		"@aws-sdk/client-sts": "3.998.0",
-		"@aws-sdk/credential-providers": "3.998.0",
-		"dotenv": "17.3.1",
-		"semver": "7.7.4",
-		"yargs": "18.0.0"
+		"@aws-sdk/client-ec2": "3.1148.0",
+		"@aws-sdk/client-ecr": "3.1148.0",
+		"@aws-sdk/client-lambda": "3.1148.0",
+		"@aws-sdk/client-s3": "3.1148.0",
+		"@aws-sdk/client-ssm": "3.1148.0",
+		"@aws-sdk/client-sts": "3.1148.0",
+		"@aws-sdk/credential-providers": "3.1148.0",
+		"dotenv": "18.0.6",
+		"semver": "7.8.5",
+		"yargs": "18.2.0"
+	},
+	"allowScripts": {
+		"esbuild@0.28.1": true
 	}
 }

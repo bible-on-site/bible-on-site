@@ -1,37 +1,41 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- Exercise the same view-model commands as the application build. -->
+    <DefineConstants>$(DefineConstants);MAUI</DefineConstants>
+    <!-- Catch JSON failures that otherwise appear only in trimmed native releases. -->
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="coverlet.collector" Version="8.0.0">
+    <PackageReference Include="coverlet.collector" Version="10.1.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="HtmlAgilityPack" Version="1.13.0" />
     <PackageReference Include="JUnitXml.TestLogger" Version="8.0.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="FluentAssertions" Version="7.2.1" />
-    <PackageReference Include="Moq" Version="4.20.72" />
-    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
-    <PackageReference Include="Microsoft.Maui.Controls" Version="9.0.120" />
+    <PackageReference Include="FluentAssertions" Version="8.11.0" />
+    <PackageReference Include="Moq" Version="4.21.0" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.110" />
     <PackageReference Include="GraphQL.Client" Version="6.1.0" />
     <PackageReference Include="GraphQL.Client.Serializer.Newtonsoft" Version="6.1.0" />
-    <PackageReference Include="Xunit.SkippableFact" Version="1.5.61" />
-    <PackageReference Include="sqlite-net-pcl" Version="1.9.172" />
-    <PackageReference Include="SQLitePCLRaw.bundle_green" Version="2.1.11" />
+    <PackageReference Include="Xunit.SkippableFact" Version="1.5.85" />
+    <PackageReference Include="sqlite-net-pcl" Version="1.11.285" />
   </ItemGroup>
 
   <ItemGroup>
@@ -40,20 +44,31 @@
       Instead, we include the source files directly for testing.
     -->
     <Compile Include="..\BibleOnSite\Config\*.cs" Link="Config\%(Filename)%(Extension)" />
+    <Compile Include="..\BibleOnSite\Converters\*.cs" Link="Converters\%(Filename)%(Extension)" />
+    <Compile Include="..\BibleOnSite\Services\IRecitationAudioDecoder.cs" Link="Services\IRecitationAudioDecoder.cs" />
+    <Compile Include="..\BibleOnSite\Services\RecitationService.cs" Link="Services\RecitationService.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\RecitationPreferencesViewModel.cs" Link="ViewModels\RecitationPreferencesViewModel.cs" />
     <!-- Exclude XAML code-behind files as they require MAUI XAML compilation -->
     <Compile Include="..\BibleOnSite\Controls\*.cs" Exclude="..\BibleOnSite\Controls\*.xaml.cs" Link="Controls\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Data\*.cs" Link="Data\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Helpers\*.cs" Link="Helpers\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Models\*.cs" Link="Models\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Services\BaseGraphQLService.cs" Link="Services\BaseGraphQLService.cs" />
+    <Compile Include="..\BibleOnSite\Services\IAppNavigator.cs" Link="Services\IAppNavigator.cs" />
     <Compile Include="..\BibleOnSite\Services\ArticleService.cs" Link="Services\ArticleService.cs" />
     <Compile Include="..\BibleOnSite\Services\StarterService.cs" Link="Services\StarterService.cs" />
+    <Compile Include="..\BibleOnSite\Services\LocalDatabaseService.cs" Link="Services\LocalDatabaseService.cs" />
+    <Compile Include="..\BibleOnSite\Services\PerekDataService.cs" Link="Services\PerekDataService.cs" />
+    <Compile Include="..\BibleOnSite\Services\NetworkService.cs" Link="Services\NetworkService.cs" />
+    <Compile Include="..\BibleOnSite\Services\IAnalyticsService.cs" Link="Services\IAnalyticsService.cs" />
+    <Compile Include="..\BibleOnSite\Services\AnalyticsService.cs" Link="Services\AnalyticsService.cs" />
     <Compile Include="..\BibleOnSite\Services\IPreferencesStorage.cs" Link="Services\IPreferencesStorage.cs" />
     <Compile Include="..\BibleOnSite\Services\PreferencesService.cs" Link="Services\PreferencesService.cs" />
     <Compile Include="..\BibleOnSite\Services\IPadDeliveryService.cs" Link="Services\IPadDeliveryService.cs" />
     <Compile Include="..\BibleOnSite\Services\PadDeliveryService.cs" Link="Services\PadDeliveryService.cs" />
     <Compile Include="..\BibleOnSite\Services\PerushimCatalogService.cs" Link="Services\PerushimCatalogService.cs" />
     <Compile Include="..\BibleOnSite\Services\PerushimNotesService.cs" Link="Services\PerushimNotesService.cs" />
+    <Compile Include="..\BibleOnSite\Services\SyntheticPerushimProvider.cs" Link="Services\SyntheticPerushimProvider.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\PerekViewModel.cs" Link="ViewModels\PerekViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\PreferencesViewModel.cs" Link="ViewModels\PreferencesViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\AuthorsViewModel.cs" Link="ViewModels\AuthorsViewModel.cs" />

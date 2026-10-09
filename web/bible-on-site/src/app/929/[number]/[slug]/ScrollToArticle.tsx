@@ -15,14 +15,18 @@ import { useEffect } from "react";
 export function ScrollToSlug({
 	targetId = "article-view",
 	behavior = "instant",
-}: { targetId?: string; behavior?: ScrollBehavior } = {}) {
+}: {
+	targetId?: string;
+	behavior?: ScrollBehavior;
+} = {}) {
 	useEffect(() => {
 		const el = document.getElementById(targetId);
 		if (el) {
 			// Small delay to ensure layout is complete
-			setTimeout(() => {
+			const timer = setTimeout(() => {
 				el.scrollIntoView({ behavior, block: "start" });
 			}, 100);
+			return () => clearTimeout(timer);
 		}
 	}, [targetId, behavior]);
 

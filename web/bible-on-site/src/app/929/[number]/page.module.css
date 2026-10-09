@@ -1,45 +1,111 @@
 .perekContainer {
-  position: absolute;
-  z-index: 6;
-  top: 72px;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  height: calc(100vh - 72px);
-  overflow-x: hidden;
-  overflow-y: auto;
-  background-color: white;
+	position: absolute;
+	z-index: 6;
+	top: 72px;
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
+	/* Follow the visible viewport when the mobile browser toolbar changes size. */
+	height: calc(100dvh - 72px);
+	overflow-x: hidden;
+	overflow-y: auto;
+	/* Keep bottom/top bounce inside the reader, preserving the header controls. */
+	overscroll-behavior-y: contain;
+	background-color: var(--surface-elevated, #fff);
+}
+
+.perekHeading {
+	max-width: 960px;
+	margin: 16px auto 12px;
+	padding: 0 16px;
+	color: var(--pasuk-num-color, #1c2c5d);
+	font-size: clamp(1.15rem, 2.2vw, 1.4rem);
+	font-weight: 600;
+	line-height: 1.3;
+	text-align: right;
+}
+
+.perekIntro {
+	max-width: 960px;
+	margin: 0 auto 24px;
+	padding: 0 16px;
+	text-align: right;
+}
+
+.perekIllustration {
+	display: block;
+	width: 100%;
+	height: auto;
+	border-radius: 12px;
+}
+
+.perekIntro figcaption {
+	margin-top: 8px;
+	color: var(--muted-text, #666);
+	font-size: 0.85rem;
+	line-height: 1.5;
 }
 
 .perekText {
-  letter-spacing: 0.04em;
-  word-spacing: 0.12em;
-  line-height: 1.5em;
-  padding: 0;
-  margin: 16px;
-  text-align: justify;
-  text-align-last: right;
+	/* Taamey D (traditional te'amim face) is the default perek font; reader
+     settings scale it via CSS vars (#reader-settings). */
+	font-family:
+		var(--font-tanakh-taamey), var(--font-tanakh), "Times New Roman", serif;
+	font-size: calc(1em * var(--perek-font-scale, 1));
+	letter-spacing: 0.04em;
+	word-spacing: var(--perek-word-spacing, 0.12em);
+	line-height: var(--perek-line-height, 1.5);
+	padding: 0;
+	margin: 16px;
+	text-align: justify;
+	text-align-last: right;
+}
+/* Noto Serif Hebrew opt-out via reader settings (data-tanakh-font).
+   Site rule: components inherit font families — the perek reader is the
+   sanctioned exception because pasuk typeface is a user-facing display
+   preference (like font size), not a component styling choice. */
+:global(:root[data-tanakh-font="noto"]) .perekText {
+	font-family: var(--font-tanakh), "Times New Roman", serif;
 }
 .pasukNum {
-  color: #1c2c5d;
-  cursor: pointer;
-  font-weight: 700;
-  text-decoration: underline;
+	color: var(--pasuk-num-color, #1c2c5d);
+	cursor: pointer;
+	font-weight: 700;
+	text-decoration: underline;
 }
-.perekTextHeader h1 {
-  color: #9a92d1;
-  font-size: 1.2em;
-  font-weight: 700;
-  margin: 0.1em 0 1em;
-  text-align: justify;
+.perekText > [id^="pasuk-"] {
+	scroll-margin-block-start: calc((100dvh - 72px) / 2);
+}
+.perekText:not([data-pasuk-navigation-ready]) > [id^="pasuk-"]:target,
+.perekText > [data-pasuk-highlight] {
+	background: rgba(254, 243, 199, 0.95);
+	box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
+	border-radius: 3px;
 }
 .qri label::before {
-  color: #637598;
-  content: "קְרִי:";
-  cursor: text;
-  display: inherit;
-  font-size: 14px;
-  font-weight: 400;
-  margin: 0 0 0 1vmin;
-  vertical-align: baseline;
+	color: #637598;
+	content: "קְרִי:";
+	cursor: text;
+	display: inherit;
+	font-size: 14px;
+	font-weight: 400;
+	margin: 0 0 0 1vmin;
+	vertical-align: baseline;
+}
+
+.tanahpediaLink {
+	color: inherit;
+	text-decoration: none;
+	border-bottom: 1px dashed #1a73e8;
+	transition: border-color 0.2s ease;
+}
+.tanahpediaLink:hover {
+	border-bottom-style: solid;
+	border-bottom-color: var(--link-accent, #1552ac);
+}
+
+@media (prefers-color-scheme: dark) {
+	.tanahpediaLink {
+		border-bottom-color: var(--link-accent, #7eb0ff);
+	}
 }

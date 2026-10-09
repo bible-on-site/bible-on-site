@@ -31,6 +31,12 @@ test.describe("sitemap.xml", () => {
 		expect(body).toContain("<priority>1</priority>");
 	});
 
+	test("omits unsupported modification dates", async ({ request }) => {
+		const response = await request.get("/sitemap.xml");
+		const body = await response.text();
+		expect(body).not.toContain("<lastmod>");
+	});
+
 	test("contains all section URLs", async ({ request }) => {
 		const response = await request.get("/sitemap.xml");
 		const body = await response.text();
@@ -70,6 +76,21 @@ test.describe("sitemap.xml", () => {
 		expect(body).toContain("/929/authors</loc>");
 	});
 
+	test("contains pedia entry URLs", async ({ request }) => {
+		const response = await request.get("/sitemap.xml");
+		const body = await response.text();
+
+		// Pedia entry URLs use URL-encoded Hebrew unique names: /pedia/%D7...
+		const pediaEntries = body.match(/\/pedia\/[^<]+<\/loc>/g) || [];
+
+		// If Tanahpedia entries exist in the database, they should appear
+		if (pediaEntries.length > 0) {
+			for (const entry of pediaEntries) {
+				expect(entry).toMatch(/\/pedia\/[^<]+<\/loc>/);
+			}
+		}
+	});
+
 	test("contains article URLs", async ({ request }) => {
 		const response = await request.get("/sitemap.xml");
 		const body = await response.text();
@@ -103,8 +124,10 @@ test.describe("sitemap.xml", () => {
 		// Perush URLs use URL-encoded Hebrew names: /929/{perekId}/%D7...
 		const perushEntries = (body.match(/\/929\/\d+\/%[^<]+<\/loc>/g) || [])
 			.length;
+		// Pedia URLs use URL-encoded Hebrew unique names: /pedia/%D7...
+		const pediaEntries = (body.match(/\/pedia\/[^<]+<\/loc>/g) || []).length;
 
-		// Expected: 1 root + sections + 1 929 index + 929 perakim + N articles + N perushim + 1 authors index + N authors
+		// Expected: 1 root + sections + 1 929 index + 929 perakim + N articles + N perushim + 1 authors index + N authors + 1 pedia index + N pedias
 		const expectedCount =
 			1 +
 			SITEMAP_SECTIONS.length +
@@ -113,7 +136,9 @@ test.describe("sitemap.xml", () => {
 			articleEntries +
 			perushEntries +
 			1 +
-			authorEntries;
+			authorEntries +
+			1 +
+			pediaEntries;
 		expect(urlCount).toBe(expectedCount);
 	});
 

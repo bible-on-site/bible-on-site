@@ -123,7 +123,7 @@ public class LocalDatabaseServiceTests
         var currentDir = Directory.GetCurrentDirectory();
         var dir = new DirectoryInfo(currentDir);
 
-        // Walk up until we find the app directory (contains BibleOnSite.sln or the app folder structure)
+        // Walk up until we find the app directory (contains bible-on-site.slnx or the app folder structure)
         while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "BibleOnSite")))
         {
             dir = dir.Parent;

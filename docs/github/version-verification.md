@@ -1,114 +1,106 @@
-# Version Verification
+# Module Version Bumps
 
-This document describes the automated version verification system that prevents duplicate version releases.
+Module versions are never bumped in pull requests. PR and merge-queue checks validate
+the proposed code without requiring a version change.
 
-## Overview
+After a module releases from `master`, the `Bump Versions` job increments its version
+on `master`, including the website. The bump is pushed with `[skip ci]`, so master
+normally holds the next unreleased version and the next merge can release it directly.
+The app build-number consistency check in `devops/check-app-version.py` remains active.
 
-The version verification system ensures that module versions are properly bumped before any release can occur. This prevents CD (Continuous Deployment) failures caused by attempting to release a version that has already been tagged.
+If a release tag already exists but belongs to another commit, the release job warns,
+skips tag creation and release, and sets `needs_bump`. The master bump job then increments
+that module together with other required bumps, without `[skip ci]`. That push starts a
+new CI run for the bumped module, which can package and release its new version. The
+release workflow dispatches CD only for the exact tag commit, so retry runs do not deploy
+the colliding release.
 
-## How It Works
+Hosted Renovate needs no version-bump configuration. It updates dependencies normally;
+module version bumps happen only after releases on `master`.
 
-### Pre-Commit Hook
+## Concurrent releases and deployment
 
-When committing changes to a module (app, web/api, or web/bible-on-site), the pre-commit hook automatically verifies that the current version is greater than the last released version.
+CI packages an immutable commit, creates its module tag and GitHub Release, and
+dispatches CD with that commit and CI run ID. Deployment also requires that source run's
+`Cross Module CI` to have passed. The master version bump follows the
+release/dispatch; CD can still be running when the bump is pushed. CD never builds
+from the bump commit or reads the next version from the moving master branch.
 
-```bash
-# The hook runs automatically on commit
-git commit -m "feat: add new feature"
+Release jobs queue per module, master bumps queue repository-wide, and CD queues
+per production target with `cancel-in-progress: false` and `queue: max`. GitHub's
+default single pending slot would otherwise cancel an older waiting job even with
+`cancel-in-progress: false`. The maximum queue retains up to 100 pending jobs;
+queue arrival order is not commit order. See
+[GitHub concurrency syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency).
 
-# If version is not bumped, commit fails with:
-# ❌ ERROR: app version 4.0.15 is NOT greater than released version 4.0.15
-# Please bump the version in app/BibleOnSite/BibleOnSite.csproj before merging.
-```
+Each bump publication fetches master and tags, calculates its edits from that
+head, and pushes without force. If another merge wins the push, it discards only
+its own disposable CI bump commit and recalculates against the new master instead
+of rebasing stale version edits. Authentication/policy failures remain failures.
+Late collision retries skip a module when its latest tag already contains their
+source commit. Normal release bumps remain idempotent and retain `[skip ci]`;
+collision retry pushes run CI.
 
-### CI Version Verification Jobs
+Inside the CD queue, a guard verifies the artifact's CI run, source SHA and release
+tag. A newer published version supersedes an older queued dispatch. Data has no
+version tag: a newer successful `Release Data` job or durable successful data deployment
+supersedes older SQL dispatches, including when the newer CI is subsequently rerun.
+Data checkout also uses the dispatching commit SHA, so its migration scripts and
+SQL artifact come from the same CI run. API failures stop deployment.
 
-The CI workflow includes version verification jobs that run when a module changes:
+## Recovery
 
-- `Verify Website Version` - Runs when `web/bible-on-site` changes
-- `Verify API Version` - Runs when `web/api` changes
-- `Verify App Version` - Runs when `app` changes
+A release is a draft until all required assets are uploaded and verified by name,
+size and the GitHub SHA-256 digest when available. Missing files, partial uploads
+and API failures stop publication and CD. Rerun the failed CI jobs to finish a tag-only
+or draft release. Draft recovery uses the current passing CI build of the exact tag commit and
+updates its delivery metadata. Downloads pin immutable archive IDs and verify
+their SHA-256 checksums. Published assets are never replaced by a rerun.
 
-These jobs are conditional - they only run if the corresponding module has changes. If a module hasn't changed, version verification is skipped for that module.
+Versioned CD downloads the published GitHub Release assets, not mutable CI artifacts:
+a full CI rerun may rebuild the same artifact name, but cannot change the binary CD
+uses. Release notes retain the exact source SHA, CI run ID, version and dispatch
+payload. Rerunning a completed release replays that payload and finishes any missed
+version bump. Legacy releases without this metadata advance the version on recovery
+but do not automatically replay a dispatch.
 
-### Cross Module CI Integration
+Each CD target records its attempt and completion in GitHub Deployments. Repeated
+successful deliveries skip production writes. App completion is separate for Android,
+Windows and iOS, so rerunning a failed platform does not upload the successful platforms
+again. Failed or interrupted attempts remain visible and retryable. This is completion
+tracking, not a distributed transaction with the stores: if a runner or status write
+fails after a store accepts an upload, inspect the store's version/build before retrying.
 
-The `cross_module_ci` job validates version verification results:
-- If a module changed and its version verification failed → CI fails
-- If a module didn't change → version verification is skipped (passes)
-- All version checks must pass for the CI to succeed
+Normal bumps and collision retries publish together, with CI enabled only when an
+unreleased collision actually needs packaging. Later collision requests reuse a retry
+commit that already contains their source, preventing duplicate master builds. If that
+retry CI fails, repair it and rerun its failed jobs; further collision requests do not
+hide the failed run by continuously increasing versions.
 
-## Module Version Files
+For a failed dispatch, rerun the failed dispatch job or the release workflow. For a failed
+CD, rerun failed jobs in that CD workflow. Queues retain at most 100 pending jobs; overflow,
+manual cancellation, expired CI artifacts during draft recovery, and exhausted five-attempt
+bump publication retries still require explicit recovery from the visible failed/cancelled
+run. The workflow never force-pushes master or rolls production back automatically.
 
-| Module | Version File | Version Command |
-|--------|-------------|-----------------|
-| App | `app/BibleOnSite/BibleOnSite.csproj` | `dotnet run --project devops -- Version` |
-| API | `web/api/Cargo.toml` | `cargo make version` |
-| Website | `web/bible-on-site/package.json` | `npm run version --silent` |
+## CI reruns and SQL archive identity
 
-## Tag Format
+Published release metadata records the original CI run and attempt. CD verifies the latest Cross Module CI result at or before that attempt, so a failed full rerun cannot invalidate already published binaries. A failed-jobs-only rerun can reuse its unchanged successful quality gate. A newer failed quality gate never inherits an earlier pass.
 
-Released versions are tracked via git tags:
-- App: `app-v{version}` (e.g., `app-v4.0.15`)
-- API: `api-v{version}` (e.g., `api-v0.1.13`)
-- Website: `website-v{version}` (e.g., `website-v0.2.204`)
+Data dispatches carry an immutable SQL artifact ID, SHA-256 archive digest, commit SHA, and CI attempt. CD verifies the archive's source, expiry, and checksum before accessing production. Data completion records include that artifact ID, allowing a new archive from a CI rerun to deploy while repeated dispatches of a completed archive are skipped. Successfully deployed later attempts also prevent older SQL from replacing them.
 
-## DevOps Scripts
+Legacy data dispatches using `refs/heads/master` resolve to their validated master push CI commit, never the current moving branch. Without an artifact ID they are bound once to a verified archive only if the source CI has never been rerun. After a rerun, their original SQL cannot be proven: use the new Release Data dispatch with an immutable artifact ID. Completed pinned SQL deliveries remain no-ops after archive expiry. Incomplete deliveries with deleted or expired archives fail visibly; they never fall back to replacement SQL.
 
-The version verification logic is implemented in the `devops/` directory:
 
-- `devops/get-module-version.ts` - Module configuration and version extraction
-- `devops/github/release/get-version.ts` - Get latest released version from git tags
-- `devops/github/ci/is-version-newer-than-baseline.ts` - CI verification script
+## Handover from older workflows
 
-### Running Locally
+An older master `bump_versions` job checks out current master but invokes separate
+released/retry CLI steps. The publisher recognizes only that existing master push
+job and handles both modes together with safe retries. It emits no edit summary,
+so the older workflow skips its commit/rebase/push steps. Other callers retain
+file-only behavior unless they explicitly request publishing.
 
-```bash
-# Verify all changed modules
-cd devops
-npm run verify-version
-
-# Verify a specific module
-npm run verify-version -- --module app
-npm run verify-version -- --module api
-npm run verify-version -- --module website
-```
-
-## Bypassing (Not Recommended)
-
-In exceptional cases, you can bypass the pre-commit hook:
-
-```bash
-git commit --no-verify -m "message"
-```
-
-⚠️ **Warning**: Bypassing the hook will cause CI to fail if the version is not bumped. The CI version verification cannot be bypassed.
-
-## Branch Protection
-
-The `master` branch requires the `Cross Module CI` status check to pass before merging. This ensures:
-1. All module tests pass
-2. Version verification passes for any changed modules
-3. Coverage requirements are met
-
-## Troubleshooting
-
-### "Version X is NOT greater than released version X"
-
-This error means you need to bump the version before committing:
-
-1. **App**: Edit `app/BibleOnSite/BibleOnSite.csproj` and increment `ApplicationDisplayVersion`
-2. **API**: Edit `web/api/Cargo.toml` and increment `version`
-3. **Website**: Run `npm version patch` (or minor/major) in `web/bible-on-site`
-
-### Pre-commit hook not running
-
-Ensure husky is installed:
-```bash
-npm install
-npx husky install
-```
-
-### Version verification skipped unexpectedly
-
-The verification only runs when the module directory has changes. Check that your changes are in the correct module directory.
+Before merging this change, drain any production CD runs and version-bump jobs
+already running with older code. To recover a historical CD failure after the handover, issue a fresh dispatch
+from a current master release workflow so the new guards execute. Rerunning an old
+CD run reuses its historical workflow code and does not acquire these new guards.

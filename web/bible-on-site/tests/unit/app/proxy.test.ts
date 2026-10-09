@@ -1,0 +1,169 @@
+/**
+ * @jest-environment node
+ */
+import { NextRequest } from "next/server";
+import { config, proxy } from "@/proxy";
+
+function makeRequest(pathname: string, opts?: { ua?: string }): NextRequest {
+	const headers: Record<string, string> = {};
+	if (opts?.ua) headers["user-agent"] = opts.ua;
+	return new NextRequest(new URL(pathname, "https://localhost"), { headers });
+}
+
+describe("proxy", () => {
+	describe("bypassed paths", () => {
+		it.each([
+			"/api/health",
+			"/api/health/ready",
+			"/favicon.ico",
+			"/style.css",
+			"/bundle.js",
+			"/image.png",
+			"/photo.jpg",
+			"/icon.svg",
+			"/font.woff2",
+		])("returns undefined for %s", async (path) => {
+			const result = await proxy(makeRequest(path));
+			expect(result).toBeUndefined();
+		});
+	});
+
+	describe("blocked bots", () => {
+		it.each([
+			"Bytespider",
+			"MJ12bot/v1.4.8",
+			"AhrefsBot/7.0",
+			"SemrushBot/7~bl",
+			"DotBot/1.2",
+			"PetalBot",
+			"BLEXBot/1.0",
+			"MegaIndex.ru/2.0",
+			"Sogou web spider/4.0",
+			"DataForSeoBot/1.0",
+		])("returns 403 for blocked bot: %s", async (ua) => {
+			const result = await proxy(makeRequest("/929/1", { ua }));
+			expect(result?.status).toBe(403);
+		});
+
+		it("does not block legitimate crawlers like Googlebot", async () => {
+			const result = await proxy(
+				makeRequest("/929/1", { ua: "Googlebot/2.1" }),
+			);
+			expect(result).toBeUndefined();
+		});
+
+		it("does not block AI training crawlers like meta-externalagent", async () => {
+			const result = await proxy(
+				makeRequest("/929/1", {
+					ua: "meta-externalagent/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)",
+				}),
+			);
+			expect(result).toBeUndefined();
+		});
+
+		it("does not block regular browsers", async () => {
+			const result = await proxy(
+				makeRequest("/929/1", {
+					ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+				}),
+			);
+			expect(result).toBeUndefined();
+		});
+	});
+
+	describe("non-blocked requests", () => {
+		it("returns undefined for regular page requests", async () => {
+			const result = await proxy(
+				makeRequest("/929/1", {
+					ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+				}),
+			);
+			expect(result).toBeUndefined();
+		});
+
+		it("returns undefined when no user-agent is set", async () => {
+			const result = await proxy(makeRequest("/929/1"));
+			expect(result).toBeUndefined();
+		});
+	});
+
+	describe("legacy tanahpedia alias", () => {
+		it.each([
+			["/tanahpedia", "/pedia"],
+			["/tanahpedia/", "/pedia"],
+			["/tanahpedia/person", `/pedia/${encodeURIComponent("אישים")}`],
+			[
+				"/tanahpedia/person?role=prophet",
+				`/pedia/${encodeURIComponent("נביאים")}`,
+			],
+			["/tanahpedia/animal?kind=chaya", `/pedia/${encodeURIComponent("חיות")}`],
+			[
+				"/tanahpedia/animal?purity=tahor",
+				`/pedia/${encodeURIComponent("טהורים")}`,
+			],
+			["/tanahpedia/nonsense", "/pedia"],
+			["/tanahpedia/jerusalem", `/pedia/${encodeURIComponent("ירושלים")}`],
+			["/pedia/jerusalem", `/pedia/${encodeURIComponent("ירושלים")}`],
+			["/pedia/person", `/pedia/${encodeURIComponent("אישים")}`],
+			["/pedia/person?role=prophet", `/pedia/${encodeURIComponent("נביאים")}`],
+			[
+				`/pedia/${encodeURIComponent("אישים")}?role=${encodeURIComponent("נביאים")}`,
+				`/pedia/${encodeURIComponent("נביאים")}`,
+			],
+		])("redirects %s permanently", async (path, expectedPath) => {
+			const result = await proxy(makeRequest(path));
+
+			expect(result?.status).toBe(308);
+			expect(result?.headers.get("location")).toBe(
+				`https://localhost${expectedPath}`,
+			);
+		});
+
+		it("leaves the tanahpedia preview API untouched", async () => {
+			const result = await proxy(makeRequest("/api/tanahpedia/preview/moshe"));
+			expect(result).toBeUndefined();
+		});
+
+		it.each([
+			"/pedia",
+			`/pedia/${encodeURIComponent("אישים")}`,
+			`/pedia/${encodeURIComponent("נביאים")}`,
+			`/pedia/${encodeURIComponent("משה-רבנו")}`,
+		])("leaves canonical %s untouched", async (path) => {
+			const result = await proxy(makeRequest(path));
+			expect(result).toBeUndefined();
+		});
+	});
+
+	describe("config", () => {
+		it("exports a matcher that excludes _next/static, _next/image, and favicon.ico", () => {
+			expect(config.matcher).toEqual([
+				"/((?!_next/static|_next/image|favicon.ico).*)",
+			]);
+		});
+	});
+
+	describe("BOT_BLOCKING_ENABLED", () => {
+		it("allows a blocked crawler when bot blocking is disabled", async () => {
+			jest.replaceProperty(process, "env", {
+				...process.env,
+				BOT_BLOCKING_ENABLED: "false",
+			});
+			let configuredProxy: typeof proxy = proxy;
+			jest.isolateModules(() => {
+				configuredProxy = require("@/proxy").proxy;
+			});
+			try {
+				expect(
+					await configuredProxy(makeRequest("/929/1", { ua: "Bytespider" })),
+				).toBeUndefined();
+			} finally {
+				jest.restoreAllMocks();
+			}
+		});
+		it("blocks bots by default (env var not set)", async () => {
+			const result = await proxy(makeRequest("/929/1", { ua: "Bytespider" }));
+			expect(result?.status).toBe(403);
+		});
+	});
+});

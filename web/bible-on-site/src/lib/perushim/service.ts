@@ -54,6 +54,32 @@ export async function getPerushimByPerekId(
 	}
 }
 
+interface PerushPerekNamePair {
+	perekId: number;
+	perushName: string;
+}
+
+export async function getAllPerushPerekNamePairs(): Promise<PerushPerekNamePair[]> {
+	try {
+		const rows = await query<{ perek_id: number; perush_name: string }>(
+			`SELECT DISTINCT n.perek_id, p.name AS perush_name
+			 FROM note n
+			 JOIN perush p ON n.perush_id = p.id
+			 ORDER BY n.perek_id ASC, p.name ASC`,
+		);
+		return rows.map((row) => ({
+			perekId: row.perek_id,
+			perushName: row.perush_name,
+		}));
+	} catch (error) {
+		console.warn(
+			"Failed to fetch perush-perek name pairs:",
+			error instanceof Error ? error.message : error,
+		);
+		return [];
+	}
+}
+
 interface NoteRow {
 	pasuk: number;
 	note_idx: number;

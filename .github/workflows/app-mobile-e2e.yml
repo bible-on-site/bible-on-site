@@ -1,0 +1,287 @@
+name: App Mobile E2E
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  appium:
+    name: Appium ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      # Each platform owns its runner, device, server and artifacts. Preserve
+      # both results when one platform fails; there is no cross-platform dependency.
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Android
+            artifact: android
+            runner: ubuntu-latest
+            workload: maui-android
+          - platform: iOS
+            artifact: ios
+            runner: xcode-27
+            workload: maui-ios
+    env:
+      MOBILE_PLATFORM: ${{ matrix.platform }}
+      MOBILE_E2E_ARTIFACTS: ${{ github.workspace }}/app/.artifacts/mobile-e2e/${{ matrix.artifact }}
+      # Android emulator coordinates shared by the sdkmanager install, the
+      # cache keys and the runner action, so any bump invalidates the caches.
+      ANDROID_API_LEVEL: "36"
+      ANDROID_TARGET: google_apis
+      ANDROID_ABI: x86_64
+      ANDROID_BUILD_TOOLS: "37.0.0"
+      AVD_NAME: mobile_e2e
+      AVD_PROFILE: pixel_7
+      # Bump when the clean-snapshot recipe changes (boot options, readiness
+      # flow, runner-action version) so stale snapshots cannot be restored.
+      AVD_SNAPSHOT_RECIPE: r1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          # Keep aligned with Xcode 27 and the iOS packaging workload; see #1871.
+          dotnet-version: "10.0.401"
+
+      - name: Hash NuGet dependency inputs
+        id: nuget-key
+        run: node ${{ github.workspace }}/devops/github/ci/nuget-cache-key.mjs
+
+      - name: Restore NuGet packages
+        id: nuget-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-mobile-e2e-${{ matrix.platform }}-${{ steps.nuget-key.outputs.hash }}
+          restore-keys: |
+            ${{ runner.os }}-mobile-e2e-${{ matrix.platform }}-
+            ${{ runner.os }}-nuget-
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+
+      - name: Restore npm cache
+        id: npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-mobile-e2e-${{ hashFiles('devops/package-lock.json', 'app/mobile-e2e/package-lock.json') }}
+          restore-keys: ${{ runner.os }}-npm-mobile-e2e-
+
+      - name: Install build and Appium dependencies
+        run: |
+          npm ci --prefix devops --no-audit
+          npm ci --prefix app/mobile-e2e --no-audit
+
+      - name: Save npm cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.npm
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
+
+      - name: Validate the test harness
+        working-directory: app
+        run: |
+          npm run test:unit --prefix mobile-e2e
+          dotnet run --project devops -- TestMobileE2EUnit
+
+      - name: Setup Java
+        if: matrix.platform == 'Android'
+        uses: actions/setup-java@v6
+        with:
+          distribution: microsoft
+          java-version: "21"
+
+      - name: Select compatible Xcode
+        if: matrix.platform == 'iOS'
+        run: sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
+
+      - name: Install MAUI workload
+        # 10.0.401.1 selects the iOS 27 SDK, which requires Xcode 27; see #1871.
+        run: dotnet workload install ${{ matrix.workload }} --version 10.0.401.1
+
+      - name: Build complete simulator app
+        # Explicit bash enables pipefail, preserving npm failures through tee.
+        shell: bash
+        run: |
+          mkdir -p "$MOBILE_E2E_ARTIFACTS"
+          npm run build:app --prefix app/mobile-e2e 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/build.log"
+
+      - name: Save NuGet packages
+        if: ${{ github.ref == 'refs/heads/master' && steps.nuget-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
+
+      - name: Enable Android hardware acceleration
+        if: matrix.platform == 'Android'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libpulse0
+          sudo chmod 666 /dev/kvm
+
+      # Caches resolve before any install: the action always asks sdkmanager for
+      # the newest stable emulator and system image, so keys must track what
+      # Google's manifests currently serve. An unresolved key never matches a
+      # saved cache and is never saved back; the install step then takes the
+      # same bounded sdkmanager fallback it would without caching.
+      - name: Resolve Android SDK cache coordinates
+        if: matrix.platform == 'Android'
+        id: sdk-key
+        run: node devops/github/ci/android-sdk-manifest.mjs
+
+      # Package metadata (package.xml) is cached inside each directory so
+      # sdkmanager recognizes installed packages. The narrow restore-key
+      # intentionally allows an older emulator revision: sdkmanager updates it
+      # in place while the large system image stays usable.
+      - name: Restore Android SDK packages
+        if: matrix.platform == 'Android'
+        id: sdk-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ${{ steps.sdk-key.outputs.sdk-home }}/emulator
+            ${{ steps.sdk-key.outputs.sdk-home }}/system-images/android-${{ env.ANDROID_API_LEVEL }}
+            ${{ steps.sdk-key.outputs.sdk-home }}/platforms/android-${{ env.ANDROID_API_LEVEL }}
+            ${{ steps.sdk-key.outputs.sdk-home }}/build-tools/${{ env.ANDROID_BUILD_TOOLS }}
+            ${{ steps.sdk-key.outputs.sdk-home }}/platform-tools
+          key: android-sdk-${{ steps.sdk-key.outputs.os-tag }}-${{ runner.arch }}-${{ steps.sdk-key.outputs.sdk-key }}
+          restore-keys: |
+            android-sdk-${{ steps.sdk-key.outputs.os-tag }}-${{ runner.arch }}-
+
+      # sdkmanager trusts package.xml even when the payload is truncated, so the
+      # script verifies content first, removes corrupt restorations, and only
+      # then downloads with bounded retries.
+      - name: Install or repair Android SDK packages
+        if: matrix.platform == 'Android'
+        run: node devops/github/ci/android-sdk-install.mjs
+
+      # Exact-key only: a snapshot built under different coordinates can be
+      # worse than a cold boot, so misses rebuild through the snapshot stage.
+      - name: Restore clean AVD snapshot
+        if: matrix.platform == 'Android'
+        id: avd-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ steps.sdk-key.outputs.avd-home }}
+          key: android-avd-${{ steps.sdk-key.outputs.os-tag }}-${{ runner.arch }}-api${{ env.ANDROID_API_LEVEL }}-${{ env.ANDROID_TARGET }}-${{ env.ANDROID_ABI }}-${{ env.AVD_PROFILE }}-swiftshader-${{ steps.sdk-key.outputs.emulator-key }}-${{ env.AVD_SNAPSHOT_RECIPE }}-${{ hashFiles('app/mobile-e2e/android-readiness.mjs', 'app/mobile-e2e/android-ready.mjs') }}
+
+      - name: Validate restored AVD snapshot
+        if: matrix.platform == 'Android' && steps.avd-cache.outputs.cache-hit == 'true'
+        id: avd-check
+        run: node app/mobile-e2e/android-snapshot-check.mjs validate-restored
+
+      # Two-stage snapshot pattern: on a cache miss the action creates the AVD,
+      # cold-boots it and runs only the device readiness check — never the app
+      # install or an Appium session — so the saved state stays clean.
+      - name: Create clean AVD snapshot
+        if: matrix.platform == 'Android' && (steps.avd-cache.outputs.cache-hit != 'true' || steps.avd-check.outputs.usable == 'false')
+        id: avd-snapshot
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        env:
+          MOBILE_UDID: emulator-5554
+        with:
+          api-level: ${{ env.ANDROID_API_LEVEL }}
+          arch: ${{ env.ANDROID_ABI }}
+          target: ${{ env.ANDROID_TARGET }}
+          profile: ${{ env.AVD_PROFILE }}
+          avd-name: ${{ env.AVD_NAME }}
+          force-avd-creation: false
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-metrics
+          script: npm run android:ready --prefix app/mobile-e2e
+
+      # `emu kill` is graceful but asynchronous; the snapshot payload must reach
+      # the AVD directory before the save step may capture it.
+      - name: Confirm snapshot persisted
+        if: matrix.platform == 'Android' && steps.avd-snapshot.outcome == 'success'
+        id: snapshot-files
+        env:
+          MOBILE_UDID: emulator-5554
+        run: node app/mobile-e2e/android-snapshot-check.mjs confirm-saved
+
+      # Caches are written from push/workflow_dispatch runs: default-branch runs
+      # publish for every PR, while PR and merge-queue runs only restore.
+      - name: Save clean AVD snapshot
+        if: matrix.platform == 'Android' && github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.sdk-key.outputs.resolved == 'true' && steps.avd-cache.outputs.cache-hit != 'true' && steps.snapshot-files.outputs.saved == 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ steps.sdk-key.outputs.avd-home }}
+          key: ${{ steps.avd-cache.outputs.cache-primary-key }}
+
+      - name: Run shared pilot on Android
+        if: matrix.platform == 'Android'
+        id: pilot
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        env:
+          MOBILE_UDID: emulator-5554
+        with:
+          api-level: ${{ env.ANDROID_API_LEVEL }}
+          arch: ${{ env.ANDROID_ABI }}
+          target: ${{ env.ANDROID_TARGET }}
+          profile: ${{ env.AVD_PROFILE }}
+          avd-name: ${{ env.AVD_NAME }}
+          force-avd-creation: false
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-snapshot-save -no-metrics
+          script: npm test --prefix app/mobile-e2e
+
+      # The SDK save waits for a genuinely booted device (any stage's readiness
+      # log) rather than trusting installed packages, and stays disabled for
+      # PR/merge-queue runs so only default-branch scope publishes caches.
+      - name: Record device readiness for cache validation
+        if: matrix.platform == 'Android' && always()
+        id: device-ready
+        run: |
+          if grep -q '"ready":true' "$MOBILE_E2E_ARTIFACTS/device-readiness.jsonl" 2>/dev/null; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save Android SDK packages
+        if: matrix.platform == 'Android' && always() && github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.sdk-key.outputs.resolved == 'true' && steps.sdk-cache.outputs.cache-hit != 'true' && steps.device-ready.outputs.ready == 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ${{ steps.sdk-key.outputs.sdk-home }}/emulator
+            ${{ steps.sdk-key.outputs.sdk-home }}/system-images/android-${{ env.ANDROID_API_LEVEL }}
+            ${{ steps.sdk-key.outputs.sdk-home }}/platforms/android-${{ env.ANDROID_API_LEVEL }}
+            ${{ steps.sdk-key.outputs.sdk-home }}/build-tools/${{ env.ANDROID_BUILD_TOOLS }}
+            ${{ steps.sdk-key.outputs.sdk-home }}/platform-tools
+          key: ${{ steps.sdk-cache.outputs.cache-primary-key }}
+
+      - name: Prepare prebuilt iOS automation agent
+        if: matrix.platform == 'iOS'
+        run: npm run ios:wda --prefix app/mobile-e2e
+
+      - name: Boot iPhone simulator
+        if: matrix.platform == 'iOS'
+        run: npm run ios:boot --prefix app/mobile-e2e
+
+      - name: Run shared pilot on iOS
+        if: matrix.platform == 'iOS'
+        run: npm test --prefix app/mobile-e2e
+
+      - name: Upload platform results and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: appium-${{ matrix.artifact }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            app/.artifacts/mobile-e2e/${{ matrix.artifact }}/
+            app/.nuke/temp/build*.log
+          retention-days: 14
+          # Only the explicit diagnostics paths above are included.
+          include-hidden-files: true

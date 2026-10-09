@@ -2,7 +2,7 @@
  * General-purpose Hebrew-safe URL slug utilities.
  *
  * Hebrew text often contains "problematic" characters that break or clutter
- * URLs — geresh (׳), gershayim (״), ASCII quotes (" '), etc.
+ * URLs — geresh (׳), gershayim ("), ASCII quotes (" '), etc.
  * The helpers below strip those characters so that URLs work regardless of
  * whether the source text includes them, and produce clean percent-encoded slugs.
  *
@@ -15,7 +15,7 @@
  * Characters stripped when sanitising Hebrew text for URL slugs.
  * Covers ASCII double/single quotes and their Hebrew equivalents.
  */
-const PROBLEMATIC_CHARS = /["״׳']/g;
+const PROBLEMATIC_CHARS = /["׳']/g;
 
 /**
  * Sanitise Hebrew text for URL matching.

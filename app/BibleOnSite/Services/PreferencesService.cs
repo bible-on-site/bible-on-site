@@ -1,3 +1,5 @@
+using BibleOnSite.Models;
+
 namespace BibleOnSite.Services;
 
 /// <summary>
@@ -70,6 +72,53 @@ public class PreferencesService
     private const string LastLearntPerekKey = "lastLearntPerek";
     private const string PerekToLoadKey = "perekToLoad";
     private const string BookmarkedPerakimKey = "bookmarkedPerakim";
+    private const string RecitationEnabledKey = "recitationEnabled";
+    private bool _recitationEnabled;
+
+    public bool RecitationEnabled
+    {
+        get => _recitationEnabled;
+        set
+        {
+            if (_recitationEnabled == value)
+            {
+                return;
+            }
+
+            _recitationEnabled = value;
+            _storage.Set(RecitationEnabledKey, value);
+            OnPreferencesChanged();
+        }
+    }
+
+    private double _recitationSpeed = 1;
+    private double _recitationVolume = 1;
+    private double _recitationVersePauseMs = -1;
+    // A negative pause preserves the original recording; custom pauses are wall-clock milliseconds.
+    public double RecitationSpeed
+    {
+        get => _recitationSpeed;
+        set => SetRecitationValue(ref _recitationSpeed, "recitationSpeed", Normalize(value, 1, 0.5, 2));
+    }
+    public double RecitationVolume
+    {
+        get => _recitationVolume;
+        set => SetRecitationValue(ref _recitationVolume, "recitationVolume", Normalize(value, 1, 0, 1));
+    }
+    public double RecitationVersePauseMs
+    {
+        get => _recitationVersePauseMs;
+        set => SetRecitationValue(ref _recitationVersePauseMs, "recitationVersePauseMs", Normalize(value, -1, -1, 5000));
+    }
+    private static double Normalize(double value, double fallback, double min, double max) =>
+        double.IsFinite(value) ? Math.Clamp(value, min, max) : fallback;
+    private void SetRecitationValue(ref double field, string key, double value)
+    {
+        if (Math.Abs(field - value) < 0.000001) { return; }
+        field = value;
+        _storage.Set(key, value);
+        OnPreferencesChanged();
+    }
 
     private readonly IPreferencesStorage _storage;
     private double _fontFactor = 1.0;
@@ -92,7 +141,11 @@ public class PreferencesService
         get => _fontFactor;
         set
         {
-            if (Math.Abs(_fontFactor - value) < 0.001) return;
+            if (Math.Abs(_fontFactor - value) < 0.001)
+            {
+                return;
+            }
+
             _fontFactor = value;
             _storage.Set(FontFactorKey, value);
             OnPreferencesChanged();
@@ -107,7 +160,11 @@ public class PreferencesService
         get => _lastLearntPerek;
         set
         {
-            if (_lastLearntPerek == value) return;
+            if (_lastLearntPerek == value)
+            {
+                return;
+            }
+
             _lastLearntPerek = value;
             if (value.HasValue)
             {
@@ -129,7 +186,11 @@ public class PreferencesService
         get => _perekToLoad;
         set
         {
-            if (_perekToLoad == value) return;
+            if (_perekToLoad == value)
+            {
+                return;
+            }
+
             _perekToLoad = value;
             _storage.Set(PerekToLoadKey, (int)value);
             OnPreferencesChanged();
@@ -146,6 +207,10 @@ public class PreferencesService
     /// </summary>
     public void Load()
     {
+        _recitationEnabled = _storage.Get(RecitationEnabledKey, false);
+        _recitationSpeed = Normalize(_storage.Get("recitationSpeed", 1.0), 1, 0.5, 2);
+        _recitationVolume = Normalize(_storage.Get("recitationVolume", 1.0), 1, 0, 1);
+        _recitationVersePauseMs = Normalize(_storage.Get("recitationVersePauseMs", -1.0), -1, -1, 5000);
         _fontFactor = _storage.Get(FontFactorKey, 1.0);
 
         var lastLearnt = _storage.Get(LastLearntPerekKey, -1);
@@ -158,7 +223,7 @@ public class PreferencesService
         {
             try
             {
-                var bookmarks = System.Text.Json.JsonSerializer.Deserialize<int[]>(bookmarksJson);
+                var bookmarks = System.Text.Json.JsonSerializer.Deserialize(bookmarksJson, AppJsonContext.Default.BookmarkedPerakim);
                 _bookmarkedPerakim = bookmarks != null ? new HashSet<int>(bookmarks) : new HashSet<int>();
             }
             catch (Exception)
@@ -220,7 +285,7 @@ public class PreferencesService
 
     private void SaveBookmarks()
     {
-        var json = System.Text.Json.JsonSerializer.Serialize(_bookmarkedPerakim.ToArray());
+        var json = System.Text.Json.JsonSerializer.Serialize(_bookmarkedPerakim.ToArray(), AppJsonContext.Default.BookmarkedPerakim);
         _storage.Set(BookmarkedPerakimKey, json);
     }
 

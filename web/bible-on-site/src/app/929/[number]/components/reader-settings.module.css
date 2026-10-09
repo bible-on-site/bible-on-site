@@ -1,0 +1,181 @@
+.container {
+	position: fixed;
+	top: 15px;
+	left: 12px;
+	z-index: 10000;
+}
+@media (min-width: 768px) {
+	.container {
+		left: 140px;
+	}
+}
+.button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	border: 0;
+	border-radius: 50%;
+	background: #fff;
+	color: #1c2c5d;
+	cursor: pointer;
+	box-shadow: 0 1px 3px #0002;
+}
+.button:hover {
+	background: #e9eff8;
+}
+.button:focus-visible {
+	outline: 2px solid #1552ac;
+	outline-offset: 2px;
+}
+.panel {
+	position: fixed;
+	right: auto;
+	bottom: auto;
+	margin: 0;
+	width: min(340px, calc(100vw - 24px));
+	max-height: calc(100dvh - 24px);
+	box-sizing: border-box;
+	overflow-y: auto;
+	padding: 18px;
+	border: 1px solid #e1e7f0;
+	border-radius: 16px;
+	background: #fff;
+	color: #1c2c5d;
+	box-shadow: 0 14px 48px #1c2c5d30;
+	font:
+		14px Arial,
+		sans-serif;
+}
+.panel::backdrop {
+	background: #1c2c5d18;
+}
+.panelHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	font-size: 17px;
+}
+.panelHeader button {
+	border: 0;
+	background: transparent;
+	color: #637598;
+	font-size: 24px;
+	padding: 0 6px;
+	cursor: pointer;
+}
+.categories {
+	display: flex;
+	gap: 4px;
+	padding: 4px;
+	margin: 16px 0 20px;
+	border-radius: 10px;
+	background: #f0f3f8;
+}
+.categories button {
+	flex: 1;
+	border: 0;
+	padding: 9px;
+	background: transparent;
+	border-radius: 8px;
+	color: #637598;
+	font: inherit;
+	cursor: pointer;
+}
+.categories button[aria-pressed="true"] {
+	background: #fff;
+	color: #264c88;
+	box-shadow: 0 1px 4px #1c2c5d15;
+	font-weight: 600;
+}
+.section {
+	display: grid;
+	gap: 22px;
+}
+.section label {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	align-items: center;
+	gap: 10px;
+	font-weight: 600;
+}
+.section input,
+.section select,
+.section small {
+	grid-column: 1 / -1;
+	width: 100%;
+	box-sizing: border-box;
+}
+.section input {
+	accent-color: #264c88;
+	margin: 0;
+	direction: ltr;
+}
+.section select {
+	padding: 9px;
+	border: 1px solid #d8e1ef;
+	border-radius: 8px;
+	background: #fff;
+	color: #1c2c5d;
+	font: inherit;
+	font-weight: normal;
+}
+.section output {
+	color: #637598;
+	font-weight: normal;
+	font-variant-numeric: tabular-nums;
+}
+.section small {
+	color: #637598;
+	font-size: 12px;
+	font-weight: normal;
+	line-height: 1.5;
+}
+
+@media (prefers-color-scheme: dark) {
+	.button {
+		background: #1a1f2e;
+		color: #a8b9ff;
+	}
+
+	.button:hover {
+		background: #232a45;
+	}
+
+	.panel {
+		border-color: #2d3548;
+		background: #1a1f2e;
+		color: #a8b9ff;
+	}
+
+	.panel::backdrop {
+		background: rgba(10, 13, 20, 0.55);
+	}
+
+	.panelHeader button,
+	.categories button,
+	.section output,
+	.section small {
+		color: #9aa0a6;
+	}
+
+	.categories {
+		background: #12151c;
+	}
+
+	.categories button[aria-pressed="true"] {
+		background: #232a45;
+		color: #a8b9ff;
+	}
+
+	.section input {
+		accent-color: #7eb0ff;
+	}
+
+	.section select {
+		border-color: #3b4256;
+		background: #12151c;
+		color: #a8b9ff;
+	}
+}

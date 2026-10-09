@@ -59,3 +59,34 @@ pub fn build_pipeline(data_root: &Path) -> Result<Vec<Document>> {
 
     Ok(pipeline)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_pipeline_returns_expected_stage_order() {
+        let data_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+
+        let pipeline = build_pipeline(&data_root).unwrap();
+        let operators: Vec<&str> = pipeline
+            .iter()
+            .map(|stage| stage.iter().next().unwrap().0.as_str())
+            .collect();
+
+        assert_eq!(
+            operators,
+            vec![
+                "$match",
+                "$lookup",
+                "$project",
+                "$setWindowFields",
+                "$set",
+                "$group",
+                "$sort",
+                "$set",
+                "$set",
+            ]
+        );
+    }
+}

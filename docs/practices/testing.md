@@ -126,6 +126,19 @@ Performance tests measure application behavior under load and track metrics over
 
 **Note**: Integration tests use `[Trait("Category", "Integration")]` to distinguish from unit tests. The API server must be running at `http://127.0.0.1:3003` for integration tests.
 
+### Data (data/)
+
+| Task | Command |
+| ---- | ------- |
+| Unit Tests | `cargo make test-unit` |
+| Integration Tests | `cargo make test-integration` |
+| Unit Coverage | `cargo make coverage-unit` |
+| Integration Coverage | `cargo make coverage-integration` |
+| Merge Coverage | `cargo make coverage-merge` |
+| Find Coverage Gaps | `node devops/coverage-gaps.mjs [filter...]` |
+
+**Note**: Integration tests need MongoDB with the Sefaria dump loaded — see [Data Integration Tests](../tests/data/integration-tests.md).
+
 ## Coverage Reporting
 
 Coverage data is collected during test runs and reported to external services for tracking and analysis.
@@ -162,6 +175,9 @@ Codecov uses flags to separate coverage by module:
 - `website` - Coverage from web/bible-on-site
 - `api` - Coverage from web/api
 - `app` - Coverage from app/BibleOnSite (when available)
+- `admin` - Coverage from web/admin
+- `bulletin` - Coverage from web/bulletin
+- `data` - Coverage from data/
 
 See [codecov.yml](../../codecov.yml) for configuration details.
 

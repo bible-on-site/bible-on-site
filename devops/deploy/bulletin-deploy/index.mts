@@ -95,7 +95,7 @@ class BulletinDeployer extends DeployerBase {
 
 		this.info("Waiting for code update to complete...");
 		await waitUntilFunctionUpdatedV2(
-			{ client, maxWaitTime: 120 },
+			{ client, maxWaitTime: 300 },
 			{ FunctionName: LAMBDA_FUNCTION_NAME },
 		);
 
@@ -158,7 +158,7 @@ class BulletinDeployer extends DeployerBase {
 
 		this.info("Waiting for configuration update to complete...");
 		await waitUntilFunctionUpdatedV2(
-			{ client, maxWaitTime: 120 },
+			{ client, maxWaitTime: 300 },
 			{ FunctionName: LAMBDA_FUNCTION_NAME },
 		);
 		this.info("Environment variables updated.");

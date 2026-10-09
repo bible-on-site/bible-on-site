@@ -23,7 +23,11 @@ public class PerekDataService
     private Dictionary<int, Sefer>? _sefarim;
     private bool _isLoaded;
 
-    private PerekDataService() { }
+    private readonly LocalDatabaseService _databaseService;
+
+    private PerekDataService() : this(LocalDatabaseService.Instance) { }
+
+    public PerekDataService(LocalDatabaseService databaseService) { _databaseService = databaseService; }
 
     /// <summary>
     /// Whether perek data has been loaded.
@@ -43,7 +47,7 @@ public class PerekDataService
         if (_isLoaded)
             return;
 
-        var db = await LocalDatabaseService.Instance.GetDatabaseAsync();
+        var db = await _databaseService.GetDatabaseAsync();
 
         // Load sefarim first
         await LoadSefarimAsync(db);
@@ -178,7 +182,7 @@ public class PerekDataService
     /// </summary>
     public async Task<List<Pasuk>> LoadPasukimAsync(int perekId)
     {
-        var db = await LocalDatabaseService.Instance.GetDatabaseAsync();
+        var db = await _databaseService.GetDatabaseAsync();
 
         var segmentRows = await db.QueryAsync<PasukSegmentRow>(
             "SELECT s.id AS segment_id, s.pasuk_id AS pasuk_id, s.segment_type AS segment_type, " +
@@ -361,14 +365,17 @@ public class PerekDataService
             3 => "כסלו",
             4 => "טבת",
             5 => "שבט",
-            6 => isLeapYear ? "אדר א" : "אדר",
-            7 => isLeapYear ? "אדר ב" : "ניסן",
-            8 => isLeapYear ? "ניסן" : "אייר",
-            9 => isLeapYear ? "אייר" : "סיון",
-            10 => isLeapYear ? "סיון" : "תמוז",
-            11 => isLeapYear ? "תמוז" : "אב",
-            12 => isLeapYear ? "אב" : "אלול",
-            13 => "אלול",
+            // Database dates use legacy month numbers: Nisan stays 7 in
+            // every year; Adar I and II use 13 and 14 in leap years.
+            6 => isLeapYear ? "אדר ב" : "אדר",
+            7 => "ניסן",
+            8 => "אייר",
+            9 => "סיון",
+            10 => "תמוז",
+            11 => "אב",
+            12 => "אלול",
+            13 when isLeapYear => "אדר א",
+            14 when isLeapYear => "אדר ב",
             _ => string.Empty
         };
     }

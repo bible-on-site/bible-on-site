@@ -17,19 +17,25 @@ public interface IPreferencesStorage
 /// </summary>
 public class MauiPreferencesStorage : IPreferencesStorage
 {
+    private readonly IPreferences _preferences;
+
+    public MauiPreferencesStorage() : this(Preferences.Default) { }
+
+    public MauiPreferencesStorage(IPreferences preferences) { _preferences = preferences; }
+
     public T Get<T>(string key, T defaultValue)
     {
-        return Preferences.Default.Get(key, defaultValue);
+        return _preferences.Get(key, defaultValue);
     }
 
     public void Set<T>(string key, T value)
     {
-        Preferences.Default.Set(key, value);
+        _preferences.Set(key, value);
     }
 
     public void Remove(string key)
     {
-        Preferences.Default.Remove(key);
+        _preferences.Remove(key);
     }
 }
 #endif

@@ -1,0 +1,223 @@
+.headerRow {
+	display: flex;
+	align-items: center;
+	direction: rtl;
+	gap: 6px;
+	min-height: 32px;
+	margin-top: 2px;
+}
+.heading {
+	flex: 1;
+	min-width: 0;
+	border: 0;
+	border-radius: 5px;
+	padding: 5px 3px;
+	margin: 0;
+	color: #637598;
+	background: transparent;
+	font: inherit;
+	font-size: 0.9rem;
+	font-weight: 600;
+	text-align: start;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+button.heading {
+	cursor: pointer;
+}
+.headerRow:has([data-chapter-play]:hover) [data-chapter-play],
+.headerRow:has([data-chapter-play]:focus-visible) [data-chapter-play] {
+	background: #eaf0f8;
+	color: #264c88;
+}
+.controls {
+	direction: rtl;
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: flex-end;
+	min-width: 66px;
+	position: relative;
+	gap: 2px;
+	color: #637598;
+	vertical-align: middle;
+}
+.notice {
+	position: absolute;
+	z-index: 5;
+	top: 100%;
+	inset-inline-end: 0;
+	width: max-content;
+	max-width: 250px;
+	padding: 6px 10px;
+	border: 1px solid #e4e8ef;
+	border-radius: 6px;
+	background: #fff;
+	box-shadow: 0 3px 10px #20396018;
+	color: #526789;
+	font:
+		0.75rem Arial,
+		sans-serif;
+}
+.srOnly {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+.toggle,
+.action {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.4rem;
+	min-height: 32px;
+	min-width: 32px;
+	border: 0;
+	border-radius: 20px;
+	padding: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+.toggle[aria-pressed="true"] {
+	color: #264c88;
+	background: #eaf0f8;
+}
+.toggle:hover:not(:disabled),
+.action:hover:not(:disabled) {
+	background: #f0f3f8;
+}
+.action:disabled,
+.toggle:disabled {
+	opacity: 0.35;
+	cursor: default;
+}
+.word,
+.pasuk {
+	display: inline;
+	border: 0;
+	padding: 0;
+	margin: 0;
+	border-radius: 3px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	line-height: inherit;
+	letter-spacing: inherit;
+	word-spacing: inherit;
+	text-align: inherit;
+}
+.word[role="button"],
+.pasuk[role="button"] {
+	cursor: pointer;
+}
+.word[role="button"]:hover,
+.word[data-recitation-active="true"],
+.pasuk[role="button"]:hover {
+	color: #1c427b;
+	background: #e9eff8;
+	box-shadow: 0 2px 0 #a9bddb;
+}
+.verse:has(.pasuk[role="button"]:hover),
+.verse:has(.pasuk:focus-visible) {
+	background: #e9eff8;
+	-webkit-box-decoration-break: clone;
+	box-decoration-break: clone;
+}
+.toggle:focus-visible,
+.action:focus-visible,
+.word:focus-visible,
+.pasuk:focus-visible {
+	outline: 2px solid #547bb2;
+	outline-offset: 3px;
+}
+
+.toggle {
+	position: relative;
+}
+.progress {
+	position: absolute;
+	inset: 0;
+	width: 32px;
+	height: 32px;
+	pointer-events: none;
+}
+.progressTrack,
+.progressValue {
+	fill: none;
+	stroke-width: 2;
+}
+.progressTrack {
+	stroke: #e4e8ef;
+}
+.progressValue {
+	stroke: #264c88;
+	stroke-linecap: round;
+	transition: stroke-dashoffset 150ms ease;
+}
+.progress[data-indeterminate="true"] {
+	animation: recitation-spin 1s linear infinite;
+}
+@keyframes recitation-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.progress[data-indeterminate="true"] {
+		animation: none;
+	}
+	.progressValue {
+		transition: none;
+	}
+}
+
+@media (prefers-color-scheme: dark) {
+	.heading {
+		color: #9aa0a6;
+	}
+
+	.headerRow:has([data-chapter-play]:hover) [data-chapter-play],
+	.headerRow:has([data-chapter-play]:focus-visible) [data-chapter-play] {
+		background: #232a45;
+		color: #a8b9ff;
+	}
+
+	.controls {
+		color: #9aa0a6;
+	}
+
+	.notice {
+		border-color: #2d3548;
+		background: #1a1f2e;
+		color: #9aa0a6;
+	}
+
+	.toggle[aria-pressed="true"] {
+		color: #a8b9ff;
+		background: #232a45;
+	}
+
+	.toggle:hover:not(:disabled),
+	.action:hover:not(:disabled) {
+		background: #12151c;
+	}
+
+	.word[role="button"]:hover,
+	.word[data-recitation-active="true"],
+	.pasuk[role="button"]:hover {
+		color: #a8b9ff;
+		background: #232a45;
+	}
+
+	.verse:has(.pasuk[role="button"]:hover),
+	.verse:has(.pasuk:focus-visible) {
+		background: #232a45;
+	}
+}

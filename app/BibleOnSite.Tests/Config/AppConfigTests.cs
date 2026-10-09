@@ -1,0 +1,196 @@
+using BibleOnSite.Config;
+using FluentAssertions;
+using System.Reflection;
+using Microsoft.Maui.Devices;
+using Microsoft.Maui.Storage;
+
+namespace BibleOnSite.Tests.Config;
+
+[Collection("App configuration")]
+public class AppConfigTests
+{
+    private static AppConfig CreateConfig()
+    {
+        var device = new Mock<IDeviceInfo>();
+        device.SetupGet(d => d.DeviceType).Returns(DeviceType.Virtual);
+        var files = new Mock<IFileSystem>();
+        files.Setup(f => f.OpenAppPackageFileAsync(It.IsAny<string>()))
+            .ThrowsAsync(new FileNotFoundException());
+        return new AppConfig(files.Object, device.Object);
+    }
+    private static readonly object ApiUrlEnvLock = new();
+
+    private static void WithApiUrl(string? value, Action action)
+    {
+        lock (ApiUrlEnvLock)
+        {
+            var previous = Environment.GetEnvironmentVariable("API_URL");
+            try
+            {
+                Environment.SetEnvironmentVariable("API_URL", value);
+                action();
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("API_URL", previous);
+            }
+        }
+    }
+
+    public class RemoteHost
+    {
+        [Fact]
+        public void returns_punycode_domain()
+        {
+            AppConfig.Instance.RemoteHost.Should().Be("xn--febl3a.com");
+        }
+    }
+
+    public class ApiUrl
+    {
+        [Fact]
+        public void returns_https_api_host()
+        {
+            AppConfig.Instance.ApiUrl.Should().Be("https://api.xn--febl3a.com");
+        }
+    }
+
+    public class WebsiteUrl
+    {
+        [Fact]
+        public void returns_https_website_host()
+        {
+            AppConfig.Instance.WebsiteUrl.Should().Be("https://xn--febl3a.com");
+        }
+    }
+
+    public class DevApiUrl
+    {
+        [Fact]
+        public void returns_localhost_port_3003_on_non_android()
+        {
+            AppConfig.Instance.DevApiUrl.Should().Be("http://localhost:3003");
+        }
+    }
+
+    public class DevWebsiteUrl
+    {
+        [Fact]
+        public void returns_localhost_port_3001_on_non_android()
+        {
+            AppConfig.Instance.DevWebsiteUrl.Should().Be("http://localhost:3001");
+        }
+    }
+
+    public class TosUrl
+    {
+        [Fact]
+        public void appends_tos_path_to_get_website_url()
+        {
+            var config = AppConfig.Instance;
+            config.TosUrl.Should().Be($"{config.GetWebsiteUrl()}/tos");
+        }
+
+#if DEBUG
+        [Fact]
+        public void resolves_to_localhost_terms_url()
+        {
+            AppConfig.Instance.TosUrl.Should().Be("http://localhost:3001/tos");
+        }
+#endif
+    }
+
+    [Collection("App configuration")]
+    public class GetApiUrl
+    {
+        private readonly AppConfig _config = CreateConfig();
+        public GetApiUrl()
+        {
+            ResetCachedApiOverride();
+        }
+
+        [Fact]
+        public void returns_environment_value_when_api_url_is_set()
+        {
+            WithApiUrl("http://127.0.0.1:9999", () =>
+            {
+                _config.GetApiUrl().Should().Be("http://127.0.0.1:9999");
+            });
+        }
+
+        [Fact]
+        public void returns_dev_api_url_when_api_url_is_unset_in_test_build()
+        {
+            WithApiUrl(null, () =>
+            {
+#if DEBUG
+                _config.GetApiUrl().Should().Be(_config.DevApiUrl);
+#else
+                _config.GetApiUrl().Should().Be(_config.ApiUrl);
+#endif
+            });
+        }
+
+        [Fact]
+        public void returns_dev_api_url_when_api_url_is_empty()
+        {
+            WithApiUrl("", () =>
+            {
+#if DEBUG
+                _config.GetApiUrl().Should().Be(_config.DevApiUrl);
+#else
+                _config.GetApiUrl().Should().Be(_config.ApiUrl);
+#endif
+            });
+        }
+
+        [Fact]
+        public void returns_cached_build_time_override_before_environment_value()
+        {
+            WithApiUrl("http://127.0.0.1:9999", () =>
+            {
+                SetCachedApiOverride("https://override.example.test");
+
+                _config.GetApiUrl().Should().Be("https://override.example.test");
+            });
+        }
+
+        [Fact]
+        public async Task initialize_async_ignores_missing_build_time_override()
+        {
+            WithApiUrl(null, () => { });
+            ResetCachedApiOverride();
+
+            await _config.InitializeAsync();
+
+            WithApiUrl(null, () =>
+            {
+#if DEBUG
+                _config.GetApiUrl().Should().Be(_config.DevApiUrl);
+#else
+                _config.GetApiUrl().Should().Be(_config.ApiUrl);
+#endif
+            });
+        }
+
+        private void SetCachedApiOverride(string? value)
+        {
+            typeof(AppConfig)
+                .GetField("_apiUrlOverride", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(_config, value);
+            typeof(AppConfig)
+                .GetField("_apiUrlOverrideLoaded", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(_config, true);
+        }
+
+        private void ResetCachedApiOverride()
+        {
+            typeof(AppConfig)
+                .GetField("_apiUrlOverride", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(_config, null);
+            typeof(AppConfig)
+                .GetField("_apiUrlOverrideLoaded", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(_config, false);
+        }
+    }
+}

@@ -15,8 +15,14 @@ jest.mock("@/hooks/useIsWideEnough", () => ({
 }));
 
 const mockGet = jest.fn().mockReturnValue(null);
+const mockReplace = jest.fn();
 jest.mock("next/navigation", () => ({
-	useSearchParams: () => ({ get: mockGet }),
+	useSearchParams: () => ({
+		get: mockGet,
+		toString: () => "",
+	}),
+	useRouter: () => ({ replace: mockReplace }),
+	usePathname: () => "/929/5",
 }));
 
 jest.mock("@/app/929/[number]/components/ReadModeToggler", () => ({
@@ -24,7 +30,7 @@ jest.mock("@/app/929/[number]/components/ReadModeToggler", () => ({
 	default: () => <div data-testid="read-mode-toggler" />,
 }));
 
-jest.mock("@/app/929/[number]/components/Sefer", () => ({
+jest.mock("@/app/929/[number]/components/LoadedSefer", () => ({
 	__esModule: true,
 	default: () => <div data-testid="sefer" />,
 }));
@@ -32,6 +38,11 @@ jest.mock("@/app/929/[number]/components/Sefer", () => ({
 import SeferComposite from "@/app/929/[number]/components/SeferComposite";
 
 describe("SeferComposite", () => {
+	beforeEach(() => {
+		mockGet.mockReturnValue(null);
+		delete document.documentElement.dataset.bookView;
+	});
+
 	const minimalPerek = {
 		perekId: 5,
 		perekHeb: "ה",
@@ -44,9 +55,17 @@ describe("SeferComposite", () => {
 
 	it("returns null when viewport is not wide enough", () => {
 		const { container } = render(
-			<SeferComposite perekObj={minimalPerek} articles={[]} />,
+			<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
 		);
 		// isWideEnough is false → component returns null
 		expect(container.firstChild).toBeNull();
+	});
+
+	it("keeps chapter text visible on phones even when a link requests book view", () => {
+		mockGet.mockImplementation((key: string) => (key === "book" ? "" : null));
+		render(
+			<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
+		);
+		expect(document.documentElement).not.toHaveAttribute("data-book-view");
 	});
 });

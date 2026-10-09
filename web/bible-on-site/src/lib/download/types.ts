@@ -21,12 +21,18 @@ export interface PageRangesDownloadContext {
 	seferName?: string;
 }
 
+/** Context for full-sefer PDF download (#1494). */
+export interface SeferDownloadContext {
+	seferName: string;
+	perekIds: number[];
+}
+
 /**
- * Sefer download handler.
- * Receives no arguments; consumer decides scope (e.g. current sefer from context).
- * Returns [extension, binary] for the downloaded file.
+ * Sefer download handler — full sefer PDF (cover + TOC + all perakim).
  */
-export type SeferDownloadHandler = () => Promise<DownloadResult>;
+export type SeferDownloadHandler = (
+	ctx: SeferDownloadContext,
+) => Promise<DownloadResult>;
 
 /**
  * Page-ranges download handler.

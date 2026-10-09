@@ -217,3 +217,67 @@ pub fn build() -> Document {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_groups_split_books_and_accumulates_ranges() {
+        let stage = build();
+        let group = stage.get_document("$group").unwrap();
+
+        assert!(group.get_document("_id").unwrap().contains_key("$switch"));
+        assert!(group.get_document("name").unwrap().contains_key("$first"));
+        assert_eq!(
+            group
+                .get_document("pesukimCount")
+                .unwrap()
+                .get_str("$sum")
+                .unwrap(),
+            "$pesukimCount"
+        );
+        assert_eq!(
+            group
+                .get_document("perekFrom")
+                .unwrap()
+                .get_str("$first")
+                .unwrap(),
+            "$perekFrom"
+        );
+        assert_eq!(
+            group
+                .get_document("perekTo")
+                .unwrap()
+                .get_str("$last")
+                .unwrap(),
+            "$perekTo"
+        );
+    }
+
+    #[test]
+    fn build_routes_split_books_to_additionals_and_regular_books_to_perakim() {
+        let stage = build();
+        let group = stage.get_document("$group").unwrap();
+
+        let additionals_cond = group
+            .get_document("additionals")
+            .unwrap()
+            .get_document("$push")
+            .unwrap()
+            .get_document("$cond")
+            .unwrap();
+        assert_eq!(additionals_cond.get_str("then").unwrap(), "$$ROOT");
+        assert_eq!(additionals_cond.get_str("else").unwrap(), "$$REMOVE");
+
+        let perakim_cond = group
+            .get_document("perakim")
+            .unwrap()
+            .get_document("$first")
+            .unwrap()
+            .get_document("$cond")
+            .unwrap();
+        assert_eq!(perakim_cond.get_str("then").unwrap(), "$$REMOVE");
+        assert_eq!(perakim_cond.get_str("else").unwrap(), "$perakim");
+    }
+}

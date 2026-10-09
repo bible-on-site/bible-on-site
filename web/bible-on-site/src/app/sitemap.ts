@@ -3,7 +3,12 @@ import { headers } from "next/headers";
 import type { ArticlePerekPair } from "../lib/articles";
 import { getAllArticlePerekIdPairs } from "../lib/articles";
 import { getAllAuthorSlugs } from "../lib/authors";
-import { getPerushimByPerekId } from "../lib/perushim";
+import { getAllPerushPerekNamePairs } from "../lib/perushim";
+import type { PerekIllustration } from "../lib/seo/perek-illustrations";
+import { getPerekImagesByChapter } from "../lib/seo/perek-images-data";
+import { CATEGORY_SLUGS, categoryHref } from "../lib/tanahpedia/category-slug";
+import { getAllEntryUniqueNames } from "../lib/tanahpedia/service";
+import type { CategoryKey } from "../lib/tanahpedia/types";
 
 /**
  * Static section paths for the sitemap
@@ -32,7 +37,8 @@ export interface PerushPerekPair {
 
 export interface SitemapConfig {
 	baseUrl: string;
-	lastModified: Date;
+	/** Set only when a page's actual last significant update is known. */
+	lastModified?: Date;
 }
 
 /**
@@ -82,13 +88,18 @@ export function generate929IndexEntry(
  */
 export function generatePerekEntries(
 	config: SitemapConfig,
+	imagesByPerek: Record<number, PerekIllustration[]> = {},
 ): MetadataRoute.Sitemap {
-	return Array.from({ length: TOTAL_PERAKIM }, (_, i) => ({
-		url: `${config.baseUrl}/929/${i + 1}`,
-		lastModified: config.lastModified,
-		changeFrequency: "monthly" as const,
-		priority: 0.8,
-	}));
+	return Array.from({ length: TOTAL_PERAKIM }, (_, i) => {
+		const images = imagesByPerek[i + 1] ?? [];
+		return {
+			url: `${config.baseUrl}/929/${i + 1}`,
+			lastModified: config.lastModified,
+			changeFrequency: "monthly" as const,
+			priority: 0.8,
+			...(images.length ? { images: images.map((image) => image.src) } : {}),
+		};
+	});
 }
 
 /**
@@ -151,6 +162,50 @@ export function generatePerushEntries(
 }
 
 /**
+ * Generates Tanahpedia entry (pedia) URL entries for the sitemap.
+ * Entries live at the short `/pedia/<uniqueName>` route.
+ */
+export function generatePediaEntries(
+	config: SitemapConfig,
+	entryUniqueNames: string[],
+): MetadataRoute.Sitemap {
+	return entryUniqueNames.map((uniqueName) => ({
+		url: `${config.baseUrl}/pedia/${encodeURIComponent(uniqueName)}`,
+		lastModified: config.lastModified,
+		changeFrequency: "monthly" as const,
+		priority: 0.7,
+	}));
+}
+
+/**
+ * Generates the Tanahpedia landing page entry (`/pedia`).
+ */
+export function generatePediaIndexEntry(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap[0] {
+	return {
+		url: `${config.baseUrl}/pedia`,
+		lastModified: config.lastModified,
+		changeFrequency: "daily",
+		priority: 0.9,
+	};
+}
+
+/**
+ * Generates the Hebrew-slug category listing entries (`/pedia/<category>`).
+ */
+export function generatePediaCategoryEntries(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap {
+	return (Object.keys(CATEGORY_SLUGS) as CategoryKey[]).map((key) => ({
+		url: `${config.baseUrl}${categoryHref(key)}`,
+		lastModified: config.lastModified,
+		changeFrequency: "weekly" as const,
+		priority: 0.8,
+	}));
+}
+
+/**
  * Generates the complete sitemap entries (pure function for testing)
  */
 export function generateSitemapEntries(
@@ -158,16 +213,21 @@ export function generateSitemapEntries(
 	authorSlugs: string[] = [],
 	articles: ArticlePerekPair[] = [],
 	perushim: PerushPerekPair[] = [],
+	pediaUniqueNames: string[] = [],
+	imagesByPerek: Record<number, PerekIllustration[]> = {},
 ): MetadataRoute.Sitemap {
 	return [
 		generateRootEntry(config),
 		...generateSectionEntries(config),
 		generate929IndexEntry(config),
-		...generatePerekEntries(config),
+		...generatePerekEntries(config, imagesByPerek),
 		...generateArticleEntries(config, articles),
 		...generatePerushEntries(config, perushim),
 		generateAuthorsIndexEntry(config),
 		...generateAuthorEntries(config, authorSlugs),
+		generatePediaIndexEntry(config),
+		...generatePediaCategoryEntries(config),
+		...generatePediaEntries(config, pediaUniqueNames),
 	];
 }
 
@@ -177,34 +237,30 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 	const host = headersList.get("host") ?? "xn--febl3a.co.il";
 	const baseUrl = `https://${host}`;
 
-	// Fetch dynamic data for sitemap entries in parallel
-	const [authorSlugs, articles] = await Promise.all([
+	// Fetch dynamic data for sitemap entries in parallel. Perushim load via a
+	// single bulk query rather than one lookup per perek.
+	const [
+		authorSlugs,
+		articles,
+		pediaUniqueNames,
+		imagesByPerek,
+		perushPerekPairs,
+	] = await Promise.all([
 		getAllAuthorSlugs(),
 		getAllArticlePerekIdPairs(),
+		getAllEntryUniqueNames(),
+		getPerekImagesByChapter(),
+		getAllPerushPerekNamePairs(),
 	]);
-
-	// Fetch all perushim for all perakim
-	const perushimPromises = Array.from({ length: TOTAL_PERAKIM }, (_, i) =>
-		getPerushimByPerekId(i + 1),
-	);
-	const allPerushim = await Promise.all(perushimPromises);
-
-	// Flatten to perush-perek pairs
-	const perushPerekPairs: PerushPerekPair[] = allPerushim.flatMap(
-		(perushim, index) =>
-			perushim.map((perush) => ({
-				perekId: index + 1,
-				perushName: perush.name,
-			})),
-	);
 
 	return generateSitemapEntries(
 		{
 			baseUrl,
-			lastModified: new Date(),
 		},
 		authorSlugs,
 		articles,
 		perushPerekPairs,
+		pediaUniqueNames,
+		imagesByPerek,
 	);
 }

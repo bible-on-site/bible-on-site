@@ -2,11 +2,14 @@
  * @jest-environment jsdom
  */
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { useLayoutEffect, useState } from "react";
 
 jest.mock("@/app/929/[number]/components/sefer-composite.module.css", () => ({
 	seferOverlay: "seferOverlay",
 	visible: "visible",
 	hidden: "hidden",
+	loadingContainer: "loadingContainer",
+	loadingSpinner: "loadingSpinner",
 }));
 
 jest.mock("@/hooks/useIsWideEnough", () => ({
@@ -15,8 +18,16 @@ jest.mock("@/hooks/useIsWideEnough", () => ({
 }));
 
 const mockGet = jest.fn().mockReturnValue(null);
+const mockReplace = jest.fn();
+let mockPathname = "/929/5";
+let mockSeferMountCount = 0;
 jest.mock("next/navigation", () => ({
-	useSearchParams: () => ({ get: mockGet }),
+	useSearchParams: () => ({
+		get: mockGet,
+		toString: () => "",
+	}),
+	useRouter: () => ({ replace: mockReplace }),
+	usePathname: () => mockPathname,
 }));
 
 jest.mock("next/image", () => ({
@@ -34,10 +45,25 @@ jest.mock("@/app/929/[number]/components/read-mode-toggler.module.css", () => ({
 	noteIcon: "noteIcon",
 }));
 
-jest.mock("@/app/929/[number]/components/Sefer", () => ({
-	__esModule: true,
-	default: () => <div data-testid="sefer" />,
-}));
+jest.mock("next/dynamic", () => {
+	return (
+		_loader: () => Promise<unknown>,
+		opts?: { ssr?: boolean; loading?: () => React.ReactElement },
+	) => {
+		(globalThis as Record<string, unknown>).__capturedDynamicLoading =
+			opts?.loading ?? null;
+		return function MockSefer(props: { initialBookPage?: string | null }) {
+			const [mount] = useState(() => ++mockSeferMountCount);
+			return (
+				<div
+					data-testid="sefer"
+					data-book-page={props.initialBookPage ?? "chapter"}
+					data-mount={mount}
+				/>
+			);
+		};
+	};
+});
 
 import SeferComposite from "@/app/929/[number]/components/SeferComposite";
 
@@ -54,30 +80,155 @@ describe("SeferComposite (wide screen)", () => {
 
 	beforeEach(() => {
 		mockGet.mockReturnValue(null);
+		mockPathname = "/929/5";
+		mockReplace.mockClear();
+		mockSeferMountCount = 0;
+		localStorage.clear();
+		window.history.replaceState(null, "", "/929/5");
+	});
+
+	it("keeps a verse citation visible despite a saved book preference", () => {
+		localStorage.setItem("perekViewMode", "book");
+		window.history.replaceState(null, "", "/929/5#pasuk-3");
+		render(
+			<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
+		);
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(screen.queryByTestId("sefer")).toBeNull();
 	});
 
 	it("renders ReadModeToggler when wide enough", () => {
-		render(<SeferComposite perekObj={minimalPerek} articles={[]} />);
+		render(
+			<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
+		);
 		expect(screen.getByRole("checkbox")).toBeTruthy();
 	});
 
 	it("shows Sefer view when toggled via checkbox", async () => {
-		render(<SeferComposite perekObj={minimalPerek} articles={[]} />);
+		render(
+			<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
+		);
 		const checkbox = screen.getByRole("checkbox");
 
 		await act(async () => {
 			fireEvent.click(checkbox);
 		});
 
-		// Sefer is loaded via next/dynamic, so wait for the async chunk to resolve.
+		expect(mockReplace).toHaveBeenCalledWith("/929/5?book=", { scroll: false });
 		expect(await screen.findByTestId("sefer")).toBeTruthy();
+	});
+
+	it("keeps a book opened before the initial passive effects visible", async () => {
+		function OpenDuringHydration() {
+			useLayoutEffect(() => {
+				// Hydration can replay a user's click before the URL initialization effect.
+				screen.getByRole("checkbox").click();
+			}, []);
+			return (
+				<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />
+			);
+		}
+
+		await act(async () => {
+			render(<OpenDuringHydration />);
+		});
+
+		expect(mockReplace).toHaveBeenCalledWith("/929/5?book=", { scroll: false });
+		expect(await screen.findByTestId("sefer")).toBeVisible();
 	});
 
 	it("shows Sefer view immediately when ?book is in URL", async () => {
 		mockGet.mockReturnValue("");
 		await act(async () => {
-			render(<SeferComposite perekObj={minimalPerek} articles={[]} />);
+			render(
+				<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
+			);
 		});
 		expect(await screen.findByTestId("sefer")).toBeTruthy();
+	});
+
+	it("reopens an already mounted book after closing it", async () => {
+		jest.useFakeTimers();
+		try {
+			render(
+				<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
+			);
+			const toggle = screen.getByRole("checkbox");
+			await act(async () => {
+				fireEvent.click(toggle);
+			});
+			const book = await screen.findByTestId("sefer");
+			const mount = book.getAttribute("data-mount");
+			fireEvent.click(toggle);
+			act(() => jest.advanceTimersByTime(1000));
+			await act(async () => {
+				fireEvent.click(toggle);
+			});
+			expect(screen.getByTestId("sefer")).toBeVisible();
+			expect(screen.getByTestId("sefer").getAttribute("data-mount")).toBe(
+				mount,
+			);
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it("leaves a semantic book route through its chapter page", async () => {
+		mockPathname = "/929/בראשית/תוכן";
+		mockGet.mockImplementation((name: string) => (name === "book" ? "" : null));
+		await act(async () => {
+			render(
+				<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
+			);
+		});
+		await act(async () => {
+			fireEvent.click(screen.getByRole("checkbox"));
+		});
+		expect(mockReplace).toHaveBeenCalledWith("/929/5", { scroll: false });
+	});
+
+	it("passes a new requested spread without remounting the book", async () => {
+		mockGet.mockImplementation((name: string) => (name === "book" ? "" : null));
+		mockPathname = "/929/בראשית/תוכן";
+		const props = { perekObj: minimalPerek, articles: [], perushim: [] };
+		const { rerender } = render(<SeferComposite {...props} />);
+		const book = await screen.findByTestId("sefer");
+		expect(book.getAttribute("data-book-page")).toBe("toc");
+		const firstMount = book.getAttribute("data-mount");
+
+		mockPathname = "/929/בראשית/כריכה";
+		rerender(<SeferComposite {...props} />);
+		expect(screen.getByTestId("sefer").getAttribute("data-book-page")).toBe(
+			"front",
+		);
+		expect(screen.getByTestId("sefer").getAttribute("data-mount")).toBe(
+			firstMount,
+		);
+	});
+
+	it("uses the rewrite's page key when Next exposes its destination pathname", async () => {
+		mockPathname = "/929/5";
+		mockGet.mockImplementation((name: string) =>
+			name === "book" ? "" : name === "bookPage" ? "back" : null,
+		);
+		render(
+			<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
+		);
+		expect(
+			(await screen.findByTestId("sefer")).getAttribute("data-book-page"),
+		).toBe("back");
+	});
+
+	it("provides a loading indicator for the dynamic Sefer import", () => {
+		render(
+			<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
+		);
+		const loadingFn = (globalThis as Record<string, unknown>)
+			.__capturedDynamicLoading as (() => React.ReactElement) | null;
+		if (!loadingFn) throw new Error("expected loadingFn to be defined");
+		const { container } = render(loadingFn());
+		expect(
+			container.querySelector('[aria-label="טוען תצוגת ספר..."]'),
+		).toBeTruthy();
 	});
 });

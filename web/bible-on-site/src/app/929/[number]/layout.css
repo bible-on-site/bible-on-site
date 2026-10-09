@@ -124,3 +124,25 @@ html[data-book-view] .seo-content {
   font-weight: 600;
   color: #1a3a5c;
 }
+
+@media (prefers-color-scheme: dark) {
+  .toc-page {
+    background-color: #1c1915;
+  }
+
+  .toc-heading {
+    color: #f0ebe3;
+  }
+
+  .toc-link:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+  }
+
+  .toc-dots {
+    border-bottom-color: #555;
+  }
+
+  .toc-page-num {
+    color: #8ab4f8;
+  }
+}

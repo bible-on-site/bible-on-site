@@ -1,3 +1,9 @@
+# Normalize line endings: force LF in the working tree and repo for all text
+# files. Without this, core.autocrlf=true gives Windows checkouts CRLF working
+# trees that mismatch the LF blobs, which makes formatters (e.g. Biome) report
+# whole-file CRLF diffs. The binary/eol rules below override this per-path.
+* text=auto eol=lf
+
 # Generated data files - tracked but don't show diffs
 # binary = -diff -merge -text
 # -delta = skip delta compression (only for already-compressed files)

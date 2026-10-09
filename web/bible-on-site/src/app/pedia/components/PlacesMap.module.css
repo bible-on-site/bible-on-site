@@ -1,0 +1,141 @@
+.mapRoot {
+  width: 100%;
+  height: min(420px, 55vh);
+  min-height: 280px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  z-index: 0;
+}
+
+.markerIconWrap {
+  background: transparent;
+  border: none;
+}
+
+.markerDot {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #4338ca;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
+}
+
+.mapboxPopup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 110px;
+  font: 0.95rem/1.4 inherit;
+  text-align: right;
+}
+
+.mapboxPlace {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mapboxPlace + .mapboxPlace {
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.mapboxPopup a {
+  color: #4338ca;
+  font-weight: 700;
+}
+
+.mapboxPopup span {
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.mapError {
+  display: grid;
+  place-items: center;
+  min-height: 280px;
+  padding: 24px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #475569;
+  text-align: center;
+}
+
+/* Leaflet overrides for RTL context */
+.mapRoot :global(.leaflet-popup-content) {
+  direction: rtl;
+  text-align: right;
+  margin: 10px 12px;
+  font-size: 0.95rem;
+}
+
+.mapRoot :global(.leaflet-popup-content a) {
+  color: #4338ca;
+  font-weight: 600;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mapRoot {
+    border-color: #2d3548;
+  }
+
+  .markerDot {
+    background: #a5b4fc;
+    border-color: #1a1f2e;
+  }
+
+  .mapRoot :global(.mapboxgl-popup-content) {
+    background: #1a1f2e;
+    color: #e8eaed;
+  }
+
+  .mapRoot :global(.mapboxgl-popup-close-button) {
+    color: #9aa0a6;
+  }
+
+  .mapRoot :global(.mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip) {
+    border-top-color: #1a1f2e;
+  }
+
+  .mapRoot :global(.mapboxgl-popup-anchor-top .mapboxgl-popup-tip) {
+    border-bottom-color: #1a1f2e;
+  }
+
+  .mapRoot :global(.mapboxgl-popup-anchor-left .mapboxgl-popup-tip) {
+    border-right-color: #1a1f2e;
+  }
+
+  .mapRoot :global(.mapboxgl-popup-anchor-right .mapboxgl-popup-tip) {
+    border-left-color: #1a1f2e;
+  }
+
+  .mapboxPlace + .mapboxPlace {
+    border-top-color: #2d3548;
+  }
+
+  .mapboxPopup a,
+  .mapRoot :global(.leaflet-popup-content a) {
+    color: #a5b4fc;
+  }
+
+  .mapboxPopup span {
+    color: #9aa0a6;
+  }
+
+  .mapError {
+    border-color: #2d3548;
+    background: #12151c;
+    color: #b8c2d9;
+  }
+
+  /* Leaflet popup chrome is rendered by the library outside the module tree. */
+  .mapRoot :global(.leaflet-popup-content-wrapper),
+  .mapRoot :global(.leaflet-popup-tip) {
+    background: #1a1f2e;
+    color: #e8eaed;
+  }
+}

@@ -1,0 +1,962 @@
+import { query } from "../api-client";
+import type {
+	CategoryHomepage,
+	CategoryKey,
+	EntityType,
+	EntityWithEntries,
+	Entry,
+	EntryStub,
+	EntryWithEntities,
+	PersonFamilyChildEdge,
+	PersonFamilyParentEdge,
+	PersonFamilyRelatedPerson,
+	PersonFamilySpouseEdge,
+	PersonFamilySummary,
+	PlaceIdentification,
+	PlaceMapMarker,
+	SynonymTarget,
+	ThreeDModel,
+} from "./types";
+
+export const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
+	PERSON: "אישים",
+	PLACE: "מקומות",
+	EVENT: "אירועים",
+	WAR: "מלחמות",
+	ANIMAL: "בעלי חיים",
+	OBJECT: "חפצים",
+	TEMPLE_TOOL: "כלי מקדש",
+	PLANT: "צמחים",
+	ASTRONOMICAL_OBJECT: "גרמי שמיים",
+	SAYING: "אמרות",
+	SEFER: "ספרים",
+	TANAH_SEFER: 'ספרי תנ"ך',
+	PROPHECY: "נבואות",
+	NATION: "עמים",
+};
+
+export const CATEGORY_LABELS: Record<CategoryKey, string> = {
+	...ENTITY_TYPE_LABELS,
+	PROPHET: "נביאים",
+	KING: "מלכים",
+	BEHEMA: "בהמות",
+	CHAYA: "חיות",
+	OF: "עופות",
+	SHERETZ: "שרצים",
+	TAHOR: "טהורים",
+	TAMEH: "טמאים",
+};
+
+export const ENTITY_TYPES = Object.keys(ENTITY_TYPE_LABELS) as EntityType[];
+
+export async function getEntries(limit = 50, offset = 0): Promise<Entry[]> {
+	return query<Entry>(
+		"SELECT id, unique_name AS uniqueName, title, content, created_at AS createdAt, updated_at AS updatedAt FROM tanahpedia_entry ORDER BY title LIMIT ? OFFSET ?",
+		[String(limit), String(offset)],
+	);
+}
+
+export async function getEntryByUniqueName(
+	uniqueName: string,
+): Promise<EntryWithEntities | null> {
+	const entries = await query<Entry>(
+		"SELECT id, unique_name AS uniqueName, title, content, created_at AS createdAt, updated_at AS updatedAt FROM tanahpedia_entry WHERE unique_name = ?",
+		[uniqueName],
+	);
+	if (entries.length === 0) return null;
+
+	const entry = entries[0];
+	const entities = await query<{
+		id: string;
+		entryId: string;
+		entityId: string;
+		entityType: EntityType;
+		entityName: string;
+	}>(
+		`SELECT ee.id, ee.entry_id AS entryId, ee.entity_id AS entityId,
+		        e.entity_type AS entityType, e.name AS entityName
+		 FROM tanahpedia_entry_entity ee
+		 JOIN tanahpedia_entity e ON e.id = ee.entity_id
+		 WHERE ee.entry_id = ?`,
+		[entry.id],
+	);
+
+	return { ...entry, entities };
+}
+
+export async function getEntriesByEntityType(
+	entityType: EntityType,
+): Promise<Entry[]> {
+	return query<Entry>(
+		`SELECT DISTINCT ent.id, ent.unique_name AS uniqueName, ent.title, ent.content, ent.created_at AS createdAt, ent.updated_at AS updatedAt
+     FROM tanahpedia_entry ent
+     JOIN tanahpedia_entry_entity ee ON ee.entry_id = ent.id
+     JOIN tanahpedia_entity e ON e.id = ee.entity_id
+     WHERE e.entity_type = ?
+     ORDER BY ent.title`,
+		[entityType],
+	);
+}
+
+export async function getEntitiesWithEntries(
+	entityType: EntityType,
+): Promise<EntityWithEntries[]> {
+	const rows = await query<{
+		entityId: string;
+		entityName: string;
+		entryId: string | null;
+		entryUniqueName: string | null;
+		entryTitle: string | null;
+	}>(
+		`SELECT e.id AS entityId, e.name AS entityName,
+		        ent.id AS entryId, ent.unique_name AS entryUniqueName, ent.title AS entryTitle
+		 FROM tanahpedia_entity e
+		 LEFT JOIN tanahpedia_entry_entity ee ON ee.entity_id = e.id
+		 LEFT JOIN tanahpedia_entry ent ON ent.id = ee.entry_id
+		 WHERE e.entity_type = ?
+		 ORDER BY e.name`,
+		[entityType],
+	);
+
+	const grouped = new Map<
+		string,
+		{ entityName: string; linkedEntries: EntryStub[] }
+	>();
+
+	for (const row of rows) {
+		let group = grouped.get(row.entityId);
+		if (!group) {
+			group = { entityName: row.entityName, linkedEntries: [] };
+			grouped.set(row.entityId, group);
+		}
+		if (row.entryId && row.entryUniqueName && row.entryTitle) {
+			group.linkedEntries.push({
+				id: row.entryId,
+				uniqueName: row.entryUniqueName,
+				title: row.entryTitle,
+			});
+		}
+	}
+
+	return Array.from(grouped.entries()).map(([entityId, data]) => ({
+		entityType,
+		entityId,
+		entityName: data.entityName,
+		linkedEntries: data.linkedEntries,
+	}));
+}
+
+export async function getEntitiesWithEntriesByRole(
+	role: "PROPHET" | "KING",
+): Promise<EntityWithEntries[]> {
+	const roleTable =
+		role === "PROPHET"
+			? "tanahpedia_person_role_prophet"
+			: "tanahpedia_person_role_king";
+	const rows = await query<{
+		entityId: string;
+		entityName: string;
+		entryId: string | null;
+		entryUniqueName: string | null;
+		entryTitle: string | null;
+	}>(
+		`SELECT e.id AS entityId, e.name AS entityName,
+		        ent.id AS entryId, ent.unique_name AS entryUniqueName, ent.title AS entryTitle
+		 FROM ${roleTable} r
+		 JOIN tanahpedia_person p ON p.id = r.person_id
+		 JOIN tanahpedia_entity e ON e.id = p.entity_id
+		 LEFT JOIN tanahpedia_entry_entity ee ON ee.entity_id = e.id
+		 LEFT JOIN tanahpedia_entry ent ON ent.id = ee.entry_id
+		 ORDER BY e.name`,
+	);
+
+	const grouped = new Map<
+		string,
+		{ entityName: string; linkedEntries: EntryStub[] }
+	>();
+
+	for (const row of rows) {
+		let group = grouped.get(row.entityId);
+		if (!group) {
+			group = { entityName: row.entityName, linkedEntries: [] };
+			grouped.set(row.entityId, group);
+		}
+		if (row.entryId && row.entryUniqueName && row.entryTitle) {
+			group.linkedEntries.push({
+				id: row.entryId,
+				uniqueName: row.entryUniqueName,
+				title: row.entryTitle,
+			});
+		}
+	}
+
+	return Array.from(grouped.entries()).map(([entityId, data]) => ({
+		entityType: "PERSON" as EntityType,
+		entityId,
+		entityName: data.entityName,
+		linkedEntries: data.linkedEntries,
+	}));
+}
+
+export async function getAnimalsByClassification(
+	classType: "kind" | "purity",
+	value: string,
+): Promise<EntityWithEntries[]> {
+	const table =
+		classType === "kind"
+			? "tanahpedia_animal_kind"
+			: "tanahpedia_animal_purity";
+	const column = classType === "kind" ? "kind" : "purity";
+	const rows = await query<{
+		entityId: string;
+		entityName: string;
+		entryId: string | null;
+		entryUniqueName: string | null;
+		entryTitle: string | null;
+	}>(
+		`SELECT e.id AS entityId, e.name AS entityName,
+		        ent.id AS entryId, ent.unique_name AS entryUniqueName, ent.title AS entryTitle
+		 FROM ${table} ac
+		 JOIN tanahpedia_animal a ON a.id = ac.animal_id
+		 JOIN tanahpedia_entity e ON e.id = a.entity_id
+		 LEFT JOIN tanahpedia_entry_entity ee ON ee.entity_id = e.id
+		 LEFT JOIN tanahpedia_entry ent ON ent.id = ee.entry_id
+		 WHERE ac.${column} = ?
+		 ORDER BY e.name`,
+		[value],
+	);
+
+	const grouped = new Map<
+		string,
+		{ entityName: string; linkedEntries: EntryStub[] }
+	>();
+
+	for (const row of rows) {
+		let group = grouped.get(row.entityId);
+		if (!group) {
+			group = { entityName: row.entityName, linkedEntries: [] };
+			grouped.set(row.entityId, group);
+		}
+		if (row.entryId && row.entryUniqueName && row.entryTitle) {
+			group.linkedEntries.push({
+				id: row.entryId,
+				uniqueName: row.entryUniqueName,
+				title: row.entryTitle,
+			});
+		}
+	}
+
+	return Array.from(grouped.entries()).map(([entityId, data]) => ({
+		entityType: "ANIMAL" as EntityType,
+		entityId,
+		entityName: data.entityName,
+		linkedEntries: data.linkedEntries,
+	}));
+}
+
+export async function getCategoryHomepage(
+	entityType: EntityType,
+): Promise<CategoryHomepage | null> {
+	const rows = await query<CategoryHomepage>(
+		`SELECT id, entity_type AS entityType, layout_type AS layoutType,
+		        config, content, updated_at AS updatedAt
+		 FROM tanahpedia_category_homepage
+		 WHERE entity_type = ?`,
+		[entityType],
+	);
+	if (rows.length === 0) return null;
+	const row = rows[0];
+	return {
+		...row,
+		config:
+			typeof row.config === "string" ? JSON.parse(row.config) : row.config,
+	};
+}
+
+export async function get3DModels(entityId: string): Promise<ThreeDModel[]> {
+	return query<ThreeDModel>(
+		`SELECT id, entity_id AS entityId,
+		        blob_key AS blobKey, format, label, alt_group_id AS altGroupId
+		 FROM tanahpedia_3d_model
+		 WHERE entity_id = ?`,
+		[entityId],
+	);
+}
+
+export async function getPlaceIdentifications(): Promise<
+	(PlaceIdentification & { placeName: string })[]
+> {
+	return query(
+		`SELECT pi.id, pi.place_id AS placeId, pi.modern_name AS modernName,
+		        pi.latitude, pi.longitude, pi.alt_group_id AS altGroupId,
+		        e.name AS placeName
+		 FROM tanahpedia_place_identification pi
+		 JOIN tanahpedia_place p ON p.id = pi.place_id
+		 JOIN tanahpedia_entity e ON e.id = p.entity_id
+		 WHERE pi.latitude IS NOT NULL AND pi.longitude IS NOT NULL`,
+	);
+}
+
+function sqlFirstEntryUniqueNameForEntity(alias: string): string {
+	return `(SELECT ent.unique_name FROM tanahpedia_entry_entity ee2
+	         INNER JOIN tanahpedia_entry ent ON ent.id = ee2.entry_id
+	         WHERE ee2.entity_id = ${alias}.id
+	         ORDER BY ent.title LIMIT 1)`;
+}
+
+function sqlFirstEntryTitleForEntity(alias: string): string {
+	return `(SELECT ent.title FROM tanahpedia_entry_entity ee2
+	         INNER JOIN tanahpedia_entry ent ON ent.id = ee2.entry_id
+	         WHERE ee2.entity_id = ${alias}.id
+	         ORDER BY ent.title LIMIT 1)`;
+}
+
+function parseCoordinate(value: unknown): number {
+	if (typeof value === "number" && Number.isFinite(value)) return value;
+	if (typeof value === "string") {
+		const n = Number.parseFloat(value);
+		return Number.isFinite(n) ? n : Number.NaN;
+	}
+	return Number.NaN;
+}
+
+/**
+ * Places with coordinates for the public map (OpenStreetMap tiles — no API key).
+ */
+export async function getPlaceMapMarkers(): Promise<PlaceMapMarker[]> {
+	const uq = sqlFirstEntryUniqueNameForEntity("e");
+	const rows = await query<{
+		placeId: string;
+		placeName: string;
+		modernName: string | null;
+		latitude: unknown;
+		longitude: unknown;
+		entryUniqueName: string | null;
+	}>(
+		`SELECT pi.id AS placeId, e.name AS placeName, pi.modern_name AS modernName,
+		        pi.latitude AS latitude, pi.longitude AS longitude,
+		        ${uq} AS entryUniqueName
+		 FROM tanahpedia_place_identification pi
+		 INNER JOIN tanahpedia_place p ON p.id = pi.place_id
+		 INNER JOIN tanahpedia_entity e ON e.id = p.entity_id
+		 WHERE pi.latitude IS NOT NULL AND pi.longitude IS NOT NULL`,
+	);
+	const out: PlaceMapMarker[] = [];
+	for (const r of rows) {
+		const lat = parseCoordinate(r.latitude);
+		const lng = parseCoordinate(r.longitude);
+		if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+		out.push({
+			placeId: r.placeId,
+			placeName: r.placeName,
+			modernName: r.modernName,
+			lat,
+			lng,
+			entryUniqueName: r.entryUniqueName,
+		});
+	}
+	return out;
+}
+
+/**
+ * Map markers for place entities linked to a single entry (e.g. ארץ ישראל on the entry page).
+ */
+export async function getPlaceMapMarkersForEntry(
+	entryId: string,
+): Promise<PlaceMapMarker[]> {
+	const rows = await query<{
+		placeId: string;
+		placeName: string;
+		modernName: string | null;
+		latitude: unknown;
+		longitude: unknown;
+		entryUniqueName: string | null;
+	}>(
+		`SELECT pi.id AS placeId, e.name AS placeName, pi.modern_name AS modernName,
+		        pi.latitude AS latitude, pi.longitude AS longitude,
+		        ent.unique_name AS entryUniqueName
+		 FROM tanahpedia_entry_entity ee
+		 INNER JOIN tanahpedia_entry ent ON ent.id = ee.entry_id
+		 INNER JOIN tanahpedia_entity e ON e.id = ee.entity_id
+		 INNER JOIN tanahpedia_place p ON p.entity_id = e.id
+		 INNER JOIN tanahpedia_place_identification pi ON pi.place_id = p.id
+		 WHERE ee.entry_id = ?
+		   AND e.entity_type = 'PLACE'
+		   AND pi.latitude IS NOT NULL AND pi.longitude IS NOT NULL`,
+		[entryId],
+	);
+	const out: PlaceMapMarker[] = [];
+	for (const r of rows) {
+		const lat = parseCoordinate(r.latitude);
+		const lng = parseCoordinate(r.longitude);
+		if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+		out.push({
+			placeId: r.placeId,
+			placeName: r.placeName,
+			modernName: r.modernName,
+			lat,
+			lng,
+			entryUniqueName: r.entryUniqueName,
+		});
+	}
+	return out;
+}
+
+type RelatedRow = {
+	relatedPersonId: string;
+	relatedEntityId: string;
+	displayName: string;
+	entryUniqueName: string | null;
+	entryTitle: string | null;
+	relatedSex?: string | null;
+};
+
+function mapRelated(r: RelatedRow): PersonFamilyRelatedPerson {
+	return {
+		personId: r.relatedPersonId,
+		entityId: r.relatedEntityId,
+		displayName: r.displayName,
+		entryUniqueName: r.entryUniqueName,
+		entryTitle: r.entryTitle,
+		sex: r.relatedSex ?? null,
+	};
+}
+
+/**
+ * Parents, children, unions and siblings for a person entity (tanahpedia_person / parent_child / union).
+ */
+export async function getPersonFamilySummary(
+	entityId: string,
+	focalDisplayName: string,
+): Promise<PersonFamilySummary | null> {
+	const personRows = await query<{ personId: string }>(
+		"SELECT id AS personId FROM tanahpedia_person WHERE entity_id = ? LIMIT 1",
+		[entityId],
+	);
+	if (personRows.length === 0) return null;
+	const personId = personRows[0].personId;
+
+	const sexRows = await query<{ sex: string }>(
+		"SELECT sex FROM tanahpedia_person_sex WHERE person_id = ? LIMIT 1",
+		[personId],
+	);
+	const focalSex = sexRows[0]?.sex ?? null;
+
+	const pe = "parent_e";
+	const ce = "child_e";
+	const oe = "other_e";
+	const uqP = sqlFirstEntryUniqueNameForEntity(pe);
+	const tqP = sqlFirstEntryTitleForEntity(pe);
+	const uqC = sqlFirstEntryUniqueNameForEntity(ce);
+	const tqC = sqlFirstEntryTitleForEntity(ce);
+	const uqO = sqlFirstEntryUniqueNameForEntity(oe);
+	const tqO = sqlFirstEntryTitleForEntity(oe);
+
+	const parentSql = `SELECT ppc.alt_group_id AS altGroupId,
+			pr.name AS parentRole, pct.name AS relationshipType,
+			ppc.source_citation AS sourceCitation,
+			parent_p.id AS relatedPersonId, ${pe}.id AS relatedEntityId,
+			${pe}.name AS displayName,
+			${uqP} AS entryUniqueName, ${tqP} AS entryTitle,
+			(SELECT sx.sex FROM tanahpedia_person_sex sx
+			 WHERE sx.person_id = parent_p.id AND sx.alt_group_id IS NULL LIMIT 1) AS relatedSex
+		FROM tanahpedia_person_parent_child ppc
+		INNER JOIN tanahpedia_person parent_p ON parent_p.id = ppc.parent_id
+		INNER JOIN tanahpedia_entity ${pe} ON ${pe}.id = parent_p.entity_id
+		INNER JOIN tanahpedia_lookup_parent_role pr ON pr.id = ppc.parent_role_id
+		INNER JOIN tanahpedia_lookup_parent_child_type pct ON pct.id = ppc.relationship_type_id
+		WHERE ppc.child_id = ?`;
+
+	const childSql = `SELECT ppc.alt_group_id AS altGroupId,
+			pr.name AS parentRole, pct.name AS relationshipType,
+			ppc.source_citation AS sourceCitation,
+			ppc.birth_order AS birthOrder,
+			child_p.id AS relatedPersonId, ${ce}.id AS relatedEntityId,
+			${ce}.name AS displayName,
+			${uqC} AS entryUniqueName, ${tqC} AS entryTitle,
+			(SELECT sx.sex FROM tanahpedia_person_sex sx
+			 WHERE sx.person_id = child_p.id AND sx.alt_group_id IS NULL LIMIT 1) AS relatedSex,
+			co_e.id AS coParentEntityId,
+			co_e.name AS coParentDisplayName,
+			(SELECT MIN(u2.union_order) FROM tanahpedia_person_union u2
+			 WHERE (u2.person1_id = ? AND u2.person2_id = ppc_co.parent_id)
+			    OR (u2.person2_id = ? AND u2.person1_id = ppc_co.parent_id)) AS coParentUnionOrder
+		FROM tanahpedia_person_parent_child ppc
+		INNER JOIN tanahpedia_person child_p ON child_p.id = ppc.child_id
+		INNER JOIN tanahpedia_entity ${ce} ON ${ce}.id = child_p.entity_id
+		INNER JOIN tanahpedia_lookup_parent_role pr ON pr.id = ppc.parent_role_id
+		INNER JOIN tanahpedia_lookup_parent_child_type pct ON pct.id = ppc.relationship_type_id
+		LEFT JOIN tanahpedia_person_parent_child ppc_co
+			ON ppc_co.child_id = ppc.child_id AND ppc_co.parent_id <> ppc.parent_id
+		LEFT JOIN tanahpedia_person co_p ON co_p.id = ppc_co.parent_id
+		LEFT JOIN tanahpedia_entity co_e ON co_e.id = co_p.entity_id
+		WHERE ppc.parent_id = ?`;
+
+	const spouseSql = `SELECT u.alt_group_id AS altGroupId, ut.name AS unionType,
+			u.union_order AS unionOrder,
+			u.source_citation AS sourceCitation,
+			u.person_source_citation AS personSourceCitation,
+			uer.name AS unionEndReason,
+			u.start_date AS unionStartDate,
+			u.end_date AS unionEndDate,
+			op.id AS relatedPersonId, ${oe}.id AS relatedEntityId,
+			${oe}.name AS displayName,
+			${uqO} AS entryUniqueName, ${tqO} AS entryTitle,
+			(SELECT sx.sex FROM tanahpedia_person_sex sx
+			 WHERE sx.person_id = op.id AND sx.alt_group_id IS NULL LIMIT 1) AS relatedSex
+		FROM tanahpedia_person_union u
+		INNER JOIN tanahpedia_lookup_union_type ut ON ut.id = u.union_type_id
+		LEFT JOIN tanahpedia_lookup_union_end_reason uer ON uer.id = u.end_reason_id
+		INNER JOIN tanahpedia_person op ON op.id = IF(u.person1_id = ?, u.person2_id, u.person1_id)
+		INNER JOIN tanahpedia_entity ${oe} ON ${oe}.id = op.entity_id
+		WHERE u.person1_id = ? OR u.person2_id = ?`;
+
+	const siblingSql = `SELECT DISTINCT
+			other_p.id AS relatedPersonId, other_e.id AS relatedEntityId,
+			other_e.name AS displayName,
+			(SELECT ent.unique_name FROM tanahpedia_entry_entity ee2
+			 INNER JOIN tanahpedia_entry ent ON ent.id = ee2.entry_id
+			 WHERE ee2.entity_id = other_e.id ORDER BY ent.title LIMIT 1) AS entryUniqueName,
+			(SELECT ent.title FROM tanahpedia_entry_entity ee2
+			 INNER JOIN tanahpedia_entry ent ON ent.id = ee2.entry_id
+			 WHERE ee2.entity_id = other_e.id ORDER BY ent.title LIMIT 1) AS entryTitle,
+			(SELECT sx.sex FROM tanahpedia_person_sex sx
+			 WHERE sx.person_id = other_p.id AND sx.alt_group_id IS NULL LIMIT 1) AS relatedSex,
+			(SELECT MIN(bd.birth_date) FROM tanahpedia_person_birth_date bd
+			 WHERE bd.person_id = other_p.id AND bd.alt_group_id IS NULL) AS relatedBirthDate,
+			other_edge.source_citation AS siblingSourceCitation
+		FROM tanahpedia_person_parent_child my_edge
+		INNER JOIN tanahpedia_person_parent_child other_edge
+		  ON other_edge.parent_id = my_edge.parent_id
+		 AND other_edge.child_id <> my_edge.child_id
+		INNER JOIN tanahpedia_person other_p ON other_p.id = other_edge.child_id
+		INNER JOIN tanahpedia_entity other_e ON other_e.id = other_p.entity_id
+		WHERE my_edge.child_id = ? AND other_p.id <> ?`;
+
+	const focalBirthSql = `SELECT MIN(birth_date) AS focalBirthDate
+		FROM tanahpedia_person_birth_date
+		WHERE person_id = ? AND alt_group_id IS NULL`;
+
+	const [parentRows, childRows, spouseRows, siblingRows, focalBirthRows] =
+		await Promise.all([
+			query<
+				RelatedRow & {
+					altGroupId: string | null;
+					parentRole: string;
+					relationshipType: string;
+					sourceCitation: string | null;
+				}
+			>(parentSql, [personId]),
+			query<
+				RelatedRow & {
+					altGroupId: string | null;
+					parentRole: string;
+					relationshipType: string;
+					sourceCitation: string | null;
+					coParentEntityId: string | null;
+					birthOrder: number | null;
+					coParentDisplayName: string | null;
+					coParentUnionOrder: number | null;
+				}
+			>(childSql, [personId, personId, personId]),
+			query<
+				RelatedRow & {
+					altGroupId: string | null;
+					unionType: string;
+					unionOrder: number | null;
+					sourceCitation: string | null;
+					personSourceCitation: string | null;
+					unionEndReason: string | null;
+					unionStartDate: number | null;
+					unionEndDate: number | null;
+					relatedSex: string | null;
+				}
+			>(spouseSql, [personId, personId, personId]),
+			query<
+				RelatedRow & {
+					relatedBirthDate: number | string | null;
+					siblingSourceCitation: string | null;
+				}
+			>(siblingSql, [personId, personId]),
+			query<{ focalBirthDate: number | string | null }>(focalBirthSql, [
+				personId,
+			]),
+		]);
+
+	const rawFocalBd = focalBirthRows[0]?.focalBirthDate;
+	const focalBirthYyyymmdd =
+		rawFocalBd != null && rawFocalBd !== "" ? Number(rawFocalBd) : null;
+
+	const parents: PersonFamilyParentEdge[] = parentRows.map((r) => ({
+		related: mapRelated(r),
+		parentRole: r.parentRole,
+		relationshipType: r.relationshipType,
+		altGroupId: r.altGroupId,
+		sourceCitation: r.sourceCitation,
+	}));
+
+	const childDedupe = new Map<string, PersonFamilyChildEdge>();
+	for (const r of childRows) {
+		const edge: PersonFamilyChildEdge = {
+			related: mapRelated(r),
+			parentRole: r.parentRole,
+			relationshipType: r.relationshipType,
+			altGroupId: r.altGroupId,
+			sourceCitation: r.sourceCitation,
+			birthOrder: r.birthOrder != null ? Number(r.birthOrder) : null,
+			coParentEntityId: r.coParentEntityId ?? null,
+			coParentDisplayName: r.coParentDisplayName ?? null,
+			coParentUnionOrder:
+				r.coParentUnionOrder != null ? Number(r.coParentUnionOrder) : null,
+		};
+		const dedupeKey = `${edge.related.entityId}|${edge.relationshipType}|${edge.parentRole}|${edge.altGroupId ?? ""}`;
+		const prev = childDedupe.get(dedupeKey);
+		if (!prev) {
+			childDedupe.set(dedupeKey, edge);
+		} else if (!prev.coParentEntityId && edge.coParentEntityId) {
+			childDedupe.set(dedupeKey, edge);
+		}
+	}
+	const children = [...childDedupe.values()];
+
+	const spouses: PersonFamilySpouseEdge[] = spouseRows.map((r) => ({
+		related: mapRelated(r),
+		unionType: r.unionType,
+		unionOrder: r.unionOrder,
+		altGroupId: r.altGroupId,
+		sourceCitation: r.sourceCitation,
+		personSourceCitation: r.personSourceCitation,
+		unionEndReason: r.unionEndReason,
+		unionStartDate: r.unionStartDate,
+		unionEndDate: r.unionEndDate,
+	}));
+
+	const sibDedupe = new Map<string, PersonFamilyRelatedPerson>();
+	for (const r of siblingRows) {
+		const rel = mapRelated(r);
+		const bd = r.relatedBirthDate;
+		rel.birthDateYyyymmdd = bd != null && bd !== "" ? Number(bd) : null;
+		const cite =
+			r.siblingSourceCitation != null &&
+			String(r.siblingSourceCitation).trim() !== ""
+				? String(r.siblingSourceCitation).trim()
+				: null;
+		const prev = sibDedupe.get(rel.entityId);
+		if (!prev) {
+			if (cite) rel.sourceCitation = cite;
+			sibDedupe.set(rel.entityId, rel);
+		} else {
+			if (cite && !prev.sourceCitation) prev.sourceCitation = cite;
+		}
+	}
+	const siblings = [...sibDedupe.values()].sort((a, b) =>
+		a.displayName.localeCompare(b.displayName, "he"),
+	);
+
+	const hasAny =
+		parents.length > 0 ||
+		children.length > 0 ||
+		spouses.length > 0 ||
+		siblings.length > 0;
+	if (!hasAny) return null;
+
+	return {
+		focalPersonId: personId,
+		focalEntityId: entityId,
+		focalDisplayName,
+		focalSex,
+		focalBirthYyyymmdd: Number.isFinite(focalBirthYyyymmdd)
+			? focalBirthYyyymmdd
+			: null,
+		parents,
+		children,
+		spouses,
+		siblings,
+	};
+}
+
+export async function getCategoryCounts(): Promise<
+	Record<CategoryKey, number>
+> {
+	const [entityRows, roleRows, animalRows, placeRowCountRows] =
+		await Promise.all([
+			query<{ entityType: EntityType; cnt: number }>(
+				`SELECT e.entity_type AS entityType, COUNT(DISTINCT ee.entry_id) AS cnt
+			 FROM tanahpedia_entry_entity ee
+			 JOIN tanahpedia_entity e ON e.id = ee.entity_id
+			 GROUP BY e.entity_type`,
+			),
+			query<{ role: string; cnt: number }>(
+				`SELECT 'PROPHET' AS role, COUNT(DISTINCT ee.entry_id) AS cnt
+			 FROM tanahpedia_person_role_prophet pr
+			 JOIN tanahpedia_person p ON p.id = pr.person_id
+			 JOIN tanahpedia_entry_entity ee ON ee.entity_id = p.entity_id
+			 UNION ALL
+			 SELECT 'KING' AS role, COUNT(DISTINCT ee.entry_id) AS cnt
+			 FROM tanahpedia_person_role_king pk
+			 JOIN tanahpedia_person p ON p.id = pk.person_id
+			 JOIN tanahpedia_entry_entity ee ON ee.entity_id = p.entity_id`,
+			),
+			query<{ cat: string; cnt: number }>(
+				`SELECT ak.kind AS cat, COUNT(DISTINCT ee.entry_id) AS cnt
+			 FROM tanahpedia_animal_kind ak
+			 JOIN tanahpedia_animal a ON a.id = ak.animal_id
+			 JOIN tanahpedia_entry_entity ee ON ee.entity_id = a.entity_id
+			 GROUP BY ak.kind
+			 UNION ALL
+			 SELECT ap.purity AS cat, COUNT(DISTINCT ee.entry_id) AS cnt
+			 FROM tanahpedia_animal_purity ap
+			 JOIN tanahpedia_animal a ON a.id = ap.animal_id
+			 JOIN tanahpedia_entry_entity ee ON ee.entity_id = a.entity_id
+			 GROUP BY ap.purity`,
+			),
+			query<{ c: number }>("SELECT COUNT(*) AS c FROM tanahpedia_place"),
+		]);
+	const counts = {} as Record<CategoryKey, number>;
+	for (const et of ENTITY_TYPES) counts[et] = 0;
+	counts.PROPHET = 0;
+	counts.KING = 0;
+	counts.BEHEMA = 0;
+	counts.CHAYA = 0;
+	counts.OF = 0;
+	counts.SHERETZ = 0;
+	counts.TAHOR = 0;
+	counts.TAMEH = 0;
+	for (const row of entityRows) counts[row.entityType] = Number(row.cnt);
+	for (const row of roleRows) counts[row.role as CategoryKey] = Number(row.cnt);
+	for (const row of animalRows)
+		counts[row.cat as CategoryKey] = Number(row.cnt);
+	/* מקומות: אם אין ערך מקושר לישות PLACE אך קיימות שורות ב־tanahpedia_place (דמו / אכלוס חלקי), אל נציג 0 */
+	const placeRows = Number(placeRowCountRows[0]?.c ?? 0);
+	if (counts.PLACE === 0 && placeRows > 0) counts.PLACE = placeRows;
+	return counts;
+}
+
+export async function getRecentEntries(limit = 10): Promise<Entry[]> {
+	return query<Entry>(
+		"SELECT id, unique_name AS uniqueName, title, content, created_at AS createdAt, updated_at AS updatedAt FROM tanahpedia_entry ORDER BY updated_at DESC LIMIT ?",
+		[String(limit)],
+	);
+}
+
+/**
+ * Get all entry unique names for SSG.
+ * This function is used by generateStaticParams to pre-render all entry pages.
+ */
+export async function getAllEntryUniqueNames(): Promise<string[]> {
+	const rows = await query<{ uniqueName: string }>(
+		"SELECT unique_name AS uniqueName FROM tanahpedia_entry ORDER BY unique_name",
+	);
+	return rows.map((row) => row.uniqueName);
+}
+
+/** Alternate names an entry can be reached by, e.g. `משה` for `משה-רבנו`. */
+export async function getAllEntrySynonymNames(): Promise<string[]> {
+	const rows = await query<{ name: string }>(
+		`SELECT DISTINCT s.name AS name
+		   FROM tanahpedia_entry_synonym s
+		  WHERE s.name NOT IN (SELECT unique_name FROM tanahpedia_entry)
+		  ORDER BY s.name`,
+	);
+	return rows.map((row) => row.name);
+}
+
+/**
+ * Entries a synonym can lead to. One result means a plain alias; several mean the
+ * name is ambiguous and the reader has to choose.
+ */
+export async function getEntriesBySynonym(
+	name: string,
+): Promise<SynonymTarget[]> {
+	const rows = await query<SynonymTarget>(
+		`SELECT e.id AS entryId, e.unique_name AS uniqueName, e.title AS title,
+		        NULL AS label
+		   FROM tanahpedia_entry_synonym s
+		   JOIN tanahpedia_entry e ON e.id = s.entry_id
+		  WHERE s.name = ?
+		  UNION
+		 SELECT e.id AS entryId, e.unique_name AS uniqueName, e.title AS title,
+		        d.disambiguation_label AS label
+		   FROM tanahpedia_entry_synonym s
+		   JOIN tanahpedia_entry_synonym_disambiguation d ON d.synonym_id = s.id
+		   JOIN tanahpedia_entry e ON e.id = d.entry_id
+		  WHERE s.name = ?
+		  ORDER BY title`,
+		[name, name],
+	);
+
+	/* A labelled row wins, so a disambiguation label is never lost to the plain one. */
+	const byEntry = new Map<string, SynonymTarget>();
+	for (const row of rows) {
+		const current = byEntry.get(row.entryId);
+		if (!current || (!current.label && row.label))
+			byEntry.set(row.entryId, row);
+	}
+	return [...byEntry.values()];
+}
+
+/**
+ * Get all entity type params for SSG.
+ * Note: Next.js generateStaticParams only supports path params, not search params.
+ * Subcategories (role, kind, purity) are handled via search params at runtime,
+ * so we only generate static params for base entity types here.
+ */
+export async function getAllEntityTypeParams(): Promise<
+	Array<{ entityType: string }>
+> {
+	// Return all base entity types
+	// Subcategories (person?role=prophet, animal?kind=behema, etc.) are handled
+	// via search params at runtime, not in generateStaticParams
+	return ENTITY_TYPES.map((entityType) => ({
+		entityType: entityType.toLowerCase(),
+	}));
+}
+
+// ─── Today in Tanah ─────────────────────────────────────────
+// Anniversaries match the Hebrew month and day, regardless of year.
+export async function getTodayInTanahEntities(
+	hebrewMonth: number,
+	hebrewDay: number,
+): Promise<EntityWithEntries[]> {
+	const monthDay = hebrewMonth * 100 + hebrewDay;
+	const rows = await query<{
+		entityId: string;
+		entityName: string;
+		entityType: EntityType;
+		entryId: string | null;
+		entryUniqueName: string | null;
+		entryTitle: string | null;
+	}>(
+		`SELECT DISTINCT
+		   e.id AS entityId,
+		   e.name AS entityName,
+		   e.entity_type AS entityType,
+		   ent.id AS entryId,
+		   ent.unique_name AS entryUniqueName,
+		   ent.title AS entryTitle
+		 FROM tanahpedia_entity e
+		 LEFT JOIN tanahpedia_entry_entity ee ON ee.entity_id = e.id
+		 LEFT JOIN tanahpedia_entry ent ON ent.id = ee.entry_id
+		 WHERE EXISTS (
+		   SELECT 1 FROM tanahpedia_event ev
+		   JOIN tanahpedia_event_date_range d ON d.event_id = ev.id
+		   WHERE ev.entity_id = e.id AND (
+		     (d.start_date > 0 AND d.start_date <> 99991229 AND d.start_date % 10000 = ?)
+		     OR (d.end_date > 0 AND d.end_date <> 99991229 AND d.end_date % 10000 = ?)
+		   )
+		 ) OR EXISTS (
+		   SELECT 1 FROM tanahpedia_saying s
+		   WHERE s.entity_id = e.id
+		     AND s.saying_date > 0 AND s.saying_date <> 99991229 AND s.saying_date % 10000 = ?
+		 ) OR EXISTS (
+		   SELECT 1 FROM tanahpedia_person p
+		   WHERE p.entity_id = e.id AND (
+		     EXISTS (
+		       SELECT 1 FROM tanahpedia_person_birth_date d WHERE d.person_id = p.id
+		       AND d.birth_date > 0 AND d.birth_date <> 99991229 AND d.birth_date % 10000 = ?
+		     ) OR EXISTS (
+		       SELECT 1 FROM tanahpedia_person_death_date d WHERE d.person_id = p.id
+		       AND d.death_date > 0 AND d.death_date <> 99991229 AND d.death_date % 10000 = ?
+		     ) OR EXISTS (
+		       SELECT 1 FROM tanahpedia_person_union u
+		       WHERE (u.person1_id = p.id OR u.person2_id = p.id) AND (
+		         (u.start_date > 0 AND u.start_date <> 99991229 AND u.start_date % 10000 = ?)
+		         OR (u.end_date > 0 AND u.end_date <> 99991229 AND u.end_date % 10000 = ?)
+		       )
+		     )
+		   )
+		 )
+		 ORDER BY e.name, e.id, ent.title, ent.id`,
+		Array(7).fill(monthDay),
+	);
+
+	const entities = new Map<string, EntityWithEntries>();
+	for (const row of rows) {
+		let entity = entities.get(row.entityId);
+		if (!entity) {
+			entity = {
+				entityId: row.entityId,
+				entityName: row.entityName,
+				entityType: row.entityType,
+				linkedEntries: [],
+			};
+			entities.set(row.entityId, entity);
+		}
+		if (row.entryId && row.entryUniqueName) {
+			entity.linkedEntries.push({
+				id: row.entryId,
+				uniqueName: row.entryUniqueName,
+				title: row.entryTitle ?? row.entityName,
+			});
+		}
+	}
+	return [...entities.values()];
+}
+
+// ─── Tanah al haperek integration ─────────────────────────
+// Returns entity references for a given perek, used to render links in pasuk text.
+
+export interface PerekEntityReference {
+	entityId: string;
+	entityName: string;
+	entityType: EntityType;
+	entryUniqueName: string | null;
+	pasukNumber: number;
+	segmentStart: number | null;
+	segmentEnd: number | null;
+}
+
+export interface EntryTanahOccurrence {
+	perekId: number;
+	pasukNumber: number;
+	segmentStart: number | null;
+	segmentEnd: number | null;
+}
+
+/** Verse references for every entity linked to an entry, regardless of type. */
+export async function getEntryOccurrences(
+	entryId: string,
+): Promise<EntryTanahOccurrence[]> {
+	return query<EntryTanahOccurrence>(
+		`SELECT DISTINCT
+		   ets.perek_id AS perekId,
+		   ets.pasuk_number AS pasukNumber,
+		   ets.segment_start AS segmentStart,
+		   ets.segment_end AS segmentEnd
+		 FROM tanahpedia_entity_tanah_source ets
+		 JOIN tanahpedia_entry_entity ee ON ee.entity_id = ets.entity_id
+		 WHERE ee.entry_id = ?
+		 ORDER BY ets.perek_id, ets.pasuk_number, ets.segment_start, ets.segment_end`,
+		[entryId],
+	);
+}
+
+export async function getEntityReferencesForPerek(
+	perekId: number,
+): Promise<PerekEntityReference[]> {
+	try {
+		return await query<PerekEntityReference>(
+			`SELECT
+			   ets.entity_id AS entityId,
+			   e.name AS entityName,
+			   e.entity_type AS entityType,
+			   ent.unique_name AS entryUniqueName,
+			   ets.pasuk_number AS pasukNumber,
+			   ets.segment_start AS segmentStart,
+			   ets.segment_end AS segmentEnd
+			 FROM tanahpedia_entity_tanah_source ets
+			 JOIN tanahpedia_entity e ON e.id = ets.entity_id
+			 LEFT JOIN tanahpedia_entry_entity ee ON ee.entity_id = e.id
+			 LEFT JOIN tanahpedia_entry ent ON ent.id = ee.entry_id
+			 WHERE ets.perek_id = ?
+			 ORDER BY ets.pasuk_number, ets.segment_start`,
+			[String(perekId)],
+		);
+	} catch (error) {
+		console.error(
+			`Failed to fetch entity references for perek ${perekId}:`,
+			error instanceof Error ? error.message : error,
+		);
+		return [];
+	}
+}

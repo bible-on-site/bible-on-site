@@ -2,7 +2,7 @@
 
 import { toLetters } from "gematry";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Article } from "@/lib/articles";
+import type { Article, ArticleSummary } from "@/lib/articles";
 import type { PerushDetail, PerushSummary } from "@/lib/perushim";
 import { getArticleForBook, getPerushNotesForPage } from "../actions";
 import { ArticleFullView } from "./ArticleFullView";
@@ -10,13 +10,14 @@ import { ArticlesSection } from "./ArticlesSection";
 import { PerushFullView } from "./PerushFullView";
 import { PerushimSection } from "./PerushimSection";
 import styles from "./sefer.module.css";
+import { writeSeferContentHistory } from "./useSeferContentNavigation";
 
 interface BlankPageContentProps {
-	articles: Article[];
+	articles?: ArticleSummary[];
 	perushim?: PerushSummary[];
 	perekId?: number;
 	hebrewDateStr: string;
-	/** When set, auto-expand the article (numeric) or perush (name) on mount */
+	/** Article ID or perush name selected by the current book route. */
 	initialSlug?: string;
 	/** Dynamically expand a perush (by name) or article (by numeric id string) — set by QA navigation */
 	expandSlug?: string;
@@ -26,15 +27,20 @@ interface BlankPageContentProps {
 	expandNotePasuk?: number;
 	/** Target note index for scrolling after perush expansion */
 	expandNoteIdx?: number;
+	onNavigate?: (slug?: string) => void;
 }
+
+const NO_ARTICLES: ArticleSummary[] = [];
+const NO_PERUSHIM: PerushSummary[] = [];
 
 /**
  * Blank page content in the flipbook: date, perushim carousel, articles carousel, or full view.
  * Clicking a perush/article in the carousel shows it in place (whole left page); back returns to carousels.
+ * History state is pushed so the browser back button works.
  */
 export function BlankPageContent({
-	articles,
-	perushim = [],
+	articles = NO_ARTICLES,
+	perushim = NO_PERUSHIM,
 	perekId = 0,
 	hebrewDateStr,
 	initialSlug,
@@ -42,6 +48,7 @@ export function BlankPageContent({
 	expandToken,
 	expandNotePasuk,
 	expandNoteIdx,
+	onNavigate,
 }: BlankPageContentProps) {
 	const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
 	const [articleLoading, setArticleLoading] = useState(false);
@@ -49,56 +56,64 @@ export function BlankPageContent({
 		null,
 	);
 	const [perushLoading, setPerushLoading] = useState(false);
-	const initialSlugHandled = useRef(false);
+	const [slug, setSlug] = useState(initialSlug);
+	useEffect(() => setSlug(initialSlug), [initialSlug]);
 
-	const handleArticleClick = useCallback(async (article: Article) => {
-		setArticleLoading(true);
-		try {
-			const full = await getArticleForBook(article.id);
-			if (full) setSelectedArticle(full);
-		} finally {
-			setArticleLoading(false);
-		}
-	}, []);
-
-	const handlePerushClick = useCallback(
-		async (perush: PerushSummary) => {
-			setPerushLoading(true);
-			try {
-				const notes = await getPerushNotesForPage(perush.id, perekId);
-				setSelectedPerush({
-					id: perush.id,
-					name: perush.name,
-					parshanName: perush.parshanName,
-					notes,
-				});
-			} catch {
-				setSelectedPerush(null);
-			} finally {
-				setPerushLoading(false);
-			}
-		},
-		[perekId],
-	);
-
-	// Auto-expand article or perush when initialSlug is provided (e.g. /929/5/42?book)
 	useEffect(() => {
-		if (!initialSlug || initialSlugHandled.current) return;
-		initialSlugHandled.current = true;
-
-		const numericId = Number.parseInt(initialSlug, 10);
-		if (!Number.isNaN(numericId)) {
-			const article = articles.find((a) => a.id === numericId);
-			if (article) {
-				handleArticleClick(article);
-			}
-		} else {
-			const perush = perushim.find((p) => p.name === initialSlug);
-			if (perush) {
-				handlePerushClick(perush);
-			}
+		let cancelled = false;
+		setSelectedArticle(null);
+		setSelectedPerush(null);
+		setArticleLoading(false);
+		setPerushLoading(false);
+		const article = articles.find((item) => String(item.id) === slug);
+		const perush = perushim.find((item) => item.name === slug);
+		if (article) {
+			setArticleLoading(true);
+			getArticleForBook(article.id)
+				.then((full) => {
+					if (!cancelled) {
+						setSelectedArticle(full);
+						if (!full) setSlug(undefined);
+					}
+				})
+				.catch((error) => {
+					console.error("Failed to load book article", {
+						perekId, articleId: article.id, error,
+					});
+					if (!cancelled) setSlug(undefined);
+				})
+				.finally(() => {
+					if (!cancelled) setArticleLoading(false);
+				});
+		} else if (perush) {
+			setPerushLoading(true);
+			getPerushNotesForPage(perush.id, perekId)
+				.then((notes) => {
+					if (!cancelled) setSelectedPerush({ ...perush, notes });
+				})
+				.catch((error) => {
+					console.error("Failed to load book commentary", {
+						perekId, perushId: perush.id, error,
+					});
+					if (!cancelled) setSlug(undefined);
+				})
+				.finally(() => {
+					if (!cancelled) setPerushLoading(false);
+				});
 		}
-	}, [initialSlug, articles, perushim, handleArticleClick, handlePerushClick]);
+		return () => {
+			cancelled = true;
+		};
+	}, [slug, articles, perushim, perekId]);
+
+	const navigate = useCallback(
+		(nextSlug?: string) => {
+			if (onNavigate) onNavigate(nextSlug);
+			else if (perekId) writeSeferContentHistory(perekId, nextSlug);
+			setSlug(nextSlug);
+		},
+		[onNavigate, perekId],
+	);
 
 	// Dynamically expand a perush or article when QA navigation sets expandSlug
 	const lastExpandToken = useRef<number>(0);
@@ -109,21 +124,13 @@ export function BlankPageContent({
 		lastExpandToken.current = expandToken;
 
 		// Compute the scroll target id before triggering expansion
-		if (expandNotePasuk != null && expandNoteIdx != null) {
-			pendingScrollNote.current = `book-note-${toLetters(expandNotePasuk)}-${expandNoteIdx + 1}`;
-		} else {
-			pendingScrollNote.current = null;
-		}
+		pendingScrollNote.current =
+			expandNotePasuk != null && expandNoteIdx != null
+				? `book-note-${toLetters(expandNotePasuk)}-${expandNoteIdx + 1}`
+				: null;
 
-		const numericId = Number.parseInt(expandSlug, 10);
-		if (!Number.isNaN(numericId)) {
-			const article = articles.find((a) => a.id === numericId);
-			if (article) handleArticleClick(article);
-		} else {
-			const perush = perushim.find((p) => p.name === expandSlug);
-			if (perush) handlePerushClick(perush);
-		}
-	}, [expandSlug, expandToken, expandNotePasuk, expandNoteIdx, articles, perushim, handleArticleClick, handlePerushClick]);
+		navigate(expandSlug);
+	}, [expandSlug, expandToken, expandNotePasuk, expandNoteIdx, navigate]);
 
 	// After a perush expands, scroll to the target note if one is pending
 	useEffect(() => {
@@ -135,14 +142,6 @@ export function BlankPageContent({
 			el?.scrollIntoView({ behavior: "smooth", block: "center" });
 		});
 	}, [selectedPerush]);
-
-	const handleArticleBack = useCallback(() => {
-		setSelectedArticle(null);
-	}, []);
-
-	const handlePerushBack = useCallback(() => {
-		setSelectedPerush(null);
-	}, []);
 
 	const hasFullView = selectedPerush || selectedArticle;
 
@@ -163,7 +162,8 @@ export function BlankPageContent({
 					<div className={styles.blankPageArticleFullWrapper}>
 						<PerushFullView
 							perush={selectedPerush}
-							onBack={handlePerushBack}
+							onBack={() => navigate()}
+							perekId={perekId}
 							fullPage
 						/>
 					</div>
@@ -171,7 +171,7 @@ export function BlankPageContent({
 					<div className={styles.blankPageArticleFullWrapper}>
 						<ArticleFullView
 							article={selectedArticle}
-							onBack={handleArticleBack}
+							onBack={() => navigate()}
 							fullPage
 						/>
 					</div>
@@ -181,13 +181,13 @@ export function BlankPageContent({
 							<PerushimSection
 								perekId={perekId}
 								perushim={perushim}
-								onPerushClick={handlePerushClick}
+								onPerushClick={(perush) => navigate(perush.name)}
 								loading={perushLoading}
 							/>
 						)}
 						<ArticlesSection
 							articles={articles}
-							onArticleClick={handleArticleClick}
+							onArticleClick={(article) => navigate(String(article.id))}
 							loading={articleLoading}
 						/>
 					</>

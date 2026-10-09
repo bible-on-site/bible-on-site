@@ -24,9 +24,12 @@ public static class MauiProgram
 	public static MauiApp CreateMauiApp()
 	{
 		var builder = MauiApp.CreateBuilder();
+#pragma warning disable CA1416 // MediaElement requires Android 26+; harmless on older devices
 		builder
 			.UseMauiApp<App>()
 			.UseMauiCommunityToolkit()
+			.UseMauiCommunityToolkitMediaElement(false)
+#pragma warning restore CA1416
 			.ConfigureFonts(fonts =>
 			{
 				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
@@ -57,18 +60,6 @@ public static class MauiProgram
 			}
 		});
 
-		// Prevent the outer CarouselView from intercepting primarily-vertical gestures.
-		// Each inner CollectionView (pasukim list) claims the gesture on ACTION_DOWN
-		// and only releases it when horizontal movement clearly dominates — the same
-		// pattern Flutter's gesture arena uses in the legacy app.
-		Microsoft.Maui.Controls.Handlers.Items.CollectionViewHandler.Mapper.AppendToMapping("SwipeSensitivity", (handler, _) =>
-		{
-			if (handler.PlatformView is AndroidX.RecyclerView.Widget.RecyclerView recyclerView)
-			{
-				recyclerView.AddOnItemTouchListener(
-					new BibleOnSite.Platforms.Android.Listeners.VerticalScrollPriorityListener());
-			}
-		});
 #endif
 
 #if IOS || MACCATALYST
@@ -77,12 +68,22 @@ public static class MauiProgram
 		// switch. Once iOS determines the dominant scroll axis, movement on the other
 		// axis is suppressed for that gesture — matching the legacy Flutter app's
 		// PageView + ListView gesture-arena behavior.
-		Microsoft.Maui.Controls.Handlers.Items.CarouselViewHandler.Mapper.AppendToMapping("SwipeSensitivity", (handler, _) =>
+		Microsoft.Maui.Controls.Handlers.Items2.CarouselViewHandler2.Mapper.AppendToMapping("SwipeSensitivity", (handler, _) =>
 		{
-			if (handler.PlatformView is UIKit.UICollectionView collectionView)
+			var collectionView = FindDescendant<UIKit.UICollectionView>(handler.PlatformView);
+			Console.WriteLine($"[EdgePan] carousel mapper platformView={handler.PlatformView?.GetType().Name ?? "null"} collectionView={collectionView?.GetType().Name ?? "null"}");
+			if (collectionView is null)
 			{
-				collectionView.DirectionalLockEnabled = true;
+				return;
 			}
+			collectionView.DirectionalLockEnabled = true;
+			// The carousel's horizontal paging pan competes with the Shell
+			// flyout's right-edge recognizer over the same touches and usually
+			// wins, leaving the RTL drawer gesture dead on perek pages (#1306).
+			// Give the drawer gesture priority so a swipe starting at the
+			// right screen edge opens the drawer instead of switching perek.
+			collectionView.PanGestureRecognizer.RequireGestureRecognizerToFail(AppShell.SharedFlyoutEdgePan);
+			Console.WriteLine("[EdgePan] carousel pan wired");
 		});
 #endif
 
@@ -91,9 +92,8 @@ public static class MauiProgram
 		// Without this, CrossFirebaseAnalytics.Current silently fails on iOS.
 		// Note: Plugin.Firebase 4.0.0 does NOT support MacCatalyst — only iOS and Android.
 		//
-		// Wrapped in try-catch because the underlying Firebase iOS SDK (currently 12.5 via AdamE bindings)
-		// crashes on iOS 26 due to a known issue (firebase/firebase-ios-sdk#15020, fixed in SDK 12.9.0).
-		// Until the .NET bindings are updated, we gracefully degrade: the app works without analytics.
+		// If initialization raises a managed exception, leave analytics disabled.
+		// Native crashes require a device crash report and cannot be caught here.
 		builder.ConfigureLifecycleEvents(events =>
 		{
 #if IOS
@@ -136,4 +136,23 @@ public static class MauiProgram
 
 		return builder.Build();
 	}
+
+#if IOS || MACCATALYST
+	private static T? FindDescendant<T>(UIKit.UIView? root) where T : UIKit.UIView
+	{
+		if (root is T match)
+		{
+			return match;
+		}
+		foreach (var child in root?.Subviews ?? [])
+		{
+			var found = FindDescendant<T>(child);
+			if (found is not null)
+			{
+				return found;
+			}
+		}
+		return null;
+	}
+#endif
 }

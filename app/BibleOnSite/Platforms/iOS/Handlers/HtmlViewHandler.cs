@@ -1,6 +1,7 @@
 using Foundation;
 using Microsoft.Maui.Handlers;
 using BibleOnSite.Controls;
+using BibleOnSite.Helpers;
 using UIKit;
 using CoreGraphics;
 
@@ -25,6 +26,17 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         [nameof(HtmlView.H3FontSizeMultiplier)] = MapHeaderStyles
     };
 
+    // NSAttributedString's NSHTML import is unusable here at any thread level:
+    // NSHTMLReader always marshals the actual parse back to the main thread via
+    // performSelectorOnMainThread, where the nested WebKit run loop re-enters
+    // UICollectionView cell updates and aborts the app (TestFlight incidents
+    // F0AF3C74 and 351F87DB). HtmlRuns converts the markup with a managed
+    // parser instead — no WebKit, no hidden main-thread work.
+    // _renderSerial still invalidates stale parses when the bound content
+    // changes while an earlier conversion is in flight.
+    private string? _renderedHtml;
+    private int _renderSerial;
+
     public HtmlViewHandler() : base(PropertyMapper)
     {
     }
@@ -45,6 +57,11 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
 
     protected override void ConnectHandler(UITextView platformView)
     {
+        // A reconnect gets a fresh UITextView: invalidate the render cache so the
+        // property mapper re-renders, and discard completions targeted at the
+        // previous platform view.
+        _renderedHtml = null;
+        _renderSerial++;
         base.ConnectHandler(platformView);
         VirtualView.HtmlContentChanged += OnHtmlContentChanged;
         VirtualView.StyleChanged += OnStyleChanged;
@@ -76,105 +93,91 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         var html = VirtualView.HtmlContent;
         if (string.IsNullOrEmpty(html))
         {
+            _renderedHtml = null;
+            _renderSerial++;
             PlatformView.Text = string.Empty;
             return;
         }
 
-        // Wrap content with styling
-        var styledHtml = WrapWithStyles(html);
-
-        try
-        {
-            // Parse HTML using NSAttributedString via import
-            var htmlData = NSData.FromString(styledHtml, NSStringEncoding.Unicode);
-
-            var importParams = new NSDictionary(
-                new NSString("DocumentType"), new NSString("NSHTML"),
-                new NSString("CharacterEncoding"), NSNumber.FromInt32((int)NSStringEncoding.Unicode));
-
-            NSError? error = null;
-#pragma warning disable CS0618 // Type or member is obsolete - this constructor still works and is simpler
-            var attributedString = new NSAttributedString(htmlData, importParams, out _, ref error!);
-#pragma warning restore CS0618
-
-            if (error == null && attributedString != null)
-            {
-                var mutableString = new NSMutableAttributedString(attributedString);
-
-                // Apply text alignment
-                var paragraphStyle = new NSMutableParagraphStyle
-                {
-                    Alignment = VirtualView.TextAlignment switch
-                    {
-                        HtmlTextAlignment.Center => UITextAlignment.Center,
-                        HtmlTextAlignment.End => VirtualView.TextDirection == HtmlTextDirection.Rtl
-                            ? UITextAlignment.Left : UITextAlignment.Right,
-                        HtmlTextAlignment.Justify => UITextAlignment.Justified,
-                        _ => VirtualView.TextDirection == HtmlTextDirection.Rtl
-                            ? UITextAlignment.Right : UITextAlignment.Left
-                    },
-                    LineHeightMultiple = (nfloat)VirtualView.LineHeight
-                };
-
-                var range = new NSRange(0, mutableString.Length);
-                mutableString.AddAttribute(UIStringAttributeKey.ParagraphStyle, paragraphStyle, range);
-                mutableString.AddAttribute(UIStringAttributeKey.ForegroundColor, GetTextColor(), range);
-
-                PlatformView.AttributedText = mutableString;
-            }
-            else
-            {
-                // Fallback to plain text
-                PlatformView.Text = html;
-                PlatformView.TextColor = GetTextColor();
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"HtmlViewHandler iOS error: {ex.Message}");
-            PlatformView.Text = html;
-            PlatformView.TextColor = GetTextColor();
-        }
-
-        // Set text direction
-        if (VirtualView.TextDirection == HtmlTextDirection.Rtl)
-        {
-            PlatformView.TextAlignment = UITextAlignment.Right;
-        }
-    }
-
-    private string WrapWithStyles(string html)
-    {
-        var textAlign = VirtualView.GetCssTextAlign();
-        var direction = VirtualView.GetCssDirection();
         var fontSize = VirtualView.EffectiveFontSize;
-        var lineHeight = VirtualView.LineHeight;
-        var h1Size = fontSize * VirtualView.H1FontSizeMultiplier;
-        var h2Size = fontSize * VirtualView.H2FontSizeMultiplier;
-        var h3Size = fontSize * VirtualView.H3FontSizeMultiplier;
+        var h1Scale = VirtualView.H1FontSizeMultiplier;
+        var h2Scale = VirtualView.H2FontSizeMultiplier;
+        var h3Scale = VirtualView.H3FontSizeMultiplier;
+        var renderKey = $"{VirtualView.TextAlignment}|{VirtualView.TextDirection}|" +
+            $"{fontSize}|{VirtualView.LineHeight}|{h1Scale}|{h2Scale}|{h3Scale}|{html}";
+        if (renderKey == _renderedHtml)
+        {
+            return;
+        }
+        _renderedHtml = renderKey;
+        var serial = ++_renderSerial;
 
-        return $@"<!DOCTYPE html>
-<html dir=""{direction}"">
-<head>
-    <meta charset=""UTF-8"">
-    <style>
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            font-size: {fontSize}px;
-            text-align: {textAlign};
-            direction: {direction};
-            line-height: {lineHeight};
-            margin: 0;
-            padding: 0;
-        }}
-        h1 {{ font-size: {h1Size}px; }}
-        h2 {{ font-size: {h2Size}px; text-decoration: underline; }}
-        h3 {{ font-size: {h3Size}px; text-decoration: underline; }}
-        a {{ color: #1976d2; }}
-    </style>
-</head>
-<body>{html}</body>
-</html>";
+        var paragraphStyle = new NSMutableParagraphStyle
+        {
+            Alignment = VirtualView.TextAlignment switch
+            {
+                HtmlTextAlignment.Center => UITextAlignment.Center,
+                HtmlTextAlignment.End => VirtualView.TextDirection == HtmlTextDirection.Rtl
+                    ? UITextAlignment.Left : UITextAlignment.Right,
+                HtmlTextAlignment.Justify => UITextAlignment.Justified,
+                _ => VirtualView.TextDirection == HtmlTextDirection.Rtl
+                    ? UITextAlignment.Right : UITextAlignment.Left
+            },
+            LineHeightMultiple = (nfloat)VirtualView.LineHeight,
+            // The WebKit stylesheet set `dir` on the document; keep the same
+            // base writing direction so mixed-direction runs bidi-resolve alike.
+            BaseWritingDirection = VirtualView.TextDirection switch
+            {
+                HtmlTextDirection.Ltr => NSWritingDirection.LeftToRight,
+                HtmlTextDirection.Rtl => NSWritingDirection.RightToLeft,
+                _ => NSWritingDirection.Natural
+            }
+        };
+        var textColor = GetTextColor();
+        var rtl = VirtualView.TextDirection == HtmlTextDirection.Rtl;
+
+        // Clear recycled content before the parsed result arrives.
+        PlatformView.Text = string.Empty;
+
+        Task.Run(() =>
+        {
+            // Skip the conversion entirely when the bound content already moved on.
+            if (serial != _renderSerial)
+            {
+                return;
+            }
+            var attributedString = HtmlAttributedStringFactory.FromHtml(html, fontSize, h1Scale, h2Scale, h3Scale);
+            if (attributedString != null)
+            {
+                var range = new NSRange(0, attributedString.Length);
+                attributedString.AddAttribute(UIStringAttributeKey.ParagraphStyle, paragraphStyle, range);
+                attributedString.AddAttribute(UIStringAttributeKey.ForegroundColor, textColor, range);
+            }
+
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                if (PlatformView == null || VirtualView == null || serial != _renderSerial)
+                {
+                    return;
+                }
+                if (attributedString != null)
+                {
+                    PlatformView.AttributedText = attributedString;
+                }
+                else
+                {
+                    PlatformView.Text = html;
+                    PlatformView.TextColor = textColor;
+                }
+                if (rtl)
+                {
+                    PlatformView.TextAlignment = UITextAlignment.Right;
+                }
+                // The cell was measured while the text view was empty; re-measure
+                // now that the rendered content has arrived.
+                VirtualView.InvalidateMeasure();
+            });
+        });
     }
 
     private static void MapHtmlContent(HtmlViewHandler handler, HtmlView view)

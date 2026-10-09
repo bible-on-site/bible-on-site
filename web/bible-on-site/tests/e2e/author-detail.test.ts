@@ -12,7 +12,7 @@ test.describe("Author detail page", () => {
 	test("renders author page with name and content", async ({ page }) => {
 		await page.goto(`/929/authors/${AUTHOR_1_SLUG}`);
 
-		await expect(page).toHaveTitle(/הרב לדוגמא|תנ״ך באתר/);
+		await expect(page).toHaveTitle(/הרב לדוגמא|תנ"ך באתר/);
 		const authorName = page.locator("h1").filter({ hasText: "הרב" });
 		await expect(authorName).toBeVisible();
 	});
@@ -50,7 +50,7 @@ test.describe("Author detail page", () => {
 	test("numeric ID still resolves via backward-compat", async ({ page }) => {
 		await page.goto("/929/authors/1");
 
-		await expect(page).toHaveTitle(/הרב לדוגמא|תנ״ך באתר/);
+		await expect(page).toHaveTitle(/הרב לדוגמא|תנ"ך באתר/);
 		const authorName = page.locator("h1").filter({ hasText: "הרב" });
 		await expect(authorName).toBeVisible();
 	});
@@ -58,7 +58,7 @@ test.describe("Author detail page", () => {
 	test("/929/rabbis alias works for author detail", async ({ page }) => {
 		await page.goto(`/929/rabbis/${AUTHOR_1_SLUG}`);
 
-		await expect(page).toHaveTitle(/הרב לדוגמא|תנ״ך באתר/);
+		await expect(page).toHaveTitle(/הרב לדוגמא|תנ"ך באתר/);
 		const authorName = page.locator("h1").filter({ hasText: "הרב" });
 		await expect(authorName).toBeVisible();
 	});

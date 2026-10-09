@@ -50,12 +50,24 @@ video {
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --surface-elevated: #ffffff;
+  --surface-muted: #f8fafc;
+  --border-subtle: #e2e8f0;
+  --link-accent: #1552ac;
+  --pasuk-num-color: #1c2c5d;
+  --muted-text: #666666;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0f1219;
+    --foreground: #e8eaed;
+    --surface-elevated: #1a1f2e;
+    --surface-muted: #12151c;
+    --border-subtle: #2d3548;
+    --link-accent: #7eb0ff;
+    --pasuk-num-color: #a8b9ff;
+    --muted-text: #9aa0a6;
   }
 }
 

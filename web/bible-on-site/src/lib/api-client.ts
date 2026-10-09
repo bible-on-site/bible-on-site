@@ -48,7 +48,7 @@ function getPool(): mysql.Pool {
 		pool = mysql.createPool({
 			...getDbConfig(),
 			waitForConnections: true,
-			connectionLimit: 10,
+			connectionLimit: 5,
 			queueLimit: 0,
 		});
 	}

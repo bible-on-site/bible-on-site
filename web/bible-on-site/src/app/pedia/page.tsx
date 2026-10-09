@@ -1,0 +1,199 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { JsonLd } from "@/app/components/JsonLd";
+import { buildLandingGraph } from "@/lib/seo/tanahpedia-jsonld";
+import {
+	CATEGORY_HIERARCHY,
+	labelForCategoryKey,
+} from "@/lib/tanahpedia/category-hierarchy";
+import { categoryHref } from "@/lib/tanahpedia/category-slug";
+import {
+	CATEGORY_LABELS,
+	getCategoryCounts,
+	getRecentEntries,
+	getTodayInTanahEntities,
+} from "@/lib/tanahpedia/service";
+import type { CategoryKey } from "@/lib/tanahpedia/types";
+import { constructTsetAwareHDate } from "@/util/hebdates-util";
+import styles from "./page.module.css";
+
+export const metadata: Metadata = {
+	title: 'תנכפדיה | תנ"ך על הפרק',
+	description: 'אנציקלופדיה לתנ"ך - אישים, מקומות, אירועים ועוד',
+};
+
+// Today's anniversaries and recent entries must be loaded on each request.
+export const dynamic = "force-dynamic";
+
+export default async function TanahpediaLandingPage() {
+	const today = constructTsetAwareHDate(new Date());
+	const hebrewMonth = today.getUniformMonth();
+	const hebrewDay = today.day;
+	const hebrewDateStr = today.toTraditionalHebrewString();
+
+	let counts: Record<CategoryKey, number>;
+	let recentEntries: Awaited<ReturnType<typeof getRecentEntries>>;
+	let todayEntities: Awaited<ReturnType<typeof getTodayInTanahEntities>>;
+	let loadError: string | null = null;
+	try {
+		[counts, recentEntries, todayEntities] = await Promise.all([
+			getCategoryCounts(),
+			getRecentEntries(8),
+			getTodayInTanahEntities(hebrewMonth, hebrewDay),
+		]);
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		if (process.env.NODE_ENV === "development") {
+			console.error("[tanahpedia] landing DB load failed:", err);
+		}
+		loadError = msg;
+		counts = Object.fromEntries(
+			Object.keys(CATEGORY_LABELS).map((k) => [k, 0]),
+		) as Record<CategoryKey, number>;
+		recentEntries = [];
+		todayEntities = [];
+	}
+
+	// A failed load zeroes every count; only a real zero means "coming soon".
+	const isComingSoon = (key: CategoryKey) => !loadError && counts[key] === 0;
+
+	return (
+		<div className={styles.tanahpediaPage}>
+			<JsonLd data={buildLandingGraph()} />
+			<h1 className={styles.pageTitle}>תנכפדיה</h1>
+			<p className={styles.pageSubtitle}>
+				אנציקלופדיה לתנ&quot;ך - אישים, מקומות, אירועים, חפצים ועוד
+			</p>
+
+			{loadError ? (
+				<div className={styles.dbLoadWarning} role="alert">
+					<strong className={styles.dbLoadWarningTitle}>
+						התוכן אינו זמין כרגע
+					</strong>
+					{process.env.NODE_ENV === "development" ? (
+						<>
+							<p className={styles.dbLoadWarningText}>
+								ודאו ש-MySQL פעיל, ש-DB_URL ב-.dev.env מצביע על אותה מסד שמולא
+								ב-
+								<code className={styles.dbLoadWarningCode}>
+									cargo make mysql-populate-dev
+								</code>
+								, ואז הריצו שוב{" "}
+								<code className={styles.dbLoadWarningCode}>npm run dev</code>.
+							</p>
+							<pre className={styles.dbLoadWarningPre}>{loadError}</pre>
+						</>
+					) : (
+						<p className={styles.dbLoadWarningText}>
+							אירעה שגיאה בטעינת הנתונים. נסו לרענן את העמוד מאוחר יותר.
+						</p>
+					)}
+				</div>
+			) : null}
+
+			{todayEntities.length > 0 && (
+				<section className={styles.todaySection}>
+					<div className={styles.todayHeader}>
+						<h2 className={styles.todaySectionTitle}>היום בתנ&quot;ך</h2>
+						<span className={styles.todayDate}>{hebrewDateStr}</span>
+					</div>
+					<ul className={styles.todayList}>
+						{todayEntities.map((entity) => (
+							<li key={entity.entityId} className={styles.todayItem}>
+								<span className={styles.todayBullet}>●</span>
+								<span className={styles.todayText}>
+									{entity.linkedEntries.length > 0 ? (
+										entity.linkedEntries.map((entry, index) => (
+											<span key={entry.id}>
+												{index > 0 && " / "}
+												<Link
+													href={`/pedia/${encodeURIComponent(entry.uniqueName)}`}
+													className={styles.todayLink}
+												>
+													{entry.title}
+												</Link>
+											</span>
+										))
+									) : (
+										<strong>{entity.entityName}</strong>
+									)}
+								</span>
+							</li>
+						))}
+					</ul>
+				</section>
+			)}
+
+			<section>
+				<h2 className={styles.sectionTitle}>קטגוריות</h2>
+				<div className={styles.categoryGrid}>
+					{CATEGORY_HIERARCHY.map((cat) => (
+						<div key={cat.type} className={styles.categoryGroup}>
+							<Link
+								href={categoryHref(cat.type)}
+								className={`${styles.categoryCard} ${isComingSoon(cat.type) ? styles.categoryCardEmpty : ""}`}
+							>
+								<div className={styles.categoryName}>
+									{CATEGORY_LABELS[cat.type]}
+								</div>
+								<div className={styles.categoryCount}>
+									{isComingSoon(cat.type) ? (
+										<span className={styles.comingSoonBadge}>בקרוב</span>
+									) : (
+										`${counts[cat.type]} ערכים`
+									)}
+								</div>
+							</Link>
+							{cat.children && cat.children.length > 0 && (
+								<div className={styles.subcategoryList}>
+									{cat.children.map((sub) => (
+										<Link
+											key={sub}
+											href={categoryHref(sub)}
+											className={`${styles.subcategoryCard} ${isComingSoon(sub) ? styles.subcategoryCardEmpty : ""}`}
+										>
+											<span className={styles.subcategoryName}>
+												{labelForCategoryKey(sub)}
+											</span>
+											{isComingSoon(sub) ? (
+												<span className={styles.comingSoonBadge}>בקרוב</span>
+											) : (
+												<span className={styles.subcategoryCount}>
+													{counts[sub]}
+												</span>
+											)}
+										</Link>
+									))}
+								</div>
+							)}
+						</div>
+					))}
+				</div>
+			</section>
+
+			{recentEntries.length > 0 && (
+				<section>
+					<h2 className={styles.sectionTitle}>עודכנו לאחרונה</h2>
+					<ul className={styles.recentList}>
+						{recentEntries.map((entry) => (
+							<li key={entry.id} className={styles.recentItem}>
+								<Link
+									href={`/pedia/${encodeURIComponent(entry.uniqueName)}`}
+									className={styles.recentLink}
+								>
+									{entry.title}
+								</Link>
+							</li>
+						))}
+					</ul>
+				</section>
+			)}
+
+			<div className={styles.backLinkWrapper}>
+				<Link href="/" className={styles.backLink}>
+					חזרה לעמוד הראשי
+				</Link>
+			</div>
+		</div>
+	);
+}

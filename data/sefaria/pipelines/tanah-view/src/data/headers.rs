@@ -61,4 +61,41 @@ mod tests {
         assert_eq!(headers[0].header, "בריאת העולם");
         assert_eq!(headers[0].sefer, "בראשית");
     }
+
+    #[test]
+    fn to_header_strings_preserves_order_and_values() {
+        let headers = vec![
+            PerekHeader {
+                id: 2,
+                sefer: "Book".to_string(),
+                perek: 2,
+                header: "Second".to_string(),
+                qualified: true,
+            },
+            PerekHeader {
+                id: 1,
+                sefer: "Book".to_string(),
+                perek: 1,
+                header: "First".to_string(),
+                qualified: false,
+            },
+        ];
+
+        assert_eq!(to_header_strings(&headers), vec!["Second", "First"]);
+    }
+
+    #[test]
+    fn to_bson_array_converts_headers_to_string_array() {
+        let headers = vec![PerekHeader {
+            id: 1,
+            sefer: "Book".to_string(),
+            perek: 1,
+            header: "Header".to_string(),
+            qualified: false,
+        }];
+
+        let bson = to_bson_array(&headers);
+
+        assert_eq!(bson, Bson::Array(vec![Bson::String("Header".to_string())]));
+    }
 }

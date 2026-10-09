@@ -77,5 +77,117 @@ pub fn generate(
     fs::write(&perushim_path, json)?;
     println!("📁 Perushim written to: {}", perushim_path.display());
 
+    // Citation recognition uses a client-safe projection. Generate it from the
+    // same catalog so newly added/removed works cannot leave this list stale.
+    let names_path = perushim_path
+        .parent()
+        .unwrap()
+        .join(if output_to_dependant_modules {
+            "perush-names.ts".to_string()
+        } else {
+            format!("{dump_name}.perush-names.ts")
+        });
+    let mut names: Vec<&str> = extracted.perushim.iter().map(|p| p.name.as_str()).collect();
+    names.sort_by(|a, b| {
+        b.chars()
+            .count()
+            .cmp(&a.chars().count())
+            .then_with(|| a.cmp(b))
+    });
+    fs::write(
+        names_path,
+        format!(
+            "/** Generated client-safe names-only projection of the perushim catalog. */\nexport const perushNames = {} as const;\n",
+            serde_json::to_string_pretty(&names)?
+        ),
+    )?;
+
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data::extract::{Extracted, Note, Parshan, Perush};
+
+    fn sample_extracted() -> Extracted {
+        Extracted {
+            parshanim: vec![
+                Parshan {
+                    id: 1,
+                    name: "Rashi".to_string(),
+                    birth_year: Some(1040),
+                    has_pic: true,
+                },
+                Parshan {
+                    id: 2,
+                    name: "Unknown".to_string(),
+                    birth_year: None,
+                    has_pic: false,
+                },
+            ],
+            perushim: vec![
+                Perush {
+                    id: 10,
+                    name: "Commentary One".to_string(),
+                    parshan_id: 1,
+                    comp_date: Some("1100".to_string()),
+                    pub_date: None,
+                    priority: 20,
+                },
+                Perush {
+                    id: 11,
+                    name: "Commentary Two".to_string(),
+                    parshan_id: 2,
+                    comp_date: None,
+                    pub_date: Some("1200".to_string()),
+                    priority: 30,
+                },
+            ],
+            notes: vec![Note {
+                perush_id: 10,
+                perek_id: 1,
+                pasuk: 1,
+                note_idx: 0,
+                note_content: "ignored by json command".to_string(),
+            }],
+        }
+    }
+
+    #[test]
+    fn generate_writes_parshanim_and_perushim_json_with_optional_fields() {
+        let dump_name = format!("test-dump-{}", std::process::id());
+        let output_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join(".output");
+        let parshanim_path = output_dir.join(format!("{dump_name}.parshanim.json"));
+        let perushim_path = output_dir.join(format!("{dump_name}.perushim.json"));
+        let names_path = output_dir.join(format!("{dump_name}.perush-names.ts"));
+        let _ = fs::remove_file(&parshanim_path);
+        let _ = fs::remove_file(&perushim_path);
+
+        generate(&sample_extracted(), &dump_name, false).unwrap();
+
+        let parshanim: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&parshanim_path).unwrap()).unwrap();
+        assert_eq!(parshanim[0]["id"], 1);
+        assert_eq!(parshanim[0]["birthYear"], 1040);
+        assert_eq!(parshanim[0]["hasPic"], true);
+        assert!(parshanim[1].get("birthYear").is_none());
+
+        let perushim: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&perushim_path).unwrap()).unwrap();
+        assert_eq!(perushim[0]["parshanId"], 1);
+        assert_eq!(perushim[0]["compDate"], "1100");
+        assert!(perushim[0].get("pubDate").is_none());
+        assert_eq!(perushim[1]["pubDate"], "1200");
+
+        let names = fs::read_to_string(&names_path).unwrap();
+        assert!(names.contains("export const perushNames ="));
+        for p in sample_extracted().perushim {
+            assert!(names.contains(&serde_json::to_string(&p.name).unwrap()));
+        }
+
+        let _ = fs::remove_file(parshanim_path);
+        let _ = fs::remove_file(perushim_path);
+        let _ = fs::remove_file(names_path);
+    }
 }
