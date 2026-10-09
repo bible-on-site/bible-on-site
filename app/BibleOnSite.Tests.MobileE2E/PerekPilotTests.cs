@@ -8,8 +8,8 @@ namespace BibleOnSite.Tests.MobileE2E;
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "Shared")]
-public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessionFactory sessions)
-    : MobileDeviceTest(output, sessions)
+public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSession session)
+    : MobileDeviceTest(output, session)
 {
     [Fact]
     public void StartupDisplaysPackagedPesukimAndUsableBottomNavigation() => Scenario(() =>

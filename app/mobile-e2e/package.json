@@ -11,7 +11,9 @@
     "test:unit": "node --test simulator.test.mjs appium-readiness.test.mjs native-logs.test.mjs android-readiness.test.mjs android-snapshot-check.test.mjs",
     "android:ready": "node android-ready.mjs",
     "ios:wda": "node prepare-wda.mjs",
-    "ios:boot": "node boot-ios.mjs"
+    "ios:boot": "node boot-ios.mjs",
+    "ios:boot:start": "node boot-ios.mjs --early",
+    "ios:boot:ready": "node boot-ios.mjs --ready"
   },
   "devDependencies": {
     "appium": "3.8.0",

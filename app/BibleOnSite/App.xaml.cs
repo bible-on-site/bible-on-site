@@ -22,6 +22,7 @@ public partial class App : Application
 		{
 			var window = new Window(new AppShell());
 			window.Stopped += (_, _) => Services.RecitationService.Instance.RequestPlaybackStop();
+			Services.SearchIndexService.WarmupForE2e();
 			return window;
 		}
 		catch (Exception ex)

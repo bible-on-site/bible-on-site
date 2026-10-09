@@ -38,6 +38,49 @@ public sealed class SearchIndexService : IAsyncDisposable
 
     public bool CommentaryAvailable { get; private set; }
 
+    // The mobile-e2e harness launches the app with this marker so the index
+    // builds while earlier scenarios still run, instead of the first perush
+    // search paying the multi-minute commentary import inside its own window.
+    // Production launches never set it and keep the lazy path.
+    internal const string E2eEnvironmentVariable = "BIBLE_E2E";
+
+    public static void WarmupForE2e()
+    {
+        if (Environment.GetEnvironmentVariable(E2eEnvironmentVariable) != "1")
+        {
+            return;
+        }
+        _ = WarmupIndexesAsync();
+    }
+
+    private static async Task WarmupIndexesAsync()
+    {
+        try
+        {
+            var service = Instance;
+            await Task.WhenAll(service.WarmTableAsync("verses"), service.WarmTableAsync("notes"));
+        }
+        catch (Exception exception)
+        {
+            Console.WriteLine($"E2E search-index warmup failed: {exception}");
+        }
+    }
+
+    // Shares the search path's dedup so a warmup build is also the build a
+    // concurrent search awaits, and DisposeAsync can drain it.
+    private Task WarmTableAsync(string table)
+    {
+        lock (_buildSync)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (!_buildTasks.TryGetValue(table, out var build) || build.IsCompleted)
+            {
+                _buildTasks[table] = build = EnsureIndexAsync(table);
+            }
+            return build;
+        }
+    }
+
     public Task<List<SearchHit>> SearchAsync(string query, IReadOnlySet<SearchFilter> filters,
         IReadOnlySet<int> books, int limit, CancellationToken cancellationToken) =>
         SearchAsync(query, filters, books, limit, cancellationToken, null);

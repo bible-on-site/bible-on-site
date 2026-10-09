@@ -1,4 +1,6 @@
+using BibleOnSite.Tests.MobileE2E.Platforms;
 using OpenQA.Selenium;
+using OpenQA.Selenium.Appium;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -12,7 +14,7 @@ public sealed class DeviceSessionRecoveryTests
     private readonly string _artifacts = Path.Join(Path.GetTempPath(), $"e2e-{Guid.NewGuid():N}");
 
     public DeviceSessionRecoveryTests() =>
-        _test = new(new ListOutput(_log), new MobileDeviceSessionFactory(), _artifacts);
+        _test = new(new ListOutput(_log), new FakeSession(_artifacts));
 
     [Fact]
     public void SessionLossRebuildsTheSessionAndRerunsOnce()
@@ -111,6 +113,17 @@ public sealed class DeviceSessionRecoveryTests
         Assert.Equal(2, _test.Rebuilds);
     }
 
+    [Fact]
+    public void LaunchEnvironmentReachesTheSession()
+    {
+        var session = new FakeSession(_artifacts);
+        var test = new EnvironmentDeviceTest(new ListOutput(_log), session);
+
+        test.Reacquire();
+
+        Assert.Equal("1", session.LastEnvironment?["BIBLE_E2E_PERUSHIM"]);
+    }
+
     private sealed class ListOutput(List<string> lines) : ITestOutputHelper
     {
         public string Output => string.Join("\n", lines);
@@ -118,9 +131,21 @@ public sealed class DeviceSessionRecoveryTests
         public void WriteLine(string format, params object[] args) => lines.Add(string.Format(format, args));
     }
 
-    private sealed class FakeDeviceTest(ITestOutputHelper output, MobileDeviceSessionFactory sessions, string artifacts)
-        : MobileDeviceTest(output, sessions, new MobileTestConfiguration(
-            MobilePlatform.Android, "/test/app", "test-device", artifacts, new Uri("http://127.0.0.1:4723")))
+    private sealed class FakeSession(string artifacts) : IMobileDeviceSession
+    {
+        public MobilePlatformAdapter Adapter { get; } =
+            MobilePlatformAdapter.For(MobilePlatform.Android);
+        public MobileTestConfiguration Configuration { get; } = new(
+            MobilePlatform.Android, "/test/app", "test-device", artifacts,
+            new Uri("http://127.0.0.1:4723"));
+        public AppiumDriver? Driver => null;
+        public IReadOnlyDictionary<string, string>? LastEnvironment { get; private set; }
+        public void Acquire(IReadOnlyDictionary<string, string>? environment) =>
+            LastEnvironment = environment;
+    }
+
+    private sealed class FakeDeviceTest(ITestOutputHelper output, IMobileDeviceSession session)
+        : MobileDeviceTest(output, session)
     {
         public int Rebuilds { get; private set; }
         public Queue<Exception> ConnectFailures { get; } = new();
@@ -134,5 +159,13 @@ public sealed class DeviceSessionRecoveryTests
         }
         public void Execute(Action run) => Scenario(run);
         public Task Start() => InitializeAsync();
+    }
+
+    private sealed class EnvironmentDeviceTest(ITestOutputHelper output, IMobileDeviceSession session)
+        : MobileDeviceTest(output, session)
+    {
+        protected override IReadOnlyDictionary<string, string> LaunchEnvironment =>
+            new Dictionary<string, string> { ["BIBLE_E2E_PERUSHIM"] = "1" };
+        public void Reacquire() => AcquireSession();
     }
 }
