@@ -216,6 +216,47 @@ public class FanMenuGeometryTests
         second.Items.Should().Equal(first.Items);
     }
 
+    /// <summary>
+    /// Cramped canvases that still admit a valid layout: the resolver must
+    /// converge to distinct, unobstructed touch targets.
+    /// </summary>
+    public static IEnumerable<object[]> CrampedCanvases =>
+    [
+        [200.0, 300.0],  // too narrow for four actions on one row — must stack
+        [360.0, 120.0],  // too short to lift actions above the toggle — must sidestep
+    ];
+
+    [Theory]
+    [MemberData(nameof(CrampedCanvases))]
+    public void CrampedCanvas_KeepsActionsDistinct(double width, double height)
+    {
+        var layout = FanMenuGeometry.Compute(width, height);
+
+        layout.Items.Should().HaveCount(4);
+        foreach (var item in layout.Items)
+        {
+            item.Left.Should().BeGreaterThanOrEqualTo(0);
+            item.Top.Should().BeGreaterThanOrEqualTo(0);
+            item.Right.Should().BeLessThanOrEqualTo(width);
+            item.Bottom.Should().BeLessThanOrEqualTo(height);
+            item.IntersectsWith(layout.Toggle).Should().BeFalse(
+                "actions must never cover the toggle, even on cramped canvases");
+            foreach (var obstacle in layout.Obstacles)
+            {
+                item.IntersectsWith(obstacle).Should().BeFalse(
+                    "actions must never cover the bottom-bar buttons");
+            }
+        }
+        for (var i = 0; i < layout.Items.Count; i++)
+        {
+            for (var j = i + 1; j < layout.Items.Count; j++)
+            {
+                layout.Items[i].IntersectsWith(layout.Items[j]).Should().BeFalse(
+                    $"action {i} and {j} must stay distinct on a {width}x{height} canvas");
+            }
+        }
+    }
+
     [Fact]
     public void DegenerateCanvas_KeepsActionsInsideBounds()
     {

@@ -62,6 +62,8 @@ public static class FanMenuGeometry
     private const double ObstacleGap = 4;
     private const double DegToRad = Math.PI / 180;
     private const int MaxSeparationPasses = 16;
+    private const int MaxResolveRounds = 8;
+    private const int FixedResolveRounds = 3;
 
     /// <summary>
     /// The computed menu layout: the toggle bounds, the action bounds (ordered
@@ -228,36 +230,142 @@ public static class FanMenuGeometry
         List<Rect> items, Rect toggle, IReadOnlyList<Rect> obstacles,
         double width, double height)
     {
-        // Clamp into the canvas and lift actions off the fixed obstacles and
-        // the toggle. Lifting only ever moves an action upward — the fan sits
-        // in the upper half around the toggle, so this preserves its shape.
-        for (var i = 0; i < items.Count; i++)
+        // Fixed-control resolution and pair separation alternate: pushes can
+        // shove an action onto an obstacle while lifts/sidesteps can re-merge
+        // pairs, so neither pass alone converges. A few rounds are enough on
+        // real canvases; canvases that cannot fit the fan fall through to the
+        // grid below.
+        for (var round = 0; round < MaxResolveRounds; round++)
         {
-            var rect = ClampToCanvas(items[i], width, height);
-
-            foreach (var obstacle in obstacles)
+            var changed = ResolveFixed(items, toggle, obstacles, width, height);
+            changed |= SeparatePairs(items, width, height);
+            if (!changed)
             {
-                if (rect.IntersectsWith(obstacle))
+                break;
+            }
+        }
+
+        // Last resort for canvases too narrow for the fan: stack the actions
+        // in a compact grid above the toggle so every touch target stays
+        // distinct, then settle the result like any other arrangement.
+        if (AnyPairOverlaps(items))
+        {
+            GridStack(items, toggle, width, height);
+            for (var round = 0; round < MaxResolveRounds; round++)
+            {
+                var changed = ResolveFixed(items, toggle, obstacles, width, height);
+                changed |= SeparatePairs(items, width, height);
+                if (!changed)
                 {
-                    var bottom = obstacle.Top - ObstacleGap;
-                    rect = new Rect(rect.X, Math.Min(rect.Y, bottom - ItemSize),
-                        ItemSize, ItemSize);
+                    break;
                 }
             }
 
-            if (rect.IntersectsWith(toggle))
-            {
-                rect = new Rect(rect.X, toggle.Top - ToggleGap - ItemSize,
-                    ItemSize, ItemSize);
-            }
+            // Fixed controls have priority over pair separation: on degenerate
+            // canvases a residual pair overlap is preferable to covering a
+            // fixed control or leaving the safe area.
+            ResolveFixed(items, toggle, obstacles, width, height);
+        }
+    }
 
-            items[i] = ClampToCanvas(rect, width, height);
+    /// <summary>
+    /// Clamps every action into the canvas and moves it off the obstacles and
+    /// the toggle.
+    /// </summary>
+    /// <returns>True when any action moved.</returns>
+    private static bool ResolveFixed(
+        List<Rect> items, Rect toggle, IReadOnlyList<Rect> obstacles,
+        double width, double height)
+    {
+        var changed = false;
+        for (var i = 0; i < items.Count; i++)
+        {
+            var resolved = ResolveFixedCollisions(items[i], toggle, obstacles,
+                width, height);
+            if (!resolved.Equals(items[i]))
+            {
+                items[i] = resolved;
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    /// <summary>
+    /// Resolves a single action against the fixed controls. Escaping one
+    /// blocker sideways can land the action on the next one, so the pass
+    /// repeats until the rect stabilizes.
+    /// </summary>
+    private static Rect ResolveFixedCollisions(
+        Rect rect, Rect toggle, IReadOnlyList<Rect> obstacles,
+        double width, double height)
+    {
+        for (var round = 0; round < FixedResolveRounds; round++)
+        {
+            var resolved = ClampToCanvas(rect, width, height);
+            foreach (var obstacle in obstacles)
+            {
+                if (resolved.IntersectsWith(obstacle))
+                {
+                    resolved = EscapeBlocker(resolved, obstacle, ObstacleGap);
+                }
+            }
+            if (resolved.IntersectsWith(toggle))
+            {
+                resolved = EscapeBlocker(resolved, toggle, ToggleGap);
+            }
+            resolved = ClampToCanvas(resolved, width, height);
+            if (resolved.Equals(rect))
+            {
+                return resolved;
+            }
+            rect = resolved;
+        }
+        return rect;
+    }
+
+    /// <summary>
+    /// Moves an action off a fixed control: above it when the canvas has room
+    /// (the fan lives in the upper half around the toggle), otherwise beside
+    /// it — a short canvas may lack the vertical space to lift an action but
+    /// almost always has horizontal room next to the control.
+    /// </summary>
+    private static Rect EscapeBlocker(Rect rect, Rect blocker, double gap)
+    {
+        var liftedY = Math.Min(rect.Y, blocker.Top - gap - ItemSize);
+        if (liftedY >= TopMargin)
+        {
+            return new Rect(rect.X, liftedY, ItemSize, ItemSize);
         }
 
-        // Push overlapping pairs apart along their cheaper separation axis.
-        // Actions are ordered left-to-right, so a horizontal push keeps the
-        // visual order; a vertical push stacks them. Iterates because one
-        // resolution can create the next overlap on crowded canvases.
+        // The clamped lift may still clear a low blocker (e.g. a bar button on
+        // a very short canvas): prefer it over moving sideways.
+        if (TopMargin + ItemSize <= blocker.Top)
+        {
+            return new Rect(rect.X, TopMargin, ItemSize, ItemSize);
+        }
+
+        var leftX = blocker.Left - gap - ItemSize;
+        var rightX = blocker.Right + gap;
+        var moveLeft = Math.Abs(rect.X - leftX);
+        var moveRight = Math.Abs(rect.X - rightX);
+        var x = moveLeft <= moveRight ? leftX : rightX;
+        return new Rect(x, rect.Y, ItemSize, ItemSize);
+    }
+
+    /// <summary>
+    /// Pushes overlapping pairs apart along their cheaper separation axis.
+    /// Actions are ordered left-to-right, so a horizontal push keeps the
+    /// visual order; a vertical push stacks them. When the cheaper axis is
+    /// wedged against a canvas edge (the push gets clamped away), the other
+    /// axis still gets a try — narrow windows cannot always separate four
+    /// actions horizontally. Iterates because one resolution can create the
+    /// next overlap on crowded canvases.
+    /// </summary>
+    /// <returns>True when any action moved.</returns>
+    private static bool SeparatePairs(List<Rect> items, double width, double height)
+    {
+        var anyMoved = false;
         for (var pass = 0; pass < MaxSeparationPasses; pass++)
         {
             var moved = false;
@@ -267,31 +375,34 @@ public static class FanMenuGeometry
                 {
                     var a = items[i];
                     var b = items[j];
-                    var overlapX = Math.Min(a.Right, b.Right) - Math.Max(a.Left, b.Left);
-                    var overlapY = Math.Min(a.Bottom, b.Bottom) - Math.Max(a.Top, b.Top);
+                    var overlapX = Overlap(a, b, horizontal: true);
+                    var overlapY = Overlap(a, b, horizontal: false);
                     if (overlapX <= -ItemGap || overlapY <= -ItemGap)
                     {
                         continue;
                     }
 
-                    moved = true;
-                    if (overlapX <= overlapY)
+                    moved = anyMoved = true;
+                    var horizontal = overlapX <= overlapY;
+                    (a, b) = PushPair(a, b, overlapX, overlapY, horizontal);
+                    a = ClampToCanvas(a, width, height);
+                    b = ClampToCanvas(b, width, height);
+
+                    // The preferred axis may be pinned at a canvas edge: give
+                    // the other axis a try only while the pair still actually
+                    // intersects — partial separation converges on later passes.
+                    if (Overlap(a, b, horizontal: true) > 0 &&
+                        Overlap(a, b, horizontal: false) > 0)
                     {
-                        var push = (overlapX + ItemGap) / 2;
-                        var sign = a.Left <= b.Left ? 1 : -1;
-                        a = new Rect(a.X - push * sign, a.Y, ItemSize, ItemSize);
-                        b = new Rect(b.X + push * sign, b.Y, ItemSize, ItemSize);
-                    }
-                    else
-                    {
-                        var push = (overlapY + ItemGap) / 2;
-                        var sign = a.Top <= b.Top ? 1 : -1;
-                        a = new Rect(a.X, a.Y - push * sign, ItemSize, ItemSize);
-                        b = new Rect(b.X, b.Y + push * sign, ItemSize, ItemSize);
+                        (a, b) = PushPair(a, b,
+                            Overlap(a, b, horizontal: true),
+                            Overlap(a, b, horizontal: false), !horizontal);
+                        a = ClampToCanvas(a, width, height);
+                        b = ClampToCanvas(b, width, height);
                     }
 
-                    items[i] = ClampToCanvas(a, width, height);
-                    items[j] = ClampToCanvas(b, width, height);
+                    items[i] = a;
+                    items[j] = b;
                 }
             }
 
@@ -300,29 +411,67 @@ public static class FanMenuGeometry
                 break;
             }
         }
+        return anyMoved;
+    }
 
-        // Separation pushes may have moved an action back onto the toggle or an
-        // obstacle (or outside the canvas): re-apply the higher-priority rules.
-        // On degenerate canvases a residual pair overlap is preferable to
-        // covering a fixed control or leaving the safe area.
+    /// <summary>Signed overlap of two action rects on one axis (negative = gap).</summary>
+    private static double Overlap(Rect a, Rect b, bool horizontal) => horizontal
+        ? Math.Min(a.Right, b.Right) - Math.Max(a.Left, b.Left)
+        : Math.Min(a.Bottom, b.Bottom) - Math.Max(a.Top, b.Top);
+
+    /// <summary>Separates a pair by half the needed clearance on each side.</summary>
+    private static (Rect, Rect) PushPair(
+        Rect a, Rect b, double overlapX, double overlapY, bool horizontal)
+    {
+        if (horizontal)
+        {
+            var push = (overlapX + ItemGap) / 2;
+            var sign = a.Left <= b.Left ? 1 : -1;
+            return (new Rect(a.X - push * sign, a.Y, ItemSize, ItemSize),
+                    new Rect(b.X + push * sign, b.Y, ItemSize, ItemSize));
+        }
+
+        var vertical = (overlapY + ItemGap) / 2;
+        var signV = a.Top <= b.Top ? 1 : -1;
+        return (new Rect(a.X, a.Y - vertical * signV, ItemSize, ItemSize),
+                new Rect(b.X, b.Y + vertical * signV, ItemSize, ItemSize));
+    }
+
+    /// <summary>Any pair of actions closer than <see cref="ItemGap"/> on both axes.</summary>
+    private static bool AnyPairOverlaps(List<Rect> items)
+    {
         for (var i = 0; i < items.Count; i++)
         {
-            var rect = items[i];
-            foreach (var obstacle in obstacles)
+            for (var j = i + 1; j < items.Count; j++)
             {
-                if (rect.IntersectsWith(obstacle))
+                if (Overlap(items[i], items[j], horizontal: true) > -ItemGap &&
+                    Overlap(items[i], items[j], horizontal: false) > -ItemGap)
                 {
-                    rect = new Rect(rect.X,
-                        Math.Min(rect.Y, obstacle.Top - ObstacleGap - ItemSize),
-                        ItemSize, ItemSize);
+                    return true;
                 }
             }
-            if (rect.IntersectsWith(toggle))
-            {
-                rect = new Rect(rect.X, toggle.Top - ToggleGap - ItemSize,
-                    ItemSize, ItemSize);
-            }
-            items[i] = ClampToCanvas(rect, width, height);
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Arranges the actions in centered rows above the toggle — the fallback
+    /// for canvases too narrow to hold even the reduced fan horizontally.
+    /// </summary>
+    private static void GridStack(
+        List<Rect> items, Rect toggle, double width, double height)
+    {
+        var cols = Math.Max(1,
+            (int)((width - 2 * EdgeMargin + ItemGap) / (ItemSize + ItemGap)));
+        for (var i = 0; i < items.Count; i++)
+        {
+            var row = i / cols;
+            var col = i % cols;
+            var rowCount = Math.Min(cols, items.Count - row * cols);
+            var rowWidth = rowCount * ItemSize + (rowCount - 1) * ItemGap;
+            var x = (width - rowWidth) / 2 + col * (ItemSize + ItemGap);
+            var y = toggle.Top - ToggleGap - ItemSize - row * (ItemSize + ItemGap);
+            items[i] = ClampToCanvas(new Rect(x, y, ItemSize, ItemSize), width, height);
         }
     }
 
