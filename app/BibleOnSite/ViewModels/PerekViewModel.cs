@@ -335,10 +335,7 @@ public partial class PerekViewModel : ObservableObject
     /// </summary>
     public async Task LoadPerushimAsync(int perekId)
     {
-        if (TryApplySyntheticPerushimForE2e(perekId))
-        {
-            return;
-        }
+        if (TryApplySyntheticPerushimForE2e(perekId)) { return; }
 
         await _catalogService.InitializeAsync();
         await _notesService.InitializeAsync();

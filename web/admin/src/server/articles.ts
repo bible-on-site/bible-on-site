@@ -8,6 +8,7 @@ export interface Article {
 	abstract: string | null;
 	name: string;
 	priority: number;
+	distributable: boolean;
 	content?: string | null;
 	author_name?: string; // Populated when joined with authors table
 }
@@ -18,6 +19,7 @@ export interface ArticleFormData {
 	abstract: string;
 	name: string;
 	priority: number;
+	distributable: boolean;
 	content: string;
 }
 
@@ -25,7 +27,7 @@ export interface ArticleFormData {
 export const getArticles = createServerFn({ method: "GET" }).handler(
 	async () => {
 		return await query<Omit<Article, "content">>(
-			"SELECT id, perek_id, author_id, abstract, name, priority FROM tanah_article ORDER BY perek_id, priority",
+			"SELECT id, perek_id, author_id, abstract, name, priority, distributable FROM tanah_article ORDER BY perek_id, priority",
 		);
 	},
 );
@@ -37,7 +39,7 @@ export const getArticlesByPerek = createServerFn({ method: "GET" })
 		const articles = await query<
 			Omit<Article, "content"> & { author_name?: string }
 		>(
-			`SELECT a.id, a.perek_id, a.author_id, a.abstract, a.name, a.priority, au.name as author_name
+			`SELECT a.id, a.perek_id, a.author_id, a.abstract, a.name, a.priority, a.distributable, au.name as author_name
 			 FROM tanah_article a
 			 LEFT JOIN tanah_author au ON a.author_id = au.id
 			 WHERE a.perek_id = ? ORDER BY a.priority`,
@@ -51,7 +53,7 @@ export const getArticle = createServerFn({ method: "GET" })
 	.validator((data: number) => data)
 	.handler(async ({ data: id }) => {
 		const article = await queryOne<Article>(
-			"SELECT id, perek_id, author_id, abstract, name, priority, content FROM tanah_article WHERE id = ?",
+			"SELECT id, perek_id, author_id, abstract, name, priority, distributable, content FROM tanah_article WHERE id = ?",
 			[id],
 		);
 
@@ -71,19 +73,20 @@ export const createArticle = createServerFn({ method: "POST" })
 		}
 
 		const result = await execute(
-			"INSERT INTO tanah_article (perek_id, author_id, abstract, name, priority, content) VALUES (?, ?, ?, ?, ?, ?)",
+			"INSERT INTO tanah_article (perek_id, author_id, abstract, name, priority, distributable, content) VALUES (?, ?, ?, ?, ?, ?, ?)",
 			[
 				data.perek_id,
 				data.author_id,
 				data.abstract || null,
 				data.name,
 				data.priority || 1,
+				data.distributable === true,
 				data.content || null,
 			],
 		);
 
 		const newArticle = await queryOne<Article>(
-			"SELECT id, perek_id, author_id, abstract, name, priority, content FROM tanah_article WHERE id = ?",
+			"SELECT id, perek_id, author_id, abstract, name, priority, distributable, content FROM tanah_article WHERE id = ?",
 			[result.insertId],
 		);
 
@@ -102,20 +105,21 @@ export const updateArticle = createServerFn({ method: "POST" })
 		}
 
 		await execute(
-			"UPDATE tanah_article SET perek_id = ?, author_id = ?, abstract = ?, name = ?, priority = ?, content = ? WHERE id = ?",
+			"UPDATE tanah_article SET perek_id = ?, author_id = ?, abstract = ?, name = ?, priority = ?, distributable = ?, content = ? WHERE id = ?",
 			[
 				data.perek_id,
 				data.author_id,
 				data.abstract || null,
 				data.name,
 				data.priority || 1,
+				data.distributable === true,
 				data.content || null,
 				data.id,
 			],
 		);
 
 		const updated = await queryOne<Article>(
-			"SELECT id, perek_id, author_id, abstract, name, priority, content FROM tanah_article WHERE id = ?",
+			"SELECT id, perek_id, author_id, abstract, name, priority, distributable, content FROM tanah_article WHERE id = ?",
 			[data.id],
 		);
 

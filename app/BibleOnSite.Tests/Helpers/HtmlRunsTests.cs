@@ -71,6 +71,14 @@ public class HtmlRunsTests
         }
 
         [Fact]
+        public void leading_whitespace_at_document_start_produces_no_space()
+        {
+            var runs = HtmlRuns.FromHtml("  שלום");
+            runs.Should().ContainSingle();
+            runs[0].Text.Should().Be("שלום");
+        }
+
+        [Fact]
         public void strips_script_and_style_contents()
         {
             var runs = HtmlRuns.FromHtml("א<script>alert(1)</script><style>.x{}</style>ב");
@@ -162,6 +170,20 @@ public class HtmlRunsTests
         public void block_elements_separate_lines()
         {
             var runs = HtmlRuns.FromHtml("<p>א</p><p>ב</p>");
+            string.Concat(runs.Select(r => r.Text)).Should().Be("א\nב");
+        }
+
+        [Fact]
+        public void whitespace_text_node_between_blocks_is_dropped()
+        {
+            var runs = HtmlRuns.FromHtml("<div>א</div> <div>ב</div>");
+            string.Concat(runs.Select(r => r.Text)).Should().Be("א\nב");
+        }
+
+        [Fact]
+        public void text_after_a_block_break_gets_no_separator_space()
+        {
+            var runs = HtmlRuns.FromHtml("<div>א</div> ב");
             string.Concat(runs.Select(r => r.Text)).Should().Be("א\nב");
         }
 
@@ -323,6 +345,14 @@ public class HtmlRunsTests
         }
 
         [Fact]
+        public void font_style_oblique_marks_italic()
+        {
+            var runs = HtmlRuns.FromHtml("<span style=\"font-style: oblique\">א</span>");
+            runs.Should().ContainSingle();
+            runs[0].Italic.Should().BeTrue();
+        }
+
+        [Fact]
         public void vertical_align_super_and_sub_shift_baseline()
         {
             var runs = HtmlRuns.FromHtml("א<span style=\"vertical-align:super\">2</span>ב<span style=\"vertical-align:sub\">n</span>");
@@ -369,6 +399,15 @@ public class HtmlRunsTests
             var runs = HtmlRuns.FromHtml("<table><tr><td>א</td><td>ב</td></tr></table>");
             var text = string.Concat(runs.Select(r => r.Text));
             text.Should().Contain("א  ב");
+        }
+
+        [Fact]
+        public void table_separator_absorbs_leading_space_in_next_cell()
+        {
+            var runs = HtmlRuns.FromHtml("<table><tr><td>א</td><td> ב</td></tr></table>");
+            var text = string.Concat(runs.Select(r => r.Text));
+            text.Should().Contain("א  ב");
+            text.Should().NotContain("א   ב");
         }
 
         [Fact]

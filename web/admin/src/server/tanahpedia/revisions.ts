@@ -1,4 +1,4 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createServerFn, createServerOnlyFn } from "@tanstack/react-start";
 import type mysql from "mysql2/promise";
 import {
 	type EntryRevisionRow,
@@ -7,13 +7,7 @@ import {
 	RevisionConflictError,
 	shouldSquashIntoHead,
 } from "~/lib/tanahpedia/revisions-shared";
-import {
-	execute,
-	query,
-	transaction,
-	txExecute,
-	txQueryOne,
-} from "../db";
+import { execute, query, transaction, txExecute, txQueryOne } from "../db";
 
 const REVISION_COLUMNS =
 	"id, entry_id, proposed_unique_name, proposed_title, proposed_content, source, notes, status, base_revision_id, created_at, updated_at";
@@ -94,87 +88,91 @@ export interface SavedEntryRevisionResult {
  * head revision rather than appending a row per autosave. Pass `squash: false`
  * (e.g. restores) to always open a new revision.
  */
-export async function saveEntryRevisioned(
-	conn: mysql.PoolConnection,
-	input: SaveEntryRevisionedInput,
-	options: { squash?: boolean } = {},
-): Promise<SavedEntryRevisionResult> {
-	const entry = await lockEntry(conn, input.id);
-	if (!entry) throw new Error("Entry not found");
+export const saveEntryRevisioned = createServerOnlyFn(
+	async function saveEntryRevisioned(
+		conn: mysql.PoolConnection,
+		input: SaveEntryRevisionedInput,
+		options: { squash?: boolean } = {},
+	): Promise<SavedEntryRevisionResult> {
+		const entry = await lockEntry(conn, input.id);
+		if (!entry) throw new Error("Entry not found");
 
-	const head = await headRevision(conn, input.id);
-	assertFreshBase(head?.id ?? null, input.baseRevisionId);
+		const head = await headRevision(conn, input.id);
+		assertFreshBase(head?.id ?? null, input.baseRevisionId);
 
-	const nextContent = input.content || null;
-	const unchanged =
-		entry.unique_name === input.unique_name &&
-		entry.title === input.title &&
-		entry.content === nextContent;
+		const nextContent = input.content || null;
+		const unchanged =
+			entry.unique_name === input.unique_name &&
+			entry.title === input.title &&
+			entry.content === nextContent;
 
-	// A no-op save keeps the same head — no history spam for untouched content.
-	if (unchanged) {
-		return { entry, headRevisionId: head?.id ?? null };
-	}
+		// A no-op save keeps the same head — no history spam for untouched content.
+		if (unchanged) {
+			return { entry, headRevisionId: head?.id ?? null };
+		}
 
-	const source = normalizeRevisionSource(input.source);
-	const notes = input.notes?.trim() || null;
-	let headId = head?.id ?? null;
+		const source = normalizeRevisionSource(input.source);
+		const notes = input.notes?.trim() || null;
+		let headId = head?.id ?? null;
 
-	if (
-		options.squash !== false &&
-		shouldSquashIntoHead(
-			head ? { source: head.source, ageSeconds: Number(head.age_seconds) } : null,
-			source,
-		)
-	) {
-		await txExecute(
-			conn,
-			`UPDATE tanahpedia_entry_revision
+		if (
+			options.squash !== false &&
+			shouldSquashIntoHead(
+				head
+					? { source: head.source, ageSeconds: Number(head.age_seconds) }
+					: null,
+				source,
+			)
+		) {
+			await txExecute(
+				conn,
+				`UPDATE tanahpedia_entry_revision
 			 SET proposed_unique_name = ?, proposed_title = ?, proposed_content = ?,
 			     notes = COALESCE(?, notes), updated_at = NOW()
 			 WHERE id = ?`,
-			[
-				input.unique_name,
-				input.title,
-				nextContent,
-				notes,
-				head?.id as string,
-			],
-		);
-	} else {
-		headId = crypto.randomUUID();
-		await txExecute(
-			conn,
-			`INSERT INTO tanahpedia_entry_revision
+				[
+					input.unique_name,
+					input.title,
+					nextContent,
+					notes,
+					head?.id as string,
+				],
+			);
+		} else {
+			headId = crypto.randomUUID();
+			await txExecute(
+				conn,
+				`INSERT INTO tanahpedia_entry_revision
 			 (id, entry_id, proposed_unique_name, proposed_title, proposed_content,
 			  source, notes, status, base_revision_id)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, 'APPLIED', ?)`,
-			[
-				headId,
-				input.id,
-				input.unique_name,
-				input.title,
-				nextContent,
-				source,
-				notes,
-				head?.id ?? null,
-			],
+				[
+					headId,
+					input.id,
+					input.unique_name,
+					input.title,
+					nextContent,
+					source,
+					notes,
+					head?.id ?? null,
+				],
+			);
+		}
+
+		await txExecute(
+			conn,
+			"UPDATE tanahpedia_entry SET unique_name = ?, title = ?, content = ? WHERE id = ?",
+			[input.unique_name, input.title, nextContent, input.id],
 		);
-	}
 
-	await txExecute(
-		conn,
-		"UPDATE tanahpedia_entry SET unique_name = ?, title = ?, content = ? WHERE id = ?",
-		[input.unique_name, input.title, nextContent, input.id],
-	);
-
-	const saved = await txQueryOne<EntryRow>(
-		conn,
-		"SELECT id, unique_name, title, content, created_at, updated_at FROM tanahpedia_entry WHERE id = ?",
-		[input.id],
-	);
-	return { entry: saved as EntryRow, headRevisionId: headId };
-}
+		const saved = await txQueryOne<EntryRow>(
+			conn,
+			"SELECT id, unique_name, title, content, created_at, updated_at FROM tanahpedia_entry WHERE id = ?",
+			[input.id],
+		);
+		return { entry: saved as EntryRow, headRevisionId: headId };
+	},
+);
 
 export const listEntryRevisions = createServerFn({ method: "GET" })
 	.validator((data: string) => data)
@@ -220,10 +218,7 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 				}
 				const head = await headRevision(conn, revision.entry_id);
 				headId = head?.id ?? null;
-				if (
-					revision.base_revision_id &&
-					revision.base_revision_id !== headId
-				) {
+				if (revision.base_revision_id && revision.base_revision_id !== headId) {
 					throw new RevisionConflictError(
 						"the revision's declared base is stale - the entry head has moved",
 					);
@@ -266,11 +261,7 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 				`UPDATE tanahpedia_entry_revision
 				 SET status = 'APPLIED', entry_id = ?, base_revision_id = ?, updated_at = NOW()
 				 WHERE id = ?`,
-				[
-					targetEntryId,
-					revision.base_revision_id ?? headId,
-					revision.id,
-				],
+				[targetEntryId, revision.base_revision_id ?? headId, revision.id],
 			);
 			return {
 				revisionId: revision.id,
@@ -309,7 +300,9 @@ export const restoreEntryRevision = createServerFn({ method: "POST" })
 			);
 			if (!revision) throw new Error("Revision not found");
 			if (!revision.entry_id) {
-				throw new Error("cannot restore a revision that is not linked to an entry");
+				throw new Error(
+					"cannot restore a revision that is not linked to an entry",
+				);
 			}
 
 			const entry = await lockEntry(conn, revision.entry_id);
@@ -344,12 +337,7 @@ export const restoreEntryRevision = createServerFn({ method: "POST" })
 			await txExecute(
 				conn,
 				"UPDATE tanahpedia_entry SET unique_name = ?, title = ?, content = ? WHERE id = ?",
-				[
-					restoredUniqueName,
-					restoredTitle,
-					restoredContent,
-					revision.entry_id,
-				],
+				[restoredUniqueName, restoredTitle, restoredContent, revision.entry_id],
 			);
 			const saved = await txQueryOne<EntryRow>(
 				conn,

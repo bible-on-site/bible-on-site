@@ -441,10 +441,6 @@ public static class HtmlRuns
     private static void AppendText(HtmlNode node, Style style, Context context)
     {
         var text = HtmlEntity.DeEntitize(node.InnerText);
-        if (string.IsNullOrEmpty(text))
-        {
-            return;
-        }
         if (style.PreserveWhitespace)
         {
             context.Append(text, style);
