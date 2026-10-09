@@ -303,12 +303,9 @@ public static class FanMenuGeometry
         for (var round = 0; round < FixedResolveRounds; round++)
         {
             var resolved = ClampToCanvas(rect, width, height);
-            foreach (var obstacle in obstacles)
+            foreach (var obstacle in obstacles.Where(o => resolved.IntersectsWith(o)))
             {
-                if (resolved.IntersectsWith(obstacle))
-                {
-                    resolved = EscapeBlocker(resolved, obstacle, ObstacleGap);
-                }
+                resolved = EscapeBlocker(resolved, obstacle, ObstacleGap);
             }
             if (resolved.IntersectsWith(toggle))
             {
