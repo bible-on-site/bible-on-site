@@ -1,3 +1,4 @@
+using OpenQA.Selenium;
 using Xunit;
 
 namespace BibleOnSite.Tests.MobileE2E.Configuration;
@@ -47,6 +48,29 @@ public sealed class SessionFactoryTests
         }));
         Assert.False(attemptedReplacement);
         Assert.Same(failure, blocked.InnerException);
+    }
+
+    [Fact]
+    public void ConfirmedSessionDeathDoesNotBlockTheNextScenario()
+    {
+        // A death-classified failure means Appium already dropped the session
+        // server-side; nothing remains that a replacement session could race.
+        var factory = new MobileDeviceSessionFactory();
+        Assert.Throws<UnknownErrorException>(() => factory.Create<object>(() =>
+            throw new UnknownErrorException("A session is either terminated or not started")));
+
+        Assert.NotNull(factory.Create(() => new object()));
+    }
+
+    [Fact]
+    public void ClosingAnAlreadyDeadSessionDoesNotBlockTheNextScenario()
+    {
+        var factory = new MobileDeviceSessionFactory();
+        factory.Create(() => new object());
+        Assert.Throws<UnknownErrorException>(() => factory.Cleanup(() =>
+            throw new UnknownErrorException("invalid session id")));
+
+        Assert.NotNull(factory.Create(() => new object()));
     }
 
     [Fact]
