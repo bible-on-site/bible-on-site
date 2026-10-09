@@ -202,15 +202,32 @@ public class ArticleService : BaseGraphQLService
     /// </summary>
     /// <param name="phrase">Raw user phrase; normalized server-side.</param>
     /// <param name="limit">Maximum hits (server clamps to 1-50).</param>
+    public Task<ArticleSearchPage?> SearchArticlesAsync(string phrase, int limit) =>
+        SearchArticlesAsync(phrase, limit, 0, null, CancellationToken.None);
+
+    /// <param name="phrase">Raw user phrase; normalized server-side.</param>
+    /// <param name="limit">Maximum hits (server clamps to 1-50).</param>
+    /// <param name="cancellationToken">Caller cancellation.</param>
+    public Task<ArticleSearchPage?> SearchArticlesAsync(string phrase, int limit, CancellationToken cancellationToken) =>
+        SearchArticlesAsync(phrase, limit, 0, null, cancellationToken);
+
+    /// <param name="phrase">Raw user phrase; normalized server-side.</param>
+    /// <param name="limit">Maximum hits (server clamps to 1-50).</param>
+    /// <param name="timeout">Total request budget.</param>
+    public Task<ArticleSearchPage?> SearchArticlesAsync(string phrase, int limit, TimeSpan timeout) =>
+        SearchArticlesAsync(phrase, limit, 0, timeout, CancellationToken.None);
+
+    /// <param name="phrase">Raw user phrase; normalized server-side.</param>
+    /// <param name="limit">Maximum hits (server clamps to 1-50).</param>
     /// <param name="offset">Pagination offset (server clamps to 0-1000).</param>
     /// <param name="timeout">Total request budget.</param>
     /// <param name="cancellationToken">Caller cancellation.</param>
     public async Task<ArticleSearchPage?> SearchArticlesAsync(
         string phrase,
         int limit,
-        int offset = 0,
-        TimeSpan? timeout = null,
-        CancellationToken cancellationToken = default)
+        int offset,
+        TimeSpan? timeout,
+        CancellationToken cancellationToken)
     {
         var query = new GraphQLRequest
         {
@@ -247,7 +264,9 @@ public class ArticleService : BaseGraphQLService
 
             var data = response.Data?.SearchArticles;
             if (data == null)
+            {
                 return null;
+            }
 
             return new ArticleSearchPage
             {

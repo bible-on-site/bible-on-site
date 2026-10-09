@@ -41,4 +41,11 @@ public static class SearchFilterExtensions
             _ => filter.ToString()
         };
     }
+
+    /// <summary>
+    /// Whether this kind is served remotely and therefore requires network
+    /// access. Remote kinds stay opt-in (off by default and on reset) so an
+    /// unreachable API can never delay or degrade the local search kinds.
+    /// </summary>
+    public static bool RequiresNetwork(this SearchFilter filter) => filter == SearchFilter.Articles;
 }

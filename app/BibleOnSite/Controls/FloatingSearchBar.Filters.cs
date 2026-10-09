@@ -133,17 +133,27 @@ public partial class FloatingSearchBar
         _buildingFilters = true;
         try
         {
+            // Reset restores the defaults: local kinds on, remote kinds off —
+            // enabling a network-backed kind stays an explicit user choice.
             foreach (var filter in Enum.GetValues<SearchFilter>())
             {
-                _viewModel.SetFilterEnabled(filter, true);
+                var enabled = !filter.RequiresNetwork();
+                _viewModel.SetFilterEnabled(filter, enabled);
+                if (_filterChecks.TryGetValue($"SearchKind{filter}", out var kindCheck))
+                {
+                    kindCheck.IsChecked = enabled;
+                }
             }
             foreach (var group in Enumerable.Range(0, 3))
             {
                 _viewModel.SetSeferGroupFilterEnabled(group, true);
             }
-            foreach (var checkBox in _filterChecks.Values)
+            foreach (var pair in _filterChecks)
             {
-                checkBox.IsChecked = true;
+                if (!pair.Key.StartsWith("SearchKind", StringComparison.Ordinal))
+                {
+                    pair.Value.IsChecked = true;
+                }
             }
             _viewModel.ResultsLimit = 10;
             LimitPicker.SelectedItem = 10;

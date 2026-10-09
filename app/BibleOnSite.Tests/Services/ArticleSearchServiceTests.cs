@@ -96,7 +96,11 @@ public class ArticleSearchServiceTests
             service)
         { SearchPhrase = "בראשית" };
         foreach (var filter in new[] { SearchFilter.Author, SearchFilter.Pasuk, SearchFilter.Perush, SearchFilter.Perek })
+        {
             vm.SetFilterEnabled(filter, false);
+        }
+        // The remote kind is opt-in: enable it explicitly for this search.
+        vm.SetFilterEnabled(SearchFilter.Articles, true);
 
         await vm.SearchAsync();
 
@@ -125,7 +129,10 @@ public class ArticleSearchServiceTests
         { SearchPhrase = "בראשית" };
         vm.SetAuthors([new Author { Id = 1, Name = "בראשית בוטנר", Details = "" }]);
         foreach (var filter in new[] { SearchFilter.Pasuk, SearchFilter.Perush, SearchFilter.Perek })
+        {
             vm.SetFilterEnabled(filter, false);
+        }
+        vm.SetFilterEnabled(SearchFilter.Articles, true);
 
         await vm.SearchAsync();
 
@@ -148,7 +155,9 @@ public class ArticleSearchServiceTests
         { SearchPhrase = "בראשית" };
         vm.SetAuthors([new Author { Id = 1, Name = "בראשית בוטנר", Details = "" }]);
         foreach (var filter in new[] { SearchFilter.Pasuk, SearchFilter.Perush, SearchFilter.Perek, SearchFilter.Articles })
+        {
             vm.SetFilterEnabled(filter, false);
+        }
 
         await vm.SearchAsync();
 
@@ -157,11 +166,42 @@ public class ArticleSearchServiceTests
     }
 
     [Fact]
+    public async Task SearchViewModel_ArticlesFilter_IsOptIn_NotEnabledByDefault()
+    {
+        using var http = new GraphQLTransport(SearchResponse);
+        var service = new ArticleService(http.Client);
+        await using var storage = new TestStorage();
+        var vm = new SearchViewModel(
+            new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)),
+            null,
+            service)
+        { SearchPhrase = "בראשית" };
+
+        vm.IsFilterEnabled(SearchFilter.Articles).Should().BeFalse();
+        foreach (var filter in new[] { SearchFilter.Author, SearchFilter.Pasuk, SearchFilter.Perush, SearchFilter.Perek })
+        {
+            vm.SetFilterEnabled(filter, false);
+        }
+
+        await vm.SearchAsync();
+
+        http.Requests.Should().BeEmpty();
+        vm.SearchResults.Should().NotContain(r => r is ArticleSearchResult);
+    }
+
+    [Fact]
     public async Task SearchViewModel_CancelledSearch_DropsStaleArticleResults()
     {
         var gate = new TaskCompletionSource<HttpResponseMessage>();
         using var http = new GraphQLTransport();
-        http.Respond = _ => gate.Task;
+        // Each request gets its own response object after the gate — the
+        // cancelled search's in-flight request and the live one must not share
+        // a response stream, just like real network responses.
+        http.Respond = async token =>
+        {
+            await gate.Task.WaitAsync(token);
+            return GraphQLTransport.JsonResponse(SearchResponse);
+        };
         var service = new ArticleService(http.Client);
         await using var storage = new TestStorage();
         var vm = new SearchViewModel(
@@ -170,7 +210,10 @@ public class ArticleSearchServiceTests
             service)
         { SearchPhrase = "בראשית" };
         foreach (var filter in new[] { SearchFilter.Author, SearchFilter.Pasuk, SearchFilter.Perush, SearchFilter.Perek })
+        {
             vm.SetFilterEnabled(filter, false);
+        }
+        vm.SetFilterEnabled(SearchFilter.Articles, true);
 
         var pending = vm.SearchAsync();
         // Newer phrase cancels the in-flight search — the stale response must

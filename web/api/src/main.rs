@@ -18,8 +18,10 @@ async fn main() -> anyhow::Result<()> {
 
     // One-shot maintenance mode: rebuild the derived article-search index from
     // the authoritative tables and exit. Used for first backfill and for
-    // operator-triggered rebuilds (`cargo make rebuild-article-search`).
-    if std::env::args().any(|arg| arg == "--rebuild-article-search") {
+    // operator-triggered rebuilds (`cargo make rebuild-article-search` sets
+    // REBUILD_ARTICLE_SEARCH=1 — an env flag, not a CLI arg, so operators do not
+    // depend on mutable process argv).
+    if std::env::var("REBUILD_ARTICLE_SEARCH").ok().as_deref() == Some("1") {
         return rebuild_article_search_index().await;
     }
 

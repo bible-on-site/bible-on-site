@@ -32,8 +32,9 @@ args = ["run"]
 # tanah_article. Honors PROFILE like run-api-* (e.g. `cargo make
 # rebuild-article-search` with PROFILE=dev uses .dev.env).
 [tasks.rebuild-article-search]
+env = { REBUILD_ARTICLE_SEARCH = "1" }
 command = "cargo"
-args = ["run", "--", "--rebuild-article-search"]
+args = ["run"]
 
 [tasks.populate-dev-db]
 env_files = [".dev.env"]

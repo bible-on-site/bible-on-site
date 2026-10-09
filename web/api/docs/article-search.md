@@ -124,7 +124,7 @@ write path.
 ```bash
 cd web/api
 cargo make rebuild-article-search        # honors PROFILE like run-api-*
-# or: cargo run -- --rebuild-article-search
+# or: REBUILD_ARTICLE_SEARCH=1 cargo run
 ```
 
 One-shot mode: connects, ensures schema, takes the advisory lock, retrains,
