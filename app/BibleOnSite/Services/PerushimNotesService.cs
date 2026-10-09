@@ -77,6 +77,12 @@ public class PerushimNotesService
     /// <summary>Whether compatible notes are available from PAD/ODR or a bundled asset.</summary>
     public bool IsAvailable => _initialized && !_notesMissing && _connection != null;
 
+    internal async Task<SQLiteAsyncConnection?> GetSearchConnectionAsync()
+    {
+        await InitializeAsync();
+        return IsAvailable ? _connection : null;
+    }
+
     /// <summary>
     /// Builds a diagnostic report for support (platform, state, PAD/ODR path, app package).
     /// Call when Perushim don't show so the user can export and share the file.

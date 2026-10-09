@@ -116,6 +116,8 @@ public class AsyncCommandsTests
         var vm = new SearchViewModel();
         vm.SetAuthors([new Author { Id = 1, Name = "הרב משה", Details = "" }]);
         vm.SetFilterEnabled(SearchFilter.Perek, false);
+        vm.SetFilterEnabled(SearchFilter.Pasuk, false);
+        vm.SetFilterEnabled(SearchFilter.Perush, false);
         vm.SearchPhrase = "משה";
         await vm.SearchAsync();
         vm.SearchResults.Should().ContainSingle().Which.Should().BeOfType<AuthorSearchResult>();

@@ -2,6 +2,8 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using BibleOnSite.Models;
 using BibleOnSite.Data;
+using BibleOnSite.Helpers;
+using BibleOnSite.Services;
 
 namespace BibleOnSite.ViewModels;
 
@@ -12,11 +14,17 @@ namespace BibleOnSite.ViewModels;
 public partial class SearchViewModel : ObservableObject
 {
     private readonly Services.PerekDataService _perekDataService;
+    private readonly SearchIndexService? _searchIndex;
+    private readonly bool _useDefaultIndex;
+    private CancellationTokenSource? _searchCancellation;
+    private int _searchVersion;
+    private IReadOnlyDictionary<int, Perush> _perushim = new Dictionary<int, Perush>();
     private const string SearchPhraseAll = "*";
 
     private readonly HashSet<SearchFilter> _enabledFilters;
     private readonly HashSet<int> _enabledSefarim;
     private readonly List<Author> _authors = new();
+    public SearchSort Sorting { get; set; } = SearchSort.Relevance;
 
 #pragma warning disable MVVMTK0045
     [ObservableProperty]
@@ -30,20 +38,47 @@ public partial class SearchViewModel : ObservableObject
     private bool _isLoading;
 
     [ObservableProperty]
+    private string _errorMessage = string.Empty;
+
+    [ObservableProperty]
+    private string _availabilityMessage = string.Empty;
+
+    [ObservableProperty]
+    private string _loadingMessage = "מחפש...";
+
+    [ObservableProperty]
     private ObservableCollection<SearchResult> _searchResults = new();
 #pragma warning restore MVVMTK0045
 
-    public SearchViewModel() : this(Services.PerekDataService.Instance) { }
+    public SearchViewModel() : this(PerekDataService.Instance, null) { _useDefaultIndex = true; }
 
-    public SearchViewModel(Services.PerekDataService perekDataService)
+    public SearchViewModel(PerekDataService perekDataService) : this(perekDataService, null) { }
+
+    public SearchViewModel(PerekDataService perekDataService, SearchIndexService? searchIndex)
     {
         _perekDataService = perekDataService;
+        _searchIndex = searchIndex;
         // Initialize all filters as enabled
         _enabledFilters = new HashSet<SearchFilter>(Enum.GetValues<SearchFilter>());
 
         // Initialize all sefarim (1-35) as enabled
         _enabledSefarim = new HashSet<int>(Enumerable.Range(1, 35));
     }
+
+#pragma warning disable S1172 // ObservableProperty generates this hook with a value parameter.
+    partial void OnSearchPhraseChanged(string value) => CancelSearch();
+#pragma warning restore S1172
+
+    public void CancelSearch()
+    {
+        _searchVersion++;
+        _searchCancellation?.Cancel();
+        _searchCancellation?.Dispose();
+        _searchCancellation = null;
+        IsLoading = false;
+    }
+
+    public void SetPerushim(IEnumerable<Perush> perushim) => _perushim = perushim.ToDictionary(perush => perush.Id);
 
     /// <summary>
     /// Gets the optimized search phrase with whitespace trimmed and "הרב" prefix removed.
@@ -55,7 +90,8 @@ public partial class SearchViewModel : ObservableObject
             if (string.IsNullOrWhiteSpace(SearchPhrase))
                 return SearchPhraseAll;
 
-            return SearchPhrase.Trim().Replace("הרב ", string.Empty);
+            var normalized = SearchText.Normalize(SearchPhrase);
+            return normalized.StartsWith("הרב ", StringComparison.Ordinal) ? normalized[4..] : normalized;
         }
     }
 
@@ -163,14 +199,15 @@ public partial class SearchViewModel : ObservableObject
         var searchTerm = OptimizedSearchPhrase;
 
         return _authors
-            .Where(author =>
+            .Select(author => new AuthorSearchResult(author, searchTerm)
             {
-                var nameWithoutPrefix = author.Name.Replace("הרב ", string.Empty);
-                return nameWithoutPrefix.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
-                       author.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase);
+                Title = author.Name,
+                SubtitleHtml = SearchText.Snippet(author.Details, searchTerm),
+                Score = SearchText.Score(author.Name, searchTerm)
             })
-            .Take(ResultsLimit)
-            .Select(a => new AuthorSearchResult(a, OptimizedSearchPhrase))
+            .Where(result => result.Score > 0)
+            .OrderByDescending(result => result.Score)
+            .Take(Math.Clamp(ResultsLimit, 1, 50))
             .ToList();
     }
 
@@ -182,58 +219,110 @@ public partial class SearchViewModel : ObservableObject
     /// <summary>
     /// Executes the search and populates SearchResults.
     /// </summary>
-    public async Task SearchAsync()
+    public async Task SearchAsync(CancellationToken cancellationToken = default)
     {
+        CancelSearch();
+        var version = _searchVersion;
+        _searchCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var token = _searchCancellation.Token;
+        SearchResults.Clear();
+        ErrorMessage = string.Empty;
+        AvailabilityMessage = string.Empty;
         if (OptimizedSearchPhrase == SearchPhraseAll)
         {
-            SearchResults.Clear();
             return;
         }
-
+        // Author titles are optional for names, but every word matters in content.
+        var phrase = SearchText.Normalize(SearchPhrase);
+        var filters = _enabledFilters.ToHashSet();
+        var books = _enabledSefarim.ToHashSet();
+        var limit = Math.Clamp(ResultsLimit, 1, 50);
+        var ordering = new SearchOrdering(Sorting, _perushim.ToDictionary(pair => pair.Key, pair => pair.Value.Priority));
         try
         {
             IsLoading = true;
-            SearchResults.Clear();
-
-            // Add author results
-            if (IsFilterEnabled(SearchFilter.Author))
+            var results = new List<SearchResult>(GetAuthorResults());
+            if (filters.Any(filter => filter != SearchFilter.Author))
+                await _perekDataService.LoadAsync().WaitAsync(token);
+            if (filters.Contains(SearchFilter.Perek))
+                results.AddRange(GetPerekResults(phrase, books));
+            token.ThrowIfCancellationRequested();
+            if (version == _searchVersion)
+                PublishResults(results, limit);
+            var searchIndex = _searchIndex;
+            if (_useDefaultIndex && (filters.Contains(SearchFilter.Pasuk) || filters.Contains(SearchFilter.Perush)))
+                searchIndex = SearchIndexService.Instance;
+            if (searchIndex != null && (filters.Contains(SearchFilter.Pasuk) || filters.Contains(SearchFilter.Perush)))
             {
-                foreach (var result in GetAuthorResults())
+                var progress = new Progress<string>(message => { if (version == _searchVersion) LoadingMessage = message; });
+                foreach (var type in new[] { SearchFilter.Pasuk, SearchFilter.Perush }.Where(filters.Contains))
                 {
-                    SearchResults.Add(result);
+                    var hits = await searchIndex.SearchAsync(phrase, new HashSet<SearchFilter> { type }, books, limit, token, progress, ordering);
+                    foreach (var hit in hits)
+                    {
+                        SearchResult result = hit.Type == SearchFilter.Pasuk
+                            ? new PasukSearchResult(new Pasuk { Text = hit.Text, PasukNum = hit.PasukNum }, hit.PerekId, phrase)
+                            : new PerushSearchResult(hit.PerushId.ToString(System.Globalization.CultureInfo.InvariantCulture), hit.Text, hit.PerekId, hit.PasukNum, phrase);
+                        var name = hit.Type == SearchFilter.Perush ? (_perushim.GetValueOrDefault(hit.PerushId)?.Name ?? "פירוש") + " - " : string.Empty;
+                        result.Title = name + _perekDataService.GetPerekSource(hit.PerekId) + " " + hit.PasukNum.ToHebrewLetters();
+                        result.SubtitleHtml = SearchText.Snippet(hit.Text, phrase);
+                        result.Score = hit.Score;
+                        result.GenerationOrder = ordering.YearFor(hit.PerushId);
+                        results.Add(result);
+                    }
+                    token.ThrowIfCancellationRequested();
+                    if (version == _searchVersion)
+                        PublishResults(results, limit);
                 }
+                if (version == _searchVersion && filters.Contains(SearchFilter.Perush) && !searchIndex.CommentaryAvailable)
+                    AvailabilityMessage = "לחיפוש בפירושים, הורידו את הפירושים בהגדרות";
             }
-
-            // Add perek results (search by sefer name + perek)
-            if (IsFilterEnabled(SearchFilter.Perek))
-            {
-                var perekResults = await GetPerekResultsAsync();
-                foreach (var result in perekResults)
-                {
-                    SearchResults.Add(result);
-                }
-            }
-
-            // Note: Pasuk and Perush search would require API calls
-            // These are placeholders for the full implementation
+            token.ThrowIfCancellationRequested();
+            if (version == _searchVersion)
+                PublishResults(results, limit);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch
+        {
+            if (version == _searchVersion) ErrorMessage = "שגיאה בחיפוש. נסו שוב";
+            throw;
         }
         finally
         {
-            IsLoading = false;
+            if (version == _searchVersion) IsLoading = false;
         }
     }
 
-    private async Task<List<PerekSearchResult>> GetPerekResultsAsync()
+    private void PublishResults(List<SearchResult> results, int limit)
     {
-        await _perekDataService.LoadAsync();
-        var phrase = OptimizedSearchPhrase;
+        var visible = (Sorting == SearchSort.Generation
+            ? results.OrderBy(result => result.GenerationOrder).ThenBy(result => result.SourceOrder).ThenByDescending(result => result.Score)
+            : results.OrderByDescending(result => result.Score)).Take(limit).ToArray();
+        for (var position = 0; position < visible.Length; position++)
+        {
+            var existing = SearchResults.IndexOf(visible[position]);
+            if (existing < 0) SearchResults.Insert(position, visible[position]);
+            else if (existing != position) SearchResults.Move(existing, position);
+        }
+        while (SearchResults.Count > visible.Length) SearchResults.RemoveAt(SearchResults.Count - 1);
+        // Preserve native result rows while slower commentary matches are added.
+        OnPropertyChanged(nameof(SearchResults));
+    }
+
+    private IEnumerable<PerekSearchResult> GetPerekResults(string phrase, IReadOnlySet<int> books)
+    {
+        var referenceQuery = string.Join(" ", phrase.Split(' ').Select(word => int.TryParse(word, out var number) && number is > 0 and <= 929
+            ? number.ToHebrewLetters() : word));
         return _perekDataService.Perakim!.Values
-            .Where(p => IsSeferFilterEnabled(p.SeferId) &&
-                (_perekDataService.GetPerekSource(p.PerekId)?.Contains(phrase, StringComparison.OrdinalIgnoreCase) == true))
-            .OrderBy(p => p.PerekId)
-            .Take(ResultsLimit)
-            .Select(p => new PerekSearchResult(p, phrase))
-            .ToList();
+            .Where(perek => books.Contains(perek.SeferId))
+            .Select(perek => new PerekSearchResult(perek, phrase)
+            {
+                Title = _perekDataService.GetPerekSource(perek.PerekId) ?? string.Empty,
+                SubtitleHtml = SearchText.Snippet(perek.Header, phrase),
+                GenerationOrder = int.MinValue,
+                Score = Math.Max(SearchText.Score(_perekDataService.GetPerekSource(perek.PerekId) ?? "", referenceQuery), SearchText.Score(perek.Header, phrase))
+            })
+            .Where(result => result.Score > 0).OrderByDescending(result => result.Score).ThenBy(result => result.Perek.PerekId);
     }
 #endif
 

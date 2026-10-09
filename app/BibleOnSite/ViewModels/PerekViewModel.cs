@@ -21,6 +21,7 @@ public partial class PerekViewModel : ObservableObject
     private readonly IAppNavigator _navigator;
     private readonly IFileSystem _fileSystem;
     private readonly IShare _share;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, Perek> _readerPerakim = new();
 
     /// <summary>Reports whether a perek has downloaded recitation audio (production: RecitationService).</summary>
     private readonly Func<int, bool>? _hasPerekAudio;
@@ -316,7 +317,7 @@ public partial class PerekViewModel : ObservableObject
             await _perekDataService.LoadAsync();
         }
 
-        var perek = _perekDataService.GetPerek(perekId);
+        var perek = GetReaderPerek(perekId);
         if (perek != null)
         {
             // Load pasukim
@@ -334,6 +335,8 @@ public partial class PerekViewModel : ObservableObject
     /// </summary>
     public async Task LoadPerushimAsync(int perekId)
     {
+        if (TryApplySyntheticPerushimForE2e(perekId)) { return; }
+
         await _catalogService.InitializeAsync();
         await _notesService.InitializeAsync();
 
@@ -416,6 +419,31 @@ public partial class PerekViewModel : ObservableObject
     /// </summary>
     private bool IsStalePerushimLoad(int perekId) => Perek != null && Perek.PerekId != perekId;
 
+    // E2E hook (BIBLE_E2E_PERUSHIM=1): fabricate notes so the HtmlView
+    // commentary path is exercised in CI, where no ODR pack exists. Excluded
+    // from unit coverage — it only activates under the e2e env var, which unit
+    // tests must not mutate (process-global, races parallel fixtures); the
+    // mobile e2e suite covers it.
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(Justification = "E2E-only synthetic path; covered by the iOS mobile e2e suite.")]
+    private bool TryApplySyntheticPerushimForE2e(int perekId)
+    {
+        if (!SyntheticPerushimProvider.Enabled)
+        {
+            return false;
+        }
+
+        _perushNotesCache = SyntheticPerushimProvider.NotesFor(
+            perekId, Perek?.Pasukim?.Select(p => p.PasukNum) ?? []);
+        CheckedPerushim = new List<int>();
+        Perushim = SyntheticPerushimProvider.Perushim;
+        PerushimCatalogAvailable = true;
+        PerushimNotesAvailable = true;
+        OnPropertyChanged(nameof(PerushimEmptyMessage));
+        OnPropertyChanged(nameof(ShowDownloadPerushimButton));
+        FillFilteredPerushContents();
+        return true;
+    }
+
     /// <summary>
     /// Loads the next perek in sequence.
     /// When the carousel is already initialized, just moves position (OnCarouselItemChanged handles the rest).
@@ -477,7 +505,7 @@ public partial class PerekViewModel : ObservableObject
     {
         if (CarouselPerakim != null && CarouselPerakim.Count == 929)
         {
-            var targetPerek = _perekDataService.GetPerek(perekId);
+            var targetPerek = GetReaderPerek(perekId);
             if (targetPerek != null)
             {
                 await EnsurePasukimLoadedAsync(targetPerek);
@@ -627,7 +655,7 @@ public partial class PerekViewModel : ObservableObject
             var result = new List<Perek>(929);
             for (var id = 1; id <= 929; id++)
             {
-                var p = id == perekId ? perek : _perekDataService.GetPerek(id);
+                var p = id == perekId ? perek : GetReaderPerek(id);
                 if (p != null) result.Add(p);
             }
 
@@ -688,7 +716,7 @@ public partial class PerekViewModel : ObservableObject
         var loaded = new List<(Perek, List<Pasuk>)>();
         for (var id = start; id <= end; id++)
         {
-            var p = _perekDataService.GetPerek(id);
+            var p = GetReaderPerek(id);
             if (p != null && p.Pasukim.Count == 0)
             {
                 loaded.Add((p, await _perekDataService.LoadPasukimAsync(id)));
@@ -713,6 +741,16 @@ public partial class PerekViewModel : ObservableObject
                 perek.Pasukim = pasukim;
             }
         }
+    }
+
+    private Perek? GetReaderPerek(int perekId)
+    {
+        if (_readerPerakim.TryGetValue(perekId, out var existing))
+        {
+            return existing;
+        }
+        var metadata = _perekDataService.GetPerek(perekId);
+        return metadata == null ? null : _readerPerakim.GetOrAdd(perekId, _ => metadata.CreateReaderCopy());
     }
 
     /// <summary>
