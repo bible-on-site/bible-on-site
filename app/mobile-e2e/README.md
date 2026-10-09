@@ -56,6 +56,48 @@ The pilot matrix deliberately covers Android and iOS. Existing Windows FlaUI
 tests and Android gesture regressions remain separate. Additional device/OS
 entries can reuse the same suite; each must own its emulator and artifacts.
 
+## Android emulator caching
+
+The Android job caches two layers so a truncated Google download cannot abort a
+run before testing (as in run 37814563700):
+
+1. **SDK packages** (`android-sdk-<os-tag>-<arch>-<components>`): `$ANDROID_HOME`'s
+   `emulator`, `platform-tools`, `platforms;android-36`, `build-tools;37.0.0`
+   and the `google_apis` x86_64 system image — about 2.3 GB. The key embeds each
+   package's stable-channel revision and archive checksum resolved from
+   Google's SDK manifests by `devops/github/ci/android-sdk-manifest.mjs`, so a
+   Google-side update produces a fresh key instead of reviving a frozen copy.
+   `package.xml` files ride inside the cached directories, letting sdkmanager
+   recognize the restored packages. A one-level `android-sdk-<os-tag>-<arch>-`
+   restore-key intentionally permits an older emulator revision: sdkmanager
+   updates it in place while the large system image stays cached.
+2. **Clean AVD snapshot** (`android-avd-<os-tag>-<arch>-api36-google_apis-x86_64-pixel_7-swiftshader-<emulator-rev>-<build>-<sha>-<recipe>-<readiness-hash>`):
+   `~/.android/avd` after a cold boot that ran only the device readiness check —
+   never the app install, an Appium session, commentary packaging, or test
+   output. There are no restore-keys: a snapshot under different coordinates is
+   worse than a cold boot. On a miss the workflow runs the documented two-stage
+   pattern — a snapshot-creating invocation whose `script` is `android:ready`,
+   then the pilot, which boots the saved `default_boot` quick-boot state with
+   `-no-snapshot-save`.
+
+Only `push` and `workflow_dispatch` runs save caches, so the default branch
+publishes and pull requests restore (forks get no write scope), matching
+GitHub's cache isolation rules. Saving is gated on validation: the SDK cache
+requires a genuinely booted device (the shared `device-readiness.jsonl`
+marker), and the AVD cache requires the persisted `snapshots/default_boot`
+payload. Cache keys are immutable: a corrupt entry detected on restore is
+deleted locally and rebuilt cold, then heals after natural eviction or a recipe
+bump. `android-sdk-install.mjs` removes corrupt package directories before
+bounded sdkmanager retries and forces a clean reinstall when `emulator
+-version` fails despite installed metadata; `android-snapshot-check.mjs`
+validates restored AVD structure and confirms the emulator process exited
+before any snapshot save. When manifest resolution fails, both keys degrade to
+`unresolved`, which always misses and never saves — the run falls back to the
+original download path. Maintenance: bump `AVD_SNAPSHOT_RECIPE` when boot
+options, device profile, readiness flow or the runner-action version change;
+bump nothing else by hand — emulator and system-image updates rotate keys on
+their own.
+
 ## Running locally
 
 Install the platform's .NET MAUI workload, Android SDK/JDK or compatible Xcode,

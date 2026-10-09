@@ -29,6 +29,17 @@ jobs:
     env:
       MOBILE_PLATFORM: ${{ matrix.platform }}
       MOBILE_E2E_ARTIFACTS: ${{ github.workspace }}/app/.artifacts/mobile-e2e/${{ matrix.artifact }}
+      # Android emulator coordinates shared by the sdkmanager install, the
+      # cache keys and the runner action, so any bump invalidates the caches.
+      ANDROID_API_LEVEL: "36"
+      ANDROID_TARGET: google_apis
+      ANDROID_ABI: x86_64
+      ANDROID_BUILD_TOOLS: "37.0.0"
+      AVD_NAME: mobile_e2e
+      AVD_PROFILE: pixel_7
+      # Bump when the clean-snapshot recipe changes (boot options, readiness
+      # flow, runner-action version) so stale snapshots cannot be restored.
+      AVD_SNAPSHOT_RECIPE: r1
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -120,40 +131,136 @@ jobs:
           sudo apt-get install --no-install-recommends -y libpulse0
           sudo chmod 666 /dev/kvm
 
-      - name: Install Android emulator with bounded download retries
+      # Caches resolve before any install: the action always asks sdkmanager for
+      # the newest stable emulator and system image, so keys must track what
+      # Google's manifests currently serve. An unresolved key never matches a
+      # saved cache and is never saved back; the install step then takes the
+      # same bounded sdkmanager fallback it would without caching.
+      - name: Resolve Android SDK cache coordinates
         if: matrix.platform == 'Android'
-        shell: bash
-        # The emulator action installs the latest SDK emulator itself, but a
-        # truncated Google archive fails before it can boot or run any tests.
-        # Preinstall that same version so the action can reuse a verified install.
-        run: |
-          sdk_manager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          test -x "$sdk_manager"
-          for attempt in 1 2 3; do
-            if "$sdk_manager" --install emulator --channel=0; then
-              "$ANDROID_HOME/emulator/emulator" -version
-              exit 0
-            fi
-            if (( attempt == 3 )); then
-              exit 1
-            fi
-            sleep 5
-          done
+        id: sdk-key
+        run: node devops/github/ci/android-sdk-manifest.mjs
 
-      - name: Run shared pilot on Android
+      # Package metadata (package.xml) is cached inside each directory so
+      # sdkmanager recognizes installed packages. The narrow restore-key
+      # intentionally allows an older emulator revision: sdkmanager updates it
+      # in place while the large system image stays usable.
+      - name: Restore Android SDK packages
         if: matrix.platform == 'Android'
+        id: sdk-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ${{ steps.sdk-key.outputs.sdk-home }}/emulator
+            ${{ steps.sdk-key.outputs.sdk-home }}/system-images/android-${{ env.ANDROID_API_LEVEL }}
+            ${{ steps.sdk-key.outputs.sdk-home }}/platforms/android-${{ env.ANDROID_API_LEVEL }}
+            ${{ steps.sdk-key.outputs.sdk-home }}/build-tools/${{ env.ANDROID_BUILD_TOOLS }}
+            ${{ steps.sdk-key.outputs.sdk-home }}/platform-tools
+          key: android-sdk-${{ steps.sdk-key.outputs.os-tag }}-${{ runner.arch }}-${{ steps.sdk-key.outputs.sdk-key }}
+          restore-keys: |
+            android-sdk-${{ steps.sdk-key.outputs.os-tag }}-${{ runner.arch }}-
+
+      # sdkmanager trusts package.xml even when the payload is truncated, so the
+      # script verifies content first, removes corrupt restorations, and only
+      # then downloads with bounded retries.
+      - name: Install or repair Android SDK packages
+        if: matrix.platform == 'Android'
+        run: node devops/github/ci/android-sdk-install.mjs
+
+      # Exact-key only: a snapshot built under different coordinates can be
+      # worse than a cold boot, so misses rebuild through the snapshot stage.
+      - name: Restore clean AVD snapshot
+        if: matrix.platform == 'Android'
+        id: avd-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ steps.sdk-key.outputs.avd-home }}
+          key: android-avd-${{ steps.sdk-key.outputs.os-tag }}-${{ runner.arch }}-api${{ env.ANDROID_API_LEVEL }}-${{ env.ANDROID_TARGET }}-${{ env.ANDROID_ABI }}-${{ env.AVD_PROFILE }}-swiftshader-${{ steps.sdk-key.outputs.emulator-key }}-${{ env.AVD_SNAPSHOT_RECIPE }}-${{ hashFiles('app/mobile-e2e/android-readiness.mjs', 'app/mobile-e2e/android-ready.mjs') }}
+
+      - name: Validate restored AVD snapshot
+        if: matrix.platform == 'Android' && steps.avd-cache.outputs.cache-hit == 'true'
+        id: avd-check
+        run: node app/mobile-e2e/android-snapshot-check.mjs validate-restored
+
+      # Two-stage snapshot pattern: on a cache miss the action creates the AVD,
+      # cold-boots it and runs only the device readiness check — never the app
+      # install or an Appium session — so the saved state stays clean.
+      - name: Create clean AVD snapshot
+        if: matrix.platform == 'Android' && (steps.avd-cache.outputs.cache-hit != 'true' || steps.avd-check.outputs.usable == 'false')
+        id: avd-snapshot
         uses: reactivecircus/android-emulator-runner@v2.38.0
         env:
           MOBILE_UDID: emulator-5554
         with:
-          api-level: 36
-          arch: x86_64
-          target: google_apis
-          profile: pixel_7
-          avd-name: mobile_e2e
+          api-level: ${{ env.ANDROID_API_LEVEL }}
+          arch: ${{ env.ANDROID_ABI }}
+          target: ${{ env.ANDROID_TARGET }}
+          profile: ${{ env.AVD_PROFILE }}
+          avd-name: ${{ env.AVD_NAME }}
+          force-avd-creation: false
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-snapshot -no-metrics
+          emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-metrics
+          script: npm run android:ready --prefix app/mobile-e2e
+
+      # `emu kill` is graceful but asynchronous; the snapshot payload must reach
+      # the AVD directory before the save step may capture it.
+      - name: Confirm snapshot persisted
+        if: matrix.platform == 'Android' && steps.avd-snapshot.outcome == 'success'
+        id: snapshot-files
+        env:
+          MOBILE_UDID: emulator-5554
+        run: node app/mobile-e2e/android-snapshot-check.mjs confirm-saved
+
+      # Caches are written from push/workflow_dispatch runs: default-branch runs
+      # publish for every PR, while PR and merge-queue runs only restore.
+      - name: Save clean AVD snapshot
+        if: matrix.platform == 'Android' && github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.sdk-key.outputs.resolved == 'true' && steps.avd-cache.outputs.cache-hit != 'true' && steps.snapshot-files.outputs.saved == 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ steps.sdk-key.outputs.avd-home }}
+          key: ${{ steps.avd-cache.outputs.cache-primary-key }}
+
+      - name: Run shared pilot on Android
+        if: matrix.platform == 'Android'
+        id: pilot
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        env:
+          MOBILE_UDID: emulator-5554
+        with:
+          api-level: ${{ env.ANDROID_API_LEVEL }}
+          arch: ${{ env.ANDROID_ABI }}
+          target: ${{ env.ANDROID_TARGET }}
+          profile: ${{ env.AVD_PROFILE }}
+          avd-name: ${{ env.AVD_NAME }}
+          force-avd-creation: false
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-snapshot-save -no-metrics
           script: npm test --prefix app/mobile-e2e
+
+      # The SDK save waits for a genuinely booted device (any stage's readiness
+      # log) rather than trusting installed packages, and stays disabled for
+      # PR/merge-queue runs so only default-branch scope publishes caches.
+      - name: Record device readiness for cache validation
+        if: matrix.platform == 'Android' && always()
+        id: device-ready
+        run: |
+          if grep -q '"ready":true' "$MOBILE_E2E_ARTIFACTS/device-readiness.jsonl" 2>/dev/null; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save Android SDK packages
+        if: matrix.platform == 'Android' && always() && github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.sdk-key.outputs.resolved == 'true' && steps.sdk-cache.outputs.cache-hit != 'true' && steps.device-ready.outputs.ready == 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ${{ steps.sdk-key.outputs.sdk-home }}/emulator
+            ${{ steps.sdk-key.outputs.sdk-home }}/system-images/android-${{ env.ANDROID_API_LEVEL }}
+            ${{ steps.sdk-key.outputs.sdk-home }}/platforms/android-${{ env.ANDROID_API_LEVEL }}
+            ${{ steps.sdk-key.outputs.sdk-home }}/build-tools/${{ env.ANDROID_BUILD_TOOLS }}
+            ${{ steps.sdk-key.outputs.sdk-home }}/platform-tools
+          key: ${{ steps.sdk-cache.outputs.cache-primary-key }}
 
       - name: Prepare prebuilt iOS automation agent
         if: matrix.platform == 'iOS'

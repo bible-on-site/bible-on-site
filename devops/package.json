@@ -16,7 +16,7 @@
 		"dev": "node --import tsx ./dev-all.mts",
 		"setup_dev_env": "node --import tsx ./setup-dev-env.mts",
 		"tanahpedia:apply": "node ./tanahpedia-apply.mjs",
-		"test:version": "node --import tsx --test merge-lcov.test.mts github/ci/bump-module-versions.test.mts github/ci/publish-version-bumps.test.mts github/release/check-deployment.test.mjs github/release/shared-release.test.mjs github/release/deployment-state.test.mjs github/release/release-assets.test.mjs github/release/data-artifact.test.mjs github/release/testflight-build.test.mjs",
+		"test:version": "node --import tsx --test merge-lcov.test.mts github/ci/bump-module-versions.test.mts github/ci/publish-version-bumps.test.mts github/ci/android-sdk-manifest.test.mjs github/ci/android-sdk-install.test.mjs github/release/check-deployment.test.mjs github/release/shared-release.test.mjs github/release/deployment-state.test.mjs github/release/release-assets.test.mjs github/release/data-artifact.test.mjs github/release/testflight-build.test.mjs",
 		"test:dependency-snapshots": "node --test github/ci/dependency-snapshots.test.mjs",
 		"verify:dependency-snapshots": "node github/ci/dependency-snapshots.mjs",
 		"bump:module-versions": "node --import tsx ./github/ci/bump-module-versions.ts",
