@@ -144,10 +144,15 @@ public abstract class MobilePlatformAdapter
             // including POST /session. A cold app launch can exceed 90s; keep the
             // server default (240s) inside the five-minute IOSDriver budget.
             options.AddAdditionalAppiumOption("wdaConnectionTimeout", 240000);
-            // XCTest's repeated default idle waits can consume the entire shared
-            // readiness deadline during the loading-page/reader transition.
-            // Keep idle checks enabled; page objects poll the actual UI state.
-            options.AddAdditionalAppiumOption("waitForIdleTimeout", 1.0);
+            // XCTest gates each proxied command on the app main thread going
+            // idle for this threshold. The shared-CPU simulator rarely stays
+            // quiet for even one second during reader scroll churn (perushim
+            // HtmlView relayouts) or navigation animations, so queries stalled
+            // for tens of seconds and the scroll storm's POST /actions once hit
+            // the 240s proxy timeout. Zero disables the idle wait; page objects
+            // already poll explicit element state instead of relying on WDA's
+            // implicit synchronization.
+            options.AddAdditionalAppiumOption("waitForIdleTimeout", 0);
             if (appEnvironment is { Count: > 0 })
             {
                 // XCUITest processArguments.env reaches the app as process
