@@ -486,7 +486,12 @@ public class PreferencesViewModelTests : IDisposable
             var viewModel = new PreferencesViewModel(_service, perushim);
 
             await viewModel.DownloadPerushimCommand.ExecuteAsync(null);
-            await Task.Delay(50, TestContext.Current.CancellationToken);
+            // Progress<T>.Report dispatches asynchronously; wait until the report applies.
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (viewModel.PerushimDownloadProgress != 1 && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(10, TestContext.Current.CancellationToken);
+            }
 
             fakePad.FetchCalls.Should().Be(1);
             viewModel.IsPerushimDownloading.Should().BeFalse();
