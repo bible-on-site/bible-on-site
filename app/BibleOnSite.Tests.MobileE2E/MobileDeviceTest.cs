@@ -12,7 +12,8 @@ namespace BibleOnSite.Tests.MobileE2E;
 // transport occasionally kills a healthy session mid-run (adb "device offline",
 // instrumentation exiting 255 with the logcat stream, a crashed WebDriverAgent)
 // and every later test recreates the identical session anyway, so a scenario
-// may rebuild it once and retry. Assertion failures are not WebDriverExceptions
+// may rebuild it once after confirmed cleanup. Uncertain cleanup blocks reuse.
+// Assertion failures are not WebDriverExceptions
 // and never match the classifier, so a retry cannot mask a real regression — a
 // second failure propagates normally.
 public abstract class MobileDeviceTest : IAsyncLifetime
@@ -57,13 +58,17 @@ public abstract class MobileDeviceTest : IAsyncLifetime
     {
         try
         {
-            Driver?.Quit();
-            Driver?.Dispose();
+            _sessions.Cleanup(() =>
+            {
+                Driver?.Quit();
+                Driver?.Dispose();
+            });
         }
         catch (WebDriverException exception)
         {
-            // Quitting a session the transport already killed is expected.
-            Output.WriteLine($"{Configuration.Platform}: session cleanup after transport loss: {exception.Message}");
+            // Keep the scenario's failure, but block later sessions: Appium may
+            // still run the failed session's cleanup against the same device.
+            Output.WriteLine($"{Configuration.Platform}: session cleanup failed; device reuse blocked: {exception.Message}");
         }
         return Task.CompletedTask;
     }
@@ -100,14 +105,11 @@ public abstract class MobileDeviceTest : IAsyncLifetime
 
     protected virtual void Connect()
     {
-        try
+        _sessions.Cleanup(() =>
         {
             Driver?.Quit();
-        }
-        catch (WebDriverException exception)
-        {
-            Output.WriteLine($"{Configuration.Platform}: the previous session was already gone: {exception.Message}");
-        }
+            Driver?.Dispose();
+        });
         Driver = _sessions.Create(() =>
             Platform.CreateDriver(Configuration.Server, Platform.CreateOptions(Configuration)));
         Page = new(Driver, Platform);
