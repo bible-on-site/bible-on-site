@@ -44,7 +44,7 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         try
         {
             Connect();
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
         catch (WebDriverException exception) when (DeviceSessionDeath.Matches(exception))
         {
