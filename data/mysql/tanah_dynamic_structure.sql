@@ -30,6 +30,9 @@ DROP TABLE IF EXISTS `tanah_author`;
 ;
 /*!50503 SET character_set_client = utf8mb4 */
 ;
+-- DO NOT add image_url or any URL column here.
+-- Author image URLs are derived at runtime from the author ID:
+--   S3 key = authors/high-res/{id}.jpg  (see getAuthorImageUrl in code)
 CREATE TABLE `tanah_author` (
     `id` smallint NOT NULL AUTO_INCREMENT,
     `name` tinytext NOT NULL,
@@ -53,6 +56,7 @@ CREATE TABLE `tanah_article` (
     `abstract` varchar(10000) DEFAULT NULL,
     `name` varchar(700) NOT NULL,
     `priority` tinyint NOT NULL,
+    `distributable` boolean NOT NULL DEFAULT FALSE,
     `content` mediumtext,
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 DEFAULT CHARSET = utf8mb3;

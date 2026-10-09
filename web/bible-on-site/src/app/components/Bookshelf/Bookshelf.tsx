@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { sefarim } from "@/data/db/sefarim";
-import { getTodaysPerekId } from "@/data/perek-dto";
+import { useEffect, useState } from "react";
+import catalog from "@/data/db/client-catalog.generated.json";
+import { getTodaysPerekId } from "@/data/perek-calendar";
 import { isTreiAsar } from "@/data/sefer-colors";
 import styles from "./bookshelf.module.scss";
+
+const sefarim = catalog.books;
 
 // Constants for layout (in grid units)
 const BOOK_WIDTH = 2;
@@ -51,9 +53,11 @@ function generateSpectrumColor(
 }
 
 function lightenColor(hslColor: string, amount: number): string {
-	const [, h, s, l] = hslColor.match(
+	const match = hslColor.match(
 		/hsl\(([^,]+),\s*([^,]+)%,\s*([^)]+)%\)/,
-	)!;
+	);
+	if (!match) return hslColor;
+	const [, h, s, l] = match;
 	const newL = Math.min(100, Number.parseFloat(l) + amount);
 	return `hsl(${h}, ${s}%, ${newL}%)`;
 }
@@ -232,7 +236,7 @@ type BookBlockProps = {
 };
 
 function BookBlock({ sefer, x, sqSize, onClick, isToday }: BookBlockProps) {
-	const baseColor = seferColors.get(sefer.name)!;
+	const baseColor = seferColors.get(sefer.name) ?? "hsl(0, 0%, 50%)";
 	const spineColor = darkenColor(baseColor, 8);
 
 	const blockStyle = {
@@ -490,15 +494,13 @@ function SingleShelf({
 	);
 }
 
-// Hook to detect window width
+// Window width; starts at a fixed default so SSR and the first client render match
 function useWindowWidth(): number {
-	const [width, setWidth] = useState(
-		/* istanbul ignore next -- SSR fallback; tests and browser always have window */
-		typeof window !== "undefined" ? window.innerWidth : 1200,
-	);
+	const [width, setWidth] = useState(1200);
 
 	useEffect(() => {
 		const handleResize = () => setWidth(window.innerWidth);
+		handleResize();
 		window.addEventListener("resize", handleResize);
 		return () => window.removeEventListener("resize", handleResize);
 	}, []);
@@ -524,14 +526,15 @@ export function Bookshelf({ onSeferClick }: BookshelfProps) {
 	const windowWidth = useWindowWidth();
 	const useMultiShelf = windowWidth < MULTI_SHELF_BREAKPOINT;
 
-	// Compute today's perek/sefer once per mount for the bookmark ribbon & navigation
-	const { todaySeferName, todaysPerekId } = useMemo(() => {
-		const perekId = getTodaysPerekId();
-		const sefer = sefarim.find(
-			(s) => s.perekFrom <= perekId && s.perekTo >= perekId,
-		);
-		return { todaySeferName: sefer?.name ?? "", todaysPerekId: perekId };
-	}, []);
+	// Today's perek depends on the client's date, so resolve it after mount
+	const [todaysPerekId, setTodaysPerekId] = useState<number>();
+	useEffect(() => setTodaysPerekId(getTodaysPerekId()), []);
+	const todaySeferName =
+		todaysPerekId === undefined
+			? ""
+			: (sefarim.find(
+					(s) => s.perekFrom <= todaysPerekId && s.perekTo >= todaysPerekId,
+				)?.name ?? "");
 
 	if (useMultiShelf) {
 		// Four separate shelves (RTL order: Torah on top)

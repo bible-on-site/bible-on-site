@@ -19,37 +19,39 @@ interface ArticleRow {
 let s3WarningShown = false;
 
 /**
- * Check if S3/MinIO is available (dev environment only).
+ * Check if S3/RustFS is available (dev environment only).
  * Logs a warning once if not available.
  */
 async function checkS3Availability(): Promise<void> {
 	if (s3WarningShown || process.env.NODE_ENV === "production") return;
 
 	const S3_ENDPOINT = process.env.S3_ENDPOINT;
-	if (!S3_ENDPOINT) return; // Not using MinIO
+	if (!S3_ENDPOINT) return;
 
+	const controller = new AbortController();
+	const timeoutId = setTimeout(() => controller.abort(), 1000);
 	try {
-		const controller = new AbortController();
-		const timeoutId = setTimeout(() => controller.abort(), 1000);
-		await fetch(`${S3_ENDPOINT}/minio/health/live`, {
+		const response = await fetch(`${S3_ENDPOINT}/health/ready`, {
 			signal: controller.signal,
 		});
-		clearTimeout(timeoutId);
+		if (!response.ok) throw new Error("RustFS is not ready");
 	} catch {
 		s3WarningShown = true;
 		console.warn(
-			"⚠️  S3/MinIO not available at",
+			"⚠️  S3/RustFS not available at",
 			S3_ENDPOINT,
 			"- Author images will not load.",
-			"\n   Start Docker and run: docker compose -f devops/docker-compose.yml up -d minio",
+			"\n   Start Docker and run: docker compose -f devops/docker-compose.yml up -d rustfs",
 		);
+	} finally {
+		clearTimeout(timeoutId);
 	}
 }
 
 /**
  * Build the public URL for author images based on author ID.
  * Images are stored in S3 with naming convention: authors/high-res/{id}.jpg
- * Handles both MinIO (dev) and AWS S3 (prod) URLs.
+ * Handles both RustFS (dev) and AWS S3 (prod) URLs.
  */
 export function getAuthorImageUrl(authorId: number): string {
 	const imagePath = `authors/high-res/${authorId}.jpg`;
@@ -64,7 +66,7 @@ export function getAuthorImageUrl(authorId: number): string {
 	checkS3Availability();
 
 	if (S3_ENDPOINT) {
-		// MinIO style URL
+		// S3 path-style URL
 		return `${S3_ENDPOINT}/${S3_BUCKET}/${imagePath}`;
 	}
 	// Standard AWS S3 URL
@@ -169,9 +171,7 @@ export async function getAuthorByName(
 		);
 
 		const needle = normalizeAuthorName(rawName);
-		const match = rows.find(
-			(row) => normalizeAuthorName(row.name) === needle,
-		);
+		const match = rows.find((row) => normalizeAuthorName(row.name) === needle);
 
 		if (!match) return null;
 

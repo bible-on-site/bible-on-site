@@ -10,6 +10,12 @@ namespace BibleOnSite.ViewModels;
 /// </summary>
 public partial class AuthorsViewModel : ObservableObject
 {
+    private readonly Services.StarterService _starterService;
+
+    public AuthorsViewModel() : this(Services.StarterService.Instance) { }
+
+    public AuthorsViewModel(Services.StarterService starterService) { _starterService = starterService; }
+
     private const string SearchPhraseAll = "*";
 
 #pragma warning disable MVVMTK0045
@@ -89,12 +95,12 @@ public partial class AuthorsViewModel : ObservableObject
             IsLoading = true;
             ErrorMessage = string.Empty;
 
-            if (!Services.StarterService.Instance.IsLoaded)
+            if (!_starterService.IsLoaded)
             {
-                await Services.StarterService.Instance.LoadAsync();
+                await _starterService.LoadAsync();
             }
 
-            SetAuthors(Services.StarterService.Instance.Authors);
+            SetAuthors(_starterService.Authors);
         }
         catch (Exception ex)
         {

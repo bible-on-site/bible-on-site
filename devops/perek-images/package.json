@@ -1,0 +1,15 @@
+{
+	"name": "perek-image-tools",
+	"private": true,
+	"type": "module",
+	"engines": {
+		"node": ">=26.10.0 <27"
+	},
+	"scripts": {
+		"generate": "node prepare.mjs",
+		"test": "node --test prepare.test.mjs"
+	},
+	"dependencies": {
+		"sharp": "0.35.5"
+	}
+}

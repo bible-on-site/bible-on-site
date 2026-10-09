@@ -3,46 +3,89 @@ import { unstable_cache } from "next/cache";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import React, { Suspense } from "react";
-import { isQriDifferentThanKtiv } from "../../../../data/db/tanah-view-types";
+import { Suspense } from "react";
 import { getPerekByPerekId } from "../../../../data/perek-dto";
 import {
 	getPerekIdsForSefer,
 	getSeferByName,
 } from "../../../../data/sefer-dto";
-import { getArticleById, getArticlesByPerekId } from "../../../../lib/articles";
+import {
+	getAllArticlePerekIdPairs,
+	getArticleById,
+	getArticleSummariesByPerekId,
+} from "../../../../lib/articles";
 import { authorNameToSlug } from "../../../../lib/authors";
 import {
+	getAllPerushPerekNamePairs,
 	getPerushDetail,
 	getPerushimByPerekId,
 } from "../../../../lib/perushim";
+import {
+	articlePath,
+	buildArticleGraph,
+	buildPerushGraph,
+	perushPath,
+} from "../../../../lib/seo/core-jsonld";
+import { plainText, SITE_NAME } from "../../../../lib/seo/jsonld";
+import { selectPerekImages } from "../../../../lib/seo/perek-illustrations";
+import { getPerekImagesByChapter } from "../../../../lib/seo/perek-images-data";
+import { fetchAllEntityRefs } from "../../../../lib/tanahpedia/perek-entity-refs";
+import { JsonLd } from "../../../components/JsonLd";
 import { ArticlesSection } from "../components/ArticlesSection";
 import Breadcrumb from "../components/Breadcrumb";
+import { PerekHeading } from "../components/PerekHeading";
+import { PerekText } from "../components/PerekText";
 import { PerushimSection } from "../components/PerushimSection";
-import { Ptuah } from "../components/Ptuha";
 import SeferComposite from "../components/SeferComposite";
-import { Stuma } from "../components/Stuma";
-import perekStyles from "../page.module.css";
 import styles from "./page.module.css";
 import { ScrollToSlug } from "./ScrollToArticle";
+import { ScrollToPerushPasukNote } from "./ScrollToPerushPasuk";
 
 /**
- * Generate static params for known articles and perushim at build time.
+ * Module-level caches for bulk queries, shared across all 929 parent
+ * invocations within the same build worker. Ensures exactly one DB
+ * round-trip per query type regardless of parallelism.
  */
+let articlePairsPromise: Promise<
+	{ articleId: number; perekId: number }[]
+> | null = null;
+let perushPairsPromise: Promise<
+	{ perekId: number; perushName: string }[]
+> | null = null;
+
+/* istanbul ignore next: only runs during next build */
 export async function generateStaticParams({
 	params,
 }: {
 	params: { number: string };
 }) {
 	const perekId = Number.parseInt(params.number, 10);
-	const [articles, perushim] = await Promise.all([
-		getArticlesByPerekId(perekId),
-		getPerushimByPerekId(perekId),
+
+	if (!articlePairsPromise) {
+		articlePairsPromise = getAllArticlePerekIdPairs();
+	}
+	if (!perushPairsPromise) {
+		perushPairsPromise = getAllPerushPerekNamePairs();
+	}
+
+	const [articlePairs, perushPairs] = await Promise.all([
+		articlePairsPromise,
+		perushPairsPromise,
 	]);
-	return [
-		...articles.map((article) => ({ slug: String(article.id) })),
-		...perushim.map((perush) => ({ slug: perush.name })),
-	];
+
+	const slugs: { slug: string }[] = [];
+	for (const pair of articlePairs) {
+		if (pair.perekId === perekId) {
+			slugs.push({ slug: String(pair.articleId) });
+		}
+	}
+	for (const pair of perushPairs) {
+		if (pair.perekId === perekId) {
+			slugs.push({ slug: encodeURIComponent(pair.perushName) });
+		}
+	}
+
+	return slugs;
 }
 
 /**
@@ -58,8 +101,8 @@ const getCachedArticle = unstable_cache(
 );
 
 const getCachedArticles = unstable_cache(
-	async (perekId: number) => getArticlesByPerekId(perekId),
-	["articles"],
+	async (perekId: number) => getArticleSummariesByPerekId(perekId),
+	["article-summaries"],
 	{
 		tags: ["articles"],
 		revalidate: false,
@@ -100,16 +143,30 @@ export async function generateMetadata({
 		const article = await getCachedArticle(id);
 		if (!article) {
 			return {
-				title: "מאמר לא נמצא | תנ״ך באתר",
+				title: `מאמר לא נמצא | ${SITE_NAME}`,
 			};
 		}
 
 		const descriptionSource = article.abstract || article.content;
+		const title = `${article.name} | ${article.authorName} | ${SITE_NAME}`;
+		const description =
+			(descriptionSource ? plainText(descriptionSource, 160) : "") ||
+			`מאמר מאת ${article.authorName}`;
+		const url = articlePath(perekId, article.id);
 		return {
-			title: `${article.name} | ${article.authorName} | תנ״ך באתר`,
-			description: descriptionSource
-				? descriptionSource.replace(/<[^>]*>/g, "").slice(0, 160)
-				: `מאמר מאת ${article.authorName}`,
+			title,
+			description,
+			alternates: {
+				canonical: url,
+			},
+			openGraph: {
+				title,
+				description,
+				url,
+				siteName: SITE_NAME,
+				locale: "he_IL",
+				type: "article",
+			},
 		};
 	}
 
@@ -119,16 +176,40 @@ export async function generateMetadata({
 
 	if (!perush) {
 		return {
-			title: "פירוש לא נמצא | תנ״ך באתר",
+			title: `פירוש לא נמצא | ${SITE_NAME}`,
 		};
 	}
 
 	const perekObj = getPerekByPerekId(perekId);
 	const sefer = getSeferByName(perekObj.sefer);
+	const perushDetail = await getCachedPerushDetail(perush.id, perekId);
+	const notesExcerpt = perushDetail
+		? plainText(
+				perushDetail.notes.map((note) => note.noteContent).join(" "),
+				160,
+			)
+		: "";
 
+	const title = `${perush.name} על ${sefer.name} ${perekObj.perekHeb} | ${SITE_NAME}`;
+	const description =
+		notesExcerpt ||
+		`פירוש ${perush.name} מאת ${perush.parshanName} על ${sefer.name} פרק ${perekObj.perekHeb}`;
+	const url = perushPath(perekId, perush.name);
 	return {
-		title: `${perush.name} על ${sefer.name} ${perekObj.perekHeb} | תנ״ך באתר`,
-		description: `פירוש ${perush.name} מאת ${perush.parshanName} על ${sefer.name} פרק ${perekObj.perekHeb}`,
+		title,
+		description,
+		alternates: {
+			canonical: url,
+		},
+		openGraph: {
+			title,
+			description,
+			url,
+			siteName: SITE_NAME,
+			locale: "he_IL",
+			type: "article",
+			authors: [perush.parshanName],
+		},
 	};
 }
 
@@ -155,9 +236,9 @@ export default async function ArticlePage({
 
 	const sefer = getSeferByName(perekObj.sefer);
 	const perekIds = getPerekIdsForSefer(sefer);
-	const articlesByPerekIndex = await Promise.all(
-		perekIds.map((pid) => getCachedArticles(pid)),
-	);
+	const entityRefsByPerek = await fetchAllEntityRefs(perekIds);
+	const imagesByPerek = await getPerekImagesByChapter();
+	const seferImages = selectPerekImages(imagesByPerek, perekIds);
 
 	if (isArticle) {
 		// Handle article view
@@ -169,114 +250,73 @@ export default async function ArticlePage({
 
 		return (
 			<>
-				<ScrollToSlug targetId="article-view" />
-			<Suspense>
-				<SeferComposite
-					perekObj={perekObj}
-					articles={articles}
-					articlesByPerekIndex={articlesByPerekIndex}
-					initialSlug={slug}
-				/>
-			</Suspense>
-			<div className={perekStyles.perekContainer}>
-				<Breadcrumb perekObj={perekObj} />
-
-				<article className={perekStyles.perekText}>
-					{perekObj.pesukim.map((pasuk, pasukIdx) => {
-						const pasukKey = pasukIdx + 1;
-						const pasukNumElement = (
-							<span className={perekStyles.pasukNum}>
-								{toLetters(pasukIdx + 1)}
-							</span>
-						);
-						const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
-							const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
-							const isQriWithDifferentKtiv =
-								segment.type === "qri" && isQriDifferentThanKtiv(segment);
-							return (
-								<React.Fragment key={segmentKey}>
-									<span
-										className={isQriWithDifferentKtiv ? perekStyles.qri : ""}
-									>
-										{segment.type === "ktiv" ? (
-											segment.value
-										) : segment.type === "qri" ? (
-											isQriWithDifferentKtiv ? (
-												<>
-													{/* biome-ignore lint/a11y/noLabelWithoutControl: It'll take some time to validate this fix altogether with css rules */}
-													(<label />
-													{segment.value})
-												</>
-											) : (
-												segment.value
-											)
-										) : segment.type === "ptuha" ? (
-											Ptuah()
-										) : (
-											Stuma()
-										)}
-									</span>
-									{segmentIdx === pasuk.segments.length - 1 ||
-									((segment.type === "ktiv" || segment.type === "qri") &&
-										segment.value.at(segment.value.length - 1) ===
-											"־") ? null : (
-										<span> </span>
-									)}
-								</React.Fragment>
-							);
-						});
-						return (
-							<React.Fragment key={pasukKey}>
-								{pasukNumElement}
-								<span> </span>
-								{pasukElement}
-								<span> </span>
-							</React.Fragment>
-						);
+				<JsonLd
+					data={buildArticleGraph({
+						article,
+						perekObj,
+						authorSlug: authorNameToSlug(article.authorName),
 					})}
-				</article>
-
-				{/* Perushim section - commentaries carousel */}
-				<PerushimSection perekId={perekId} perushim={perushim} />
-
-				{/* Articles carousel */}
-				<ArticlesSection articles={articles} />
-
-				{/* Expanded article view */}
+				/>
+				<ScrollToSlug targetId="article-view" />
 				<section id="article-view" className={styles.expandedArticle}>
-						<header className={styles.articleHeader}>
-							<Link
-								href={`/929/authors/${authorNameToSlug(article.authorName)}`}
-								className={styles.authorLink}
-							>
-								<div className={styles.authorImage}>
-									<Image
-										src={article.authorImageUrl}
-										alt={article.authorName}
-										width={80}
-										height={80}
-										className={styles.authorImg}
-									/>
-								</div>
-								<span className={styles.authorName}>{article.authorName}</span>
-							</Link>
-							<h2 className={styles.articleTitle}>{article.name}</h2>
-						</header>
+					<header className={styles.articleHeader}>
+						<Link
+							href={`/929/authors/${authorNameToSlug(article.authorName)}`}
+							className={styles.authorLink}
+						>
+							<div className={styles.authorImage}>
+								<Image
+									src={article.authorImageUrl}
+									alt={article.authorName}
+									width={80}
+									height={80}
+									className={styles.authorImg}
+								/>
+							</div>
+							<span className={styles.authorName}>{article.authorName}</span>
+						</Link>
+						<h1 className={styles.articleTitle}>{article.name}</h1>
+					</header>
 
-						{article.content && (
-							<div
-								className={styles.articleBody}
-								// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
-								dangerouslySetInnerHTML={{ __html: article.content }}
-							/>
-						)}
+					{article.content && (
+						<div
+							className={styles.articleBody}
+							// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
+							dangerouslySetInnerHTML={{ __html: article.content }}
+						/>
+					)}
 
-						<div className={styles.backToPerek}>
-							<Link href={`/929/${perekId}`} className={styles.backLink}>
-								חזרה לפרק →
-							</Link>
-						</div>
-					</section>
+					<div className={styles.backToPerek}>
+						<Link href={`/929/${perekId}`} className={styles.backLink}>
+							חזרה לפרק →
+						</Link>
+					</div>
+				</section>
+				<Suspense>
+					<SeferComposite
+						perekObj={perekObj}
+						articles={articles}
+						perushim={perushim}
+						perekIds={perekIds}
+						entityRefsByPerek={entityRefsByPerek}
+						imagesByPerek={seferImages}
+						initialSlug={slug}
+					/>
+				</Suspense>
+				<div className={styles.articlePerekContainer}>
+					<Breadcrumb perekObj={perekObj} />
+					<PerekHeading perekObj={perekObj} />
+
+					<PerekText
+						perekObj={perekObj}
+						entityRefs={entityRefsByPerek[perekId] ?? []}
+					/>
+
+					{/* Perushim section - commentaries carousel */}
+					<PerushimSection perekId={perekId} perushim={perushim} />
+
+					{/* Articles carousel */}
+					<ArticlesSection articles={articles} />
 				</div>
 			</>
 		);
@@ -297,101 +337,34 @@ export default async function ArticlePage({
 
 	return (
 		<>
+			<JsonLd data={buildPerushGraph({ perush: perushDetail, perekObj })} />
 			<ScrollToSlug targetId="perush-view" />
-			<Suspense>
-				<SeferComposite
-					perekObj={perekObj}
-					articles={articles}
-					articlesByPerekIndex={articlesByPerekIndex}
-					initialSlug={slug}
-				/>
+			<Suspense fallback={null}>
+				<ScrollToPerushPasukNote />
 			</Suspense>
-			<div className={perekStyles.perekContainer}>
-				<Breadcrumb perekObj={perekObj} />
+			<section id="perush-view" className={styles.expandedPerush}>
+				<header className={styles.perushHeader}>
+					<h1 className={styles.perushTitle}>
+						{perushDetail.name} על {perekObj.source}
+					</h1>
+					<h2 className={styles.parshanName}>{perushDetail.parshanName}</h2>
+				</header>
 
-				<article className={perekStyles.perekText}>
-					{perekObj.pesukim.map((pasuk, pasukIdx) => {
-						const pasukKey = pasukIdx + 1;
-						const pasukNumElement = (
-							<span className={perekStyles.pasukNum}>
-								{toLetters(pasukIdx + 1)}
-							</span>
-						);
-						const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
-							const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
-							const isQriWithDifferentKtiv =
-								segment.type === "qri" && isQriDifferentThanKtiv(segment);
-							return (
-								<React.Fragment key={segmentKey}>
-									<span
-										className={isQriWithDifferentKtiv ? perekStyles.qri : ""}
-									>
-										{segment.type === "ktiv" ? (
-											segment.value
-										) : segment.type === "qri" ? (
-											isQriWithDifferentKtiv ? (
-												<>
-													{/* biome-ignore lint/a11y/noLabelWithoutControl: It'll take some time to validate this fix altogether with css rules */}
-													(<label />
-													{segment.value})
-												</>
-											) : (
-												segment.value
-											)
-										) : segment.type === "ptuha" ? (
-											Ptuah()
-										) : (
-											Stuma()
-										)}
-									</span>
-									{segmentIdx === pasuk.segments.length - 1 ||
-									((segment.type === "ktiv" || segment.type === "qri") &&
-										segment.value.at(segment.value.length - 1) ===
-											"־") ? null : (
-										<span> </span>
-									)}
-								</React.Fragment>
-							);
-						});
+				<div className={styles.perushContent}>
+					{perushDetail.notes.map((note, idx) => {
+						const prevSamePasuk =
+							idx > 0 && perushDetail.notes[idx - 1].pasuk === note.pasuk;
+						const noteAnchorId = !prevSamePasuk
+							? `perush-pasuk-${note.pasuk}`
+							: undefined;
 						return (
-							<React.Fragment key={pasukKey}>
-								{pasukNumElement}
-								<span> </span>
-								{pasukElement}
-								<span> </span>
-							</React.Fragment>
-						);
-					})}
-				</article>
-
-				{/* Perushim section - commentaries carousel */}
-				<PerushimSection perekId={perekId} perushim={perushim} />
-
-				{/* Articles carousel */}
-				<ArticlesSection articles={articles} />
-
-				{/* Expanded perush view */}
-				<section id="perush-view" className={styles.expandedPerush}>
-					<header className={styles.perushHeader}>
-						<h2 className={styles.perushTitle}>
-							{perushDetail.name}
-							{perushDetail.parshanBirthYear && (
-								<span className={styles.parshanYear}>
-									{" "}
-									({perushDetail.parshanBirthYear})
-								</span>
-							)}
-						</h2>
-						<h3 className={styles.parshanName}>{perushDetail.parshanName}</h3>
-					</header>
-
-					<div className={styles.perushContent}>
-						{perushDetail.notes.map((note) => (
 							<div
 								key={`${note.pasuk}-${note.noteIdx}`}
-								id={`note-${toLetters(note.pasuk)}-${note.noteIdx + 1}`}
+								id={noteAnchorId}
 								className={styles.note}
+								data-perush-pasuk={note.pasuk}
 							>
+								<span id={`note-${toLetters(note.pasuk)}-${note.noteIdx + 1}`} />
 								<span className={styles.notePasuk}>
 									פסוק {toLetters(note.pasuk)}:
 								</span>
@@ -401,15 +374,41 @@ export default async function ArticlePage({
 									dangerouslySetInnerHTML={{ __html: note.noteContent }}
 								/>
 							</div>
-						))}
-					</div>
+						);
+					})}
+				</div>
 
-					<div className={styles.backToPerek}>
-						<Link href={`/929/${perekId}`} className={styles.backLink}>
-							חזרה לפרק →
-						</Link>
-					</div>
-				</section>
+				<div className={styles.backToPerek}>
+					<Link href={`/929/${perekId}`} className={styles.backLink}>
+						חזרה לפרק →
+					</Link>
+				</div>
+			</section>
+			<Suspense>
+				<SeferComposite
+					perekObj={perekObj}
+					articles={articles}
+					perushim={perushim}
+					perekIds={perekIds}
+					entityRefsByPerek={entityRefsByPerek}
+					imagesByPerek={seferImages}
+					initialSlug={slug}
+				/>
+			</Suspense>
+			<div className={styles.articlePerekContainer}>
+				<Breadcrumb perekObj={perekObj} />
+				<PerekHeading perekObj={perekObj} />
+
+				<PerekText
+					perekObj={perekObj}
+					entityRefs={entityRefsByPerek[perekId] ?? []}
+				/>
+
+				{/* Perushim section - commentaries carousel */}
+				<PerushimSection perekId={perekId} perushim={perushim} />
+
+				{/* Articles carousel */}
+				<ArticlesSection articles={articles} />
 			</div>
 		</>
 	);

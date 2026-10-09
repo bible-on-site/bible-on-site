@@ -4,9 +4,12 @@
   display: grid;
   align-items: center;
 }
-/*
+
 .container {
-} */
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
 
 .breadcrumb {
   list-style: none;
@@ -14,28 +17,43 @@
   margin: 0 18px 0 0;
   font-size: 14px;
   color: #555;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .breadcrumb li {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
 }
 
 .breadcrumb > li:not(:last-child):after {
-  content: ">";
+  content: "\203A";
+  display: inline-block;
+  font-style: normal;
+  font-size: 16px;
+  line-height: 1;
   margin: 0 8px;
   color: #999;
   font-weight: normal;
 }
 
 .breadcrumb li a {
+  padding: 4px 8px;
+  border-radius: 4px;
   text-decoration: underline;
   color: #0066cc;
-  transition: color 0.2s ease;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease;
 }
 
 .breadcrumb li a:hover {
   color: #0052a3;
   text-decoration: underline;
+  background-color: #f0f0f0;
 }
 
 .breadcrumb li a:focus {
@@ -70,8 +88,36 @@
   outline-offset: 2px;
 }
 
-/* .relative {
-} */
+.relative {
+  position: relative;
+}
+
+.bg-white {
+  background-color: #fff;
+}
+
+.list {
+  list-style: none;
+  padding: 4px 0;
+  margin: 0;
+}
+
+.pl0 {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.glyphicon {
+  display: inline-block;
+  font-style: normal;
+  font-variant: normal;
+  text-rendering: auto;
+  line-height: 1;
+}
+
+.glyphicon-triangle-bottom::before {
+  content: "▼";
+}
 
 .drop {
   display: none;
@@ -87,8 +133,22 @@
   min-width: 150px;
 }
 
-.drop-container:hover .drop {
+.drop-container > [aria-expanded="true"] + .drop {
   display: block;
+}
+
+/* Hover previews stay mouse-only (touch keeps sticky :hover) and yield to an open selector. */
+@media (hover: hover) {
+  .drop-container:hover .drop {
+    display: block;
+  }
+
+  .breadcrumb:has([aria-expanded="true"])
+    .drop-container:hover
+    > [aria-expanded="false"]
+    + .drop {
+    display: none;
+  }
 }
 
 .drop-container {
@@ -110,7 +170,9 @@
   padding: 8px 16px;
   text-decoration: none;
   color: #333;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
 
 .drop ul li a:hover {
@@ -128,11 +190,52 @@
   font-size: 9px;
   margin-right: 4px;
   color: #666;
-  transition: transform 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    margin 0.2s ease;
 }
 
 .drop-container:hover .small {
   transform: translateY(1px);
+}
+
+@media (max-width: 480px) {
+  .breadcrumb {
+    font-size: 12px;
+    margin: 0 8px 0 0;
+  }
+
+  .breadcrumb > li:not(:last-child):after {
+    margin: 0 4px;
+    font-size: 13px;
+  }
+
+  .breadcrumb li a,
+  .active > button {
+    padding: 4px 4px;
+  }
+
+  .glyphicon-triangle-bottom::before {
+    font-size: 8px;
+  }
+
+  .small {
+    margin-right: 2px;
+  }
+
+  /* Dropdowns opened from end-side buttons would overflow the left edge, so anchor them to the breadcrumb row. */
+  .breadcrumb {
+    position: relative;
+  }
+
+  .drop-container {
+    position: static;
+  }
+
+  .drop {
+    max-width: calc(100vw - 16px);
+    overflow: auto;
+  }
 }
 
 .perek-grid {
@@ -214,4 +317,149 @@
 
 .sefer-grid ul li {
   white-space: nowrap;
+}
+
+/* Tanahpedia: full-width breadcrumb row (like perek layout) */
+.tanahpedia-nav {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.tanahpedia-inner {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.tanahpedia-inner .breadcrumb {
+  margin: 0 12px 0 0;
+}
+
+/* Wider scrollable category menu with two-level hierarchy */
+.tanahpedia-category-drop {
+  min-width: 220px;
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+}
+
+.tanahpedia-category-group {
+  border-bottom: 1px solid #eee;
+}
+
+.tanahpedia-category-group:last-child {
+  border-bottom: none;
+}
+
+.drop .tanahpedia-category-parent {
+  display: block;
+  font-weight: 600;
+  padding: 8px 16px 4px;
+  text-decoration: none;
+  color: #222;
+}
+
+.drop .tanahpedia-category-parent:hover,
+.drop .tanahpedia-category-parent:focus {
+  background-color: #f5f5f5;
+  color: #0066cc;
+}
+
+.drop .tanahpedia-nested {
+  list-style: none;
+  padding: 0 0 8px 0;
+  margin: 0;
+}
+
+.drop .tanahpedia-nested li {
+  display: block;
+}
+
+.drop .tanahpedia-nested li a {
+  display: block;
+  padding: 4px 28px 4px 16px;
+  font-size: 13px;
+  font-weight: normal;
+  text-decoration: none;
+  color: #444;
+}
+
+.drop .tanahpedia-nested li a:hover,
+.drop .tanahpedia-nested li a:focus {
+  background-color: #f0f6ff;
+  color: #0066cc;
+}
+
+@media (prefers-color-scheme: dark) {
+  .breadcrumb {
+    color: #b8c2d9;
+  }
+
+  .breadcrumb > li:not(:last-child):after {
+    color: #64748b;
+  }
+
+  .breadcrumb li a {
+    color: #7eb0ff;
+  }
+
+  .breadcrumb li a:hover {
+    color: #a8b9ff;
+    background-color: #232a45;
+  }
+
+  .active {
+    color: #e8eaed;
+  }
+
+  .active > button:hover {
+    background-color: #232a45;
+  }
+
+  .bg-white {
+    background-color: #1a1f2e;
+  }
+
+  .drop {
+    background-color: #1a1f2e;
+    border-color: #2d3548;
+  }
+
+  .drop ul li a {
+    color: #e8eaed;
+  }
+
+  .drop ul li a:hover {
+    background-color: #232a45;
+    color: #7eb0ff;
+  }
+
+  .drop ul li a:focus {
+    background-color: #232a45;
+    color: #7eb0ff;
+  }
+
+  .small {
+    color: #9aa0a6;
+  }
+
+  .drop .tanahpedia-category-parent {
+    color: #e8eaed;
+  }
+
+  .drop .tanahpedia-category-parent:hover,
+  .drop .tanahpedia-category-parent:focus {
+    background-color: #232a45;
+    color: #7eb0ff;
+  }
+
+  .drop .tanahpedia-nested li a {
+    color: #b8c2d9;
+  }
+
+  .drop .tanahpedia-nested li a:hover,
+  .drop .tanahpedia-nested li a:focus {
+    background-color: #232a45;
+    color: #7eb0ff;
+  }
 }

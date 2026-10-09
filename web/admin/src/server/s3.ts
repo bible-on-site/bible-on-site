@@ -5,14 +5,13 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createServerFn } from "@tanstack/react-start";
-import { execute } from "./db";
 
 // S3 configuration from environment
 const S3_REGION =
 	process.env.S3_REGION || process.env.AWS_REGION || "il-central-1";
-const S3_BUCKET = process.env.S3_BUCKET || "bible-on-site-rabbis";
-const S3_ENDPOINT = process.env.S3_ENDPOINT; // Optional: for MinIO
-const S3_FORCE_PATH_STYLE = process.env.S3_FORCE_PATH_STYLE === "true"; // Required for MinIO
+const S3_BUCKET = process.env.S3_BUCKET || "bible-on-site-assets";
+const S3_ENDPOINT = process.env.S3_ENDPOINT; // Optional: for local S3 (RustFS)
+const S3_FORCE_PATH_STYLE = process.env.S3_FORCE_PATH_STYLE === "true"; // Required for local S3
 const S3_ACCESS_KEY =
 	process.env.S3_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;
 const S3_SECRET_KEY =
@@ -34,11 +33,20 @@ const s3Client = new S3Client({
 // Build the public URL based on configuration
 function getPublicUrl(key: string): string {
 	if (S3_ENDPOINT) {
-		// MinIO style URL
+		// Local path-style S3 URL
 		return `${S3_ENDPOINT}/${S3_BUCKET}/${key}`;
 	}
 	// Standard AWS S3 URL
 	return `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${key}`;
+}
+
+/**
+ * Build the public URL for an author image based on their ID.
+ * Images live in S3 at: authors/high-res/{id}.jpg
+ * There is NO image_url column in tanah_author — URLs are always derived from the ID.
+ */
+export function getAuthorImageUrl(authorId: number): string {
+	return getPublicUrl(`authors/high-res/${authorId}.jpg`);
 }
 
 export async function uploadImage(
@@ -64,12 +72,12 @@ export async function uploadImage(
 }
 
 export async function deleteImage(imageUrl: string): Promise<void> {
-	// Extract key from URL - handle both S3 and MinIO URLs
+	// Extract key from URL - handle both AWS and local S3 URLs
 	const url = new URL(imageUrl);
 	let key: string;
 
 	if (S3_ENDPOINT && imageUrl.startsWith(S3_ENDPOINT)) {
-		// MinIO style: endpoint/bucket/key
+		// Local path-style: endpoint/bucket/key
 		const pathParts = url.pathname.split("/").filter(Boolean);
 		key = pathParts.slice(1).join("/"); // Skip bucket name
 	} else {
@@ -113,21 +121,15 @@ interface UploadAuthorImageInput {
 
 // Server function to upload author image
 export const uploadAuthorImage = createServerFn({ method: "POST" })
-	.inputValidator((data: UploadAuthorImageInput) => data)
+	.validator((data: UploadAuthorImageInput) => data)
 	.handler(async ({ data }) => {
 		const { authorId, contentType, base64Data } = data;
 
 		// Convert base64 to buffer
 		const buffer = Buffer.from(base64Data, "base64");
 
-		// Upload to S3
-		const imageUrl = await uploadImage(buffer, contentType, authorId);
+		// Upload to S3 — no DB update needed, URL is derived from the author ID
+		await uploadImage(buffer, contentType, authorId);
 
-		// Update author record with new image URL
-		await execute("UPDATE tanah_author SET image_url = ? WHERE id = ?", [
-			imageUrl,
-			authorId,
-		]);
-
-		return { imageUrl };
+		return { imageUrl: getAuthorImageUrl(authorId) };
 	});

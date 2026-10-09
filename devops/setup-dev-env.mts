@@ -1,8 +1,8 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
+import zlib from "node:zlib";
 import {
 	AuthorizeSecurityGroupIngressCommand,
 	EC2Client,
@@ -40,6 +40,7 @@ async function main() {
 	console.info("Setting up devops...");
 	if (!setupPythonVenv(devopsDir))
 		throw new Error("Failed to set up Python virtual environment for devops");
+	installGitHooks();
 
 	const modules = [
 		{ name: "website", path: websiteDir },
@@ -311,30 +312,29 @@ async function runSyncFromProd(): Promise<void> {
 		} else {
 			console.info("Dumping production database...");
 			console.info(`Running: mysqldump ${mysqldumpArgs.join(" ")}`);
+			// Stream stdout straight to the dump file — buffering the whole dump in
+			// memory (maxBuffer) fails with ENOBUFS once the prod DB outgrows it.
 			const dumpFd = fs.openSync(dumpPath, "w");
+			let dumpResult: ReturnType<typeof spawnSync>;
 			try {
-				const dumpResult = spawnSync("mysqldump", mysqldumpArgs, {
+				dumpResult = spawnSync("mysqldump", mysqldumpArgs, {
 					env: { ...process.env, MYSQL_PWD: prodDb.password },
 					stdio: ["ignore", dumpFd, "pipe"],
 				});
-				if (dumpResult.error) {
-					throw new Error(
-						`mysqldump spawn error: ${dumpResult.error.message}`,
-					);
-				}
-				if (dumpResult.status !== 0) {
-					const stderr = dumpResult.stderr?.toString() || "";
-					throw new Error(
-						`mysqldump failed (exit ${dumpResult.status}): stderr=${stderr}`,
-					);
-				}
 			} finally {
 				fs.closeSync(dumpFd);
 			}
-			const dumpSize = fs.statSync(dumpPath).size;
-			console.info(
-				`Dump written to ${dumpPath} (${(dumpSize / 1024 / 1024).toFixed(1)} MB)`,
-			);
+			if (dumpResult.error) {
+				throw new Error(`mysqldump spawn error: ${dumpResult.error.message}`);
+			}
+			if (dumpResult.status !== 0) {
+				const stderr = dumpResult.stderr?.toString() || "";
+				throw new Error(
+					`mysqldump failed (exit ${dumpResult.status}): stderr=${stderr}`,
+				);
+			}
+			const dumpSizeMb = fs.statSync(dumpPath).size / 1_048_576;
+			console.info(`  Dump complete (${dumpSizeMb.toFixed(1)} MB)`);
 		}
 
 		if (dryRun) {
@@ -362,23 +362,30 @@ async function runSyncFromProd(): Promise<void> {
 				stdio: "inherit",
 			});
 			console.info("Restoring into dev database...");
-			const restoreResult = spawnSync(
-				"mysql",
-				[
-					"-h",
-					devDb.host,
-					"-P",
-					String(devDb.port),
-					"-u",
-					devDb.user,
-					devDb.database,
-				],
-				{
-					env: { ...process.env, MYSQL_PWD: devDb.password },
-					stdio: ["pipe", "inherit", "inherit"],
-					input: fs.readFileSync(dumpPath),
-				},
-			);
+			// Stream the dump file into mysql stdin — avoids loading the whole
+			// dump into memory (see ENOBUFS note on the dump side).
+			const restoreFd = fs.openSync(dumpPath, "r");
+			let restoreResult: ReturnType<typeof spawnSync>;
+			try {
+				restoreResult = spawnSync(
+					"mysql",
+					[
+						"-h",
+						devDb.host,
+						"-P",
+						String(devDb.port),
+						"-u",
+						devDb.user,
+						devDb.database,
+					],
+					{
+						env: { ...process.env, MYSQL_PWD: devDb.password },
+						stdio: [restoreFd, "inherit", "inherit"],
+					},
+				);
+			} finally {
+				fs.closeSync(restoreFd);
+			}
 			if (restoreResult.status !== 0) throw new Error("mysql restore failed");
 			fs.rmSync(dumpPath, { force: true });
 
@@ -539,18 +546,48 @@ async function runSyncFromProd(): Promise<void> {
 			}
 		}
 
-	// S3 sync (optional if buckets are set)
-	if (prodS3Bucket && devS3Bucket) {
-		if (!dryRun && s3Endpoint) {
-			ensureMinioRunning();
-		}
+		// Tanahpedia safe structure + baseline seed on the freshly-synced dev DB.
+		// The prod dump is the canonical Tanahpedia content seed; this step only
+		// creates missing tables, applies idempotent column upgrades, and inserts
+		// lookup/baseline rows — it never drops or replaces synced content.
 		if (dryRun) {
+			console.info(
+				"[dry-run] Would run: cargo make mysql-seed-tanahpedia-baseline (Tanahpedia safe structure + baseline seed on dev DB)",
+			);
+		} else {
+			console.info(
+				"Applying Tanahpedia safe structure + baseline seed on dev DB...",
+			);
+			const tanahpediaUpgradeResult = spawnSync(
+				"cargo",
+				["make", "mysql-seed-tanahpedia-baseline"],
+				{
+					cwd: path.resolve(projectDir, "data"),
+					env: { ...process.env, DB_URL: devDbUrl },
+					stdio: "inherit",
+					shell: isWin,
+				},
+			);
+			if (tanahpediaUpgradeResult.status !== 0) {
+				throw new Error(
+					"Tanahpedia safe structure/baseline seed failed after prod sync",
+				);
+			}
+			console.info("  Tanahpedia safe structure + baseline seed complete");
+		}
+
+		// S3 sync (optional if buckets are set)
+		if (prodS3Bucket && devS3Bucket) {
+			if (!dryRun && s3Endpoint) {
+				ensureRustfsRunning();
+			}
+			if (dryRun) {
 				console.info(
 					`[dry-run] Would ensure bucket s3://${devS3Bucket} exists`,
 				);
 				if (s3Endpoint) {
 					console.info(
-						`[dry-run] Would sync: AWS s3://${prodS3Bucket} → local temp → MinIO s3://${devS3Bucket}`,
+						`[dry-run] Would sync: AWS s3://${prodS3Bucket} → local temp → RustFS s3://${devS3Bucket}`,
 					);
 				} else {
 					console.info(
@@ -588,7 +625,7 @@ async function runSyncFromProd(): Promise<void> {
 				}
 
 				if (s3Endpoint) {
-					// Two-step sync: AWS prod → local temp dir → MinIO dev
+					// Two-step sync: AWS prod → local temp dir → RustFS dev
 					// Required because --endpoint-url applies to both source and dest
 					const tempS3Dir = path.join(projectDir, "data", ".s3-sync-temp");
 					fs.mkdirSync(tempS3Dir, { recursive: true });
@@ -619,7 +656,7 @@ async function runSyncFromProd(): Promise<void> {
 					} else {
 						console.info("  S3 download complete");
 						console.info(
-							`Uploading to MinIO (s3://${devS3Bucket}) at ${s3Endpoint}...`,
+							`Uploading to RustFS (s3://${devS3Bucket}) at ${s3Endpoint}...`,
 						);
 						const uploadResult = spawnSync(
 							"aws",
@@ -638,8 +675,7 @@ async function runSyncFromProd(): Promise<void> {
 								encoding: "utf-8",
 								env: {
 									...process.env,
-									AWS_ACCESS_KEY_ID:
-										process.env.S3_ACCESS_KEY_ID || "test",
+									AWS_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID || "test",
 									AWS_SECRET_ACCESS_KEY:
 										process.env.S3_SECRET_ACCESS_KEY || "test_1234",
 								},
@@ -647,9 +683,9 @@ async function runSyncFromProd(): Promise<void> {
 						);
 						if (uploadResult.status !== 0) {
 							const stderr = uploadResult.stderr || "";
-							console.warn(`  Warning: MinIO upload failed: ${stderr}`);
+							console.warn(`  Warning: RustFS upload failed: ${stderr}`);
 						} else {
-							console.info("  MinIO upload complete");
+							console.info("  RustFS upload complete");
 						}
 					}
 
@@ -722,22 +758,46 @@ async function runSyncFromProd(): Promise<void> {
 	console.info("sync-from-prod finished.");
 }
 
-function ensureMinioRunning(): void {
+function ensureRustfsRunning(): void {
 	const dockerComposePath = path.resolve(devopsDir, "docker-compose.yml");
-	console.info("Ensuring MinIO is running via docker-compose...");
+	console.info("Ensuring RustFS is ready via docker-compose...");
 	const result = spawnSync(
 		"docker",
-		["compose", "-f", dockerComposePath, "up", "-d", "--wait"],
+		[
+			"compose",
+			"-f",
+			dockerComposePath,
+			"up",
+			"-d",
+			"--wait",
+			"--wait-timeout",
+			"180",
+		],
 		{ stdio: "inherit", shell: isWin },
 	);
 	if (result.status !== 0) {
-		console.warn(
-			"Warning: Failed to start MinIO via docker-compose. S3 asset sync may fail.",
+		throw new Error(
+			"RustFS startup failed. Make sure Docker Desktop is running.",
 		);
-		console.warn(
-			"  Make sure Docker Desktop is running, then retry or run manually:",
+	}
+	const init = spawnSync(
+		"docker",
+		[
+			"compose",
+			"-f",
+			dockerComposePath,
+			"run",
+			"--build",
+			"--rm",
+			"--no-deps",
+			"rustfs-init",
+		],
+		{ stdio: "inherit", shell: isWin },
+	);
+	if (init.status !== 0) {
+		throw new Error(
+			"RustFS bucket initialization failed; refusing to sync assets.",
 		);
-		console.warn(`  docker compose -f ${dockerComposePath} up -d`);
 	}
 }
 
@@ -760,6 +820,20 @@ function setupPythonVenv(dir: string, name = ".", fullSetup = true) {
 	}
 	return fullSetup ? pipInstall(dir) : false;
 }
+// Installs the pre-commit framework's git hooks (pre-commit + post-commit
+// stages); the logic lives in install-git-hooks.mjs so the root package.json
+// `prepare` script runs the same code on `npm install`/`npm ci`.
+function installGitHooks(): void {
+	const result = spawnSync(
+		"node",
+		[path.join(devopsDir, "install-git-hooks.mjs")],
+		{ cwd: projectDir, stdio: "inherit" },
+	);
+	if (result.status !== 0) {
+		throw new Error("Failed to install pre-commit git hooks");
+	}
+}
+
 function getActivationCommand(dir: string) {
 	return isWin
 		? path.join(dir, ".venv", "Scripts", "activate")
@@ -867,7 +941,7 @@ function assertPythonVersion() {
 function assertNodeJSVersion() {
 	// TODO: check using semver, TODO: inform if NodeJS is not installed.
 	console.info("Checking NodeJS version...");
-	const supportedNodeVersions = ["v24.11.1"];
+	const supportedNodeVersions = ["v26.10.0"];
 	const actualNodeVersion = spawnSync("node", ["--version"], { shell: isWin })
 		.output.toString()
 		.replaceAll(",", "")

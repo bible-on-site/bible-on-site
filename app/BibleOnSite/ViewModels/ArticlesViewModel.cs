@@ -11,6 +11,9 @@ namespace BibleOnSite.ViewModels;
 /// </summary>
 public partial class ArticlesViewModel : ObservableObject
 {
+    private readonly Services.StarterService _starterService;
+    private readonly Services.PerekDataService _perekDataService;
+    private readonly Services.IAppNavigator _navigator;
 #pragma warning disable MVVMTK0045
     [ObservableProperty]
     private int _perekId;
@@ -80,14 +83,23 @@ public partial class ArticlesViewModel : ObservableObject
         OnPropertyChanged(nameof(DisplayTitle));
     }
 
-    public ArticlesViewModel()
+    public ArticlesViewModel() : this(Services.StarterService.Instance, Services.PerekDataService.Instance,
+        Services.ShellAppNavigator.Instance)
     {
+    }
+
+    public ArticlesViewModel(Services.StarterService starterService, Services.PerekDataService perekDataService,
+        Services.IAppNavigator navigator)
+    {
+        _starterService = starterService;
+        _perekDataService = perekDataService;
+        _navigator = navigator;
     }
 
     /// <summary>
     /// Creates a view model for articles filtered by perek.
     /// </summary>
-    public ArticlesViewModel(int perekId, string perekTitle)
+    public ArticlesViewModel(int perekId, string perekTitle) : this()
     {
         _perekId = perekId;
         _perekTitle = perekTitle;
@@ -133,11 +145,11 @@ public partial class ArticlesViewModel : ObservableObject
 
             // Ensure Starter data is loaded
 #if DEBUG
-            await Services.StarterService.Instance.LoadAsync(forceReload: true);
+            await _starterService.LoadAsync(forceReload: true);
 #else
-            if (!Services.StarterService.Instance.IsLoaded)
+            if (!_starterService.IsLoaded)
             {
-                await Services.StarterService.Instance.LoadAsync();
+                await _starterService.LoadAsync();
             }
 #endif
 
@@ -146,18 +158,18 @@ public partial class ArticlesViewModel : ObservableObject
             if (IsFilterByAuthor && AuthorId.HasValue)
             {
                 // Use cached Starter data - instant, no API call
-                articles = Services.StarterService.Instance.GetArticlesByAuthorId(AuthorId.Value);
+                articles = _starterService.GetArticlesByAuthorId(AuthorId.Value);
 
                 // Populate PerekDisplayName for each article (needed when showing articles by author)
                 foreach (var article in articles)
                 {
-                    article.PerekDisplayName = Services.PerekDataService.Instance.GetPerekSource(article.PerekId);
+                    article.PerekDisplayName = _perekDataService.GetPerekSource(article.PerekId);
                 }
             }
             else if (IsFilterByPerek)
             {
                 // Use cached Starter data - instant, no API call
-                articles = Services.StarterService.Instance.GetArticlesByPerekId(PerekId);
+                articles = _starterService.GetArticlesByPerekId(PerekId);
             }
             else
             {
@@ -187,7 +199,7 @@ public partial class ArticlesViewModel : ObservableObject
             return;
 
         // Navigate to article detail page
-        await Shell.Current.GoToAsync($"articleDetail?articleId={article.Id}&perekId={article.PerekId}");
+        await _navigator.GoToAsync($"articleDetail?articleId={article.Id}&perekId={article.PerekId}");
     }
 #endif
 }

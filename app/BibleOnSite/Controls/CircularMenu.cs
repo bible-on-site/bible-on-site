@@ -151,6 +151,10 @@ public partial class CircularMenu : ContentView
 
     private void SetupMenuItems(IList<CircularMenuItem> items)
     {
+        foreach (var oldItem in _menuItems)
+        {
+            _container.Remove(oldItem);
+        }
         _menuItems.Clear();
         _menuItems.AddRange(items);
 
@@ -163,7 +167,7 @@ public partial class CircularMenu : ContentView
             _container.Insert(0, item); // Add behind toggle button
         }
 
-        PositionMenuItems(false);
+        PositionMenuItems(_isExpanded);
     }
 
     private void OnToggleClicked(object? sender, EventArgs e)
@@ -206,7 +210,7 @@ public partial class CircularMenu : ContentView
     private void AnimateMenu()
     {
         // Animate toggle button rotation
-        _toggleButton.RotateTo(_isExpanded ? 45 : 0, 300, Easing.BounceOut);
+        _toggleButton.RotateToAsync(_isExpanded ? 45 : 0, 300, Easing.BounceOut);
 
         // Position and animate menu items
         PositionMenuItems(_isExpanded);
@@ -236,21 +240,24 @@ public partial class CircularMenu : ContentView
                 item.TranslationY = 0;
 
                 // Animate to position
-                item.TranslateTo(x, y, 300, Easing.BounceOut);
-                item.FadeTo(1, 200);
-                item.ScaleTo(1, 300, Easing.BounceOut);
+                item.TranslateToAsync(x, y, 300, Easing.BounceOut);
+                item.FadeToAsync(1, 200);
+                item.ScaleToAsync(1, 300, Easing.BounceOut);
             }
             else
             {
                 // Animate back to center
-                item.TranslateTo(0, 0, 200, Easing.CubicIn);
-                item.FadeTo(0, 150);
-                item.ScaleTo(0, 200, Easing.CubicIn);
+                item.TranslateToAsync(0, 0, 200, Easing.CubicIn);
+                item.FadeToAsync(0, 150);
+                item.ScaleToAsync(0, 200, Easing.CubicIn);
 
                 // Hide after animation
-                _ = Task.Delay(200).ContinueWith(_ =>
+                Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(200), () =>
                 {
-                    MainThread.BeginInvokeOnMainThread(() => item.IsVisible = false);
+                    if (!_isExpanded)
+                    {
+                        item.IsVisible = false;
+                    }
                 });
             }
         }

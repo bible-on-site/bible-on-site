@@ -22,11 +22,11 @@
 		"noUncheckedSideEffectImports": true,
 
 		/* Paths */
-		"baseUrl": ".",
+		"ignoreDeprecations": "5.0",
 		"paths": {
-			"~/*": ["src/*"]
+			"~/*": ["./src/*"]
 		},
-		"types": ["vinxi/types/client"]
+		"types": ["vite/client"]
 	},
-	"include": ["src", "vite.config.ts"]
+	"include": ["src", "tests", "vite.config.ts"]
 }

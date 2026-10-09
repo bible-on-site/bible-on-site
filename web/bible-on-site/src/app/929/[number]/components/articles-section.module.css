@@ -17,7 +17,7 @@
 }
 
 .sectionIcon {
-  font-size: 18px;
+  flex-shrink: 0;
 }
 
 .sectionTitle {
@@ -172,5 +172,46 @@ button.carouselItem {
 
   .authorName {
     font-size: 0.85rem;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .articlesSection {
+    background: linear-gradient(to bottom, #161b2a, #12151c);
+    border-color: #2d3548;
+  }
+
+  .sectionTitle,
+  .authorName {
+    color: #a8b9ff;
+  }
+
+  .emptyMessage {
+    color: #9aa0a6;
+  }
+
+  .carousel {
+    scrollbar-color: #3b4256 transparent;
+  }
+
+  .carousel::-webkit-scrollbar-thumb {
+    background: #3b4256;
+  }
+
+  .carouselItem {
+    background: #1a1f2e;
+    border-color: #2d3548;
+  }
+
+  .carouselItem:hover {
+    border-color: #a8b9ff;
+  }
+
+  .authorImage {
+    background: #2d3548;
+  }
+
+  .articleAbstract {
+    color: #d7dae0;
   }
 }

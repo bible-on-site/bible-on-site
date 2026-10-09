@@ -11,10 +11,23 @@ engines:
 # Exclude MySQL/SQLite schema files: SQL analyzer uses T-SQL dialect and flags
 # valid MySQL backticks and SQLite PRAGMA/AUTOINCREMENT as syntax errors
 exclude_paths:
+  - "data/mysql/tanah_daily_bulletin_upgrade.sql"
+  - "data/mysql/tanahpedia_alter_entry_revision_history.sql"
+  - "data/mysql/tanahpedia_alter_saying_date.sql"
+  - "data/mysql/tanahpedia_alter_person_source_citation.sql"
+  - "data/mysql/tanahpedia_alter_source_citation.sql"
+  - "data/mysql/tanahpedia_alter_child_birth_order.sql"
+  - "data/mysql/tanahpedia_place_jerusalem_data.sql"
+  - "data/mysql/tanahpedia_jerusalem_occurrences_data.sql"
   - "data/mysql/perushim_structure.sql"
   - "data/mysql/perushim_data.sql"
+  - "data/mysql/tanah_perek_images_structure.sql"
+  - "data/mysql/tanah_truncate.sql"
   - "data/sqlite/perushim_catalog_structure.sql"
   - "data/sqlite/perushim_notes_structure.sql"
   # CloudFormation Lambda scripts are infra reference code, not application code.
   # Linters flag intentional patterns (e.g. time.sleep polling loops) as issues.
   - "docs/aws/cloudformation/**"
+  # Android SDK manifest parser test fixtures embed Google's repository XML;
+  # markup rules flag the fixture strings as interpolated HTML/XSS.
+  - "devops/github/ci/android-sdk-manifest.test.mjs"

@@ -102,10 +102,10 @@
 .articlesSection {
   margin-top: 32px;
   padding: 24px;
-  background: linear-gradient(to bottom, #f8f9fc, #ffffff);
+  background: var(--surface-elevated);
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-subtle);
 }
 
 .sectionHeader {
@@ -118,7 +118,7 @@
 }
 
 .sectionIcon {
-  font-size: 24px;
+  flex-shrink: 0;
 }
 
 .sectionTitle {
@@ -127,51 +127,6 @@
   color: #1c2c5d;
   margin: 0;
   letter-spacing: 0.02em;
-}
-
-.articlesList {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.articleCard {
-  background: #ffffff;
-  border-radius: 8px;
-  padding: 16px 20px;
-  border: 1px solid #e5e7eb;
-  transition: all 0.2s ease;
-  text-decoration: none;
-  color: inherit;
-  display: block;
-}
-
-.articleCard:hover {
-  border-color: #1c2c5d;
-  box-shadow: 0 4px 12px rgba(28, 44, 93, 0.12);
-  transform: translateY(-2px);
-}
-
-.articleName {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1c2c5d;
-  margin: 0;
-  line-height: 1.4;
-}
-
-.articleMeta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  font-size: 0.85rem;
-  color: #6b7280;
-}
-
-.perekLink {
-  color: #9a92d1;
-  font-weight: 500;
 }
 
 .emptyState {
@@ -215,5 +170,58 @@
 
   .authorName {
     font-size: 1.5rem;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .breadcrumb ol {
+    color: #b8c2d9;
+  }
+
+  .breadcrumb li:not(:last-child)::after {
+    color: #64748b;
+  }
+
+  .breadcrumb li a,
+  .authorName,
+  .sectionTitle,
+  .articleName {
+    color: #a8b9ff;
+  }
+
+  .breadcrumb li.active,
+  .perekLink {
+    color: #b7adf0;
+  }
+
+  .authorImageContainer {
+    background: linear-gradient(135deg, #1a1f2e, #2d3548);
+    border-color: #3b4256;
+  }
+
+  .authorPlaceholder {
+    color: #64748b;
+  }
+
+  .authorDetails {
+    color: #b8c2d9;
+  }
+
+  .articlesSection {
+    background: linear-gradient(to bottom, #161b2a, #12151c);
+    border-color: #2d3548;
+  }
+
+  .articleCard {
+    background: #1a1f2e;
+    border-color: #2d3548;
+  }
+
+  .articleCard:hover {
+    border-color: #a8b9ff;
+  }
+
+  .articleMeta {
+    color: #9aa0a6;
   }
 }

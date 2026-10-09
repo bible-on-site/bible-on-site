@@ -11,7 +11,7 @@
 
         <!-- Logo -->
         <Image Grid.Row="0"
-               Source="appicon.png"
+               Source="loading_logo.png"
                HeightRequest="150"
                WidthRequest="150"
                VerticalOptions="End"
@@ -45,7 +45,7 @@
                              Spacing="4"
                              Margin="0,0,0,40">
 
-            <Label Text="תנ״ך על הפרק"
+            <Label Text="תנ&quot;ך על הפרק"
                    TextColor="White"
                    FontSize="24"
                    FontAttributes="Bold"

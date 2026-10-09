@@ -67,10 +67,26 @@ const HASKALAH_EXCLUDED: &[&str] = &[
     "Shadal on Leviticus",
     "Shadal on Numbers",
     "Shadal on Deuteronomy",
+    // Shadal on Isaiah was missed in the original exclusion
+    "Shadal on Isaiah",
+    // Yashar (Isaac Samuel Reggio, 1784–1855) — Italian Haskalah figure
+    "Reggio on Torah",
+    // Em LaMikra (Elijah Benamozegh, 1823–1900) — Italian rabbi with non-traditional methodology
+    "Em LaMikra",
+    // Ohev Ger — Shadal's commentary on Targum Onkelos
+    "Ohev Ger",
+    // Mechokekei Yehudah (Judah Leib Krinsky) — author had Haskalah connections.
+    // TODO: Consult הרב שנדורפי on whether to include (see GitHub issue).
+    "Mechokekei Yehudah; Karnei Ohr",
+    "Mechokekei Yehudah; Yahel Ohr",
 ];
 
 /// Modern English-language works — not traditional Hebrew perushim.
 const MODERN_ENGLISH_EXCLUDED: &[&str] = &[
+    // The Torah: A Women's Commentary — modern feminist commentary (URJ Press)
+    "The Torah; A Women's Commentary",
+    // The Kehot Chumash — modern Chabad commentary in English
+    "The Kehot Chumash; A Chasidic Commentary",
     "Footnotes to Kohelet by Bruce Heitler",
     "Depths of Yonah",
     "From David to Destruction",
@@ -80,6 +96,22 @@ const MODERN_ENGLISH_EXCLUDED: &[&str] = &[
     "Redeeming Relevance; Exodus",
     "Redeeming Relevance; Numbers",
     "Redeeming Relevance; Deuteronomy",
+    // The Five Books of Moses / The Early Prophets (Everett Fox) — modern English translation
+    "The Five Books of Moses, by Everett Fox",
+    "The Early Prophets, by Everett Fox",
+    // Covenant and Conversation series (Rabbi Jonathan Sacks) — modern English essays
+    "Covenant and Conversation; Genesis; The Book of the Beginnings",
+    "Covenant and Conversation; Exodus; The Book of Redemption",
+    "Covenant and Conversation; Leviticus; The Book of Holiness",
+    "Covenant and Conversation; Numbers; The Wilderness Years",
+    "Covenant and Conversation; Deuteronomy; Renewal of the Sinai Covenant",
+    "Judaism's Life Changing Ideas; A Weekly Reading of the Jewish Bible",
+    "Essays in Ethics; A Weekly Reading of the Jewish Bible",
+    "I Believe; A Weekly Reading of the Jewish Bible",
+    "Studies in Spirituality; A Weekly Reading of the Jewish Bible",
+    "Lessons in Leadership; A Weekly Reading of the Jewish Bible",
+    // Tribal Lands (Tamar Weissman) — modern academic work
+    "Tribal Lands",
 ];
 
 /// Works that are not verse-by-verse commentaries on Tanakh text.
@@ -87,6 +119,31 @@ const NOT_PERUSIM: &[&str] = &[
     "Sefer Yesodei HaTorah", // Rambam's halachic work (Mishneh Torah), not a Tanakh commentary
     "Malbim Ayelet HaShachar", // Methodological introduction to Malbim's commentary, not a perush
 ];
+
+/// Academic / non-traditional works — not from the Orthodox tradition.
+const ACADEMIC_EXCLUDED: &[&str] = &[
+    // Cassuto (Umberto Cassuto, 1883–1951) — academic Bible scholar
+    "Cassuto on Genesis",
+    "Cassuto on Exodus",
+    // Karati Bekhol Lev (Michal Tikochinsky) — modern non-rabbinic work
+    "Karati Bekhol Lev",
+    // Sefer Daniel; Opportunity in Exile / Megillat Ruth; From Chaos to Kingship (Chaim Jachter) —
+    // modern English works
+    "Sefer Daniel; Opportunity in Exile",
+    "Megillat Ruth; From Chaos to Kingship",
+];
+
+/// Works by contradictory / problematic authors — not suitable for an Orthodox project.
+const CONTRADICTORY_AUTHORS_EXCLUDED: &[&str] = &[
+    // Zerachiah ben Shealtiel Chen — contradictory figure
+    "Imrei Da'at on Proverbs",
+    "Tikvat Enosh on Job",
+];
+
+/// Meta-commentaries on other perushim — currently empty; kept as a category placeholder.
+/// Divrei David, Siftei Chakhamim, and Mizrachi were removed: although they are
+/// super-commentaries on Rashi, the decision is to include them.
+const META_COMMENTARIES_EXCLUDED: &[&str] = &[];
 
 // TODO: Clarify exclusion reason for each of these titles
 const UNCLEAR_EXCLUSIONS: &[&str] = &[
@@ -102,7 +159,6 @@ const UNCLEAR_EXCLUSIONS: &[&str] = &[
     "Aderet Eliyahu (Rabbi Yosef Chaim)",
     "Nachal Sorek",
     "Mashmia Yeshuah",
-    "Ohev Ger",
     "Paaneach Raza",
     "Chanukat HaTorah",
     "Beit HaLevi on Torah",
@@ -133,6 +189,9 @@ pub fn build() -> Document {
         .chain(HASKALAH_EXCLUDED.iter())
         .chain(MODERN_ENGLISH_EXCLUDED.iter())
         .chain(NOT_PERUSIM.iter())
+        .chain(ACADEMIC_EXCLUDED.iter())
+        .chain(CONTRADICTORY_AUTHORS_EXCLUDED.iter())
+        .chain(META_COMMENTARIES_EXCLUDED.iter())
         .chain(UNCLEAR_EXCLUSIONS.iter())
         .copied()
         .collect();
@@ -144,5 +203,148 @@ pub fn build() -> Document {
                 "$nin": excluded
             }
         }
+    }
+}
+
+/// Returns the flat list of all excluded titles (for testing).
+#[cfg(test)]
+fn excluded_titles() -> Vec<&'static str> {
+    TANAKH_BOOKS
+        .iter()
+        .chain(HASKALAH_EXCLUDED.iter())
+        .chain(MODERN_ENGLISH_EXCLUDED.iter())
+        .chain(NOT_PERUSIM.iter())
+        .chain(ACADEMIC_EXCLUDED.iter())
+        .chain(CONTRADICTORY_AUTHORS_EXCLUDED.iter())
+        .chain(META_COMMENTARIES_EXCLUDED.iter())
+        .chain(UNCLEAR_EXCLUSIONS.iter())
+        .copied()
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn no_duplicate_exclusions() {
+        let titles = excluded_titles();
+        let unique: HashSet<&str> = titles.iter().copied().collect();
+        assert_eq!(
+            titles.len(),
+            unique.len(),
+            "Duplicate titles found in exclusion lists"
+        );
+    }
+
+    /// Pin the total number of exclusions so accidental additions/removals are caught.
+    #[test]
+    fn exclusion_count_is_pinned() {
+        let titles = excluded_titles();
+        // 39 Tanakh books + 11 Haskalah + 24 Modern English + 2 Not Perusim
+        // + 5 Academic + 2 Contradictory + 0 Meta + 29 Unclear = 112
+        assert_eq!(
+            titles.len(),
+            112,
+            "Exclusion count changed — update this test if intentional"
+        );
+    }
+
+    /// These perushim must NOT appear in the exclusion list.
+    /// They are legitimate traditional commentaries that the pipeline should include.
+    #[test]
+    fn legitimate_perushim_are_not_excluded() {
+        let excluded: HashSet<&str> = excluded_titles().into_iter().collect();
+        let must_include = [
+            // Multi-book complex schema perushim (the original bug fix)
+            "HaKtav VeHaKabalah",
+            "Chizkuni",
+            "Bekhor Shor",
+            "Tur HaArokh",
+            "Riva on Torah",
+            "Rosh on Torah",
+            "Ralbag on Torah",
+            "Hadar Zekenim on Torah",
+            "Toledot Yitzchak on Torah",
+            "Yeriot Shlomo on Torah",
+            "Bartenura on Torah",
+            "Tzror HaMor on Torah",
+            "Alshekh on Torah",
+            "Levush HaOrah",
+            "Maskil LeDavid",
+            "Pardes Yosef",
+            "Siftei Kohen on Torah",
+            "Tiferet Yehonatan on Torah",
+            "Nachalat Ya'akov",
+            "Netinah LaGer",
+            "Birkat Asher on Torah",
+            "Torah Temimah on Torah",
+            "Tzafnat Pa'neach on Torah",
+            "Nachal Kedumim on Torah",
+            "Chomat Anakh on Torah",
+            "Aderet Eliyahu",
+            // Minchat Shai — per-book entries
+            "Minchat Shai on Genesis",
+            "Minchat Shai on Exodus",
+            // Super-commentaries on Rashi (decision: include)
+            "Divrei David on Rashi",
+            "Siftei Chakhamim",
+            "Mizrachi",
+            // Included despite being supplements
+            "Ralbag Beur HaMilot on Torah",
+            "Minei Targuma on Torah",
+        ];
+        for title in &must_include {
+            assert!(
+                !excluded.contains(title),
+                "{title} should NOT be excluded — it is a legitimate perush"
+            );
+        }
+    }
+
+    /// Spot-check that key exclusions are still present.
+    #[test]
+    fn key_exclusions_are_present() {
+        let excluded: HashSet<&str> = excluded_titles().into_iter().collect();
+        let must_exclude = [
+            // Tanakh books
+            "Genesis",
+            "Psalms",
+            "Ruth",
+            // Haskalah
+            "Shadal on Genesis",
+            "Reggio on Torah",
+            "Mechokekei Yehudah; Karnei Ohr",
+            // Modern English
+            "The Torah; A Women's Commentary",
+            "The Kehot Chumash; A Chasidic Commentary",
+            "JPS 1985 Footnotes",
+            // Not perusim
+            "Sefer Yesodei HaTorah",
+            // Academic
+            "Cassuto on Genesis",
+            // Contradictory
+            "Imrei Da'at on Proverbs",
+        ];
+        for title in &must_exclude {
+            assert!(
+                excluded.contains(title),
+                "{title} should be excluded but was not found in exclusion list"
+            );
+        }
+    }
+
+    #[test]
+    fn build_produces_valid_match_document() {
+        let doc = build();
+        let match_doc = doc.get_document("$match").expect("missing $match");
+        assert_eq!(match_doc.get_str("categories").unwrap(), "Tanakh");
+        let nin = match_doc
+            .get_document("title")
+            .expect("missing title")
+            .get_array("$nin")
+            .expect("missing $nin");
+        assert!(!nin.is_empty());
     }
 }

@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { render } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 jest.mock("@/app/components/Bookshelf/bookshelf.module.scss", () => ({
 	root: "root",
@@ -26,14 +26,12 @@ jest.mock("@/app/components/Bookshelf/bookshelf.module.scss", () => ({
 	shelfLabel: "shelfLabel",
 }));
 
-jest.mock("@/data/db/sefarim", () => ({
-	sefarim: [
-		{ name: "בראשית", helek: "תורה", perekFrom: 1, perekTo: 50 },
-	],
+jest.mock("@/data/db/client-catalog.generated.json", () => ({
+	books: [{ name: "בראשית", helek: "תורה", perekFrom: 1, perekTo: 50 }],
 }));
 
 // Return a perek ID that doesn't match any sefer range → todaySeferName = ""
-jest.mock("@/data/perek-dto", () => ({
+jest.mock("@/data/perek-calendar", () => ({
 	getTodaysPerekId: () => 999,
 }));
 
@@ -54,5 +52,21 @@ describe("Bookshelf (no today sefer)", () => {
 		const { container } = render(<Bookshelf />);
 		// No bookmarkRibbon div should be rendered
 		expect(container.innerHTML).not.toContain("bookmarkRibbon");
+	});
+
+	it("uses the sefer starting perek when today's perek matches no sefer", () => {
+		Object.defineProperty(window, "innerWidth", {
+			value: 800,
+			writable: true,
+			configurable: true,
+		});
+
+		const onSeferClick = jest.fn();
+		render(<Bookshelf onSeferClick={onSeferClick} />);
+
+		fireEvent.click(screen.getByRole("button"));
+
+		expect(onSeferClick).toHaveBeenCalledTimes(1);
+		expect(onSeferClick).toHaveBeenCalledWith("בראשית", 1);
 	});
 });

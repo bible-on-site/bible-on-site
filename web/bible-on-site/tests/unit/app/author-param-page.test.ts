@@ -12,6 +12,7 @@ jest.mock("next/navigation", () => ({
 	notFound: jest.fn(() => {
 		throw new Error("NEXT_NOT_FOUND");
 	}),
+	useRouter: () => ({ push: jest.fn() }),
 }));
 
 jest.mock("next/image", () => ({
@@ -29,6 +30,7 @@ jest.mock("../../../src/lib/authors", () => ({
 	getArticlesByAuthorId: jest.fn(),
 	getAuthorById: jest.fn(),
 	getAuthorByName: jest.fn(),
+	authorNameToSlug: (name: string) => name,
 }));
 
 import { render, screen } from "@testing-library/react";
@@ -98,7 +100,7 @@ describe("[authorParam] page", () => {
 			});
 
 			expect(result).toEqual({
-				title: "הרב לדוגמא | תנ״ך באתר",
+				title: "הרב לדוגמא | תנ\"ך באתר",
 				description: "תיאור ארוך מאוד",
 			});
 			expect(mockGetAuthorById).toHaveBeenCalledWith(1);
@@ -119,7 +121,7 @@ describe("[authorParam] page", () => {
 			});
 
 			expect(result).toEqual({
-				title: "הרב לדוגמא | תנ״ך באתר",
+				title: "הרב לדוגמא | תנ\"ך באתר",
 				description: "מאמרים מאת הרב לדוגמא",
 			});
 			expect(mockGetAuthorByName).toHaveBeenCalledWith("הרב לדוגמא");
@@ -133,7 +135,7 @@ describe("[authorParam] page", () => {
 			});
 
 			expect(result).toEqual({
-				title: "הרב לא נמצא | תנ״ך באתר",
+				title: "הרב לא נמצא | תנ\"ך באתר",
 			});
 		});
 

@@ -7,6 +7,31 @@ public abstract class SearchResult
 {
     public string SearchPhrase { get; set; } = string.Empty;
     public abstract SearchFilter ResultType { get; }
+
+    protected static string CreateHighlightedResult(string text, string searchPhrase)
+    {
+        var matchIndex = string.IsNullOrEmpty(searchPhrase)
+            ? -1
+            : text.IndexOf(searchPhrase, StringComparison.Ordinal);
+        if (matchIndex < 0)
+        {
+            return text.Length > 50 ? text[..50] + "..." : text;
+        }
+
+        var highlighted = text.Replace(searchPhrase, $"<b>{searchPhrase}</b>");
+        var start = Math.Max(0, matchIndex - 20);
+        var end = Math.Min(highlighted.Length, matchIndex + searchPhrase.Length + 7 + 20);
+        var result = highlighted[start..end];
+        if (start > 0)
+        {
+            result = "..." + result;
+        }
+        if (end < highlighted.Length)
+        {
+            result += "...";
+        }
+        return result;
+    }
 }
 
 /// <summary>
@@ -59,28 +84,6 @@ public class PasukSearchResult : SearchResult
         SearchPhrase = searchPhrase;
         HighlightedResult = CreateHighlightedResult(pasuk.Text, searchPhrase);
     }
-
-    private static string CreateHighlightedResult(string text, string searchPhrase)
-    {
-        if (string.IsNullOrEmpty(searchPhrase) || !text.Contains(searchPhrase))
-            return text.Length > 50 ? text[..50] + "..." : text;
-
-        var highlighted = text.Replace(searchPhrase, $"<b>{searchPhrase}</b>");
-        var matchIndex = highlighted.IndexOf("<b>", StringComparison.Ordinal);
-
-        if (matchIndex < 0)
-            return highlighted.Length > 50 ? highlighted[..50] + "..." : highlighted;
-
-        // Extract context around the match
-        var start = Math.Max(0, matchIndex - 20);
-        var end = Math.Min(highlighted.Length, matchIndex + searchPhrase.Length + 7 + 20); // +7 for <b></b>
-
-        var result = highlighted[start..end];
-        if (start > 0) result = "..." + result;
-        if (end < highlighted.Length) result += "...";
-
-        return result;
-    }
 }
 
 /// <summary>
@@ -104,26 +107,5 @@ public class PerushSearchResult : SearchResult
         PasukNum = pasukNum;
         SearchPhrase = searchPhrase;
         HighlightedResult = CreateHighlightedResult(noteContent, searchPhrase);
-    }
-
-    private static string CreateHighlightedResult(string text, string searchPhrase)
-    {
-        if (string.IsNullOrEmpty(searchPhrase) || !text.Contains(searchPhrase))
-            return text.Length > 50 ? text[..50] + "..." : text;
-
-        var highlighted = text.Replace(searchPhrase, $"<b>{searchPhrase}</b>");
-        var matchIndex = highlighted.IndexOf("<b>", StringComparison.Ordinal);
-
-        if (matchIndex < 0)
-            return highlighted.Length > 50 ? highlighted[..50] + "..." : highlighted;
-
-        var start = Math.Max(0, matchIndex - 20);
-        var end = Math.Min(highlighted.Length, matchIndex + searchPhrase.Length + 7 + 20);
-
-        var result = highlighted[start..end];
-        if (start > 0) result = "..." + result;
-        if (end < highlighted.Length) result += "...";
-
-        return result;
     }
 }

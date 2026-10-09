@@ -9,6 +9,7 @@ monocart-report/
 .ssh/
 .release/
 .cache/
+.tanahpedia-dev.env
 legacy-app/
 legacy-api/
 legacy-website/
@@ -19,13 +20,23 @@ test-results/
 # Rust build artifacts
 **/target/
 
+# Python bytecode cache
+__pycache__/
+
 # Raw data files (downloaded/generated locally, except tracked assets)
 app/BibleOnSite/Resources/Raw/*
 !app/BibleOnSite/Resources/Raw/*.sqlite
 !app/BibleOnSite/Resources/Raw/AboutAssets.txt
+!app/BibleOnSite/Resources/Raw/recitation-audio.html
 **/.raw/
 **/.outputs/
 app/.artifacts/
+app/BibleOnSite/Platforms/Android/AssetPacks/recitation_*/
+app/BibleOnSite/Platforms/iOS/Assets/Recitation.xcassets/
+app/BibleOnSite/Platforms/Windows/Recitation/
 data/mysql/tanah_full_dump.sql
 data/mysql/perushim_data.sql
 nul
+
+# QA service (present on qa-bot branch; ignore when untracked on other branches)
+web/qa-service/

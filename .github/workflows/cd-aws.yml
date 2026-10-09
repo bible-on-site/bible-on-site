@@ -4,10 +4,18 @@ on:
   repository_dispatch:
     types: [deploy-aws]
 
+# Keep every dispatch; never interrupt a production write.
+concurrency:
+  group: ${{ github.repository }}-cd-${{ github.event.client_payload.module_name }}
+  cancel-in-progress: false
+  queue: max
+
 jobs:
   deploy:
     permissions:
       contents: read
+      actions: read
+      deployments: write
       id-token: write # Required for OIDC authentication with AWS
     runs-on: ubuntu-latest
 
@@ -27,40 +35,59 @@ jobs:
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
 
     steps:
-      - name: Checkout
+      - name: Checkout deployment automation
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.client_payload.ref }}
+          ref: ${{ github.sha }}
+
+      - name: Check deployment source and freshness
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_MODULE: ${{ github.event.client_payload.module_name }}
+        run: node devops/github/release/check-deployment.mjs
+
+      - name: Checkout artifact source
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.guard.outputs.ref }}
 
       - name: Setup Node.js
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: setup-node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
           cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
           cache: npm
 
       - name: Install npm Dependencies
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: npm_ci
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           npm ci --no-audit
 
       - name: Configure AWS Credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v5
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup crane
-        uses: imjasonh/setup-crane@v0.5
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        uses: imjasonh/setup-crane@v0.7
 
       - name: Login to ECR
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         run: |
           aws ecr get-login-password --region ${{ env.AWS_REGION }} | crane auth login --username AWS --password-stdin ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
 
       - name: Prepare Docker Restore
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: prepare_docker_restore
         run: |
           mkdir -p "$DOCKER_IMAGE_OUTPUT_DIR"
@@ -69,14 +96,13 @@ jobs:
           echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
 
       - name: Restore Docker Image
-        uses: actions/download-artifact@v7
-        with:
-          name: ${{ env.RELEASED_ARTIFACT_NAME }}
-          path: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
-          run-id: ${{ env.CI_RUN_ID }}
-          github-token: ${{ secrets.BOT_PAT }}
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "${{ env.MODULE_NAME }}-v${{ env.MODULE_VERSION }}" --pattern "${{ env.DOCKER_IMAGE_NAME }}-v${{ env.MODULE_VERSION }}.tar.gz" --dir "${{ env.DOCKER_IMAGE_OUTPUT_DIR }}"
 
       - name: Deploy to ECR
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: deploy
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
@@ -86,3 +112,20 @@ jobs:
             --docker-image "${{ github.workspace }}/${{ steps.prepare_docker_restore.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}"
         # Note: ECS deployment is automatically triggered by EventBridge when
         # the 'latest' tag is pushed to ECR. See: ecr-ecs-auto-deploy.yaml
+
+      - name: Verify website recitation after ECS rollout
+        if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'website' }}
+        run: |
+          # Recreate the overlay from the exact release SHA. Repeated runs are safe.
+          python data/recitation/publish.py
+          python data/recitation/audit.py
+          python data/recitation/deployment.py --origin https://xn--febl3a.co.il \
+            --version "$MODULE_VERSION" --check-audio --attempts 30 --interval 20
+
+      - name: Record deployment result
+        if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.guard.outputs.deployment_id }}
+          DEPLOYMENT_RESULT: ${{ job.status }}
+        run: node "${{ runner.temp }}/deployment-state.mjs"

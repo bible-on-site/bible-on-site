@@ -191,13 +191,42 @@ pub async fn count_by_perek_id(db: &Database, perek_id: i32) -> Result<i64, Serv
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sea_orm::{DatabaseBackend, DbErr, MockDatabase};
+    use sea_orm::{DatabaseBackend, DbErr, MockDatabase, Value};
+    use std::collections::BTreeMap;
 
     fn create_mock_db_with_query_error(error_message: &str) -> Database {
         let mock_db = MockDatabase::new(DatabaseBackend::MySql)
             .append_query_errors([DbErr::Custom(error_message.to_string())])
             .into_connection();
         Database::from_connection(mock_db)
+    }
+
+    fn article_model(id: i32, perek_id: i16, author_id: i16) -> Model {
+        Model {
+            id,
+            perek_id,
+            author_id,
+            article_abstract: Some(format!("abstract-{id}")),
+            name: format!("Article {id}"),
+            priority: 1,
+            content: Some(format!("content-{id}")),
+        }
+    }
+
+    fn create_mock_db_with_articles(rows: Vec<Model>) -> Database {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<Model, Vec<Model>, _>([rows])
+            .into_connection();
+        Database::from_connection(mock_db)
+    }
+
+    fn mock_row(
+        values: impl IntoIterator<Item = (&'static str, Value)>,
+    ) -> BTreeMap<String, Value> {
+        values
+            .into_iter()
+            .map(|(key, value)| (key.to_string(), value))
+            .collect()
     }
 
     #[tokio::test]
@@ -299,5 +328,161 @@ mod tests {
         let err = result.unwrap_err();
         assert!(matches!(err, ServiceError::NotFound(_)));
         assert_eq!(err.to_string(), "Article Not Found");
+    }
+
+    #[tokio::test]
+    async fn find_all_returns_articles_from_database() {
+        let db =
+            create_mock_db_with_articles(vec![article_model(1, 10, 20), article_model(2, 11, 20)]);
+
+        let result = find_all(&db).await.expect("articles should load");
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].name, "Article 1");
+        assert_eq!(result[1].perek_id, 11);
+    }
+
+    #[tokio::test]
+    async fn find_one_by_id_returns_article_when_it_exists() {
+        let db = create_mock_db_with_articles(vec![article_model(7, 10, 21)]);
+
+        let result = find_one_by_id(&db, 7).await.expect("article should load");
+
+        assert_eq!(result.id, 7);
+        assert_eq!(result.author_id, 21);
+    }
+
+    #[tokio::test]
+    async fn find_by_perek_id_returns_matching_articles() {
+        let db =
+            create_mock_db_with_articles(vec![article_model(3, 42, 5), article_model(4, 42, 6)]);
+
+        let result = find_by_perek_id(&db, 42)
+            .await
+            .expect("articles should load");
+
+        assert_eq!(
+            result.iter().map(|article| article.id).collect::<Vec<_>>(),
+            vec![3, 4]
+        );
+    }
+
+    #[tokio::test]
+    async fn find_by_author_id_returns_matching_articles() {
+        let db =
+            create_mock_db_with_articles(vec![article_model(5, 42, 9), article_model(6, 43, 9)]);
+
+        let result = find_by_author_id(&db, 9)
+            .await
+            .expect("articles should load");
+
+        assert_eq!(
+            result
+                .iter()
+                .map(|article| article.perek_id)
+                .collect::<Vec<_>>(),
+            vec![42, 43]
+        );
+    }
+
+    #[tokio::test]
+    async fn count_by_perek_maps_counts_into_the_929_slot_vector() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![
+                    mock_row([("perek_id", 1_i16.into()), ("count", 2_i64.into())]),
+                    mock_row([("perek_id", 929_i16.into()), ("count", 4_i64.into())]),
+                    mock_row([("perek_id", 930_i16.into()), ("count", 9_i64.into())]),
+                ],
+            ])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let result = count_by_perek(&db).await.expect("counts should load");
+
+        assert_eq!(result.len(), 929);
+        assert_eq!(result[0], 2);
+        assert_eq!(result[928], 4);
+        assert_eq!(result.iter().sum::<i64>(), 6);
+    }
+
+    #[tokio::test]
+    async fn count_by_author_returns_author_count_map() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![
+                    mock_row([("author_id", 3_i16.into()), ("count", 2_i64.into())]),
+                    mock_row([("author_id", 7_i16.into()), ("count", 5_i64.into())]),
+                ],
+            ])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let result = count_by_author(&db).await.expect("counts should load");
+
+        assert_eq!(result.get(&3), Some(&2));
+        assert_eq!(result.get(&7), Some(&5));
+    }
+
+    #[tokio::test]
+    async fn count_by_author_id_returns_count_or_zero() {
+        let db_with_count = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![mock_row([("count", 3_i64.into())])],
+                ])
+                .into_connection(),
+        );
+        assert_eq!(
+            count_by_author_id(&db_with_count, 9)
+                .await
+                .expect("count should load"),
+            3
+        );
+
+        let db_without_count = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![],
+                ])
+                .into_connection(),
+        );
+        assert_eq!(
+            count_by_author_id(&db_without_count, 9)
+                .await
+                .expect("missing count should become zero"),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn count_by_perek_id_returns_count_or_zero() {
+        let db_with_count = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![mock_row([("count", 8_i64.into())])],
+                ])
+                .into_connection(),
+        );
+        assert_eq!(
+            count_by_perek_id(&db_with_count, 42)
+                .await
+                .expect("count should load"),
+            8
+        );
+
+        let db_without_count = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![],
+                ])
+                .into_connection(),
+        );
+        assert_eq!(
+            count_by_perek_id(&db_without_count, 42)
+                .await
+                .expect("missing count should become zero"),
+            0
+        );
     }
 }

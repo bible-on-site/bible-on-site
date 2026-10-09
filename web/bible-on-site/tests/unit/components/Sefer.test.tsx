@@ -1,72 +1,99 @@
 /**
  * @jest-environment jsdom
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { sampleImage } from "./perek-image-fixture";
 
 let capturedFlipBookProps: Record<string, unknown> = {};
 let capturedTocProps: Record<string, unknown> = {};
+const mockRestorePage = jest.fn();
+const mockJumpToPage = jest.fn();
+const mockGetCurrentPageIndex = jest.fn().mockReturnValue(3);
 
 jest.mock("next/dynamic", () => {
+	const { forwardRef, useImperativeHandle } =
+		require("react") as typeof import("react");
 	return (_loader: unknown) =>
-		function MockFlipBook(props: Record<string, unknown>) {
+		forwardRef(function MockFlipBook(props: Record<string, unknown>, ref) {
 			capturedFlipBookProps = props;
+			useImperativeHandle(ref, () => ({
+				getCurrentPageIndex: mockGetCurrentPageIndex,
+				restorePage: mockRestorePage,
+				jumpToPage: mockJumpToPage,
+			}));
 			return (
 				<div data-testid="mock-flipbook">
 					{props.pages as React.ReactNode[]}
 				</div>
 			);
-		};
+		});
 });
 
-jest.mock("html-flip-book-react", () => ({
-	TocPage: (props: Record<string, unknown>) => {
-		capturedTocProps = props;
-		return <div data-testid="mock-toc" />;
-	},
-}), { virtual: true });
+jest.mock(
+	"html-flip-book-react",
+	() => ({
+		TocPage: (props: Record<string, unknown>) => {
+			capturedTocProps = props;
+			return <div data-testid="mock-toc" />;
+		},
+	}),
+	{ virtual: true },
+);
 
-jest.mock("html-flip-book-react/toolbar", () => ({
-	ActionButton: ({
-		onClick,
-		children,
-		ariaLabel,
-	}: {
-		onClick: () => void;
-		children: React.ReactNode;
-		ariaLabel: string;
-	}) => (
-		<button type="button" onClick={onClick} aria-label={ariaLabel}>
-			{children}
-		</button>
-	),
-	BookshelfIcon: () => <span>shelf</span>,
-	DownloadDropdown: () => <div />,
-	FirstPageButton: () => <div />,
-	FullscreenButton: () => <div />,
-	LastPageButton: () => <div />,
-	NextButton: () => <div />,
-	PageIndicator: () => <div />,
-	PrevButton: () => <div />,
-	TocButton: () => <div />,
-	Toolbar: ({ children }: { children: React.ReactNode }) => (
-		<div>{children}</div>
-	),
-}), { virtual: true });
+jest.mock(
+	"html-flip-book-react/toolbar",
+	() => ({
+		ActionButton: ({
+			onClick,
+			children,
+			ariaLabel,
+		}: {
+			onClick: () => void;
+			children: React.ReactNode;
+			ariaLabel: string;
+		}) => (
+			<button type="button" onClick={onClick} aria-label={ariaLabel}>
+				{children}
+			</button>
+		),
+		BookshelfIcon: () => <span>shelf</span>,
+		DownloadDropdown: () => <div />,
+		FirstPageButton: () => <div />,
+		FullscreenButton: () => <div />,
+		LastPageButton: () => <div />,
+		MouseModeButton: () => (
+			<button type="button" aria-label="בחירת טקסט עם העכבר" />
+		),
+		NextButton: () => <div />,
+		PageIndicator: () => <div />,
+		PrevButton: () => <div />,
+		TocButton: () => <div />,
+		Toolbar: ({ children }: { children: React.ReactNode }) => (
+			<div>{children}</div>
+		),
+	}),
+	{ virtual: true },
+);
 
 jest.mock("html-flip-book-react/styles.css", () => ({}), { virtual: true });
 jest.mock("@/app/929/[number]/components/sefer.css", () => ({}));
-jest.mock("@/app/929/[number]/components/sefer.module.css", () =>
-	new Proxy(
-		{},
-		{
-			get: (_t, prop) => (typeof prop === "string" ? prop : ""),
-		},
-	),
+jest.mock(
+	"@/app/929/[number]/components/sefer.module.css",
+	() =>
+		new Proxy(
+			{},
+			{
+				get: (_t, prop) => (typeof prop === "string" ? prop : ""),
+			},
+		),
 );
 
 const mockDownloadSefer = jest.fn();
 const mockDownloadPageRanges = jest.fn();
+const mockGetPerekSummariesBatch = jest.fn().mockResolvedValue({});
 jest.mock("@/app/929/[number]/actions", () => ({
+	getPerekSummariesBatch: (...args: unknown[]) =>
+		mockGetPerekSummariesBatch(...args),
 	downloadSefer: (...args: unknown[]) => mockDownloadSefer(...args),
 	downloadPageRanges: (...args: unknown[]) => mockDownloadPageRanges(...args),
 }));
@@ -75,7 +102,10 @@ jest.mock("@/app/components/Bookshelf", () => ({
 	BookshelfModal: ({
 		isOpen,
 		onClose,
-	}: { isOpen: boolean; onClose: () => void }) =>
+	}: {
+		isOpen: boolean;
+		onClose: () => void;
+	}) =>
 		isOpen ? (
 			<div data-testid="mock-modal">
 				<button type="button" onClick={onClose} data-testid="close-modal">
@@ -86,7 +116,8 @@ jest.mock("@/app/components/Bookshelf", () => ({
 }));
 
 jest.mock("@/data/db/tanah-view-types", () => ({
-	isQriDifferentThanKtiv: () => false,
+	isQriDifferentThanKtiv: (segment: { value: string }) =>
+		segment.value === "בְּרֵאשִׁית",
 }));
 
 jest.mock("@/data/sefer-colors", () => ({
@@ -94,14 +125,38 @@ jest.mock("@/data/sefer-colors", () => ({
 }));
 
 jest.mock("@/data/sefer-dto", () => ({
-	getSeferByName: () => ({
-		perakim: [{ header: "בראשית א", pesukim: [] }],
+	getSeferByName: jest.fn().mockReturnValue({
+		perakim: [
+			{
+				header: "בראשית א",
+				pesukim: [
+					{
+						segments: [
+							{
+								type: "qri" as const,
+								value: "בְּרֵאשִׁית",
+								recordingTimeFrame: { start: 0, end: 1 },
+							},
+							{ type: "ktiv" as const, value: "בראשית" },
+							{ type: "ptuha" as const },
+							{ type: "stuma" as const },
+							{
+								type: "qri" as const,
+								value: "הָאָ֖רֶץ",
+								recordingTimeFrame: { start: 2, end: 3 },
+							},
+						],
+					},
+				],
+			},
+		],
 	}),
+	getPerekIdsForSefer: jest.fn().mockReturnValue([1]),
 }));
 
 jest.mock("@/util/hebdates-util", () => ({
 	constructTsetAwareHDate: () => ({
-		toTraditionalHebrewString: () => "כ״ג אדר תשפ״ו",
+		toTraditionalHebrewString: () => 'כ"ג אדר תשפ"ו',
 	}),
 }));
 
@@ -117,8 +172,16 @@ jest.mock("@/app/929/[number]/components/Stuma", () => ({
 	Stuma: () => <span />,
 }));
 
-import Sefer from "@/app/929/[number]/components/Sefer";
+import type { ComponentProps } from "react";
+import SeferContents from "@/app/929/[number]/components/Sefer";
+import type { QriSegment } from "@/data/db/tanah-view-types";
 import type { PerekObj } from "@/data/perek-dto";
+import { getSeferByName } from "@/data/sefer-dto";
+import type { PerekEntityReference } from "@/lib/tanahpedia/service";
+
+function timeframe(from: string, to: string): QriSegment["recordingTimeFrame"] {
+	return { from, to } as unknown as QriSegment["recordingTimeFrame"];
+}
 
 const minimalPerek: PerekObj = {
 	perekId: 1,
@@ -127,8 +190,32 @@ const minimalPerek: PerekObj = {
 	helek: "תורה",
 	sefer: "בראשית",
 	source: "mechon-mamre" as const,
-	pesukim: [{ segments: [{ type: "qri" as const, value: "בְּרֵאשִׁית", recordingTimeFrame: { start: 0, end: 1 } }] }],
+	pesukim: [
+		{
+			segments: [
+				{
+					type: "qri" as const,
+					value: "בְּרֵאשִׁית",
+					recordingTimeFrame: timeframe("00:00:00", "00:00:01"),
+					ktivOffset: 1,
+				},
+				{ type: "ktiv" as const, value: "בראשית", qriOffset: -1 },
+				{ type: "ptuha" as const },
+				{ type: "stuma" as const },
+				{
+					type: "qri" as const,
+					value: "הָאָ֖רֶץ",
+					recordingTimeFrame: timeframe("00:00:02", "00:00:03"),
+				},
+			],
+		},
+	],
 };
+
+// Keep existing view fixtures while book loading is tested independently.
+const Sefer = (props: Omit<ComponentProps<typeof SeferContents>, "sefer">) => (
+	<SeferContents {...props} sefer={getSeferByName(props.perekObj.sefer)} />
+);
 
 describe("Sefer component", () => {
 	beforeEach(() => {
@@ -136,19 +223,70 @@ describe("Sefer component", () => {
 		capturedTocProps = {};
 		mockDownloadSefer.mockReset();
 		mockDownloadPageRanges.mockReset();
+		mockRestorePage.mockReset();
+		mockJumpToPage.mockReset();
+		mockGetCurrentPageIndex.mockReset().mockReturnValue(3);
+	});
+
+	it("opens content on the requested chapter and clears it after a page flip", async () => {
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} perekIds={[1]} initialSlug="42" />);
+		const blankProps = () => {
+			const pages = capturedFlipBookProps.pages as React.ReactElement<{ children: React.ReactElement<{ initialSlug?: string; onNavigate: (slug?: string) => void }> }>[];
+			return pages[4].props.children.props;
+		};
+		expect(blankProps().initialSlug).toBe("42");
+		act(() => blankProps().onNavigate('רש"י'));
+		expect(blankProps().initialSlug).toBe('רש"י');
+		act(() => blankProps().onNavigate());
+		expect(blankProps().initialSlug).toBeUndefined();
+		const handlers = capturedFlipBookProps.handlers as { onPageFlipped: () => void };
+		await act(async () => handlers.onPageFlipped());
+		await act(async () => {
+			handlers.onPageFlipped();
+			history.replaceState(history.state, "", "/929/2?book");
+		});
+		expect(blankProps().initialSlug).toBeUndefined();
+	});
+
+	it("keeps entity links on the correct chapter when other chapters have no references", async () => {
+		const reference: PerekEntityReference = {
+			entityId: "creation", entityName: "בריאה", entityType: "OBJECT",
+			entryUniqueName: "בריאה", pasukNumber: 1, segmentStart: 0, segmentEnd: 0,
+		};
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} perekIds={[1, 2, 3]} entityRefsByPerek={{ 1: [reference], 2: [] }} />);
+		await act(async () => {});
+		expect(screen.getByRole("link", { name: /בְּרֵאשִׁית/ })).toHaveAttribute("href", expect.stringContaining("/pedia/"));
+	});
+
+	it("logs a failed batch with the book and requested chapters", async () => {
+		const error = jest.spyOn(console, "error").mockImplementation(() => {});
+		mockGetPerekSummariesBatch.mockRejectedValueOnce(new Error("summaries unavailable"));
+		try {
+			render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} perekIds={[1, 2]} />);
+			await act(async () => {});
+			expect(error).toHaveBeenCalledWith("Failed to load book summaries", expect.objectContaining({ sefer: "בראשית", perekIds: [2] }));
+		} finally {
+			error.mockRestore();
+		}
 	});
 
 	it("renders FlipBook and toolbar", () => {
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		expect(screen.getByTestId("mock-flipbook")).toBeInTheDocument();
 		expect(screen.getByTestId("mock-toc")).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: "בחירת טקסט עם העכבר" }),
+		).toBeInTheDocument();
+		expect(capturedFlipBookProps.mouseModeStorageKey).toBe(
+			"sefer-mouse-book-mode",
+		);
 	});
 
 	it("opens and closes bookshelf modal via toolbar button", () => {
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		expect(screen.queryByTestId("mock-modal")).toBeNull();
 
-		fireEvent.click(screen.getByLabelText("ספרי התנ״ך"));
+		fireEvent.click(screen.getByLabelText('ספרי התנ"ך'));
 		expect(screen.getByTestId("mock-modal")).toBeInTheDocument();
 
 		fireEvent.click(screen.getByTestId("close-modal"));
@@ -156,16 +294,157 @@ describe("Sefer component", () => {
 	});
 
 	it("onNavigate calls jumpToPage on flipBookRef", () => {
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		const onNavigate = capturedTocProps.onNavigate as (idx: number) => void;
 		expect(onNavigate).toBeDefined();
-		// flipBookRef.current is null in test, so optional chaining means no-op
-		expect(() => onNavigate(5)).not.toThrow();
+		onNavigate(5);
+		expect(mockJumpToPage).toHaveBeenCalledWith(5);
+	});
+
+	it("restores a router-selected cover in place without remounting", () => {
+		const originalUrl = window.location.href;
+		window.history.replaceState(null, "", "/929/בראשית/תוכן?book");
+		mockGetCurrentPageIndex.mockReturnValue(1);
+		try {
+			const props = {
+				perekObj: minimalPerek,
+				articles: [],
+				perushim: [],
+				perekIds: [1],
+			};
+			const { rerender } = render(<Sefer {...props} initialBookPage="toc" />);
+			expect(mockRestorePage).not.toHaveBeenCalled();
+			window.history.replaceState(null, "", "/929/בראשית/כריכה?book");
+			rerender(<Sefer {...props} initialBookPage="front" />);
+			expect(mockRestorePage).toHaveBeenCalledWith(0);
+		} finally {
+			window.history.replaceState(null, "", originalUrl);
+		}
+	});
+
+	it("keeps the flipped chapter when unchanged router data gets fresh references", async () => {
+		const perek = { ...minimalPerek, perekId: 2 };
+		mockGetCurrentPageIndex.mockReturnValue(5);
+		const { rerender } = render(<Sefer perekObj={perek} articles={[]} perushim={[]} perekIds={[1, 2]} />);
+		await act(async () => {});
+		mockRestorePage.mockClear();
+		// The user has turned back to chapter 1 while a same-route router refresh finishes.
+		mockGetCurrentPageIndex.mockReturnValue(3);
+		await act(async () => rerender(<Sefer perekObj={{ ...perek }} articles={[]} perushim={[]} perekIds={[1, 2]} />));
+		expect(mockRestorePage).not.toHaveBeenCalled();
+		// A genuinely different router destination must still restore its chapter.
+		mockGetCurrentPageIndex.mockReturnValue(5);
+		await act(async () => rerender(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} perekIds={[1, 2]} />));
+		expect(mockRestorePage).toHaveBeenCalledWith(3);
+	});
+
+	it.each(["42", 'רש"י'])("opens content %s in a book with parts without undoing the page turn", async (slug) => {
+		const { getSeferByName } = jest.requireMock("@/data/sefer-dto") as { getSeferByName: jest.Mock };
+		const originalSefer = getSeferByName();
+		getSeferByName.mockReturnValue({ additionals: [
+			{ perakim: originalSefer.perakim }, { perakim: originalSefer.perakim },
+		] });
+		try {
+			mockGetCurrentPageIndex.mockReturnValue(5);
+			const { unmount } = render(<Sefer perekObj={{ ...minimalPerek, perekId: 2 }} articles={[]} perushim={[]} perekIds={[1, 2]} />);
+			await act(async () => {});
+			mockRestorePage.mockClear();
+			mockGetCurrentPageIndex.mockReturnValue(3);
+			const handlers = capturedFlipBookProps.handlers as { onPageFlipped: () => void };
+			await act(async () => {
+				handlers.onPageFlipped();
+				history.replaceState(history.state, "", "/929/1?book");
+			});
+			const blankProps = () => {
+				const pages = capturedFlipBookProps.pages as React.ReactElement<{ children: React.ReactElement<{ initialSlug?: string; onNavigate: (slug?: string) => void }> }>[];
+				return pages[4].props.children.props;
+			};
+			act(() => blankProps().onNavigate(slug));
+			expect(blankProps().initialSlug).toBe(slug);
+			expect(mockRestorePage).not.toHaveBeenCalled();
+			expect(decodeURIComponent(location.pathname)).toBe(`/929/1/${slug}`);
+			act(() => blankProps().onNavigate());
+			expect(blankProps().initialSlug).toBeUndefined();
+			expect(mockRestorePage).not.toHaveBeenCalled();
+			unmount();
+		} finally {
+			getSeferByName.mockReturnValue(originalSefer);
+		}
+	});
+
+	it("TocPage filter excludes cover pages and empty titles", () => {
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
+		const filter = capturedTocProps.filter as (entry: {
+			pageIndex: number;
+			title: string;
+		}) => boolean;
+		expect(filter).toBeDefined();
+		expect(filter({ pageIndex: 0, title: "cover" })).toBe(false);
+		expect(filter({ pageIndex: 5, title: "" })).toBe(false);
+		expect(filter({ pageIndex: 5, title: "פרק א" })).toBe(true);
+	});
+
+	it("gives TOC entries the same chapter routes used by book history", () => {
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1]}
+			/>,
+		);
+		const getHref = capturedTocProps.getHref as (entry: {
+			pageIndex: number;
+			semanticName: string;
+			title: string;
+		}) => string | null;
+		expect(getHref({ pageIndex: 0, semanticName: "", title: "" })).toBe(
+			"/929/בראשית/כריכה?book",
+		);
+		expect(
+			getHref({ pageIndex: 3, semanticName: "א", title: "בראשית א" }),
+		).toBe("/929/1?book");
+	});
+
+	it("opens a direct TOC route at the contents page", () => {
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1]}
+				initialBookPage="toc"
+			/>,
+		);
+		expect(capturedFlipBookProps.initialTurnedLeaves).toEqual([0]);
+	});
+
+	it("opens cover routes at the first and last leaf", () => {
+		const { rerender } = render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1]}
+				initialBookPage="front"
+			/>,
+		);
+		expect(capturedFlipBookProps.initialTurnedLeaves).toEqual([]);
+		rerender(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1]}
+				initialBookPage="back"
+			/>,
+		);
+		expect(capturedFlipBookProps.initialTurnedLeaves).toEqual([0, 1, 2]);
 	});
 
 	it("onDownloadSefer wraps result from server action", async () => {
 		mockDownloadSefer.mockResolvedValue({ ext: "pdf", data: "base64data" });
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		const config = capturedFlipBookProps.downloadConfig as {
 			onDownloadSefer: () => Promise<unknown>;
 			onDownloadPageRange: (...args: unknown[]) => Promise<unknown>;
@@ -176,16 +455,44 @@ describe("Sefer component", () => {
 
 	it("onDownloadSefer returns null on error", async () => {
 		mockDownloadSefer.mockResolvedValue({ error: "not_implemented" });
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		const config = capturedFlipBookProps.downloadConfig as {
 			onDownloadSefer: () => Promise<unknown>;
 		};
 		expect(await config.onDownloadSefer()).toBeNull();
 	});
 
+	it.each([undefined, [], [1, 2]])(
+		"downloads the available chapters with IDs %s",
+		async (perekIds) => {
+			mockDownloadSefer.mockResolvedValue({ ext: "pdf", data: "chapters" });
+			render(
+				<Sefer
+					perekObj={minimalPerek}
+					articles={[]}
+					perushim={[]}
+					perekIds={perekIds}
+				/>,
+			);
+			await act(async () => {});
+			const config = capturedFlipBookProps.downloadConfig as {
+				onDownloadSefer: () => Promise<unknown>;
+			};
+			await act(async () => {});
+			expect(await config.onDownloadSefer()).toEqual({
+				ext: "pdf",
+				data: "chapters",
+			});
+			expect(mockDownloadSefer).toHaveBeenCalledWith({
+				seferName: minimalPerek.sefer,
+				perekIds: perekIds?.length ? perekIds : [minimalPerek.perekId],
+			});
+		},
+	);
+
 	it("onDownloadPageRange wraps result from server action", async () => {
 		mockDownloadPageRanges.mockResolvedValue({ ext: "zip", data: "zipdata" });
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		const config = capturedFlipBookProps.downloadConfig as {
 			onDownloadPageRange: (...args: unknown[]) => Promise<unknown>;
 		};
@@ -198,20 +505,109 @@ describe("Sefer component", () => {
 	});
 
 	it("renders without optional per-perek props (covers ?? fallbacks)", () => {
-		render(<Sefer perekObj={minimalPerek} articles={[]} />);
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		expect(screen.getByTestId("blank-page")).toBeInTheDocument();
 	});
 
-	it("renders with per-perek index maps", () => {
+	it("does not attach chapter illustrations without the chapter-to-page ID mapping", () => {
 		render(
 			<Sefer
 				perekObj={minimalPerek}
 				articles={[]}
-				articlesByPerekIndex={[[]]}
-				perushimByPerekIndex={[[]]}
-				perekIds={[1]}
+				perushim={[]}
+				imagesByPerek={{ 1: [sampleImage] }}
 			/>,
 		);
+		expect(screen.queryByRole("img", { name: sampleImage.alt })).toBeNull();
+		expect(screen.getByTestId("mock-flipbook")).toBeVisible();
+	});
+
+	it("renders with perekIds and passes SSG data for current perek only", async () => {
+		const secondImage = {
+			...sampleImage,
+			id: 18,
+			alt: "איור שני",
+			avifSrcSet: "",
+			credit: "מאייר",
+		};
+		const { container } = render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1]}
+				imagesByPerek={{ 1: [sampleImage, secondImage] }}
+			/>,
+		);
+		await act(async () => {});
 		expect(screen.getByTestId("blank-page")).toBeInTheDocument();
+		const source = container.querySelector('picture source[type="image/avif"]');
+		expect(source).toHaveAttribute(
+			"srcset",
+			expect.stringContaining("sample-640.avif 640w"),
+		);
+		expect(screen.getByRole("img", { name: sampleImage.alt })).toHaveAttribute(
+			"loading",
+			"lazy",
+		);
+		expect(screen.getByText(sampleImage.caption)).toBeInTheDocument();
+		expect(screen.getByRole("img", { name: "איור שני" })).toBeInTheDocument();
+		expect(container.querySelectorAll("picture source")).toHaveLength(1);
+		expect(screen.getByText(/מאייר/)).toBeInTheDocument();
+	});
+
+	it("renders maqaf-ending segments without trailing space", () => {
+		const perekWithMaqaf: PerekObj = {
+			...minimalPerek,
+			pesukim: [
+				{
+					segments: [
+						{
+							type: "qri" as const,
+							value: "מִן־",
+							recordingTimeFrame: timeframe("00:00:00", "00:00:01"),
+						},
+						{
+							type: "qri" as const,
+							value: "הָאָ֖רֶץ",
+							recordingTimeFrame: timeframe("00:00:01", "00:00:02"),
+						},
+					],
+				},
+			],
+		};
+		render(<Sefer perekObj={perekWithMaqaf} articles={[]} perushim={[]} />);
+		expect(screen.getByTestId("mock-flipbook")).toBeInTheDocument();
+	});
+
+	it("renders sefer with additionals (uses flatMap branch)", () => {
+		const { getSeferByName } = jest.requireMock("@/data/sefer-dto") as {
+			getSeferByName: jest.Mock;
+		};
+		getSeferByName.mockReturnValueOnce({
+			additionals: [
+				{
+					perakim: [
+						{
+							header: "שמואל א א",
+							pesukim: [
+								{
+									segments: [
+										{
+											type: "qri" as const,
+											value: "word",
+											recordingTimeFrame: { start: 0, end: 1 },
+										},
+									],
+								},
+							],
+						},
+					],
+				},
+			],
+		});
+
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
+		expect(screen.getByTestId("mock-flipbook")).toBeInTheDocument();
 	});
 });

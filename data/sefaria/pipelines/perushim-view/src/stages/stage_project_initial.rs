@@ -27,3 +27,41 @@ pub fn build() -> Document {
         "$project": inner
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn schema_projection() -> Document {
+        build()
+            .get_document("$project")
+            .unwrap()
+            .get_document("schema")
+            .unwrap()
+            .clone()
+    }
+
+    #[test]
+    fn keeps_child_nodes_of_book_level_schema_nodes() {
+        // Abarbanel on Torah nests its depth-3 content under a child node of each
+        // book node; dropping `nodes.nodes` here silently loses the whole Torah.
+        let schema = schema_projection();
+        let child = schema
+            .get_document("nodes")
+            .unwrap()
+            .get_document("nodes")
+            .expect("nested node projection");
+
+        for key in ["key", "depth", "default"] {
+            assert!(child.contains_key(key), "nested node must project {key}");
+        }
+    }
+
+    #[test]
+    fn keeps_book_level_node_identity_and_depth() {
+        let nodes = schema_projection().get_document("nodes").unwrap().clone();
+        for key in ["key", "depth"] {
+            assert!(nodes.contains_key(key), "book node must project {key}");
+        }
+    }
+}

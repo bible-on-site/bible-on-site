@@ -14,7 +14,7 @@ public class PerushCheckedConverter : IMultiValueConverter
     {
         if (values is not { Length: >= 2 })
             return false;
-        var id = values[0] is int i ? i : (values[0] is long l ? (int)l : (int?)null);
+        var id = values[0] is int i ? i : (values[0] is long l && l is >= int.MinValue and <= int.MaxValue ? (int)l : (int?)null);
         if (!id.HasValue)
             return false;
         if (values[1] is IList<int> intList)

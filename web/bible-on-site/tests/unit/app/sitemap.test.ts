@@ -3,6 +3,7 @@ import {
 	generateArticleEntries,
 	generateAuthorEntries,
 	generateAuthorsIndexEntry,
+	generatePediaEntries,
 	generatePerekEntries,
 	generateRootEntry,
 	generateSectionEntries,
@@ -11,6 +12,14 @@ import {
 	type SitemapConfig,
 	TOTAL_PERAKIM,
 } from "@/app/sitemap";
+import { CATEGORY_SLUGS } from "@/lib/tanahpedia/category-slug";
+
+jest.mock("@/lib/seo/perek-images-data", () => ({
+	getPerekImagesByChapter: jest.fn(async () => ({})),
+}));
+
+/** `/pedia` landing entry plus one entry per Hebrew category slug. */
+const PEDIA_STATIC_COUNT = 1 + Object.keys(CATEGORY_SLUGS).length;
 
 describe("sitemap", () => {
 	const mockConfig: SitemapConfig = {
@@ -112,10 +121,16 @@ describe("sitemap", () => {
 		});
 
 		it("generates sequential perek URLs from 1 to 929", () => {
-			const result = generatePerekEntries(mockConfig);
+			const result = generatePerekEntries(mockConfig, {
+				1: [{ src: "https://images.example.com/sample.webp" } as never],
+			});
 
 			expect(result[0].url).toBe("https://example.com/929/1");
 			expect(result[928].url).toBe("https://example.com/929/929");
+			expect(result[0].images).toEqual([
+				"https://images.example.com/sample.webp",
+			]);
+			expect(result[1].images).toBeUndefined();
 		});
 
 		it("sets monthly change frequency for perakim", () => {
@@ -227,13 +242,55 @@ describe("sitemap", () => {
 		});
 	});
 
+	describe("generatePediaEntries", () => {
+		it("returns pedia entries for provided unique names", () => {
+			const uniqueNames = ["יעקב", "שמשון"];
+			const result = generatePediaEntries(mockConfig, uniqueNames);
+
+			expect(result).toHaveLength(2);
+			expect(result[0].url).toBe(
+				`https://example.com/pedia/${encodeURIComponent("יעקב")}`,
+			);
+			expect(result[1].url).toBe(
+				`https://example.com/pedia/${encodeURIComponent("שמשון")}`,
+			);
+		});
+
+		it("returns empty array when no unique names provided", () => {
+			const result = generatePediaEntries(mockConfig, []);
+
+			expect(result).toHaveLength(0);
+		});
+
+		it("sets monthly change frequency for pedia entries", () => {
+			const result = generatePediaEntries(mockConfig, ["יעקב"]);
+
+			result.forEach((entry) => {
+				expect(entry.changeFrequency).toBe("monthly");
+			});
+		});
+
+		it("sets priority 0.7 for pedia entries", () => {
+			const result = generatePediaEntries(mockConfig, ["יעקב"]);
+
+			result.forEach((entry) => {
+				expect(entry.priority).toBe(0.7);
+			});
+		});
+	});
+
 	describe("generateSitemapEntries", () => {
 		it("returns all entries combined", () => {
 			const result = generateSitemapEntries(mockConfig);
 
 			// 1 root + 6 sections + 1 929 index + 929 perakim + 1 authors index = 938
 			const expectedLength =
-				1 + SITEMAP_SECTIONS.length + 1 + TOTAL_PERAKIM + 1;
+				1 +
+				SITEMAP_SECTIONS.length +
+				1 +
+				TOTAL_PERAKIM +
+				1 +
+				PEDIA_STATIC_COUNT;
 			expect(result).toHaveLength(expectedLength);
 		});
 
@@ -307,17 +364,24 @@ describe("sitemap", () => {
 
 			// 1 root + 6 sections + 1 929 index + 929 perakim + 1 authors index + 3 authors = 941
 			const expectedLength =
-				1 + SITEMAP_SECTIONS.length + 1 + TOTAL_PERAKIM + 1 + 3;
+				1 +
+				SITEMAP_SECTIONS.length +
+				1 +
+				TOTAL_PERAKIM +
+				1 +
+				3 +
+				PEDIA_STATIC_COUNT;
 			expect(result).toHaveLength(expectedLength);
 
-			// Check last 3 entries are author pages
-			expect(result[result.length - 1].url).toBe(
+			// Author pages come right before the pedia landing/category block
+			const authorEnd = result.length - PEDIA_STATIC_COUNT;
+			expect(result[authorEnd - 1].url).toBe(
 				`https://example.com/929/authors/${encodeURIComponent("הרב ג")}`,
 			);
-			expect(result[result.length - 2].url).toBe(
+			expect(result[authorEnd - 2].url).toBe(
 				`https://example.com/929/authors/${encodeURIComponent("הרב ב")}`,
 			);
-			expect(result[result.length - 3].url).toBe(
+			expect(result[authorEnd - 3].url).toBe(
 				`https://example.com/929/authors/${encodeURIComponent("הרב א")}`,
 			);
 		});
@@ -332,7 +396,14 @@ describe("sitemap", () => {
 
 			// 1 root + 6 sections + 1 929 index + 929 perakim + 2 articles + 1 authors index + 2 authors = 942
 			const expectedLength =
-				1 + SITEMAP_SECTIONS.length + 1 + TOTAL_PERAKIM + 2 + 1 + 2;
+				1 +
+				SITEMAP_SECTIONS.length +
+				1 +
+				TOTAL_PERAKIM +
+				2 +
+				1 +
+				2 +
+				PEDIA_STATIC_COUNT;
 			expect(result).toHaveLength(expectedLength);
 
 			// Check articles are present
@@ -348,6 +419,36 @@ describe("sitemap", () => {
 				`https://example.com/929/authors/${encodeURIComponent("הרב ב")}`,
 			);
 		});
-	});
 
+		it("appends pedia entries after author entries", () => {
+			const slugs = ["הרב א"];
+			const pediaNames = ["יעקב", "שמשון"];
+			const result = generateSitemapEntries(
+				mockConfig,
+				slugs,
+				[],
+				[],
+				pediaNames,
+			);
+
+			// The last two entries are pedia URLs, in order
+			expect(result[result.length - 2].url).toBe(
+				`https://example.com/pedia/${encodeURIComponent("יעקב")}`,
+			);
+			expect(result[result.length - 1].url).toBe(
+				`https://example.com/pedia/${encodeURIComponent("שמשון")}`,
+			);
+		});
+
+		it("omits pedia entry URLs when no unique names provided", () => {
+			const result = generateSitemapEntries(mockConfig);
+
+			const urls = result.map((e) => e.url);
+			// Category listings remain; only per-entry URLs are absent.
+			expect(urls).toContain(`https://example.com/pedia/אישים`);
+			expect(urls.filter((url) => url.includes("/pedia"))).toHaveLength(
+				PEDIA_STATIC_COUNT,
+			);
+		});
+	});
 });

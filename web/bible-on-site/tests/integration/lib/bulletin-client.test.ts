@@ -38,9 +38,7 @@ import {
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 
-const mockExecFileSync = execFileSync as jest.MockedFunction<
-	typeof execFileSync
->;
+const mockExecFileSync = execFileSync as jest.Mock;
 const mockExistsSync = existsSync as jest.MockedFunction<typeof existsSync>;
 
 const PDF_HEADER = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d]);
@@ -67,14 +65,26 @@ function makeLambdaResponse(pdfBuf: Buffer) {
 describe("bulletin-client", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
-		mockExistsSync.mockImplementation(
-			(path: string) =>
-				path.includes("target/debug/bulletin") ||
-				path.includes("target\\debug\\bulletin"),
-		);
+		mockExistsSync.mockReturnValue(true);
 	});
 
 	describe("generatePdfViaBulletin (dev mode — no BULLETIN_LAMBDA_NAME)", () => {
+		it("requires Lambda configuration in production", async () => {
+			const nodeEnv = jest.replaceProperty(
+				process.env,
+				"NODE_ENV",
+				"production",
+			);
+			try {
+				await expect(generatePdfViaBulletin([1])).rejects.toThrow(
+					/BULLETIN_LAMBDA_NAME is required/,
+				);
+				expect(mockExecFileSync).not.toHaveBeenCalled();
+			} finally {
+				nodeEnv.restore();
+			}
+		});
+
 		it("sends just perek IDs on stdin — no text data", async () => {
 			const fakePdf = makeFakePdf();
 			mockExecFileSync.mockReturnValue(fakePdf);
@@ -190,6 +200,32 @@ describe("bulletin-client", () => {
 			expect(body.includeArticles).toBe(true);
 		});
 
+		it("passes optional cover and sefer metadata through to Lambda", async () => {
+			mockSend.mockResolvedValue(makeLambdaResponse(makeFakePdf()));
+
+			await generatePdfViaBulletin([7], {
+				seferName: "שמות",
+				includeCover: true,
+				includeToc: true,
+				coverAccentHex: "#8B0000",
+			});
+
+			const invokeInput = mockSend.mock.calls[0][0];
+			const event = JSON.parse(
+				Buffer.from(invokeInput.Payload).toString("utf-8"),
+			);
+			const body = JSON.parse(event.body);
+			expect(body).toEqual(
+				expect.objectContaining({
+					perakimIds: [7],
+					seferName: "שמות",
+					includeCover: true,
+					includeToc: true,
+					coverAccentHex: "8B0000",
+				}),
+			);
+		});
+
 		it("returns PDF bytes from Lambda response", async () => {
 			const fakePdf = makeFakePdf(4096);
 			mockSend.mockResolvedValue(makeLambdaResponse(fakePdf));
@@ -208,6 +244,17 @@ describe("bulletin-client", () => {
 
 			await expect(generatePdfViaBulletin([1])).rejects.toThrow(
 				/Bulletin Lambda error/,
+			);
+		});
+
+		it("uses unknown when Lambda FunctionError has no payload", async () => {
+			mockSend.mockResolvedValue({
+				FunctionError: "Unhandled",
+				Payload: undefined,
+			});
+
+			await expect(generatePdfViaBulletin([1])).rejects.toThrow(
+				/Bulletin Lambda error: unknown/,
 			);
 		});
 
@@ -231,6 +278,15 @@ describe("bulletin-client", () => {
 			);
 		});
 
+		it("reports a Lambda failure even when the response omits its body", async () => {
+			mockSend.mockResolvedValue({
+				Payload: Buffer.from(JSON.stringify({ statusCode: 503 })),
+			});
+			await expect(generatePdfViaBulletin([1])).rejects.toThrow(
+				"Bulletin Lambda returned status 503: ",
+			);
+		});
+
 		it("throws when Lambda returns too few bytes", async () => {
 			mockSend.mockResolvedValue({
 				Payload: Buffer.from(
@@ -245,6 +301,24 @@ describe("bulletin-client", () => {
 			await expect(generatePdfViaBulletin([1])).rejects.toThrow(
 				/expected a PDF/,
 			);
+		});
+
+		it("decodes non-base64 Lambda bodies as binary PDF bytes", async () => {
+			const fakePdf = makeFakePdf();
+			mockSend.mockResolvedValue({
+				Payload: Buffer.from(
+					JSON.stringify({
+						statusCode: 200,
+						body: fakePdf.toString("binary"),
+						isBase64Encoded: false,
+					}),
+				),
+			});
+
+			const result = await generatePdfViaBulletin([1]);
+
+			expect(result).toBeInstanceOf(Uint8Array);
+			expect(result.slice(0, 5)).toEqual(new Uint8Array(PDF_HEADER));
 		});
 
 		it("does not invoke the local binary", async () => {
@@ -302,11 +376,9 @@ describe("bulletin-client", () => {
 			const handler = createBulletinPageRangesHandler();
 
 			await expect(
-				handler(
-					[0],
-					[{ pageIndex: 0, semanticName: "א", title: "פרק א'" }],
-					{ seferName: "בראשית" },
-				),
+				handler([0], [{ pageIndex: 0, semanticName: "א", title: "פרק א'" }], {
+					seferName: "בראשית",
+				}),
 			).rejects.toThrow("No content pages in selected range");
 		});
 

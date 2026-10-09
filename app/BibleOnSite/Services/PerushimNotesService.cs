@@ -1,5 +1,7 @@
 using BibleOnSite.Models;
 using SQLite;
+using BibleOnSite.Helpers;
+using System.Text.Json;
 
 namespace BibleOnSite.Services;
 
@@ -19,6 +21,10 @@ public class PerushimNotesService
 
     private readonly IPadDeliveryService _padService;
     private readonly string? _dataDirectoryOverride;
+    private readonly IFileSystem _fileSystem;
+    private readonly IDeviceInfo _deviceInfo;
+    private readonly IAppInfo _appInfo;
+    private readonly PerushimCatalogService? _catalog;
 
     private static readonly Lazy<PerushimNotesService> _instance =
         new(() => new PerushimNotesService(PadDeliveryService.Instance));
@@ -28,10 +34,27 @@ public class PerushimNotesService
     private SQLiteAsyncConnection? _connection;
     private bool _initialized;
     private bool _notesMissing = true;
+    private string _notesValidationStatus = "Notes database unavailable";
+    private readonly SemaphoreSlim _operationLock = new(1, 1);
 
     public PerushimNotesService(IPadDeliveryService padService)
+        : this(padService, null, null, null)
+    {
+    }
+
+    public PerushimNotesService(IPadDeliveryService padService, IFileSystem fileSystem)
+        : this(padService, fileSystem, null, null)
+    {
+    }
+
+    public PerushimNotesService(IPadDeliveryService padService, IFileSystem? fileSystem,
+        IDeviceInfo? deviceInfo, IAppInfo? appInfo)
     {
         _padService = padService;
+        _fileSystem = fileSystem ?? FileSystem.Current;
+        _deviceInfo = deviceInfo ?? DeviceInfo.Current;
+        _appInfo = appInfo ?? AppInfo.Current;
+        _catalog = new PerushimCatalogService(_fileSystem);
     }
 
     /// <summary>
@@ -42,16 +65,103 @@ public class PerushimNotesService
         return new PerushimNotesService(padService, dataDirectory);
     }
 
-    private PerushimNotesService(IPadDeliveryService padService, string dataDirectory)
+    private PerushimNotesService(IPadDeliveryService padService, string dataDirectory) : this(padService)
     {
-        _padService = padService;
         _dataDirectoryOverride = dataDirectory;
+        // This factory isolates raw-note tests from the platform's package storage.
+        _catalog = null;
     }
 
-    private string DataDirectory => _dataDirectoryOverride ?? FileSystem.AppDataDirectory;
+    private string DataDirectory => _dataDirectoryOverride ?? _fileSystem.AppDataDirectory;
 
-    /// <summary>Whether the notes database is available (from PAD or HTTP download).</summary>
+    /// <summary>Whether compatible notes are available from PAD/ODR or a bundled asset.</summary>
     public bool IsAvailable => _initialized && !_notesMissing && _connection != null;
+
+    /// <summary>
+    /// Builds a diagnostic report for support (platform, state, PAD/ODR path, app package).
+    /// Call when Perushim don't show so the user can export and share the file.
+    /// </summary>
+    public async Task<string> GetDiagnosticsAsync()
+    {
+        var diagnosticErrors = new List<string>();
+        try { await InitializeAsync(); }
+        catch (Exception ex)
+        {
+            diagnosticErrors.Add($"Initialization error: {ex.GetType().Name}: {ex.Message}");
+        }
+        var dbPath = Path.Combine(DataDirectory, NotesDbName);
+        string? padPath = null;
+        try { padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName); }
+        catch (Exception ex)
+        {
+            diagnosticErrors.Add($"PAD/ODR path error: {ex.GetType().Name}: {ex.Message}");
+        }
+        var appPackageHasFile = await AppPackageHasNotesAsync();
+
+        var lines = new List<string>
+        {
+            "=== Perushim notes diagnostics ===",
+            $"Time: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}Z",
+            $"Platform: {_deviceInfo.Platform} ({_deviceInfo.VersionString})",
+            $"App: {_appInfo.VersionString} build {_appInfo.BuildString}",
+            "",
+            $"IsAvailable: {IsAvailable}",
+            $"Initialized: {_initialized}",
+            $"NotesMissing: {_notesMissing}",
+            $"Notes validation: {_notesValidationStatus}",
+            $"JSON reflection enabled by default: {JsonSerializer.IsReflectionEnabledByDefault}",
+            $"Local DB path: {dbPath}",
+            $"Local DB exists: {File.Exists(dbPath)}",
+            $"PAD/ODR path: {(padPath ?? "(null)")}",
+            $"App package has notes file: {appPackageHasFile}",
+        };
+        lines.AddRange(diagnosticErrors);
+        if (padPath != null)
+        {
+            var atRoot = File.Exists(Path.Combine(padPath, NotesDbName));
+            var atAssets = File.Exists(Path.Combine(padPath, "assets", NotesDbName));
+            lines.Add($"  PAD file at root: {atRoot}");
+            lines.Add($"  PAD file in assets/: {atAssets}");
+        }
+        if (File.Exists(dbPath))
+        {
+            try
+            {
+                var ts = await GetBuildTimestampAsync(dbPath);
+                lines.Add($"Local DB build_timestamp: {ts}");
+            }
+            catch (Exception ex)
+            {
+                lines.Add($"Local DB build_timestamp error: {ex.Message}");
+            }
+        }
+
+        // Platform-specific delivery diagnostics (ODR on iOS, PAD on Android)
+        try
+        {
+            var deliveryDiag = await _padService.GetDeliveryDiagnosticsAsync(PerushimNotesPackName);
+            lines.AddRange(deliveryDiag);
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"Delivery diagnostics error: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private async Task<bool> AppPackageHasNotesAsync()
+    {
+        try
+        {
+            await using var s = await _fileSystem.OpenAppPackageFileAsync(NotesDbName);
+            return s != null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     /// <summary>
     /// Initializes the notes connection. Does not download — only opens if file exists.
@@ -60,16 +170,28 @@ public class PerushimNotesService
     /// </summary>
     public async Task InitializeAsync()
     {
+        await _operationLock.WaitAsync();
+        try { await InitializeCoreAsync(); }
+        finally { _operationLock.Release(); }
+    }
+
+    private async Task InitializeCoreAsync()
+    {
         if (_initialized)
             return;
 
-        var dbPath = Path.Combine(FileSystem.AppDataDirectory, NotesDbName);
+        var dbPath = Path.Combine(DataDirectory, NotesDbName);
 
         if (!File.Exists(dbPath))
         {
-            // No local DB → try to copy from PAD if already available
+            // No local DB → try PAD/ODR first, then fallback to app package (e.g. Android Debug APK)
             var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName);
             if (padPath != null && await TryCopyFromPadAsync(padPath, dbPath))
+            {
+                _connection = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
+                _notesMissing = false;
+            }
+            else if (await TryCopyFromAppPackageAsync(dbPath))
             {
                 _connection = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
                 _notesMissing = false;
@@ -87,6 +209,7 @@ public class PerushimNotesService
             _notesMissing = false;
         }
 
+        await ValidateLocalNotesAsync();
         _initialized = true;
     }
 
@@ -96,22 +219,37 @@ public class PerushimNotesService
     /// </summary>
     public async Task<bool> TryDownloadNotesAsync(IProgress<double>? progress = null)
     {
-        var dbPath = Path.Combine(FileSystem.AppDataDirectory, NotesDbName);
+        await _operationLock.WaitAsync();
+        try { return await TryDownloadNotesCoreAsync(progress); }
+        finally { _operationLock.Release(); }
+    }
+
+    private async Task<bool> TryDownloadNotesCoreAsync(IProgress<double>? progress)
+    {
+        var dbPath = Path.Combine(DataDirectory, NotesDbName);
         if (File.Exists(dbPath))
         {
-            await InitializeAsync();
-            return true;
+            await InitializeCoreAsync();
+            if (IsAvailable)
+            {
+                return true;
+            }
         }
 
+        // Try PAD/ODR path if already available
         var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName);
         if (padPath != null && await TryCopyFromPadAsync(padPath, dbPath))
         {
             _connection = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
             _notesMissing = false;
             _initialized = true;
-            return true;
+            if (await ValidateLocalNotesAsync())
+            {
+                return true;
+            }
         }
 
+        // Try on-demand fetch (downloads from store)
         if (await _padService.FetchAsync(PerushimNotesPackName, progress))
         {
             padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName);
@@ -120,11 +258,100 @@ public class PerushimNotesService
                 _connection = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
                 _notesMissing = false;
                 _initialized = true;
+                if (await ValidateLocalNotesAsync())
+                {
+                    return true;
+                }
+            }
+        }
+
+        // Last resort: try bundled app package (e.g. Android Debug APK)
+        if (await TryCopyFromAppPackageAsync(dbPath))
+        {
+            _connection = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
+            _notesMissing = false;
+            _initialized = true;
+            if (await ValidateLocalNotesAsync())
+            {
                 return true;
             }
         }
 
         Console.Error.WriteLine("Perushim notes not available via on-demand delivery. Ensure the perushim_notes asset pack (Android) or ODR tag (iOS) is included in the build.");
+        return false;
+    }
+
+    /// <summary>
+    /// A catalog and notes pack are delivered independently. Never join their IDs
+    /// unless the pack records the same complete ID-to-name mapping. Legacy packs
+    /// can only be trusted when generated together with this catalog.
+    /// </summary>
+    private async Task<bool> ValidateLocalNotesAsync()
+    {
+        if (_connection == null)
+        {
+            return false;
+        }
+        if (_catalog == null)
+        {
+            _notesValidationStatus = "Catalog validation skipped for raw-note tests";
+            return true;
+        }
+        try
+        {
+            var catalogConnection = await _catalog.GetConnectionAsync();
+            // Without a catalog the UI cannot display commentaries. Raw note access
+            // remains useful for diagnostics, but there are no names to misattribute.
+            if (catalogConnection == null)
+            {
+                _notesValidationStatus = "Catalog unavailable; attribution cannot be checked";
+                return true;
+            }
+
+            string? snapshot = null;
+            try
+            {
+                snapshot = await _connection.ExecuteScalarAsync<string>(
+                    "SELECT value FROM _metadata WHERE key = 'perush_catalog'");
+            }
+            catch (SQLiteException) { /* Legacy notes may have no metadata. */ }
+
+            bool compatible;
+            if (snapshot != null)
+            {
+                var expected = JsonSerializer.Deserialize(snapshot, AppJsonContext.Default.PerushCatalog);
+                var current = await _catalog.GetAllPerushimAsync();
+                compatible = expected != null && expected.Count == current.Count &&
+                    current.All(p => expected.TryGetValue(p.Id, out var name) && name == p.Name);
+                _notesValidationStatus = compatible
+                    ? $"Compatible catalog mapping ({current.Count} entries)"
+                    : $"Catalog mapping mismatch (notes={expected?.Count ?? 0}, catalog={current.Count})";
+            }
+            else
+            {
+                var notesTimestamp = await GetBuildTimestampAsync(Path.Combine(DataDirectory, NotesDbName));
+                var catalogTimestamp = await GetBuildTimestampAsync(Path.Combine(_fileSystem.AppDataDirectory,
+                    "sefaria-dump-5784-sivan-4.perushim_catalog.sqlite"));
+                compatible = notesTimestamp > 0 && notesTimestamp == catalogTimestamp;
+                _notesValidationStatus = compatible
+                    ? $"Compatible legacy build ({notesTimestamp})"
+                    : $"Legacy build mismatch (notes={notesTimestamp}, catalog={catalogTimestamp}); matching notes pack required";
+            }
+            if (compatible)
+            {
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _notesValidationStatus = $"Validation error: {ex.GetType().Name}: {ex.Message}";
+            Console.Error.WriteLine($"Could not verify perushim attribution: {ex.Message}");
+        }
+
+        await _connection.CloseAsync();
+        _connection = null;
+        _notesMissing = true;
+        Console.Error.WriteLine("Perushim notes do not match the installed catalog; download a matching pack.");
         return false;
     }
 
@@ -139,6 +366,8 @@ public class PerushimNotesService
             if (padPath == null) return;
 
             var padDbPath = Path.Combine(padPath, NotesDbName);
+            if (!File.Exists(padDbPath))
+                padDbPath = Path.Combine(padPath, "assets", NotesDbName);
             if (!File.Exists(padDbPath)) return;
 
             var localTs = await GetBuildTimestampAsync(localDbPath);
@@ -152,7 +381,8 @@ public class PerushimNotesService
                     await _connection.CloseAsync();
                     _connection = null;
                 }
-                await Task.Run(() => File.Copy(padDbPath, localDbPath, overwrite: true));
+                await using var source = File.OpenRead(padDbPath);
+                await AtomicFile.CopyAsync(source, localDbPath);
                 Console.WriteLine($"Perushim notes upgraded from PAD (local={localTs}, pad={padTs})");
             }
         }
@@ -188,17 +418,43 @@ public class PerushimNotesService
 
     private static async Task<bool> TryCopyFromPadAsync(string padAssetsPath, string dbPath)
     {
+        // PAD may expose pack root or an "assets" subfolder depending on SDK/version
         var srcPath = Path.Combine(padAssetsPath, NotesDbName);
+        if (!File.Exists(srcPath))
+            srcPath = Path.Combine(padAssetsPath, "assets", NotesDbName);
         if (!File.Exists(srcPath))
             return false;
         try
         {
-            await Task.Run(() => File.Copy(srcPath, dbPath, overwrite: true));
+            await using var source = File.OpenRead(srcPath);
+            await AtomicFile.CopyAsync(source, dbPath);
             return true;
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Failed to copy perushim notes from PAD: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Copies the notes DB from the app package when bundled (e.g. Android Debug MauiAsset fallback).
+    /// </summary>
+    private async Task<bool> TryCopyFromAppPackageAsync(string dbPath)
+    {
+        try
+        {
+            await using var source = await _fileSystem.OpenAppPackageFileAsync(NotesDbName);
+            await AtomicFile.CopyAsync(source, dbPath);
+            return true;
+        }
+        catch (FileNotFoundException)
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Perushim notes copy from app package failed: {ex.Message}");
             return false;
         }
     }

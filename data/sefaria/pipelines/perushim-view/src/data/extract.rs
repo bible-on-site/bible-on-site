@@ -4,7 +4,7 @@
 //! This module deduplicates parshanim and perushim, and flattens the nested
 //! version arrays into individual note rows.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bson::Document;
 
@@ -75,7 +75,12 @@ pub fn extract(docs: &[Document]) -> Extracted {
             id
         } else {
             let id = (parshanim.len() + 1) as i64;
-            let birth_year = parse_birth_year(doc.get("firstAuthorBirthYear"));
+            let birth_year = parse_birth_year(doc.get("firstAuthorBirthYear")).or_else(|| {
+                BIRTH_YEAR_FALLBACKS
+                    .iter()
+                    .find(|(name, _)| *name == first_author)
+                    .map(|(_, year)| *year)
+            });
             parshanim.push(Parshan {
                 id,
                 name: first_author.clone(),
@@ -91,7 +96,16 @@ pub fn extract(docs: &[Document]) -> Extracted {
             id
         } else {
             let id = (perushim.len() + 1) as i64;
-            let priority = derive_priority(&perush_name, doc.get("compDate"));
+            let parshan_birth_year = parshanim
+                .iter()
+                .find(|p| p.id == parshan_id)
+                .and_then(|p| p.birth_year);
+            let priority = derive_priority(
+                &perush_name,
+                doc.get("compDate"),
+                doc.get("firstAuthorBirthYear"),
+                parshan_birth_year,
+            );
             perushim.push(Perush {
                 id,
                 name: perush_name.clone(),
@@ -109,25 +123,32 @@ pub fn extract(docs: &[Document]) -> Extracted {
         let additional = doc.get("additional").and_then(bson_to_optional_i64);
         let base_perek_id = perek_mapping::first_perek_id(sefer, additional);
 
-        if base_perek_id == 0 {
-            continue; // Unknown sefer mapping
-        }
-
         if let Some(bson::Bson::Array(versions)) = doc.get("versions") {
             // Use the first version (usually only one after filtering)
             match versions.first() {
                 // Simple schema: versions[0] is a flat array of chapters
                 Some(bson::Bson::Array(chapters)) => {
+                    if base_perek_id == 0 {
+                        continue; // Unknown sefer mapping
+                    }
                     flatten_chapters(&mut notes, perush_id, base_perek_id, chapters);
                 }
-                // Complex schema (e.g. Ramban, Ibn Ezra on Torah): versions[0]
-                // is a Document with node keys like {"intro": [...], "default": [[...]]}
-                // The actual verse-by-verse commentary lives in the "default" node
-                // (or whichever node the schema marks as default).
+                // Complex schema: versions[0] is a Document with node keys.
+                // Two cases:
+                // 1. Single-book with intro/default nodes (e.g. Ramban on Torah):
+                //    sefer is known, extract from the "default" node.
+                // 2. Multi-book entry (e.g. HaKtav VeHaKabalah): sefer is 0,
+                //    iterate over all book nodes using schema.nodes metadata.
                 Some(bson::Bson::Document(version_doc)) => {
-                    let default_key = find_default_node_key(doc);
-                    if let Some(bson::Bson::Array(chapters)) = version_doc.get(&default_key) {
-                        flatten_chapters(&mut notes, perush_id, base_perek_id, chapters);
+                    if base_perek_id > 0 {
+                        // Single-book complex schema
+                        let default_key = find_default_node_key(doc);
+                        if let Some(bson::Bson::Array(chapters)) = version_doc.get(&default_key) {
+                            flatten_chapters(&mut notes, perush_id, base_perek_id, chapters);
+                        }
+                    } else {
+                        // Multi-book complex schema: iterate over all book nodes
+                        flatten_multi_book_nodes(&mut notes, perush_id, doc, version_doc);
                     }
                 }
                 _ => {}
@@ -135,11 +156,26 @@ pub fn extract(docs: &[Document]) -> Extracted {
         }
     }
 
+    // Deduplicate notes: multi-book commentaries can map the same perek from
+    // different source books, producing duplicate (perush_id, perek_id, pasuk,
+    // note_idx) keys with different content. Keep the first occurrence, matching
+    // the SQLite INSERT OR IGNORE behaviour.
+    dedup_notes_by_pk(&mut notes);
+
     Extracted {
         parshanim,
         perushim,
         notes,
     }
+}
+
+/// Remove notes that share a primary key `(perush_id, perek_id, pasuk, note_idx)`,
+/// keeping the first occurrence. This matches the SQLite `INSERT OR IGNORE`
+/// behaviour and prevents MySQL duplicate-key (1062) failures when multi-book
+/// commentaries map the same perek from different source books.
+fn dedup_notes_by_pk(notes: &mut Vec<Note>) {
+    let mut seen = HashSet::new();
+    notes.retain(|n| seen.insert((n.perush_id, n.perek_id, n.pasuk, n.note_idx)));
 }
 
 /// Find the node key that contains the verse-by-verse commentary data
@@ -153,34 +189,103 @@ pub fn extract(docs: &[Document]) -> Extracted {
 fn find_default_node_key(doc: &Document) -> String {
     if let Some(bson::Bson::Document(schema)) = doc.get("schema")
         && let Some(bson::Bson::Array(nodes)) = schema.get("nodes")
+        && let Some(key) = find_content_node_key(nodes)
     {
-        // First pass: look for a node with key == "default"
+        return key;
+    }
+    "default".to_string()
+}
+
+/// Pick the content node key out of a `nodes` array: prefer `default`, else the
+/// first node with depth >= 3 (chapter/verse/comment).
+fn find_content_node_key(nodes: &[bson::Bson]) -> Option<String> {
+    for node in nodes {
+        if let bson::Bson::Document(node_doc) = node
+            && let Some(bson::Bson::String(key)) = node_doc.get("key")
+            && key == "default"
+        {
+            return Some(key.clone());
+        }
+    }
+    for node in nodes {
+        if let bson::Bson::Document(node_doc) = node
+            && node_depth(node_doc) >= 3
+            && let Some(bson::Bson::String(key)) = node_doc.get("key")
+        {
+            return Some(key.clone());
+        }
+    }
+    None
+}
+
+fn node_depth(node_doc: &Document) -> i64 {
+    match node_doc.get("depth") {
+        Some(bson::Bson::Int32(n)) => *n as i64,
+        Some(bson::Bson::Int64(n)) => *n,
+        _ => 0,
+    }
+}
+
+/// Resolve the chapters array for one book node of a multi-book schema.
+///
+/// A book node is either a depth-3 JaggedArrayNode (`versions[book]` is the
+/// chapters array) or a SchemaNode wrapping `Introduction`/`default` children
+/// (Abarbanel on Torah), in which case the chapters live one level deeper under
+/// the content child key.
+fn book_node_chapters<'a>(
+    node_doc: &Document,
+    key: &str,
+    version_doc: &'a Document,
+) -> Option<&'a Vec<bson::Bson>> {
+    if node_depth(node_doc) >= 3 {
+        return match version_doc.get(key) {
+            Some(bson::Bson::Array(chapters)) => Some(chapters),
+            _ => None,
+        };
+    }
+    let bson::Bson::Array(children) = node_doc.get("nodes")? else {
+        return None;
+    };
+    let child_key = find_content_node_key(children)?;
+    let bson::Bson::Document(book_doc) = version_doc.get(key)? else {
+        return None;
+    };
+    match book_doc.get(&child_key) {
+        Some(bson::Bson::Array(chapters)) => Some(chapters),
+        _ => None,
+    }
+}
+
+/// Extract notes from a multi-book complex schema document.
+///
+/// Multi-book commentaries (e.g., HaKtav VeHaKabalah) have a single index
+/// entry with schema nodes for each book. The version document contains
+/// keys matching the English node names (e.g., "Genesis", "Exodus").
+/// We iterate over all book nodes with depth >= 3, map each to a sefer,
+/// and extract its chapters.
+fn flatten_multi_book_nodes(
+    notes: &mut Vec<Note>,
+    perush_id: i64,
+    doc: &Document,
+    version_doc: &Document,
+) {
+    if let Some(bson::Bson::Document(schema)) = doc.get("schema")
+        && let Some(bson::Bson::Array(nodes)) = schema.get("nodes")
+    {
         for node in nodes {
             if let bson::Bson::Document(node_doc) = node
                 && let Some(bson::Bson::String(key)) = node_doc.get("key")
-                && key == "default"
+                && let Some((sefer, additional)) = perek_mapping::english_node_key_to_sefer(key)
             {
-                return key.clone();
-            }
-        }
-        // Second pass: look for a node with depth >= 3
-        // (chapter/verse/comment structure)
-        for node in nodes {
-            if let bson::Bson::Document(node_doc) = node {
-                let depth = match node_doc.get("depth") {
-                    Some(bson::Bson::Int32(n)) => *n as i64,
-                    Some(bson::Bson::Int64(n)) => *n,
-                    _ => 0,
-                };
-                if depth >= 3
-                    && let Some(bson::Bson::String(key)) = node_doc.get("key")
+                let base_perek_id = perek_mapping::first_perek_id(sefer, additional);
+                if base_perek_id > 0
+                    && let Some(chapters) = book_node_chapters(node_doc, key, version_doc)
                 {
-                    return key.clone();
+                    flatten_chapters(notes, perush_id, base_perek_id, chapters);
                 }
             }
         }
     }
-    "default".to_string()
 }
 
 /// Flatten chapter/verse/note arrays into Note rows.
@@ -268,14 +373,47 @@ fn flatten_verse_entry(
     }
 }
 
-/// Extract author names from a BSON document's `authors` field.
+/// Corrections for author display names where the Sefaria person record
+/// has an incorrect or non-standard Hebrew spelling.
+const AUTHOR_NAME_CORRECTIONS: &[(&str, &str)] = &[("אברהם סבה", "אברהם סבע")];
+
+/// Fallback birth years for parshanim whose person records are either
+/// missing from Sefaria or have empty `authors` arrays in the index
+/// (so the pipeline's person lookup can't find them).
+/// Sources: Sefaria person collection, Jewish Encyclopedia, Wikipedia.
+const BIRTH_YEAR_FALLBACKS: &[(&str, i64)] = &[
+    ("ר' שמואל די אוזידה", 1545),      // Samuel de Uceda
+    ("ר' יעקב קרנץ", 1741),            // Jacob Kranz, Maggid of Dubno
+    ("ר' יוסף אבן כספי", 1280),        // Joseph ibn Caspi
+    ("ר' חיים יוסף דוד אזולאי", 1724), // Chida
+    ("חזקוני", 1210),                  // Hezekiah ben Manoah, est. early 13th c.
+    ("אברהם בן יצחק צהלון", 1560),     // Abraham ben Isaac Zahalon, est. late 16th c.
+    ("ר' מרדכי יפה", 1530),            // Mordecai Jaffe (the Levush)
+    ("דוד פארדו", 1719),               // David Pardo
+    ("הרב נתן מרקוס אדלר", 1803),      // Nathan Marcus Adler
+    ("ר' עזרא בן שלמה מגירונה", 1160), // Ezra ben Solomon of Gerona
+    ("ר' יעקב בן יצחק אשכנזי", 1550),  // Jacob ben Isaac Ashkenazi (Tze'enah Ure'enah)
+    ("סעדיה גאון", 882),               // Saadia Gaon
+    ("יצחק בן מרדכי גרשון", 1560),     // Isaac ben Mordecai Gershon, est. late 16th c.
+    ("אונקלוס", 35),                   // Onkelos, ~35-120 CE
+    ("יונתן בן עוזיאל", 60),           // Yonatan ben Uziel, ~1st c. BCE - 1st c. CE
+    ("תוספות", 1150),                  // Tosafists, collective: ~12th-13th c.
+    ("רבותינו זכרונם לברכה", 0),       // Chazal — Targum Yerushalmi and anonymous works
+];
+
+/// Extract author names from a BSON document's `authors` field,
+/// applying display-name corrections from [`AUTHOR_NAME_CORRECTIONS`].
 fn extract_authors(doc: &Document) -> Vec<String> {
     match doc.get("authors") {
         Some(bson::Bson::Array(arr)) => arr
             .iter()
             .filter_map(|v| {
                 if let bson::Bson::String(s) = v {
-                    Some(s.clone())
+                    let corrected = AUTHOR_NAME_CORRECTIONS
+                        .iter()
+                        .find(|(from, _)| *from == s.as_str())
+                        .map_or_else(|| s.clone(), |(_, to)| (*to).to_string());
+                    Some(corrected)
                 } else {
                     None
                 }
@@ -314,7 +452,7 @@ fn bson_to_optional_string(value: Option<&bson::Bson>) -> Option<String> {
     }
 }
 
-/// Parse Sefaria birthDate (e.g. "1040", "1040-1105") to a single year.
+/// Parse Sefaria birthDate (e.g. "1040", "1040-1105", "882") to a single year.
 fn parse_birth_year(value: Option<&bson::Bson>) -> Option<i64> {
     let s = match value {
         Some(bson::Bson::String(s)) => s.as_str(),
@@ -322,10 +460,16 @@ fn parse_birth_year(value: Option<&bson::Bson>) -> Option<i64> {
         Some(bson::Bson::Int64(n)) => return Some(*n),
         _ => return None,
     };
-    // Take first 4 consecutive digits (handles "1040", "1040-1105", "c. 1040").
-    let digits: String = s.chars().filter(|c| c.is_ascii_digit()).take(4).collect();
-    if digits.len() == 4 {
-        digits.parse().ok()
+    let mut current_number = String::new();
+    for ch in s.chars() {
+        if ch.is_ascii_digit() {
+            current_number.push(ch);
+        } else if !current_number.is_empty() {
+            break;
+        }
+    }
+    if current_number.len() >= 3 {
+        current_number.parse().ok()
     } else {
         None
     }
@@ -335,10 +479,16 @@ fn parse_birth_year(value: Option<&bson::Bson>) -> Option<i64> {
 /// - Targum variants (תרגום): priority 0-99 (first, ordered chronologically among themselves)
 /// - Rashi (רש"י): priority 100 (second)
 /// - All others: chronological by composition date starting from 200
+///   Falls back to author birth year + 200 when composition date is missing.
 ///
 /// This matches the legacy app ordering where Targum always appears first,
 /// then Rashi, then other commentaries by chronological order.
-fn derive_priority(perush_name: &str, comp_date: Option<&bson::Bson>) -> i64 {
+fn derive_priority(
+    perush_name: &str,
+    comp_date: Option<&bson::Bson>,
+    author_birth_year: Option<&bson::Bson>,
+    static_birth_year: Option<i64>,
+) -> i64 {
     // Special handling for Targum (all variants first)
     if perush_name.contains("תרגום") {
         // All Targumim must be < 100 to appear before Rashi
@@ -361,10 +511,20 @@ fn derive_priority(perush_name: &str, comp_date: Option<&bson::Bson>) -> i64 {
     // All others: chronological, starting from 200
     let year = extract_year_from_comp_date(comp_date);
     if year < 9999 {
-        200 + year
-    } else {
-        9999 // Unknown dates last
+        return 200 + year;
     }
+
+    // Fallback 1: use author birth year from person collection
+    if let Some(birth_year) = parse_birth_year(author_birth_year) {
+        return 200 + birth_year;
+    }
+
+    // Fallback 2: use statically resolved birth year
+    if let Some(birth_year) = static_birth_year {
+        return 200 + birth_year;
+    }
+
+    9999 // Truly unknown dates last
 }
 
 /// Extract the first year from a composition date field.
@@ -600,5 +760,386 @@ mod tests {
         assert_eq!(result.notes.len(), 1);
         assert_eq!(result.notes[0].note_content, "real note");
         assert_eq!(result.notes[0].pasuk, 3); // 1-indexed: the 3rd verse has content
+    }
+
+    // ─── derive_priority tests ───────────────────────────────────────────────
+
+    #[test]
+    fn priority_targum_with_date() {
+        let comp = bson!("[80, 120]");
+        assert_eq!(
+            derive_priority("תרגום אונקלוס", Some(&comp), None, None),
+            13
+        );
+    }
+
+    #[test]
+    fn priority_targum_without_date() {
+        assert_eq!(derive_priority("תרגום יונתן", None, None, None), 50);
+    }
+
+    #[test]
+    fn priority_rashi() {
+        let comp = bson!("[1075, 1105]");
+        assert_eq!(derive_priority("רש\"י", Some(&comp), None, None), 100);
+    }
+
+    #[test]
+    fn priority_other_with_comp_date() {
+        let comp = bson!("[1040, 1105]");
+        assert_eq!(derive_priority("אבן עזרא", Some(&comp), None, None), 1240);
+    }
+
+    #[test]
+    fn priority_other_without_comp_date_uses_birth_year() {
+        let birth = bson!("882");
+        assert_eq!(
+            derive_priority("ר' סעדיה גאון", None, Some(&birth), None),
+            1082, // 200 + 882
+        );
+    }
+
+    #[test]
+    fn priority_other_without_any_date() {
+        assert_eq!(derive_priority("unknown perush", None, None, None), 9999);
+    }
+
+    #[test]
+    fn priority_comp_date_takes_precedence_over_birth_year() {
+        let comp = bson!("[1845, 1875]");
+        let birth = bson!("1809");
+        assert_eq!(
+            derive_priority("מלבי\"ם", Some(&comp), Some(&birth), None),
+            2045
+        );
+    }
+
+    #[test]
+    fn priority_static_birth_year_fallback() {
+        assert_eq!(
+            derive_priority("test perush", None, None, Some(1724)),
+            1924, // 200 + 1724
+        );
+    }
+
+    #[test]
+    fn priority_bson_birth_year_before_static() {
+        let birth = bson!("1500");
+        assert_eq!(
+            derive_priority("test perush", None, Some(&birth), Some(1724)),
+            1700, // 200 + 1500 (BSON takes precedence)
+        );
+    }
+
+    #[test]
+    fn author_name_correction_applied() {
+        let doc = doc! {
+            "name": "צרור המור",
+            "authors": ["אברהם סבה"],
+            "sefer": 1,
+            "versions": [],
+            "schema": { "depth": 3 }
+        };
+        let result = extract(&[doc]);
+        assert_eq!(result.parshanim[0].name, "אברהם סבע");
+    }
+
+    // ─── multi-book complex schema tests ─────────────────────────────────────
+
+    /// Helper: build a multi-book complex-schema pipeline output document.
+    /// Simulates commentaries like HaKtav VeHaKabalah that have a single index
+    /// entry covering multiple books, with `sefer = 0` (unmapped).
+    fn multi_book_schema_doc(
+        name: &str,
+        book_nodes: &[(&str, bson::Bson)], // (node_key, chapters)
+    ) -> Document {
+        let mut version_doc = Document::new();
+        let mut schema_nodes = vec![bson!({"key": "Introduction", "depth": 1})];
+
+        for (key, chapters) in book_nodes {
+            version_doc.insert(key.to_string(), chapters.clone());
+            schema_nodes.push(
+                bson!({"key": *key, "depth": 3, "addressTypes": ["Perek", "Pasuk", "Integer"]}),
+            );
+        }
+
+        doc! {
+            "name": name,
+            "authors": [name],
+            "sefer": 0,  // multi-book entries have no single sefer
+            "versions": [version_doc],
+            "schema": {
+                "nodes": schema_nodes
+            }
+        }
+    }
+
+    #[test]
+    fn multi_book_schema_extraction() {
+        // HaKtav VeHaKabalah-like: two Torah books
+        let doc = multi_book_schema_doc(
+            "הכתב והקבלה",
+            &[
+                ("Genesis", bson!([["gen ch1 v1", "gen ch1 v2"]])),
+                ("Exodus", bson!([["exo ch1 v1"]])),
+            ],
+        );
+        let result = extract(&[doc]);
+
+        assert_eq!(result.parshanim.len(), 1);
+        assert_eq!(result.perushim.len(), 1);
+        assert_eq!(
+            result.notes.len(),
+            3,
+            "should extract notes from all book nodes"
+        );
+
+        // Genesis → sefer 1 → base_perek_id = 1
+        assert_eq!(result.notes[0].perek_id, 1);
+        assert_eq!(result.notes[0].pasuk, 1);
+        assert_eq!(result.notes[0].note_content, "gen ch1 v1");
+
+        assert_eq!(result.notes[1].perek_id, 1);
+        assert_eq!(result.notes[1].pasuk, 2);
+        assert_eq!(result.notes[1].note_content, "gen ch1 v2");
+
+        // Exodus → sefer 2 → base_perek_id = 51
+        assert_eq!(result.notes[2].perek_id, 51);
+        assert_eq!(result.notes[2].pasuk, 1);
+        assert_eq!(result.notes[2].note_content, "exo ch1 v1");
+    }
+
+    #[test]
+    fn multi_book_schema_all_five_torah_books() {
+        let doc = multi_book_schema_doc(
+            "חזקוני",
+            &[
+                ("Genesis", bson!([["g"]])),
+                ("Exodus", bson!([["e"]])),
+                ("Leviticus", bson!([["l"]])),
+                ("Numbers", bson!([["n"]])),
+                ("Deuteronomy", bson!([["d"]])),
+            ],
+        );
+        let result = extract(&[doc]);
+
+        assert_eq!(result.notes.len(), 5);
+        assert_eq!(result.notes[0].perek_id, 1); // Genesis
+        assert_eq!(result.notes[1].perek_id, 51); // Exodus
+        assert_eq!(result.notes[2].perek_id, 91); // Leviticus
+        assert_eq!(result.notes[3].perek_id, 118); // Numbers
+        assert_eq!(result.notes[4].perek_id, 154); // Deuteronomy
+    }
+
+    #[test]
+    fn multi_book_schema_transliterated_keys() {
+        // Rabbeinu Bahya-like: uses Bereshit, Shemot, etc.
+        let doc = multi_book_schema_doc(
+            "רבנו בחיי",
+            &[
+                ("Bereshit", bson!([["note1"]])),
+                ("Shemot", bson!([["note2"]])),
+            ],
+        );
+        let result = extract(&[doc]);
+
+        assert_eq!(result.notes.len(), 2);
+        assert_eq!(result.notes[0].perek_id, 1); // Bereshit → Genesis
+        assert_eq!(result.notes[1].perek_id, 51); // Shemot → Exodus
+    }
+
+    #[test]
+    fn multi_book_schema_book_of_ruth_variant() {
+        // Tzafnat Pa'neach-like: has "Book of Ruth" alongside Torah
+        let doc = multi_book_schema_doc(
+            "צפנת פענח",
+            &[
+                ("Genesis", bson!([["torah note"]])),
+                ("Book of Ruth", bson!([["ruth note"]])),
+            ],
+        );
+        let result = extract(&[doc]);
+
+        assert_eq!(result.notes.len(), 2);
+        assert_eq!(result.notes[0].perek_id, 1); // Genesis
+        assert_eq!(result.notes[1].perek_id, 799); // Ruth
+    }
+
+    #[test]
+    fn multi_book_schema_skips_non_book_nodes() {
+        // Introduction and Postscript nodes should be skipped
+        let version_doc = doc! {
+            "Introduction": [["intro text"]],
+            "Genesis": [["real note"]],
+            "Postscript": [["postscript"]],
+        };
+
+        let doc = doc! {
+            "name": "test multi",
+            "authors": ["test"],
+            "sefer": 0,
+            "versions": [version_doc],
+            "schema": {
+                "nodes": [
+                    { "key": "Introduction", "depth": 1 },
+                    { "key": "Genesis", "depth": 3, "addressTypes": ["Perek", "Pasuk", "Integer"] },
+                    { "key": "Postscript", "depth": 1 }
+                ]
+            }
+        };
+
+        let result = extract(&[doc]);
+        assert_eq!(result.notes.len(), 1, "should only extract from book nodes");
+        assert_eq!(result.notes[0].note_content, "real note");
+    }
+
+    #[test]
+    fn multi_book_schema_multiple_chapters_correct_perek_ids() {
+        // Genesis with 3 chapters → perek_id 1, 2, 3
+        let doc = multi_book_schema_doc(
+            "test",
+            &[("Genesis", bson!([["ch1 note"], ["ch2 note"], ["ch3 note"]]))],
+        );
+        let result = extract(&[doc]);
+
+        assert_eq!(result.notes.len(), 3);
+        assert_eq!(result.notes[0].perek_id, 1);
+        assert_eq!(result.notes[1].perek_id, 2);
+        assert_eq!(result.notes[2].perek_id, 3);
+    }
+
+    #[test]
+    fn dedup_notes_by_pk_keeps_first_occurrence() {
+        let note = |perush_id, perek_id, pasuk, note_idx, content: &str| Note {
+            perush_id,
+            perek_id,
+            pasuk,
+            note_idx,
+            note_content: content.to_string(),
+        };
+        let mut notes = vec![
+            note(1, 16, 38, 0, "first"),
+            note(1, 16, 38, 0, "duplicate - different content"),
+            note(1, 16, 38, 1, "distinct note_idx"),
+            note(2, 16, 38, 0, "distinct perush"),
+        ];
+
+        dedup_notes_by_pk(&mut notes);
+
+        // The duplicate PK (1, 16, 38, 0) collapses to a single row, keeping the
+        // first occurrence; rows differing in any PK component are preserved.
+        assert_eq!(notes.len(), 3);
+        assert_eq!(notes[0].note_content, "first");
+        assert_eq!(notes[1].note_idx, 1);
+        assert_eq!(notes[2].perush_id, 2);
+    }
+
+    /// Helper: build a multi-book document whose book nodes are SchemaNodes that
+    /// wrap `Introduction` + `default` children (Abarbanel on Torah's shape).
+    fn nested_multi_book_schema_doc(name: &str, book_nodes: &[(&str, bson::Bson)]) -> Document {
+        let mut version_doc = Document::new();
+        let mut schema_nodes: Vec<bson::Bson> = Vec::new();
+
+        for (key, chapters) in book_nodes {
+            version_doc.insert(
+                key.to_string(),
+                bson!({ "Introduction": [["intro"]], "default": chapters.clone() }),
+            );
+            schema_nodes.push(bson!({
+                "key": *key,
+                "nodeType": "SchemaNode",
+                "nodes": [
+                    { "key": "Introduction", "depth": 1 },
+                    { "key": "default", "depth": 3, "default": true },
+                ],
+            }));
+        }
+
+        doc! {
+            "name": name,
+            "authors": [name],
+            "sefer": 0,
+            "versions": [version_doc],
+            "schema": { "nodes": schema_nodes },
+        }
+    }
+
+    #[test]
+    fn nested_multi_book_schema_extraction() {
+        // Abarbanel on Torah: each book node is a SchemaNode with no own depth,
+        // so its chapters sit one level deeper under the "default" child.
+        let doc = nested_multi_book_schema_doc(
+            "אברבנאל",
+            &[
+                ("Genesis", bson!([["gen ch1 v1", "gen ch1 v2"]])),
+                ("Exodus", bson!([["exo ch1 v1"]])),
+            ],
+        );
+        let result = extract(&[doc]);
+
+        assert_eq!(result.notes.len(), 3);
+        assert_eq!(result.notes[0].perek_id, 1);
+        assert_eq!(result.notes[0].note_content, "gen ch1 v1");
+        assert_eq!(result.notes[1].pasuk, 2);
+        assert_eq!(result.notes[2].perek_id, 51);
+        assert_eq!(result.notes[2].note_content, "exo ch1 v1");
+    }
+
+    #[test]
+    fn nested_multi_book_schema_skips_introduction_content() {
+        let doc = nested_multi_book_schema_doc("אברבנאל", &[("Genesis", bson!([["real"]]))]);
+        let result = extract(&[doc]);
+
+        assert_eq!(result.notes.len(), 1);
+        assert_eq!(result.notes[0].note_content, "real");
+    }
+
+    #[test]
+    fn book_node_chapters_resolves_flat_and_nested_nodes() {
+        let flat_node = doc! { "key": "Genesis", "depth": 3 };
+        let flat_version = doc! { "Genesis": [["flat"]] };
+        assert!(book_node_chapters(&flat_node, "Genesis", &flat_version).is_some());
+
+        let nested_node = doc! {
+            "key": "Genesis",
+            "nodes": [
+                { "key": "Introduction", "depth": 1 },
+                { "key": "default", "depth": 3 },
+            ],
+        };
+        let nested_version = doc! {
+            "Genesis": { "Introduction": [["i"]], "default": [["nested"]] },
+        };
+        assert!(book_node_chapters(&nested_node, "Genesis", &nested_version).is_some());
+
+        // A nested node whose version payload is missing yields nothing.
+        assert!(book_node_chapters(&nested_node, "Genesis", &doc! {}).is_none());
+        // A depth-1 leaf node without children is not book content.
+        let intro_node = doc! { "key": "Introduction", "depth": 1 };
+        assert!(book_node_chapters(&intro_node, "Introduction", &flat_version).is_none());
+    }
+
+    #[test]
+    fn find_content_node_key_prefers_default_then_depth_three() {
+        let with_default = vec![
+            bson!({ "key": "Introduction", "depth": 1 }),
+            bson!({ "key": "default", "depth": 3 }),
+        ];
+        assert_eq!(
+            find_content_node_key(&with_default).as_deref(),
+            Some("default")
+        );
+
+        let depth_only = vec![
+            bson!({ "key": "Introduction", "depth": 1 }),
+            bson!({ "key": "Genesis", "depth": 3 }),
+        ];
+        assert_eq!(
+            find_content_node_key(&depth_only).as_deref(),
+            Some("Genesis")
+        );
+
+        let none = vec![bson!({ "key": "Introduction", "depth": 1 })];
+        assert_eq!(find_content_node_key(&none), None);
     }
 }

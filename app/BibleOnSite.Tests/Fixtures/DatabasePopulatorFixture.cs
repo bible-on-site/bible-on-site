@@ -232,8 +232,8 @@ public class DatabasePopulatorFixture : IAsyncLifetime
                 }
             }
 
-            // Also check if we're in the repo root (has bible-on-site.sln)
-            var slnPath = Path.Combine(dir.FullName, "bible-on-site.sln");
+            // Also check if we're in the repo root (has bible-on-site.slnx)
+            var slnPath = Path.Combine(dir.FullName, "bible-on-site.slnx");
             if (File.Exists(slnPath))
             {
                 var dataPath2 = Path.Combine(dir.FullName, "data");

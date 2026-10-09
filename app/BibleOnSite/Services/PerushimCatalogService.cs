@@ -1,5 +1,6 @@
 using BibleOnSite.Models;
 using SQLite;
+using BibleOnSite.Helpers;
 
 namespace BibleOnSite.Services;
 
@@ -20,8 +21,13 @@ public class PerushimCatalogService
     private SQLiteAsyncConnection? _connection;
     private bool _isInitialized;
     private bool _catalogMissing;
+    private readonly SemaphoreSlim _initializeLock = new(1, 1);
 
-    private PerushimCatalogService() { }
+    private readonly IFileSystem _fileSystem;
+
+    private PerushimCatalogService() : this(FileSystem.Current) { }
+
+    public PerushimCatalogService(IFileSystem fileSystem) { _fileSystem = fileSystem; }
 
     /// <summary>Whether the catalog database is available.</summary>
     public bool IsAvailable => _isInitialized && !_catalogMissing && _connection != null;
@@ -40,20 +46,20 @@ public class PerushimCatalogService
     }
 
     /// <summary>
-    /// Initializes by copying the catalog from app package to AppDataDirectory if needed.
+    /// Refreshes the catalog from the installed app before resolving note IDs.
+    /// Generated IDs can change between releases, so a copy from an older app is unsafe.
     /// </summary>
     public async Task InitializeAsync()
     {
-        if (_isInitialized)
-            return;
-
-        var dbPath = Path.Combine(FileSystem.AppDataDirectory, CatalogDbName);
-
-        if (!File.Exists(dbPath))
+        await _initializeLock.WaitAsync();
+        try
         {
+            if (_isInitialized)
+                return;
+            var dbPath = Path.Combine(_fileSystem.AppDataDirectory, CatalogDbName);
             try
             {
-                await CopyCatalogFromAssetsAsync(dbPath);
+                await PackagedDatabase.RefreshAsync(_fileSystem, CatalogDbName);
             }
             catch (FileNotFoundException)
             {
@@ -61,17 +67,11 @@ public class PerushimCatalogService
                 _isInitialized = true;
                 return;
             }
+
+            _connection = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
+            _isInitialized = true;
         }
-
-        _connection = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
-        _isInitialized = true;
-    }
-
-    private static async Task CopyCatalogFromAssetsAsync(string targetPath)
-    {
-        await using var sourceStream = await FileSystem.OpenAppPackageFileAsync(CatalogDbName);
-        await using var targetStream = File.Create(targetPath);
-        await sourceStream.CopyToAsync(targetStream);
+        finally { _initializeLock.Release(); }
     }
 
     /// <summary>

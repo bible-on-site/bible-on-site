@@ -2,8 +2,6 @@
 
 ## Documentation References
 
-In order to understand some topic related to this repository, refer to the `docs/` directory:
-
 | Topic                | Documentation Path     |
 | -------------------- | ---------------------- |
 | **Practices**        | `docs/practices/`      |
@@ -12,48 +10,45 @@ In order to understand some topic related to this repository, refer to the `docs
 | AWS Infrastructure   | `docs/aws/`            |
 | App Development      | `docs/app/`            |
 
-## Quick Reference for Agents
+## Known Workarounds
 
-### Known Workarounds
+- **Terminal**: prepend a leading space to every command (temporary bug) — ` cd /path && command`.
+- **Windows `nul` files**: delete before committing (`find . -name "nul" -type f -delete`).
+- **Branches**: verify the branch does not already exist on remote before pushing (see `docs/practices/git.md`).
+- **Quotes**: never use the Hebrew gershayim `"` — use ASCII `"`, escaped or encoded as the file format requires.
+- **Non-interactive CLI on Windows**: no `gh ... --watch` in Git Bash (it reopens an alternate buffer and hides auditable output) — use REST/GraphQL snapshots or redirect the watcher to a file. Set `GH_PAGER=cat GH_FORCE_TTY=0 PAGER=cat` and `AWS_PAGER=''`.
+- **MINGW path conversion**: prefix colon paths and leading-slash arguments with `MSYS_NO_PATHCONV=1` (e.g. `git show "origin/master:path"`, SSM names starting with `/`), or use the repository's root-level SSM names.
 
-- **Terminal Commands**: Due to a temporary bug, always prepend a leading space before running any commands in terminal (e.g., ` cd /path && command` instead of `cd /path && command`).
-- **Windows "nul" Files**: Before committing, check for and remove any accidentally created `nul` files (a Windows artifact). Run: `find . -name "nul" -type f -delete` or manually delete them.
-- **Branch Verification**: Before pushing to a branch, verify it doesn't already exist on remote (may have been merged). See `docs/practices/git.md` for details.
+## Dependency & CI Maintenance
 
-### Tool Learning Protocol
+- **Validate a dep refresh locally before pushing** — CI runs in UTC with a clean `npm ci`:
+  1. `cd web/bible-on-site && TZ=UTC npm run test:unit` — hebrew-date/tzeit tests (e.g. `constructTsetAwareHDate`) pass in local timezones but fail under UTC when date libs change.
+  2. `npm ci --dry-run` in **every** touched npm module (especially `web/admin`) to catch `package.json`/lockfile drift before the Dockerized CI jobs do.
+  3. For .NET majors, `dotnet restore app/BibleOnSite.Tests/BibleOnSite.Tests.csproj` — catches `NU1605` downgrades without mobile workloads.
+- **Renovate grouped "all non-major" PRs are risky**: their lockfile maintenance can drop transitive optional deps, breaking the Dockerized `npm ci`, and they auto-merge and re-break master. The `wasm32-wasi` chain (`@emnapi/*`, `@napi-rs/wasm-runtime`, `@tybys/wasm-util`) is anchored as `optionalDependencies` in `web/admin` and `web/bible-on-site` `package.json` so it cannot be pruned — keep those entries when the packages update. Other optional chains can still drop: if a grouped PR shows a lockfile-only diff, run `gh pr merge <n> --disable-auto`, then supersede with a hand-built branch carrying only the real dep change plus regenerated lockfiles. Admin CI and Website CI run "Verify Lockfile Sync With Packaging npm" (`npm ci --dry-run` inside `node:26.10.0-alpine`); keep that step and verify Linux optional dependencies after lockfile updates.
+- **Never regenerate lockfiles on Windows**: `npm install --package-lock-only` on Windows silently drops `libc` fields (and can drop `license`) from native-binary entries (`@img/*`, `@swc/*`, `@next/swc-*`, `@parcel/watcher-*`, `@unrs/*`, `@biomejs/*`), so Linux `npm ci` then installs both glibc and musl variants. Regenerate inside the `node:26.10.0-alpine` packaging image, or copy master's lockfile and patch only the bumped entries' `version`/`resolved`/`integrity`/`dependencies`.
+- **Held dependencies** (authoritative list in `renovate.json`): the app's `macos` runner <26 and Appium drivers (vulnerable deps bundled in upstream tarballs; #1995). Website coverage plugin 0.0.33 requires Next 16.4 canary's newer SWC host, MongoDB uses its `bson-3` feature for BSON 3, and admin uses patched Nitro beta instead of the older nightly alias. Keep `.nvmrc` in sync with `engines`.
+- **Module versions**: never bump module versions in pull requests. After a module releases on master, the release workflow bumps its version on master; if its version tag already belongs to another commit, a retry bump triggers a new master CI run. Keep `.csproj` build-number consistency with `python devops/check-app-version.py`.
+- **CDs** (Bulletin / RDS / App) run from `repository_dispatch` in the release pipeline, never manually, so fixes land on the next release. The `db-populator` Lambda is external to this repo — diagnose via CloudWatch (`/aws/lambda/bible-on-site-db-populator`).
 
-When using a tool/library/framework for the first time:
+## Tool Learning Protocol
 
-1. Check `.github/tool-registry.md` for existing research
-2. If missing/outdated: use Context7 (`resolve-library-id` → `get-library-docs`), official docs, or GitHub
-3. Update registry with: tool name, version, date, key learnings
-4. Apply learnings
+Check `.github/tool-registry.md`; if the entry is missing or outdated, research it (Context7 `resolve-library-id` → `get-library-docs`, official docs, GitHub), record tool/version/date/learnings there, then apply them.
 
-### Quality Ownership
+## Quality Ownership
 
-- **Never ignore compiler or linter errors/warnings** — maintain 0 problems in VS Code
-- **Never dismiss test failures** — you are the owner of repo quality. If a test fails:
-  1. Investigate the root cause (is it your change? environment issue? flaky test?)
-  2. Fix the issue or ask clarifying questions if unsure
-  3. Never say "this is unrelated" and move on without resolution
-- Use of client components in `web/bible-on-site` is forbidden unless explicitly requested
+- **Never ignore a compiler or linter error/warning** — keep 0 problems in VS Code.
+- **Never dismiss a test failure**: find the root cause (your change? environment? flaky?) and fix it or ask — never call it "unrelated" and move on.
+- **Never leave anything red, and never _assume_ a red is fixed.** Every red signal (CI, merge queue, CD for AWS/Bulletin/RDS/App, README/Project Status badges, Uptime Robot, codecov) is yours until **verified green with freshly observed evidence** or **tracked with its true current status**:
+  1. **Track with evidence** — record the artifact (run ID, PR, issue, badge) and re-query the source of truth (`gh run list`/`gh run view`, badge endpoint, AWS). Report the status you observed, never the one you expect.
+  2. **Diagnose before acting** — separate real failures from stale/transient ones (expired artifact, idle Lambda, OIDC hiccup) and from red herrings (`digest-mismatch` is an _input_ of `actions/download-artifact`).
+  3. **Fix at the source** when it is in your control (code, config, workflow, reachable infra).
+  4. **Only green is resolution.** A CD/badge reflects its latest run, so a merged preventive fix does not clear it; if clearing depends on a future release/dispatch/external action, say plainly it is **still red** and keep it tracked — and if you are blocked externally (Store submission, prod deploy confirmation, expired artifacts), file a tracked issue **and** state the exact action needed.
+  5. **Never mask a red** — no `continue-on-error`, no inflated codecov `coverage.range`, no re-deploying stale artifacts. Prevent recurrence when the cause was systemic (e.g. too-short artifact retention).
+- Check CI/PR status yourself with evidence; never ask the user to watch or confirm. When checks are green and policy allows, merge (or enqueue) yourself and verify the post-merge state.
+- Client components in `web/bible-on-site` are forbidden unless explicitly requested.
+- When the user's intent is clear, continue with the next aligned step instead of asking "next steps?".
 
-### GitHub Issue Creation
+## GitHub Issue Creation
 
-When creating GitHub issues, **always** include:
-
-1. **Priority label** (required): `P1` (Top Priority), `P2` (Prioritized), or `P3` (Nice to have)
-2. **Difficulty label** (required): `D1` (Low), `D2` (Medium), `D3` (High), or `D4` (Huge)
-3. **Project** (required): Add to the appropriate project:
-   - `App` (project #4) — for mobile app issues
-   - `API` (project #3) — for backend API issues
-   - `website` (project #2) — for frontend website issues
-   - `Data` (project #5) — for data pipeline issues
-   - `Admin` (project #6) — for admin portal issues
-
-Use gh CLI to add labels and project:
-
-```bash
-gh issue edit <number> --repo bible-on-site/bible-on-site --add-label "P3,D1"
-gh project item-add <project-number> --owner bible-on-site --url <issue-url>
-```
+See [instructions/github-issues.instructions.md](instructions/github-issues.instructions.md): every issue needs Priority + Difficulty + Type + Component labels and the matching project (App #4, API #3, website #2, Data #5, Admin #6).

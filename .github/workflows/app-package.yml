@@ -71,7 +71,7 @@ permissions:
 
 env:
   APP_DIRECTORY: app
-  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-notes-sqlite.master
+  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-sqlite-v2.master
   PERUSHIM_NOTES_ANDROID_ASSET_RELDIR: Platforms/Android/AssetPacks/perushim_notes
   PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR: Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset
 
@@ -103,7 +103,7 @@ jobs:
           unzip -o /tmp/$ARTIFACT_NAME.zip -d /tmp/$ARTIFACT_NAME
 
       - name: Re-upload for current workflow
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
@@ -119,7 +119,7 @@ jobs:
       module_version: ${{ steps.get_version.outputs.VERSION }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Get .NET version and app version from csproj
         id: get_version
@@ -141,21 +141,26 @@ jobs:
           }
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ steps.get_version.outputs.DOTNET_VERSION }}
 
-      - name: Cache NuGet packages
-        uses: actions/cache@v5
+      - name: Hash NuGet dependency inputs
+        id: nuget-key
+        run: node ${{ github.workspace }}/devops/github/ci/nuget-cache-key.mjs
+
+      - name: Restore NuGet packages
+        id: nuget-cache
+        uses: actions/cache/restore@v6
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-maui-windows-${{ hashFiles('app/**/*.csproj') }}
+          key: ${{ runner.os }}-nuget-maui-windows-${{ steps.nuget-key.outputs.hash }}
           restore-keys: |
             ${{ runner.os }}-nuget-maui-windows-
             ${{ runner.os }}-nuget-
 
       - name: Install MAUI workload
-        run: dotnet workload install maui-windows --skip-manifest-update
+        run: dotnet workload install maui-windows
 
       - name: Decode signing certificate
         run: |
@@ -171,10 +176,32 @@ jobs:
         working-directory: ${{ env.APP_DIRECTORY }}
         run: dotnet tool restore
 
+      - name: Setup Python for recitation extension packaging
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Restore original recitation audio cache
+        uses: actions/cache@v6
+        with:
+          path: .cache/recitation-assets
+          key: recitation-audio-v1-${{ hashFiles('data/recitation/recitation.sqlite') }}
+          restore-keys: recitation-audio-v1-
+
+      - name: Prepare lossless recitation book extension packages
+        run: python app/devops/prepare_recitation_assets.py --platform Windows
+
       - name: Package MSIX
         working-directory: ${{ env.APP_DIRECTORY }}
         run: |
           dotnet run --project devops -- Package --platform Windows --configuration Release --certificate-thumbprint "${{ secrets.WINDOWS_SIGNING_CERT_THUMBPRINT }}"
+
+      - name: Save NuGet packages
+        if: ${{ github.ref == 'refs/heads/master' && steps.nuget-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
 
       - name: Find MSIX file
         id: find_msix
@@ -201,8 +228,11 @@ jobs:
         run: echo "artifact_name=app-windows-v${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
         shell: bash
 
+      - name: Verify all recitation Windows archives and hashes
+        run: python app/devops/verify_recitation_assets.py --platform Windows --catalog app/BibleOnSite/Resources/Raw/recitation-catalog.json --package "${{ steps.find_msix.outputs.MSIX_PATH }}"
+
       - name: Upload MSIX artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.set_artifact_name.outputs.artifact_name }}
           path: ${{ env.APP_DIRECTORY }}/.artifacts/*
@@ -228,7 +258,7 @@ jobs:
       module_version: ${{ steps.get_version.outputs.VERSION }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Get .NET version and app version from csproj
         id: get_version
@@ -244,33 +274,53 @@ jobs:
           echo "App version: $VERSION"
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ steps.get_version.outputs.DOTNET_VERSION }}
 
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: "microsoft"
           java-version: "17"
 
-      - name: Cache NuGet packages
-        uses: actions/cache@v5
+      - name: Hash NuGet dependency inputs
+        id: nuget-key
+        run: node ${{ github.workspace }}/devops/github/ci/nuget-cache-key.mjs
+
+      - name: Restore NuGet packages
+        id: nuget-cache
+        uses: actions/cache/restore@v6
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-maui-android-${{ hashFiles('app/**/*.csproj') }}
+          key: ${{ runner.os }}-nuget-maui-android-${{ steps.nuget-key.outputs.hash }}
           restore-keys: |
             ${{ runner.os }}-nuget-maui-android-
             ${{ runner.os }}-nuget-
 
       - name: Install MAUI workload
-        run: dotnet workload install maui-android --skip-manifest-update
+        run: dotnet workload install maui-android
 
       - name: Restore perushim notes SQLite for AAB asset pack
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.perushim_notes_sqlite_artifact || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
-          path: ${{ env.APP_DIRECTORY }}/BibleOnSite/${{ env.PERUSHIM_NOTES_ANDROID_ASSET_RELDIR }}
+          path: ${{ runner.temp }}/perushim-sqlite
+
+      - name: Prepare matching Perushim catalog and Android notes
+        run: python3 app/devops/prepare_perushim_assets.py --source "${{ runner.temp }}/perushim-sqlite" --app-directory app/BibleOnSite --platform Android
+
+      - name: Verify perushim SQLite present (required for PAD asset pack in AAB)
+        run: |
+          set -euo pipefail
+          SQLITE="${{ env.APP_DIRECTORY }}/BibleOnSite/${{ env.PERUSHIM_NOTES_ANDROID_ASSET_RELDIR }}/sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
+          if [ ! -f "$SQLITE" ]; then
+            echo "::error::Perushim notes DB missing at $SQLITE — the AAB would ship without the perushim_notes on-demand pack (GetPackLocation null on device)."
+            echo "Directory listing:"
+            ls -laR "${{ env.APP_DIRECTORY }}/BibleOnSite/${{ env.PERUSHIM_NOTES_ANDROID_ASSET_RELDIR }}" || true
+            exit 1
+          fi
+          ls -la "$SQLITE"
 
       - name: Decode Android keystore
         run: |
@@ -280,6 +330,21 @@ jobs:
       - name: Restore dotnet tools
         working-directory: ${{ env.APP_DIRECTORY }}
         run: dotnet tool restore
+
+      - name: Setup Python for recitation extension packaging
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Restore original recitation audio cache
+        uses: actions/cache@v6
+        with:
+          path: .cache/recitation-assets
+          key: recitation-audio-v1-${{ hashFiles('data/recitation/recitation.sqlite') }}
+          restore-keys: recitation-audio-v1-
+
+      - name: Prepare lossless recitation book extension packages
+        run: python app/devops/prepare_recitation_assets.py --platform Android
 
       - name: Package AAB
         working-directory: ${{ env.APP_DIRECTORY }}
@@ -294,12 +359,41 @@ jobs:
             dotnet run --project devops -- Package --platform Android --configuration Release
           fi
 
+      - name: Save NuGet packages
+        if: ${{ github.ref == 'refs/heads/master' && steps.nuget-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
+
+      - name: Sanity-check AAB for perushim asset pack module
+        working-directory: ${{ env.APP_DIRECTORY }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          aabs=(.artifacts/*.aab)
+          if [ ${#aabs[@]} -eq 0 ]; then
+            echo "::error::No AAB in .artifacts"
+            exit 1
+          fi
+          AAB="${aabs[0]}"
+          echo "Checking $AAB for perushim / asset pack entries..."
+          if unzip -l "$AAB" | grep -qiE 'perushim|asset.pack|assetpack|split'; then
+            unzip -l "$AAB" | grep -iE 'perushim|asset.pack|assetpack|split' | head -40
+          else
+            echo "::warning::No obvious perushim/asset-pack path in AAB zip listing — verify Play Asset Delivery packaging if PAD fails on device."
+            unzip -l "$AAB" | head -30
+          fi
+
+      - name: Verify all recitation PAD modules and hashes
+        run: python app/devops/verify_recitation_assets.py --platform Android --catalog app/BibleOnSite/Resources/Raw/recitation-catalog.json --package "$(find app/.artifacts -name '*.aab' -print -quit)"
+
       - name: Set artifact name output
         id: set_artifact_name
         run: echo "artifact_name=app-android-v${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
 
       - name: Upload AAB artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.set_artifact_name.outputs.artifact_name }}
           path: ${{ env.APP_DIRECTORY }}/.artifacts/*.aab
@@ -318,13 +412,13 @@ jobs:
     name: Package iOS (IPA)
     needs: [resolve_perushim_artifact]
     if: ${{ always() && !cancelled() && !failure() && (inputs.platform == 'iOS' || inputs.platform == 'All') }}
-    runs-on: macos-15
+    runs-on: xcode-27
     outputs:
       artifact_name: ${{ steps.set_artifact_name.outputs.artifact_name }}
       module_version: ${{ steps.get_version.outputs.VERSION }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Get .NET version and app version from csproj
         id: get_version
@@ -340,15 +434,21 @@ jobs:
           echo "App version: $VERSION"
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: ${{ steps.get_version.outputs.DOTNET_VERSION }}
+          # Keep in sync with the maui-ios workload below; see https://github.com/bible-on-site/bible-on-site/issues/1871
+          dotnet-version: "10.0.401"
 
-      - name: Cache NuGet packages
-        uses: actions/cache@v5
+      - name: Hash NuGet dependency inputs
+        id: nuget-key
+        run: node ${{ github.workspace }}/devops/github/ci/nuget-cache-key.mjs
+
+      - name: Restore NuGet packages
+        id: nuget-cache
+        uses: actions/cache/restore@v6
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-maui-ios-${{ hashFiles('app/**/*.csproj') }}
+          key: ${{ runner.os }}-nuget-maui-ios-${{ steps.nuget-key.outputs.hash }}
           restore-keys: |
             ${{ runner.os }}-nuget-maui-ios-
             ${{ runner.os }}-nuget-
@@ -357,8 +457,8 @@ jobs:
         run: |
           # Show .NET SDK info to debug
           dotnet --info
-          # Install the MAUI iOS workload
-          dotnet workload install maui-ios --skip-manifest-update
+          # Pin the iOS 27 workload set for Xcode 27; see https://github.com/bible-on-site/bible-on-site/issues/1871
+          dotnet workload install maui-ios --version 10.0.401.1
           # Show installed workloads
           dotnet workload list
 
@@ -368,18 +468,18 @@ jobs:
           echo "Available Xcode installations:"
           ls -la /Applications/ | grep -i xcode || true
 
-          # The MAUI iOS workload installs iOS SDK 26.0.9766 which requires exactly Xcode 26.0
-          # Using Xcode 26.1 or 26.2 causes: "requires Xcode 26.0. The current version of Xcode is 26.2"
-          # Find Xcode 26.0.x installation specifically
-          XCODE_PATH=$(ls -d /Applications/Xcode_26.0*.app 2>/dev/null | sort -V | tail -1)
+          # The current MAUI iOS workload requires Xcode 27.
+          XCODE_PATH=/Applications/Xcode_27.app
+          if [ ! -d "$XCODE_PATH" ]; then
+            XCODE_PATH=""
+          fi
           if [ -z "$XCODE_PATH" ]; then
-            # Fallback to any 26.x if 26.0.x not found
-            echo "Xcode 26.0.x not found, trying any 26.x"
-            XCODE_PATH=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | head -1)
+            echo "Xcode 27.0 not found, trying the newest available 27.x"
+            XCODE_PATH=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)
           fi
           if [ -z "$XCODE_PATH" ]; then
             # Fallback to default Xcode
-            echo "Xcode 26.x not found, using default Xcode"
+            echo "Xcode 27.x not found, using default Xcode"
             XCODE_PATH=$(xcode-select -p | sed 's|/Contents/Developer||')
           fi
 
@@ -439,27 +539,57 @@ jobs:
           echo "PROFILE_UUID=$PROFILE_UUID" >> $GITHUB_ENV
 
       - name: Restore perushim notes SQLite for iOS ODR asset catalog
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.perushim_notes_sqlite_artifact || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
-          path: ${{ env.APP_DIRECTORY }}/BibleOnSite/${{ env.PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR }}
+          path: ${{ runner.temp }}/perushim-sqlite
+
+      - name: Prepare matching Perushim catalog and iOS notes
+        run: python3 app/devops/prepare_perushim_assets.py --source "${{ runner.temp }}/perushim-sqlite" --app-directory app/BibleOnSite --platform iOS
 
       - name: Restore dotnet tools
         working-directory: ${{ env.APP_DIRECTORY }}
         run: dotnet tool restore
 
+      - name: Setup Python for recitation extension packaging
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Restore original recitation audio cache
+        uses: actions/cache@v6
+        with:
+          path: .cache/recitation-assets
+          key: recitation-audio-v1-${{ hashFiles('data/recitation/recitation.sqlite') }}
+          restore-keys: recitation-audio-v1-
+
+      - name: Prepare lossless recitation book extension packages
+        run: python app/devops/prepare_recitation_assets.py --platform iOS
+
       - name: Package IPA
         working-directory: ${{ env.APP_DIRECTORY }}
         run: |
+          set -o pipefail
           dotnet run --project devops -- Package --platform iOS --configuration Release \
-            --ios-team-id "${{ secrets.IOS_TEAM_ID }}"
+            --ios-team-id "${{ secrets.IOS_TEAM_ID }}" \
+            2>&1 | sed -E 's/(Apple (Distribution|Development): )[^(]+(\([^)]*\))/\1[masked] \3/g'
+
+      - name: Save NuGet packages
+        if: ${{ github.ref == 'refs/heads/master' && steps.nuget-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
+
+      - name: Verify all recitation ODR tags and payloads
+        run: python app/devops/verify_recitation_assets.py --platform iOS --catalog app/BibleOnSite/Resources/Raw/recitation-catalog.json --package "$(find app/.artifacts -name '*.ipa' -print -quit)"
 
       - name: Set artifact name output
         id: set_artifact_name
         run: echo "artifact_name=app-ios-v${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
 
       - name: Upload IPA artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.set_artifact_name.outputs.artifact_name }}
           path: ${{ env.APP_DIRECTORY }}/.artifacts/*.ipa
@@ -481,3 +611,4 @@ jobs:
           # Delete temp files
           rm -f $RUNNER_TEMP/certificate.p12 || true
           rm -f $RUNNER_TEMP/profile.mobileprovision || true
+

@@ -8,7 +8,7 @@ alwaysApply: true
 ## Pre-commit
 
 - Config: `.pre-commit-config.yaml`; venv: `devops/.venv/`; tool config: `devops/pyproject.toml`.
-- Husky runs pre-commit via `.husky/pre-commit`.
+- pre-commit installs the git hooks directly (`pre-commit install --hook-type pre-commit --hook-type post-commit`, via root `prepare` script and `devops/setup-dev-env.mts`).
 - Adding a hook: add to `.pre-commit-config.yaml`, then update `docs/devops/pre-commit.md`.
 
 ## Clean Working Directory Before Commit
@@ -37,25 +37,19 @@ alwaysApply: true
 
 ## Branch Management
 
+Use a dedicated Git worktree for every task unless the entire task can be completed using API calls alone. Create or reuse a worktree belonging to the current task before changing files or running builds. Never switch branches or modify files in another task's checkout. After delivery, archive a managed worktree through the app or remove an unmanaged worktree and prune its registration.
+
 Before pushing, check if the branch already exists on remote (may be merged/deleted):
 
 ```bash
 git ls-remote --heads origin <branch-name>
 ```
 
-If it exists: check if merged; if merged, use a new branch name; if not, fetch and rebase before pushing.
+If it exists, check whether its PR was merged. If merged, use a new branch name; otherwise apply the branch sync rule below.
 
-## Pre-Push: Merge from Master
+## Pull Request Branch Sync
 
-**MANDATORY before every push**, the agent MUST:
-
-1. Fetch and merge the latest `master` into the current branch:
-   ```bash
-   git fetch origin master
-   git merge origin/master
-   ```
-2. If there are merge conflicts, **resolve them immediately** — inspect each conflicting file, apply the correct resolution (preserving both sides where appropriate), stage the resolved files, and complete the merge commit.
-3. Only push after the merge is clean and the working tree has no conflicts or uncommitted changes.
+Start new branches from the intended base. Sync an existing pull request branch with its base only when both conditions hold: the current head has no green CI result, and there is an actual merge conflict. Being behind the base is not sufficient. When syncing is necessary, inspect the overlapping changes, resolve conflicts preserving both sides where appropriate, validate the resolution, and push with a clean tree.
 
 ## Post-Push: Monitor CI
 
@@ -66,10 +60,10 @@ If it exists: check if merged; if merged, use a new branch name; if not, fetch a
    gh run list --branch <branch-name> --limit 3
    ```
 2. If a run is in progress, poll periodically (every 30–60 seconds) until it completes or the user intervenes.
-3. If CI fails, inspect the failure (`gh run view <run-id> --log-failed`), diagnose the root cause, fix it locally, and push again (repeating the merge-from-master step).
+3. If CI fails, inspect the failure (`gh run view <run-id> --log-failed`), diagnose the root cause, fix it locally, and push again (applying the branch sync rule before syncing with the base).
 4. Report the final CI status to the user.
 
 ## Pull Requests
 
 - Use a new branch per feature/fix. PR is created when publishing the branch.
-- Only @DoradSoft can merge unless explicitly delegated.
+- **The agent owns the repo end-to-end and merges PRs itself** once the required checks are green and every review comment is triaged. Dorad assigns tasks and reviews plans and expensive/hard-to-reverse decisions — surface those for approval before proceeding (e.g. prod RDS/schema deploys, destructive infra changes), but do not wait for a human to merge routine work.

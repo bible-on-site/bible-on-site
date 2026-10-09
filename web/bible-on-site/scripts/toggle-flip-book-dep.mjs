@@ -13,7 +13,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkgPath = path.resolve(__dirname, "..", "package.json");
 
 const LOCAL_REF = "file:../../../html-flip-book/react";
-const NPM_VERSION = "0.0.0-alpha.36"; // Update this when upgrading
+const NPM_VERSION = "0.0.0-alpha.45"; // Update this when upgrading
 
 const mode = process.argv[2];
 
@@ -47,7 +47,12 @@ pkg.dependencies["html-flip-book-react"] = target;
 fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, "\t")}\n`);
 
 if (mode === "npm") {
-	const nodeModulesLink = path.resolve(__dirname, "..", "node_modules", "html-flip-book-react");
+	const nodeModulesLink = path.resolve(
+		__dirname,
+		"..",
+		"node_modules",
+		"html-flip-book-react",
+	);
 	try {
 		const stat = fs.lstatSync(nodeModulesLink);
 		if (stat.isSymbolicLink()) {
@@ -63,7 +68,10 @@ if (mode === "npm") {
 		const packages = lock.packages ?? {};
 		let cleaned = false;
 		for (const key of Object.keys(packages)) {
-			if (key.includes("html-flip-book") && (packages[key].link || key.startsWith("../"))) {
+			if (
+				key.includes("html-flip-book") &&
+				(packages[key].link || key.startsWith("../"))
+			) {
 				delete packages[key];
 				cleaned = true;
 			}

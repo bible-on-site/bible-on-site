@@ -1,4 +1,3 @@
-// TODO: try to convert to ESM when Playwright supports it
 const { mkdirSync, writeFileSync } = require("node:fs");
 const { resolve } = require("node:path");
 
@@ -10,7 +9,11 @@ const BENCHMARK_OUTPUT_FILE = resolve(BENCHMARK_OUTPUT_DIR, "benchmark.json");
 
 const WEB_SERVER_URL = "http://127.0.0.1:3001";
 
-// Routes to warm up before running e2e tests with coverage
+// Routes to warm up before running e2e tests with coverage.
+// Every dynamic route pattern gets one sequential hit so its static-paths
+// resolution finishes before parallel workers start — concurrent first-hits
+// race a non-atomic .next/prerender-manifest.json write (vercel/next.js#96259)
+// and surface in the browser as "Unexpected end of JSON input" (#2005).
 const WARMUP_ROUTES = [
 	"",
 	"929",
@@ -19,6 +22,14 @@ const WARMUP_ROUTES = [
 	"929/250",
 	"929/727",
 	"929/764",
+	// 929/[number]/[slug]
+	"929/1/1",
+	// 929/authors/[authorParam]
+	"929/authors/1",
+	// pedia/[slug]
+	`pedia/${encodeURIComponent("יעקב")}`,
+	// [section]
+	"tos",
 ];
 
 /**
@@ -27,11 +38,9 @@ const WARMUP_ROUTES = [
  * which adds overhead that can cause timeouts on cold starts.
  */
 async function warmUpServer() {
-	// Dynamically import ESM module to get shouldMeasureCov flag  // TODO: import regularly when this file is ESM
-	const { shouldMeasureCov } = await import(
-		"../shared/tests-util/environment.mjs"
-	);
-	if (!shouldMeasureCov) {
+	// Playwright loads global setup through a separate transform from its config.
+	// Read the flag here so its ESM transform cannot change the shared module's exports.
+	if (process.env.MEASURE_COV !== "1") {
 		return;
 	}
 

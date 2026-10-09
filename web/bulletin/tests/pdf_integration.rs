@@ -42,6 +42,9 @@ mod pdf_generation {
                 pesukim: perek_data.pesukim.clone(),
                 articles: vec![],
             }],
+            include_cover: false,
+            include_toc: false,
+            cover_accent_hex: "333333".to_string(),
         };
 
         let buf = pdf::build_pdf(&req, &fonts_dir()).unwrap();
@@ -97,6 +100,9 @@ mod pdf_generation {
         let req = pdf::PdfRequest {
             sefer_name: first_data.sefer_name.clone(),
             perakim,
+            include_cover: false,
+            include_toc: false,
+            cover_accent_hex: "333333".to_string(),
         };
 
         let buf = pdf::build_pdf(&req, &fonts_dir()).unwrap();

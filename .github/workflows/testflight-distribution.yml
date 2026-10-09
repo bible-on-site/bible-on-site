@@ -1,0 +1,148 @@
+name: Distribute TestFlight build
+
+on:
+  workflow_call:
+    inputs:
+      ios_artifact_name:
+        required: true
+        type: string
+      ci_run_id:
+        required: true
+        type: string
+      parent_lock_held:
+        description: "The calling app deployment already holds the shared lock"
+        default: false
+        type: boolean
+  workflow_dispatch:
+    inputs:
+      ios_artifact_name:
+        description: "Published iOS artifact name (e.g., app-ios-v5.0.128)"
+        required: true
+        type: string
+      ci_run_id:
+        description: "Master CI run that published this release"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  deployments: write
+
+# A manual recovery shares the app CD lock. A called job inherits its parent's
+# lock and uses a distinct group to avoid waiting on that same parent forever.
+concurrency:
+  group: ${{ inputs.parent_lock_held && format('{0}-testflight-distribution-{1}', github.repository, github.run_id) || format('{0}-cd-app', github.repository) }}
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  distribute:
+    name: Distribute the verified build to TestFlight testers
+    runs-on: macos-15
+    env:
+      MODULE_VERSION: "0.0.0"
+      IOS_ARTIFACT_NAME: ${{ inputs.ios_artifact_name }}
+      CI_RUN_ID: ${{ inputs.ci_run_id }}
+    steps:
+      - name: Checkout deployment automation
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+
+      - name: Check deployment source and freshness
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_MODULE: app
+          DEPLOY_TARGET: app-ios-beta
+        run: node devops/github/release/check-deployment.mjs
+
+      - name: Preserve TestFlight verification automation
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        run: cp devops/github/release/testflight-build.mjs "$RUNNER_TEMP/testflight-build.mjs"
+
+      - name: Checkout artifact source
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.guard.outputs.ref }}
+
+      - name: Restore the published IPA for build identity only
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "app-v$MODULE_VERSION" --pattern '*.ipa' --dir "$RUNNER_TEMP/testflight-distribute"
+          echo "IPA_FILE=$(find "$RUNNER_TEMP/testflight-distribute" -name '*.ipa' -type f | head -1)" >> "$GITHUB_ENV"
+
+      - name: Setup App Store Connect API Key
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          API_KEY_PATH: ${{ runner.temp }}/testflight-api-key.json
+          API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          echo "API_KEY_PATH=$API_KEY_PATH" >> "$GITHUB_ENV"
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          writeFileSync(process.env.API_KEY_PATH, JSON.stringify({
+            key_id: process.env.API_KEY_ID,
+            issuer_id: process.env.API_ISSUER_ID,
+            key: Buffer.from(process.env.API_KEY_BASE64, 'base64').toString('utf8'),
+            in_house: false,
+          }), { mode: 0o600 });
+          NODE
+
+      - name: Verify Apple processed the exact published build
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        id: build
+        env:
+          UPLOAD_EXIT_CODE: "0"
+        run: node "$RUNNER_TEMP/testflight-build.mjs" postflight
+
+      - name: Install Fastlane
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        run: gem install fastlane -NV
+
+      - name: Distribute the exact iOS build to the beta group
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          TESTFLIGHT_BETA_GROUP: ${{ secrets.TESTFLIGHT_BETA_GROUP_NAME }}
+          APP_IDENTIFIER: ${{ steps.build.outputs.app_identifier }}
+          APP_VERSION: ${{ steps.build.outputs.app_version }}
+          BUILD_NUMBER: ${{ steps.build.outputs.build_number }}
+        run: |
+          fastlane pilot distribute --app_platform ios \
+            --api_key_path "$API_KEY_PATH" \
+            --app_identifier "$APP_IDENTIFIER" --app_version "$APP_VERSION" --build_number "$BUILD_NUMBER" \
+            --distribute_external true --groups "$TESTFLIGHT_BETA_GROUP" \
+            --beta_app_description "בכ\"ט כסלו תשע\"ה(21 דצמ' 14) התחילה תכנית לימוד תנ\"ך יומי של משרד החינוך, פרק ליום. כחודש לאחר מכן עלה לרשת אתר לימוד תנך באותו פורמט אשר מתעדכן מיום ליום במאמרים של רבנים. כמו כן יש רעיונות נוספים שעתידים להתחדש, תעקבו אחרינו! לימוד פורה, תנך.co.il" \
+            --beta_app_feedback_email "tanah.site@gmail.com" \
+            --beta_app_review_info '{"contact_email":"tanah.site@gmail.com","contact_first_name":"Dorad","contact_last_name":"Levinshtein","contact_phone":"+372 5707 8640"}' \
+            --changelog "Automated build v$MODULE_VERSION"
+
+      - name: Record distribution result
+        if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.guard.outputs.deployment_id }}
+          DEPLOYMENT_RESULT: ${{ job.status }}
+        run: node "$RUNNER_TEMP/deployment-state.mjs"
+
+      - name: Cleanup API key
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
+        run: rm -f "$API_KEY_PATH"
+
+      - name: Distribution summary
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        run: |
+          echo "## TestFlight Distribution Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Version:** $MODULE_VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Status:** Submitted to the beta group ✅" >> "$GITHUB_STEP_SUMMARY"

@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { ArticlesSection } from "../../../src/app/929/[number]/components/ArticlesSection";
 import type { Article } from "../../../src/lib/articles";
 
@@ -40,9 +40,11 @@ describe("ArticlesSection", () => {
 
 	describe("when articles are provided", () => {
 		it("renders the section header with icon and title", () => {
-			render(<ArticlesSection articles={mockArticles} />);
+			const { container } = render(<ArticlesSection articles={mockArticles} />);
 
-			expect(screen.getByText("📚")).toBeTruthy();
+			const icon = container.querySelector('img[src*="/icons/book.svg"]');
+			expect(icon?.getAttribute("aria-hidden")).toBe("true");
+			expect(icon?.getAttribute("alt")).toBe("");
 			expect(screen.getByText("מאמרים על הפרק")).toBeTruthy();
 		});
 
@@ -106,8 +108,8 @@ describe("ArticlesSection", () => {
 		});
 	});
 
-	describe("when onArticleClick is provided (button mode)", () => {
-		it("renders buttons instead of links", () => {
+	describe("when onArticleClick is provided (callback mode)", () => {
+		it("keeps crawlable article links while delegating clicks", () => {
 			const handleClick = jest.fn();
 			render(
 				<ArticlesSection
@@ -116,12 +118,13 @@ describe("ArticlesSection", () => {
 				/>,
 			);
 
-			const buttons = screen.getAllByRole("button");
-			expect(buttons).toHaveLength(2);
-			expect(screen.queryAllByRole("link")).toHaveLength(0);
+			const links = screen.getAllByRole("link");
+			expect(links).toHaveLength(2);
+			expect(links[0].getAttribute("href")).toBe("/929/1/1");
+			expect(links[1].getAttribute("href")).toBe("/929/1/2");
 		});
 
-		it("calls onArticleClick when button is clicked", async () => {
+		it("calls onArticleClick when the link is clicked", async () => {
 			const handleClick = jest.fn();
 			render(
 				<ArticlesSection
@@ -130,14 +133,32 @@ describe("ArticlesSection", () => {
 				/>,
 			);
 
-			const buttons = screen.getAllByRole("button");
-			buttons[0].click();
+			const links = screen.getAllByRole("link");
+			links[0].click();
 
 			expect(handleClick).toHaveBeenCalledTimes(1);
 			expect(handleClick).toHaveBeenCalledWith(mockArticles[0]);
 		});
 
-		it("renders abstract in button mode when present", () => {
+		it("lets modifier-clicks follow the href instead of the callback", () => {
+			const handleClick = jest.fn();
+			render(
+				<ArticlesSection
+					articles={mockArticles}
+					onArticleClick={handleClick}
+				/>,
+			);
+
+			const link = screen.getAllByRole("link")[0];
+			fireEvent.click(link, { ctrlKey: true });
+			fireEvent.click(link, { metaKey: true });
+			fireEvent.click(link, { shiftKey: true });
+			fireEvent.click(link, { altKey: true });
+
+			expect(handleClick).not.toHaveBeenCalled();
+		});
+
+		it("renders abstract in callback mode when present", () => {
 			const handleClick = jest.fn();
 			render(
 				<ArticlesSection

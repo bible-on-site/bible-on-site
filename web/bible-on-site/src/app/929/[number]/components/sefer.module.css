@@ -1,298 +1,392 @@
 .bookWrapper {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
 }
 
 .bookArea {
-  flex: 1;
-  min-height: 0;
-  position: relative;
+	flex: 1;
+	min-height: 0;
+	position: relative;
+}
+
+/* Keep React's unfinished page slots unpainted until FlipBook has applied
+   dimensions. Visibility preserves the geometry needed for initialization. */
+.bookArea > :global(.he-book:not(.flipbook)) {
+	visibility: hidden;
 }
 
 .page {
-  background-color: white;
-  padding: 15px;
-  position: relative;
-  box-sizing: border-box;
+	background-color: white;
+	padding: 15px;
+	position: relative;
+	box-sizing: border-box;
 }
 
 /* Right page (content): flex column so header stays on top, scroller outside text */
 .pageContentPage {
-  background-color: white;
-  padding: 15px;
-  position: relative;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
+	background-color: white;
+	padding: 15px;
+	position: relative;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
 }
 
 /* Header in flow (no overlap); sefer + perek on opposite edges */
 .pageHeaderRight {
-  flex-shrink: 0;
-  padding-top: 2px;
-  padding-bottom: 4px;
-  direction: rtl;
-  max-width: 100%;
+	flex-shrink: 0;
+	padding-top: 2px;
+	padding-bottom: 4px;
+	direction: rtl;
+	max-width: 100%;
 }
 
 /* Scroll wrapper outside the text only; scrollbar on outer edge (RTL = left) */
 .perekTextScrollWrapper {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  direction: rtl;
-  scrollbar-width: thin;
-  scrollbar-color: var(--scrollbarBG) var(--scrollbarBG);
-  --scrollbarBG: #cfd8dc;
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	direction: rtl;
+	scrollbar-width: thin;
+	scrollbar-color: var(--scrollbarBG) var(--scrollbarBG);
+	--scrollbarBG: #cfd8dc;
 }
 
 .perekTextScrollWrapper::-webkit-scrollbar {
-  width: 11px;
+	width: 11px;
 }
 
 .perekTextScrollWrapper::-webkit-scrollbar-track {
-  background: var(--scrollbarBG);
+	background: var(--scrollbarBG);
 }
 
 .perekTextScrollWrapper::-webkit-scrollbar-thumb {
-  background-color: #90a4ae;
-  border-radius: 6px;
-  border: 3px solid var(--scrollbarBG);
+	background-color: #90a4ae;
+	border-radius: 6px;
+	border: 3px solid var(--scrollbarBG);
 }
 
 .pageHeaderRow {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
-  font-size: 0.95rem;
-  color: #1c2c5d;
-  font-weight: 600;
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 8px;
+	font-size: 0.95rem;
+	color: #1c2c5d;
+	font-weight: 600;
 }
 
 .pageHeaderSefer {
-  flex-shrink: 0;
+	flex-shrink: 0;
 }
 
 .pageHeaderPerek {
-  flex-shrink: 0;
+	flex-shrink: 0;
 }
 
 .perekHeader {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #637598;
-  margin-top: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
+	font-size: 0.9rem;
+	font-weight: 600;
+	color: #637598;
+	margin-top: 2px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 100%;
+}
+
+.perekIllustrationFigure {
+	margin: 8px 10px 0;
+}
+
+.perekIllustration {
+	display: block;
+	width: 100%;
+	height: auto;
+	border-radius: 6px;
+}
+
+.perekIllustrationFigure figcaption {
+	margin-top: 4px;
+	color: #637598;
+	font-size: 0.75rem;
+	line-height: 1.35;
+	text-align: right;
 }
 
 /* Left page (blank): flex column, Hebrew date at top, then articles carousel */
 .pageBlank {
-  background-color: white;
-  padding: 15px;
-  position: relative;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
+	background-color: white;
+	padding: 15px;
+	position: relative;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
 }
 
 .blankPageDate {
-  font-size: 1rem;
-  color: #637598;
-  text-align: center;
-  padding-top: 6px;
-  direction: rtl;
-  flex-shrink: 0;
+	font-size: 1rem;
+	color: #637598;
+	text-align: center;
+	padding-top: 6px;
+	direction: rtl;
+	flex-shrink: 0;
 }
 
 .blankPageArticles {
-  flex: 1;
-  min-height: 120px;
-  overflow: auto;
-  margin-top: 8px;
+	flex: 1;
+	min-height: 120px;
+	overflow: auto;
+	margin-top: 8px;
 }
 
 /* When showing full article/perush, container clips; child handles scroll */
 .blankPageArticlesFullArticle {
-  overflow: hidden;
-  min-height: 0;
+	overflow: hidden;
+	min-height: 0;
 }
 
 /* Wrapper when showing full article on blank page: fill area and use flex column */
 .blankPageArticleFullWrapper {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  height: 100%;
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	height: 100%;
 }
 
 /* Article full view in book: fill container, title fixed, body scrolls */
 .articleFullViewInBook {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  padding: 0 12px;
-  border: none;
-  box-shadow: none;
-  border-radius: 0;
-  background: transparent;
-  height: 100%;
-  overflow: hidden;
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	margin: 0;
+	padding: 0 12px;
+	border: none;
+	box-shadow: none;
+	border-radius: 0;
+	background: transparent;
+	height: 100%;
+	overflow: hidden;
 }
 
 .articleFullViewInBook .articleBodyWrapper {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #c4b896 transparent;
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-color: #c4b896 transparent;
 }
 
 /* Perush full view in book: fill container, header fixed, notes scroll.
    Doubled selector for specificity over .perushimSection from perushim-section.module.css */
 .perushFullViewInBook.perushFullViewInBook {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  padding: 0 12px;
-  border: none;
-  box-shadow: none;
-  border-radius: 0;
-  background: transparent;
-  height: 100%;
-  overflow: hidden;
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	margin: 0;
+	padding: 0 12px;
+	border: none;
+	box-shadow: none;
+	border-radius: 0;
+	background: transparent;
+	height: 100%;
+	overflow: hidden;
 }
 
 /* Notes container in book mode: fill available space, scroll, no max-height.
    Doubled selector for specificity over .notesContainer max-height. */
 .perushNotesInBook.perushNotesInBook {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  max-height: none;
-  scrollbar-width: thin;
-  scrollbar-color: #c4b896 transparent;
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	max-height: none;
+	scrollbar-width: thin;
+	scrollbar-color: #c4b896 transparent;
 }
 
 /* Cover: genuine book cover look using the sefer spectrum color */
 .cover.cover {
-  background-color: var(--cover-color, #333);
-  padding: 0;
+	background-color: var(--cover-color, #333);
+	padding: 0;
 }
 
 .coverInner {
-  height: 100%;
-  width: 100%;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  /* Inset border to simulate a real hardcover frame */
-  border: 3px solid rgb(255 255 255 / 0.15);
-  border-radius: 2px;
-  /* Subtle texture: faint radial gradient to mimic leather/cloth */
-  background:
-    radial-gradient(ellipse at 30% 20%, rgb(255 255 255 / 0.06) 0%, transparent 60%),
-    linear-gradient(180deg, rgb(255 255 255 / 0.04) 0%, transparent 40%, rgb(0 0 0 / 0.12) 100%);
+	height: 100%;
+	width: 100%;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	/* Inset border to simulate a real hardcover frame */
+	border: 3px solid rgb(255 255 255 / 0.15);
+	border-radius: 2px;
+	/* Subtle texture: faint radial gradient to mimic leather/cloth */
+	background:
+		radial-gradient(
+			ellipse at 30% 20%,
+			rgb(255 255 255 / 0.06) 0%,
+			transparent 60%
+		),
+		linear-gradient(
+			180deg,
+			rgb(255 255 255 / 0.04) 0%,
+			transparent 40%,
+			rgb(0 0 0 / 0.12) 100%
+		);
 }
 
 .coverContent {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 2rem;
-  box-sizing: border-box;
-  gap: 0.3em;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	padding: 2rem;
+	box-sizing: border-box;
+	gap: 0.3em;
 }
 
 .coverOrnament {
-  color: rgb(255 255 255 / 0.5);
-  font-size: clamp(1rem, 2.5vw, 1.5rem);
-  letter-spacing: 0.3em;
-  margin-bottom: 0.5em;
+	color: rgb(255 255 255 / 0.5);
+	font-size: clamp(1rem, 2.5vw, 1.5rem);
+	letter-spacing: 0.3em;
+	margin-bottom: 0.5em;
 }
 
 .coverTitle {
-  color: #fff;
-  font-size: clamp(1.5rem, 4vw, 2.5rem);
-  font-weight: 700;
-  margin: 0;
-  letter-spacing: 0.05em;
-  text-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
+	color: #fff;
+	font-size: clamp(1.5rem, 4vw, 2.5rem);
+	font-weight: 700;
+	margin: 0;
+	letter-spacing: 0.05em;
+	text-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
 }
 
 .coverDivider {
-  width: 40%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.5), transparent);
-  margin: 0.6em 0;
+	width: 40%;
+	height: 1px;
+	background: linear-gradient(
+		90deg,
+		transparent,
+		rgb(255 255 255 / 0.5),
+		transparent
+	);
+	margin: 0.6em 0;
 }
 
 .coverSubtitle {
-  color: rgb(255 255 255 / 0.85);
-  font-size: clamp(0.85rem, 2vw, 1.1rem);
-  font-weight: 400;
-  margin: 0;
-  letter-spacing: 0.08em;
+	color: rgb(255 255 255 / 0.85);
+	font-size: clamp(0.85rem, 2vw, 1.1rem);
+	font-weight: 400;
+	margin: 0;
+	letter-spacing: 0.08em;
 }
 
 .coverEdition {
-  color: rgb(255 255 255 / 0.55);
-  font-size: clamp(0.7rem, 1.5vw, 0.85rem);
-  font-weight: 300;
-  margin: 0.3em 0 0;
-  letter-spacing: 0.04em;
+	color: rgb(255 255 255 / 0.55);
+	font-size: clamp(0.7rem, 1.5vw, 0.85rem);
+	font-weight: 300;
+	margin: 0.3em 0 0;
+	letter-spacing: 0.04em;
 }
 
 .perekText {
-  direction: rtl;
-  letter-spacing: 0.04em;
-  word-spacing: 0.12em;
-  line-height: 1.5em;
-  padding: 8px 10px 10px;
-  text-align: justify;
-  -moz-text-align-last: right;
-  text-align-last: right;
-  overflow-x: hidden;
-  display: flow-root;
+	direction: rtl;
+	/* Taamey D (traditional te'amim face) is the default perek font; reader
+     settings scale it via CSS vars (#reader-settings). */
+	font-family:
+		var(--font-tanakh-taamey), var(--font-tanakh), "Times New Roman", serif;
+	font-size: calc(1em * var(--perek-font-scale, 1));
+	letter-spacing: 0.04em;
+	word-spacing: var(--perek-word-spacing, 0.12em);
+	line-height: var(--perek-line-height, 1.5);
+	padding: 8px 10px 10px;
+	text-align: justify;
+	-moz-text-align-last: right;
+	text-align-last: right;
+	overflow-x: hidden;
+	display: flow-root;
+}
+/* Noto Serif Hebrew opt-out via reader settings (data-tanakh-font).
+   Site rule: components inherit font families — the perek reader is the
+   sanctioned exception because pasuk typeface is a user-facing display
+   preference (like font size), not a component styling choice. */
+:global(:root[data-tanakh-font="noto"]) .perekText {
+	font-family: var(--font-tanakh), "Times New Roman", serif;
 }
 .pasukNum {
-  color: #1c2c5d;
-  cursor: pointer;
-  font-weight: 700;
-  text-decoration: underline;
+	color: #1c2c5d;
+	cursor: pointer;
+	font-weight: 700;
+	text-decoration: underline;
 }
 .perekTextHeader h1 {
-  color: #9a92d1;
-  font-size: 1.2em;
-  font-weight: 700;
-  margin: 0.1em 0 1em;
-  text-align: justify;
+	color: #9a92d1;
+	font-size: 1.2em;
+	font-weight: 700;
+	margin: 0.1em 0 1em;
+	text-align: justify;
 }
 .qri label::before {
-  color: #637598;
-  content: "קְרִי:";
-  cursor: text;
-  display: inherit;
-  font-size: 14px;
-  font-weight: 400;
-  margin: 0 0 0 1vmin;
-  vertical-align: baseline;
+	color: #637598;
+	content: "קְרִי:";
+	cursor: text;
+	display: inherit;
+	font-size: 14px;
+	font-weight: 400;
+	margin: 0 0 0 1vmin;
+	vertical-align: baseline;
+}
+
+.tanahpediaLink {
+	color: inherit;
+	text-decoration: none;
+	border-bottom: 1px dashed #1a73e8;
+	transition: border-color 0.2s ease;
+}
+.tanahpediaLink:hover {
+	border-bottom-style: solid;
+	border-bottom-color: #1552ac;
+}
+
+@media (prefers-color-scheme: dark) {
+	.page,
+	.pageContentPage,
+	.pageBlank {
+		background-color: #1a1f2e;
+	}
+
+	.perekTextScrollWrapper {
+		--scrollbarBG: #2d3548;
+	}
+
+	.pageHeaderRow,
+	.pasukNum {
+		color: #a8b9ff;
+	}
+
+	.perekHeader,
+	.perekIllustrationFigure figcaption,
+	.blankPageDate,
+	.qri label::before {
+		color: #9aa0a6;
+	}
+
+	.perekTextHeader h1 {
+		color: #b7adf0;
+	}
+
+	.tanahpediaLink:hover {
+		border-bottom-color: #7eb0ff;
+	}
 }

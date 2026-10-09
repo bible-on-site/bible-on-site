@@ -64,9 +64,17 @@ async fn generate_pdf_core(req: GeneratePdfRequest) -> Result<(Vec<u8>, String),
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fonts"));
 
+    let cover_hex = req
+        .cover_accent_hex
+        .clone()
+        .unwrap_or_else(|| "475569".to_string());
+
     let pdf_req = pdf::PdfRequest {
         sefer_name: sefer_name.clone(),
         perakim,
+        include_cover: req.include_cover,
+        include_toc: req.include_toc,
+        cover_accent_hex: cover_hex,
     };
 
     let buf = pdf::build_pdf(&pdf_req, &fonts_dir)
@@ -142,6 +150,18 @@ pub async fn cli_handler() -> anyhow::Result<()> {
     let mut input = String::new();
     io::stdin().read_to_string(&mut input)?;
 
+    // This selects a local output format, makes no security decision, and ignores argv[0].
+    // nosemgrep: rust.lang.security.args-os.args-os, args-os
+    if std::env::args_os()
+        .skip(1)
+        .any(|arg| arg == "--daily-preview")
+    {
+        let req: bulletin::daily::DailyInput = serde_json::from_str(&input)?;
+        let result = bulletin::daily::render(&req, &daily_fonts_dir())?;
+        serde_json::to_writer(io::stdout(), &result)?;
+        return Ok(());
+    }
+
     let req: GeneratePdfRequest =
         serde_json::from_str(&input).map_err(|e| anyhow::anyhow!("Invalid request JSON: {}", e))?;
 
@@ -170,6 +190,7 @@ pub async fn lambda_handler(
 
     match path {
         "/api/generate-pdf" => lambda_generate_pdf(event).await,
+        "/api/preview-daily" => lambda_preview_daily(event).await,
         "/health" => Ok(LambdaResponse::builder()
             .status(200)
             .header("content-type", "application/json")
@@ -181,6 +202,33 @@ pub async fn lambda_handler(
             .body(Body::Text(r#"{"error":"not_found"}"#.into()))
             .unwrap()),
     }
+}
+
+fn daily_fonts_dir() -> PathBuf {
+    env::var("FONTS_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fonts"))
+}
+
+async fn lambda_preview_daily(
+    event: LambdaRequest,
+) -> Result<LambdaResponse<Body>, lambda_http::Error> {
+    let bytes = match event.body() {
+        Body::Text(s) => s.as_bytes(),
+        Body::Binary(b) => b.as_slice(),
+        _ => &[],
+    };
+    let (status, body) = match serde_json::from_slice::<bulletin::daily::DailyInput>(bytes) {
+        Err(e) => (400, serde_json::json!({"error": e.to_string()})),
+        Ok(req) => match bulletin::daily::render(&req, &daily_fonts_dir()) {
+            Ok(artifacts) => (200, serde_json::to_value(artifacts)?),
+            Err(e) => (400, serde_json::json!({"error": e.to_string()})),
+        },
+    };
+    Ok(LambdaResponse::builder()
+        .status(status)
+        .header("content-type", "application/json")
+        .body(Body::Text(body.to_string()))?)
 }
 
 async fn lambda_generate_pdf(
@@ -202,7 +250,9 @@ async fn lambda_generate_pdf(
         Err(e) => {
             return Ok(LambdaResponse::builder()
                 .status(400)
-                .body(Body::Text(format!(r#"{{"error":"{}"}}"#, e)))
+                .body(Body::Text(
+                    serde_json::json!({"error": e.to_string()}).to_string(),
+                ))
                 .unwrap());
         }
     };
@@ -219,7 +269,200 @@ async fn lambda_generate_pdf(
             .unwrap()),
         Err(e) => Ok(LambdaResponse::builder()
             .status(500)
-            .body(Body::Text(format!(r#"{{"error":"{}"}}"#, e)))
+            .body(Body::Text(serde_json::json!({"error": e}).to_string()))
             .unwrap()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request(path: &str, body: Body) -> LambdaRequest {
+        let mut request = LambdaRequest::new(body);
+        *request.uri_mut() = path.parse().expect("path should parse");
+        request
+    }
+
+    fn text_body(body: &Body) -> &str {
+        match body {
+            Body::Text(text) => text,
+            _ => panic!("expected text body"),
+        }
+    }
+
+    #[test]
+    fn build_filename_handles_empty_single_and_multi_perek_requests() {
+        assert_eq!(build_filename("Sefer", &[]), "Sefer.pdf");
+
+        let single = build_filename("Sefer", &[1]);
+        assert!(single.starts_with("Sefer-"));
+        assert!(single.ends_with(".pdf"));
+        assert_ne!(single, "Sefer-.pdf");
+
+        let multi = build_filename("Sefer", &[1, 2]);
+        assert!(multi.starts_with("Sefer-"));
+        assert!(multi.ends_with(".pdf"));
+        assert!(multi.matches('-').count() >= 2);
+    }
+
+    #[test]
+    fn build_filename_keeps_unknown_perek_ids_predictable() {
+        assert_eq!(build_filename("Sefer", &[999_999]), "Sefer-.pdf");
+        assert_eq!(build_filename("Sefer", &[1, 999_999]), {
+            let first = build_filename("Sefer", &[1])
+                .trim_start_matches("Sefer-")
+                .trim_end_matches(".pdf")
+                .to_string();
+            format!("Sefer-{}-.pdf", first)
+        });
+    }
+
+    #[tokio::test]
+    async fn lambda_handler_returns_health_and_not_found_responses() {
+        let health = lambda_handler(request("/health", Body::Empty))
+            .await
+            .expect("health should not fail");
+        assert_eq!(health.status().as_u16(), 200);
+        assert_eq!(
+            health.headers().get("content-type").unwrap(),
+            "application/json"
+        );
+        assert_eq!(
+            text_body(health.body()),
+            r#"{"status":"ok","service":"bulletin"}"#
+        );
+
+        let missing = lambda_handler(request("/missing", Body::Empty))
+            .await
+            .expect("not found should not fail");
+        assert_eq!(missing.status().as_u16(), 404);
+        assert_eq!(text_body(missing.body()), r#"{"error":"not_found"}"#);
+    }
+
+    #[tokio::test]
+    async fn lambda_generate_pdf_rejects_missing_and_invalid_json_bodies() {
+        let missing = lambda_handler(request("/api/generate-pdf", Body::Empty))
+            .await
+            .expect("missing body should become a response");
+        assert_eq!(missing.status().as_u16(), 400);
+        assert_eq!(
+            text_body(missing.body()),
+            r#"{"error":"Missing request body"}"#
+        );
+
+        let invalid = lambda_handler(request(
+            "/api/generate-pdf",
+            Body::Text("{not-json".to_string()),
+        ))
+        .await
+        .expect("invalid JSON should become a response");
+        assert_eq!(invalid.status().as_u16(), 400);
+        assert!(text_body(invalid.body()).starts_with(r#"{"error":"#));
+    }
+
+    #[tokio::test]
+    async fn lambda_generate_pdf_returns_validation_errors_from_core() {
+        let response = lambda_handler(request(
+            "/api/generate-pdf",
+            Body::Text(r#"{"perakimIds":[],"includeArticles":false}"#.to_string()),
+        ))
+        .await
+        .expect("core validation should become a response");
+
+        assert_eq!(response.status().as_u16(), 500);
+        assert_eq!(
+            text_body(response.body()),
+            r#"{"error":"perakimIds must not be empty"}"#
+        );
+    }
+
+    #[tokio::test]
+    async fn lambda_generate_pdf_accepts_binary_json_and_reports_unknown_perek() {
+        let response = lambda_handler(request(
+            "/api/generate-pdf",
+            Body::Binary(br#"{"perakimIds":[999999],"includeArticles":false}"#.to_vec()),
+        ))
+        .await
+        .expect("core validation should become a response");
+
+        assert_eq!(response.status().as_u16(), 500);
+        assert_eq!(
+            text_body(response.body()),
+            r#"{"error":"Unknown perekId: 999999"}"#
+        );
+    }
+
+    #[tokio::test]
+    async fn daily_preview_returns_matching_artifacts_and_valid_json_errors() {
+        use base64::{Engine, engine::general_purpose::STANDARD};
+        let response = lambda_handler(request(
+            "/api/preview-daily",
+            Body::Binary(br#"{"date":"2026-10-08","hebrewDate":"test date","perekId":1,"article":null,"dedications":[]}"#.to_vec()),
+        )).await.unwrap();
+        assert_eq!(response.status().as_u16(), 200);
+        let artifacts: bulletin::daily::DailyArtifacts =
+            serde_json::from_str(text_body(response.body())).unwrap();
+        assert_eq!(artifacts.source, "בראשית א");
+        assert!(artifacts.subject.contains("test date"));
+        assert!(
+            STANDARD
+                .decode(artifacts.pdf_base64)
+                .unwrap()
+                .starts_with(b"%PDF-")
+        );
+        for body in [
+            Body::Empty,
+            Body::Text(
+                r#"{"date":"invalid","hebrewDate":"date","perekId":1,"article":null}"#.into(),
+            ),
+        ] {
+            let response = lambda_handler(request("/api/preview-daily", body))
+                .await
+                .unwrap();
+            assert_eq!(response.status().as_u16(), 400);
+            let value: serde_json::Value =
+                serde_json::from_str(text_body(response.body())).unwrap();
+            assert!(value["error"].is_string());
+        }
+        let invalid = lambda_handler(request(
+            "/api/generate-pdf",
+            Body::Text(r#"{"perakimIds":"quoted"}"#.into()),
+        ))
+        .await
+        .unwrap();
+        let value: serde_json::Value = serde_json::from_str(text_body(invalid.body())).unwrap();
+        assert!(value["error"].as_str().unwrap().contains("quoted"));
+    }
+
+    #[tokio::test]
+    async fn lambda_generate_pdf_returns_pdf_bytes_and_download_headers() {
+        let response = lambda_handler(request(
+            "/api/generate-pdf",
+            Body::Text(
+                r##"{"seferName":"Genesis","perakimIds":[1],"includeArticles":false,"coverAccentHex":"#123abc"}"##
+                    .to_string(),
+            ),
+        ))
+        .await
+        .expect("valid request should become a PDF response");
+
+        assert_eq!(response.status().as_u16(), 200);
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "application/pdf"
+        );
+        assert!(
+            response
+                .headers()
+                .get("content-disposition")
+                .unwrap()
+                .as_bytes()
+                .starts_with(b"attachment; filename=\"Genesis-")
+        );
+        match response.body() {
+            Body::Binary(bytes) => assert!(bytes.starts_with(b"%PDF")),
+            _ => panic!("expected PDF binary body"),
+        }
     }
 }

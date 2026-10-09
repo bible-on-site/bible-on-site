@@ -14,7 +14,7 @@ A React-based admin panel for managing articles and rabbis content.
 
 ### Prerequisites
 
-- Node.js >= 24.11.1
+- Node.js 26.10.0
 - MySQL database (same as web/bible-on-site)
 - AWS S3 bucket for rabbi images (optional)
 
@@ -38,6 +38,7 @@ Environment variables:
 - `VITE_WEBSITE_URL`: Main website URL for cache invalidation
 - `VITE_AWS_REGION`: AWS region for S3
 - `VITE_S3_BUCKET`: S3 bucket name for rabbi images
+- `OPENAI_API_KEY` / `OPENAI_MODEL` (optional): Tanahpedia entry LLM assistant — server-side only; see `docs/tanahpedia/admin-llm-assistant.md`
 
 ### Development
 
@@ -49,11 +50,20 @@ npm run dev
 
 This will start the Vite dev server at http://localhost:3101
 
+**מסד נתונים לפיתוח:** `devops/ensure-dev-db.mts` מריץ `mysql-populate-dev` רק אם אין עדיין `tanah_sefer` (מסד חדש). `mysql-populate-dev` **לא** טוען את `tanah_test_data.sql` (בלי «הרב לדוגמא») — מאמרים אמיתיים מ־`sync-from-prod`. אם כבר היו במסד מאמרי דמו, הם יוסרו בפתיחת dev (אלא אם `KEEP_BUNDLED_TEST_ARTICLES=1`). לדמו מלא כמו ב־CI: `npm run db:populate:dev:test-articles`.
+
 ### Building
 
 ```bash
 npm run build
 ```
+
+### Tests & coverage
+
+- Unit: `npm run test:unit` / coverage: `npm run coverage:unit` (outputs `web/admin/.coverage/unit/lcov.info`)
+- E2E: `npm run test:e2e` / coverage: `npm run coverage:e2e` (istanbul instrumentation via monocart → `web/admin/.coverage/e2e/lcov.info`)
+- Merge unit + e2e: `npm run coverage:merge` → `web/admin/.coverage/merged/lcov.info`
+- CI publishes the merged report to Codecov with flag **`admin`** (see root `README.md`).
 
 ## Project Structure
 

@@ -1,5 +1,11 @@
 import type { Page } from "@playwright/test";
 import { expect } from "@playwright/test";
+import {
+	isCI,
+	shouldMeasureCov,
+} from "../../../../../shared/tests-util/environment.mjs";
+
+const flipBookMountTimeoutMs = isCI || shouldMeasureCov ? 60_000 : 20_000;
 
 /**
  * Page Object Model for Sefer view functionality
@@ -30,23 +36,54 @@ export class SeferPage {
 	}
 
 	/**
-	 * Click the sefer view toggle button to open sefer view
-	 * Note: This assumes the test is running on tablet+ viewport where the toggle is visible
+	 * Click the sefer view toggle button to open sefer view.
+	 * Uses a retry loop because on SSG pages the click can land before
+	 * React has hydrated the controlled checkbox, in which case the
+	 * onChange handler never fires and the overlay stays hidden.
 	 */
 	async openSeferView(): Promise<void> {
 		const toggler = this.page.getByTestId("read-mode-toggler");
+		const checkbox = toggler.locator("input");
+		const overlay = this.page.locator('[class*="seferOverlay"]');
+
 		await toggler.scrollIntoViewIfNeeded();
-		await toggler.click({ timeout: 10_000 });
+
+		await expect(async () => {
+			if (!(await checkbox.isChecked())) {
+				await toggler.click();
+			}
+			await expect(overlay).toBeVisible();
+		}).toPass({ timeout: 15_000 });
+
 		await this.verifySeferViewIsOpen();
 	}
 
 	/**
-	 * Verify that the sefer overlay is visible
-	 * Uses a longer timeout to account for animation and CI slowness
+	 * Verify that the sefer overlay is visible and the FlipBook has mounted.
+	 * The overlay displays immediately but the FlipBook is lazy-loaded inside
+	 * a React startTransition, so we must wait for the actual book before checking
+	 * any nested content (articles, qri spans, etc.).
 	 */
 	async verifySeferViewIsOpen(): Promise<void> {
 		const seferOverlay = this.page.locator('[class*="seferOverlay"]');
 		await expect(seferOverlay).toBeVisible({ timeout: 10_000 });
+		// <Sefer> mounts only after a low-priority startTransition commits, and the
+		// FlipBook is an ssr:false dynamic import that must load its chunk and then
+		// initialize (it builds every perek page). Under parallel CI load that can
+		// take well over 15s, so wait for the wrapper to attach first (a clear
+		// failure if it never mounts), then for it to lay out, with a budget sized
+		// to the worst-case mount rather than the typical one.
+		const bookWrapper = seferOverlay.locator('[class*="bookWrapper"]');
+		await expect(bookWrapper).toBeAttached({
+			timeout: flipBookMountTimeoutMs,
+		});
+		await expect(bookWrapper).toBeVisible({
+			timeout: flipBookMountTimeoutMs,
+		});
+		// The wrapper can precede the dynamically imported FlipBook itself.
+		await expect(seferOverlay.locator(".he-book.flipbook")).toBeVisible({
+			timeout: flipBookMountTimeoutMs,
+		});
 	}
 
 	/**
@@ -70,17 +107,14 @@ export class SeferPage {
 		expect(textContent!.length).toBeGreaterThan(50);
 	}
 
-	/**
-	 * Close the sefer view (if needed for future tests)
-	 */
+	/** Close the active reader through its read-mode control. */
 	async closeSeferView(): Promise<void> {
-		const closeButton = this.page.getByTestId("sefer-overlay-close");
-		if (await closeButton.isVisible()) {
-			await closeButton.click();
-			// Wait for overlay to become hidden instead of fixed timeout
-			const seferOverlay = this.page.locator('[class*="seferOverlay"]');
-			await expect(seferOverlay).toBeHidden({ timeout: 10_000 });
-		}
+		const toggler = this.page.getByTestId("read-mode-toggler");
+		await expect(toggler.locator("input")).toBeChecked();
+		await toggler.click();
+		await expect(this.page.locator('[class*="seferOverlay"]')).toBeHidden({
+			timeout: 10_000,
+		});
 	}
 
 	/**

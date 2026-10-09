@@ -38,7 +38,8 @@ public class BottomNavigationBar : ContentView
         nameof(BarHeight),
         typeof(double),
         typeof(BottomNavigationBar),
-        80.0);
+        80.0,
+        propertyChanged: (bindable, _, value) => ((BottomNavigationBar)bindable).HeightRequest = (double)value);
 
     /// <summary>
     /// Bindable property for notch radius.
@@ -47,7 +48,8 @@ public class BottomNavigationBar : ContentView
         nameof(NotchRadius),
         typeof(double),
         typeof(BottomNavigationBar),
-        32.0);
+        32.0,
+        propertyChanged: (bindable, _, value) => OnNotchRadiusChanged((BottomNavigationBar)bindable, (double)value));
 
     /// <summary>
     /// Bindable property for the bar background color.
@@ -130,10 +132,7 @@ public class BottomNavigationBar : ContentView
 
     public BottomNavigationBar()
     {
-        _background = new BottomBarBackground
-        {
-            BarColor = BarColor
-        };
+        _background = new BottomBarBackground();
 
         // Main grid for left/right content
         _mainGrid = new Grid
@@ -203,6 +202,12 @@ public class BottomNavigationBar : ContentView
             bar._background.InvalidateDrawable();
         }
     }
+
+    private static void OnNotchRadiusChanged(BottomNavigationBar bar, double radius)
+    {
+        bar._background.NotchRadius = (float)radius;
+        bar._background.InvalidateDrawable();
+    }
 }
 
 /// <summary>
@@ -210,11 +215,23 @@ public class BottomNavigationBar : ContentView
 /// </summary>
 public class BottomBarBackground : GraphicsView
 {
-    public Color BarColor { get; set; } = Colors.White;
+    private readonly BottomBarDrawable _drawable = new();
+
+    public Color BarColor
+    {
+        get => _drawable.BarColor ?? Colors.White;
+        set => _drawable.BarColor = value;
+    }
+
+    public float NotchRadius
+    {
+        get => _drawable.NotchRadius;
+        set => _drawable.NotchRadius = value;
+    }
 
     public BottomBarBackground()
     {
-        Drawable = new BottomBarDrawable();
+        Drawable = _drawable;
     }
 
     public void InvalidateDrawable()

@@ -39,15 +39,27 @@ describe("constructTsetAwareHDate", () => {
 	});
 	describe("when after tset", () => {
 		it("returns the next day", () => {
-			const date = parseKosherChristianDate("27/June/24", "23:59:59");
+			// 23:00 in Jerusalem on June 27, after that day's civil dusk.
+			const date = new Date("2024-06-27T20:00:00Z");
 			const actual = constructTsetAwareHDate(date);
 			expect(actual.toString()).toContain("22");
 			expect(actual.toString()).toContain("Sivan");
 			expect(actual.toString()).toContain("5784");
 		});
+
+		it("uses Jerusalem's next civil date after midnight there", () => {
+			const date = new Date("2024-06-27T23:59:59Z");
+			const actual = constructTsetAwareHDate(date);
+			expect(actual.toString()).toContain("22 Sivan 5784");
+		});
 	});
 });
 describe("hebcalDateToNumber", () => {
+	it("rejects unspecific Adar in a leap year instead of silently choosing an Adar", () => {
+		expect(() => parseNumericalDateToHebcalDate(57840601)).toThrow(
+			"Invalid uniform month: 6",
+		);
+	});
 	describe("when leap year", () => {
 		describe("when 1 Sh'vat 5784", () => {
 			it("returns month 05", () => {
@@ -247,10 +259,10 @@ describe("HebrewDate", () => {
 				18,
 			);
 			const result = hDate.toTraditionalHebrewString();
-			expect(result).toContain("י\"ח");
+			expect(result).toContain('י"ח');
 			expect(result).toContain("שבט");
 			expect(result).toContain("ה'");
-			expect(result).toContain("תשפ\"ד");
+			expect(result).toContain('תשפ"ד');
 		});
 
 		it("returns year without ה' prefix for year < 5000", () => {
@@ -274,7 +286,7 @@ describe("HebrewDate", () => {
 			);
 			const result = hDate.toTraditionalHebrewString();
 			// Day 18 = י"ח
-			expect(result).toContain("י\"ח");
+			expect(result).toContain('י"ח');
 			expect(result).toContain("שבט");
 		});
 	});

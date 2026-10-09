@@ -4,11 +4,19 @@ on:
   repository_dispatch:
     types: [deploy-data]
 
+# Keep every dispatch; never interrupt a production write.
+concurrency:
+  group: ${{ github.repository }}-cd-data
+  cancel-in-progress: false
+  queue: max
+
 jobs:
   deploy:
     name: Deploy Data to Production RDS
     permissions:
       contents: read
+      actions: read
+      deployments: write
       id-token: write # Required for OIDC authentication with AWS
     runs-on: ubuntu-latest
 
@@ -18,45 +26,70 @@ jobs:
       DEVOPS_NODE_VERSION_FILE: devops/package.json
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout deployment automation
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.client_payload.ref }}
+          ref: ${{ github.sha }}
+
+      - name: Check deployment source and freshness
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_MODULE: data
+        run: node devops/github/release/check-deployment.mjs
+
+      - name: Checkout artifact source
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.guard.outputs.ref }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
           cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
           cache: npm
 
       - name: Install npm Dependencies
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: npm ci --no-audit
 
-      - name: Download Generated Perushim SQL
-        uses: actions/download-artifact@v7
-        with:
-          name: perushim-data-sql
-          path: data/mysql
-          github-token: ${{ secrets.BOT_PAT }}
-          repository: ${{ github.repository }}
-          run-id: ${{ github.event.client_payload.run_id }}
-
-      - name: Verify Perushim Data File
+      # Verify the exact immutable archive before granting access to production.
+      - name: Download Perushim SQL
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ steps.guard.outputs.artifact_id }}
+          ARTIFACT_DIGEST: ${{ steps.guard.outputs.artifact_digest }}
+          REPO: ${{ github.repository }}
         run: |
-          if [ ! -f data/mysql/perushim_data.sql ]; then
-            echo "❌ perushim_data.sql not found after artifact download"
-            exit 1
-          fi
-          echo "✅ perushim_data.sql downloaded successfully ($(wc -l < data/mysql/perushim_data.sql) lines)"
+          set -euo pipefail
+          mkdir -p data/mysql
+          archive="$RUNNER_TEMP/perushim-data.zip"
+          gh api "repos/$REPO/actions/artifacts/$ARTIFACT_ID/zip" > "$archive"
+          printf '%s  %s\n' "${ARTIFACT_DIGEST#sha256:}" "$archive" | sha256sum --check --status
+          unzip -p "$archive" perushim_data.sql > data/mysql/perushim_data.sql
+          test -s data/mysql/perushim_data.sql
 
       - name: Configure AWS Credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v5
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Deploy Data to Production RDS
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: npm run deploy:data
+
+      - name: Record deployment result
+        if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.guard.outputs.deployment_id }}
+          DEPLOYMENT_RESULT: ${{ job.status }}
+        run: node "${{ runner.temp }}/deployment-state.mjs"

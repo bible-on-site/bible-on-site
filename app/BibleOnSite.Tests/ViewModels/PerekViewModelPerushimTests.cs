@@ -2,6 +2,7 @@ using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 using FluentAssertions;
+using System.Reflection;
 
 namespace BibleOnSite.Tests.ViewModels;
 
@@ -112,6 +113,43 @@ public class PerekViewModelPerushimTests
     #endregion
 
     #region FillFilteredPerushContents
+
+    [Fact]
+    public void FocusedVerseShowsAllItsCommentaries_RegardlessOfInlineSelection()
+    {
+        var vm = CreateViewModelWithPerushimAndNotes();
+        vm.ToggleCheckedPerush(2);
+        vm.Perek!.Pasukim[0].PerushNotes.Should().ContainSingle().Which.PerushName.Should().Be("אבן עזרא");
+        var focused = vm.GetPerushimForPasuk(1);
+        focused.Select(n => n.PerushName).Should().Equal("רש\"י", "אבן עזרא");
+        focused[0].NoteContents.Should().Equal("בראשית - בשביל התורה");
+        vm.GetPerushimForPasuk(3).Should().ContainSingle().Which.NoteContents.Should().Equal("ויאמר - note 1", "ויאמר - note 2");
+        vm.GetPerushimForPasuk(4).Should().BeEmpty();
+        vm.IsPerushChecked(1).Should().BeFalse("focusing a verse must not change inline filters");
+    }
+
+    [Fact]
+    public void RefreshingWithNoCheckedPerushimDoesNotRebindEmptyVerseNotes()
+    {
+        var vm = CreateViewModelWithPerushimAndNotes();
+        var pasuk = vm.Perek!.Pasukim[0];
+        var original = pasuk.PerushNotes;
+        var changes = 0;
+        pasuk.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(Pasuk.PerushNotes))
+            {
+                changes++;
+            }
+        };
+
+        typeof(PerekViewModel)
+            .GetMethod("FillFilteredPerushContents", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(vm, null);
+
+        pasuk.PerushNotes.Should().BeSameAs(original);
+        changes.Should().Be(0);
+    }
 
     [Fact]
     public void ToggleCheckedPerush_ShouldPopulatePerushNotesOnPasukim()
