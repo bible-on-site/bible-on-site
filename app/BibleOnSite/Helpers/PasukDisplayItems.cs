@@ -9,10 +9,10 @@ namespace BibleOnSite.Helpers;
 public static class PasukDisplayItems
 {
     /// <summary>Base pasuk text size (before the user's font factor).</summary>
-    public const double PasukFontSizeBase = 18;
+    public static double PasukFontSizeBase { get; } = 18;
 
     /// <summary>Base pasuk-number marker size (before the user's font factor).</summary>
-    public const double PasukMarkerFontSizeBase = 16;
+    public static double PasukMarkerFontSizeBase { get; } = 16;
 
     /// <summary>
     /// Creates one display item per pasuk, or two when <paramref name="repeatEachPasuk"/>
@@ -22,10 +22,15 @@ public static class PasukDisplayItems
     /// </summary>
     /// <param name="pesukim">The logical pesukim of the perek.</param>
     /// <param name="repeatEachPasuk">שניים מקרא — emit each pasuk twice.</param>
+    public static List<PasukDisplayItem> Create(IReadOnlyList<Pasuk>? pesukim, bool repeatEachPasuk) =>
+        Create(pesukim, repeatEachPasuk, fontFactor: 1.0);
+
+    /// <param name="pesukim">The logical pesukim of the perek.</param>
+    /// <param name="repeatEachPasuk">שניים מקרא — emit each pasuk twice.</param>
     /// <param name="fontFactor">User font-scaling factor; sizes mirror the page's
     /// PasukFontSize/PasukNumFontSize resources (factor × 18 / factor × 16).</param>
     public static List<PasukDisplayItem> Create(IReadOnlyList<Pasuk>? pesukim, bool repeatEachPasuk,
-        double fontFactor = 1.0)
+        double fontFactor)
     {
         if (pesukim is null || pesukim.Count == 0)
         {

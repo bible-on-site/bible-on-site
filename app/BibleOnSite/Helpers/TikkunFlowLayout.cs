@@ -37,7 +37,7 @@ public static class TikkunFlowLayout
     /// active font/size, so the gap scales with the reader's text size instead of
     /// copying the website's fixed pixel gap.
     /// </summary>
-    public const string StumaProbe = "אשר אשר אשר";
+    public static string StumaProbe { get; } = "אשר אשר אשר";
 
     private const float Epsilon = 0.01f;
 
