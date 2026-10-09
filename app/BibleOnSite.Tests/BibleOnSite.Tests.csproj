@@ -68,6 +68,7 @@
     <Compile Include="..\BibleOnSite\Services\PadDeliveryService.cs" Link="Services\PadDeliveryService.cs" />
     <Compile Include="..\BibleOnSite\Services\PerushimCatalogService.cs" Link="Services\PerushimCatalogService.cs" />
     <Compile Include="..\BibleOnSite\Services\PerushimNotesService.cs" Link="Services\PerushimNotesService.cs" />
+    <Compile Include="..\BibleOnSite\Services\SyntheticPerushimProvider.cs" Link="Services\SyntheticPerushimProvider.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\PerekViewModel.cs" Link="ViewModels\PerekViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\PreferencesViewModel.cs" Link="ViewModels\PreferencesViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\AuthorsViewModel.cs" Link="ViewModels\AuthorsViewModel.cs" />

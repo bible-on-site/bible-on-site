@@ -8,6 +8,7 @@ import { createServer } from "node:net";
 import { promisify } from "node:util";
 import { probeAppiumReadiness } from "./appium-readiness.mjs";
 import { prepareWda } from "./prepare-wda.mjs";
+import { waitForAndroidDevice } from "./android-readiness.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const runStarted = Date.now();
@@ -23,6 +24,15 @@ const appPath = process.env.MOBILE_APP_PATH ?? resolve(directory,
 if (!existsSync(appPath)) throw new Error(`Build the app with npm run build:app first: ${appPath}`);
 if (platform === "ios" && !existsSync(resolve(appPath, "GoogleService-Info.plist"))) {
   throw new Error("The iOS app is missing its root Firebase configuration resource.");
+}
+const execute = promisify(execFile);
+if (platform === "android") {
+  const androidSdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT;
+  const adb = androidSdk ? resolve(androidSdk, "platform-tools", process.platform === "win32" ? "adb.exe" : "adb") : "adb";
+  const deviceReadinessLog = resolve(artifacts, "device-readiness.jsonl");
+  writeFileSync(deviceReadinessLog, "");
+  await waitForAndroidDevice({ adb, udid: process.env.MOBILE_UDID, execute,
+    observe: (observation) => appendFileSync(deviceReadinessLog, `${JSON.stringify(observation)}\n`) });
 }
 const wdaPath = platform === "ios" ? (process.env.MOBILE_WDA_PATH ?? prepareWda()) : undefined;
 // Refuse an existing listener so a local run cannot accidentally use somebody
@@ -49,7 +59,6 @@ const observeReadiness = (observation) => appendFileSync(readinessLog, `${JSON.s
 server.on("spawn", () => observeReadiness({ phase: "spawned", pid: server.pid }));
 let test;
 let diagnosticsFailed = false;
-const execute = promisify(execFile);
 
 async function sampleIosApp() {
   try {
