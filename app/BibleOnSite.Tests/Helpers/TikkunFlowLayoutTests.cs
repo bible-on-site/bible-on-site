@@ -174,6 +174,40 @@ public class TikkunFlowLayoutTests
             result.Words.Should().OnlyContain(w => w.Text.Length > 0);
             result.Words.Select(w => w.Text).Should().NotContain("{פ}");
         }
+
+        [Fact]
+        public void ignores_a_marker_that_arrives_before_any_content()
+        {
+            // {פ} as the very first token: there is no line to end and no
+            // previous content, so no blank remainder can be left.
+            var words = Words("aa");
+            words.Insert(0, TikkunWord.PtuhaBreak);
+
+            var result = TikkunFlowLayout.Layout(words, Measure, BaseFontSize,
+                maxWidth: 200, LineHeightFactor);
+
+            result.LineCount.Should().Be(1);
+            result.Words.Should().ContainSingle();
+            RightEdge(result.Words[0]).Should().BeApproximately(200, 0.01f);
+        }
+
+        [Fact]
+        public void a_marker_on_an_already_empty_line_leaves_a_whole_blank_line()
+        {
+            // The first {פ} flushes "aa"; the second arrives on an empty line,
+            // so the paragraph break becomes a full blank line before "bb".
+            var words = Words("aa", "bb");
+            words.Insert(1, TikkunWord.PtuhaBreak);
+            words.Insert(2, TikkunWord.PtuhaBreak);
+
+            var result = TikkunFlowLayout.Layout(words, Measure, BaseFontSize,
+                maxWidth: 200, LineHeightFactor);
+
+            result.LineCount.Should().Be(3);
+            LineWords(result, 0).Select(w => w.Text).Should().Equal("aa");
+            LineWords(result, 1).Should().BeEmpty();
+            LineWords(result, 2).Select(w => w.Text).Should().Equal("bb");
+        }
     }
 
     public class Stuma
@@ -272,6 +306,22 @@ public class TikkunFlowLayoutTests
             after.Should().ContainSingle();
             after[0].X.Should().BeGreaterThanOrEqualTo(0);
             RightEdge(after[0]).Should().BeApproximately(60, 0.01f);
+        }
+
+        [Fact]
+        public void a_leading_marker_indents_the_first_word_by_the_gap()
+        {
+            // {ס} before the first word still applies its nine-letter indent
+            // to the continuation that opens the flow.
+            var words = Words("aa");
+            words.Insert(0, TikkunWord.StumaGap);
+
+            var result = TikkunFlowLayout.Layout(words, Measure, BaseFontSize,
+                maxWidth: 200, LineHeightFactor);
+
+            var line = LineWords(result, 0);
+            line.Should().ContainSingle();
+            RightEdge(line[0]).Should().BeApproximately(200 - StumaGap, 0.01f);
         }
     }
 
