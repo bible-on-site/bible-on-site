@@ -15,7 +15,13 @@ public enum SearchFilter
     Perush,
 
     /// <summary>Search for perek by name/source.</summary>
-    Perek
+    Perek,
+
+    /// <summary>
+    /// Search within article content through the API's semantic index.
+    /// Requires network access — performed remotely, unlike the local filters.
+    /// </summary>
+    Articles
 }
 
 /// <summary>
@@ -31,6 +37,7 @@ public static class SearchFilterExtensions
             SearchFilter.Pasuk => "תוכן פסוק",
             SearchFilter.Perush => "תוכן פירוש",
             SearchFilter.Perek => "פרק",
+            SearchFilter.Articles => "תוכן מאמרים (חיבור רשת נדרש)",
             _ => filter.ToString()
         };
     }

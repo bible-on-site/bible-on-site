@@ -1,6 +1,9 @@
 use crate::{
     common::error_handling::{INTERNAL_SERVER_ERROR, ServiceError},
+    dtos::article::{ArticleSearchHit, ArticleSearchResults},
+    dtos::perek::number_to_hebrew,
     providers::Database,
+    services::article_search::{self, store, text},
 };
 use entities::article::{Column, Entity, Model};
 use sea_orm::{ColumnTrait, DbErr, EntityTrait, QueryFilter};
@@ -124,6 +127,125 @@ pub async fn count_by_author_id(db: &Database, author_id: i32) -> Result<i64, Se
     let count = result.map(|r| r.count).unwrap_or(0);
     tracing::info!("Author {} has {} articles", author_id, count);
     Ok(count)
+}
+
+/// Upper bound for a search phrase — beyond it the request is rejected rather
+/// than truncated so abuse is visible.
+pub const MAX_SEARCH_PHRASE_CHARS: usize = 256;
+/// Default and maximum page sizes for article search.
+pub const SEARCH_DEFAULT_LIMIT: i32 = 20;
+pub const SEARCH_MAX_LIMIT: i32 = 50;
+/// Pagination depth cap — deep scrolling is out of scope for a search API.
+pub const SEARCH_MAX_OFFSET: i32 = 1_000;
+/// Excerpt length budget in characters.
+const EXCERPT_CHARS: usize = 220;
+
+/// Semantically searches article content through the derived index and
+/// hydrates the top page with display metadata. Returns an empty page for
+/// empty/all-stopword phrases; rejects over-long phrases.
+pub async fn search_articles(
+    db: &Database,
+    index: &article_search::ArticleSearchIndex,
+    phrase: &str,
+    limit: Option<i32>,
+    offset: Option<i32>,
+) -> Result<ArticleSearchResults, ServiceError> {
+    tracing::info_span!("articles_service::search_articles");
+    if phrase.chars().count() > MAX_SEARCH_PHRASE_CHARS {
+        return Err(ServiceError::bad_request(
+            "Search phrase exceeds 256 characters",
+        ));
+    }
+    let limit = limit.unwrap_or(SEARCH_DEFAULT_LIMIT);
+    if !(1..=SEARCH_MAX_LIMIT).contains(&limit) {
+        return Err(ServiceError::bad_request("limit must be between 1 and 50"));
+    }
+    let offset = offset.unwrap_or(0);
+    if !(0..=SEARCH_MAX_OFFSET).contains(&offset) {
+        return Err(ServiceError::bad_request(
+            "offset must be between 0 and 1000",
+        ));
+    }
+    let page = index
+        .search(phrase, limit as usize, offset as usize)
+        .await
+        .map_err(|db_err| {
+            ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
+        })?;
+    if page.hits.is_empty() {
+        return Ok(ArticleSearchResults {
+            total: page.total as i32,
+            hits: Vec::new(),
+        });
+    }
+    let terms = index.expanded_terms(phrase).await;
+    let ids: Vec<i32> = page.hits.iter().map(|hit| hit.article_id).collect();
+    let rows = store::fetch_hit_rows(db.get_connection(), &ids)
+        .await
+        .map_err(|db_err| {
+            ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
+        })?;
+    let scores: std::collections::HashMap<i32, article_search::ScoredDoc> =
+        page.hits.iter().map(|hit| (hit.article_id, *hit)).collect();
+    let hits = rows
+        .into_iter()
+        .map(|row| {
+            let plain = text::strip_html(
+                row.content
+                    .as_deref()
+                    .or(row.article_abstract.as_deref())
+                    .unwrap_or_default(),
+            );
+            let excerpt = {
+                let excerpt = text::excerpt(&plain, &terms, EXCERPT_CHARS);
+                if excerpt.is_empty() {
+                    // Nothing textual to quote — fall back to the title.
+                    row.name.clone()
+                } else {
+                    excerpt
+                }
+            };
+            let source = row.sefer_name.as_ref().map(|sefer_name| {
+                let perek_heb = number_to_hebrew(row.perek_in_context.unwrap_or(1));
+                match &row.additional_letter {
+                    Some(letter) => format!("{} {} {}", sefer_name, letter, perek_heb),
+                    None => format!("{} {}", sefer_name, perek_heb),
+                }
+            });
+            let scored = scores
+                .get(&row.id)
+                .copied()
+                .unwrap_or(article_search::ScoredDoc {
+                    article_id: row.id,
+                    score: 0.0,
+                    semantic: 0.0,
+                    lexical: 0.0,
+                });
+            ArticleSearchHit {
+                article_id: row.id,
+                name: row.name.clone(),
+                author_name: row.author_name,
+                author_id: row.author_id,
+                perek_id: row.perek_id,
+                source,
+                article_abstract: row.article_abstract,
+                excerpt,
+                score: scored.score,
+                semantic_score: scored.semantic,
+                lexical_score: scored.lexical,
+            }
+        })
+        .collect::<Vec<_>>();
+    tracing::info!(
+        phrase_len = phrase.chars().count(),
+        hits = hits.len(),
+        total = page.total,
+        "article search completed"
+    );
+    Ok(ArticleSearchResults {
+        total: page.total as i32,
+        hits,
+    })
 }
 
 /// Returns a map of author_id → article count for all authors with articles

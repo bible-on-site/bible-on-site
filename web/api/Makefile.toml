@@ -28,6 +28,13 @@ env = { PROFILE = "test" }
 command = "cargo"
 args = ["run"]
 
+# One-shot rebuild/backfill of the derived article-search index from
+# tanah_article. Honors PROFILE like run-api-* (e.g. `cargo make
+# rebuild-article-search` with PROFILE=dev uses .dev.env).
+[tasks.rebuild-article-search]
+command = "cargo"
+args = ["run", "--", "--rebuild-article-search"]
+
 [tasks.populate-dev-db]
 env_files = [".dev.env"]
 cwd = "../../data"

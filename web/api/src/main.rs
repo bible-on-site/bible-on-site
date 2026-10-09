@@ -16,6 +16,13 @@ async fn main() -> anyhow::Result<()> {
     let subscriber = Telemetry::get_subscriber("api", "info"); // Customize the application name and log level as needed.
     Telemetry::init_subscriber(subscriber);
 
+    // One-shot maintenance mode: rebuild the derived article-search index from
+    // the authoritative tables and exit. Used for first backfill and for
+    // operator-triggered rebuilds (`cargo make rebuild-article-search`).
+    if std::env::args().any(|arg| arg == "--rebuild-article-search") {
+        return rebuild_article_search_index().await;
+    }
+
     // Create sand start the Actix application.
     let application = ActixApp::new().await?;
     let application_task = tokio::spawn(application.start_server());
@@ -24,6 +31,33 @@ async fn main() -> anyhow::Result<()> {
     tokio::select! {
         outcome = application_task => report_exit("API", outcome),
     };
+    Ok(())
+}
+
+/// Rebuilds the article-search index from `tanah_article` and exits.
+/// Mirrors `ActixApp`'s env loading so PROFILE-targeted env files apply.
+async fn rebuild_article_search_index() -> anyhow::Result<()> {
+    let profile: String = std::env::var("PROFILE").unwrap_or_else(|_| "prod".to_string());
+    let env_file = if profile == "prod" {
+        ".env".to_string()
+    } else {
+        format!(".{}.env", profile)
+    };
+    if let Err(e) = dotenvy::from_filename(&env_file) {
+        tracing::warn!("Failed to load {} file: {}", env_file, e);
+    }
+    let db = crate::providers::Database::new().await?;
+    let conn = db.get_connection();
+    services::article_search::store::ensure_schema(conn).await?;
+    match services::article_search::retrain(conn).await? {
+        Some(docs) => {
+            tracing::info!(docs, "article search index rebuilt");
+            println!("Rebuilt article search index over {docs} articles");
+        }
+        None => {
+            anyhow::bail!("another API instance holds the article-search retrain lock");
+        }
+    }
     Ok(())
 }
 

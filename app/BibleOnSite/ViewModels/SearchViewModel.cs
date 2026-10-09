@@ -15,7 +15,9 @@ public partial class SearchViewModel : ObservableObject
 {
     private readonly Services.PerekDataService _perekDataService;
     private readonly SearchIndexService? _searchIndex;
+    private readonly ArticleService? _articleService;
     private readonly bool _useDefaultIndex;
+    private readonly bool _useDefaultArticleService;
     private CancellationTokenSource? _searchCancellation;
     private int _searchVersion;
     private IReadOnlyDictionary<int, Perush> _perushim = new Dictionary<int, Perush>();
@@ -50,14 +52,19 @@ public partial class SearchViewModel : ObservableObject
     private ObservableCollection<SearchResult> _searchResults = new();
 #pragma warning restore MVVMTK0045
 
-    public SearchViewModel() : this(PerekDataService.Instance, null) { _useDefaultIndex = true; }
+    public SearchViewModel() : this(PerekDataService.Instance, null)
+    {
+        _useDefaultIndex = true;
+        _useDefaultArticleService = true;
+    }
 
     public SearchViewModel(PerekDataService perekDataService) : this(perekDataService, null) { }
 
-    public SearchViewModel(PerekDataService perekDataService, SearchIndexService? searchIndex)
+    public SearchViewModel(PerekDataService perekDataService, SearchIndexService? searchIndex, ArticleService? articleService = null)
     {
         _perekDataService = perekDataService;
         _searchIndex = searchIndex;
+        _articleService = articleService;
         // Initialize all filters as enabled
         _enabledFilters = new HashSet<SearchFilter>(Enum.GetValues<SearchFilter>());
 
@@ -242,7 +249,8 @@ public partial class SearchViewModel : ObservableObject
         {
             IsLoading = true;
             var results = new List<SearchResult>(GetAuthorResults());
-            if (filters.Any(filter => filter != SearchFilter.Author))
+            // Article search is remote — it must not force the local perek DB load.
+            if (filters.Any(filter => filter != SearchFilter.Author && filter != SearchFilter.Articles))
                 await _perekDataService.LoadAsync().WaitAsync(token);
             if (filters.Contains(SearchFilter.Perek))
                 results.AddRange(GetPerekResults(phrase, books));
@@ -276,6 +284,42 @@ public partial class SearchViewModel : ObservableObject
                 }
                 if (version == _searchVersion && filters.Contains(SearchFilter.Perush) && !searchIndex.CommentaryAvailable)
                     AvailabilityMessage = "לחיפוש בפירושים, הורידו את הפירושים בהגדרות";
+            }
+            if (filters.Contains(SearchFilter.Articles))
+            {
+                try
+                {
+                    var articleService = _articleService;
+                    if (_useDefaultArticleService)
+                        articleService = ArticleService.Instance;
+                    if (articleService != null)
+                    {
+                        var page = await articleService.SearchArticlesAsync(phrase, limit, cancellationToken: token);
+                        if (version == _searchVersion && page != null)
+                        {
+                            foreach (var hit in page.Hits)
+                            {
+                                results.Add(new ArticleSearchResult(hit.ArticleId, hit.PerekId, hit.AuthorName, hit.Source, hit.Excerpt, phrase)
+                                {
+                                    Title = hit.Name,
+                                    SubtitleHtml = SearchText.Snippet(hit.Excerpt, phrase),
+                                    Score = (int)Math.Round(hit.Score * 100),
+                                });
+                            }
+                            PublishResults(results, limit);
+                        }
+                        else if (version == _searchVersion && page == null)
+                        {
+                            AvailabilityMessage = "חיפוש תוכן מאמרים זמין רק עם חיבור רשת";
+                        }
+                    }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException || !token.IsCancellationRequested)
+                {
+                    Console.Error.WriteLine($"Article search failed: {ex.Message}");
+                    if (version == _searchVersion)
+                        AvailabilityMessage = "חיפוש תוכן מאמרים דורש חיבור רשת תקין";
+                }
             }
             token.ThrowIfCancellationRequested();
             if (version == _searchVersion)
