@@ -1,6 +1,7 @@
 using Foundation;
 using Microsoft.Maui.Handlers;
 using BibleOnSite.Controls;
+using BibleOnSite.Helpers;
 using UIKit;
 using CoreGraphics;
 
@@ -25,20 +26,16 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         [nameof(HtmlView.H3FontSizeMultiplier)] = MapHeaderStyles
     };
 
-    // NSHTML import runs WebKit synchronously and spins the calling thread's run
-    // loop. On the main thread that nested loop services pending UICollectionView
-    // updates while a cell is being created, re-entering _updateVisibleCellsNow:
-    // and crashing with SIGABRT (TestFlight incident F0AF3C74). The import runs on
-    // a worker thread instead, and the parsed string is applied back on the main
-    // thread. _renderSerial invalidates stale parses when the bound content
-    // changes while an earlier import is still in flight.
+    // NSAttributedString's NSHTML import is unusable here at any thread level:
+    // NSHTMLReader always marshals the actual parse back to the main thread via
+    // performSelectorOnMainThread, where the nested WebKit run loop re-enters
+    // UICollectionView cell updates and aborts the app (TestFlight incidents
+    // F0AF3C74 and 351F87DB). HtmlRuns converts the markup with a managed
+    // parser instead — no WebKit, no hidden main-thread work.
+    // _renderSerial still invalidates stale parses when the bound content
+    // changes while an earlier conversion is in flight.
     private string? _renderedHtml;
     private int _renderSerial;
-
-    // WebKitLegacy is not thread-safe: concurrent off-main imports from
-    // multiple cells serialize here. Each parse still spins only its own
-    // worker run loop, never the main one.
-    private static readonly object ParseLock = new();
 
     public HtmlViewHandler() : base(PropertyMapper)
     {
@@ -102,8 +99,12 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
             return;
         }
 
-        var styledHtml = WrapWithStyles(html);
-        var renderKey = $"{VirtualView.TextAlignment}|{styledHtml}";
+        var fontSize = VirtualView.EffectiveFontSize;
+        var h1Scale = VirtualView.H1FontSizeMultiplier;
+        var h2Scale = VirtualView.H2FontSizeMultiplier;
+        var h3Scale = VirtualView.H3FontSizeMultiplier;
+        var renderKey = $"{VirtualView.TextAlignment}|{VirtualView.TextDirection}|" +
+            $"{fontSize}|{VirtualView.LineHeight}|{h1Scale}|{h2Scale}|{h3Scale}|{html}";
         if (renderKey == _renderedHtml)
         {
             return;
@@ -122,7 +123,15 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
                 _ => VirtualView.TextDirection == HtmlTextDirection.Rtl
                     ? UITextAlignment.Right : UITextAlignment.Left
             },
-            LineHeightMultiple = (nfloat)VirtualView.LineHeight
+            LineHeightMultiple = (nfloat)VirtualView.LineHeight,
+            // The WebKit stylesheet set `dir` on the document; keep the same
+            // base writing direction so mixed-direction runs bidi-resolve alike.
+            BaseWritingDirection = VirtualView.TextDirection switch
+            {
+                HtmlTextDirection.Ltr => NSWritingDirection.LeftToRight,
+                HtmlTextDirection.Rtl => NSWritingDirection.RightToLeft,
+                _ => NSWritingDirection.Natural
+            }
         };
         var textColor = GetTextColor();
         var rtl = VirtualView.TextDirection == HtmlTextDirection.Rtl;
@@ -132,17 +141,12 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
 
         Task.Run(() =>
         {
-            NSMutableAttributedString? attributedString;
-            lock (ParseLock)
+            // Skip the conversion entirely when the bound content already moved on.
+            if (serial != _renderSerial)
             {
-                // Skip the WebKit import entirely when the bound content already
-                // moved on — stale parses must not hold the shared lock.
-                if (serial != _renderSerial)
-                {
-                    return;
-                }
-                attributedString = ParseHtml(styledHtml);
+                return;
             }
+            var attributedString = HtmlAttributedStringFactory.FromHtml(html, fontSize, h1Scale, h2Scale, h3Scale);
             if (attributedString != null)
             {
                 var range = new NSRange(0, attributedString.Length);
@@ -174,91 +178,6 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
                 VirtualView.InvalidateMeasure();
             });
         });
-    }
-
-    // Runs off the main thread: NSHTML import spins a nested run loop which is
-    // fatal on the main thread inside UICollectionView cell creation.
-    private static NSMutableAttributedString? ParseHtml(string styledHtml)
-    {
-        try
-        {
-            var htmlData = NSData.FromString(styledHtml, NSStringEncoding.Unicode);
-            if (htmlData == null || htmlData.Length == 0)
-            {
-                return null;
-            }
-
-            var importParams = new NSDictionary(
-                new NSString("DocumentType"), new NSString("NSHTML"),
-                new NSString("CharacterEncoding"), NSNumber.FromInt32((int)NSStringEncoding.Unicode));
-
-            // NSAttributedString HTML import uses WebKit internally and can throw
-            // unhandled ObjC exceptions (SIGABRT) that bypass C# try-catch.
-            // Temporarily disable ThrowOnInitFailure to convert these into null returns.
-            var previousThrowSetting = ObjCRuntime.Class.ThrowOnInitFailure;
-            ObjCRuntime.Class.ThrowOnInitFailure = false;
-            try
-            {
-                NSError? error = null;
-#pragma warning disable CS0618
-                var parsed = new NSAttributedString(htmlData, importParams, out _, ref error!);
-#pragma warning restore CS0618
-                if (error != null)
-                {
-                    System.Diagnostics.Debug.WriteLine($"HtmlView NSAttributedString error: {error.LocalizedDescription}");
-                    return null;
-                }
-                return parsed == null ? null : new NSMutableAttributedString(parsed);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"HtmlView NSAttributedString init exception: {ex.Message}");
-                return null;
-            }
-            finally
-            {
-                ObjCRuntime.Class.ThrowOnInitFailure = previousThrowSetting;
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"HtmlViewHandler iOS parse error: {ex.Message}");
-            return null;
-        }
-    }
-
-    private string WrapWithStyles(string html)
-    {
-        var textAlign = VirtualView.GetCssTextAlign();
-        var direction = VirtualView.GetCssDirection();
-        var fontSize = VirtualView.EffectiveFontSize;
-        var lineHeight = VirtualView.LineHeight;
-        var h1Size = fontSize * VirtualView.H1FontSizeMultiplier;
-        var h2Size = fontSize * VirtualView.H2FontSizeMultiplier;
-        var h3Size = fontSize * VirtualView.H3FontSizeMultiplier;
-
-        return $@"<!DOCTYPE html>
-<html dir=""{direction}"">
-<head>
-    <meta charset=""UTF-8"">
-    <style>
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            font-size: {fontSize}px;
-            text-align: {textAlign};
-            direction: {direction};
-            line-height: {lineHeight};
-            margin: 0;
-            padding: 0;
-        }}
-        h1 {{ font-size: {h1Size}px; }}
-        h2 {{ font-size: {h2Size}px; text-decoration: underline; }}
-        h3 {{ font-size: {h3Size}px; text-decoration: underline; }}
-        a {{ color: #1976d2; }}
-    </style>
-</head>
-<body>{html}</body>
-</html>";
     }
 
     private static void MapHtmlContent(HtmlViewHandler handler, HtmlView view)
