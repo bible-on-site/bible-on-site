@@ -73,7 +73,8 @@ public class PasukDisplayItemsConverterTests
             .Should().BeAssignableTo<IReadOnlyList<PasukDisplayItem>>().Subject;
 
         // Repeated and original copies alike render at the configured size.
-        items.Should().OnlyContain(i => i.FontSize == 27 && i.MarkerFontSize == 24);
+        items.Should().OnlyContain(i =>
+            Math.Abs(i.FontSize - 27) < 0.001 && Math.Abs(i.MarkerFontSize - 24) < 0.001);
     }
 
     [Fact]

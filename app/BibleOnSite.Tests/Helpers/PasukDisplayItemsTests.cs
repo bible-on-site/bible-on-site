@@ -84,7 +84,8 @@ public class PasukDisplayItemsTests
             [PasukOf(1, "א"), PasukOf(2, "ב")], repeatEachPasuk: true, fontFactor: 1.5);
 
         // Both copies of every pasuk keep the same configured size (#2070).
-        items.Should().OnlyContain(i => i.FontSize == 27 && i.MarkerFontSize == 24);
+        items.Should().OnlyContain(i =>
+            Math.Abs(i.FontSize - 27) < 0.001 && Math.Abs(i.MarkerFontSize - 24) < 0.001);
         items.Select(i => i.PasukNum).Should().Equal(1, 1, 2, 2);
     }
 
@@ -97,8 +98,7 @@ public class PasukDisplayItemsTests
         var on = PasukDisplayItems.Create(pesukim, repeatEachPasuk: true, fontFactor: 1.25);
         var offAgain = PasukDisplayItems.Create(pesukim, repeatEachPasuk: false, fontFactor: 1.25);
 
-        off.Select(i => i.FontSize).Should().OnlyContain(s => s == 22.5);
-        on.Select(i => i.FontSize).Should().OnlyContain(s => s == 22.5);
+        off.Concat(on).Should().OnlyContain(i => Math.Abs(i.FontSize - 22.5) < 0.001);
         offAgain.Select(i => i.FontSize).Should().Equal(off.Select(i => i.FontSize));
     }
 }
