@@ -5,8 +5,8 @@ namespace BibleOnSite.Tests.Helpers;
 
 public class FanMenuGeometryTests
 {
-    private const double ItemSize = FanMenuGeometry.ItemSize;
-    private const double ToggleSize = FanMenuGeometry.ToggleSize;
+    private static double ItemSize { get; } = FanMenuGeometry.ItemSize;
+    private static double ToggleSize { get; } = FanMenuGeometry.ToggleSize;
 
     /// <summary>
     /// Representative canvases (FloatingMenuContainer arrange area, dp):

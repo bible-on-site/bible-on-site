@@ -19,35 +19,41 @@ namespace BibleOnSite.Helpers;
 public static class FanMenuGeometry
 {
     /// <summary>Action button diameter (the satellite buttons in PerekPage.xaml).</summary>
-    public const double ItemSize = 48;
+    public static double ItemSize { get; } = 48;
 
     /// <summary>Central open/close button diameter.</summary>
-    public const double ToggleSize = 56;
+    public static double ToggleSize { get; } = 56;
 
     /// <summary>Bottom-bar height (BottomBar HeightRequest).</summary>
-    public const double BarHeight = 90;
+    public static double BarHeight { get; } = 90;
 
     /// <summary>Bottom-bar button size.</summary>
-    public const double BarButtonSize = 44;
+    public static double BarButtonSize { get; } = 44;
 
     /// <summary>Vertical proportional position of the bar buttons inside the bar.</summary>
-    public const double BarButtonVerticalFraction = 0.55;
+    public static double BarButtonVerticalFraction { get; } = 0.55;
 
     /// <summary>Horizontal proportional positions of the bar buttons inside the bar.</summary>
     public static IReadOnlyList<double> BarButtonHorizontalFractions { get; } =
         [0.08, 0.28, 0.72, 0.92];
 
     /// <summary>Preferred horizontal radius of the fan ellipse, in dp.</summary>
-    public const double PreferredRadiusX = 98;
+    public static double PreferredRadiusX { get; } = 98;
 
     /// <summary>Preferred vertical radius of the fan ellipse, in dp.</summary>
-    public const double PreferredRadiusY = 64;
+    public static double PreferredRadiusY { get; } = 64;
 
     /// <summary>Half-spread of the fan, measured from the vertical axis.</summary>
-    public const double MaxAngleDegrees = 60;
+    public static double MaxAngleDegrees { get; } = 60;
 
     /// <summary>Distance between the toggle's bottom edge and the canvas bottom edge.</summary>
-    public const double ToggleBottomClearance = 34;
+    public static double ToggleBottomClearance { get; } = 34;
+
+    /// <summary>
+    /// |dx| below this is treated as "on the fan axis" — the middle action of an
+    /// odd count stays centered instead of being pushed aside.
+    /// </summary>
+    private const double OnAxisEpsilon = 1e-9;
 
     private const double EdgeMargin = 6;
     private const double TopMargin = 6;
@@ -71,9 +77,15 @@ public static class FanMenuGeometry
     /// Computes the menu layout for a canvas of <paramref name="width"/> x
     /// <paramref name="height"/> device-independent units — the arrange area of
     /// <c>FloatingMenuContainer</c> (its size minus padding, so system safe-area
-    /// insets applied as padding are already excluded).
+    /// insets applied as padding are already excluded) — for the reader's four
+    /// action buttons.
     /// </summary>
-    public static Result Compute(double width, double height, int itemCount = 4)
+    public static Result Compute(double width, double height) =>
+        Compute(width, height, 4);
+
+    /// <inheritdoc cref="Compute(double, double)"/>
+    /// <param name="itemCount">Number of action buttons to place on the fan.</param>
+    public static Result Compute(double width, double height, int itemCount)
     {
         var toggle = ToggleBounds(width, height);
         var obstacles = ObstacleBounds(width, height);
@@ -119,7 +131,7 @@ public static class FanMenuGeometry
             return items;
         }
 
-        const double itemHalf = ItemSize / 2;
+        var itemHalf = ItemSize / 2;
 
         // 1. Horizontal radius: the fan never widens past PreferredRadiusX —
         //    the group stays compact and centered on huge landscape/tablet
@@ -193,7 +205,7 @@ public static class FanMenuGeometry
         for (var i = 0; i < count; i++)
         {
             var dx = -dxOuter + 2 * dxOuter * i / (count - 1);
-            if (dx != 0 && Math.Abs(dx) < dxInner)
+            if (Math.Abs(dx) >= OnAxisEpsilon && Math.Abs(dx) < dxInner)
             {
                 dx = Math.CopySign(dxInner, dx);
             }
