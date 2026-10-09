@@ -32,8 +32,12 @@ starting. Its provenance identifies the additional cache-transfer profile and
 records actual reuse counters. A changed proof or runtime rejects activation.
 The selected worker's original FP32 OOM fallback remains unchanged.
 
-GPU controls run exclusively after the active collection chapter has been saved
-to its existing checkpoint. If any sanity or performance check fails, resume the
+GPU controls run exclusively after the active collection chapter's manifest is
+saved. `checkpoint_handoff.py` observes the flushed completion message instead
+of opening live SQLite files, which can block atomic replacement on Windows.
+After the bound worker exits, rebuild and verify its existing checkpoint from
+saved manifests, preserving unpublished candidates outside the approved table.
+If any sanity or performance check fails, resume the
 existing selected profile on that same checkpoint. Do not replace the reference
 fixtures, reuse stale benchmark files, reduce inference quality or publish held
 word intervals. Timing batch pushes remain postponed until after Shabbat.
