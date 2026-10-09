@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import {
 	type FormEvent,
 	type KeyboardEvent,
+	useCallback,
 	useEffect,
-	useMemo,
 	useRef,
 	useState,
 } from "react";
@@ -70,16 +69,19 @@ export function SearchExperience({
 	initialResults,
 	initialError = false,
 }: SearchExperienceProps) {
-	const searchParams = useSearchParams();
-
-	const urlQuery = (searchParams.get("q") ?? "").trim();
-	// getAll: the no-JS form path submits repeated type= params; a missing
-	// param means "all types" (handled inside parseSearchTypes).
-	const typeParamKey = searchParams.getAll("type").join(",");
-	const urlTypes = useMemo(
-		() => parseSearchTypes(typeParamKey.length ? typeParamKey : null),
-		[typeParamKey],
-	);
+	/**
+	 * Query+filter state carried by the URL. This is owned React state —
+	 * not useSearchParams — because the component settles states with
+	 * native history.pushState, and useSearchParams does not observe
+	 * native history writes. settle() and the popstate listener below are
+	 * the only writers, keeping state and URL atomically in sync.
+	 */
+	const [urlState, setUrlState] = useState<{
+		query: string;
+		types: SearchResultType[];
+	}>({ query: initialQuery, types: initialTypes });
+	const urlQuery = urlState.query;
+	const urlTypes = urlState.types;
 	const urlKey = paramsKey(urlQuery, urlTypes);
 
 	const [input, setInput] = useState(initialQuery);
@@ -112,19 +114,40 @@ export function SearchExperience({
 
 	/**
 	 * Commit a query+filter state as its own history entry (native pushState:
-	 * updates useSearchParams without an RSC round-trip). Each *settled*
-	 * query gets one entry — keystrokes are debounced so history is not
-	 * spammed — so Back/Forward walks meaningful search states and always
-	 * finds the matching results (client cache or refetch).
+	 * no RSC round-trip). Each *settled* query gets one entry — keystrokes
+	 * are debounced so history is not spammed — so Back/Forward walks
+	 * meaningful search states and always finds the matching results
+	 * (client cache or refetch).
 	 */
-	const settle = (query: string, types: readonly SearchResultType[]) => {
-		const href = canonicalHref(query, types);
-		const current = `${window.location.pathname}${window.location.search}`;
-		if (current !== href) {
-			lastPushedKey.current = paramsKey(query, types);
+	const settle = useCallback(
+		(query: string, types: readonly SearchResultType[]) => {
+			const trimmed = query.trim();
+			const href = canonicalHref(trimmed, types);
+			const current = `${window.location.pathname}${window.location.search}`;
+			if (current === href) return;
+			lastPushedKey.current = paramsKey(trimmed, types);
 			window.history.pushState(window.history.state, "", href);
-		}
-	};
+			setUrlState({ query: trimmed, types: [...types] });
+		},
+		[],
+	);
+
+	// External navigations (Back/Forward, or a preserved tree restored by
+	// the router) adopt the URL wholesale. lastPushedKey is cleared so the
+	// URL→input effect below restores the text for these entries.
+	useEffect(() => {
+		const onPopState = () => {
+			const params = new URLSearchParams(window.location.search);
+			const typeValues = params.getAll("type");
+			lastPushedKey.current = null;
+			setUrlState({
+				query: (params.get("q") ?? "").trim(),
+				types: parseSearchTypes(typeValues.length ? typeValues : null),
+			});
+		};
+		window.addEventListener("popstate", onPopState);
+		return () => window.removeEventListener("popstate", onPopState);
+	}, []);
 
 	// Adopt a fresh SSR payload after a real server re-render (hard nav or
 	// router.refresh); native-history states never change these props.
@@ -136,6 +159,7 @@ export function SearchExperience({
 		setResults(initialResults);
 		setStatus(initialResults ? "success" : initialError ? "error" : "idle");
 		setInput(initialQuery);
+		setUrlState({ query: initialQuery, types: initialTypes });
 	}
 
 	// URL → input: adopt the query only for external navigations (Back,
@@ -151,17 +175,12 @@ export function SearchExperience({
 	// urlTypesRef read keeps this effect dependent on keystrokes only;
 	// filter toggles settle immediately in their own handler.
 	useEffect(() => {
-		settleTimer.current = setTimeout(() => {
-			const types = urlTypesRef.current;
-			const href = canonicalHref(input, types);
-			const current = `${window.location.pathname}${window.location.search}`;
-			if (current !== href) {
-				lastPushedKey.current = paramsKey(input, types);
-				window.history.pushState(window.history.state, "", href);
-			}
-		}, DEBOUNCE_MS);
+		settleTimer.current = setTimeout(
+			() => settle(input, urlTypesRef.current),
+			DEBOUNCE_MS,
+		);
 		return () => clearTimeout(settleTimer.current);
-	}, [input]);
+	}, [input, settle]);
 
 	// URL → results: resolve the current state from the client cache or a
 	// cancellable fetch. Runs once per settled/committed entry.

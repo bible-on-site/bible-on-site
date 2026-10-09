@@ -8,11 +8,6 @@ jest.mock("@/lib/search/service", () => ({
 	searchSite: jest.fn(),
 }));
 
-let mockParams = new URLSearchParams();
-jest.mock("next/navigation", () => ({
-	useSearchParams: () => mockParams,
-}));
-
 jest.mock("next/image", () => ({
 	__esModule: true,
 	default: (props: Record<string, unknown>) => (
@@ -62,7 +57,6 @@ describe("SearchPage", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockSearch.mockResolvedValue(RESULTS);
-		mockParams = new URLSearchParams("q=בראשית");
 	});
 
 	it("renders the search form and SSR results for the query", async () => {
@@ -88,11 +82,12 @@ describe("SearchPage", () => {
 	it("shows the empty state when nothing matches", async () => {
 		mockSearch.mockResolvedValue({ ...RESULTS, results: [], counts: {} });
 		render(await SearchPage({ searchParams: paramsFor({ q: "זזז" }) }));
-		expect(screen.getByText(/לא נמצאו תוצאות/)).toBeInTheDocument();
+		expect(
+			screen.getByText('לא נמצאו תוצאות עבור "זזז"'),
+		).toBeInTheDocument();
 	});
 
 	it("shows the prompt state without a query and does not search", async () => {
-		mockParams = new URLSearchParams();
 		render(await SearchPage({ searchParams: paramsFor({}) }));
 		expect(mockSearch).not.toHaveBeenCalled();
 		expect(screen.getByText(/הקלידו מונח חיפוש/)).toBeInTheDocument();
@@ -101,6 +96,9 @@ describe("SearchPage", () => {
 	it("renders the error state when the SSR search fails", async () => {
 		mockSearch.mockRejectedValue(new Error("db down"));
 		jest.spyOn(console, "error").mockImplementation(() => {});
+		// The client retries after an SSR failure; jsdom has no fetch, and the
+		// retry failure is logged via console.warn — keep the output clean.
+		jest.spyOn(console, "warn").mockImplementation(() => {});
 		render(await SearchPage({ searchParams: paramsFor({ q: "בראשית" }) }));
 		expect(screen.getByRole("status")).toHaveTextContent("שגיאה בחיפוש");
 	});

@@ -93,11 +93,14 @@ the search.
 Query and filters live in the URL: `/search?q=<phrase>&type=<csv>`
 (`type` omitted = all types). While typing, each *settled* query (300 ms
 debounce) becomes its own history entry via native `history.pushState` —
-keystrokes never spam history, and Next's patched history keeps
-`useSearchParams` in sync without an RSC round-trip. Filter toggles,
-submit, and Escape settle immediately. Back/Forward therefore walks
-meaningful states; results are restored from a small client cache (~30
-entries) or refetched, and Next's own scroll restoration preserves list
+keystrokes never spam history, and no RSC round-trip is needed. Because
+`useSearchParams` does not observe native `history.pushState`, the
+component owns its URL state explicitly: `settle()` pushes history and
+updates React state atomically, and a `popstate` listener adopts
+external Back/Forward navigations. Filter toggles, submit, and Escape
+settle immediately. Back/Forward therefore walks meaningful states;
+results are restored from a small client cache (~30 entries) or
+refetched, and the browser's own scroll restoration preserves list
 position. Result links are plain `<Link>`s — ordinary crawlable anchors —
 so opening them in a new tab works normally. The form is a real
 `GET /search` form, so a no-JS submit lands on the SSR'd results page.

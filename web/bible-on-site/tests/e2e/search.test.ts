@@ -25,11 +25,10 @@ test.describe("Site search", () => {
 	test("renders SSR results for a shared query URL", async ({ page }) => {
 		await page.goto("/search?q=בראשית");
 
-		// Perakim and pesukim resolve from the bundled corpus.
-		const perekLink = page
-			.getByRole("link", { name: "בראשית א", exact: true })
-			.first();
-		await expect(perekLink).toHaveAttribute("href", "/929/1");
+		// Perakim and pesukim resolve from the bundled corpus. Result links
+		// contain their snippet text too, so locate by href, not name.
+		const perekLink = page.locator('a[data-result-link][href="/929/1"]');
+		await expect(perekLink).toBeVisible();
 
 		// Result groups are headed by their Hebrew type names.
 		await expect(

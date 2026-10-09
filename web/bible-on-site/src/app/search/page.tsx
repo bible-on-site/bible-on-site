@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 import { searchSite } from "@/lib/search/service";
 import {
 	SEARCH_LIMIT_DEFAULT,
@@ -53,16 +52,12 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 	return (
 		<main className={styles.searchPage}>
 			<h1 className={styles.pageTitle}>חיפוש</h1>
-			{/* useSearchParams inside SearchExperience needs a Suspense boundary;
-			    the component does not suspend, so SSR still emits full results. */}
-			<Suspense>
-				<SearchExperience
-					initialQuery={query}
-					initialTypes={types}
-					initialResults={response}
-					initialError={searchFailed}
-				/>
-			</Suspense>
+			<SearchExperience
+				initialQuery={query}
+				initialTypes={types}
+				initialResults={response}
+				initialError={searchFailed}
+			/>
 		</main>
 	);
 }

@@ -3,34 +3,6 @@
  */
 import { act, fireEvent, render, screen } from "@testing-library/react";
 
-/**
- * Simulate Next.js's patched history API: native pushState/replaceState keep
- * useSearchParams in sync without an RSC round-trip, and popstate restores
- * prior entries. The mock subscribes React to those same transitions.
- */
-jest.mock("next/navigation", () => {
-	const { useMemo, useSyncExternalStore } = jest.requireActual<
-		typeof import("react")
-	>("react");
-	const subscribe = (callback: () => void) => {
-		window.addEventListener("test:navigate", callback);
-		window.addEventListener("popstate", callback);
-		return () => {
-			window.removeEventListener("test:navigate", callback);
-			window.removeEventListener("popstate", callback);
-		};
-	};
-	return {
-		useSearchParams: () => {
-			const search = useSyncExternalStore(
-				subscribe,
-				() => window.location.search,
-			);
-			return useMemo(() => new URLSearchParams(search), [search]);
-		},
-	};
-});
-
 jest.mock("next/link", () => ({
 	__esModule: true,
 	default: ({
@@ -78,10 +50,11 @@ const realFetch = global.fetch;
 const mockFetch = jest.fn();
 
 const realPushState = window.history.pushState.bind(window.history);
-const realReplaceState = window.history.replaceState.bind(window.history);
 
-function dispatchNavigate() {
-	window.dispatchEvent(new Event("test:navigate"));
+/** Simulate an external history traversal landing on `url`. */
+function popTo(url: string) {
+	realPushState(window.history.state, "", url);
+	window.dispatchEvent(new Event("popstate"));
 }
 
 function renderSearch(
@@ -117,21 +90,11 @@ describe("SearchExperience", () => {
 			json: async () => RESULTS,
 		});
 		global.fetch = mockFetch;
-		window.history.pushState = ((data: unknown, unused: string, url?: string | URL | null) => {
-			realPushState(data, unused, url ?? null);
-			dispatchNavigate();
-		}) as typeof window.history.pushState;
-		window.history.replaceState = ((data: unknown, unused: string, url?: string | URL | null) => {
-			realReplaceState(data, unused, url ?? null);
-			dispatchNavigate();
-		}) as typeof window.history.replaceState;
 	});
 
 	afterEach(() => {
 		jest.useRealTimers();
 		global.fetch = realFetch;
-		window.history.pushState = realPushState;
-		window.history.replaceState = realReplaceState;
 	});
 
 	it("renders the SSR results on first paint", () => {
@@ -176,11 +139,10 @@ describe("SearchExperience", () => {
 		await act(async () => {});
 		expect(window.location.search).toContain("D7%94");
 		expect(mockFetch).toHaveBeenCalledTimes(2);
-		// A Back navigation lands on the earlier entry: the URL reverts and the
-		// router notifies — simulated here with the same observable transition.
+		// A Back navigation lands on the earlier entry: the URL reverts and a
+		// popstate notifies the component to adopt it.
 		await act(async () => {
-			realPushState(window.history.state, "", "/search?q=%D7%90%D7%AA");
-			dispatchNavigate();
+			popTo("/search?q=%D7%90%D7%AA");
 		});
 		expect((input as HTMLInputElement).value).toBe("את");
 		// Results come back from the client cache without a refetch.
