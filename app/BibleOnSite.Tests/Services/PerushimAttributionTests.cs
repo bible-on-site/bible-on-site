@@ -200,8 +200,8 @@ public class PerushimAttributionTests
         await CreateNotesAsync(delivered, "300", CurrentMapping);
         if (assetsSubfolder)
         {
-            Directory.CreateDirectory(Path.Combine(delivered.Root, "assets"));
-            File.Move(Path.Combine(delivered.Root, NotesDb), Path.Combine(delivered.Root, "assets", NotesDb));
+            Directory.CreateDirectory(Path.Join(delivered.Root, "assets"));
+            File.Move(Path.Join(delivered.Root, NotesDb), Path.Join(delivered.Root, "assets", NotesDb));
         }
         var pad = NotesDeliveryTests.Pad();
         pad.Setup(p => p.FetchAsync("perushim_notes", It.IsAny<IProgress<double>?>(), It.IsAny<CancellationToken>()))
@@ -246,7 +246,7 @@ public class PerushimAttributionTests
         var pad = NotesDeliveryTests.Pad();
         if (bundled)
         {
-            storage.PackageFiles[NotesDb] = await File.ReadAllBytesAsync(Path.Combine(delivered.Root, NotesDb), TestContext.Current.CancellationToken);
+            storage.PackageFiles[NotesDb] = await File.ReadAllBytesAsync(Path.Join(delivered.Root, NotesDb), TestContext.Current.CancellationToken);
         }
         else
         {
