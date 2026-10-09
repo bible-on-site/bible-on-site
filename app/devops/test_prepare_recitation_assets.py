@@ -69,6 +69,7 @@ class RecitationAssetsTests(unittest.TestCase):
     def test_partial_response_is_discarded_before_retry_and_hash_check(self):
         class InterruptedResponse(io.BytesIO):
             status = 200
+
             def read(self, size=-1):
                 if self.tell():
                     raise IncompleteRead(b"", len(self.audio))
@@ -94,7 +95,8 @@ class RecitationAssetsTests(unittest.TestCase):
             self.assertEqual(transport.call_count, 2)
         (self.cache / (self.sha + ".mp3")).unlink()
         for code in (403, 404):
-            with self.subTest(code=code), patch("prepare_recitation_assets.open_https", side_effect=HTTPError(track['audioUrl'], code, 'permanent', {}, None)) as transport, \
+            failure = HTTPError(track['audioUrl'], code, 'permanent', {}, None)
+            with self.subTest(code=code), patch("prepare_recitation_assets.open_https", side_effect=failure) as transport, \
                     patch("prepare_recitation_assets.time.sleep") as sleep:
                 with self.assertRaises(HTTPError):
                     recording(track, self.cache)
