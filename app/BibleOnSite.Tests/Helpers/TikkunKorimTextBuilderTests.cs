@@ -115,7 +115,28 @@ public class TikkunKorimTextBuilderTests
         }
 
         [Fact]
-        public void keeps_parsha_markers_and_strips_qri_label_marks()
+        public void turns_parsha_markers_into_layout_tokens_without_literal_text()
+        {
+            var pesukim = new List<Pasuk>
+            {
+                PasukOf(1,
+                    new PasukSegment { Type = SegmentType.Ktiv, Value = "א" },
+                    new PasukSegment { Type = SegmentType.Ptuha, Value = "" },
+                    new PasukSegment { Type = SegmentType.Stuma, Value = "" },
+                    new PasukSegment { Type = SegmentType.Ktiv, Value = "ב" })
+            };
+
+            var words = TikkunKorimTextBuilder.BuildWords(pesukim, false, false);
+
+            words.Select(w => w.Kind).Should().Equal(
+                TikkunWordKind.Text, TikkunWordKind.Text,
+                TikkunWordKind.Ptuha, TikkunWordKind.Stuma, TikkunWordKind.Text);
+            Texts(words).Should().NotContain("{פ}").And.NotContain("{ס}");
+            Texts(words).Should().Equal("א", "א", "", "", "ב");
+        }
+
+        [Fact]
+        public void strips_qri_label_marks_and_keeps_the_note_paren_glue()
         {
             var pesukim = new List<Pasuk>
             {
@@ -125,11 +146,29 @@ public class TikkunKorimTextBuilderTests
                     new PasukSegment { Type = SegmentType.Qri, Value = "הוּא", PairedOffset = 1 })
             };
 
-            var texts = Texts(TikkunKorimTextBuilder.BuildWords(pesukim, false, true));
+            var words = TikkunKorimTextBuilder.BuildWords(pesukim, false, true);
+            var texts = Texts(words);
 
-            texts.Should().Contain("{פ}");
             texts.Should().Contain("(קרי:");
-            texts.Should().Contain("הוא");
+            // The closing paren glues to the qri value like in the pasuk list.
+            texts.Should().Contain("הוא)");
+            // The פתוחה marker is a layout token, not literal text.
+            words.Should().Contain(w => w.Kind == TikkunWordKind.Ptuha);
+        }
+
+        [Fact]
+        public void glues_maqaf_joined_words_across_segment_boundaries()
+        {
+            var pesukim = new List<Pasuk>
+            {
+                PasukOf(1,
+                    new PasukSegment { Type = SegmentType.Ktiv, Value = "א־" },
+                    new PasukSegment { Type = SegmentType.Qri, Value = "ב" })
+            };
+
+            var words = TikkunKorimTextBuilder.BuildWords(pesukim, false, false);
+
+            Texts(words).Should().Equal("א", "א־ב");
         }
 
         [Fact]
