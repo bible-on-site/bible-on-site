@@ -56,6 +56,7 @@ CREATE TABLE `tanah_article` (
     `abstract` varchar(10000) DEFAULT NULL,
     `name` varchar(700) NOT NULL,
     `priority` tinyint NOT NULL,
+    `distributable` boolean NOT NULL DEFAULT FALSE,
     `content` mediumtext,
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 DEFAULT CHARSET = utf8mb3;

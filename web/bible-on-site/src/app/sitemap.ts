@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import type { ArticlePerekPair } from "../lib/articles";
 import { getAllArticlePerekIdPairs } from "../lib/articles";
 import { getAllAuthorSlugs } from "../lib/authors";
-import { getPerushimByPerekId } from "../lib/perushim";
+import { getAllPerushPerekNamePairs } from "../lib/perushim";
 import type { PerekIllustration } from "../lib/seo/perek-illustrations";
 import { getPerekImagesByChapter } from "../lib/seo/perek-images-data";
 import { CATEGORY_SLUGS, categoryHref } from "../lib/tanahpedia/category-slug";
@@ -237,29 +237,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 	const host = headersList.get("host") ?? "xn--febl3a.co.il";
 	const baseUrl = `https://${host}`;
 
-	// Fetch dynamic data for sitemap entries in parallel
-	const [authorSlugs, articles, pediaUniqueNames, imagesByPerek] =
-		await Promise.all([
-			getAllAuthorSlugs(),
-			getAllArticlePerekIdPairs(),
-			getAllEntryUniqueNames(),
-			getPerekImagesByChapter(),
-		]);
-
-	// Fetch all perushim for all perakim
-	const perushimPromises = Array.from({ length: TOTAL_PERAKIM }, (_, i) =>
-		getPerushimByPerekId(i + 1),
-	);
-	const allPerushim = await Promise.all(perushimPromises);
-
-	// Flatten to perush-perek pairs
-	const perushPerekPairs: PerushPerekPair[] = allPerushim.flatMap(
-		(perushim, index) =>
-			perushim.map((perush) => ({
-				perekId: index + 1,
-				perushName: perush.name,
-			})),
-	);
+	// Fetch dynamic data for sitemap entries in parallel. Perushim load via a
+	// single bulk query rather than one lookup per perek.
+	const [
+		authorSlugs,
+		articles,
+		pediaUniqueNames,
+		imagesByPerek,
+		perushPerekPairs,
+	] = await Promise.all([
+		getAllAuthorSlugs(),
+		getAllArticlePerekIdPairs(),
+		getAllEntryUniqueNames(),
+		getPerekImagesByChapter(),
+		getAllPerushPerekNamePairs(),
+	]);
 
 	return generateSitemapEntries(
 		{

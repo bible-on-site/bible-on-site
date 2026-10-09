@@ -1,7 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getTanahpediaSchemaSummaryForLlm } from "~/lib/tanahpedia/schema-registry";
-import { loadTanahpediaEntryById } from "./entry-loader.server";
-import { loadEntryStructuralContext } from "./structural-loader.server";
 
 /** פלט מוצע בלבד - ללא הרצת SQL או כתיבה ל־DB על ידי המודל */
 export interface TanahpediaLlmProposal {
@@ -146,6 +144,10 @@ export const getLlmAssistantStatus = createServerFn({ method: "GET" }).handler(
 export const suggestTanahpediaEntryEdits = createServerFn({ method: "POST" })
 	.validator((data: SuggestEditsInput) => data)
 	.handler(async ({ data }) => {
+		const { loadTanahpediaEntryById } = await import("./entry-loader.server");
+		const { loadEntryStructuralContext } = await import(
+			"./structural-loader.server"
+		);
 		const [entryRow, structural] = await Promise.all([
 			loadTanahpediaEntryById(data.entryId),
 			loadEntryStructuralContext(data.entryId),

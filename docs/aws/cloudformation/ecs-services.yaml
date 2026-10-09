@@ -221,7 +221,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName: bible-on-site-admin-task-role
-      Description: Task role for admin container — allows S3 access for rabbis bucket
+      Description: Task role for admin container — allows S3 access and bulletin previews
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -243,6 +243,13 @@ Resources:
                 Resource:
                   - arn:aws:s3:::bible-on-site-assets
                   - arn:aws:s3:::bible-on-site-assets/*
+        - PolicyName: AdminBulletinPreview
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:bible-on-site-bulletin"
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -273,14 +280,13 @@ Resources:
             - ContainerPort: 3000
               HostPort: 3000
               Protocol: tcp
-          # Readiness loads canonical server data before ECS replaces the old task.
+          # Warm each critical route bundle before ECS replaces the old task.
           # Keep these settings aligned with the website Dockerfile.
           HealthCheck:
             Command:
               - CMD-SHELL
-              # Liveness alone can pass before data routes finish cold loading.
-              # Use localhost (not 127.0.0.1) for clarity and consistency.
-              - curl -sf --max-time 5 http://localhost:3000/api/health/ready > /dev/null || exit 1
+              # Three bounded requests fit within the ten-second check timeout.
+              - 'for route in api/health/ready api/recitation api/recitation/2; do curl -sf --max-time 3 "http://localhost:3000/$route" > /dev/null || exit 1; done'
             Interval: 30
             Timeout: 10
             Retries: 5

@@ -332,7 +332,7 @@ fn append_toc_page(markup: &mut String, req: &PdfRequest) {
     for p in &req.perakim {
         let mut line = format!("{} {}", req.sefer_name, p.perek_heb);
         if !p.header.is_empty() {
-            line.push_str(" – ");
+            line.push_str(" - ");
             line.push_str(&p.header);
         }
         markup.push_str("#block(inset: (right: 0.2em))[#align(right)[");
@@ -343,6 +343,10 @@ fn append_toc_page(markup: &mut String, req: &PdfRequest) {
 
 /// Generate Typst markup string from the request data.
 fn generate_typst_markup(req: &PdfRequest) -> String {
+    generate_typst_markup_with_intro(req, None)
+}
+
+fn generate_typst_markup_with_intro(req: &PdfRequest, intro: Option<(&str, &[String])>) -> String {
     let mut markup = String::with_capacity(16 * 1024);
 
     // Page and text settings
@@ -361,6 +365,16 @@ fn generate_typst_markup(req: &PdfRequest) -> String {
     if req.include_toc {
         append_toc_page(&mut markup, req);
         markup.push_str("#pagebreak()\n");
+    }
+
+    if let Some((date, dedications)) = intro {
+        markup.push_str(&format!(
+            "#align(center, text(size: 16pt, weight: \"bold\")[תנ\\\"ך על הפרק])\n#align(center)[{}]\n#v(0.6em)\n",
+            typst_escape(date)
+        ));
+        for dedication in dedications {
+            markup.push_str(&format!("{}\n\n", typst_escape(dedication)));
+        }
     }
 
     for (idx, perek) in req.perakim.iter().enumerate() {
@@ -427,7 +441,22 @@ fn generate_typst_markup(req: &PdfRequest) -> String {
 /// Uses Typst for proper Hebrew text shaping (taamim, nikud via GPOS).
 pub fn build_pdf(req: &PdfRequest, fonts_dir: &Path) -> anyhow::Result<Vec<u8>> {
     let markup = generate_typst_markup(req);
+    compile_pdf(markup, fonts_dir)
+}
 
+pub fn build_daily_pdf(
+    req: &PdfRequest,
+    fonts_dir: &Path,
+    date: &str,
+    dedications: &[String],
+) -> anyhow::Result<Vec<u8>> {
+    compile_pdf(
+        generate_typst_markup_with_intro(req, Some((date, dedications))),
+        fonts_dir,
+    )
+}
+
+fn compile_pdf(markup: String, fonts_dir: &Path) -> anyhow::Result<Vec<u8>> {
     let font_path = fonts_dir.join("TaameyD-Regular.ttf");
     let font_bytes = std::fs::read(&font_path)
         .map_err(|e| anyhow::anyhow!("Failed to read font {}: {}", font_path.display(), e))?;
@@ -617,7 +646,7 @@ mod tests {
         assert!(markup.contains("תוכן העניינים"));
         assert!(markup.contains("תנ\\\"ך"));
         assert!(markup.contains("rgb(\"8B0000\")"));
-        assert!(markup.contains("בראשית א – כותרת"));
+        assert!(markup.contains("בראשית א - כותרת"));
     }
 
     #[test]

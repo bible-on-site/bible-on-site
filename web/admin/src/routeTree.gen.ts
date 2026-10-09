@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ArticlesRouteImport } from './routes/articles'
+import { Route as BulletinsRouteImport } from './routes/bulletins'
 import { Route as RabbisRouteImport } from './routes/rabbis'
 import { Route as TanahpediaRouteImport } from './routes/tanahpedia'
 import { Route as ArticlesIdRouteImport } from './routes/articles.$id'
@@ -28,6 +29,11 @@ const IndexRoute = IndexRouteImport.update({
 const ArticlesRoute = ArticlesRouteImport.update({
   id: '/articles',
   path: '/articles',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BulletinsRoute = BulletinsRouteImport.update({
+  id: '/bulletins',
+  path: '/bulletins',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RabbisRoute = RabbisRouteImport.update({
@@ -74,6 +80,7 @@ const TanahpediaEntriesIdRoute = TanahpediaEntriesIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/articles': typeof ArticlesRouteWithChildren
+  '/bulletins': typeof BulletinsRoute
   '/rabbis': typeof RabbisRouteWithChildren
   '/tanahpedia': typeof TanahpediaRouteWithChildren
   '/articles/$id': typeof ArticlesIdRoute
@@ -86,6 +93,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/articles': typeof ArticlesRouteWithChildren
+  '/bulletins': typeof BulletinsRoute
   '/rabbis': typeof RabbisRouteWithChildren
   '/tanahpedia': typeof TanahpediaRouteWithChildren
   '/articles/$id': typeof ArticlesIdRoute
@@ -99,6 +107,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/articles': typeof ArticlesRouteWithChildren
+  '/bulletins': typeof BulletinsRoute
   '/rabbis': typeof RabbisRouteWithChildren
   '/tanahpedia': typeof TanahpediaRouteWithChildren
   '/articles/$id': typeof ArticlesIdRoute
@@ -113,6 +122,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/articles'
+    | '/bulletins'
     | '/rabbis'
     | '/tanahpedia'
     | '/articles/$id'
@@ -125,6 +135,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/articles'
+    | '/bulletins'
     | '/rabbis'
     | '/tanahpedia'
     | '/articles/$id'
@@ -137,6 +148,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/articles'
+    | '/bulletins'
     | '/rabbis'
     | '/tanahpedia'
     | '/articles/$id'
@@ -150,6 +162,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ArticlesRoute: typeof ArticlesRouteWithChildren
+  BulletinsRoute: typeof BulletinsRoute
   RabbisRoute: typeof RabbisRouteWithChildren
   TanahpediaRoute: typeof TanahpediaRouteWithChildren
 }
@@ -168,6 +181,13 @@ declare module '@tanstack/react-router' {
       path: '/articles'
       fullPath: '/articles'
       preLoaderRoute: typeof ArticlesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bulletins': {
+      id: '/bulletins'
+      path: '/bulletins'
+      fullPath: '/bulletins'
+      preLoaderRoute: typeof BulletinsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/rabbis': {
@@ -273,6 +293,7 @@ const TanahpediaRouteWithChildren = TanahpediaRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ArticlesRoute: ArticlesRouteWithChildren,
+  BulletinsRoute: BulletinsRoute,
   RabbisRoute: RabbisRouteWithChildren,
   TanahpediaRoute: TanahpediaRouteWithChildren,
 }

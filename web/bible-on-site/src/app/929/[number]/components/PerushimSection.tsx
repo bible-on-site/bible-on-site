@@ -98,54 +98,36 @@ export function PerushimSection({
 				) : loading ? (
 					<p className={styles.emptyMessage}>מתחבר לפירוש...</p>
 				) : (
-					safePerushim.map((perush) =>
-						onPerushClick ? (
-							<button
-								key={perush.id}
-								type="button"
-								className={styles.carouselItem}
-								onClick={() => handlePerushClick(perush)}
-							>
-								<Image
-									src="/icons/note.svg"
-									alt=""
-									aria-hidden="true"
-									width={28}
-									height={28}
-									className={styles.perushIcon}
-								/>
-								<span className={styles.perushName}>{perush.name}</span>
-								<span className={styles.parshanName}>{perush.parshanName}</span>
-								<span className={styles.noteCount}>
-									{perush.noteCount} פסוקים
-								</span>
-							</button>
-						) : (
-							<Link
-								key={perush.id}
-								href={`/929/${perekId}/${encodeURIComponent(perush.name)}`}
-								className={styles.carouselItem}
-								onClick={(e) => {
-									e.preventDefault();
-									handlePerushClick(perush);
-								}}
-							>
-								<Image
-									src="/icons/note.svg"
-									alt=""
-									aria-hidden="true"
-									width={28}
-									height={28}
-									className={styles.perushIcon}
-								/>
-								<span className={styles.perushName}>{perush.name}</span>
-								<span className={styles.parshanName}>{perush.parshanName}</span>
-								<span className={styles.noteCount}>
-									{perush.noteCount} פסוקים
-								</span>
-							</Link>
-						),
-					)
+					safePerushim.map((perush) => (
+						<Link
+							key={perush.id}
+							href={`/929/${perekId}/${encodeURIComponent(perush.name)}`}
+							className={styles.carouselItem}
+							onClick={(e) => {
+								// Modifier/new-tab clicks keep the anchor's
+								// default navigation.
+								if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+									return;
+								}
+								e.preventDefault();
+								handlePerushClick(perush);
+							}}
+						>
+							<Image
+								src="/icons/note.svg"
+								alt=""
+								aria-hidden="true"
+								width={28}
+								height={28}
+								className={styles.perushIcon}
+							/>
+							<span className={styles.perushName}>{perush.name}</span>
+							<span className={styles.parshanName}>{perush.parshanName}</span>
+							<span className={styles.noteCount}>
+								{perush.noteCount} פסוקים
+							</span>
+						</Link>
+					))
 				)}
 			</Carousel>
 		</section>
