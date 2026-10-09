@@ -392,10 +392,10 @@ function SearchResults({
 										onKeyDown={onResultKeyDown}
 									>
 										<span className={styles.resultTitle}>{item.title}</span>
+										{/* nosemgrep -- snippetHtml is escaped server-side with only <mark> tags emitted (see lib/search/snippet.ts) */}
 										{item.snippetHtml ? (
 											<span
 												className={styles.resultSnippet}
-												// nosemgrep -- snippetHtml is escaped server-side; only <mark> tags are emitted (see lib/search/snippet.ts)
 												// biome-ignore lint/security/noDangerouslySetInnerHtml: snippet is built server-side with every input byte escaped; only <mark> tags are emitted
 												dangerouslySetInnerHTML={{
 													__html: item.snippetHtml,
