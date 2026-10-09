@@ -117,6 +117,19 @@ describe("searchAuthors", () => {
 		expect(hits[0].score).toBeGreaterThan(0);
 	});
 
+	it("matches authors without details and orders equal scores by id", async () => {
+		mockQuery.mockResolvedValue([
+			{ id: 2, name: "רב לוי", details: null },
+			{ id: 3, name: "לוי הראשון", details: null },
+			{ id: 1, name: "רב לוי", details: null },
+		]);
+		const hits = await searchAuthors("לוי", 10);
+		expect(hits).toHaveLength(3);
+		// The two identical names tie on score and fall back to id order.
+		const tied = hits.filter((hit) => hit.entry.name === "רב לוי");
+		expect(tied.map((hit) => hit.entry.id)).toEqual([1, 2]);
+	});
+
 	it("returns empty for a blank phrase without querying", async () => {
 		expect(await searchAuthors("---", 10)).toEqual([]);
 		expect(mockQuery).not.toHaveBeenCalled();
@@ -147,6 +160,37 @@ describe("searchArticles", () => {
 		expect(hits).toHaveLength(1);
 		expect(hits[0].entry.plain).toBe("תוכן ארוך על בראשית");
 		expect(hits[0].entry.id).toBe(42);
+	});
+
+	it("falls back to the abstract when content is missing", async () => {
+		mockQuery.mockResolvedValue([
+			{
+				id: 5,
+				perek_id: 1,
+				name: "מאמר זר",
+				author_name: "הרב לוי",
+				content: null,
+				abstract: "<p>תקציר על בראשית</p>",
+			},
+		]);
+		const hits = await searchArticles("בראשית", 10);
+		expect(hits).toHaveLength(1);
+		expect(hits[0].entry.plain).toBe("תקציר על בראשית");
+	});
+
+	it("drops an article with no searchable text", async () => {
+		mockQuery.mockResolvedValue([
+			{
+				id: 6,
+				perek_id: 1,
+				name: "מאמר",
+				author_name: "הרב",
+				content: null,
+				abstract: null,
+			},
+		]);
+		const hits = await searchArticles("בראשית", 10);
+		expect(hits).toHaveLength(0);
 	});
 
 	it("returns empty for a blank phrase without querying", async () => {

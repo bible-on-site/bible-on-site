@@ -56,4 +56,9 @@ describe("searchSnippet", () => {
 		expect(html.endsWith("...")).toBe(true);
 		expect(html).not.toContain("<mark>");
 	});
+
+	it("emits no highlights for an empty query", () => {
+		const html = searchSnippet("א ב ג", "");
+		expect(html).not.toContain("<mark>");
+	});
 });

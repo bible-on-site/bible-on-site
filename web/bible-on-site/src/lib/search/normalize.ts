@@ -64,7 +64,7 @@ const HTML_ENTITIES: Record<string, string> = {
 const BLOCK_TAGS = /<(br|p|div|li|tr|td|h[1-6]|ul|ol|table|blockquote|section|article|header|footer|hr)\b[^>]*>/gi;
 const SCRIPT_STYLE = /<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi;
 const ALL_TAGS = /<[^>]+>/g;
-const ENTITY = /&(#x?[0-9a-fA-F]+|\w+);/g;
+const ENTITY = /&(#[xX]?[0-9a-fA-F]+|\w+);/g;
 
 function decodeEntities(text: string): string {
 	return text.replace(ENTITY, (whole, body: string) => {

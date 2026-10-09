@@ -216,6 +216,7 @@ export function SearchExperience({
 				clientCache.current.set(urlKey, data);
 				while (clientCache.current.size > CLIENT_CACHE_MAX) {
 					const oldest = clientCache.current.keys().next().value;
+					/* istanbul ignore next -- size > MAX guarantees a first key; guard is defensive */
 					if (oldest === undefined) break;
 					clientCache.current.delete(oldest);
 				}
@@ -253,6 +254,7 @@ export function SearchExperience({
 
 	const resultLinks = () =>
 		Array.from(
+			/* istanbul ignore next -- the container div is always mounted before key handlers can run */
 			resultsRef.current?.querySelectorAll<HTMLAnchorElement>(
 				"a[data-result-link]",
 			) ?? [],

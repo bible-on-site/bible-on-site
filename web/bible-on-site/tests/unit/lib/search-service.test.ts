@@ -8,6 +8,22 @@ jest.mock("@/lib/search/db-content", () => ({
 	perushHitReference: jest.fn(() => 'רש"י בראשית א א'),
 }));
 
+// Spied (not replaced) so individual tests can force a provider failure.
+jest.mock("@/lib/search/corpus", () => {
+	const actual = jest.requireActual<typeof import("@/lib/search/corpus")>(
+		"@/lib/search/corpus",
+	);
+	return {
+		...actual,
+		searchPerakim: jest.fn(actual.searchPerakim),
+		searchPesukim: jest.fn(actual.searchPesukim),
+	};
+});
+
+import {
+	searchPerakim,
+	searchPesukim,
+} from "@/lib/search/corpus";
 import {
 	searchArticles,
 	searchAuthors,
@@ -23,6 +39,11 @@ const mockAuthors = searchAuthors as jest.MockedFunction<typeof searchAuthors>;
 const mockArticles = searchArticles as jest.MockedFunction<
 	typeof searchArticles
 >;
+const mockPerakim = searchPerakim as jest.MockedFunction<typeof searchPerakim>;
+const mockPesukim = searchPesukim as jest.MockedFunction<typeof searchPesukim>;
+const actualCorpus = jest.requireActual<typeof import("@/lib/search/corpus")>(
+	"@/lib/search/corpus",
+);
 
 describe("parseSearchTypes", () => {
 	it("defaults to all types when the param is missing", () => {
@@ -54,6 +75,8 @@ describe("searchSite", () => {
 		mockNotes.mockResolvedValue([]);
 		mockAuthors.mockResolvedValue([]);
 		mockArticles.mockResolvedValue([]);
+		mockPerakim.mockImplementation(actualCorpus.searchPerakim);
+		mockPesukim.mockImplementation(actualCorpus.searchPesukim);
 		jest.spyOn(console, "warn").mockImplementation(() => {});
 	});
 
@@ -158,6 +181,37 @@ describe("searchSite", () => {
 		expect(response.results.some((item) => item.type === "perek")).toBe(true);
 		expect(response.results.some((item) => item.type === "perush")).toBe(false);
 		expect(response.availability).toContain("חיפוש הפירושים אינו זמין כרגע");
+	});
+
+	it("degrades when the perek provider throws", async () => {
+		mockPerakim.mockImplementation(() => {
+			throw new Error("corrupt index");
+		});
+		const response = await searchSite("בראשית", ["perek", "pasuk"]);
+		expect(response.results.some((item) => item.type === "pasuk")).toBe(true);
+		expect(response.availability).toContain("חיפוש הפרקים אינו זמין כרגע");
+	});
+
+	it("degrades when the pasuk provider throws", async () => {
+		mockPesukim.mockImplementation(() => {
+			throw new Error("corrupt index");
+		});
+		const response = await searchSite("בראשית", ["perek", "pasuk"]);
+		expect(response.results.some((item) => item.type === "perek")).toBe(true);
+		expect(response.availability).toContain("חיפוש הפסוקים אינו זמין כרגע");
+	});
+
+	it("degrades a failing author provider, including non-Error rejections", async () => {
+		mockAuthors.mockRejectedValue("plain failure");
+		const response = await searchSite("לוי", ["author", "article"]);
+		expect(response.availability).toContain("חיפוש הרבנים אינו זמין כרגע");
+	});
+
+	it("degrades a failing article provider", async () => {
+		mockArticles.mockRejectedValue(new Error("db down"));
+		const response = await searchSite("בראשית", ["article", "perek"]);
+		expect(response.results.some((item) => item.type === "perek")).toBe(true);
+		expect(response.availability).toContain("חיפוש המאמרים אינו זמין כרגע");
 	});
 
 	it("honors the limit per type", async () => {

@@ -75,7 +75,13 @@ describe("htmlToPlainText", () => {
 		expect(htmlToPlainText("א&nbsp;ב")).toBe("א ב");
 		expect(htmlToPlainText("&lt;b&gt;")).toBe("<b>");
 		expect(htmlToPlainText("&#1513;&#1500;&#1493;&#1501;")).toBe("שלום");
+		expect(htmlToPlainText("&#x5E9;&#X5DC;&#x5D5;&#x5DD;")).toBe("שלום");
 		expect(htmlToPlainText("&quot;hi&quot;")).toBe('"hi"');
+	});
+
+	it("leaves out-of-range numeric entities untouched", () => {
+		expect(htmlToPlainText("&#x2000000;")).toBe("&#x2000000;");
+		expect(htmlToPlainText("&#99999999;")).toBe("&#99999999;");
 	});
 
 	it("passes plain text through entity decoding only", () => {

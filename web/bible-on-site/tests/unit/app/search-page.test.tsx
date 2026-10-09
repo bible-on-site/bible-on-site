@@ -38,7 +38,7 @@ const RESULTS: SearchResponse = {
 	availability: [],
 };
 
-function paramsFor(search: Record<string, string>) {
+function paramsFor(search: Record<string, string | string[]>) {
 	return Promise.resolve(search) as Promise<
 		Record<string, string | string[] | undefined>
 	>;
@@ -100,6 +100,25 @@ describe("SearchPage", () => {
 		// retry failure is logged via console.warn — keep the output clean.
 		jest.spyOn(console, "warn").mockImplementation(() => {});
 		render(await SearchPage({ searchParams: paramsFor({ q: "בראשית" }) }));
+		expect(screen.getByRole("status")).toHaveTextContent("שגיאה בחיפוש");
+	});
+
+	it("uses the first value when q is repeated in the URL", async () => {
+		await SearchPage({
+			searchParams: paramsFor({ q: ["את", "בת"] }),
+		});
+		expect(mockSearch).toHaveBeenCalledWith(
+			"את",
+			expect.anything(),
+			expect.anything(),
+		);
+	});
+
+	it("reports non-Error SSR failures the same way", async () => {
+		mockSearch.mockRejectedValue("plain failure");
+		jest.spyOn(console, "error").mockImplementation(() => {});
+		jest.spyOn(console, "warn").mockImplementation(() => {});
+		render(await SearchPage({ searchParams: paramsFor({ q: "את" }) }));
 		expect(screen.getByRole("status")).toHaveTextContent("שגיאה בחיפוש");
 	});
 

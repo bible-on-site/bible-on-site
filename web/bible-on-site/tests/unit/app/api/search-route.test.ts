@@ -81,4 +81,11 @@ describe("GET /api/search", () => {
 		const res = await requestFor(`?q=${encodeURIComponent("את")}`);
 		expect(res.status).toBe(500);
 	});
+
+	it("returns 500 for a non-Error rejection too", async () => {
+		mockSearch.mockRejectedValue("plain failure");
+		jest.spyOn(console, "error").mockImplementation(() => {});
+		const res = await requestFor(`?q=${encodeURIComponent("את")}`);
+		expect(res.status).toBe(500);
+	});
 });

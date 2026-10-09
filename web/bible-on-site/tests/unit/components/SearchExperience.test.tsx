@@ -46,6 +46,23 @@ const ALL_TYPES: SearchResultType[] = [
 	"article",
 ];
 
+/** Two perek results (one without a snippet) plus an availability notice. */
+const TWO_RESULTS: SearchResponse = {
+	...RESULTS,
+	results: [
+		...RESULTS.results,
+		{
+			type: "perek",
+			title: "בראשית ב",
+			snippetHtml: null,
+			href: "/929/2",
+			score: 80,
+		},
+	],
+	counts: { perek: 2 },
+	availability: ["חיפוש הפירושים אינו זמין כרגע"],
+};
+
 const realFetch = global.fetch;
 const mockFetch = jest.fn();
 
@@ -199,5 +216,166 @@ describe("SearchExperience", () => {
 		await act(async () => {});
 		expect((input as HTMLInputElement).value).toBe("");
 		expect(window.location.search).toBe("");
+	});
+
+	it("settles immediately on submit, and a redundant submit is a no-op", async () => {
+		renderSearch();
+		const input = screen.getByRole("searchbox", { name: "מונח חיפוש" });
+		fireEvent.change(input, { target: { value: "את" } });
+		fireEvent.submit(input.closest("form") as HTMLFormElement);
+		expect(window.location.search).toBe("?q=%D7%90%D7%AA");
+		await act(async () => {});
+		expect(mockFetch).toHaveBeenCalledTimes(1);
+		// Same state again: the URL is already canonical, so settle returns
+		// early and no second fetch is issued.
+		fireEvent.submit(input.closest("form") as HTMLFormElement);
+		await act(async () => {});
+		expect(mockFetch).toHaveBeenCalledTimes(1);
+	});
+
+	it("restores the unfiltered canonical URL when a filter is re-checked", async () => {
+		renderSearch();
+		const input = screen.getByRole("searchbox", { name: "מונח חיפוש" });
+		fireEvent.change(input, { target: { value: "את" } });
+		await settle();
+		await act(async () => {});
+		const box = screen.getByRole("checkbox", { name: "פסוקים" });
+		fireEvent.click(box);
+		await act(async () => {});
+		expect(window.location.search).toContain("type=");
+		fireEvent.click(box);
+		await act(async () => {});
+		expect(window.location.search).toBe("?q=%D7%90%D7%AA");
+	});
+
+	it("adopts the filter carried by a restored URL on Back", async () => {
+		renderSearch({ initialQuery: "את", initialResults: RESULTS });
+		await act(async () => {
+			popTo("/search?q=%D7%90%D7%AA&type=perek");
+		});
+		expect(screen.getByRole("checkbox", { name: "פרקים" })).toBeChecked();
+		expect(screen.getByRole("checkbox", { name: "פסוקים" })).not.toBeChecked();
+	});
+
+	it("ignores ArrowDown when there are no result links", () => {
+		renderSearch();
+		const input = screen.getByRole("searchbox", { name: "מונח חיפוש" });
+		input.focus();
+		fireEvent.keyDown(input, { key: "ArrowDown" });
+		expect(input).toHaveFocus();
+	});
+
+	it("ignores Escape in an empty input", () => {
+		renderSearch();
+		const input = screen.getByRole("searchbox", { name: "מונח חיפוש" });
+		input.focus();
+		fireEvent.keyDown(input, { key: "Escape" });
+		expect((input as HTMLInputElement).value).toBe("");
+		expect(window.location.search).toBe("");
+	});
+
+	it("cycles focus between result links and back to the input", () => {
+		renderSearch({ initialQuery: "את", initialResults: TWO_RESULTS });
+		const input = screen.getByRole("searchbox", { name: "מונח חיפוש" });
+		input.focus();
+		fireEvent.keyDown(input, { key: "ArrowDown" });
+		const first = screen.getByRole("link", { name: /בראשית א/ });
+		const second = screen.getByRole("link", { name: "בראשית ב" });
+		expect(first).toHaveFocus();
+		fireEvent.keyDown(first, { key: "ArrowDown" });
+		expect(second).toHaveFocus();
+		fireEvent.keyDown(second, { key: "ArrowUp" });
+		expect(first).toHaveFocus();
+		fireEvent.keyDown(first, { key: "Escape" });
+		expect(input).toHaveFocus();
+	});
+
+	it("renders availability notices and results without snippets", () => {
+		renderSearch({ initialQuery: "את", initialResults: TWO_RESULTS });
+		expect(
+			screen.getByText("חיפוש הפירושים אינו זמין כרגע"),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("link", { name: "בראשית ב" }),
+		).toBeInTheDocument();
+	});
+
+	it("drops the response of a fetch aborted by a newer settled state", async () => {
+		// The first fetch hangs until its AbortSignal fires.
+		mockFetch.mockImplementationOnce(
+			(_url: string, init?: { signal?: AbortSignal }) =>
+				new Promise((_resolve, reject) => {
+					init?.signal?.addEventListener("abort", () =>
+						reject(new Error("aborted")),
+					);
+				}),
+		);
+		renderSearch();
+		const input = screen.getByRole("searchbox", { name: "מונח חיפוש" });
+		fireEvent.change(input, { target: { value: "את" } });
+		await settle();
+		fireEvent.change(input, { target: { value: "אתה" } });
+		await settle();
+		await act(async () => {});
+		// No error state from the abandoned fetch; the newer response wins.
+		expect(screen.getByRole("status")).not.toHaveTextContent("שגיאה");
+		expect(
+			await screen.findByRole("link", { name: /בראשית א/ }),
+		).toBeInTheDocument();
+	});
+
+	it("shows the error state for a non-Error rejection", async () => {
+		mockFetch.mockRejectedValue("plain failure");
+		renderSearch();
+		fireEvent.change(screen.getByRole("searchbox", { name: "מונח חיפוש" }), {
+			target: { value: "את" },
+		});
+		await settle();
+		await act(async () => {});
+		expect(screen.getByRole("status")).toHaveTextContent("שגיאה בחיפוש");
+	});
+
+	it("evicts the oldest cached response past the cache cap", async () => {
+		renderSearch();
+		const input = screen.getByRole("searchbox", { name: "מונח חיפוש" });
+		// Sequential settled states are the point: each fills one cache slot.
+		for (let i = 0; i < 31; i++) {
+			fireEvent.change(input, { target: { value: `q${i}` } });
+			await settle();
+			await act(async () => {});
+		}
+		expect(mockFetch).toHaveBeenCalledTimes(31);
+		// q0 was evicted — going Back to it must refetch instead of hitting
+		// the cache.
+		await act(async () => {
+			popTo("/search?q=q0");
+		});
+		expect(mockFetch).toHaveBeenCalledTimes(32);
+	});
+
+	it("adopts a fresh SSR payload when the page props change", async () => {
+		const { rerender } = renderSearch({
+			initialQuery: "את",
+			initialResults: RESULTS,
+		});
+		const input = screen.getByRole("searchbox", { name: "מונח חיפוש" });
+		rerender(
+			<SearchExperience
+				initialQuery="זזז"
+				initialTypes={ALL_TYPES}
+				initialResults={null}
+				initialError
+			/>,
+		);
+		expect((input as HTMLInputElement).value).toBe("זזז");
+		expect(screen.getByRole("status")).toHaveTextContent("שגיאה בחיפוש");
+		rerender(
+			<SearchExperience
+				initialQuery=""
+				initialTypes={ALL_TYPES}
+				initialResults={null}
+			/>,
+		);
+		expect((input as HTMLInputElement).value).toBe("");
 	});
 });
