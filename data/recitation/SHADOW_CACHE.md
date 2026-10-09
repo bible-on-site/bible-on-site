@@ -41,3 +41,27 @@ If any sanity or performance check fails, resume the
 existing selected profile on that same checkpoint. Do not replace the reference
 fixtures, reuse stale benchmark files, reduce inference quality or publish held
 word intervals. Timing batch pushes remain postponed until after Shabbat.
+
+## Measured sanity result, October 9
+
+Fresh Isaiah 4 runs passed all three comparisons against each other and the
+stored golden. All 89 word identities and 178 boundaries were unchanged, with
+exact contemporaneous ASR and zero contemporaneous acoustic-score drift.
+Both runs had a maximum score difference of 0.0005 against the older golden.
+
+| Measurement | Current selected profile | CPU shadow |
+| --- | ---: | ---: |
+| Inference time | 1536.921 seconds | 763.110 seconds |
+| Compared word boundaries | 178 | 178 |
+| Boundary drift against the golden | 0 ms | 0 ms |
+
+The shadow used 50.35% less inference time in this case, avoiding 722,534,400,000
+bytes of redundant return copies through 9,408 verified cache reuses. These are
+tensor-transfer bytes, not recording download sizes. This result measures one
+chapter on this laptop; it does not establish a collection-wide speed factor.
+
+All 80 local tests passed with CUDA enabled and no skips. The original 17-case
+qualification and held-control evidence were checked again before resuming the
+same collection checkpoint. The original worker and fallback source remain
+unchanged. Complete fresh results and qualification are preserved in
+`benchmarks/shadow-sanity-2026-10-09.json.gz`.
