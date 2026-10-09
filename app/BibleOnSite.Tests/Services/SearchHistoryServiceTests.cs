@@ -5,6 +5,37 @@ namespace BibleOnSite.Tests.Services;
 public class SearchHistoryServiceTests
 {
     [Fact]
+    public void NullStoredHistory_RecoversOnTheNextSearch()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        storage.Set("RecentSearches.v1", "null");
+        var history = new SearchHistoryService(storage);
+        history.Read().Should().BeEmpty();
+        history.Remember("שמות");
+        history.Read().Should().Equal("שמות");
+    }
+
+    [Fact]
+    public void StoredHistory_DropsNullBlankAndOversizedEntries()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        storage.Set("RecentSearches.v1", $"[null,\" \",\"{new string('א', 513)}\",\"בראשית\",\"בְּרֵאשִׁית\"]");
+        new SearchHistoryService(storage).Read().Should().Equal("בראשית");
+    }
+
+    [Fact]
+    public void OversizedQuery_DoesNotReplaceRecentSearches()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var history = new SearchHistoryService(storage);
+        history.Remember("שמות");
+        var saved = storage.Get("RecentSearches.v1", "");
+        history.Remember(new string('א', 513));
+        storage.Get("RecentSearches.v1", "").Should().Be(saved);
+        history.Read().Should().Equal("שמות");
+    }
+
+    [Fact]
     public void History_PersistsAcrossInstances_DeduplicatesHebrew_AndKeepsNewestPhrase()
     {
         var storage = new InMemoryPreferencesStorage();

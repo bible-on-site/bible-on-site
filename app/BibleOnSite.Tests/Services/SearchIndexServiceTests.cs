@@ -43,6 +43,27 @@ public class SearchIndexServiceTests
     }
 
     [Fact]
+    public async Task CommentaryImport_SearchesTheEndOfALargeCorpusAcrossBatchBoundaries()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
+            "WITH RECURSIVE entries(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM entries WHERE n < 32769) " +
+            "INSERT INTO note SELECT 7,1,1,n,CASE WHEN n = 32769 THEN 'אחרון' ELSE 'רגיל' END FROM entries");
+        var delivery = new Mock<IPadDeliveryService>();
+        delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string?)null);
+        var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Combine(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("אחרון", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, default);
+
+        hits.Should().ContainSingle().Which.Text.Should().Be("אחרון");
+    }
+
+    [Fact]
     public async Task HebrewSearch_IgnoresVowels_RequiresEveryWord_AndFiltersBeforeLimiting()
     {
         await using var storage = new TestStorage();

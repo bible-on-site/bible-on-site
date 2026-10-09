@@ -6,6 +6,13 @@ namespace BibleOnSite.Tests.Helpers;
 
 public class HtmlRunsRegressionTests
 {
+    [Fact]
+    public void OrderedListMarkers_FindTheListThroughAnExtraWrapper()
+    {
+        var runs = HtmlRuns.FromHtml("<ol><div><li>שלום</li></div></ol>");
+        string.Concat(runs.Select(run => run.Text)).Should().Be("1. שלום");
+    }
+
     [Theory]
     [InlineData("strong", true, false, false, false)]
     [InlineData("em", false, true, false, false)]
