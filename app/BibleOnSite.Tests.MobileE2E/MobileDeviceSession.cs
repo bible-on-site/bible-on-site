@@ -74,9 +74,18 @@ public sealed class MobileDeviceSession : IMobileDeviceSession, IAsyncLifetime
     // the replacement has nothing to race.
     public void Acquire(IReadOnlyDictionary<string, string>? environment)
     {
-        if (Driver == null)
+        var created = Driver == null;
+        if (created)
         {
             CreateWithOneRetry();
+        }
+        // A brand-new session already launched the app with the suite
+        // environment, so a scenario with no extra variables has nothing to
+        // restart — and the app is mid cold-start then, exactly the window a
+        // terminate+launch cycle can wedge in.
+        if (created && environment == null)
+        {
+            return;
         }
         try
         {

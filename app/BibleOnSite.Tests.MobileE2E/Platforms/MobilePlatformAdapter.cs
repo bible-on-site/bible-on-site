@@ -218,21 +218,32 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
         IReadOnlyDictionary<string, string>? environment)
     {
         driver.TerminateApp(AppId);
-        // mobile: launchApp replaces processArguments on the session's launch,
-        // so the suite marker and the scenario's variables ride together.
-        var env = new Dictionary<string, string>(IosE2eEnvironment);
-        if (environment != null)
+        if (environment is { Count: > 0 })
         {
+            // mobile: launchApp replaces processArguments on the session's
+            // launch, so the suite marker and the scenario's variables ride
+            // together. It is heavier than activate and only pays when a
+            // scenario actually needs launch environment.
+            var env = new Dictionary<string, string>(IosE2eEnvironment);
             foreach (var (key, value) in environment)
             {
                 env[key] = value;
             }
+            driver.ExecuteScript("mobile: launchApp", new Dictionary<string, object>
+            {
+                ["bundleId"] = AppId,
+                ["environment"] = env
+            });
         }
-        driver.ExecuteScript("mobile: launchApp", new Dictionary<string, object>
+        else
         {
-            ["bundleId"] = AppId,
-            ["environment"] = env
-        });
+            // /wda/apps/activate starts the terminated app again without the
+            // launch payload's processArguments/env handling.
+            driver.ExecuteScript("mobile: activateApp", new Dictionary<string, object>
+            {
+                ["bundleId"] = AppId
+            });
+        }
         driver.Orientation = ScreenOrientation.Portrait;
     }
 
