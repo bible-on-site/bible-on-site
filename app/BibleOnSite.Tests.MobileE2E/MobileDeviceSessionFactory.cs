@@ -27,7 +27,7 @@ public sealed class MobileDeviceSessionFactory
         {
             if (!DeviceSessionDeath.Matches(exception))
             {
-                _sessionFailure ??= exception;
+                _sessionFailure = exception;
             }
             throw;
         }

@@ -42,27 +42,34 @@ public abstract class MobileDeviceTest : IAsyncLifetime
     public virtual Task InitializeAsync()
     {
         Platform = MobilePlatformAdapter.For(Configuration.Platform);
-        for (var attempt = 1; ; attempt++)
+        try
         {
-            try
-            {
-                Connect();
-                return Task.CompletedTask;
-            }
-            catch (WebDriverException exception) when (DeviceSessionDeath.Matches(exception) && attempt == 1)
-            {
-                // The device already dropped this session, so there is nothing
-                // left for a replacement to race; create it once more. Any
-                // other startup failure — and a second death — fails below.
-                Output.WriteLine($"{Configuration.Platform}: the session died during startup " +
-                    $"({exception.Message}); creating it once more.");
-            }
-            catch
-            {
-                SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed");
-                throw;
-            }
+            Connect();
+            return Task.CompletedTask;
         }
+        catch (WebDriverException exception) when (DeviceSessionDeath.Matches(exception))
+        {
+            // The device already dropped this session, so there is nothing
+            // left for a replacement to race; create it once more. Any
+            // other startup failure — and a second death — fails below.
+            Output.WriteLine($"{Configuration.Platform}: the session died during startup " +
+                $"({exception.Message}); creating it once more.");
+        }
+        catch
+        {
+            SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed");
+            throw;
+        }
+        try
+        {
+            Connect();
+        }
+        catch
+        {
+            SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed");
+            throw;
+        }
+        return Task.CompletedTask;
     }
 
     public virtual Task DisposeAsync()
@@ -140,8 +147,7 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         }
         catch (WebDriverException exception) when (DeviceSessionDeath.Matches(exception))
         {
-            // Closing a session the device already dropped is expected to fail;
-            // nothing remains for the new session to race.
+            // The dropped session has nothing left for Appium to clean.
             Output.WriteLine($"{Configuration.Platform}: dead session rejected cleanup ({exception.Message}); continuing.");
         }
         Driver = _sessions.Create(() => Platform.CreateDriver(Configuration.Server, CreateOptions()));
