@@ -45,6 +45,24 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         try
         {
             Connect();
+            return Task.CompletedTask;
+        }
+        catch (WebDriverException exception) when (DeviceSessionDeath.Matches(exception))
+        {
+            // The device already dropped this session, so there is nothing
+            // left for a replacement to race; create it once more. Any
+            // other startup failure — and a second death — fails below.
+            Output.WriteLine($"{Configuration.Platform}: the session died during startup " +
+                $"({exception.Message}); creating it once more.");
+        }
+        catch
+        {
+            SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed");
+            throw;
+        }
+        try
+        {
+            Connect();
         }
         catch
         {
@@ -60,15 +78,23 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         {
             _sessions.Cleanup(() =>
             {
-                Driver?.Quit();
-                Driver?.Dispose();
+                try
+                {
+                    Driver?.Quit();
+                }
+                finally
+                {
+                    Driver?.Dispose();
+                }
             });
         }
         catch (WebDriverException exception)
         {
-            // Keep the scenario's failure, but block later sessions: Appium may
-            // still run the failed session's cleanup against the same device.
-            Output.WriteLine($"{Configuration.Platform}: session cleanup failed; device reuse blocked: {exception.Message}");
+            Output.WriteLine(DeviceSessionDeath.Matches(exception)
+                ? $"{Configuration.Platform}: session cleanup failed; the device had already dropped it: {exception.Message}"
+                // Uncertain cleanup stays latched in the factory: Appium may
+                // still run the failed session's shutdown against the device.
+                : $"{Configuration.Platform}: session cleanup failed; device reuse blocked: {exception.Message}");
         }
         return Task.CompletedTask;
     }
@@ -105,16 +131,34 @@ public abstract class MobileDeviceTest : IAsyncLifetime
 
     protected virtual void Connect()
     {
-        _sessions.Cleanup(() =>
+        try
         {
-            Driver?.Quit();
-            Driver?.Dispose();
-        });
-        Driver = _sessions.Create(() =>
-            Platform.CreateDriver(Configuration.Server, Platform.CreateOptions(Configuration)));
+            _sessions.Cleanup(() =>
+            {
+                try
+                {
+                    Driver?.Quit();
+                }
+                finally
+                {
+                    Driver?.Dispose();
+                }
+            });
+        }
+        catch (WebDriverException exception) when (DeviceSessionDeath.Matches(exception))
+        {
+            // The dropped session has nothing left for Appium to clean.
+            Output.WriteLine($"{Configuration.Platform}: dead session rejected cleanup ({exception.Message}); continuing.");
+        }
+        Driver = _sessions.Create(() => Platform.CreateDriver(Configuration.Server, CreateOptions()));
         Page = new(Driver, Platform);
         Page.WaitForStartup();
     }
+
+    // Scenarios that need extra launch environment (e.g. BIBLE_E2E_PERUSHIM
+    // synthetic commentary data) override this instead of reimplementing
+    // session management.
+    protected virtual AppiumOptions CreateOptions() => Platform.CreateOptions(Configuration);
 
     protected void SaveDiagnostics(string name, string outcome)
     {

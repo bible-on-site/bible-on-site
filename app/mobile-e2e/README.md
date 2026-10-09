@@ -33,9 +33,11 @@ branching or skipping an entire shared scenario. Shared classes use
 tests plus the current platform, leaving platform-only behavior easy to add.
 Use `[Collection("Mobile device")]` on every mobile test class to serialize
 scenarios that own the same device. Inject `MobileDeviceSessionFactory` and create
-drivers through `sessions.Create(...)`. If session startup fails, subsequent
-scenarios fail without requesting another session on a device whose preparation
-may still be running; the original failure remains in the test report.
+drivers through `sessions.Create(...)`. If session startup or cleanup fails in a
+way that could leave Appium working on the device, subsequent scenarios fail
+without requesting another session on it; the original failure remains in the
+test report. Failures matching `DeviceSessionDeath` mean the session is already
+gone server-side, so they do not block the collection.
 
 iOS waits for XCTest's `hittable` attribute before actions and sends one W3C touch
 at the element's viewport center, with a 100 ms pause between down and up. This
@@ -48,9 +50,16 @@ iOS lookup can take longer than 45 seconds and return the earlier loading tree
 even though the reader has appeared. This startup gate requires a visible,
 nonempty perek source and captures failure diagnostics. Subsequent scenario
 lookups and navigation retain their 45-second deadlines.
-iOS keeps XCTest idle checks enabled with a one-second `waitForIdleTimeout`, so
-repeated internal idle waits during startup do not exhaust the page object's
-readiness polling. See the [Appium idle-wait capability](https://appium.github.io/appium-xcuitest-driver/latest/reference/capabilities/).
+iOS disables XCTest idle checks (`waitForIdleTimeout` 0): every proxied WDA
+command otherwise waits for the app main thread to stay quiet for the whole
+threshold, which a reader that keeps re-rendering commentary cells (or a
+navigation animation on a shared-CPU runner) never satisfies — queries stalled
+for tens of seconds and once hit the 240s proxy timeout mid-scroll. Page objects
+poll explicit element state instead of relying on implicit synchronization. See
+the [Appium idle-wait capability](https://appium.github.io/appium-xcuitest-driver/latest/reference/capabilities/).
+A session the device already dropped mid-startup or mid-scenario is recreated
+once; ambiguous startup or cleanup failures still block the device, since stale
+session work could race a replacement.
 
 The pilot matrix deliberately covers Android and iOS. Existing Windows FlaUI
 tests and Android gesture regressions remain separate. Additional device/OS
