@@ -1,6 +1,7 @@
 using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using FluentAssertions;
+using Microsoft.Maui.Graphics;
 
 namespace BibleOnSite.Tests.Helpers;
 
@@ -115,7 +116,28 @@ public class TikkunKorimTextBuilderTests
         }
 
         [Fact]
-        public void keeps_parsha_markers_and_strips_qri_label_marks()
+        public void turns_parsha_markers_into_layout_tokens_without_literal_text()
+        {
+            var pesukim = new List<Pasuk>
+            {
+                PasukOf(1,
+                    new PasukSegment { Type = SegmentType.Ktiv, Value = "א" },
+                    new PasukSegment { Type = SegmentType.Ptuha, Value = "" },
+                    new PasukSegment { Type = SegmentType.Stuma, Value = "" },
+                    new PasukSegment { Type = SegmentType.Ktiv, Value = "ב" })
+            };
+
+            var words = TikkunKorimTextBuilder.BuildWords(pesukim, false, false);
+
+            words.Select(w => w.Kind).Should().Equal(
+                TikkunWordKind.Text, TikkunWordKind.Text,
+                TikkunWordKind.Ptuha, TikkunWordKind.Stuma, TikkunWordKind.Text);
+            Texts(words).Should().NotContain("{פ}").And.NotContain("{ס}");
+            Texts(words).Should().Equal("א", "א", "", "", "ב");
+        }
+
+        [Fact]
+        public void strips_qri_label_marks_and_keeps_the_note_paren_glue()
         {
             var pesukim = new List<Pasuk>
             {
@@ -125,11 +147,29 @@ public class TikkunKorimTextBuilderTests
                     new PasukSegment { Type = SegmentType.Qri, Value = "הוּא", PairedOffset = 1 })
             };
 
-            var texts = Texts(TikkunKorimTextBuilder.BuildWords(pesukim, false, true));
+            var words = TikkunKorimTextBuilder.BuildWords(pesukim, false, true);
+            var texts = Texts(words);
 
-            texts.Should().Contain("{פ}");
             texts.Should().Contain("(קרי:");
-            texts.Should().Contain("הוא");
+            // The closing paren glues to the qri value like in the pasuk list.
+            texts.Should().Contain("הוא)");
+            // The פתוחה marker is a layout token, not literal text.
+            words.Should().Contain(w => w.Kind == TikkunWordKind.Ptuha);
+        }
+
+        [Fact]
+        public void glues_maqaf_joined_words_across_segment_boundaries()
+        {
+            var pesukim = new List<Pasuk>
+            {
+                PasukOf(1,
+                    new PasukSegment { Type = SegmentType.Ktiv, Value = "א־" },
+                    new PasukSegment { Type = SegmentType.Qri, Value = "ב" })
+            };
+
+            var words = TikkunKorimTextBuilder.BuildWords(pesukim, false, false);
+
+            Texts(words).Should().Equal("א", "א־ב");
         }
 
         [Fact]
@@ -145,6 +185,66 @@ public class TikkunKorimTextBuilderTests
             var words = TikkunKorimTextBuilder.BuildWords(TwoPesukim(), true, false);
 
             words.Should().OnlyContain(w => !w.Text.Contains(' '));
+        }
+
+        [Fact]
+        public void skips_segments_that_have_no_drawable_text()
+        {
+            // An empty segment emits nothing; under hideMarks a marks-only
+            // segment (a lone segol) also collapses to nothing.
+            var pesukim = new List<Pasuk>
+            {
+                PasukOf(1,
+                    new PasukSegment { Type = SegmentType.Ktiv, Value = "" },
+                    new PasukSegment { Type = SegmentType.Ktiv, Value = "א" },
+                    new PasukSegment { Type = SegmentType.Ktiv, Value = "\u05B6" })
+            };
+
+            var words = TikkunKorimTextBuilder.BuildWords(pesukim, false, true);
+
+            Texts(words).Should().Equal("א", "א");
+        }
+
+        [Fact]
+        public void throws_for_an_unknown_segment_type()
+        {
+            var pesukim = new List<Pasuk>
+            {
+                PasukOf(1, new PasukSegment { Type = (SegmentType)999, Value = "א" })
+            };
+
+            var act = () => TikkunKorimTextBuilder.BuildWords(pesukim, false, false);
+
+            act.Should().Throw<ArgumentOutOfRangeException>();
+        }
+
+        [Fact]
+        public void colors_the_reciting_ktiv_segment_with_the_recitation_color()
+        {
+            var pasuk = PasukOf(1,
+                new PasukSegment { Type = SegmentType.Ktiv, Value = "א" },
+                new PasukSegment { Type = SegmentType.Ktiv, Value = "ב" });
+            pasuk.RecitingSegment = 2; // 1-based segment index, like FormattedText
+
+            var words = TikkunKorimTextBuilder.BuildWords([pasuk], false, false);
+
+            words[1].TextColor.Should().BeNull();
+            words[2].TextColor.Should().Be(Color.FromArgb("#1c427b"));
+        }
+
+        [Fact]
+        public void colors_the_reciting_qri_value_with_the_recitation_color()
+        {
+            var pasuk = PasukOf(1,
+                new PasukSegment { Type = SegmentType.Ktiv, Value = "א" },
+                new PasukSegment { Type = SegmentType.Qri, Value = "ב", PairedOffset = 1 });
+            pasuk.RecitingSegment = 2;
+
+            var words = TikkunKorimTextBuilder.BuildWords([pasuk], false, false);
+
+            // The reciting qri value goes blue; ")" glued to it like the pasuk list.
+            var valueWord = words.Should().ContainSingle(w => w.Text == "ב)").Which;
+            valueWord.TextColor.Should().Be(Color.FromArgb("#1c427b"));
         }
     }
 }

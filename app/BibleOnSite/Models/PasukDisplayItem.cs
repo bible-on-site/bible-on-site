@@ -8,10 +8,12 @@ namespace BibleOnSite.Models;
 /// </summary>
 public sealed class PasukDisplayItem
 {
-    public PasukDisplayItem(Pasuk pasuk, bool isRepeatedCopy)
+    public PasukDisplayItem(Pasuk pasuk, bool isRepeatedCopy, double fontSize, double markerFontSize)
     {
         Pasuk = pasuk;
         IsRepeatedCopy = isRepeatedCopy;
+        FontSize = fontSize;
+        MarkerFontSize = markerFontSize;
     }
 
     /// <summary>The underlying logical pasuk (shared between display copies).</summary>
@@ -28,4 +30,15 @@ public sealed class PasukDisplayItem
 
     /// <summary>Marker shown once per pair; empty on the repeated copy.</summary>
     public string PasukNumHeb => IsRepeatedCopy ? string.Empty : Pasuk.PasukNumHeb;
+
+    /// <summary>
+    /// Resolved pasuk-text size carried on the item itself. Bound directly (rather
+    /// than via a resource) so a recycled or newly created row always gets the
+    /// configured size — toggling שניים מקרא must never leave stale or mixed
+    /// sizes between rows (#2070).
+    /// </summary>
+    public double FontSize { get; }
+
+    /// <summary>Resolved pasuk-number marker size (scaled like <see cref="FontSize"/>).</summary>
+    public double MarkerFontSize { get; }
 }
