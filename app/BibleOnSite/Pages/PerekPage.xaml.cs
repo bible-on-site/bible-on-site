@@ -12,7 +12,7 @@ using Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific;
 /// <summary>
 /// Page for displaying a Perek (chapter) with its pasukim (verses).
 /// </summary>
-public partial class PerekPage : ContentPage
+public partial class PerekPage : ContentPage, IQueryAttributable
 {
     private readonly PerekViewModel _viewModel;
     private bool _isLoading;
@@ -109,6 +109,30 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private void SetupCarouselNavigation()
     {
+#if ANDROID || IOS
+        if (OperatingSystem.IsAndroid() || OperatingSystem.IsIOS())
+        {
+            var statusBar = new CommunityToolkit.Maui.Behaviors.StatusBarBehavior
+            {
+                ApplyOn = CommunityToolkit.Maui.Behaviors.StatusBarApplyOn.OnPageNavigatedTo
+            };
+            statusBar.SetBinding(CommunityToolkit.Maui.Behaviors.StatusBarBehavior.StatusBarColorProperty,
+                new Binding(nameof(BackgroundColor), source: ReaderToolbar));
+            statusBar.SetAppTheme(CommunityToolkit.Maui.Behaviors.StatusBarBehavior.StatusBarStyleProperty,
+                CommunityToolkit.Maui.Core.StatusBarStyle.DarkContent, CommunityToolkit.Maui.Core.StatusBarStyle.LightContent);
+            Behaviors.Add(statusBar);
+        }
+#endif
+        InitializeSearchHeader();
+        ChapterSearch.SearchOpenChanged += OnChapterSearchOpenChanged;
+        ChapterSearch.SetSource(_viewModel.Source);
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PerekViewModel.Source))
+            {
+                ChapterSearch.SetSource(_viewModel.Source);
+            }
+        };
         PerekCarousel.SizeChanged += OnCarouselSizeChanged;
         _viewModel.NavigationRequested += (_, perekId) =>
         {
@@ -331,7 +355,7 @@ public partial class PerekPage : ContentPage
     private void OnTouchStarted(object? sender, TouchPosition position)
     {
         _swipe.Cancel();
-        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || _isMenuOpen || _isShowingArticles || _focusedPasuk != null ||
+        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || _isMenuOpen || _isShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
             !ContainsTouch(PerekCarousel, position) || ContainsTouch(BottomBar, position) ||
             ContainsTouch(ExitFullScreenButton, position))
         {
@@ -342,7 +366,7 @@ public partial class PerekPage : ContentPage
 
     private void OnTouchDispatched(object? sender, TouchPosition position)
     {
-        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || _isMenuOpen || _isShowingArticles || _focusedPasuk != null ||
+        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || _isMenuOpen || _isShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
             !ContainsTouch(PerekCarousel, position) || ContainsTouch(BottomBar, position) ||
             ContainsTouch(ExitFullScreenButton, position) || ContainsTouch(CircularMenuButton, position) ||
             ContainsTouch(SelectionBar, position))
@@ -395,6 +419,17 @@ public partial class PerekPage : ContentPage
 
     protected override void OnDisappearing()
     {
+        FinishSearchIntroduction();
+#if ANDROID
+        UnregisterReaderBack();
+#endif
+#if WINDOWS
+        UnregisterReaderKeyboardBack();
+#endif
+        if (!_preserveSearchOnDisappear)
+        {
+            ChapterSearch.Close();
+        }
         ResetRecitationContext();
         PreferencesService.Instance.PreferencesChanged -= OnRecitationPreferencesChanged;
         RecitationService.Instance.Changed -= OnRecitationPackageChanged;
@@ -457,6 +492,12 @@ public partial class PerekPage : ContentPage
     {
         Console.WriteLine("[Startup] PerekPage appearing");
         base.OnAppearing();
+#if ANDROID
+        RegisterReaderBack();
+#endif
+#if WINDOWS
+        RegisterReaderKeyboardBack();
+#endif
         SubscribeRecitation();
         await InitializeRecitationAsync();
         Console.WriteLine("[Startup] PerekPage recitation initialized");
@@ -504,6 +545,9 @@ public partial class PerekPage : ContentPage
                 // Hide loading overlay — carousel is ready
                 CarouselLoadingOverlay.IsVisible = false;
 
+                await ApplySearchReaderLocationAsync();
+                StartSearchIntroduction();
+
                 // Update articles count badge
                 await UpdateArticlesCountAsync();
 
@@ -534,7 +578,11 @@ public partial class PerekPage : ContentPage
             // Perushim may have been installed (downloaded in Preferences) or cleared by the OS
             // since this page last appeared. Re-check and reload so they show without an app restart.
             await RefreshPerushimIfAvailabilityChangedAsync();
+            StartSearchIntroduction();
         }
+#if IOS
+        Dispatcher.Dispatch(ConfigureIosReaderHistory);
+#endif
     }
 
     /// <summary>
@@ -574,6 +622,12 @@ public partial class PerekPage : ContentPage
 
     private void OnAppLinkRequested(object? sender, AppLinkHelper.AppLinkTarget target)
     {
+        // Only the original reader handles app links; search readers are pushed
+        // above it and must not compete to navigate a page that has been popped.
+        if (Shell.Current?.Navigation.NavigationStack.OfType<PerekPage>().FirstOrDefault() is { } rootReader && rootReader != this)
+        {
+            return;
+        }
         if (Handler is null)
         {
             // Dead page left over from a Shell recreation; detach instead of
@@ -596,6 +650,7 @@ public partial class PerekPage : ContentPage
                 return;
             }
             AppLinkHelper.PendingTarget = null;
+            ChapterSearch.Close();
             var shell = Shell.Current;
             if (shell != null &&
                 !shell.CurrentState.Location.OriginalString.EndsWith(AppRoutes.Perek, StringComparison.Ordinal))
@@ -612,6 +667,10 @@ public partial class PerekPage : ContentPage
 
     private int GetInitialPerekId()
     {
+        if (_searchReaderResult is { } result)
+        {
+            return GetSearchPerekId(result);
+        }
         // A link that opened the app (cold start) wins over preferences.
         if (AppLinkHelper.PendingTarget is { } pendingTarget)
         {
@@ -670,30 +729,16 @@ public partial class PerekPage : ContentPage
     /// (SafeAreaEdges = Container), and each Layout pads independently —
     /// clearing it only on MainGrid just moves the padding to ContentArea,
     /// which is what produced the empty landscape side bands (#1308).
-    /// Opt the entire subtree out except the root grid's bottom edge, which
-    /// ApplyBottomBarSafeArea manages around the home indicator itself.
+    /// Keep the root's top inset so the reader toolbar stays below the status
+    /// bar and notch. Its bottom edge also respects the home indicator, with
+    /// ApplyBottomBarSafeArea managing the bottom bar itself. Leave the sides
+    /// and descendant layouts unpadded so landscape content spans the width.
     /// Views inside scroll views (the carousel cells and pasukim lists) never
     /// apply safe-area padding, so only the direct layout chain needs this.
     /// </summary>
     private void ConfigureReaderSafeArea()
     {
-        MainGrid.SafeAreaEdges = new SafeAreaEdges(
-            SafeAreaRegions.None,
-            SafeAreaRegions.None,
-            SafeAreaRegions.None,
-            SafeAreaRegions.Container);
-        DisableSafeAreaPadding(MainGrid);
-    }
-
-    private static void DisableSafeAreaPadding(Element root)
-    {
-        foreach (var child in root.GetVisualTreeDescendants())
-        {
-            if (child is Layout layout)
-            {
-                layout.SafeAreaEdges = SafeAreaEdges.None;
-            }
-        }
+        ReaderSafeArea.Configure(MainGrid);
     }
 
     private void InitializeBottomBarDebugControls()
@@ -882,6 +927,11 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private async void OnPasukTapped(object? sender, TappedEventArgs e)
     {
+        if (ChapterSearch.IsSearchOpen)
+        {
+            ChapterSearch.Close();
+            return;
+        }
 #if ANDROID
         // On Android, taps are handled natively via LongPressBehavior.NativeTapped
         // because (a) MAUI's TapGestureRecognizer fails in nested CarouselView >
@@ -918,6 +968,11 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private async void OnPasukNativeTapped(object? sender, EventArgs e)
     {
+        if (ChapterSearch.IsSearchOpen)
+        {
+            ChapterSearch.Close();
+            return;
+        }
         // Skip tap if long press just happened
         if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 300)
         {
@@ -1105,16 +1160,24 @@ public partial class PerekPage : ContentPage
         ToolTipProperties.SetText(SelectionRecitationButton, hint);
         SemanticProperties.SetDescription(SelectionRecitationButton, hint);
 
-        Shell.SetNavBarIsVisible(this, true);
-        Shell.SetFlyoutBehavior(this, isSelectionMode ? FlyoutBehavior.Disabled : FlyoutBehavior.Flyout);
+        var searching = ChapterSearch.IsSearchOpen;
+        Shell.SetNavBarIsVisible(this, false);
+        ReaderToolbar.IsVisible = !ExitFullScreenButton.IsVisible;
+        Shell.SetFlyoutBehavior(this, isSelectionMode || searching ? FlyoutBehavior.Disabled : FlyoutBehavior.Flyout);
+        Shell.SetBackButtonBehavior(this, new BackButtonBehavior { IsVisible = !searching });
         var shellBackground = isSelectionMode
             ? (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"]
             : Microsoft.Maui.Controls.Application.Current!.RequestedTheme == AppTheme.Dark
-                ? (Color)Microsoft.Maui.Controls.Application.Current.Resources["OffBlack"]
-                : Colors.White;
+                ? Color.FromArgb("#20304A")
+                : Color.FromArgb("#F2F7FE");
         Shell.SetBackgroundColor(this, shellBackground);
-        NormalNavigationTitle.IsVisible = !isSelectionMode;
-        SelectionBar.IsVisible = isSelectionMode;
+        ReaderToolbar.BackgroundColor = shellBackground;
+        NormalNavigationBar.IsVisible = !isSelectionMode && !searching;
+        SearchTitleHost.IsVisible = searching;
+        SearchTitleHost.Content = searching ? _searchHeader : null;
+        ChapterSearch.IsVisible = searching;
+        ContentArea.IsVisible = !searching;
+        SelectionBar.IsVisible = isSelectionMode && !searching;
         SelectionCountLabel.Text = count.ToString();
     }
 
@@ -2030,6 +2093,7 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private void EnterFullScreen()
     {
+        ChapterSearch.Close();
         // Close circular menu if open
         if (_isMenuOpen)
         {
@@ -2047,6 +2111,7 @@ public partial class PerekPage : ContentPage
 
         // Hide Shell navigation bar (no TabBar in this app - single page per FlyoutItem)
         Shell.SetNavBarIsVisible(this, false);
+        ReaderToolbar.IsVisible = false;
 
         // Hide bottom bar completely
         BottomBar.IsVisible = false;
@@ -2066,8 +2131,9 @@ public partial class PerekPage : ContentPage
         // Hide floating exit button first
         ExitFullScreenButton.IsVisible = false;
 
-        // Show Shell navigation bar (no TabBar in this app - single page per FlyoutItem)
-        Shell.SetNavBarIsVisible(this, true);
+        // Restore the reader toolbar without introducing a native Back button.
+        Shell.SetNavBarIsVisible(this, false);
+        ReaderToolbar.IsVisible = true;
 
         // Show bottom bar
         BottomBar.IsVisible = true;

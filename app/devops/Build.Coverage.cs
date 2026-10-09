@@ -43,8 +43,8 @@ partial class Build
 
         var coberturaFile = coverageFiles.First();
         DotNetTasks.DotNet($"tool run reportgenerator " +
-            $"-reports:\"{coberturaFile}\" " +
-            $"-targetdir:\"{outputDirectory}\" " +
+            $"-reports:{coberturaFile} " +
+            $"-targetdir:{outputDirectory} " +
             $"-reporttypes:lcov",
             workingDirectory: RootDirectory);
 
@@ -100,7 +100,7 @@ partial class Build
             // Merge multiple LCOV files using ReportGenerator
             DotNetTasks.DotNet($"tool run reportgenerator " +
                 $"-reports:{string.Join(";", lcovFiles)} " +
-                $"-targetdir:\"{MergedCoverageDirectory}\" " +
+                $"-targetdir:{MergedCoverageDirectory} " +
                 $"-reporttypes:lcov",
                 workingDirectory: RootDirectory);
 

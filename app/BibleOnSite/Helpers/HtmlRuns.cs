@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using HtmlAgilityPack;
 
@@ -374,13 +375,15 @@ public static class HtmlRuns
                 case "font-style" when value is "italic" or "oblique":
                     mutate().Italic = true;
                     break;
-                case "text-decoration" or "text-decoration-line"
-                    when value.Contains("underline"):
-                    mutate().Underline = true;
-                    break;
-                case "text-decoration" or "text-decoration-line"
-                    when value.Contains("line-through"):
-                    mutate().Strikethrough = true;
+                case "text-decoration" or "text-decoration-line":
+                    if (value.Contains("underline"))
+                    {
+                        mutate().Underline = true;
+                    }
+                    if (value.Contains("line-through"))
+                    {
+                        mutate().Strikethrough = true;
+                    }
                     break;
                 case "vertical-align" when value is "super":
                     mutate().BaselineShift = 1;
@@ -400,23 +403,38 @@ public static class HtmlRuns
 
     private static void ApplyFontSize(string value, Func<Style> mutate)
     {
+        double scale;
         if (value.EndsWith('%') &&
-            double.TryParse(value[..^1], out var percent))
+            double.TryParse(value[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent))
         {
-            mutate().FontScale *= percent / 100.0;
+            scale = percent / 100.0;
         }
         else if (value.EndsWith("em") &&
-            double.TryParse(value[..^2], out var em))
+            double.TryParse(value[..^2], NumberStyles.Float, CultureInfo.InvariantCulture, out var em))
         {
-            mutate().FontScale *= em;
+            scale = em;
         }
         else if (value is "smaller" or "x-small" or "xx-small")
         {
-            mutate().FontScale *= 0.83;
+            scale = 0.83;
         }
         else if (value is "larger" or "x-large" or "xx-large")
         {
-            mutate().FontScale *= 1.17;
+            scale = 1.17;
+        }
+        else
+        {
+            return;
+        }
+        // Invalid sizes must never reach UIKit's native font constructor.
+        if (double.IsFinite(scale) && scale > 0)
+        {
+            var style = mutate();
+            var result = style.FontScale * scale;
+            if (double.IsFinite(result) && result > 0)
+            {
+                style.FontScale = result;
+            }
         }
     }
 

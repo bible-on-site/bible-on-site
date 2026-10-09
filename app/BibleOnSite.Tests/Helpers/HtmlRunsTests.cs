@@ -435,3 +435,199 @@ public class HtmlRunsTests
         }
     }
 }
+
+public class HtmlRunsStyleCoverageTests
+{
+    [Theory]
+    [InlineData("bold")]
+    [InlineData("bolder")]
+    [InlineData("600")]
+    [InlineData("700")]
+    [InlineData("800")]
+    [InlineData("900")]
+    public void applies_inline_css_bold_weights(string weight)
+    {
+        var runs = HtmlRuns.FromHtml($"א<span style=\"font-weight:{weight}\">ב</span>");
+        runs.First(r => r.Text.Contains('ב')).Bold.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("italic")]
+    [InlineData("oblique")]
+    public void applies_inline_css_italic_styles(string style)
+    {
+        var runs = HtmlRuns.FromHtml($"א<span style=\"font-style:{style}\">ב</span>");
+        runs.First(r => r.Text.Contains('ב')).Italic.Should().BeTrue();
+    }
+
+    [Fact]
+    public void applies_inline_css_underline_decoration()
+    {
+        var runs = HtmlRuns.FromHtml("א<span style=\"text-decoration:underline\">ב</span>");
+        runs.First(r => r.Text.Contains('ב')).Underline.Should().BeTrue();
+    }
+
+    [Fact]
+    public void applies_inline_css_line_through_decoration()
+    {
+        var runs = HtmlRuns.FromHtml("א<span style=\"text-decoration:line-through\">ב</span>");
+        runs.First(r => r.Text.Contains('ב')).Strikethrough.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("super", 1)]
+    [InlineData("sub", -1)]
+    public void applies_vertical_align_baseline(string align, int expected)
+    {
+        var runs = HtmlRuns.FromHtml($"א<span style=\"vertical-align:{align}\">n</span>");
+        runs.First(r => r.Text == "n").BaselineShift.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("150%", 1.5)]
+    [InlineData("0.5em", 0.5)]
+    [InlineData("larger", 1.17)]
+    [InlineData("x-large", 1.17)]
+    [InlineData("xx-large", 1.17)]
+    [InlineData("smaller", 0.83)]
+    [InlineData("x-small", 0.83)]
+    [InlineData("xx-small", 0.83)]
+    public void scales_font_size_keywords_and_units(string size, double expected)
+    {
+        var runs = HtmlRuns.FromHtml($"א<span style=\"font-size:{size}\">ב</span>");
+        runs.First(r => r.Text.Contains('ב')).FontScale.Should().BeApproximately(expected, 0.001);
+    }
+
+    [Theory]
+    [InlineData("color:red")]
+    [InlineData("font-weight:normal")]
+    [InlineData("text-decoration:none")]
+    public void ignores_unhandled_css_declarations(string css)
+    {
+        var runs = HtmlRuns.FromHtml($"א<span style=\"{css}\">ב</span>");
+        var run = runs.First(r => r.Text.Contains('ב'));
+        run.Bold.Should().BeFalse();
+        run.Underline.Should().BeFalse();
+        run.Strikethrough.Should().BeFalse();
+    }
+
+    [Fact]
+    public void breaks_after_trailing_newline_run()
+    {
+        var runs = HtmlRuns.FromHtml("א<br><br>ב");
+        runs.First(r => r.Text.Contains('ב')).Text.Should().NotStartWith(" ");
+    }
+
+    [Fact]
+    public void drops_leading_whitespace_at_document_start()
+    {
+        var runs = HtmlRuns.FromHtml("   א");
+        runs.Should().ContainSingle().Which.Text.Should().Be("א");
+    }
+
+    [Theory]
+    [InlineData("bogus")]
+    [InlineData("-20%")]
+    [InlineData("0%")]
+    public void ignores_invalid_or_nonpositive_font_size(string size)
+    {
+        var runs = HtmlRuns.FromHtml($"א<span style=\"font-size:{size}\">ב</span>");
+        runs.First(r => r.Text.Contains('ב')).FontScale.Should().Be(1.0);
+    }
+
+    [Fact]
+    public void skips_non_li_siblings_when_numbering_ordered_list()
+    {
+        var runs = HtmlRuns.FromHtml("<ol><li>א</li>הערה<li>ב</li></ol>");
+        runs.Select(r => r.Text).Should().Contain(t => t.Contains("2."));
+    }
+
+    [Fact]
+    public void unknown_elements_keep_their_text_with_default_style()
+    {
+        var runs = HtmlRuns.FromHtml("א<mark>ב</mark>ג");
+        var marked = runs.First(r => r.Text.Contains('ב'));
+        marked.Bold.Should().BeFalse();
+        marked.FontScale.Should().Be(1.0);
+    }
+
+    [Fact]
+    public void mid_headings_carry_their_level()
+    {
+        var runs = HtmlRuns.FromHtml("<h4>כותרת</h4>גוף");
+        runs[0].HeadingLevel.Should().Be(4);
+    }
+}
+
+public class HtmlRunsTagCoverageTests
+{
+    [Theory]
+    [InlineData("strong")]
+    [InlineData("b")]
+    public void semantic_bold_tags_mark_bold(string tag)
+    {
+        var runs = HtmlRuns.FromHtml($"א<{tag}>ב</{tag}>");
+        runs.First(r => r.Text.Contains('ב')).Bold.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("em")]
+    public void semantic_italic_tags_mark_italic(string tag)
+    {
+        var runs = HtmlRuns.FromHtml($"א<{tag}>ב</{tag}>");
+        runs.First(r => r.Text.Contains('ב')).Italic.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("u")]
+    [InlineData("ins")]
+    public void underline_tags_mark_underline(string tag)
+    {
+        var runs = HtmlRuns.FromHtml($"א<{tag}>ב</{tag}>");
+        runs.First(r => r.Text.Contains('ב')).Underline.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("s")]
+    [InlineData("strike")]
+    [InlineData("del")]
+    public void strikethrough_tags_mark_strikethrough(string tag)
+    {
+        var runs = HtmlRuns.FromHtml($"א<{tag}>ב</{tag}>");
+        runs.First(r => r.Text.Contains('ב')).Strikethrough.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("h0")]
+    [InlineData("h7")]
+    [InlineData("hx")]
+    public void invalid_heading_tags_fall_back_to_default(string tag)
+    {
+        var runs = HtmlRuns.FromHtml($"<{tag}>כותרת</{tag}>");
+        runs.Should().ContainSingle().Which.HeadingLevel.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData("font-style:normal")]
+    [InlineData("vertical-align:baseline")]
+    public void css_keywords_outside_the_supported_set_are_ignored(string css)
+    {
+        var runs = HtmlRuns.FromHtml($"א<span style=\"{css}\">ב</span>");
+        var run = runs.First(r => r.Text.Contains('ב'));
+        run.Italic.Should().BeFalse();
+        run.BaselineShift.Should().Be(0);
+    }
+
+    [Fact]
+    public void whitespace_after_a_break_is_dropped()
+    {
+        var runs = HtmlRuns.FromHtml("א<br>  ב");
+        runs.Last().Text.Should().Be("\nב");
+    }
+
+    [Fact]
+    public void break_only_document_stays_empty()
+    {
+        HtmlRuns.FromHtml("<br>").Should().BeEmpty();
+    }
+}

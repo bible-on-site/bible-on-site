@@ -73,7 +73,7 @@ partial class Build
                 .SetBlameHangTimeout("10m")
                 .SetBlameHangDumpType("mini")
                 .SetResultsDirectory(Path.Join(artifacts, "results"))
-                .SetLoggers("trx;LogFileName=mobile-e2e.trx", "junit;LogFilePath=" + Path.Join(artifacts, "results", "mobile-e2e.xml")));
+                .SetLoggers("console;verbosity=normal", "trx;LogFileName=mobile-e2e.trx", "junit;LogFilePath=" + Path.Join(artifacts, "results", "mobile-e2e.xml")));
         });
 
     Target TestMobileE2EUnit => _ => _
